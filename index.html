@@ -10,194 +10,67 @@
 
 </head>
 <body>
-    <header class="navbar navbar-inverse navbar-fixed-top">
-      <div class="navbar-inner">
-        <a href="http://github.com/rafaelfranca/simple_form-bootstrap">
-          <img style="position: absolute; top: 0; right: 0; border: 0;" src="http://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png" alt="Fork me on GitHub">
-        </a>
-        <div class="container">
-          <a class="brand" href="#">SimpleForm & Twitter Bootstrap</a>
-          <ul class="nav">
-            <li><a href="/">Home</a></li>
-            <li class="dropdown">
-              <a href="#" class="dropdown-toggle" data-toggle='dropdown'>
-                Articles
-                <b class='caret'></b>
-              </a>
-              <ul class="dropdown-menu">
-                <li><a href="/articles">List all articles</a></li>
-                <li><a href="/articles/new">New article</a></li>
-              </ul>
-            </li>
-          </ul>
+
+    <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="#">Project name</a>
+        </div>
+        <div class="navbar-collapse collapse">
+          <form class="navbar-form navbar-right" role="form">
+            <div class="form-group">
+              <input type="text" placeholder="Email" class="form-control">
+            </div>
+            <div class="form-group">
+              <input type="password" placeholder="Password" class="form-control">
+            </div>
+            <button type="submit" class="btn btn-success">Sign in</button>
+          </form>
+        </div><!--/.navbar-collapse -->
+      </div>
+    </div>
+
+    <!-- Main jumbotron for a primary marketing message or call to action -->
+    <div class="jumbotron">
+      <div class="container">
+        <h1>Hello, world!</h1>
+        <p>This is a template for a simple marketing or informational website. It includes a large callout called a jumbotron and three supporting pieces of content. Use it as a starting point to create something more unique.</p>
+        <p><a class="btn btn-primary btn-lg" role="button">Learn more &raquo;</a></p>
+      </div>
+    </div>
+
+    <div class="container">
+      <!-- Example row of columns -->
+      <div class="row">
+        <div class="col-md-4">
+          <h2>Heading</h2>
+          <p>Donec id elit non mi porta gravida at eget metus. Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh, ut fermentum massa justo sit amet risus. Etiam porta sem malesuada magna mollis euismod. Donec sed odio dui. </p>
+          <p><a class="btn btn-default" href="#" role="button">View details &raquo;</a></p>
+        </div>
+        <div class="col-md-4">
+          <h2>Heading</h2>
+          <p>Donec id elit non mi porta gravida at eget metus. Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh, ut fermentum massa justo sit amet risus. Etiam porta sem malesuada magna mollis euismod. Donec sed odio dui. </p>
+          <p><a class="btn btn-default" href="#" role="button">View details &raquo;</a></p>
+       </div>
+        <div class="col-md-4">
+          <h2>Heading</h2>
+          <p>Donec sed odio dui. Cras justo odio, dapibus ac facilisis in, egestas eget quam. Vestibulum id ligula porta felis euismod semper. Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh, ut fermentum massa justo sit amet risus.</p>
+          <p><a class="btn btn-default" href="#" role="button">View details &raquo;</a></p>
         </div>
       </div>
-    </header>
-    <div class="container master-container">
-      <ul class="breadcrumb">
-          <li><a href="/">Home</a> <span class="divider">/</span></li>
-    <li class="active">New article</li>
 
-      </ul>
-      <div class='alert alert-info fade in' data-alert='alert'>
-        <h3>
-          <strong>
-            <a href="https://github.com/plataformatec/simple_form">SimpleForm</a> 2.0 and <a href="http://twitter.github.com/bootstrap">Twitter Bootstrap</a> sample application.
-          </strong>
-        </h3>
-        <p>Here you'll see the usage of <a href="https://github.com/plataformatec/simple_form">SimpleForm</a> and the <a href="http://twitter.github.com/bootstrap">Twitter Bootstrap</a> toolkit on a Rails 3.2 application.</p>
-        <p>You can check the source code on <a href='https://github.com/rafaelfranca/simple_form-bootstrap'>GitHub</a>.</p>
+      <hr>
 
-      </div>
+      <footer>
+        <p>&copy; Company 2013</p>
+      </footer>
+    </div> <!-- /container -->
 
-
-    
-  <h1>New article <small>Inline Form</small></h1>
-
-  <div class="well form-actions">
-    <a href="#" class="btn btn-primary pull-left" data-code="show">
-      toggle code examples for each form element.
-    </a>
-    <a href='#' id='toggle-form' class='btn pull-right'>
-      toggle between vertical and horizontal form
-    </a>
-  </div>
-
-  <form accept-charset="UTF-8" action="/articles" class="simple_form form-horizontal" id="new_article" method="post" novalidate="novalidate"><div style="margin:0;padding:0;display:inline"><input name="utf8" type="hidden" value="&#x2713;" /><input name="authenticity_token" type="hidden" value="Sv2HJJpmZvkraiSUptNtVa7GLqJ9usPvgfHkH03QoYo=" /></div>
-  <pre class='prettyprint linenums lang-rb'>
-  # If you generated the SimpleForm configuration with `--bootstrap`, the `simple_form_for` helper will use the bootstrap wrapper by default.
-  simple_form_for(@article, :html =&gt; { :class =&gt; 'form-horizontal' }) do |f|
-  </pre>
-
-
-    <legend>Article</legend>
-    <div class="control-group string required article_name"><label class="string required control-label" for="article_name"><abbr title="required">*</abbr> Name</label><div class="controls"><input class="string required span6" id="article_name" name="article[name]" type="text" /><p class="help-block">add your article title here</p></div></div>
-  <pre class='prettyprint linenums lang-rb'>
-    # You can use the same `span*` classes from the grid system.
-    f.input :name, :input_html =&gt; { :class =&gt; "span6" }, :hint =&gt; "add your article title here"
-  </pre>
-
-    <div class="control-group string required article_name"><div class="controls"><div class="input-prepend">
-      <span class="add-on">Name</span>
-      <input class="string required" id="article_name" maxlength="255" name="article[name]" size="255" type="text" />
-  </div></div></div>
-  <pre class='prettyprint linenums lang-rb'>
-    # Use different wrappers to use other elements from Bootstrap, like a 'prepend' box.
-    f.input :name, :wrapper =&gt; :prepend, :label =&gt; false do
-      content_tag :span, "Name", :class =&gt; "add-on"
-      f.input_field :name
-    end
-  </pre>
-
-    <div class="control-group boolean optional article_published"><label class="boolean optional control-label" for="article_published">Published</label><div class="controls"><input name="article[published]" type="hidden" value="0" /><label class="checkbox"><input class="boolean optional" id="article_published" name="article[published]" type="checkbox" value="1" /></label></div></div>
-
-  <pre class='prettyprint linenums lang-rb'>
-    f.input :published, :as =&gt; :boolean
-  </pre>
-
-    <div class="control-group check_boxes optional article_content_type"><label class="check_boxes optional control-label">Stacked checkboxes</label><div class="controls"><label class="checkbox"><input class="check_boxes optional" id="article_content_type_blog" name="article[content_type][]" type="checkbox" value="Blog" />Blog</label><label class="checkbox"><input class="check_boxes optional" id="article_content_type_editorial" name="article[content_type][]" type="checkbox" value="Editorial" />Editorial</label><label class="checkbox"><input class="check_boxes optional" id="article_content_type_announce" name="article[content_type][]" type="checkbox" value="Announce" />Announce</label><label class="checkbox"><input class="check_boxes optional" id="article_content_type_advertisement" name="article[content_type][]" type="checkbox" value="Advertisement" />Advertisement</label><input name="article[content_type][]" type="hidden" value="" /></div></div>
-  <pre class='prettyprint linenums lang-rb'>
-    f.input :content_type, :collection =&gt; content_type_options, :as =&gt; :check_boxes
-  </pre>
-
-    <div class="control-group check_boxes optional article_content_type"><label class="check_boxes optional control-label">Inline checkboxes</label><div class="controls"><label class="checkbox inline"><input class="check_boxes optional" id="article_content_type_blog" name="article[content_type][]" type="checkbox" value="Blog" />Blog</label><label class="checkbox inline"><input class="check_boxes optional" id="article_content_type_editorial" name="article[content_type][]" type="checkbox" value="Editorial" />Editorial</label><label class="checkbox inline"><input class="check_boxes optional" id="article_content_type_announce" name="article[content_type][]" type="checkbox" value="Announce" />Announce</label><label class="checkbox inline"><input class="check_boxes optional" id="article_content_type_advertisement" name="article[content_type][]" type="checkbox" value="Advertisement" />Advertisement</label><input name="article[content_type][]" type="hidden" value="" /></div></div>
-  <pre class='prettyprint linenums lang-rb'>
-    f.input :content_type, :collection =&gt; content_type_options, :as =&gt; :check_boxes, :item_wrapper_class =&gt; &#x27inline&#x27;
-  </pre>
-
-    <div class="control-group radio_buttons optional article_content_type"><label class="radio_buttons optional control-label">Stacked radios</label><div class="controls"><label class="radio"><input class="radio_buttons optional" id="article_content_type_blog" name="article[content_type]" type="radio" value="Blog" />Blog</label><label class="radio"><input class="radio_buttons optional" id="article_content_type_editorial" name="article[content_type]" type="radio" value="Editorial" />Editorial</label><label class="radio"><input class="radio_buttons optional" id="article_content_type_announce" name="article[content_type]" type="radio" value="Announce" />Announce</label><label class="radio"><input class="radio_buttons optional" id="article_content_type_advertisement" name="article[content_type]" type="radio" value="Advertisement" />Advertisement</label></div></div>
-
-  <pre class='prettyprint linenums lang-rb'>
-    f.input :content_type, :collection =&gt; content_type_options, :as =&gt; :radio_buttons
-  </pre>
-
-
-    <div class="control-group radio_buttons optional article_content_type"><label class="radio_buttons optional control-label">Inline radios</label><div class="controls"><label class="radio inline"><input class="radio_buttons optional" id="article_content_type_blog" name="article[content_type]" type="radio" value="Blog" />Blog</label><label class="radio inline"><input class="radio_buttons optional" id="article_content_type_editorial" name="article[content_type]" type="radio" value="Editorial" />Editorial</label><label class="radio inline"><input class="radio_buttons optional" id="article_content_type_announce" name="article[content_type]" type="radio" value="Announce" />Announce</label><label class="radio inline"><input class="radio_buttons optional" id="article_content_type_advertisement" name="article[content_type]" type="radio" value="Advertisement" />Advertisement</label></div></div>
-
-  <pre class='prettyprint linenums lang-rb'>
-    f.input :content_type, :collection =&gt; content_type_options, :as =&gt; :radio_buttons, :item_wrapper_class =&gt; &#x27;inline&#x27;
-  </pre>
-
-    <div class="control-group select optional article_content_type"><label class="select optional control-label" for="article_content_type">Content type</label><div class="controls"><input name="article[content_type][]" type="hidden" value="" /><select class="select optional" id="article_content_type" multiple="multiple" name="article[content_type][]"><option value="Blog">Blog</option>
-  <option value="Editorial">Editorial</option>
-  <option value="Announce">Announce</option>
-  <option value="Advertisement">Advertisement</option></select><p class="help-block">multiple select</p></div></div>
-  <pre class='prettyprint linenums lang-rb'>
-    f.input :content_type, :collection =&gt; content_type_options, :input_html =&gt; { :multiple =&gt; true }
-  </pre>
-
-    <div class="control-group select optional article_category"><label class="select optional control-label" for="article_category">Category</label><div class="controls"><select class="select optional" id="article_category" name="article[category]"><option value=""></option>
-  <option value="Blog">Blog</option>
-  <option value="Editorial">Editorial</option>
-  <option value="Announce">Announce</option>
-  <option value="Advertisement">Advertisement</option></select><p class="help-block">simple select box</p></div></div>
-  <pre class='prettyprint linenums lang-rb'>
-    f.input :category, :collection =&gt; content_type_options, :hint =&gt; "simple select box"
-  </pre>
-
-    <div class="control-group text optional article_content"><label class="text optional control-label" for="article_content">Content</label><div class="controls"><textarea class="text optional span6" id="article_content" name="article[content]">
-  </textarea></div></div>
-  <pre class='prettyprint linenums lang-rb'>
-    f.input :content, :input_html =&gt; { :class =&gt; "span6" }
-  </pre>
-
-    <div class="control-group string optional disabled article_disabled_text"><label class="string optional control-label" for="article_disabled_text">Disabled text</label><div class="controls"><input class="string optional disabled" disabled="disabled" id="article_disabled_text" name="article[disabled_text]" type="text" /><p class="help-block">an example of disabled input</p></div></div>
-
-  <pre class='prettyprint linenums lang-rb'>
-    f.input :disabled_text, :disabled =&gt; true, :hint =&gt; "an example of disabled input"
-  </pre>
-
-    <div class="control-group string optional article_disabled_text"><label class="string optional control-label" for="article_disabled_text">Disabled text</label><div class="controls"><div class="input-prepend">
-      <span class="add-on">
-        <input id="remove" name="remove" type="checkbox" value="true" />
-  </span>    <input class="string optional disabled" disabled="disabled" id="article_disabled_text" maxlength="255" name="article[disabled_text]" size="255" type="text" />
-  </div><span class="help-block">This is the hint text</span></div></div><pre class='prettyprint linenums lang-rb'>
-  f.input :disabled_text, :wrapper =&gt; :prepend, :hint =&gt; "This is the hint text" do
-    content_tag :span, :class =&gt; "add-on" do
-      check_box_tag :remove, 'true'
-    end
-    f.input_field :disabled_text
-  end
-  </pre>
-
-    <div class="control-group string optional article_disabled_text"><label class="string optional control-label" for="article_disabled_text">Disabled text</label><div class="controls"><div class="input-append">
-      <input class="string optional disabled mini" disabled="disabled" id="article_disabled_text" maxlength="255" name="article[disabled_text]" size="255" type="text" />
-      <span class="add-on active">
-        <input id="remove" name="remove" type="checkbox" value="true" />
-  </span></div><span class="help-block">This is the hint text</span></div></div>
-  <pre class='prettyprint linenums lang-rb'>
-    # Use the 'append' wrapper the same way as the 'prepend' one.
-    f.input :disabled_text, :wrapper =&gt; :append, :hint =&gt; "This is the hint text" do
-      f.input_field :disabled_text, :class =&gt; :mini
-      content_tag :span, :class =&gt; "add-on active" do
-        check_box_tag :remove, 'true'
-      end
-    end
-  </pre>
-
-    <div class="form-actions">
-      <input class="btn btn-primary" name="commit" type="submit" value="Create Article" />
-      <input class="btn btn-danger" name="commit" type="reset" value="Cancel" />
-    </div>
-  <pre class='prettyprint linenums lang-rb'>
-    # SimpleForm buttons already receive the 'btn' class for Bootstrap.
-    f.button :submit, :class =&gt; 'btn-primary'
-    submit_tag 'Cancel', :type =&gt; :reset, :class =&gt; "btn btn-danger"
-  </pre>
-  </form>
-
-
-    </div>
-
-    <footer class="footer">
-      <div class="container">
-        <p>Copyright 2009-2013 <a href="http://plataformatec.com.br">Plataformatec</a></p>
-        <ul class="footer-links">
-          <li><a href="http://blog.plataformatec.com.br">Plataformatec Blog</a></li>
-          <li class="muted">·</li>
-          <li><a href="https://github.com/plataformatec/simple_form">SimpleForm @ GitHub</a></li>
-        </ul>
-      </div>
-    </footer>
 </body>
 </html>
