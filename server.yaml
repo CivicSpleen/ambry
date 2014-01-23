@@ -1,0 +1,43 @@
+library:
+    default:
+        filesystem: library
+        database: library
+        remote: production-remote
+        port: 7979
+        require-upload: true   
+
+    test:
+        filesystem: library
+        database: library
+        remote: test-remote
+        port: 7979
+        require-upload: true   
+
+
+database:
+    library:
+        dbname: '{root}/library.db'
+        driver: sqlite  
+
+filesystem:
+    root_dir: /Volumes/DataLibrary/server
+    
+    library:
+        dir: '{root}/library'
+        size: 50000
+        upstream: production-remote
+        
+    test-remote:
+        options: [compress,usreadonly]
+        bucket: test.s3.clarinova.net
+        prefix:  library
+        access_key: AKIAIOKK4KSYYGYXWQJQ
+        secret: 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
+        
+    production-remote:
+        options: [compress,usreadonly]
+        bucket: s3.sandiegodata.org
+        prefix: library
+        access_key: AKIAIW6AZFKTKTVUUWWA
+        secret: 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
+             

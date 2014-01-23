@@ -1,0 +1,35 @@
+identity:
+    source: null # Domain name of the producer of the data, like census.gov
+    dataset: null # Name of the dataset
+    subset: null # Second level differentator
+    variation: null # Third level differentiator
+    revision: 1 # Monotonic integer one for each published update
+    version: 0.0.1 # Semantic version number. Last digit is always revision
+    id: d00C # Dataset object number
+    vid: d00C001 # Dataset object number, with revision number
+
+names: # Names are generated from the identity
+    name: null # Simple name, no version or object number
+    vname: null # name with version, but no object number
+    fqname: null # Fully qualified name, with version and object number
+
+about: {
+    author: "Author's email address",
+    description: "**include**", # Description, gets replaces with yaml include when installed.
+    groups: [
+        "group1",
+        "group2"
+    ],
+    homepage: "https://civicknowledge.org",
+    license: "other-open",
+    maintainer: "Maintainers email address",
+    tags: [
+        "tag1",
+        "tag2"
+    ],
+    title: "Bundle title"
+}
+
+build:
+    dependencies:
+        geocoder: clarinova.com-geocode-casnd-429e.segments

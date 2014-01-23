@@ -1,0 +1,12 @@
+#
+# Packages for the library server
+#
+psycopg2
+boto # Required for the library server
+setproctitle # required for --daemonize
+paste
+python-daemon
+lockfile
+decorator
+bottle
+redis

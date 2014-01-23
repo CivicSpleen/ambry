@@ -1,0 +1,14 @@
+# Configuration for a library that is backed by a remote library
+
+
+filesystem:  
+  root_dir: /tmp/test-source
+
+sourcerepo:
+  dir: /tmp/test-source/bundles
+  
+  clarinova.data:
+    account: clarinova-data
+
+
+        

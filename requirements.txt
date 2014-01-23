@@ -1,0 +1,17 @@
+PyYAML
+semidbm
+SQLAlchemy
+simplejson
+requests==1.2.0 # Later versions don't work right, but forgot why ...
+boto
+python-dateutil
+unicodecsv
+lockfile
+sh
+petl
+pyparsing
+markdown
+psycopg2
+semantic_version
+# This pysqlite clone enables load_extension. Only needed on Linux
+# git+https://github.com/clarinova/pysqlite.git#egg=pysqlite

@@ -1,0 +1,92 @@
+# Configuration for a library that is backed by a remote library
+
+library:
+    default:
+      filesystem: default
+      database: default
+
+warehouse:
+    default:
+      database: postgres_warehouse
+
+    redshift:
+      service: redshift
+      database: redshift
+      library: redshift_library
+
+    postgres:
+        service: postgres
+        database:
+            driver: postgres
+            server: lorne
+            dbname: warehouse
+            username: test
+            password: test
+        library: 
+            driver: postgres
+            server: lorne
+            dbname: library
+            username: test
+            password: test
+
+    mysql:
+      service: relational
+      database: mysql_warehouse
+      library: mysql_library
+ 
+    sqlite:
+      service: relational
+      database: sqlite_warehouse
+      library: sqlite_library
+
+
+database:
+  
+    default:
+        dbname: '/tmp/server/library.db'
+        driver: sqlite  
+  
+
+        
+    redshift:
+        driver: postgres
+        server: lorne
+        dbname: test-library
+        account: redshift-test
+        
+    redshift_library:
+        dbname: '/tmp/redshift-library.db'
+        driver: sqlite        
+  
+    sqlite_warehouse:
+        dbname: '/tmp/warehouse.db'
+        driver: sqlite  
+  
+    sqlite_library:
+        dbname: '/tmp/sqlite-library.db'
+        driver: sqlite  
+        
+        
+    mysql_warehouse:
+        driver: mysql
+        server: testdb.cnhz40f0cmdb.us-east-1.rds.amazonaws.com
+        dbname: test
+        username: test
+        password: samizdat 
+
+
+
+
+
+
+filesystem:  
+  root_dir: /tmp/warehouse-test/
+  default:
+      dir: '{root}/cache-l1'
+      size: 50
+      upstream:
+        dir: '{root}/cache-l2'
+        options: [compress]
+
+
+        

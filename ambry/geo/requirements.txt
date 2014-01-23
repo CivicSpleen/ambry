@@ -1,0 +1,14 @@
+
+#
+# Numerical
+#
+gdal 
+numpy # Must be installed externally
+h5py # Must be installed externally on ubuntu
+
+#
+# Geographic
+#
+pyshp
+
+

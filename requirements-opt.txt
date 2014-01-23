@@ -1,0 +1,9 @@
+# These are for the server
+decorator
+paste
+bottle
+# For geo processing
+numpy
+gdal
+# For hdf5 files
+h5py

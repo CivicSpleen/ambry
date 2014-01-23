@@ -1,0 +1,87 @@
+library:
+  
+    writer:
+        filesystem: writer
+        database: writer
+        upstream:
+          host: localhost
+          port: 7979
+          upstream: remote
+
+    local:
+        filesystem: local
+        database: local
+
+
+    reader:
+        filesystem: reader
+        database: reader  
+        remotes:
+          - http://localhost:7979
+          
+    default:
+        filesystem: server
+        database: server  
+        host: localhost   
+        port: 7979
+        upstream:
+          options: [compress]
+          prefix: library-test
+          bucket: devtest.sandiegodata.org
+          account: devtest.sandiegodata.org
+
+
+database:
+  
+    writer:
+        dbname: '/tmp/server/writer.db'
+        driver: sqlite  
+        
+    reader:
+        dbname: '/tmp/server/reader.db'
+        driver: sqlite  
+
+    local:
+        dbname: '/tmp/server/local.db'
+        driver: sqlite
+
+    server:
+        dbname: '/tmp/server/server.db'
+        driver: sqlite  
+
+filesystem:
+
+
+    local:
+        dir: '/tmp/server/local'
+
+    writer:
+        dir: '/tmp/server/writer'
+        
+    reader:
+        dir: '/tmp/server/reader'
+        
+    server:
+        dir: '/tmp/server/server'
+   
+
+    rrc-fs:
+      dir: '/tmp/server/remote'
+
+    rrc:
+      url: http://localhost:7979
+
+    remote:
+      prefix: server-test
+      bucket: devtest.sandiegodata.org
+      account: devtest.sandiegodata.org
+      upstream:
+        size: 2000
+        dir: /tmp/server/s3cache
+            
+downloads:
+    dir: '{root}/downloads'
+
+extracts: 
+    dir: '{root}/extracts'
+        
