@@ -16,7 +16,7 @@ if sys.version_info <= (2, 6):
     sys.exit(1)
 
 def readme():
-    with open("README") as f:
+    with open("README.md") as f:
         return f.read()
 
 def parse_requirements(file_name):
@@ -48,20 +48,11 @@ setup(name = "ambry",
       author = "Eric Busboom",
       author_email = "eric@clarinova.com",
       url = "https://github.com/clarinova/ambry",
-      # If the base system uses setuptools, there is a patching for distribute  that fails, and
-      # bad things happen. http://stackoverflow.com/questions/7446187/no-module-named-pkg-resources
-      #install_requires=['distribute'],
-      xpackages = ["ambry",
-                  "ambry.client",
-                  "ambry.server",
-                  "ambry.geo",
-                  "ambry.sourcesupport",
-                  ],
       packages = find_packages(), 
-      scripts=['scripts/bambry', 'scripts/cli'],
+      scripts=['scripts/bambry', 'scripts/ambry'],
       package_data = {"ambry": ["support/*", "geo/support/*" ]},
       license = "",
-      platforms = "Posix; MacOS X; Windows",
+      platforms = "Posix; MacOS X; Linux",
       classifiers = [],
       #zip_safe=False,
       install_requires = parse_requirements('requirements.txt'),

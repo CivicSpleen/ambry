@@ -1,3 +1,3 @@
-recursive-include databundles/support *.yaml *.sql
+recursive-include ambry/support *.yaml *.sql
 recursive-include test *
 include requirements.txt

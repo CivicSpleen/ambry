@@ -3,7 +3,7 @@
 echo "--- Installing base packages. May need to ask for root password"
 
 #
-# INstall scikit, scipy, numpy and others, on Mac OS X
+# Install scikit, scipy, numpy and others, on Mac OS X
 #  curl -o install_superpack.sh https://raw.github.com/fonnesbeck/ScipySuperpack/master/install_superpack.sh
 #  sh install_superpack.sh
 #
@@ -46,7 +46,6 @@ if [ $has_aptget -eq 0 ]; then
 elif [ `uname` = 'Darwin' ]; then
 
 
-
     if [ $has_brew -eq 0 ]; then
         echo "--- Installing with Homebrew"
         # Install homebrew with:
@@ -65,7 +64,7 @@ elif [ `uname` = 'Darwin' ]; then
         #fi
 
     else
-        echo "ERROR: Didn't find a package manage we recognize. "
+        echo "ERROR: Didn't find a package manager we recognize. "
         echo "Recommended to install Homebrew with: "
         echo '  ruby -e "$(curl -fsSL https://raw.github.com/mxcl/homebrew/go)"'
         echo 
