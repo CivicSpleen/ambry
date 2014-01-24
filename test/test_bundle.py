@@ -5,8 +5,8 @@ Created on Jun 22, 2012
 """
 import unittest
 from  testbundle.bundle import Bundle
-from ambry.identity import * #@UnusedWildImport
-from test_base import  TestBase  # @UnresolvedImport
+from ambry.identity import *
+from test_base import  TestBase
 
 class Test(TestBase):
  

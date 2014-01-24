@@ -1,52 +1,62 @@
-table,seq,column,is_pk,is_fk,type,i1,ui1,size,scale,default,width,units,d_data_one,d_hash,d_make_partition,d_mandatory,description,id
-tone,1,id,1,,INTEGER,,,,100000.0,,,km,one,,1,,,ciEGPXmDC801001
-tone,2,text,,,VARCHAR,1,,20,,DEFAULT,,,two,1,,1,,ciEGPXmDC801002
-tone,3,integer,,,INTEGER,,1,3,,-1,,,three,1,,,,ciEGPXmDC801003
-tone,4,float,,,REAL,,1,,,3.14,,,four,,,,,ciEGPXmDC801004
-tone,5,extra,,,TEXT,,1,,,,,,extra,,,,,ciEGPXmDC801005
-tone,6,extra2,,,VARCHAR,,1,20,,DEFAULT,,,extra,,,,,ciEGPXmDC801006
-,,,,,,,,,,,,,,,,,,
-ttwo,1,id,1,,INTEGER,,,,,,,,one,,1,,,ciEGPXmDC802001
-ttwo,2,text,,,VARCHAR,1,,20,,DEFAULT,,,two,,,,,ciEGPXmDC802002
-ttwo,3,integer,,,INTEGER,,1,,,-1,,,three,1,,1,,ciEGPXmDC802003
-ttwo,4,float,,,REAL,,1,,,3.14,,,four,1,,,,ciEGPXmDC802004
-,,,,,,,,,,,,,,,,,,
-tthree,1,id,1,,INTEGER,,,,,,,,one,,1,,,ciEGPXmDC803001
-tthree,2,text,,,VARCHAR,1,,20,,DEFAULT,,,two,1,,,,ciEGPXmDC803002
-tthree,3,integer,,,INTEGER,,,3,,-1,,,three,,,,,ciEGPXmDC803003
-tthree,4,float,,,REAL,,,,,2.14,,,four,0,,0,,ciEGPXmDC803004
-tthree,5,date,,,DATE,,,,,1990-01-01,,,,,,,,ciEGPXmDC803005
-tthree,6,datetime,,,DATETIME,,,,,1990-01-01,,,,,,,,ciEGPXmDC803006
-tthree,7,time,,,TIME,,,,,12:00:00 PM,,,,,,,,ciEGPXmDC803007
-,,,,,,,,,,,,,,,,,,
-all,1,all_id,,,INTEGER,,,,,,,,one,,1,,,ciEGPXmDC804001
-all,2,text1,,,VARCHAR,,,20,,NONE,4,,two,,,,,ciEGPXmDC804002
-all,6,text2,,,VARCHAR,,,20,,NONE,5,,,,,,,ciEGPXmDC804006
-all,5,integer1,,,INTEGER,,,,,-1,3,,three,,,1,,ciEGPXmDC804005
-all,4,integer2,,,INTEGER,,,,,-1,4,,four,,,1,,ciEGPXmDC804004
-,,,,,,,,,,,,,,,,,,
-geot1,1,geot1_id,1,,INTEGER,,,,,,,,,,,,,ciEGPXmDC805001
-geot1,2,name,,,VARCHAR,,,20,,,,,,,,,,ciEGPXmDC805002
-geot1,3,code,,,INTEGER,,,,,,,,,,,,,ciEGPXmDC805003
-geot1,4,lat,,,REAL,,,,,,,,,,,,,ciEGPXmDC805004
-geot1,5,lon,,,REAL,,,,,,,,,,,,,ciEGPXmDC805005
-,,,,,,,,,,,,,,,,,,
-geot2,1,geot2_id,1,,INTEGER,,,,,,,,,,,,,ciEGPXmDC806001
-geot2,2,name,,,VARCHAR,,,20,,,,,,,,,,ciEGPXmDC806002
-geot2,3,code,,,INTEGER,,,,,,,,,,,,,ciEGPXmDC806003
-geot2,4,wkt,,,BLOB,,,,,,,,,,,,,ciEGPXmDC806004
-,,,,,,,,,,,,,,,,,,
-hdf5,1,hdf5_id,1,,INTEGER,,,,,,,,,,,,,ciEGPXmDC807001
-,,,,,,,,,,,,,,,,,,
-csv,1,csv_id,1,,INTEGER,,,,,,,,,,,,,ciEGPXmDC808001
-csv,2,text,,,VARCHAR,,,20,,,,,,,,,,ciEGPXmDC808002
-csv,3,integer,,,INTEGER,,,,,,,,,,,,,ciEGPXmDC808003
-csv,4,real,,,REAL,,,,,,,,,,,,,ciEGPXmDC808004
-,,,,,,,,,,,,,,,,,,
-coding,1,id,1,,INTEGER,,,,,,,,one,,1,,,ciEGPXmDC809001
-coding,2,text,,,VARCHAR,1,,20,,DEFAULT,,,two,1,,,,ciEGPXmDC809002
-coding,3,integer,,,INTEGER,,,4,,-1,,,three,,,,,ciEGPXmDC809003
-coding,4,float,,,REAL,,,,,2.14,,,four,0,,0,,ciEGPXmDC809004
-coding,5,date,,,DATE,,,,,1990-01-01,,,,,,,,ciEGPXmDC809005
-coding,6,datetime,,,DATETIME,,,,,1990-01-01,,,,,,,,ciEGPXmDC809006
-coding,7,time,,,TIME,,,,,12:00:00 PM,,,,,,,,ciEGPXmDC809007
+table,seq,column,is_pk,is_fk,type,i1,ui1,size,scale,default,width,description,units,d_code_key,d_data_one,d_hash,d_make_partition,d_mandatory,id
+tone,1,id,1,,INTEGER,,,,100000.0,,,,km,,one,,1,,ciEGPXmDC801001
+tone,2,text,,,VARCHAR,1,,20,,DEFAULT,,,,,two,1,,1,ciEGPXmDC801002
+tone,3,integer,,,INTEGER,,1,3,,-1,,,,,three,1,,,ciEGPXmDC801003
+tone,4,float,,,REAL,,1,,,3.14,,,,,four,,,,ciEGPXmDC801004
+tone,5,extra,,,TEXT,,1,,,,,,,,extra,,,,ciEGPXmDC801005
+tone,6,extra2,,,VARCHAR,,1,20,,DEFAULT,,,,,extra,,,,ciEGPXmDC801006
+,,,,,,,,,,,,,,,,,,,
+ttwo,1,id,1,,INTEGER,,,,,,,,,,one,,1,,ciEGPXmDC802001
+ttwo,2,text,,,VARCHAR,1,,20,,DEFAULT,,,,,two,,,,ciEGPXmDC802002
+ttwo,3,integer,,,INTEGER,,1,,,-1,,,,,three,1,,1,ciEGPXmDC802003
+ttwo,4,float,,,REAL,,1,,,3.14,,,,,four,1,,,ciEGPXmDC802004
+,,,,,,,,,,,,,,,,,,,
+tthree,1,id,1,,INTEGER,,,,,,,,,,one,,1,,ciEGPXmDC803001
+tthree,2,text,,,VARCHAR,1,,20,,DEFAULT,,,,,two,1,,,ciEGPXmDC803002
+tthree,3,integer,,,INTEGER,,,3,,-1,,,,,three,,,,ciEGPXmDC803003
+tthree,4,float,,,REAL,,,,,2.14,,,,,four,0,,0,ciEGPXmDC803004
+tthree,5,date,,,DATE,,,,,1990-01-01,,,,,,,,,ciEGPXmDC803005
+tthree,6,datetime,,,DATETIME,,,,,1990-01-01,,,,,,,,,ciEGPXmDC803006
+tthree,7,time,,,TIME,,,,,12:00:00 PM,,,,,,,,,ciEGPXmDC803007
+,,,,,,,,,,,,,,,,,,,
+all,1,all_id,,,INTEGER,,,,,,,,,,one,,1,,ciEGPXmDC804001
+all,2,text1,,,VARCHAR,,,20,,NONE,4,,,,two,,,,ciEGPXmDC804002
+all,6,text2,,,VARCHAR,,,20,,NONE,5,,,,,,,,ciEGPXmDC804006
+all,5,integer1,,,INTEGER,,,,,-1,3,,,,three,,,1,ciEGPXmDC804005
+all,4,integer2,,,INTEGER,,,,,-1,4,,,,four,,,1,ciEGPXmDC804004
+,,,,,,,,,,,,,,,,,,,
+geot1,1,geot1_id,1,,INTEGER,,,,,,,,,,,,,,ciEGPXmDC805001
+geot1,2,name,,,VARCHAR,,,20,,,,,,,,,,,ciEGPXmDC805002
+geot1,3,code,,,INTEGER,,,,,,,,,,,,,,ciEGPXmDC805003
+geot1,4,lat,,,REAL,,,,,,,,,,,,,,ciEGPXmDC805004
+geot1,5,lon,,,REAL,,,,,,,,,,,,,,ciEGPXmDC805005
+,,,,,,,,,,,,,,,,,,,
+geot2,1,geot2_id,1,,INTEGER,,,,,,,,,,,,,,ciEGPXmDC806001
+geot2,2,name,,,VARCHAR,,,20,,,,,,,,,,,ciEGPXmDC806002
+geot2,3,code,,,INTEGER,,,,,,,,,,,,,,ciEGPXmDC806003
+geot2,4,wkt,,,BLOB,,,,,,,,,,,,,,ciEGPXmDC806004
+,,,,,,,,,,,,,,,,,,,
+hdf5,1,hdf5_id,1,,INTEGER,,,,,,,,,,,,,,ciEGPXmDC807001
+,,,,,,,,,,,,,,,,,,,
+csv,1,csv_id,1,,INTEGER,,,,,,,,,,,,,,ciEGPXmDC808001
+csv,2,text,,,VARCHAR,,,20,,,,,,,,,,,ciEGPXmDC808002
+csv,3,integer,,,INTEGER,,,,,,,,,,,,,,ciEGPXmDC808003
+csv,4,real,,,REAL,,,,,,,,,,,,,,ciEGPXmDC808004
+,,,,,,,,,,,,,,,,,,,
+coding,1,id,1,,INTEGER,,,,,-1,,,,,one,,1,,ciEGPXmDC809001
+coding,2,text,,,VARCHAR,1,,10,,-,,,,,two,1,,,ciEGPXmDC809002
+coding,3,integer,,,INTEGER,,,,,-1,,,,,three,,,,ciEGPXmDC809003
+coding,4,float,,,REAL,,,,,-1,,,,,four,0,,0,ciEGPXmDC809004
+coding,5,date,,,DATE,,,,,-1,,,,,,,,,ciEGPXmDC809005
+coding,6,datetime,,,DATETIME,,,,,-1,,,,,,,,,ciEGPXmDC809006
+coding,7,time,,,TIME,,,,,-1,,,,,,,,,ciEGPXmDC809007
+coding,8,integer_code,,,VARCHAR,,,1,,,,Non-integer code value for column integer,,,,,,,ciEGPXmDC809008
+coding,9,date_code,,,VARCHAR,,,1,,,,Non-integer code value for column date,,,,,,,ciEGPXmDC809009
+,,,,,,,,,,,,,,,,,,,
+coding_integer_codes,1,id,1,,INTEGER,,,,,,,,,"[""coding"", ""integer""]",,,,,ciEGPXmDC80a001
+coding_integer_codes,2,code,,,TEXT,,,1,,,,Value of code,,,,,,,ciEGPXmDC80a002
+coding_integer_codes,3,description,,,TEXT,,,,,,,Code description,,,,,,,ciEGPXmDC80a003
+,,,,,,,,,,,,,,,,,,,
+coding_date_codes,1,id,1,,INTEGER,,,,,,,,,"[""coding"", ""date""]",,,,,ciEGPXmDC80b001
+coding_date_codes,2,code,,,TEXT,,,1,,,,Value of code,,,,,,,ciEGPXmDC80b002
+coding_date_codes,3,description,,,TEXT,,,,,,,Code description,,,,,,,ciEGPXmDC80b003

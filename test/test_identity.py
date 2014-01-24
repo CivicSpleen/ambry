@@ -5,11 +5,17 @@ Created on Jul 6, 2013
 """
 import unittest
 from ambry.identity import *
+from  testbundle.bundle import Bundle
+from test_base import  TestBase
 
-class Test(unittest.TestCase):
+class Test(TestBase):
 
     def setUp(self):
-        pass
+
+        self.copy_or_build_bundle()
+
+        self.bundle = Bundle()
+        self.bundle_dir = self.bundle.bundle_dir
 
     def tearDown(self):
         pass
@@ -454,8 +460,8 @@ class Test(unittest.TestCase):
                  for p in bp._find_orm(pnq).all()]
 
 
-        self.assertEqual({'source-dataset-subset-variation-t2-s1-0.0.1',
-                          'source-dataset-subset-variation-t1-s1-0.0.1'},
+        self.assertEqual({u'source-dataset-subset-variation-t2-s1-0.0.1',
+                          u'source-dataset-subset-variation-t1-s1-0.0.1'},
                          set(names))
 
         names = [p.vname
@@ -656,6 +662,8 @@ class Test(unittest.TestCase):
 
         finally:
             os.rename(save, orig)
+            self.delete_bundle()
+
 
     def test_format(self):
 
@@ -666,6 +674,11 @@ class Test(unittest.TestCase):
             pi = Identity(name, dn).as_partition(space='space', format=format)
             print type(pi), pi.path
 
+
+def suite():
+    suite = unittest.TestSuite()
+    suite.addTest(unittest.makeSuite(Test))
+    return suite
 
 
 if __name__ == "__main__":

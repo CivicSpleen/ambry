@@ -5,7 +5,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from ..dbexceptions import DependencyError
 from relational import RelationalWarehouse #@UnresolvedImport
-from ..library import LibraryDb
+from ..library.database import LibraryDb
 
 
 class PostgresWarehouse(RelationalWarehouse):

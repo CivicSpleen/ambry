@@ -179,7 +179,7 @@ class CensusTransform(BasicTransform):
 
         Args:
             column an orm.Column
-            useIndex if True, acess the column value in the row by index, not name
+            useIndex if True, access the column value in the row by index, not name
             
 
         """
@@ -209,7 +209,8 @@ class CensusTransform(BasicTransform):
             elif column.datatype == 'real' or column.datatype == 'float':
                 default = float(column.default) 
             elif column.datatype == 'integer'  or str(column.datatype) == 'integer64' :
-                default = int(column.default) 
+                default = int(column.default)
+
             else:
                 raise ValueError('Unknown column datatype: '+column.datatype)
         else:

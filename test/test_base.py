@@ -18,6 +18,24 @@ class TestBase(unittest.TestCase):
 
     server_url = None
 
+    def bundle_dirs(self):
+
+        bundle = Bundle()
+
+        marker = bundle.filesystem.build_path('test-marker')
+        build_dir = bundle.filesystem.build_path() + '/' # Slash needed for rsync
+        save_dir = bundle.filesystem.build_path() + "-save/"
+
+        return bundle, marker, build_dir, save_dir
+
+    def delete_bundle(self):
+        from ambry.util import rm_rf
+
+        bundle, marker, build_dir, save_dir = self.bundle_dirs()
+
+        rm_rf(build_dir)
+        rm_rf(save_dir)
+
     def copy_or_build_bundle(self):
         """Set up a clean bundle build, either by re-building the bundle, or
         by copying it from a saved bundle directory """
@@ -26,15 +44,34 @@ class TestBase(unittest.TestCase):
         # the bundle doesn't exist and the saved version doesn't exist, 
         # build a new one. 
 
-        bundle = Bundle()  
+        bundle, marker, build_dir, save_dir = self.bundle_dirs()
+
         idnt = bundle.identity
-        idnt.revision = 1
-        bundle.config.rewrite(identity=idnt.dict)
+
+        if str(idnt.name.version) != "0.0.1":
+            # Rebuild the bundle if the test_library.py:test_versions
+            # script didn't reset the bundle at the end
+            from ambry.util import rm_rf
+            rm_rf(build_dir)
+            rm_rf(save_dir)
+
+        idnt = Identity.from_dict({'subset': 'subset',
+                                   'vid': 'piEGPXmDC8001001',
+                                   'variation': 'variation',
+                                   'dataset': 'dataset',
+                                   'source': 'source',
+                                   'version': '0.0.1',
+                                   'id': 'diEGPXmDC8',
+                                   'revision': 1}
+        )
+
+        bundle.config.rewrite(
+            identity = idnt.ident_dict,
+            names = idnt.names_dict
+        )
 
         bundle = Bundle()  
-        marker = bundle.filesystem.build_path('test-marker')
-        build_dir =  bundle.filesystem.build_path()+'/' # Slash needed for rsync
-        save_dir = bundle.filesystem.build_path()+"-save/"
+
 
         if not os.path.exists(marker):
             logger.info( "Build dir marker ({}) is missing".format(marker))
@@ -46,7 +83,10 @@ class TestBase(unittest.TestCase):
             if not os.path.exists(save_dir):
                 logger.info( "Save dir is missing; re-build bundle. ")
                 bundle.prepare()
-                
+
+                if str(bundle.identity.name.version) != '0.0.1':
+                    raise Exception("Can only save bundle if version is 0.0.1")
+
                 bundle.build()
                 
                 with open(marker, 'w') as f:

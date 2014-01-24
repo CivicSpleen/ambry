@@ -35,18 +35,17 @@ identity:
     cache_key: source/dataset-subset-variation-0.0.1.db
     dataset: dataset
     id: diEGPXmDC8
-    name: source-dataset-subset-variation
     revision: 1
     source: source
     subset: subset
     variation: variation
     version: 0.0.1
-    vid: diEGPXmDC8001
-    vname: source-dataset-subset-variation-0.0.1
 names:
     fqname: source-dataset-subset-variation-0.0.1~diEGPXmDC8001
     name: source-dataset-subset-variation
     vid: diEGPXmDC8001
     vname: source-dataset-subset-variation-0.0.1
 partitions:
-- source-dataset-subset-variation-hdf5-hdf
+- source-dataset-subset-variation-coding
+- source-dataset-subset-variation-coding_date_codes
+- source-dataset-subset-variation-coding_integer_codes

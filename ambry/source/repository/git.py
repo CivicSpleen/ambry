@@ -46,7 +46,7 @@ class GitShellService(object):
 
     def init_remote(self, url):
         
-        return git.upstream('add','origin',url)
+        return git.remote('add','origin',url)
 
 
     def deinit(self):

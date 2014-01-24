@@ -837,8 +837,7 @@ class Test(TestBase):
         self.assertEquals(self.bundle.identity.name,  l.get(self.bundle.identity.name).identity.name)
         
         
-        
-        
+
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
