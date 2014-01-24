@@ -1,3 +1,1 @@
-recursive-include ambry/support *.yaml *.sql
-recursive-include test *
 include requirements.txt
