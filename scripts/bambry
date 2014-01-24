@@ -5,4 +5,4 @@
 # Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
 
-python -m databundles.cli bundle -d $(pwd) $@
+python -m ambry.cli bundle -d $(pwd) $@

@@ -237,7 +237,7 @@ def main():
     from .warehouse import warehouse_command, warehouse_parser
     from .remote import remote_parser,remote_command
     from test import test_parser, test_command
-    from install import install_parser, install_command
+    from config import config_parser, config_command
     from ckan import ckan_parser, ckan_command
     from source import source_command, source_parser
     from bundle import bundle_command, bundle_parser
@@ -249,6 +249,7 @@ def main():
     source_parser(cmd)
     remote_parser(cmd)
     test_parser(cmd)
+    config_parser(cmd)
     bundle_parser(cmd)
 
     args = parser.parse_args()
@@ -269,31 +270,26 @@ def main():
         'warehouse':warehouse_command,
         'remote':remote_command,
         'test':test_command,
-        'install':install_command,
         'ckan':ckan_command,
         'source': source_command,
+        'config': config_command,
     }
-        
+
+
     f = funcs.get(args.command, False)
-        
-    if f != install_command:
-        rc = get_runconfig(rc_path)
-        src = get_runconfig(rc_path, is_server = True)
-    else:
-        rc = None
-        src = None
-        
+
+    rc = get_runconfig(rc_path)
+
     global logger
 
     logger = get_logger("{}.{}".format(args.command,args.subcommand  ))
     logger.setLevel(logging.INFO) 
 
-
     if not f:
         err("Error: No command: "+args.command)
     else:
         try:
-            f(args, rc, src)
+            f(args, rc)
         except KeyboardInterrupt:
             prt('\nExiting...')
             pass

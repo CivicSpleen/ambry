@@ -32,17 +32,12 @@ def remote_parser(cmd):
 
 
 
-def remote_command(args, rc, src):
+def remote_command(args, rc):
     from ambry.library import new_library
 
-    if args.is_server:
-        config  = src
-    else:
-        config = rc
-    
-    l = new_library(config.library(args.name))
+    l = new_library(rc.library(args.name))
 
-    globals()['remote_'+args.subcommand](args, l,config)
+    globals()['remote_'+args.subcommand](args, l,rc)
 
 
 

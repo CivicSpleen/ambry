@@ -17,14 +17,18 @@ def library_parser(cmd):
     #
     lib_p = cmd.add_parser('library', help='Manage a library')
     lib_p.set_defaults(command='library')
-    asp = lib_p.add_subparsers(title='library commands', help='command help')
-    lib_p.add_argument('-n','--name',  default='default',  help='Select a different name for the library')
-        
+
+    lib_p.add_argument('-n', '--name', default='default', help='Select a different name for the library')
     group = lib_p.add_mutually_exclusive_group()
-    group.add_argument('-s', '--server',  default=False, dest='is_server',  action='store_true', help = 'Select the server configuration')
-    group.add_argument('-c', '--client',  default=False, dest='is_server',  action='store_false', help = 'Select the client configuration')
-        
-        
+    group.add_argument('-s', '--server', default=False, dest='is_server', action='store_true',
+                       help='Select the server configuration')
+    group.add_argument('-c', '--client', default=False, dest='is_server', action='store_false',
+                       help='Select the client configuration')
+
+
+    asp = lib_p.add_subparsers(title='library commands', help='command help')
+
+
     sp = asp.add_parser('push', help='Push new library files')
     sp.set_defaults(subcommand='push')
     sp.add_argument('-w','--watch',  default=False,action="store_true",  help='Check periodically for new files.')
@@ -115,17 +119,12 @@ def library_parser(cmd):
     group.add_argument('-c', '--csv',  default='csv', dest='format',  action='store_const', const='csv')
     
 
-def library_command(args, rc, src):
+def library_command(args, rc):
     from  ..library import new_library
 
-    if args.is_server:
-        config  = src
-    else:
-        config = rc
-    
-    l = new_library(config.library(args.name))
+    l = new_library(rc.library(args.name))
 
-    globals()['library_'+args.subcommand](args, l,config)
+    globals()['library_'+args.subcommand](args, l,rc)
 
 
 def library_init(args, l, config):

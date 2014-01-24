@@ -16,7 +16,7 @@ import os
 import yaml
 import shutil
 
-def source_command(args, rc, src):
+def source_command(args, rc):
 
     st = SourceTree(rc.sourcerepo.dir)
 

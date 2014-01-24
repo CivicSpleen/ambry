@@ -28,9 +28,7 @@ class RunConfig(object):
     earlier ones. 
     '''
 
-    ROOT_CONFIG = '/etc/ambry/config.yaml'
-    SERVER_CONFIG = '/etc/ambry/server.yaml'
-    CLIENT_CONFIG = '/etc/ambry/client.yaml'
+    ROOT_CONFIG = '/etc/ambry.yaml'
     USER_CONFIG = os.path.expanduser('~/.ambry.yaml')
     DIR_CONFIG = os.path.join(os.getcwd(),'ambry.yaml')
 
@@ -50,8 +48,7 @@ class RunConfig(object):
         if isinstance(path, (list, tuple, set)):
             self.files = path
         else:
-            self.files = [ 
-                          RunConfig.SERVER_CONFIG if is_server else RunConfig.CLIENT_CONFIG , 
+            self.files = [
                           RunConfig.ROOT_CONFIG, 
                           RunConfig.USER_CONFIG, 
                           RunConfig.DIR_CONFIG, 

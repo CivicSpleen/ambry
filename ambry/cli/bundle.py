@@ -12,7 +12,7 @@ import os
 import yaml
 import shutil
 
-def bundle_command(args, rc, src):
+def bundle_command(args, rc):
     import os
     from ..run import import_file
 
@@ -25,7 +25,7 @@ def bundle_command(args, rc, src):
         for line in sys.stdin.readlines():
             args.bundle_dir = line.strip()
             prt('====== {}',args.bundle_dir)
-            bundle_command(args,rc, src)
+            bundle_command(args,rc)
 
         return
     elif args.bundle_dir[0] != '/':

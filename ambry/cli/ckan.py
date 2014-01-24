@@ -20,7 +20,7 @@ def ckan_parser(cmd):
     group.add_argument('-j', '--json',  default=True, dest='use_json',  action='store_true')
     
     
-def ckan_command(args,rc, src):
+def ckan_command(args,rc):
     from ambry.dbexceptions import ConfigurationError
     import ambry.client.ckan
     import requests

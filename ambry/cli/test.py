@@ -25,7 +25,7 @@ def test_parser(cmd):
          
        
                     
-def test_command(args,rc, src):
+def test_command(args,rc):
     
     if args.subcommand == 'config':
         prt(rc.dump())

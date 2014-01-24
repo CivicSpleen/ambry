@@ -6,17 +6,12 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from . import prt, err, _print_info #@UnresolvedImport
 from ambry.warehouse import ResolverInterface, ResolutionError
 
-def warehouse_command(args, rc, src):
+def warehouse_command(args, rc):
     from ambry.warehouse import new_warehouse
 
-    if args.is_server:
-        config  = src
-    else:
-        config = rc
+    w = new_warehouse(rc.warehouse(args.name))
 
-    w = new_warehouse(config.warehouse(args.name))
-
-    globals()['warehouse_'+args.subcommand](args, w,config)
+    globals()['warehouse_'+args.subcommand](args, w,rc)
 
 def warehouse_parser(cmd):
    
