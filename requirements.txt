@@ -14,4 +14,4 @@ markdown
 psycopg2
 semantic_version
 # This pysqlite clone enables load_extension. Only needed on Linux
-git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
+#git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
