@@ -17,7 +17,7 @@ if [ $? -ne 0 ]; then
 
     echo "Press y to visit the Homebrew web page, or any other key to cancel"
     read -n 1 yn
-    if [ yn == 'y' ]; then
+    if [ "$yn" == 'y' ]; then
         open 'http://brew.sh/'
         exit 0
     else
@@ -26,6 +26,8 @@ if [ $? -ne 0 ]; then
 
 fi
 
+# Upgrade setuptools
+curl  https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py | sudo python
 
 which clang > /dev/null
 
@@ -53,7 +55,7 @@ if [ $gdal_version -lt 1920 ]; then
     echo "\nERROR: GDAL Found, but version $gdal_version is too old. Upgrade with KyngChaos frame work, "
     echo "Press y to visit the GDAL download Page, or any other key to cancel"
     read -n 1 yn
-    if [ yn == 'y' ]; then
+    if [ "$yn"  == 'y' ]; then
         open 'http://www.kyngchaos.com/software/frameworks#gdal_complete'
         exit 0
     else
@@ -65,11 +67,11 @@ echo "--- Installing with Homebrew"
 rc=0
 brew install git
 let rc=rc+$?
-brew install homebrew/science/hdf5
-let rc=rc+$?
 brew install spatialite-tools
 let rc=rc+$?
 brew install postgresql
+let rc=rc+$?
+brew install homebrew/science/hdf5
 let rc=rc+$?
 
 if [ $rc -ne 0 ]; then
@@ -77,8 +79,5 @@ if [ $rc -ne 0 ]; then
 	exit 1
 fi
 
-echo "--- Installing Ambry"
-
-pip install "git+https://github.com/clarinova/ambry.git#egg=ambry"
 
 
