@@ -14,8 +14,16 @@ if [ $? -ne 0 ]; then
     echo "ERROR: This script requires the bew package manager "
     echo "Recommended to install Homebrew with: "
     echo '  ruby -e "$(curl -fsSL https://raw.github.com/mxcl/homebrew/go)"'
-    echo
-    exit 1
+
+    echo "Press y to visit the Homebrew web page, or any other key to cancel"
+    read -n 1 yn
+    if [ yn == 'y' ]; then
+        open 'http://brew.sh/'
+        exit 0
+    else
+        exit 1
+    fi
+
 fi
 
 
@@ -29,14 +37,27 @@ fi
 gdal_version=$(python -c 'import gdal; print gdal.VersionInfo()')
 
 if [ $? -ne 0 ]; then
-    echo "ERROR: GDAL not found. Install the KyngChaos GDAL framework, from http://www.kyngchaos.com/files/software/frameworks/GDAL_Complete-1.9.dmg"
-    exit 1	
+    echo "ERROR: GDAL not found. Install the KyngChaos "GDAL Complete" framework, from http://www.kyngchaos.com/software/frameworks#gdal_complete"
+    echo "Press y to visit the GDAL download Page, or any other key to cancel"
+    read -n 1 yn
+    if [ yn == 'y' ]; then
+        open 'http://www.kyngchaos.com/software/frameworks#gdal_complete'
+        exit 0
+    else
+        exit 1
+    fi
 fi	
 
 if [ $gdal_version -lt 1920 ]; then
     echo "ERROR: GDAL Found, but version $gdal_version is too old. Upgrade with KyngChaos frame work, "
-    echo " from:http://www.kyngchaos.com/files/software/frameworks/GDAL_Complete-1.9.dmg"
-    exit 1			
+    echo "Press y to visit the GDAL download Page, or any other key to cancel"
+    read -n 1 yn
+    if [ yn == 'y' ]; then
+        open 'http://www.kyngchaos.com/software/frameworks#gdal_complete'
+        exit 0
+    else
+        exit 1
+    fi
 fi
 
 echo "--- Installing with Homebrew"
