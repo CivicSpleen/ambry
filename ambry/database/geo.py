@@ -5,18 +5,17 @@ Revised BSD License, included in this distribution as LICENSE.txt
    
 from inserter import InserterInterface, UpdaterInterface
 from .partition import PartitionDb
-from ..geo.sfschema import TableShapefile
 from ..partition.geo import GeoPartitionName
 
 class FeatureInserter(InserterInterface):
     
     def __init__(self, partition, table, dest_srs=4326, source_srs=None, layer_name = None):
+        from ..geo.sfschema import TableShapefile
 
         self.partition = partition
         self.bundle = partition.bundle
         self.table = table
-        
-        
+
         self.sf = TableShapefile(self.bundle, partition.database.path, table, dest_srs, source_srs, name=layer_name)
         
     

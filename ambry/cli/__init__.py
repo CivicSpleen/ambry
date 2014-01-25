@@ -245,7 +245,6 @@ def main():
     library_parser(cmd)  
     warehouse_parser(cmd)
     ckan_parser(cmd)
-    install_parser(cmd)
     source_parser(cmd)
     remote_parser(cmd)
     test_parser(cmd)
@@ -278,7 +277,10 @@ def main():
 
     f = funcs.get(args.command, False)
 
-    rc = get_runconfig(rc_path)
+    if args.command == 'config' and args.subcommand == 'install':
+        rc = None
+    else:
+        rc = get_runconfig(rc_path)
 
     global logger
 

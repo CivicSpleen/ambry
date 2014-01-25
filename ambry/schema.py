@@ -290,11 +290,15 @@ class Schema(object):
         #print driver, column.name, column.size, column.default
                 
         type_ =  Column.types[column.datatype][0]
-    
+
+
         if column.datatype == Column.DATATYPE_NUMERIC:
             return type_(column.precision, column.scale)
         elif column.size:
-            return type_(column.size)
+            try:
+                return type_(column.size)
+            except TypeError: # usually, the type desont't ake a size
+                return type_
         else:
             return type_
 

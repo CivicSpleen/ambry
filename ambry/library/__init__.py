@@ -754,6 +754,10 @@ class Library(object):
         return bundles
 
     @property
+    def remotes(self):
+        return self._remotes
+
+    @property
     def info(self):
         return """
 ------ Library {name} ------

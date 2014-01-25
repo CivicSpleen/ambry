@@ -7,6 +7,9 @@ from ..identity import PartitionIdentity, PartitionName
 from sqlite import SqlitePartition
 
 
+def _geo_db_class(): # To break an import dependency
+    from ..database.geo import GeoDb
+    return GeoDb
 
 class GeoPartitionName(PartitionName):
     PATH_EXTENSION = '.geodb'
@@ -15,14 +18,11 @@ class GeoPartitionName(PartitionName):
 class GeoPartitionIdentity(PartitionIdentity):
     _name_class = GeoPartitionName
 
-
-from ..database.geo import GeoDb
-
 class GeoPartition(SqlitePartition):
     '''A Partition that hosts a Spatialite for geographic data'''
 
     _id_class = GeoPartitionIdentity
-    _db_class = GeoDb
+    _db_class = _geo_db_class()
     
     def __init__(self, bundle, record, **kwargs):
         super(GeoPartition, self).__init__(bundle, record)
@@ -30,10 +30,9 @@ class GeoPartition(SqlitePartition):
     @property
     def database(self):
         if self._database is None:
-            self._database = GeoDb(self.bundle, self, base_path=self.path)          
+            self._database = self._db_class(self.bundle, self, base_path=self.path)
         return self._database
 
-        
     def get_srs_wkt(self):
         
         #

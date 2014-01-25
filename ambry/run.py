@@ -30,6 +30,7 @@ class RunConfig(object):
 
     ROOT_CONFIG = '/etc/ambry.yaml'
     USER_CONFIG = os.path.expanduser('~/.ambry.yaml')
+    USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
     DIR_CONFIG = os.path.join(os.getcwd(),'ambry.yaml')
 
     def __init__(self, path=None, is_server = False):
@@ -50,7 +51,8 @@ class RunConfig(object):
         else:
             self.files = [
                           RunConfig.ROOT_CONFIG, 
-                          RunConfig.USER_CONFIG, 
+                          RunConfig.USER_CONFIG,
+                          RunConfig.USER_ACCOUNTS,
                           RunConfig.DIR_CONFIG, 
                           path]
 
@@ -171,7 +173,7 @@ class RunConfig(object):
         e =  self.group_item('filesystem', name) 
         
         fs = self.group('filesystem') 
-        root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
 
         return self._sub_strings(e, {
                                      'upstream': lambda k,v: self.filesystem(v),
@@ -201,9 +203,7 @@ class RunConfig(object):
 
         e =  self._sub_strings(e, {
                                      'filesystem': lambda k,v: self.filesystem(v),
-                                     'remote': lambda k,v: self.filesystem(v),
                                      'database': lambda k,v: self.database(v),
-                                     'account': lambda k,v: self.account(v),
                                      'upstream': lambda k,v: self.filesystem(v),
                                      'cdn': lambda k,v: self.account(v),
                                      }  )
@@ -244,9 +244,8 @@ class RunConfig(object):
         def dir(self):   
 
             fs = self.this.group('filesystem') 
-            root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
-                    
-            
+            root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
+
             return self.this.group('sourcerepo')['dir'].format(root=root_dir)
 
     
@@ -261,7 +260,7 @@ class RunConfig(object):
     def database(self,name):
         
         fs = self.group('filesystem') 
-        root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
         
         e = self.group_item('database', name) 
 
@@ -288,7 +287,7 @@ class RunConfig(object):
         if not 'python' in fs:
             return None
         
-        root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
 
         python_dir = fs['python'].format(root=root_dir)
 

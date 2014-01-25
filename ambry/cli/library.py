@@ -311,7 +311,7 @@ def library_info(args, l, config, list_all=False):
         prt("Name:     {}",args.name)
         prt("Database: {}",l.database.dsn)
         prt("Cache:    {}",l.cache)
-        prt("Remote:   {}",l.upstream if l.upstream else 'None')
+        prt("Remotes:  {}", ', '.join(l.remotes))
 
     
 def library_push(args, l, config):
