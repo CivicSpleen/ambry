@@ -19,11 +19,22 @@ def readme():
     with open("README.md") as f:
         return f.read()
 
+def read_requirements(file_name):
+
+    with open(file_name, 'r') as f:
+        for line in f.read().split('\n'):
+
+            if re.match(r'(\s*#)|(\s*$)', line):
+                continue
+
+    if 'linux' in sys.platform:
+        yield 'git+https://github.com/clarinova/pysqlite.git#egg=pysqlite'
+
+
 def parse_requirements(file_name):
     requirements = []
-    for line in open(file_name, 'r').read().split('\n'):
-        if re.match(r'(\s*#)|(\s*$)', line):
-            continue
+    for line in read_requirements(file_name):
+
         if re.match(r'\s*-e\s+', line):
             requirements.append(re.sub(r'\s*-e\s+.*#egg=(.*)$', r'\1', line))
         elif re.match(r'\s*-f\s+', line):
@@ -35,7 +46,7 @@ def parse_requirements(file_name):
 
 def parse_dependency_links(file_name):
     dependency_links = []
-    for line in open(file_name, 'r').read().split('\n'):
+    for line in read_requirements(file_name):
         if re.match(r'\s*-[ef]\s+', line):
             dependency_links.append(re.sub(r'\s*-[ef]\s+', '', line))
 
@@ -50,7 +61,7 @@ setup(name = "ambry",
       url = "https://github.com/clarinova/ambry",
       packages = find_packages(), 
       scripts=['scripts/bambry', 'scripts/ambry'],
-      package_data = {"ambry": ["support/*", "geo/support/*" ]},
+      package_data = {"ambry": ["support/*"]},
       license = "",
       platforms = "Posix; MacOS X; Linux",
       classifiers=[
