@@ -16,6 +16,7 @@ if [ $? -ne 0 ]; then
     echo '  ruby -e "$(curl -fsSL https://raw.github.com/mxcl/homebrew/go)"'
     echo
     exit 1
+fi
 
 
 which clang > /dev/null
@@ -47,9 +48,7 @@ let rc=rc+$?
 brew install spatialite-tools
 let rc=rc+$?
 
-#if [ $rc -ne 0 ]; then
-#	echo "ERROR: one of the brew packages didn't install correctly"
-#	exit 1
-#fi
-
-
+if [ $rc -ne 0 ]; then
+	echo "ERROR: one of the brew packages didn't install correctly"
+	exit 1
+fi
