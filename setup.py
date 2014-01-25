@@ -60,9 +60,6 @@ def parse_dependency_links(file_name):
 
     return dependency_links
 
-print parse_requirements('requirements.txt')
-print parse_dependency_links('requirements.txt')
-
 setup(name = "ambry",
       version = __version__,
       description = "Data packaging and distribution framework",

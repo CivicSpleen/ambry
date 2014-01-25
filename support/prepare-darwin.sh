@@ -69,6 +69,8 @@ brew install homebrew/science/hdf5
 let rc=rc+$?
 brew install spatialite-tools
 let rc=rc+$?
+brew install postgresql
+let rc=rc+$?
 
 if [ $rc -ne 0 ]; then
 	echo "ERROR: one of the brew packages didn't install correctly"
