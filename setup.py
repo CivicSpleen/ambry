@@ -29,8 +29,6 @@ def read_requirements(file_name):
 
             yield line
 
-    if 'linux' in sys.platform:
-        yield 'git+https://github.com/clarinova/pysqlite.git#egg=pysqlite'
 
 
 def parse_requirements(file_name):
@@ -44,6 +42,10 @@ def parse_requirements(file_name):
         else:
             requirements.append(line)
 
+
+    if 'linux' in sys.platform:
+        requirements.append('pysqlite')
+
     return requirements
 
 def parse_dependency_links(file_name):
@@ -52,7 +54,14 @@ def parse_dependency_links(file_name):
         if re.match(r'\s*-[ef]\s+', line):
             dependency_links.append(re.sub(r'\s*-[ef]\s+', '', line))
 
+
+    if 'linux' in sys.platform:
+        dependency_links.append('git+https://github.com/clarinova/pysqlite.git#egg=pysqlite')
+
     return dependency_links
+
+print parse_requirements('requirements.txt')
+print parse_dependency_links('requirements.txt')
 
 setup(name = "ambry",
       version = __version__,
