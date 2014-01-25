@@ -27,6 +27,8 @@ def read_requirements(file_name):
             if re.match(r'(\s*#)|(\s*$)', line):
                 continue
 
+            yield line
+
     if 'linux' in sys.platform:
         yield 'git+https://github.com/clarinova/pysqlite.git#egg=pysqlite'
 

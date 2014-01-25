@@ -42,6 +42,7 @@ if [ $? -ne 0 ]; then
     read -n 1 yn
     if [ "$yn" == 'y' ]; then
         open 'http://www.kyngchaos.com/software/frameworks#gdal_complete'
+        echo "\nBe sure to install both GDAL Complete and Numpy"
         exit 0
     else
         exit 1
@@ -64,7 +65,7 @@ echo "--- Installing with Homebrew"
 rc=0
 brew install git
 let rc=rc+$?
-brew install hdf5
+brew install homebrew/science/hdf5
 let rc=rc+$?
 brew install spatialite-tools
 let rc=rc+$?
@@ -73,3 +74,9 @@ if [ $rc -ne 0 ]; then
 	echo "ERROR: one of the brew packages didn't install correctly"
 	exit 1
 fi
+
+echo "--- Installing Ambry"
+
+pip install "git+https://github.com/clarinova/ambry.git#egg=ambry"
+
+
