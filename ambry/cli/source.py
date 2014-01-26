@@ -8,7 +8,8 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 
 
-from ..cli import prt, err, warn
+from ..cli import prt, err, warn, _find
+
 from ..cli import  load_bundle, _print_bundle_list
 from ..source import SourceTree
 
@@ -18,7 +19,10 @@ import shutil
 
 def source_command(args, rc):
 
-    st = SourceTree(rc.sourcerepo.dir)
+    def logger(x):
+        prt(x)
+
+    st = SourceTree(rc.sourcerepo.dir, logger=logger)
 
     globals()['source_'+args.subcommand](args, st, rc)
 
@@ -45,7 +49,7 @@ def source_parser(cmd):
 
     sp = asp.add_parser('info', help='Information about the source configuration')
     sp.set_defaults(subcommand='info')
-    sp.add_argument('term',  nargs='?', type=str,help='Name or ID of the bundle or partition to print information for')
+    sp.add_argument('terms',  nargs='?', type=str,help='Name or ID of the bundle or partition to print information for')
     
     
     sp = asp.add_parser('deps', help='Print the depenencies for all source bundles')
@@ -62,15 +66,16 @@ def source_parser(cmd):
 
     sp = asp.add_parser('list', help='List the source dirctories')
     sp.set_defaults(subcommand='list')
+    sp.add_argument('-l', '--list-library', default=False, action="store_true", help='Also include a list from the library')
 
-    sp = asp.add_parser('sync', help='Load references from the confiurged source remotes')
+    sp = asp.add_parser('sync', help='Load references from the configured source remotes')
     sp.set_defaults(subcommand='sync')
     sp.add_argument('-l','--library',  default='default',  help='Select a library to add the references to')
-  
+    sp.add_argument('-p', '--print',  default=False, action="store_true", help='Print, rather than actually sync')
+
     sp = asp.add_parser('clone', help='Clone source into a local directory')
     sp.set_defaults(subcommand='clone')
-    sp.add_argument('-l','--library',  default='default',  help='Select a library to take references from')
-    sp.add_argument('dir', type=str,nargs='?',help='Source id')      
+    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Query term')
   
     sp = asp.add_parser('build', help='Build sources')
     sp.set_defaults(subcommand='build')
@@ -100,7 +105,7 @@ def source_parser(cmd):
     group.add_argument('-l', '--pull',  default=False, dest='repo_command',   action='store_const', const='pull', help='Pull from upstream')  
     group.add_argument('-i', '--install',  default=False, dest='repo_command',   action='store_const', const='install', help='Install the bundle')
 
-    sp = asp.add_parser('find', help='Find source packages that meet a vareity of conditions')
+    sp = asp.add_parser('find', help='Find source packages that meet a variety of conditions')
     sp.set_defaults(subcommand='find')
     sp.add_argument('-d','--dir',  help='Directory to start recursing from ')
     sp.add_argument('-P', '--plain', default=False,  action='store_true',
@@ -112,33 +117,35 @@ def source_parser(cmd):
     group.add_argument('-a', '--all', default=False, dest='all', action='store_true',
                        help='List all bundles, from root or sub dir')
 
-
+    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Query commands to find packages with. ')
 
     sp = asp.add_parser('watch', help='Watch the source directory for changes')
     sp.set_defaults(subcommand='watch')
 
-
 def source_info(args, st, rc):
     
-    if not args.term:
+    if not args.terms:
         prt("Source dir: {}", rc.sourcerepo.dir)
         for repo in  rc.sourcerepo.list:
             prt("Repo      : {}", repo.ident)
     else:
         import ambry.library as library
         from ..identity import new_identity
+
+        term = args.terms.pop(0)
+
         l = library.new_library(rc.library(args.library))  
         found = False      
         
         for r in l.database.get_file_by_type('source'):
             ident = new_identity(r.data)
             
-            if args.term == ident.name or args.term == ident.vname:
+            if term == ident.name or term == ident.vname:
                 found = r
                 break
                 
         if not found:
-            err("Didn't find source for term '{}'. (Maybe need to run 'source sync')", args.term)
+            err("Didn't find source for term '{}'. (Maybe need to run 'source sync')", term)
         else:
             from ..source.repository import new_repository
             repo = new_repository(rc.sourcerepo(args.name))
@@ -171,42 +178,50 @@ def source_list(args, st, rc, names=None):
 
     d = {}
 
-    l_list = l.list(datasets=d)
+    if args.list_library:
+        l_list = l.list(datasets=d)
 
     s_lst =  st.list(datasets=d)
 
     _print_bundle_list(d.values(), subset_names=names)
 
-            
 def source_clone(args, st, rc):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     import ambry.library as library
     from ..dbexceptions import ConflictError
 
-    l = library.new_library(rc.library(args.library))
 
-    def get_by_group(group):
-        return [f for f in  l.database.get_file_by_type('source') if f.group == group]
+    for term in args.terms:
 
-    for repo in rc.sourcerepo.list:
-        prt ("--- Cloning sources from: {}", repo.ident)
-        for f in get_by_group(repo.ident):
-            try:
-                ident = Identity.from_dict(f.data)
-                d = repo.clone(f.path, ident.source_path,repo.dir) 
-                prt("Cloned {} to {}",f.path, d)
-            except ConflictError as e :
-                warn("Clone failed for {}: {}".format(f.path, e.message))
+        if term.startswith('http'):
+            from ambry.source.repository.git import GitShellService
+
+            st.clone(term)
+
+        else:
+
+            ident = st.library.resolve(term)
+
+            for repo in rc.sourcerepo.list:
+                if repo.ident != ident.data['repo']:
+                    continue
+
+                prt ("--- Cloning sources for {} from: {}", term, repo.ident)
+
+                try:
+                    d = repo.clone(ident.url, ident.source_path, repo.dir)
+                    prt("Cloned {} to {}",ident.url, d)
+                except ConflictError as e :
+                    warn("Clone failed for {}: {}".format(ident.url, e.message))
                 
 def source_new(args, st, rc):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     from ..source.repository import new_repository
-    from ..identity import DatasetNumber
-    
-    
+    from ..identity import DatasetNumber, Identity
+
     repo = new_repository(rc.sourcerepo(args.name))  
 
-    ident = new_identity(vars(args))
+    ident = Identity.from_dict(vars(args))
 
     bundle_dir =  os.path.join(repo.dir, ident.source_path)
 
@@ -295,7 +310,7 @@ def source_build(args, st, rc):
         
     def build(bundle_dir):
         from ambry.library import new_library
-        from ambry.source.repository.git import GitShellService
+
         
         # Stash must happen before pull, and pull must happen
         # before the class is loaded in load_bundle, otherwize the class
@@ -476,8 +491,8 @@ def source_run(args, st, rc):
        
 def source_find(args, st, rc):
     from ..source.repository.git import GitRepository
+    from ..library.query import QueryCommand
 
-    
     dir_ = args.dir
 
     if args.plain:
@@ -485,30 +500,36 @@ def source_find(args, st, rc):
         def print_func(*args):
             print ' '.join(args)
 
-        prt=print_func
+        prtf=print_func
+    else:
+        prtf=prt
 
     if not dir_:
         dir_ = rc.sourcerepo.dir   
 
-    for root, _, files in os.walk(dir_):
-        if 'bundle.yaml' in files:
 
-            repo = GitRepository(None, root)
-            repo.bundle_dir = root
-            if args.commit:
-                if repo.needs_commit():
-                    prt(root)
-            elif args.push:
-                if repo.needs_push():
-                    prt(root)
-            elif args.init:
-                if repo.needs_init():
-                    prt(root)
-            elif args.all:
-                prt(root)
-            else:
-                err("Must specify either --push. --init or --commit")
-                
+    if args.terms:
+        return _find(args, st.library._library, rc, False)
+    else:
+        for root, _, files in os.walk(dir_):
+            if 'bundle.yaml' in files:
+
+                repo = GitRepository(None, root)
+                repo.bundle_dir = root
+                if args.commit:
+                    if repo.needs_commit():
+                        prtf(root)
+                elif args.push:
+                    if repo.needs_push():
+                        prtf(root)
+                elif args.init:
+                    if repo.needs_init():
+                        prtf(root)
+                elif args.all:
+                    prtf(root)
+                else:
+                    err("Must specify either --push. --init or --commit")
+
    
          
 def source_init(args, st, rc):
@@ -532,22 +553,12 @@ def source_init(args, st, rc):
     
 def source_sync(args, st, rc):
     '''Synchronize all of the repositories with the local library'''
-    import ambry.library as library
+    from ..source.repository.git import GitShellService
 
-    l = library.new_library(rc.library(args.library))
 
-   
+    # Sync all of the registered repositories
     for repo in rc.sourcerepo.list:
-        
-        prt('--- Sync with upstream source repository {}', repo.service.ident)
-        for e in repo.service.list():
-
-            ident = new_identity(e)
-
-            l.database.add_file(e['clone_url'], repo.service.ident, ident.id_, 
-                                state='synced', type_='source', source_url = e['clone_url'], data=e)
-            
-            prt("Added {:15s} {}",ident.id_,e['clone_url'] )
+        st.sync_org(repo)
 
 
 def source_deps(args, st, rc):
@@ -564,7 +575,7 @@ def source_deps(args, st, rc):
         deps = repo.bundle_deps(args.ref, reverse=bool(args.direction == 'r'))
 
         if args.detail:
-            source_list(args,rc, src, names=deps)    
+            source_list(args,rc, names=deps)
         else:
             for b in deps:
                 prt(b)    
@@ -577,11 +588,15 @@ def source_deps(args, st, rc):
         for i,level in enumerate(graph):
             for j, name in enumerate(level):
                 prt("{:3d} {:3d} {}",i,j,name)
-            
+
+
+
 
 def source_watch(args, st, rc):
 
     st.watch()
+
+
 
 
 

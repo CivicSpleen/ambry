@@ -345,7 +345,6 @@ def library_files(args, l, config):
             prt("{0:11s} {1:4s} {2}",f.ref,f.state,f.path)
       
 
-            
 def library_find(args, l, config):
     return _find(args, l, config, False)
 

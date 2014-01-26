@@ -97,7 +97,6 @@ class GitHubService(ServiceInterface,GitServiceMarker):
                     config = yaml.load(r.content, OrderedDictYAMLLoader)
                 except ScannerError:
                     print r.content
-                    print '!!!',url
                     raise 
                 ident = dict(config['identity'])
                 ident['clone_url'] = e['clone_url']

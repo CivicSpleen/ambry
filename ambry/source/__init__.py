@@ -23,9 +23,16 @@ def load_bundle(bundle_dir):
 
 class SourceTree(object):
 
-    def __init__(self, base_dir):
+    def __init__(self, base_dir, logger = None):
         self.base_dir = base_dir
         self._library = None
+        self.logger = logger
+
+        if not self.logger:
+            self.logger = lambda x: x
+
+        if not os.path.exists(self.base_dir):
+            os.makedirs(self.base_dir)
 
     def list(self, datasets=None, key='vid'):
         from ..identity import LocationRef, Identity
@@ -51,28 +58,109 @@ class SourceTree(object):
                 datasets[ck].data['path'] = root
 
 
-
         return sorted(datasets.values(), key=lambda x: x.vname)
+
+    @property
+    def library(self):
+        if not self._library:
+            self._library = SourceTreeLibrary(self, self.base_dir)
+
+        return self._library
+
+
+    def temp_repo(self):
+        from uuid import uuid4
+        from ..source.repository.git import GitShellService
+        tmp = os.path.join(self.base_dir, '_source', 'temp',str(uuid4()))
+
+        if not os.path.exists(os.path.dirname(tmp)):
+            os.makedirs(os.path.dirname(tmp))
+
+        return GitShellService(tmp)
 
 
     def watch(self):
         pass
 
 
+    def sync_org(self, repo):
+        '''Sync all fo the bundles in an organization or account'''
+        from ..identity import Identity
+
+        self.logger("Sync repo: {}".format(str(repo)))
+        for e in repo.service.list():
+
+            ident = Identity.from_dict(e)
+            self.logger("   Sync repo entry: {} -> {} ".format(ident.fqname, e['clone_url']))
+
+            self.library.add_source_ref(ident, repo=repo.ident, url=e['clone_url'], data=e)
+
+    def sync_repo(self, url):
+        pass
+
+    def clone(self,url):
+        '''Clone a new bundle insto the source tree'''
+
+        import shutil
+
+        repo = self.temp_repo()
+        repo.clone(url)
+
+        bundle_class = load_bundle(repo.path)
+        bundle = bundle_class(repo.path)
+
+        bundle_dir = os.path.join(self.base_dir, bundle.identity.source_path)
+
+        if os.path.exists(bundle_dir):
+            raise Exception("{} already exists".format(bundle_dir))
+
+        if not os.path.exists(os.path.dirname(bundle_dir)):
+            os.makedirs(os.path.dirname(bundle_dir))
+
+        shutil.move(repo.path, bundle_dir)
+
+        bundle_class = load_bundle(bundle_dir)
+        bundle = bundle_class(bundle_dir)
+
+        self.library.load_bundle(bundle_dir, bundle.identity)
+
 
 class SourceTreeLibrary(object):
 
 
-    @property
-    def library(self):
-        if not self._library:
-            self._library = self._create_library()
+    def __init__(self, tree, base_dir):
+        from ..library import _new_library
+        import os
 
-            if len(self._library.database.datasets()) == 0:
-                self._load_database()
+        self.tree = tree
+        self.base_dir = base_dir
 
-        return self._library
+        cache_dir = os.path.join(self.base_dir, '_source', 'cache')
 
+        if not os.path.exists(cache_dir):
+            os.makedirs(cache_dir)
+
+        library = _new_library({
+            '_name': 'source-library',
+            'filesystem': {
+                'dir': cache_dir
+
+            },
+            'database': {
+                'driver': 'sqlite',
+                'dbname': os.path.join(self.base_dir, '_source', 'source.db')
+
+            }
+        })
+
+        self._library = library
+
+
+        if len(self._library.database.datasets()) == 0:
+            self.sync()
+
+    def sync(self):
+        self._load_database()
 
     def check_bundle_config(self, path):
         pass
@@ -82,6 +170,44 @@ class SourceTreeLibrary(object):
 
     def check_bundle_repo(self, path):
         pass
+
+
+    def resolve(self, term):
+
+        # The terms come from the command line args as a list
+        try: term = term.pop(0)
+        except: pass
+
+        ident = self._library.resolve(term)
+
+        if not ident:
+            return None
+
+        f = self._library.database.get_file_by_ref(ident.id_, type_= 'source_url')
+
+        if f:
+
+            f = f.pop(0)
+
+            ident.url = f.source_url
+            ident.data['repo'] = f.group
+
+        return ident
+
+
+    def add_source_ref(self, ident, url, repo, data):
+
+        self._library.database.install_dataset_identity(ident)
+
+        self._library.database.add_file(
+            path=ident.fqname,
+            group=repo,
+            ref=ident.id_,
+            state='synced',
+            type_='source_url',
+            data=data,
+            source_url=data['clone_url'])
+
 
     def _add_file(self,path, identity, state='loaded',type_=None,
                   data=None, source_url=None):
@@ -106,82 +232,64 @@ class SourceTreeLibrary(object):
     def _remove_file(self, path):
         pass
 
-    def _create_library(self):
-        from ..cache.filesystem import FsCache
-        from ..library import _new_library
-
-        import os
-
-        cache_dir = os.path.join(self.base_dir, '_source', 'cache')
-
-        if not os.path.exists(cache_dir):
-            os.makedirs(cache_dir)
-
-        library = _new_library({
-            '_name': 'source-library',
-            'filesystem': {
-                'dir': cache_dir
-
-            },
-            'database': {
-                'driver': 'sqlite',
-                'dbname': os.path.join(self.base_dir, '_source', 'source.db')
-
-            }
-        })
-
-        return library
-
 
     def _load_database(self):
+
+        for ident in self.tree.list():
+            print 'Loading ', ident
+            path = ident.data['path']
+            self.load_bundle(path, ident)
+
+    def load_bundle(self, path, ident):
         from ..util import md5_for_file
 
-        for dsid in self.list():
-            print 'Loading ', dsid
-            self._library.database.install_dataset_identity(dsid)
+        self._library.database.install_dataset_identity(ident)
 
-            f = dsid.data['path']
+        bundle_file = path + '/bundle.yaml'
 
-            bundle_file = f + '/bundle.yaml'
+        self._library.database.add_file(
+            path=bundle_file,
+            group='source',
+            ref=ident.id_,
+            state='loaded',
+            type_='bundle_config',
+            data=ident.dict,
+            hash=md5_for_file(bundle_file),
+            source_url=None)
 
-            self._library.database.add_file(
-                path=bundle_file,
-                group='source',
-                ref=dsid.id_,
-                state='loaded',
-                type_='bundle_config',
-                data=dsid.dict,
-                hash=md5_for_file(bundle_file),
-                source_url=None)
+        self._library.database.add_file(
+            path=path,
+            group='source',
+            ref=ident.id_,
+            state='loaded',
+            type_='source_dir',
+            data=None,
+            source_url=None)
 
-            self._library.database.add_file(
-                path=f,
-                group='source',
-                ref=dsid.id_,
-                state='loaded',
-                type_='source_dir',
-                data=None,
-                source_url=None)
+        self._library.database.add_file(
+            path=path + '/.git',
+            group='source',
+            ref=ident.id_,
+            state='loaded',
+            type_='git_dir',
+            data=None,
+            source_url=None)
 
-            self._library.database.add_file(
-                path=f + '/.git',
-                group='source',
-                ref=dsid.id_,
-                state='loaded',
-                type_='git_dir',
-                data=None,
-                source_url=None)
+        bundle_file = os.path.join(path, 'build', ident.cache_key)
 
-            bundle_file = os.path.join(f, 'build', dsid.cache_key)
+        self._library.database.add_file(
+            path=bundle_file,
+            group='source',
+            ref=ident.id_,
+            state='loaded',
+            type_='bundle_file',
+            data=None,
+            source_url=None)
 
-            self._library.database.add_file(
-                path=bundle_file,
-                group='source',
-                ref=dsid.id_,
-                state='loaded',
-                type_='bundle_file',
-                data=None,
-                source_url=None)
+
+
+
+
 
 
     def _get_bundle(self, root):

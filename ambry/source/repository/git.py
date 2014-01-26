@@ -7,8 +7,8 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from . import RepositoryInterface, RepositoryException  #@UnresolvedImport
 from ambry.dbexceptions import ConfigurationError
 
-from sh import git,ErrorReturnCode_1, ErrorReturnCode_128 #@UnresolvedImport
-
+from sh import git
+from sh import ErrorReturnCode_1, ErrorReturnCode_128
 
 from ambry.util import get_logger
 
@@ -27,7 +27,8 @@ class GitShellService(object):
 
         if self.dir_:
             self.saved_path = os.getcwd()
-            os.chdir(self.dir_)
+            try: os.chdir(self.dir_)
+            except: self.saved_path = None
         else:
             self.saved_path = None
 
@@ -35,7 +36,11 @@ class GitShellService(object):
         import os
         if self.saved_path:
             os.chdir( self.saved_path )
-        
+
+    @property
+    def path(self):
+        return self.dir_
+
     def init(self):
         o = git.init()
         
@@ -214,10 +219,12 @@ class GitShellService(object):
             
         return True
 
-    def clone(self,url,  dir_):
+    def clone(self,url,  dir_=None):
         import os
         from ambry.dbexceptions import ConflictError
-       
+
+        dir_ = self.dir_ if not dir_ else dir_
+
         if not os.path.exists(dir_):
             git.clone(url,dir_)
         else:
@@ -230,7 +237,7 @@ class GitRepository(RepositoryInterface):
     classdocs
     '''
 
-    SUFFIX = '-dbundle'
+    SUFFIX = '-ambry'
 
     def __init__(self,service, dir, bundle_dir = None, **kwargs):  # @ReservedAssignment
         
@@ -244,23 +251,103 @@ class GitRepository(RepositoryInterface):
             self.bundle_dir = bundle_dir
         
         self._dependencies = None
-        
-    
+
+    ##
+    ## Only a few of the methods use self.service. They should be factored out
+    ##
+
+    @property
+    def ident(self):
+        '''Return an identifier for this service'''
+        return self.service.ident
+
+
+    def init_remote(self):
+        self.bundle.log("Check existence of repository: {}".format(self.name))
+
+        if not self.service.has(self.name):
+            pass
+            #raise ConfigurationError("Repo {} already exists. Checkout instead?".format(self.name))
+            self.bundle.log("Creating repository: {}".format(self.name))
+            self.service.create(self.name)
+
+        self.impl.init_remote(self.service.repo_url(self.name))
+
+    def delete_remote(self):
+
+        if self.service.has(self.name):
+            self.bundle.log("Deleting remote: {}".format(self.name))
+            self.service.delete(self.name)
+
+    ##
+    ## Only a few methods use self.dir_
+    ##
+
     @property
     def dir(self):
         '''The directory of ... '''
         return self.dir_
-    
-    def source_path(self, ident):
-        '''Return the absolute directory for a bundle based on its identity'''
+
+
+    @property
+    def dependencies(self):
+        '''Return a set of dependencies for the source packages'''
+        from collections import defaultdict
         import os
-        return os.path.join(self.dir, ident.source_path)
-    
-    
-    def get_bundle(self, ident):
-        '''Return a build bundle from the identity'''
-        
-    
+        from ambry.identity import Identity
+        from ambry.run import import_file
+
+        if not self._dependencies:
+
+            depset = defaultdict(set)
+
+            for root, _, files in os.walk(self.dir_):
+                if 'bundle.yaml' in files:
+
+                    rp = os.path.realpath(os.path.join(root, 'bundle.py'))
+                    mod = import_file(rp)
+
+                    bundle = mod.Bundle(root)
+                    deps = bundle.library.dependencies
+
+                    for _, v in deps.items():
+                        ident = Identity.parse_name(v) # Remove revision
+                        #print "XXX {:50s} {:30s} {}".format(v, ident.name, ident.to_dict())
+                        depset[bundle.identity.name].add(ident.name)
+
+            self._dependencies = depset
+
+        return dict(self._dependencies.items())
+
+    ##
+    ## Only a few methods use self._bundle_dir
+    ##
+
+
+    @property
+    def bundle_dir(self):
+        if not self._bundle and not self._bundle_dir:
+            raise ConfigurationError("Must assign bundle or bundle_dir to repostitory before this operation")
+
+        if self._bundle_dir:
+            return self._bundle_dir
+        else:
+            return self.bundle.bundle_dir
+
+    @bundle_dir.setter
+    def bundle_dir(self, bundle_dir):
+        self._bundle_dir = bundle_dir
+
+        # Import the bundle file from the directory
+        from ambry.run import import_file
+        import os
+        rp = os.path.realpath(os.path.join(bundle_dir, 'bundle.py'))
+        mod = import_file(rp)
+
+        dir_ = os.path.dirname(rp)
+        self.bundle = mod.Bundle(dir_)
+
+
     @property
     def bundle(self):
         if not self._bundle:
@@ -280,30 +367,6 @@ class GitRepository(RepositoryInterface):
     
         self._impl = GitShellService(b.bundle_dir)
 
-    
-    @property
-    def bundle_dir(self):
-        if not self._bundle and not self._bundle_dir:
-            raise ConfigurationError("Must assign bundle or bundle_dir to repostitory before this operation")             
-    
-        if self._bundle_dir:
-            return self._bundle_dir
-        else:
-            return self.bundle.bundle_dir
-        
-    @bundle_dir.setter
-    def bundle_dir(self, bundle_dir):
-        self._bundle_dir = bundle_dir
-        
-        # Import the bundle file from the directory
-        from ambry.run import import_file
-        import os
-        rp = os.path.realpath(os.path.join(bundle_dir, 'bundle.py'))
-        mod = import_file(rp)
-     
-        dir_ = os.path.dirname(rp)
-        self.bundle = mod.Bundle(dir_)
-        
 
     @property
     def bundle_ident(self):
@@ -323,57 +386,43 @@ class GitRepository(RepositoryInterface):
 
         return self._impl
 
-    @property
-    def ident(self):
-        '''Return an identifier for this service'''
-        return self.service.ident
-        
+
+    # ----
+
+    def source_path(self, ident):
+        '''Return the absolute directory for a bundle based on its identity'''
+        import os
+
+        return os.path.join(self.dir, ident.source_path)
+
+
     def init(self):
         '''Initialize the repository, both load and the upstream'''
-        import os 
-        
+        import os
+
         self.impl.deinit()
-        
+
         self.bundle.log("Create .git directory")
         self.impl.init()
-        
+
         self.bundle.log("Create .gitignore")
         for p in ('*.pyc', 'build','.project','.pydevproject', 'meta/schema-revised.csv', 'meta/schema-old.csv'):
             self.impl.ignore(p)
-               
+
         self.bundle.log("Create remote {}".format(self.name))
-   
+
         self.add('bundle.py')
         self.add('bundle.yaml')
 
         if os.path.exists(self.bundle.filesystem.path('meta')):
             self.add('meta/*')
-     
+
         if os.path.exists(self.bundle.filesystem.path('config')):
             self.add('config/*')
-            
+
         self.add('.gitignore')
-        
+
         self.commit('Initial commit')
-            
-        
-    def init_remote(self):
-        self.bundle.log("Check existence of repository: {}".format(self.name))
-        
-        if not self.service.has(self.name):
-            pass
-            #raise ConfigurationError("Repo {} already exists. Checkout instead?".format(self.name))
-            self.bundle.log("Creating repository: {}".format(self.name))
-            self.service.create(self.name)
-         
-
-        self.impl.init_remote(self.service.repo_url(self.name))
-
-    def delete_remote(self):
-        
-        if  self.service.has(self.name):
-            self.bundle.log("Deleting remote: {}".format(self.name))
-            self.service.delete(self.name)
 
         
     def de_init(self):
@@ -411,7 +460,7 @@ class GitRepository(RepositoryInterface):
     def needs_init(self):
         return self.impl.needs_init()
     
-    def clone(self, url, path, dir_):
+    def clone(self, url, path):
         '''Locate the source for the named bundle from the library and retrieve the 
         source '''
         import os
@@ -444,35 +493,6 @@ class GitRepository(RepositoryInterface):
         raise NotImplemented()
     
 
-    @property
-    def dependencies(self):
-        '''Return a set of dependencies for the source packages'''
-        from collections import defaultdict
-        import os
-        from ambry.identity import Identity
-        from ambry.run import import_file
-        
-        if not self._dependencies:
-            
-            depset = defaultdict(set)
-        
-            for root, _, files in os.walk(self.dir_):
-                if 'bundle.yaml' in files:
-
-                    rp = os.path.realpath(os.path.join(root, 'bundle.py'))
-                    mod = import_file(rp)
-  
-                    bundle = mod.Bundle(root)
-                    deps =  bundle.library.dependencies
-
-                    for _,v in deps.items():
-                        ident = Identity.parse_name(v) # Remove revision 
-                        #print "XXX {:50s} {:30s} {}".format(v, ident.name, ident.to_dict())
-                        depset[bundle.identity.name].add(ident.name)            
-                    
-            self._dependencies = depset
-            
-        return dict(self._dependencies.items())
         
     def bundle_deps(self,name, reverse=False):
         '''Dependencies for a particular bundle'''

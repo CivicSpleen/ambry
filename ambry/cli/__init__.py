@@ -36,7 +36,6 @@ def warn(template, *args, **kwargs):
     
     logger.warning(template.format(*args, **kwargs))
 
-
 def load_bundle(bundle_dir):
     from ambry.run import import_file
     
@@ -45,23 +44,24 @@ def load_bundle(bundle_dir):
   
     return mod.Bundle
 
-
 def _find(args, l, config, remote):
 
-    from ambry.library import QueryCommand
+    try: in_terms = args.terms
+    except: in_terms = args.term
+
+    from ..library.query import QueryCommand
 
     terms = []
-    for t in args.term:
+    for t in in_terms:
         if ' ' in t or '%' in t:
             terms.append("'{}'".format(t))
         else:
             terms.append(t)
 
-
     qc = QueryCommand.parse(' '.join(terms))
-    
+
     prt("Query: {}", qc)
-    
+
     if remote:
         identities = l.remote_find(qc)
     else:
@@ -69,13 +69,13 @@ def _find(args, l, config, remote):
 
     try: first = identities[0]
     except: first = None
-    
+
     if not first:
         return
-    
+
     t = ['{id:<14s}','{vname:20s}']
     header = {'id': 'ID', 'vname' : 'Versioned Name'}
-    
+
     multi = False
     if 'column' in first:
         multi = True
@@ -91,14 +91,14 @@ def _find(args, l, config, remote):
         multi = True
         t.append('{partition:50s}')
         header['partition'] = 'partition'
-        
+
     ts = ' '.join(t)
-    
+
     dashes = { k:'-'*len(v) for k,v in header.items() }
-   
+
     prt(ts, **header) # Print the header
     prt(ts, **dashes) # print the dashes below the header
-   
+
     last_rec = None
     first_rec_line = True
     for r in identities:
@@ -109,21 +109,21 @@ def _find(args, l, config, remote):
             first_rec_line = True
         else:
             rec = {'id':'', 'vname':''}
-   
+
         if 'column' in r:
             rec['column'] = ''
-            
+
         if 'table' in r:
             rec['table'] = ''
 
         if 'partition' in r:
             rec['partition'] = ''
-           
+
         if multi and first_rec_line:
             prt(ts, **rec)
             rec = {'id':'', 'vname':''}
             first_rec_line = False
-           
+
         if 'column' in r:
             rec['id'] = r['column']['vid']
             rec['column'] = r['column']['name']
@@ -139,7 +139,7 @@ def _find(args, l, config, remote):
 
         prt(ts, **rec)
 
-    return 
+    return
 
 def _source_list(dir_):
     lst = {}

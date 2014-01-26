@@ -497,9 +497,13 @@ class LibraryDb(object):
         ds.cache_key = identity.cache_key
         ds.creator = 'N/A'
 
-        self.session.add(ds)
-
-        self.commit()
+        try:
+            self.session.add(ds)
+            self.commit()
+        except:
+            self.session.rollback()
+            self.session.merge(ds)
+            self.commit()
 
 
     def install_bundle(self, bundle):
@@ -1019,7 +1023,7 @@ class LibraryDb(object):
         return q.all()
 
 
-    def get_file_by_ref(self, ref, type_=None):
+    def get_file_by_ref(self, ref, type_=None, state=None):
         """Return all files in the database with the given state"""
         from ambry.orm import  File
         from sqlalchemy.orm.exc import NoResultFound
@@ -1029,7 +1033,11 @@ class LibraryDb(object):
             q = s.query(File).filter(File.ref == ref)
 
             if type_ is not None:
-                q = q.filter(File.type_ == type_)
+                q = q.filter(File.type_ == type_ )
+
+            if state is not None:
+                q = q.filter(File.state == state )
+
 
             return q.all()
 

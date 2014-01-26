@@ -232,7 +232,8 @@ class RunConfig(object):
             return e   
         
         @property
-        def list(self):   
+        def list(self):
+            """Returns list of all of the sourcerepos"""
             from source.repository import new_repository
             
             return [ new_repository(self.this.sourcerepo(r_name)) 
