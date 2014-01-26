@@ -103,7 +103,10 @@ def _on_connect_geo(dbapi_con, con_record):
         dbapi_con.execute('select spatialite_version()')
         return
     except:
-        dbapi_con.enable_load_extension(True)
+        try:
+            dbapi_con.enable_load_extension(True)
+        except AttributeError as e:
+            raise
          
     try:
         with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it. 

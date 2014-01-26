@@ -8,7 +8,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 
 
-from ..cli import prt, err, warn, _find
+from ..cli import prt, plain_prt, err, warn, _find, _print_find
 
 from ..cli import  load_bundle, _print_bundle_list
 from ..source import SourceTree
@@ -41,15 +41,16 @@ def source_parser(cmd):
     sp.set_defaults(revision=1) # Needed in Identity.name_parts
     sp.add_argument('-s','--source', required=True, help='Source, usually a domain name') 
     sp.add_argument('-d','--dataset',  required=True, help='Name of the dataset') 
-    sp.add_argument('-b','--subset', nargs='?', default=None, help='Name of the subset') 
-    sp.add_argument('-v','--variation', default='orig', help='Name of the variation') 
-    sp.add_argument('-c','--creator',  required=True, help='Id of the creator') 
-    sp.add_argument('-n','--dryrun', default=False, help='Dry run') 
+    sp.add_argument('-b','--subset',  default=None, help='Name of the subset')
+    sp.add_argument('-v','--variation', default=None, help='Name of the variation')
+    sp.add_argument('-c','--creator',  required=False, help='Id of the creator')
+    sp.add_argument('-n','--dryrun', default=False, help='Dry run')
+    sp.add_argument('-k', '--key', help='Number server key')
     sp.add_argument('args', nargs=argparse.REMAINDER) # Get everything else. 
 
     sp = asp.add_parser('info', help='Information about the source configuration')
     sp.set_defaults(subcommand='info')
-    sp.add_argument('terms',  nargs='?', type=str,help='Name or ID of the bundle or partition to print information for')
+    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Name or ID of the bundle or partition to print information for')
     
     
     sp = asp.add_parser('deps', help='Print the depenencies for all source bundles')
@@ -67,15 +68,17 @@ def source_parser(cmd):
     sp = asp.add_parser('list', help='List the source dirctories')
     sp.set_defaults(subcommand='list')
     sp.add_argument('-l', '--list-library', default=False, action="store_true", help='Also include a list from the library')
+    sp.add_argument('-P', '--plain', default=False, action='store_true',
+                    help='Plain output; just print the bundle id, with no logging decorations')
 
     sp = asp.add_parser('sync', help='Load references from the configured source remotes')
     sp.set_defaults(subcommand='sync')
     sp.add_argument('-l','--library',  default='default',  help='Select a library to add the references to')
     sp.add_argument('-p', '--print',  default=False, action="store_true", help='Print, rather than actually sync')
 
-    sp = asp.add_parser('clone', help='Clone source into a local directory')
-    sp.set_defaults(subcommand='clone')
-    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Query term')
+    sp = asp.add_parser('get', help='Load a source bundle into the local source directory')
+    sp.set_defaults(subcommand='get')
+    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Bundle references, a git url or identity reference')
   
     sp = asp.add_parser('build', help='Build sources')
     sp.set_defaults(subcommand='build')
@@ -123,50 +126,26 @@ def source_parser(cmd):
     sp.set_defaults(subcommand='watch')
 
 def source_info(args, st, rc):
-    
+    from . import _print_bundle_info
+
     if not args.terms:
         prt("Source dir: {}", rc.sourcerepo.dir)
         for repo in  rc.sourcerepo.list:
             prt("Repo      : {}", repo.ident)
     else:
         import ambry.library as library
-        from ..identity import new_identity
+        from ..identity import Identity
 
         term = args.terms.pop(0)
 
-        l = library.new_library(rc.library(args.library))  
-        found = False      
-        
-        for r in l.database.get_file_by_type('source'):
-            ident = new_identity(r.data)
-            
-            if term == ident.name or term == ident.vname:
-                found = r
-                break
-                
-        if not found:
-            err("Didn't find source for term '{}'. (Maybe need to run 'source sync')", term)
-        else:
-            from ..source.repository import new_repository
-            repo = new_repository(rc.sourcerepo(args.name))
-            ident = new_identity(r.data)
-            repo.bundle_ident = ident
-            
-            prt('Name      : {}', ident.vname)
-            prt('Id        : {}', ident.vid)
-            prt('Dir       : {}', repo.bundle_dir)
-            
-            if not repo.bundle.database.exists():
-                prt('Exists    : Database does not exist or is empty')
-            else:   
-                
-                d = dict(repo.bundle.db_config.dict)
-                process = d['process']
+        ident = st.library.resolve(term)
 
-                prt('Created   : {}', process.get('dbcreated',''))
-                prt('Prepared  : {}', process.get('prepared',''))
-                prt('Built     : {}', process.get('built',''))
-                prt('Build time: {}', str(round(float(process['buildtime']),2))+'s' if process.get('buildtime',False) else '')
+        if not ident:
+            err("Didn't find source for term '{}'. (Maybe need to run 'source sync')", term)
+
+        bundle = st.library.resolve_bundle(term)
+
+        _print_bundle_info(bundle)
 
 
 def source_list(args, st, rc, names=None):
@@ -178,50 +157,74 @@ def source_list(args, st, rc, names=None):
 
     d = {}
 
+    if args.plain:
+        from . import plain_prt
+        prtf = plain_prt
+    else:
+        prtf = prt
+
     if args.list_library:
         l_list = l.list(datasets=d)
 
     s_lst =  st.list(datasets=d)
 
-    _print_bundle_list(d.values(), subset_names=names)
+    if args.plain:
+        for v in d.values():
+            prtf(str(v.id_))
+    else:
+        _print_bundle_list(d.values(), subset_names=names, prtf=prtf)
 
-def source_clone(args, st, rc):
+def source_get(args, st, rc):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     import ambry.library as library
     from ..dbexceptions import ConflictError
 
 
     for term in args.terms:
-
+        from ..dbexceptions import ConflictError
         if term.startswith('http'):
-            from ambry.source.repository.git import GitShellService
-
-            st.clone(term)
+            prt("Loading bundle from {}".format(term))
+            try:
+                bundle = st.clone(term)
+                prt("Loaded {} into {}".format(bundle.identity.sname, bundle.bundle_dir))
+            except ConflictError as e:
+                err(e.message)
 
         else:
 
             ident = st.library.resolve(term)
+            args.terms = [ident.url]
+            return source_get(args, st, rc)
 
-            for repo in rc.sourcerepo.list:
-                if repo.ident != ident.data['repo']:
-                    continue
-
-                prt ("--- Cloning sources for {} from: {}", term, repo.ident)
-
-                try:
-                    d = repo.clone(ident.url, ident.source_path, repo.dir)
-                    prt("Cloned {} to {}",ident.url, d)
-                except ConflictError as e :
-                    warn("Clone failed for {}: {}".format(ident.url, e.message))
                 
 def source_new(args, st, rc):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     from ..source.repository import new_repository
     from ..identity import DatasetNumber, Identity
+    from ..identity import NumberServer
+    from requests.exceptions import HTTPError
+    from collections import OrderedDict
 
     repo = new_repository(rc.sourcerepo(args.name))  
 
-    ident = Identity.from_dict(vars(args))
+    nsconfig = rc.group('numbers')
+
+    if args.key:
+        nsconfig['key'] = args.key
+
+    ns = NumberServer(**nsconfig)
+
+    d = vars(args)
+    d['revision'] = 1
+
+    try:
+        d['id'] = str(ns.next())
+    except HTTPError as e:
+        warn("Failed to get number from number server. Config = {}: {}".format(nsconfig, e.message))
+        warn("Using self-generated number. There is no problem with this, but they are longer than centrally generated numbers.")
+        d['id'] = str(DatasetNumber())
+
+    ident = Identity.from_dict(d)
 
     bundle_dir =  os.path.join(repo.dir, ident.source_path)
 
@@ -229,6 +232,19 @@ def source_new(args, st, rc):
         os.makedirs(bundle_dir)
     elif not os.path.isdir(bundle_dir):
         raise IOError("Directory already exists: "+bundle_dir)
+
+    try:
+        ambry_account = rc.group('accounts').get('ambry', {})
+    except:
+        ambry_account = None
+
+    if not ambry_account:
+        err("Failed to get an accounts.ambry entry from the configuration. ( It's usually in {}. ) ".format(rc.USER_ACCOUNTS))
+
+    if not ambry_account.get('name') or not ambry_account.get('email'):
+        from ambry.run import RunConfig as rc
+        err("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
+
 
     config ={
         'identity':{
@@ -238,15 +254,18 @@ def source_new(args, st, rc):
              'dataset':args.dataset,
              'subset': args.subset,
              'variation': args.variation,
-             'revision': args.revision
+             'revision': args.revision,
+             'version': '0.0.1'
          },
         'about': {
-            'author': "Author's email address",
+            'author': ambry_account.get('name'),
+            'author_email': ambry_account.get('email'),
             'description': "**include**", # Can't get YAML to write this properly
             'groups': ['group1','group2'],
             'homepage': "https://civicknowledge.org",
             'license': "other-open",
-            'maintainer': "Maintainers email address",
+            'maintainer': ambry_account.get('name'),
+            'maintainer_email': ambry_account.get('email'),
             'tags': ['tag1','tag2'],
             'title': "Bundle title"
         }
@@ -273,7 +292,8 @@ def source_new(args, st, rc):
     shutil.copy(p('README.md'),bundle_dir)
     shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta')  )
     shutil.copy(p('about.description.md'), os.path.join(bundle_dir, 'meta')  )
-    
+
+    st.sync_bundle(bundle_dir)
 
     prt("CREATED: {}",bundle_dir)
 
@@ -300,7 +320,7 @@ def source_build(args, st, rc):
             try: 
                 Identity.parse_name(name)
             except:  
-                err("Argument '{}' must be either a bundle name or a directory")
+                err("Argument '{}' must be either a bundle name or a directory".format(name))
                 return
             
     if not dir_:
@@ -495,21 +515,24 @@ def source_find(args, st, rc):
 
     dir_ = args.dir
 
-    if args.plain:
-
-        def print_func(*args):
-            print ' '.join(args)
-
-        prtf=print_func
-    else:
-        prtf=prt
+    prtf=prt
 
     if not dir_:
         dir_ = rc.sourcerepo.dir   
 
 
     if args.terms:
-        return _find(args, st.library._library, rc, False)
+
+        identities = _find(args, st.library._library, rc, False)
+
+        if args.plain:
+            for ident in identities:
+
+                ident = st.library.resolve(ident['identity']['vid'])
+
+                plain_prt('{}'.format(ident.data['path']))
+        else:
+            _print_find(identities, prtf=prtf)
     else:
         for root, _, files in os.walk(dir_):
             if 'bundle.yaml' in files:
@@ -559,6 +582,9 @@ def source_sync(args, st, rc):
     # Sync all of the registered repositories
     for repo in rc.sourcerepo.list:
         st.sync_org(repo)
+
+    st.sync_source()
+
 
 
 def source_deps(args, st, rc):

@@ -29,7 +29,9 @@ class Name(object):
                   ('subset',None,True),
                   ('type',None,True),
                   ('part',None,True),
-                  ('variation','orig',True),
+                  ('variation',None,True),
+                  ('btime', None, True),
+                  ('bspace', None, True),
                   # Semantic Version, different from Object Number revision, 
                   # which is an int. "Version" is the preferred name, 
                   # but 'revision' is in the databases schema. 
@@ -49,6 +51,8 @@ class Name(object):
     type = None
     part = None
     variation = None
+    btime = None
+    bspace = None
     version = None
 
     def __init__(self, *args, **kwargs):
@@ -1455,8 +1459,7 @@ class NumberServer(object):
 
     def next(self):
         import requests
-        
-        
+
         if self.key:
             params = dict(access_key=self.key)
         else:
@@ -1465,7 +1468,7 @@ class NumberServer(object):
         r = requests.get('http://{}{}/next'.format(self.host, self.port_str), params=params)
 
         r.raise_for_status()
-        
+
         d = r.json()
 
         self.last_response = d

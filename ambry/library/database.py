@@ -962,44 +962,19 @@ class LibraryDb(object):
                  source_url=None,
                  hash=None
                 ):
-        from ambry.orm import  File
+        from ambry.orm import File
 
-        if os.path.exists(path):
-            stat = os.stat(path)
-            modified = int(stat.st_mtime)
-            size = stat.st_size
-        else:
-            modified = None
-            size = None
+        assert type_ is not None
 
-        s = self.session
-
-        try: s.query(File).filter(File.path == path).delete()
-        except ProgrammingError:
-            pass
-        except OperationalError:
-            pass
-
-        file_ = File(path=path,
+        self.merge_file(File(path=path,
                      group=group,
                      ref=ref,
-                     modified=modified,
                      state = state,
-                     size=size,
                      type_=type_,
                      data=data,
                      source_url=source_url,
                      hash = hash
-                     )
-
-        # Sqlalchemy doesn't automatically rollback on exceptions, and you
-        # can't re-try the commit until you roll back.
-        try:
-            s.add(file_)
-            self.commit()
-        except:
-            self.rollback()
-            raise
+                     ))
 
         self._mark_update()
 
@@ -1071,12 +1046,52 @@ class LibraryDb(object):
         except NoResultFound:
             return None
 
-    def remove_file(self,path):
-        pass
+    def remove_file(self,ref, type_=None, state=None):
+        from ambry.orm import File
+        from sqlalchemy.orm.exc import NoResultFound
 
+        s = self.session
 
-    def get_file(self,path):
-        pass
+        try:
+            q = s.query(File).filter(File.ref == ref)
+
+            if type_ is not None:
+                q = q.filter(File.type_ == type_)
+
+            if state is not None:
+                q = q.filter(File.state == state)
+
+            return q.delete()
+
+        except NoResultFound:
+            return None
+
+    def merge_file(self, f):
+
+        from sqlalchemy.exc import IntegrityError
+
+        path = f.path
+
+        if os.path.exists(path):
+            stat = os.stat(path)
+            f.modified = int(stat.st_mtime)
+            f.size = stat.st_size
+        else:
+            f.modified = None
+            f.size = None
+
+        s = self.session
+
+        # Sqlalchemy doesn't automatically rollback on exceptions, and you
+        # can't re-try the commit until you roll back.
+        try:
+            s.add(f)
+            self.commit()
+        except IntegrityError:
+            self.rollback()
+            s.merge(f)
+
+        self._mark_update()
 
     ##
     ## Database backup and restore. Synchronizes the database with

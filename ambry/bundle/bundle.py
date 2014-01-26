@@ -575,10 +575,10 @@ class BuildBundle(Bundle):
         try:
             b = self.library.resolve(self.identity.id_)
             
-            if b and b.identity.revision >= self.identity.revision:
+            if b and b.on.revision >= self.identity.on.revision:
                 self.fatal(("Can't build this version. Library has version {} "
-                            " which is greater than or equal this version {}")
-                           .format(b.identity.revision, self.identity.revision))
+                            " which is less than or equal this version {}")
+                           .format(b.on.revision, self.identity.on.revision))
                 return False
             
         except Exception as e:

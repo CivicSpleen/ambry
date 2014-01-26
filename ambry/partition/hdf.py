@@ -29,7 +29,7 @@ class HdfPartition(PartitionBase):
     def database(self):
 
         if self._database is None:
-            self._database = HdfDb(self)
+            self._database = _hdf_db_class()(self)
           
         return self._database
 

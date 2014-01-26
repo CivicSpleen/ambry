@@ -205,11 +205,13 @@ class Dataset(Base):
     vname = SAColumn('d_vname',String(200), unique=True, nullable=False)
     fqname = SAColumn('d_fqname',String(200), unique=True, nullable=False)
     cache_key = SAColumn('d_cache_key',String(200), unique=True, nullable=False)
-    source = SAColumn('d_source',Text, nullable=False)
-    dataset = SAColumn('d_dataset',Text, nullable=False)
-    subset = SAColumn('d_subset',Text)
-    variation = SAColumn('d_variation',Text)
-    creator = SAColumn('d_creator',Text, nullable=False)
+    source = SAColumn('d_source',String(200), nullable=False)
+    dataset = SAColumn('d_dataset',String(200), nullable=False)
+    subset = SAColumn('d_subset',String(200))
+    variation = SAColumn('d_variation',String(200))
+    btime = SAColumn('d_btime', String(200))
+    bspace = SAColumn('d_bspace', String(200))
+    creator = SAColumn('d_creator',String(200), nullable=False)
     revision = SAColumn('d_revision',Integer, nullable=False)
     version = SAColumn('d_version',String(20), nullable=False)
 
@@ -231,7 +233,9 @@ class Dataset(Base):
         self.source = kwargs.get("source",None) 
         self.dataset = kwargs.get("dataset",None) 
         self.subset = kwargs.get("subset",None) 
-        self.variation = kwargs.get("variation",None) 
+        self.variation = kwargs.get("variation",None)
+        self.btime = kwargs.get("btime", None)
+        self.bspace = kwargs.get("bspace", None)
         self.creator = kwargs.get("creator",None) 
         self.revision = kwargs.get("revision",None) 
         self.version = kwargs.get("version",None) 
@@ -274,7 +278,9 @@ class Dataset(Base):
                 'source':self.source,
                 'dataset':self.dataset, 
                 'subset':self.subset, 
-                'variation':self.variation, 
+                'variation':self.variation,
+                'btime': self.btime,
+                'bspace': self.bspace,
                 'creator':self.creator, 
                 'revision':self.revision, 
                 'version':self.version, 
@@ -891,6 +897,8 @@ class File(Base, SavableMixin):
 
     oid = SAColumn('f_id',Integer, primary_key=True, nullable=False)
     path = SAColumn('f_path',Text, nullable=False)
+    ref = SAColumn('f_ref', Text)
+    type_ = SAColumn('f_type', Text)
     source_url = SAColumn('f_source_url',Text)
     process = SAColumn('f_process',Text)
     state = SAColumn('f_state',Text)
@@ -898,9 +906,14 @@ class File(Base, SavableMixin):
     modified = SAColumn('f_modified',Integer)
     size = SAColumn('f_size',BigInteger)
     group = SAColumn('f_group',Text)
-    type_ = SAColumn('f_type',Text)
-    ref = SAColumn('f_ref',Text)
+
+
     data = SAColumn('f_data',MutationDict.as_mutable(JSONEncodedObj))
+
+    __table_args__ = (
+        UniqueConstraint('f_path', 'f_type', name='u_type_path'),
+        UniqueConstraint('f_ref', 'f_type', name='u_type_path'),
+    )
 
     def __init__(self,**kwargs):
         self.oid = kwargs.get("oid",None) 
@@ -923,7 +936,7 @@ class File(Base, SavableMixin):
     def dict(self):
 
         return  dict((col, getattr(self, col)) for col 
-                     in ['path', 'source_url', 'process', 'state', 'content_hash', 'modified', 'size', 'group', 'ref', 'type_','data'])
+                     in ['path', 'ref',  'type_',  'source_url', 'process', 'state', 'content_hash', 'modified', 'size', 'group', 'data'])
  
 
 class Partition(Base):

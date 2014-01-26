@@ -7,6 +7,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from ..cli import prt, err, warn
 from ..cli import  _source_list, load_bundle, _print_bundle_list
+from ..source import SourceTree
 
 import os
 import yaml
@@ -18,20 +19,30 @@ def bundle_command(args, rc):
 
     if not args.bundle_dir:
         bundle_file = os.path.join(os.getcwd(),'bundle.py')
-    elif args.bundle_dir == '-':
-        # Run run for each line of input
-        import sys
-
-        for line in sys.stdin.readlines():
-            args.bundle_dir = line.strip()
-            prt('====== {}',args.bundle_dir)
-            bundle_command(args,rc)
-
-        return
-    elif args.bundle_dir[0] != '/':
-        bundle_file = os.path.join(os.getcwd(), args.bundle_dir, 'bundle.py')
     else:
-        bundle_file = os.path.join(args.bundle_dir, 'bundle.py')
+        st = SourceTree(rc.sourcerepo.dir, logger=prt)
+        ident = st.library.resolve(args.bundle_dir)
+
+        if ident:
+            bundle_file = os.path.join(ident.data['path'], 'bundle.py')
+
+        elif args.bundle_dir == '-':
+            # Run run for each line of input
+            import sys
+
+            for line in sys.stdin.readlines():
+                args.bundle_dir = line.strip()
+                prt('====== {}',args.bundle_dir)
+                bundle_command(args,rc)
+
+            return
+
+        elif args.bundle_dir[0] != '/':
+            bundle_file = os.path.join(os.getcwd(), args.bundle_dir, 'bundle.py')
+
+        else:
+            bundle_file = os.path.join(args.bundle_dir, 'bundle.py')
+
 
 
     if not os.path.exists(bundle_file):

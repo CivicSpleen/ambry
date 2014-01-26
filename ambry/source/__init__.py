@@ -11,8 +11,6 @@
 import os
 
 
-
-
 def load_bundle(bundle_dir):
     from ambry.run import import_file
 
@@ -34,7 +32,14 @@ class SourceTree(object):
         if not os.path.exists(self.base_dir):
             os.makedirs(self.base_dir)
 
+
     def list(self, datasets=None, key='vid'):
+        return self.library.list(datasets, key)
+
+    def _source_lists(self, datasets=None, key='vid'):
+        pass
+
+    def _dir_list(self, datasets=None, key='vid'):
         from ..identity import LocationRef, Identity
 
         if datasets is None:
@@ -83,6 +88,9 @@ class SourceTree(object):
         pass
 
 
+    def sync_source(self):
+        self.library.sync_source()
+
     def sync_org(self, repo):
         '''Sync all fo the bundles in an organization or account'''
         from ..identity import Identity
@@ -98,10 +106,14 @@ class SourceTree(object):
     def sync_repo(self, url):
         pass
 
+    def sync_bundle(self, path):
+        self.library.update_bundle(path)
+
     def clone(self,url):
         '''Clone a new bundle insto the source tree'''
 
         import shutil
+        from ..dbexceptions import ConflictError
 
         repo = self.temp_repo()
         repo.clone(url)
@@ -112,7 +124,7 @@ class SourceTree(object):
         bundle_dir = os.path.join(self.base_dir, bundle.identity.source_path)
 
         if os.path.exists(bundle_dir):
-            raise Exception("{} already exists".format(bundle_dir))
+            raise ConflictError("Bundle directory '{}' already exists".format(bundle_dir))
 
         if not os.path.exists(os.path.dirname(bundle_dir)):
             os.makedirs(os.path.dirname(bundle_dir))
@@ -122,7 +134,9 @@ class SourceTree(object):
         bundle_class = load_bundle(bundle_dir)
         bundle = bundle_class(bundle_dir)
 
-        self.library.load_bundle(bundle_dir, bundle.identity)
+        self.library.update_bundle(bundle_dir, bundle.identity)
+
+        return bundle
 
 
 class SourceTreeLibrary(object):
@@ -156,20 +170,42 @@ class SourceTreeLibrary(object):
         self._library = library
 
 
-        if len(self._library.database.datasets()) == 0:
-            self.sync()
+    def list(self, datasets=None, key='vid'):
+        from ..identity import Identity, LocationRef
 
-    def sync(self):
+        if datasets is None:
+            datasets = {}
+
+        for file_ in self._library.database.get_file_by_type(type_='bundle_source'):
+
+            ident = Identity.from_dict(file_.data['identity'])
+
+            ck = getattr(ident, key)
+
+            if ck not in datasets:
+                datasets[ck] = ident
+
+            datasets[ck].locations.set(LocationRef.LOCATION.SOURCE)
+            datasets[ck].data = file_.dict
+
+        for file_ in self._library.database.get_file_by_type(type_='source_url'):
+
+
+            ident = Identity.from_dict(file_.data)
+
+            ck = getattr(ident, key)
+
+            if ck not in datasets:
+                datasets[ck] = ident
+
+            datasets[ck].locations.set(LocationRef.LOCATION.SREPO)
+
+
+        return datasets
+
+    def sync_source(self):
         self._load_database()
 
-    def check_bundle_config(self, path):
-        pass
-
-    def check_bundle_db(self,path):
-        pass
-
-    def check_bundle_repo(self, path):
-        pass
 
 
     def resolve(self, term):
@@ -191,8 +227,18 @@ class SourceTreeLibrary(object):
 
             ident.url = f.source_url
             ident.data['repo'] = f.group
+            ident.data['path'] = os.path.join(self.base_dir, ident.source_path)
 
         return ident
+
+    def resolve_bundle(self, term):
+
+        ident = self.resolve(term)
+
+        if not ident:
+            return None
+
+        return self._get_bundle(os.path.join(self.base_dir, ident.source_path))
 
 
     def add_source_ref(self, ident, url, repo, data):
@@ -209,8 +255,69 @@ class SourceTreeLibrary(object):
             source_url=data['clone_url'])
 
 
-    def _add_file(self,path, identity, state='loaded',type_=None,
-                  data=None, source_url=None):
+    def _load_database(self):
+
+        for ident in self.tree.list():
+            print 'Loading ', ident
+            path = ident.data['path']
+            self.update_bundle(path, ident)
+
+    def update_bundle(self, path, ident=None, bundle=None):
+        from ..util import md5_for_file
+
+        if not bundle and os.path.exists(path):
+            bundle = self._get_bundle(path)
+
+        if not ident and bundle:
+            ident = bundle.identity
+
+        self._library.database.install_dataset_identity(ident)
+
+
+
+        f =  self._library.database.get_file_by_ref(ident.id_, type_='bundle_source')
+
+
+        if not f:
+
+            from ..orm import File
+
+            f = File(
+                path=path,
+                group='source',
+                ref=ident.id_,
+                state='',
+                type_='bundle_source',
+                data=None,
+                source_url=None)
+
+            d = dict(
+                identity=ident.dict,
+                bundle_config = None,
+                process = None,
+                git_state = None,
+                rev = 0
+            )
+
+        else:
+            assert len(f) == 1
+            f = f[0]
+
+            d = f.data
+
+        if bundle and bundle.is_built:
+            config = dict(bundle.db_config.dict)
+            d['process'] = config['process']
+
+        d['rev'] = d['rev']+ 1
+
+        f.data = d
+
+        self._library.database.merge_file(f)
+
+
+    def _add_file(self, path, identity, state='loaded', type_=None,
+                          data=None, source_url=None):
 
         import os.path
         from ..util import md5_for_file
@@ -233,68 +340,10 @@ class SourceTreeLibrary(object):
         pass
 
 
-    def _load_database(self):
-
-        for ident in self.tree.list():
-            print 'Loading ', ident
-            path = ident.data['path']
-            self.load_bundle(path, ident)
-
-    def load_bundle(self, path, ident):
-        from ..util import md5_for_file
-
-        self._library.database.install_dataset_identity(ident)
-
-        bundle_file = path + '/bundle.yaml'
-
-        self._library.database.add_file(
-            path=bundle_file,
-            group='source',
-            ref=ident.id_,
-            state='loaded',
-            type_='bundle_config',
-            data=ident.dict,
-            hash=md5_for_file(bundle_file),
-            source_url=None)
-
-        self._library.database.add_file(
-            path=path,
-            group='source',
-            ref=ident.id_,
-            state='loaded',
-            type_='source_dir',
-            data=None,
-            source_url=None)
-
-        self._library.database.add_file(
-            path=path + '/.git',
-            group='source',
-            ref=ident.id_,
-            state='loaded',
-            type_='git_dir',
-            data=None,
-            source_url=None)
-
-        bundle_file = os.path.join(path, 'build', ident.cache_key)
-
-        self._library.database.add_file(
-            path=bundle_file,
-            group='source',
-            ref=ident.id_,
-            state='loaded',
-            type_='bundle_file',
-            data=None,
-            source_url=None)
-
-
-
-
-
-
-
     def _get_bundle(self, root):
         bundle_class = load_bundle(root)
         bundle = bundle_class(root)
+        return bundle
 
 
 class SourceTreeWatcher(object):

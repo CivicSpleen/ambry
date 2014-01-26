@@ -18,9 +18,10 @@ logger = None # Set in main
 
 def prt(template, *args, **kwargs):
     global logger
-
     logger.info(template.format(*args, **kwargs))
 
+def plain_prt(template, *args, **kwargs):
+    print(template.format(*args, **kwargs))
 
 def err(template, *args, **kwargs):
     import sys
@@ -45,11 +46,12 @@ def load_bundle(bundle_dir):
     return mod.Bundle
 
 def _find(args, l, config, remote):
-
-    try: in_terms = args.terms
-    except: in_terms = args.term
-
     from ..library.query import QueryCommand
+
+    try:
+        in_terms = args.terms
+    except:
+        in_terms = args.term
 
     terms = []
     for t in in_terms:
@@ -60,12 +62,14 @@ def _find(args, l, config, remote):
 
     qc = QueryCommand.parse(' '.join(terms))
 
-    prt("Query: {}", qc)
-
     if remote:
         identities = l.remote_find(qc)
     else:
         identities = l.find(qc)
+
+    return identities
+
+def _print_find(identities, prtf=prt):
 
     try: first = identities[0]
     except: first = None
@@ -157,7 +161,7 @@ def _source_list(dir_):
 
     return lst
 
-def _print_bundle_entry(ident, show_partitions=False):
+def _print_bundle_entry(ident, show_partitions=False, prtf=prt):
 
     locations_length = 6
     vid_length = 15
@@ -166,18 +170,18 @@ def _print_bundle_entry(ident, show_partitions=False):
     d_format = "{:%ds} {:%ds} {:%ds}" % (locations_length, vid_length, name_length)
     p_format = "{:%ds} {:%ds}     {:%ds}" % (locations_length, vid_length, name_length)
 
-    prt(d_format,str(ident.locations), ident.vid, ident.vname)
+    prtf(d_format,str(ident.locations), ident.vid, ident.vname)
 
     if show_partitions and ident.partitions:
         for pi in ident.partitions.values():
-            prt(p_format, str(pi.locations), pi.vid, pi.name)
+            prtf(p_format, str(pi.locations), pi.vid, pi.name)
 
-def _print_bundle_list(idents, subset_names = None, **kwargs):
+def _print_bundle_list(idents, subset_names = None, prtf=prt, **kwargs):
     '''Create a nice display of a list of source packages'''
     from collections import defaultdict
 
     for ident in sorted(idents, key = lambda i: i.sname):
-        _print_bundle_entry(ident, **kwargs)
+        _print_bundle_entry(ident, prtf=prtf,**kwargs)
 
 def _print_info(l,ident, list_partitions=False):
     from ..cache import RemoteMarker
@@ -219,7 +223,25 @@ def _print_info(l,ident, list_partitions=False):
 
         if resolved_ident.url:
             prt("P Web Path  : {}",resolved_ident.url)
-            
+
+def _print_bundle_info(bundle):
+    from ..source.repository import new_repository
+
+    prt('Name      : {}', bundle.identity.vname)
+    prt('Id        : {}', bundle.identity.vid)
+    prt('Dir       : {}', bundle.bundle_dir)
+
+    if bundle.is_built:
+
+        d = dict(bundle.db_config.dict)
+        process = d['process']
+
+        prt('Created   : {}', process.get('dbcreated', ''))
+        prt('Prepared  : {}', process.get('prepared', ''))
+        prt('Built     : {}', process.get('built', ''))
+        prt('Build time: {}',
+            str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
+
 
 def main():
     import argparse
@@ -272,6 +294,7 @@ def main():
         'ckan':ckan_command,
         'source': source_command,
         'config': config_command,
+
     }
 
 

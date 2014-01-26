@@ -59,7 +59,6 @@ def config_install(args, rc):
     else:
         contents = pkgutil.get_data("ambry.support", 'ambry-{}.yaml'.format(args.template))
 
-
     d = yaml.load(contents)
 
     # Set the key-value entries.
@@ -90,3 +89,15 @@ def config_install(args, rc):
 
         with open(install_file,'w') as f:
             f.write(s)
+
+    if not os.path.exists(rc.USER_ACCOUNTS):
+        with open(rc.USER_ACCOUNTS,'w') as f:
+
+            d = dict(accounts=dict(
+                 ambry=dict(
+                     name = None,
+                     email = None
+                 )
+            ))
+
+            f.write(yaml.dumps(d, indent=4, default_flow_style=False))
