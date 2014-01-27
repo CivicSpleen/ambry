@@ -100,4 +100,4 @@ def config_install(args, rc):
                  )
             ))
 
-            f.write(yaml.dumps(d, indent=4, default_flow_style=False))
+            f.write(yaml.dump(d, indent=4, default_flow_style=False))
