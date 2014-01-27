@@ -114,10 +114,12 @@ def source_parser(cmd):
     sp.add_argument('-P', '--plain', default=False,  action='store_true',
                     help='Plain output; just print the bundle path, with no logging decorations')
     group = sp.add_mutually_exclusive_group()
-    group.add_argument('-c', '--commit',  default=False, dest='commit',   action='store_true', help='Find bundles that need to be committed')
-    group.add_argument('-p', '--push',  default=False, dest='push',   action='store_true', help='Find bundles that need to be pushed')
-    group.add_argument('-i', '--init',  default=False, dest='init',   action='store_true', help='Find bundles that need to be initialized')
-    group.add_argument('-a', '--all', default=False, dest='all', action='store_true',
+    group.add_argument('-s', '--source', default=False, action='store_true', help='Find source bundle')
+    group.add_argument('-b', '--built', default=False,  action='store_true', help='Find bundles that have been built')
+    group.add_argument('-c', '--commit',  default=False,  action='store_true', help='Find bundles that need to be committed')
+    group.add_argument('-p', '--push',  default=False, action='store_true', help='Find bundles that need to be pushed')
+    group.add_argument('-i', '--init',  default=False, action='store_true', help='Find bundles that need to be initialized')
+    group.add_argument('-a', '--all', default=False, action='store_true',
                        help='List all bundles, from root or sub dir')
 
     sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Query commands to find packages with. ')
@@ -167,7 +169,9 @@ def source_list(args, st, rc, names=None):
         prtf = prt
 
     if args.list_library:
-        l_list = l.list(datasets=d)
+        pass
+
+    l_list = l.list(datasets=d)
 
     s_lst =  st.list(datasets=d)
 
