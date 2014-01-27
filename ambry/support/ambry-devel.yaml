@@ -36,6 +36,8 @@ sourcerepo:
 
     default:
         account: github-account-name
+        service: github
+        org: clarinova-data
 
 numbers:
     host: numbers.ambry.io

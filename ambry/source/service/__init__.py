@@ -8,9 +8,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 def new_service(config):
 
-    name = config['service']
-
-    if name == 'github':
+    if config['service'] == 'github':
         from github import GitHubService #@UnresolvedImport
 
         return GitHubService(**config)

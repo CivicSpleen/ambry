@@ -7,24 +7,19 @@ Revised BSD License, included in this distribution as LICENSE.txt
 def new_repository(config):
 
     from ..service import new_service, GitServiceMarker #@UnresolvedImport
-    
-    if 'account' in config:
-        service = new_service(config['account'])
-    else:
-        defaults_config = {'user': None, 'password': None, 'org': None}
-        defaults_config.update(config)
 
-        service = new_service(defaults_config)
-    
-    config['service'] = service
-    
-    try: del config['account']
-    except: pass
-    
+    if not 'account' in config:
+        config['account'] =  {'user': None, 'password': None}
+
+    service_config = config['account']
+    service_config.update(config)
+
+    service = new_service(service_config)
+
     if isinstance(service,GitServiceMarker):
         from .git import GitRepository #@UnresolvedImport
 
-        return GitRepository(**config)
+        return GitRepository(service=service,dir = config['dir'])
     else:
         from ambry.dbexceptions import ConfigurationError
         raise ConfigurationError('Unknown {}'.format(type(service)))       

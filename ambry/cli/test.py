@@ -23,6 +23,9 @@ def test_parser(cmd):
     sp = asp.add_parser('spatialite', help='Test spatialite configuration')
     sp.set_defaults(subcommand='spatialite')
 
+    sp = asp.add_parser('gitaccess', help='Test gitaccess')
+    sp.set_defaults(subcommand='gitaccess')
+
 def test_command(args, rc):
     from ..library import new_library
 
@@ -58,3 +61,14 @@ def test_spatialite(args,rc):
     for row in rs:
         msg = "> SQLite v%s Spatialite v%s" % (row[0], row[1])
         print(msg)
+
+def test_gitaccess(args,rc):
+    from ..source.repository import new_repository
+
+    repo = new_repository(rc.sourcerepo('default'))
+
+    for e in  repo.service.list():
+        print e
+
+
+
