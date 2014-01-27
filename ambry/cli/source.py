@@ -143,9 +143,12 @@ def source_info(args, st, rc):
         if not ident:
             err("Didn't find source for term '{}'. (Maybe need to run 'source sync')", term)
 
-        bundle = st.library.resolve_bundle(term)
-
-        _print_bundle_info(bundle)
+        try:
+            bundle = st.library.resolve_bundle(term)
+            _print_bundle_info(bundle=bundle)
+        except ImportError:
+            ident = st.library.resolve(term)
+            _print_bundle_info(ident=ident)
 
 
 def source_list(args, st, rc, names=None):
@@ -191,8 +194,11 @@ def source_get(args, st, rc):
                 err(e.message)
 
         else:
-
             ident = st.library.resolve(term)
+
+            if not ident.url:
+                err("Didn't get a git URL for reference: {} ".format(term))
+
             args.terms = [ident.url]
             return source_get(args, st, rc)
 
@@ -511,7 +517,7 @@ def source_run(args, st, rc):
        
 def source_find(args, st, rc):
     from ..source.repository.git import GitRepository
-    from ..library.query import QueryCommand
+    from ..identity import Identity
 
     dir_ = args.dir
 
@@ -530,9 +536,14 @@ def source_find(args, st, rc):
 
                 ident = st.library.resolve(ident['identity']['vid'])
 
-                plain_prt('{}'.format(ident.data['path']))
+                plain_prt('{}'.format(ident.sname))
+
         else:
-            _print_find(identities, prtf=prtf)
+
+            _print_bundle_list([ st.library.resolve(i['identity']['vid']) for i in identities])
+
+            #_print_find(identities, prtf=prtf)
+
     else:
         for root, _, files in os.walk(dir_):
             if 'bundle.yaml' in files:
@@ -573,19 +584,15 @@ def source_init(args, st, rc):
     repo.init_remote()
     
     repo.push()
+
+    st.sync_bundle(dir_)
+
     
 def source_sync(args, st, rc):
     '''Synchronize all of the repositories with the local library'''
     from ..source.repository.git import GitShellService
 
-
-    # Sync all of the registered repositories
-    for repo in rc.sourcerepo.list:
-        st.sync_org(repo)
-
-    st.sync_source()
-
-
+    st.sync(rc.sourcerepo.list)
 
 def source_deps(args, st, rc):
     """Produce a list of dependencies for all of the source bundles"""

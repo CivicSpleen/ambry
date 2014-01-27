@@ -224,14 +224,21 @@ def _print_info(l,ident, list_partitions=False):
         if resolved_ident.url:
             prt("P Web Path  : {}",resolved_ident.url)
 
-def _print_bundle_info(bundle):
+def _print_bundle_info(bundle=None, ident=None):
     from ..source.repository import new_repository
 
-    prt('Name      : {}', bundle.identity.vname)
-    prt('Id        : {}', bundle.identity.vid)
-    prt('Dir       : {}', bundle.bundle_dir)
+    if ident is None and bundle:
+        ident = bundle.identity
 
-    if bundle.is_built:
+    prt('Name      : {}', ident.vname)
+    prt('Id        : {}', ident.vid)
+
+    if bundle:
+        prt('Dir       : {}', bundle.bundle_dir)
+    else:
+        prt('URL       : {}', ident.url)
+
+    if bundle and bundle.is_built:
 
         d = dict(bundle.db_config.dict)
         process = d['process']

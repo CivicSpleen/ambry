@@ -43,10 +43,10 @@ csv,2,text,,,VARCHAR,,,20,,,,,,,,,,ciEGPXmDC808002
 csv,3,integer,,,INTEGER,,,,,,,,,,,,,ciEGPXmDC808003
 csv,4,real,,,REAL,,,,,,,,,,,,,ciEGPXmDC808004
 ,,,,,,,,,,,,,,,,,,
-coding,1,id,1,,INTEGER,,,,,,,,one,,1,,,ciEGPXmDC809001
-coding,2,text,,,VARCHAR,1,,20,,DEFAULT,,,two,1,,,,ciEGPXmDC809002
-coding,3,integer,,,INTEGER,,,4,,-1,,,three,,,,,ciEGPXmDC809003
-coding,4,float,,,REAL,,,,,2.14,,,four,0,,0,,ciEGPXmDC809004
-coding,5,date,,,DATE,,,,,1990-01-01,,,,,,,,ciEGPXmDC809005
-coding,6,datetime,,,DATETIME,,,,,1990-01-01,,,,,,,,ciEGPXmDC809006
-coding,7,time,,,TIME,,,,,12:00:00 PM,,,,,,,,ciEGPXmDC809007
+coding,1,id,1,,INTEGER,,,,,-1,,,one,,1,,,ciEGPXmDC809001
+coding,2,text,,,VARCHAR,1,,10,,-,,,two,1,,,,ciEGPXmDC809002
+coding,3,integer,,,INTEGER,,,,,-1,,,three,,,,,ciEGPXmDC809003
+coding,4,float,,,REAL,,,,,-1,,,four,0,,0,,ciEGPXmDC809004
+coding,5,date,,,DATE,,,,,-1,,,,,,,,ciEGPXmDC809005
+coding,6,datetime,,,DATETIME,,,,,-1,,,,,,,,ciEGPXmDC809006
+coding,7,time,,,TIME,,,,,-1,,,,,,,,ciEGPXmDC809007

@@ -88,7 +88,7 @@ def bundle_command(args, rc):
     phases.append(args.subcommand)
 
     for phase in phases:
-        getf(phase)(args, b, rc)
+        getf(phase)(args, b, st, rc)
 
 def bundle_parser(cmd):
     import argparse, multiprocessing
@@ -248,8 +248,7 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('pull', help='Pull from the git origin')
     command_p.set_defaults(subcommand='pull', command_group='source')
 
-
-def bundle_info(args, b, rc):
+def bundle_info(args, b, st, rc):
     if args.schema:
         print b.schema.as_csv()
     else:
@@ -269,15 +268,15 @@ def bundle_info(args, b, rc):
             for partition in b.partitions:
                 b.log("    "+partition.identity.sname)
 
-
-
-def bundle_clean(args, b, rc):
+def bundle_clean(args, b, st, rc):
     b.log("---- Cleaning ---")
     # Only clean the meta phases when it is explicityly specified.
     #b.clean(clean_meta=('meta' in phases))
     b.clean()
 
-def bundle_meta(args, b, rc):
+    st.set_bundle_state(b.identity.id_, 'built')
+
+def bundle_meta(args, b, st, rc):
 
     # The meta phase does not require a database, and should write files
     # that only need to be done once.
@@ -292,7 +291,7 @@ def bundle_meta(args, b, rc):
     else:
         b.log("---- Skipping Meta ---- ")
 
-def bundle_prepare(args, b, rc):
+def bundle_prepare(args, b, st, rc):
     if b.pre_prepare():
         b.log("---- Preparing ----")
         if b.prepare():
@@ -306,10 +305,10 @@ def bundle_prepare(args, b, rc):
 
     return True
 
-def bundle_build(args, b, rc):
+def bundle_build(args, b, st, rc):
 
     if not b.is_prepared:
-        bundle_prepare(args, b, rc)
+        bundle_prepare(args, b, st, rc)
 
     if b.pre_build():
         b.log("---- Build ---")
@@ -322,9 +321,11 @@ def bundle_build(args, b, rc):
     else:
         b.log("---- Skipping Build ---- ")
 
+    st.set_bundle_state(b.identity.id_, 'built')
+
     return True
 
-def bundle_install(args, b, rc):
+def bundle_install(args, b, st, rc):
 
     force = args.force
 
@@ -341,7 +342,7 @@ def bundle_install(args, b, rc):
 
     return True
 
-def bundle_run(args, b, rc):
+def bundle_run(args, b, st, rc):
 
     #
     # Run a method on the bundle. Can be used for testing and development.
@@ -358,7 +359,7 @@ def bundle_run(args, b, rc):
 
     return f(*args.args)
 
-def bundle_submit(args, b, rc):
+def bundle_submit(args, b, st, rc):
 
     if b.pre_submit():
         b.log("---- Submit ---")
@@ -370,7 +371,7 @@ def bundle_submit(args, b, rc):
     else:
         b.log("---- Skipping Submit ---- ")
 
-def bundle_extract(args, b, rc):
+def bundle_extract(args, b, st, rc):
     if b.pre_extract():
         b.log("---- Extract ---")
         if b.extract():
@@ -381,7 +382,7 @@ def bundle_extract(args, b, rc):
     else:
         b.log("---- Skipping Extract ---- ")
 
-def bundle_update(args, b, rc):
+def bundle_update(args, b, st, rc):
 
     if b.pre_update():
         b.log("---- Update ---")
@@ -394,7 +395,7 @@ def bundle_update(args, b, rc):
     else:
         b.log("---- Skipping Update ---- ")
 
-def bundle_config(args, b, rc):
+def bundle_config(args, b, st, rc):
 
     if args.command == 'config':
         if args.subcommand == 'rewrite':
@@ -408,7 +409,7 @@ def bundle_config(args, b, rc):
 
     return
 
-def bundle_source(args, b, rc):
+def bundle_source(args, b, st, rc):
 
     if 'command_group' in args and args.command_group == 'source':
 

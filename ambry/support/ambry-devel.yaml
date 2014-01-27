@@ -29,6 +29,8 @@ filesystem:
     extracts: 
         dir: '{root}/cache/extracts'
 
+    python: '{root}/cache/python'
+
 sourcerepo:
     dir: '{root}/source'
 

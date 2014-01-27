@@ -929,21 +929,23 @@ class LocationRef(object):
     LOCATION.REMOTE ='R'
     LOCATION.SREPO = 'G' # Source repository, 'github'
 
-    def __init__(self,location, revision=None, version=None):
+    def __init__(self,location, revision=None, version=None, code = None):
         self.location = location
         self.revision = revision
         self.version = version
+        self.code = code
 
     location = None
     revision = None
     version = None
+    code = None
 
     @property
     def exists(self):
         return bool(self.revision)
 
     def __str__(self):
-        return self.location if self.revision else self.LOCATION.UNKNOWN
+        return self.code if self.revision else self.LOCATION.UNKNOWN
 
     def __repr__(self):
         return '{}:{}'.format(self.location,self.revision if self.revision else '')
@@ -966,12 +968,15 @@ class Locations(object):
 
     def set(self, code, revision=None, version=None):
 
+        uc_code = code.upper()
+
         if not revision:
             revision = self.ident.on.revision
             version = self.ident.name.version
 
-        self._locations[code].revision = revision
-        self._locations[code].version = version
+        self._locations[uc_code].revision = revision
+        self._locations[uc_code].version = version
+        self._locations[uc_code].code = code
 
 class Identity(object):
     '''Identities represent the defining set of information about a 

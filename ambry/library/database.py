@@ -1087,9 +1087,10 @@ class LibraryDb(object):
         try:
             s.add(f)
             self.commit()
-        except IntegrityError:
+        except IntegrityError as e:
             self.rollback()
             s.merge(f)
+            self.commit()
 
         self._mark_update()
 

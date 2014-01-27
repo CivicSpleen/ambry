@@ -545,8 +545,7 @@ class BuildBundle(Bundle):
             python_dir = self.config.config.python_dir()
             
             if not python_dir:
-
-                raise ConfigurationError("Can't install requirements without a configuration item for filesystems.python")
+                raise ConfigurationError("Can't install python requirements without a configuration item for filesystems.python")
             
             if not os.path.exists(python_dir):
                 os.makedirs(python_dir)

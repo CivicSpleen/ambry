@@ -150,7 +150,7 @@ class QueryCommand(object):
 
             line = tt[4]
 
-            #print "{:5d} {:5d} {:15s} || {}".format(t_type, pos, "'"+t_string+"'", line)
+            #print "{:5d} {:5d} {:15s} {:20s} {:8s}.{:8s}= {:10s} || {}".format(t_type, pos, "'"+t_string+"'", state, n1, n2, value, line)
 
 
             def err(expected):
@@ -159,23 +159,43 @@ class QueryCommand(object):
             if not t_string:
                 continue
 
-            if state == 'name_start':
+            if state == 'value_continuation':
+                value += t_string
+                if is_like:
+                    value = '%' + value + '%'
+                state = 'value_continuation'
+                qc.getsubdict(n1).__setattr__(n2, value.strip("'").strip('"'))
+
+            elif state == 'name_start' or state == 'name_start_or_value':
                 # First part of name
-                if t_type == token.NAME:
+                if state == 'name_start_or_value' and t_string in ('-','.'):
+                    if is_like:
+                        value = value.strip('%')
+
+                    value += t_string
+                    state = 'value_continuation'
+                elif t_type == token.NAME:
                     n1 = t_string
                     state = 'name_sep'
+                    is_like = False
+
+
                 elif t_type == token.OP and t_string == ',':
                     state = 'name_start'
+
                 elif t_type == token.ENDMARKER:
                     state = 'done'
+
                 else:
-                    err( "NAME or ',' ")
+                    err( "NAME or ','; got: '{}'  ".format(t_string))
+
             elif state == 'name_sep':
-                # '.' that serpates names
+                # '.' that separates names
                 if t_type == token.OP and t_string == '.':
                     state = 'name_2'
                 else:
                     raise err("'.'")
+
             elif state == 'name_2':
                 # Second part of name
                 if t_type == token.NAME:
@@ -183,6 +203,7 @@ class QueryCommand(object):
                     n2 = t_string
                 else:
                     raise err("NAME")
+
             elif state == 'value_sep':
                 # The '=' that seperates name from values
                 if (t_type == token.OP and t_string == '=') or (t_type == token.NAME and t_string == 'like'):
@@ -193,15 +214,15 @@ class QueryCommand(object):
 
                 else:
                     raise err("'='")
+
             elif state == 'value':
                 # The Value
                 if t_type == token.NAME or t_type == token.STRING or t_type == token.NUMBER:
                     value = t_string
                     if is_like:
                         value = '%'+value+'%'
-                        is_like = False
 
-                    state = 'name_start'
+                    state = 'name_start_or_value'
 
                     qc.getsubdict(n1).__setattr__(n2,value.strip("'").strip('"'))
 
@@ -211,6 +232,8 @@ class QueryCommand(object):
                 raise cls.ParseError("Got token after end")
             else:
                 raise cls.ParseError("Unknown state: {} at char {}".format(state))
+
+
 
         return qc
 

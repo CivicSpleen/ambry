@@ -1319,8 +1319,8 @@ class {name}(Base):
 
             t = self.add_table(name, data={'code_key':json.dumps([source_table_name, source_column_name])})
             self.add_column(t, 'id', datatype='integer', is_primary_key = True, sequence_id=1)
-            self.add_column(t, 'code', datatype='text', description='Value of code',sequence_id=2)
-            self.add_column(t, 'description', datatype='text', description='Code description', sequence_id = 3)
+            self.add_column(t, 'code', datatype='varchar', description='Value of code',sequence_id=2)
+            self.add_column(t, 'description', datatype='varchar', description='Code description', sequence_id = 3)
             
 
             

@@ -59,7 +59,11 @@ class SourceTree(object):
                 if ck not in datasets:
                     datasets[ck] = ident
 
-                datasets[ck].locations.set(LocationRef.LOCATION.SOURCE)
+                if bundle.is_built:
+                    datasets[ck].locations.set(LocationRef.LOCATION.SOURCE)
+                else:
+                    datasets[ck].locations.set(LocationRef.LOCATION.SOURCE.lower())
+
                 datasets[ck].data['path'] = root
 
 
@@ -88,6 +92,16 @@ class SourceTree(object):
         pass
 
 
+    def sync(self, repos):
+
+        self.library.clear_datasets()
+
+        # Sync all of the registered repositories
+        for repo in repos:
+            self.sync_org(repo)
+
+        self.sync_source()
+
     def sync_source(self):
         self.library.sync_source()
 
@@ -96,6 +110,9 @@ class SourceTree(object):
         from ..identity import Identity
 
         self.logger("Sync repo: {}".format(str(repo)))
+
+        self.library.clear_source_refs(repo.ident)
+
         for e in repo.service.list():
 
             ident = Identity.from_dict(e)
@@ -103,11 +120,16 @@ class SourceTree(object):
 
             self.library.add_source_ref(ident, repo=repo.ident, url=e['clone_url'], data=e)
 
+
     def sync_repo(self, url):
         pass
 
     def sync_bundle(self, path):
         self.library.update_bundle(path)
+
+    def set_bundle_state(self, ref, state):
+        self.library.set_bundle_state(ref,state)
+
 
     def clone(self,url):
         '''Clone a new bundle insto the source tree'''
@@ -185,11 +207,18 @@ class SourceTreeLibrary(object):
             if ck not in datasets:
                 datasets[ck] = ident
 
-            datasets[ck].locations.set(LocationRef.LOCATION.SOURCE)
+            try:
+                bundle = self._get_bundle(ident.source_path)
+            except ImportError:
+                raise Exception("Failed to load bundle from {}".format(ident.source_path))
+
+            if bundle.is_built:
+                datasets[ck].locations.set(LocationRef.LOCATION.SOURCE)
+            else:
+                datasets[ck].locations.set(LocationRef.LOCATION.SOURCE.lower())
             datasets[ck].data = file_.dict
 
         for file_ in self._library.database.get_file_by_type(type_='source_url'):
-
 
             ident = Identity.from_dict(file_.data)
 
@@ -200,16 +229,13 @@ class SourceTreeLibrary(object):
 
             datasets[ck].locations.set(LocationRef.LOCATION.SREPO)
 
-
         return datasets
 
     def sync_source(self):
         self._load_database()
 
-
-
     def resolve(self, term):
-
+        from ..identity import LocationRef
         # The terms come from the command line args as a list
         try: term = term.pop(0)
         except: pass
@@ -228,6 +254,16 @@ class SourceTreeLibrary(object):
             ident.url = f.source_url
             ident.data['repo'] = f.group
             ident.data['path'] = os.path.join(self.base_dir, ident.source_path)
+            ident.locations.set(LocationRef.LOCATION.SREPO)
+
+        f = self._library.database.get_file_by_ref(ident.id_, type_='bundle_source')
+
+        if f:
+            f = f.pop(0)
+
+            ident.url = f.source_url
+            ident.data['path'] = os.path.join(self.base_dir, ident.source_path)
+            ident.locations.set(LocationRef.LOCATION.SOURCE)
 
         return ident
 
@@ -254,16 +290,49 @@ class SourceTreeLibrary(object):
             data=data,
             source_url=data['clone_url'])
 
+    def clear_datasets(self):
+        from ..orm import Dataset
+        from ..library.database import ROOT_CONFIG_NAME_V
+
+        self._library.database.session.query(Dataset).filter(Dataset.vid != ROOT_CONFIG_NAME_V).delete()
+
+        self._library.database.session.commit()
+
+    def clear_source_refs(self,repo):
+        from ..orm import File
+
+        self._library.database.session.query(File).filter(File.group == repo).delete()
+
+        self._library.database.session.commit()
+
 
     def _load_database(self):
+        from ..orm import File
 
-        for ident in self.tree.list():
-            print 'Loading ', ident
+        self._library.database.session.query(File).filter(File.type_ == 'bundle_source').delete()
+        self._library.database.session.commit()
+
+        for ident in self.tree._dir_list():
             path = ident.data['path']
             self.update_bundle(path, ident)
 
+
+
+    def set_bundle_state(self, ref, state):
+
+        f = self._library.database.get_file_by_ref(ref, type_='bundle_source')
+
+        if  f:
+            f = f[0]
+
+            f.data['bundle_state'] = state
+
+            self._library.database.merge_file(f)
+
     def update_bundle(self, path, ident=None, bundle=None):
         from ..util import md5_for_file
+
+        self.tree.logger("Sync source bundle: {} ".format(path))
 
         if not bundle and os.path.exists(path):
             bundle = self._get_bundle(path)
@@ -273,10 +342,7 @@ class SourceTreeLibrary(object):
 
         self._library.database.install_dataset_identity(ident)
 
-
-
         f =  self._library.database.get_file_by_ref(ident.id_, type_='bundle_source')
-
 
         if not f:
 
@@ -294,6 +360,7 @@ class SourceTreeLibrary(object):
             d = dict(
                 identity=ident.dict,
                 bundle_config = None,
+                bundle_state=None,
                 process = None,
                 git_state = None,
                 rev = 0
@@ -336,11 +403,18 @@ class SourceTreeLibrary(object):
             data=data,
             source_url=source_url)
 
-    def _remove_file(self, path):
-        pass
+    def _remove_file_by_ref(self, ref, type_):
+
+        self._library.remove_file(self, ref, type_=type_)
 
 
-    def _get_bundle(self, root):
+    def _get_bundle(self, path):
+
+        if path[0] != '/':
+            root = os.path.join(self.base_dir, path)
+        else:
+            root = path
+
         bundle_class = load_bundle(root)
         bundle = bundle_class(root)
         return bundle
