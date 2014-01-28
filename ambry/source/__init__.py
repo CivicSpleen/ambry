@@ -261,7 +261,6 @@ class SourceTreeLibrary(object):
         if f:
             f = f.pop(0)
 
-            ident.url = f.source_url
             ident.data['path'] = os.path.join(self.base_dir, ident.source_path)
             ident.locations.set(LocationRef.LOCATION.SOURCE)
 

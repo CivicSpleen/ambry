@@ -121,7 +121,7 @@ class RunConfig(object):
                             break
                         sd = sd[pp]
                         
-                    # Save the oroginal value as a name
+                    # Save the Original value as a name
                         
                     sd[pp] = nv
                     
@@ -171,7 +171,14 @@ class RunConfig(object):
 
     def filesystem(self,name):
         e =  self.group_item('filesystem', name) 
-        
+
+        # If the value is a string, rather than a dict, it is for a
+        # FsCache. Re-write it to be the expected type. 
+
+        if isinstance(e, basestring):
+            e = dict(dir=e)
+
+
         fs = self.group('filesystem') 
         root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
 

@@ -321,7 +321,10 @@ def library_push(args, l, config):
         state = 'all'
     else:
         state = 'new'
-    
+
+    def push_cb(note, md, t):
+        prt("{} {}", note, md['fqname'])
+
     files_ = l.database.get_file_by_state(state)
     if len(files_):
         prt("-- Pushing to {}",l.upstream)
@@ -329,10 +332,9 @@ def library_push(args, l, config):
             
             if f.type_ not in ('partition','bundle'):
                 continue
-            
-            prt("Pushing: {}",f.path)
+
             try:
-                l.push(f)
+                l.push(f.ref, cb=push_cb)
             except Exception as e:
                 prt("Failed: {}",e)
                 raise

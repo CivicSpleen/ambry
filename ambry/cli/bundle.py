@@ -26,6 +26,19 @@ def bundle_command(args, rc):
         if ident:
             bundle_file = os.path.join(ident.data['path'], 'bundle.py')
 
+            if not os.path.exists(bundle_file):
+                from ..dbexceptions import ConflictError
+                # The bundle exists in the source repo, but is not local
+                prt("Loading bundle from {}".format(ident.url))
+                try:
+                    bundle = st.clone(ident.url)
+                    prt("Loaded {} into {}".format(bundle.identity.sname, bundle.bundle_dir))
+
+                    bundle_file = os.path.join(bundle.bundle_dir,'bundle.py')
+                except ConflictError as e:
+                    err(e.message)
+
+
         elif args.bundle_dir == '-':
             # Run run for each line of input
             import sys
