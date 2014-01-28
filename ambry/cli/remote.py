@@ -42,7 +42,7 @@ def remote_command(args, rc):
 
 
 def remote_info(args, l, rc):
-    from ..identity import new_identity
+    from ..identity import Identity
     from ambry.client.exceptions import NotFound
     
     if args.term:
@@ -55,8 +55,8 @@ def remote_info(args, l, rc):
             err("Failed to find record for: {}", args.term)
             return 
 
-        d = new_identity(dsi['dataset'])
-        p = new_identity(dsi['partitions'].items()[0][1]) if dsi['ref_type'] == 'partition' else None
+        d = Identity.from_dict(dsi['dataset'])
+        p = Identity.from_dict(dsi['partitions'].items()[0][1]) if dsi['ref_type'] == 'partition' else None
                 
         _print_info(l,d,p)
 

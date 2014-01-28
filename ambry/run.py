@@ -175,17 +175,22 @@ class RunConfig(object):
         fs = self.group('filesystem') 
         root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
 
-        return self._sub_strings(e, {
+
+
+        e =  self._sub_strings(e, {
                                      'upstream': lambda k,v: self.filesystem(v),
                                      'account': lambda k,v: self.account(v),
                                      'dir' : lambda k,v: v.format(root=root_dir)
                                      }  )
+
+        return e
     
     def account(self,name):
         e = self.group_item('accounts', name) 
 
         e =  self._sub_strings(e, {'store': lambda k,v: self.filesystem(v)}  )
-        
+
+
         e['_name'] = name
         
         return e
@@ -205,8 +210,10 @@ class RunConfig(object):
                                      'filesystem': lambda k,v: self.filesystem(v),
                                      'database': lambda k,v: self.database(v),
                                      'upstream': lambda k,v: self.filesystem(v),
+                                     'account': lambda k, v: self.account(v),
                                      'cdn': lambda k,v: self.account(v),
                                      }  )
+
         e['_name'] = name
      
         return e
