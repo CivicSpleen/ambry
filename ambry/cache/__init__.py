@@ -5,7 +5,7 @@ from ambry.dbexceptions import ConfigurationError
 
 def new_cache(config):
         """Return a new :class:`FsCache` built on the configured cache directory
-        """   
+        """
 
         if 'size' in config:
             from filesystem import FsLimitedCache
