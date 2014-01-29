@@ -236,17 +236,15 @@ class Partitions(object):
             return None
    
     
-    def find_all(self, pid=None, **kwargs):
+    def find_all(self, pnq=None, **kwargs):
         '''Return a Partition object from the database based on a PartitionId.
         The object returned is immutable; changes are not persisted'''
         from identity import Identity
         
-        if pid and not pid.format:
-                pid.format = NameQuery.ANY
-        elif not 'format' in kwargs:
-                kwargs['format'] = NameQuery.ANY
+        if pnq is None:
+            pnq = PartitionNameQuery(**kwargs)
 
-        ops = self._find_orm(pid, **kwargs).all()
+        ops = self._find_orm(pnq).all()
         
         return [ self.partition(op) for op in ops]
 

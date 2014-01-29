@@ -1234,7 +1234,7 @@ class Identity(object):
     @property
     def vname(self):
         ''' '''
-        return self._name.vname
+        return self._name.vname # Obsoleted by __getattr__??
  
     @property
     def fqname(self):

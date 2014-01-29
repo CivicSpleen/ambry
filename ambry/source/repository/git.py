@@ -500,6 +500,7 @@ class GitRepository(RepositoryInterface):
         
         ident = Identity.parse_name(name)
         name = ident.name
+
         out = []
         all_deps = self.dependencies
 

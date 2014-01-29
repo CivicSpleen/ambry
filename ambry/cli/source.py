@@ -134,6 +134,15 @@ def source_info(args, st, rc):
         prt("Source dir: {}", rc.sourcerepo.dir)
         for repo in  rc.sourcerepo.list:
             prt("Repo      : {}", repo.ident)
+    if args.terms[0] == '-':
+        # Read terms from stdin, one per line.
+        import sys
+
+        for line in sys.stdin.readlines():
+            args.terms = [line.strip()]
+            source_info(args,st,rc)
+
+
     else:
         import ambry.library as library
         from ..identity import Identity
@@ -199,6 +208,10 @@ def source_get(args, st, rc):
 
         else:
             ident = st.library.resolve(term)
+
+
+            if not ident:
+                err("Could not find bundle for term: {} ".format(term))
 
             if not ident.url:
                 err("Didn't get a git URL for reference: {} ".format(term))
@@ -461,7 +474,11 @@ def source_run(args, st, rc):
     if not dir_:
         dir_ = rc.sourcerepo.dir
 
-    for root, _, files in os.walk(dir_):
+    for root, dirs, files in os.walk(dir_):
+
+        # Yes! can edit dirs in place!
+        dirs[:] = [d for d in dirs if not d.startswith('_')]
+
         if 'bundle.yaml' in files:
             repo = GitRepository(None, root)
             repo.bundle_dir = root

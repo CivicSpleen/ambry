@@ -269,17 +269,20 @@ def bundle_info(args, b, st, rc):
         b.log("VID  : "+b.identity.vid)
         b.log("Name : "+b.identity.sname)
         b.log("VName: "+b.identity.vname)
-        b.log("Parts: {}".format(b.partitions.count))
 
-        if b.config.build.get('dependencies',False):
+        if b.config.build.get('dependencies', False):
             b.log("---- Dependencies ---")
-            for k,v in b.config.build.dependencies.items():
-                b.log("    {}: {}".format(k,v))
+            for k, v in b.config.build.dependencies.items():
+                b.log("    {}: {}".format(k, v))
 
-        if b.partitions.count < 5:
-            b.log("---- Partitions ---")
-            for partition in b.partitions:
-                b.log("    "+partition.identity.sname)
+        if b.database.exists():
+
+            b.log("Parts: {}".format(b.partitions.count))
+
+            if b.partitions.count < 5:
+                b.log("---- Partitions ---")
+                for partition in b.partitions:
+                    b.log("    "+partition.identity.sname)
 
 def bundle_clean(args, b, st, rc):
     b.log("---- Cleaning ---")
