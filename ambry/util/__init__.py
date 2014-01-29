@@ -41,18 +41,22 @@ class curry:
 
 
 
-def get_logger(name, file_name = None):
+def get_logger(name, file_name = None, template=None):
     
     logger = logging.getLogger(name)
 
     if  name not in logger_init:
 
-        formatter = logging.Formatter("%(name)s %(levelname)s %(message)s")
+        if not template:
+            template = "%(name)s %(levelname)s %(message)s"
+
+        formatter = logging.Formatter(template)
         
         if file_name:
             ch = logging.FileHandler(file_name)
         else:
             ch = logging.StreamHandler(stream=sys.stdout)
+
         ch.setFormatter(formatter)
         #ch.setLevel(logging.DEBUG)
         logger.addHandler(ch)

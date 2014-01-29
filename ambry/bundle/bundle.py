@@ -31,15 +31,7 @@ class Bundle(object):
         self._identity = None
         self._repository = None
         self._dataset_id = None # Needed in LibraryDbBundle to  disambiguate multiple datasets
-        
-        if not logger:
-            from ..util import get_logger
-            self.logger = get_logger(__name__)
-        else:
-            self.logger = logger 
-            
-        import logging
-        self.logger.setLevel(logging.INFO) 
+
         
         # This bit of wackiness allows the var(self.run_args) code
         # to work when there have been no artgs parsed. 
@@ -49,13 +41,33 @@ class Bundle(object):
             test = False
 
         self.run_args = vars(null_args())
-        
+
+        self._logger = logger
+
+    @property
+    def logger(self):
+
+        if not self._logger:
+            from ..util import get_logger
+            import logging
+
+            ident = self.identity
+            template = ident.sname+" %(message)s"
+
+            self._logger = get_logger(__name__, template=template)
+
+
+            self.logger.setLevel(logging.INFO)
+
+        return self._logger
+
         
     @property
     def schema(self):
         if self._schema is None:
             self._schema = Schema(self)
-            
+
+
         return self._schema
     
     @property
