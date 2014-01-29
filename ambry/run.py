@@ -173,7 +173,7 @@ class RunConfig(object):
         e =  self.group_item('filesystem', name) 
 
         # If the value is a string, rather than a dict, it is for a
-        # FsCache. Re-write it to be the expected type. 
+        # FsCache. Re-write it to be the expected type.
 
         if isinstance(e, basestring):
             e = dict(dir=e)

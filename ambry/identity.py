@@ -1250,6 +1250,14 @@ class Identity(object):
 
         return self._name.path
 
+    # Call other values on the name
+    def __getattr__(self, name):
+        if hasattr(self._name, name):
+            return getattr(self._name, name)
+        else:
+            raise AttributeError
+
+
 
     @property
     def source_path(self):
