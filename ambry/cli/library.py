@@ -65,7 +65,8 @@ def library_parser(cmd):
     sp = asp.add_parser('list', help='List datasets in the library, or partitions in dataset')
     sp.set_defaults(subcommand='list')
     sp.add_argument('term', type=str, nargs='?', help='Name of bundle, to list partitions')
-    sp.add_argument('-l','--local_only',  default=False, action="store_true",   help='Dont include information from the remote' )
+    sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
+    sp.add_argument('-l','--local_only',  default=False, action="store_true",   help="Don't include information from the remote" )
     
     sp = asp.add_parser('rebuild', help='Rebuild the library database from the files in the library')
     sp.set_defaults(subcommand='rebuild')
@@ -262,7 +263,7 @@ def library_list(args, l, config):
 
     if not args.term:
 
-        _print_bundle_list(l.list(key='fqname'), show_partitions=True )
+        _print_bundle_list(l.list(key='fqname'), show_partitions=args.partitions )
 
     else:
         library_info(args, l, config, list_all=True)    

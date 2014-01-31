@@ -999,6 +999,10 @@ class Identity(object):
     partitions = None
     urls = None # Url dict, from a remote library.
     url = None # Url of remote where object should be retrieved
+    bundle_path = None # Path to bundle in file system. Set in SourceTreeLibrary.list()
+    bundle_state = None # Build state of the bundle. Set in SourceTreeLibrary.list()
+    git_state = None # State of the git repository. Set in SourceTreeLibrary.list()
+
 
     md5 = None #
     data = None # Catch-all for other information

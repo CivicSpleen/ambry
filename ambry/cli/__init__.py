@@ -161,20 +161,52 @@ def _source_list(dir_):
 
     return lst
 
-def _print_bundle_entry(ident, show_partitions=False, prtf=prt):
+def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
 
-    locations_length = 6
-    vid_length = 15
-    name_length = 35
+    record_entry_names = ('name', 'd_format', 'p_format', 'extractor')
 
-    d_format = "{:%ds} {:%ds} {:%ds}" % (locations_length, vid_length, name_length)
-    p_format = "{:%ds} {:%ds}     {:%ds}" % (locations_length, vid_length, name_length)
+    def status(ident):
+        try:
+            s =  ident.data['data']['bundle_state']
+            if s:
+                return s
+        except:
+            pass
 
-    prtf(d_format,str(ident.locations), ident.vid, ident.vname)
+        return ''
+
+    all_fields = [
+        # Name, width, d_format_string, p_format_string, extract_function
+        ('locations','{:6s}',  '{:6s}',       lambda ident: ident.locations),
+        ('vid',      '{:15s}', '{:20s}',      lambda ident: ident.vid),
+        ('status',   '{:20s}', '{:20s}',      status),
+        ('name',     '{:40s}', '    {:40s}',  lambda ident: ident.vname),
+    ]
+
+    if not fields:
+        fields = ['locations', 'vid', 'status', 'name']
+
+    d_format = ""
+    p_format = ""
+    extractors = []
+
+    for e in all_fields:
+        e = dict(zip(record_entry_names, e)) # Just to make the following code easier to read
+
+        if e['name'] not in fields:
+            continue
+
+        d_format += e['d_format']
+        p_format += e['p_format']
+
+        extractors.append(e['extractor'])
+
+
+    prtf(d_format, *[ f(ident) for f in extractors ] )
 
     if show_partitions and ident.partitions:
         for pi in ident.partitions.values():
-            prtf(p_format, str(pi.locations), pi.vid, pi.name)
+            prtf(p_format, *[f(pi) for f in extractors])
 
 def _print_bundle_list(idents, subset_names = None, prtf=prt, **kwargs):
     '''Create a nice display of a list of source packages'''
@@ -254,7 +286,8 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(prog='python -mdatabundles',
-                                     description='Databundles {}. Management interface for ambry, libraries and repositories. '.format(__version__))
+                                     description='Databundles {}. Management interface for ambry, libraries and repositories. '.format(__version__),
+                                     prefix_chars='-+')
        
     parser.add_argument('-c','--config', default=None, action='append', help="Path to a run config file") 
     parser.add_argument('-v','--verbose', default=None, action='append', help="Be verbose") 

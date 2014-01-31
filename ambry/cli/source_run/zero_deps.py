@@ -10,4 +10,4 @@ def run(args, bundle_dir, bundle, repo):
     deps = bundle.config.build.get('dependencies',{})
 
     if len(deps) == 0:
-        print bundle_dir
+        print bundle.identity.fqname

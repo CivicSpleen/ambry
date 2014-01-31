@@ -18,6 +18,7 @@ import shutil
 def bundle_command(args, rc):
     import os
     from ..run import import_file
+    from ..dbexceptions import  DependencyError
 
     if not args.bundle_dir:
         bundle_file = os.path.join(os.getcwd(),'bundle.py')
@@ -102,9 +103,15 @@ def bundle_command(args, rc):
 
     phases.append(args.subcommand)
 
-
-    for phase in phases:
-        getf(phase)(args, b, st, rc)
+    try:
+        for phase in phases:
+            getf(phase)(args, b, st, rc)
+    except DependencyError as e:
+        st.set_bundle_state(b.identity.id_, 'error:dependency')
+        err("Phase {} failed: {}", phase, e.message)
+    except Exception:
+        st.set_bundle_state(b.identity.id_, 'error:'+phase)
+        raise
 
 def bundle_parser(cmd):
     import argparse, multiprocessing

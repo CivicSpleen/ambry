@@ -447,20 +447,20 @@ class Library(object):
     ## Dependencies
     ##
 
-    @property
     def dep(self, name):
         """"Bundle version of get(), which uses a key in the
         bundles configuration group 'dependencies' to resolve to a name"""
+        from ..dbexceptions import DependencyError
 
         bundle_name = self.dependencies.get(name, False)
 
         if not bundle_name:
-            raise ConfigurationError("No dependency named '{}'".format(name))
+            raise DependencyError("No dependency named '{}'".format(name))
 
         b = self.get(bundle_name)
 
         if not b:
-            raise NotFoundError("Failed to get dependency, key={}, id={}".format(name, bundle_name))
+            raise DependencyError("Failed to get dependency, key={}, id={}".format(name, bundle_name))
 
         if self.dep_cb:
             self.dep_cb(self, name, bundle_name, b)

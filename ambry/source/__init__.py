@@ -217,6 +217,10 @@ class SourceTreeLibrary(object):
             else:
                 datasets[ck].locations.set(LocationRef.LOCATION.SOURCE.lower())
             datasets[ck].data = file_.dict
+            import pprint
+            datasets[ck].bundle_path = file_.path
+            datasets[ck].bundle_state = file_.data['bundle_state']
+            datasets[ck].git_state = file_.data['git_state']
 
         for file_ in self._library.database.get_file_by_type(type_='source_url'):
 
@@ -327,6 +331,7 @@ class SourceTreeLibrary(object):
             f.data['bundle_state'] = state
 
             self._library.database.merge_file(f)
+
 
     def update_bundle(self, path, ident=None, bundle=None):
         from ..util import md5_for_file
