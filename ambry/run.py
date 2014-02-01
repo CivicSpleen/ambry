@@ -240,7 +240,7 @@ class RunConfig(object):
                                          'account': lambda k,v: self.this.account(v)
                                          }  ) 
             e['_name'] = name
-         
+
             e['dir'] = self.dir
 
             return e   
@@ -260,6 +260,7 @@ class RunConfig(object):
 
             fs = self.this.group('filesystem') 
             root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
+
 
             return self.this.group('sourcerepo')['dir'].format(root=root_dir)
 

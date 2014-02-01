@@ -435,6 +435,11 @@ class Test(TestBase):
         from ambry.dbexceptions import ConflictError
 
         bundle = Bundle()
+
+        # Need to clear the library, or the Bundle's pre_prepare
+        # will cancel the build if this version is already installed
+        bundle.library.purge()
+
         bundle.exit_on_fatal = False
         bundle.clean()
         bundle.database.create()

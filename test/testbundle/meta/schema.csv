@@ -50,8 +50,8 @@ coding,4,float,,,REAL,,,,,-1,,,,,four,0,,0,ciEGPXmDC809004
 coding,5,date,,,DATE,,,,,-1,,,,,,,,,ciEGPXmDC809005
 coding,6,datetime,,,DATETIME,,,,,-1,,,,,,,,,ciEGPXmDC809006
 coding,7,time,,,TIME,,,,,-1,,,,,,,,,ciEGPXmDC809007
-coding,8,integer_code,,,VARCHAR,,,,,,,Non-integer code value for column integer,,,,,,,ciEGPXmDC809008
-coding,9,date_code,,,VARCHAR,,,,,,,Non-integer code value for column date,,,,,,,ciEGPXmDC809009
+coding,8,integer_code,,,VARCHAR,,,1,,,,Non-integer code value for column integer,,,,,,,ciEGPXmDC809008
+coding,9,date_code,,,VARCHAR,,,1,,,,Non-integer code value for column date,,,,,,,ciEGPXmDC809009
 ,,,,,,,,,,,,,,,,,,,
 coding_integer_codes,1,id,1,,INTEGER,,,,,,,,,"[""coding"", ""integer""]",,,,,ciEGPXmDC80a001
 coding_integer_codes,2,code,,,TEXT,,,1,,,,Value of code,,,,,,,ciEGPXmDC80a002

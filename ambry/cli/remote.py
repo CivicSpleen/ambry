@@ -84,7 +84,8 @@ def remote_list(args, l, rc, return_meta=False):
 
         datasets = l.upstream.list(with_metadata=return_meta)
 
-
+        import pprint
+        pprint.pprint(datasets)
         for id_, data in sorted(datasets.items(), key = lambda x: x[1]['identity']['vname']):
 
             try:

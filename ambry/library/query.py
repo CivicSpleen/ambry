@@ -6,8 +6,9 @@ of the bundles that have been installed into it.
 # Revised BSD License, included in this distribution as LICENSE.txt
 
 
-from ..util import lru_cache
-
+from ambry.orm import Dataset, Partition
+from ambry.orm import Table, Column
+from ..identity import Identity, PartitionNumber, DatasetNumber
 
 class _qc_attrdict(object):
 
@@ -267,6 +268,8 @@ class QueryCommand(object):
         return str(self._dict)
 
 
+
+
 class Resolver(object):
     '''Find a reference to a dataset or partition based on a string,
     which may be a name or object number '''
@@ -276,10 +279,7 @@ class Resolver(object):
         self.session = session # a Sqlalchemy connection
 
     def _resolve_ref_orm(self, ref):
-        from ambry.orm import Dataset, Partition
-        import semantic_version
-        from sqlalchemy.sql import or_
-        from ..identity import Identity, PartitionNumber, DatasetNumber
+
 
         ip = Identity.classify(ref)
 
@@ -326,7 +326,7 @@ class Resolver(object):
 
         return ip, out
 
-    def _resolve_ref(self, ref):
+    def _resolve_ref(self, ref, location = Dataset.LOCATION.LIBRARY):
         '''Convert the output from _resolve_ref to nested identities'''
         ip, results = self._resolve_ref_orm(ref)
 
@@ -334,27 +334,37 @@ class Resolver(object):
         out = {}
         for d,p in results:
 
+
+            if location and  not ( d.location != location or d.location in location ):
+                continue
+
             if not d.vid in out:
                 out[d.vid] = d.identity
 
+            out[d.vid].locations.set(d.location)
+
+            # Partitions are only added for the LOCATION.LIBRARY location, so
+            # we don't have to deal with duplicate  partitions
             if p:
                 out[d.vid].add_partition(p.identity)
 
         return ip, out
 
 
-    def resolve_ref_all(self, ref):
+    def resolve_ref_all(self, ref, location = Dataset.LOCATION.LIBRARY):
 
-        return self._resolve_ref(ref)
+        return self._resolve_ref(ref, location)
 
-    def resolve_ref_one(self, ref):
+    def resolve_ref_one(self, ref, location = Dataset.LOCATION.LIBRARY):
         '''Return the "best" result for an object specification
 
         '''
         import semantic_version
 
 
-        ip, refs = self.resolve_ref_all(ref)
+        ip, refs = self._resolve_ref(ref, location)
+
+        #print refs, ref
 
         if isinstance(ip.version, semantic_version.Spec):
             pass
@@ -386,10 +396,7 @@ class Resolver(object):
 
         '''
 
-        from ambry.orm import Dataset
-        from ambry.orm import Partition
-        from ambry.identity import Identity
-        from ambry.orm import Table, Column
+
 
         def like_or_eq(c,v):
 
@@ -487,14 +494,14 @@ class RemoteResolver(object):
         self.urls = remote_urls
 
 
-    def resolve_ref_one(self, ref):
+    def resolve_ref_one(self, ref, location = Dataset.LOCATION.LIBRARY):
         from requests.exceptions import ConnectionError
         from ambry.client.rest import RemoteLibrary
         import semantic_version
         from ..identity import Identity
 
         if self.local_resolver:
-            ip,ident = self.local_resolver.resolve_ref_one(ref)
+            ip,ident = self.local_resolver.resolve_ref_one(ref, location)
             if ident:
                 idents = [ident]
             else:

@@ -29,9 +29,10 @@ class Test(TestBase):
         self.bundle_dir =  os.path.join(os.path.dirname(os.path.abspath(__file__)),'testbundle')    
         self.rc = RunConfig([os.path.join(self.bundle_dir,'client-test-config.yaml'),
                              os.path.join(self.bundle_dir,'bundle.yaml'),
-                             RunConfig.USER_CONFIG])
+                             RunConfig.USER_ACCOUNTS])
          
-        self.server_rc = RunConfig([os.path.join(self.bundle_dir,'server-test-config.yaml'),RunConfig.USER_CONFIG])
+        self.server_rc = RunConfig([os.path.join(self.bundle_dir,'server-test-config.yaml'),
+                                    RunConfig.USER_ACCOUNTS])
        
         self.bundle = Bundle()  
         self.bundle_dir = self.bundle.bundle_dir
@@ -194,7 +195,7 @@ class Test(TestBase):
         # Upload the dataset to S3, clear the library, then load it back in
         #
 
-        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_ACCOUNTS))
         cache = new_cache(rc.filesystem('cached-compressed-s3'))
 
         fn = self.bundle.database.path
@@ -295,6 +296,8 @@ class Test(TestBase):
             self.web_exists(s3, p.identity.cache_key)
 
 
+
+
     def test_caches(self):
         '''Basic test of put(), get() and has() for all cache types'''
         from functools import partial
@@ -320,7 +323,8 @@ class Test(TestBase):
 
         print "MD5 {}  = {}".format(fn, md5)
 
-        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),
+                            RunConfig.USER_ACCOUNTS))
 
         for i, fsname in enumerate(['fscache', 'limitedcache', 'compressioncache',
                                     'cached-s3', 'cached-compressed-s3']):

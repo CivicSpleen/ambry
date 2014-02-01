@@ -118,7 +118,11 @@ def library_parser(cmd):
     group.add_argument('-y', '--yaml',  default='csv', dest='format',  action='store_const', const='yaml')
     group.add_argument('-j', '--json',  default='csv', dest='format',  action='store_const', const='json')
     group.add_argument('-c', '--csv',  default='csv', dest='format',  action='store_const', const='csv')
-    
+
+
+    sp = asp.add_parser('sync', help='Synchronize with the remotes and the upstream')
+    sp.set_defaults(subcommand='sync')
+
 
 def library_command(args, rc):
     from  ..library import new_library
@@ -424,6 +428,12 @@ def library_load(args, l, config):
         
     if path:
         print(get_identity(path).name)
+
+def library_sync(args, l, config):
+    '''Synchronize the remotes and the upstream to a local library
+    database'''
+
+
 
     
 def library_unknown(args, l, config):

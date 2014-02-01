@@ -8,13 +8,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 import os.path
 from semantic_version import Version 
 from util.typecheck import returns, accepts
+from util import Constant
 
-class _const:
-    class ConstError(TypeError): pass
-    def __setattr__(self,name,value):
-        if self.__dict__.has_key(name):
-            raise self.ConstError, "Can't rebind const(%s)"%name
-        self.__dict__[name]=value
+
 
 class Name(object):
     '''The Name part of an identity ''' 
@@ -599,7 +595,7 @@ class ObjectNumber(object):
     
 
 
-    TYPE=_const()
+    TYPE=Constant()
     TYPE.DATASET = 'd'
     TYPE.PARTITION = 'p'
     TYPE.TABLE ='t'
@@ -607,7 +603,7 @@ class ObjectNumber(object):
     
     VERSION_SEP = ''
     
-    DLEN=_const()
+    DLEN=Constant()
     
     # Number of digits in each assignment class
     DLEN.DATASET = (3,5,7,9)
@@ -922,12 +918,14 @@ class PartitionNumber(ObjectNumber):
 
 class LocationRef(object):
 
-    LOCATION=_const()
+    LOCATION=Constant()
+
     LOCATION.UNKNOWN = ' '
+    LOCATION.SREPO = 'G' # Source repository, 'github'
     LOCATION.SOURCE = 'S'
     LOCATION.LIBRARY = 'L'
     LOCATION.REMOTE ='R'
-    LOCATION.SREPO = 'G' # Source repository, 'github'
+    LOCATION.UPSTREAM = 'U'
 
     def __init__(self,location, revision=None, version=None, code = None):
         self.location = location
@@ -956,7 +954,8 @@ class Locations(object):
         LocationRef.LOCATION.SREPO,
         LocationRef.LOCATION.SOURCE,
         LocationRef.LOCATION.LIBRARY,
-        LocationRef.LOCATION.REMOTE
+        LocationRef.LOCATION.REMOTE,
+        LocationRef.LOCATION.UPSTREAM
     ]
 
     def __init__(self, ident=None):
@@ -999,6 +998,7 @@ class Identity(object):
     partitions = None
     urls = None # Url dict, from a remote library.
     url = None # Url of remote where object should be retrieved
+    bundle = None # A bundle if it is created during the identity listing process.
     bundle_path = None # Path to bundle in file system. Set in SourceTreeLibrary.list()
     bundle_state = None # Build state of the bundle. Set in SourceTreeLibrary.list()
     git_state = None # State of the git repository. Set in SourceTreeLibrary.list()

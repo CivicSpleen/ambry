@@ -15,6 +15,8 @@ from sqlalchemy.types import TypeDecorator, TEXT, PickleType
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.exc import OperationalError
+from util import Constant
+from identity import LocationRef
 
 from sqlalchemy.sql import text
 from ambry.identity import  DatasetNumber, ColumnNumber
@@ -198,7 +200,16 @@ class SavableMixin(object):
 
 class Dataset(Base):
     __tablename__ = 'datasets'
-    
+
+
+    LOCATION = Constant()
+    LOCATION.LIBRARY = LocationRef.LOCATION.LIBRARY
+    LOCATION.SOURCE_REPO = LocationRef.LOCATION.SREPO
+    LOCATION.BUNDLE_SOURCE = LocationRef.LOCATION.SOURCE
+    LOCATION.REMOTE =  LocationRef.LOCATION.REMOTE
+    LOCATION.UPSTREAM = LocationRef.LOCATION.UPSTREAM
+
+
     vid = SAColumn('d_vid',String(20), primary_key=True)
     id_ = SAColumn('d_id',String(20), )
     name = SAColumn('d_name',String(200), unique=False, nullable=False)
@@ -214,6 +225,7 @@ class Dataset(Base):
     creator = SAColumn('d_creator',String(200), nullable=False)
     revision = SAColumn('d_revision',Integer, nullable=False)
     version = SAColumn('d_version',String(20), nullable=False)
+    location = SAColumn('d_location', String(5), nullable=False, default=LOCATION.LIBRARY)
 
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
@@ -221,9 +233,15 @@ class Dataset(Base):
 
     tables = relationship("Table", backref='dataset', cascade="all, delete-orphan", 
                           passive_updates=False)
+
     partitions = relationship("Partition", backref='dataset', cascade="all, delete-orphan",
                                passive_updates=False)
-   
+
+    __table_args__ = (
+        UniqueConstraint('d_vid', 'd_location', name='u_vid_location'),
+    )
+
+
     def __init__(self,**kwargs):
         self.id_ = kwargs.get("oid",kwargs.get("id",kwargs.get("id_", None)) )
         self.name = kwargs.get("name",None) 

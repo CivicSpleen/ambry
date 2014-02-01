@@ -20,6 +20,9 @@ class BadRequest(BundleError):
 class ProcessError(BundleError):
     '''Error in the configuration files'''
 
+class ObjectStateError(BundleError):
+    '''Object not put into appropriate state before uses'''
+
 class ConfigurationError(BundleError):
     '''Error in the configuration files'''
     
@@ -43,10 +46,9 @@ class Locked(BundleError):
 
 class QueryError(BundleError):
     """Error while executing a query"""
-    
 
 class ConflictError(BundleError):
-    """COnflict with existing resource"""
+    """Conflict with existing resource"""
     
 class FatalError(BundleError):
     """A Fatal Bundle Error, generated in testing instead of a system exit. """

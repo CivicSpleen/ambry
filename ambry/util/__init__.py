@@ -950,5 +950,14 @@ class Progressor(object):
                  round(float(rate)/(1024*1024),2), rate_type))
             
             self.last = now
-            
-      
+
+class Constant:
+    '''Organizes constants in a class'''
+    class ConstError(TypeError): pass
+
+    def __setattr__(self, name, value):
+        if self.__dict__.has_key(name):
+            raise self.ConstError, "Can't rebind const(%s)" % name
+        self.__dict__[name] = value
+
+

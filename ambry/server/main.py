@@ -567,8 +567,9 @@ def get_dataset(did, library, pid=None):
     
     # Construct the response
     d = {'identity' : gr.identity.dict, 'partitions' : {}}
-         
-    files = library.database.get_file_by_ref(gr.identity.vid)
+
+
+    files = library.files.query.installed.ref(gr.identity.vid).all
     
     # Get direct access to the cache that implements the remote, so
     # we can get a URL with path()
@@ -592,8 +593,8 @@ def get_dataset(did, library, pid=None):
         d['partitions'][partition.identity.id_] = dict()
 
         d['partitions'][partition.identity.id_]['identity'] = partition.identity.dict
- 
-        files = library.database.get_file_by_ref(partition.identity.vid)
+
+        files = library.files.query.installed.ref(partition.identity.vid).all
         
         if len(files) > 0:
             file_ = files.pop(0)
