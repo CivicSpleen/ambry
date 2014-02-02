@@ -22,8 +22,7 @@ def warehouse_parser(cmd):
     group = whr_p.add_mutually_exclusive_group()
     group.add_argument('-s', '--server',  default=False, dest='is_server',  action='store_true', help = 'Select the server configuration')
     group.add_argument('-c', '--client',  default=False, dest='is_server',  action='store_false', help = 'Select the client configuration')
-        
-    whr_p.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
+    
     whr_p.add_argument('-n','--name',  default='default',  help='Select a different name for the warehouse')
 
     whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
@@ -153,7 +152,7 @@ def warehouse_install(args, w,config):
     if not w.exists():
         w.create()
 
-    l = new_library(config.library(args.library))
+    l = new_library(config.library(args.library_name))
     w.resolver = Resolver(l)
     w.logger = Logger('Warehouse Install',init_log_rate(prt,N=2000))
  

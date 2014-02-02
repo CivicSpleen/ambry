@@ -99,7 +99,9 @@ class Bundle(object):
         try:
             if self._dataset_id:
                 try:
-                    return (session.query(Dataset).filter(Dataset.vid == self._dataset_id).one())
+                    return (session.query(Dataset)
+                            .filter(Dataset.location == Dataset.LOCATION.LIBRARY)
+                            .filter(Dataset.vid == self._dataset_id).one())
                 except NoResultFound:
                     from ..dbexceptions import NotFoundError
                     raise NotFoundError("Failed to find dataset for id {} in {} "
@@ -488,7 +490,7 @@ class BuildBundle(Bundle):
         #if not self.cache_downloads :
         #    self.rm_rf(self.filesystem.downloads_path())
 
-        self.library.source.set_bundle_state(self.identity.id_, 'cleaned')
+        self.library.source.set_bundle_state(self.identity, 'cleaned')
 
     def progress(self,message):
         '''print message to terminal, in place'''
@@ -685,7 +687,7 @@ class BuildBundle(Bundle):
 
             self._revise_schema()
 
-        self.library.source.set_bundle_state(self.identity.id_, 'prepared')
+        self.library.source.set_bundle_state(self.identity, 'prepared')
 
         return True
 
@@ -758,7 +760,7 @@ class BuildBundle(Bundle):
 
         self.post_build_write_stats()
 
-        self.library.source.set_bundle_state(self.identity.id_, 'built')
+        self.library.source.set_bundle_state(self.identity, 'built')
 
         return True
     
@@ -876,7 +878,7 @@ class BuildBundle(Bundle):
     def post_install(self):
         from datetime import datetime
         self.db_config.set_value('process', 'installed', datetime.now().isoformat())
-        self.library.source.set_bundle_state(self.identity.id_, 'installed')
+        self.library.source.set_bundle_state(self.identity, 'installed')
         return True
     
     ### Submit the package to the repository

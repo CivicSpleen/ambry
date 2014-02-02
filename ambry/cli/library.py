@@ -3,9 +3,8 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..cli import prt, err, Progressor, _find, _print_info #@UnresolvedImport
+from ..cli import prt, err, Progressor, _print_info #@UnresolvedImport
 import os
-from ..cli import  load_bundle, _print_bundle_list
 
 
 def library_parser(cmd):
@@ -18,7 +17,7 @@ def library_parser(cmd):
     lib_p = cmd.add_parser('library', help='Manage a library')
     lib_p.set_defaults(command='library')
 
-    lib_p.add_argument('-n', '--name', default='default', help='Select a different name for the library')
+
     group = lib_p.add_mutually_exclusive_group()
     group.add_argument('-s', '--server', default=False, dest='is_server', action='store_true',
                        help='Select the server configuration')
@@ -65,12 +64,6 @@ def library_parser(cmd):
     sp = asp.add_parser('sync', help='Synchronize the local directory, upstream and remote with the library')
     sp.set_defaults(subcommand='sync')
 
-    sp = asp.add_parser('list', help='List datasets in the library, or partitions in dataset')
-    sp.set_defaults(subcommand='list')
-    sp.add_argument('term', type=str, nargs='?', help='Name of bundle, to list partitions')
-    sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
-    sp.add_argument('-l','--local_only',  default=False, action="store_true",   help="Don't include information from the remote" )
-    
     sp = asp.add_parser('rebuild', help='Rebuild the library database from the files in the library')
     sp.set_defaults(subcommand='rebuild')
     sp.add_argument('-r','--remote',  default=False, action="store_true",   help='Rebuild from the remote')
@@ -89,15 +82,20 @@ def library_parser(cmd):
     sp.add_argument('-r','--remote',  default=False, action="store_true",   help='Also load file from configured remote')
     sp.add_argument('-c','--cache',  default=False, action="store_true",   help='Also load file from configured cache')
  
-    sp = asp.add_parser('info', help='Display information about the library or a bundle or partition')
+    sp = asp.add_parser('info', help='Display information about the library')
     sp.set_defaults(subcommand='info')   
-    sp.add_argument('term',  nargs='?', type=str,help='Name or ID of the bundle or partition to print information for')
-    
+
     sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
     sp.set_defaults(subcommand='get')   
     sp.add_argument('term', type=str,help='Query term')
-    sp.add_argument('-o','--open',  default=False, action="store_true",  help='Open the database with sqlite')
     sp.add_argument('-f','--force',  default=False, action="store_true",  help='Force retrieving from the remote')
+
+
+    sp = asp.add_parser('open',
+                        help='Open a bundle or partition file with sqlite3')
+    sp.set_defaults(subcommand='open')
+    sp.add_argument('term', type=str, help='Query term')
+    sp.add_argument('-f', '--force', default=False, action="store_true", help='Force retrieving from the remote')
 
     sp = asp.add_parser('remove', help='Delete a file from all local caches and the local library')
     sp.set_defaults(subcommand='remove')
@@ -106,11 +104,6 @@ def library_parser(cmd):
     sp = asp.add_parser('load', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
     sp.set_defaults(subcommand='load')   
     sp.add_argument('relpath', type=str,help='Cache rel path of dataset to load from remote')
-
-
-    sp = asp.add_parser('find', help='Search for the argument as a bundle or partition name or id')
-    sp.set_defaults(subcommand='find')   
-    sp.add_argument('term', type=str, nargs=argparse.REMAINDER,help='Query term')
 
 
     sp = asp.add_parser('schema', help='Dump the schema for a bundle')
@@ -131,7 +124,7 @@ def library_command(args, rc):
     from  ..library import new_library
     from . import logger
 
-    l = new_library(rc.library(args.name))
+    l = new_library(rc.library(args.library_name))
 
     l.logger = logger
 
@@ -219,7 +212,7 @@ def library_restore(args, l, config, *kwargs):
     # Backup before restoring. 
     
     args = type('Args', (object,),{'file':'/tmp/before-restore.db','cache': True, 
-                                   'date': True, 'is_server': args.is_server, 'name':args.name, 
+                                   'date': True, 'is_server': args.is_server, 'name':args.library_name, 
                                    'subcommand': 'backup'})
     library_backup(args, l, config)
     
@@ -233,14 +226,14 @@ def library_server(args, l, config):
     from ambry.server.main import production_run, local_run
 
     def run_server(args, config):
-        production_run(config.library(args.name))
+        production_run(config.library(args.library_name))
     
     if args.daemonize:
         daemonize(run_server, args,  config)
     elif args.test:
-        local_run(config.library(args.name))
+        local_run(config.library(args.library_name))
     else:
-        production_run(config.library(args.name))
+        production_run(config.library(args.library_name))
         
 def library_drop(args, l, config):   
 
@@ -269,14 +262,7 @@ def library_rebuild(args, l, config):
         prt("Rebuild library from local storage")
         l.rebuild()
         
-def library_list(args, l, config):    
 
-    if not args.term:
-
-        _print_bundle_list(l.list(key='fqname').values(), show_partitions=args.partitions )
-
-    else:
-        library_info(args, l, config, list_all=True)    
  
 def library_remove(args, l, config):   
     
@@ -306,24 +292,12 @@ def library_remove(args, l, config):
 
 def library_info(args, l, config, list_all=False):    
 
-    if args.term:
-
-        ident = l.resolve(args.term)
-
-        if not ident:
-            err("Failed to find record for: {}", args.term)
-            return 
- 
-        _print_info(l,ident, list_partitions=list_all)
-
-    else:
-
-        prt("Library Info")
-        prt("Name:     {}",args.name)
-        prt("Database: {}",l.database.dsn)
-        prt("Cache:    {}",l.cache)
-        prt("Upstream: {}", l.upstream)
-        prt("Remotes:  {}", ', '.join(l.remotes) if l.remotes else '')
+    prt("Library Info")
+    prt("Name:     {}",args.library_name)
+    prt("Database: {}",l.database.dsn)
+    prt("Cache:    {}",l.cache)
+    prt("Upstream: {}", l.upstream)
+    prt("Remotes:  {}", ', '.join(l.remotes) if l.remotes else '')
 
     
 def library_push(args, l, config):
@@ -361,8 +335,7 @@ def library_files(args, l, config):
             prt("{0:11s} {1:4s} {2}",f.ref,f.state,f.path)
       
 
-def library_find(args, l, config):
-    return _find(args, l, config, False)
+
 
 def library_schema(args, l, config):
     from ambry.bundle import DbBundle
@@ -401,22 +374,28 @@ def library_get(args, l, config):
   
     if not r:
         prt("{}: Not found",args.term)
-        return  
-
+        return  None
 
     _print_info(l,r.identity, r.partition.identity if r.partition else None)
 
-    if r and args.open:
-        
+    return r
+
+
+
+
+def library_open(args, l, config):
+    # This will fetch the data, but the return values aren't quite right
+
+    r = library_get(args, l, config)
+
+    if r:
         if r.partition:
             abs_path = os.path.join(l.cache.cache_dir, r.partition.identity.cache_key)
         else:
             abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
-            
-        prt("\nOpening: {}\n",abs_path)
 
-        os.execlp('sqlite3','sqlite3',abs_path )
-        
+        os.execlp('sqlite3', 'sqlite3', abs_path)
+
 
 def library_load(args, l, config):       
 

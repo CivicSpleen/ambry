@@ -94,15 +94,12 @@ class SourceTree(object):
         pass
 
 
+    def set_bundle_state(self, ident, state):
 
-    def set_bundle_state(self, ref, state):
-
-        f = self.library.files.query.ref(ref).type(Dataset.LOCATION.SOURCE).one_maybe
+        f = self.library.files.query.ref(ident.vid).type(Dataset.LOCATION.SOURCE).one_maybe
 
         if f:
-
             f.state = state
-
             self.library.files.merge(f)
 
 
@@ -234,15 +231,6 @@ class SourceTree(object):
 
 
 
-
-
-
-
-
-
-
-
-
     def _dir_list(self, datasets=None, key='vid'):
         from ..identity import LocationRef, Identity
         from ..bundle import BuildBundle
@@ -279,7 +267,18 @@ class SourceTree(object):
     # Bundles
     #
 
+    def source_path(self, term=None, ident=None):
+
+        if ident is None:
+            ident = self.library.resolve(term, location=Dataset.LOCATION.SOURCE)
+
+        if not ident:
+            return None
+
+        return os.path.join(self.base_dir, ident.source_path)
+
     def bundle(self, path):
+        '''Return an  Bundle object, using the class defined in the bundle source'''
         if path[0] != '/':
             root = os.path.join(self.base_dir, path)
         else:
@@ -288,6 +287,8 @@ class SourceTree(object):
         bundle_class = load_bundle(root)
         bundle = bundle_class(root)
         return bundle
+
+
 
     def resolve_bundle(self, term):
         from ambry.orm import Dataset
@@ -298,6 +299,24 @@ class SourceTree(object):
 
         return self.bundle(os.path.join(self.base_dir, ident.source_path))
 
+
+    def resolve_build_bundle(self, term):
+        '''Return an Bundle object, using the base BuildBundle class'''
+        from ..bundle import BuildBundle
+
+        ident = self.library.resolve(term, location=Dataset.LOCATION.SOURCE)
+
+        if not ident:
+            return None
+
+        path =  os.path.join(self.base_dir, ident.source_path)
+
+        if path[0] != '/':
+            root = os.path.join(self.base_dir, path)
+        else:
+            root = path
+
+        return BuildBundle(root)
 
 class SourceTreeLibrary(object):
 

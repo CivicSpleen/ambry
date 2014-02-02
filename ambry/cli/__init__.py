@@ -27,7 +27,7 @@ def err(template, *args, **kwargs):
     import sys
     global logger
     
-    logger.error(template.format(*args, **kwargs))
+    logger.error("ERROR: "+template.format(*args, **kwargs))
     sys.exit(1)
 
 def warn(template, *args, **kwargs):
@@ -45,8 +45,10 @@ def load_bundle(bundle_dir):
   
     return mod.Bundle
 
-def _find(args, l, config, remote):
+def _find(args, l, config):
     from ..library.query import QueryCommand
+    from ..identity import Identity
+    from ..library.files import Files
 
     try:
         in_terms = args.terms
@@ -62,10 +64,37 @@ def _find(args, l, config, remote):
 
     qc = QueryCommand.parse(' '.join(terms))
 
-    if remote:
-        identities = l.remote_find(qc)
-    else:
-        identities = l.find(qc)
+    identities = {}
+
+    for entry in l.find(qc):
+
+        ident = l.resolve(entry['identity']['vid'], None)
+
+
+        if ident.locations.is_in(Files.TYPE.SOURCE):
+            f = l.files.query.type(Files.TYPE.SOURCE).ref(ident.vid).one_maybe
+
+            if f:
+                ident.bundle_state = f.state
+
+        if ident.vid in identities:
+            ident = identities[ident.vid]
+        else:
+            identities[ident.vid] = ident
+
+        if "partition" in entry:
+            pi = Identity.from_dict(entry['partition'])
+            ident.add_partition(pi)
+            tc_add_to = pi
+        else:
+            tc_add_to = ident
+
+        if 'table' in entry:
+            tc_add_to.data['table'] = entry['table']
+
+        if 'column' in entry:
+            tc_add_to.data['column'] = entry['column']
+
 
     return identities
 
@@ -165,26 +194,19 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
 
     record_entry_names = ('name', 'd_format', 'p_format', 'extractor')
 
-    def status(ident):
-        try:
-            s =  ident.data['data']['bundle_state']
-            if s:
-                return s
-        except:
-            pass
-
-        return ''
 
     all_fields = [
         # Name, width, d_format_string, p_format_string, extract_function
         ('locations','{:6s}',  '{:6s}',       lambda ident: ident.locations),
         ('vid',      '{:15s}', '{:20s}',      lambda ident: ident.vid),
-        ('status',   '{:20s}', '{:20s}',      status),
-        ('name',     '{:40s}', '    {:40s}',  lambda ident: ident.vname),
+        ('status',   '{:20s}', '{:20s}',      lambda ident: ident.bundle_state if ident.bundle_state else ''),
+        ('vname',    '{:40s}', '    {:40s}',  lambda ident: ident.vname),
+        ('sname',    '{:40s}', '    {:40s}',  lambda ident: ident.sname),
+        ('fqname',   '{:40s}', '    {:40s}',  lambda ident: ident.fqname),
     ]
 
     if not fields:
-        fields = ['locations', 'vid', 'status', 'name']
+        fields = ['locations', 'vid', 'status', 'vname']
 
     d_format = ""
     p_format = ""
@@ -208,31 +230,50 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
         for pi in ident.partitions.values():
             prtf(p_format, *[f(pi) for f in extractors])
 
-def _print_bundle_list(idents, subset_names = None, prtf=prt, **kwargs):
+def _print_bundle_list(idents, subset_names = None, prtf=prt,fields=[], **kwargs):
     '''Create a nice display of a list of source packages'''
     from collections import defaultdict
 
     for ident in sorted(idents, key = lambda i: i.sname):
-        _print_bundle_entry(ident, prtf=prtf,**kwargs)
+        _print_bundle_entry(ident, prtf=prtf,fields=fields,**kwargs)
 
 def _print_info(l,ident, list_partitions=False):
     from ..cache import RemoteMarker
     from ..bundle import LibraryDbBundle # Get the bundle from the library
 
-    resolved_ident = l.resolve(ident.vid) # Re-resolve to get the URL or Locations
+    resolved_ident = l.resolve(ident.vid, None) # Re-resolve to get the URL or Locations
 
     d = ident
     p = ident.partition
 
+    bundle = l.source.resolve_build_bundle(d.vid)
 
     prt("D --- Dataset ---")
     prt("D Dataset   : {}; {}",d.vid, d.vname)
-    prt("D Is Local  : {}",l.cache.has(d.cache_key) is not False)
+    prt("D Locations : {}",str(resolved_ident.locations))
     prt("D Rel Path  : {}",d.cache_key)
     prt("D Abs Path  : {}",l.cache.path(d.cache_key) if l.cache.has(d.cache_key) else '')
-
     if d.url:
         prt("D Web Path  : {}",d)
+
+    if bundle:
+        prt('B Bundle Dir: {}', bundle.bundle_dir)
+    else:
+        source_dir = l.source.source_path(d.vid)
+        prt('B Source Dir: {}', source_dir)
+
+    if bundle and bundle.is_built:
+        cd = dict(bundle.db_config.dict)
+        process = cd['process']
+        prt('B Partitions: {}', bundle.partitions.count)
+        prt('B Created   : {}', process.get('dbcreated', ''))
+        prt('B Prepared  : {}', process.get('prepared', ''))
+        prt('B Built     : {}', process.get('built', ''))
+        prt('B Build time: {}',
+            str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
+
+
+
 
     if l.cache.has(d.cache_key):
         b = LibraryDbBundle(l.database, d.vid)
@@ -288,7 +329,9 @@ def main():
     parser = argparse.ArgumentParser(prog='python -mdatabundles',
                                      description='Databundles {}. Management interface for ambry, libraries and repositories. '.format(__version__),
                                      prefix_chars='-+')
-       
+
+    parser.add_argument('-l', '--library', dest='library_name', default="default",
+                        help="Name of library, from the library secton of the config")
     parser.add_argument('-c','--config', default=None, action='append', help="Path to a run config file") 
     parser.add_argument('-v','--verbose', default=None, action='append', help="Be verbose") 
     parser.add_argument('--single-config', default=False,action="store_true", help="Load only the config file specified")
@@ -303,6 +346,7 @@ def main():
     from ckan import ckan_parser, ckan_command
     from source import source_command, source_parser
     from bundle import bundle_command, bundle_parser
+    from root import root_command, root_parser
 
     library_parser(cmd)  
     warehouse_parser(cmd)
@@ -312,6 +356,7 @@ def main():
     test_parser(cmd)
     config_parser(cmd)
     bundle_parser(cmd)
+    root_parser(cmd)
 
     args = parser.parse_args()
 
@@ -334,6 +379,7 @@ def main():
         'ckan':ckan_command,
         'source': source_command,
         'config': config_command,
+        'root': root_command,
 
     }
 
@@ -347,7 +393,9 @@ def main():
 
     global logger
 
-    logger = get_logger("{}.{}".format(args.command,args.subcommand  ))
+    #logger = get_logger("{}.{}".format(args.command,args.subcommand  ))
+    logger = get_logger("{}.{}".format(args.command, args.subcommand),
+                        template="%(message)s")
     logger.setLevel(logging.INFO) 
 
     if not f:

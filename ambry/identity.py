@@ -959,6 +959,9 @@ class Locations(object):
         LocationRef.LOCATION.UPSTREAM
     ]
 
+    def is_in(self, location):
+        return location in self.codes
+
     def __init__(self, ident=None):
         self.ident = ident
         self._locations = { code:LocationRef(code) for name, code in vars(LocationRef.LOCATION).items() }
@@ -1085,6 +1088,9 @@ class Identity(object):
         from collections import namedtuple
 
         s = str(o)
+
+        if o is None:
+            raise  ValueError("Input cannot be None")
 
         class IdentityParts(object):
             on = None

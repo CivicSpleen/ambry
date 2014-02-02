@@ -724,6 +724,7 @@ class LibraryDb(object):
             if ck not in datasets:
                 dsid = d.identity
                 datasets[ck] = dsid
+
             else:
                 dsid = datasets[ck]
 

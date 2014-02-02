@@ -23,7 +23,7 @@ def bundle_command(args, rc):
     from . import logger
     from ..orm import Dataset
 
-    l = new_library(rc.library(args.library))
+    l = new_library(rc.library(args.library_name))
     l.logger = logger
 
     if not args.bundle_dir:
@@ -33,7 +33,8 @@ def bundle_command(args, rc):
         ident = l.resolve(args.bundle_dir, location=Dataset.LOCATION.SOURCE)
 
         if ident:
-            bundle_file = os.path.join(ident.data['path'], 'bundle.py')
+
+            bundle_file = os.path.join(ident.bundle_path, 'bundle.py')
 
             if not os.path.exists(bundle_file):
                 from ..dbexceptions import ConflictError
@@ -124,7 +125,6 @@ def bundle_parser(cmd):
 
     parser = cmd.add_parser('bundle', help='Manage bundle files')
     parser.set_defaults(command='bundle')
-    parser.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
     parser.add_argument('-d','--bundle-dir', required=False,   help='Path to the bundle .py file')
     parser.add_argument('-t','--test',  default=False, action="store_true", help='Enable bundle-specific test behaviour')
     parser.add_argument('-m','--multi',  type = int,  nargs = '?',

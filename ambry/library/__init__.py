@@ -8,7 +8,7 @@ of the bundles that have been installed into it.
 import os.path
 
 from ambry.util import temp_file_name
-from ambry.dbexceptions import ConfigurationError, NotFoundError
+from ambry.dbexceptions import ConfigurationError, NotFoundError, DependencyError
 from ambry.bundle import DbBundle
 
 # Setup a default logger. The logger is re-assigned by the
@@ -350,6 +350,7 @@ class Library(object):
         from sqlalchemy.orm.exc import NoResultFound
         from ..dbexceptions import NotFoundError
         from .files import  Files
+        from ..orm import Dataset
 
         # Get a reference to the dataset, partition and relative path
         # from the local database.
@@ -359,7 +360,9 @@ class Library(object):
         if not dataset:
             return None
 
-        if dataset.url: # This means that the reference came from a REST interface.
+        if Dataset.LOCATION.REMOTE in dataset.locations.codes:
+
+            f  = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
 
             gets = [dataset]
 
@@ -368,7 +371,7 @@ class Library(object):
 
             # Since it was remote, attach the appropriate remote cache to our cache stack then
             # when we read from the top level, we'l get it from the remote.
-            self._attach_rrc(dataset.url,gets,cb=cb)
+            self._attach_rrc(f.source_url, gets, cb=cb)
 
         # First, get the bundle and instantiate it. If what was requested
         # was just the bundle, return it, otherwise, return it. If it was
@@ -457,7 +460,6 @@ class Library(object):
 
         return bundle
 
-
     ##
     ## Finding
     ##
@@ -478,9 +480,12 @@ class Library(object):
         #else:
         #    return self.database.resolver
 
-    def resolve(self, ref, location = Dataset.LOCATION.LIBRARY):
+    def resolve(self, ref, location = (Dataset.LOCATION.LIBRARY,Dataset.LOCATION.REMOTE)):
 
         ip, ident = self.resolver.resolve_ref_one(ref, location)
+
+        if ident:
+            ident.bundle_path = self.source.source_path(ident=ident)
 
         return ident
 
@@ -521,12 +526,14 @@ class Library(object):
         self._dependencies = None
 
     def _get_dependencies(self):
-        from ambry.identity import Identity
+        from ..orm import Dataset
 
         if not self.bundle:
             raise ConfigurationError("Can't use the dep() method for a library that is not attached to a bundle");
 
         group = self.bundle.config.group('build')
+
+        errors = 0
 
         try:
             deps = group.get('dependencies')
@@ -540,11 +547,19 @@ class Library(object):
         for k, v in deps.items():
 
             try:
-                Identity.parse_name(v)
-                out[k] = v
+                ident = self.resolve(v)
+                if not ident:
+                    self.bundle.error("Failed to resolve {} ".format(v))
+                    errors += 1
+                    continue
+                out[k] = ident
             except Exception as e:
                 self.bundle.error(
                     "Failed to parse dependency name '{}' for '{}': {}".format(v, self.bundle.identity.name, e.message))
+                errors += 1
+
+        if errors > 0:
+            raise DependencyError("Failed to find one or more dependencies")
 
         return out
 
@@ -558,7 +573,7 @@ class Library(object):
 
             if not b:
                 if throw:
-                    raise NotFoundError("Dependency check failed for key={}, id={}".format(k, v))
+                    raise NotFoundError("Dependency check failed for key={}, id={}. Failed to get bundle or partition".format(k, v))
                 else:
                     errors[k] = v
 
@@ -844,7 +859,7 @@ class Library(object):
             state='synced',
             type_=Dataset.LOCATION.REMOTE,
             data=ident.urls,
-            source_url=None)
+            source_url=url)
 
 
     @property

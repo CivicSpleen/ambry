@@ -36,7 +36,6 @@ def source_parser(cmd):
     src_p = cmd.add_parser('source', help='Manage bundle source files')
     src_p.set_defaults(command='source')
     src_p.add_argument('-n','--name',  default='default',  help='Select the name for the repository. Defaults to "default" ')
-    src_p.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
     asp = src_p.add_subparsers(title='source commands', help='command help')  
    
 
@@ -106,30 +105,6 @@ def source_parser(cmd):
     group.add_argument('-l', '--pull',  default=False, dest='repo_command',   action='store_const', const='pull', help='Pull from upstream')  
     group.add_argument('-i', '--install',  default=False, dest='repo_command',   action='store_const', const='install', help='Install the bundle')
 
-    sp = asp.add_parser('find', help='Find source packages that meet a variety of conditions', prefix_chars='-+')
-    sp.set_defaults(subcommand='find')
-    sp.add_argument('-d','--dir',  help='Directory to start recursing from ')
-    sp.add_argument('-P', '--plain', default=False,  action='store_true',
-                    help='Plain output; just print the bundle path, with no logging decorations')
-    group = sp.add_mutually_exclusive_group()
-    group.add_argument('+s', '--source', default=False, action='store_true',
-                       help='Find source bundle (Source is downloaded, not just referenced)')
-    group.add_argument('-s', '--not-source', default=False, action='store_true',
-                       help='Find source bundle that is referenced but not downloaded')
-    group.add_argument('+b', '--built', default=False,  action='store_true',
-                       help='Find bundles that have been built')
-    group.add_argument('-b', '--not-built', default=False, action='store_true',
-                       help='Find bundles that have not been built')
-    group.add_argument('-c', '--commit',  default=False,  action='store_true',
-                       help='Find bundles that need to be committed')
-    group.add_argument('-p', '--push',  default=False, action='store_true',
-                       help='Find bundles that need to be pushed')
-    group.add_argument('-i', '--init',  default=False, action='store_true',
-                       help='Find bundles that need to be initialized')
-    group.add_argument('-a', '--all', default=False, action='store_true',
-                       help='List all bundles, from root or sub dir')
-
-    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Query commands to find packages with. ')
 
     sp = asp.add_parser('watch', help='Watch the source directory for changes')
     sp.set_defaults(subcommand='watch')
@@ -174,7 +149,7 @@ def source_list(args, l, st, rc, names=None):
     from collections import defaultdict
     import ambry.library as library
 
-    l = library.new_library(rc.library(args.library))
+    l = library.new_library(rc.library(args.library_name))
 
     d = {}
 
@@ -382,7 +357,7 @@ def source_build(args, l, st, rc):
         bundle_class = load_bundle(bundle_dir)
         bundle = bundle_class(bundle_dir)
 
-        l = new_library(rc.library(args.library))
+        l = new_library(rc.library(args.library_name))
 
         if l.get(bundle.identity.vid)  and not args.force:
             prt("{} Bundle is already in library", bundle.identity.name)
@@ -543,65 +518,6 @@ def source_run(args, l, st, rc):
                 prt('')
                 os.chdir(saved_path)         
        
-def source_find(args, l, st, rc):
-    from ..source.repository.git import GitRepository
-    from ..identity import Identity
-    from ..bundle.bundle import BuildBundle
-
-    dir_ = args.dir
-
-    if not dir_:
-        dir_ = rc.sourcerepo.dir   
-
-    if args.terms:
-
-        identities = _find(args, st.library._library, rc, False)
-
-        if args.plain:
-            for ident in identities:
-
-                ident = st.library.resolve(ident['identity']['vid'])
-
-                plain_prt('{}'.format(ident.sname))
-
-        else:
-
-            _print_bundle_list([ st.library.resolve(i['identity']['vid']) for i in identities])
-
-
-    else:
-        for root, _, files in os.walk(dir_):
-
-            if 'bundle.yaml' in files:
-
-                repo = GitRepository(None, root)
-                repo.bundle_dir = root
-                bundle = BuildBundle(root)
-
-                show = [False]
-
-                def toggle(show, cond):
-                    if not show[0] and cond:
-                        show[:] = [True]
-
-                toggle(show, args.all)
-
-                toggle(show, args.commit and repo.needs_commit() )
-                toggle(show, args.push and repo.needs_push())
-                toggle(show, args.init and repo.needs_init())
-
-                toggle(show, args.built and bundle and bundle.is_built )
-                toggle(show, args.not_built and bundle and  not bundle.is_built)
-
-                if show[0]:
-
-                    ident = bundle.identity
-
-                    if args.plain:
-                        plain_prt('{}'.format(ident.sname))
-                    else:
-                        _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=[])
-
 
 def source_init(args, l, st, rc):
     from ..source.repository import new_repository
