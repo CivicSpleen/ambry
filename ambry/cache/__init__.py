@@ -32,9 +32,12 @@ def new_cache(config):
             raise ConfigurationError("Can't determine cache type: {} ".format(config))
 
         if 'options' in config and 'compress' in config['options'] :
-            config['options'] = [ i for i in config['options'] if i !=  'compress']
+            # Need to clone the config because we don't want to propagate the changes
+            cc = config.to_dict()
+
+            cc['options'] = [ i for i in config['options'] if i !=  'compress']
             from filesystem import FsCompressionCache
-            return FsCompressionCache(upstream=config)
+            return FsCompressionCache(upstream=cc)
         else:
             return  fsclass(**dict(config))
             

@@ -42,6 +42,8 @@ def _new_library(config):
 
     sourcerepo = config.get('sourcerepo', None)
 
+    #print "### Upstream", config['upstream']
+
     l = Library(cache=cache,
                 database=database,
                 name = config['_name'] if '_name' in config else 'NONE',
@@ -189,7 +191,7 @@ class Library(object):
         file_md5 = self.cache.md5(rel_path)
 
         if file_md5 != decl_md5:
-            raise ConflictError('MD5 Mismatch: file={} != declared={} '.format(file_md5, decl_md5))
+            raise ConflictError('MD5 Mismatch for {} : file={} != declared={} '.format(rel_path, file_md5, decl_md5))
 
         abs_path = self.cache.path(rel_path)
         b = DbBundle(abs_path)

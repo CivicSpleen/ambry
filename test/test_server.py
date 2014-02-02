@@ -164,12 +164,11 @@ class Test(TestBase):
         from ambry.util import md5_for_file
         from ambry.identity import Identity
 
-        self.start_server()
+        config = self.start_server()
+        l = new_library(config)
 
         rl = RemoteLibrary(self.server_url)
 
-        l = self.get_library()
-        print l.info
 
         #
         # Check that the library can list datasets that are inserted externally
@@ -177,7 +176,7 @@ class Test(TestBase):
 
         r = l.put(self.bundle)
 
-        s = set([i.fqname for i in rl.list()])
+        s = set([i.fqname for i in rl.list().values()])
 
         self.assertIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001', s)
 
@@ -204,6 +203,7 @@ class Test(TestBase):
 
         r = cache.put(fn, relpath, identity.to_meta(file=fn))
 
+
         self.assertTrue(bool(cache.has(relpath)))
 
         # clear the library.
@@ -219,18 +219,18 @@ class Test(TestBase):
         l.load(identity.cache_key, identity.md5)
 
         self.assertIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
-                      set([i.fqname for i in rl.list()]))
+                      set([i.fqname for i in rl.list().values()]))
 
         # Do it one more time, using the remote library
 
         l.purge()
         self.assertNotIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
-                         set([i.fqname for i in rl.list()]))
+                         set([i.fqname for i in rl.list().values()]))
 
         rl.load_dataset(identity)
 
         self.assertIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
-                      set([i.fqname for i in rl.list()]))
+                      set([i.fqname for i in rl.list().values()]))
 
         # Check that we can get the record from the library
 
@@ -394,7 +394,7 @@ class Test(TestBase):
         ident.add_md5(file=self.bundle.database.path)
         rl.load_dataset(ident)
         self.assertIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
-                      set([i.fqname for i in rl.list()]))
+                      set([i.fqname for i in rl.list().values()]))
 
 
 
