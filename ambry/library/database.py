@@ -93,7 +93,7 @@ class LibraryDb(object):
             # found. It looks like connections are losing the setting for the search path to the
             # library schema.
             # Disabling connection pooling solves the problem.
-            self._engine = create_engine(self.dsn,echo=False, poolclass=NullPool)
+            self._engine = create_engine(self.dsn,echo=False,   poolclass=NullPool)
 
             from sqlalchemy import event
 
@@ -458,8 +458,12 @@ class LibraryDb(object):
         bdbs = db.unmanaged_session
 
         s = self.session
+        s.autoflush = False
+
         dataset = bdbs.query(Dataset).one()
+
         dataset.location = Dataset.LOCATION.LIBRARY
+
         s.merge(dataset)
 
         for config in bdbs.query(Config).all():
@@ -475,7 +479,7 @@ class LibraryDb(object):
         try:
             self.commit()
         except IntegrityError as e:
-            self.logger.error("Failed to merge")
+            self.logger.error("Failed to merge in {}".format(self.dsn))
             self.rollback()
             raise e
 
@@ -708,10 +712,13 @@ class LibraryDb(object):
                 p = dsid.partitions[p.vid]
 
 
-            p.locations.set(LocationRef.LOCATION.LIBRARY)
+            p.locations.set(d.location)
 
-        # Get alp of the other data set entries, that aren't for actual installed datasets.
-        for d in self.session.query(Dataset).filter(Dataset.location != Dataset.LOCATION.LIBRARY):
+        # Get all of the other data set entries, that aren't for actual installed datasets.
+        for d in (self.session.query(Dataset)
+                  .filter(Dataset.location != Dataset.LOCATION.LIBRARY)
+                  .filter(Dataset.vid != ROOT_CONFIG_NAME_V).all()):
+
             ck = getattr(d.identity, key)
 
             if ck not in datasets:

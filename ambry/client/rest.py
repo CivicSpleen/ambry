@@ -154,21 +154,30 @@ class RemoteLibrary(object):
     # @post('/datasets/find')
 
     # @get('/datasets')
-    def list(self):
+    def list(self, datasets=None, location=None, key='vid'):
         '''List the identities of all of the datasets in the library '''
         from ..identity import Identity
 
-        out = []
+        if not datasets:
+            datasets = {}
 
         for cache_key, data in self.get(self.url("/datasets")).items():
             ident = Identity.from_dict(data['identity'])
-            ident.urls = data['urls']
-            out.append(ident)
 
-        return out
+            ck = getattr(ident, key)
+
+            if ck not in datasets:
+                datasets[ck] = ident
+            else:
+                ident = datasets[ck]
+
+            ident.urls = data['urls']
+
+
+        return datasets
 
     # @get('/resolve/<ref>')
-    def resolve(self, ref):
+    def resolve(self, ref, location = None):
         '''Returns an identity given a vid, name, vname, cache_key or object number'''
         from ..identity import Identity
 

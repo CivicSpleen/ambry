@@ -21,14 +21,10 @@ from ..identity import LocationRef, Identity
 libraries = {}
 
 
-def _new_library(config,source_dir):
+def _new_library(config):
     import copy
     from ..cache import new_cache, RemoteMarker
     from database import LibraryDb
-
-    config = copy.deepcopy(config)
-
-    #import pprint; pprint.pprint(config.to_dict())
 
     cache = new_cache(config['filesystem'])
 
@@ -40,30 +36,29 @@ def _new_library(config,source_dir):
 
     remotes = config['remotes'] if 'remotes' in config else None
 
-    config['name'] = config['_name'] if '_name' in config else 'NONE'
-
-    for key in ['_name', 'filesystem', 'database', 'remotes']:
-        if key in config:
-            del config[key]
-
     if upstream and (not isinstance(upstream, RemoteMarker)
                      and not isinstance(upstream.last_upstream(), RemoteMarker)):
         raise ConfigurationError("Library upstream must have a RemoteMarker interface: {}".format(config))
 
-    if 'upstream' in config:
-        del config['upstream']
+    sourcerepo = config.get('sourcerepo', None)
 
     l = Library(cache=cache,
                 database=database,
+                name = config['_name'] if '_name' in config else 'NONE',
                 upstream=upstream,
                 remotes=remotes,
-                source_dir=source_dir,
-                **config)
+                sync = config.get('sync', None),
+                require_upload=config.get('require_upload', None),
+                source_dir = sourcerepo.dir,
+                source_repos=sourcerepo.list,
+                host=config.get('host', None),
+                port=config.get('port', None),
+                )
 
     return l
 
 
-def new_library(config, source_dir=None, reset=False):
+def new_library(config, reset=False):
     """Return a new :class:`~ambry.library.Library`, constructed from a configuration
 
     :param config: a :class:`~ambry.run.RunConfig` object
@@ -85,7 +80,7 @@ def new_library(config, source_dir=None, reset=False):
         name = 'default'
 
     if name not in libraries:
-        libraries[name] = _new_library(config, source_dir)
+        libraries[name] = _new_library(config)
 
     l = libraries[name]
     l.clear_dependencies()
@@ -109,7 +104,11 @@ class Library(object):
     '''
 
 
-    def __init__(self, cache, database, name=None, upstream=None, source_dir = None, remotes=None, sync=False, require_upload=False,
+    def __init__(self, cache, database,
+                 name=None,
+                 upstream=None,  remotes=None,
+                 source_dir = None, source_repos = None,
+                 sync=False, require_upload=False,
                  host=None, port=None):
         '''Libraries are constructed on the root cache name for the library.
         If the cache does not exist, it will be created.
@@ -126,6 +125,7 @@ class Library(object):
         self.name = name
         self.cache = cache
         self.source_dir = source_dir
+        self.source_repos = source_repos
         self._database = database
         self._upstream = upstream
         self.sync = sync
@@ -346,6 +346,7 @@ class Library(object):
         from sqlite3 import DatabaseError
         from sqlalchemy.orm.exc import NoResultFound
         from ..dbexceptions import NotFoundError
+        from .files import  Files
 
         # Get a reference to the dataset, partition and relative path
         # from the local database.
@@ -397,7 +398,7 @@ class Library(object):
                                 ref=bundle.identity.vid,
                                 state='pulled',
                                 source_url=dataset.url,
-                                type_='bundle')
+                                type_=Files.TYPE.BUNDLE)
 
         bundle.library = self
 
@@ -566,9 +567,10 @@ class Library(object):
 
     @property
     def source(self):
+        '''Return a SourceTree object, based on the source_repo configuration'''
         from ..source import SourceTree
 
-        return SourceTree(self.source_dir, self, self.logger)
+        return SourceTree(self.source_dir, self.source_repos, self, self.logger)
 
 
     @property
@@ -615,9 +617,14 @@ class Library(object):
             else:
                 start = time.clock()
                 if cb: cb('Pushing', md, start)
+
+
                 self.upstream.put(file_.path, identity.cache_key, metadata=md)
                 file_.state = 'pushed'
                 if cb: cb('Pushed', md, time.clock() - start)
+
+            if identity.is_bundle:
+                self.sync_upstream_dataset(identity, md)
 
             self.database.session.merge(file_)
             self.database.commit()
@@ -706,6 +713,7 @@ class Library(object):
         in the repository cache'''
 
         from ambry.bundle import DbBundle
+        from .files import Files
 
         self.logger.info("Clean database {}".format(self.database.dsn))
         self.database.clean()
@@ -742,6 +750,7 @@ class Library(object):
         for bundle in bundles:
             self.logger.info('Installing: {} '.format(bundle.identity.vname))
 
+
             try:
                 self.database.install_bundle(bundle)
             except Exception as e:
@@ -749,16 +758,88 @@ class Library(object):
                 continue
 
             self.database.add_file(bundle.database.path, self.cache.repo_id, bundle.identity.vid, 'rebuilt',
-                                   type_='bundle')
+                                   type_=Files.TYPE.BUNDLE)
 
             for p in bundle.partitions:
                 if self.cache.has(p.identity.cache_key, use_upstream=False):
                     self.logger.info('            {} '.format(p.identity.vname))
                     self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid, 'rebuilt',
-                                           type_='partition')
+                                           type_=Files.TYPE.PARTITION)
 
         self.database.commit()
         return bundles
+
+    def sync_upstream(self):
+        import json
+        from ..identity import Identity
+
+        self.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.UPSTREAM).delete()
+        self.files.query.type(Dataset.LOCATION.UPSTREAM).delete()
+
+
+        if not self.upstream:
+            return
+
+        self.logger.info("Upstream sync: {}".format(self.upstream))
+
+        for e in self.upstream.list():
+            md =  self.upstream.metadata(e)
+            ident = Identity.from_dict(json.loads(md['identity']))
+
+            self.sync_upstream_dataset(ident, md)
+
+            self.logger.info("Upstream sync: {}".format(ident.fqname))
+
+
+
+    def sync_upstream_dataset(self, ident, metadata):
+
+        self.database.install_dataset_identity(ident, location=Dataset.LOCATION.UPSTREAM)
+
+        self.files.new_file(
+            merge=True,
+            path=ident.fqname,
+            group='upstream',
+            ref=ident.vid,
+            state='synced',
+            type_=Dataset.LOCATION.UPSTREAM,
+            data=metadata,
+            source_url=None)
+
+
+    def sync_remotes(self):
+
+        from ambry.client.rest import RemoteLibrary
+
+        self.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.REMOTE).delete()
+        self.files.query.type(Dataset.LOCATION.REMOTE).delete()
+
+        if not self.remotes:
+            return
+
+        for url in self.remotes:
+            self.logger.info("Remote sync: {}".format(url))
+            rl = RemoteLibrary(url)
+            for ident in rl.list().values():
+                self.sync_remote_dataset(url, ident)
+
+                self.logger.info("Remote {} sync: {}".format(url, ident.fqname))
+
+
+    def sync_remote_dataset(self, url, ident):
+
+        self.database.install_dataset_identity(ident, location=Dataset.LOCATION.REMOTE)
+
+        self.files.new_file(
+            merge=True,
+            path=ident.fqname,
+            group=url,
+            ref=ident.vid,
+            state='synced',
+            type_=Dataset.LOCATION.REMOTE,
+            data=ident.urls,
+            source_url=None)
+
 
     @property
     def remotes(self):

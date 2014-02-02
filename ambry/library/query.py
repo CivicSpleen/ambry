@@ -330,12 +330,15 @@ class Resolver(object):
         '''Convert the output from _resolve_ref to nested identities'''
         ip, results = self._resolve_ref_orm(ref)
 
+        if not isinstance(location,(list, tuple)):
+            location = [location]
+
         # Convert the ORM results to identities
         out = {}
         for d,p in results:
 
 
-            if location and  not ( d.location != location or d.location in location ):
+            if location and  d.location not in location:
                 continue
 
             if not d.vid in out:
@@ -363,8 +366,6 @@ class Resolver(object):
 
 
         ip, refs = self._resolve_ref(ref, location)
-
-        #print refs, ref
 
         if isinstance(ip.version, semantic_version.Spec):
             pass
@@ -519,7 +520,7 @@ class RemoteResolver(object):
                     rl = RemoteLibrary(url)
 
                     try:
-                        ident = rl.resolve(ref)
+                        ident = rl.resolve(ref, location)
                     except ConnectionError:
                         continue
 

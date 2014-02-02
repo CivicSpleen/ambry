@@ -504,7 +504,7 @@ def get_datasets(library):
                     'csv':'{}/datasets/{}/schema.csv'.format(_host_port(library),dsid.vid),
                   }
                  } 
-            for dsid in library.list()}
+            for dsid in library.list().values()}
 
 @post('/datasets/find')
 def post_datasets_find(library):

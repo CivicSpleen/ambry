@@ -61,7 +61,10 @@ def library_parser(cmd):
     
     sp = asp.add_parser('purge', help='Remove all entries from the library database and delete all files')
     sp.set_defaults(subcommand='purge')
-    
+
+    sp = asp.add_parser('sync', help='Synchronize the local directory, upstream and remote with the library')
+    sp.set_defaults(subcommand='sync')
+
     sp = asp.add_parser('list', help='List datasets in the library, or partitions in dataset')
     sp.set_defaults(subcommand='list')
     sp.add_argument('term', type=str, nargs='?', help='Name of bundle, to list partitions')
@@ -126,8 +129,11 @@ def library_parser(cmd):
 
 def library_command(args, rc):
     from  ..library import new_library
+    from . import logger
 
     l = new_library(rc.library(args.name))
+
+    l.logger = logger
 
     globals()['library_'+args.subcommand](args, l,rc)
 
@@ -267,7 +273,7 @@ def library_list(args, l, config):
 
     if not args.term:
 
-        _print_bundle_list(l.list(key='fqname'), show_partitions=args.partitions )
+        _print_bundle_list(l.list(key='fqname').values(), show_partitions=args.partitions )
 
     else:
         library_info(args, l, config, list_all=True)    
@@ -432,6 +438,10 @@ def library_load(args, l, config):
 def library_sync(args, l, config):
     '''Synchronize the remotes and the upstream to a local library
     database'''
+
+    l.sync_remotes()
+
+    l.sync_upstream()
 
 
 

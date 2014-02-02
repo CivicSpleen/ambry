@@ -13,13 +13,22 @@ library:
       filesystem: default
       database: default
 
+sourcerepo:
+  dir: '{root}/bundles'
+
+  default:
+    service: github
+    org: clarinova-data
+    account: clarinova-data
+
+
 database:
     default:
         dbname: '{root}/library.db'
         driver: sqlite  
 
 filesystem:  
-  root_dir: /tmp/library-test/
+  root: /tmp/library-test/
   default:
       dir: '{root}/cache-l1'
       size: 50

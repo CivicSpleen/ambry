@@ -9,7 +9,8 @@
 
 
 import os
-
+from ..identity import Identity
+from ..orm import Dataset
 
 def load_bundle(bundle_dir):
     from ambry.run import import_file
@@ -22,7 +23,8 @@ def load_bundle(bundle_dir):
 
 class SourceTree(object):
 
-    def __init__(self, base_dir, library, logger = None):
+    def __init__(self, base_dir, repos, library, logger = None):
+        self.repos = repos
         self.base_dir = base_dir
         self.library = library
         self.logger = logger
@@ -40,7 +42,7 @@ class SourceTree(object):
         if datasets is None:
             datasets = {}
 
-        for file_ in self.library.files.query.type(self.library.files.TYPE.BUNDLE_SOURCE).all:
+        for file_ in self.library.files.query.type(Dataset.LOCATION.SOURCE).all:
 
             ident = Identity.from_dict(file_.data['identity'])
 
@@ -62,10 +64,10 @@ class SourceTree(object):
             import pprint
 
             datasets[ck].bundle_path = file_.path
-            datasets[ck].bundle_state = file_.data['bundle_state']
+            datasets[ck].bundle_state = file_.state
             datasets[ck].git_state = file_.data['git_state']
 
-        for file_ in self.library.files.query.type(self.library.files.TYPE.SOURCE_URL).all:
+        for file_ in self.library.files.query.type(Dataset.LOCATION.SREPO).all:
 
             ident = Identity.from_dict(file_.data)
 
@@ -97,14 +99,14 @@ class SourceTree(object):
 
 
     def set_bundle_state(self, ref, state):
-        f = self._library.database.get_file_by_ref(ref, type_='bundle_source')
+
+        f = self.library.files.query.ref(ref).type(Dataset.LOCATION.SOURCE).one_maybe
 
         if f:
-            f = f[0]
 
-            f.data['bundle_state'] = state
+            f.state = state
 
-            self._library.database.merge_file(f)
+            self.library.files.merge(f)
 
 
     def clone(self,url):
@@ -136,7 +138,7 @@ class SourceTree(object):
 
         return bundle
 
-    def resolve(self, term):
+    def resolve(self, term, location=None):
         from ..identity import LocationRef
         # The terms come from the command line args as a list
         try:
@@ -144,28 +146,14 @@ class SourceTree(object):
         except:
             pass
 
-        ident = self.library.resolve(term, location=None)
+        ident = self.library.resolve(term, location=location)
 
         if not ident:
             return None
 
-        f = self._library.database.get_file_by_ref(ident.id_, type_='source_url')
+        if ident:
+            ident.bundle_path =  os.path.join(self.base_dir, ident.source_path)
 
-        if f:
-            f = f.pop(0)
-
-            ident.url = f.source_url
-            ident.data['repo'] = f.group
-            ident.data['path'] = os.path.join(self.base_dir, ident.source_path)
-            ident.locations.set(LocationRef.LOCATION.SREPO)
-
-        f = self._library.database.get_file_by_ref(ident.id_, type_='bundle_source')
-
-        if f:
-            f = f.pop(0)
-
-            ident.data['path'] = os.path.join(self.base_dir, ident.source_path)
-            ident.locations.set(LocationRef.LOCATION.SOURCE)
 
         return ident
 
@@ -173,33 +161,58 @@ class SourceTree(object):
     # Synchronization
     #
 
-    def sync(self, repos):
+    def sync(self):
+        pass
 
-        self.clear_datasets()
 
-        # Sync all of the registered repositories
-        for repo in repos:
+
+
+    def sync_repos(self):
+
+        self.library.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.SREPO).delete()
+        self.library.files.query.type(Dataset.LOCATION.SREPO).delete()
+
+        for repo in self.repos:
             self._sync_repo(repo)
+
+
+    def _sync_repo(self, repo):
+        '''Sync all fo the bundles in an organization or account'''
+
+        self.logger.info("Sync repo: {}".format(str(repo)))
+
+        for e in repo.service.list():
+            ident = Identity.from_dict(e)
+            self.logger.info("   Sync repo entry: {} -> {} ".format(ident.fqname, e['clone_url']))
+
+            self.add_source_url(ident, repo=repo.ident, data=e)
+
+    def add_source_url(self, ident, repo, data):
+
+        self.library.database.install_dataset_identity(ident, location=Dataset.LOCATION.SREPO)
+
+        self.library.files.new_file(
+            merge=True,
+            path=ident.fqname,
+            group=repo,
+            ref=ident.vid,
+            state='synced',
+            type_=Dataset.LOCATION.SREPO,
+            data=data,
+            source_url=data['clone_url'])
+
+
+    def sync_source(self):
+
+        self.library.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.SOURCE).delete()
+        self.library.files.query.type(Dataset.LOCATION.SOURCE).delete()
 
         for ident in self._dir_list().values():
             self.sync_bundle(ident.bundle_path, ident, ident.bundle)
 
 
-    def clear_datasets(self):
-        from ..orm import Dataset
-        from ..library.files import Files
-
-        self.library.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.SOURCE_REPO).delete()
-        self.library.files.query.type(Files.TYPE.BUNDLE_SOURCE).delete()
-        self.library.files.query.type(Files.TYPE.SOURCE_URL).delete()
-
-        self.library.database.session.commit()
-
-
     def sync_bundle(self, path, ident=None, bundle=None):
-        from ..util import md5_for_file
-        from ..library.files import Files
-        from ..orm import Dataset
+
 
         self.logger.info("Sync source bundle: {} ".format(path))
 
@@ -209,9 +222,9 @@ class SourceTree(object):
         if not ident and bundle:
             ident = bundle.identity
 
-        self.library.database.install_dataset_identity(ident, location=Dataset.LOCATION.BUNDLE_SOURCE)
+        self.library.database.install_dataset_identity(ident, location=Dataset.LOCATION.SOURCE)
 
-        f = self.library.files.query.type(Files.TYPE.BUNDLE_SOURCE).ref(ident.id_).one_maybe
+        f = self.library.files.query.type(Dataset.LOCATION.SOURCE).ref(ident.vid).one_maybe
 
         if not f:
 
@@ -220,9 +233,9 @@ class SourceTree(object):
             f = File(
                 path=path,
                 group='source',
-                ref=ident.id_,
+                ref=ident.vid,
                 state='synced',
-                type_=Files.TYPE.BUNDLE_SOURCE,
+                type_=Dataset.LOCATION.SOURCE,
                 data=None,
                 source_url=None)
 
@@ -250,34 +263,11 @@ class SourceTree(object):
         self.library.files.merge(f)
 
 
-    def _sync_repo(self, repo):
-        '''Sync all fo the bundles in an organization or account'''
-        from ..identity import Identity
-
-        self.logger.info("Sync repo: {}".format(str(repo)))
-
-        for e in repo.service.list():
-            ident = Identity.from_dict(e)
-            self.logger.info("   Sync repo entry: {} -> {} ".format(ident.fqname, e['clone_url']))
-
-            self.add_source_url(ident, repo=repo.ident, data=e)
 
 
 
-    def add_source_url(self, ident, repo, data):
-        from ..library.files import Files
-        from ..orm import Dataset
-        self.library.database.install_dataset_identity(ident, location = Dataset.LOCATION.SOURCE_REPO)
 
-        self.library.files.new_file(
-            merge=True,
-            path=ident.fqname,
-            group=repo,
-            ref=ident.id_,
-            state='synced',
-            type_= Files.TYPE.SOURCE_URL,
-            data=data,
-            source_url=data['clone_url'])
+
 
 
 
@@ -331,8 +321,8 @@ class SourceTree(object):
         return bundle
 
     def resolve_bundle(self, term):
-
-        ident = self.resolve(term)
+        from ambry.orm import Dataset
+        ident = self.resolve(term, location=Dataset.LOCATION.SOURCE)
 
         if not ident:
             return None
@@ -340,11 +330,7 @@ class SourceTree(object):
         return self.bundle(os.path.join(self.base_dir, ident.source_path))
 
 
-
 class SourceTreeLibrary(object):
-
-
-
 
 
 
@@ -388,7 +374,7 @@ class SourceTreeLibrary(object):
         self._library.database.add_file(
             path=path,
             group='source',
-            ref=identity.id_,
+            ref=identity.vid,
             state=state,
             type_=type_,
             data=data,

@@ -249,7 +249,9 @@ class Test(TestBase):
         # Create the library so we can get the same remote config
         l = new_library(config)
         s3 = l.upstream.last_upstream()
+
         print l.info
+
         db = l.database
         db.enable_delete = True
         try:
@@ -266,7 +268,6 @@ class Test(TestBase):
         def push_cb(expect, action, metadata, time):
             import json
 
-
             self.assertIn(action, expect)
 
             identity = Identity.from_dict(json.loads(metadata['identity']))
@@ -277,7 +278,7 @@ class Test(TestBase):
 
         l.push(cb=partial(push_cb, ('Pushed', 'Pushing')))
 
-        # ALl should be pushed, so suhould not run
+        # ALl should be pushed, so should not run
         l.push(cb=throw_cb)
 
         # Resetting library, but not s3, should already have all
@@ -295,6 +296,7 @@ class Test(TestBase):
         for p in self.bundle.partitions:
             self.web_exists(s3, p.identity.cache_key)
 
+        l.sync_upstream()
 
 
 
@@ -364,6 +366,7 @@ class Test(TestBase):
         # Create the library so we can get the same remote config
         l = new_library(config)
 
+
         s3 = l.upstream.last_upstream()
 
         s3.clean()
@@ -394,9 +397,6 @@ class Test(TestBase):
                       set([i.fqname for i in rl.list()]))
 
 
-
-
-        return
 
         # Try variants of find. 
         r = api.find(self.bundle.identity.name)
@@ -531,6 +531,7 @@ class Test(TestBase):
         # Local only; no connection to server
         local_l  = new_library(self.server_rc.library("local"))
 
+        # A library that connects to the server
         remote_l = new_library(self.server_rc.library("reader"))
         remote_l.purge()
 
@@ -553,6 +554,11 @@ class Test(TestBase):
             self.assertTrue(p.identity.fqname, b.partition.identity.fqname)
 
         self.assertEqual(1, len(remote_l.list()))
+
+        # Test out syncing.
+
+
+        remote_l.sync_remotes()
 
 
     # =======================

@@ -26,16 +26,15 @@ class Test(TestBase):
         self.bundle_dir = os.path.dirname(testbundle.bundle.__file__)
         self.rc = get_runconfig((os.path.join(self.bundle_dir,'library-test-config.yaml'),
                                  os.path.join(self.bundle_dir,'bundle.yaml'),
-                                 RunConfig.USER_ACCOUNTS,
-                                 RunConfig.USER_CONFIG)
+                                 RunConfig.USER_ACCOUNTS)
                                  )
 
         self.copy_or_build_bundle()
 
         self.bundle = Bundle()    
 
-        print "Deleting: {}".format(self.rc.group('filesystem').root_dir)
-        Test.rm_rf(self.rc.group('filesystem').root_dir)
+        print "Deleting: {}".format(self.rc.group('filesystem').root)
+        Test.rm_rf(self.rc.group('filesystem').root)
        
     @staticmethod
     def rm_rf(d):
@@ -225,8 +224,10 @@ class Test(TestBase):
     def test_library_install(self):
         '''Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent'''
-      
+
+
         l = self.get_library()
+        print l.database.dsn
 
         l.put(self.bundle)
         l.put(self.bundle)
@@ -481,7 +482,7 @@ class Test(TestBase):
         
         from ambry.cache.filesystem import  FsCache, FsLimitedCache
      
-        root = self.rc.group('filesystem').root_dir
+        root = self.rc.group('filesystem').root
       
         l1_repo_dir = os.path.join(root,'repo-l1')
         os.makedirs(l1_repo_dir)
@@ -600,7 +601,7 @@ class Test(TestBase):
         '''Test a two-level cache where the upstream compresses files '''
         from ambry.cache.filesystem import  FsCache,FsCompressionCache
          
-        root = self.rc.group('filesystem').root_dir
+        root = self.rc.group('filesystem').root
       
         l1_repo_dir = os.path.join(root,'comp-repo-l1')
         os.makedirs(l1_repo_dir)
@@ -700,7 +701,7 @@ class Test(TestBase):
         # Set up the test directory and make some test files. 
         from ambry.cache import new_cache
         
-        root = self.rc.group('filesystem').root_dir
+        root = self.rc.group('filesystem').root
         os.makedirs(root)
                 
         testfile = os.path.join(root,'testfile')

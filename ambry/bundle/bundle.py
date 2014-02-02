@@ -488,7 +488,7 @@ class BuildBundle(Bundle):
         #if not self.cache_downloads :
         #    self.rm_rf(self.filesystem.downloads_path())
 
-    
+        self.library.source.set_bundle_state(self.identity.id_, 'cleaned')
 
     def progress(self,message):
         '''print message to terminal, in place'''
@@ -685,6 +685,7 @@ class BuildBundle(Bundle):
 
             self._revise_schema()
 
+        self.library.source.set_bundle_state(self.identity.id_, 'prepared')
 
         return True
 
@@ -756,6 +757,8 @@ class BuildBundle(Bundle):
         
 
         self.post_build_write_stats()
+
+        self.library.source.set_bundle_state(self.identity.id_, 'built')
 
         return True
     
@@ -839,12 +842,13 @@ class BuildBundle(Bundle):
         force = self.run_args.get('force', force)
 
         with self.session:
-            library_name = self.run_args.get('library', 'default') if library_name is None else 'default'
-            library_name = library_name if library_name else 'default'
-    
-            library = ambry.library.new_library(self.config.config.library(library_name), reset=True)
+
+            #library_name = self.run_args.get('library', 'default') if library_name is None else 'default'
+            #library_name = library_name if library_name else 'default'
+            #library = ambry.library.new_library(self.config.config.library(library_name), reset=True)
+            library = self.library
          
-            self.log("{} Install to  library {}".format(self.identity.name, library_name))  
+            self.log("{} Install to  library {}".format(self.identity.name, library.database.dsn))
             dest = library.put(self, force=force)
             self.log("{} Installed".format(dest[1]))
             
@@ -872,6 +876,7 @@ class BuildBundle(Bundle):
     def post_install(self):
         from datetime import datetime
         self.db_config.set_value('process', 'installed', datetime.now().isoformat())
+        self.library.source.set_bundle_state(self.identity.id_, 'installed')
         return True
     
     ### Submit the package to the repository

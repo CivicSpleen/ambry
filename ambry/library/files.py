@@ -8,18 +8,19 @@
 from ..orm import File
 from sqlalchemy.sql import or_
 from ..util import Constant
+from ..identity import LocationRef
 import os
 
 class Files(object):
 
 
     TYPE = Constant()
-    TYPE.BUNDLE = 'bundle'
-    TYPE.PARTITION = 'partition'
-    TYPE.BUNDLE_SOURCE = 'bundle_source'
-    TYPE.SOURCE_URL = 'source_url'
-    TYPE.UPSTREAM = 'upstream'
-    TYPE.REMOTE = 'remote'
+    TYPE.BUNDLE = LocationRef.LOCATION.LIBRARY
+    TYPE.PARTITION = 'LP'
+    TYPE.SOURCE = LocationRef.LOCATION.SOURCE
+    TYPE.SREPO = LocationRef.LOCATION.SREPO
+    TYPE.UPSTREAM = LocationRef.LOCATION.UPSTREAM
+    TYPE.REMOTE = LocationRef.LOCATION.REMOTE
 
 
     def __init__(self, db, query=None):

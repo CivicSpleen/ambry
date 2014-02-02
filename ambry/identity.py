@@ -965,6 +965,10 @@ class Locations(object):
     def __str__(self):
         return ''.join([str(self._locations[code]) for code in self.order])
 
+    @property
+    def codes(self):
+        return tuple ( ( c for c, v in self._locations.items() if v.code ) )
+
     def set(self, code, revision=None, version=None):
 
         uc_code = code.upper()

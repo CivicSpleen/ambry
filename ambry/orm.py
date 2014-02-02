@@ -8,7 +8,7 @@ import datetime
 import sqlalchemy
 from sqlalchemy import orm
 from sqlalchemy import event
-from sqlalchemy import Column as SAColumn, Integer, BigInteger, Boolean, UniqueConstraint
+from sqlalchemy import Column as SAColumn, Integer, BigInteger, Boolean, UniqueConstraint, ForeignKeyConstraint
 from sqlalchemy import Float as Real,  Text, String, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator, TEXT, PickleType
@@ -204,18 +204,19 @@ class Dataset(Base):
 
     LOCATION = Constant()
     LOCATION.LIBRARY = LocationRef.LOCATION.LIBRARY
-    LOCATION.SOURCE_REPO = LocationRef.LOCATION.SREPO
-    LOCATION.BUNDLE_SOURCE = LocationRef.LOCATION.SOURCE
+    LOCATION.SREPO = LocationRef.LOCATION.SREPO
+    LOCATION.SOURCE = LocationRef.LOCATION.SOURCE
     LOCATION.REMOTE =  LocationRef.LOCATION.REMOTE
     LOCATION.UPSTREAM = LocationRef.LOCATION.UPSTREAM
 
 
     vid = SAColumn('d_vid',String(20), primary_key=True)
+    location = SAColumn('d_location', String(5), primary_key=True, default=LOCATION.LIBRARY)
     id_ = SAColumn('d_id',String(20), )
-    name = SAColumn('d_name',String(200), unique=False, nullable=False)
-    vname = SAColumn('d_vname',String(200), unique=True, nullable=False)
-    fqname = SAColumn('d_fqname',String(200), unique=True, nullable=False)
-    cache_key = SAColumn('d_cache_key',String(200), unique=True, nullable=False)
+    name = SAColumn('d_name',String(200),  nullable=False)
+    vname = SAColumn('d_vname',String(200),  nullable=False)
+    fqname = SAColumn('d_fqname',String(200),  nullable=False)
+    cache_key = SAColumn('d_cache_key',String(200),  nullable=False)
     source = SAColumn('d_source',String(200), nullable=False)
     dataset = SAColumn('d_dataset',String(200), nullable=False)
     subset = SAColumn('d_subset',String(200))
@@ -225,7 +226,7 @@ class Dataset(Base):
     creator = SAColumn('d_creator',String(200), nullable=False)
     revision = SAColumn('d_revision',Integer, nullable=False)
     version = SAColumn('d_version',String(20), nullable=False)
-    location = SAColumn('d_location', String(5), nullable=False, default=LOCATION.LIBRARY)
+
 
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
@@ -237,13 +238,19 @@ class Dataset(Base):
     partitions = relationship("Partition", backref='dataset', cascade="all, delete-orphan",
                                passive_updates=False)
 
+
+
     __table_args__ = (
         UniqueConstraint('d_vid', 'd_location', name='u_vid_location'),
+        UniqueConstraint('d_fqname', 'd_location', name='u_fqname_location'),
+        UniqueConstraint('d_cache_key', 'd_location', name='u_cache_location'),
     )
 
 
     def __init__(self,**kwargs):
         self.id_ = kwargs.get("oid",kwargs.get("id",kwargs.get("id_", None)) )
+        self.vid = kwargs.get("vid", None)
+        self.location = kwargs.get("location", self.LOCATION.LIBRARY)
         self.name = kwargs.get("name",None) 
         self.vname = kwargs.get("vname",None) 
         self.fqname = kwargs.get("fqname",None)
@@ -272,6 +279,8 @@ class Dataset(Base):
         if self.cache_key is None:
             self.cache_key = self.identity.cache_key
 
+        assert self.vid[0] == 'd'
+
     def __repr__(self):
         return """<datasets: id={} vid={} name={} source={} ds={} ss={} var={} creator={} rev={}>""".format(
                     self.id_, self.vid, self.name, self.source,
@@ -289,6 +298,7 @@ class Dataset(Base):
         return {
                 'id':self.id_, 
                 'vid':self.vid,
+                'location': self.location,
                 'name':self.name,
                 'vname':self.fqname, 
                 'fqname':self.vname,
@@ -531,7 +541,8 @@ class Table(Base):
     vid = SAColumn('t_vid',String(20), primary_key=True)
     id_ = SAColumn('t_id',String(20), primary_key=False)
     d_id = SAColumn('t_d_id',String(20))
-    d_vid = SAColumn('t_d_vid',String(20),ForeignKey('datasets.d_vid'), nullable = False)
+    d_vid = SAColumn('t_d_vid',String(20), nullable = False)
+    d_location = SAColumn('t_d_location',String(5), nullable = False, default = Dataset.LOCATION.LIBRARY)
     sequence_id = SAColumn('t_sequence_id',Integer, nullable = False)
     name = SAColumn('t_name',String(200), nullable = False)
     altname = SAColumn('t_altname',Text)
@@ -540,8 +551,10 @@ class Table(Base):
     data = SAColumn('t_data',MutationDict.as_mutable(JSONEncodedObj))
     installed = SAColumn('t_installed',String(100))
     
-    __table_args__ = (UniqueConstraint('t_sequence_id', 't_d_vid', name='_uc_tables_1'),
-                      UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
+    __table_args__ = (
+        ForeignKeyConstraint([d_vid, d_location], ['datasets.d_vid', 'datasets.d_location']),
+        UniqueConstraint('t_sequence_id', 't_d_vid', name='_uc_tables_1'),
+        UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
                      )
     
     columns = relationship(Column, backref='table', cascade="all, delete-orphan")
@@ -969,7 +982,8 @@ class Partition(Base):
     sequence_id = SAColumn('p_sequence_id',Integer)
     t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'))
     t_id = SAColumn('p_t_id',String(20))
-    d_vid = SAColumn('p_d_vid',String(20),ForeignKey('datasets.d_vid'))
+    d_vid = SAColumn('p_d_vid',String(20))
+    d_location = SAColumn('p_d_location',String(5),default = Dataset.LOCATION.LIBRARY)
     d_id = SAColumn('p_d_id',String(20))
     time = SAColumn('p_time',String(20))
     space = SAColumn('p_space',String(50))
@@ -984,8 +998,9 @@ class Partition(Base):
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedObj))
     installed = SAColumn('p_installed',String(100))
 
-    __table_args__ = (UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'),
-                     )
+    __table_args__ = (
+        ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
+        UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'))
 
     table = relationship('Table', backref='partitions', lazy='subquery')
     # Already have a 'partitions' replationship on Dataset

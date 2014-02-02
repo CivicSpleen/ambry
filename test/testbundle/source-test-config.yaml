@@ -14,6 +14,12 @@ library:
     default:
       filesystem: default
       database: default
+      upstream:
+          options: [compress]
+          prefix: library-test
+          bucket: devtest.sandiegodata.org
+          account: devtest.sandiegodata.org
+
 
     # Used to seperate tests that do or dont have a remote.
     default-remote:

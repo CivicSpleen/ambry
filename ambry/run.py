@@ -50,7 +50,7 @@ class RunConfig(object):
             self.files = path
         else:
             self.files = [
-                          RunConfig.ROOT_CONFIG, 
+                          RunConfig.ROOT_CONFIG,
                           RunConfig.USER_CONFIG,
                           RunConfig.USER_ACCOUNTS,
                           RunConfig.DIR_CONFIG, 
@@ -222,7 +222,9 @@ class RunConfig(object):
                                      }  )
 
         e['_name'] = name
-     
+
+        e['sourcerepo'] = self._sourcerepo(self)
+
         return e
     
     #
@@ -244,7 +246,7 @@ class RunConfig(object):
             e['dir'] = self.dir
 
             return e   
-        
+
         @property
         def list(self):
             """Returns list of all of the sourcerepos"""

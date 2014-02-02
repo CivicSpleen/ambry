@@ -300,7 +300,7 @@ def bundle_clean(args, b, st, rc):
     #b.clean(clean_meta=('meta' in phases))
     b.clean()
 
-    st.set_bundle_state(b.identity.id_, 'built')
+
 
 def bundle_meta(args, b, st, rc):
 
@@ -347,7 +347,7 @@ def bundle_build(args, b, st, rc):
     else:
         b.log("---- Skipping Build ---- ")
 
-    st.set_bundle_state(b.identity.id_, 'built')
+
 
     return True
 
