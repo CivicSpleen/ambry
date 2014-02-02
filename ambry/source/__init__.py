@@ -23,14 +23,11 @@ def load_bundle(bundle_dir):
 
 class SourceTree(object):
 
-    def __init__(self, base_dir, repos, library, logger = None):
+    def __init__(self, base_dir, repos, library, logger=None):
         self.repos = repos
         self.base_dir = base_dir
         self.library = library
         self.logger = logger
-
-        if not self.logger:
-            self.logger = lambda x: x
 
         if not os.path.exists(self.base_dir):
             os.makedirs(self.base_dir)
@@ -137,34 +134,6 @@ class SourceTree(object):
         self.sync_bundle(bundle_dir, bundle.identity)
 
         return bundle
-
-    def resolve(self, term, location=None):
-        from ..identity import LocationRef
-        # The terms come from the command line args as a list
-        try:
-            term = term.pop(0)
-        except:
-            pass
-
-        ident = self.library.resolve(term, location=location)
-
-        if not ident:
-            return None
-
-        if ident:
-            ident.bundle_path =  os.path.join(self.base_dir, ident.source_path)
-
-
-        return ident
-
-    #
-    # Synchronization
-    #
-
-    def sync(self):
-        pass
-
-
 
 
     def sync_repos(self):
@@ -322,7 +291,7 @@ class SourceTree(object):
 
     def resolve_bundle(self, term):
         from ambry.orm import Dataset
-        ident = self.resolve(term, location=Dataset.LOCATION.SOURCE)
+        ident = self.library.resolve(term, location=Dataset.LOCATION.SOURCE)
 
         if not ident:
             return None

@@ -923,7 +923,8 @@ class LocationRef(object):
     LOCATION.UNKNOWN = ' '
     LOCATION.SREPO = 'G' # Source repository, 'github'
     LOCATION.SOURCE = 'S'
-    LOCATION.LIBRARY = 'L'
+    LOCATION.LIBRARY = 'L' # For the bundle
+    LOCATION.PARTITION = 'LP' # For the partition, b/c also used in File.type
     LOCATION.REMOTE ='R'
     LOCATION.UPSTREAM = 'U'
 

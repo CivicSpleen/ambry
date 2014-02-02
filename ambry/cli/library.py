@@ -327,29 +327,31 @@ def library_info(args, l, config, list_all=False):
 
     
 def library_push(args, l, config):
+    from ..orm import Dataset
 
     if args.force:
-        state = 'all'
+        files = [ (f.ref, f.type_) for f in l.files.query.installed.all]
     else:
-        state = 'new'
+
+        files = [(f.ref, f.type_) for f in l.files.query.installed.state('new').all]
 
     def push_cb(note, md, t):
         prt("{} {}", note, md['fqname'])
 
-    files_ = l.database.get_file_by_state(state)
-    if len(files_):
-        prt("-- Pushing to {}",l.upstream)
-        for f in files_:
-            
-            if f.type_ not in ('partition','bundle'):
+    if len(files):
+        prt("-- Pushing to {}", l.upstream)
+        for ref, t in files:
+
+            if t not in (Dataset.LOCATION.LIBRARY, Dataset.LOCATION.PARTITION):
                 continue
 
             try:
-                l.push(f.ref, cb=push_cb)
+                l.push(ref, cb=push_cb)
             except Exception as e:
-                prt("Failed: {}",e)
+                prt("Failed: {}", e)
                 raise
-                
+
+
 def library_files(args, l, config):
 
     files_ = l.database.get_file_by_state(args.file_state)
@@ -443,7 +445,9 @@ def library_sync(args, l, config):
 
     l.sync_upstream()
 
+    l.source.sync_source()
 
+    l.source.sync_repos()
 
     
 def library_unknown(args, l, config):

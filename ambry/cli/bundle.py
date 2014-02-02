@@ -19,12 +19,18 @@ def bundle_command(args, rc):
     import os
     from ..run import import_file
     from ..dbexceptions import  DependencyError
+    from ..library import new_library
+    from . import logger
+    from ..orm import Dataset
+
+    l = new_library(rc.library(args.library))
+    l.logger = logger
 
     if not args.bundle_dir:
         bundle_file = os.path.join(os.getcwd(),'bundle.py')
     else:
-        st = SourceTree(rc.sourcerepo.dir, logger=prt)
-        ident = st.library.resolve(args.bundle_dir)
+        st = l.source
+        ident = l.resolve(args.bundle_dir, location=Dataset.LOCATION.SOURCE)
 
         if ident:
             bundle_file = os.path.join(ident.data['path'], 'bundle.py')

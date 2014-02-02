@@ -397,6 +397,7 @@ class Test(TestBase):
                       set([i.fqname for i in rl.list().values()]))
 
 
+        return
 
         # Try variants of find. 
         r = api.find(self.bundle.identity.name)

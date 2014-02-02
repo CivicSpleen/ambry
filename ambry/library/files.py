@@ -16,7 +16,7 @@ class Files(object):
 
     TYPE = Constant()
     TYPE.BUNDLE = LocationRef.LOCATION.LIBRARY
-    TYPE.PARTITION = 'LP'
+    TYPE.PARTITION = LocationRef.LOCATION.PARTITION
     TYPE.SOURCE = LocationRef.LOCATION.SOURCE
     TYPE.SREPO = LocationRef.LOCATION.SREPO
     TYPE.UPSTREAM = LocationRef.LOCATION.UPSTREAM

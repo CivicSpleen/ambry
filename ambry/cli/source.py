@@ -18,13 +18,17 @@ import yaml
 import shutil
 
 def source_command(args, rc):
+    from ..library import new_library
+    from . import logger
 
-    def logger(x):
-        prt(x)
 
-    st = SourceTree(rc.sourcerepo.dir, logger=logger)
+    l = new_library(rc.library(args.name))
+    l.logger = logger
 
-    globals()['source_'+args.subcommand](args, st, rc)
+    st = l.source
+
+
+    globals()['source_'+args.subcommand](args, l, st, rc)
 
 def source_parser(cmd):
     import argparse
@@ -69,11 +73,6 @@ def source_parser(cmd):
     sp.set_defaults(subcommand='list')
     sp.add_argument('-P', '--plain', default=False, action='store_true',
                     help='Plain output; just print the bundle id, with no logging decorations')
-
-    sp = asp.add_parser('sync', help='Load references from the configured source remotes')
-    sp.set_defaults(subcommand='sync')
-    sp.add_argument('-l','--library',  default='default',  help='Select a library to add the references to')
-    sp.add_argument('-p', '--print',  default=False, action="store_true", help='Print, rather than actually sync')
 
     sp = asp.add_parser('get', help='Load a source bundle into the local source directory')
     sp.set_defaults(subcommand='get')
@@ -135,7 +134,7 @@ def source_parser(cmd):
     sp = asp.add_parser('watch', help='Watch the source directory for changes')
     sp.set_defaults(subcommand='watch')
 
-def source_info(args, st, rc):
+def source_info(args, l, st, rc):
     from . import _print_bundle_info
 
     if not args.terms:
@@ -157,20 +156,20 @@ def source_info(args, st, rc):
 
         term = args.terms.pop(0)
 
-        ident = st.library.resolve(term)
+        ident = l.resolve(term, location=None)
 
         if not ident:
             err("Didn't find source for term '{}'. (Maybe need to run 'source sync')", term)
 
         try:
-            bundle = st.library.resolve_bundle(term)
+            bundle = st.resolve_bundle(ident.id_)
             _print_bundle_info(bundle=bundle)
         except ImportError:
-            ident = st.library.resolve(term)
+            ident = l.resolve(term)
             _print_bundle_info(ident=ident)
 
 
-def source_list(args, st, rc, names=None):
+def source_list(args, l, st, rc, names=None):
     '''List all of the source packages'''
     from collections import defaultdict
     import ambry.library as library
@@ -196,10 +195,11 @@ def source_list(args, st, rc, names=None):
     else:
         _print_bundle_list(d.values(), subset_names=names, prtf=prtf)
 
-def source_get(args, st, rc):
+def source_get(args, l, st, rc):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     import ambry.library as library
     from ..dbexceptions import ConflictError
+    from ..orm import Dataset
 
 
     for term in args.terms:
@@ -213,20 +213,21 @@ def source_get(args, st, rc):
                 err(e.message)
 
         else:
-            ident = st.library.resolve(term)
-
+            ident = l.resolve(term, location = Dataset.LOCATION.SREPO)
 
             if not ident:
                 err("Could not find bundle for term: {} ".format(term))
 
-            if not ident.url:
+            f = l.files.query.type(Dataset.LOCATION.SREPO).ref(ident.vid).one
+
+            if not f.source_url:
                 err("Didn't get a git URL for reference: {} ".format(term))
 
-            args.terms = [ident.url]
-            return source_get(args, st, rc)
+            args.terms = [f.source_url]
+            return source_get(args, l, st, rc)
 
                 
-def source_new(args, st, rc):
+def source_new(args, l, st, rc):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     from ..source.repository import new_repository
     from ..identity import DatasetNumber, Identity
@@ -327,7 +328,7 @@ def source_new(args, st, rc):
     prt("CREATED: {}",bundle_dir)
 
 
-def source_build(args, st, rc):
+def source_build(args, l, st, rc):
     '''Build a single bundle, or a set of bundles in a directory. The build process
     will build all dependencies for each bundle before buildng the bundle. '''
     
@@ -462,7 +463,7 @@ def source_build(args, st, rc):
         build(dir_)
 
             
-def source_run(args, st, rc):
+def source_run(args, l, st, rc):
     from ambry.run import import_file
     from ambry.source.repository.git import GitRepository
 
@@ -542,7 +543,7 @@ def source_run(args, st, rc):
                 prt('')
                 os.chdir(saved_path)         
        
-def source_find(args, st, rc):
+def source_find(args, l, st, rc):
     from ..source.repository.git import GitRepository
     from ..identity import Identity
     from ..bundle.bundle import BuildBundle
@@ -602,7 +603,7 @@ def source_find(args, st, rc):
                         _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=[])
 
 
-def source_init(args, st, rc):
+def source_init(args, l, st, rc):
     from ..source.repository import new_repository
 
     dir_ = args.dir
@@ -623,14 +624,8 @@ def source_init(args, st, rc):
 
     st.sync_bundle(dir_)
 
-    
-def source_sync(args, st, rc):
-    '''Synchronize all of the repositories with the local library'''
-    from ..source.repository.git import GitShellService
 
-    st.sync(rc.sourcerepo.list)
-
-def source_deps(args, st, rc):
+def source_deps(args, l, st, rc):
     """Produce a list of dependencies for all of the source bundles"""
 
     from ..util import toposort
@@ -661,7 +656,7 @@ def source_deps(args, st, rc):
 
 
 
-def source_watch(args, st, rc):
+def source_watch(args, l, st, rc):
 
     st.watch()
 

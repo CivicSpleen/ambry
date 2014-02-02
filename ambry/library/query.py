@@ -280,7 +280,6 @@ class Resolver(object):
 
     def _resolve_ref_orm(self, ref):
 
-
         ip = Identity.classify(ref)
 
         dqp = None # Dataset query parts
@@ -330,13 +329,12 @@ class Resolver(object):
         '''Convert the output from _resolve_ref to nested identities'''
         ip, results = self._resolve_ref_orm(ref)
 
-        if not isinstance(location,(list, tuple)):
+        if location and not isinstance(location,(list, tuple)):
             location = [location]
 
         # Convert the ORM results to identities
         out = {}
         for d,p in results:
-
 
             if location and  d.location not in location:
                 continue

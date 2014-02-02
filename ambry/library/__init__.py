@@ -130,6 +130,7 @@ class Library(object):
         self.source_repos = source_repos
         self._database = database
         self._upstream = upstream
+
         self.sync = sync
         self.bundle = None # Set externally in bundle.library()
         self.host = host
@@ -469,12 +470,13 @@ class Library(object):
     @property
     def resolver(self):
 
-        if self._remotes:
-            from .query import RemoteResolver
+        return self.database.resolver
 
-            return RemoteResolver(local_resolver=self.database.resolver, remote_urls=self._remotes)
-        else:
-            return self.database.resolver
+        #if self._remotes:
+        #    from .query import RemoteResolver
+        #    return RemoteResolver(local_resolver=self.database.resolver, remote_urls=self._remotes)
+        #else:
+        #    return self.database.resolver
 
     def resolve(self, ref, location = Dataset.LOCATION.LIBRARY):
 
@@ -633,6 +635,8 @@ class Library(object):
         else:
             for file_ in self.new_files:
                 self.push(file_.ref, cb=cb)
+
+
 
 
     #
