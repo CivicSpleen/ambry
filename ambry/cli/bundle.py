@@ -114,10 +114,10 @@ def bundle_command(args, rc):
         for phase in phases:
             getf(phase)(args, b, st, rc)
     except DependencyError as e:
-        st.set_bundle_state(b.identity.id_, 'error:dependency')
+        st.set_bundle_state(b.identity, 'error:dependency')
         err("Phase {} failed: {}", phase, e.message)
     except Exception:
-        st.set_bundle_state(b.identity.id_, 'error:'+phase)
+        st.set_bundle_state(b.identity, 'error:'+phase)
         raise
 
 def bundle_parser(cmd):

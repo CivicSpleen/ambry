@@ -247,7 +247,11 @@ class SourceTree(object):
 
         # Walk the subdirectory for the files to build, and
         # add all of their dependencies
-        for root, _, files in os.walk(self.base_dir):
+        for root, dirs, files in os.walk(self.base_dir):
+
+            # Yes! can edit dirs in place!
+            dirs[:] = [d for d in dirs if not d.startswith('_')]
+
             if 'bundle.yaml' in files:
 
                 bundle = BuildBundle(root)
