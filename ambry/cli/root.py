@@ -100,6 +100,7 @@ def root_info(args, l, st, rc):
 
 def root_find(args, l, st, rc):
     from ..source.repository.git import GitRepository
+    from ..library.files import Files
     from ..identity import Identity
     from ..bundle.bundle import BuildBundle
 
@@ -147,6 +148,9 @@ def root_find(args, l, st, rc):
             toggle(show, args.push and repo and repo.needs_push())
             toggle(show, args.init and repo and repo.needs_init())
 
+            toggle(show, args.source and ident.locations.is_in(Files.TYPE.SOURCE) )
+            toggle(show, args.not_source and not ident.locations.is_in(Files.TYPE.SOURCE))
+
             toggle(show, args.built and bundle and bundle.is_built)
             toggle(show, args.not_built and bundle and not bundle.is_built)
 
@@ -156,8 +160,3 @@ def root_find(args, l, st, rc):
                     plain_prt('{}'.format(ident.fqname))
                 else:
                     _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=fields)
-
-
-
-
-

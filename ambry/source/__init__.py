@@ -129,8 +129,8 @@ class SourceTree(object):
 
             self.sync_bundle(bundle_dir, ident)
 
-            bundle_class = load_bundle(repo.path)
-            bundle = bundle_class(repo.path)
+            bundle_class = load_bundle(bundle_dir)
+            bundle = bundle_class(bundle_dir)
 
             return bundle
         except Exception as e:
