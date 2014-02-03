@@ -680,7 +680,7 @@ class LibraryDb(object):
 
         return  s.query(Table).filter(Table.vid == table_vid).one()
 
-    def list(self, datasets=None, location = LocationRef.LOCATION.LIBRARY, key='vid'):
+    def list(self, datasets=None, location = None, key='vid'):
         """
         :param datasets: If specified, must be a dict, which the internal dataset data will be
         put into.
@@ -693,9 +693,18 @@ class LibraryDb(object):
         if datasets is None:
             datasets = {}
 
-        for d,p in (self.session.query(Dataset, Partition).join(Partition)
-                    .filter(Dataset.location == Dataset.LOCATION.LIBRARY)
-                    .filter(Dataset.vid != ROOT_CONFIG_NAME_V).all()):
+        q1 = (self.session.query(Dataset, Partition).join(Partition)
+                       .filter(Dataset.vid != ROOT_CONFIG_NAME_V))
+
+        q2 = (self.session.query(Dataset)
+
+              .filter(Dataset.vid != ROOT_CONFIG_NAME_V))
+
+        if location:
+            q1 = q1.filter(Dataset.location == location)
+            q2 = q2.filter(Dataset.location == location)
+
+        for d,p in (q1.all() + [ (d,None) for d in q2.all()]):
 
             ck = getattr(d.identity, key)
 
@@ -708,29 +717,12 @@ class LibraryDb(object):
             # The dataset locations are linked to the identity locations
             dsid.locations.set(d.location)
 
-            if not (dsid.partitions and p.vid in dsid.partitions):
-                datasets[ck].add_partition(p.identity)
-                p = dsid.partitions[p.vid]
+            if dsid.partitions:
+                if not (dsid.partitions and p.vid in dsid.partitions):
+                    datasets[ck].add_partition(p.identity)
+                    p = dsid.partitions[p.vid]
 
-
-            p.locations.set(d.location)
-
-        # Get all of the other data set entries, that aren't for actual installed datasets.
-        for d in (self.session.query(Dataset)
-                  .filter(Dataset.location != Dataset.LOCATION.LIBRARY)
-                  .filter(Dataset.vid != ROOT_CONFIG_NAME_V).all()):
-
-            ck = getattr(d.identity, key)
-
-            if ck not in datasets:
-                dsid = d.identity
-                datasets[ck] = dsid
-
-            else:
-                dsid = datasets[ck]
-
-            # The dataset locations are linked to the identity locations
-            dsid.locations.set(d.location)
+                p.locations.set(d.location)
 
             if d.location == Files.TYPE.SOURCE:
                 files = Files(self)
@@ -740,11 +732,11 @@ class LibraryDb(object):
                     dsid.bundle_state = f.state
 
 
+
         return datasets
 
     def datasets(self, key='vid'):
         '''List only the dataset records'''
-
 
         from ..orm import Dataset
 

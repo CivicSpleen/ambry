@@ -308,8 +308,6 @@ class Library(object):
         in  a form that is similar to the remote and source lists. '''
         import socket
 
-
-
         if datasets is None:
             datasets = {}
 

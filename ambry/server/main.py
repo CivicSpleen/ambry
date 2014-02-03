@@ -480,12 +480,12 @@ def get_key(key, library):
     return redirect(url)
 
 
-
-
 @get('/datasets')
 def get_datasets(library):
     '''Return all of the dataset identities, as a dict, 
     indexed by id'''
+
+    from ..orm import Dataset
 
     return { dsid.cache_key : {
                  'identity': dsid.dict ,
@@ -504,7 +504,7 @@ def get_datasets(library):
                     'csv':'{}/datasets/{}/schema.csv'.format(_host_port(library),dsid.vid),
                   }
                  } 
-            for dsid in library.list().values()}
+            for dsid in library.list(locatoin=Dataset.LOCATION.).values()}
 
 @post('/datasets/find')
 def post_datasets_find(library):
