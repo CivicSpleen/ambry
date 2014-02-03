@@ -123,7 +123,7 @@ def root_find(args, l, st, rc):
 
     else:
 
-        idents = l.list(key='fqname').values()
+        idents =sorted(l.list(key='fqname').values(), key=key)
 
         s = l.source
 
