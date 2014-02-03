@@ -466,7 +466,19 @@ def do_source_run(ident, args, l, st, rc):
 
         import inspect
 
-        mod = import_file(args.python)
+        try:
+            mod = import_file(args.python)
+        except ImportError:
+            import source_run as sr
+
+            f = os.path.join(os.path.dirname(sr.__file__), args.python+".py" )
+            try:
+                mod = import_file(f)
+            except ImportError:
+                raise
+                err("Could not get python file neither '{}', nor '{}'".format(args.python, f))
+
+
 
         run_args = inspect.getargspec(mod.run)
 
