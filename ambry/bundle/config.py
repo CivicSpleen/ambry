@@ -45,6 +45,7 @@ class BundleFileConfig(BundleConfig):
         If the 'id' value is not set in the yaml file, it will be created and the
         file will be re-written
         '''
+        from ..dbexceptions import ConfigurationError
 
         super(BundleFileConfig, self).__init__()
 
@@ -58,7 +59,6 @@ class BundleFileConfig(BundleConfig):
 
         if not self._run_config.identity.get('id',False):
             self.init_dataset_number()
-
 
         if not os.path.exists(self.local_file):
             raise ConfigurationError("Can't find bundle config file: ")
@@ -96,6 +96,15 @@ class BundleFileConfig(BundleConfig):
     @property
     def path(self):
         return os.path.join(self.cache, BundleFileConfig.BUNDLE_CONFIG_FILE)
+
+    def get_identity(self):
+        '''Return an identity object. '''
+        from ..identity import Identity, Name, ObjectNumber
+
+        names = self.names.items()
+        idents = self.identity.items()
+
+        return Identity.from_dict(dict(names + idents))
 
     def rewrite(self, **kwargs):
         '''Re-writes the file from its own data. Reformats it, and updates

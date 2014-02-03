@@ -89,9 +89,9 @@ def source_parser(cmd):
     sp.add_argument('dir', type=str,nargs='?',help='Directory to start search for sources in. ')      
  
  
-    sp = asp.add_parser('run', help='Run a shell command in source directories')
+    sp = asp.add_parser('run', help='Run a shell command in source directories passed in on stdin')
     sp.set_defaults(subcommand='run')
-    sp.add_argument('-d','--dir', nargs='?', help='Directory to start recursing from ')
+
     sp.add_argument('-P','--python', default=None, help=
                     'Path to a python class file to run. Loads as module and calls run(). The '+
                     'run() function can have any combination of arguments of these names: bundle_dir,'+
@@ -104,7 +104,6 @@ def source_parser(cmd):
     group.add_argument('-p', '--push',  default=False, dest='repo_command',   action='store_const', const='push', help='Push to origin/master')    
     group.add_argument('-l', '--pull',  default=False, dest='repo_command',   action='store_const', const='pull', help='Pull from upstream')  
     group.add_argument('-i', '--install',  default=False, dest='repo_command',   action='store_const', const='install', help='Install the bundle')
-
 
     sp = asp.add_parser('watch', help='Watch the source directory for changes')
     sp.set_defaults(subcommand='watch')
@@ -183,7 +182,8 @@ def source_get(args, l, st, rc):
             prt("Loading bundle from {}".format(term))
             try:
                 bundle = st.clone(term)
-                prt("Loaded {} into {}".format(bundle.identity.sname, bundle.bundle_dir))
+                if bundle:
+                    prt("Loaded {} into {}".format(bundle.identity.sname, bundle.bundle_dir))
             except ConflictError as e:
                 err(e.message)
 
@@ -439,85 +439,89 @@ def source_build(args, l, st, rc):
 
             
 def source_run(args, l, st, rc):
+
+    from ..orm import Dataset
+
+    import sys
+
+    for line in sys.stdin.readlines():
+        ident = l.resolve(line.strip(), Dataset.LOCATION.SOURCE)
+        if not ident:
+            warn("Didn't get source bundle for term '{}'; skipping ".format(line))
+            continue
+        else:
+            do_source_run(ident, args, l, st, rc)
+
+
+def do_source_run(ident, args, l, st, rc):
     from ambry.run import import_file
     from ambry.source.repository.git import GitRepository
 
-    dir_ = args.dir
+    root = ident.bundle_path
+
+    repo = GitRepository(None, root)
+    repo.bundle_dir = root
 
     if args.python:
+
         import inspect
+
         mod = import_file(args.python)
 
         run_args = inspect.getargspec(mod.run)
 
-    else:
-        mod = None
+        a = {}
 
-    if not dir_:
-        dir_ = rc.sourcerepo.dir
+        if 'bundle_dir' in run_args.args:
+            a['bundle_dir'] = root
 
-    for root, dirs, files in os.walk(dir_):
+        if 'repo' in run_args.args:
+            a['repo'] = repo
 
-        # Yes! can edit dirs in place!
-        dirs[:] = [d for d in dirs if not d.startswith('_')]
+        if 'args' in run_args.args:
+            a['args'] = args.shell_command
 
-        if 'bundle.yaml' in files:
-            repo = GitRepository(None, root)
-            repo.bundle_dir = root
+        if 'bundle' in run_args.args:
+            rp = os.path.join(root, 'bundle.py')
+            bundle_mod = import_file(rp)
+            dir_ = os.path.dirname(rp)
+            a['bundle'] = bundle_mod.Bundle(dir_)
 
-            if args.python:
-                a = {}
+        mod.run(**a)
 
-                if 'bundle_dir' in run_args.args:
-                    a['bundle_dir'] = root
+    elif args.repo_command == 'commit' and repo.needs_commit():
+        prt("--- {} {}",args.repo_command, root)
+        repo.commit(' '.join(args.message))
 
-                if 'repo' in run_args.args:
-                    a['repo'] = repo
+    elif args.repo_command == 'push' and repo.needs_push():
+        prt("--- {} {}",args.repo_command, root)
+        repo.push()
 
-                if 'args' in run_args.args:
-                    a['args'] = args.shell_command
+    elif args.repo_command == 'pull':
+        prt("--- {} {}",args.repo_command, root)
+        repo.pull()
 
-                if 'bundle' in run_args.args:
-                    rp = os.path.join(root, 'bundle.py')
-                    bundle_mod = import_file(rp)
-                    dir_ = os.path.dirname(rp)
-                    a['bundle'] = bundle_mod.Bundle(dir_)
+    elif args.repo_command == 'install':
+        prt("--- {} {}",args.repo_command, root)
+        bundle_class = load_bundle(root)
+        bundle = bundle_class(root)
 
-                mod.run(**a)
+        bundle.run_install()
 
-            elif args.repo_command == 'commit' and repo.needs_commit():
-                prt("--- {} {}",args.repo_command, root)
-                repo.commit(' '.join(args.message))
-                
-            elif args.repo_command == 'push' and repo.needs_push():
-                prt("--- {} {}",args.repo_command, root)
-                repo.push()
-                
-            elif args.repo_command == 'pull':
-                prt("--- {} {}",args.repo_command, root)
-                repo.pull()
-                
-            elif args.repo_command == 'install':
-                prt("--- {} {}",args.repo_command, root)    
-                bundle_class = load_bundle(root)
-                bundle = bundle_class(root)
-        
-                bundle.run_install()
-        
-        
-            elif args.shell_command:
-                
-                cmd = ' '.join(args.shell_command)
-                
-                saved_path = os.getcwd()
-                os.chdir(root)   
-                prt('----- {}', root)
-                prt('----- {}', cmd)
-        
-                os.system(cmd)
-                prt('')
-                os.chdir(saved_path)         
-       
+
+    elif args.shell_command:
+
+        cmd = ' '.join(args.shell_command)
+
+        saved_path = os.getcwd()
+        os.chdir(root)
+        prt('----- {}', root)
+        prt('----- {}', cmd)
+
+        os.system(cmd)
+        prt('')
+        os.chdir(saved_path)
+
 
 def source_init(args, l, st, rc):
     from ..source.repository import new_repository

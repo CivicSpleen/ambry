@@ -108,14 +108,14 @@ class SourceTree(object):
 
         import shutil
         from ..dbexceptions import ConflictError
+        from ..bundle import BundleFileConfig
 
         repo = self.temp_repo()
         repo.clone(url)
 
-        bundle_class = load_bundle(repo.path)
-        bundle = bundle_class(repo.path)
-
-        bundle_dir = os.path.join(self.base_dir, bundle.identity.source_path)
+        bfc = BundleFileConfig(repo.path)
+        ident = bfc.get_identity()
+        bundle_dir = os.path.join(self.base_dir, ident.source_path)
 
         if os.path.exists(bundle_dir):
             raise ConflictError("Bundle directory '{}' already exists".format(bundle_dir))
@@ -125,12 +125,18 @@ class SourceTree(object):
 
         shutil.move(repo.path, bundle_dir)
 
-        bundle_class = load_bundle(bundle_dir)
-        bundle = bundle_class(bundle_dir)
+        try:
 
-        self.sync_bundle(bundle_dir, bundle.identity)
+            self.sync_bundle(bundle_dir, ident)
 
-        return bundle
+            bundle_class = load_bundle(repo.path)
+            bundle = bundle_class(repo.path)
+
+            return bundle
+        except Exception as e:
+            self.logger.error("Failed to load bundle source file: {}".format(e.message))
+            self.set_bundle_state(ident, 'error:load')
+            return None
 
 
     def sync_repos(self):
@@ -200,7 +206,7 @@ class SourceTree(object):
                 path=path,
                 group='source',
                 ref=ident.vid,
-                state='synced',
+                state='',
                 type_=Dataset.LOCATION.SOURCE,
                 data=None,
                 source_url=None)
@@ -221,6 +227,7 @@ class SourceTree(object):
         if bundle and bundle.is_built:
             config = dict(bundle.db_config.dict)
             d['process'] = config['process']
+            f.state = 'built'
 
         d['rev'] = d['rev'] + 1
 

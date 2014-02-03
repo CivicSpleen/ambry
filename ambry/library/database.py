@@ -688,6 +688,7 @@ class LibraryDb(object):
         """
 
         from ..orm import Dataset, Partition
+        from .files import Files
 
         if datasets is None:
             datasets = {}
@@ -730,6 +731,13 @@ class LibraryDb(object):
 
             # The dataset locations are linked to the identity locations
             dsid.locations.set(d.location)
+
+            if d.location == Files.TYPE.SOURCE:
+                files = Files(self)
+                f = files.query.type(Files.TYPE.SOURCE).ref(dsid.vid).one_maybe
+
+                if f:
+                    dsid.bundle_state = f.state
 
 
         return datasets
