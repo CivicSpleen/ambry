@@ -280,6 +280,8 @@ class Resolver(object):
 
     def _resolve_ref_orm(self, ref):
 
+
+
         ip = Identity.classify(ref)
 
         dqp = None # Dataset query parts

@@ -1120,12 +1120,12 @@ class Identity(object):
 
         elif '/' in s:
             # A cache key
-            ip.cache_key =s
+            ip.cache_key = s.strip()
             ip.isa = str
 
         elif cls.OBJECT_NUMBER_SEP in s:
             # Must be a fqname
-            ip.name, on_s = s.split(cls.OBJECT_NUMBER_SEP)
+            ip.name, on_s = s.strip().split(cls.OBJECT_NUMBER_SEP)
             ip.on = ObjectNumber.parse(on_s)
             ip.name_parts = ip.name.split(Name.NAME_PART_SEP)
             ip.isa =type(ip.on)
@@ -1141,7 +1141,7 @@ class Identity(object):
             # Probably an Object Number in string form
             ip.name = None
             ip.name_parts = None
-            ip.on = ObjectNumber.parse(s)
+            ip.on = ObjectNumber.parse(s.strip())
             ip.isa = type(ip.on)
 
         if ip.name_parts:
