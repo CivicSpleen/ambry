@@ -469,7 +469,7 @@ def do_source_run(ident, args, l, st, rc):
         try:
             mod = import_file(args.python)
         except ImportError:
-            import source_run as sr
+            import ambry.cli.source_run as sr
 
             f = os.path.join(os.path.dirname(sr.__file__), args.python+".py" )
             try:
