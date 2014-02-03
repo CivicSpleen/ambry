@@ -302,7 +302,7 @@ class Library(object):
     ##
 
 
-    def list(self, datasets=None, with_meta=True, key='fqname'):
+    def list(self, datasets=None, with_meta=True, location=None, key='fqname'):
         '''Lists all of the datasets in the partition, optionally with
         metadata. Does not include partitions. This returns a dictionary
         in  a form that is similar to the remote and source lists. '''
@@ -311,7 +311,7 @@ class Library(object):
         if datasets is None:
             datasets = {}
 
-        self.database.list(datasets=datasets)
+        self.database.list(datasets=datasets, location=location)
 
         return datasets
 
