@@ -202,7 +202,7 @@ class LibraryDb(object):
         s.query(Column).delete()
         s.query(Partition).delete()
         s.query(Table).delete()
-        s.query(Dataset).filter(Dataset.location == Dataset.LOCATION.LIBRARY ).delete()
+        s.query(Dataset).delete()
 
         if add_config_root:
             self._add_config_root()
@@ -488,7 +488,6 @@ class LibraryDb(object):
     def install_dataset_identity(self, identity, location = Dataset.LOCATION.LIBRARY):
 
 
-
         ds = Dataset(**identity.dict)
         ds.name = identity.sname
         ds.vname = identity.vname
@@ -697,7 +696,6 @@ class LibraryDb(object):
                        .filter(Dataset.vid != ROOT_CONFIG_NAME_V))
 
         q2 = (self.session.query(Dataset)
-
               .filter(Dataset.vid != ROOT_CONFIG_NAME_V))
 
         if location:

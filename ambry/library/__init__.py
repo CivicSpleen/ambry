@@ -726,18 +726,23 @@ class Library(object):
         return backup_file
 
 
-
-    def rebuild(self):
+    def sync_library(self):
         '''Rebuild the database from the bundles that are already installed
         in the repository cache'''
 
         from ambry.bundle import DbBundle
         from .files import Files
+        from database import ROOT_CONFIG_NAME_V
 
-        self.logger.info("Clean database {}".format(self.database.dsn))
-        self.database.clean()
-        self.logger.info("Create database {}".format(self.database.dsn))
-        self.database.create()
+        assert Files.TYPE.BUNDLE == Dataset.LOCATION.LIBRARY
+        assert Files.TYPE.PARTITION == Dataset.LOCATION.PARTITION
+
+        (self.database.session.query(Dataset)
+            .filter(Dataset.vid != ROOT_CONFIG_NAME_V)
+            .filter(Dataset.location == Dataset.LOCATION.LIBRARY).delete())
+
+        self.files.query.type(Files.TYPE.BUNDLE).delete()
+        self.files.query.type(Files.TYPE.PARTITION).delete()
 
         bundles = []
 
@@ -763,30 +768,59 @@ class Library(object):
                             bundles.append(b)
 
                     except Exception as e:
+                        raise
                         pass
-                        #self.logger.error('Failed to process {}, {} : {} '.format(file_, path_, e))
+                        self.logger.error('Failed to process {}, {} : {} '.format(file_, path_, e))
 
         for bundle in bundles:
             self.logger.info('Installing: {} '.format(bundle.identity.vname))
 
-
             try:
-                self.database.install_bundle(bundle)
+                self.sync_library_dataset(bundle)
             except Exception as e:
                 self.logger.error('Failed to install bundle {}'.format(bundle.identity.vname))
                 continue
 
-            self.database.add_file(bundle.database.path, self.cache.repo_id, bundle.identity.vid, 'rebuilt',
-                                   type_=Files.TYPE.BUNDLE)
-
             for p in bundle.partitions:
                 if self.cache.has(p.identity.cache_key, use_upstream=False):
                     self.logger.info('            {} '.format(p.identity.vname))
-                    self.database.add_file(p.database.path, self.cache.repo_id, p.identity.vid, 'rebuilt',
-                                           type_=Files.TYPE.PARTITION)
+                    self.sync_library_partition(p.identity)
 
         self.database.commit()
         return bundles
+
+    def sync_library_dataset(self, bundle):
+
+        from files import Files
+
+        assert Files.TYPE.BUNDLE == Dataset.LOCATION.LIBRARY
+
+        ident  = bundle.identity
+
+        self.database.install_bundle(bundle)
+
+        self.files.new_file(
+            merge=True,
+            path=bundle.database.path,
+            group=self.cache.repo_id,
+            ref=ident.vid,
+            state='rebuilt',
+            type_= Files.TYPE.BUNDLE,
+            data=None,
+            source_url=None)
+
+    def sync_library_partition(self, ident):
+        from files import Files
+
+        self.files.new_file(
+            merge=True,
+            path=ident.fqname,
+            group=None,
+            ref=ident.vid,
+            state='rebuilt',
+            type_= Files.TYPE.PARTITION,
+            data=ident.urls,
+            source_url=None)
 
     def sync_upstream(self):
         import json

@@ -110,8 +110,8 @@ class Bundle(object):
             else:
                 
                 return (session.query(Dataset).one())
-        except:
-            self.error("Failed to get dataset in dir {}".format(self.bundle_dir))
+        except Exception as e:
+            #self.error("Failed to get dataset: {}".format(e.message))
             raise
 
     @property

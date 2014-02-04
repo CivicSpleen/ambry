@@ -63,6 +63,13 @@ def library_parser(cmd):
 
     sp = asp.add_parser('sync', help='Synchronize the local directory, upstream and remote with the library')
     sp.set_defaults(subcommand='sync')
+    group = sp.add_mutually_exclusive_group(required=True)
+    group.add_argument('-a', '--all', default=False, action="store_true", help='Sync everything')
+    group.add_argument('-l', '--library', default=False, action="store_true", help='Sync only the library')
+    group.add_argument('-r', '--remote', default=False, action="store_true", help='Sync only the remote')
+    group.add_argument('-u', '--upstream', default=False, action="store_true", help='Sync only the upstream')
+    group.add_argument('-g', '--srepo', default=False, action="store_true", help='Sync only the srepo')
+    group.add_argument('-s', '--source', default=False, action="store_true", help='Sync only the source')
 
     sp = asp.add_parser('rebuild', help='Rebuild the library database from the files in the library')
     sp.set_defaults(subcommand='rebuild')
@@ -114,10 +121,6 @@ def library_parser(cmd):
     group.add_argument('-y', '--yaml',  default='csv', dest='format',  action='store_const', const='yaml')
     group.add_argument('-j', '--json',  default='csv', dest='format',  action='store_const', const='json')
     group.add_argument('-c', '--csv',  default='csv', dest='format',  action='store_const', const='csv')
-
-
-    sp = asp.add_parser('sync', help='Synchronize with the remotes and the upstream')
-    sp.set_defaults(subcommand='sync')
 
 
 def library_command(args, rc):
@@ -420,13 +423,27 @@ def library_sync(args, l, config):
     '''Synchronize the remotes and the upstream to a local library
     database'''
 
-    l.sync_remotes()
 
-    l.sync_upstream()
+    if args.library or args.all:
+        l.logger.info("==== Sync Library")
+        l.sync_library()
 
-    l.source.sync_source()
+    if args.remote or args.all:
+        l.logger.info("==== Sync Remotes")
+        l.sync_remotes()
 
-    l.source.sync_repos()
+    if args.upstream or args.all:
+        l.logger.info("==== Sync Upstream")
+        l.sync_upstream()
+
+    if args.source or args.all:
+        l.logger.info("==== Sync Source")
+        l.source.sync_source()
+
+    if args.srepo or args.all:
+        l.logger.info("==== Sync Source Repos")
+        l.source.sync_repos()
+
 
     
 def library_unknown(args, l, config):
