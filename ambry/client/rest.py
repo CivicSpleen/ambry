@@ -209,10 +209,10 @@ class RemoteLibrary(object):
 
         info = self.info(ref)
 
-        if 'partitions' in info:
-            url = info['partitions']['urls']['db']
-        else:
+        if info['response'] == 'bundle':
             url = info['urls']['db']
+        else:
+            url = info['partitions'].values()[0]['urls']['db']
 
         print '!!!', ref, url
         r = requests.get(url, verify=False, stream=True)

@@ -642,7 +642,7 @@ def get_dataset(did, library, pid=None):
         }
 
     d['response'] = 'dataset'
- 
+
     return d
 
 @get('/datasets/<did>/csv') 
@@ -737,7 +737,7 @@ def get_partition(did, pid, library):
 @CaptureException
 def get_partition_file(did, pid, library):
     from ambry.cache import RemoteMarker
-    from ambry.identity import new_identity, Identity
+    from ambry.identity import Identity
 
     b =  library.get(did)
 
