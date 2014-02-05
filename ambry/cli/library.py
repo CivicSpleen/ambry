@@ -305,28 +305,56 @@ def library_info(args, l, config, list_all=False):
     
 def library_push(args, l, config):
     from ..orm import Dataset
+    import time
+    from functools import partial
 
     if args.force:
-        files = [ (f.ref, f.type_) for f in l.files.query.installed.all]
+        files = [(f.ref, f.type_) for f in l.files.query.installed.all]
     else:
 
         files = [(f.ref, f.type_) for f in l.files.query.installed.state('new').all]
 
-    def push_cb(note, md, t):
-        prt("{} {}", note, md['fqname'])
+    def push_cb(rate, note, md, t):
+        if note == 'Has':
+            prt("{} {} {}", note, md['fqname'])
+        elif note == 'Pushing':
+            prt("{} {}  {} KB/s ", note, md['fqname'], rate)
+        elif note == 'Pushed':
+            pass
+        else:
+            prt("{} {}", note, md['fqname'])
 
     if len(files):
+
+        total_time = 0.0
+        total_size = 0.0
+        rate = 0
+
         prt("-- Pushing to {}", l.upstream)
+        start = time.clock()
         for ref, t in files:
 
             if t not in (Dataset.LOCATION.LIBRARY, Dataset.LOCATION.PARTITION):
                 continue
 
             try:
-                l.push(ref, cb=push_cb)
+                what, start, end, size = l.push(ref, cb=partial(push_cb, rate))
             except Exception as e:
                 prt("Failed: {}", e)
                 raise
+
+
+            if what == 'pushed':
+                total_time += end-start
+                total_size += size
+
+                if total_time > 0:
+                    rate = int(float(total_size) / float(total_time) / 1024.0)
+                else:
+                    rate = 0
+
+
+
 
 
 def library_files(args, l, config):

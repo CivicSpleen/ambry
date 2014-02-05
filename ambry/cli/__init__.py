@@ -194,7 +194,6 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
 
     record_entry_names = ('name', 'd_format', 'p_format', 'extractor')
 
-
     all_fields = [
         # Name, width, d_format_string, p_format_string, extract_function
         ('locations','{:6s}',  '{:6s}',       lambda ident: ident.locations),
@@ -227,15 +226,17 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
     prtf(d_format, *[ f(ident) for f in extractors ] )
 
     if show_partitions and ident.partitions:
+
         for pi in ident.partitions.values():
             prtf(p_format, *[f(pi) for f in extractors])
 
-def _print_bundle_list(idents, subset_names = None, prtf=prt,fields=[], **kwargs):
+def _print_bundle_list(idents, subset_names = None, prtf=prt,fields=[], show_partitions=False):
     '''Create a nice display of a list of source packages'''
     from collections import defaultdict
 
     for ident in sorted(idents, key = lambda i: i.sname):
-        _print_bundle_entry(ident, prtf=prtf,fields=fields,**kwargs)
+        _print_bundle_entry(ident, prtf=prtf,fields=fields,
+                            show_partitions=show_partitions)
 
 def _print_info(l,ident, list_partitions=False):
     from ..cache import RemoteMarker
@@ -244,7 +245,6 @@ def _print_info(l,ident, list_partitions=False):
     resolved_ident = l.resolve(ident.vid, None) # Re-resolve to get the URL or Locations
 
     d = ident
-    p = ident.partition
 
     bundle = l.source.resolve_build_bundle(d.vid)
 
@@ -273,18 +273,7 @@ def _print_info(l,ident, list_partitions=False):
             str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
 
 
-
-
-    if l.cache.has(d.cache_key):
-        b = LibraryDbBundle(l.database, d.vid)
-        
-        prt("D Partitions: {}",b.partitions.count)
-        if not p and (list_partitions or b.partitions.count < 12):
-            
-            for partition in  b.partitions.all_nocsv:
-                prt("P {:15s} {}", partition.identity.vid, partition.identity.vname)
-
-    if p:
+    if len(ident.partitions) == 1:
 
         resolved_ident = l.resolve(ident.partition).partition
 
@@ -296,6 +285,14 @@ def _print_info(l,ident, list_partitions=False):
 
         if resolved_ident.url:
             prt("P Web Path  : {}",resolved_ident.url)
+
+    elif len(ident.partitions) > 1 and list_partitions:
+        prt("D Partitions: {}", len(ident.partitions))
+        for p in sorted(ident.partitions.values(), key=lambda x: x.vname):
+            prt("P {:15s} {}", p.vid, p.vname)
+
+
+
 
 def _print_bundle_info(bundle=None, ident=None):
     from ..source.repository import new_repository

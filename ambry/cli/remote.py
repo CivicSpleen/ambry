@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from . import prt, err, _print_info, _find #@UnresolvedImport
+from ..cli import prt, err, _find, plain_prt, _print_bundle_list, _print_bundle_entry
 import argparse
 
 def remote_parser(cmd):
@@ -24,12 +24,11 @@ def remote_parser(cmd):
     sp = asp.add_parser('list', help='List remote files')
     sp.set_defaults(subcommand='list')
     sp.add_argument('-m','--meta', default=False,  action='store_true',  help="Force fetching metadata for remotes that don't provide it while listing, like S3")
-    sp.add_argument('datasets', nargs=argparse.REMAINDER)
+    sp.add_argument('term', nargs=argparse.REMAINDER)
         
     sp = asp.add_parser('find', help='Search for the argument as a bundle or partition name or id')
     sp.set_defaults(subcommand='find')   
     sp.add_argument('term', type=str, nargs=argparse.REMAINDER,help='Query term')
-
 
 
 def remote_command(args, rc):
@@ -64,10 +63,24 @@ def remote_info(args, l, rc):
         prt(str(l.upstream))
 
 def remote_list(args, l, rc, return_meta=False):
-        
-    if args.datasets:
-        # List just the partitions in some data sets. This should probably be combined into info. 
-        for ds in args.datasets:
+    from . import _print_bundle_entry
+
+    fields = ['locations', 'vid', 'status', 'vname']
+    show_partitions = True
+
+    if args.term:
+        # List just the partitions in some data sets. This should probably be combined into info.
+        for term in args.term:
+
+            ip, ident = l.remote_resolver.resolve_ref_one(term)
+
+            print vars(ident)
+
+            _print_bundle_entry(ident, prtf=prt, fields=fields,
+                                show_partitions=show_partitions)
+
+            return
+
             dsi = l.upstream.get_ref(ds)
 
             prt("dataset {0:11s} {1}",dsi['dataset']['id'],dsi['dataset']['name'])

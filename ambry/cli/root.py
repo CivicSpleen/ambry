@@ -16,12 +16,20 @@ def root_parser(cmd):
     sp.add_argument('-F', '--fields', type=str,
                     help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
+    group = sp.add_mutually_exclusive_group()
+    group.add_argument('-a', '--all', default=False, action="store_true", help='List everything')
+    group.add_argument('-l', '--library', default=False, action="store_true", help='List only the library')
+    group.add_argument('-r', '--remote', default=False, action="store_true", help='List only the remote')
+    group.add_argument('-u', '--upstream', default=False, action="store_true", help='List only the upstream')
+    group.add_argument('-g', '--srepo', default=False, action="store_true", help='List only the srepo')
+    group.add_argument('-s', '--source', default=False, action="store_true", help='List only the source')
+    sp.add_argument('term', nargs = '?', type=str, help='Name or ID of the bundle or partition')
 
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='info')
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
-    sp.add_argument('term', type=str,help='Name or ID of the bundle or partition')
+    sp.add_argument('term',  type=str, help='Name or ID of the bundle or partition')
 
     sp = cmd.add_parser('find', prefix_chars='-+',
                         help='Search for the argument as a bundle or partition name or id')
@@ -68,6 +76,7 @@ def root_command(args, rc):
 
 def root_list(args, l, st, rc):
     from ..cli import load_bundle, _print_bundle_list
+    from ..orm import Dataset
 
     if args.plain:
         fields = ['vid']
@@ -78,16 +87,41 @@ def root_list(args, l, st, rc):
     else:
         fields = ['locations', 'vid', 'status', 'vname']
 
+    locations = []
+
+    if args.library:
+        locations.append(Dataset.LOCATION.LIBRARY)
+
+    if args.remote:
+        locations.append(Dataset.LOCATION.REMOTE)
+
+    if args.upstream:
+        locations.append(Dataset.LOCATION.UPSTREAM)
+
+    if args.source:
+        locations.append(Dataset.LOCATION.SOURCE)
+
+    if args.srepo:
+        locations.append(Dataset.LOCATION.SREPO)
+
+    if not locations:
+        locations = None # list everything.
+
+    if args.partitions:
+        locations = [Dataset.LOCATION.LIBRARY]
+
+
     key = lambda ident : ident.vname
 
-    idents = sorted(l.list(key='fqname').values(), key=key)
+    idents = sorted(l.list(locations=locations, key='fqname').values(), key=key)
 
     _print_bundle_list(idents,
-                        fields = fields,
-                        show_partitions=args.partitions)
+                       fields=fields,
+                       show_partitions=args.partitions)
 
 def root_info(args, l, st, rc):
     from ..cli import load_bundle, _print_info
+    from ..orm import Dataset
 
     ident = l.resolve(args.term, location=None)
 
@@ -95,7 +129,20 @@ def root_info(args, l, st, rc):
         err("Failed to find record for: {}", args.term)
         return
 
-    _print_info(l, ident, list_partitions=True)
+    if ident.locations.is_in(Dataset.LOCATION.LIBRARY):
+        pass
+    elif ident.locations.is_in(Dataset.LOCATION.REMOTE):
+        from ..client.rest import RemoteLibrary
+
+        f = l.files.query.type(Dataset.LOCATION.REMOTE).ref(ident.vid).one
+        rl = RemoteLibrary(f.group)
+
+        ds = rl.dataset(ident.vid)
+
+        ident.partitions = ds.partitions
+
+
+    _print_info(l, ident, list_partitions=args.partitions)
 
 
 def root_find(args, l, st, rc):

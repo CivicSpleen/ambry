@@ -504,7 +504,7 @@ def get_datasets(library):
                     'csv':'{}/datasets/{}/schema.csv'.format(_host_port(library),dsid.vid),
                   }
                  } 
-            for dsid in library.list(location=Dataset.LOCATION.LIBRARY).values()}
+            for dsid in library.list(locations=Dataset.LOCATION.LIBRARY).values()}
 
 @post('/datasets/find')
 def post_datasets_find(library):
@@ -552,7 +552,9 @@ def post_dataset(did,library):
 
     b = library.load(identity.cache_key, identity.md5)
 
-    return b.identity.dict
+    d =  b.identity.dict
+    d['response'] = 'dataset'
+    return d
 
 @get('/datasets/<did>') 
 @CaptureException   
@@ -672,7 +674,10 @@ def post_partition(did, pid, library):
 
     library.database.add_remote_file(identity)
 
-    return identity.dict
+    d =  identity.dict
+    d['response'] = 'partition'
+    return d
+
 
 
 

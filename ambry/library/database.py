@@ -674,12 +674,11 @@ class LibraryDb(object):
 
     def get_table(self, table_vid):
 
-
         s = self.session
 
         return  s.query(Table).filter(Table.vid == table_vid).one()
 
-    def list(self, datasets=None, location = None, key='vid'):
+    def list(self, datasets=None, locations = None, key='vid'):
         """
         :param datasets: If specified, must be a dict, which the internal dataset data will be
         put into.
@@ -698,9 +697,14 @@ class LibraryDb(object):
         q2 = (self.session.query(Dataset)
               .filter(Dataset.vid != ROOT_CONFIG_NAME_V))
 
-        if location:
-            q1 = q1.filter(Dataset.location == location)
-            q2 = q2.filter(Dataset.location == location)
+        if locations:
+
+            if not isinstance(locations,(list, tuple)):
+                locations=[locations]
+
+            for location in locations:
+                q1 = q1.filter(Dataset.location == location)
+                q2 = q2.filter(Dataset.location == location)
 
         for d,p in (q1.all() + [ (d,None) for d in q2.all()]):
 
@@ -715,12 +719,10 @@ class LibraryDb(object):
             # The dataset locations are linked to the identity locations
             dsid.locations.set(d.location)
 
-            if dsid.partitions:
-                if not (dsid.partitions and p.vid in dsid.partitions):
-                    datasets[ck].add_partition(p.identity)
-                    p = dsid.partitions[p.vid]
-
-                p.locations.set(d.location)
+            if p and ( not datasets[ck].partitions or p.vid not in datasets[ck].partitions):
+                pident = p.identity
+                pident.locations.set(d.location)
+                datasets[ck].add_partition(pident)
 
             if d.location == Files.TYPE.SOURCE:
                 files = Files(self)

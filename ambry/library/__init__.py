@@ -302,7 +302,7 @@ class Library(object):
     ##
 
 
-    def list(self, datasets=None, with_meta=True, location=None, key='fqname'):
+    def list(self, datasets=None, with_meta=True, locations=None, key='fqname'):
         '''Lists all of the datasets in the partition, optionally with
         metadata. Does not include partitions. This returns a dictionary
         in  a form that is similar to the remote and source lists. '''
@@ -311,7 +311,7 @@ class Library(object):
         if datasets is None:
             datasets = {}
 
-        self.database.list(datasets=datasets, location=location)
+        self.database.list(datasets=datasets, locations=locations)
 
         return datasets
 
@@ -336,8 +336,8 @@ class Library(object):
         # Gets from the remote are slow, but after that, gets from the
         # file system cache are fast, so we can afford to repeat the gets later.
 
-        for get in gets:
-            self.cache.get(get.cache_key, cb=cb)
+        for ident in gets:
+            self.cache.get(ident.cache_key, cb=cb)
 
 
         orig_last_upstream.upstream = None
@@ -394,15 +394,7 @@ class Library(object):
             d = None
 
         if not d:
-            self.database.install_bundle(bundle)
-
-            self.files.new_file(merge=True,
-                                path=abs_path,
-                                group=self.cache.repo_id,
-                                ref=bundle.identity.vid,
-                                state='pulled',
-                                source_url=dataset.url,
-                                type_=Files.TYPE.BUNDLE)
+            self.sync_library_dataset(bundle)
 
         bundle.library = self
 
@@ -410,24 +402,12 @@ class Library(object):
 
             # Ensure the partition is in the cache
             if not self.cache.has(dataset.partition.cache_key):
-                remote_dataset = self.resolve(dataset.partition.cache_key)
+                f = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
 
-                if not remote_dataset:
-                    raise NotFoundError("Failed to get partition from resolver: {}".format(dataset.partition.cache_key))
+                # Since it was remote, attach the appropriate remote cache to our cache stack then
+                # when we read from the top level, we'l get it from the remote.
+                self._attach_rrc(f.source_url, [dataset.partition], cb=cb)
 
-                url = dataset.url
-
-                if not url:
-                    # This happens when a second call to get() gets a partition of a dataset
-                    # that was retrieved in the first. The resolve() call returns from the local resolver,
-                    # and url is not set.
-
-                    file_ = self.files.query.installed.ref(bundle.identity.vid).one
-
-                    url = file_.source_url
-
-                assert url is not None
-                self._attach_rrc(url, [dataset.partition], cb = cb)
             else:
                 url = None
 
@@ -439,19 +419,12 @@ class Library(object):
 
             partition = bundle.partitions.get(dataset.partition.vid)
 
+            self.sync_library_partition(partition.identity)
+
             if not partition:
                 from ..dbexceptions import NotFoundError
 
                 raise NotFoundError('Failed to get partition {} from bundle '.format(dataset.partition.fqname))
-
-            self.files.new_file(merge=True,
-                                path=abs_path,
-                                group=self.cache.repo_id,
-                                ref=partition.identity.vid,
-                                state='pulled',
-                                source_url=url,
-                                type_='partition')
-
 
             # Attach the partition into the bundle, and return both.
             bundle.partition = partition
@@ -472,11 +445,13 @@ class Library(object):
 
         return self.database.resolver
 
-        #if self._remotes:
-        #    from .query import RemoteResolver
-        #    return RemoteResolver(local_resolver=self.database.resolver, remote_urls=self._remotes)
-        #else:
-        #    return self.database.resolver
+    @property
+    def remote_resolver(self):
+
+        from .query import RemoteResolver
+        #return RemoteResolver(local_resolver=self.database.resolver, remote_urls=self._remotes)
+        return RemoteResolver(local_resolver=None, remote_urls=self._remotes)
+
 
     def resolve(self, ref, location = (Dataset.LOCATION.LIBRARY,Dataset.LOCATION.REMOTE)):
 
@@ -609,6 +584,9 @@ class Library(object):
         """
         import time
 
+        what = None
+        start = None
+        end = None
         if not self.upstream:
             raise Exception("Can't push() without defining a upstream. ")
 
@@ -628,28 +606,33 @@ class Library(object):
 
             md = identity.to_meta(file=file_.path)
 
-            if self.upstream.has(identity.cache_key):
+            if False and self.upstream.has(identity.cache_key):
                 if cb: cb('Has', md, 0)
+                what = 'has'
                 file_.state = 'pushed'
+
             else:
                 start = time.clock()
                 if cb: cb('Pushing', md, start)
 
-
                 self.upstream.put(file_.path, identity.cache_key, metadata=md)
+                end = time.clock()
+                dt = end - start
                 file_.state = 'pushed'
-                if cb: cb('Pushed', md, time.clock() - start)
+                if cb: cb('Pushed', md, dt)
+                what = 'pushed'
 
             if identity.is_bundle:
                 self.sync_upstream_dataset(identity, md)
 
             self.database.session.merge(file_)
             self.database.commit()
+
         else:
             for file_ in self.new_files:
                 self.push(file_.ref, cb=cb)
 
-
+        return what, start, end, md['size'] if 'size' in md else None
 
 
     #

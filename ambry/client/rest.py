@@ -209,8 +209,12 @@ class RemoteLibrary(object):
 
         info = self.info(ref)
 
-        url = info['urls']['db']
+        if 'partitions' in info:
+            url = info['partitions']['urls']['db']
+        else:
+            url = info['urls']['db']
 
+        print '!!!', ref, url
         r = requests.get(url, verify=False, stream=True)
 
         if r.status_code != 200:
@@ -266,6 +270,8 @@ class RemoteLibrary(object):
     def x_put(self, b_or_p):
 
         pass
+
+
 
     # @get('/datasets/<did>/csv')
     # @post('/datasets/<did>/partitions/<pid>')

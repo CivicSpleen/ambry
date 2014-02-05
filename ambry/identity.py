@@ -1183,15 +1183,18 @@ class Identity(object):
             from util import md5_for_file
             
             md5 = md5_for_file(file)
+            size = os.stat(file).st_size
+        else:
+            size = None
         
         return {
                 'id':self.id_, 
                 'identity': json.dumps(self.dict),
                 'name':self.sname,
                 'fqname':self.fqname,
-                'md5':md5
+                'md5':md5,
                 # This causes errors with calculating the AWS signature
-                #,'size': os.stat(file).st_size if file else None
+                'size': size
                 }
 
 
@@ -1270,7 +1273,7 @@ class Identity(object):
         if hasattr(self._name, name):
             return getattr(self._name, name)
         else:
-            raise AttributeError
+            raise AttributeError('Identity does not have attribute {} '.format(name))
 
 
 
