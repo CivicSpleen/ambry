@@ -552,9 +552,8 @@ def post_dataset(did,library):
 
     b = library.load(identity.cache_key, identity.md5)
 
-    d =  b.identity.dict
-    d['response'] = 'dataset'
-    return d
+    return b.identity.dict
+
 
 @get('/datasets/<did>') 
 @CaptureException   
@@ -642,6 +641,8 @@ def get_dataset(did, library, pid=None):
           }
         }
 
+    d['response'] = 'dataset'
+ 
     return d
 
 @get('/datasets/<did>/csv') 
@@ -674,10 +675,7 @@ def post_partition(did, pid, library):
 
     library.database.add_remote_file(identity)
 
-    d =  identity.dict
-    d['response'] = 'partition'
-    return d
-
+    return identity.dict
 
 
 
@@ -729,7 +727,11 @@ def get_dataset_schema(did, typ, library):
 def get_partition(did, pid, library):
     from ambry.cache import RemoteMarker
 
-    return get_dataset(did, library, pid)
+    d =  get_dataset(did, library, pid)
+    d['response'] = 'partition'
+    return d
+
+
 
 @get('/datasets/<did>/partitions/<pid>/db')
 @CaptureException
