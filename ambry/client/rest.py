@@ -214,7 +214,6 @@ class RemoteLibrary(object):
         else:
             url = info['partitions'].values()[0]['urls']['db']
 
-        print '!!!', ref, url
         r = requests.get(url, verify=False, stream=True)
 
         if r.status_code != 200:

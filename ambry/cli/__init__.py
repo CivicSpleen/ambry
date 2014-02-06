@@ -273,23 +273,24 @@ def _print_info(l,ident, list_partitions=False):
             str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
 
 
-    if len(ident.partitions) == 1:
+    if ident.partitions:
+        if len(ident.partitions) == 1:
 
-        resolved_ident = l.resolve(ident.partition).partition
+            resolved_ident = l.resolve(ident.partition).partition
 
-        prt("P --- Partition ---")
-        prt("P Partition : {}; {}",p.vid, p.vname)
-        prt("P Is Local  : {}",(l.cache.has(p.cache_key) is not False) if p else '')
-        prt("P Rel Path  : {}",p.cache_key)
-        prt("P Abs Path  : {}",l.cache.path(p.cache_key) if l.cache.has(p.cache_key) else '' )   
+            prt("P --- Partition ---")
+            prt("P Partition : {}; {}",p.vid, p.vname)
+            prt("P Is Local  : {}",(l.cache.has(p.cache_key) is not False) if p else '')
+            prt("P Rel Path  : {}",p.cache_key)
+            prt("P Abs Path  : {}",l.cache.path(p.cache_key) if l.cache.has(p.cache_key) else '' )
 
-        if resolved_ident.url:
-            prt("P Web Path  : {}",resolved_ident.url)
+            if resolved_ident.url:
+                prt("P Web Path  : {}",resolved_ident.url)
 
-    elif len(ident.partitions) > 1 and list_partitions:
-        prt("D Partitions: {}", len(ident.partitions))
-        for p in sorted(ident.partitions.values(), key=lambda x: x.vname):
-            prt("P {:15s} {}", p.vid, p.vname)
+        elif len(ident.partitions) > 1 and list_partitions:
+            prt("D Partitions: {}", len(ident.partitions))
+            for p in sorted(ident.partitions.values(), key=lambda x: x.vname):
+                prt("P {:15s} {}", p.vid, p.vname)
 
 
 
