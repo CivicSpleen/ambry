@@ -359,7 +359,7 @@ def library_push(args, l, config):
 
 def library_files(args, l, config):
 
-    files_ = l.database.get_file_by_state(args.file_state)
+    files_ = l.files.query.state(args.file_state).all
     if len(files_):
         prt("-- Display {} files",args.file_state)
         for f in files_:
