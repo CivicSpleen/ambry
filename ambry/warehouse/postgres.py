@@ -9,10 +9,7 @@ from ..library.database import LibraryDb
 
 
 class PostgresWarehouse(RelationalWarehouse):
-    
-    def __init__(self, database,  library=None, storage=None, resolver = None, logger=None):
-        super(PostgresWarehouse, self).__init__(database,  library=library, storage=storage, 
-                                                resolver = resolver, logger=logger)
+
     
     def create(self):
         self.database.create()
@@ -71,7 +68,16 @@ class PostgresWarehouse(RelationalWarehouse):
         template = """COPY "public"."{table}"  FROM  PROGRAM 'curl -s -L --compressed "{url}"'  WITH ( FORMAT csv )"""
 
         return template.format(table = table, url = url)
-     
+
+
+    def table_meta(self, d_vid, p_vid, table_name):
+        '''Get the metadata directly from the database. This requires that
+        table_name be the same as the table as it is in stalled in the database'''
+
+        self.library.database.session.execute("SET search_path TO library")
+
+        super(PostgresWarehouse, self).table_meta(d_vid, p_vid, table_name)
+
     def _install_partition(self, partition):
 
         from ambry.client.exceptions import NotFound
@@ -111,16 +117,17 @@ class PostgresWarehouse(RelationalWarehouse):
     def remove_by_name(self,name):
         '''Call the parent, then remove CSV partitions'''
         from ..bundle import LibraryDbBundle
-        
+        from ..identity import PartitionNameQuery
+
         super(PostgresWarehouse, self).remove_by_name(name)
 
-        dataset, partition = self.get(name)
+        dataset = self.get(name)
 
-        if partition:
+        if dataset.partition:
             b = LibraryDbBundle(self.library.database, dataset.vid)
-            p = b.partitions.find(partition)
+            p = b.partitions.find(PartitionNameQuery(id_=dataset.partition.id_))
  
             for p in p.get_csv_parts():
-                super(PostgresWarehouse, self).remove_by_name(p.vname)
+                super(PostgresWarehouse, self).remove_by_name(p.identity.vname)
         
             

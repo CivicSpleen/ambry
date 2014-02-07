@@ -277,7 +277,7 @@ def _print_info(l,ident, list_partitions=False):
         if len(ident.partitions) == 1:
 
             resolved_ident = l.resolve(ident.partition).partition
-
+            p = ident.partition
             prt("P --- Partition ---")
             prt("P Partition : {}; {}",p.vid, p.vname)
             prt("P Is Local  : {}",(l.cache.has(p.cache_key) is not False) if p else '')

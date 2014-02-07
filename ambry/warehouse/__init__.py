@@ -1,98 +1,247 @@
-
 from __future__ import absolute_import
-from ..dbexceptions import ConfigurationError
 from ..library import Library
 from ..library.database import LibraryDb
 from ..cache import new_cache, CacheInterface
 from ..database import new_database
 
 
-
 class NullCache(CacheInterface):
     def has(self, rel_path, md5=None, use_upstream=True):
         return False
-    
-
-def new_warehouse(config):
-
-    service = config['service'] if 'service' in config else 'relational'
-    
-    db_config = dict(config['database'].items())
-
-    database = new_database(db_config,'warehouse')
-    storage = new_cache(config['storage']) if 'storage' in config else None
-    
-    library_database = LibraryDb(**config['library']) if 'library' in config else  LibraryDb(**db_config)
-
-    library =  Library(cache = NullCache(), 
-                 database = library_database, 
-                 upstream= None)
 
 
-    if service == 'bigquery':
-        pass
-    elif service == 'redshift':
-        from .redshift import RedshiftWarehouse  #@UnresolvedImport
-
-        return RedshiftWarehouse(database,storage=storage, library=library)
-    
-    elif service == 'postgres':
-        from .postgres import PostgresWarehouse  #@UnresolvedImport
-        return PostgresWarehouse(database=database,storage=storage, library=library)
-    
-    elif service == 'postgis':
-        from .postgis import PostgisWarehouse  #@UnresolvedImport
-        return PostgisWarehouse(database=database,storage=storage, library=library)
-
-    elif service == 'postgresrds':
-        from .amazonrds import PostgresRDSWarehouse  #@UnresolvedImport
-        return PostgresRDSWarehouse(database=database,storage=storage, library=library)
-    
-        
-    else:
-        from .relational import RelationalWarehouse #@UnresolvedImport
-        return RelationalWarehouse(database,storage=storage, library=library)
-        
-
-class ResolutionError(Exception):
-    pass
-    
-
-class ResolverInterface(object):   
-    
-    def get(self, name):
-        raise NotImplemented()
-    
-    def get_ref(self, name):
-        raise NotImplemented()
-    
-    def url(self, name):
-        raise NotImplemented()
-    
-    
-class WarehouseInterface(object):
-    
-    def __init__(self, database,  library=None, storage=None, resolver = None, logger=None):
-        
-        self.database = database
-        self.storage = storage
-        self.library = library
-        self.resolver = resolver if resolver else lambda name: False
-        self.logger = logger if logger else NullLogger()
-
-        if not self.library:
-            self.library = self.database
-            
 class NullLogger(object):
-    
     def __init__(self):
         pass
 
-    def progress(self,type_,name, n, message=None):
+    def progress(self, type_, name, n, message=None):
         pass
-        
-    def log(self,message):
+
+    def log(self, message):
         pass
-        
-    def error(self,message):
-        pass 
+
+    def error(self, message):
+        pass
+
+
+def new_warehouse(config, elibrary):
+    service = config['service'] if 'service' in config else 'relational'
+
+    db_config = dict(config['database'].items())
+
+    database = new_database(db_config, class_='warehouse')
+    storage = new_cache(config['storage']) if 'storage' in config else None
+
+    library_database = LibraryDb(**config['library']) if 'library' in config else  LibraryDb(**db_config)
+
+    # This library instance is only for the warehouse database.
+    wlibrary = Library(
+        cache=NullCache(),
+        database=library_database,
+        upstream=None)
+
+    if service == 'sqlite':
+        from .sqlite import SqliteWarehouse
+
+        return SqliteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
+
+    elif service == 'postgres':
+        from .postgres import PostgresWarehouse
+
+        return PostgresWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
+
+    elif service == 'postgis':
+        from .postgis import PostgisWarehouse
+
+        return PostgisWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
+
+    elif service == 'postgresrds':
+        from .amazonrds import PostgresRDSWarehouse
+
+        return PostgresRDSWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
+
+    else:
+        raise Exception("Unknown warehouse type: {}".format(service))
+
+
+class ResolutionError(Exception):
+    pass
+
+
+class ResolverInterface(object):
+    def get(self, name):
+        raise NotImplemented()
+
+    def get_ref(self, name):
+        raise NotImplemented()
+
+    def url(self, name):
+        raise NotImplemented()
+
+
+class WarehouseInterface(object):
+    def __init__(self,
+                 database,
+                 wlibrary=None, # Warehouse library
+                 elibrary=None, # external Library
+                 logger=None):
+
+        self.database = database
+        self.wlibrary = wlibrary
+        self.elibrary = elibrary
+
+        self.logger = logger if logger else NullLogger()
+
+    def create(self):
+        self.database.create()
+        self.wlibrary.database.create()
+
+    @property
+    def library(self):
+        return self.wlibrary
+
+
+    def install_partition(self, bundle, partition):
+        raise NotImplementedError()
+
+    ##
+    ## users
+    ##
+
+    def drop_user(self, u):
+        pass # Sqlite database don't have users.
+
+    def create_user(self, u):
+        pass # Sqlite databases don't have users.
+
+    def users(self):
+        return {} # Sqlite databases don't have users.
+
+
+
+    def install(self, ref):
+        raise NotImplementedError()
+
+
+    def _setup_install(self, ref):
+        '''Perform local and remote resolutions to get the bundle, partition and links
+        to CSV parts in the remote REST itnerface '''
+        from ..identity import Identity
+
+        ri = RestInterface()
+
+        if isinstance(ref, Identity):
+            ref = ref.vid
+
+        dataset = self.elibrary.resolve(ref)
+
+
+        if not dataset:
+            raise ResolutionError("Library does not have object for reference: {}".format(ref))
+
+        ident = dataset.partition
+
+        if not ident:
+            raise ResolutionError(
+                "Ref resolves to a bundle, not a partition. Can only install partitions: {}".format(ref))
+
+        # Get just the bundle. We'll install the partition from CSV directly from the
+        # library
+        b = self.elibrary.get(dataset)
+        p = b.partitions.get(ident.id_)
+
+        rident = self.elibrary.remote_resolver.resolve(ident)
+
+        table_urls = {}
+
+        for table_name in p.tables:
+            t = b.schema.table(table_name)
+
+
+            if rident:
+                import requests
+                # If we got an rident, the remotes were defined, and we can get the CSV urls
+                # to load the table.
+
+                table_urls[table_name] = ri.get(rident.data['csv']['tables'][t.id_]['parts'])
+            else:
+                table_urls[table_name] = None
+
+        return b,p,table_urls
+
+
+
+class RestInterface(object):
+
+
+    def _handle_status(self, r):
+        import exceptions
+
+        if r.status_code >= 300:
+
+            try:
+                o = r.json()
+            except:
+                o = None
+
+            if isinstance(o, dict) and 'exception' in o:
+                e = self._handle_exception(o)
+                raise e
+
+            if 400 <= r.status_code < 500:
+                raise exceptions.NotFound("Failed to find resource for URL: {}".format(r.url))
+
+            r.raise_for_status()
+
+
+    def _handle_return(self, r):
+        if r.headers.get('content-type', False) == 'application/json':
+            self.last_response = r
+            return r.json()
+        else:
+            return r
+
+    def _handle_exception(self, object):
+        '''If self.object has an exception, re-construct the exception and
+        return it, to be raised later'''
+
+        import types, sys
+
+        field = object['exception']['class']
+
+        pre_message = ''
+        try:
+            class_ = getattr(sys.modules['ambry.client.exceptions'], field)
+        except AttributeError:
+            pre_message = "(Class: {}.) ".format(field)
+            class_ = Exception
+
+        if not isinstance(class_, (types.ClassType, types.TypeType)):
+            pre_message = "(Class: {},) ".format(field)
+            class_ = Exception
+
+        args = object['exception']['args']
+
+        # Add the pre-message, if the real exception type is not known.
+        if isinstance(args, list) and len(args) > 0:
+            args[0] = pre_message + str(args[0])
+
+        # Add the trace
+        try:
+            if args:
+                args[0] = args[0] + "\n---- Server Trace --- \n" + object['exception']['trace']
+            else:
+                args.append("\n---- Server Trace --- \n" + object['exception']['trace'])
+        except:
+            print "Failed to augment exception. {}, {}".format(args, object)
+        return class_(*args)
+
+
+    def get(self, url, params={}):
+        import requests
+
+        r = requests.get(url, params=params)
+
+        self._handle_status(r)
+
+        return self._handle_return(r)

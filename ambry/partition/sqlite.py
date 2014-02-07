@@ -221,11 +221,12 @@ class SqlitePartition(PartitionBase):
             _store_library(p)
 
     def get_csv_parts(self):
+        from ..identity import PartitionNameQuery
         ident = self.identity.clone()   
         ident.format = 'csv'
-        ident.segment = self.identity.ANY
+        ident.segment = PartitionNameQuery.ANY
 
-        return self.bundle.partitions.find_all(ident)
+        return self.bundle.partitions.find_all(PartitionNameQuery(id_=ident))
 
     def load_csv(self, table=None, parts=None):
         '''Loads the database from a collection of CSV files that have the same identity, 

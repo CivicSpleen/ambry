@@ -97,7 +97,7 @@ class Resolver(ResolverInterface):
             return bundle
     
     def get_ref(self, name):
-        return self.library.get_ref(name)
+        return self.library.resolve(name)
 
     def url(self, name):
         

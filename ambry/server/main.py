@@ -808,11 +808,20 @@ def get_partition_table_csv(did, pid, tid, library):
 def get_partition_table_csv_parts(did, pid, tid, library):
     '''
     '''
+    from ..partition.csv import CsvPartitionName
+    from ..partition.geo import GeoPartitionName
+    from ..partition.sqlite import SqlitePartitionName
 
     did, _, _ = process_did(did, library)
     pid, _, _  = process_pid(did, pid, library)
 
     p = library.get(pid).partition # p_orm is a database entry, not a partition
+
+    if p.identity.format == CsvPartitionName.FORMAT:
+        return ['/datasets/{}/partitions/{}/db'.format(_host_port(library), pid, pid)]
+    elif p.identity.format not in  (SqlitePartitionName.FORMAT, GeoPartitionName.FORMAT):
+        raise exc.BadRequest("Can only get CSV parts for csv, geo or sqlite partitions. Got: {}".format(p.identity.format))
+
 
     table = p.bundle.schema.table(tid)
 
@@ -952,7 +961,6 @@ def test_run(config):
 
     logger.info("Starting test server on http://{}:{}".format(host, port))
     logger.info("Library at: {}".format(l.database.dsn))
-
 
     install(LibraryPlugin(lf))
 

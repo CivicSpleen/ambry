@@ -25,12 +25,17 @@ def _new_library(config):
     import copy
     from ..cache import new_cache, RemoteMarker
     from database import LibraryDb
+    from sqlalchemy.exc import OperationalError
 
     cache = new_cache(config['filesystem'])
 
     database = LibraryDb(**dict(config['database']))
 
-    database.create()
+    try:
+        database.create()
+    except OperationalError as e:
+        from ..dbexceptions import DatabaseError
+        raise DatabaseError('Failed to create {} : {}'.format(database.dsn, e.message))
 
     upstream = new_cache(config['upstream']) if 'upstream' in config else None
 
@@ -41,6 +46,13 @@ def _new_library(config):
         raise ConfigurationError("Library upstream must have a RemoteMarker interface: {}".format(config))
 
     sourcerepo = config.get('sourcerepo', None)
+    try:
+        source_dir = sourcerepo.dir if sourcerepo else None
+        source_repos = sourcerepo.list if sourcerepo else None
+    except ConfigurationError:
+        source_dir = None
+        source_repos = None
+
 
     #print "### Upstream", config['upstream']
 
@@ -51,8 +63,8 @@ def _new_library(config):
                 remotes=remotes,
                 sync = config.get('sync', None),
                 require_upload=config.get('require_upload', None),
-                source_dir = sourcerepo.dir,
-                source_repos=sourcerepo.list,
+                source_dir = source_dir,
+                source_repos = source_repos,
                 host=config.get('host', None),
                 port=config.get('port', None),
                 )
@@ -225,13 +237,22 @@ class Library(object):
     ## Storing
     ##
 
-    def put(self, bundle, force=False):
+    def put_bundle(self, bundle, force=False):
+
+        self._put(bundle, force=force)
+
+        for p in bundle.partitions:
+            self._put(p, force=force)
+
+
+    def _put(self, bundle, force=False):
         '''Install a single bundle or partition file into the library.
 
         :param bundle: the file object to install
         :rtype: a `Partition`  or `Bundle` object
 
         '''
+
         from ..bundle import Bundle
         from ..partition import PartitionInterface
 
@@ -242,13 +263,6 @@ class Library(object):
 
         return dst, cache_key, url
 
-
-    def put_bundle(self, bundle, force=False):
-
-        self.put(bundle, force=force)
-
-        for p in bundle.partitions:
-            self.put(p, force=force)
 
 
     def _put_file(self, identity, file_path, state='new', force=False):
@@ -455,10 +469,16 @@ class Library(object):
 
     def resolve(self, ref, location = (Dataset.LOCATION.LIBRARY,Dataset.LOCATION.REMOTE)):
 
+        if isinstance(ref, Identity):
+            ref = ref.vid
+
         ip, ident = self.resolver.resolve_ref_one(ref, location)
 
-        if ident:
-            ident.bundle_path = self.source.source_path(ident=ident)
+        try:
+            if ident:
+                ident.bundle_path = self.source.source_path(ident=ident)
+        except ConfigurationError:
+            pass # Warehouse libraries don't have source directories.
 
         return ident
 
@@ -561,6 +581,9 @@ class Library(object):
     def source(self):
         '''Return a SourceTree object, based on the source_repo configuration'''
         from ..source import SourceTree
+
+        if not self.source_dir:
+            raise ConfigurationError("Don't have a source_dir")
 
         return SourceTree(self.source_dir, self.source_repos, self, self.logger)
 

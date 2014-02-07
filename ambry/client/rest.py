@@ -173,7 +173,6 @@ class RemoteLibrary(object):
 
             ident.urls = data['urls']
 
-
         return datasets
 
     # @get('/resolve/<ref>')
@@ -181,12 +180,20 @@ class RemoteLibrary(object):
         '''Returns an identity given a vid, name, vname, cache_key or object number'''
         from ..identity import Identity
 
-        d =  self.get(self.url("/resolve/{}", ref))
+        d =  self.get(self.url("/info/{}", ref))
 
         if not d:
             return None
 
-        ident =  Identity.from_dict(d)
+        if d['response'] == 'partition':
+            data = d['partitions'].values()[0]
+        else:
+            data = d
+
+        ident_d = d['identity']
+
+        ident =  Identity.from_dict(ident_d)
+        ident.data = data['urls']
 
         if ident.is_bundle:
             return ident
@@ -195,7 +202,6 @@ class RemoteLibrary(object):
             dsid.add_partition(ident)
 
             return dsid
-
 
     # @get('/info/<ref>')
     def info(self, ref):
@@ -269,7 +275,6 @@ class RemoteLibrary(object):
     def x_put(self, b_or_p):
 
         pass
-
 
 
     # @get('/datasets/<did>/csv')

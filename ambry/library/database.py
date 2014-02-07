@@ -425,6 +425,25 @@ class LibraryDb(object):
     ## Install and remove bundles and partitions
     ##
 
+    def install_dataset_identity(self, identity, location=Dataset.LOCATION.LIBRARY):
+        '''Create the record for the dataset. Does not add an File objects'''
+
+        ds = Dataset(**identity.dict)
+        ds.name = identity.sname
+        ds.vname = identity.vname
+        ds.fqname = identity.fqname
+        ds.cache_key = identity.cache_key
+        ds.creator = 'N/A'
+        ds.location = location
+
+        try:
+            self.session.add(ds)
+            self.commit()
+        except:
+            self.session.rollback()
+            self.session.merge(ds)
+            self.commit()
+
     def install_bundle_file(self, identity, bundle_file):
         """Install a bundle in the database, starting from a file that may
         be a partition or a bundle"""
@@ -485,24 +504,6 @@ class LibraryDb(object):
 
         return dataset
 
-    def install_dataset_identity(self, identity, location = Dataset.LOCATION.LIBRARY):
-
-
-        ds = Dataset(**identity.dict)
-        ds.name = identity.sname
-        ds.vname = identity.vname
-        ds.fqname = identity.fqname
-        ds.cache_key = identity.cache_key
-        ds.creator = 'N/A'
-        ds.location = location
-
-        try:
-            self.session.add(ds)
-            self.commit()
-        except:
-            self.session.rollback()
-            self.session.merge(ds)
-            self.commit()
 
 
     def install_bundle(self, bundle):
@@ -548,8 +549,17 @@ class LibraryDb(object):
         the whole bundle"""
 
         from sqlalchemy.orm.exc import NoResultFound
+        from ..identity import PartitionNameQuery
 
-        partition = bundle.partitions.find(p_id)
+        try:
+            b = self.get(bundle.identity.vid)
+        except NoResultFound:
+            b = None
+
+        if not b:
+            self.install_bundle(bundle)
+
+        partition = bundle.partitions.get(p_id)
 
         s = self.session
 
@@ -583,13 +593,12 @@ class LibraryDb(object):
         table = s.query(Table).filter(Table.vid == table_or_vid).one()
 
         if not table:
-            table = s.query(Table).filter(Table.vid == table.vid).one()
+            table = s.query(Table).filter(Table.name == table.vid).one()
 
         if not name:
             name = table.name
 
         table.installed = name
-
 
         s.merge(table)
         s.commit()
@@ -630,15 +639,17 @@ class LibraryDb(object):
 
         try:
             dataset = self.get(partition.identity.vid) #@UnusedVariable
+            p_vid = partition.identity.vid
         except AttributeError:
             # It is actually an identity, we hope
-            dataset = partition.as_dataset
+            dataset = partition.as_dataset()
+            p_vid = partition.vid
 
         b = LibraryDbBundle(self, dataset.vid)
 
         s = self.session
 
-        s.query(Partition).filter(Partition.t_vid  == dataset.partition.vid).delete()
+        s.query(Partition).filter(Partition.t_vid  == p_vid).delete()
 
         self.commit()
 

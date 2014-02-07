@@ -74,6 +74,7 @@ class RunConfig(object):
         
         self.sourcerepo = self._sourcerepo(self)
 
+
     def __getattr__(self, group):
         '''Fetch a confiration group and return the contents as an 
         attribute-accessible dict'''
@@ -225,6 +226,7 @@ class RunConfig(object):
 
         e['sourcerepo'] = self._sourcerepo(self)
 
+
         return e
     
     #
@@ -233,11 +235,12 @@ class RunConfig(object):
     class _sourcerepo(object):
         def __init__(self,this):
             self.this = this
-            
+
         def __call__(self, name):
             
 
-            e =  self.this.group_item('sourcerepo', name) 
+            e =  self.this.group_item('sourcerepo', name)
+
             e =  self.this._sub_strings(e, {
                                          'account': lambda k,v: self.this.account(v)
                                          }  ) 
@@ -260,11 +263,14 @@ class RunConfig(object):
         @property
         def dir(self):   
 
-            fs = self.this.group('filesystem') 
+            fs = self.this.group('filesystem')
             root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
 
-
-            return self.this.group('sourcerepo')['dir'].format(root=root_dir)
+            try:
+                return self.this.group('sourcerepo')['dir'].format(root=root_dir)
+            except KeyError:
+                from dbexceptions import ConfigurationError
+                raise ConfigurationError("Sourcerepo config did not define a root director")
 
     
     def warehouse(self,name):

@@ -384,6 +384,9 @@ class Resolver(object):
             else:
                 return ip, versions[best]
 
+    def resolve(self, ref, location = Dataset.LOCATION.LIBRARY):
+        return self.resolve_ref_one(ref, location)[1]
+
     def find(self, query_command):
         '''Find a bundle or partition record by a QueryCommand or Identity
 
@@ -515,6 +518,7 @@ class RemoteResolver(object):
         # remote if this is a semantic version request, to possible
         # get a newer version
         if len(idents) == 0 or isinstance(ip.version, semantic_version.Spec):
+
             if self.urls:
                 for url in self.urls:
                     rl = RemoteLibrary(url)
@@ -537,6 +541,9 @@ class RemoteResolver(object):
         # if this is a semantic version request, the idents array should be sorted with the highest revision number
         # for the spec at the top
         return ip, idents.pop(0)
+
+    def resolve(self, ref, location = Dataset.LOCATION.LIBRARY):
+        return self.resolve_ref_one(ref, location)[1]
 
 
     def find(self, query_command):

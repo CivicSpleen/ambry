@@ -944,7 +944,7 @@ class File(Base, SavableMixin):
 
     __table_args__ = (
         UniqueConstraint('f_path', 'f_type', name='u_type_path'),
-        UniqueConstraint('f_ref', 'f_type', name='u_type_path'),
+        UniqueConstraint('f_ref', 'f_type', name='u_ref_path'),
     )
 
     def __init__(self,**kwargs):
