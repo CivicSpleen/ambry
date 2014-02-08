@@ -1,0 +1,7 @@
+#!/bin/sh
+
+url=$1
+db_path=$2
+table_name=$3
+
+curl -s -L --compressed "$url" | sqlite3 -header -separator ',' $db_path ".import /dev/stdin $table_name"

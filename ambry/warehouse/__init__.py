@@ -45,6 +45,12 @@ def new_warehouse(config, elibrary):
 
         return SqliteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
 
+    if service == 'spatialite':
+
+        from .sqlite import SpatialiteWarehouse
+
+        return SpatialiteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
+
     elif service == 'postgres':
         from .postgres import PostgresWarehouse
 
@@ -104,6 +110,8 @@ class WarehouseInterface(object):
     def install_partition(self, bundle, partition):
         raise NotImplementedError()
 
+
+
     ##
     ## users
     ##
@@ -118,10 +126,32 @@ class WarehouseInterface(object):
         return {} # Sqlite databases don't have users.
 
 
+    def install(self, partition):
 
-    def install(self, ref):
+        p_vid = self._to_vid(partition)
+
+        bundle, p, tables  = self._setup_install(p_vid)
+
+        if p.identity.format == 'db':
+            self.install_partition(bundle, p)
+            for table_name, urls in tables.items():
+
+                if urls:
+                    self.load_remote(p, table_name, urls)
+                else:
+                    self.load_attach(p, table_name)
+
+        elif p.identity.format == 'geo':
+            self.install_partition(bundle, p)
+            for table_name, urls in tables.items():
+                self.load_ogr(p, table_name)
+        else:
+            self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
+
+
+    def _ogr_args(self, partition):
+        '''Return a arguments for ogr2ogr to connect to the database'''
         raise NotImplementedError()
-
 
     def _setup_install(self, ref):
         '''Perform local and remote resolutions to get the bundle, partition and links
@@ -160,15 +190,65 @@ class WarehouseInterface(object):
 
             if rident:
                 import requests
+                from ..client.exceptions import BadRequest
                 # If we got an rident, the remotes were defined, and we can get the CSV urls
                 # to load the table.
 
-                table_urls[table_name] = ri.get(rident.data['csv']['tables'][t.id_]['parts'])
+                try:
+                    table_urls[table_name] = ri.get(rident.data['csv']['tables'][t.id_]['parts'])
+                except BadRequest:
+                    table_urls[table_name] = None
+
+
+
             else:
                 table_urls[table_name] = None
 
         return b,p,table_urls
 
+
+    def get(self, name_or_id):
+        """Return true if the warehouse already has the referenced bundle or partition"""
+
+        return self.library.resolve(name_or_id)
+
+    def has(self, ref):
+        r = self.library.resolve(ref)
+
+        if bool(r):
+            return True
+        else:
+            return False
+
+    def _to_vid(self, partition):
+
+        from ..partition import PartitionBase
+        from ..identity import Identity
+
+        if isinstance(partition, PartitionBase):
+            pid = partition.identity.vid
+        elif isinstance(partition, Identity):
+            pid = partition.vid
+        else:
+            pid = partition
+
+        return pid
+
+    def _partition_to_dataset_vid(self, partition):
+
+        from ..partition import PartitionBase
+        from ..identity import Identity
+
+        if isinstance(partition, PartitionBase):
+            did = partition.identity.as_dataset().vid
+        elif isinstance(partition, Identity):
+            did = partition.as_dataset().vid
+        else:
+            from ..identity import ObjectNumber
+
+            did = str(ObjectNumber(str(partition)).dataset)
+
+        return did
 
 
 class RestInterface(object):
@@ -229,11 +309,12 @@ class RestInterface(object):
         # Add the trace
         try:
             if args:
-                args[0] = args[0] + "\n---- Server Trace --- \n" + object['exception']['trace']
+                args[0] = args[0] + "\n---- Server Trace --- \n" + str('\n'.join(object['exception']['trace']))
             else:
-                args.append("\n---- Server Trace --- \n" + object['exception']['trace'])
-        except:
+                args.append("\n---- Server Trace --- \n" + str('\n'.join(object['exception']['trace'])))
+        except Exception as e:
             print "Failed to augment exception. {}, {}".format(args, object)
+
         return class_(*args)
 
 

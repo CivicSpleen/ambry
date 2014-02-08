@@ -46,6 +46,4 @@ names:
     vid: diEGPXmDC8001
     vname: source-dataset-subset-variation-0.0.1
 partitions:
-- source-dataset-subset-variation-coding
-- source-dataset-subset-variation-coding_date_codes
-- source-dataset-subset-variation-coding_integer_codes
+- source-dataset-subset-variation-hdf5-hdf

@@ -4,7 +4,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from postgres import PostgresWarehouse #@UnresolvedImport
-from sh import ogr2ogr #@UnresolvedImport
+
 
 class PostgisWarehouse(PostgresWarehouse):
     
@@ -19,6 +19,17 @@ class PostgisWarehouse(PostgresWarehouse):
         try:  self.database.connection.execute('CREATE EXTENSION IF NOT EXISTS fuzzystrmatch')
         except: pass
 
+    def _ogr_args(self, partition):
+
+        db = self.database
+
+        ogr_dsn = ("PG:'dbname={dbname} user={username} host={host} password={password}'"
+                   .format(username=db.username, password=db.password,
+                           host=db.server, dbname=db.dbname))
+
+        return ["-f PostgreSQL", ogr_dsn,
+                partition.database.path,
+                "--config PG_USE_COPY YES"]
 
     def _install_geo_partition(self, partition):
         

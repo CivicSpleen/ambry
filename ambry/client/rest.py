@@ -140,8 +140,10 @@ class RemoteLibrary(object):
                 args[0] = args[0] + "\n---- Server Trace --- \n" + object['exception']['trace']
             else:
                 args.append("\n---- Server Trace --- \n" + object['exception']['trace'])
-        except:
+        except Exception as e:
             print "Failed to augment exception. {}, {}".format(args, object)
+            print 'AAA', e, e.message
+
         return  class_(*args)
 
 

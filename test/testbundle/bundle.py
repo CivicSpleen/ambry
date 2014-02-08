@@ -42,7 +42,7 @@ class Bundle(BuildBundle):
                   ('extra', lambda: None),
                   ('extra2', lambda: None),
                   ]
-  
+
     @property
     def fields3(self):
         from functools import partial
@@ -208,6 +208,7 @@ class Bundle(BuildBundle):
         for table_name in  ('ttwo',):
             p = self.partitions.find_or_new_db(table=table_name, grain=None)
             petl.dummytable(30000,self.fields).tosqlite3(p.database.path, table_name, create=False) #@UndefinedVariable
+
 
         for seg in range(1,5):
             p = self.partitions.find_or_new_db(table='tthree', segment=seg)

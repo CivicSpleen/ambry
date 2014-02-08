@@ -18,7 +18,7 @@ logger.debug("Init database logger")
 class SqliteAttachmentMixin(object):
     
     
-    def attach(self,id_, name=None):
+    def attach(self,id_, name=None, conn=None):
         """Attach another sqlite database to this one
         
         Args:
@@ -61,11 +61,15 @@ class SqliteAttachmentMixin(object):
             name =  ''.join(random.choice(string.letters) for i in xrange(10)) #@UnusedVariable
         
         q = """ATTACH DATABASE '{}' AS '{}' """.format(path, name)
-        
-        self.connection.execute(q)
+
+        if not conn:
+            conn = self.connection
+
+        conn.execute(q)
            
         self._last_attach_name = name
-        
+
+
         self._attachments.add(name)
         
         return name
@@ -88,7 +92,7 @@ class SqliteAttachmentMixin(object):
     
     
     def copy_from_attached(self, table, columns=None, name=None, 
-                           on_conflict= 'ABORT', where=None):
+                           on_conflict= 'ABORT', where=None, conn=None):
         """ Copy from this database to an attached database
         
         Args:
@@ -114,7 +118,7 @@ class SqliteAttachmentMixin(object):
             f['to_table'] = table
     
         elif isinstance(table, tuple):
-            # Copy all ields between two tables with different names
+            # Copy all fields between two tables with different names
             f['from_table'] = table[0]
             f['to_table'] = table[1]
         else:
@@ -131,10 +135,14 @@ class SqliteAttachmentMixin(object):
     
         if where is not None:
             q = q + " " + where.format(**f)
-    
-        self.connection.execute(q)
-           
-                   
+
+        if conn:
+            conn.execute(q)
+        else:
+            with self.engine.begin() as conn:
+                conn.execute(q)
+
+
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
@@ -494,6 +502,7 @@ class BundleLockContext(object):
     def add(self,o):
         self._bundle._session.add(o) 
             
+
 class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
     def __init__(self, bundle, dbname, **kwargs):   
@@ -577,16 +586,11 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
                 s.merge(column)
 
         return table
-    
 
 
-class SqliteWarehouseDatabase(SqliteDatabase):
+class SqliteWarehouseDatabase(SqliteDatabase, SqliteAttachmentMixin):
 
-    def __init__(self, dbname, **kwargs):   
-        '''
-        '''
-
-        super(SqliteWarehouseDatabase, self).__init__(dbname,  **kwargs)
+    pass
 
 
 class SqliteMemoryDatabase(SqliteDatabase, SqliteAttachmentMixin):
@@ -612,7 +616,6 @@ class SqliteMemoryDatabase(SqliteDatabase, SqliteAttachmentMixin):
             return self.connection.execute(*args, **kwargs)
         except OperationalError as e:
             raise QueryError("Error while executing {} in database {} ({}): {}".format(args, self.dsn, type(self), e.message))
-        
 
 
 def _on_connect_bundle(dbapi_con, con_record):

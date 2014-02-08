@@ -64,18 +64,19 @@ class Test(TestBase):
             self.bundle.log("{} {}".format(type_, name))
 
     def get_warehouse(self, l, name):
+        from  ambry.util import get_logger
         from ambry.warehouse import new_warehouse
-        w = new_warehouse(self.rc.warehouse(name), l)
 
+        w = new_warehouse(self.rc.warehouse(name), l)
+        w.logger = get_logger('unit_test')
         w.database.enable_delete = True
 
         lr = self.bundle.init_log_rate(10000)
         w.progress_cb = lambda type_, name, n: self.progress_cb(lr, type_, name, n)
 
-        try:
-            w.drop()
-        except:
-            pass
+        p = w.database.path
+        if os.path.exists(p):
+            os.remove(p)
 
         w.create()
 
@@ -90,7 +91,7 @@ class Test(TestBase):
         l.put_bundle(self.bundle)
 
         for p in self.bundle.partitions.all:
-            w.install(p.identity.vid)
+            w.install(p)
 
     def test_remote_install(self):
 
@@ -105,9 +106,10 @@ class Test(TestBase):
         l.put_bundle(self.bundle)
 
         for p in self.bundle.partitions.all:
-            if p.identity.format != 'hdf':
-                w.install_partition(self.bundle, p)
+            if p.identity.format == 'db':
+                w.install(p)
 
+        print
 
 
     def x_test_install(self):

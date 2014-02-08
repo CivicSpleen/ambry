@@ -60,7 +60,7 @@ def get_logger(name, file_name = None, template=None):
         ch.setFormatter(formatter)
         #ch.setLevel(logging.DEBUG)
         logger.addHandler(ch)
-        #logger.setLevel(logging.DEBUG) 
+        logger.setLevel(logging.INFO)
         logger._stream = ch.stream
         logger_init.add(name)
      

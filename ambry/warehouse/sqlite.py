@@ -16,97 +16,74 @@ class SqliteWarehouse(RelationalWarehouse):
     ## Datasets and Bundles
     ##
 
-    def install(self, ref):
-        pass
 
-        bundle, partition, tables = self._setup_install(ref)
+    def _ogr_args(self, partition):
 
-        print bundle.identity.fqname
-        print partition.identity.fqname
-        print tables
-     
-    def _install_partition(self, partition):
-
-        from ambry.client.exceptions import NotFound
-        
-        self.logger.log('install_partition_csv {}'.format(partition.identity.name))
-
-        pdb = partition.database
+        return [
+            "-f SQLite ",self.database.path,
+            "-gt 65536",
+            partition.database.path,
+            "-dsco SPATIALITE=no"]
 
 
-        
-    def _install_csv_url(self, table, url):
-        
-        self.logger.log('install_csv_url {}'.format(url))
+    def load_attach(self, partition, table_name):
+        from ..database.inserter import ValueInserter
 
-        cmd =  self._copy_command(table.name, url)
-        self.logger.log('installing with command: {} '.format(cmd))
-        r = self.database.connection.execute(cmd)
-                
-        #self.logger.log('installed_csv_url {}'.format(url)) 
-        
-        r = self.database.connection.execute('commit')
+        self.logger.info('load_attach {}'.format(partition.identity.name))
 
-    def remove_by_name(self,name):
-        '''Call the parent, then remove CSV partitions'''
-        from ..bundle import LibraryDbBundle
-        from ..identity import PartitionNameQuery
+        if self.database.driver == 'mysql':
+            cache_size = 5000
+        elif self.database.driver == 'postgres':
+            cache_size = 20000
+        else:
+            cache_size = 50000
 
-        super(SqliteWarehouse, self).remove_by_name(name)
+        cache_size = 1000
 
-        dataset = self.get(name)
+        p_vid = partition.identity.vid
+        d_vid = partition.identity.as_dataset().vid
 
-        if dataset.partition:
-            b = LibraryDbBundle(self.library.database, dataset.vid)
-            p = b.partitions.find(PartitionNameQuery(id_=dataset.partition.id_))
- 
-            for p in p.get_csv_parts():
-                super(SqliteWarehouse, self).remove_by_name(p.identity.vname)
-
-        def _install_geo_partition_table(self, partition, table):
-            #
-            # Use ogr2ogr to copy.
-            #
-            import shlex
-
-            db = self.database
-
-            self.library.database.install_table(partition.get_table().vid, table.name)
-
-            args = [
-                "-t_srs EPSG:2771",
-                "-nlt PROMOTE_TO_MULTI",
-                "-nln {}".format(table.name),
-                "-progress ",
-                "-overwrite",
-                "-skipfailures",
-                "-f PostgreSQL",
-                ("PG:'dbname={dbname} user={username} host={host} password={password}'"
-                 .format(username=db.username, password=db.password,
-                         host=db.server, dbname=db.dbname)),
-                partition.database.path,
-                "--config PG_USE_COPY YES"]
-
-            def err_output(line):
-                self.logger.error(line)
-
-            global count
-            count = 0
-
-            def out_output(c):
-                global count
-                count += 1
-                if count % 10 == 0:
-                    pct = (int(count / 10) - 1) * 20
-                    if pct <= 100:
-                        self.logger.log("Loading {}%".format(pct))
+        source_table_name = table_name
+        dest_table_name =  self.augmented_table_name(d_vid, table_name)
 
 
-            self.logger.log("Loading with: ogr2ogr {}".format(' '.join(args)))
+        with self.database.engine.begin() as conn:
+            atch_name = self.database.attach(partition, conn=conn)
 
-            # Need to shlex it b/c the "PG:" part gets bungled otherwise.
-            p = ogr2ogr(*shlex.split(' '.join(args)), _err=err_output, _out=out_output, _iter=True, _out_bufsize=0)
-            p.wait()
+            self.database.copy_from_attached( table=(source_table_name, dest_table_name),
+                                              on_conflict='REPLACE',
+                                              name=atch_name, conn=conn)
 
-            return
+        self.logger.info('done {}'.format(partition.identity.vname))
 
+
+    def load_remote(self, partition, table_name, urls):
+
+        import shlex
+        from sh import ambry_load_sqlite, ErrorReturnCode_1
+
+        self.logger.info('load_remote {} '.format(partition.identity.vname, table_name))
+
+        d_vid = partition.identity.as_dataset().vid
+
+        a_table_name = self.augmented_table_name(d_vid, table_name)
+
+        for url in urls:
+
+            try:
+                p = ambry_load_sqlite(url, self.database.path, a_table_name,
+                                      _err=self.logger.error, _out=self.logger.info )
+                p.wait()
+            except Exception as e:
+                self.logger.error("Failed to load: {} {}: {}".format(partition.identity.vname, table_name, e.message))
+
+
+class SpatialiteWarehouse(SqliteWarehouse):
+
+    def _ogr_args(self, partition):
+
+        return [
+            "-f SQLite ", self.database.path,
+            "-gt 65536",
+            partition.database.path,
+            "-dsco SPATIALITE=yes"]

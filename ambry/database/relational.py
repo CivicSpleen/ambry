@@ -75,7 +75,7 @@ class RelationalDatabase(DatabaseInterface):
 
     def create(self):
 
-        self.connection
+        self._create()
         
         return True
     

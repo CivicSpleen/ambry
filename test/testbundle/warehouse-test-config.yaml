@@ -51,9 +51,14 @@ warehouse:
       service: relational
       database: mysql_warehouse
       library: mysql_library
- 
+
     sqlite:
       service: sqlite
+      database: sqlite_warehouse
+      library: sqlite_library
+
+    sqlite:
+      service: spatialite
       database: sqlite_warehouse
       library: sqlite_library
 
@@ -76,9 +81,13 @@ database:
         dbname: '/tmp/redshift-library.db'
         driver: sqlite        
   
+    spatialite_warehouse:
+        dbname: '/tmp/warehouse.db'
+        driver: spatialite
+
     sqlite_warehouse:
         dbname: '/tmp/warehouse.db'
-        driver: sqlite  
+        driver: sqlite
   
     sqlite_library:
         dbname: '/tmp/sqlite-library.db'
