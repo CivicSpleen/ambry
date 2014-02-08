@@ -55,42 +55,32 @@ warehouse:
     sqlite:
       service: sqlite
       database: sqlite_warehouse
-      library: sqlite_library
+      xlibrary: sqlite_library
 
-    sqlite:
+    spatialite:
       service: spatialite
-      database: sqlite_warehouse
-      library: sqlite_library
+      database: spatialite_warehouse
+      xlibrary: sqlite_library
 
 
 database:
   
 
     library:
-        dbname: '/tmp/server/warehouse/server.db'
+        dbname: '/tmp/warehouse/library.db'
         driver: sqlite
 
-        
-    redshift:
-        driver: postgres
-        server: lorne
-        dbname: test-library
-        account: redshift-test
-        
-    redshift_library:
-        dbname: '/tmp/redshift-library.db'
-        driver: sqlite        
   
     spatialite_warehouse:
-        dbname: '/tmp/warehouse.db'
+        dbname: '/tmp/warehouse/spatialite.db'
         driver: spatialite
 
     sqlite_warehouse:
-        dbname: '/tmp/warehouse.db'
+        dbname: '/tmp/warehouse/sqlite.db'
         driver: sqlite
   
     sqlite_library:
-        dbname: '/tmp/sqlite-library.db'
+        dbname: '/tmp/warehouse/warehouse-library.db'
         driver: sqlite  
         
         
@@ -100,7 +90,6 @@ database:
         dbname: test
         username: test
         password: samizdat 
-
 
 
 filesystem:  

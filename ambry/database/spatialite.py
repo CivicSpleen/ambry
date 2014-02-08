@@ -5,9 +5,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 
-from .sqlite import SqliteDatabase
+from .sqlite import SqliteDatabase, SqliteAttachmentMixin
 
-class SpatialiteDatabase(SqliteDatabase):
+class SpatialiteDatabase(SqliteDatabase, SqliteAttachmentMixin):
 
     def create(self):
 

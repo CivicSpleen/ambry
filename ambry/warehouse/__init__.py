@@ -25,9 +25,11 @@ class NullLogger(object):
 
 
 def new_warehouse(config, elibrary):
+
     service = config['service'] if 'service' in config else 'relational'
 
     db_config = dict(config['database'].items())
+
 
     database = new_database(db_config, class_='warehouse')
     storage = new_cache(config['storage']) if 'storage' in config else None
@@ -126,6 +128,53 @@ class WarehouseInterface(object):
         return {} # Sqlite databases don't have users.
 
 
+    def get(self, name_or_id):
+        """Return true if the warehouse already has the referenced bundle or partition"""
+
+        return self.library.resolve(name_or_id)
+
+
+    def has(self, ref):
+        r = self.library.resolve(ref)
+
+        if bool(r):
+            return True
+        else:
+            return False
+
+
+    def _to_vid(self, partition):
+        from ..partition import PartitionBase
+        from ..identity import Identity
+
+        if isinstance(partition, basestring):
+            dsid = self.elibrary.resolve(partition)
+            pid = dsid.partition.vid
+        elif isinstance(partition, PartitionBase):
+            pid = partition.identity.vid
+        elif isinstance(partition, Identity):
+            pid = partition.vid
+        else:
+            pid = partition
+
+        return pid
+
+
+    def _partition_to_dataset_vid(self, partition):
+        from ..partition import PartitionBase
+        from ..identity import Identity
+
+        if isinstance(partition, PartitionBase):
+            did = partition.identity.as_dataset().vid
+        elif isinstance(partition, Identity):
+            did = partition.as_dataset().vid
+        else:
+            from ..identity import ObjectNumber
+
+            did = str(ObjectNumber(str(partition)).dataset)
+
+        return did
+
     def install(self, partition):
 
         p_vid = self._to_vid(partition)
@@ -207,48 +256,7 @@ class WarehouseInterface(object):
         return b,p,table_urls
 
 
-    def get(self, name_or_id):
-        """Return true if the warehouse already has the referenced bundle or partition"""
 
-        return self.library.resolve(name_or_id)
-
-    def has(self, ref):
-        r = self.library.resolve(ref)
-
-        if bool(r):
-            return True
-        else:
-            return False
-
-    def _to_vid(self, partition):
-
-        from ..partition import PartitionBase
-        from ..identity import Identity
-
-        if isinstance(partition, PartitionBase):
-            pid = partition.identity.vid
-        elif isinstance(partition, Identity):
-            pid = partition.vid
-        else:
-            pid = partition
-
-        return pid
-
-    def _partition_to_dataset_vid(self, partition):
-
-        from ..partition import PartitionBase
-        from ..identity import Identity
-
-        if isinstance(partition, PartitionBase):
-            did = partition.identity.as_dataset().vid
-        elif isinstance(partition, Identity):
-            did = partition.as_dataset().vid
-        else:
-            from ..identity import ObjectNumber
-
-            did = str(ObjectNumber(str(partition)).dataset)
-
-        return did
 
 
 class RestInterface(object):

@@ -86,12 +86,22 @@ class Test(TestBase):
 
         l = self.get_library('local')
 
-        w = self.get_warehouse(l, 'sqlite')
-
         l.put_bundle(self.bundle)
 
-        for p in self.bundle.partitions.all:
-            w.install(p)
+        w = self.get_warehouse(l, 'sqlite')
+
+        w.install("source-dataset-subset-variation-tone-0.0.1")
+        w.install("source-dataset-subset-variation-ttwo-0.0.1")
+        w.install("source-dataset-subset-variation-tthree-0.0.1")
+        w.install("source-dataset-subset-variation-geot1-geo-0.0.1")
+
+        w = self.get_warehouse(l, 'spatialite')
+
+        w.install("source-dataset-subset-variation-tone-0.0.1")
+        w.install("source-dataset-subset-variation-ttwo-0.0.1")
+        w.install("source-dataset-subset-variation-tthree-0.0.1")
+        w.install("source-dataset-subset-variation-geot1-geo-0.0.1")
+
 
     def test_remote_install(self):
 
@@ -101,15 +111,17 @@ class Test(TestBase):
 
         w = self.get_warehouse(l, 'sqlite')
 
-        print "Warehouse", w.library.database.dsn
+        w.install("source-dataset-subset-variation-tone-0.0.1")
+        w.install("source-dataset-subset-variation-ttwo-0.0.1")
+        w.install("source-dataset-subset-variation-tthree-0.0.1")
+        w.install("source-dataset-subset-variation-geot1-geo-0.0.1")
 
-        l.put_bundle(self.bundle)
+        w = self.get_warehouse(l, 'spatialite')
 
-        for p in self.bundle.partitions.all:
-            if p.identity.format == 'db':
-                w.install(p)
-
-        print
+        w.install("source-dataset-subset-variation-tone-0.0.1")
+        w.install("source-dataset-subset-variation-ttwo-0.0.1")
+        w.install("source-dataset-subset-variation-tthree-0.0.1")
+        w.install("source-dataset-subset-variation-geot1-geo-0.0.1")
 
 
     def x_test_install(self):

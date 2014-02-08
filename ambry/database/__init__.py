@@ -9,6 +9,8 @@ from collections import namedtuple
 
 def new_database(config, bundle=None, class_=None):
 
+    config = dict(config.items())
+
     service = config['driver']
     
     if 'class' in config and class_ and config['class'] != class_:

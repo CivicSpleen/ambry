@@ -32,6 +32,7 @@ class LibraryDb(object):
             'postgis':Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}',sql='support/configuration-pg.sql'),
             'postgres':Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}',sql='support/configuration-pg.sql'), # Stored in the ambry module.
             'sqlite':Dbci(dsn_template='sqlite:///{name}',sql='support/configuration-sqlite.sql'),
+            'spatialite': Dbci(dsn_template='sqlite:///{name}', sql='support/configuration-sqlite.sql'),
             'mysql':Dbci(dsn_template='mysql://{user}:{password}@{server}{colon_port}/{name}',sql='support/configuration-sqlite.sql')
             }
 
@@ -226,8 +227,12 @@ class LibraryDb(object):
         if not self.enable_delete:
             raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
 
+        tables = [Config.__tablename__, Column.__tablename__, Partition.__tablename__,
+                  Table.__tablename__, File.__tablename__,  Dataset.__tablename__]
+
         for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
-            table.drop(self.engine, checkfirst=True)
+            if table.name in  tables:
+                table.drop(self.engine, checkfirst=True)
 
     def drop(self):
         s = self.session
