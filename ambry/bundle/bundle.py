@@ -858,7 +858,7 @@ class BuildBundle(Bundle):
             library = self.library
          
             self.log("{} Install to  library {}".format(self.identity.name, library.database.dsn))
-            dest = library.put(self, force=force)
+            dest = library.put_bundle(self, force=force)
             self.log("{} Installed".format(dest[1]))
             
             skips = self.config.group('build').get('skipinstall',[])
