@@ -26,26 +26,19 @@ class SqliteWarehouse(RelationalWarehouse):
             "-dsco SPATIALITE=no"]
 
 
+    def load_local(self, partition, table_name):
+        self.load_attach(partition, table_name)
+
     def load_attach(self, partition, table_name):
         from ..database.inserter import ValueInserter
 
         self.logger.info('load_attach {}'.format(partition.identity.name))
-
-        if self.database.driver == 'mysql':
-            cache_size = 5000
-        elif self.database.driver == 'postgres':
-            cache_size = 20000
-        else:
-            cache_size = 50000
-
-        cache_size = 1000
 
         p_vid = partition.identity.vid
         d_vid = partition.identity.as_dataset().vid
 
         source_table_name = table_name
         dest_table_name =  self.augmented_table_name(d_vid, table_name)
-
 
         with self.database.engine.begin() as conn:
             atch_name = self.database.attach(partition, conn=conn)

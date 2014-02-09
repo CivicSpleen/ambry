@@ -51,8 +51,11 @@ class Bundle(object):
             from ..util import get_logger
             import logging
 
-            ident = self.identity
-            template = ident.sname+" %(message)s"
+            try:
+                ident = self.identity
+                template = ident.sname+" %(message)s"
+            except:
+                template = "%(message)s"
 
             self._logger = get_logger(__name__, template=template)
 
@@ -111,7 +114,10 @@ class Bundle(object):
                 
                 return (session.query(Dataset).one())
         except Exception as e:
-            #self.error("Failed to get dataset: {}".format(e.message))
+            from ..util import get_logger
+            # self.logger can get caught in a recursion loop
+            logger = get_logger(__name__)
+            logger.error("Failed to get dataset: {}; {}".format(e.message, self.database.dsn))
             raise
 
     @property

@@ -3,26 +3,66 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from . import prt, err, _print_info #@UnresolvedImport
-from ambry.warehouse import ResolverInterface, ResolutionError
+from . import prt, err, _print_info
+
+class Logger(object):
+    def __init__(self,  prefix, lr):
+        self.prefix = prefix
+        self.lr = lr
+
+    def progress(self,type_,name, n, message=None):
+        self.lr("{}: {} {}: {}".format(self.prefix,type_, name, n))
+
+    def info(self,message):
+        prt("{}: {}",self.prefix, message)
+
+    def log(self,message):
+        prt("{}: {}",self.prefix, message)
+
+    def error(self,message):
+        err("{}: {}",self.prefix, message)
 
 def warehouse_command(args, rc):
     from ambry.warehouse import new_warehouse
+    from ..library import new_library
+    from . import logger
 
-    w = new_warehouse(rc.warehouse(args.name))
+    if args.sqlite:
+        config = dict(
+            service='sqlite',
+            database=dict(
+                dbname=args.sqlite,
+                driver='sqlite'
+            )
+        )
+    elif args.spatialite:
+        config = dict(
+            service='spatialite',
+            database=dict(
+                dbname=args.spatialite,
+                driver='sqlite'
+            )
+        )
+    else:
+        config = rc.warehouse(args.name)
+
+    l = new_library(rc.library(args.library_name))
+    l.logger = logger
+
+    w = new_warehouse(config, l)
 
     globals()['warehouse_'+args.subcommand](args, w,rc)
+
+
 
 def warehouse_parser(cmd):
    
     whr_p = cmd.add_parser('warehouse', help='Manage a warehouse')
     whr_p.set_defaults(command='warehouse')
     whp = whr_p.add_subparsers(title='warehouse commands', help='command help')
- 
-    group = whr_p.add_mutually_exclusive_group()
-    group.add_argument('-s', '--server',  default=False, dest='is_server',  action='store_true', help = 'Select the server configuration')
-    group.add_argument('-c', '--client',  default=False, dest='is_server',  action='store_false', help = 'Select the client configuration')
-    
+
+    whr_p.add_argument('-s', '--sqlite',  help='Path to a Sqlite database to use for the warehouse. ')
+    whr_p.add_argument('-t', '--spatialite', help='Path to a Spatialite database to use for the warehouse. ')
     whr_p.add_argument('-n','--name',  default='default',  help='Select a different name for the warehouse')
 
     whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
@@ -68,82 +108,9 @@ def warehouse_info(args, w,config):
     prt("Database: {}",w.database.dsn)
     prt("Library : {}",w.library.database.dsn)
 
-class Logger(object):
-    def __init__(self, prefix, lr):
-        self.prefix = prefix
-        self.lr = lr
-        
-    def progress(self,type_,name, n, message=None):
-        self.lr("{}: {} {}: {}".format(self.prefix,type_, name, n))
-        
-    def log(self,message):
-        prt("{}: {}",self.prefix, message)
-        
-    def error(self,message):
-        err("{}: {}",self.prefix, message)
-   
-class Resolver(ResolverInterface):
-    
-    def __init__(self, library):
-    
-        self.library = library
-    
-    def get(self, name):
-        bundle = self.library.get(name)
-        
-        if bundle.partition:
-            return bundle.partition
-        else:
-            return bundle
-    
-    def get_ref(self, name):
-        return self.library.resolve(name)
-
-    def url(self, name):
-        
-        dsi = self.library.upstream.get_ref(name)
-
-        if not dsi:
-            return None
-
-        if dsi['ref_type'] == 'partition':
-            # For a partition reference, we get back a dataset structure, which could
-            # have many partitions, but if we asked for a parttion, will get only one. 
-
-            return dsi['partitions'].values()[0]['urls']['db']
-        else:
-            return dsi['dataset']['url']
-
-    def csv_parts(self, name, tid):
-        import requests
-        
-        dsi = self.library.upstream.get_ref(name)
-
-        if not dsi:
-            return None
-
-        if dsi['ref_type'] == 'partition':
-            # For a partition reference, we get back a dataset structure, which could
-            # have many partitions, but if we asked for a parttion, will get only one. 
 
 
-            parts_url =  dsi['partitions'].values()[0]['urls']['csv']['tables'][tid]['parts']
 
-            r = requests.get(parts_url)
-            r.raise_for_status()
-
-            v = r.json()
-            
-            if 'exception' in v:
-                raise ResolutionError(v['exception']['args'][0]+
-                                      "\n==== Server Trace: \n"+v['exception']['trace'])
-                
-            return v
-            
-        else:
-            from ..dbexceptions import BadRequest
-            raise BadRequest("Didn't get any csvparts; references was not to a partition")
-    
 def warehouse_install(args, w,config):
     from ..library import new_library
     from functools import partial
@@ -153,10 +120,10 @@ def warehouse_install(args, w,config):
         w.create()
 
     l = new_library(config.library(args.library_name))
-    w.resolver = Resolver(l)
+
     w.logger = Logger('Warehouse Install',init_log_rate(prt,N=2000))
  
-    w.install_by_name(args.term )
+    w.install(args.term )
 
 def warehouse_remove(args, w,config):
     from functools import partial
@@ -164,7 +131,7 @@ def warehouse_remove(args, w,config):
 
     w.logger = Logger('Warehouse Remove',init_log_rate(prt,N=2000))
     
-    w.remove_by_name(args.term )
+    w.remove(args.term )
       
 def warehouse_drop(args, w,config):
     
@@ -211,4 +178,3 @@ def warehouse_list(args, w, config):
         d, p = l.get_ref(args.term)
                 
         _print_info(l,d,p, list_partitions=True)
-  

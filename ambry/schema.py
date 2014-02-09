@@ -1185,15 +1185,13 @@ class {name}(Base):
             except ValueError:
                 pass
             
-            # What follow is the normal intuiting process. 
-
-
+            # What follows is the normal intuiting process.
 
             if v is None or v == '-' or v == '':
                 continue
             
             elif mfi['min-type'] == str:
-                mfi['length'] = max(mfi['length'], len(str(v))) 
+                mfi['length'] = max(mfi['length'], len(unicode(v)))
                 mfi['maybe']['date'] += 1 if self._maybe_date(v) else 0
                 mfi['maybe']['time'] += 1 if self._maybe_time(v) else 0
                 mfi['maybe']['datetime'] += 1 if self._maybe_datetime(v) else 0

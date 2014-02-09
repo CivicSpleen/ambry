@@ -372,6 +372,8 @@ class Library(object):
         if not dataset:
             return None
 
+
+
         if Dataset.LOCATION.REMOTE in dataset.locations.codes:
 
             f  = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
@@ -388,6 +390,7 @@ class Library(object):
         # First, get the bundle and instantiate it. If what was requested
         # was just the bundle, return it, otherwise, return it. If it was
         # a partition, get the partition from the bundle.
+
         abs_path = self.cache.get(dataset.cache_key, cb=cb)
 
         if not abs_path or not os.path.exists(abs_path):
@@ -496,6 +499,8 @@ class Library(object):
 
         if not bundle_name:
             raise DependencyError("No dependency named '{}'".format(name))
+
+
 
         b = self.get(bundle_name)
 

@@ -217,7 +217,7 @@ class RemoteLibrary(object):
 
         info = self.info(ref)
 
-        if info['response'] == 'bundle':
+        if info['response'] == 'dataset':
             url = info['urls']['db']
         else:
             url = info['partitions'].values()[0]['urls']['db']

@@ -249,7 +249,9 @@ def _print_info(l,ident, list_partitions=False):
     bundle = l.source.resolve_build_bundle(d.vid)
 
     prt("D --- Dataset ---")
-    prt("D Dataset   : {}; {}",d.vid, d.vname)
+    prt("D Vid       : {}",d.vid)
+    prt("D Vname     : {}", d.vname)
+    prt("D Fqname    : {}", d.fqname)
     prt("D Locations : {}",str(resolved_ident.locations))
     prt("D Rel Path  : {}",d.cache_key)
     prt("D Abs Path  : {}",l.cache.path(d.cache_key) if l.cache.has(d.cache_key) else '')

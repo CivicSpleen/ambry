@@ -28,7 +28,10 @@ def new_warehouse(config, elibrary):
 
     service = config['service'] if 'service' in config else 'relational'
 
-    db_config = dict(config['database'].items())
+    if 'database' in config:
+        db_config = dict(config['database'].items()) # making a copy so we can alter it.
+    else:
+        db_config = dict(config.items())
 
 
     database = new_database(db_config, class_='warehouse')
@@ -76,17 +79,6 @@ class ResolutionError(Exception):
     pass
 
 
-class ResolverInterface(object):
-    def get(self, name):
-        raise NotImplemented()
-
-    def get_ref(self, name):
-        raise NotImplemented()
-
-    def url(self, name):
-        raise NotImplemented()
-
-
 class WarehouseInterface(object):
     def __init__(self,
                  database,
@@ -104,14 +96,130 @@ class WarehouseInterface(object):
         self.database.create()
         self.wlibrary.database.create()
 
+
+    def clean(self):
+        self.database.clean()
+
+    def drop(self):
+        self.database.drop()
+
+    def exists(self):
+        self.database.exists()
+
     @property
     def library(self):
         return self.wlibrary
 
 
+    ##
+    ## Installation
+    ##
+
+    def install(self, partition):
+
+        p_vid = self._to_vid(partition)
+
+        bundle, p, tables = self._setup_install(p_vid)
+
+        if p.identity.format == 'db':
+            self.install_partition(bundle, p)
+            for table_name, urls in tables.items():
+
+                if urls:
+                    self.load_remote(p, table_name, urls)
+                else:
+                    self.load_local(p, table_name)
+
+        elif p.identity.format == 'geo':
+            self.install_partition(bundle, p)
+            for table_name, urls in tables.items():
+                self.load_ogr(p, table_name)
+        else:
+            self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
+
+
     def install_partition(self, bundle, partition):
+        '''Install the records for the partition, the tables referenced by the partition,
+        and the bundle, if they aren't already installed'''
+        from sqlalchemy.orm.exc import NoResultFound
+
+        ld = self.library.database
+
+        pid = self._to_vid(partition)
+
+        ld.install_partition(bundle, pid)
+
+        p = bundle.partitions.get(pid)
+
+        for table_name in p.tables:
+            self.create_table(p, table_name)
+
+
+    def load_local(self, partition, table_name):
+        '''Load data using a network connection to the warehouse and
+        INSERT commands'''
         raise NotImplementedError()
 
+    def load_remote(self, partition, table_name, urls):
+        '''Load data by streaming from the remote REST interface to a bulk load
+        facility of the target warehouse'''
+        raise NotImplementedError()
+
+    def load_ogr(self, partition, table_name):
+        '''Load geo data using the ogr2ogr program'''
+        raise NotImplementedError()
+
+
+    def _setup_install(self, ref):
+        '''Perform local and remote resolutions to get the bundle, partition and links
+        to CSV parts in the remote REST itnerface '''
+        from ..identity import Identity
+
+        ri = RestInterface()
+
+        if isinstance(ref, Identity):
+            ref = ref.vid
+
+        dataset = self.elibrary.resolve(ref)
+
+        if not dataset:
+            raise ResolutionError("Library does not have object for reference: {}".format(ref))
+
+        ident = dataset.partition
+
+        if not ident:
+            raise ResolutionError(
+                "Ref resolves to a bundle, not a partition. Can only install partitions: {}".format(ref))
+
+        # Get just the bundle. We'll install the partition from CSV directly from the
+        # library
+        b = self.elibrary.get(dataset)
+        p = b.partitions.get(ident.id_)
+
+        rident = self.elibrary.remote_resolver.resolve(ident)
+
+        table_urls = {}
+
+        for table_name in p.tables:
+            t = b.schema.table(table_name)
+
+            if rident:
+                import requests
+                from ..client.exceptions import BadRequest
+                # If we got an rident, the remotes were defined, and we can get the CSV urls
+                # to load the table.
+
+                try:
+                    table_urls[table_name] = ri.get(rident.data['csv']['tables'][t.id_]['parts'])
+                except BadRequest:
+                    table_urls[table_name] = None
+
+
+
+            else:
+                table_urls[table_name] = None
+
+        return b, p, table_urls
 
 
     ##
@@ -142,6 +250,11 @@ class WarehouseInterface(object):
         else:
             return False
 
+    def has_table(self, table_name):
+        raise NotImplementedError()
+
+    def create_table(self, partition, table_name):
+        raise NotImplementedError()
 
     def _to_vid(self, partition):
         from ..partition import PartitionBase
@@ -175,86 +288,24 @@ class WarehouseInterface(object):
 
         return did
 
-    def install(self, partition):
 
-        p_vid = self._to_vid(partition)
+    def augmented_table_name(self, d_vid, table_name):
+        return d_vid.replace('/', '_') + '_' + table_name
 
-        bundle, p, tables  = self._setup_install(p_vid)
+    def is_augmented_name(self, d_vid, table_name):
 
-        if p.identity.format == 'db':
-            self.install_partition(bundle, p)
-            for table_name, urls in tables.items():
-
-                if urls:
-                    self.load_remote(p, table_name, urls)
-                else:
-                    self.load_attach(p, table_name)
-
-        elif p.identity.format == 'geo':
-            self.install_partition(bundle, p)
-            for table_name, urls in tables.items():
-                self.load_ogr(p, table_name)
-        else:
-            self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
-
+        return table_name.startswith(d_vid.replace('/', '_') + '_')
 
     def _ogr_args(self, partition):
         '''Return a arguments for ogr2ogr to connect to the database'''
         raise NotImplementedError()
 
-    def _setup_install(self, ref):
-        '''Perform local and remote resolutions to get the bundle, partition and links
-        to CSV parts in the remote REST itnerface '''
-        from ..identity import Identity
 
-        ri = RestInterface()
+    def info(self):
+        config = self.config.to_dict()
 
-        if isinstance(ref, Identity):
-            ref = ref.vid
-
-        dataset = self.elibrary.resolve(ref)
-
-
-        if not dataset:
-            raise ResolutionError("Library does not have object for reference: {}".format(ref))
-
-        ident = dataset.partition
-
-        if not ident:
-            raise ResolutionError(
-                "Ref resolves to a bundle, not a partition. Can only install partitions: {}".format(ref))
-
-        # Get just the bundle. We'll install the partition from CSV directly from the
-        # library
-        b = self.elibrary.get(dataset)
-        p = b.partitions.get(ident.id_)
-
-        rident = self.elibrary.remote_resolver.resolve(ident)
-
-        table_urls = {}
-
-        for table_name in p.tables:
-            t = b.schema.table(table_name)
-
-
-            if rident:
-                import requests
-                from ..client.exceptions import BadRequest
-                # If we got an rident, the remotes were defined, and we can get the CSV urls
-                # to load the table.
-
-                try:
-                    table_urls[table_name] = ri.get(rident.data['csv']['tables'][t.id_]['parts'])
-                except BadRequest:
-                    table_urls[table_name] = None
-
-
-
-            else:
-                table_urls[table_name] = None
-
-        return b,p,table_urls
-
+        if 'password' in config['database']: del config['database']['password']
+        return config
 
 
 

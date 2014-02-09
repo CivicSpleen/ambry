@@ -7,17 +7,32 @@ Created on Jun 30, 2012
 import unittest
 import os.path
 from  testbundle.bundle import Bundle
-from sqlalchemy import *
 from ambry.run import  get_runconfig
-from ambry.library.query import QueryCommand
-from ambry.library import new_library
 import logging
 import ambry.util
+
 
 from test_base import  TestBase
 
 logger = ambry.util.get_logger(__name__)
-logger.setLevel(logging.DEBUG) 
+logger.setLevel(logging.DEBUG)
+
+
+class TestLogger(object):
+    def __init__(self, lr):
+        self.lr = lr
+
+    def progress(self, type_, name, n, message=None):
+        self.lr("{} {}: {}".format(type_, name, n))
+
+    def info(self, message):
+        print("{}".format(message))
+
+    def log(self, message):
+        print("{}".format(message))
+
+    def error(self, message):
+        print("ERROR: {}".format(message))
 
 class Test(TestBase):
  
@@ -56,12 +71,6 @@ class Test(TestBase):
 
         return l
 
-    
-    def progress_cb(self, lr, type_,name,n):
-        if n:
-            lr("{} {}: {}".format(type, name, n))
-        else:
-            self.bundle.log("{} {}".format(type_, name))
 
     def get_warehouse(self, l, name):
         from  ambry.util import get_logger
@@ -72,7 +81,7 @@ class Test(TestBase):
         w.database.enable_delete = True
 
         lr = self.bundle.init_log_rate(10000)
-        w.progress_cb = lambda type_, name, n: self.progress_cb(lr, type_, name, n)
+        w.logger = TestLogger(lr)
 
         p = w.database.path
         if os.path.exists(p):
@@ -89,6 +98,7 @@ class Test(TestBase):
         l.put_bundle(self.bundle)
 
         w = self.get_warehouse(l, 'sqlite')
+        print "WAREHOUSE: ", w.database.dsn
 
         w.install("source-dataset-subset-variation-tone-0.0.1")
         w.install("source-dataset-subset-variation-ttwo-0.0.1")
@@ -96,6 +106,7 @@ class Test(TestBase):
         w.install("source-dataset-subset-variation-geot1-geo-0.0.1")
 
         w = self.get_warehouse(l, 'spatialite')
+        print "WAREHOUSE: ", w.database.dsn
 
         w.install("source-dataset-subset-variation-tone-0.0.1")
         w.install("source-dataset-subset-variation-ttwo-0.0.1")
@@ -110,6 +121,7 @@ class Test(TestBase):
         l = self.get_library('client')
 
         w = self.get_warehouse(l, 'sqlite')
+        print "WAREHOUSE: ", w.database.dsn
 
         w.install("source-dataset-subset-variation-tone-0.0.1")
         w.install("source-dataset-subset-variation-ttwo-0.0.1")
@@ -117,6 +129,7 @@ class Test(TestBase):
         w.install("source-dataset-subset-variation-geot1-geo-0.0.1")
 
         w = self.get_warehouse(l, 'spatialite')
+        print "WAREHOUSE: ", w.database.dsn
 
         w.install("source-dataset-subset-variation-tone-0.0.1")
         w.install("source-dataset-subset-variation-ttwo-0.0.1")
