@@ -239,13 +239,15 @@ class Library(object):
 
     def put_bundle(self, bundle, force=False):
 
-        self._put(bundle, force=force)
+        dst, cache_key, url = self.put(bundle, force=force)
 
         for p in bundle.partitions:
-            self._put(p, force=force)
+            self.put(p, force=force)
+
+        return dst, cache_key, url
 
 
-    def _put(self, bundle, force=False):
+    def put(self, bundle, force=False):
         '''Install a single bundle or partition file into the library.
 
         :param bundle: the file object to install
