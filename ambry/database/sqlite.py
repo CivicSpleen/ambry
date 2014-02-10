@@ -232,7 +232,7 @@ class SqliteDatabase(RelationalDatabase):
 
             return self._engine
         except:
-            print "ERROR; Failed for DSN {} ".foramt(self.dsn)
+            print "ERROR; Failed for DSN {} ".format(self.dsn)
             raise
 
     @property
@@ -640,30 +640,31 @@ def _on_connect_update_sqlite_schema(conn):
         version = int(version)
 
     
+    if version > 10: # Some files have version of 0 because the version was not set.
 
-    if  version < 14:
+        if  version < 14:
 
-        raise Exception("There should not be any files of less than version 14 in existence. Got: {}".format(version))
+            raise Exception("There should not be any files of less than version 14 in existence. Got: {}".format(version))
 
 
-    if  version < 15:
+        if  version < 15:
 
-        try: conn.execute('ALTER TABLE datasets ADD COLUMN d_cache_key VARCHAR(200);')
-        except: pass
+            try: conn.execute('ALTER TABLE datasets ADD COLUMN d_cache_key VARCHAR(200);')
+            except: pass
 
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_cache_key VARCHAR(200);')
-        except: pass
+            try: conn.execute('ALTER TABLE partitions ADD COLUMN p_cache_key VARCHAR(200);')
+            except: pass
 
-        conn.execute('PRAGMA user_version = 15')
 
-    if version < 16:
+        if version < 16:
 
-        try:
-            conn.execute('ALTER TABLE tables ADD COLUMN t_universe VARCHAR(200);')
-        except:
-            pass
+            try:
+                conn.execute('ALTER TABLE tables ADD COLUMN t_universe VARCHAR(200);')
+            except:
+                pass
 
-        conn.execute('PRAGMA user_version = 16')
+
+    conn.execute('PRAGMA user_version = {}'.format(SqliteDatabase.SCHEMA_VERSION))
 
 
 class BuildBundleDb(SqliteBundleDatabase):
