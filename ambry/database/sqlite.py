@@ -232,7 +232,7 @@ class SqliteDatabase(RelationalDatabase):
 
             return self._engine
         except:
-            print "ERROR; Failed for DSN {} ".foramt(self.dsn)
+            print "ERROR; Failed for DSN {} ".format(self.dsn)
             raise
 
     @property
