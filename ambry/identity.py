@@ -25,9 +25,9 @@ class Name(object):
                   ('subset',None,True),
                   ('type',None,True),
                   ('part',None,True),
-                  ('variation',None,True),
-                  ('btime', None, True),
                   ('bspace', None, True),
+                  ('btime', None, True),
+                  ('variation',None,True),
                   # Semantic Version, different from Object Number revision, 
                   # which is an int. "Version" is the preferred name, 
                   # but 'revision' is in the databases schema. 
@@ -144,7 +144,8 @@ class Name(object):
         '''Returns the identity as a dict. values that are empty are removed'''
         
         d = dict([ (k, getattr(self, k)) for k,_, _ in self.name_parts ] )
-        
+
+
         if with_name :
             d['name'] =  self.name
             try: d['vname'] = self.vname
@@ -197,10 +198,11 @@ class Name(object):
             names = set(k for k,_,_ in self.name_parts) - set(excludes)
         else:
             names = set(names)
-        
-        return sep.join(
-                   [ str(d[k]) for (k,_,_) in self.name_parts 
-                         if k and d.get(k,False) and k in (names-excludes)])  
+
+        final_parts= [str(d[k]) for (k, _, _) in self.name_parts
+                      if k and d.get(k, False) and k in (names - excludes)]
+
+        return sep.join( final_parts)
            
 
     @property
@@ -1320,7 +1322,7 @@ class Identity(object):
         '''A dictionary with only the items required to specify the identy, excluding the
         generated names, name, vname and fqname'''
 
-        return { k:v for k,v in self.dict.items() if k not in ['name','vname','fqname','vid']}
+        return { k:v for k,v in self.dict.items() if k not in ['name','vname','fqname','vid','cache_key']}
 
     @staticmethod
     def _compose_fqname(vname, vid):

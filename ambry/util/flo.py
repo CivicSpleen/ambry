@@ -39,6 +39,7 @@ def copy_file_or_flo(input_, output, buffer_size=64*1024, cb=None):
     
     input_opened = False
     output_opened = False
+
     try:
         if isinstance(input_, basestring):
             
@@ -58,7 +59,7 @@ def copy_file_or_flo(input_, output, buffer_size=64*1024, cb=None):
             
         #shutil.copyfileobj(input_,  output, buffer_size)
         
-        def copyfileobj(fsrc, fdst, length=16*1024):
+        def copyfileobj(fsrc, fdst, length=buffer_size):
             cumulative = 0
             while 1:
                 buf = fsrc.read(length)
@@ -67,7 +68,7 @@ def copy_file_or_flo(input_, output, buffer_size=64*1024, cb=None):
                 fdst.write(buf)
                 if cb:
                     cumulative += len(buf)
-                    cb(cumulative)
+                    cb(cumulative, cumulative)
         
         copyfileobj(input_, output)
         

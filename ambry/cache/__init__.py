@@ -48,7 +48,7 @@ class CacheInterface(object):
     config = None
     upstream = None
 
-    def path(self, rel_path, **kwargs): raise NotImplementedError()
+    def path(self, rel_path, propatate = True, **kwargs): raise NotImplementedError()
 
     def get(self, rel_path, cb=None): raise NotImplementedError()
     

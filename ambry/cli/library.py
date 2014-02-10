@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..cli import prt, err, Progressor, _print_info #@UnresolvedImport
+from ..cli import prt, err, warn, Progressor, _print_info #@UnresolvedImport
 import os
 
 
@@ -106,7 +106,7 @@ def library_parser(cmd):
 
     sp = asp.add_parser('remove', help='Delete a file from all local caches and the local library')
     sp.set_defaults(subcommand='remove')
-    sp.add_argument('term', type=str,help='Name or ID of the bundle or partition to remove')
+    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Name or ID of the bundle or partition to remove')
 
     sp = asp.add_parser('load', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
     sp.set_defaults(subcommand='load')   
@@ -267,31 +267,48 @@ def library_rebuild(args, l, config):
         
 
  
-def library_remove(args, l, config):   
-    
-    name = args.term
-    
-    b = l.get(name)
-    
-    if not b:
-        err("Didn't find")
-    
-    if b.partition:
-        k =  b.partition.identity.cache_key
-        prt("Deleting partition {}",k)
- 
-        l.cache.remove(k, propagate = True)
-        
-    else:
-        
-        for p in b.partitions:
-            k =  p.identity.cache_key
-            prt("Deleting partition {}",k)
-            l.cache.remove(k, propagate = True)            
-        
-        k = b.identity.cache_key
-        prt("Deleting bundle {}", k)
-        l.remove(b)  
+def library_remove(args, l, config):
+    from ..dbexceptions import NotFoundError
+
+    for name in args.terms:
+
+        ident = l.resolve(name, location=None)
+
+
+        if not ident:
+            warn("Found no references to term {}".format(name))
+            continue
+
+        try:
+            b = l.get(name)
+
+            if b:
+
+                if b.partition:
+                    k =  b.partition.identity.cache_key
+                    prt("Deleting partition {}",k)
+
+                    l.cache.remove(k, propagate = True)
+
+                else:
+
+                    for p in b.partitions:
+                        k =  p.identity.cache_key
+                        prt("Deleting partition {}",k)
+                        l.cache.remove(k, propagate = True)
+
+                    k = b.identity.cache_key
+                    prt("Deleting bundle {}", k)
+                    l.remove(b)
+        except NotFoundError:
+            pass
+
+        l.files.query.ref(ident.vid).delete()
+
+        l.database.remove_dataset(ident.vid)
+
+        prt("Removed {}".format(ident.fqname))
+
 
 def library_info(args, l, config, list_all=False):    
 

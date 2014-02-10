@@ -911,7 +911,7 @@ class Progressor(object):
 
     start = None
     last = None
-    freq = 1
+    freq = 5
 
     def __init__(self, message='Download', printf = _print):
         import time
@@ -923,17 +923,17 @@ class Progressor(object):
         
 
     def progress(self, i, n):
-        import curses
-        import time
-        
+
         import time
         now = time.clock()
 
         if not self.last:
             self.last = now
-        
+
         if now - self.last > self.freq:
-            diff = now - self.start 
+            diff = now - self.start
+            self.last = now
+
             i_rate = float(i)/diff
             self.rates.append(i_rate)
             
@@ -949,7 +949,7 @@ class Progressor(object):
                  round(float(i)/(1024.*1024.),2), 
                  round(float(rate)/(1024*1024),2), rate_type))
             
-            self.last = now
+
 
 class Constant:
     '''Organizes constants in a class'''

@@ -304,11 +304,11 @@ class Test(TestBase):
         #
 
         print str(ident.locations)
-        self.assertEquals('    ', str(ident.locations))
+        self.assertEquals('     ', str(ident.locations))
         ident.locations.set(LocationRef.LOCATION.LIBRARY, 1)
         ident.locations.set(LocationRef.LOCATION.REMOTE, 2)
         ident.locations.set(LocationRef.LOCATION.SOURCE)
-        self.assertEquals(' SLR', str(ident.locations))
+        self.assertEquals(' SLR ', str(ident.locations))
 
         # Partitions, converting to datasets
 
@@ -678,6 +678,49 @@ class Test(TestBase):
         for format in ('geo','hdf','csv','db'):
             pi = Identity(name, dn).as_partition(space='space', format=format)
             print type(pi), pi.path
+
+
+    def test_time_space(self):
+
+        name = Name(source='source.com',
+                    dataset='foobar',
+                    version='0.0.1',
+                    btime='2010P5Y',
+                    bspace='space',
+                    variation='orig')
+
+        self.assertEquals('source.com-foobar-space-time-orig-0.0.1', name.vname)
+        self.assertEquals('source.com/foobar-space-time-orig-0.0.1.db', name.cache_key)
+        self.assertEquals('source.com/foobar-space-time-orig-0.0.1', name.path)
+        self.assertEquals('source.com/foobar-space-time-orig', name.source_path)
+
+        return
+
+        dn = DatasetNumber(10000, 1, assignment_class='registered')
+
+        ident = Identity(name, dn)
+
+        self.assertEquals('d002Bi', ident.id_)
+        self.assertEquals('d002Bi001', ident.vid)
+        self.assertEquals('source.com-foobar-orig', str(ident.name))
+        self.assertEquals('source.com-foobar-orig-0.0.1', ident.vname)
+        self.assertEquals('source.com-foobar-orig-0.0.1~d002Bi001', ident.fqname)
+        self.assertEquals('source.com/foobar-orig-0.0.1', ident.path)
+        self.assertEquals('source.com/foobar-orig', ident.source_path)
+        self.assertEquals('source.com/foobar-orig-0.0.1.db', ident.cache_key)
+
+        d = {
+                'id': 'd002Bi',
+                'source': 'source',
+                'creator': 'creator',
+                'dataset': 'dataset',
+                'subset': 'subset',
+                'btime': 'time',
+                'bspace': 'space',
+                'variation': 'variation',
+                'revision': 1,
+                'version': '0.0.1'
+            }
 
 
 def suite():

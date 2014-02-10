@@ -146,7 +146,7 @@ class SqliteAttachmentMixin(object):
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
-    SCHEMA_VERSION = 14
+    SCHEMA_VERSION = 16
 
     def __init__(self, dbname, memory = False,  **kwargs):   
         ''' '''
@@ -635,61 +635,11 @@ def _on_connect_update_sqlite_schema(conn):
     if version:
         version = int(version)
 
-    if version < 10:
-        
-        try: conn.execute('ALTER TABLE columns ADD COLUMN c_foreign_key VARCHAR(50);')
-        except: pass
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_format VARCHAR(50);')
-        except: pass
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_segment INTEGER;')
-        except: pass
-                
-        conn.execute('PRAGMA user_version = 10;')
-
-    if version < 11:
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_min_key INTEGER;')
-        except: pass
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_max_key INTEGER;')
-        except: pass
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_count INTEGER;')
-        except: pass
-                
-        conn.execute('PRAGMA user_version = 11')
-        
-        
-    if  version < 13:
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_installed VARCHAR(100);')
-        except: pass
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_variant VARCHAR(50);')
-        except: pass
-         
-        try: conn.execute('ALTER TABLE tables ADD COLUMN t_installed VARCHAR(100);')
-        except: pass
-        
-        conn.execute('PRAGMA user_version = 13')        
     
 
     if  version < 14:
 
-        try: conn.execute('ALTER TABLE datasets ADD COLUMN d_fqname VARCHAR(200);')
-        except: pass
-
-        try: conn.execute('ALTER TABLE datasets ADD COLUMN d_version VARCHAR(20);')
-        except: pass
-
-
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_fqname VARCHAR(50);')
-        except: pass
-
-
-        conn.execute('PRAGMA user_version = 14')
+        raise Exception("There should not be any files of less than version 14 in existence")
 
 
     if  version < 15:
@@ -701,6 +651,15 @@ def _on_connect_update_sqlite_schema(conn):
         except: pass
 
         conn.execute('PRAGMA user_version = 15')
+
+    if version < 16:
+
+        try:
+            conn.execute('ALTER TABLE tables ADD COLUMN t_universe VARCHAR(200);')
+        except:
+            pass
+
+        conn.execute('PRAGMA user_version = 16')
 
 
 class BuildBundleDb(SqliteBundleDatabase):

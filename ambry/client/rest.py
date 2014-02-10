@@ -232,8 +232,8 @@ class RemoteLibrary(object):
 
                 o = minidom.parse(r.raw)
                 # Assuming the response is in XML because we are usually calling s3
-                raise RestError("{} Error from server after redirect to {} : XML={}"
-                .format(r.status_code, location, o.toprettyxml()))
+                raise RestError("{} Error from server after redirect  : XML={}"
+                .format(r.status_code, o.toprettyxml()))
             except ExpatError:
                 raise RestError("Failed to get {}, status = {}, content = {} "
                                 .format(url, r.status_code, r.content))
@@ -243,7 +243,7 @@ class RemoteLibrary(object):
         if r.headers['content-encoding'] == 'gzip':
             from ..util import FileLikeFromIter
             # In  the requests library, iter_content will auto-decompress
-            response = FileLikeFromIter(r.iter_content())
+            response = FileLikeFromIter(r.iter_content(chunk_size=128 * 1024))
         else:
             response = r.raw
 

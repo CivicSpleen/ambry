@@ -45,6 +45,8 @@ def source_parser(cmd):
     sp.add_argument('-s','--source', required=True, help='Source, usually a domain name') 
     sp.add_argument('-d','--dataset',  required=True, help='Name of the dataset') 
     sp.add_argument('-b','--subset',  default=None, help='Name of the subset')
+    sp.add_argument('-t','--time', default=None, help='Time period. Use ISO Time intervals where possible. ')
+    sp.add_argument('-p', '--space', default=None, help='Spatial extent name')
     sp.add_argument('-v','--variation', default=None, help='Name of the variation')
     sp.add_argument('-c','--creator',  required=False, help='Id of the creator')
     sp.add_argument('-n','--dryrun', default=False, help='Dry run')
@@ -209,6 +211,7 @@ def source_new(args, l, st, rc):
     from ..identity import NumberServer
     from requests.exceptions import HTTPError
     from collections import OrderedDict
+    from ..dbexceptions import ConflictError
 
     repo = new_repository(rc.sourcerepo(args.name))  
 
@@ -222,8 +225,15 @@ def source_new(args, l, st, rc):
     d = vars(args)
     d['revision'] = 1
 
+    d['btime'] = d.get('time',None)
+    d['bspace'] = d.get('space', None)
+
+
+
+
     try:
         d['id'] = str(ns.next())
+        prt("Got number from number server: {}".format(d['id']))
     except HTTPError as e:
         warn("Failed to get number from number server. Config = {}: {}".format(nsconfig, e.message))
         warn("Using self-generated number. There is no problem with this, but they are longer than centrally generated numbers.")
@@ -235,8 +245,8 @@ def source_new(args, l, st, rc):
 
     if not os.path.exists(bundle_dir):
         os.makedirs(bundle_dir)
-    elif not os.path.isdir(bundle_dir):
-        raise IOError("Directory already exists: "+bundle_dir)
+    elif os.path.isdir(bundle_dir):
+        err("Directory already exists: "+bundle_dir)
 
     try:
         ambry_account = rc.group('accounts').get('ambry', {})
@@ -252,16 +262,7 @@ def source_new(args, l, st, rc):
 
 
     config ={
-        'identity':{
-             'id': str(DatasetNumber()),
-             'source': args.source,
-             'creator': args.creator,
-             'dataset':args.dataset,
-             'subset': args.subset,
-             'variation': args.variation,
-             'revision': args.revision,
-             'version': '0.0.1'
-         },
+        'identity':ident.ident_dict,
         'about': {
             'author': ambry_account.get('name'),
             'author_email': ambry_account.get('email'),
@@ -275,7 +276,10 @@ def source_new(args, l, st, rc):
             'title': "Bundle title"
         }
     }
-    
+
+
+
+
     os.makedirs(os.path.join(bundle_dir, 'meta'))
     
     file_ = os.path.join(bundle_dir, 'bundle.yaml-in')
@@ -298,9 +302,14 @@ def source_new(args, l, st, rc):
     shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta')  )
     shutil.copy(p('about.description.md'), os.path.join(bundle_dir, 'meta')  )
 
-    st.sync_bundle(bundle_dir)
-
-    prt("CREATED: {}",bundle_dir)
+    try:
+        st.sync_bundle(bundle_dir)
+    except ConflictError as e:
+        from ..util import rm_rf
+        rm_rf(bundle_dir)
+        err("Failed to sync bundle at {}  ; {}".format(bundle_dir, e.message))
+    else:
+        prt("CREATED: {}, {}",ident.fqname, bundle_dir)
 
 
 def source_build(args, l, st, rc):

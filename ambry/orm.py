@@ -548,6 +548,7 @@ class Table(Base):
     name = SAColumn('t_name',String(200), nullable = False)
     altname = SAColumn('t_altname',Text)
     description = SAColumn('t_description',Text)
+    universe = SAColumn('t_universe',String(200))
     keywords = SAColumn('t_keywords',Text)
     data = SAColumn('t_data',MutationDict.as_mutable(JSONEncodedObj))
     installed = SAColumn('t_installed',String(100))
@@ -566,7 +567,8 @@ class Table(Base):
         self.name = kwargs.get("name",None) 
         self.vname = kwargs.get("vname",None) 
         self.altname = kwargs.get("altname",None) 
-        self.description = kwargs.get("description",None) 
+        self.description = kwargs.get("description",None)
+        self.universe = kwargs.get("universe", None)
         self.keywords = kwargs.get("keywords",None) 
         self.data = kwargs.get("data",None) 
         

@@ -432,6 +432,8 @@ class LibraryDb(object):
 
     def install_dataset_identity(self, identity, location=Dataset.LOCATION.LIBRARY):
         '''Create the record for the dataset. Does not add an File objects'''
+        from sqlalchemy.exc import IntegrityError
+        from ..dbexceptions import ConflictError
 
         ds = Dataset(**identity.dict)
         ds.name = identity.sname
@@ -442,12 +444,16 @@ class LibraryDb(object):
         ds.location = location
 
         try:
-            self.session.add(ds)
-            self.commit()
-        except:
-            self.session.rollback()
-            self.session.merge(ds)
-            self.commit()
+            try:
+                self.session.add(ds)
+                self.commit()
+            except:
+                self.session.rollback()
+                self.session.merge(ds)
+                self.commit()
+        except IntegrityError:
+            raise ConflictError("Can't install dataset; one already exists")
+
 
     def install_bundle_file(self, identity, bundle_file):
         """Install a bundle in the database, starting from a file that may
@@ -638,6 +644,14 @@ class LibraryDb(object):
 
         self.commit()
 
+    def remove_dataset(self, vid):
+        '''Remove all references to a Dataset'''
+        from ..orm import Dataset
+
+        self.session.query(Dataset).filter(Dataset.vid ==  vid).delete()
+        self.commit()
+
+
     def remove_partition(self, partition):
         from ..bundle import LibraryDbBundle
         from ..orm import Partition
@@ -666,27 +680,32 @@ class LibraryDb(object):
         '''Get an identity by a vid. For partitions, returns a nested Identity'''
         from ..identity import ObjectNumber, DatasetNumber, PartitionNumber
         from ..orm import Dataset, Partition
+        from sqlalchemy.orm.exc import NoResultFound
+        from ..dbexceptions import NotFoundError
 
-        if isinstance(vid, basestring):
-            vid = ObjectNumber.parse(vid)
+        try:
+            if isinstance(vid, basestring):
+                vid = ObjectNumber.parse(vid)
 
-        if isinstance(vid, DatasetNumber):
-            d = (self.session.query(Dataset)
-                 .filter(Dataset.location == Dataset.LOCATION.LIBRARY )
-                 .filter(Dataset.vid == str(vid)).one())
-            did = d.identity
+            if isinstance(vid, DatasetNumber):
+                d = (self.session.query(Dataset)
+                     .filter(Dataset.location == Dataset.LOCATION.LIBRARY )
+                     .filter(Dataset.vid == str(vid)).one())
+                did = d.identity
 
-        elif isinstance(vid, PartitionNumber):
-            d,p = (self.session.query(Dataset, Partition).join(Partition)
-                   .filter(Dataset.location == Dataset.LOCATION.LIBRARY)
-                   .filter(Partition.vid == str(vid)).one())
-            did = d.identity
-            did.add_partition(p.identity)
+            elif isinstance(vid, PartitionNumber):
+                d,p = (self.session.query(Dataset, Partition).join(Partition)
+                       .filter(Dataset.location == Dataset.LOCATION.LIBRARY)
+                       .filter(Partition.vid == str(vid)).one())
+                did = d.identity
+                did.add_partition(p.identity)
 
-        else:
-            raise ValueError('vid was wrong type: {}'.format(type(vid)))
+            else:
+                raise ValueError('vid was wrong type: {}'.format(type(vid)))
 
-        return did
+            return did
+        except NoResultFound:
+            raise NotFoundError("No object found for vid {}".format(vid))
 
     def get_table(self, table_vid):
 

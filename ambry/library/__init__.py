@@ -353,7 +353,13 @@ class Library(object):
         # file system cache are fast, so we can afford to repeat the gets later.
 
         for ident in gets:
-            self.cache.get(ident.cache_key, cb=cb)
+            try:
+                self.cache.get(ident.cache_key, cb=cb)
+            except:
+                orig_last_upstream.upstream = None
+                self.logger.info("Deleting incomplete download: {}".format(self.cache.path(ident.cache_key)))
+                self.cache.remove(ident.cache_key, propagate = True)
+                raise
 
 
         orig_last_upstream.upstream = None
@@ -387,6 +393,11 @@ class Library(object):
 
             # Since it was remote, attach the appropriate remote cache to our cache stack then
             # when we read from the top level, we'l get it from the remote.
+
+            # NOTE! The partition and bundle are actually fetched from the remote in _attach_rrc!
+            # All of the subsequent cache gets in this function just read from the local cache
+
+
             self._attach_rrc(f.source_url, gets, cb=cb)
 
         # First, get the bundle and instantiate it. If what was requested
@@ -407,10 +418,9 @@ class Library(object):
         # Do we have it in the database? If not install it.
         # It should be installed if it was retrieved remotely,
         # but may not be installed if there is a local copy in the cache.
-        try:
-            d = self.database.get(bundle.identity.vid)
-        except NoResultFound:
-            d = None
+
+        d = self.database.get(bundle.identity.vid)
+
 
         if not d:
             self.sync_library_dataset(bundle)
@@ -436,7 +446,10 @@ class Library(object):
 
                 raise NotFoundError('Failed to get partition {} from cache '.format(dataset.partition.fqname))
 
-            partition = bundle.partitions.get(dataset.partition.vid)
+            try:
+                partition = bundle.partitions.get(dataset.partition.vid)
+            except KeyboardInterrupt:
+                raise
 
             self.sync_library_partition(partition.identity)
 
@@ -497,22 +510,20 @@ class Library(object):
         bundles configuration group 'dependencies' to resolve to a name"""
         from ..dbexceptions import DependencyError
 
-        bundle_name = self.dependencies.get(name, False)
+        object_ref = self.dependencies.get(name, False)
 
-        if not bundle_name:
+        if not object_ref:
             raise DependencyError("No dependency named '{}'".format(name))
 
+        o = self.get(object_ref)
 
-
-        b = self.get(bundle_name)
-
-        if not b:
-            raise DependencyError("Failed to get dependency, key={}, id={}".format(name, bundle_name))
+        if not o:
+            raise DependencyError("Failed to get dependency, key={}, id={}".format(name, object_ref))
 
         if self.dep_cb:
-            self.dep_cb(self, name, bundle_name, b)
+            self.dep_cb(self, name, object_ref, o)
 
-        return b
+        return o
 
     @property
     def dependencies(self):
@@ -552,7 +563,10 @@ class Library(object):
                     self.bundle.error("Failed to resolve {} ".format(v))
                     errors += 1
                     continue
-                out[k] = ident
+                if ident.partition:
+                    out[k] = ident.partition
+                else:
+                    out[k] = ident
             except Exception as e:
                 self.bundle.error(
                     "Failed to parse dependency name '{}' for '{}': {}".format(v, self.bundle.identity.name, e.message))
