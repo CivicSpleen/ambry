@@ -639,7 +639,7 @@ def _on_connect_update_sqlite_schema(conn):
 
     if  version < 14:
 
-        raise Exception("There should not be any files of less than version 14 in existence")
+        raise Exception("There should not be any files of less than version 14 in existence. Got: {}".format(version))
 
 
     if  version < 15:
