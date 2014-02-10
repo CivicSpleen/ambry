@@ -211,25 +211,29 @@ class SqliteDatabase(RelationalDatabase):
         '''return the SqlAlchemy engine for this database'''
         from sqlalchemy import create_engine  
         import sqlite3
-        
-        if not self._engine:
-            self.require_path()
-            self._engine = create_engine(self.dsn,
-                                         connect_args={'detect_types': sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES},
-                                         native_datetime=True,
-                                         echo=False)
-            
-            
-            logger.debug("_get_engine: {}".format(self.dsn))
-            
-            from sqlalchemy import event
-            
-            event.listen(self._engine, 'connect',connect_listener)
-            #event.listen(self._engine, 'connect', _on_connect_update_schema)
 
-            _on_connect_update_sqlite_schema(self.connection)
-             
-        return self._engine
+        try:
+            if not self._engine:
+                self.require_path()
+                self._engine = create_engine(self.dsn,
+                                             connect_args={'detect_types': sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES},
+                                             native_datetime=True,
+                                             echo=False)
+
+
+                logger.debug("_get_engine: {}".format(self.dsn))
+
+                from sqlalchemy import event
+
+                event.listen(self._engine, 'connect',connect_listener)
+                #event.listen(self._engine, 'connect', _on_connect_update_schema)
+
+                _on_connect_update_sqlite_schema(self.connection)
+
+            return self._engine
+        except:
+            print "ERROR; Failed for DSN {} ".foramt(self.dsn)
+            raise
 
     @property
     def connection(self):
