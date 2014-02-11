@@ -278,7 +278,14 @@ def _print_info(l,ident, list_partitions=False):
     if ident.partitions:
         if len(ident.partitions) == 1:
 
-            resolved_ident = l.resolve(ident.partition).partition
+            ds_ident = l.resolve(ident.partition.vid, location = None)
+
+            # This happens when the dataset is not in the local library, I think ...
+            if not ds_ident:
+                return
+
+
+            resolved_ident = ds_ident.partition
             p = ident.partition
             prt("P --- Partition ---")
             prt("P Partition : {}; {}",p.vid, p.vname)

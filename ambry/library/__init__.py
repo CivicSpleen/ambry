@@ -419,8 +419,10 @@ class Library(object):
         # It should be installed if it was retrieved remotely,
         # but may not be installed if there is a local copy in the cache.
 
-        d = self.database.get(bundle.identity.vid)
-
+        try:
+            d = self.database.get(bundle.identity.vid)
+        except NotFoundError:
+            d = None
 
         if not d:
             self.sync_library_dataset(bundle)
@@ -485,18 +487,24 @@ class Library(object):
         return RemoteResolver(local_resolver=None, remote_urls=self._remotes)
 
 
-    def resolve(self, ref, location = (Dataset.LOCATION.LIBRARY,Dataset.LOCATION.REMOTE)):
+    def resolve(self, ref, location = [Dataset.LOCATION.LIBRARY,Dataset.LOCATION.REMOTE], use_remote = False):
+        from .query import RemoteResolver
 
         if isinstance(ref, Identity):
             ref = ref.vid
 
-        ip, ident = self.resolver.resolve_ref_one(ref, location)
+        if use_remote:
+            resolver = RemoteResolver(local_resolver=self.resolver, remote_urls=self._remotes)
+        else:
+            resolver = self.resolver
+
+        ip, ident = resolver.resolve_ref_one(ref, location)
 
         try:
             if ident:
                 ident.bundle_path = self.source.source_path(ident=ident)
         except ConfigurationError:
-            pass # Warehouse libraries don't have source directories.
+            pass  # Warehouse libraries don't have source directories.
 
         return ident
 

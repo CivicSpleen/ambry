@@ -4,7 +4,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-# Stolen from: http://code.activestate.com/recipes/498245-lru-and-lfu-cache-decorators/
+
 from __future__ import print_function
 import collections
 import functools
@@ -134,14 +134,26 @@ def bundle_file_type(path_or_file):
         return 'gzip'
     else:
         return None
-        
 
+# From https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize
+def memoize(obj):
+    cache = obj.cache = {}
+
+    @functools.wraps(obj)
+    def memoizer(*args, **kwargs):
+        key = str(args) + str(kwargs)
+        if key not in cache:
+            cache[key] = obj(*args, **kwargs)
+        return cache[key]
+
+    return memoizer
         
 class Counter(dict):
     'Mapping where default values are zero'
     def __missing__(self, key):
         return 0
 
+# Stolen from: http://code.activestate.com/recipes/498245-lru-and-lfu-cache-decorators/
 def lru_cache(maxsize=128, maxtime=60):
     '''Least-recently-used cache decorator.
 

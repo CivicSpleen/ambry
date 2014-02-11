@@ -417,14 +417,23 @@ def library_schema(args, l, config):
   
 def library_get(args, l, config):
 
+    ident = l.resolve(args.term, use_remote = True)
+
+    if not ident:
+        err("Could not resolve term {} ", args.term)
+
+
     # This will fetch the data, but the return values aren't quite right
     r = l.get(args.term, force=args.force, cb=Progressor('Download {}'.format(args.term)).progress)
-  
-    if not r:
-        prt("{}: Not found",args.term)
-        return  None
 
-    _print_info(l,r.identity, r.partition.identity if r.partition else None)
+    if not r:
+        err("Downlaod failed: {}", args.term)
+
+    ident = r.identity
+    if r.partition:
+        ident.add_partition(r.partition.identity)
+
+    _print_info(l, ident)
 
     return r
 

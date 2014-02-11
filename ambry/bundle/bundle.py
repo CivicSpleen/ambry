@@ -227,7 +227,6 @@ class DbBundle(Bundle):
         
         self.partition = None # Set in Library.get() and Library.find() when the user requests a partition. 
 
-        
     @property
     def path(self):
         base, _ = os.path.splitext(self.database_file)
@@ -236,9 +235,7 @@ class DbBundle(Bundle):
     def sub_path(self, *args):
         '''For constructing paths to partitions'''
 
-        return os.path.join(self.path, *args) 
-
-
+        return os.path.join(self.path, *args)
 
     def table_data(self, query):
         '''Return a petl container for a data table'''
@@ -963,17 +960,32 @@ class BuildBundle(Bundle):
     def run_mp(self, method, arg_sets):
         from ..run import mp_run
         from multiprocessing import Pool, cpu_count
-        
+
+        if len(arg_sets) == 0:
+            return
+
+        # Argsets should be tuples, but for one ag functions, the
+        # caller may pass in a scalar, which we have to convert.
+        if not isinstance(arg_sets[0], (list, tuple)):
+            arg_sets = ( (arg,) for arg in arg_sets )
+
         n = int(self.run_args.get('multi'))
 
         if n == 0:
             n = cpu_count()
-        
-        
-        pool = Pool(n)
 
-        pool.map(mp_run,[ (self.bundle_dir, method.__name__, args) 
-                         for args in arg_sets])
+
+        if n == 1:
+            self.log("Requested MP run, but for only 1 process; running in process instead")
+            for args in arg_sets:
+                method(*args)
+        else:
+            self.log("Multi processor run with {} processes".format(n))
+
+            pool = Pool(n)
+
+            pool.map(mp_run,[ (self.bundle_dir, method.__name__, args)
+                             for args in arg_sets])
 
 
     
