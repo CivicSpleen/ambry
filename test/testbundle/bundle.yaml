@@ -32,7 +32,6 @@ extracts:
     query: select * from  {p_table}
     title: 'Extract for table: {p_table}, a={dima}, b={dimb} and c={dimc}'
 identity:
-    cache_key: source/dataset-subset-variation-0.0.1.db
     dataset: dataset
     id: diEGPXmDC8
     revision: 1

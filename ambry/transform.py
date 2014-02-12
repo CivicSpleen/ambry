@@ -236,6 +236,37 @@ class CensusTransform(BasicTransform):
 # Functions for CasterTransformBUilder
 # 
 
+class Int(int):
+    '''An Integer
+    '''
+
+    def __init__(self, v):
+        int.__init__(self, v)
+        if self < 0:
+            raise ValueError("Must be a non negative integer")
+
+
+class NonNegativeInt(int):
+    '''An Integer that is >=0
+    '''
+
+    def __init__(self, v):
+        int.__init__(self, v)
+        if self < 0:
+            raise ValueError("Must be a non negative integer")
+
+
+class NaturalInt(int):
+    ''' An Integer that is > 0
+
+    '''
+
+    def __init__(self, v):
+        int.__init__(self, v)
+        if self <= 0:
+            raise ValueError("Must be a greater than zero")
+
+
 def is_nothing(v):
     
     if isinstance(v, basestring):
@@ -246,7 +277,8 @@ def is_nothing(v):
     else:
         return False
 
-def parse_int(name, v):
+def parse_int(name, v, type_=int):
+    '''Parse as an integer, or a subclass of Int'''
     try:
         if is_nothing(v):
             return None
@@ -254,7 +286,7 @@ def parse_int(name, v):
             return int(round(float(v),0))
     except ValueError:
         raise CastingError(name, v, 
-            "Can't cast '{}' to Integer in field '{}' ".format(v, name))
+            "Can't cast '{}' to {} in field '{}' ".format(v, type_,name))
 
 def parse_type(type_,name, v):
 
@@ -265,6 +297,9 @@ def parse_type(type_,name, v):
             return type_(v)   
     except TypeError:
         raise CastingError(name, v, 
+            "Can't cast '{}' to {} in field '{}' ".format(v, type_, name))
+    except ValueError:
+        raise CastingError(name, v,
             "Can't cast '{}' to {} in field '{}' ".format(v, type_, name))
 
 def parse_date(name, v):
@@ -314,8 +349,7 @@ def parse_datetime(name, v):
     elif isinstance(v, datetime.datetime):
         return v
     else:
-        raise CastingError(name, v, "Expected datetime.datetime or basestring, got {{}}".format(type(v)))        
-        
+        raise CastingError(name, v, "Expected datetime.datetime or basestring, got {{}}".format(type(v)))
 
 class CasterTransformBuilder(object):
     
