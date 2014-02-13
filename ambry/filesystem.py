@@ -261,7 +261,12 @@ class BundleFilesystem(Filesystem):
         '''Context manager to extract a single file from a zip archive, and delete
         it when finished'''
         import tempfile, uuid
-        
+
+
+        if isinstance(regex, basestring):
+            import re
+            regex = re.compile(regex)
+
         cache = self.get_cache_by_name('extracts')
 
         tmpdir = os.path.join(cache.cache_dir,'tmp',str(uuid.uuid4()))
