@@ -43,7 +43,7 @@ class FeatureInserter(InserterInterface):
         
         if isinstance(row, RowProxy):
             row  = dict(row)
-        
+
         return self.sf.add_feature( row, source_srs)
 
     def close(self):
