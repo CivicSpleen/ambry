@@ -382,8 +382,6 @@ class Library(object):
         if not dataset:
             return None
 
-
-
         if Dataset.LOCATION.REMOTE in dataset.locations.codes:
 
             f  = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
@@ -435,7 +433,11 @@ class Library(object):
 
             # Ensure the partition is in the cache
             if not self.cache.has(dataset.partition.cache_key):
-                f = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
+                try:
+                    f = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
+                except:
+                    print '!!!',dataset.vid
+                    raise
 
                 # Since it was remote, attach the appropriate remote cache to our cache stack then
                 # when we read from the top level, we'l get it from the remote.
@@ -784,7 +786,6 @@ class Library(object):
         bundles = []
 
         self.logger.info("Rebuilding from dir {}".format(self.cache.cache_dir))
-
 
         for r, d, f in os.walk(self.cache.cache_dir, topdown=True): #@UnusedVariable
 

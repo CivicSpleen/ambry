@@ -275,7 +275,6 @@ def _print_info(l,ident, list_partitions=False):
         prt('B Build time: {}',
             str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
 
-
     if ident.partitions:
         if len(ident.partitions) == 1:
 

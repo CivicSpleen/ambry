@@ -131,8 +131,10 @@ def root_info(args, l, st, rc):
 
     if ident.locations.is_in(Dataset.LOCATION.LIBRARY):
         b = l.get(ident.vid)
-        for p in b.partitions.all:
-            ident.add_partition(p.identity)
+
+        if not ident.partition:
+            for p in b.partitions.all:
+                ident.add_partition(p.identity)
 
     elif ident.locations.is_in(Dataset.LOCATION.REMOTE):
         from ..client.rest import RemoteLibrary
@@ -142,7 +144,8 @@ def root_info(args, l, st, rc):
 
         ds = rl.dataset(ident.vid)
 
-        ident.partitions = ds.partitions
+        if not ident.partition:
+            ident.partitions = ds.partitions
 
 
     _print_info(l, ident, list_partitions=args.partitions)

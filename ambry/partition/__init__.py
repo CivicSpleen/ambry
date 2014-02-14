@@ -167,8 +167,7 @@ class PartitionBase(PartitionInterface):
     @property
     def name(self):
         return self.identity.name
-    
-    
+
     def get(self):
         '''Fetch this partition from the library or remote if it does not exist'''
         import os

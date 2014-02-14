@@ -1297,7 +1297,7 @@ class Identity(object):
 
     @source_path.setter
     def source_path_setter(self, v):
-        print 'HERE'
+
         self._source_path = v
 
     @property

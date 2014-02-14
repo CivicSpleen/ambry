@@ -286,6 +286,14 @@ def bundle_info(args, b, st, rc):
         b.log("Name : "+b.identity.sname)
         b.log("VName: "+b.identity.vname)
 
+        cd = dict(b.db_config.dict)
+        process = cd['process']
+        b.log('Created   : '+process.get('dbcreated', ''))
+        b.log('Prepared  : '+process.get('prepared', ''))
+        b.log('Built     : '+process.get('built', ''))
+        b.log('Build time: '+
+              str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
+
         if b.config.build.get('dependencies', False):
             b.log("---- Dependencies ---")
             for k, v in b.config.build.dependencies.items():
