@@ -390,9 +390,6 @@ class Test(TestBase):
         self.assertEquals('filesystem2', l['filesystem']['upstream']['_name'])
         self.assertEquals('filesystem3', l['filesystem']['upstream']['upstream']['_name'])
         self.assertEquals('devtest.sandiegodata.org', l['filesystem']['upstream']['upstream']['account']['_name'])
-        
-
-
 
     def test_build_bundle_hdf(self):
 

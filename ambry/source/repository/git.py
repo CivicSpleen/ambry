@@ -15,7 +15,7 @@ from ambry.util import get_logger
 import logging
 
 logger = get_logger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.FATAL)
 
 class GitShellService(object):
     '''Interact with GIT services using the shell commands'''

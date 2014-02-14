@@ -239,6 +239,7 @@ class Library(object):
 
     def put_bundle(self, bundle, force=False):
 
+
         dst, cache_key, url = self.put(bundle, force=force)
 
         for p in bundle.partitions:
@@ -261,7 +262,8 @@ class Library(object):
         if not isinstance(bundle, (PartitionInterface, Bundle)):
             raise ValueError("Can only install a Partition or Bundle object")
 
-        dst, cache_key, url = self._put_file(bundle.identity, bundle.database.path, force=force)
+        dst, cache_key, url = self._put_file(bundle.identity, bundle.database.path,
+                                             force=force)
 
         return dst, cache_key, url
 
@@ -783,7 +785,12 @@ class Library(object):
 
         self.logger.info("Rebuilding from dir {}".format(self.cache.cache_dir))
 
-        for r, d, f in os.walk(self.cache.cache_dir): #@UnusedVariable
+
+        for r, d, f in os.walk(self.cache.cache_dir, topdown=True): #@UnusedVariable
+
+            # Exclude all of the directories which have the same basename as a database file. These
+            # hold only partitions.
+            d[:] = [dr for dr in d if dr + ".db" not in f]
 
             if '/meta/' in r:
                 continue
@@ -793,18 +800,20 @@ class Library(object):
                 if file_.endswith(".db"):
                     path_ = os.path.join(r, file_)
                     try:
+
                         b = DbBundle(path_)
                         # This is a fragile hack -- there should be a flag in the database
-                        # that diferentiates a partition from a bundle.
+                        # that differentiates a partition from a bundle.
                         f = os.path.splitext(file_)[0]
 
                         if b.db_config.get_value('info', 'type') == 'bundle':
                             self.logger.info("Queing: {} from {}".format(b.identity.vname, file_))
                             bundles.append(b)
-
+                    except NotFoundError:
+                        # Probably a partition, not a bundle.
+                        pass
                     except Exception as e:
                         raise
-                        pass
                         self.logger.error('Failed to process {}, {} : {} '.format(file_, path_, e))
 
         for bundle in bundles:

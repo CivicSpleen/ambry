@@ -202,6 +202,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
         ('vname',    '{:40s}', '    {:40s}',  lambda ident: ident.vname),
         ('sname',    '{:40s}', '    {:40s}',  lambda ident: ident.sname),
         ('fqname',   '{:40s}', '    {:40s}',  lambda ident: ident.fqname),
+        ('source_path', '{:s}', '    {:s}', lambda ident: ident.source_path),
     ]
 
     if not fields:

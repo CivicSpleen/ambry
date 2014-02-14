@@ -96,6 +96,8 @@ class Bundle(object):
         '''Return the dataset
         '''
         from sqlalchemy.orm.exc import NoResultFound
+        from sqlalchemy.exc import OperationalError
+        from ..dbexceptions import NotFoundError
         
         from ambry.orm import Dataset
 
@@ -107,12 +109,15 @@ class Bundle(object):
                             .filter(Dataset.vid == self._dataset_id).one())
                 except NoResultFound:
                     from ..dbexceptions import NotFoundError
+
                     raise NotFoundError("Failed to find dataset for id {} in {} "
                                         .format(self._dataset_id, self.database.dsn))
-        
+
             else:
-                
+
                 return (session.query(Dataset).one())
+        except OperationalError:
+            raise NotFoundError("No dataset record found. Probably not a bundle")
         except Exception as e:
             from ..util import get_logger
             # self.logger can get caught in a recursion loop

@@ -69,6 +69,7 @@ class Name(object):
 
         self.clean()
 
+
         self.is_valid()
 
 
@@ -217,8 +218,7 @@ class Name(object):
                 self.source,
                 self._path_join(names=names, excludes='source',sep=self.NAME_PART_SEP)
              )
-                
-    
+
     @property
     def source_path(self):
         '''The name in a form suitable for use in a filesystem. 
@@ -227,12 +227,17 @@ class Name(object):
         # bundle path when called from subclasses
         names = [ k for k,_,_ in Name._name_parts]
 
-        return os.path.join(
-                self.source,
-                self._path_join(names=names,
-                                excludes=['source','version'],sep=self.NAME_PART_SEP)
-             )
-                
+        parts = []
+
+        parts.append(self.source)
+
+        if self.bspace:
+            parts.append(self.bspace)
+
+        parts.append(self._path_join(names=names,
+                                     excludes=['source', 'version', 'bspace'], sep=self.NAME_PART_SEP))
+
+        return os.path.join(*parts)
 
     @property
     def cache_key(self):
@@ -1283,8 +1288,17 @@ class Identity(object):
     def source_path(self):
         '''The name in a form suitable for use in a filesystem. 
         Excludes the revision'''
-        self.is_valid()
-        return self._name.source_path
+
+        if self._source_path:
+            return "C"+self._source_path
+        else:
+            self.is_valid()
+            return "X"+self._name.source_path
+
+    @source_path.setter
+    def source_path_setter(self, v):
+        print 'HERE'
+        self._source_path = v
 
     @property
     def cache_key(self):

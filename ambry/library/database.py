@@ -470,6 +470,7 @@ class LibraryDb(object):
         if identity.is_bundle:
 
             bundle = DbBundle(bundle_file)
+
             self.install_bundle(bundle)
 
     def install_dataset(self, bundle):

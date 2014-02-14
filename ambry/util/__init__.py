@@ -960,8 +960,14 @@ class Progressor(object):
                  self.message,int(int(n)/(1024*1024)),
                  round(float(i)/(1024.*1024.),2), 
                  round(float(rate)/(1024*1024),2), rate_type))
-            
 
+# http://stackoverflow.com/a/1695250
+# >>> Numbers = enum('ZERO', 'ONE', TWO = 20, THREE = 30)
+# >>> print Numbers.ONE
+# >>> print Numbers.THREE
+def enum(*sequential, **named):
+    enums = dict(zip(sequential, range(len(sequential))), **named)
+    return type('Enum', (), enums)
 
 class Constant:
     '''Organizes constants in a class'''

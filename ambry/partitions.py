@@ -10,13 +10,21 @@ from identity import PartitionIdentity, PartitionNameQuery, PartitionName, Parti
 from sqlalchemy.orm.exc import NoResultFound
 from util.typecheck import accepts, returns
 from dbexceptions import ConflictError
+from util import Constant
 
 class Partitions(object):
     '''Continer and manager for the set of partitions. 
     
     This object is always accessed from Bundle.partitions""
     '''
-    
+
+    STATE=Constant()
+    STATE.NEW = 'new'
+    STATE.BUILDING = 'building'
+    STATE.BUILT = 'built'
+    STATE.ERROR = 'error'
+
+
     def __init__(self, bundle):
         self.bundle = bundle
 
@@ -367,6 +375,7 @@ class Partitions(object):
                 self.bundle.get_dataset(session),         
                 t_id = table.id_ if table else None,
                 data=data,
+                state = Partitions.STATE.NEW,
                 **d
              )  
         
@@ -573,4 +582,9 @@ class Partitions(object):
              .filter(OrmPartition.id_==partition.identity.id_))
       
         q.delete()
+
+
+
+
+
 

@@ -99,13 +99,15 @@ def source_parser(cmd):
                     'run() function can have any combination of arguments of these names: bundle_dir,'+
                     ' bundle, repo')
     sp.add_argument('-m','--message', nargs='+', default='.', help='Directory to start recursing from ')
-    sp.add_argument('shell_command',nargs=argparse.REMAINDER, type=str,help='Shell command to run')
+    sp.add_argument('terms',nargs=argparse.REMAINDER, type=str,help='Bundle refs to run command on')
 
     group = sp.add_mutually_exclusive_group()
     group.add_argument('-c', '--commit',  default=False, dest='repo_command',   action='store_const', const='commit', help='Commit')
     group.add_argument('-p', '--push',  default=False, dest='repo_command',   action='store_const', const='push', help='Push to origin/master')    
     group.add_argument('-l', '--pull',  default=False, dest='repo_command',   action='store_const', const='pull', help='Pull from upstream')  
     group.add_argument('-i', '--install',  default=False, dest='repo_command',   action='store_const', const='install', help='Install the bundle')
+    group.add_argument('-s', '--shell', default=False, dest='repo_command', action='store_const', const='shell',
+                       help='Run a shell command')
 
     sp = asp.add_parser('watch', help='Watch the source directory for changes')
     sp.set_defaults(subcommand='watch')
@@ -453,13 +455,24 @@ def source_run(args, l, st, rc):
 
     import sys
 
-    for line in sys.stdin.readlines():
-        ident = l.resolve(line.strip(), Dataset.LOCATION.SOURCE)
+    if args.terms and args.repo_command != 'shell':
+        def yield_term():
+            for t in args.terms:
+                yield t
+    else:
+        def yield_term():
+            for line in sys.stdin.readlines():
+                yield line.strip()
+
+    for term in yield_term():
+
+        ident = l.resolve(term, Dataset.LOCATION.SOURCE)
+
         if not ident:
-            warn("Didn't get source bundle for term '{}'; skipping ".format(line))
+            warn("Didn't get source bundle for term '{}'; skipping ".format(term))
             continue
-        else:
-            do_source_run(ident, args, l, st, rc)
+
+        do_source_run(ident, args, l, st, rc)
 
 
 def do_source_run(ident, args, l, st, rc):
@@ -530,9 +543,10 @@ def do_source_run(ident, args, l, st, rc):
         bundle.run_install()
 
 
-    elif args.shell_command:
+    elif args.repo_command == 'shell':
 
-        cmd = ' '.join(args.shell_command)
+
+        cmd = ' '.join(args.terms)
 
         saved_path = os.getcwd()
         os.chdir(root)
@@ -542,6 +556,7 @@ def do_source_run(ident, args, l, st, rc):
         os.system(cmd)
         prt('')
         os.chdir(saved_path)
+
 
 
 def source_init(args, l, st, rc):

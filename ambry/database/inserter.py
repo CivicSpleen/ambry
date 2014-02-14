@@ -95,26 +95,32 @@ class ValueWriter(InserterInterface):
 
         self.cache_size = cache_size
         self.statement = None
-     
-        
         
         if text_factory:
             self.db.engine.raw_connection().connection.text_factory = text_factory
 
-    def __enter__(self): 
+    def __enter__(self):
+        from ..partitions import Partitions
+        self.db.partition.set_state(Partitions.STATE.BUILDING)
         return self
         
     def rollback(self):
+        from ..partitions import Partitions
         logger.debug("rollback {}".format(repr(self.session)))
         self.session.rollback()
+        self.db.partition.set_state(Partitions.STATE.ERROR)
     
     def commit_end(self):
+        from ..partitions import Partitions
         logger.debug("commit end {}".format(repr(self.session)))
         self.session.commit()
+        self.db.partition.set_state(Partitions.STATE.BUILT)
         
     def commit_continue(self):
+        from ..partitions import Partitions
         logger.debug("commit continue {}".format(repr(self.session)))
         self.session.commit()
+        self.db.partition.set_state(Partitions.STATE.BUILDING)
  
     def close(self):
 
@@ -139,6 +145,7 @@ class ValueWriter(InserterInterface):
         if type_ is not None:
             try: self.bundle.error("Got Exception: "+str(value))
             except:  print "ERROR: Got Exception {}: {}".format(type_, str(value))
+            self.rollback()
             return False
 
         self.close()
@@ -267,8 +274,8 @@ class ValueInserter(ValueWriter):
             if len(self.cache) >= self.cache_size: 
                 self.session.execute(self.statement, self.cache)
                 self.cache = []
-
                 self.commit_continue()
+
 
             if cast_errors and self.cast_error_handler:
                 self.cast_error_handler.cast_error(values,cast_errors )

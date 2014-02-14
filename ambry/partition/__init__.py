@@ -190,6 +190,14 @@ class PartitionBase(PartitionInterface):
         return self.data.get('tables',[])
 
 
+    # Call other values on the record
+    def __getattr__(self, name):
+        if hasattr(self.record, name):
+            return getattr(self.record, name)
+        else:
+            raise AttributeError('Partition does not have attribute {} '.format(name))
+
+
     def get_table(self, table_spec=None):
         '''Return the orm table for this partition, or None if
         no table is specified. 
@@ -235,6 +243,19 @@ class PartitionBase(PartitionInterface):
         except:
             raise
         
+
+    def set_state(self, state):
+        from ..orm import Partition
+
+        with self.bundle.session as s:
+            r = s.query(Partition).get(self.record.vid)
+
+            r.state = state
+
+            s.merge(r)
+
+            s.commit()
+
 
     def dbm(self, suffix = None):
         '''Return a DBMDatabase replated to this partition'''

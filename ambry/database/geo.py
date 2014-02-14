@@ -21,15 +21,19 @@ class FeatureInserter(InserterInterface):
         
     
     def __enter__(self):
+        from ..partitions import Partitions
+        self.partition.set_state(Partitions.STATE.BUILDING)
         return self
     
     def __exit__(self, type_, value, traceback):
-        
+        from ..partitions import Partitions
         
         if type_ is not None:
             self.bundle.error("Got Exception: "+str(value))
+            self.partition.set_state(Partitions.STATE.ERROR)
             return False
-                    
+
+        self.partition.set_state(Partitions.STATE.BUILT)
         self.close()
                     
         return self
