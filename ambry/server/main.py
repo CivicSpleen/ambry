@@ -299,21 +299,23 @@ def _read_body(request):
 def _download_redirect(identity, library):
     '''This is very similar to get_key'''
     from ambry.cache import RemoteMarker
+    from ambry.dbexceptions import NotFoundError
 
     if library.upstream:
-
         remote = library.upstream.get_upstream(RemoteMarker)
-
         if not remote:
-            raise exc.InternalError("Library remote does not have a proper upstream")
-
-        url =  remote.path(identity.cache_key)
-
+            logger.error("Library remote does not have a proper upstream")
     else:
-        url = "{}/files/{}".format(_host_port(library), identity.cache_key)
+        remote = None
+
+    try:
+        return remote.path(identity.cache_key)
+    except NotFoundError:
+        logger.warn("Object not found in upstream. Return local URL; {}".format(identity.fqname))
 
 
-    return url
+    return redirect("{}/files/{}".format(_host_port(library), identity.cache_key))
+
 
 def _send_csv_if(did, pid, table, library):
     '''Send csv function, with a web-processing interface '''
