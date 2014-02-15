@@ -272,25 +272,11 @@ class PartitionBase(PartitionInterface):
     def extension(self):
         return self._id_class._name_class.PATH_EXTENSION
 
-    @property
-    def help(self):
+    def info(self):
         """Returns a human readable string of useful information"""
-        
-        info = dict(self.identity.to_dict(clean=False).items())
-        info['path'] = self.database.path
-        info['tables'] = ','.join(self.tables)
 
-        return """
------- Partition: {name} ------
-id    : {id}
-vid   : {vid}
-name  : {name}
-vname : {vname}
-path  : {path}
-table : {table}
-tables: {tables}
-time  : {time}
-space : {space}
-grain : {grain}
-        """.format(**info)
-        
+        return ("------ Partition: {name} ------\n".format(name=self.identity.sname)+
+        "\n".join(['{:10s}: {}'.format(k,v) for k,v in self.identity.dict.items()])+"\n"
+        '{:10s}: {}\n'.format('path',self.database.path)+
+        '{:10s}: {}\n'.format('tables', ','.join(self.tables))
+        )

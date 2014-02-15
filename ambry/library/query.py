@@ -324,18 +324,18 @@ class Resolver(object):
                         .order_by(Dataset.revision.desc()).all()):
                 out.append((row.Dataset, row.Partition))
 
-
         return ip, out
 
     def _resolve_ref(self, ref, location = Dataset.LOCATION.LIBRARY):
         '''Convert the output from _resolve_ref to nested identities'''
         ip, results = self._resolve_ref_orm(ref)
+        from collections import OrderedDict
 
         if location and not isinstance(location,(list, tuple)):
             location = [location]
 
         # Convert the ORM results to identities
-        out = {}
+        out = OrderedDict()
         for d,p in results:
 
             if location and  d.location not in location:

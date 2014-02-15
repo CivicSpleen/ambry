@@ -239,8 +239,7 @@ class RemoteLibrary(object):
                                 .format(url, r.status_code, r.content))
 
 
-
-        if r.headers['content-encoding'] == 'gzip':
+        if r.headers.get('content-encoding','') == 'gzip':
             from ..util import FileLikeFromIter
             # In  the requests library, iter_content will auto-decompress
             response = FileLikeFromIter(r.iter_content(chunk_size=128 * 1024))

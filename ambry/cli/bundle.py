@@ -132,9 +132,6 @@ def bundle_parser(cmd):
                         const = multiprocessing.cpu_count(),
                         help='Run the build process on multiple processors, if the  method supports it')
 
-    # These are args that Aptana / PyDev adds to runs.
-    parser.add_argument('--port', default=None, help="PyDev Debugger arg")
-    parser.add_argument('--verbosity', default=None, help="PyDev Debugger arg")
 
     sub_cmd = parser.add_subparsers(title='commands', help='command help')
 
@@ -173,6 +170,8 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='info')
     command_p.add_argument('-s','--schema',  default=False,action="store_true",
                            help='Dump the schema as a CSV. The bundle must have been prepared')
+    command_p.add_argument('-d', '--dep', default=False,
+                           help='Report information about a dependency')
 
     #
     # Clean Command
@@ -278,8 +277,23 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='pull', command_group='source')
 
 def bundle_info(args, b, st, rc):
-    if args.schema:
-        print b.schema.as_csv()
+
+
+    if args.dep:
+        #
+        # Get the dependency and then re-run to display it.
+        #
+        dep = b.library.dep(args.dep)
+        if not dep:
+            err("Didn't find dependency for {}".format(args.dep))
+
+        ns = vars(args)
+        ns['dep'] = None
+
+        bundle_info(args.__class__(**ns), dep, st, rc)
+
+    elif args.schema:
+        b.schema.as_csv()
     else:
         b.log("----Info ---")
         b.log("VID  : "+b.identity.vid)

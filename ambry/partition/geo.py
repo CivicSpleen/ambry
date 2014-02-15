@@ -33,17 +33,25 @@ class GeoPartition(SqlitePartition):
             self._database = self._db_class(self.bundle, self, base_path=self.path)
         return self._database
 
-    def get_srs_wkt(self):
+    def _get_srs_wkt(self):
         
         #
         # !! Assumes only one layer!
         
         try:
-            q ="select srs_wkt from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
-            return self.database.query(q).first()[0]
+            q ="select srs_wkt, spatial_ref_sys.srid from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
+            return self.database.query(q).first()
         except:
-            q ="select srtext from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
-            return self.database.query(q).first()[0]
+            q ="select srtext, spatial_ref_sys.srid from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
+            return self.database.query(q).first()
+
+    def get_srs_wkt(self):
+        r = self._get_srs_wkt()
+        return r[0]
+
+    def get_srid(self):
+        r = self._get_srs_wkt()
+        return r[1]
 
     def get_srs(self):
         import ogr 
@@ -196,7 +204,7 @@ class GeoPartition(SqlitePartition):
             print 'convert_dates HERE', self.database.dsn
             self.database.connection.execute( "UPDATE {} SET {}".format(table.name, ','.join(clauses)))
 
-    def load_shapefile(self, path,  **kwargs):
+    def load_shapefile(self, path, t_srs = '4326',  **kwargs):
         """Load a shape file into a partition as a spatialite database. 
         
         Will also create a schema entry for the table speficified in the 
@@ -208,8 +216,6 @@ class GeoPartition(SqlitePartition):
         from ambry.geo.util import get_shapefile_geometry_types
         import os
 
-        t_srs=kwargs.get('t_srs')
-        
         if t_srs:
             t_srs_opt = '-t_srs EPSG:{}'.format(t_srs)
         else:
@@ -263,3 +269,17 @@ class GeoPartition(SqlitePartition):
 
     def __repr__(self):
         return "<geo partition: {}>".format(self.name)
+
+
+    def info(self):
+        """Returns a human readable string of useful information"""
+
+        try:
+            srid = self.get_srid()
+        except Exception as e:
+            self.bundle.error(e)
+            srid = 'error'
+
+        return (super(GeoPartition, self).info()+
+        '{:10s}: {}\n'.format('SRID',srid))
+

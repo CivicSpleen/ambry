@@ -41,4 +41,7 @@ class GeoBuildBundle(BuildBundle):
         for table, url in self.config.build.sources.items():
             p = self.partitions.new_geo_partition(table=table, shape_file=url)
 
+
+        for p in self.partitions:
+            print p.info()
         return True

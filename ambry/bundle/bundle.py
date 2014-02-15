@@ -112,7 +112,6 @@ class Bundle(object):
 
                     raise NotFoundError("Failed to find dataset for id {} in {} "
                                         .format(self._dataset_id, self.database.dsn))
-
             else:
 
                 return (session.query(Dataset).one())

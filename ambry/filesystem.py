@@ -329,6 +329,9 @@ class BundleFilesystem(Filesystem):
     def download(self,url, test_f=None):
         '''Context manager to download a file, return it for us, 
         and delete it when done.
+
+        url may also be a key for the build.sources configuration
+
         
         Will store the downloaded file into the cache defined
         by filesystem.download
@@ -341,6 +344,13 @@ class BundleFilesystem(Filesystem):
       
         cache = self.get_cache_by_name('downloads')
         parsed = urlparse.urlparse(url)
+
+        if ( not parsed.scheme and
+                self.bundle.config.build.get('sources') and
+                url in self.bundle.config.build.sources):
+            url = self.bundle.config.build.sources.get(url)
+            parsed = urlparse.urlparse(url)
+
         file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
 
         # We download to a temp file, then move it into place when 
