@@ -48,9 +48,12 @@ def _new_library(config):
     sourcerepo = config.get('sourcerepo', None)
     try:
         source_dir = sourcerepo.dir if sourcerepo else None
-        source_repos = sourcerepo.list if sourcerepo else None
     except ConfigurationError:
         source_dir = None
+
+    try:
+        source_repos = sourcerepo.list if sourcerepo else None
+    except ConfigurationError:
         source_repos = None
 
 
