@@ -16,7 +16,7 @@ Contents:
     tutorial/index
     cli/index
     tutorial/tips
-    
+    recipes/index
     
 
 

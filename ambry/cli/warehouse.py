@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from . import prt, err, _print_info
+from . import prt, err, _print_info, _print_bundle_list
 
 class Logger(object):
     def __init__(self,  prefix, lr):
@@ -52,7 +52,6 @@ def warehouse_command(args, rc):
     w = new_warehouse(config, l)
 
     globals()['warehouse_'+args.subcommand](args, w,rc)
-
 
 
 def warehouse_parser(cmd):
@@ -106,9 +105,8 @@ def warehouse_info(args, w,config):
     prt("Name:     {}",args.name)
     prt("Class:    {}",w.__class__)
     prt("Database: {}",w.database.dsn)
-    prt("Library : {}",w.library.database.dsn)
-
-
+    prt("WLibrary: {}",w.wlibrary.database.dsn)
+    prt("ELibrary: {}",w.elibrary.database.dsn)
 
 
 def warehouse_install(args, w,config):
@@ -134,9 +132,9 @@ def warehouse_remove(args, w,config):
     w.remove(args.term )
       
 def warehouse_drop(args, w,config):
-    
-    w.database.enable_delete = True
+
     w.library.clean()
+    w.database.enable_delete = True
     w.drop()
  
 def warehouse_create(args, w,config):
@@ -165,16 +163,14 @@ def warehouse_users(args, w,config):
     
 def warehouse_list(args, w, config):    
 
-    
     l = w.library
 
     if not args.term:
 
-        last_d = None
-        for d,p in l.partitions:
-            prt("{:2s} {:10s} {}", '   W', p.vid, p.vname)
+        _print_bundle_list(l.list().values(),show_partitions=True)
             
     else:
+        raise NotImplementedError()
         d, p = l.get_ref(args.term)
                 
         _print_info(l,d,p, list_partitions=True)

@@ -413,6 +413,7 @@ class GitRepository(RepositoryInterface):
 
         self.add('bundle.py')
         self.add('bundle.yaml')
+        self.add('README.md')
 
         if os.path.exists(self.bundle.filesystem.path('meta')):
             self.add('meta/*')

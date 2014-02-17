@@ -459,7 +459,45 @@ class Schema(object):
                 if not t.name in self.bundle.database.inspector.get_table_names():
                     t_meta, table = self.bundle.schema.get_table_meta(t.name) #@UnusedVariable
                     table.create(bind=self.bundle.database.engine)
-        
+
+
+    def caster(self, table_name):
+        '''Return a caster for a table. This is like orm.Table.caster, but it will use special caster types
+        defined in the schema'''
+
+        from ambry.transform import CasterTransformBuilder
+
+        table = self.table(table_name)
+
+        bdr = CasterTransformBuilder()
+
+        for c in self.columns:
+
+            # Try to get a caster type object from the bundle
+            if 'caster' in c.data and c.data['caster']:
+                t = None
+
+                for l in [self.bundle, self.bundle.__module__]:
+                    try:
+                        t = getattr(self.bundle,c.data['caster'] )
+                        bdr.add_type(t)
+                        break
+                    except AttributeError:
+                        continue
+
+                if not t:
+                    self.bundle.error("Schema declared undefined caster type {} for {}.{}. Ignoring"
+                                      .format(c.data['caster'], table.name, c.name))
+                    t = c.python_type
+
+            else:
+                t = c.python_type
+
+            bdr.append(c.name, t)
+
+        return bdr
+
+
         
     def schema_from_file(self, file_, progress_cb=None):
         return self._schema_from_file(file_, progress_cb)
@@ -587,8 +625,7 @@ class Schema(object):
             
             
             self.validate_column(t, col, warnings, errors)
-            
-            
+
         return warnings, errors
 
            
@@ -596,8 +633,7 @@ class Schema(object):
         '''Write the schema back to the schema file'''
         with open(self.bundle.filesystem.path('meta',self.bundle.SCHEMA_FILE), 'w') as f:
             self.as_csv(f)
-        
-           
+
     def copy_table(self, in_table):
         
         with self.bundle.session as s:
@@ -607,12 +643,10 @@ class Schema(object):
                 d = c.to_dict()
                 del d['t_vid']
                 self.add_column(table, **d) 
-            
 
     def _dump_gen(self, table_name=None):
         """Yield schema row for use in exporting the schem to other
         formats
-        
 
         """
         

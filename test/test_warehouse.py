@@ -98,7 +98,8 @@ class Test(TestBase):
         l.put_bundle(self.bundle)
 
         w = self.get_warehouse(l, 'sqlite')
-        print "WAREHOUSE: ", w.database.dsn
+        print "Warehouse: ", w.database.dsn
+        print "Library: ", l.database.dsn
 
         w.install("source-dataset-subset-variation-tone-0.0.1")
         w.install("source-dataset-subset-variation-ttwo-0.0.1")

@@ -50,7 +50,8 @@ class LibraryDb(object):
             self.colon_port = ''
 
         self.dsn_template = self.DBCI[self.driver].dsn_template
-        self.dsn = None
+        self.dsn = self.dsn_template.format(user=self.username, password=self.password,
+                                            server=self.server, name=self.dbname, colon_port=self.colon_port)
 
         self.Session = None
         self._session = None
@@ -84,8 +85,7 @@ class LibraryDb(object):
 
         if not self._engine:
 
-            self.dsn = self.dsn_template.format(user=self.username, password=self.password,
-                            server=self.server, name=self.dbname, colon_port=self.colon_port)
+
 
             #print "Create Engine",os.getpid(), self.dsn
 
@@ -560,12 +560,12 @@ class LibraryDb(object):
         used for installing into warehouses, where it isn't desirable to install
         the whole bundle"""
 
-        from sqlalchemy.orm.exc import NoResultFound
+        from ..dbexceptions import NotFoundError
         from ..identity import PartitionNameQuery
 
         try:
             b = self.get(bundle.identity.vid)
-        except NoResultFound:
+        except NotFoundError:
             b = None
 
         if not b:

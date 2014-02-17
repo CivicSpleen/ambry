@@ -153,64 +153,43 @@ class RelationalWarehouse(WarehouseInterface):
 
         return
 
-
-class OldRelationalWarehouse(WarehouseInterface):
-
-
-    
-    def table(self, d_vid, p_vid, table_name):
-        '''Return an ORM table from the local schema. Unlike
-        table_meta, this pulls the data from library records, 
-        so table_name must be unaugmented. '''
-        
-        from ..schema import Schema
-        
-
-        return Schema.get_table_from_database(self.library.database, 
-                                              table_name, 
-                                              d_vid = d_vid,
-                                              session = self.library.database.session, 
-                                              )
-        
-
-          
-    def remove_by_name(self,name):
+    def remove(self, name):
         from ..orm import Dataset
         from ..bundle import LibraryDbBundle
         from ..identity import PartitionNameQuery
-        from sqlalchemy.exc import  NoSuchTableError, ProgrammingError
-        
-        dataset  = self.get(name)
+        from sqlalchemy.exc import NoSuchTableError, ProgrammingError
+
+        dataset = self.wlibrary.resolve(name)
 
         if dataset.partition:
             b = LibraryDbBundle(self.library.database, dataset.vid)
-            p = b.partitions.find(id_=dataset.partition.id_)
+            p = b.partitions.find(id_=dataset.partition.vid)
             self.logger.info("Dropping tables in partition {}".format(p.identity.vname))
-            for table_name in p.tables: # Table name without the id prefix
-                
+            for table_name in p.tables:  # Table name without the id prefix
+
                 table_name = self.augmented_table_name(p.identity.as_dataset().vid, table_name)
-                
+
                 try:
                     self.database.drop_table(table_name)
                     self.logger.info("Dropped table: {}".format(table_name))
-                    
+
                 except NoSuchTableError:
                     self.logger.info("Table does not exist (a): {}".format(table_name))
-                    
+
                 except ProgrammingError:
                     self.logger.info("Table does not exist (b): {}".format(table_name))
 
             self.library.database.remove_partition(dataset.partition)
-            
-            
+
+
         elif dataset:
-            
+
             b = LibraryDbBundle(self.library.database, dataset.vid)
             for p in b.partitions:
-                self.remove_by_name(p.identity.vname)
+                self.remove(p.identity.vname)
 
             self.logger.info('Removing bundle {}'.format(dataset.vname))
-            self.library.database.remove_bundle(dataset)
+            self.library.database.remove_bundle(b)
         else:
             self.logger.error("Failed to find partition or bundle by name '{}'".format(name))
-        
+

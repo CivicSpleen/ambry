@@ -136,6 +136,8 @@ class Library(object):
 
         '''
 
+        assert database is not None
+
         self.name = name
         self.cache = cache
         self.source_dir = source_dir

@@ -91,6 +91,25 @@ class Test(TestBase):
 
 
         #
+        # Custom caster types
+        #
+
+        class UpperCaster(str):
+            def __new__(cls, v):
+                return str.__new__(cls, v.upper())
+
+        ctb = CasterTransformBuilder()
+
+        ctb.append('int', int)
+        ctb.append('float', float)
+        ctb.append('str', UpperCaster)
+        ctb.add_type(UpperCaster)
+
+        row, errors = ctb({'int': 1, 'float': 2, 'str': 'three'})
+
+        self.assertEquals(row['str'], 'THREE')
+
+        #
         # Handling Errors
         #
 
@@ -105,11 +124,6 @@ class Test(TestBase):
 
         row, errors = ctb({'int': '.', 'float': 'a', 'str': '3', 'ni1': 0, 'ni2': 3 },
                           codify_cast_errors=True)
-
-        print '!!!', row, errors
-
-
-
 
         
     def test_intuit(self):

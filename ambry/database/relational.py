@@ -45,7 +45,9 @@ class RelationalDatabase(DatabaseInterface):
         self.dbname = dbname
         self.username = username
         self.password = password
-   
+
+        self.enable_delete = False
+
         if port:
             self.colon_port = ':'+str(port)
         else:

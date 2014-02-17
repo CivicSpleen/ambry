@@ -798,6 +798,19 @@ Columns:
             
         return self._null_row
 
+    @property
+    def header(self):
+        '''Return an array of column names in the same order as the column definitions, to be used zip with
+        a row when reading a CSV file
+
+        >> row = dict(zip(table.header, row))
+
+        '''
+
+        return [ c.name for c in self.columns ]
+
+
+
     def _get_validator(self, and_join=True):
         '''Return a lambda function that, when given a row to this table, 
         returns true or false to indicate the validitity of the row
@@ -883,12 +896,13 @@ Columns:
         '''Returns a function that takes a row that can be indexed by positions which returns a new
         row with all of the values cast to schema types. '''
         from ambry.transform import CasterTransformBuilder
-        
+
+
         bdr = CasterTransformBuilder()
-        
+
         for c in self.columns:
             bdr.append(c.name, c.python_type)
-        
+
         return bdr
 
     @property

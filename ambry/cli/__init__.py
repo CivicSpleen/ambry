@@ -276,14 +276,14 @@ def _print_info(l,ident, list_partitions=False):
             str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
 
     if ident.partitions:
-        if len(ident.partitions) == 1:
+
+        if len(ident.partitions) == 1 and not list_partitions:
 
             ds_ident = l.resolve(ident.partition.vid, location = None)
 
             # This happens when the dataset is not in the local library, I think ...
             if not ds_ident:
                 return
-
 
             resolved_ident = ds_ident.partition
             p = ident.partition
@@ -296,12 +296,10 @@ def _print_info(l,ident, list_partitions=False):
             if resolved_ident.url:
                 prt("P Web Path  : {}",resolved_ident.url)
 
-        elif len(ident.partitions) > 1 and list_partitions:
+        elif list_partitions:
             prt("D Partitions: {}", len(ident.partitions))
             for p in sorted(ident.partitions.values(), key=lambda x: x.vname):
                 prt("P {:15s} {}", p.vid, p.vname)
-
-
 
 
 def _print_bundle_info(bundle=None, ident=None):

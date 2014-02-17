@@ -129,6 +129,8 @@ def root_info(args, l, st, rc):
         err("Failed to find record for: {}", args.term)
         return
 
+
+
     if ident.locations.is_in(Dataset.LOCATION.LIBRARY):
         b = l.get(ident.vid)
 

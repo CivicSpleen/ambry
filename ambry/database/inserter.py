@@ -156,7 +156,7 @@ class ValueWriter(InserterInterface):
  
 class CodeCastErrorHandler(object):
     '''Used by the Value Inserter to handle errors in casting
-    data types. This versino will create code table entries
+    data types. This version will create code table entries
     for any values that can't be cast.  '''
     
     def __init__(self, inserter):
@@ -201,14 +201,14 @@ class ValueInserter(ValueWriter):
         # RelationalDatabase.table() 
         if hasattr(self.table,'_db_orm_table'):
             self.orm_table = self.table._db_orm_table
+            self.caster = self.orm_table.caster
         else:
             self.orm_table = self.bundle.schema.table(table.name)
+            self.caster = self.bundle.schema.caster(table.name)
 
         self.null_row = self.orm_table.null_dict
 
         self.cast_error_handler = cast_error_handler(self) if cast_error_handler else None
-
-        self.caster = self.orm_table.caster
 
         self.header = [c.name for c in self.orm_table.columns]
 
@@ -292,7 +292,8 @@ class ValueInserter(ValueWriter):
             raise
         except Exception as e:
             if self.bundle:
-                self.bundle.error("Exception during ValueInserter.insert: {} for session {}".format(e, repr(self.session)))
+                self.bundle.error("Insert exception: {}".format(e))
+                raise
             else:
                 print "ERROR: Exception during ValueInserter.insert: {}".format(e)
             self.rollback()

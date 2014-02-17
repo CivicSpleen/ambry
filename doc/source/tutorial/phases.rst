@@ -1,7 +1,6 @@
-.. _phases_toplevel:
+.. _phases:
 
-=============
 Bundle Phases
-=============
+===============
 
-Each seperate activity in creating running or building a bundle is called a Phase, and each phase is implemented by a Bundle method. 
+The stages of building a bundle are called phases, with each phase bing implemented by a bundle method. 

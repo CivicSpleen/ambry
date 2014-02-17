@@ -21,4 +21,7 @@ The Meta phase is useful for creating information that needs only be created onc
   - :func:`ambry.filesystem.write_yaml`
   - :func:`ambry.filesystem.read_yaml`
 
+Note that the :func:`ambry.filesystem.load_yaml` function is for loading bundle.yaml objects, and will product an
+:class:`ambry.util.AttrDict` object.
+
 

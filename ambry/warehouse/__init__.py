@@ -26,6 +26,8 @@ class NullLogger(object):
 
 def new_warehouse(config, elibrary):
 
+    assert elibrary is not None
+
     service = config['service'] if 'service' in config else 'relational'
 
     if 'database' in config:
@@ -33,8 +35,8 @@ def new_warehouse(config, elibrary):
     else:
         db_config = dict(config.items())
 
-
     database = new_database(db_config, class_='warehouse')
+
     storage = new_cache(config['storage']) if 'storage' in config else None
 
     library_database = LibraryDb(**config['library']) if 'library' in config else  LibraryDb(**db_config)
@@ -44,6 +46,7 @@ def new_warehouse(config, elibrary):
         cache=NullCache(),
         database=library_database,
         upstream=None)
+
 
     if service == 'sqlite':
         from .sqlite import SqliteWarehouse
@@ -66,10 +69,6 @@ def new_warehouse(config, elibrary):
 
         return PostgisWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
 
-    elif service == 'postgresrds':
-        from .amazonrds import PostgresRDSWarehouse
-
-        return PostgresRDSWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
 
     else:
         raise Exception("Unknown warehouse type: {}".format(service))
@@ -85,6 +84,10 @@ class WarehouseInterface(object):
                  wlibrary=None, # Warehouse library
                  elibrary=None, # external Library
                  logger=None):
+
+        assert wlibrary is not None
+        assert elibrary is not None
+        assert database is not None
 
         self.database = database
         self.wlibrary = wlibrary
@@ -259,10 +262,21 @@ class WarehouseInterface(object):
     def _to_vid(self, partition):
         from ..partition import PartitionBase
         from ..identity import Identity
+        from ..dbexceptions import NotFoundError
 
         if isinstance(partition, basestring):
             dsid = self.elibrary.resolve(partition)
+
+            if not dsid:
+                raise NotFoundError("Didn't find {} in external library".format(partition))
+
+            if not dsid.partition:
+                raise ResolutionError("Term referred to a dataset, not a partition: {}".format(partition))
+
             pid = dsid.partition.vid
+
+
+
         elif isinstance(partition, PartitionBase):
             pid = partition.identity.vid
         elif isinstance(partition, Identity):

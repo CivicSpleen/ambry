@@ -32,7 +32,7 @@ def new_database(config, bundle=None, class_=None):
         from .relational import RelationalDatabase
         return RelationalDatabase(**config)
     
-    elif k == ('postgis',None):   
+    elif k == ('postgis','warehouse'):
         from .postgis import PostgisDatabase
         return PostgisDatabase(**config)
     
@@ -57,7 +57,10 @@ def new_database(config, bundle=None, class_=None):
         raise NotImplemented()  
        
     elif k == ('postgres','warehouse'):   
-        raise NotImplemented()    
+        raise NotImplemented()
+
+    else:
+        raise ConfigurationError("No database service for {}".format(k))
     
 
 class DatabaseInterface(object):
