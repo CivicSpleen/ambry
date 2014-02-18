@@ -279,9 +279,7 @@ class Test(TestBase):
         r = l.find(QueryCommand().table(name='tthree').partition(format='db', segment=None))
         self.assertEquals('source-dataset-subset-variation-tthree',r[0]['partition']['name'])
 
-        r = l.find(QueryCommand().table(name='tthree').partition(format='db', segment="1"))
-        self.assertEquals('source-dataset-subset-variation-tthree-1',r[0]['partition']['name'])
-        
+
         #
         #  Try getting the files 
         # 

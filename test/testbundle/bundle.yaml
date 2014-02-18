@@ -54,9 +54,4 @@ partitions:
 - source-dataset-subset-variation-csv-csv-2
 - source-dataset-subset-variation-csv-csv-3
 - source-dataset-subset-variation-csv-csv-4
-- source-dataset-subset-variation-ttwo
-- source-dataset-subset-variation-tthree-1
-- source-dataset-subset-variation-tthree-2
-- source-dataset-subset-variation-tthree-3
-- source-dataset-subset-variation-tthree-4
 - source-dataset-subset-variation-hdf5-hdf

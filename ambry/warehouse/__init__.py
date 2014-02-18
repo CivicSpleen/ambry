@@ -99,12 +99,13 @@ class WarehouseInterface(object):
         self.database.create()
         self.wlibrary.database.create()
 
-
     def clean(self):
         self.database.clean()
 
-    def drop(self):
+    def delete(self):
         self.database.drop()
+        self.wlibrary.database.enable_delete = True
+        self.wlibrary.database.drop()
 
     def exists(self):
         self.database.exists()

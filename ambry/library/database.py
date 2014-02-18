@@ -85,8 +85,6 @@ class LibraryDb(object):
 
         if not self._engine:
 
-
-
             #print "Create Engine",os.getpid(), self.dsn
 
             # There appears to be a problem related to connection pooling on Linux + Postgres, where
@@ -111,6 +109,9 @@ class LibraryDb(object):
         if not self._connection:
             self._connection = self.engine.connect()
 
+            if self.driver in ['postgres', 'postgis']:
+                self._connection.execute("SET search_path TO library")
+
         return self._connection
 
     def close_connection(self):
@@ -131,8 +132,9 @@ class LibraryDb(object):
         if not self._session:
             self._session = self.Session()
             # set the search path
-            if self.driver in ('postgres','postgis') and self._schema:
-                self._session.execute("SET search_path TO {}".format(self._schema))
+
+        if self.driver in ('postgres','postgis') and self._schema:
+            self._session.execute("SET search_path TO {}".format(self._schema))
 
         return self._session
 
@@ -142,6 +144,7 @@ class LibraryDb(object):
         '''Return an SqlAlchemy MetaData object, bound to the engine'''
 
         from sqlalchemy import MetaData
+
         metadata = MetaData(bind=self.engine, schema = self._schema)
 
         metadata.reflect(self.engine)
@@ -278,11 +281,11 @@ class LibraryDb(object):
             it.create(bind=self.engine)
             self.commit()
 
-
         # We have to put the schemas back because when installing to a warehouse.
         # the same library classes can be used to access a Sqlite database, which
         # does not handle schemas.
         if self._schema:
+
             for it, orig_schema in orig_schemas.items():
                 it.schema = orig_schema
 

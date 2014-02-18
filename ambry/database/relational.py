@@ -106,25 +106,6 @@ class RelationalDatabase(DatabaseInterface):
         else:
             return False
 
-    def _create(self):
-        """Create the database from the base SQL"""
-        from ambry.orm import  Config
-        
-        if not self.exists():    
-
-            self.require_path()
-      
-            # For Sqlite, this will create an empty database. 
-            self.get_connection(check_exists=False)
-      
-            tables = [ Config ]
-
-            for table in tables:
-                table.__table__.create(bind=self.engine)
-
-            return True #signal did create
-            
-        return False # signal didn't create
 
     def _post_create(self):
         # call the post create function
@@ -145,20 +126,18 @@ class RelationalDatabase(DatabaseInterface):
                 if n == '_post_create':
                     f(self)
 
-    def _drop(self):
-        
+
+    def drop(self):
         if not self.enable_delete:
             raise Exception("Deleting not enabled")
-        
-        for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
-            
+
+        for table in reversed(self.metadata.sorted_tables):  # sorted by foreign key dependency
+
             if table.name not in ['spatial_ref_sys']:
                 table.drop(self.engine, checkfirst=True)
 
-
-    def drop(self):
-
-        self._drop()
+    def delete(self):
+        self.drop()
 
     def drop_table(self, table_name, use_id = False):
         table = self.table(table_name)

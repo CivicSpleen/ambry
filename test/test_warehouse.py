@@ -69,6 +69,10 @@ class Test(TestBase):
 
         l = new_library(config, reset=True)
 
+        l.database.enable_delete = True
+        l.database.drop()
+        l.database.create()
+
         return l
 
 
@@ -78,31 +82,29 @@ class Test(TestBase):
 
         w = new_warehouse(self.rc.warehouse(name), l)
         w.logger = get_logger('unit_test')
-        w.database.enable_delete = True
+
 
         lr = self.bundle.init_log_rate(10000)
         w.logger = TestLogger(lr)
 
-        p = w.database.path
-        if os.path.exists(p):
-            os.remove(p)
+        w.database.enable_delete = True
+        w.database.delete()
 
         w.create()
 
         return w
 
-    def test_local_install(self):
+    def _test_local_install(self, name):
 
         l = self.get_library('local')
 
         l.put_bundle(self.bundle)
 
-        w = self.get_warehouse(l, 'sqlite')
+        w = self.get_warehouse(l, name)
         print "Warehouse: ", w.database.dsn
         print "Library: ", l.database.dsn
 
         w.install("source-dataset-subset-variation-tone-0.0.1")
-        w.install("source-dataset-subset-variation-ttwo-0.0.1")
         w.install("source-dataset-subset-variation-tthree-0.0.1")
         w.install("source-dataset-subset-variation-geot1-geo-0.0.1")
 
@@ -110,9 +112,16 @@ class Test(TestBase):
         print "WAREHOUSE: ", w.database.dsn
 
         w.install("source-dataset-subset-variation-tone-0.0.1")
-        w.install("source-dataset-subset-variation-ttwo-0.0.1")
         w.install("source-dataset-subset-variation-tthree-0.0.1")
         w.install("source-dataset-subset-variation-geot1-geo-0.0.1")
+
+    def test_local_sqlite_install(self):
+        self._test_local_install('sqlite')
+
+
+    def test_local_postgres_install(self):
+
+        self._test_local_install('postgres1')
 
 
     def test_remote_install(self):
@@ -125,7 +134,6 @@ class Test(TestBase):
         print "WAREHOUSE: ", w.database.dsn
 
         w.install("source-dataset-subset-variation-tone-0.0.1")
-        w.install("source-dataset-subset-variation-ttwo-0.0.1")
         w.install("source-dataset-subset-variation-tthree-0.0.1")
         w.install("source-dataset-subset-variation-geot1-geo-0.0.1")
 
@@ -133,9 +141,11 @@ class Test(TestBase):
         print "WAREHOUSE: ", w.database.dsn
 
         w.install("source-dataset-subset-variation-tone-0.0.1")
-        w.install("source-dataset-subset-variation-ttwo-0.0.1")
         w.install("source-dataset-subset-variation-tthree-0.0.1")
         w.install("source-dataset-subset-variation-geot1-geo-0.0.1")
+
+
+
 
 
     def x_test_install(self):

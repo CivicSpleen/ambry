@@ -441,7 +441,7 @@ class Library(object):
                 try:
                     f = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
                 except:
-                    print '!!!',dataset.vid
+
                     raise
 
                 # Since it was remote, attach the appropriate remote cache to our cache stack then

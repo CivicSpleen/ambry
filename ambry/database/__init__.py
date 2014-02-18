@@ -35,7 +35,11 @@ def new_database(config, bundle=None, class_=None):
     elif k == ('postgis','warehouse'):
         from .postgis import PostgisDatabase
         return PostgisDatabase(**config)
-    
+
+    elif k == ('postgres', 'warehouse'):
+        from .postgres import PostgresDatabase
+        return PostgresDatabase(**config)
+
     elif k == ('sqlite','bundle'):
         from .sqlite import SqliteBundleDatabase
         return SqliteBundleDatabase(bundle=bundle, **config)
@@ -55,9 +59,7 @@ def new_database(config, bundle=None, class_=None):
 
     elif k == ('mysql','warehouse'):   
         raise NotImplemented()  
-       
-    elif k == ('postgres','warehouse'):   
-        raise NotImplemented()
+
 
     else:
         raise ConfigurationError("No database service for {}".format(k))

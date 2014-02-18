@@ -3,8 +3,8 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from relational import RelationalDatabase 
+from postgres import PostgresDatabase
              
 
-class PostgisDatabase(RelationalDatabase):
+class PostgisDatabase(PostgresDatabase):
     pass
