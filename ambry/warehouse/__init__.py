@@ -23,6 +23,8 @@ class NullLogger(object):
     def error(self, message):
         pass
 
+    def warn(self, message):
+        pass
 
 def new_warehouse(config, elibrary):
 
@@ -47,7 +49,6 @@ def new_warehouse(config, elibrary):
         database=library_database,
         upstream=None)
 
-
     if service == 'sqlite':
         from .sqlite import SqliteWarehouse
 
@@ -69,14 +70,12 @@ def new_warehouse(config, elibrary):
 
         return PostgisWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
 
-
     else:
         raise Exception("Unknown warehouse type: {}".format(service))
 
 
 class ResolutionError(Exception):
     pass
-
 
 class WarehouseInterface(object):
     def __init__(self,
@@ -103,6 +102,7 @@ class WarehouseInterface(object):
         self.database.clean()
 
     def delete(self):
+        self.database.enable_delete = True
         self.database.drop()
         self.wlibrary.database.enable_delete = True
         self.wlibrary.database.drop()
@@ -114,33 +114,46 @@ class WarehouseInterface(object):
     def library(self):
         return self.wlibrary
 
-
     ##
     ## Installation
     ##
 
     def install(self, partition):
+        from ..orm import Partition
 
         p_vid = self._to_vid(partition)
 
-        bundle, p, tables = self._setup_install(p_vid)
+        p = self.wlibrary.database.session.query(Partition).filter(Partition.vid == p_vid).first()
 
+        if p and p.installed == 'y':
+            self.logger.warn("Skipping {}; already installed".format(p.vname))
+            return
+
+        bundle, p, tables = self._setup_install(p_vid)
+        installed_tables = set()
         if p.identity.format == 'db':
             self.install_partition(bundle, p)
             for table_name, urls in tables.items():
 
                 if urls:
-                    self.load_remote(p, table_name, urls)
+                    itn = self.load_remote(p, table_name, urls)
                 else:
-                    self.load_local(p, table_name)
+                    itn = self.load_local(p, table_name)
+                installed_tables.add((table_name, itn))
 
         elif p.identity.format == 'geo':
             self.install_partition(bundle, p)
             for table_name, urls in tables.items():
-                self.load_ogr(p, table_name)
+                itn = self.load_ogr(p, table_name)
+                installed_tables.add((table_name, itn))
         else:
             self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
 
+        for source_table, installed_table in installed_tables:
+            orm_table = p.get_table(table_name)
+            self.library.database.mark_table_installed(orm_table.vid, installed_table)
+
+            self.library.database.mark_partition_installed(p_vid)
 
     def install_partition(self, bundle, partition):
         '''Install the records for the partition, the tables referenced by the partition,
@@ -217,8 +230,6 @@ class WarehouseInterface(object):
                     table_urls[table_name] = ri.get(rident.data['csv']['tables'][t.id_]['parts'])
                 except BadRequest:
                     table_urls[table_name] = None
-
-
 
             else:
                 table_urls[table_name] = None

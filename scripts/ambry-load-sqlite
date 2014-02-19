@@ -1,5 +1,7 @@
 #!/bin/sh
-
+#
+# use in ambry.wareouse.sqlite.load_remote() to load data into sqlite from a URL
+#
 url=$1
 db_path=$2
 table_name=$3

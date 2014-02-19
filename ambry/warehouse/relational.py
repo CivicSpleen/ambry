@@ -45,6 +45,9 @@ class RelationalWarehouse(WarehouseInterface):
 
         meta, table = self.table_meta(d_vid, p_vid, table_name)
 
+
+
+
         if not self.has_table(table.name):
             table.create(bind=self.database.engine)
             self.logger.info('create_table {}'.format(table.name))
@@ -53,6 +56,25 @@ class RelationalWarehouse(WarehouseInterface):
 
         return table, meta
 
+    def tables(self):
+
+        return self.metadata.sorted_tables
+
+    def table(self, table_name):
+        '''Get table metadata from the database'''
+        from sqlalchemy import Table
+
+        table = self._table_meta_cache.get(table_name, False)
+
+        if table is not False:
+            r = table
+        else:
+            metadata = self.metadata
+            table = Table(table_name, metadata, autoload=True)
+            self._table_meta_cache[table_name] = table
+            r = table
+
+        return r
 
     def load_insert(self, partition, table_name):
         from ..database.inserter import ValueInserter
@@ -107,6 +129,8 @@ class RelationalWarehouse(WarehouseInterface):
 
         self.logger.info('done {}'.format(partition.identity.vname))
 
+        return dest_table_name
+
 
     def load_ogr(self, partition, table_name):
         #
@@ -121,7 +145,7 @@ class RelationalWarehouse(WarehouseInterface):
         a_table_name = self.augmented_table_name(d_vid, table_name)
 
         args = [
-            "-t_srs EPSG:2771",
+            "-t_srs EPSG:4326",
             "-nlt PROMOTE_TO_MULTI",
             "-nln {}".format(a_table_name),
             "-progress ",
@@ -151,7 +175,7 @@ class RelationalWarehouse(WarehouseInterface):
         p = ogr2ogr(*shlex.split(' '.join(args)), _err=err_output, _out=out_output, _iter=True, _out_bufsize=0)
         p.wait()
 
-        return
+        return a_table_name
 
     def remove(self, name):
         from ..orm import Dataset

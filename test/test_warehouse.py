@@ -118,19 +118,17 @@ class Test(TestBase):
     def test_local_sqlite_install(self):
         self._test_local_install('sqlite')
 
-
     def test_local_postgres_install(self):
-
         self._test_local_install('postgres1')
 
-
-    def test_remote_install(self):
+    def _test_remote_install(self, name):
 
         self.start_server(self.rc.library('server'))
 
         l = self.get_library('client')
+        l.put_bundle(self.bundle)
 
-        w = self.get_warehouse(l, 'sqlite')
+        w = self.get_warehouse(l, name)
         print "WAREHOUSE: ", w.database.dsn
 
         w.install("source-dataset-subset-variation-tone-0.0.1")
@@ -144,7 +142,11 @@ class Test(TestBase):
         w.install("source-dataset-subset-variation-tthree-0.0.1")
         w.install("source-dataset-subset-variation-geot1-geo-0.0.1")
 
+    def test_remote_sqlite_install(self):
+        self._test_remote_install('sqlite')
 
+    def test_remote_postgres_install(self):
+        self._test_remote_install('postgres1')
 
 
 

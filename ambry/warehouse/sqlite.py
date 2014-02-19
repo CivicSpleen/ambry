@@ -27,10 +27,9 @@ class SqliteWarehouse(RelationalWarehouse):
 
 
     def load_local(self, partition, table_name):
-        self.load_attach(partition, table_name)
+        return self.load_attach(partition, table_name)
 
     def load_attach(self, partition, table_name):
-        from ..database.inserter import ValueInserter
 
         self.logger.info('load_attach {}'.format(partition.identity.name))
 
@@ -49,6 +48,8 @@ class SqliteWarehouse(RelationalWarehouse):
 
         self.logger.info('done {}'.format(partition.identity.vname))
 
+        return dest_table_name
+
 
     def load_remote(self, partition, table_name, urls):
 
@@ -64,12 +65,15 @@ class SqliteWarehouse(RelationalWarehouse):
         for url in urls:
 
             try:
+                ## Call the external program ambry-load-sqlite to load data into
+                ## sqlite
                 p = ambry_load_sqlite(url, self.database.path, a_table_name,
                                       _err=self.logger.error, _out=self.logger.info )
                 p.wait()
             except Exception as e:
                 self.logger.error("Failed to load: {} {}: {}".format(partition.identity.vname, table_name, e.message))
 
+        return a_table_name
 
 class SpatialiteWarehouse(SqliteWarehouse):
 

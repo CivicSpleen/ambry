@@ -280,8 +280,6 @@ class Resolver(object):
 
     def _resolve_ref_orm(self, ref):
 
-
-
         ip = Identity.classify(ref)
 
         dqp = None # Dataset query parts
@@ -310,7 +308,6 @@ class Resolver(object):
         else:
             dqp = Dataset.name == ip.sname
             pqp = Partition.name == ip.sname
-
 
         out = []
         if dqp is not None:

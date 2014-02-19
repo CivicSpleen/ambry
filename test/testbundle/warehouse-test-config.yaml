@@ -32,18 +32,12 @@ warehouse:
       database: redshift
       library: redshift_library
 
-    postgres:
+    postgres1:
         service: postgres
         database:
             driver: postgres
-            server: lorne
-            dbname: warehouse
-            username: test
-            password: test
-        library: 
-            driver: postgres
-            server: lorne
-            dbname: library
+            server: warehouse1
+            dbname: test
             username: test
             password: test
 

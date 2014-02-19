@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from . import prt, err, _print_info, _print_bundle_list
+from . import prt, err,warn,  _print_info, _print_bundle_list
 
 class Logger(object):
     def __init__(self,  prefix, lr):
@@ -22,29 +22,38 @@ class Logger(object):
     def error(self,message):
         err("{}: {}",self.prefix, message)
 
+    def warn(self, message):
+        warn("{}: {}", self.prefix, message)
+
+
 def warehouse_command(args, rc):
     from ambry.warehouse import new_warehouse
     from ..library import new_library
     from . import logger
+    import urlparse
 
-    if args.sqlite:
-        config = dict(
-            service='sqlite',
-            database=dict(
-                dbname=args.sqlite,
-                driver='sqlite'
-            )
-        )
-    elif args.spatialite:
-        config = dict(
-            service='spatialite',
-            database=dict(
-                dbname=args.spatialite,
-                driver='sqlite'
-            )
-        )
+    if args.database:
+        parts = urlparse.urlparse(args.database)
+
+        if parts.scheme == 'sqlite':
+            config = dict(service='sqlite', database=dict(dbname=parts.path, driver='sqlite'))
+        elif parts.scheme == 'spatialite':
+            config = dict(service='spatialite', database=dict(dbname=args.spatialite, driver='sqlite'))
+        elif parts.scheme == 'postgres':
+            config = dict(service='postgres',
+                          database=dict(driver='postgres',
+                                        server=parts.hostname,
+                                        username=parts.username,
+                                        password=parts.password,
+                                        dbname=parts.path.strip('/')
+                          ))
+        elif parts.scheme == 'postgis:':
+            config = dict(service='postgis', database=dict(dbname=args.spatialite, driver='postgis'))
+        else:
+            raise ValueError("Unknown database connection scheme: {}".format(parts.scheme))
     else:
         config = rc.warehouse(args.name)
+
 
     l = new_library(rc.library(args.library_name))
     l.logger = logger
@@ -60,8 +69,7 @@ def warehouse_parser(cmd):
     whr_p.set_defaults(command='warehouse')
     whp = whr_p.add_subparsers(title='warehouse commands', help='command help')
 
-    whr_p.add_argument('-s', '--sqlite',  help='Path to a Sqlite database to use for the warehouse. ')
-    whr_p.add_argument('-t', '--spatialite', help='Path to a Spatialite database to use for the warehouse. ')
+    whr_p.add_argument('-d', '--database', help='Path or connection url for a database. ')
     whr_p.add_argument('-n','--name',  default='default',  help='Select a different name for the warehouse')
 
     whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
@@ -111,7 +119,7 @@ def warehouse_info(args, w,config):
 
 def warehouse_install(args, w,config):
     from ..library import new_library
-    from functools import partial
+    import os.path
     from ambry.util import init_log_rate
     
     if not w.exists():
@@ -120,8 +128,19 @@ def warehouse_install(args, w,config):
     l = new_library(config.library(args.library_name))
 
     w.logger = Logger('Warehouse Install',init_log_rate(prt,N=2000))
- 
-    w.install(args.term )
+
+    if os.path.isfile(args.term):
+        with open(args.term) as f:
+            for line in f.readlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    w.install(line)
+                except:
+                    w.logger.error("Failed to install {}".format(line))
+    else:
+        w.install(args.term )
 
 def warehouse_remove(args, w,config):
     from functools import partial
@@ -133,9 +152,7 @@ def warehouse_remove(args, w,config):
       
 def warehouse_drop(args, w,config):
 
-    w.library.clean()
-    w.database.enable_delete = True
-    w.drop()
+    w.delete()
  
 def warehouse_create(args, w,config):
     

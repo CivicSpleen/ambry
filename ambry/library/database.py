@@ -599,7 +599,7 @@ class LibraryDb(object):
             self.rollback()
             raise e
 
-    def install_table(self, table_or_vid, name=None):
+    def mark_table_installed(self, table_or_vid, name=None):
         """Mark a table record as installed"""
 
         s = self.session
@@ -616,6 +616,38 @@ class LibraryDb(object):
         table.installed = name
 
         s.merge(table)
+        s.commit()
+
+    def mark_table_installed(self, table_or_vid, name=None):
+        """Mark a table record as installed"""
+
+        s = self.session
+        table = None
+
+        table = s.query(Table).filter(Table.vid == table_or_vid).one()
+
+        if not table:
+            table = s.query(Table).filter(Table.name == table.vid).one()
+
+        if not name:
+            name = table.name
+
+        table.installed = name
+
+        s.merge(table)
+        s.commit()
+
+    def mark_partition_installed(self, p_vid):
+        """Mark a table record as installed"""
+
+        s = self.session
+        table = None
+
+        p = s.query(Partition).filter(Partition.vid == p_vid).one()
+
+        p.installed = 'y'
+
+        s.merge(p)
         s.commit()
 
     def remove_bundle(self, bundle):

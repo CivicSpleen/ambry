@@ -51,7 +51,7 @@ class PostgisWarehouse(PostgresWarehouse):
         
         db = self.database
         
-        self.library.database.install_table(partition.get_table().vid, table.name)
+        self.library.database.mark_table_installed(partition.get_table().vid, table.name)
         
     
         args = [

@@ -63,12 +63,6 @@ class PostgresWarehouse(RelationalWarehouse):
         return { row['name']:dict(row) for row 
                 in self.database.connection.execute(q) }
 
-    def _copy_command(self, table, url):
-        
-        template = """COPY "public"."{table}"  FROM  PROGRAM 'curl -s -L --compressed "{url}"'  WITH ( FORMAT csv )"""
-
-        return template.format(table = table, url = url)
-
 
     def table_meta(self, d_vid, p_vid, table_name):
         '''Get the metadata directly from the database. This requires that
@@ -76,43 +70,8 @@ class PostgresWarehouse(RelationalWarehouse):
 
         self.library.database.session.execute("SET search_path TO library")
 
-        super(PostgresWarehouse, self).table_meta(d_vid, p_vid, table_name)
+        return super(PostgresWarehouse, self).table_meta(d_vid, p_vid, table_name)
 
-    def _install_partition(self, partition):
-
-        from ambry.client.exceptions import NotFound
-        
-        self.logger.log('install_partition_csv {}'.format(partition.identity.name))
-
-        pdb = partition.database
-
-        for table_name in partition.data.get('tables',[]):
-            sqla_table, meta = self.create_table(partition.identity, table_name)
-            orm_table = partition.get_table(table_name)
-            
-            try:
-                urls = self.resolver.csv_parts(partition.identity.vid, orm_table.id_)
-            except NotFound:
-                self.logger.error("install_partition {} CSV install failed because partition was not found on remote server"
-                                  .format(partition.identity.name))
-                raise 
-
-            for url in urls:
-                self._install_csv_url(sqla_table, url)
-
-            self.library.database.install_table(orm_table.vid, sqla_table.name)
-        
-    def _install_csv_url(self, table, url):
-        
-        self.logger.log('install_csv_url {}'.format(url))
-
-        cmd =  self._copy_command(table.name, url)
-        self.logger.log('installing with command: {} '.format(cmd))
-        r = self.database.connection.execute(cmd)
-                
-        #self.logger.log('installed_csv_url {}'.format(url)) 
-        
-        r = self.database.connection.execute('commit')
 
     def remove_by_name(self,name):
         '''Call the parent, then remove CSV partitions'''
@@ -129,5 +88,48 @@ class PostgresWarehouse(RelationalWarehouse):
  
             for p in p.get_csv_parts():
                 super(PostgresWarehouse, self).remove_by_name(p.identity.vname)
-        
-            
+
+    def _ogr_args(self, partition):
+
+        db = self.database
+
+        ogr_dsn = ("PG:'dbname={dbname} user={username} host={host} password={password}'"
+                   .format(username=db.username, password=db.password,
+                           host=db.server, dbname=db.dbname))
+
+        return ["-f PostgreSQL", ogr_dsn,
+                partition.database.path,
+                "--config PG_USE_COPY YES"]
+
+    def _copy_command(self, table, url):
+
+        template = """COPY "public"."{table}"  FROM  PROGRAM 'curl -s -L --compressed "{url}"'  WITH ( FORMAT csv )"""
+
+        return template.format(table=table, url=url)
+
+
+    def load_local(self, partition, table_name):
+        return self.load_insert(partition, table_name)
+
+    def load_remote(self, partition, table_name, urls):
+
+        self.logger.log('install_partition_csv {}'.format(partition.identity.name))
+
+        pdb = partition.database
+
+        sqla_table, meta = self.create_table(partition.identity, table_name)
+
+
+        for url in urls:
+            self.logger.log('install_csv_url {}'.format(url))
+
+            cmd = self._copy_command(sqla_table, url)
+            self.logger.log('installing with command: {} '.format(cmd))
+            r = self.database.connection.execute(cmd)
+
+            #self.logger.log('installed_csv_url {}'.format(url))
+
+            r = self.database.connection.execute('commit')
+
+
+
