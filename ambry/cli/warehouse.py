@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from . import prt, err,warn,  _print_info, _print_bundle_list
+from . import prt, fatal, err, warn,  _print_info, _print_bundle_list
 
 class Logger(object):
     def __init__(self,  prefix, lr):
@@ -20,7 +20,7 @@ class Logger(object):
         prt("{}: {}",self.prefix, message)
 
     def error(self,message):
-        err("{}: {}",self.prefix, message)
+        fatal("{}: {}",self.prefix, message)
 
     def warn(self, message):
         warn("{}: {}", self.prefix, message)
@@ -47,8 +47,14 @@ def warehouse_command(args, rc):
                                         password=parts.password,
                                         dbname=parts.path.strip('/')
                           ))
-        elif parts.scheme == 'postgis:':
-            config = dict(service='postgis', database=dict(dbname=args.spatialite, driver='postgis'))
+        elif parts.scheme == 'postgis':
+            config = dict(service='postgis',
+                          database=dict(driver='postgis',
+                                        server=parts.hostname,
+                                        username=parts.username,
+                                        password=parts.password,
+                                        dbname=parts.path.strip('/')
+                          ))
         else:
             raise ValueError("Unknown database connection scheme: {}".format(parts.scheme))
     else:
@@ -121,6 +127,7 @@ def warehouse_install(args, w,config):
     from ..library import new_library
     import os.path
     from ambry.util import init_log_rate
+    from ..dbexceptions import NotFoundError
     
     if not w.exists():
         w.create()
@@ -129,18 +136,26 @@ def warehouse_install(args, w,config):
 
     w.logger = Logger('Warehouse Install',init_log_rate(prt,N=2000))
 
-    if os.path.isfile(args.term):
-        with open(args.term) as f:
-            for line in f.readlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    w.install(line)
-                except:
-                    w.logger.error("Failed to install {}".format(line))
+    if os.path.isfile(args.term): # Assume it is a Manifest file.
+        from ..warehouse.manifest import Manifest
+        m  = Manifest(args.term)
+
+        partitions = m.partitions
+        views = m.views
     else:
-        w.install(args.term )
+        partitions = [args.term]
+        views = []
+    for p in partitions:
+        try:
+            w.install(p)
+        except NotFoundError:
+            err("Partition {} not found in external library".format(p))
+
+    if m.sql:
+        w.run_sql(m.sql[w.database.driver])
+
+    for view in views:
+        w.install_view(view)
 
 def warehouse_remove(args, w,config):
     from functools import partial
@@ -184,7 +199,8 @@ def warehouse_list(args, w, config):
 
     if not args.term:
 
-        _print_bundle_list(l.list().values(),show_partitions=True)
+
+        _print_bundle_list(w.list(),show_partitions=False)
             
     else:
         raise NotImplementedError()

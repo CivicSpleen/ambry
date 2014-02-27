@@ -8,7 +8,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 
 
-from ..cli import prt, plain_prt, err, warn, _find, _print_find, _print_bundle_entry
+from ..cli import prt, plain_prt, fatal, warn, _find, _print_find, _print_bundle_entry
 
 from ..cli import  load_bundle, _print_bundle_list
 from ..source import SourceTree
@@ -90,7 +90,12 @@ def source_parser(cmd):
 
     sp.add_argument('dir', type=str,nargs='?',help='Directory to start search for sources in. ')      
  
- 
+
+    sp = asp.add_parser('edit', help='Run the editor defined in the EDITOR env var on the bundle directory')
+    sp.set_defaults(subcommand='edit')
+    sp.add_argument('term', type=str, help='Name or ID of the bundle or partition to print information for')
+
+
     sp = asp.add_parser('run', help='Run a shell command in source directories passed in on stdin')
     sp.set_defaults(subcommand='run')
 
@@ -137,7 +142,7 @@ def source_info(args, l, st, rc):
         ident = l.resolve(term, location=None)
 
         if not ident:
-            err("Didn't find source for term '{}'. (Maybe need to run 'source sync')", term)
+            fatal("Didn't find source for term '{}'. (Maybe need to run 'source sync')", term)
 
         try:
             bundle = st.resolve_bundle(ident.id_)
@@ -189,18 +194,18 @@ def source_get(args, l, st, rc):
                 if bundle:
                     prt("Loaded {} into {}".format(bundle.identity.sname, bundle.bundle_dir))
             except ConflictError as e:
-                err(e.message)
+                fatal(e.message)
 
         else:
             ident = l.resolve(term, location = Dataset.LOCATION.SREPO)
 
             if not ident:
-                err("Could not find bundle for term: {} ".format(term))
+                fatal("Could not find bundle for term: {} ".format(term))
 
             f = l.files.query.type(Dataset.LOCATION.SREPO).ref(ident.vid).one
 
             if not f.source_url:
-                err("Didn't get a git URL for reference: {} ".format(term))
+                fatal("Didn't get a git URL for reference: {} ".format(term))
 
             args.terms = [f.source_url]
             return source_get(args, l, st, rc)
@@ -248,7 +253,7 @@ def source_new(args, l, st, rc):
     if not os.path.exists(bundle_dir):
         os.makedirs(bundle_dir)
     elif os.path.isdir(bundle_dir):
-        err("Directory already exists: "+bundle_dir)
+        fatal("Directory already exists: "+bundle_dir)
 
     try:
         ambry_account = rc.group('accounts').get('ambry', {})
@@ -256,11 +261,11 @@ def source_new(args, l, st, rc):
         ambry_account = None
 
     if not ambry_account:
-        err("Failed to get an accounts.ambry entry from the configuration. ( It's usually in {}. ) ".format(rc.USER_ACCOUNTS))
+        fatal("Failed to get an accounts.ambry entry from the configuration. ( It's usually in {}. ) ".format(rc.USER_ACCOUNTS))
 
     if not ambry_account.get('name') or not ambry_account.get('email'):
         from ambry.run import RunConfig as rc
-        err("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
+        fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
 
 
     config ={
@@ -293,7 +298,7 @@ def source_new(args, l, st, rc):
     
     with file(file_, 'r') as f_in:
         with file(os.path.join(bundle_dir, 'bundle.yaml'), 'w') as f_out:
-            f_out.write(f_in.read().replace("'**include**'", "!include 'meta/about.description.md'"))
+            f_out.write(f_in.read().replace("'**include**'", "!include 'README.md'"))
         
     os.remove(file_)
         
@@ -302,14 +307,14 @@ def source_new(args, l, st, rc):
     shutil.copy(p('bundle.py'),bundle_dir)
     shutil.copy(p('README.md'),bundle_dir)
     shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta')  )
-    shutil.copy(p('about.description.md'), os.path.join(bundle_dir, 'meta')  )
+    #shutil.copy(p('about.description.md'), os.path.join(bundle_dir, 'meta')  )
 
     try:
         st.sync_bundle(bundle_dir)
     except ConflictError as e:
         from ..util import rm_rf
         rm_rf(bundle_dir)
-        err("Failed to sync bundle at {}  ; {}".format(bundle_dir, e.message))
+        fatal("Failed to sync bundle at {}  ; {}".format(bundle_dir, e.message))
     else:
         prt("CREATED: {}, {}",ident.fqname, bundle_dir)
 
@@ -336,7 +341,7 @@ def source_build(args, l, st, rc):
             try: 
                 Identity.parse_name(name)
             except:  
-                err("Argument '{}' must be either a bundle name or a directory".format(name))
+                fatal("Argument '{}' must be either a bundle name or a directory".format(name))
                 return
             
     if not dir_:
@@ -395,14 +400,14 @@ def source_build(args, l, st, rc):
             prt("{} Building ", bundle.identity.name)
 
             if not bundle.run_prepare():
-                err("{} Prepare failed", bundle.identity.name)
+                fatal("{} Prepare failed", bundle.identity.name)
             
             if not bundle.run_build():
-                err("{} Build failed", bundle.identity.name)
+                fatal("{} Build failed", bundle.identity.name)
             
         if args.install and not args.dryrun:
             if not bundle.run_install(force=True):
-                err('{} Install failed', bundle.identity.name)
+                fatal('{} Install failed', bundle.identity.name)
             
 
     build_dirs = {}
@@ -442,7 +447,7 @@ def source_build(args, l, st, rc):
         try:
             dir_ = build_dirs[n]
         except KeyError:
-            err("Failed to find directory for bundle {}".format(n))
+            fatal("Failed to find directory for bundle {}".format(n))
 
         prt('')
         prt("{} Building in {}".format(n, dir_))
@@ -498,7 +503,7 @@ def do_source_run(ident, args, l, st, rc):
                 mod = import_file(f)
             except ImportError:
                 raise
-                err("Could not get python file neither '{}', nor '{}'".format(args.python, f))
+                fatal("Could not get python file neither '{}', nor '{}'".format(args.python, f))
 
 
 
@@ -615,6 +620,33 @@ def source_deps(args, l, st, rc):
 def source_watch(args, l, st, rc):
 
     st.watch()
+
+def source_edit(args, l, st, rc):
+    from ambry.orm import Dataset
+    from os import environ
+    from subprocess import Popen
+
+    if not args.term:
+        fatal("Must supply a bundle term")
+
+    term = args.term
+
+    editor = environ['EDITOR']
+
+    try:
+        ident = l.resolve(term, Dataset.LOCATION.SOURCE)
+    except ValueError:
+        ident = None
+
+    if not ident:
+        fatal("Didn't find a source bundle for term: {} ".format(term))
+
+    root = ident.bundle_path
+
+    prt("Running: {} {}".format(editor, root))
+    prt("Build with: ambry bundle -d {} build".format(ident.sname))
+    prt("Directory : {}".format(ident.bundle_path))
+    Popen(['env',editor,root])
 
 
 

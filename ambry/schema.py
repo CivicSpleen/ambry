@@ -302,7 +302,10 @@ class Schema(object):
         else:
             return type_
 
-        
+    @staticmethod
+    def munge_index_name(table, n):
+        return table.vid_enc + '_' + n
+
     @classmethod
     def get_table_meta_from_db(self,db,  name_or_id,  use_id=False, 
                                driver=None, d_vid = None, session=None, alt_name=None ):
@@ -398,22 +401,19 @@ class Schema(object):
                         constraints[cons.strip()] = []
                     
                     constraints[cons.strip()].append(ac)
-            
 
-        def munge_name(n):
-            return table.vid_enc+'_'+n
 
         # Append constraints. 
         for constraint, columns in constraints.items():
-            at.append_constraint(UniqueConstraint(name=munge_name(constraint),*columns))
+            at.append_constraint(UniqueConstraint(name=self.munge_index_name(table, constraint),*columns))
              
         # Add indexes   
         for index, columns in indexes.items():
-            Index(munge_name(index), unique = False ,*columns)
+            Index(self.munge_index_name(table, index), unique = False ,*columns)
     
         # Add unique indexes   
         for index, columns in uindexes.items():
-            Index(munge_name(index), unique = True ,*columns)
+            Index(self.munge_index_name(table, index), unique = True ,*columns)
         
         #for from_col, to_col in foreign_keys.items():
         #    at.append_constraint(ForeignKeyConstraint(from_col, to_col))
@@ -422,14 +422,14 @@ class Schema(object):
  
     def generate_indexes(self, table):
         """Used for adding indexes to geo partitions. Generates index CREATE commands"""
-        
-         
+
         indexes = {}
         uindexes = {}
         
         for column in table.columns:
             # assemble non unique indexes
             if column.indexes and column.indexes.strip():
+                print column.indexes
                 for cons in column.indexes.strip().split(','):
                     if cons.strip() not in indexes:
                         indexes[cons.strip()] = set()
@@ -443,14 +443,15 @@ class Schema(object):
                     uindexes[cons.strip()].add(column)
 
         for index_name, cols in indexes.items():
+            index_name = self.munge_index_name(table, index_name)
             yield "CREATE INDEX IF NOT EXISTS {} ON {} ({});".format(index_name, table.name,  
                                                                      ','.join([c.name for c in cols]) )
             
         for index_name, cols in uindexes.items():
+            index_name = self.munge_index_name(table, index_name)
             yield "CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} ({});".format(index_name, table.name, 
                                                                              ','.join([c.name for c in cols]) )
-             
-    
+
                     
     def create_tables(self):
         '''Create the defined tables as database tables.'''
@@ -471,7 +472,7 @@ class Schema(object):
 
         bdr = CasterTransformBuilder()
 
-        for c in self.columns:
+        for c in table.columns:
 
             # Try to get a caster type object from the bundle
             if 'caster' in c.data and c.data['caster']:

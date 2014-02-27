@@ -34,6 +34,10 @@ class TestLogger(object):
     def error(self, message):
         print("ERROR: {}".format(message))
 
+    def warn(self, message):
+        print("Warn: {}".format(message))
+
+
 class Test(TestBase):
  
     def setUp(self):
@@ -148,7 +152,75 @@ class Test(TestBase):
     def test_remote_postgres_install(self):
         self._test_remote_install('postgres1')
 
+    def test_manifest(self):
 
+        from ambry.warehouse.manifest import Manifest
+
+        m = Manifest("""
+
+First Line of documentation
+
+partitions:
+
+part1 # Comment
+part2 # Comment
+
+views:
+
+create view foobar1 as
+one
+two
+three;
+
+create view foobar2 as
+one
+two
+three;
+
+documentation:
+
+Foo Doc
+
+views:
+
+create view foobar3 as
+one
+two
+three;
+
+doc:
+
+More Documentation
+
+sql:driver1|driver2
+
+one
+two
+three
+
+sql:driver1
+
+four
+five
+
+sql:driver2
+
+seven
+eight
+
+        """)
+
+        for view in m.views:
+            print "view", view
+
+        for partition in m.partitions:
+            print 'partition', partition
+
+        print 'doc', m.documentation
+
+        print '----'
+
+        print m.sql
 
     def x_test_install(self):
         
@@ -208,7 +280,7 @@ class Test(TestBase):
         for p in self.bundle.partitions:
             lr = self.bundle.init_log_rate(10000)
             w.install(p, progress_cb = partial(progress_cb, lr))
-             
+
 
 def suite():
     suite = unittest.TestSuite()

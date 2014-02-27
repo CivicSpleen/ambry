@@ -358,13 +358,8 @@ class CasterTransformBuilder(object):
         self.types = []
         self._compiled = None
         self.custom_types = {}
-        if env:
-            self._globals = dict(globals().items() + env[0].items())
-            self._locals = dict(locals().items() + env[1].items())
 
-        else:
-            self._globals, self._locals = globals(), locals()
-
+        self.dict_code = None
 
     def append(self, name, type_):
         self.types.append((name,type_))

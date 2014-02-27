@@ -132,4 +132,15 @@ class PostgresWarehouse(RelationalWarehouse):
             r = self.database.connection.execute('commit')
 
 
+    def install_view(self, view_text):
+
+
+        print '!!!!', view_text
+
+        return
+
+        e = self.database.connection.execute
+
+        e(view_text)
+
 

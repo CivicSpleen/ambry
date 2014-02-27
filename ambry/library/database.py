@@ -565,6 +565,7 @@ class LibraryDb(object):
 
         from ..dbexceptions import NotFoundError
         from ..identity import PartitionNameQuery
+        from sqlalchemy.orm.exc import NoResultFound
 
         try:
             b = self.get(bundle.identity.vid)

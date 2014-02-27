@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..cli import prt,err, _find, plain_prt, _print_bundle_list, _print_bundle_entry
+from ..cli import prt, warn, fatal, _find, plain_prt, _print_bundle_list, _print_bundle_entry
 
 
 def root_parser(cmd):
@@ -123,13 +123,13 @@ def root_info(args, l, st, rc):
     from ..cli import load_bundle, _print_info
     from ..orm import Dataset
 
-    ident = l.resolve(args.term, location=None)
+    ident = l.resolve(args.term, location=None, use_remote = True)
 
     if not ident:
-        err("Failed to find record for: {}", args.term)
+        fatal("Failed to find record for: {}", args.term)
         return
 
-
+    l.get(ident.vid)
 
     if ident.locations.is_in(Dataset.LOCATION.LIBRARY):
         b = l.get(ident.vid)
@@ -183,11 +183,18 @@ def root_find(args, l, st, rc):
         s = l.source
 
         for ident in idents:
-            bundle = s.resolve_build_bundle(ident.vid)
+            try:
+                bundle = s.resolve_build_bundle(ident.vid)
+            except Exception as e:
+                warn("Failed to load for {}: {}".format(ident, e.message))
 
             if bundle:
                 repo = GitRepository(None, bundle.bundle_dir)
-                repo.bundle_dir = bundle.bundle_dir
+                try:
+                    repo.bundle_dir = bundle.bundle_dir
+                except Exception as e:
+                    warn("Failed to instantiate for {}: {}".format(ident, e.message))
+                    continue
             else:
                 repo = None
 

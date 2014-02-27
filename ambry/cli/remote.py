@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..cli import prt, err, _find, plain_prt, _print_bundle_list, _print_bundle_entry
+from ..cli import prt, fatal, _find, plain_prt, _print_bundle_list, _print_bundle_entry
 import argparse
 
 def remote_parser(cmd):
@@ -51,7 +51,7 @@ def remote_info(args, l, rc):
             dsi = None
 
         if not dsi:
-            err("Failed to find record for: {}", args.term)
+            fatal("Failed to find record for: {}", args.term)
             return 
 
         d = Identity.from_dict(dsi['dataset'])

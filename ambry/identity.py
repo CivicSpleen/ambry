@@ -934,6 +934,7 @@ class LocationRef(object):
     LOCATION.PARTITION = 'LP' # For the partition, b/c also used in File.type
     LOCATION.REMOTE ='R'
     LOCATION.UPSTREAM = 'U'
+    LOCATION.WAREHOUSE = 'U'
 
     def __init__(self,location, revision=None, version=None, code = None):
         self.location = location
@@ -963,7 +964,9 @@ class Locations(object):
         LocationRef.LOCATION.SOURCE,
         LocationRef.LOCATION.LIBRARY,
         LocationRef.LOCATION.REMOTE,
-        LocationRef.LOCATION.UPSTREAM
+        LocationRef.LOCATION.UPSTREAM,
+        LocationRef.LOCATION.WAREHOUSE
+
     ]
 
     def is_in(self, location):

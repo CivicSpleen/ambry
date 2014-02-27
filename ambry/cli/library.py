@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..cli import prt, err, warn, Progressor, _print_info #@UnresolvedImport
+from ..cli import prt, fatal, warn, Progressor, _print_info #@UnresolvedImport
 import os
 
 
@@ -420,14 +420,14 @@ def library_get(args, l, config):
     ident = l.resolve(args.term, use_remote = True)
 
     if not ident:
-        err("Could not resolve term {} ", args.term)
+        fatal("Could not resolve term {} ", args.term)
 
 
     # This will fetch the data, but the return values aren't quite right
     r = l.get(args.term, force=args.force, cb=Progressor('Download {}'.format(args.term)).progress)
 
     if not r:
-        err("Downlaod failed: {}", args.term)
+        fatal("Downlaod failed: {}", args.term)
 
     ident = r.identity
     if r.partition:
@@ -501,5 +501,5 @@ def library_sync(args, l, config):
 
     
 def library_unknown(args, l, config):
-    err("Unknown subcommand")
-    err(args)
+    fatal("Unknown subcommand")
+    fatal(args)

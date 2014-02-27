@@ -123,37 +123,34 @@ class WarehouseInterface(object):
 
         p_vid = self._to_vid(partition)
 
-        p = self.wlibrary.database.session.query(Partition).filter(Partition.vid == p_vid).first()
+        p_orm = self.wlibrary.database.session.query(Partition).filter(Partition.vid == p_vid).first()
 
-        if p and p.installed == 'y':
-            self.logger.warn("Skipping {}; already installed".format(p.vname))
+        if p_orm and p_orm.installed == 'y':
+            self.logger.warn("Skipping {}; already installed".format(p_orm.vname))
             return
 
         bundle, p, tables = self._setup_install(p_vid)
-        installed_tables = set()
-        if p.identity.format == 'db':
-            self.install_partition(bundle, p)
-            for table_name, urls in tables.items():
 
+        if p.identity.format not in ('db', 'geo'):
+            self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
+            return;
+
+        self.install_partition(bundle, p)
+
+        for table_name, urls in tables.items():
+
+            if p.identity.format == 'db':
                 if urls:
                     itn = self.load_remote(p, table_name, urls)
                 else:
                     itn = self.load_local(p, table_name)
-                installed_tables.add((table_name, itn))
-
-        elif p.identity.format == 'geo':
-            self.install_partition(bundle, p)
-            for table_name, urls in tables.items():
+            else:
                 itn = self.load_ogr(p, table_name)
-                installed_tables.add((table_name, itn))
-        else:
-            self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
 
-        for source_table, installed_table in installed_tables:
             orm_table = p.get_table(table_name)
-            self.library.database.mark_table_installed(orm_table.vid, installed_table)
+            self.library.database.mark_table_installed(orm_table.vid, itn)
 
-            self.library.database.mark_partition_installed(p_vid)
+        self.library.database.mark_partition_installed(p_vid)
 
     def install_partition(self, bundle, partition):
         '''Install the records for the partition, the tables referenced by the partition,
@@ -170,6 +167,12 @@ class WarehouseInterface(object):
 
         for table_name in p.tables:
             self.create_table(p, table_name)
+
+    def install_view(self, view_text):
+        raise NotImplementedError()
+
+    def run_sql(self, sql_text):
+        raise NotImplementedError()
 
 
     def load_local(self, partition, table_name):
@@ -325,6 +328,21 @@ class WarehouseInterface(object):
     def _ogr_args(self, partition):
         '''Return a arguments for ogr2ogr to connect to the database'''
         raise NotImplementedError()
+
+    def list(self):
+        from ..orm import Partition
+        from ..identity import LocationRef
+
+        orms  = self.wlibrary.database.session.query(Partition).filter(Partition.installed == 'y').all()
+
+        idents  = []
+
+        for p in orms:
+            ident = p.identity
+            ident.locations.set(LocationRef.LOCATION.WAREHOUSE)
+            idents.append(ident)
+
+        return sorted(idents, key = lambda x : x.fqname)
 
 
     def info(self):

@@ -22,3 +22,4 @@ class PostgresDatabase(RelationalDatabase):
             return True  #signal did create
 
         return False  # signal didn't create
+

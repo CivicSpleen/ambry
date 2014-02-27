@@ -1,5 +1,5 @@
 
-from ..cli import prt, err, warn
+from ..cli import prt, fatal, warn
 
 def config_parser(cmd):
     import argparse
@@ -55,7 +55,7 @@ def config_install(args, rc):
             prt("File output file exists, overwriting: {}".format(install_file))
             contents = pkgutil.get_data("ambry.support", 'ambry-{}.yaml'.format(args.template))
         else:
-            err("Output file {} exists. Use -e to edit, or -f to overwrite".format(install_file))
+            fatal("Output file {} exists. Use -e to edit, or -f to overwrite".format(install_file))
     else:
         contents = pkgutil.get_data("ambry.support", 'ambry-{}.yaml'.format(args.template))
 

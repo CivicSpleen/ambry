@@ -206,6 +206,7 @@ class ValueInserter(ValueWriter):
             self.orm_table = self.bundle.schema.table(table.name)
             self.caster = self.bundle.schema.caster(table.name)
 
+
         self.null_row = self.orm_table.null_dict
 
         self.cast_error_handler = cast_error_handler(self) if cast_error_handler else None
@@ -236,6 +237,7 @@ class ValueInserter(ValueWriter):
         code_dict = None
 
         try:
+            cast_errors =  None
 
             if isinstance(values, dict):
 

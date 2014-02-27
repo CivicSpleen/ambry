@@ -217,3 +217,9 @@ class RelationalWarehouse(WarehouseInterface):
         else:
             self.logger.error("Failed to find partition or bundle by name '{}'".format(name))
 
+
+    def run_sql(self, sql_text):
+
+        e = self.database.connection.execute
+
+        e(sql_text)

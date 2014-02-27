@@ -112,30 +112,3 @@ class DatabaseInterface(object):
 
 
 
-def _on_connect_geo(dbapi_con, con_record):
-    '''ISSUE some Sqlite pragmas when the connection is created'''
-    from ..util import RedirectStdStreams
-
-    dbapi_con.execute('PRAGMA page_size = 8192')
-    dbapi_con.execute('PRAGMA temp_store = MEMORY')
-    dbapi_con.execute('PRAGMA cache_size = 500000')
-    dbapi_con.execute('PRAGMA foreign_keys = ON')
-    dbapi_con.execute('PRAGMA journal_mode = OFF')
-    #dbapi_con.execute('PRAGMA synchronous = OFF')
-
-    try:
-        dbapi_con.execute('select spatialite_version()')
-        return
-    except:
-        try:
-            dbapi_con.enable_load_extension(True)
-        except AttributeError as e:
-            raise
-
-    try:
-        with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it.
-            dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so')")
-    except:
-        with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it.
-            dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so.3')")
-

@@ -89,6 +89,11 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
             
         return ValueUpdater(self.bundle, table , self,**kwargs)
 
+    def _on_connect(self, conn):
+        '''Called from engine() to update the database'''
+        _on_connect_partition(conn)
+
+
     def create(self):
         from ambry.orm import Dataset
 
@@ -102,11 +107,8 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
         
         if RelationalDatabase._create(self):
             self.post_create()
-              
-    @property
-    def engine(self):
-        return self._get_engine(_on_connect_partition)
-                  
+
+
     # DEPRECATED! Should use the session_context instead
     @property
     def session(self):
@@ -118,9 +120,6 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
             
         return self._session
 
-    
-
-   
 def _on_connect_partition(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
 

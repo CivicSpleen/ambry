@@ -28,6 +28,12 @@ def err(template, *args, **kwargs):
     global logger
     
     logger.error("ERROR: "+template.format(*args, **kwargs))
+
+def fatal(template, *args, **kwargs):
+    import sys
+    global logger
+
+    logger.error("FATAL: "+template.format(*args, **kwargs))
     sys.exit(1)
 
 def warn(template, *args, **kwargs):
@@ -404,7 +410,7 @@ def main():
     logger.setLevel(logging.INFO) 
 
     if not f:
-        err("Error: No command: "+args.command)
+        fatal("Error: No command: "+args.command)
     else:
         try:
             f(args, rc)

@@ -206,34 +206,13 @@ class SqliteDatabase(RelationalDatabase):
         except:
             return 0
     
-        
-    def _get_engine(self, connect_listener):
-        '''return the SqlAlchemy engine for this database'''
-        from sqlalchemy import create_engine  
-        import sqlite3
-
-        try:
-            if not self._engine:
-                self.require_path()
-                self._engine = create_engine(self.dsn,
-                                             connect_args={'detect_types': sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES},
-                                             native_datetime=True,
-                                             echo=False)
 
 
-                logger.debug("_get_engine: {}".format(self.dsn))
+    def _on_connect(self, conn):
+        '''Called from engine() to update the database'''
+        _on_connect_update_sqlite_schema(conn)
+        _on_connect_bundle(conn)
 
-                from sqlalchemy import event
-
-                event.listen(self._engine, 'connect',connect_listener)
-                #event.listen(self._engine, 'connect', _on_connect_update_schema)
-
-                _on_connect_update_sqlite_schema(self.connection)
-
-            return self._engine
-        except:
-            print "ERROR; Failed for DSN {} ".format(self.dsn)
-            raise
 
     @property
     def connection(self):
@@ -531,10 +510,7 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
             self.post_create()
           
-        
-    @property
-    def engine(self):
-        return self._get_engine(_on_connect_bundle)
+
         
     @property
     def session(self):

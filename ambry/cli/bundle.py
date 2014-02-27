@@ -5,7 +5,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 
 
-from ..cli import prt, err, warn
+from ..cli import prt, fatal, warn
 from ..cli import  _source_list, load_bundle, _print_bundle_list
 from ..source import SourceTree
 
@@ -46,7 +46,7 @@ def bundle_command(args, rc):
 
                     bundle_file = os.path.join(bundle.bundle_dir,'bundle.py')
                 except ConflictError as e:
-                    err(e.message)
+                    fatal(e.message)
 
 
         elif args.bundle_dir == '-':
@@ -69,14 +69,14 @@ def bundle_command(args, rc):
 
 
     if not os.path.exists(bundle_file):
-        err("Bundle code file does not exist: {}".format(bundle_file) )
+        fatal("Bundle code file does not exist: {}".format(bundle_file) )
 
     bundle_dir = os.path.dirname(bundle_file)
 
     config_file = os.path.join(bundle_dir, 'bundle.yaml')
 
     if not os.path.exists(config_file):
-        err("Bundle config file does not exist: {}".format(bundle_file) )
+        fatal("Bundle config file does not exist: {}".format(bundle_file) )
 
     # Import the bundle file from the
     rp = os.path.realpath(bundle_file)
@@ -115,7 +115,7 @@ def bundle_command(args, rc):
             getf(phase)(args, b, st, rc)
     except DependencyError as e:
         st.set_bundle_state(b.identity, 'error:dependency')
-        err("Phase {} failed: {}", phase, e.message)
+        fatal("Phase {} failed: {}", phase, e.message)
     except Exception:
         st.set_bundle_state(b.identity, 'error:'+phase)
         raise
@@ -285,7 +285,7 @@ def bundle_info(args, b, st, rc):
         #
         dep = b.library.dep(args.dep)
         if not dep:
-            err("Didn't find dependency for {}".format(args.dep))
+            fatal("Didn't find dependency for {}".format(args.dep))
 
         ns = vars(args)
         ns['dep'] = None
@@ -481,3 +481,4 @@ def bundle_source(args, b, st, rc):
             repo.pull()
 
         return
+

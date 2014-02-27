@@ -6,7 +6,6 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from inserter import InserterInterface, UpdaterInterface
 from .partition import PartitionDb
 from ..partition.geo import GeoPartitionName
-from . import _on_connect_geo
 
 class FeatureInserter(InserterInterface):
     
@@ -81,11 +80,11 @@ class GeoDb(PartitionDb):
     def make_path(cls, container):
         return container.path + cls.EXTENSION
 
-    @property
-    def engine(self):
-        return self._get_engine(_on_connect_geo)
-   
-   
+    def _on_connect(self):
+        from  sqlite import _on_connect_update_sqlite_schema
+        '''Called from engine() to update the database'''
+        _on_connect_geo(self.connection)
+
     def inserter(self,  table = None, dest_srs=4326, source_srs=None, layer_name=None):
         
         if table is None and self.partition.identity.table:
@@ -95,5 +94,33 @@ class GeoDb(PartitionDb):
 
 class SpatialiteWarehouseDatabase(GeoDb):
     pass
+
+
+def _on_connect_geo(dbapi_con, con_record):
+    '''ISSUE some Sqlite pragmas when the connection is created'''
+    from ..util import RedirectStdStreams
+
+    dbapi_con.execute('PRAGMA page_size = 8192')
+    dbapi_con.execute('PRAGMA temp_store = MEMORY')
+    dbapi_con.execute('PRAGMA cache_size = 500000')
+    dbapi_con.execute('PRAGMA foreign_keys = ON')
+    dbapi_con.execute('PRAGMA journal_mode = OFF')
+    #dbapi_con.execute('PRAGMA synchronous = OFF')
+
+    try:
+        dbapi_con.execute('select spatialite_version()')
+        return
+    except:
+        try:
+            dbapi_con.enable_load_extension(True)
+        except AttributeError as e:
+            raise
+
+    try:
+        with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it.
+            dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so')")
+    except:
+        with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it.
+            dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so.3')")
 
 
