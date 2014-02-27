@@ -26,9 +26,9 @@ class SpatialiteDatabase(SqliteDatabase, SqliteAttachmentMixin):
         self.create()
 
 
-    def _on_connect(self):
+    def _on_connect(self, conn):
         from sqlite import _on_connect_update_sqlite_schema
         from geo import _on_connect_geo
         '''Called from engine() to update the database'''
-        _on_connect_update_sqlite_schema(self.connection)
-        _on_connect_geo(self.connection)
+        _on_connect_update_sqlite_schema(conn, None)
+        _on_connect_geo(conn, None)
