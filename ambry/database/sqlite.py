@@ -212,6 +212,7 @@ class SqliteDatabase(RelationalDatabase):
         pass
 
     def _on_create_engine(self, engine):
+        '''Called just after the engine is created '''
         from sqlalchemy import event
 
         _on_connect_update_sqlite_schema(self.connection, None)
@@ -255,8 +256,8 @@ class SqliteDatabase(RelationalDatabase):
         
         engine = create_engine(self.dsn, echo=False)
         connection = engine.connect()
-
         connection.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
+        connection.close()
 
     MIN_NUMBER_OF_TABLES = 1
     def is_empty(self):
@@ -498,8 +499,8 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         _on_connect_bundle(connection, None)
 
     def _on_create_engine(self, engine):
+        '''Called just after the engine is created '''
         super(SqliteBundleDatabase, self)._on_create_engine(engine)
-
 
 
     def create(self):

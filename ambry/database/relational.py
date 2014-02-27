@@ -180,7 +180,6 @@ class RelationalDatabase(DatabaseInterface):
                                          echo=False)
 
             self._on_create_engine(self._engine)
-            #event.listen(self._engine, 'connect', connect_listener)
 
         return self._engine
 
