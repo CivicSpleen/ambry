@@ -208,7 +208,7 @@ class RelationalDatabase(DatabaseInterface):
         '''Used in engine but only implemented for sqlite'''
         pass
 
-    def _on_connect(self):
+    def _on_connect(self, connection):
         pass
 
     @property
