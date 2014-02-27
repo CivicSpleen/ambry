@@ -45,4 +45,13 @@ names:
     vid: diEGPXmDC8001
     vname: source-dataset-subset-variation-0.0.1
 partitions:
+- source-dataset-subset-variation-tthree
+- source-dataset-subset-variation-geot1-geo
+- source-dataset-subset-variation-geot2-geo
+- source-dataset-subset-variation-tone-missing
+- source-dataset-subset-variation-tone
+- source-dataset-subset-variation-csv-csv-1
+- source-dataset-subset-variation-csv-csv-2
+- source-dataset-subset-variation-csv-csv-3
+- source-dataset-subset-variation-csv-csv-4
 - source-dataset-subset-variation-hdf5-hdf

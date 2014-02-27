@@ -99,7 +99,7 @@ class LibraryDb(object):
             if self.driver == 'sqlite':
                 event.listen(self._engine, 'connect', _pragma_on_connect)
                 #event.listen(self._engine, 'connect', _on_connect_update_schema)
-                _on_connect_update_sqlite_schema(self.connection)
+                _on_connect_update_sqlite_schema(self.connection, None)
 
         return self._engine
 

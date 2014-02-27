@@ -162,11 +162,19 @@ class RelationalDatabase(DatabaseInterface):
     def drop_table(self, table_name, use_id = False):
         table = self.table(table_name)
         
-        table.drop(self.engine)        
+        table.drop(self.engine)
+
 
     @property
-    def connection(self, check_exists=True):
+    def connection(self):
         '''Return an SqlAlchemy connection'''
+
+        return self.get_connection()
+
+
+    def get_connection(self, check_exists=True):
+        '''Return an SqlAlchemy connection. check_exists is ignored'''
+
         if not self._connection:
             try:
                 self._connection = self.engine.connect()
@@ -176,6 +184,7 @@ class RelationalDatabase(DatabaseInterface):
                 raise
             
         return self._connection
+
 
     @property
     def engine(self):

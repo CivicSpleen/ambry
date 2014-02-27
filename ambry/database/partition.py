@@ -91,7 +91,7 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
 
     def _on_connect(self, conn):
         '''Called from engine() to update the database'''
-        _on_connect_partition(conn)
+        _on_connect_partition(conn, None)
 
 
     def create(self):

@@ -210,32 +210,21 @@ class SqliteDatabase(RelationalDatabase):
 
     def _on_connect(self, conn):
         '''Called from engine() to update the database'''
-        _on_connect_update_sqlite_schema(conn)
-        _on_connect_bundle(conn)
+        _on_connect_update_sqlite_schema(conn, None)
+        _on_connect_bundle(conn, None)
 
-
-    @property
-    def connection(self):
-        return self.get_connection()
 
     def get_connection(self, check_exists=True):
-        '''Return an SqlAlchemy connection'''
-        if not self._connection:
-            
-            if not os.path.exists(self.path) and check_exists:
-                from ..dbexceptions import DatabaseMissingError
-                raise DatabaseMissingError("Trying to make a connection to a sqlite database "+
-                                "that does not exist. check_exists={} path={}"
-                                .format(check_exists, self.path))
+        '''Return an SqlAlchemy connection, but allow for existence check, which
+        uses os.path.exists'''
 
-            try:
-    
-                self._connection = self.engine.connect()
-            except Exception as e:
-                self.error("Failed to open: '{}': {} ".format(self.path, e))
-                raise
-            
-        return self._connection
+        if not os.path.exists(self.path) and check_exists:
+            from ..dbexceptions import DatabaseMissingError
+
+            raise DatabaseMissingError("Trying to make a connection to a sqlite database " +
+                                       "that does not exist.  path={}".format(self.path))
+
+        return super(SqliteDatabase, self).get_connection(check_exists)
 
     @property
     def unmanaged_session(self):
@@ -607,7 +596,7 @@ def _on_connect_bundle(dbapi_con, con_record):
     dbapi_con.execute('PRAGMA foreign_keys = ON')
 
 
-def _on_connect_update_sqlite_schema(conn):
+def _on_connect_update_sqlite_schema(conn, con_record):
     '''Perform on-the-fly schema updates based on the user version'''
 
     version = conn.execute('PRAGMA user_version').fetchone()[0]
