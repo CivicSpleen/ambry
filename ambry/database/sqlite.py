@@ -207,11 +207,16 @@ class SqliteDatabase(RelationalDatabase):
             return 0
     
 
+    def _on_create_connection(self, connection):
+        '''Called from get_connection() to update the database'''
+        pass
 
-    def _on_connect(self, conn):
-        '''Called from engine() to update the database'''
-        _on_connect_update_sqlite_schema(conn, None)
-        _on_connect_bundle(conn, None)
+    def _on_create_engine(self, engine):
+        from sqlalchemy import event
+
+        _on_connect_update_sqlite_schema(self.connection, None)
+
+        event.listen(self._engine, 'connect', _on_connect_bundle)
 
 
     def get_connection(self, check_exists=True):
@@ -486,6 +491,16 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
         self._session = None # This is controlled by the BundleLockContext
 
+    def _on_create_connection(self, connection):
+        '''Called from get_connection() to update the database'''
+        super(SqliteBundleDatabase, self)._on_create_connection(connection)
+        _on_connect_update_sqlite_schema(connection, None)
+        _on_connect_bundle(connection, None)
+
+    def _on_create_engine(self, engine):
+        super(SqliteBundleDatabase, self)._on_create_engine(engine)
+
+
 
     def create(self):
 
@@ -587,6 +602,17 @@ class SqliteMemoryDatabase(SqliteDatabase, SqliteAttachmentMixin):
             raise QueryError("Error while executing {} in database {} ({}): {}".format(args, self.dsn, type(self), e.message))
 
 
+class BuildBundleDb(SqliteBundleDatabase):
+    '''For Bundle databases when they are being built, and the path is computed from
+    the build base director'''
+    @property
+    def path(self):
+        return self.bundle.path + self.EXTENSION
+
+
+
+
+
 def _on_connect_bundle(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created
     
@@ -632,12 +658,6 @@ def _on_connect_update_sqlite_schema(conn, con_record):
     conn.execute('PRAGMA user_version = {}'.format(SqliteDatabase.SCHEMA_VERSION))
 
 
-class BuildBundleDb(SqliteBundleDatabase):
-    '''For Bundle databases when they are being built, and the path is computed from 
-    the build base director'''
-    @property 
-    def path(self):
-        return self.bundle.path + self.EXTENSION
 
  
 def insert_or_ignore(table, columns):

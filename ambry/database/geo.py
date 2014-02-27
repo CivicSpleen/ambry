@@ -80,10 +80,17 @@ class GeoDb(PartitionDb):
     def make_path(cls, container):
         return container.path + cls.EXTENSION
 
-    def _on_connect(self, conn):
-        from  sqlite import _on_connect_update_sqlite_schema
-        '''Called from engine() to update the database'''
-        _on_connect_geo(conn, None)
+    def _on_create_connection(self, connection):
+        '''Called from get_connection() to update the database'''
+        super(GeoDb, self)._on_create_connection(connection)
+
+    def _on_create_engine(self, engine):
+        from sqlalchemy import event
+
+        super(GeoDb, self)._on_create_engine(engine)
+
+        event.listen(self._engine, 'connect', _on_connect_geo)
+
 
     def inserter(self,  table = None, dest_srs=4326, source_srs=None, layer_name=None):
         

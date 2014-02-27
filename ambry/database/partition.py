@@ -89,9 +89,17 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
             
         return ValueUpdater(self.bundle, table , self,**kwargs)
 
-    def _on_connect(self, conn):
-        '''Called from engine() to update the database'''
-        _on_connect_partition(conn, None)
+
+    def _on_create_connection(self, connection):
+        '''Called from get_connection() to update the database'''
+        super(PartitionDb, self)._on_create_connection(connection)
+
+    def _on_create_engine(self, engine):
+        from sqlalchemy import event
+
+        super(PartitionDb, self)._on_create_engine(engine)
+
+        event.listen(self._engine, 'connect', _on_connect_partition)
 
 
     def create(self):

@@ -166,27 +166,6 @@ class RelationalDatabase(DatabaseInterface):
 
 
     @property
-    def connection(self):
-        '''Return an SqlAlchemy connection'''
-
-        return self.get_connection()
-
-
-    def get_connection(self, check_exists=True):
-        '''Return an SqlAlchemy connection. check_exists is ignored'''
-
-        if not self._connection:
-            try:
-                self._connection = self.engine.connect()
-                self._on_connect(self._connection)
-            except Exception as e:
-                self.error("Failed to open: '{}': {} ".format(self.dsn, e))
-                raise
-            
-        return self._connection
-
-
-    @property
     def engine(self):
         '''return the SqlAlchemy engine for this database'''
         from sqlalchemy import create_engine
@@ -200,15 +179,40 @@ class RelationalDatabase(DatabaseInterface):
                                          native_datetime=True,
                                          echo=False)
 
+            self._on_create_engine(self._engine)
+            #event.listen(self._engine, 'connect', connect_listener)
+
         return self._engine
 
+    @property
+    def connection(self):
+        '''Return an SqlAlchemy connection'''
+
+        return self.get_connection()
+
+
+    def get_connection(self, check_exists=True):
+        '''Return an SqlAlchemy connection. check_exists is ignored'''
+
+        if not self._connection:
+            try:
+                self._connection = self.engine.connect()
+                self._on_create_connection(self._connection)
+            except Exception as e:
+                self.error("Failed to open: '{}': {} ".format(self.dsn, e))
+                raise
+            
+        return self._connection
 
 
     def require_path(self):
         '''Used in engine but only implemented for sqlite'''
         pass
 
-    def _on_connect(self, connection):
+    def _on_create_connection(self, connection):
+        pass
+
+    def _on_create_engine(self, engine):
         pass
 
     @property
