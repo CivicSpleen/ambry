@@ -119,7 +119,7 @@ def _on_connect_geo(dbapi_con, con_record):
         return
     except:
         try:
-            dbapi_con.raw_connection().enable_load_extension(True)
+            dbapi_con.enable_load_extension(True)
         except AttributeError as e:
             raise
 
