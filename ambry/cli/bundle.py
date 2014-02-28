@@ -110,6 +110,11 @@ def bundle_command(args, rc):
 
     phases.append(args.subcommand)
 
+    if args.debug:
+        from ..util import  debug
+        warn('Entering debug mode. Send USR1 signal ( 10 or 16 ) to break to interactive prompt')
+        debug.listen()
+
     try:
         for phase in phases:
             getf(phase)(args, b, st, rc)
@@ -126,6 +131,8 @@ def bundle_parser(cmd):
     parser = cmd.add_parser('bundle', help='Manage bundle files')
     parser.set_defaults(command='bundle')
     parser.add_argument('-d','--bundle-dir', required=False,   help='Path to the bundle .py file')
+    parser.add_argument('-D', '--debug', required=False, default=False, action="store_true",
+                                        help='URS1 signal will break to interactive prompt')
     parser.add_argument('-t','--test',  default=False, action="store_true", help='Enable bundle-specific test behaviour')
     parser.add_argument('-m','--multi',  type = int,  nargs = '?',
                         default = 1,
