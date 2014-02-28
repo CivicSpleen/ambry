@@ -112,7 +112,7 @@ def bundle_command(args, rc):
 
     if args.debug:
         from ..util import  debug
-        warn('Entering debug mode. Send USR1 signal ( 10 or 16 ) to break to interactive prompt')
+        warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
         debug.listen()
 
     try:

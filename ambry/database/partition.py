@@ -143,7 +143,7 @@ def _on_connect_partition(dbapi_con, con_record):
     dbapi_con.execute('PRAGMA temp_store = MEMORY')
     dbapi_con.execute('PRAGMA cache_size = -500000')
     dbapi_con.execute('PRAGMA foreign_keys = OFF')
-    dbapi_con.execute('PRAGMA journal_mode = memory')
+    dbapi_con.execute('PRAGMA journal_mode = wal')
     dbapi_con.execute('PRAGMA synchronous = OFF')
 
     #dbapi_con.enable_load_extension(True)
