@@ -213,11 +213,7 @@ class SqliteDatabase(RelationalDatabase):
 
     def _on_create_engine(self, engine):
         '''Called just after the engine is created '''
-        from sqlalchemy import event
-
-        _on_connect_update_sqlite_schema(self.connection, None)
-
-        event.listen(self._engine, 'connect', _on_connect_bundle)
+        pass
 
 
     def get_connection(self, check_exists=True):
@@ -266,6 +262,7 @@ class SqliteDatabase(RelationalDatabase):
             return True
         
         if  self.version >= 12:
+
             if not 'config' in self.inspector.get_table_names():
                 return True
             else:
@@ -496,11 +493,15 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         '''Called from get_connection() to update the database'''
         super(SqliteBundleDatabase, self)._on_create_connection(connection)
         _on_connect_update_sqlite_schema(connection, None)
-        _on_connect_bundle(connection, None)
+
 
     def _on_create_engine(self, engine):
         '''Called just after the engine is created '''
+        from sqlalchemy import event
+
         super(SqliteBundleDatabase, self)._on_create_engine(engine)
+
+        event.listen(self._engine, 'connect', _on_connect_bundle)
 
 
     def create(self):

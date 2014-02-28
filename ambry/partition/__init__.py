@@ -218,12 +218,21 @@ class PartitionBase(PartitionInterface):
 
     
     def inserter(self, table_or_name=None,**kwargs):
-        
+
+        if not self.database.exists():
+           self.create()
+
+        return self.database.inserter(table_or_name,**kwargs)
+
+
+    def updater(self, table_or_name=None, **kwargs):
+
         if not self.database.exists():
             self.create()
 
-        return self.database.inserter(table_or_name,**kwargs)
-    
+        return self.database.updater(table_or_name, **kwargs)
+
+
     def delete(self):
         
         try:

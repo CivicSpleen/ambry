@@ -76,6 +76,9 @@ class Bundle(BuildBundle):
         self.log("=== Build db, using an inserter")
         self.build_db_inserter()
 
+        self.log("=== Update")
+        self.build_db_updater()
+
         self.log("=== Build geo")
         self.build_geo()
 
@@ -189,6 +192,14 @@ class Bundle(BuildBundle):
                 ins.insert(cast_row)
                 lr()
         
+
+    def build_db_updater(self):
+
+        p = self.partitions.find(table='tthree')
+
+        with p.updater('tthree') as upd:
+            for row in p.query("SELECT * FROM tthree"):
+                upd.update({'_id': row['id'], '_float': row['float']*2})
 
 
     def build_geo(self):

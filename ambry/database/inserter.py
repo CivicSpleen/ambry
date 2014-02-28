@@ -324,7 +324,7 @@ class ValueUpdater(ValueWriter, UpdaterInterface):
     def __init__(self,  db, bundle, table,  cache_size=50000, text_factory = None): 
         
         from sqlalchemy.sql.expression import bindparam, and_
-        super(ValueUpdater, self).__init__(bundle, db, cache_size=50000, text_factory = text_factory)  
+        super(ValueUpdater, self).__init__(db, bundle,  cache_size=50000, text_factory = text_factory)
     
         self.table = table
         self.statement = self.table.update()

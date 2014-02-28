@@ -436,6 +436,8 @@ class Test(TestBase):
             bundle.pre_build()
             bundle.build_db_inserter_codes()
             bundle.post_build()
+
+
         finally:
             
             # Need to clean up to ensure that we're back to a good state.
@@ -445,7 +447,8 @@ class Test(TestBase):
             shutil.copyfile(
                     bundle.filesystem.path('meta','schema-edit-me.csv'),
                     bundle.filesystem.path('meta','schema.csv'))      
-            
+
+
             bundle.clean()
             bundle = Bundle()   
             bundle.exit_on_fatal = False
@@ -455,7 +458,27 @@ class Test(TestBase):
             bundle.pre_build()
             bundle.build()
             bundle.post_build()
-                  
+
+
+    def test_simple_build(self):
+        import shutil
+
+        bundle = Bundle()
+
+        shutil.copyfile(
+            bundle.filesystem.path('meta', 'schema-edit-me.csv'),
+            bundle.filesystem.path('meta', 'schema.csv'))
+
+
+        bundle.clean()
+        bundle = Bundle()
+        bundle.exit_on_fatal = False
+        bundle.pre_prepare()
+        bundle.prepare()
+        bundle.post_prepare()
+        bundle.pre_build()
+        bundle.build()
+        bundle.post_build()
     
 def suite():
     suite = unittest.TestSuite()

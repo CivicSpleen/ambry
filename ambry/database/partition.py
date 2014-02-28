@@ -87,19 +87,23 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
         else:
             table = self.table(table_or_name.name)
             
-        return ValueUpdater(self.bundle, table , self,**kwargs)
+        return ValueUpdater(self, self.bundle, table , **kwargs)
 
 
     def _on_create_connection(self, connection):
         '''Called from get_connection() to update the database'''
         super(PartitionDb, self)._on_create_connection(connection)
 
+        _on_connect_partition(connection, None)
+
     def _on_create_engine(self, engine):
         from sqlalchemy import event
 
         super(PartitionDb, self)._on_create_engine(engine)
 
-        event.listen(self._engine, 'connect', _on_connect_partition)
+        # This looks like it should be connected to the listener, but it causes
+        # I/O errors, so it is in _on_create_connection
+        #event.listen(self._engine, 'connect', _on_connect_partition)
 
 
     def create(self):
@@ -137,9 +141,9 @@ def _on_connect_partition(dbapi_con, con_record):
 
     dbapi_con.execute('PRAGMA page_size = 8192')
     dbapi_con.execute('PRAGMA temp_store = MEMORY')
-    dbapi_con.execute('PRAGMA cache_size = 500000')
+    dbapi_con.execute('PRAGMA cache_size = -500000')
     dbapi_con.execute('PRAGMA foreign_keys = OFF')
-    dbapi_con.execute('PRAGMA journal_mode = WAL')
+    dbapi_con.execute('PRAGMA journal_mode = memory')
     dbapi_con.execute('PRAGMA synchronous = OFF')
 
     #dbapi_con.enable_load_extension(True)
