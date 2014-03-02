@@ -535,8 +535,13 @@ class LibraryDb(object):
 
         self._mark_update()
 
-
-        dataset = self.install_dataset(bundle)
+        try:
+            dataset = self.install_dataset(bundle)
+        except Exception as e:
+            from ..dbexceptions import DatabaseError
+            raise DatabaseError("Failed to install {} into {}: {}".format(
+                bundle.database.path, self.dsn, e.message
+            ))
 
         s = self.session
 

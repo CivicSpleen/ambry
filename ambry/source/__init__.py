@@ -217,7 +217,8 @@ class SourceTree(object):
                 bundle_state=None,
                 process=None,
                 git_state=None,
-                rev=0
+                rev=0,
+                dependencies=bundle.config.build.get('dependencies')
             )
 
         else:

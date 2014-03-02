@@ -611,7 +611,7 @@ class Library(object):
 
     @property
     def files(self):
-        from .files import Files
+        from files import Files
 
         return Files(self.database)
 

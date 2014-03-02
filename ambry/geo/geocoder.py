@@ -452,6 +452,7 @@ class PlaceCoder(object):
         import json
         import pprint
         import ogr
+        from sqlalchemy.exc import NoSuchColumnError
        
         dest_srs = osr.SpatialReference()
         dest_srs.ImportFromEPSG(4326) # WGS 84
@@ -462,6 +463,7 @@ class PlaceCoder(object):
         
         places = {}
         self.envelopes = []
+        id_col = 'places_id'
         for row in self.places_partition.query("SELECT *, AsText(geometry) AS wkt FROM places"):
 
             d = dict(row)
@@ -471,8 +473,12 @@ class PlaceCoder(object):
 
             d['geometry'] = g
 
-            places[row['places_id']] = d
-            
+            try:
+                places[row['places_id']] = d
+            except NoSuchColumnError:
+                id_col = 'OGC_FID'
+                places[row[id_col]] = d
+
             wgs_env = g.GetEnvelope()
 
             # This envelope is for the Analysis area, 
@@ -481,7 +487,9 @@ class PlaceCoder(object):
             # which is expressed in UTM. 
             # wgs_env = json.loads(row['wgsenvelope'])
 
-            d = (row['places_id'],) + tuple(wgs_env)
+            d = (row[id_col],) + tuple(wgs_env)
+
+
             self.envelopes.append(d)
 
         self.places = places

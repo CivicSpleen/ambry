@@ -267,7 +267,6 @@ def source_new(args, l, st, rc):
         from ambry.run import RunConfig as rc
         fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
 
-
     config ={
         'identity':ident.ident_dict,
         'about': {
@@ -283,9 +282,6 @@ def source_new(args, l, st, rc):
             'title': "Bundle title"
         }
     }
-
-
-
 
     os.makedirs(os.path.join(bundle_dir, 'meta'))
     
@@ -591,6 +587,56 @@ def source_deps(args, l, st, rc):
 
     from ..util import toposort
     from ..source.repository import new_repository
+    from ..identity import Identity
+    from collections import defaultdict
+
+    sources = l.files.query.type(l.files.TYPE.SOURCE).all
+
+    errors = defaultdict(set)
+    deps = defaultdict(set)
+
+    ident_map = {}
+
+    import pprint
+
+    for source in sources:
+
+        if not ('dependencies' in source.data
+                and source.data['dependencies']
+                and source.data['identity']):
+            continue
+
+        bundle_ident = Identity.from_dict(source.data['identity'])
+
+        if not bundle_ident:
+
+            warn("Failed to resolve bundle: {}, {} ".format(source.ref, source.path))
+            continue
+
+        for v in source.data['dependencies'].values():
+            try:
+                ident = l.resolve(v, location=None)
+            except:
+                ident = None
+
+
+            if not ident:
+                errors[bundle_ident.sname].add(v)
+                continue
+
+            deps[ident.id_].add(ident)
+
+
+    print "DEPS"
+    print deps
+
+    print "ERROR"
+    for name, errors in errors.items():
+        print '=',name
+        for e in errors:
+            print '    ', e
+
+    return
 
     repo = new_repository(rc.sourcerepo(args.name))        
 

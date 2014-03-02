@@ -492,7 +492,8 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
     def _on_create_connection(self, connection):
         '''Called from get_connection() to update the database'''
         super(SqliteBundleDatabase, self)._on_create_connection(connection)
-        _on_connect_update_sqlite_schema(connection, None)
+
+        _on_connect_update_sqlite_schema(connection, None) # in both _conn and _engine.
 
 
     def _on_create_engine(self, engine):
@@ -500,6 +501,10 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         from sqlalchemy import event
 
         super(SqliteBundleDatabase, self)._on_create_engine(engine)
+
+        # Note! May need to turn this on for DbBundle Databases when they are loading
+        # old bundles.
+        #event.listen(self._engine, 'connect', _on_connect_update_sqlite_schema)  # in both _conn and _engine.
 
         event.listen(self._engine, 'connect', _on_connect_bundle)
 
@@ -515,7 +520,6 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
             RelationalBundleDatabaseMixin._create(self)
 
             self.post_create()
-          
 
         
     @property
@@ -613,8 +617,6 @@ class BuildBundleDb(SqliteBundleDatabase):
 
 
 
-
-
 def _on_connect_bundle(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created
     
@@ -632,7 +634,7 @@ def _on_connect_update_sqlite_schema(conn, con_record):
     if version:
         version = int(version)
 
-    
+
     if version > 10: # Some files have version of 0 because the version was not set.
 
         if  version < 14:
