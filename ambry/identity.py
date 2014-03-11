@@ -366,7 +366,7 @@ class PartitionName(PartialPartitionName, Name):
                   Name._name_parts[-1:])
 
     def _local_parts(self):
-        
+
         parts = []
         
         if self.table:

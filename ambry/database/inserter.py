@@ -143,9 +143,11 @@ class ValueWriter(InserterInterface):
     def __exit__(self, type_, value, traceback):
     
         if type_ is not None:
-            try: self.bundle.error("Got Exception: "+str(value))
-            except:  print "ERROR: Got Exception {}: {}".format(type_, str(value))
-            self.rollback()
+            try:
+                self.bundle.error("Got exception while exiting inserter context: "+str(value))
+            except:
+                print "ERROR: Got Exception {}: {}".format(type_, str(value))
+                self.rollback()
             return False
 
         self.close()

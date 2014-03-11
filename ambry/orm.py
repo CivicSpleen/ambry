@@ -48,9 +48,7 @@ class JSONEncodedObj(TypeDecorator):
                 # We've changed from using pickle to json, so this handles legacy cases
                 import pickle
                 value = pickle.loads(value)
-                
-                
-                
+
         else:
             value = {}
         return value
@@ -657,37 +655,47 @@ Columns:
         return TableNumber(self.d_id, self.sequence_id)
 
     def add_column(self, name, **kwargs):
+        '''Add a column to the table, or update an existing one '''
 
         import sqlalchemy.orm.session
+        from sqlalchemy.orm.exc import NoResultFound
         from dbexceptions import ConfigurationError
         
         s = sqlalchemy.orm.session.Session.object_session(self)
         
         name = Column.mangle_name(name)
 
-        if kwargs.get('sequence_id', False):
-            sequence = kwargs['sequence_id']
-        else:
-            sequence = None
+        try:
+            row = self.column(name)
+        except NoResultFound:
+            row = None
 
-        row = Column(self, name=name,  **kwargs  )
-         
-        width = kwargs.get('width', None)
-        size = kwargs.get('size', None)
-        default = kwargs.get('default', None)
-        datatype =  kwargs.get('datatype', None)
-        
+        if row:
+            extant = True
+
+        else:
+            row = Column(self, name=name, **kwargs)
+            extant = False
+
         for key, value in kwargs.items():
-            
-            if key[0] != '_' and key not in ['d_id','t_id','name', 'schema_type']:
+
+            excludes = ['d_id','t_id','name', 'schema_type']
+
+            if extant:
+                excludes.append('sequence_id')
+
+            if key[0] != '_' and key not in excludes :
                 setattr(row, key, value)
 
             if isinstance(value, basestring) and len(value) == 0:
                 if key == 'is_primary_key':
                     value = False
                     setattr(row, key, value)
-      
-        s.add(row)
+
+        if extant:
+            s.merge(row)
+        else:
+            s.add(row)
      
         if kwargs.get('commit', True):
             s.commit()

@@ -979,3 +979,38 @@ class Constant:
         self.__dict__[name] = value
 
 
+class session_context(object):
+    """Provide a transactional scope around a series of Sqlalchemyoperations."""
+
+    def __init__(self, sessionmaker_class):
+        self.sessionmaker_class = sessionmaker_class
+        self.session = None
+
+    def __enter__(self):
+        self.session = self.sessionmaker_class()
+        return self.session
+
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+
+
+        if exc_type is not None:
+            # Got an exception
+            self.session.rollback()
+            self.session.close()
+            return False
+        else:
+
+            try:
+                self.session.commit()
+                return True
+            except:
+                self.session.rollback()
+                raise
+            finally:
+                self.session.close()
+
+
+        session.close()
+
+

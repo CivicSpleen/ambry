@@ -304,11 +304,11 @@ class Test(TestBase):
         #
 
         print str(ident.locations)
-        self.assertEquals('     ', str(ident.locations))
+        self.assertEquals('      ', str(ident.locations))
         ident.locations.set(LocationRef.LOCATION.LIBRARY, 1)
         ident.locations.set(LocationRef.LOCATION.REMOTE, 2)
         ident.locations.set(LocationRef.LOCATION.SOURCE)
-        self.assertEquals(' SLR ', str(ident.locations))
+        self.assertEquals(' SLR  ', str(ident.locations))
 
         # Partitions, converting to datasets
 
@@ -689,10 +689,10 @@ class Test(TestBase):
                     bspace='space',
                     variation='orig')
 
-        self.assertEquals('source.com-foobar-space-time-orig-0.0.1', name.vname)
-        self.assertEquals('source.com/foobar-space-time-orig-0.0.1.db', name.cache_key)
-        self.assertEquals('source.com/foobar-space-time-orig-0.0.1', name.path)
-        self.assertEquals('source.com/foobar-space-time-orig', name.source_path)
+        self.assertEquals('source.com-foobar-space-2010p5y-orig-0.0.1', name.vname)
+        self.assertEquals('source.com/foobar-space-2010p5y-orig-0.0.1.db', name.cache_key)
+        self.assertEquals('source.com/foobar-space-2010p5y-orig-0.0.1', name.path)
+        self.assertEquals('source.com/space/foobar-2010p5y-orig', name.source_path)
 
         return
 

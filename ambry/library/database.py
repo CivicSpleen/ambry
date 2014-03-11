@@ -489,6 +489,8 @@ class LibraryDb(object):
         # There should be only one dataset record in the
         # bundle
         db = bundle.database
+        db.update_schema()
+
         bdbs = db.unmanaged_session
 
         s = self.session

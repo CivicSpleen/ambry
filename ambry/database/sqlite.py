@@ -230,7 +230,7 @@ class SqliteDatabase(RelationalDatabase):
 
     @property
     def unmanaged_session(self):
-        
+
         def abort_flush():
             from ambry.dbexceptions import ConflictError
             raise ConflictError('Unmanaged sessions are read-only. Use a managed session to write to the database')
@@ -475,8 +475,11 @@ class BundleLockContext(object):
             return True
             
     def add(self,o):
-        self._bundle._session.add(o) 
-            
+        return self._bundle._session.add(o)
+
+    def merge(self,o):
+        return self._bundle._session.merge(o)
+
 
 class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
@@ -508,6 +511,11 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
         event.listen(self._engine, 'connect', _on_connect_bundle)
 
+
+    def update_schema(self):
+        '''Manually update the schema. This is called when bundles are installed in the library
+        becase that use doesn't involve connections, so the _on_create calls dont get used. '''
+        _on_connect_update_sqlite_schema(self.connection, None)  # in both _conn and _engine.
 
     def create(self):
 
@@ -634,9 +642,7 @@ def _on_connect_update_sqlite_schema(conn, con_record):
     if version:
         version = int(version)
 
-
     if version > 10: # Some files have version of 0 because the version was not set.
-
         if  version < 14:
 
             raise Exception("There should not be any files of less than version 14 in existence. Got: {}".format(version))
@@ -652,10 +658,9 @@ def _on_connect_update_sqlite_schema(conn, con_record):
 
 
         if version < 16:
-
             try:
                 conn.execute('ALTER TABLE tables ADD COLUMN t_universe VARCHAR(200);')
-            except:
+            except Exception as e:
                 pass
 
 

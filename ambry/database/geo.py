@@ -91,7 +91,6 @@ class GeoDb(PartitionDb):
 
         event.listen(self._engine, 'connect', _on_connect_geo)
 
-
     def inserter(self,  table = None, dest_srs=4326, source_srs=None, layer_name=None):
         
         if table is None and self.partition.identity.table:

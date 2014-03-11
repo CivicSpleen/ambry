@@ -23,8 +23,8 @@ def load_bundle(bundle_dir):
 
 class SourceTree(object):
 
-    def __init__(self, base_dir, repos, library, logger=None):
-        self.repos = repos
+    def __init__(self, base_dir, library, logger=None):
+
         self.base_dir = base_dir
         self.library = library
         self.logger = logger

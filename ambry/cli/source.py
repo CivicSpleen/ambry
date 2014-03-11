@@ -27,7 +27,6 @@ def source_command(args, rc):
 
     st = l.source
 
-
     globals()['source_'+args.subcommand](args, l, st, rc)
 
 def source_parser(cmd):

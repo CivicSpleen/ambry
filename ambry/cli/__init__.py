@@ -251,6 +251,9 @@ def _print_info(l,ident, list_partitions=False):
 
     resolved_ident = l.resolve(ident.vid, None) # Re-resolve to get the URL or Locations
 
+    if not resolved_ident:
+        fatal("Failed to resolve while trying to print: {}", ident.vid)
+
     d = ident
 
     bundle = l.source.resolve_build_bundle(d.vid)

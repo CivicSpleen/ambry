@@ -6,6 +6,9 @@ from ..util import lru_cache
 
 @lru_cache()
 def partition_classes():
+    '''Return a holder object that has lists of the known partition types mapped to other keys
+
+    Used for getting a partition class based on simple name, format, extension, etc. '''
 
     from geo import GeoPartitionName,GeoPartitionName,GeoPartition,GeoPartitionIdentity
     from hdf import HdfPartitionName,HdfPartitionName,HdfPartition,HdfPartitionIdentity

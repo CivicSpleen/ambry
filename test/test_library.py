@@ -14,8 +14,6 @@ import ambry.util
 
 from test_base import  TestBase
 
-
-
 logger = ambry.util.get_logger(__name__)
 logger.setLevel(logging.DEBUG) 
 
@@ -59,8 +57,7 @@ class Test(TestBase):
 
         return l
         
-        
-        
+
     def tearDown(self):
         pass
 
