@@ -1346,6 +1346,9 @@ class Identity(object):
         return self._compose_fqname(self._name.vname,self.vid)
 
 
+    def __hash__(self):
+        return hash(str(self))
+
 class PartitionIdentity(Identity):
     '''Subclass of Identity for partitions'''
 

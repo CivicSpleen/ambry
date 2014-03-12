@@ -237,11 +237,14 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
         for pi in ident.partitions.values():
             prtf(p_format, *[f(pi) for f in extractors])
 
-def _print_bundle_list(idents, subset_names = None, prtf=prt,fields=[], show_partitions=False):
+def _print_bundle_list(idents, subset_names = None, prtf=prt,fields=[], show_partitions=False, sort = True):
     '''Create a nice display of a list of source packages'''
     from collections import defaultdict
 
-    for ident in sorted(idents, key = lambda i: i.sname):
+    if sort:
+        idents = sorted(idents, key = lambda i: i.sname)
+
+    for ident in idents:
         _print_bundle_entry(ident, prtf=prtf,fields=fields,
                             show_partitions=show_partitions)
 

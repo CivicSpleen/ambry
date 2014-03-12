@@ -59,11 +59,15 @@ def source_parser(cmd):
     
     sp = asp.add_parser('deps', help='Print the depenencies for all source bundles')
     sp.set_defaults(subcommand='deps')
-    sp.add_argument('ref', type=str,nargs='?',help='Name or id of a bundle to generate a sorted dependency list for.')   
-    sp.add_argument('-d','--detail',  default=False,action="store_true",  help='Display details of locations for each bundle')   
+    #sp.add_argument('ref', type=str,nargs='?',help='Name or id of a bundle to generate a sorted dependency list for.')
+    sp.add_argument('-d','--detail',  default=False,action="store_true",  help='Display details of locations for each bundle')
+    sp.add_argument('-F', '--fields', type=str,
+                    help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname','order'")
     group = sp.add_mutually_exclusive_group()
-    group.add_argument('-f', '--forward',  default='f', dest='direction',   action='store_const', const='f', help='Display bundles that this one depends on')
-    group.add_argument('-r', '--reverse',  default='f', dest='direction',   action='store_const', const='r', help='Display bundles that depend on this one')
+    #group.add_argument('-f', '--forward',  default='f', dest='direction',   action='store_const', const='f', help='Display bundles that this one depends on')
+    #group.add_argument('-r', '--reverse',  default='f', dest='direction',   action='store_const', const='r', help='Display bundles that depend on this one')
+    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER,
+                    help='Name or ID of the bundle or partition as the root of the dependency tree')
     
     sp = asp.add_parser('init', help='Intialize the local and remote git repositories')
     sp.set_defaults(subcommand='init')
@@ -80,8 +84,7 @@ def source_parser(cmd):
   
     sp = asp.add_parser('build', help='Build sources')
     sp.set_defaults(subcommand='build')
-    sp.add_argument('-p','--pull', default=False,action="store_true", help='Git pull before build')
-    sp.add_argument('-s','--stash', default=False,action="store_true", help='Git stash before build')
+
     sp.add_argument('-f','--force', default=False,action="store_true", help='Build even if built or in library')
     sp.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     sp.add_argument('-i','--install', default=False,action="store_true", help='Install after build')
@@ -106,9 +109,6 @@ def source_parser(cmd):
     sp.add_argument('terms',nargs=argparse.REMAINDER, type=str,help='Bundle refs to run command on')
 
     group = sp.add_mutually_exclusive_group()
-    group.add_argument('-c', '--commit',  default=False, dest='repo_command',   action='store_const', const='commit', help='Commit')
-    group.add_argument('-p', '--push',  default=False, dest='repo_command',   action='store_const', const='push', help='Push to origin/master')    
-    group.add_argument('-l', '--pull',  default=False, dest='repo_command',   action='store_const', const='pull', help='Pull from upstream')  
     group.add_argument('-i', '--install',  default=False, dest='repo_command',   action='store_const', const='install', help='Install the bundle')
     group.add_argument('-s', '--shell', default=False, dest='repo_command', action='store_const', const='shell',
                        help='Run a shell command')
@@ -167,7 +167,7 @@ def source_list(args, l, st, rc, names=None):
         prtf = prt
 
 
-    l_list = l.list(datasets=d)
+    #l_list = l.list(datasets=d)
 
     s_lst =  st.list(datasets=d)
 
@@ -345,21 +345,7 @@ def source_build(args, l, st, rc):
     def build(bundle_dir):
         from ambry.library import new_library
 
-        
-        # Stash must happen before pull, and pull must happen
-        # before the class is loaded in load_bundle, otherwize the class
-        # can't be updated by the pull. And, we have to use the GitShell
-        # sevice directly, because thenew_repository route will ooad the bundle
-        
-        gss = GitShellService(bundle_dir)
-        
-        if args.stash:
-            prt("{} Stashing ", bundle_dir)
-            gss.stash()
-            
-        if args.pull:
-            prt("{} Pulling ", bundle_dir)
-            gss.pull()
+
 
         # Import the bundle file from the directory
 
@@ -521,17 +507,6 @@ def do_source_run(ident, args, l, st, rc):
 
         mod.run(**a)
 
-    elif args.repo_command == 'commit' and repo.needs_commit():
-        prt("--- {} {}",args.repo_command, root)
-        repo.commit(' '.join(args.message))
-
-    elif args.repo_command == 'push' and repo.needs_push():
-        prt("--- {} {}",args.repo_command, root)
-        repo.push()
-
-    elif args.repo_command == 'pull':
-        prt("--- {} {}",args.repo_command, root)
-        repo.pull()
 
     elif args.repo_command == 'install':
         prt("--- {} {}",args.repo_command, root)
@@ -581,83 +556,40 @@ def source_init(args, l, st, rc):
 
 def source_deps(args, l, st, rc):
     """Produce a list of dependencies for all of the source bundles"""
+    from ..dbexceptions import NotFoundError
+    from ..orm import Dataset
 
-    from ..util import toposort
-    from ..source.repository import new_repository
-    from ..identity import Identity
-    from collections import defaultdict
-
-    sources = l.files.query.type(l.files.TYPE.SOURCE).all
-
-    errors = defaultdict(set)
-    deps = defaultdict(set)
-
-    ident_map = {}
-
-    import pprint
-
-    for source in sources:
-
-        if not ('dependencies' in source.data
-                and source.data['dependencies']
-                and source.data['identity']):
-            continue
-
-        bundle_ident = Identity.from_dict(source.data['identity'])
-
-        if not bundle_ident:
-
-            warn("Failed to resolve bundle: {}, {} ".format(source.ref, source.path))
-            continue
-
-        for v in source.data['dependencies'].values():
-            try:
-                ident = l.resolve(v, location=None)
-            except:
-                ident = None
-
-
-            if not ident:
-                errors[bundle_ident.sname].add(v)
-                continue
-
-            deps[ident.id_].add(ident)
-
-
-    print "DEPS"
-    print deps
-
-    print "ERROR"
-    for name, errors in errors.items():
-        print '=',name
-        for e in errors:
-            print '    ', e
-
-    return
-
-    repo = new_repository(rc.sourcerepo(args.name))        
-
-
-    if args.ref:
-
-        deps = repo.bundle_deps(args.ref, reverse=bool(args.direction == 'r'))
-
-        if args.detail:
-            source_list(args,rc, names=deps)
-        else:
-            for b in deps:
-                prt(b)    
-
-        
+    if args.fields:
+        fields = args.fields.split(',')
     else:
+        fields = ['locations', 'vid', 'vname','order']
 
-        graph = toposort(repo.dependencies)
-    
-        for i,level in enumerate(graph):
-            for j, name in enumerate(level):
-                prt("{:3d} {:3d} {}",i,j,name)
+    term = args.terms[0] if args.terms else None
 
 
+    try:
+        graph, errors = st.dependencies(term)
+    except NotFoundError:
+        fatal("Didn't find source bundle for term: {}".format(term))
+
+    if errors:
+        print "----ERRORS"
+        for name, errors in errors.items():
+            print '=', name
+            for e in errors:
+                print '    ', e
+        print "----"
+
+    identities = []
+
+    for i, level in enumerate(graph):
+        for j, name in enumerate(level):
+            ident = l.resolve(name, location=Dataset.LOCATION.SOURCE )
+            if ident:
+                ident.data['order'] = dict(major = i, minor = j)
+                identities.append(ident)
+
+    _print_bundle_list(identities, fields=fields, sort = False)
 
 
 def source_watch(args, l, st, rc):

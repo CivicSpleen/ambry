@@ -78,6 +78,102 @@ class SourceTree(object):
 
         return datasets
 
+    def dependencies(self, term=None):
+        '''Return a topologically sorted tree of dependencies, for all sources if a term is not given,
+        or for a single bundle if it is. '''
+        from ..util import toposort
+        from ..orm import Dataset
+        from ..identity import Identity
+        from collections import defaultdict
+        from ..dbexceptions import NotFoundError
+
+        l = self.library
+
+        errors = defaultdict(set)
+        deps = defaultdict(set)
+
+        # The [:-3] converts a vid to an id: we don't want version numbers here.
+        all_sources = {f.ref[:-3]:f for f in l.files.query.type(l.files.TYPE.SOURCE).all}
+
+        def deps_for_sources(sources):
+            '''Get dependencies for a set of sources, which may be a subset of all sources. '''
+            new_sources = set()
+            for source in sources:
+
+                if not ('dependencies' in source.data
+                        and source.data['dependencies']
+                        and source.data['identity']):
+                    continue
+
+                bundle_ident = Identity.from_dict(source.data['identity'])
+
+                if not bundle_ident:
+                    errors[bundle_ident.sname].add(None)
+                    continue
+
+                if bundle_ident.sname in deps:
+                    continue
+
+                for v in source.data['dependencies'].values():
+                    try:
+                        ident = l.resolve(v, location=None, use_remote=True)
+                    except:
+                        ident = None
+
+                    if not ident:
+                        errors[bundle_ident.sname].add(v)
+                        continue
+
+                    deps[bundle_ident.sname].add(ident.sname)
+
+                    try:
+                        new_source = all_sources[ident.id_]
+                        new_sources.add(new_source)
+                    except KeyError:
+                        print "Failed to add ",ident.vid, ident.sname
+
+                if not bundle_ident.sname in deps:
+                    deps[bundle_ident.sname].add(None)
+
+            return deps, list(new_sources)
+
+        #
+        # First, get the starting list of sources
+        #
+
+
+        if term:
+            ident = l.resolve(term, location=Dataset.LOCATION.SOURCE, use_remote=True)
+
+            if ident:
+                f = l.files.query.type(l.files.TYPE.SOURCE).ref(ident.vid).first
+
+                if not f:
+                    raise NotFoundError("Didn't find a source bundle for term: {} ".format(term))
+
+                sources = [f]
+
+            else:
+                raise NotFoundError("Didn't find a source bundle for term: {} ".format(term))
+
+        else:
+            sources = all_sources.values()
+
+
+        while True:
+
+            deps, new_sources = deps_for_sources(sources)
+
+            if not new_sources:
+                break
+
+            sources = new_sources
+
+
+        graph = toposort(deps)
+
+
+        return graph, errors
 
 
     def watch(self):

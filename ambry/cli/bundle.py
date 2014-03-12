@@ -177,8 +177,7 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='info')
     command_p.add_argument('-s','--schema',  default=False,action="store_true",
                            help='Dump the schema as a CSV. The bundle must have been prepared')
-    command_p.add_argument('-d', '--dep', default=False,
-                           help='Report information about a dependency')
+    command_p.add_argument('-d', '--dep', default=False, help='Report information about a dependency')
 
     #
     # Clean Command
@@ -302,32 +301,41 @@ def bundle_info(args, b, st, rc):
     elif args.schema:
         b.schema.as_csv()
     else:
-        b.log("----Info ---")
+        b.log("----Info: ".format(b.identity.sname))
         b.log("VID  : "+b.identity.vid)
         b.log("Name : "+b.identity.sname)
         b.log("VName: "+b.identity.vname)
 
-        cd = dict(b.db_config.dict)
-        process = cd['process']
-        b.log('Created   : '+process.get('dbcreated', ''))
-        b.log('Prepared  : '+process.get('prepared', ''))
-        b.log('Built     : '+process.get('built', ''))
-        b.log('Build time: '+
-              str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
-
-        if b.config.build.get('dependencies', False):
-            b.log("---- Dependencies ---")
-            for k, v in b.config.build.dependencies.items():
-                b.log("    {}: {}".format(k, v))
-
         if b.database.exists():
+
+            cd = dict(b.db_config.dict)
+            process = cd['process']
+            b.log('Created   : ' + process.get('dbcreated', ''))
+            b.log('Prepared  : ' + process.get('prepared', ''))
+            b.log('Built     : ' + process.get('built', ''))
+
+            if process.get('buildtime', False):
+                b.log('Build time: ' + str(round(float(process['buildtime']), 2)) + 's')
 
             b.log("Parts: {}".format(b.partitions.count))
 
-            if b.partitions.count < 5:
+            if b.partitions.count < 5 and b.partitions.count > 0:
                 b.log("---- Partitions ---")
                 for partition in b.partitions:
                     b.log("    "+partition.identity.sname)
+
+        if b.config.build and b.config.build.get('dependencies', False):
+            # For source bundles
+            deps = b.config.build.dependencies.items()
+        else:
+            # for built bundles
+            deps = b.db_config.odep.items()
+
+        if deps:
+            b.log("---- Dependencies ---")
+            for k, v in deps:
+                b.log("{}: {}".format(k, v))
+
 
 def bundle_clean(args, b, st, rc):
     b.log("---- Cleaning ---")
