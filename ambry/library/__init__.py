@@ -45,17 +45,7 @@ def _new_library(config):
                      and not isinstance(upstream.last_upstream(), RemoteMarker)):
         raise ConfigurationError("Library upstream must have a RemoteMarker interface: {}".format(config))
 
-    sourcerepo = config.get('sourcerepo', None)
-    try:
-        source_dir = sourcerepo.dir if sourcerepo else None
-    except ConfigurationError:
-        source_dir = None
-
-    try:
-        source_repos = sourcerepo.list if sourcerepo else None
-    except ConfigurationError:
-        source_repos = None
-
+    source_dir = config.get('source', None)
 
     #print "### Upstream", config['upstream']
 
@@ -67,7 +57,6 @@ def _new_library(config):
                 sync = config.get('sync', None),
                 require_upload=config.get('require_upload', None),
                 source_dir = source_dir,
-                source_repos = source_repos,
                 host=config.get('host', None),
                 port=config.get('port', None),
                 )
@@ -124,7 +113,7 @@ class Library(object):
     def __init__(self, cache, database,
                  name=None,
                  upstream=None,  remotes=None,
-                 source_dir = None, source_repos = None,
+                 source_dir = None,
                  sync=False, require_upload=False,
                  host=None, port=None):
         '''Libraries are constructed on the root cache name for the library.
@@ -144,7 +133,7 @@ class Library(object):
         self.name = name
         self.cache = cache
         self.source_dir = source_dir
-        self.source_repos = source_repos
+
         self._database = database
         self._upstream = upstream
 
@@ -575,7 +564,7 @@ class Library(object):
         for k, v in deps.items():
 
             try:
-                ident = self.resolve(v)
+                ident = self.resolve(v, use_remote=True)
                 if not ident:
                     self.bundle.error("Failed to resolve {} ".format(v))
                     errors += 1
@@ -621,9 +610,9 @@ class Library(object):
         from ..source import SourceTree
 
         if not self.source_dir:
-            raise ConfigurationError("Don't have a source_dir")
+            return None
 
-        return SourceTree(self.source_dir, self.source_repos, self, self.logger)
+        return SourceTree(self.source_dir, self, self.logger)
 
 
     @property

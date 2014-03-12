@@ -85,7 +85,7 @@ def root_list(args, l, st, rc):
         fields = args.fields.split(',')
 
     else:
-        fields = ['locations', 'vid', 'status', 'vname']
+        fields = ['locations', 'vid',  'vname']
 
     locations = []
 

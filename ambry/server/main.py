@@ -493,8 +493,7 @@ def get_datasets(library):
                  'identity': dsid.dict ,
                  'refs': {
                     'path': dsid.path,
-                    'cache_key': dsid.cache_key,
-                    'source_path': dsid.source_path
+                    'cache_key': dsid.cache_key
                  }, 
                  'urls': {
                           'partitions': "{}/datasets/{}".format(_host_port(library), dsid.vid),

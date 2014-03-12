@@ -198,6 +198,7 @@ def _source_list(dir_):
 
 def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
 
+
     record_entry_names = ('name', 'd_format', 'p_format', 'extractor')
 
     all_fields = [
@@ -212,7 +213,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
     ]
 
     if not fields:
-        fields = ['locations', 'vid', 'status', 'vname']
+        fields = ['locations', 'vid', 'vname']
 
     d_format = ""
     p_format = ""
@@ -228,7 +229,6 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
         p_format += e['p_format']
 
         extractors.append(e['extractor'])
-
 
     prtf(d_format, *[ f(ident) for f in extractors ] )
 

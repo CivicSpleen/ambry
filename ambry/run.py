@@ -71,9 +71,6 @@ class RunConfig(object):
 
         if not loaded:
             raise Exception("Failed to load any config from: {}".format(self.files))
-        
-        self.sourcerepo = self._sourcerepo(self)
-
 
     def __getattr__(self, group):
         '''Fetch a confiration group and return the contents as an 
@@ -212,7 +209,10 @@ class RunConfig(object):
                                      }  )
    
     def library(self,name):
-        e =  self.group_item('library', name) 
+        e =  self.group_item('library', name)
+
+        fs = self.group('filesystem')
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
 
         e =  self._sub_strings(e, {
                                      'filesystem': lambda k,v: self.filesystem(v),
@@ -220,57 +220,13 @@ class RunConfig(object):
                                      'upstream': lambda k,v: self.filesystem(v),
                                      'account': lambda k, v: self.account(v),
                                      'cdn': lambda k,v: self.account(v),
+                                     'source': lambda k, v: v.format(root=root_dir)
                                      }  )
 
         e['_name'] = name
 
-        e['sourcerepo'] = self._sourcerepo(self)
-
-
         return e
     
-    #
-    # This object is attached to the sourcerepo property, to provide a variety of interfaces
-    # other than just being callable. 
-    class _sourcerepo(object):
-        def __init__(self,this):
-            self.this = this
-
-        def __call__(self, name):
-            
-
-            e =  self.this.group_item('sourcerepo', name)
-
-            e =  self.this._sub_strings(e, {
-                                         'account': lambda k,v: self.this.account(v)
-                                         }  ) 
-            e['_name'] = name
-
-            e['dir'] = self.dir
-
-            return e   
-
-        @property
-        def list(self):
-            """Returns list of all of the sourcerepos"""
-            from source.repository import new_repository
-            
-            return [ new_repository(self.this.sourcerepo(r_name)) 
-                    for r_name in self.this.group('sourcerepo').keys()
-                    if r_name != 'dir'
-                    ]
-
-        @property
-        def dir(self):   
-
-            fs = self.this.group('filesystem')
-            root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
-
-            try:
-                return self.this.group('sourcerepo')['dir'].format(root=root_dir)
-            except KeyError:
-                from dbexceptions import ConfigurationError
-                raise ConfigurationError("Sourcerepo config did not define a root director")
 
     
     def warehouse(self,name):
@@ -316,7 +272,9 @@ class RunConfig(object):
         python_dir = fs['python'].format(root=root_dir)
 
       
-        return python_dir 
+        return python_dir
+
+
 
 
 def mp_run(mp_run_args):
@@ -360,11 +318,12 @@ def import_file(filename):
     (name, _) = os.path.splitext(name)
     (_, modname) = os.path.split(path)
 
+    modname = modname.replace('.','_') # To avoid 'Parent module not found' warnings
+
     (file_, filename, data) = imp.find_module(name, [path])
 
     return imp.load_module(modname, file_, filename, data)
-       
-            
+
 if __name__ == '__main__':
     '''When bambry is run, this routine will load the bundle module from a file
     wire it into the namespace and run it with the arguments passed into bambry. '''

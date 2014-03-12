@@ -30,7 +30,8 @@ class SourceTree(object):
         self.logger = logger
 
         if not os.path.exists(self.base_dir):
-            os.makedirs(self.base_dir)
+            from ..dbexceptions import ConfigurationError
+            raise ConfigurationError("Source directory {} does not exist".format(self.base_dir))
 
 
     def list(self, datasets=None, key='vid'):
@@ -48,10 +49,11 @@ class SourceTree(object):
             if ck not in datasets:
                 datasets[ck] = ident
 
+
             try:
-                bundle = self.bundle(ident.source_path)
+                bundle = self.bundle(file_.path)
             except ImportError:
-                raise Exception("Failed to load bundle from {}".format(ident.source_path))
+                raise Exception("Failed to load bundle from {}".format(file_.path))
 
             if bundle.is_built:
                 datasets[ck].locations.set(LocationRef.LOCATION.SOURCE)
@@ -62,7 +64,6 @@ class SourceTree(object):
 
             datasets[ck].bundle_path = file_.path
             datasets[ck].bundle_state = file_.state
-            datasets[ck].git_state = file_.data['git_state']
 
         for file_ in self.library.files.query.type(Dataset.LOCATION.SREPO).all:
 
@@ -77,17 +78,6 @@ class SourceTree(object):
 
         return datasets
 
-
-
-    def temp_repo(self):
-        from uuid import uuid4
-        from ..source.repository.git import GitShellService
-        tmp = os.path.join(self.base_dir, '_source', 'temp',str(uuid4()))
-
-        if not os.path.exists(os.path.dirname(tmp)):
-            os.makedirs(os.path.dirname(tmp))
-
-        return GitShellService(tmp)
 
 
     def watch(self):
@@ -115,7 +105,7 @@ class SourceTree(object):
 
         bfc = BundleFileConfig(repo.path)
         ident = bfc.get_identity()
-        bundle_dir = os.path.join(self.base_dir, ident.source_path)
+        bundle_dir = self.source_path(ident=ident)
 
         if os.path.exists(bundle_dir):
             raise ConflictError("Bundle directory '{}' already exists".format(bundle_dir))
@@ -139,25 +129,7 @@ class SourceTree(object):
             return None
 
 
-    def sync_repos(self):
 
-        self.library.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.SREPO).delete()
-        self.library.files.query.type(Dataset.LOCATION.SREPO).delete()
-
-        for repo in self.repos:
-            self._sync_repo(repo)
-
-
-    def _sync_repo(self, repo):
-        '''Sync all fo the bundles in an organization or account'''
-
-        self.logger.info("Sync repo: {}".format(str(repo)))
-
-        for e in repo.service.list():
-            ident = Identity.from_dict(e)
-            self.logger.info("   Sync repo entry: {} -> {} ".format(ident.fqname, e['clone_url']))
-
-            self.add_source_url(ident, repo=repo.ident, data=e)
 
     def add_source_url(self, ident, repo, data):
 
@@ -216,7 +188,6 @@ class SourceTree(object):
                 bundle_config=None,
                 bundle_state=None,
                 process=None,
-                git_state=None,
                 rev=0,
                 dependencies=bundle.config.build.get('dependencies')
             )
@@ -242,9 +213,15 @@ class SourceTree(object):
     def _dir_list(self, datasets=None, key='vid'):
         from ..identity import LocationRef, Identity
         from ..bundle import BuildBundle
+        from ..dbexceptions import ConfigurationError
 
         if datasets is None:
             datasets = {}
+
+
+        if not os.path.exists(self.base_dir):
+            raise ConfigurationError("Could not find source directory: {}".format(self.base_dir))
+
 
         # Walk the subdirectory for the files to build, and
         # add all of their dependencies
@@ -274,7 +251,6 @@ class SourceTree(object):
         return datasets
 
 
-
     #
     # Bundles
     #
@@ -287,7 +263,12 @@ class SourceTree(object):
         if not ident:
             return None
 
-        return os.path.join(self.base_dir, ident.source_path)
+        f = self.library.files.query.ref(ident.vid).type(Dataset.LOCATION.SOURCE).first
+
+        if not f:
+            return None
+
+        return f.path
 
     def bundle(self, path):
         '''Return an  Bundle object, using the class defined in the bundle source'''
@@ -309,7 +290,7 @@ class SourceTree(object):
         if not ident:
             return None
 
-        return self.bundle(os.path.join(self.base_dir, ident.source_path))
+        return self.bundle(os.path.join(self.base_dir, self.source_path(ident=ident)))
 
 
     def resolve_build_bundle(self, term):
@@ -321,7 +302,7 @@ class SourceTree(object):
         if not ident:
             return None
 
-        path =  os.path.join(self.base_dir, ident.source_path)
+        path =  self.source_path(ident=ident)
 
         if path[0] != '/':
             root = os.path.join(self.base_dir, path)

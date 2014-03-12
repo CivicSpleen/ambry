@@ -219,8 +219,6 @@ def source_new(args, l, st, rc):
     from collections import OrderedDict
     from ..dbexceptions import ConflictError
 
-    repo = new_repository(rc.sourcerepo(args.name))  
-
     nsconfig = rc.group('numbers')
 
     if args.key:
@@ -235,8 +233,6 @@ def source_new(args, l, st, rc):
     d['bspace'] = d.get('space', None)
 
 
-
-
     try:
         d['id'] = str(ns.next())
         prt("Got number from number server: {}".format(d['id']))
@@ -247,10 +243,11 @@ def source_new(args, l, st, rc):
 
     ident = Identity.from_dict(d)
 
-    bundle_dir =  os.path.join(repo.dir, ident.source_path)
+    bundle_dir =  os.path.join(os.getcwd(),ident.sname)
 
     if not os.path.exists(bundle_dir):
         os.makedirs(bundle_dir)
+
     elif os.path.isdir(bundle_dir):
         fatal("Directory already exists: "+bundle_dir)
 
@@ -307,9 +304,10 @@ def source_new(args, l, st, rc):
     try:
         st.sync_bundle(bundle_dir)
     except ConflictError as e:
+
         from ..util import rm_rf
         rm_rf(bundle_dir)
-        fatal("Failed to sync bundle at {}  ; {}".format(bundle_dir, e.message))
+        fatal("Failed to sync bundle at {}  ; {}. Bundle deleted".format(bundle_dir, e.message))
     else:
         prt("CREATED: {}, {}",ident.fqname, bundle_dir)
 

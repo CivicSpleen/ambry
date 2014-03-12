@@ -68,7 +68,6 @@ def library_parser(cmd):
     group.add_argument('-l', '--library', default=False, action="store_true", help='Sync only the library')
     group.add_argument('-r', '--remote', default=False, action="store_true", help='Sync only the remote')
     group.add_argument('-u', '--upstream', default=False, action="store_true", help='Sync only the upstream')
-    group.add_argument('-g', '--srepo', default=False, action="store_true", help='Sync only the srepo')
     group.add_argument('-s', '--source', default=False, action="store_true", help='Sync only the source')
 
     sp = asp.add_parser('rebuild', help='Rebuild the library database from the files in the library')
@@ -454,24 +453,15 @@ def library_open(args, l, config):
         os.execlp('sqlite3', 'sqlite3', abs_path)
 
 
-def library_load(args, l, config):       
+def library_load(args, l, config):
 
-    from ..bundle import get_identity
     from ..identity import Identity
-    
-    
+
+
     print(Identity.parse_name(args.relpath).to_dict())
-    
-    return 
-    
-    prt("{}",l.cache.connection_info)
-    prt("{}: Load relpath from cache", args.relpath)
-    path = l.cache.get(args.relpath)
-        
-    prt("{}: Stored in local cache", path)
-        
-    if path:
-        print(get_identity(path).name)
+
+    return
+
 
 def library_sync(args, l, config):
     '''Synchronize the remotes and the upstream to a local library
@@ -494,9 +484,6 @@ def library_sync(args, l, config):
         l.logger.info("==== Sync Source")
         l.source.sync_source()
 
-    if args.srepo or args.all:
-        l.logger.info("==== Sync Source Repos")
-        l.source.sync_repos()
 
 
     

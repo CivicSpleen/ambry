@@ -219,25 +219,6 @@ class Name(object):
                 self._path_join(names=names, excludes='source',sep=self.NAME_PART_SEP)
              )
 
-    @property
-    def source_path(self):
-        '''The name in a form suitable for use in a filesystem. 
-        Excludes the revision'''
-        # Need to do this to ensure the function produces the
-        # bundle path when called from subclasses
-        names = [ k for k,_,_ in Name._name_parts]
-
-        parts = []
-
-        parts.append(self.source)
-
-        if self.bspace:
-            parts.append(self.bspace)
-
-        parts.append(self._path_join(names=names,
-                                     excludes=['source', 'version', 'bspace'], sep=self.NAME_PART_SEP))
-
-        return os.path.join(*parts)
 
     @property
     def cache_key(self):
@@ -421,14 +402,6 @@ class PartitionName(PartialPartitionName, Name):
         except TypeError as e:
             raise TypeError("Path failed for partition {}: {}".format(self.name, e.message))
 
-    @property
-    def source_path(self):
-        '''The path of the bundle source. Includes the revision. '''
-
-        return os.path.join(*(
-                              [super(PartitionName, self).source_path]+
-                              self._local_parts()) 
-                            )
 
     def type_is_compatible(self, o):
         
@@ -502,10 +475,7 @@ class PartialMixin(object):
     @property
     def path(self):
         raise NotImplementedError("Can't get a path from a partial name")
-    
-    @property
-    def source_path(self):
-        raise NotImplementedError("Can't get a path from a partial name")
+
     
     @property
     def cache_key(self):
@@ -934,7 +904,7 @@ class LocationRef(object):
     LOCATION.PARTITION = 'LP' # For the partition, b/c also used in File.type
     LOCATION.REMOTE ='R'
     LOCATION.UPSTREAM = 'U'
-    LOCATION.WAREHOUSE = 'U'
+    LOCATION.WAREHOUSE = 'W'
 
     def __init__(self,location, revision=None, version=None, code = None):
         self.location = location
@@ -1286,22 +1256,6 @@ class Identity(object):
             raise AttributeError('Identity does not have attribute {} '.format(name))
 
 
-
-    @property
-    def source_path(self):
-        '''The name in a form suitable for use in a filesystem. 
-        Excludes the revision'''
-
-        if self._source_path:
-            return "C"+self._source_path
-        else:
-            self.is_valid()
-            return "X"+self._name.source_path
-
-    @source_path.setter
-    def source_path_setter(self, v):
-
-        self._source_path = v
 
     @property
     def cache_key(self):
