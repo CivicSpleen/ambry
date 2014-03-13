@@ -572,7 +572,7 @@ def source_deps(args, l, st, rc):
     except NotFoundError:
         fatal("Didn't find source bundle for term: {}".format(term))
 
-    if errors:
+    if errors and not args.fields:
         print "----ERRORS"
         for name, errors in errors.items():
             print '=', name
@@ -584,6 +584,9 @@ def source_deps(args, l, st, rc):
 
     for i, level in enumerate(graph):
         for j, name in enumerate(level):
+            if not name:
+                continue
+
             ident = l.resolve(name, location=Dataset.LOCATION.SOURCE )
             if ident:
                 ident.data['order'] = dict(major = i, minor = j)

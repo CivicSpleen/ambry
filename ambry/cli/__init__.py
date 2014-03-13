@@ -203,6 +203,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
 
     all_fields = [
         # Name, width, d_format_string, p_format_string, extract_function
+        ('order', '{:6s}', '{:6s}', lambda ident: "{major:02d}:{minor:02d}".format(**ident.data['order'])),
         ('locations','{:6s}',  '{:6s}',       lambda ident: ident.locations),
         ('vid',      '{:15s}', '{:20s}',      lambda ident: ident.vid),
         ('status',   '{:20s}', '{:20s}',      lambda ident: ident.bundle_state if ident.bundle_state else ''),

@@ -130,7 +130,8 @@ class SourceTree(object):
                         new_source = all_sources[ident.id_]
                         new_sources.add(new_source)
                     except KeyError:
-                        print "Failed to add ",ident.vid, ident.sname
+                        errors[bundle_ident.sname].add(ident.sname)
+
 
                 if not bundle_ident.sname in deps:
                     deps[bundle_ident.sname].add(None)
@@ -266,6 +267,9 @@ class SourceTree(object):
 
         f = self.library.files.query.type(Dataset.LOCATION.SOURCE).ref(ident.vid).one_maybe
 
+        #print '!!!', bundle.config.group('partitions')
+
+        # Update the file if it already exists.
         if not f:
 
             from ..orm import File
@@ -302,9 +306,6 @@ class SourceTree(object):
         f.data = d
 
         self.library.files.merge(f)
-
-
-
 
     def _dir_list(self, datasets=None, key='vid'):
         from ..identity import LocationRef, Identity

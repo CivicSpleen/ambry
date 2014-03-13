@@ -3,6 +3,7 @@ library:
     default:
         filesystem: default
         database: default
+        source: '{root}/source'
         remotes:
         - 'http://library.civicknowledge.org'
 
@@ -31,13 +32,6 @@ filesystem:
 
     python: '{root}/cache/python'
 
-sourcerepo:
-    dir: '{root}/source'
-
-    default:
-        account: github-account-name
-        service: github
-        org: clarinova-data
 
 numbers:
     host: numbers.ambry.io

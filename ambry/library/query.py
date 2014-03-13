@@ -279,6 +279,7 @@ class Resolver(object):
         self.session = session # a Sqlalchemy connection
 
     def _resolve_ref_orm(self, ref):
+        import semantic_version
 
         ip = Identity.classify(ref)
 
@@ -363,9 +364,6 @@ class Resolver(object):
 
 
         ip, refs = self._resolve_ref(ref, location)
-
-        if isinstance(ip.version, semantic_version.Spec):
-            pass
 
 
         if not isinstance(ip.version, semantic_version.Spec):

@@ -15,7 +15,8 @@ psycopg2
 semantic_version
 numpy
 h5py
-shapely
+shapely # Optional libgeos-dev for speedups.
+rtree # also requires libspatialindex
 ## This pysqlite clone enables load_extension. Only needed on Linux. It is added
 ## in setup.py for linux, so you don't need to uncomment it here.
 # git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
