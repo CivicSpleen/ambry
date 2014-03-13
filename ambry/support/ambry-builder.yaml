@@ -5,6 +5,7 @@ library:
         host: localhost
         filesystem: default
         database: default
+        source: '{root}/source'
         upstream:
             options: [compress]
             bucket: s3-bucket-name
@@ -29,11 +30,6 @@ filesystem:
         dir: '{root}/cache/extracts'
     python: '{root}/cache/python'
 
-sourcerepo:
-    dir: '{root}/source'
-
-    default:
-        account: github-account-name
 
 numbers:
     host: numbers.ambry.io
