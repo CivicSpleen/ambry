@@ -417,7 +417,9 @@ class BuildBundle(Bundle):
         from ..dbexceptions import  DatabaseMissingError
 
         if self.database.exists():
-            partitions = [p.identity.dict for p in self.partitions]
+            partitions = [ { k:v for k,v in p.identity.dict.items() if k in ['id', 'name','vname','cache_key'] }
+                           for p in self.partitions]
+
         else:
             partitions = []
 

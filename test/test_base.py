@@ -8,7 +8,7 @@ from  testbundle.bundle import Bundle
 from ambry.identity import * #@UnusedWildImport
 import time, logging
 import ambry.util
-from ambry.run import  RunConfig
+
 
 logger = ambry.util.get_logger(__name__)
 logger.setLevel(logging.DEBUG) 
