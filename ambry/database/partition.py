@@ -134,16 +134,10 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
 
 def _on_connect_partition(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
+    from sqlite import _on_connect_bundle as ocb
+
+    ocb(dbapi_con, con_record)
 
 
-    ## NOTE ABOUT journal_mode = WAL: it improves concurency, but has some downsides.
-    ## See http://sqlite.org/wal.html
-
-    dbapi_con.execute('PRAGMA page_size = 8192')
-    dbapi_con.execute('PRAGMA temp_store = MEMORY')
-    dbapi_con.execute('PRAGMA cache_size = -500000')
-    dbapi_con.execute('PRAGMA foreign_keys = OFF')
-    dbapi_con.execute('PRAGMA journal_mode = wal')
-    dbapi_con.execute('PRAGMA synchronous = OFF')
 
     #dbapi_con.enable_load_extension(True)

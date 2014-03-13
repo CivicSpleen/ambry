@@ -630,8 +630,16 @@ def _on_connect_bundle(dbapi_con, con_record):
     
     Bundles have different parameters because they are more likely to be accessed concurrently. 
     '''
-    dbapi_con.execute('PRAGMA cache_size = 500000')
-    dbapi_con.execute('PRAGMA foreign_keys = ON')
+
+    ## NOTE ABOUT journal_mode = WAL: it improves concurency, but has some downsides.
+    ## See http://sqlite.org/wal.html
+
+    dbapi_con.execute('PRAGMA page_size = 8192')
+    dbapi_con.execute('PRAGMA temp_store = MEMORY')
+    dbapi_con.execute('PRAGMA cache_size = 50000')
+    dbapi_con.execute('PRAGMA foreign_keys = OFF')
+    dbapi_con.execute('PRAGMA journal_mode = WAL')
+    dbapi_con.execute('PRAGMA synchronous = OFF')
 
 
 def _on_connect_update_sqlite_schema(conn, con_record):
