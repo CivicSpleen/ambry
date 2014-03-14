@@ -78,10 +78,6 @@ def source_parser(cmd):
     sp.add_argument('-P', '--plain', default=False, action='store_true',
                     help='Plain output; just print the bundle id, with no logging decorations')
 
-    sp = asp.add_parser('get', help='Load a source bundle into the local source directory')
-    sp.set_defaults(subcommand='get')
-    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Bundle references, a git url or identity reference')
-  
     sp = asp.add_parser('build', help='Build sources')
     sp.set_defaults(subcommand='build')
 
@@ -97,7 +93,6 @@ def source_parser(cmd):
     sp.set_defaults(subcommand='edit')
     sp.add_argument('term', type=str, help='Name or ID of the bundle or partition to print information for')
 
-
     sp = asp.add_parser('run', help='Run a shell command in source directories passed in on stdin')
     sp.set_defaults(subcommand='run')
 
@@ -112,9 +107,6 @@ def source_parser(cmd):
     group.add_argument('-i', '--install',  default=False, dest='repo_command',   action='store_const', const='install', help='Install the bundle')
     group.add_argument('-s', '--shell', default=False, dest='repo_command', action='store_const', const='shell',
                        help='Run a shell command')
-
-    sp = asp.add_parser('watch', help='Watch the source directory for changes')
-    sp.set_defaults(subcommand='watch')
 
 def source_info(args, l, st, rc):
     from . import _print_bundle_info

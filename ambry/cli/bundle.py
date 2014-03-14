@@ -329,7 +329,10 @@ def bundle_info(args, b, st, rc):
             deps = b.config.build.dependencies.items()
         else:
             # for built bundles
-            deps = b.db_config.odep.items()
+            try:
+                deps = b.db_config.odep.items()
+            except AttributeError:
+                deps = None
 
         if deps:
             b.log("---- Dependencies ---")

@@ -412,13 +412,12 @@ class BuildBundle(Bundle):
 
     def update_configuration(self):
         from ..dbexceptions import DatabaseError
-        # Re-writes the undle.yaml file, with updates to the identity and partitions
+        # Re-writes the bundle.yaml file, with updates to the identity and partitions
         # sections. 
         from ..dbexceptions import  DatabaseMissingError
 
         if self.database.exists():
-            partitions = [ { k:v for k,v in p.identity.dict.items() if k in ['id', 'name','vname','cache_key'] }
-                           for p in self.partitions]
+            partitions = [ p.identity.name.partital_dict for p in self.partitions ]
 
         else:
             partitions = []
@@ -431,14 +430,16 @@ class BuildBundle(Bundle):
         
         # Reload some of the values from bundle.yaml into the database configuration
 
+        odep_set = False
         if self.database.exists():
 
             if self.config.build.get('dependencies'):
                 dbc = self.db_config
                 for k,v in self.config.build.get('dependencies').items():
                     dbc.set_value('odep', k, v)
+                    odep_set = True
 
-            self.database.rewrite_dataset()
+        self.database.rewrite_dataset()
                 
         
     @classmethod

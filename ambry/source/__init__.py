@@ -267,7 +267,7 @@ class SourceTree(object):
 
         f = self.library.files.query.type(Dataset.LOCATION.SOURCE).ref(ident.vid).one_maybe
 
-        #print '!!!', bundle.config.group('partitions')
+
 
         # Update the file if it already exists.
         if not f:
@@ -295,6 +295,11 @@ class SourceTree(object):
         else:
 
             d = f.data
+
+
+        for p in bundle.config.group('partitions'):
+            if isinstance(p, dict):
+                print "X!!!",p
 
         if bundle and bundle.is_built:
             config = dict(bundle.db_config.dict)
