@@ -61,8 +61,7 @@ def source_parser(cmd):
     sp.set_defaults(subcommand='deps')
     #sp.add_argument('ref', type=str,nargs='?',help='Name or id of a bundle to generate a sorted dependency list for.')
     sp.add_argument('-d','--detail',  default=False,action="store_true",  help='Display details of locations for each bundle')
-    sp.add_argument('-F', '--fields', type=str,
-                    help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname','order'")
+    sp.add_argument('-F', '--fields', type=str,  help="Specify fields to use")
     group = sp.add_mutually_exclusive_group()
     #group.add_argument('-f', '--forward',  default='f', dest='direction',   action='store_const', const='f', help='Display bundles that this one depends on')
     #group.add_argument('-r', '--reverse',  default='f', dest='direction',   action='store_const', const='r', help='Display bundles that depend on this one')
@@ -75,8 +74,7 @@ def source_parser(cmd):
 
     sp = asp.add_parser('list', help='List the source dirctories')
     sp.set_defaults(subcommand='list')
-    sp.add_argument('-P', '--plain', default=False, action='store_true',
-                    help='Plain output; just print the bundle id, with no logging decorations')
+    sp.add_argument('-F', '--fields', type=str, help="Specify fields to use")
 
     sp = asp.add_parser('build', help='Build sources')
     sp.set_defaults(subcommand='build')
@@ -152,22 +150,19 @@ def source_list(args, l, st, rc, names=None):
 
     d = {}
 
-    if args.plain:
-        from . import plain_prt
-        prtf = plain_prt
+    if args.fields:
+        fields = args.fields.split(',')
     else:
-        prtf = prt
+        fields = ['locations', 'vid', 'vname']
 
 
     #l_list = l.list(datasets=d)
 
     s_lst =  st.list(datasets=d)
 
-    if args.plain:
-        for v in d.values():
-            prtf(str(v.id_))
-    else:
-        _print_bundle_list(d.values(), subset_names=names, prtf=prtf)
+    _print_bundle_list(d.values(), fields=fields, sort=False)
+
+
 
 def source_get(args, l, st, rc):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''

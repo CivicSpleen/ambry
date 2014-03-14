@@ -433,7 +433,7 @@ class LibraryDb(object):
     ## Install and remove bundles and partitions
     ##
 
-    def install_dataset_identity(self, identity, location=Dataset.LOCATION.LIBRARY):
+    def install_dataset_identity(self, identity, location=Dataset.LOCATION.LIBRARY, data = {}):
         '''Create the record for the dataset. Does not add an File objects'''
         from sqlalchemy.exc import IntegrityError
         from ..dbexceptions import ConflictError
@@ -445,7 +445,7 @@ class LibraryDb(object):
         ds.cache_key = identity.cache_key
         ds.creator = 'N/A'
         ds.location = location
-
+        ds.data = data
         try:
             try:
                 self.session.add(ds)

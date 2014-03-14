@@ -201,9 +201,17 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
 
     record_entry_names = ('name', 'd_format', 'p_format', 'extractor')
 
+    def deps(ident):
+        if not ident.data: return '.'
+        if not 'dependencies' in ident.data: return '.'
+        if not ident.data['dependencies']: return '0'
+        return str(len(ident.data['dependencies']))
+
     all_fields = [
         # Name, width, d_format_string, p_format_string, extract_function
-        ('order', '{:6s}', '{:6s}', lambda ident: "{major:02d}:{minor:02d}".format(**ident.data['order'])),
+        ('deps', '{:3s}', '{:3s}', lambda ident:  deps(ident) ),
+        ('order', '{:6s}', '{:6s}', lambda ident: "{major:02d}:{minor:02d}".format(**ident.data['order']
+                                    if 'order' in ident.data else {'major':-1,'minor':-1})),
         ('locations','{:6s}',  '{:6s}',       lambda ident: ident.locations),
         ('vid',      '{:15s}', '{:20s}',      lambda ident: ident.vid),
         ('status',   '{:20s}', '{:20s}',      lambda ident: ident.bundle_state if ident.bundle_state else ''),

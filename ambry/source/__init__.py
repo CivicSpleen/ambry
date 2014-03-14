@@ -46,35 +46,31 @@ class SourceTree(object):
 
             ck = getattr(ident, key)
 
-            if ck not in datasets:
-                datasets[ck] = ident
-
-
             try:
                 bundle = self.bundle(file_.path)
             except ImportError:
                 raise Exception("Failed to load bundle from {}".format(file_.path))
 
-            if bundle.is_built:
-                datasets[ck].locations.set(LocationRef.LOCATION.SOURCE)
-            else:
-                datasets[ck].locations.set(LocationRef.LOCATION.SOURCE.lower())
-            datasets[ck].data = file_.dict
-            import pprint
-
-            datasets[ck].bundle_path = file_.path
-            datasets[ck].bundle_state = file_.state
-
-        for file_ in self.library.files.query.type(Dataset.LOCATION.SREPO).all:
-
-            ident = Identity.from_dict(file_.data)
-
-            ck = getattr(ident, key)
 
             if ck not in datasets:
                 datasets[ck] = ident
 
-            datasets[ck].locations.set(LocationRef.LOCATION.SREPO)
+            if bundle.is_built:
+                datasets[ck].locations.set(LocationRef.LOCATION.SOURCE)
+            else:
+                datasets[ck].locations.set(LocationRef.LOCATION.SOURCE.lower())
+
+            # We want all of the file data, and the 'data' field, at the same level
+            d = file_.dict
+            sub_dict = d['data']
+            del d['data']
+            d.update(sub_dict)
+
+            datasets[ck].data = d
+
+            datasets[ck].bundle_path = file_.path
+            datasets[ck].bundle_state = file_.state
+
 
         return datasets
 
@@ -251,6 +247,19 @@ class SourceTree(object):
         for ident in self._dir_list().values():
             self.sync_bundle(ident.bundle_path, ident, ident.bundle)
 
+    def _bundle_data(self, ident, bundle):
+
+        dependencies = bundle.config.build.get('dependencies')
+
+        return dict(
+            identity=ident.dict,
+            bundle_config=None,
+            bundle_state=None,
+            process=None,
+            rev=0,
+            dependencies=dependencies
+        )
+
 
     def sync_bundle(self, path, ident=None, bundle=None):
 
@@ -263,10 +272,8 @@ class SourceTree(object):
         if not ident and bundle:
             ident = bundle.identity
 
-        self.library.database.install_dataset_identity(ident, location=Dataset.LOCATION.SOURCE)
 
         f = self.library.files.query.type(Dataset.LOCATION.SOURCE).ref(ident.vid).one_maybe
-
 
 
         # Update the file if it already exists.
@@ -283,36 +290,34 @@ class SourceTree(object):
                 data=None,
                 source_url=None)
 
-            d = dict(
-                identity=ident.dict,
-                bundle_config=None,
-                bundle_state=None,
-                process=None,
-                rev=0,
-                dependencies=bundle.config.build.get('dependencies')
-            )
+            d = self._bundle_data(ident,bundle)
 
         else:
 
             d = f.data
 
 
-        for p in bundle.config.group('partitions'):
-            if isinstance(p, dict):
-                print "X!!!",p
+        #for p in bundle.config.group('partitions'):
+        #    if isinstance(p, dict):
+        #        print "X!!!",p
 
         if bundle and bundle.is_built:
             config = dict(bundle.db_config.dict)
             d['process'] = config['process']
             f.state = 'built'
 
-        d['rev'] = d['rev'] + 1
+        d['rev'] = d['rev'] + 1 # Marks bundles that have already beein imported.
 
         f.data = d
+
+        self.library.database.install_dataset_identity(
+            ident, location=Dataset.LOCATION.SOURCE, data=d)
+
 
         self.library.files.merge(f)
 
     def _dir_list(self, datasets=None, key='vid'):
+        '''Get a list of sources from the directory, rather than the library '''
         from ..identity import LocationRef, Identity
         from ..bundle import BuildBundle
         from ..dbexceptions import ConfigurationError
@@ -337,6 +342,9 @@ class SourceTree(object):
                 bundle = BuildBundle(root)
 
                 ident = bundle.identity
+
+                ident.data = ident.dict.update(self._bundle_data(ident, bundle))
+
                 ck = getattr(ident, key)
 
                 if ck not in datasets:
