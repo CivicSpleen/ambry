@@ -635,6 +635,7 @@ class BuildBundle(Bundle):
             self.log("No schema file ('{}') not loading schema".format(sf))
 
 
+
     def prepare(self):
         from ..dbexceptions import NotFoundError
         
@@ -657,7 +658,8 @@ class BuildBundle(Bundle):
             self._prepare_load_schema()
 
         return True
-    
+
+
     def rebuild_schema(self):
         sf  = self.filesystem.path(self.config.build.get('schema_file', 'meta/schema.csv'))
         with open(sf, 'rbU') as f:
@@ -707,7 +709,28 @@ class BuildBundle(Bundle):
         return ( self.database.exists() 
                  and not self.run_args.get('rebuild',False)
                  and  self.db_config.get_value('process','prepared', False))
-   
+
+
+    def prepare_main(self):
+        '''This is the methods that is actually called in do_prepare; it dispatched to
+        developer created prepare() methods'''
+        return super(BuildBundle, self).prepare()
+
+    def do_prepare(self):
+        '''This method runs pre_, main and post_ prepare methods. '''
+        if self.pre_prepare():
+            self.log("---- Preparing ----")
+            if self.prepare_main():
+                self.post_prepare()
+                self.log("---- Done Preparing ----")
+            else:
+                self.log("---- Prepare exited with failure ----")
+                return False
+        else:
+            self.log("---- Skipping prepare ---- ")
+
+        return True
+
     ### Build the final package
 
     def pre_build(self):
@@ -809,8 +832,29 @@ class BuildBundle(Bundle):
         v = self.db_config.get_value('process','built', False)
         
         return bool(v)
-        
-        
+
+
+    def do_build(self):
+
+        if not self.is_prepared:
+            self.prepare()
+
+        if self.pre_build():
+            self.log("---- Build ---")
+            if self.build():
+                self.post_build()
+                self.log("---- Done Building ---")
+                return True
+            else:
+                self.log("---- Build exited with failure ---")
+                return False
+        else:
+            self.log("---- Skipping Build ---- ")
+            return False
+
+
+
+
     ### Update is like build, but calls into an earlier version of the package. 
 
     def pre_update(self):
@@ -1016,24 +1060,35 @@ def new_analysis_bundle( repo_dir, source, dataset, rc_path = None, subset=None,
 
 
 
+    print 'HERE', ab_path
     return AnalysisBundle(ab_path)
+
+
+class Registrar(object):
+    def __init__(self, bundle):
+        self.bundle = bundle
+
+    def prepare(self):
+        def wrap_prepare(f):
+            print "Wrapping ", f
+            return f
 
 class AnalysisBundle(BuildBundle):
 
+    def __init__(self, bundle_path):
+        print 'H!!!'
+        super(AnalysisBundle, self).__init__(bundle_path)
 
+    def register(self):
+        return Registrar(self)
 
-    class PrepareContext(object):
-        def __init__(self, bundle):
-            self.bundle = bundle
+    def prepare(self):
+        super(AnalysisBundle, self).do_prepare(self)
 
-        def __enter__(self):
-            if not self.bundle.pre_prepare():
-                from ..dbexceptions import ProcessError
-                raise ProcessError("")
-
-
-        def __exit__(self, type, value, traceback):
-            self.cr.restore()
+    def prepare_main(self):
+        '''This is the methods that is actually called in do_prepare; it dispatched to
+        developer created prepare() methods'''
+        return super(BuildBundle, self).prepare()
 
 
 

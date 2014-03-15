@@ -38,8 +38,10 @@ class Test(TestBase):
 
         print ab
 
+        print ab.register
 
-        @ab.prepare
+
+        @ab.register.prepare
         def prepare(bundle):
             pass
 

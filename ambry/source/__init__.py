@@ -121,7 +121,7 @@ class SourceTree(object):
                         ident = None
 
                     if not ident:
-                        print 'B'
+                        print 'B', v
                         errors[bundle_ident.sname].add(v)
                         continue
 

@@ -365,39 +365,12 @@ def bundle_meta(args, b, st, rc):
         b.log("---- Skipping Meta ---- ")
 
 def bundle_prepare(args, b, st, rc):
-    if b.pre_prepare():
-        b.log("---- Preparing ----")
-        if b.prepare():
-            b.post_prepare()
-            b.log("---- Done Preparing ----")
-        else:
-            b.log("---- Prepare exited with failure ----")
-            return False
-    else:
-        b.log("---- Skipping prepare ---- ")
+    return b.do_prepare()
 
-    return True
 
 def bundle_build(args, b, st, rc):
+    return b.do_build()
 
-
-    if not b.is_prepared:
-        bundle_prepare(args, b, st, rc)
-
-    if b.pre_build():
-        b.log("---- Build ---")
-        if b.build():
-            b.post_build()
-            b.log("---- Done Building ---")
-        else:
-            b.log("---- Build exited with failure ---")
-            return False
-    else:
-        b.log("---- Skipping Build ---- ")
-
-
-
-    return True
 
 def bundle_install(args, b, st, rc):
 
