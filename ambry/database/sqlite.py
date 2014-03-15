@@ -307,7 +307,7 @@ class SqliteDatabase(RelationalDatabase):
 
         
     def delete(self):
-        
+
         try :
             os.remove(self.path)
         except:

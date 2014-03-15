@@ -45,7 +45,7 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
     def inserter(self, table_or_name=None,**kwargs):
 
         if not self.exists():
-            raise Exception("Database doesn't exist yet")
+            raise Exception("Database doesn't exist yet: '{}'".format(self.dsn))
 
         if table_or_name is None and self.partition.table is not None:
             table_or_name = self.partition.get_table()
@@ -112,7 +112,7 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
         '''Like the create() for the bundle, but this one also copies
         the dataset and makes and entry for the partition '''
         
-        
+
         self.require_path()
         
         SqliteDatabase._create(self) # Creates the database file

@@ -305,6 +305,7 @@ def bundle_info(args, b, st, rc):
         b.log("VID  : "+b.identity.vid)
         b.log("Name : "+b.identity.sname)
         b.log("VName: "+b.identity.vname)
+        b.log("DB   : " + b.database.path)
 
         if b.database.exists():
 
@@ -378,6 +379,7 @@ def bundle_prepare(args, b, st, rc):
     return True
 
 def bundle_build(args, b, st, rc):
+
 
     if not b.is_prepared:
         bundle_prepare(args, b, st, rc)

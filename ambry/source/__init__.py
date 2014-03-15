@@ -42,7 +42,9 @@ class SourceTree(object):
 
         for file_ in self.library.files.query.type(Dataset.LOCATION.SOURCE).all:
 
-            ident = Identity.from_dict(file_.data['identity'])
+            #ident = Identity.from_dict(file_.data['identity'])
+
+            ident = self.library.resolve(file_.ref, location=None)
 
             ck = getattr(ident, key)
 
@@ -104,6 +106,7 @@ class SourceTree(object):
                 bundle_ident = Identity.from_dict(source.data['identity'])
 
                 if not bundle_ident:
+                    print 'A'
                     errors[bundle_ident.sname].add(None)
                     continue
 
@@ -117,6 +120,7 @@ class SourceTree(object):
                         ident = None
 
                     if not ident:
+                        print 'B'
                         errors[bundle_ident.sname].add(v)
                         continue
 
@@ -126,6 +130,7 @@ class SourceTree(object):
                         new_source = all_sources[ident.id_]
                         new_sources.add(new_source)
                     except KeyError:
+                        print 'C', ident.sname
                         errors[bundle_ident.sname].add(ident.sname)
 
 
@@ -263,7 +268,6 @@ class SourceTree(object):
 
     def sync_bundle(self, path, ident=None, bundle=None):
 
-
         self.logger.info("Sync source bundle: {} ".format(path))
 
         if not bundle and os.path.exists(path):
@@ -272,9 +276,7 @@ class SourceTree(object):
         if not ident and bundle:
             ident = bundle.identity
 
-
         f = self.library.files.query.type(Dataset.LOCATION.SOURCE).ref(ident.vid).one_maybe
-
 
         # Update the file if it already exists.
         if not f:
@@ -296,7 +298,6 @@ class SourceTree(object):
 
             d = f.data
 
-
         #for p in bundle.config.group('partitions'):
         #    if isinstance(p, dict):
         #        print "X!!!",p
@@ -313,7 +314,6 @@ class SourceTree(object):
         self.library.database.install_dataset_identity(
             ident, location=Dataset.LOCATION.SOURCE, data=d)
 
-
         self.library.files.merge(f)
 
     def _dir_list(self, datasets=None, key='vid'):
@@ -325,10 +325,8 @@ class SourceTree(object):
         if datasets is None:
             datasets = {}
 
-
         if not os.path.exists(self.base_dir):
             raise ConfigurationError("Could not find source directory: {}".format(self.base_dir))
-
 
         # Walk the subdirectory for the files to build, and
         # add all of their dependencies
@@ -360,7 +358,6 @@ class SourceTree(object):
 
         return datasets
 
-
     #
     # Bundles
     #
@@ -390,8 +387,6 @@ class SourceTree(object):
         bundle_class = load_bundle(root)
         bundle = bundle_class(root)
         return bundle
-
-
 
     def resolve_bundle(self, term):
         from ambry.orm import Dataset

@@ -408,6 +408,10 @@ class Library(object):
         except DatabaseError:
             self.logger.error("Failed to load databundle at path {}".format(abs_path))
             raise
+        except AttributeError:
+            self.logger.error("Failed to load databundle at path {}".format(abs_path))
+            raise
+
 
         # Do we have it in the database? If not install it.
         # It should be installed if it was retrieved remotely,
