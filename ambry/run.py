@@ -275,6 +275,19 @@ class RunConfig(object):
         return python_dir
 
 
+    def filesystem_path(self, name):
+
+        fs = self.group('filesystem')
+
+        if not name in fs:
+            return None
+
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
+
+        path = fs[name].format(root=root_dir)
+
+        return path
+
 
 
 def mp_run(mp_run_args):

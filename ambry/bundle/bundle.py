@@ -995,4 +995,45 @@ class BuildBundle(Bundle):
                              for args in arg_sets])
 
 
-    
+def new_analysis_bundle( repo_dir, source, dataset, rc_path = None, subset=None, bspace=None, btime=None,
+                        variation=None, revision=1, ns_key=None):
+
+    from ..run import get_runconfig
+    from ..library import new_library
+
+    rc = get_runconfig(path=rc_path)
+    l = new_library(rc.library('default'))
+
+
+    st = l.source
+
+    repo_dir = rc.filesystem_path('analysis')
+
+    ab_path = st.new_bundle(rc, repo_dir, type='analysis',
+                            source=source, dataset=dataset, subset=subset,
+                            bspace=bspace, btime=btime, variation=variation, revision=revision,
+                            throw = False)
+
+
+
+    return AnalysisBundle(ab_path)
+
+class AnalysisBundle(BuildBundle):
+
+
+
+    class PrepareContext(object):
+        def __init__(self, bundle):
+            self.bundle = bundle
+
+        def __enter__(self):
+            if not self.bundle.pre_prepare():
+                from ..dbexceptions import ProcessError
+                raise ProcessError("")
+
+
+        def __exit__(self, type, value, traceback):
+            self.cr.restore()
+
+
+

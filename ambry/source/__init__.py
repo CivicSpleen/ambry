@@ -76,6 +76,7 @@ class SourceTree(object):
 
         return datasets
 
+
     def dependencies(self, term=None):
         '''Return a topologically sorted tree of dependencies, for all sources if a term is not given,
         or for a single bundle if it is. '''
@@ -227,8 +228,6 @@ class SourceTree(object):
             return None
 
 
-
-
     def add_source_url(self, ident, repo, data):
 
         self.library.database.install_dataset_identity(ident, location=Dataset.LOCATION.SREPO)
@@ -251,6 +250,7 @@ class SourceTree(object):
 
         for ident in self._dir_list().values():
             self.sync_bundle(ident.bundle_path, ident, ident.bundle)
+
 
     def _bundle_data(self, ident, bundle):
 
@@ -316,6 +316,7 @@ class SourceTree(object):
 
         self.library.files.merge(f)
 
+
     def _dir_list(self, datasets=None, key='vid'):
         '''Get a list of sources from the directory, rather than the library '''
         from ..identity import LocationRef, Identity
@@ -377,6 +378,7 @@ class SourceTree(object):
 
         return f.path
 
+
     def bundle(self, path):
         '''Return an  Bundle object, using the class defined in the bundle source'''
         if path[0] != '/':
@@ -387,6 +389,7 @@ class SourceTree(object):
         bundle_class = load_bundle(root)
         bundle = bundle_class(root)
         return bundle
+
 
     def resolve_bundle(self, term):
         from ambry.orm import Dataset
@@ -416,9 +419,129 @@ class SourceTree(object):
 
         return BuildBundle(root)
 
+
+    def new_bundle(self, rc, repo_dir, source, dataset, type=None, subset=None, bspace=None, btime=None,
+                   variation=None, revision=1, throw=True):
+
+        from ..source.repository import new_repository
+        from ..identity import DatasetNumber, Identity
+        from ..identity import NumberServer
+
+        from requests.exceptions import HTTPError
+        from collections import OrderedDict
+        from ..dbexceptions import ConflictError, ConfigurationError, SyncError
+        import shutil
+        import yaml
+
+        l  = self.library
+
+        nsconfig = rc.group('numbers')
+
+        ns = NumberServer(**nsconfig)
+
+        d = dict(
+            source = source,
+            dataset = dataset,
+            subset = subset,
+            bspace = bspace,
+            btime = btime,
+            variation = variation,
+            revision = revision,
+            type = type
+        )
+
+        try:
+            if type == 'analysis':
+                d['id'] = str(DatasetNumber())
+            else:
+                d['id'] = str(ns.next())
+            self.logger.info("Got number from number server: {}".format(d['id']))
+        except HTTPError as e:
+            self.logger.warn("Failed to get number from number server: {}".format(e.message))
+            self.logger.warn(
+                "Using self-generated number. There is no problem with this, but they are longer than centrally generated numbers.")
+            d['id'] = str(DatasetNumber())
+
+        ident = Identity.from_dict(d)
+
+        bundle_dir = os.path.join(os.getcwd(), repo_dir, ident.name.source_path)
+
+        if not os.path.exists(bundle_dir):
+            os.makedirs(bundle_dir)
+
+        elif os.path.isdir(bundle_dir):
+            if throw:
+                raise ConflictError("Directory already exists: " + bundle_dir)
+            else:
+                return bundle_dir
+
+        try:
+            ambry_account = rc.group('accounts').get('ambry', {})
+        except:
+            ambry_account = None
+
+        if not ambry_account:
+            raise ConfigurationError("Failed to get an accounts.ambry entry from the configuration. ( It's usually in {}. ) ".format(
+                rc.USER_ACCOUNTS))
+
+        if not ambry_account.get('name') or not ambry_account.get('email'):
+            from ambry.run import RunConfig as rc
+
+            raise ConfigurationError("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
+
+        config = {
+            'identity': ident.ident_dict,
+            'about': {
+                'author': ambry_account.get('name'),
+                'author_email': ambry_account.get('email'),
+                'description': "**include**",  # Can't get YAML to write this properly
+                'groups': ['group1', 'group2'],
+                'homepage': "https://civicknowledge.org",
+                'license': "other-open",
+                'maintainer': ambry_account.get('name'),
+                'maintainer_email': ambry_account.get('email'),
+                'tags': ['tag1', 'tag2'],
+                'title': "Bundle title"
+            }
+        }
+
+        os.makedirs(os.path.join(bundle_dir, 'meta'))
+
+        file_ = os.path.join(bundle_dir, 'bundle.yaml-in')
+
+        yaml.dump(config, file(file_, 'w'), indent=4, default_flow_style=False)
+
+        # Need to edit the YAML file because the !include line is special metadata
+        # that is hard ( or impossible ) to write through serialization
+
+        with file(file_, 'r') as f_in:
+            with file(os.path.join(bundle_dir, 'bundle.yaml'), 'w') as f_out:
+                f_out.write(f_in.read().replace("'**include**'", "!include 'README.md'"))
+
+        os.remove(file_)
+
+        p = lambda x: os.path.join(os.path.dirname(__file__), '..', 'support', x)
+
+        shutil.copy(p('bundle.py'), bundle_dir)
+        shutil.copy(p('README.md'), bundle_dir)
+        shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta'))
+        #shutil.copy(p('about.description.md'), os.path.join(bundle_dir, 'meta')  )
+
+        try:
+            self.sync_bundle(bundle_dir)
+        except ConflictError as e:
+
+            from ..util import rm_rf
+
+            rm_rf(bundle_dir)
+            raise SyncError("Failed to sync bundle at {}  ; {}. Bundle deleted".format(bundle_dir, e.message))
+        else:
+            self.logger.info("CREATED: {}, {}", ident.fqname, bundle_dir)
+
+        return bundle_dir
+
+
 class SourceTreeLibrary(object):
-
-
 
     def clear_source_refs(self,repo):
         from ..orm import File
@@ -426,7 +549,6 @@ class SourceTreeLibrary(object):
         self._library.database.session.query(File).filter(File.group == repo).delete()
 
         self._library.database.session.commit()
-
 
     def _load_database(self):
         from ..orm import File
@@ -437,13 +559,6 @@ class SourceTreeLibrary(object):
         for ident in self.tree._dir_list():
             path = ident.data['path']
             self.update_bundle(path, ident)
-
-
-
-
-
-
-
 
 
     def _add_file(self, path, identity, state='loaded', type_=None,
@@ -469,9 +584,6 @@ class SourceTreeLibrary(object):
     def _remove_file_by_ref(self, ref, type_):
 
         self._library.remove_file(self, ref, type_=type_)
-
-
-
 
 
 class SourceTreeWatcher(object):

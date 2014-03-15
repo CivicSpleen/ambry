@@ -49,7 +49,11 @@ class QueryError(BundleError):
 
 class ConflictError(BundleError):
     """Conflict with existing resource"""
-    
+
+
+class SyncError(BundleError):
+    """Could not sync a resource"""
+
 class FatalError(BundleError):
     """A Fatal Bundle Error, generated in testing instead of a system exit. """
 
