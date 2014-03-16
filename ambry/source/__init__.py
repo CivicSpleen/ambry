@@ -433,6 +433,13 @@ class SourceTree(object):
         import shutil
         import yaml
 
+        if not repo_dir:
+            raise ValueError("Must specify a repo_dir")
+
+
+        if not os.path.exists(repo_dir):
+            raise IOError("Repository directory '{}' does not exist".format(repo_dir))
+
         l  = self.library
 
         nsconfig = rc.group('numbers')
@@ -464,8 +471,6 @@ class SourceTree(object):
 
         ident = Identity.from_dict(d)
 
-        if not os.path.exists(repo_dir):
-            raise IOError("Repository directory '{}' does not exist".format(repo_dir))
 
         bundle_dir = os.path.join(repo_dir, ident.name.source_path)
 
