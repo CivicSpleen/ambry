@@ -1044,7 +1044,7 @@ def new_analysis_bundle( repo_dir, source, dataset, rc_path = None, subset=None,
 
     if not repo_dir or not os.path.exists(repo_dir):
         raise ConfigurationError("Must specify a valid directory for configuration item filesystem.analysis."
-                                 "Got: '{}' ",format(repo_dir))
+                                 "Got: '{}' ".format(repo_dir))
 
     ab_path = st.new_bundle(rc, repo_dir, type='analysis',
                             source=source, dataset=dataset, subset=subset,
