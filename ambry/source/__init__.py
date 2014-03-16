@@ -464,7 +464,7 @@ class SourceTree(object):
 
         ident = Identity.from_dict(d)
 
-        bundle_dir = os.path.join(os.getcwd(), repo_dir, ident.name.source_path)
+        bundle_dir = os.path.join(repo_dir, ident.name.source_path)
 
         if not os.path.exists(bundle_dir):
             os.makedirs(bundle_dir)
