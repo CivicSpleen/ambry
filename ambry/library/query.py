@@ -520,7 +520,7 @@ class RemoteResolver(object):
 
                     try:
                         ident = rl.resolve(ref, location)
-                        print __file__, ident, ident.partition,
+
                     except ConnectionError:
                         continue
 
