@@ -23,6 +23,34 @@ class Test(TestBase):
     def restore_bundle(self):
         pass 
 
+    def test_config(self):
+        from ambry.bundle.config import BundleFileConfig, RunConfig
+        from ambry.util import AttrDict
+
+        import shutil
+
+        p = '/tmp/test_config'
+        if not os.path.exists(p):
+            os.makedirs(p)
+
+        shutil.copyfile(os.path.join(self.bundle.bundle_dir, 'bundle.yaml'),
+                        os.path.join(p, 'bundle.yaml'))
+
+
+        cfg = BundleFileConfig(p)
+
+        print cfg.build
+
+        cfg.build.foo = 'bar'
+
+        print cfg.build
+
+        cfg.rewrite()
+
+        cfg = RunConfig()
+
+        print cfg.get('build')
+
     def test_db_bundle(self):
         
         from ambry.bundle import BuildBundle, DbBundle
@@ -381,7 +409,7 @@ class Test(TestBase):
         """Check the the RunConfig expands  the library configuration"""
         from ambry.run import  get_runconfig, RunConfig
         
-        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG, RunConfig.USER_ACCOUNTS))
 
         l = rc.library('library1')
          
@@ -475,6 +503,9 @@ class Test(TestBase):
         bundle.exit_on_fatal = False
         bundle.pre_prepare()
         bundle.prepare()
+
+        print bundle.database.dsn
+
         bundle.post_prepare()
         bundle.pre_build()
         bundle.build()

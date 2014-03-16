@@ -39,12 +39,14 @@ class Test(TestBase):
 
         print "Bundle Dir", ab.bundle_dir
 
-        ab.config.rewrite(build= {
-            'dependencies': {
+        with ab.config.about as a:
+            a.title = 'This is an Example Analysis Bundle?'
+            a.tags = ['example','another']
+            a.groups = ['examples']
+
+        ab.config.build.dependencies =  {
                 'random': 'example.com-random-example1'
             }
-        })
-
 
         p = ab.library.dep('random').partition
 

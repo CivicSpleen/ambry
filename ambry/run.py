@@ -9,7 +9,7 @@ from ambry.util import AttrDict
 from ambry.util import lru_cache
 
 @lru_cache()
-def get_runconfig(path=None, is_server=False):
+def get_runconfig(path=None,  is_server=False):
     return RunConfig(path, is_server)
 
 class RunConfig(object):
@@ -33,6 +33,9 @@ class RunConfig(object):
     USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
     DIR_CONFIG = os.path.join(os.getcwd(),'ambry.yaml')
 
+    config = None
+    files = None
+
     def __init__(self, path=None, is_server = False):
         '''Create a new RunConfig object
         
@@ -41,15 +44,15 @@ class RunConfig(object):
           If it is an array, load only the files in the array. 
 
         '''
-        
-        self.config = AttrDict()
-        self.config['loaded'] = []
+
+        config = AttrDict()
+        config['loaded'] = []
 
     
         if isinstance(path, (list, tuple, set)):
-            self.files = path
+            files = path
         else:
-            self.files = [
+            files = [
                           RunConfig.ROOT_CONFIG,
                           RunConfig.USER_CONFIG,
                           RunConfig.USER_ACCOUNTS,
@@ -58,24 +61,42 @@ class RunConfig(object):
 
         loaded = False
 
-        for f in self.files:
+        for f in files:
             
             if f is not None and os.path.exists(f):
                 try:
                     loaded = True
 
-                    self.config.loaded.append(f)
-                    self.config.update_yaml(f)
+                    config.loaded.append(f)
+                    config.update_yaml(f)
                 except TypeError:
                     pass # Empty files will produce a type error
 
         if not loaded:
-            raise Exception("Failed to load any config from: {}".format(self.files))
+            raise Exception("Failed to load any config from: {}".format(files))
+
+        object.__setattr__(self, 'config', config)
+        object.__setattr__(self, 'files', files)
 
     def __getattr__(self, group):
-        '''Fetch a confiration group and return the contents as an 
+        '''Fetch a configuration group and return the contents as an
         attribute-accessible dict'''
+
         return self.config.get(group,{})
+
+
+    def __setattr__(self, group, v):
+        '''Fetch a configuration group and return the contents as an
+        attribute-accessible dict'''
+
+        self.config[group] = v
+
+    def get(self,k, default=None):
+
+        if not default:
+            default = None
+
+        return self.config.get(k,default)
 
     def group(self, name):
         '''return a dict for a group of configuration items.'''
@@ -288,6 +309,10 @@ class RunConfig(object):
 
         return path
 
+
+    @property
+    def dict(self):
+        return self.config.to_dict()
 
 
 def mp_run(mp_run_args):

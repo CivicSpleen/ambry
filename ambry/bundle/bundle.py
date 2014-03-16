@@ -8,6 +8,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from ..filesystem import  BundleFilesystem
 from ..schema import Schema
 from ..partitions import Partitions
+from ..util import memoize
 
 import os.path
 from ..dbexceptions import  ConfigurationError, ProcessError
@@ -153,7 +154,7 @@ class Bundle(object):
         if self._library:
             l = self._library
         else:
-            l = new_library(self.config.config.library('default'))
+            l = new_library(self.config.library('default'))
 
         l.logger =\
             self.logger
@@ -328,8 +329,8 @@ class BuildBundle(Bundle):
         self._database  = None
    
         # For build bundles, always use the FileConfig though self.config
-        # to get configuration. 
-        self._config = BundleFileConfig(self.bundle_dir)
+        # to get configuration.
+        self._load_config()
 
         self.filesystem = BundleFilesystem(self, self.bundle_dir)
         
@@ -348,7 +349,10 @@ class BuildBundle(Bundle):
         self._update_time = None
        
         self.exit_on_fatal = True
-       
+
+    def _load_config(self):
+        self._config = BundleFileConfig(self.bundle_dir)
+
     @property
     def build_dir(self):
         
@@ -357,8 +361,7 @@ class BuildBundle(Bundle):
             return cache.cache_dir
         except ConfigurationError:
             return  self.filesystem.path(self.filesystem.BUILD_DIR)
-        
-       
+
     @property
     def path(self):
         return os.path.join(self.build_dir, self.identity.path) 
@@ -554,7 +557,7 @@ class BuildBundle(Bundle):
             import sys
             import imp
             
-            python_dir = self.config.config.python_dir()
+            python_dir = self.config.python_dir()
             
             if not python_dir:
                 raise ConfigurationError("Can't install python requirements without a configuration item for filesystems.python")
@@ -735,7 +738,7 @@ class BuildBundle(Bundle):
             
             self._build_time = time()
         
-        python_dir = self.config.config.python_dir()
+        python_dir = self.config.python_dir()
         
         if  python_dir and python_dir not in sys.path:
             sys.path.append(python_dir)
@@ -892,7 +895,7 @@ class BuildBundle(Bundle):
 
             #library_name = self.run_args.get('library', 'default') if library_name is None else 'default'
             #library_name = library_name if library_name else 'default'
-            #library = ambry.library.new_library(self.config.config.library(library_name), reset=True)
+            #library = ambry.library.new_library(self.config.library(library_name), reset=True)
             library = self.library
          
             self.log("{} Install to  library {}".format(self.identity.name, library.database.dsn))
@@ -1089,7 +1092,11 @@ class AnalysisBundle(BuildBundle):
         portion of the build phase '''
         super(AnalysisBundle, self).__init__(bundle_path)
 
-        self.config.rewrite()
+        if not self.config.get("build"):
+            self.config.build = AttrDict(
+                dependencies=AttrDict()
+            )
+
 
         self.clean()
         self.prepare()
@@ -1133,12 +1140,16 @@ class AnalysisBundle(BuildBundle):
 
             self._build_time = time()
 
-        python_dir = self.config.config.python_dir()
+        python_dir = self.config.python_dir()
 
         if python_dir and python_dir not in sys.path:
             sys.path.append(python_dir)
 
         return True
+
+    def post_build(self):
+        self.config.rewrite()
+        super(AnalysisBundle,self).post_build()
 
 
 

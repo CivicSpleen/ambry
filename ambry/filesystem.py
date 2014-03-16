@@ -107,8 +107,8 @@ class BundleFilesystem(Filesystem):
     META_DIR = 'meta'
     
     def __init__(self, bundle, root_directory = None):
-        
-        super(BundleFilesystem, self).__init__(bundle.config._run_config)
+
+        super(BundleFilesystem, self).__init__(bundle.config)
         
         self.bundle = bundle
         if root_directory:

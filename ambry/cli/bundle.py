@@ -450,7 +450,7 @@ def bundle_config(args, b, st, rc):
             with self.session:
                 b.update_configuration()
         elif args.subcommand == 'dump':
-            print b.config._run_config.dump()
+            print b.config.dump()
         elif args.subcommand == 'schema':
             print b.schema.as_markdown()
 
@@ -462,7 +462,7 @@ def bundle_source(args, b, st, rc):
 
     if 'command_group' in args and args.command_group == 'source':
 
-        repo = new_repository(b.config._run_config.sourcerepo('default'))
+        repo = new_repository(b.config.sourcerepo('default'))
         repo.bundle = b
 
         if args.command == 'commit':
