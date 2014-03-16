@@ -371,7 +371,7 @@ class Library(object):
         # Get a reference to the dataset, partition and relative path
         # from the local database.
 
-        dataset = self.resolve(ref)
+        dataset = self.resolve(ref, use_remote=True)
 
         if not dataset:
             return None
@@ -573,6 +573,7 @@ class Library(object):
                     self.bundle.error("Failed to resolve {} ".format(v))
                     errors += 1
                     continue
+
                 if ident.partition:
                     out[k] = ident.partition
                 else:

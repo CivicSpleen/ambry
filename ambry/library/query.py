@@ -520,12 +520,18 @@ class RemoteResolver(object):
 
                     try:
                         ident = rl.resolve(ref, location)
+                        print __file__, ident, ident.partition,
                     except ConnectionError:
                         continue
 
                     if ident:
+                        ident.locations.set(Dataset.LOCATION.REMOTE)
+
                         ident.url = url
                         idents.append(ident)
+
+
+
 
         if not idents:
             return ip, None

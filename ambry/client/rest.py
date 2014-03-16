@@ -192,7 +192,7 @@ class RemoteLibrary(object):
         else:
             data = d
 
-        ident_d = d['identity']
+        ident_d = data['identity']
 
         ident =  Identity.from_dict(ident_d)
         ident.data = data['urls']
