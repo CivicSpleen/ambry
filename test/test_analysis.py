@@ -31,14 +31,13 @@ class Test(TestBase):
 
 
     def testBasic(self):
-        from ambry.bundle import new_analysis_bundle, AnalysisBundle
+        from ambry.bundle import new_analysis_bundle
 
         ab = new_analysis_bundle('test',
                                 source='foo.com', dataset='dataset',
                                 subset='subset', revision=1)
 
         print "Bundle Dir", ab.bundle_dir
-        ab.clean()
 
         ab.config.rewrite(build= {
             'dependencies': {
@@ -46,36 +45,18 @@ class Test(TestBase):
             }
         })
 
-        @ab.register.prepare
-        def prepare(bundle):
 
-            #super(AnalysisBundle, bundle).prepare()
+        p = ab.library.dep('random').partition
 
-            if not bundle.database.exists():
-                bundle.log("Creating bundle database")
-                bundle.database.create()
+        df =  p.select("SELECT * FROM example1",index_col='id').pandas
 
-            return True
+        gt90 =  df[df.int > 90]
 
-        @ab.register.build
-        def build(bundle):
-            import pandas as pd
-            print 'Here in Build'
+        print gt90.head(10)
 
-            p = bundle.library.dep('random').partition
+        out = ab.partitions.new_db_from_pandas(gt90,table = 'gt90')
 
-            df =  p.select("SELECT * FROM example1",index_col='id').pandas
-
-            gt90 =  df[df.int > 90]
-
-            print gt90.head(10)
-
-            out = bundle.partitions.new_db_from_pandas(gt90,table = 'gt90')
-
-            return True
-
-        ab.build()
-
+        ab.post_build()
 
 
 

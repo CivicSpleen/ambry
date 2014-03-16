@@ -726,7 +726,7 @@ class BuildBundle(Bundle):
             raise ProcessError("Database does not exist yet. Was the 'prepare' step run?")
 
         if self.is_built and not self.run_args.get('force', False):
-            self.log("Bundle is already build. Skipping  ( Use --clean  or --force to force build ) ")
+            self.log("Bundle is already built. Skipping  ( Use --clean  or --force to force build ) ")
             return False
 
         with self.session:
@@ -1084,12 +1084,16 @@ class Registrar(object):
 class AnalysisBundle(BuildBundle):
 
     def __init__(self, bundle_path):
-
+        '''Initialize the analysis bundle by running the prepare phase and starting the pre-build
+        portion of the build phase '''
         super(AnalysisBundle, self).__init__(bundle_path)
 
         self.config.rewrite()
 
+        self.clean()
+        self.prepare()
 
+        self.pre_build()
 
 
     @property
@@ -1097,23 +1101,43 @@ class AnalysisBundle(BuildBundle):
         return Registrar(self)
 
     def prepare(self):
-        super(AnalysisBundle, self).do_prepare()
+        return super(AnalysisBundle, self).do_prepare()
+
 
     def prepare_main(self):
         '''This is the methods that is actually called in do_prepare; it dispatched to
         developer created prepare() methods'''
 
-        return super(AnalysisBundle, self).prepare()
+        from ..dbexceptions import NotFoundError
 
-    def build(self):
-        super(AnalysisBundle, self).do_build()
+        # with self.session: # This will create the database if it doesn't exist, but it will be empty
+        if not self.database.exists():
+            self.log("Creating bundle database")
+            self.database.create()
+
+        return True
 
 
-    def build_main(self):
-        '''This is the methods that is actually called in do_prepare; it dispatched to
-        developer created prepare() methods'''
+    def pre_build(self):
+        from time import time
+        import sys
 
-        return super(AnalysisBundle, self).build()
+        if not self.database.exists():
+            raise ProcessError("Database does not exist yet. Was the 'prepare' step run?")
+
+
+        with self.session:
+            if not self.db_config.get_value('process', 'prepared', False):
+                raise ProcessError("Build called before prepare completed")
+
+            self._build_time = time()
+
+        python_dir = self.config.config.python_dir()
+
+        if python_dir and python_dir not in sys.path:
+            sys.path.append(python_dir)
+
+        return True
 
 
 
