@@ -55,11 +55,6 @@ class Test(TestBase):
                 bundle.log("Creating bundle database")
                 bundle.database.create()
 
-            with bundle.session:
-                bundle.schema.clean()
-                t= bundle.schema.add_table('gt90')
-                #bundle.schema.add_column(t,'id',datatype = 'integer', is_primary_key=True)
-
             return True
 
         @ab.register.build
