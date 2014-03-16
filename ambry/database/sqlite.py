@@ -280,11 +280,13 @@ class SqliteDatabase(RelationalDatabase):
     @property
     def dbapi_connection(self):
         '''Return an DB_API connection'''
-        import sqlite3
-        if not self._dbapi_connection:
-            self._dbapi_connection = sqlite3.connect(self.path)
+
+        return self.engine.raw_connection()
+        #import sqlite3
+        #if not self._dbapi_connection:
+        #    self._dbapi_connection = sqlite3.connect(self.path)
             
-        return self._dbapi_connection
+        #return self._dbapi_connection
 
     @property
     def dbapi_cursor(self):

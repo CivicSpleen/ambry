@@ -378,6 +378,7 @@ class Column(Base):
 
 
     types  = {
+        # Sqlalchemy, Python, Sql,
         DATATYPE_TEXT:(sqlalchemy.types.Text,str,'TEXT'),
         DATATYPE_VARCHAR:(sqlalchemy.types.String,str,'VARCHAR'),
         DATATYPE_CHAR:(sqlalchemy.types.String,str,'VARCHAR'),
@@ -430,7 +431,30 @@ class Column(Base):
     @property
     def schema_type(self):
         return self.types[self.datatype][2]
-        
+
+    @classmethod
+    def convert_numpy_type(cls,dtype):
+        '''Convert a numpy dtype into a Column datatype. Only handles common types.
+
+        Implemented as a function to decouple from numpy'''
+
+        import numpy as np
+
+        m = {
+            'int64': cls.DATATYPE_INTEGER64,
+            'float64': cls.DATATYPE_FLOAT,
+            'object': cls.DATATYPE_BLOB
+
+        }
+
+
+        t =  m.get(dtype.name, None)
+
+        if not t:
+            raise TypeError("Failed to convert numpy type: '{}' ".format(dtype.name))
+
+        return t
+
     @property
     def foreign_key(self):
         try:

@@ -85,10 +85,7 @@ class SqlitePartition(PartitionBase):
                 self.database.connection.execute("DROP INDEX {}".format(index_name))
     
     
-    def query(self,*args, **kwargs):
-        """Convience function for self.database.query()"""
-     
-        return self.database.query(*args, **kwargs)
+
     
     def create_with_tables(self, tables=None, clean=False):
         '''Create, or re-create,  the partition, possibly copying tables
@@ -268,10 +265,24 @@ class SqlitePartition(PartitionBase):
 
     @property
     def rows(self):
-        
+        '''Run a select query to return all rows of the primary table. '''
         pk = self.get_table().primary_key.name
         return self.database.query("SELECT * FROM {} ORDER BY {} ".format(self.get_table().name,pk))
-        
+
+    def query(self,*args, **kwargs):
+        """Convience function for self.database.query()"""
+
+        return self.database.query(*args, **kwargs)
+
+
+    def select(self,sql,*args, **kwargs):
+        '''Run a query and return an object that allows the selected rows to be returned
+        as a data object in numpy, pandas, petl or other forms'''
+        from ..database.selector import RowSelector
+
+        return RowSelector(self, sql,*args, **kwargs)
+
+
 
     def write_stats(self):
         '''Record in the partition entry basic statistics for the partition's

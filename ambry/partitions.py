@@ -473,15 +473,53 @@ class Partitions(object):
     def find_or_new(self, clean = False,  tables=None, data=None, **kwargs):
         return self.find_or_new_db(tables=tables, clean = clean, data=data, **kwargs)
 
-    def new_db_partition(self, clean=False, tables=None, data=None,  **kwargs):
+    def new_db_partition(self, clean=False, tables=None, data=None,  create=True, **kwargs):
 
-        p, found =  self._find_or_new(kwargs, clean = False,  tables=tables, data=data, format='db')
+        p, found =  self._find_or_new(kwargs, clean = False,  tables=tables, data=data, create=create, format='db')
         
         if found:
             raise ConflictError("Partition {} already exists".format(p.name))
 
         return p
-  
+
+    def new_db_from_pandas(self, frame, table=None, data=None, load=True, **kwargs):
+        '''Create a new db partition from a pandas data frame.
+
+        If the table does not exist, it will be created
+        '''
+        import pandas as pd
+        import numpy as np
+        from orm import Column
+
+        # Create the table from the information in the data frame.
+        with self.bundle.session:
+            sch = self.bundle.schema
+            t = sch.add_table(table)
+
+            sch.add_column(t,frame.index.name,
+                         datatype = Column.convert_numpy_type(frame.index.dtype),
+                         is_primary_key = True)
+
+            for name, type_ in zip([row for row in frame.columns],
+                                   [row for row in frame.convert_objects(convert_numeric=True,
+                                                                         convert_dates=True).dtypes]):
+                sch.add_column(t,name, datatype=Column.convert_numpy_type(type_))
+                sch.write_schema()
+
+        p =  self.new_partition(table=table, data=data, **kwargs)
+
+        if load:
+            pk_name = frame.index.name
+            with p.inserter(table) as ins:
+                for i, row in frame.iterrows():
+                    d = dict(row)
+                    d[pk_name] = i
+                    ins.insert(d)
+
+
+        return p
+
+
     def find_or_new_db(self, clean = False,  tables=None, data=None, **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it. 
         

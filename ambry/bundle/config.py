@@ -70,7 +70,7 @@ class BundleFileConfig(BundleConfig):
             ns = NumberServer(**self._run_config.group('numbers'))
             ds = ns.next()
         except Exception as e:
-            from .util import get_logger
+            from ..util import get_logger
             logger = get_logger(__name__)
 
             logger.error("Failed to get number from number sever; need to use self assigned number: {}"
@@ -119,9 +119,9 @@ class BundleFileConfig(BundleConfig):
 
         config.update_yaml(self.local_file)
 
+
         for k,v in kwargs.items():
             config[k] = v
-
 
         with open(temp, 'w') as f:
             config.dump(f)
@@ -130,6 +130,7 @@ class BundleFileConfig(BundleConfig):
             os.rename(self.local_file, old)
             os.rename(temp,self.local_file )
 
+        self._run_config = get_runconfig(self.local_file)
 
     def dump(self):
         '''Re-writes the file from its own data. Reformats it, and updates
@@ -241,4 +242,8 @@ class BundleDbConfig(BundleConfig):
         from ambry.orm import Partition
 
         return  (self.database.session.query(Partition).first())
+
+
+
+
 

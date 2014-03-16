@@ -31,19 +31,55 @@ class Test(TestBase):
 
 
     def testBasic(self):
-        from ambry.bundle import new_analysis_bundle
+        from ambry.bundle import new_analysis_bundle, AnalysisBundle
 
-        ab = new_analysis_bundle('test', 'foo.com', 'dataset',  subset='subset', bspace=None, btime=None,
-                                variation=None, revision=1)
+        ab = new_analysis_bundle('test',
+                                source='foo.com', dataset='dataset',
+                                subset='subset', revision=1)
 
-        print ab
+        print "Bundle Dir", ab.bundle_dir
+        ab.clean()
 
-        print ab.register
-
+        ab.config.rewrite(build= {
+            'dependencies': {
+                'random': 'example.com-random-example1'
+            }
+        })
 
         @ab.register.prepare
         def prepare(bundle):
-            pass
+
+            #super(AnalysisBundle, bundle).prepare()
+
+            if not bundle.database.exists():
+                bundle.log("Creating bundle database")
+                bundle.database.create()
+
+            with bundle.session:
+                bundle.schema.clean()
+                t= bundle.schema.add_table('gt90')
+                #bundle.schema.add_column(t,'id',datatype = 'integer', is_primary_key=True)
+
+            return True
+
+        @ab.register.build
+        def build(bundle):
+            import pandas as pd
+            print 'Here in Build'
+
+            p = bundle.library.dep('random').partition
+
+            df =  p.select("SELECT * FROM example1",index_col='id').pandas
+
+            gt90 =  df[df.int > 90]
+
+            print gt90.head(10)
+
+            out = bundle.partitions.new_db_from_pandas(gt90,table = 'gt90')
+
+            return True
+
+        ab.build()
 
 
 
