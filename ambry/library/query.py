@@ -530,9 +530,6 @@ class RemoteResolver(object):
                         ident.url = url
                         idents.append(ident)
 
-
-
-
         if not idents:
             return ip, None
 

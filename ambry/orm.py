@@ -443,7 +443,7 @@ class Column(Base):
         m = {
             'int64': cls.DATATYPE_INTEGER64,
             'float64': cls.DATATYPE_FLOAT,
-            'object': cls.DATATYPE_BLOB
+            'object': cls.DATATYPE_TEXT # Hack. Pandas makes strings into object.
 
         }
 
