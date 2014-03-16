@@ -421,7 +421,7 @@ class SourceTree(object):
 
 
     def new_bundle(self, rc, repo_dir, source, dataset, type=None, subset=None, bspace=None, btime=None,
-                   variation=None, revision=1, throw=True):
+                   variation=None, revision=1, throw=True, examples=True):
 
         from ..source.repository import new_repository
         from ..identity import DatasetNumber, Identity
@@ -457,18 +457,8 @@ class SourceTree(object):
             type = type
         )
 
-        try:
-            if type == 'analysis':
-                d['id'] = str(DatasetNumber())
-            else:
-                d['id'] = str(ns.next())
-            self.logger.info("Got number from number server: {}".format(d['id']))
-        except HTTPError as e:
-            self.logger.warn("Failed to get number from number server: {}".format(e.message))
-            self.logger.warn(
-                "Using self-generated number. There is no problem with this, but they are longer than centrally generated numbers.")
-            d['id'] = str(DatasetNumber())
-
+        # A) Make the ident the first time to get a path to the bundle
+        d['id'] = 'dxxx'  # Fake it, just to get the path.
         ident = Identity.from_dict(d)
 
 
@@ -482,6 +472,25 @@ class SourceTree(object):
                 raise ConflictError("Directory already exists: " + bundle_dir)
             else:
                 return bundle_dir
+
+
+        # Then (B) if the directory doesn't already exist, get the
+        # id number and make it again.
+        try:
+            if type == 'analysis':
+                d['id'] = str(DatasetNumber())
+            else:
+                d['id'] = str(ns.next())
+                self.logger.info("Got number from number server: {}".format(d['id']))
+        except HTTPError as e:
+            self.logger.warn("Failed to get number from number server: {}".format(e.message))
+            self.logger.warn(
+                "Using self-generated number. There is no problem with this, but they are longer than centrally generated numbers.")
+            d['id'] = str(DatasetNumber())
+
+        ident = Identity.from_dict(d)
+
+
 
         try:
             ambry_account = rc.group('accounts').get('ambry', {})
@@ -531,9 +540,12 @@ class SourceTree(object):
         p = lambda x: os.path.join(os.path.dirname(__file__), '..', 'support', x)
 
         shutil.copy(p('bundle.py'), bundle_dir)
+
+
         shutil.copy(p('README.md'), bundle_dir)
-        shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta'))
-        #shutil.copy(p('about.description.md'), os.path.join(bundle_dir, 'meta')  )
+        if examples:
+            shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta'))
+            #shutil.copy(p('about.description.md'), os.path.join(bundle_dir, 'meta')  )
 
         try:
             self.sync_bundle(bundle_dir)

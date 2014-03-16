@@ -1049,7 +1049,7 @@ def new_analysis_bundle( repo_dir, source, dataset, rc_path = None, subset=None,
     ab_path = st.new_bundle(rc, repo_dir, type='analysis',
                             source=source, dataset=dataset, subset=subset,
                             bspace=bspace, btime=btime, variation=variation, revision=revision,
-                            throw = False)
+                            throw = False, examples = False)
 
     return AnalysisBundle(ab_path)
 
