@@ -464,6 +464,9 @@ class SourceTree(object):
 
         ident = Identity.from_dict(d)
 
+        if not os.path.exists(repo_dir):
+            raise IOError("Repository directory '{}' does not exist".format(repo_dir))
+
         bundle_dir = os.path.join(repo_dir, ident.name.source_path)
 
         if not os.path.exists(bundle_dir):
