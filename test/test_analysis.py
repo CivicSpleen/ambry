@@ -99,9 +99,6 @@ class Test(TestBase):
         ab.post_build()
 
 
-
-
-
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
