@@ -398,14 +398,12 @@ class Column(Base):
         DATATYPE_BLOB:(sqlalchemy.types.LargeBinary,buffer,'BLOB')
         }
 
-   
+
     def type_is_text(self):
         return self.datatype in (Column.DATATYPE_TEXT, Column.DATATYPE_CHAR, Column.DATATYPE_VARCHAR)
 
     def type_is_time(self):
         return self.datatype in (Column.DATATYPE_TIME, Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE)
-
-
 
     @property
     def sqlalchemy_type(self):

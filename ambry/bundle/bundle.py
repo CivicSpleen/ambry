@@ -1032,7 +1032,7 @@ class BuildBundle(Bundle):
                              for args in arg_sets])
 
 
-def new_analysis_bundle( repo_dir, source, dataset, rc_path = None, subset=None, bspace=None, btime=None,
+def new_analysis_bundle( source, dataset, rc_path = None, subset=None, bspace=None, btime=None,
                         variation=None, revision=1, ns_key=None):
 
     from ..run import get_runconfig

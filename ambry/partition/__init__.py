@@ -284,6 +284,7 @@ class PartitionBase(PartitionInterface):
     def extension(self):
         return self._id_class._name_class.PATH_EXTENSION
 
+    @property
     def info(self):
         """Returns a human readable string of useful information"""
 
@@ -292,3 +293,7 @@ class PartitionBase(PartitionInterface):
         '{:10s}: {}\n'.format('path',self.database.path)+
         '{:10s}: {}\n'.format('tables', ','.join(self.tables))
         )
+
+    def _repr_html_(self):
+        '''IPython display'''
+        return "<p>"+self.info.replace("\n","<br\>\n")+"</p>"

@@ -33,9 +33,8 @@ class Test(TestBase):
     def testBasic(self):
         from ambry.bundle import new_analysis_bundle
 
-        ab = new_analysis_bundle('test',
-                                source='foo.com', dataset='dataset',
-                                subset='subset', revision=1)
+        ab = new_analysis_bundle(source='foo.com', dataset='dataset',
+                                 subset='subset', revision=2)
 
         print "Bundle Dir", ab.bundle_dir
 
@@ -59,6 +58,9 @@ class Test(TestBase):
         out = ab.partitions.new_db_from_pandas(gt90,table = 'gt90')
 
         ab.post_build()
+
+        print p._repr_html_()
+
 
 
 
