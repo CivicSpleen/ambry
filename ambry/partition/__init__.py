@@ -296,4 +296,4 @@ class PartitionBase(PartitionInterface):
 
     def _repr_html_(self):
         '''IPython display'''
-        return "<p>"+self.info.replace("\n","<br\>\n")+"</p>"
+        return "<p>"+self.info.replace("\n","<br/>\n")+"</p>"
