@@ -611,7 +611,7 @@ class Table(Base):
                                                               'vname', 'description', 'keywords', 'installed', 'data']}
     
     @property
-    def help(self):
+    def info(self):
         
        
         x =  """
@@ -627,8 +627,12 @@ Columns:
 
             x += "   {sequence_id:3d} {name:12s} {schema_type:8s} {description}\n".format(**c.dict)
          
-        return x   
-        
+        return x
+
+
+    def _repr_html_(self):
+        '''IPython display'''
+        return "<p>" + self.info.replace("\n", "<br/>\n") + "</p>"
     
     @orm.reconstructor
     def init_on_load(self):
