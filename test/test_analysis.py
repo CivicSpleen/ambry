@@ -34,7 +34,7 @@ class Test(TestBase):
         from ambry.bundle import new_analysis_bundle
 
         ab = new_analysis_bundle(source='foo.com', dataset='dataset',
-                                 subset='subset', revision=2)
+                                 subset='subset', variation='test', revision=2)
 
         print "Bundle Dir", ab.bundle_dir
 
@@ -57,9 +57,47 @@ class Test(TestBase):
 
         out = ab.partitions.new_db_from_pandas(gt90,table = 'gt90')
 
+        # Try attaching
+
+
         ab.post_build()
 
         print p._repr_html_()
+
+
+    def test_attachment(self):
+        from ambry.bundle import new_analysis_bundle
+
+        ab = new_analysis_bundle(source='foo.com', dataset='crime',
+                                 subset='attach', variation='test', revision=2)
+
+        print "Bundle Dir", ab.bundle_dir
+
+        with ab.config.about as a:
+            a.title = 'This is an Example Analysis Bundle?'
+            a.tags = ['example', 'another']
+            a.groups = ['examples']
+
+        ab.config.build.dependencies = {
+            'incidents': 'clarinova.com-crime-incidents-casnd-incidents',
+            'addresses': 'clarinova.com-crime-incidents-casnd-addresses'
+        }
+
+
+
+        incidents = ab.library.dep('incidents').partition
+        addresses = ab.library.dep('addresses').partition
+
+        incidents.attach(addresses, 'addr')
+
+        df = incidents.select("SELECT * FROM incidents "
+                              "LEFT JOIN addr.addresses as addresses ON addresses.id = incidents.address_id "
+                              "LIMIT 1000", index_col='id').pandas
+
+        print df.head(10)
+
+        ab.post_build()
+
 
 
 
