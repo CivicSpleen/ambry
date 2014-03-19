@@ -281,6 +281,5 @@ class GeoPartition(SqlitePartition):
             self.bundle.error(e)
             srid = 'error'
 
-        return (super(GeoPartition, self).info()+
-        '{:10s}: {}\n'.format('SRID',srid))
+        return super(GeoPartition, self).info+ '{:10s}: {}\n'.format('SRID',srid)
 
