@@ -516,6 +516,10 @@ class Test(TestBase):
         from ambry.bundle import DbBundle
         b = self.bundle
 
+        print b.schema.as_text()
+
+        return
+
         print b.info
 
         lb = DbBundle(b.database.path)

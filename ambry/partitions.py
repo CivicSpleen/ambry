@@ -640,7 +640,7 @@ class Partitions(object):
         for p in self.all:
             active_parts |= set(p.name.partital_dict.keys())
 
-        cols = ['Name']
+        cols = ['Id','Name']
         for np, _, _ in PartitionName._name_parts:
             if np  in active_parts:
                 cols.append(np)
@@ -650,7 +650,9 @@ class Partitions(object):
         for p in self.all:
             cols = []
             d = p.name.partital_dict
+            cols.append(p.identity.id_)
             cols.append(p.identity.sname)
+
             for np, _, _ in PartitionName._name_parts:
 
                 if np not in active_parts:

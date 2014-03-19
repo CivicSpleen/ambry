@@ -876,9 +876,7 @@ class Schema(object):
             
             if  'size' not in row or  row['size'] is None:
                 row['size'] = ''
-                
-            
-                
+
                    
             rows.append([row['seq'], row['id'], row['column'], row['type'].title(), row['size'], row['description'] ])
 
