@@ -622,11 +622,40 @@ class Partitions(object):
         q.delete()
 
 
-    def _info(self):
-        from collections import OrderedDict
-        d = OrderedDict()
-        d['count'] = self.count
-        return d
+    @property
+    def info(self):
+
+        out = 'Partitions: '+str(self.count)+"\n"
+
+        for p in self.all:
+            out += str(p.identity.sname)+"\n"
+
+        return out
+
+    def _repr_html_(self):
+        from identity import PartitionName
+
+        active_parts = set()
+
+        for p in self.all:
+            active_parts |= set(p.name.partital_dict.keys())
+
+        rows = []
+        for p in self.all:
+            cols = []
+            d = p.name.partital_dict
+            cols.append(p.identity.sname)
+            for np, _, _ in PartitionName._name_parts:
+
+                if np not in active_parts:
+                    continue
+                cols.append(d[np] if np in d else '')
+
+            rows.append("<tr>"+''.join([ '<td>{}</td>'.format(c) for c in cols])+"</tr>")
+
+
+        return "<table>\n" + "\n".join(rows) + "\n</table>"
+
 
 
 

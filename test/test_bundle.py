@@ -522,6 +522,8 @@ class Test(TestBase):
         print '-----'
         print lb._repr_html_()
 
+        print b.partitions._repr_html_()
+
 
 
 def suite():

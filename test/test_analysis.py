@@ -114,11 +114,13 @@ class Test(TestBase):
         print iset._repr_html_()
 
 
+
+
     def test_info(self):
 
         b = self.bundle
 
-
+        print b.info
 
 
 
