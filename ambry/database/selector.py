@@ -42,8 +42,12 @@ class RowSelector(object):
         g = gen()
         header = g.next()
 
-        return pd.DataFrame.from_items(g,orient = 'index',columns = header)
+        df =  pd.DataFrame.from_items(g,orient = 'index',columns = header)
 
+
+        df.convert_objects(convert_dates=True, convert_numeric=True, convert_timedeltas=True, copy=False)
+
+        return df
 
 
     @property

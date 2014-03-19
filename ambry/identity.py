@@ -1531,3 +1531,95 @@ class NumberServer(object):
         if self.next_time and time.time() < self.next_time:
             time.sleep(self.next_time - time.time())
 
+class IdentitySet(object):
+    '''A set of Identity Objects, with methods to display them. '''
+
+    def __init__(self, idents, show_partitions=False, fields=None):
+
+
+        if isinstance(idents, dict):
+            idents = idents.values()
+
+        self.idents = idents
+
+        self.show_partitions = show_partitions
+
+        if not fields:
+            fields = ['locations', 'vid', 'vname']
+
+
+        self.fields = fields
+
+    @staticmethod
+    def deps(ident):
+        if not ident.data: return '.'
+        if not 'dependencies' in ident.data: return '.'
+        if not ident.data['dependencies']: return '0'
+        return str(len(ident.data['dependencies']))
+
+    # The headings for the fields in all_fields
+    record_entry_names = ('name', 'd_format', 'p_format', 'extractor')
+
+    all_fields = [
+        # Name, width, d_format_string, p_format_string, extract_function
+        ('deps', '{:3s}', '{:3s}', lambda ident: IdentitySet.deps(ident) ),
+        ('order', '{:6s}', '{:6s}', lambda ident: "{major:02d}:{minor:02d}".format(**ident.data['order']
+        if 'order' in ident.data else {'major': -1, 'minor': -1})),
+        ('locations',      '{:6s}', '{:6s}', lambda ident: ident.locations),
+        ('vid', '{:15s}', '{:20s}', lambda ident: ident.vid),
+        ('status', '{:20s}', '{:20s}', lambda ident: ident.bundle_state if ident.bundle_state else ''),
+        ('vname', '{:40s}', '    {:40s}', lambda ident: ident.vname),
+        ('sname', '{:40s}', '    {:40s}', lambda ident: ident.sname),
+        ('fqname', '{:40s}', '    {:40s}', lambda ident: ident.fqname),
+        ('source_path', '{:s}', '    {:s}', lambda ident: ident.source_path),
+    ]
+
+
+    def __str__(self):
+        out = []
+        for row in self._yield_rows(self.all_fields):
+            out.append(''.join([ format.format(value) for format, value in row]))
+
+        return '\n'.join(out)
+
+
+    def _repr_html_(self):
+        out = []
+
+        all_fields = list(self.all_fields)
+
+        for row in self._yield_rows(all_fields):
+            out.append('<tr>'+
+                       ''.join(["<td>{}</td>".format(format.format(value).strip()) for format, value in row])+
+                       '</tr>')
+
+        return '<table>'+'\n'.join(out)+'</table>'
+
+    def _yield_rows(self, all_fields):
+
+        for ident in self.idents:
+
+            d_formats = []
+            p_formats = []
+            values = []
+
+            for e in all_fields:
+                e = dict(zip(self.record_entry_names, e))  # Just to make the following code easier to read
+
+                if e['name'] not in self.fields:
+                    continue
+
+                d_formats.append(e['d_format'])
+                p_formats.append(e['p_format'])
+
+                values.append(e['extractor'](ident))
+
+            yield zip(d_formats, values)
+
+            if self.show_partitions and ident.partitions:
+
+                for pi in ident.partitions.values():
+                    yield zip(p_formats, values)
+
+
+

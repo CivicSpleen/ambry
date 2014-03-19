@@ -25,3 +25,26 @@ __version__ = '0.3.0'
 __maintainer__ = "Eric Busboom"
 __email__ = "eric@clarinova.com"
 __status__ = "Development"
+
+
+from util import memoize
+import ambry.library as _l
+
+
+@memoize
+def config():
+    '''Return the default run_config object for this installation'''
+    from ambry.run import get_runconfig
+    return get_runconfig()
+
+
+@memoize
+def library(name='default'):
+    '''Return the default library for this installation'''
+    return _l.new_library(config().library(name))
+
+
+def ilibrary(name='default'):
+    '''Return the default library for this installation, but configured for use in ipython'''
+    return _l.AnalysisLibrary(library())
+

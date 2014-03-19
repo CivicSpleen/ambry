@@ -84,7 +84,6 @@ class Test(TestBase):
         }
 
 
-
         incidents = ab.library.dep('incidents').partition
         addresses = ab.library.dep('addresses').partition
 
@@ -94,9 +93,25 @@ class Test(TestBase):
                               "LEFT JOIN addr.addresses as addresses ON addresses.id = incidents.address_id "
                               "LIMIT 1000", index_col='id').pandas
 
-        print df.head(10)
+        print df.dtypes
+
+
 
         ab.post_build()
+
+    def test_library(self):
+
+        import ambry
+
+        l = ambry.ilibrary()
+
+        print l.info
+
+        iset = l.list()
+
+        print str(iset)
+
+        print iset._repr_html_()
 
 
 def suite():

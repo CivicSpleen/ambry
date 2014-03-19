@@ -959,3 +959,23 @@ Remote:   {remote}
                     cache=str(self.cache),
                     remote=str(self.upstream) if self.upstream else None)
 
+
+class AnalysisLibrary(Library):
+    '''A Library that redefines some of the methods to make them easier to use from ipython'''
+
+    def __init__(self, library):
+        self.l = library
+
+    def list(self, datasets=None, with_meta=True, locations=None, key='fqname', fields=None):
+        from  ..identity import IdentitySet
+
+        l = self.l.list(datasets=datasets, with_meta=with_meta, locations=locations, key=key)
+
+        return IdentitySet(l, fields=fields)
+
+    @property
+    def info(self):
+        return self.l.info
+
+
+
