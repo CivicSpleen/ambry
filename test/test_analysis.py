@@ -114,6 +114,7 @@ class Test(TestBase):
         print iset._repr_html_()
 
 
+
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
