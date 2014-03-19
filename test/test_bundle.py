@@ -516,7 +516,12 @@ class Test(TestBase):
         from ambry.bundle import DbBundle
         b = self.bundle
 
-        print b.schema.as_text()
+
+        p = b.partitions.get('piEGPXmDC8001')
+
+        print p._repr_html_()
+
+        print p.table._repr_html_()
 
         return
 

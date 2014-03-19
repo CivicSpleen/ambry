@@ -632,7 +632,23 @@ Columns:
 
     def _repr_html_(self):
         '''IPython display'''
-        return "<p>" + self.info.replace("\n", "<br/>\n") + "</p>"
+
+        t1 = """
+        <table>
+        <tr><th>Name</th><td>{name}</td></tr>
+        <tr><th>Id</th><td>{id_}</td></tr>
+        <tr><th>Vid</th><td>{name}</td></tr>
+        </table>
+        """.format(**self.dict)
+
+        rows = []
+        rows.append(
+            "<tr><th>#</th><th>Name</th><th>Datatype</th><th>description</th></tr>")
+        for c in self.columns:
+            rows.append("<tr><td>{sequence_id:d}</td><td>{name:s}</td><td>{schema_type:s}</td><td>{description}</td></tr>".format(**c.dict))
+
+
+        return t1+"<table>\n"+"\n".join(rows)+"\n</table>"
     
     @orm.reconstructor
     def init_on_load(self):
