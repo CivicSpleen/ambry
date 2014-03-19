@@ -973,11 +973,9 @@ class AnalysisLibrary(Library):
 
         return IdentitySet(l, fields=fields)
 
-
     @property
     def info(self):
         return self.l.info
-
 
     def _repr_html_(self):
         return self.info.replace('\n','<br/>')
