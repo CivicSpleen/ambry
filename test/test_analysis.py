@@ -116,12 +116,14 @@ class Test(TestBase):
 
 
 
-    def test_info(self):
+    def test_find(self):
+        import ambry
 
-        b = self.bundle
+        l = ambry.ilibrary()
 
-        print b.info
+        iset = l.find(name='random')
 
+        print str(iset)
 
 
 def suite():

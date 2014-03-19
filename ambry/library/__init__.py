@@ -998,11 +998,30 @@ class AnalysisLibrary(Library):
         ident = None
 
 
-
-    def find(self, source=None, name=True):
+    def find(self, command_string = None, source=None, name=True, fields=None):
         from ..identity import IdentitySet
+        from ..library.query import QueryCommand
 
-        return IdentitySet(l, fields=fields)
+        idents = []
+
+        if not command_string:
+            if source:
+                command_string = "identity.source = {}".format(source)
+            elif name:
+                command_string = "identity.name like {}".format(name)
+
+
+        qc = QueryCommand.parse(command_string)
+
+        vids = set()
+        for entry in self.l.find(qc):
+            vids.add(entry['identity']['vid'])
+
+        for vid in vids:
+            ident = self.l.resolve(vid, None)
+            idents.append(ident)
+
+        return IdentitySet(idents, fields=fields)
 
     def get(self, ref, force=False, cb=None):
         return self.l.get( ref=ref, force=force, cb=cb)
