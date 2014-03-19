@@ -1003,6 +1003,9 @@ class AnalysisLibrary(Library):
 
         return IdentitySet(l, fields=fields)
 
+    def get(self, ref, force=False, cb=None):
+        return self.l.get(self, ref=ref, force=force, cb=cb)
+
     @property
     def info(self):
         return self.l.info
