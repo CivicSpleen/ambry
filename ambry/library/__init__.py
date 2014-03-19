@@ -986,7 +986,7 @@ class AnalysisLibrary(Library):
         l = self.l.list()
 
 
-        return IdentitySet(sorted(l, key=lambda ident: ident.vname), fields=fields)
+        return IdentitySet(sorted(l.values(), key=lambda ident: ident.vname), fields=fields)
 
     def about(self, ref):
         '''Lookup a bundle or partition reference and display information about it.
