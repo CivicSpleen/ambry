@@ -271,6 +271,7 @@ class GeoPartition(SqlitePartition):
         return "<geo partition: {}>".format(self.name)
 
 
+    @property
     def info(self):
         """Returns a human readable string of useful information"""
 
