@@ -622,7 +622,11 @@ class Partitions(object):
         q.delete()
 
 
-
+    def _info(self):
+        from collections import OrderedDict
+        d = OrderedDict()
+        d['count'] = self.count
+        return d
 
 
 

@@ -206,7 +206,73 @@ class Bundle(object):
         else:
             from ..dbexceptions import FatalError
             raise FatalError(message)
-    
+
+
+    def _build_info(self):
+        from collections import OrderedDict
+
+        process = self.config.process
+        return OrderedDict(
+            created=process.get('dbcreated', ''),
+            prepared=process.get('prepared', ''),
+            built=process.get('built', ''),
+            build_time=str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else ''
+        )
+
+    def _info(self, identity = None):
+        '''Return a nested, ordered dict  of information about the bundle. '''
+        from collections import OrderedDict
+        d = OrderedDict()
+
+        d['identity'] = identity if identity else self.identity._info()
+        d['locations']  = str(self.identity.locations).strip()
+
+        return d
+
+    @property
+    def info(self):
+        '''Display useful information about the bundle'''
+
+        out = []
+
+        key_lengths = set()
+        d = self._info()
+        for k,v in d.items():
+            key_lengths.add(len(k))
+            if isinstance(v,dict):
+                for k, _ in v.items():
+                    key_lengths.add(len(k))
+        kw = max(key_lengths)+4
+
+        f1 = "{:<"+str(kw)+"s}: {}"
+        f2 = "{:>"+str(kw)+"s}: {}"
+
+        for k, v in d.items():
+
+            if isinstance(v,dict):
+                out.append("{}".format(k.title()))
+                for k, v2 in v.items():
+                    out.append( f2.format(k.title(),v2))
+            else:
+                out.append( f1.format(k.title(), v))
+
+        return '\n'.join(out)
+
+
+    def _repr_html_(self):
+        out = []
+        for k, v in self._info().items():
+
+            if isinstance(v, dict):
+                out.append("<tr><td><strong>{}</strong></td><td></td></tr>".format(k.title()))
+                for k, v2 in v.items():
+                    out.append('<tr><td align="right">{}</td><td>{}</td></tr>'.format(k.title(), v2))
+            else:
+                out.append('<tr><td align="left">{}</td><td>{}</td></tr>'.format(k.title(), v))
+
+        return "<table>\n"+"\n".join(out)+"\n</table>"
+
+
 class DbBundle(Bundle):
 
     def __init__(self, database_file, logger=None):
@@ -239,29 +305,36 @@ class DbBundle(Bundle):
         
     def sub_path(self, *args):
         '''For constructing paths to partitions'''
-
         return os.path.join(self.path, *args)
 
-    def table_data(self, query):
-        '''Return a petl container for a data table'''
-        import petl 
-        query = query.strip().lower()
-        
-        if 'select' not in query:
-            query = "select * from {} ".format(query)
- 
-        return petl.fromsqlite3(self.database.path, query) #@UndefinedVariable
 
     @property
     def identity(self):
         '''Return an identity object. '''
-        from ..identity import Identity
+        from ..identity import Identity, LocationRef
 
         if not self._identity:
            self._identity = self.get_dataset(self.database.session).identity
-
+           self._identity.locations.set(LocationRef.LOCATION.LIBRARY)
 
         return self._identity
+
+    def _info(self, identity=None):
+        '''Return a nested, ordered dict  of information about the bundle. '''
+        from collections import OrderedDict
+        d = super(DbBundle, self)._info(identity)
+
+        d['source'] = OrderedDict(
+            db=self.database.path
+        )
+
+        d['source'].update(self._build_info())
+
+        d['partitions'] = self.partitions.count
+
+
+        return d
+
 
 class LibraryDbBundle(Bundle):
     '''A database bundle that is built in place from the data in a library '''
@@ -291,13 +364,30 @@ class LibraryDbBundle(Bundle):
     @property
     def identity(self):
         '''Return an identity object. '''
-        from ..identity import Identity
+        from ..identity import Identity, LocationRef
 
         if not self._identity:
            self._identity = self.get_dataset(self.database.session).identity
+           self._identity.locations.set(LocationRef.LOCATION.LIBRARY)
 
 
         return self._identity
+
+    def _info(self, identity=None):
+        '''Return a nested, ordered dict  of information about the bundle. '''
+        from collections import OrderedDict
+        d = super(LibraryDbBundle, self)._info(identity)
+
+
+        d['source'] = OrderedDict(
+            db=self.database.path
+        )
+
+        d['source'].update(self._build_info())
+
+        d['partitions'] = self.partitions.count
+
+        return d
 
 class BuildBundle(Bundle):
     '''A bundle class for building bundle files. Uses the bundle.yaml file for
@@ -403,7 +493,7 @@ class BuildBundle(Bundle):
     @property
     def identity(self):
         '''Return an identity object. '''
-        from ..identity import Identity, Name, ObjectNumber
+        from ..identity import Identity, Name, ObjectNumber, LocationRef
 
         if not self._identity:
             try:
@@ -413,6 +503,7 @@ class BuildBundle(Bundle):
                 raise AttributeError("Failed to get required sections of config. "+
                                     "\nconfig_source = {}\n".format(self.config.source_ref))
             self._identity =  Identity.from_dict(dict(names+idents))
+            self._identity.locations.set(LocationRef.LOCATION.SOURCE)
 
 
         return self._identity
@@ -466,6 +557,10 @@ class BuildBundle(Bundle):
         
         s = self.config.build.sources
         return s.get(name, None)
+
+    @property
+    def dependencies(self):
+        return self.config.build.get('dependencies')
 
     def clean(self, clean_meta=False):
         '''Remove all files generated by the build process'''
@@ -1031,6 +1126,27 @@ class BuildBundle(Bundle):
             pool.map(mp_run,[ (self.bundle_dir, method.__name__, args)
                              for args in arg_sets])
 
+
+    def _info(self, identity=None):
+        '''Return a nested, ordered dict  of information about the bundle. '''
+        from collections import OrderedDict
+
+        d = super(BuildBundle, self)._info(identity)
+
+        d['source'] = OrderedDict(
+            bundle=self.bundle_dir
+        )
+
+        deps = self.config.build.get('dependencies')
+        d['build'] = OrderedDict(
+            dependencies = deps if deps else ''
+        )
+
+        if self.is_built:
+            d['build'].update(self._build_info())
+
+
+        return d
 
 def new_analysis_bundle( source, dataset, rc_path = None, subset=None, bspace=None, btime=None,
                         variation=None, revision=1, ns_key=None):

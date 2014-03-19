@@ -966,10 +966,40 @@ class AnalysisLibrary(Library):
     def __init__(self, library):
         self.l = library
 
-    def list(self, datasets=None, with_meta=True, locations=None, key='fqname', fields=None):
+    def list(self,  fields=None):
+        '''List all of the datasets available in this library
+
+        :param fields: If set, is a list of fields to be displayed. Available fields are:
+            * deps. Number of dependencies in the bundle
+            * locations. A string that indicates where the bundle exists. ``S`` is source, ``L`` is the local library
+                and ``R`` is the remote library.
+            * vid. The id number, with a version suffix
+            * status. The build status string for the bundle.
+            * sname. The bundle's simple name
+            * vname. The simple name, with the semantic version number
+            * fqname. The bundle's fully qualified name
+            * source_path. If the bundle exists as source, the path to the source directory.
+
+        '''
         from  ..identity import IdentitySet
 
-        l = self.l.list(datasets=datasets, with_meta=with_meta, locations=locations, key=key)
+        l = self.l.list()
+
+        return IdentitySet(l, fields=fields)
+
+    def about(self, ref):
+        '''Lookup a bundle or partition reference and display information about it.
+
+        This command will fetch the bundle from the remote, or instantiate it from source, so for bundles with
+        very large schemas ( Like the US Census or ACS ) it may take a while to execute.
+        '''
+
+        ident = None
+
+
+
+    def find(self, source=None, name=True):
+        from ..identity import IdentitySet
 
         return IdentitySet(l, fields=fields)
 

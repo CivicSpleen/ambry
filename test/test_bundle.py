@@ -510,7 +510,20 @@ class Test(TestBase):
         bundle.pre_build()
         bundle.build()
         bundle.post_build()
-    
+
+
+    def test_bundle(self):
+        from ambry.bundle import DbBundle
+        b = self.bundle
+
+        print b.info
+
+        lb = DbBundle(b.database.path)
+        print '-----'
+        print lb._repr_html_()
+
+
+
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))

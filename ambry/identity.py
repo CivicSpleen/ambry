@@ -155,6 +155,8 @@ class Name(object):
         return self.clear_dict(d) 
 
 
+
+
     @property
     def name(self):
         '''String version of the name, excluding the version, and
@@ -989,6 +991,8 @@ class Locations(object):
     def codes(self):
         return tuple ( ( c for c, v in self._locations.items() if v.code ) )
 
+
+
     def set(self, code, revision=None, version=None):
 
         uc_code = code.upper()
@@ -1380,6 +1384,18 @@ class Identity(object):
 
     def __str__(self):
         return self._compose_fqname(self._name.vname,self.vid)
+
+    def _info(self):
+        '''Returns an OrderedDict of information, for human display '''
+        from collections import OrderedDict
+
+        d = OrderedDict()
+
+        d['vid'] = self.vid
+        d['sname'] = self.sname
+        d['vname'] = self.vname
+
+        return d
 
 
     def __hash__(self):
