@@ -640,7 +640,13 @@ class Partitions(object):
         for p in self.all:
             active_parts |= set(p.name.partital_dict.keys())
 
-        rows = []
+        cols = ['Name']
+        for np, _, _ in PartitionName._name_parts:
+            if np  in active_parts:
+                cols.append(np)
+
+        rows = ["<tr>"+''.join([ '<th>{}</th>'.format(c) for c in cols])+"</tr>" ]
+
         for p in self.all:
             cols = []
             d = p.name.partital_dict
