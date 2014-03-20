@@ -266,13 +266,21 @@ class SqlitePartition(PartitionBase):
     @property
     def rows(self):
         '''Run a select query to return all rows of the primary table. '''
+
         pk = self.get_table().primary_key.name
         return self.database.query("SELECT * FROM {} ORDER BY {} ".format(self.get_table().name,pk))
 
     @property
     def pandas(self):
+        from sqlalchemy.exc import NoSuchColumnError
+
         pk = self.get_table().primary_key.name
-        return self.database.select("SELECT * FROM {}".format(self.get_table().name),index_col=pk).pandas
+
+        try:
+            return self.select("SELECT * FROM {}".format(self.get_table().name),index_col=pk).pandas
+        except NoSuchColumnError:
+            return self.select("SELECT * FROM {}".format(self.get_table().name)).pandas
+
 
     def query(self,*args, **kwargs):
         """Convience function for self.database.query()"""

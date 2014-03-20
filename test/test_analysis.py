@@ -100,21 +100,20 @@ class Test(TestBase):
         ab.post_build()
 
     def test_library(self):
-
         import ambry
 
         l = ambry.ilibrary()
+        l.find(name='place')
 
-        print l.info
-
-        iset = l.list()
-
-        print str(iset)
-
-        print iset._repr_html_()
+        b = l.get('example.com-random')
+        print b.partitions.info
 
 
+        b = l.get('example.com-random-example1')
+        print b.partition.table.info
 
+        p = b.partition
+        print p.pandas
 
     def test_find(self):
         import ambry

@@ -2,7 +2,7 @@
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-
+import sys
 from ..identity import PartitionIdentity, PartitionName
 from sqlite import SqlitePartition
 
@@ -17,6 +17,7 @@ class GeoPartitionName(PartitionName):
 
 class GeoPartitionIdentity(PartitionIdentity):
     _name_class = GeoPartitionName
+
 
 class GeoPartition(SqlitePartition):
     '''A Partition that hosts a Spatialite for geographic data'''
@@ -266,6 +267,7 @@ class GeoPartition(SqlitePartition):
         #                                       is_primary_key=True if row[1].lower()=='ogc_fid' else False, commit = False)
                 
         self.database.post_create()
+
 
     def __repr__(self):
         return "<geo partition: {}>".format(self.name)
