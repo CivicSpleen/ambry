@@ -269,6 +269,12 @@ class SqlitePartition(PartitionBase):
         pk = self.get_table().primary_key.name
         return self.database.query("SELECT * FROM {} ORDER BY {} ".format(self.get_table().name,pk))
 
+    @property
+    def pandas(self):
+        pk = self.get_table().primary_key.name
+        return self.database.select("SELECT * FROM {}".format(self.get_table().name),index_col=pk).pandas
+
+
     def query(self,*args, **kwargs):
         """Convience function for self.database.query()"""
 
