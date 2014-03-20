@@ -36,6 +36,8 @@ class RowSelector(object):
         else:
             def gen():
                 for i, row in enumerate(self.partition.query(self.sql, *self.args, **self.kwargs)):
+                    if i == 0:
+                        yield [k for k, v in row.items()]
                     yield (i, list(row))
 
 

@@ -113,7 +113,7 @@ class Test(TestBase):
         print b.partition.table.info
 
         p = b.partition
-        print p.pandas
+        print p.select("SELECT uuid FROM example1").pandas
 
     def test_find(self):
         import ambry
