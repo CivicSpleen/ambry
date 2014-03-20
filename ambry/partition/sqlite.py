@@ -274,7 +274,6 @@ class SqlitePartition(PartitionBase):
         pk = self.get_table().primary_key.name
         return self.database.select("SELECT * FROM {}".format(self.get_table().name),index_col=pk).pandas
 
-
     def query(self,*args, **kwargs):
         """Convience function for self.database.query()"""
 
