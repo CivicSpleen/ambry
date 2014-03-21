@@ -171,7 +171,8 @@ class FsCache(Cache):
             os.makedirs(dirname)
         
         with open(path,'w') as f:
-            shutil.copyfileobj(stream, f)
+            #shutil.copyfileobj(stream, f)
+            copy_file_or_flo(stream, f, cb=cb)
 
         try:
             stream.close()
@@ -205,13 +206,13 @@ class FsCache(Cache):
 
         raise NotImplementedError()
 
-    def path(self, rel_path, **kwargs):
+    def path(self, rel_path, propagate = True, **kwargs):
         abs_path = os.path.join(self.cache_dir, rel_path)
 
         if os.path.exists(abs_path):
             return abs_path
 
-        if self.upstream:
+        if self.upstream and propagate:
             return self.upstream.path(rel_path, **kwargs)
 
         return abs_path
@@ -749,7 +750,7 @@ class FsCompressionCache(Cache):
         sink = self.upstream.put_stream(uc_rel_path)
 
         try:
-            copy_file_or_flo(source, sink)
+            copy_file_or_flo(source, sink, cb=cb)
         except (KeyboardInterrupt, SystemExit):
             path_ = self.upstream.path(uc_rel_path)
             if os.path.exists(path_):

@@ -8,13 +8,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 import os.path
 from semantic_version import Version 
 from util.typecheck import returns, accepts
+from util import Constant
 
-class _const:
-    class ConstError(TypeError): pass
-    def __setattr__(self,name,value):
-        if self.__dict__.has_key(name):
-            raise self.ConstError, "Can't rebind const(%s)"%name
-        self.__dict__[name]=value
+
 
 class Name(object):
     '''The Name part of an identity ''' 
@@ -29,7 +25,9 @@ class Name(object):
                   ('subset',None,True),
                   ('type',None,True),
                   ('part',None,True),
-                  ('variation','orig',True),
+                  ('bspace', None, True),
+                  ('btime', None, True),
+                  ('variation',None,True),
                   # Semantic Version, different from Object Number revision, 
                   # which is an int. "Version" is the preferred name, 
                   # but 'revision' is in the databases schema. 
@@ -49,6 +47,8 @@ class Name(object):
     type = None
     part = None
     variation = None
+    btime = None
+    bspace = None
     version = None
 
     def __init__(self, *args, **kwargs):
@@ -68,6 +68,7 @@ class Name(object):
         self.version = self._parse_version(self.version)
 
         self.clean()
+
 
         self.is_valid()
 
@@ -144,13 +145,16 @@ class Name(object):
         '''Returns the identity as a dict. values that are empty are removed'''
         
         d = dict([ (k, getattr(self, k)) for k,_, _ in self.name_parts ] )
-        
+
+
         if with_name :
             d['name'] =  self.name
             try: d['vname'] = self.vname
             except ValueError: pass 
 
         return self.clear_dict(d) 
+
+
 
 
     @property
@@ -197,10 +201,11 @@ class Name(object):
             names = set(k for k,_,_ in self.name_parts) - set(excludes)
         else:
             names = set(names)
-        
-        return sep.join(
-                   [ str(d[k]) for (k,_,_) in self.name_parts 
-                         if k and d.get(k,False) and k in (names-excludes)])  
+
+        final_parts= [str(d[k]) for (k, _, _) in self.name_parts
+                      if k and d.get(k, False) and k in (names - excludes)]
+
+        return sep.join( final_parts)
            
 
     @property
@@ -215,22 +220,26 @@ class Name(object):
                 self.source,
                 self._path_join(names=names, excludes='source',sep=self.NAME_PART_SEP)
              )
-                
-    
+
     @property
     def source_path(self):
-        '''The name in a form suitable for use in a filesystem. 
+        '''The name in a form suitable for use in a filesystem.
         Excludes the revision'''
         # Need to do this to ensure the function produces the
         # bundle path when called from subclasses
-        names = [ k for k,_,_ in Name._name_parts]
+        names = [k for k, _, _ in Name._name_parts]
 
-        return os.path.join(
-                self.source,
-                self._path_join(names=names,
-                                excludes=['source','version'],sep=self.NAME_PART_SEP)
-             )
-                
+        parts = []
+
+        parts.append(self.source)
+
+        if self.bspace:
+            parts.append(self.bspace)
+
+        parts.append(self._path_join(names=names,
+                                     excludes=['source', 'version', 'bspace'], sep=self.NAME_PART_SEP))
+
+        return os.path.join(*parts)
 
     @property
     def cache_key(self):
@@ -359,7 +368,7 @@ class PartitionName(PartialPartitionName, Name):
                   Name._name_parts[-1:])
 
     def _local_parts(self):
-        
+
         parts = []
         
         if self.table:
@@ -414,14 +423,6 @@ class PartitionName(PartialPartitionName, Name):
         except TypeError as e:
             raise TypeError("Path failed for partition {}: {}".format(self.name, e.message))
 
-    @property
-    def source_path(self):
-        '''The path of the bundle source. Includes the revision. '''
-
-        return os.path.join(*(
-                              [super(PartitionName, self).source_path]+
-                              self._local_parts()) 
-                            )
 
     def type_is_compatible(self, o):
         
@@ -444,6 +445,23 @@ class PartitionName(PartialPartitionName, Name):
 
     def as_partialname(self):
         return PartialPartitionName( ** self.dict)
+
+    @property
+    def partital_dict(self, with_name=True):
+        '''Returns the name as a dict, but with only the items that are particular to a PartitionName'''
+
+        d = self._dict(with_name = False)
+
+        d =  {k:d.get(k) for k,_, _ in PartialPartitionName._name_parts if d.get(k,False) }
+
+        if 'format' in d and d['format'] == 'db':
+            del d['format']
+
+        d['name'] = self.name
+
+        return d
+
+
 
 class PartialMixin(object):
 
@@ -495,10 +513,7 @@ class PartialMixin(object):
     @property
     def path(self):
         raise NotImplementedError("Can't get a path from a partial name")
-    
-    @property
-    def source_path(self):
-        raise NotImplementedError("Can't get a path from a partial name")
+
     
     @property
     def cache_key(self):
@@ -595,7 +610,7 @@ class ObjectNumber(object):
     
 
 
-    TYPE=_const()
+    TYPE=Constant()
     TYPE.DATASET = 'd'
     TYPE.PARTITION = 'p'
     TYPE.TABLE ='t'
@@ -603,7 +618,7 @@ class ObjectNumber(object):
     
     VERSION_SEP = ''
     
-    DLEN=_const()
+    DLEN=Constant()
     
     # Number of digits in each assignment class
     DLEN.DATASET = (3,5,7,9)
@@ -918,28 +933,34 @@ class PartitionNumber(ObjectNumber):
 
 class LocationRef(object):
 
-    LOCATION=_const()
-    LOCATION.UNKNOWN = ' '
-    LOCATION.SOURCE = 'S'
-    LOCATION.LIBRARY = 'L'
-    LOCATION.REMOTE ='R'
-    LOCATION.SREPO = 'G' # Source repository, 'github'
+    LOCATION=Constant()
 
-    def __init__(self,location, revision=None, version=None):
+    LOCATION.UNKNOWN = ' '
+    LOCATION.SREPO = 'G' # Source repository, 'github'
+    LOCATION.SOURCE = 'S'
+    LOCATION.LIBRARY = 'L' # For the bundle
+    LOCATION.PARTITION = 'LP' # For the partition, b/c also used in File.type
+    LOCATION.REMOTE ='R'
+    LOCATION.UPSTREAM = 'U'
+    LOCATION.WAREHOUSE = 'W'
+
+    def __init__(self,location, revision=None, version=None, code = None):
         self.location = location
         self.revision = revision
         self.version = version
+        self.code = code
 
     location = None
     revision = None
     version = None
+    code = None
 
     @property
     def exists(self):
         return bool(self.revision)
 
     def __str__(self):
-        return self.location if self.revision else self.LOCATION.UNKNOWN
+        return self.code if self.revision else self.LOCATION.UNKNOWN
 
     def __repr__(self):
         return '{}:{}'.format(self.location,self.revision if self.revision else '')
@@ -950,8 +971,14 @@ class Locations(object):
         LocationRef.LOCATION.SREPO,
         LocationRef.LOCATION.SOURCE,
         LocationRef.LOCATION.LIBRARY,
-        LocationRef.LOCATION.REMOTE
+        LocationRef.LOCATION.REMOTE,
+        LocationRef.LOCATION.UPSTREAM,
+        LocationRef.LOCATION.WAREHOUSE
+
     ]
+
+    def is_in(self, location):
+        return location in self.codes
 
     def __init__(self, ident=None):
         self.ident = ident
@@ -960,14 +987,23 @@ class Locations(object):
     def __str__(self):
         return ''.join([str(self._locations[code]) for code in self.order])
 
+    @property
+    def codes(self):
+        return tuple ( ( c for c, v in self._locations.items() if v.code ) )
+
+
+
     def set(self, code, revision=None, version=None):
+
+        uc_code = code.upper()
 
         if not revision:
             revision = self.ident.on.revision
             version = self.ident.name.version
 
-        self._locations[code].revision = revision
-        self._locations[code].version = version
+        self._locations[uc_code].revision = revision
+        self._locations[uc_code].version = version
+        self._locations[uc_code].code = code
 
 class Identity(object):
     '''Identities represent the defining set of information about a 
@@ -990,6 +1026,12 @@ class Identity(object):
     partitions = None
     urls = None # Url dict, from a remote library.
     url = None # Url of remote where object should be retrieved
+    bundle = None # A bundle if it is created during the identity listing process.
+    bundle_path = None # Path to bundle in file system. Set in SourceTreeLibrary.list()
+    bundle_state = None # Build state of the bundle. Set in SourceTreeLibrary.list()
+    git_state = None # State of the git repository. Set in SourceTreeLibrary.list()
+
+
     md5 = None #
     data = None # Catch-all for other information
 
@@ -1067,6 +1109,9 @@ class Identity(object):
 
         s = str(o)
 
+        if o is None:
+            raise  ValueError("Input cannot be None")
+
         class IdentityParts(object):
             on = None
             name = None
@@ -1095,12 +1140,12 @@ class Identity(object):
 
         elif '/' in s:
             # A cache key
-            ip.cache_key =s
+            ip.cache_key = s.strip()
             ip.isa = str
 
         elif cls.OBJECT_NUMBER_SEP in s:
             # Must be a fqname
-            ip.name, on_s = s.split(cls.OBJECT_NUMBER_SEP)
+            ip.name, on_s = s.strip().split(cls.OBJECT_NUMBER_SEP)
             ip.on = ObjectNumber.parse(on_s)
             ip.name_parts = ip.name.split(Name.NAME_PART_SEP)
             ip.isa =type(ip.on)
@@ -1116,7 +1161,7 @@ class Identity(object):
             # Probably an Object Number in string form
             ip.name = None
             ip.name_parts = None
-            ip.on = ObjectNumber.parse(s)
+            ip.on = ObjectNumber.parse(s.strip())
             ip.isa = type(ip.on)
 
         if ip.name_parts:
@@ -1158,15 +1203,18 @@ class Identity(object):
             from util import md5_for_file
             
             md5 = md5_for_file(file)
+            size = os.stat(file).st_size
+        else:
+            size = None
         
         return {
                 'id':self.id_, 
                 'identity': json.dumps(self.dict),
                 'name':self.sname,
                 'fqname':self.fqname,
-                'md5':md5
+                'md5':md5,
                 # This causes errors with calculating the AWS signature
-                #,'size': os.stat(file).st_size if file else None
+                'size': size
                 }
 
 
@@ -1224,7 +1272,7 @@ class Identity(object):
     @property
     def vname(self):
         ''' '''
-        return self._name.vname
+        return self._name.vname # Obsoleted by __getattr__??
  
     @property
     def fqname(self):
@@ -1240,13 +1288,14 @@ class Identity(object):
 
         return self._name.path
 
+    # Call other values on the name
+    def __getattr__(self, name):
+        if hasattr(self._name, name):
+            return getattr(self._name, name)
+        else:
+            raise AttributeError('Identity does not have attribute {} '.format(name))
 
-    @property
-    def source_path(self):
-        '''The name in a form suitable for use in a filesystem. 
-        Excludes the revision'''
-        self.is_valid()
-        return self._name.source_path
+
 
     @property
     def cache_key(self):
@@ -1284,7 +1333,7 @@ class Identity(object):
         '''A dictionary with only the items required to specify the identy, excluding the
         generated names, name, vname and fqname'''
 
-        return { k:v for k,v in self.dict.items() if k not in ['name','vname','fqname','vid']}
+        return { k:v for k,v in self.dict.items() if k not in ['name','vname','fqname','vid','cache_key']}
 
     @staticmethod
     def _compose_fqname(vname, vid):
@@ -1336,6 +1385,21 @@ class Identity(object):
     def __str__(self):
         return self._compose_fqname(self._name.vname,self.vid)
 
+    def _info(self):
+        '''Returns an OrderedDict of information, for human display '''
+        from collections import OrderedDict
+
+        d = OrderedDict()
+
+        d['vid'] = self.vid
+        d['sname'] = self.sname
+        d['vname'] = self.vname
+
+        return d
+
+
+    def __hash__(self):
+        return hash(str(self))
 
 class PartitionIdentity(Identity):
     '''Subclass of Identity for partitions'''
@@ -1454,8 +1518,7 @@ class NumberServer(object):
 
     def next(self):
         import requests
-        
-        
+
         if self.key:
             params = dict(access_key=self.key)
         else:
@@ -1464,7 +1527,7 @@ class NumberServer(object):
         r = requests.get('http://{}{}/next'.format(self.host, self.port_str), params=params)
 
         r.raise_for_status()
-        
+
         d = r.json()
 
         self.last_response = d
@@ -1483,4 +1546,96 @@ class NumberServer(object):
 
         if self.next_time and time.time() < self.next_time:
             time.sleep(self.next_time - time.time())
+
+class IdentitySet(object):
+    '''A set of Identity Objects, with methods to display them. '''
+
+    def __init__(self, idents, show_partitions=False, fields=None):
+
+
+        if isinstance(idents, dict):
+            idents = idents.values()
+
+        self.idents = idents
+
+        self.show_partitions = show_partitions
+
+        if not fields:
+            fields = ['locations', 'vid', 'vname']
+
+
+        self.fields = fields
+
+    @staticmethod
+    def deps(ident):
+        if not ident.data: return '.'
+        if not 'dependencies' in ident.data: return '.'
+        if not ident.data['dependencies']: return '0'
+        return str(len(ident.data['dependencies']))
+
+    # The headings for the fields in all_fields
+    record_entry_names = ('name', 'd_format', 'p_format', 'extractor')
+
+    all_fields = [
+        # Name, width, d_format_string, p_format_string, extract_function
+        ('deps', '{:3s}', '{:3s}', lambda ident: IdentitySet.deps(ident) ),
+        ('order', '{:6s}', '{:6s}', lambda ident: "{major:02d}:{minor:02d}".format(**ident.data['order']
+        if 'order' in ident.data else {'major': -1, 'minor': -1})),
+        ('locations',      '{:6s}', '{:6s}', lambda ident: ident.locations),
+        ('vid', '{:15s}', '{:20s}', lambda ident: ident.vid),
+        ('status', '{:20s}', '{:20s}', lambda ident: ident.bundle_state if ident.bundle_state else ''),
+        ('vname', '{:40s}', '    {:40s}', lambda ident: ident.vname),
+        ('sname', '{:40s}', '    {:40s}', lambda ident: ident.sname),
+        ('fqname', '{:40s}', '    {:40s}', lambda ident: ident.fqname),
+        ('source_path', '{:s}', '    {:s}', lambda ident: ident.source_path),
+    ]
+
+
+    def __str__(self):
+        out = []
+        for row in self._yield_rows(self.all_fields):
+            out.append(''.join([ format.format(value) for format, value in row]))
+
+        return '\n'.join(out)
+
+
+    def _repr_html_(self):
+        out = []
+
+        all_fields = list(self.all_fields)
+
+        for row in self._yield_rows(all_fields):
+            out.append('<tr>'+
+                       ''.join(["<td>{}</td>".format(format.format(value).strip()) for format, value in row])+
+                       '</tr>')
+
+        return '<table>'+'\n'.join(out)+'</table>'
+
+    def _yield_rows(self, all_fields):
+
+        for ident in self.idents:
+
+            d_formats = []
+            p_formats = []
+            values = []
+
+            for e in all_fields:
+                e = dict(zip(self.record_entry_names, e))  # Just to make the following code easier to read
+
+                if e['name'] not in self.fields:
+                    continue
+
+                d_formats.append(e['d_format'])
+                p_formats.append(e['p_format'])
+
+                values.append(e['extractor'](ident))
+
+            yield zip(d_formats, values)
+
+            if self.show_partitions and ident.partitions:
+
+                for pi in ident.partitions.values():
+                    yield zip(p_formats, values)
+
+
 

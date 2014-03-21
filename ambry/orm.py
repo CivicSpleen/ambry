@@ -8,13 +8,15 @@ import datetime
 import sqlalchemy
 from sqlalchemy import orm
 from sqlalchemy import event
-from sqlalchemy import Column as SAColumn, Integer, BigInteger, Boolean, UniqueConstraint
+from sqlalchemy import Column as SAColumn, Integer, BigInteger, Boolean, UniqueConstraint, ForeignKeyConstraint
 from sqlalchemy import Float as Real,  Text, String, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator, TEXT, PickleType
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.exc import OperationalError
+from util import Constant
+from identity import LocationRef
 
 from sqlalchemy.sql import text
 from ambry.identity import  DatasetNumber, ColumnNumber
@@ -46,9 +48,7 @@ class JSONEncodedObj(TypeDecorator):
                 # We've changed from using pickle to json, so this handles legacy cases
                 import pickle
                 value = pickle.loads(value)
-                
-                
-                
+
         else:
             value = {}
         return value
@@ -198,20 +198,34 @@ class SavableMixin(object):
 
 class Dataset(Base):
     __tablename__ = 'datasets'
-    
+
+
+    LOCATION = Constant()
+    LOCATION.LIBRARY = LocationRef.LOCATION.LIBRARY
+    LOCATION.PARTITION = LocationRef.LOCATION.PARTITION
+    LOCATION.SREPO = LocationRef.LOCATION.SREPO
+    LOCATION.SOURCE = LocationRef.LOCATION.SOURCE
+    LOCATION.REMOTE =  LocationRef.LOCATION.REMOTE
+    LOCATION.UPSTREAM = LocationRef.LOCATION.UPSTREAM
+
+
     vid = SAColumn('d_vid',String(20), primary_key=True)
+    location = SAColumn('d_location', String(5), primary_key=True, default=LOCATION.LIBRARY)
     id_ = SAColumn('d_id',String(20), )
-    name = SAColumn('d_name',String(200), unique=False, nullable=False)
-    vname = SAColumn('d_vname',String(200), unique=True, nullable=False)
-    fqname = SAColumn('d_fqname',String(200), unique=True, nullable=False)
-    cache_key = SAColumn('d_cache_key',String(200), unique=True, nullable=False)
-    source = SAColumn('d_source',Text, nullable=False)
-    dataset = SAColumn('d_dataset',Text, nullable=False)
-    subset = SAColumn('d_subset',Text)
-    variation = SAColumn('d_variation',Text)
-    creator = SAColumn('d_creator',Text, nullable=False)
+    name = SAColumn('d_name',String(200),  nullable=False)
+    vname = SAColumn('d_vname',String(200),  nullable=False)
+    fqname = SAColumn('d_fqname',String(200),  nullable=False)
+    cache_key = SAColumn('d_cache_key',String(200),  nullable=False)
+    source = SAColumn('d_source',String(200), nullable=False)
+    dataset = SAColumn('d_dataset',String(200), nullable=False)
+    subset = SAColumn('d_subset',String(200))
+    variation = SAColumn('d_variation',String(200))
+    btime = SAColumn('d_btime', String(200))
+    bspace = SAColumn('d_bspace', String(200))
+    creator = SAColumn('d_creator',String(200), nullable=False)
     revision = SAColumn('d_revision',Integer, nullable=False)
     version = SAColumn('d_version',String(20), nullable=False)
+
 
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
@@ -219,11 +233,23 @@ class Dataset(Base):
 
     tables = relationship("Table", backref='dataset', cascade="all, delete-orphan", 
                           passive_updates=False)
+
     partitions = relationship("Partition", backref='dataset', cascade="all, delete-orphan",
                                passive_updates=False)
-   
+
+
+
+    __table_args__ = (
+        UniqueConstraint('d_vid', 'd_location', name='u_vid_location'),
+        UniqueConstraint('d_fqname', 'd_location', name='u_fqname_location'),
+        UniqueConstraint('d_cache_key', 'd_location', name='u_cache_location'),
+    )
+
+
     def __init__(self,**kwargs):
         self.id_ = kwargs.get("oid",kwargs.get("id",kwargs.get("id_", None)) )
+        self.vid = kwargs.get("vid", None)
+        self.location = kwargs.get("location", self.LOCATION.LIBRARY)
         self.name = kwargs.get("name",None) 
         self.vname = kwargs.get("vname",None) 
         self.fqname = kwargs.get("fqname",None)
@@ -231,7 +257,9 @@ class Dataset(Base):
         self.source = kwargs.get("source",None) 
         self.dataset = kwargs.get("dataset",None) 
         self.subset = kwargs.get("subset",None) 
-        self.variation = kwargs.get("variation",None) 
+        self.variation = kwargs.get("variation",None)
+        self.btime = kwargs.get("btime", None)
+        self.bspace = kwargs.get("bspace", None)
         self.creator = kwargs.get("creator",None) 
         self.revision = kwargs.get("revision",None) 
         self.version = kwargs.get("version",None) 
@@ -250,6 +278,8 @@ class Dataset(Base):
         if self.cache_key is None:
             self.cache_key = self.identity.cache_key
 
+        assert self.vid[0] == 'd'
+
     def __repr__(self):
         return """<datasets: id={} vid={} name={} source={} ds={} ss={} var={} creator={} rev={}>""".format(
                     self.id_, self.vid, self.name, self.source,
@@ -267,6 +297,7 @@ class Dataset(Base):
         return {
                 'id':self.id_, 
                 'vid':self.vid,
+                'location': self.location,
                 'name':self.name,
                 'vname':self.fqname, 
                 'fqname':self.vname,
@@ -274,7 +305,9 @@ class Dataset(Base):
                 'source':self.source,
                 'dataset':self.dataset, 
                 'subset':self.subset, 
-                'variation':self.variation, 
+                'variation':self.variation,
+                'btime': self.btime,
+                'bspace': self.bspace,
                 'creator':self.creator, 
                 'revision':self.revision, 
                 'version':self.version, 
@@ -345,6 +378,7 @@ class Column(Base):
 
 
     types  = {
+        # Sqlalchemy, Python, Sql,
         DATATYPE_TEXT:(sqlalchemy.types.Text,str,'TEXT'),
         DATATYPE_VARCHAR:(sqlalchemy.types.String,str,'VARCHAR'),
         DATATYPE_CHAR:(sqlalchemy.types.String,str,'VARCHAR'),
@@ -364,14 +398,12 @@ class Column(Base):
         DATATYPE_BLOB:(sqlalchemy.types.LargeBinary,buffer,'BLOB')
         }
 
-   
+
     def type_is_text(self):
         return self.datatype in (Column.DATATYPE_TEXT, Column.DATATYPE_CHAR, Column.DATATYPE_VARCHAR)
 
     def type_is_time(self):
         return self.datatype in (Column.DATATYPE_TIME, Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE)
-
-
 
     @property
     def sqlalchemy_type(self):
@@ -397,7 +429,30 @@ class Column(Base):
     @property
     def schema_type(self):
         return self.types[self.datatype][2]
-        
+
+    @classmethod
+    def convert_numpy_type(cls,dtype):
+        '''Convert a numpy dtype into a Column datatype. Only handles common types.
+
+        Implemented as a function to decouple from numpy'''
+
+        import numpy as np
+
+        m = {
+            'int64': cls.DATATYPE_INTEGER64,
+            'float64': cls.DATATYPE_FLOAT,
+            'object': cls.DATATYPE_TEXT # Hack. Pandas makes strings into object.
+
+        }
+
+
+        t =  m.get(dtype.name, None)
+
+        if not t:
+            raise TypeError("Failed to convert numpy type: '{}' ".format(dtype.name))
+
+        return t
+
     @property
     def foreign_key(self):
         try:
@@ -507,17 +562,21 @@ class Table(Base):
     vid = SAColumn('t_vid',String(20), primary_key=True)
     id_ = SAColumn('t_id',String(20), primary_key=False)
     d_id = SAColumn('t_d_id',String(20))
-    d_vid = SAColumn('t_d_vid',String(20),ForeignKey('datasets.d_vid'), nullable = False)
+    d_vid = SAColumn('t_d_vid',String(20), nullable = False)
+    d_location = SAColumn('t_d_location',String(5), nullable = False, default = Dataset.LOCATION.LIBRARY)
     sequence_id = SAColumn('t_sequence_id',Integer, nullable = False)
     name = SAColumn('t_name',String(200), nullable = False)
     altname = SAColumn('t_altname',Text)
     description = SAColumn('t_description',Text)
+    universe = SAColumn('t_universe',String(200))
     keywords = SAColumn('t_keywords',Text)
     data = SAColumn('t_data',MutationDict.as_mutable(JSONEncodedObj))
     installed = SAColumn('t_installed',String(100))
     
-    __table_args__ = (UniqueConstraint('t_sequence_id', 't_d_vid', name='_uc_tables_1'),
-                      UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
+    __table_args__ = (
+        ForeignKeyConstraint([d_vid, d_location], ['datasets.d_vid', 'datasets.d_location']),
+        UniqueConstraint('t_sequence_id', 't_d_vid', name='_uc_tables_1'),
+        UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
                      )
     
     columns = relationship(Column, backref='table', cascade="all, delete-orphan")
@@ -528,7 +587,8 @@ class Table(Base):
         self.name = kwargs.get("name",None) 
         self.vname = kwargs.get("vname",None) 
         self.altname = kwargs.get("altname",None) 
-        self.description = kwargs.get("description",None) 
+        self.description = kwargs.get("description",None)
+        self.universe = kwargs.get("universe", None)
         self.keywords = kwargs.get("keywords",None) 
         self.data = kwargs.get("data",None) 
         
@@ -551,7 +611,7 @@ class Table(Base):
                                                               'vname', 'description', 'keywords', 'installed', 'data']}
     
     @property
-    def help(self):
+    def info(self):
         
        
         x =  """
@@ -567,8 +627,28 @@ Columns:
 
             x += "   {sequence_id:3d} {name:12s} {schema_type:8s} {description}\n".format(**c.dict)
          
-        return x   
-        
+        return x
+
+
+    def _repr_html_(self):
+        '''IPython display'''
+
+        t1 = """
+        <table>
+        <tr><th>Name</th><td>{name}</td></tr>
+        <tr><th>Id</th><td>{id_}</td></tr>
+        <tr><th>Vid</th><td>{vid}</td></tr>
+        </table>
+        """.format(**self.dict)
+
+        rows = []
+        rows.append(
+            "<tr><th>#</th><th>Name</th><th>Datatype</th><th>description</th></tr>")
+        for c in self.columns:
+            rows.append("<tr><td>{sequence_id:d}</td><td>{name:s}</td><td>{schema_type:s}</td><td>{description}</td></tr>".format(**c.dict))
+
+
+        return t1+"<table>\n"+"\n".join(rows)+"\n</table>"
     
     @orm.reconstructor
     def init_on_load(self):
@@ -617,37 +697,47 @@ Columns:
         return TableNumber(self.d_id, self.sequence_id)
 
     def add_column(self, name, **kwargs):
+        '''Add a column to the table, or update an existing one '''
 
         import sqlalchemy.orm.session
+        from sqlalchemy.orm.exc import NoResultFound
         from dbexceptions import ConfigurationError
         
         s = sqlalchemy.orm.session.Session.object_session(self)
         
         name = Column.mangle_name(name)
 
-        if kwargs.get('sequence_id', False):
-            sequence = kwargs['sequence_id']
-        else:
-            sequence = None
+        try:
+            row = self.column(name)
+        except NoResultFound:
+            row = None
 
-        row = Column(self, name=name,  **kwargs  )
-         
-        width = kwargs.get('width', None)
-        size = kwargs.get('size', None)
-        default = kwargs.get('default', None)
-        datatype =  kwargs.get('datatype', None)
-        
+        if row:
+            extant = True
+
+        else:
+            row = Column(self, name=name, **kwargs)
+            extant = False
+
         for key, value in kwargs.items():
-            
-            if key[0] != '_' and key not in ['d_id','t_id','name', 'schema_type']:
+
+            excludes = ['d_id','t_id','name', 'schema_type']
+
+            if extant:
+                excludes.append('sequence_id')
+
+            if key[0] != '_' and key not in excludes :
                 setattr(row, key, value)
 
             if isinstance(value, basestring) and len(value) == 0:
                 if key == 'is_primary_key':
                     value = False
                     setattr(row, key, value)
-      
-        s.add(row)
+
+        if extant:
+            s.merge(row)
+        else:
+            s.add(row)
      
         if kwargs.get('commit', True):
             s.commit()
@@ -758,6 +848,19 @@ Columns:
             
         return self._null_row
 
+    @property
+    def header(self):
+        '''Return an array of column names in the same order as the column definitions, to be used zip with
+        a row when reading a CSV file
+
+        >> row = dict(zip(table.header, row))
+
+        '''
+
+        return [ c.name for c in self.columns ]
+
+
+
     def _get_validator(self, and_join=True):
         '''Return a lambda function that, when given a row to this table, 
         returns true or false to indicate the validitity of the row
@@ -843,12 +946,13 @@ Columns:
         '''Returns a function that takes a row that can be indexed by positions which returns a new
         row with all of the values cast to schema types. '''
         from ambry.transform import CasterTransformBuilder
-        
+
+
         bdr = CasterTransformBuilder()
-        
+
         for c in self.columns:
             bdr.append(c.name, c.python_type)
-        
+
         return bdr
 
     @property
@@ -891,6 +995,8 @@ class File(Base, SavableMixin):
 
     oid = SAColumn('f_id',Integer, primary_key=True, nullable=False)
     path = SAColumn('f_path',Text, nullable=False)
+    ref = SAColumn('f_ref', Text)
+    type_ = SAColumn('f_type', Text)
     source_url = SAColumn('f_source_url',Text)
     process = SAColumn('f_process',Text)
     state = SAColumn('f_state',Text)
@@ -898,9 +1004,14 @@ class File(Base, SavableMixin):
     modified = SAColumn('f_modified',Integer)
     size = SAColumn('f_size',BigInteger)
     group = SAColumn('f_group',Text)
-    type_ = SAColumn('f_type',Text)
-    ref = SAColumn('f_ref',Text)
+
+
     data = SAColumn('f_data',MutationDict.as_mutable(JSONEncodedObj))
+
+    __table_args__ = (
+        UniqueConstraint('f_path', 'f_type', name='u_type_path'),
+        UniqueConstraint('f_ref', 'f_type', name='u_ref_path'),
+    )
 
     def __init__(self,**kwargs):
         self.oid = kwargs.get("oid",None) 
@@ -923,7 +1034,7 @@ class File(Base, SavableMixin):
     def dict(self):
 
         return  dict((col, getattr(self, col)) for col 
-                     in ['path', 'source_url', 'process', 'state', 'content_hash', 'modified', 'size', 'group', 'ref', 'type_','data'])
+                     in ['path', 'ref',  'type_',  'source_url', 'process', 'state', 'content_hash', 'modified', 'size', 'group', 'data'])
  
 
 class Partition(Base):
@@ -938,7 +1049,8 @@ class Partition(Base):
     sequence_id = SAColumn('p_sequence_id',Integer)
     t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'))
     t_id = SAColumn('p_t_id',String(20))
-    d_vid = SAColumn('p_d_vid',String(20),ForeignKey('datasets.d_vid'))
+    d_vid = SAColumn('p_d_vid',String(20))
+    d_location = SAColumn('p_d_location',String(5),default = Dataset.LOCATION.LIBRARY)
     d_id = SAColumn('p_d_id',String(20))
     time = SAColumn('p_time',String(20))
     space = SAColumn('p_space',String(50))
@@ -953,8 +1065,9 @@ class Partition(Base):
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedObj))
     installed = SAColumn('p_installed',String(100))
 
-    __table_args__ = (UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'),
-                     )
+    __table_args__ = (
+        ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
+        UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'))
 
     table = relationship('Table', backref='partitions', lazy='subquery')
     # Already have a 'partitions' replationship on Dataset
@@ -977,7 +1090,7 @@ class Partition(Base):
         self.format = kwargs.get('format',None)
         self.segment = kwargs.get('segment',None)
         self.data = kwargs.get('data',None)
-        
+
         self.d_id = dataset.id_
         self.d_vid = dataset.vid
         
@@ -1040,29 +1153,36 @@ class Partition(Base):
     def __repr__(self):
         return "<{} partition: {}>".format(self.format, self.vname)
 
+    def set_ids(self, sequence_id):
+        from identity import Identity
+
+        self.sequence_id = sequence_id
+
+        don = ObjectNumber.parse(self.d_vid)
+        pon = PartitionNumber(don, self.sequence_id)
+
+        self.vid = str(pon)
+        self.id_ = str(pon.rev(None))
+        self.fqname = Identity._compose_fqname(self.vname,self.vid)
+
+
     @staticmethod
     def before_insert(mapper, conn, target):
         '''event.listen method for Sqlalchemy to set the sequence for this  
         object and create an ObjectNumber value for the id_'''
         from identity import Identity
-        
+
         if target.sequence_id is None:
             sql = text('''SELECT max(p_sequence_id)+1 FROM Partitions WHERE p_d_id = :did''')
-    
+
             max_id, = conn.execute(sql, did=target.d_id).fetchone()
-      
+
             if not max_id:
                 max_id = 1
-                
+
             target.sequence_id = max_id
-            
-            
-        don = ObjectNumber.parse(target.d_vid)
-        pon = PartitionNumber(don, target.sequence_id)
-        
-        target.vid = str(pon)
-        target.id_ = str(pon.rev(None))
-        target.fqname = Identity._compose_fqname(target.vname,target.vid)
+
+        target.set_ids(target.sequence_id)
 
         Partition.before_update(mapper, conn, target)
 

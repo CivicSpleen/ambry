@@ -42,7 +42,7 @@ def copy_schema(schema, path, table_name=None, fmt='shapefile', logger = None):
         path = schema.bundle.filesystem.download_shapefile(shape_url)
 
 
-    driver = driver_by_name(fmt)
+    driver, options = driver_by_name(fmt)
 
     ds = driver.Open(path, 0) # 0 means read-only. 1 means writeable.
 
@@ -82,28 +82,27 @@ def copy_schema(schema, path, table_name=None, fmt='shapefile', logger = None):
 
 def driver_by_name(fmt):
 
+    options = []
     if fmt == 'kml':
         drv = ogr.GetDriverByName("KML")
     elif fmt == 'geojson':
         drv = ogr.GetDriverByName("GeoJSON")
     elif fmt == 'sqlite' or fmt == 'geodb' or fmt == 'db':
         drv = ogr.GetDriverByName("SQLite")
-        options = ['SPATIALITE=YES', 'INIT_WITH_EPSG=YES', 'OGR_SQLITE_SYNCHRONOUS=OFF',
-                   'OGR_SQLITE_CACHE=1024', '-gt 50000', 'COMPRESS_GEOM=yes']
+        options = ['SPATIALITE=YES', 'FORMAT=SPATIALITE', '-gt 50000', 'SPATIAL_INDEX=NO'  ]
     elif fmt == 'shapefile':
         drv = ogr.GetDriverByName("ESRI Shapefile")
     else:
         raise Exception("Unknown format: {} ".format(fmt))
 
-    return drv
+    return drv, options
 
 def new_datasource(path, fmt='shapefile'):
     import os
     from ambry.util import rm_rf
 
-    options = []
 
-    drv = driver_by_name(fmt)
+    drv, options = driver_by_name(fmt)
 
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
@@ -300,7 +299,7 @@ class TableShapefile(object):
         import datetime
         
         geometry = self.get_geometry(row)
-        
+
         if source_srs is not None and source_srs != self.source_srs:
             self.source_srs = self._get_srs(source_srs)
             self.transform = osr.CoordinateTransformation(self.source_srs, self.srs)
@@ -350,7 +349,8 @@ class TableShapefile(object):
             
         if self.transform:
             geometry.Transform(self.transform)
-            
+
+
         feature.SetGeometryDirectly(geometry)
         if self.layer.CreateFeature(feature) != 0:
             raise FeatureError('Failed to add feature: {}: geometry={}'.format(gdal.GetLastErrorMsg(), geometry.ExportToWkt()))

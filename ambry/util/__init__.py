@@ -4,7 +4,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-# Stolen from: http://code.activestate.com/recipes/498245-lru-and-lfu-cache-decorators/
+
 from __future__ import print_function
 import collections
 import functools
@@ -41,22 +41,26 @@ class curry:
 
 
 
-def get_logger(name, file_name = None):
+def get_logger(name, file_name = None, template=None):
     
     logger = logging.getLogger(name)
 
     if  name not in logger_init:
 
-        formatter = logging.Formatter("%(name)s %(levelname)s %(message)s")
+        if not template:
+            template = "%(name)s %(levelname)s %(message)s"
+
+        formatter = logging.Formatter(template)
         
         if file_name:
             ch = logging.FileHandler(file_name)
         else:
             ch = logging.StreamHandler(stream=sys.stdout)
+
         ch.setFormatter(formatter)
         #ch.setLevel(logging.DEBUG)
         logger.addHandler(ch)
-        #logger.setLevel(logging.DEBUG) 
+        logger.setLevel(logging.INFO)
         logger._stream = ch.stream
         logger_init.add(name)
      
@@ -130,14 +134,26 @@ def bundle_file_type(path_or_file):
         return 'gzip'
     else:
         return None
-        
 
+# From https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize
+def memoize(obj):
+    cache = obj.cache = {}
+
+    @functools.wraps(obj)
+    def memoizer(*args, **kwargs):
+        key = str(args) + str(kwargs)
+        if key not in cache:
+            cache[key] = obj(*args, **kwargs)
+        return cache[key]
+
+    return memoizer
         
 class Counter(dict):
     'Mapping where default values are zero'
     def __missing__(self, key):
         return 0
 
+# Stolen from: http://code.activestate.com/recipes/498245-lru-and-lfu-cache-decorators/
 def lru_cache(maxsize=128, maxtime=60):
     '''Least-recently-used cache decorator.
 
@@ -402,15 +418,29 @@ class AttrDict(OrderedDict):
     def __setitem__(self, k, v):
         super(AttrDict, self).__setitem__( k,
             AttrDict(v) if isinstance(v, Mapping) else v )
+
     def __getattr__(self, k):
         if not (k.startswith('__') or k.startswith('_OrderedDict__')): 
             return self[k]
         else: 
             return super(AttrDict, self).__getattr__(k)
+
     def __setattr__(self, k, v):
         if k.startswith('_OrderedDict__'):
             return super(AttrDict, self).__setattr__(k, v)
         self[k] = v
+
+    ##
+    ## __enter__ and __exit__ allow for assigning a  path to a variable
+    ## with 'with', which isn't extra functionalm but looks pretty.
+    ##
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type_, value, traceback):
+        return False
+
 
     @classmethod
     def from_yaml(cls, path, if_exists=False):
@@ -907,7 +937,7 @@ class Progressor(object):
 
     start = None
     last = None
-    freq = 1
+    freq = 5
 
     def __init__(self, message='Download', printf = _print):
         import time
@@ -919,17 +949,17 @@ class Progressor(object):
         
 
     def progress(self, i, n):
-        import curses
-        import time
-        
+
         import time
         now = time.clock()
 
         if not self.last:
             self.last = now
-        
+
         if now - self.last > self.freq:
-            diff = now - self.start 
+            diff = now - self.start
+            self.last = now
+
             i_rate = float(i)/diff
             self.rates.append(i_rate)
             
@@ -944,7 +974,57 @@ class Progressor(object):
                  self.message,int(int(n)/(1024*1024)),
                  round(float(i)/(1024.*1024.),2), 
                  round(float(rate)/(1024*1024),2), rate_type))
-            
-            self.last = now
-            
-      
+
+# http://stackoverflow.com/a/1695250
+# >>> Numbers = enum('ZERO', 'ONE', TWO = 20, THREE = 30)
+# >>> print Numbers.ONE
+# >>> print Numbers.THREE
+def enum(*sequential, **named):
+    enums = dict(zip(sequential, range(len(sequential))), **named)
+    return type('Enum', (), enums)
+
+class Constant:
+    '''Organizes constants in a class'''
+    class ConstError(TypeError): pass
+
+    def __setattr__(self, name, value):
+        if self.__dict__.has_key(name):
+            raise self.ConstError, "Can't rebind const(%s)" % name
+        self.__dict__[name] = value
+
+
+class session_context(object):
+    """Provide a transactional scope around a series of Sqlalchemyoperations."""
+
+    def __init__(self, sessionmaker_class):
+        self.sessionmaker_class = sessionmaker_class
+        self.session = None
+
+    def __enter__(self):
+        self.session = self.sessionmaker_class()
+        return self.session
+
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+
+
+        if exc_type is not None:
+            # Got an exception
+            self.session.rollback()
+            self.session.close()
+            return False
+        else:
+
+            try:
+                self.session.commit()
+                return True
+            except:
+                self.session.rollback()
+                raise
+            finally:
+                self.session.close()
+
+
+        session.close()
+
+

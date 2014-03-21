@@ -14,7 +14,6 @@ class SqlitePartitionName(PartitionName):
 class SqlitePartitionIdentity(PartitionIdentity):
     _name_class = SqlitePartitionName
 
-
 class SqlitePartition(PartitionBase):
     '''Represents a bundle partition, part of the bundle data broken out in
     time, space, or by table. '''
@@ -42,35 +41,49 @@ class SqlitePartition(PartitionBase):
         return self.database.attach(id_,name)
     
     def create_indexes(self, table=None):
-    
+
+        if not self.database.exists():
+            self.create()
+
         if table is None:
             table = self.get_table()
     
         if isinstance(table,basestring):
             table = self.bundle.schema.table(table)
-        
-    
+
         for sql in self.bundle.schema.generate_indexes(table):
             self.database.connection.execute(sql)
               
               
     def drop_indexes(self, table=None):
-        
+
+        if not self.database.exists():
+            self.create()
+
         if table is None:
             table = self.get_table()
         
         if not isinstance(table,basestring):
             table = table.name
-        
-        for index_name in self.database.query("""SELECT name 
-            FROM sqlite_master WHERE type='index' AND tbl_name = 'geofile';"""):
+
+        indexes = []
+
+        for row in self.database.query("""SELECT name
+            FROM sqlite_master WHERE type='index' AND tbl_name = '{}';""".format(table)):
+
+                if row[0].startswith('sqlite_'):
+                    continue
+
+                indexes.append(row[0])
+
+        for index_name in indexes:
+
+                print 'Drop',index_name
+
                 self.database.connection.execute("DROP INDEX {}".format(index_name))
     
     
-    def query(self,*args, **kwargs):
-        """Convience function for self.database.query()"""
-     
-        return self.database.query(*args, **kwargs)
+
     
     def create_with_tables(self, tables=None, clean=False):
         '''Create, or re-create,  the partition, possibly copying tables
@@ -221,11 +234,12 @@ class SqlitePartition(PartitionBase):
             _store_library(p)
 
     def get_csv_parts(self):
+        from ..identity import PartitionNameQuery
         ident = self.identity.clone()   
         ident.format = 'csv'
-        ident.segment = self.identity.ANY
+        ident.segment = PartitionNameQuery.ANY
 
-        return self.bundle.partitions.find_all(ident)
+        return self.bundle.partitions.find_all(PartitionNameQuery(id_=ident))
 
     def load_csv(self, table=None, parts=None):
         '''Loads the database from a collection of CSV files that have the same identity, 
@@ -249,10 +263,36 @@ class SqlitePartition(PartitionBase):
 
     @property
     def rows(self):
-        
+        '''Run a select query to return all rows of the primary table. '''
+
         pk = self.get_table().primary_key.name
         return self.database.query("SELECT * FROM {} ORDER BY {} ".format(self.get_table().name,pk))
-        
+
+    @property
+    def pandas(self):
+        from sqlalchemy.exc import NoSuchColumnError
+
+        pk = self.get_table().primary_key.name
+
+        try:
+            return self.select("SELECT * FROM {}".format(self.get_table().name),index_col=pk).pandas
+        except NoSuchColumnError:
+            return self.select("SELECT * FROM {}".format(self.get_table().name)).pandas
+
+
+    def query(self,*args, **kwargs):
+        """Convience function for self.database.query()"""
+
+        return self.database.query(*args, **kwargs)
+
+
+    def select(self,sql,*args, **kwargs):
+        '''Run a query and return an object that allows the selected rows to be returned
+        as a data object in numpy, pandas, petl or other forms'''
+        from ..database.selector import RowSelector
+
+        return RowSelector(self, sql,*args, **kwargs)
+
 
     def write_stats(self):
         '''Record in the partition entry basic statistics for the partition's

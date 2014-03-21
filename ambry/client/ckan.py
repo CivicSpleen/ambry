@@ -44,13 +44,10 @@ class Ckan(object):
                 'X-CKAN-API-Key': self.key,
                 'Content-Type': 'application/json; charset=utf-8'
                  }
-    
-    
+
     def translate_name(self,name):
         return name.lower().replace('.','_')
-        
-    
-        
+
     def get_or_new_group(self,name):
         url = self.url+'/rest/group/{name}'
       

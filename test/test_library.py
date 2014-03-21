@@ -14,8 +14,6 @@ import ambry.util
 
 from test_base import  TestBase
 
-
-
 logger = ambry.util.get_logger(__name__)
 logger.setLevel(logging.DEBUG) 
 
@@ -26,15 +24,15 @@ class Test(TestBase):
         self.bundle_dir = os.path.dirname(testbundle.bundle.__file__)
         self.rc = get_runconfig((os.path.join(self.bundle_dir,'library-test-config.yaml'),
                                  os.path.join(self.bundle_dir,'bundle.yaml'),
-                                 RunConfig.USER_CONFIG)
+                                 RunConfig.USER_ACCOUNTS)
                                  )
 
         self.copy_or_build_bundle()
 
         self.bundle = Bundle()    
 
-        print "Deleting: {}".format(self.rc.group('filesystem').root_dir)
-        Test.rm_rf(self.rc.group('filesystem').root_dir)
+        print "Deleting: {}".format(self.rc.group('filesystem').root)
+        Test.rm_rf(self.rc.group('filesystem').root)
        
     @staticmethod
     def rm_rf(d):
@@ -59,8 +57,7 @@ class Test(TestBase):
 
         return l
         
-        
-        
+
     def tearDown(self):
         pass
 
@@ -224,8 +221,10 @@ class Test(TestBase):
     def test_library_install(self):
         '''Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent'''
-      
+
+
         l = self.get_library()
+        print l.database.dsn
 
         l.put(self.bundle)
         l.put(self.bundle)
@@ -277,9 +276,7 @@ class Test(TestBase):
         r = l.find(QueryCommand().table(name='tthree').partition(format='db', segment=None))
         self.assertEquals('source-dataset-subset-variation-tthree',r[0]['partition']['name'])
 
-        r = l.find(QueryCommand().table(name='tthree').partition(format='db', segment="1"))
-        self.assertEquals('source-dataset-subset-variation-tthree-1',r[0]['partition']['name'])
-        
+
         #
         #  Try getting the files 
         # 
@@ -302,7 +299,7 @@ class Test(TestBase):
         r = l.find(QueryCommand().table(name='tone').partition(any=True))
         self.assertEquals(2, len(r))
        
-        ds_names = [ds.sname for ds in l.list()]
+        ds_names = [ds.sname for ds in l.list().values()]
         self.assertIn('source-dataset-subset-variation', ds_names)
 
     def test_versions(self):
@@ -311,10 +308,10 @@ class Test(TestBase):
         from ambry.library.query import Resolver
         import shutil
         idnt = self.bundle.identity
-       
-        f,db = self.new_db()
-        print 'Testing ', f
-        db.create()
+
+        l = self.get_library()
+
+        l.purge()
 
         orig = os.path.join(self.bundle.bundle_dir,'bundle.yaml')
         save = os.path.join(self.bundle.bundle_dir,'bundle.yaml.save')
@@ -349,7 +346,7 @@ class Test(TestBase):
                 bundle = Bundle()
 
                 print "Installing ", bundle.identity.vname
-                db.install_bundle(bundle)
+                l.put(bundle)
 
         finally:
             pass
@@ -359,6 +356,8 @@ class Test(TestBase):
         # Save the list of datasets for version analysis in other
         # tests
         #
+
+        db = l.database
 
         for d in db.list().values():
             datasets[d.vid] = d.dict
@@ -391,7 +390,8 @@ class Test(TestBase):
     def test_version_resolver(self):
         from ambry.library.query import Resolver
 
-        l = self.bundle.library
+        l = self.get_library()
+        print l.database.dsn
 
 
         db = l.database
@@ -400,11 +400,6 @@ class Test(TestBase):
         db.create()
 
         l.put_bundle(self.bundle)
-
-        #for _, ident in db.list().items():
-        #    print '--', ident.fqname
-        #    for _, p_ident in ident.partitions.items():
-        #        print '  ', p_ident.fqname
 
 
         r = Resolver(db.session)
@@ -436,7 +431,8 @@ class Test(TestBase):
         self.assertEquals('diEGPXmDC8001', ident.vid)
 
         ident = l.resolve('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8001001')
-        self.assertEquals('piEGPXmDC8001001', ident.vid)
+        self.assertEquals('diEGPXmDC8001', ident.vid)
+        self.assertEquals('piEGPXmDC8001001', ident.partition.vid)
 
         ##
         ## Test semantic version matching
@@ -451,7 +447,7 @@ class Test(TestBase):
         # partitions for each dataset, and each of the datasets. It is only for testing
         # version filtering.
         class TestResolver(Resolver):
-            def resolve_ref_all(self, ref):
+            def _resolve_ref(self, ref, location=None):
                 from ambry.identity import Identity
                 ip = Identity.classify(ref)
                 return ip, { k:Identity.from_dict(ds) for k,ds in datasets.items() }
@@ -481,7 +477,7 @@ class Test(TestBase):
         
         from ambry.cache.filesystem import  FsCache, FsLimitedCache
      
-        root = self.rc.group('filesystem').root_dir
+        root = self.rc.group('filesystem').root
       
         l1_repo_dir = os.path.join(root,'repo-l1')
         os.makedirs(l1_repo_dir)
@@ -600,7 +596,7 @@ class Test(TestBase):
         '''Test a two-level cache where the upstream compresses files '''
         from ambry.cache.filesystem import  FsCache,FsCompressionCache
          
-        root = self.rc.group('filesystem').root_dir
+        root = self.rc.group('filesystem').root
       
         l1_repo_dir = os.path.join(root,'comp-repo-l1')
         os.makedirs(l1_repo_dir)
@@ -700,7 +696,7 @@ class Test(TestBase):
         # Set up the test directory and make some test files. 
         from ambry.cache import new_cache
         
-        root = self.rc.group('filesystem').root_dir
+        root = self.rc.group('filesystem').root
         os.makedirs(root)
                 
         testfile = os.path.join(root,'testfile')
@@ -769,9 +765,30 @@ class Test(TestBase):
         for s in fails:
 
             self.assertRaises(QueryCommand.ParseError, QueryCommand.parse, s)
-       
-       
-       
+
+
+    def test_files(self):
+
+        l = self.get_library()
+
+        l.purge()
+
+        fls = l.files
+
+        for e in [ (str(i), str(j) ) for i in range(10) for j in range(3)  ]:
+
+            f = l.files.new_file(path='path'+e[0], ref="{}-{}".format(*e), group=e[1], type_=e[1])
+
+            l.files.merge(f)
+
+        def refs(itr):
+            return [ f.ref for f in i ]
+
+        print l.files.query.path('path3').first
+
+
+
+
 
 def suite():
     suite = unittest.TestSuite()

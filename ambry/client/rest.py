@@ -140,8 +140,10 @@ class RemoteLibrary(object):
                 args[0] = args[0] + "\n---- Server Trace --- \n" + object['exception']['trace']
             else:
                 args.append("\n---- Server Trace --- \n" + object['exception']['trace'])
-        except:
+        except Exception as e:
             print "Failed to augment exception. {}, {}".format(args, object)
+            print 'AAA', e, e.message
+
         return  class_(*args)
 
 
@@ -154,30 +156,46 @@ class RemoteLibrary(object):
     # @post('/datasets/find')
 
     # @get('/datasets')
-    def list(self):
+    def list(self, datasets=None, location=None, key='vid'):
         '''List the identities of all of the datasets in the library '''
         from ..identity import Identity
 
-        out = []
+        if not datasets:
+            datasets = {}
 
         for cache_key, data in self.get(self.url("/datasets")).items():
             ident = Identity.from_dict(data['identity'])
-            ident.urls = data['urls']
-            out.append(ident)
 
-        return out
+            ck = getattr(ident, key)
+
+            if ck not in datasets:
+                datasets[ck] = ident
+            else:
+                ident = datasets[ck]
+
+            ident.urls = data['urls']
+
+        return datasets
 
     # @get('/resolve/<ref>')
-    def resolve(self, ref):
+    def resolve(self, ref, location = None):
         '''Returns an identity given a vid, name, vname, cache_key or object number'''
         from ..identity import Identity
 
-        d =  self.get(self.url("/resolve/{}", ref))
+        d =  self.get(self.url("/info/{}", ref))
 
         if not d:
             return None
 
-        ident =  Identity.from_dict(d)
+        if d['response'] == 'partition':
+            data = d['partitions'].values()[0]
+        else:
+            data = d
+
+        ident_d = data['identity']
+
+        ident =  Identity.from_dict(ident_d)
+        ident.data = data['urls']
 
         if ident.is_bundle:
             return ident
@@ -186,7 +204,6 @@ class RemoteLibrary(object):
             dsid.add_partition(ident)
 
             return dsid
-
 
     # @get('/info/<ref>')
     def info(self, ref):
@@ -200,7 +217,10 @@ class RemoteLibrary(object):
 
         info = self.info(ref)
 
-        url = info['urls']['db']
+        if info['response'] == 'dataset':
+            url = info['urls']['db']
+        else:
+            url = info['partitions'].values()[0]['urls']['db']
 
         r = requests.get(url, verify=False, stream=True)
 
@@ -212,18 +232,17 @@ class RemoteLibrary(object):
 
                 o = minidom.parse(r.raw)
                 # Assuming the response is in XML because we are usually calling s3
-                raise RestError("{} Error from server after redirect to {} : XML={}"
-                .format(r.status_code, location, o.toprettyxml()))
+                raise RestError("{} Error from server after redirect  : XML={}"
+                .format(r.status_code, o.toprettyxml()))
             except ExpatError:
                 raise RestError("Failed to get {}, status = {}, content = {} "
                                 .format(url, r.status_code, r.content))
 
 
-
-        if r.headers['content-encoding'] == 'gzip':
+        if r.headers.get('content-encoding','') == 'gzip':
             from ..util import FileLikeFromIter
             # In  the requests library, iter_content will auto-decompress
-            response = FileLikeFromIter(r.iter_content())
+            response = FileLikeFromIter(r.iter_content(chunk_size=128 * 1024))
         else:
             response = r.raw
 
@@ -257,6 +276,7 @@ class RemoteLibrary(object):
     def x_put(self, b_or_p):
 
         pass
+
 
     # @get('/datasets/<did>/csv')
     # @post('/datasets/<did>/partitions/<pid>')

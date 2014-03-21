@@ -2,11 +2,14 @@
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-
+import sys
 from ..identity import PartitionIdentity, PartitionName
 from sqlite import SqlitePartition
 
 
+def _geo_db_class(): # To break an import dependency
+    from ..database.geo import GeoDb
+    return GeoDb
 
 class GeoPartitionName(PartitionName):
     PATH_EXTENSION = '.geodb'
@@ -15,14 +18,11 @@ class GeoPartitionName(PartitionName):
 class GeoPartitionIdentity(PartitionIdentity):
     _name_class = GeoPartitionName
 
-
-from ..database.geo import GeoDb
-
 class GeoPartition(SqlitePartition):
     '''A Partition that hosts a Spatialite for geographic data'''
 
     _id_class = GeoPartitionIdentity
-    _db_class = GeoDb
+    _db_class = _geo_db_class()
     
     def __init__(self, bundle, record, **kwargs):
         super(GeoPartition, self).__init__(bundle, record)
@@ -30,21 +30,28 @@ class GeoPartition(SqlitePartition):
     @property
     def database(self):
         if self._database is None:
-            self._database = GeoDb(self.bundle, self, base_path=self.path)          
+            self._database = self._db_class(self.bundle, self, base_path=self.path)
         return self._database
 
-        
-    def get_srs_wkt(self):
+    def _get_srs_wkt(self):
         
         #
         # !! Assumes only one layer!
         
         try:
-            q ="select srs_wkt from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
-            return self.database.query(q).first()[0]
+            q ="select srs_wkt, spatial_ref_sys.srid from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
+            return self.database.query(q).first()
         except:
-            q ="select srtext from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
-            return self.database.query(q).first()[0]
+            q ="select srtext, spatial_ref_sys.srid from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
+            return self.database.query(q).first()
+
+    def get_srs_wkt(self):
+        r = self._get_srs_wkt()
+        return r[0]
+
+    def get_srid(self):
+        r = self._get_srs_wkt()
+        return r[1]
 
     def get_srs(self):
         import ogr 
@@ -197,7 +204,7 @@ class GeoPartition(SqlitePartition):
             print 'convert_dates HERE', self.database.dsn
             self.database.connection.execute( "UPDATE {} SET {}".format(table.name, ','.join(clauses)))
 
-    def load_shapefile(self, path,  **kwargs):
+    def load_shapefile(self, path, t_srs = '4326',  **kwargs):
         """Load a shape file into a partition as a spatialite database. 
         
         Will also create a schema entry for the table speficified in the 
@@ -209,8 +216,6 @@ class GeoPartition(SqlitePartition):
         from ambry.geo.util import get_shapefile_geometry_types
         import os
 
-        t_srs=kwargs.get('t_srs')
-        
         if t_srs:
             t_srs_opt = '-t_srs EPSG:{}'.format(t_srs)
         else:
@@ -262,5 +267,20 @@ class GeoPartition(SqlitePartition):
                 
         self.database.post_create()
 
+
     def __repr__(self):
         return "<geo partition: {}>".format(self.name)
+
+
+    @property
+    def info(self):
+        """Returns a human readable string of useful information"""
+
+        try:
+            srid = self.get_srid()
+        except Exception as e:
+            self.bundle.error(e)
+            srid = 'error'
+
+        return super(GeoPartition, self).info+ '{:10s}: {}\n'.format('SRID',srid)
+

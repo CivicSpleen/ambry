@@ -9,7 +9,7 @@ from ambry.util import AttrDict
 from ambry.util import lru_cache
 
 @lru_cache()
-def get_runconfig(path=None, is_server=False):
+def get_runconfig(path=None,  is_server=False):
     return RunConfig(path, is_server)
 
 class RunConfig(object):
@@ -28,11 +28,13 @@ class RunConfig(object):
     earlier ones. 
     '''
 
-    ROOT_CONFIG = '/etc/ambry/config.yaml'
-    SERVER_CONFIG = '/etc/ambry/server.yaml'
-    CLIENT_CONFIG = '/etc/ambry/client.yaml'
+    ROOT_CONFIG = '/etc/ambry.yaml'
     USER_CONFIG = os.path.expanduser('~/.ambry.yaml')
+    USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
     DIR_CONFIG = os.path.join(os.getcwd(),'ambry.yaml')
+
+    config = None
+    files = None
 
     def __init__(self, path=None, is_server = False):
         '''Create a new RunConfig object
@@ -42,43 +44,59 @@ class RunConfig(object):
           If it is an array, load only the files in the array. 
 
         '''
-        
-        self.config = AttrDict()
-        self.config['loaded'] = []
+
+        config = AttrDict()
+        config['loaded'] = []
 
     
         if isinstance(path, (list, tuple, set)):
-            self.files = path
+            files = path
         else:
-            self.files = [ 
-                          RunConfig.SERVER_CONFIG if is_server else RunConfig.CLIENT_CONFIG , 
-                          RunConfig.ROOT_CONFIG, 
-                          RunConfig.USER_CONFIG, 
+            files = [
+                          RunConfig.ROOT_CONFIG,
+                          RunConfig.USER_CONFIG,
+                          RunConfig.USER_ACCOUNTS,
                           RunConfig.DIR_CONFIG, 
                           path]
 
         loaded = False
 
-        for f in self.files:
+        for f in files:
             
             if f is not None and os.path.exists(f):
                 try:
                     loaded = True
 
-                    self.config.loaded.append(f)
-                    self.config.update_yaml(f)
+                    config.loaded.append(f)
+                    config.update_yaml(f)
                 except TypeError:
                     pass # Empty files will produce a type error
 
         if not loaded:
-            raise Exception("Failed to load any config from: {}".format(self.files))
-        
-        self.sourcerepo = self._sourcerepo(self)
+            raise Exception("Failed to load any config from: {}".format(files))
+
+        object.__setattr__(self, 'config', config)
+        object.__setattr__(self, 'files', files)
 
     def __getattr__(self, group):
-        '''Fetch a confiration group and return the contents as an 
+        '''Fetch a configuration group and return the contents as an
         attribute-accessible dict'''
+
         return self.config.get(group,{})
+
+
+    def __setattr__(self, group, v):
+        '''Fetch a configuration group and return the contents as an
+        attribute-accessible dict'''
+
+        self.config[group] = v
+
+    def get(self,k, default=None):
+
+        if not default:
+            default = None
+
+        return self.config.get(k,default)
 
     def group(self, name):
         '''return a dict for a group of configuration items.'''
@@ -122,7 +140,7 @@ class RunConfig(object):
                             break
                         sd = sd[pp]
                         
-                    # Save the oroginal value as a name
+                    # Save the Original value as a name
                         
                     sd[pp] = nv
                     
@@ -172,21 +190,33 @@ class RunConfig(object):
 
     def filesystem(self,name):
         e =  self.group_item('filesystem', name) 
-        
-        fs = self.group('filesystem') 
-        root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
 
-        return self._sub_strings(e, {
+        # If the value is a string, rather than a dict, it is for a
+        # FsCache. Re-write it to be the expected type.
+
+        if isinstance(e, basestring):
+            e = dict(dir=e)
+
+
+        fs = self.group('filesystem') 
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
+
+
+
+        e =  self._sub_strings(e, {
                                      'upstream': lambda k,v: self.filesystem(v),
                                      'account': lambda k,v: self.account(v),
                                      'dir' : lambda k,v: v.format(root=root_dir)
                                      }  )
+
+        return e
     
     def account(self,name):
         e = self.group_item('accounts', name) 
 
         e =  self._sub_strings(e, {'store': lambda k,v: self.filesystem(v)}  )
-        
+
+
         e['_name'] = name
         
         return e
@@ -200,57 +230,24 @@ class RunConfig(object):
                                      }  )
    
     def library(self,name):
-        e =  self.group_item('library', name) 
+        e =  self.group_item('library', name)
+
+        fs = self.group('filesystem')
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
 
         e =  self._sub_strings(e, {
                                      'filesystem': lambda k,v: self.filesystem(v),
-                                     'remote': lambda k,v: self.filesystem(v),
                                      'database': lambda k,v: self.database(v),
-                                     'account': lambda k,v: self.account(v),
                                      'upstream': lambda k,v: self.filesystem(v),
+                                     'account': lambda k, v: self.account(v),
                                      'cdn': lambda k,v: self.account(v),
+                                     'source': lambda k, v: v.format(root=root_dir)
                                      }  )
+
         e['_name'] = name
-     
+
         return e
     
-    #
-    # This object is attached to the sourcerepo property, to provide a variety of interfaces
-    # other than just being callable. 
-    class _sourcerepo(object):
-        def __init__(self,this):
-            self.this = this
-            
-        def __call__(self, name):
-            
-
-            e =  self.this.group_item('sourcerepo', name) 
-            e =  self.this._sub_strings(e, {
-                                         'account': lambda k,v: self.this.account(v)
-                                         }  ) 
-            e['_name'] = name
-         
-            e['dir'] = self.dir
-
-            return e   
-        
-        @property
-        def list(self):   
-            from source.repository import new_repository
-            
-            return [ new_repository(self.this.sourcerepo(r_name)) 
-                    for r_name in self.this.group('sourcerepo').keys()
-                    if r_name != 'dir'
-                    ]
-
-        @property
-        def dir(self):   
-
-            fs = self.this.group('filesystem') 
-            root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
-                    
-            
-            return self.this.group('sourcerepo')['dir'].format(root=root_dir)
 
     
     def warehouse(self,name):
@@ -264,7 +261,7 @@ class RunConfig(object):
     def database(self,name):
         
         fs = self.group('filesystem') 
-        root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
         
         e = self.group_item('database', name) 
 
@@ -291,12 +288,31 @@ class RunConfig(object):
         if not 'python' in fs:
             return None
         
-        root_dir = fs['root_dir'] if 'root_dir' in fs  else  '/tmp/norootdir'
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
 
         python_dir = fs['python'].format(root=root_dir)
 
       
-        return python_dir 
+        return python_dir
+
+
+    def filesystem_path(self, name):
+
+        fs = self.group('filesystem')
+
+        if not name in fs:
+            return None
+
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
+
+        path = fs[name].format(root=root_dir)
+
+        return path
+
+
+    @property
+    def dict(self):
+        return self.config.to_dict()
 
 
 def mp_run(mp_run_args):
@@ -340,11 +356,12 @@ def import_file(filename):
     (name, _) = os.path.splitext(name)
     (_, modname) = os.path.split(path)
 
+    modname = modname.replace('.','_') # To avoid 'Parent module not found' warnings
+
     (file_, filename, data) = imp.find_module(name, [path])
 
     return imp.load_module(modname, file_, filename, data)
-       
-            
+
 if __name__ == '__main__':
     '''When bambry is run, this routine will load the bundle module from a file
     wire it into the namespace and run it with the arguments passed into bambry. '''

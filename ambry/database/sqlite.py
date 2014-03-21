@@ -18,7 +18,7 @@ logger.debug("Init database logger")
 class SqliteAttachmentMixin(object):
     
     
-    def attach(self,id_, name=None):
+    def attach(self,id_, name=None, conn=None):
         """Attach another sqlite database to this one
         
         Args:
@@ -61,11 +61,15 @@ class SqliteAttachmentMixin(object):
             name =  ''.join(random.choice(string.letters) for i in xrange(10)) #@UnusedVariable
         
         q = """ATTACH DATABASE '{}' AS '{}' """.format(path, name)
-        
-        self.connection.execute(q)
+
+        if not conn:
+            conn = self.connection
+
+        conn.execute(q)
            
         self._last_attach_name = name
-        
+
+
         self._attachments.add(name)
         
         return name
@@ -88,7 +92,7 @@ class SqliteAttachmentMixin(object):
     
     
     def copy_from_attached(self, table, columns=None, name=None, 
-                           on_conflict= 'ABORT', where=None):
+                           on_conflict= 'ABORT', where=None, conn=None):
         """ Copy from this database to an attached database
         
         Args:
@@ -114,7 +118,7 @@ class SqliteAttachmentMixin(object):
             f['to_table'] = table
     
         elif isinstance(table, tuple):
-            # Copy all ields between two tables with different names
+            # Copy all fields between two tables with different names
             f['from_table'] = table[0]
             f['to_table'] = table[1]
         else:
@@ -131,14 +135,18 @@ class SqliteAttachmentMixin(object):
     
         if where is not None:
             q = q + " " + where.format(**f)
-    
-        self.connection.execute(q)
-           
-                   
+
+        if conn:
+            conn.execute(q)
+        else:
+            with self.engine.begin() as conn:
+                conn.execute(q)
+
+
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
-    SCHEMA_VERSION = 14
+    SCHEMA_VERSION = 16
 
     def __init__(self, dbname, memory = False,  **kwargs):   
         ''' '''
@@ -198,57 +206,31 @@ class SqliteDatabase(RelationalDatabase):
         except:
             return 0
     
-        
-    def _get_engine(self, connect_listener):
-        '''return the SqlAlchemy engine for this database'''
-        from sqlalchemy import create_engine  
-        import sqlite3
-        
-        if not self._engine:
-            self.require_path()
-            self._engine = create_engine(self.dsn,
-                                         connect_args={'detect_types': sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES},
-                                         native_datetime=True,
-                                         echo=False)
-            
-            
-            logger.debug("_get_engine: {}".format(self.dsn))
-            
-            from sqlalchemy import event
-            
-            event.listen(self._engine, 'connect',connect_listener)
-            #event.listen(self._engine, 'connect', _on_connect_update_schema)
 
-            _on_connect_update_sqlite_schema(self.connection)
-             
-        return self._engine
+    def _on_create_connection(self, connection):
+        '''Called from get_connection() to update the database'''
+        pass
 
-    @property
-    def connection(self):
-        return self.get_connection()
+    def _on_create_engine(self, engine):
+        '''Called just after the engine is created '''
+        pass
+
 
     def get_connection(self, check_exists=True):
-        '''Return an SqlAlchemy connection'''
-        if not self._connection:
-            
-            if not os.path.exists(self.path) and check_exists:
-                from ..dbexceptions import DatabaseMissingError
-                raise DatabaseMissingError("Trying to make a connection to a sqlite database "+
-                                "that does not exist. check_exists={} path={}"
-                                .format(check_exists, self.path))
+        '''Return an SqlAlchemy connection, but allow for existence check, which
+        uses os.path.exists'''
 
-            try:
-    
-                self._connection = self.engine.connect()
-            except Exception as e:
-                self.error("Failed to open: '{}': {} ".format(self.path, e))
-                raise
-            
-        return self._connection
+        if not os.path.exists(self.path) and check_exists and not self.memory:
+            from ..dbexceptions import DatabaseMissingError
+
+            raise DatabaseMissingError("Trying to make a connection to a sqlite database " +
+                                       "that does not exist.  path={}".format(self.path))
+
+        return super(SqliteDatabase, self).get_connection(check_exists)
 
     @property
     def unmanaged_session(self):
-        
+
         def abort_flush():
             from ambry.dbexceptions import ConflictError
             raise ConflictError('Unmanaged sessions are read-only. Use a managed session to write to the database')
@@ -270,16 +252,17 @@ class SqliteDatabase(RelationalDatabase):
         
         engine = create_engine(self.dsn, echo=False)
         connection = engine.connect()
-
         connection.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
+        connection.close()
 
     MIN_NUMBER_OF_TABLES = 1
     def is_empty(self):
         
-        if not os.path.exists(self.path):
+        if not self.memory and not os.path.exists(self.path):
             return True
         
         if  self.version >= 12:
+
             if not 'config' in self.inspector.get_table_names():
                 return True
             else:
@@ -297,11 +280,13 @@ class SqliteDatabase(RelationalDatabase):
     @property
     def dbapi_connection(self):
         '''Return an DB_API connection'''
-        import sqlite3
-        if not self._dbapi_connection:
-            self._dbapi_connection = sqlite3.connect(self.path)
+
+        return self.engine.raw_connection()
+        #import sqlite3
+        #if not self._dbapi_connection:
+        #    self._dbapi_connection = sqlite3.connect(self.path)
             
-        return self._dbapi_connection
+        #return self._dbapi_connection
 
     @property
     def dbapi_cursor(self):
@@ -324,7 +309,7 @@ class SqliteDatabase(RelationalDatabase):
 
         
     def delete(self):
-        
+
         try :
             os.remove(self.path)
         except:
@@ -492,8 +477,12 @@ class BundleLockContext(object):
             return True
             
     def add(self,o):
-        self._bundle._session.add(o) 
-            
+        return self._bundle._session.add(o)
+
+    def merge(self,o):
+        return self._bundle._session.merge(o)
+
+
 class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
     def __init__(self, bundle, dbname, **kwargs):   
@@ -505,6 +494,30 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
         self._session = None # This is controlled by the BundleLockContext
 
+    def _on_create_connection(self, connection):
+        '''Called from get_connection() to update the database'''
+        super(SqliteBundleDatabase, self)._on_create_connection(connection)
+
+        _on_connect_update_sqlite_schema(connection, None) # in both _conn and _engine.
+
+
+    def _on_create_engine(self, engine):
+        '''Called just after the engine is created '''
+        from sqlalchemy import event
+
+        super(SqliteBundleDatabase, self)._on_create_engine(engine)
+
+        # Note! May need to turn this on for DbBundle Databases when they are loading
+        # old bundles.
+        #event.listen(self._engine, 'connect', _on_connect_update_sqlite_schema)  # in both _conn and _engine.
+
+        event.listen(self._engine, 'connect', _on_connect_bundle)
+
+
+    def update_schema(self):
+        '''Manually update the schema. This is called when bundles are installed in the library
+        becase that use doesn't involve connections, so the _on_create calls dont get used. '''
+        _on_connect_update_sqlite_schema(self.connection, None)  # in both _conn and _engine.
 
     def create(self):
 
@@ -517,11 +530,7 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
             RelationalBundleDatabaseMixin._create(self)
 
             self.post_create()
-          
-        
-    @property
-    def engine(self):
-        return self._get_engine(_on_connect_bundle)
+
         
     @property
     def session(self):
@@ -577,16 +586,11 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
                 s.merge(column)
 
         return table
-    
 
 
-class SqliteWarehouseDatabase(SqliteDatabase):
+class SqliteWarehouseDatabase(SqliteDatabase, SqliteAttachmentMixin):
 
-    def __init__(self, dbname, **kwargs):   
-        '''
-        '''
-
-        super(SqliteWarehouseDatabase, self).__init__(dbname,  **kwargs)
+    pass
 
 
 class SqliteMemoryDatabase(SqliteDatabase, SqliteAttachmentMixin):
@@ -612,7 +616,15 @@ class SqliteMemoryDatabase(SqliteDatabase, SqliteAttachmentMixin):
             return self.connection.execute(*args, **kwargs)
         except OperationalError as e:
             raise QueryError("Error while executing {} in database {} ({}): {}".format(args, self.dsn, type(self), e.message))
-        
+
+
+class BuildBundleDb(SqliteBundleDatabase):
+    '''For Bundle databases when they are being built, and the path is computed from
+    the build base director'''
+    @property
+    def path(self):
+        return self.bundle.path + self.EXTENSION
+
 
 
 def _on_connect_bundle(dbapi_con, con_record):
@@ -620,11 +632,19 @@ def _on_connect_bundle(dbapi_con, con_record):
     
     Bundles have different parameters because they are more likely to be accessed concurrently. 
     '''
-    dbapi_con.execute('PRAGMA cache_size = 500000')
-    dbapi_con.execute('PRAGMA foreign_keys = ON')
+
+    ## NOTE ABOUT journal_mode = WAL: it improves concurency, but has some downsides.
+    ## See http://sqlite.org/wal.html
+
+    dbapi_con.execute('PRAGMA page_size = 8192')
+    dbapi_con.execute('PRAGMA temp_store = MEMORY')
+    dbapi_con.execute('PRAGMA cache_size = 50000')
+    dbapi_con.execute('PRAGMA foreign_keys = OFF')
+    dbapi_con.execute('PRAGMA journal_mode = WAL')
+    dbapi_con.execute('PRAGMA synchronous = OFF')
 
 
-def _on_connect_update_sqlite_schema(conn):
+def _on_connect_update_sqlite_schema(conn, con_record):
     '''Perform on-the-fly schema updates based on the user version'''
 
     version = conn.execute('PRAGMA user_version').fetchone()[0]
@@ -632,80 +652,31 @@ def _on_connect_update_sqlite_schema(conn):
     if version:
         version = int(version)
 
-    if version < 10:
-        
-        try: conn.execute('ALTER TABLE columns ADD COLUMN c_foreign_key VARCHAR(50);')
-        except: pass
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_format VARCHAR(50);')
-        except: pass
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_segment INTEGER;')
-        except: pass
-                
-        conn.execute('PRAGMA user_version = 10;')
+    if version > 10: # Some files have version of 0 because the version was not set.
+        if  version < 14:
 
-    if version < 11:
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_min_key INTEGER;')
-        except: pass
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_max_key INTEGER;')
-        except: pass
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_count INTEGER;')
-        except: pass
-                
-        conn.execute('PRAGMA user_version = 11')
-        
-        
-    if  version < 13:
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_installed VARCHAR(100);')
-        except: pass
-        
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_variant VARCHAR(50);')
-        except: pass
-         
-        try: conn.execute('ALTER TABLE tables ADD COLUMN t_installed VARCHAR(100);')
-        except: pass
-        
-        conn.execute('PRAGMA user_version = 13')        
-    
-
-    if  version < 14:
-
-        try: conn.execute('ALTER TABLE datasets ADD COLUMN d_fqname VARCHAR(200);')
-        except: pass
-
-        try: conn.execute('ALTER TABLE datasets ADD COLUMN d_version VARCHAR(20);')
-        except: pass
+            raise Exception("There should not be any files of less than version 14 in existence. Got: {}".format(version))
 
 
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_fqname VARCHAR(50);')
-        except: pass
+        if  version < 15:
+
+            try: conn.execute('ALTER TABLE datasets ADD COLUMN d_cache_key VARCHAR(200);')
+            except: pass
+
+            try: conn.execute('ALTER TABLE partitions ADD COLUMN p_cache_key VARCHAR(200);')
+            except: pass
 
 
-        conn.execute('PRAGMA user_version = 14')
+        if version < 16:
+            try:
+                conn.execute('ALTER TABLE tables ADD COLUMN t_universe VARCHAR(200);')
+            except Exception as e:
+                pass
 
 
-    if  version < 15:
-
-        try: conn.execute('ALTER TABLE datasets ADD COLUMN d_cache_key VARCHAR(200);')
-        except: pass
-
-        try: conn.execute('ALTER TABLE partitions ADD COLUMN p_cache_key VARCHAR(200);')
-        except: pass
-
-        conn.execute('PRAGMA user_version = 15')
+    conn.execute('PRAGMA user_version = {}'.format(SqliteDatabase.SCHEMA_VERSION))
 
 
-class BuildBundleDb(SqliteBundleDatabase):
-    '''For Bundle databases when they are being built, and the path is computed from 
-    the build base director'''
-    @property 
-    def path(self):
-        return self.bundle.path + self.EXTENSION
 
  
 def insert_or_ignore(table, columns):

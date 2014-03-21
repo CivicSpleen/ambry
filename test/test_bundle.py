@@ -23,6 +23,34 @@ class Test(TestBase):
     def restore_bundle(self):
         pass 
 
+    def test_config(self):
+        from ambry.bundle.config import BundleFileConfig, RunConfig
+        from ambry.util import AttrDict
+
+        import shutil
+
+        p = '/tmp/test_config'
+        if not os.path.exists(p):
+            os.makedirs(p)
+
+        shutil.copyfile(os.path.join(self.bundle.bundle_dir, 'bundle.yaml'),
+                        os.path.join(p, 'bundle.yaml'))
+
+
+        cfg = BundleFileConfig(p)
+
+        print cfg.build
+
+        cfg.build.foo = 'bar'
+
+        print cfg.build
+
+        cfg.rewrite()
+
+        cfg = RunConfig()
+
+        print cfg.get('build')
+
     def test_db_bundle(self):
         
         from ambry.bundle import BuildBundle, DbBundle
@@ -381,7 +409,7 @@ class Test(TestBase):
         """Check the the RunConfig expands  the library configuration"""
         from ambry.run import  get_runconfig, RunConfig
         
-        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG, RunConfig.USER_ACCOUNTS))
 
         l = rc.library('library1')
          
@@ -390,9 +418,6 @@ class Test(TestBase):
         self.assertEquals('filesystem2', l['filesystem']['upstream']['_name'])
         self.assertEquals('filesystem3', l['filesystem']['upstream']['upstream']['_name'])
         self.assertEquals('devtest.sandiegodata.org', l['filesystem']['upstream']['upstream']['account']['_name'])
-        
-
-
 
     def test_build_bundle_hdf(self):
 
@@ -439,6 +464,8 @@ class Test(TestBase):
             bundle.pre_build()
             bundle.build_db_inserter_codes()
             bundle.post_build()
+
+
         finally:
             
             # Need to clean up to ensure that we're back to a good state.
@@ -448,7 +475,8 @@ class Test(TestBase):
             shutil.copyfile(
                     bundle.filesystem.path('meta','schema-edit-me.csv'),
                     bundle.filesystem.path('meta','schema.csv'))      
-            
+
+
             bundle.clean()
             bundle = Bundle()   
             bundle.exit_on_fatal = False
@@ -458,8 +486,55 @@ class Test(TestBase):
             bundle.pre_build()
             bundle.build()
             bundle.post_build()
-                  
-    
+
+
+    def test_simple_build(self):
+        import shutil
+
+        bundle = Bundle()
+
+        shutil.copyfile(
+            bundle.filesystem.path('meta', 'schema-edit-me.csv'),
+            bundle.filesystem.path('meta', 'schema.csv'))
+
+
+        bundle.clean()
+        bundle = Bundle()
+        bundle.exit_on_fatal = False
+        bundle.pre_prepare()
+        bundle.prepare()
+
+        print bundle.database.dsn
+
+        bundle.post_prepare()
+        bundle.pre_build()
+        bundle.build()
+        bundle.post_build()
+
+
+    def test_bundle(self):
+        from ambry.bundle import DbBundle
+        b = self.bundle
+
+
+        p = b.partitions.get('piEGPXmDC8001')
+
+        print p._repr_html_()
+
+        print p.table._repr_html_()
+
+        return
+
+        print b.info
+
+        lb = DbBundle(b.database.path)
+        print '-----'
+        print lb._repr_html_()
+
+        print b.partitions._repr_html_()
+
+
+
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))

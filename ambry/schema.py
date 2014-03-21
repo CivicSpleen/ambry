@@ -90,6 +90,8 @@ class Schema(object):
 
     @classmethod
     def get_table_from_database(cls, db, name_or_id, session=None, d_vid=None):
+        '''Return the orm.Table record from the bundle schema '''
+
         from ambry.orm import Table
         
         import sqlalchemy.orm.exc
@@ -98,7 +100,6 @@ class Schema(object):
         if not name_or_id:
             raise ValueError("Got an invalid argument: {}".format(name_or_id))
 
-        
         try: 
             if d_vid:
                 return (session.query(Table).filter(
@@ -119,37 +120,60 @@ class Schema(object):
         except sqlalchemy.orm.exc.NoResultFound as e:
             raise sqlalchemy.orm.exc.NoResultFound("No table for name_or_id: {}".format(name_or_id))
 
-
     def table(self, name_or_id):
-        '''Return an orm.Table object, from either the id or name'''
+        '''Return an orm.Table object, from either the id or name. This is the cleaa method version
+        of get_table_from_database'''
 
         return Schema.get_table_from_database(self.bundle.database, name_or_id, session = self.bundle.database.session, 
                                               d_vid = self.bundle.identity.vid)
-     
+
+    def column(self, table, column_name):
+
+        for c in table:
+            if c.name == column_name:
+                return c
+
+        return None
+
 
     def add_table(self, name,  **kwargs):
-        '''Add a table to the schema'''
+        '''Add a table to the schema, or update it it already exists.
+
+        If updating, will only update data.
+        '''
         from orm import Table
+        from sqlalchemy.orm.exc import NoResultFound
         from identity import TableNumber, ObjectNumber
            
         if not self.table_sequence:
             self.table_sequence = len(self.tables)+1
            
         name = Table.mangle_name(name)
-     
-        if name in self._seen_tables:
-            raise Exception("schema.add_table has already loaded a table named: "+name)
 
         in_data = kwargs.get('data',{})
 
         col_data = { k.replace('d_','',1): v for k,v in kwargs.items() if k.startswith('d_') }
-      
-        row = Table(self.dataset,
-                    name=name, 
-                    sequence_id=self.table_sequence,
-                    data=dict(col_data.items() + in_data.items()))
-        
-        self.bundle.session.add(row)
+
+        try:
+            row = self.table(name)
+        except NoResultFound as e:
+            row = None
+
+        if row:
+            extant = True
+            row.data=dict(row.data.items() + col_data.items() + in_data.items())
+            self.col_sequence = len(row.columns)
+
+        else:
+            extant = False
+            row = Table(self.dataset,
+                        name=name,
+                        sequence_id=self.table_sequence,
+                        data=dict(col_data.items() + in_data.items()))
+
+            self.table_sequence += 1
+            self.col_sequence = 1
+            self.auto_col_numbering = False
 
 
         for key, value in kwargs.items():
@@ -159,11 +183,12 @@ class Schema(object):
                 setattr(row, key, value)
      
         self._seen_tables[name] = row
-     
-        self.table_sequence += 1
-        self.col_sequence = 1
-        self.auto_col_numbering = False
- 
+
+        if extant:
+            self.bundle.session.merge(row)
+        else:
+            self.bundle.session.add(row)
+
         return row
 
     def add_column(self, table, name,  **kwargs):
@@ -208,19 +233,12 @@ class Schema(object):
         if table_name in self._seen_tables:
             del self._seen_tables[table_name]
 
-
-
     @property
     def columns(self):
         '''Return a list of tables for this bundle'''
         from ambry.orm import Column
         return (self.bundle.database.session.query(Column).all())
-        
-    def get_table_meta(self, name_or_id, use_id=False, driver=None, alt_name=None):
-        return self.get_table_meta_from_db(self.bundle.database, name_or_id, use_id, driver, 
-                                           session = self.bundle.database.session,
-                                           alt_name = alt_name)
-        
+
     @classmethod        
     def validate_column(cls, table, column, warnings, errors):  
   
@@ -247,7 +265,6 @@ class Schema(object):
             except ValueError:
                 errors.append((table.name,column.name,"Bad default value '{}' for type '{}' (V)".format(column.default, column.datatype)))
 
-        
     @classmethod        
     def translate_type(cls,driver, table, column):
         '''Translate types for particular driver, and perform some validity checks'''
@@ -290,26 +307,39 @@ class Schema(object):
         #print driver, column.name, column.size, column.default
                 
         type_ =  Column.types[column.datatype][0]
-    
+
+
         if column.datatype == Column.DATATYPE_NUMERIC:
             return type_(column.precision, column.scale)
         elif column.size:
-            return type_(column.size)
+            try:
+                return type_(column.size)
+            except TypeError: # usually, the type desont't ake a size
+                return type_
         else:
             return type_
 
-        
+    @staticmethod
+    def munge_index_name(table, n):
+        return table.vid_enc + '_' + n
+
+
+
+    def get_table_meta(self, name_or_id, use_id=False, driver=None, alt_name=None):
+        '''Method version of get_table_meta_from_db'''
+        return self.get_table_meta_from_db(self.bundle.database, name_or_id, use_id, driver,
+                                           session = self.bundle.database.session,
+                                           alt_name = alt_name)
+
+
     @classmethod
     def get_table_meta_from_db(self,db,  name_or_id,  use_id=False, 
                                driver=None, d_vid = None, session=None, alt_name=None ):
         '''
             use_id: prepend the id to the class name
         '''
-        
-        from ambry.orm import Table, Column
-        
-        import sqlalchemy
-        from sqlalchemy import MetaData, UniqueConstraint, ForeignKeyConstraint,  Index, text
+
+        from sqlalchemy import MetaData, UniqueConstraint, Index, text
         from sqlalchemy import Column as SAColumn
         from sqlalchemy import Table as SATable
         
@@ -394,22 +424,19 @@ class Schema(object):
                         constraints[cons.strip()] = []
                     
                     constraints[cons.strip()].append(ac)
-            
 
-        def munge_name(n):
-            return table.vid_enc+'_'+n
 
         # Append constraints. 
         for constraint, columns in constraints.items():
-            at.append_constraint(UniqueConstraint(name=munge_name(constraint),*columns))
+            at.append_constraint(UniqueConstraint(name=self.munge_index_name(table, constraint),*columns))
              
         # Add indexes   
         for index, columns in indexes.items():
-            Index(munge_name(index), unique = False ,*columns)
+            Index(self.munge_index_name(table, index), unique = False ,*columns)
     
         # Add unique indexes   
         for index, columns in uindexes.items():
-            Index(munge_name(index), unique = True ,*columns)
+            Index(self.munge_index_name(table, index), unique = True ,*columns)
         
         #for from_col, to_col in foreign_keys.items():
         #    at.append_constraint(ForeignKeyConstraint(from_col, to_col))
@@ -418,8 +445,7 @@ class Schema(object):
  
     def generate_indexes(self, table):
         """Used for adding indexes to geo partitions. Generates index CREATE commands"""
-        
-         
+
         indexes = {}
         uindexes = {}
         
@@ -439,14 +465,15 @@ class Schema(object):
                     uindexes[cons.strip()].add(column)
 
         for index_name, cols in indexes.items():
+            index_name = self.munge_index_name(table, index_name)
             yield "CREATE INDEX IF NOT EXISTS {} ON {} ({});".format(index_name, table.name,  
                                                                      ','.join([c.name for c in cols]) )
             
         for index_name, cols in uindexes.items():
+            index_name = self.munge_index_name(table, index_name)
             yield "CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} ({});".format(index_name, table.name, 
                                                                              ','.join([c.name for c in cols]) )
-             
-    
+
                     
     def create_tables(self):
         '''Create the defined tables as database tables.'''
@@ -455,7 +482,44 @@ class Schema(object):
                 if not t.name in self.bundle.database.inspector.get_table_names():
                     t_meta, table = self.bundle.schema.get_table_meta(t.name) #@UnusedVariable
                     table.create(bind=self.bundle.database.engine)
-        
+
+
+    def caster(self, table_name):
+        '''Return a caster for a table. This is like orm.Table.caster, but it will use special caster types
+        defined in the schema'''
+
+        from ambry.transform import CasterTransformBuilder
+
+        table = self.table(table_name)
+
+        bdr = CasterTransformBuilder()
+
+        for c in table.columns:
+
+            # Try to get a caster type object from the bundle
+            if 'caster' in c.data and c.data['caster']:
+                t = None
+
+                for l in [self.bundle, self.bundle.__module__]:
+                    try:
+                        t = getattr(self.bundle,c.data['caster'] )
+                        bdr.add_type(t)
+                        break
+                    except AttributeError:
+                        continue
+
+                if not t:
+                    self.bundle.error("Schema declared undefined caster type {} for {}.{}. Ignoring"
+                                      .format(c.data['caster'], table.name, c.name))
+                    t = c.python_type
+
+            else:
+                t = c.python_type
+
+            bdr.append(c.name, t)
+
+        return bdr
+
         
     def schema_from_file(self, file_, progress_cb=None):
         return self._schema_from_file(file_, progress_cb)
@@ -583,19 +647,43 @@ class Schema(object):
             
             
             self.validate_column(t, col, warnings, errors)
-            
-            
+
         return warnings, errors
 
-           
+    def extract_schema(self, db):
+        '''Extract an Ambry schema from a database and create it in this bundle '''
+
+        for table_name in db.inspector.get_table_names():
+            self.bundle.log("Extracting: {}".format(table_name))
+
+            t = self.add_table(table_name)
+
+            for c in db.inspector.get_columns(table_name):
+
+                name = c['name']
+
+                try:
+                    size = c['type'].length
+                    dt = str(c['type']).replace(str(size),'').replace('()','').lower()
+                except AttributeError:
+                    size = None
+                    dt = str(c['type']).lower()
+
+                self.bundle.log("   {} {} {} ".format(name, dt, size))
+
+                self.add_column(t, name, datatype = dt,
+                                size = size,
+                                is_primary_key = c['primary_key'] != 0)
+
+
+
     def write_schema(self):
         '''Write the schema back to the schema file'''
         with open(self.bundle.filesystem.path('meta',self.bundle.SCHEMA_FILE), 'w') as f:
             self.as_csv(f)
-        
-           
+
     def copy_table(self, in_table):
-        
+        '''Copy a table schema into this schema'''
         with self.bundle.session as s:
             table = self.add_table(in_table.name, data=in_table.data)
             
@@ -603,12 +691,10 @@ class Schema(object):
                 d = c.to_dict()
                 del d['t_vid']
                 self.add_column(table, **d) 
-            
 
     def _dump_gen(self, table_name=None):
         """Yield schema row for use in exporting the schem to other
         formats
-        
 
         """
         
@@ -789,9 +875,7 @@ class Schema(object):
             
             if  'size' not in row or  row['size'] is None:
                 row['size'] = ''
-                
-            
-                
+
                    
             rows.append([row['seq'], row['id'], row['column'], row['type'].title(), row['size'], row['description'] ])
 
@@ -1181,15 +1265,13 @@ class {name}(Base):
             except ValueError:
                 pass
             
-            # What follow is the normal intuiting process. 
-
-
+            # What follows is the normal intuiting process.
 
             if v is None or v == '-' or v == '':
                 continue
             
             elif mfi['min-type'] == str:
-                mfi['length'] = max(mfi['length'], len(str(v))) 
+                mfi['length'] = max(mfi['length'], len(unicode(v)))
                 mfi['maybe']['date'] += 1 if self._maybe_date(v) else 0
                 mfi['maybe']['time'] += 1 if self._maybe_time(v) else 0
                 mfi['maybe']['datetime'] += 1 if self._maybe_datetime(v) else 0
@@ -1315,8 +1397,8 @@ class {name}(Base):
 
             t = self.add_table(name, data={'code_key':json.dumps([source_table_name, source_column_name])})
             self.add_column(t, 'id', datatype='integer', is_primary_key = True, sequence_id=1)
-            self.add_column(t, 'code', datatype='text', description='Value of code',sequence_id=2)
-            self.add_column(t, 'description', datatype='text', description='Code description', sequence_id = 3)
+            self.add_column(t, 'code', datatype='varchar', description='Value of code',sequence_id=2)
+            self.add_column(t, 'description', datatype='varchar', description='Code description', sequence_id = 3)
             
 
             

@@ -6,8 +6,9 @@ of the bundles that have been installed into it.
 # Revised BSD License, included in this distribution as LICENSE.txt
 
 
-from ..util import lru_cache
-
+from ambry.orm import Dataset, Partition
+from ambry.orm import Table, Column
+from ..identity import Identity, PartitionNumber, DatasetNumber
 
 class _qc_attrdict(object):
 
@@ -150,7 +151,7 @@ class QueryCommand(object):
 
             line = tt[4]
 
-            #print "{:5d} {:5d} {:15s} || {}".format(t_type, pos, "'"+t_string+"'", line)
+            #print "{:5d} {:5d} {:15s} {:20s} {:8s}.{:8s}= {:10s} || {}".format(t_type, pos, "'"+t_string+"'", state, n1, n2, value, line)
 
 
             def err(expected):
@@ -159,23 +160,43 @@ class QueryCommand(object):
             if not t_string:
                 continue
 
-            if state == 'name_start':
+            if state == 'value_continuation':
+                value += t_string
+                if is_like:
+                    value = '%' + value + '%'
+                state = 'value_continuation'
+                qc.getsubdict(n1).__setattr__(n2, value.strip("'").strip('"'))
+
+            elif state == 'name_start' or state == 'name_start_or_value':
                 # First part of name
-                if t_type == token.NAME:
+                if state == 'name_start_or_value' and t_string in ('-','.'):
+                    if is_like:
+                        value = value.strip('%')
+
+                    value += t_string
+                    state = 'value_continuation'
+                elif t_type == token.NAME:
                     n1 = t_string
                     state = 'name_sep'
+                    is_like = False
+
+
                 elif t_type == token.OP and t_string == ',':
                     state = 'name_start'
+
                 elif t_type == token.ENDMARKER:
                     state = 'done'
+
                 else:
-                    err( "NAME or ',' ")
+                    err( "NAME or ','; got: '{}'  ".format(t_string))
+
             elif state == 'name_sep':
-                # '.' that serpates names
+                # '.' that separates names
                 if t_type == token.OP and t_string == '.':
                     state = 'name_2'
                 else:
                     raise err("'.'")
+
             elif state == 'name_2':
                 # Second part of name
                 if t_type == token.NAME:
@@ -183,6 +204,7 @@ class QueryCommand(object):
                     n2 = t_string
                 else:
                     raise err("NAME")
+
             elif state == 'value_sep':
                 # The '=' that seperates name from values
                 if (t_type == token.OP and t_string == '=') or (t_type == token.NAME and t_string == 'like'):
@@ -193,15 +215,15 @@ class QueryCommand(object):
 
                 else:
                     raise err("'='")
+
             elif state == 'value':
                 # The Value
                 if t_type == token.NAME or t_type == token.STRING or t_type == token.NUMBER:
                     value = t_string
                     if is_like:
                         value = '%'+value+'%'
-                        is_like = False
 
-                    state = 'name_start'
+                    state = 'name_start_or_value'
 
                     qc.getsubdict(n1).__setattr__(n2,value.strip("'").strip('"'))
 
@@ -211,6 +233,8 @@ class QueryCommand(object):
                 raise cls.ParseError("Got token after end")
             else:
                 raise cls.ParseError("Unknown state: {} at char {}".format(state))
+
+
 
         return qc
 
@@ -244,6 +268,8 @@ class QueryCommand(object):
         return str(self._dict)
 
 
+
+
 class Resolver(object):
     '''Find a reference to a dataset or partition based on a string,
     which may be a name or object number '''
@@ -253,10 +279,7 @@ class Resolver(object):
         self.session = session # a Sqlalchemy connection
 
     def _resolve_ref_orm(self, ref):
-        from ambry.orm import Dataset, Partition
         import semantic_version
-        from sqlalchemy.sql import or_
-        from ..identity import Identity, PartitionNumber, DatasetNumber
 
         ip = Identity.classify(ref)
 
@@ -287,7 +310,6 @@ class Resolver(object):
             dqp = Dataset.name == ip.sname
             pqp = Partition.name == ip.sname
 
-
         out = []
         if dqp is not None:
 
@@ -300,41 +322,48 @@ class Resolver(object):
                         .order_by(Dataset.revision.desc()).all()):
                 out.append((row.Dataset, row.Partition))
 
-
         return ip, out
 
-    def _resolve_ref(self, ref):
+    def _resolve_ref(self, ref, location = Dataset.LOCATION.LIBRARY):
         '''Convert the output from _resolve_ref to nested identities'''
         ip, results = self._resolve_ref_orm(ref)
+        from collections import OrderedDict
+
+        if location and not isinstance(location,(list, tuple)):
+            location = [location]
 
         # Convert the ORM results to identities
-        out = {}
+        out = OrderedDict()
         for d,p in results:
+
+            if location and  d.location not in location:
+                continue
 
             if not d.vid in out:
                 out[d.vid] = d.identity
 
+            out[d.vid].locations.set(d.location)
+
+            # Partitions are only added for the LOCATION.LIBRARY location, so
+            # we don't have to deal with duplicate  partitions
             if p:
                 out[d.vid].add_partition(p.identity)
 
         return ip, out
 
 
-    def resolve_ref_all(self, ref):
+    def resolve_ref_all(self, ref, location = Dataset.LOCATION.LIBRARY):
 
-        return self._resolve_ref(ref)
+        return self._resolve_ref(ref, location)
 
-    def resolve_ref_one(self, ref):
+    def resolve_ref_one(self, ref, location = Dataset.LOCATION.LIBRARY):
         '''Return the "best" result for an object specification
 
         '''
         import semantic_version
 
 
-        ip, refs = self.resolve_ref_all(ref)
-
-        if isinstance(ip.version, semantic_version.Spec):
-            pass
+        ip, refs = self._resolve_ref(ref, location)
 
 
         if not isinstance(ip.version, semantic_version.Spec):
@@ -350,6 +379,9 @@ class Resolver(object):
             else:
                 return ip, versions[best]
 
+    def resolve(self, ref, location = Dataset.LOCATION.LIBRARY):
+        return self.resolve_ref_one(ref, location)[1]
+
     def find(self, query_command):
         '''Find a bundle or partition record by a QueryCommand or Identity
 
@@ -363,10 +395,7 @@ class Resolver(object):
 
         '''
 
-        from ambry.orm import Dataset
-        from ambry.orm import Partition
-        from ambry.identity import Identity
-        from ambry.orm import Table, Column
+
 
         def like_or_eq(c,v):
 
@@ -464,14 +493,14 @@ class RemoteResolver(object):
         self.urls = remote_urls
 
 
-    def resolve_ref_one(self, ref):
+    def resolve_ref_one(self, ref, location = Dataset.LOCATION.LIBRARY):
         from requests.exceptions import ConnectionError
         from ambry.client.rest import RemoteLibrary
         import semantic_version
         from ..identity import Identity
 
         if self.local_resolver:
-            ip,ident = self.local_resolver.resolve_ref_one(ref)
+            ip,ident = self.local_resolver.resolve_ref_one(ref, location)
             if ident:
                 idents = [ident]
             else:
@@ -484,16 +513,20 @@ class RemoteResolver(object):
         # remote if this is a semantic version request, to possible
         # get a newer version
         if len(idents) == 0 or isinstance(ip.version, semantic_version.Spec):
+
             if self.urls:
                 for url in self.urls:
                     rl = RemoteLibrary(url)
 
                     try:
-                        ident = rl.resolve(ref)
+                        ident = rl.resolve(ref, location)
+
                     except ConnectionError:
                         continue
 
                     if ident:
+                        ident.locations.set(Dataset.LOCATION.REMOTE)
+
                         ident.url = url
                         idents.append(ident)
 
@@ -506,6 +539,9 @@ class RemoteResolver(object):
         # if this is a semantic version request, the idents array should be sorted with the highest revision number
         # for the spec at the top
         return ip, idents.pop(0)
+
+    def resolve(self, ref, location = Dataset.LOCATION.LIBRARY):
+        return self.resolve_ref_one(ref, location)[1]
 
 
     def find(self, query_command):

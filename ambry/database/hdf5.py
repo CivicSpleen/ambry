@@ -17,7 +17,6 @@ class Hdf5File(h5py.File):
         self._is_open = False
         super(Hdf5File, self).__init__(self._path)  
 
-
     def exists(self):
         import os.path
         

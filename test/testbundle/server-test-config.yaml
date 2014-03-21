@@ -84,4 +84,12 @@ downloads:
 
 extracts: 
     dir: '{root}/extracts'
+
+sourcerepo:
+  dir: '{root}/bundles'
+
+  default:
+    service: github
+    org: clarinova-data
+    account: clarinova-data
         

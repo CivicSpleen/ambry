@@ -45,7 +45,9 @@ class RelationalDatabase(DatabaseInterface):
         self.dbname = dbname
         self.username = username
         self.password = password
-   
+
+        self.enable_delete = False
+
         if port:
             self.colon_port = ':'+str(port)
         else:
@@ -61,7 +63,8 @@ class RelationalDatabase(DatabaseInterface):
         self.dsn_template = self.DBCI[self.driver]
         self.dsn = self.dsn_template.format(user=self.username, password=self.password, 
                     server=self.server, name=self.dbname, colon_port=self.colon_port)
-       
+
+
         self.logger = get_logger(__name__)
         self.logger.setLevel(logging.INFO) 
         
@@ -75,7 +78,7 @@ class RelationalDatabase(DatabaseInterface):
 
     def create(self):
 
-        self.connection
+        self._create()
         
         return True
     
@@ -87,7 +90,7 @@ class RelationalDatabase(DatabaseInterface):
         
         try:
             self.connection
-        except:
+        except Exception as e:
             return False
         
 
@@ -107,21 +110,21 @@ class RelationalDatabase(DatabaseInterface):
     def _create(self):
         """Create the database from the base SQL"""
         from ambry.orm import  Config
-        
-        if not self.exists():    
+
+        if not self.exists():
 
             self.require_path()
-      
-            # For Sqlite, this will create an empty database. 
+
+            # For Sqlite, this will create an empty database.
             self.get_connection(check_exists=False)
-      
+
             tables = [ Config ]
 
             for table in tables:
                 table.__table__.create(bind=self.engine)
 
             return True #signal did create
-            
+
         return False # signal didn't create
 
     def _post_create(self):
@@ -143,50 +146,78 @@ class RelationalDatabase(DatabaseInterface):
                 if n == '_post_create':
                     f(self)
 
-    def _drop(self):
-        
+
+    def drop(self):
         if not self.enable_delete:
             raise Exception("Deleting not enabled")
-        
-        for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
-            
+
+        for table in reversed(self.metadata.sorted_tables):  # sorted by foreign key dependency
+
             if table.name not in ['spatial_ref_sys']:
                 table.drop(self.engine, checkfirst=True)
 
-
-    def drop(self):
-
-        self._drop()
+    def delete(self):
+        self.drop()
 
     def drop_table(self, table_name, use_id = False):
         table = self.table(table_name)
         
-        table.drop(self.engine)        
+        table.drop(self.engine)
+
 
     @property
-    def connection(self, check_exists=True):
+    def engine(self):
+        '''return the SqlAlchemy engine for this database'''
+        from sqlalchemy import create_engine
+        import sqlite3
+
+        if not self._engine:
+            self.require_path()
+            path = self.dsn
+
+            if path == 'sqlite:///:memory:':
+                path = 'sqlite://'
+
+            self._engine = create_engine(path,
+                                         connect_args={
+                                             'detect_types': sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES},
+                                         native_datetime=True,
+                                         echo=False)
+
+            self._on_create_engine(self._engine)
+
+        return self._engine
+
+    @property
+    def connection(self):
         '''Return an SqlAlchemy connection'''
+
+        return self.get_connection()
+
+
+    def get_connection(self, check_exists=True):
+        '''Return an SqlAlchemy connection. check_exists is ignored'''
+
         if not self._connection:
             try:
                 self._connection = self.engine.connect()
+                self._on_create_connection(self._connection)
             except Exception as e:
                 self.error("Failed to open: '{}': {} ".format(self.dsn, e))
                 raise
             
         return self._connection
-    
-    @property
-    def engine(self):
-        '''return the SqlAlchemy engine for this database'''
-        from sqlalchemy import create_engine  
 
-        if not self._engine:
-            self.dsn = self.dsn_template.format(user=self.username, password=self.password, 
-                            server=self.server, name=self.dbname, colon_port=self.colon_port)
 
-            self._engine = create_engine(self.dsn, echo=False)
+    def require_path(self):
+        '''Used in engine but only implemented for sqlite'''
+        pass
 
-        return self._engine
+    def _on_create_connection(self, connection):
+        pass
+
+    def _on_create_engine(self, engine):
+        pass
 
     @property
     def unmanaged_session(self):
@@ -360,7 +391,9 @@ class RelationalDatabase(DatabaseInterface):
         return self.session.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
                                  SAConfig.d_vid == d_vid).first()
-        
+
+
+
         
 
 class RelationalBundleDatabaseMixin(object):

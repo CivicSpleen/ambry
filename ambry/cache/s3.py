@@ -79,7 +79,7 @@ class S3Cache(Cache, RemoteMarker):
         else:
             return rel_path
 
-    def path(self, rel_path, **kwargs):
+    def path(self, rel_path, propagate=True, **kwargs):
 
         if self.cdn:
             rel_path = self._rename(rel_path)

@@ -10,13 +10,21 @@ from identity import PartitionIdentity, PartitionNameQuery, PartitionName, Parti
 from sqlalchemy.orm.exc import NoResultFound
 from util.typecheck import accepts, returns
 from dbexceptions import ConflictError
+from util import Constant
 
 class Partitions(object):
     '''Continer and manager for the set of partitions. 
     
     This object is always accessed from Bundle.partitions""
     '''
-    
+
+    STATE=Constant()
+    STATE.NEW = 'new'
+    STATE.BUILDING = 'building'
+    STATE.BUILT = 'built'
+    STATE.ERROR = 'error'
+
+
     def __init__(self, bundle):
         self.bundle = bundle
 
@@ -236,17 +244,15 @@ class Partitions(object):
             return None
    
     
-    def find_all(self, pid=None, **kwargs):
+    def find_all(self, pnq=None, **kwargs):
         '''Return a Partition object from the database based on a PartitionId.
         The object returned is immutable; changes are not persisted'''
         from identity import Identity
         
-        if pid and not pid.format:
-                pid.format = NameQuery.ANY
-        elif not 'format' in kwargs:
-                kwargs['format'] = NameQuery.ANY
+        if pnq is None:
+            pnq = PartitionNameQuery(**kwargs)
 
-        ops = self._find_orm(pid, **kwargs).all()
+        ops = self._find_orm(pnq).all()
         
         return [ self.partition(op) for op in ops]
 
@@ -306,7 +312,7 @@ class Partitions(object):
 
         return q
     
-    def _new_orm_partition(self, pname, tables=None, data=None):
+    def _new_orm_partition(self, pname, tables=None, data=None, memory = False):
         '''Create a new ORM Partrition object, or return one if
         it already exists '''
         from ambry.orm import Partition as OrmPartition, Table
@@ -369,9 +375,18 @@ class Partitions(object):
                 self.bundle.get_dataset(session),         
                 t_id = table.id_ if table else None,
                 data=data,
+                state = Partitions.STATE.NEW,
                 **d
              )  
-        
+
+        if memory:
+            from random import randint
+            from identity import ObjectNumber
+            op.dataset = self.bundle.get_dataset(session)
+            op.table = table
+            op.set_ids(randint(100000,ObjectNumber.PARTMAXVAL))
+            return op
+
         session.add(op)   
         
         # We need to do this here to ensure that the before_commit()
@@ -466,15 +481,53 @@ class Partitions(object):
     def find_or_new(self, clean = False,  tables=None, data=None, **kwargs):
         return self.find_or_new_db(tables=tables, clean = clean, data=data, **kwargs)
 
-    def new_db_partition(self, clean=False, tables=None, data=None,  **kwargs):
+    def new_db_partition(self, clean=False, tables=None, data=None,  create=True, **kwargs):
 
-        p, found =  self._find_or_new(kwargs, clean = False,  tables=tables, data=data, format='db')
+        p, found =  self._find_or_new(kwargs, clean = False,  tables=tables, data=data, create=create, format='db')
         
         if found:
             raise ConflictError("Partition {} already exists".format(p.name))
 
         return p
-  
+
+    def new_db_from_pandas(self, frame, table=None, data=None, load=True, **kwargs):
+        '''Create a new db partition from a pandas data frame.
+
+        If the table does not exist, it will be created
+        '''
+        import pandas as pd
+        import numpy as np
+        from orm import Column
+
+        # Create the table from the information in the data frame.
+        with self.bundle.session:
+            sch = self.bundle.schema
+            t = sch.add_table(table)
+
+            sch.add_column(t,frame.index.name,
+                         datatype = Column.convert_numpy_type(frame.index.dtype),
+                         is_primary_key = True)
+
+            for name, type_ in zip([row for row in frame.columns],
+                                   [row for row in frame.convert_objects(convert_numeric=True,
+                                                                         convert_dates=True).dtypes]):
+                sch.add_column(t,name, datatype=Column.convert_numpy_type(type_))
+                sch.write_schema()
+
+        p =  self.new_partition(table=table, data=data, **kwargs)
+
+        if load:
+            pk_name = frame.index.name
+            with p.inserter(table) as ins:
+                for i, row in frame.iterrows():
+                    d = dict(row)
+                    d[pk_name] = i
+                    ins.insert(d)
+
+
+        return p
+
+
     def find_or_new_db(self, clean = False,  tables=None, data=None, **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it. 
         
@@ -524,7 +577,7 @@ class Partitions(object):
         return p
 
 
-    def find_or_new_csv(self, clean = False,  tables=None, data=None, **kwargs):
+    def find_or_new_csv(self, clean = False, tables=None, data=None, **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it. 
         
         Args:
@@ -568,6 +621,37 @@ class Partitions(object):
         
         return p
 
+
+    def new_memory_partition(self, tables=None, data=None, **kwargs):
+        '''Find a partition identified by pid, and if it does not exist, create it.
+
+        Args:
+            pid A partition Identity
+            tables String or array of tables to copy form the main partition
+        '''
+
+        from partition.sqlite import SqlitePartition
+
+        ppn = PartialPartitionName(**kwargs)
+
+        if tables:
+            tables = set(tables)
+
+        if ppn.table:
+            if not tables:
+                tables = set()
+
+            tables.add(ppn.table)
+
+        op = self._new_orm_partition(ppn, tables=tables, data=data, memory = True)
+
+        p = SqlitePartition(self.bundle, op, memory=True, **kwargs)
+
+
+        p.create_with_tables(tables)
+
+        return p
+
     def delete(self, partition):
         from ambry.orm import Partition as OrmPartition
  
@@ -575,4 +659,50 @@ class Partitions(object):
              .filter(OrmPartition.id_==partition.identity.id_))
       
         q.delete()
+
+
+    @property
+    def info(self):
+
+        out = 'Partitions: '+str(self.count)+"\n"
+
+        for p in self.all:
+            out += str(p.identity.sname)+"\n"
+
+        return out
+
+    def _repr_html_(self):
+        from identity import PartitionName
+
+        active_parts = set()
+
+        for p in self.all:
+            active_parts |= set(p.name.partital_dict.keys())
+
+        cols = ['Id','Name']
+        for np, _, _ in PartitionName._name_parts:
+            if np  in active_parts:
+                cols.append(np)
+
+        rows = ["<tr>"+''.join([ '<th>{}</th>'.format(c) for c in cols])+"</tr>" ]
+
+        for p in self.all:
+            cols = []
+            d = p.name.partital_dict
+            cols.append(p.identity.id_)
+            cols.append(p.identity.sname)
+
+            for np, _, _ in PartitionName._name_parts:
+
+                if np not in active_parts:
+                    continue
+                cols.append(d[np] if np in d else '')
+
+            rows.append("<tr>"+''.join([ '<td>{}</td>'.format(c) for c in cols])+"</tr>")
+
+
+        return "<table>\n" + "\n".join(rows) + "\n</table>"
+
+
+
 

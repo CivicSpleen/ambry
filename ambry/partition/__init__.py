@@ -6,6 +6,9 @@ from ..util import lru_cache
 
 @lru_cache()
 def partition_classes():
+    '''Return a holder object that has lists of the known partition types mapped to other keys
+
+    Used for getting a partition class based on simple name, format, extension, etc. '''
 
     from geo import GeoPartitionName,GeoPartitionName,GeoPartition,GeoPartitionIdentity
     from hdf import HdfPartitionName,HdfPartitionName,HdfPartition,HdfPartitionIdentity
@@ -145,18 +148,20 @@ class PartitionBase(PartitionInterface):
         
         self.bundle = db
         self.record = record
-        
+
         self.dataset = self.record.dataset
         self.identity = self.record.identity
         self.data = self.record.data
-        self.table = self.get_table()
-        
-        #
-        # These two values take refreshible fields out of the partition ORM record. 
-        # Use these if you are getting DetatchedInstance errors like: 
-        #    sqlalchemy.orm.exc.DetachedInstanceError: Instance <Table at 0x1077d5450> 
+
+        # These two values take refreshible fields out of the partition ORM record.
+        # Use these if you are getting DetatchedInstance errors like:
+        #    sqlalchemy.orm.exc.DetachedInstanceError: Instance <Table at 0x1077d5450>
         #    is not bound to a Session; attribute refresh operation cannot proceed
         self.record_count = self.record.count
+
+        self.table = self.get_table()
+        
+
 
         self._database =  None
 
@@ -167,8 +172,7 @@ class PartitionBase(PartitionInterface):
     @property
     def name(self):
         return self.identity.name
-    
-    
+
     def get(self):
         '''Fetch this partition from the library or remote if it does not exist'''
         import os
@@ -188,6 +192,14 @@ class PartitionBase(PartitionInterface):
     @property
     def tables(self):
         return self.data.get('tables',[])
+
+
+    # Call other values on the record
+    def __getattr__(self, name):
+        if hasattr(self.record, name):
+            return getattr(self.record, name)
+        else:
+            raise AttributeError('Partition does not have attribute {} '.format(name))
 
 
     def get_table(self, table_spec=None):
@@ -211,12 +223,21 @@ class PartitionBase(PartitionInterface):
 
     
     def inserter(self, table_or_name=None,**kwargs):
-        
+
+        if not self.database.exists():
+           self.create()
+
+        return self.database.inserter(table_or_name,**kwargs)
+
+
+    def updater(self, table_or_name=None, **kwargs):
+
         if not self.database.exists():
             self.create()
 
-        return self.database.inserter(table_or_name,**kwargs)
-    
+        return self.database.updater(table_or_name, **kwargs)
+
+
     def delete(self):
         
         try:
@@ -234,10 +255,27 @@ class PartitionBase(PartitionInterface):
             
         except:
             raise
-        
+
+    def finalize(self):
+        '''Wrap up the creation of this partition'''
+
+
+    def set_state(self, state):
+        from ..orm import Partition
+
+        with self.bundle.session as s:
+            r = s.query(Partition).get(self.record.vid)
+
+            if r: # No record for memory partitions
+                r.state = state
+
+                s.merge(r)
+
+                s.commit()
+
 
     def dbm(self, suffix = None):
-        '''Return a DBMDatabase replated to this partition'''
+        '''Return a DBMDatabase related to this partition'''
         
         from ..database.dbm import Dbm
         
@@ -253,24 +291,15 @@ class PartitionBase(PartitionInterface):
         return self._id_class._name_class.PATH_EXTENSION
 
     @property
-    def help(self):
+    def info(self):
         """Returns a human readable string of useful information"""
-        
-        info = dict(self.identity.to_dict(clean=False).items())
-        info['path'] = self.database.path
-        info['tables'] = ','.join(self.tables)
 
-        return """
------- Partition: {name} ------
-id    : {id}
-vid   : {vid}
-name  : {name}
-vname : {vname}
-path  : {path}
-table : {table}
-tables: {tables}
-time  : {time}
-space : {space}
-grain : {grain}
-        """.format(**info)
-        
+        return ("------ Partition: {name} ------\n".format(name=self.identity.sname)+
+        "\n".join(['{:10s}: {}'.format(k,v) for k,v in self.identity.dict.items()])+"\n"
+        '{:10s}: {}\n'.format('path',self.database.path)+
+        '{:10s}: {}\n'.format('tables', ','.join(self.tables))
+        )
+
+    def _repr_html_(self):
+        '''IPython display'''
+        return "<p>"+self.info.replace("\n","<br/>\n")+"</p>"

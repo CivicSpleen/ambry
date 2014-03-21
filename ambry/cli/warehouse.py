@@ -3,32 +3,79 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from . import prt, err, _print_info #@UnresolvedImport
-from ambry.warehouse import ResolverInterface, ResolutionError
+from . import prt, fatal, err, warn,  _print_info, _print_bundle_list
 
-def warehouse_command(args, rc, src):
+class Logger(object):
+    def __init__(self,  prefix, lr):
+        self.prefix = prefix
+        self.lr = lr
+
+    def progress(self,type_,name, n, message=None):
+        self.lr("{}: {} {}: {}".format(self.prefix,type_, name, n))
+
+    def info(self,message):
+        prt("{}: {}",self.prefix, message)
+
+    def log(self,message):
+        prt("{}: {}",self.prefix, message)
+
+    def error(self,message):
+        fatal("{}: {}",self.prefix, message)
+
+    def warn(self, message):
+        warn("{}: {}", self.prefix, message)
+
+
+def warehouse_command(args, rc):
     from ambry.warehouse import new_warehouse
+    from ..library import new_library
+    from . import logger
+    import urlparse
 
-    if args.is_server:
-        config  = src
+    if args.database:
+        parts = urlparse.urlparse(args.database)
+
+        if parts.scheme == 'sqlite':
+            config = dict(service='sqlite', database=dict(dbname=parts.path, driver='sqlite'))
+        elif parts.scheme == 'spatialite':
+            config = dict(service='spatialite', database=dict(dbname=args.spatialite, driver='sqlite'))
+        elif parts.scheme == 'postgres':
+            config = dict(service='postgres',
+                          database=dict(driver='postgres',
+                                        server=parts.hostname,
+                                        username=parts.username,
+                                        password=parts.password,
+                                        dbname=parts.path.strip('/')
+                          ))
+        elif parts.scheme == 'postgis':
+            config = dict(service='postgis',
+                          database=dict(driver='postgis',
+                                        server=parts.hostname,
+                                        username=parts.username,
+                                        password=parts.password,
+                                        dbname=parts.path.strip('/')
+                          ))
+        else:
+            raise ValueError("Unknown database connection scheme: {}".format(parts.scheme))
     else:
-        config = rc
+        config = rc.warehouse(args.name)
 
-    w = new_warehouse(config.warehouse(args.name))
 
-    globals()['warehouse_'+args.subcommand](args, w,config)
+    l = new_library(rc.library(args.library_name))
+    l.logger = logger
+
+    w = new_warehouse(config, l)
+
+    globals()['warehouse_'+args.subcommand](args, w,rc)
+
 
 def warehouse_parser(cmd):
    
     whr_p = cmd.add_parser('warehouse', help='Manage a warehouse')
     whr_p.set_defaults(command='warehouse')
     whp = whr_p.add_subparsers(title='warehouse commands', help='command help')
- 
-    group = whr_p.add_mutually_exclusive_group()
-    group.add_argument('-s', '--server',  default=False, dest='is_server',  action='store_true', help = 'Select the server configuration')
-    group.add_argument('-c', '--client',  default=False, dest='is_server',  action='store_false', help = 'Select the client configuration')
-        
-    whr_p.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
+
+    whr_p.add_argument('-d', '--database', help='Path or connection url for a database. ')
     whr_p.add_argument('-n','--name',  default='default',  help='Select a different name for the warehouse')
 
     whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
@@ -72,97 +119,43 @@ def warehouse_info(args, w,config):
     prt("Name:     {}",args.name)
     prt("Class:    {}",w.__class__)
     prt("Database: {}",w.database.dsn)
-    prt("Library : {}",w.library.database.dsn)
-
-class Logger(object):
-    def __init__(self, prefix, lr):
-        self.prefix = prefix
-        self.lr = lr
-        
-    def progress(self,type_,name, n, message=None):
-        self.lr("{}: {} {}: {}".format(self.prefix,type_, name, n))
-        
-    def log(self,message):
-        prt("{}: {}",self.prefix, message)
-        
-    def error(self,message):
-        err("{}: {}",self.prefix, message)
-   
-class Resolver(ResolverInterface):
-    
-    def __init__(self, library):
-    
-        self.library = library
-    
-    def get(self, name):
-        bundle = self.library.get(name)
-        
-        if bundle.partition:
-            return bundle.partition
-        else:
-            return bundle
-    
-    def get_ref(self, name):
-        return self.library.get_ref(name)
-
-    def url(self, name):
-        
-        dsi = self.library.upstream.get_ref(name)
-
-        if not dsi:
-            return None
-
-        if dsi['ref_type'] == 'partition':
-            # For a partition reference, we get back a dataset structure, which could
-            # have many partitions, but if we asked for a parttion, will get only one. 
-
-            return dsi['partitions'].values()[0]['urls']['db']
-        else:
-            return dsi['dataset']['url']
-
-    def csv_parts(self, name, tid):
-        import requests
-        
-        dsi = self.library.upstream.get_ref(name)
-
-        if not dsi:
-            return None
-
-        if dsi['ref_type'] == 'partition':
-            # For a partition reference, we get back a dataset structure, which could
-            # have many partitions, but if we asked for a parttion, will get only one. 
+    prt("WLibrary: {}",w.wlibrary.database.dsn)
+    prt("ELibrary: {}",w.elibrary.database.dsn)
 
 
-            parts_url =  dsi['partitions'].values()[0]['urls']['csv']['tables'][tid]['parts']
-
-            r = requests.get(parts_url)
-            r.raise_for_status()
-
-            v = r.json()
-            
-            if 'exception' in v:
-                raise ResolutionError(v['exception']['args'][0]+
-                                      "\n==== Server Trace: \n"+v['exception']['trace'])
-                
-            return v
-            
-        else:
-            from ..dbexceptions import BadRequest
-            raise BadRequest("Didn't get any csvparts; references was not to a partition")
-    
 def warehouse_install(args, w,config):
     from ..library import new_library
-    from functools import partial
+    import os.path
     from ambry.util import init_log_rate
+    from ..dbexceptions import NotFoundError
     
     if not w.exists():
         w.create()
 
-    l = new_library(config.library(args.library))
-    w.resolver = Resolver(l)
+    l = new_library(config.library(args.library_name))
+
     w.logger = Logger('Warehouse Install',init_log_rate(prt,N=2000))
- 
-    w.install_by_name(args.term )
+
+    if os.path.isfile(args.term): # Assume it is a Manifest file.
+        from ..warehouse.manifest import Manifest
+        m  = Manifest(args.term)
+
+        partitions = m.partitions
+        views = m.views
+    else:
+        partitions = [args.term]
+        views = []
+    for p in partitions:
+        try:
+            w.install(p)
+        except NotFoundError:
+            err("Partition {} not found in external library".format(p))
+
+    if m.sql:
+        w.run_sql(m.sql[w.database.driver])
+
+    for view in views:
+        w.install_view(view)
 
 def warehouse_remove(args, w,config):
     from functools import partial
@@ -170,13 +163,11 @@ def warehouse_remove(args, w,config):
 
     w.logger = Logger('Warehouse Remove',init_log_rate(prt,N=2000))
     
-    w.remove_by_name(args.term )
+    w.remove(args.term )
       
 def warehouse_drop(args, w,config):
-    
-    w.database.enable_delete = True
-    w.library.clean()
-    w.drop()
+
+    w.delete()
  
 def warehouse_create(args, w,config):
     
@@ -204,17 +195,15 @@ def warehouse_users(args, w,config):
     
 def warehouse_list(args, w, config):    
 
-    
     l = w.library
 
     if not args.term:
 
-        last_d = None
-        for d,p in l.partitions:
-            prt("{:2s} {:10s} {}", '   W', p.vid, p.vname)
+
+        _print_bundle_list(w.list(),show_partitions=False)
             
     else:
+        raise NotImplementedError()
         d, p = l.get_ref(args.term)
                 
         _print_info(l,d,p, list_partitions=True)
-  

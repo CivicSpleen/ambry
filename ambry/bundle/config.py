@@ -1,7 +1,7 @@
 __author__ = 'eric'
 
 import os
-from ..run import get_runconfig
+from ..run import get_runconfig, RunConfig
 
 from ambry.run import AttrDict
 class BundleDbConfigDict(AttrDict):
@@ -34,111 +34,6 @@ class BundleConfig(object):
         pass
 
 
-class BundleFileConfig(BundleConfig):
-    '''Bundle configuration from a bundle.yaml file '''
-
-    BUNDLE_CONFIG_FILE = 'bundle.yaml'
-
-    def __init__(self, root_dir):
-        '''Load the bundle.yaml file and create a config object
-
-        If the 'id' value is not set in the yaml file, it will be created and the
-        file will be re-written
-        '''
-
-        super(BundleFileConfig, self).__init__()
-
-        self.root_dir = root_dir
-        self.local_file = os.path.join(self.root_dir,'bundle.yaml')
-        self.source_ref = self.local_file
-        self._run_config = get_runconfig(self.local_file)
-
-        # If there is no id field, create it immediately and
-        # write the configuration back out.
-
-        if not self._run_config.identity.get('id',False):
-            self.init_dataset_number()
-
-
-        if not os.path.exists(self.local_file):
-            raise ConfigurationError("Can't find bundle config file: ")
-
-    def init_dataset_number(self):
-        from ambry.identity import Identity, DatasetNumber, NumberServer
-
-        try:
-            ns = NumberServer(**self._run_config.group('numbers'))
-            ds = ns.next()
-        except Exception as e:
-            from .util import get_logger
-            logger = get_logger(__name__)
-
-            logger.error("Failed to get number from number sever; need to use self assigned number: {}"
-                .format(e.message))
-            raise
-
-        ident = Identity.from_dict(self._run_config.identity)
-
-        ident._on = ds.rev(self._run_config.identity.revision)
-
-        self.rewrite(**dict(
-            identity=ident.ident_dict,
-            names=ident.names_dict
-        ))
-        self._run_config = get_runconfig(self.local_file)
-
-    @property
-    def config(self): #@ReservedAssignment
-        '''Return a dict/array object tree for the bundle configuration'''
-
-        return self._run_config
-
-    @property
-    def path(self):
-        return os.path.join(self.cache, BundleFileConfig.BUNDLE_CONFIG_FILE)
-
-    def rewrite(self, **kwargs):
-        '''Re-writes the file from its own data. Reformats it, and updates
-        the modification time. Will also look for a config directory and copy the
-        contents of files there into the bundle.yaml file, adding a key derived from the name
-        of the file. '''
-
-        temp = self.local_file+".temp"
-        old = self.local_file+".old"
-
-        config = AttrDict()
-
-        config.update_yaml(self.local_file)
-
-        for k,v in kwargs.items():
-            config[k] = v
-
-
-        with open(temp, 'w') as f:
-            config.dump(f)
-
-        if os.path.exists(temp):
-            os.rename(self.local_file, old)
-            os.rename(temp,self.local_file )
-
-
-    def dump(self):
-        '''Re-writes the file from its own data. Reformats it, and updates
-        the modification time'''
-        import yaml
-
-        return yaml.dump(self._run_config, indent=4, default_flow_style=False)
-
-
-    def __getattr__(self, group):
-        '''Fetch a confiration group and return the contents as an
-        attribute-accessible dict'''
-        return self._run_config.group(group)
-
-    def group(self, name):
-        '''return a dict for a group of configuration items.'''
-
-        return self._run_config.group(name)
 
 class BundleDbConfig(BundleConfig):
     ''' Retrieves configuration from the database, rather than the .yaml file. '''
@@ -232,4 +127,106 @@ class BundleDbConfig(BundleConfig):
         from ambry.orm import Partition
 
         return  (self.database.session.query(Partition).first())
+
+class BundleFileConfig(RunConfig):
+    '''Bundle configuration from a bundle.yaml file '''
+
+    BUNDLE_CONFIG_FILE = 'bundle.yaml'
+
+    local_groups = [ 'build','about','identity','names','partitions','extracts','views','data', 'visualizations' ]
+
+    def __init__(self,bundle_dir):
+        from ..dbexceptions import  ConfigurationError
+
+        object.__setattr__(self, 'bundle_dir', bundle_dir)
+        object.__setattr__(self, 'local_file', os.path.join(self.bundle_dir,'bundle.yaml'))
+
+        super(BundleFileConfig, self).__init__(self.local_file)
+
+        if not self.identity.get('id', False):
+            self.init_dataset_number()
+
+        if not os.path.exists(self.local_file):
+            raise ConfigurationError("Can't find bundle config file: ")
+
+    def __getattr__(self, group):
+        '''Fetch a configuration group and return the contents as an
+        attribute-accessible dict'''
+
+        if group not in self.config and group in self.local_groups:
+            self.config[group] = AttrDict()
+
+        return self.config.get(group,{})
+
+
+    def get_identity(self):
+        '''Return an identity object. '''
+        from ..identity import Identity, Name, ObjectNumber
+
+        names = self.names.items()
+        idents = self.identity.items()
+
+        return Identity.from_dict(dict(names + idents))
+
+    def dump(self):
+        '''Return as a yaml string'''
+        import yaml
+
+        return self.config.dump()
+
+    def rewrite(self, **kwargs):
+        '''Re-writes the file from its own data. Reformats it, and updates
+        the modification time. Will also look for a config directory and copy the
+        contents of files there into the bundle.yaml file, adding a key derived from the name
+        of the file. '''
+
+        temp = self.local_file + ".temp"
+        old = self.local_file + ".old"
+
+        config = AttrDict()
+
+        config.update_yaml(self.local_file)
+
+        # Copy local data out of the whole config
+        for k in self.local_groups:
+            if k in self.config:
+
+                config[k] = self.config[k]
+
+        # Replace with items from the arg list.
+        for k, v in kwargs.items():
+            config[k] = v
+
+        with open(temp, 'w') as f:
+            config.dump(f)
+
+        if os.path.exists(temp):
+            os.rename(self.local_file, old)
+            os.rename(temp, self.local_file)
+
+        super(BundleFileConfig, self).__init__(self.local_file)
+
+    def init_dataset_number(self):
+        from ambry.identity import Identity, DatasetNumber, NumberServer
+
+        try:
+            ns = NumberServer(**self.group('numbers'))
+            ds = ns.next()
+        except Exception as e:
+            from ..util import get_logger
+
+            logger = get_logger(__name__)
+
+            logger.error("Failed to get number from number sever; need to use self assigned number: {}"
+                         .format(e.message))
+            raise
+
+        ident = Identity.from_dict(self.identity)
+
+        ident._on = ds.rev(self.identity.revision)
+
+        self.rewrite(**dict(
+            identity=ident.ident_dict,
+            names=ident.names_dict
+        ))
 

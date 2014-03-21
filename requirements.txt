@@ -2,7 +2,7 @@ PyYAML
 semidbm
 SQLAlchemy
 simplejson
-requests # ==1.2.0 # Later versions don't work right, but forgot why ...
+requests
 boto
 python-dateutil
 unicodecsv
@@ -13,5 +13,11 @@ pyparsing
 markdown
 psycopg2
 semantic_version
-# This pysqlite clone enables load_extension. Only needed on Linux
-git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
+numpy
+h5py
+shapely # Optional libgeos-dev for speedups.
+rtree # also requires libspatialindex-dev,'brew install spatialindex' on mac
+pandas
+## This pysqlite clone enables load_extension. Only needed on Linux. It is added
+## in setup.py for linux, so you don't need to uncomment it here.
+# git+https://github.com/clarinova/pysqlite.git#egg=pysqlite

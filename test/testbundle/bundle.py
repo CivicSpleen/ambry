@@ -10,7 +10,6 @@ import petl.fluent as petl  # @UnresolvedImport
 
 
 class Bundle(BuildBundle):
-    
 
     def prepare(self):
         from ambry.identity import PartitionIdentity
@@ -42,7 +41,7 @@ class Bundle(BuildBundle):
                   ('extra', lambda: None),
                   ('extra2', lambda: None),
                   ]
-  
+
     @property
     def fields3(self):
         from functools import partial
@@ -77,6 +76,9 @@ class Bundle(BuildBundle):
         self.log("=== Build db, using an inserter")
         self.build_db_inserter()
 
+        self.log("=== Update")
+        self.build_db_updater()
+
         self.log("=== Build geo")
         self.build_geo()
 
@@ -89,8 +91,6 @@ class Bundle(BuildBundle):
         self.log("=== Build csv")
         self.build_csv()
 
-        self.log("=== Build db, using petl")
-        self.build_db_petl()
 
         self.log("=== Build hdf")
         self.build_hdf()
@@ -128,20 +128,17 @@ class Bundle(BuildBundle):
         from ambry.database.inserter import CodeCastErrorHandler
         p = self.partitions.find_or_new_db(table='coding')
         table = p.table
-        
-        
+
         def yield_rows():
 
             field_gen =  self.fields3
 
             for i in range(10000):
                 row = { f[0]:f[1]() for f in field_gen }
-                
-                
+
                 if i % 51 == 0:
                     row['integer'] = chr(65+(i/51 % 26))
-                
-                
+
                 if i % 13 == 0:
                     row['date'] = chr(65+(i/13 % 26))
    
@@ -195,24 +192,15 @@ class Bundle(BuildBundle):
                 ins.insert(cast_row)
                 lr()
         
-        
 
-    def build_db_petl(self):
+    def build_db_updater(self):
 
-        # Now write random data to each of the pable partitions. 
-        
-        for table_name in  ('tone',):
-            p = self.partitions.find_or_new_db(table=table_name, grain=None)
-            petl.dummytable(30000,self.fields2).tosqlite3(p.database.path, table_name, create=False) #@UndefinedVariable
+        p = self.partitions.find(table='tthree')
 
-        for table_name in  ('ttwo',):
-            p = self.partitions.find_or_new_db(table=table_name, grain=None)
-            petl.dummytable(30000,self.fields).tosqlite3(p.database.path, table_name, create=False) #@UndefinedVariable
+        with p.updater('tthree') as upd:
+            for row in p.query("SELECT * FROM tthree"):
+                upd.update({'_id': row['id'], '_float': row['float']*2})
 
-        for seg in range(1,5):
-            p = self.partitions.find_or_new_db(table='tthree', segment=seg)
-            petl.dummytable(30000,self.fields3).tosqlite3(p.database.path, 'tthree', create=False) #@UndefinedVariable
-            p.write_stats()
 
     def build_geo(self):
    

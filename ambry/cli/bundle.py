@@ -5,44 +5,78 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 
 
-from ..cli import prt, err, warn
+from ..cli import prt, fatal, warn
 from ..cli import  _source_list, load_bundle, _print_bundle_list
+from ..source import SourceTree
 
 import os
 import yaml
 import shutil
 
-def bundle_command(args, rc, src):
+
+
+def bundle_command(args, rc):
     import os
     from ..run import import_file
+    from ..dbexceptions import  DependencyError
+    from ..library import new_library
+    from . import logger
+    from ..orm import Dataset
+
+    l = new_library(rc.library(args.library_name))
+    l.logger = logger
 
     if not args.bundle_dir:
         bundle_file = os.path.join(os.getcwd(),'bundle.py')
-    elif args.bundle_dir == '-':
-        # Run run for each line of input
-        import sys
-
-        for line in sys.stdin.readlines():
-            args.bundle_dir = line.strip()
-            prt('====== {}',args.bundle_dir)
-            bundle_command(args,rc, src)
-
-        return
-    elif args.bundle_dir[0] != '/':
-        bundle_file = os.path.join(os.getcwd(), args.bundle_dir, 'bundle.py')
     else:
-        bundle_file = os.path.join(args.bundle_dir, 'bundle.py')
+        st = l.source
+        ident = l.resolve(args.bundle_dir, location=Dataset.LOCATION.SOURCE)
+
+        if ident:
+
+            bundle_file = os.path.join(ident.bundle_path, 'bundle.py')
+
+            if not os.path.exists(bundle_file):
+                from ..dbexceptions import ConflictError
+                # The bundle exists in the source repo, but is not local
+                prt("Loading bundle from {}".format(ident.url))
+                try:
+                    bundle = st.clone(ident.url)
+                    prt("Loaded {} into {}".format(bundle.identity.sname, bundle.bundle_dir))
+
+                    bundle_file = os.path.join(bundle.bundle_dir,'bundle.py')
+                except ConflictError as e:
+                    fatal(e.message)
+
+
+        elif args.bundle_dir == '-':
+            # Run run for each line of input
+            import sys
+
+            for line in sys.stdin.readlines():
+                args.bundle_dir = line.strip()
+                prt('====== {}',args.bundle_dir)
+                bundle_command(args,rc)
+
+            return
+
+        elif args.bundle_dir[0] != '/':
+            bundle_file = os.path.join(os.getcwd(), args.bundle_dir, 'bundle.py')
+
+        else:
+            bundle_file = os.path.join(args.bundle_dir, 'bundle.py')
+
 
 
     if not os.path.exists(bundle_file):
-        err("Bundle code file does not exist: {}".format(bundle_file) )
+        fatal("Bundle code file does not exist: {}".format(bundle_file) )
 
     bundle_dir = os.path.dirname(bundle_file)
 
     config_file = os.path.join(bundle_dir, 'bundle.yaml')
 
     if not os.path.exists(config_file):
-        err("Bundle config file does not exist: {}".format(bundle_file) )
+        fatal("Bundle config file does not exist: {}".format(bundle_file) )
 
     # Import the bundle file from the
     rp = os.path.realpath(bundle_file)
@@ -76,25 +110,35 @@ def bundle_command(args, rc, src):
 
     phases.append(args.subcommand)
 
-    for phase in phases:
-        getf(phase)(args, b, rc)
+    if args.debug:
+        from ..util import  debug
+        warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
+        debug.listen()
+
+    try:
+        for phase in phases:
+            getf(phase)(args, b, st, rc)
+    except DependencyError as e:
+        st.set_bundle_state(b.identity, 'error:dependency')
+        fatal("Phase {} failed: {}", phase, e.message)
+    except Exception:
+        st.set_bundle_state(b.identity, 'error:'+phase)
+        raise
 
 def bundle_parser(cmd):
     import argparse, multiprocessing
 
     parser = cmd.add_parser('bundle', help='Manage bundle files')
     parser.set_defaults(command='bundle')
-    parser.add_argument('-l','--library',  default='default',  help='Select a different name for the library')
     parser.add_argument('-d','--bundle-dir', required=False,   help='Path to the bundle .py file')
+    parser.add_argument('-D', '--debug', required=False, default=False, action="store_true",
+                                        help='URS1 signal will break to interactive prompt')
     parser.add_argument('-t','--test',  default=False, action="store_true", help='Enable bundle-specific test behaviour')
     parser.add_argument('-m','--multi',  type = int,  nargs = '?',
                         default = 1,
                         const = multiprocessing.cpu_count(),
                         help='Run the build process on multiple processors, if the  method supports it')
 
-    # These are args that Aptana / PyDev adds to runs.
-    parser.add_argument('--port', default=None, help="PyDev Debugger arg")
-    parser.add_argument('--verbosity', default=None, help="PyDev Debugger arg")
 
     sub_cmd = parser.add_subparsers(title='commands', help='command help')
 
@@ -133,6 +177,7 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='info')
     command_p.add_argument('-s','--schema',  default=False,action="store_true",
                            help='Dump the schema as a CSV. The bundle must have been prepared')
+    command_p.add_argument('-d', '--dep', default=False, help='Report information about a dependency')
 
     #
     # Clean Command
@@ -237,36 +282,74 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('pull', help='Pull from the git origin')
     command_p.set_defaults(subcommand='pull', command_group='source')
 
+def bundle_info(args, b, st, rc):
 
-def bundle_info(args, b, rc):
-    if args.schema:
-        print b.schema.as_csv()
+
+    if args.dep:
+        #
+        # Get the dependency and then re-run to display it.
+        #
+        dep = b.library.dep(args.dep)
+        if not dep:
+            fatal("Didn't find dependency for {}".format(args.dep))
+
+        ns = vars(args)
+        ns['dep'] = None
+
+        bundle_info(args.__class__(**ns), dep, st, rc)
+
+    elif args.schema:
+        b.schema.as_csv()
     else:
-        b.log("----Info ---")
+        b.log("----Info: ".format(b.identity.sname))
         b.log("VID  : "+b.identity.vid)
         b.log("Name : "+b.identity.sname)
         b.log("VName: "+b.identity.vname)
-        b.log("Parts: {}".format(b.partitions.count))
+        b.log("DB   : " + b.database.path)
 
-        if b.config.build.get('dependencies',False):
+        if b.database.exists():
+
+            cd = dict(b.db_config.dict)
+            process = cd['process']
+            b.log('Created   : ' + process.get('dbcreated', ''))
+            b.log('Prepared  : ' + process.get('prepared', ''))
+            b.log('Built     : ' + process.get('built', ''))
+
+            if process.get('buildtime', False):
+                b.log('Build time: ' + str(round(float(process['buildtime']), 2)) + 's')
+
+            b.log("Parts: {}".format(b.partitions.count))
+
+            if b.partitions.count < 5 and b.partitions.count > 0:
+                b.log("---- Partitions ---")
+                for partition in b.partitions:
+                    b.log("    "+partition.identity.sname)
+
+        if b.config.build and b.config.build.get('dependencies', False):
+            # For source bundles
+            deps = b.config.build.dependencies.items()
+        else:
+            # for built bundles
+            try:
+                deps = b.db_config.odep.items()
+            except AttributeError:
+                deps = None
+
+        if deps:
             b.log("---- Dependencies ---")
-            for k,v in b.config.build.dependencies.items():
-                b.log("    {}: {}".format(k,v))
-
-        if b.partitions.count < 5:
-            b.log("---- Partitions ---")
-            for partition in b.partitions:
-                b.log("    "+partition.identity.sname)
+            for k, v in deps:
+                b.log("{}: {}".format(k, v))
 
 
-
-def bundle_clean(args, b, rc):
+def bundle_clean(args, b, st, rc):
     b.log("---- Cleaning ---")
     # Only clean the meta phases when it is explicityly specified.
     #b.clean(clean_meta=('meta' in phases))
     b.clean()
 
-def bundle_meta(args, b, rc):
+
+
+def bundle_meta(args, b, st, rc):
 
     # The meta phase does not require a database, and should write files
     # that only need to be done once.
@@ -281,39 +364,15 @@ def bundle_meta(args, b, rc):
     else:
         b.log("---- Skipping Meta ---- ")
 
-def bundle_prepare(args, b, rc):
-    if b.pre_prepare():
-        b.log("---- Preparing ----")
-        if b.prepare():
-            b.post_prepare()
-            b.log("---- Done Preparing ----")
-        else:
-            b.log("---- Prepare exited with failure ----")
-            return False
-    else:
-        b.log("---- Skipping prepare ---- ")
+def bundle_prepare(args, b, st, rc):
+    return b.do_prepare()
 
-    return True
 
-def bundle_build(args, b, rc):
+def bundle_build(args, b, st, rc):
+    return b.do_build()
 
-    if not b.is_prepared:
-        bundle_prepare(args, b, rc)
 
-    if b.pre_build():
-        b.log("---- Build ---")
-        if b.build():
-            b.post_build()
-            b.log("---- Done Building ---")
-        else:
-            b.log("---- Build exited with failure ---")
-            return False
-    else:
-        b.log("---- Skipping Build ---- ")
-
-    return True
-
-def bundle_install(args, b, rc):
+def bundle_install(args, b, st, rc):
 
     force = args.force
 
@@ -330,7 +389,7 @@ def bundle_install(args, b, rc):
 
     return True
 
-def bundle_run(args, b, rc):
+def bundle_run(args, b, st, rc):
 
     #
     # Run a method on the bundle. Can be used for testing and development.
@@ -347,7 +406,7 @@ def bundle_run(args, b, rc):
 
     return f(*args.args)
 
-def bundle_submit(args, b, rc):
+def bundle_submit(args, b, st, rc):
 
     if b.pre_submit():
         b.log("---- Submit ---")
@@ -359,7 +418,7 @@ def bundle_submit(args, b, rc):
     else:
         b.log("---- Skipping Submit ---- ")
 
-def bundle_extract(args, b, rc):
+def bundle_extract(args, b, st, rc):
     if b.pre_extract():
         b.log("---- Extract ---")
         if b.extract():
@@ -370,7 +429,7 @@ def bundle_extract(args, b, rc):
     else:
         b.log("---- Skipping Extract ---- ")
 
-def bundle_update(args, b, rc):
+def bundle_update(args, b, st, rc):
 
     if b.pre_update():
         b.log("---- Update ---")
@@ -383,7 +442,7 @@ def bundle_update(args, b, rc):
     else:
         b.log("---- Skipping Update ---- ")
 
-def bundle_config(args, b, rc):
+def bundle_config(args, b, st, rc):
 
     if args.command == 'config':
         if args.subcommand == 'rewrite':
@@ -391,17 +450,19 @@ def bundle_config(args, b, rc):
             with self.session:
                 b.update_configuration()
         elif args.subcommand == 'dump':
-            print b.config._run_config.dump()
+            print b.config.dump()
         elif args.subcommand == 'schema':
             print b.schema.as_markdown()
 
     return
 
-def bundle_source(args, b, rc):
+
+
+def bundle_source(args, b, st, rc):
 
     if 'command_group' in args and args.command_group == 'source':
 
-        repo = new_repository(b.config._run_config.sourcerepo('default'))
+        repo = new_repository(b.config.sourcerepo('default'))
         repo.bundle = b
 
         if args.command == 'commit':
@@ -413,3 +474,4 @@ def bundle_source(args, b, rc):
             repo.pull()
 
         return
+

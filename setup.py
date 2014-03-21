@@ -3,7 +3,7 @@
 #from distribute_setup import use_setuptools
 #use_setuptools()
 
-from setuptools import setup, find_packages #@UnresolvedImport
+from setuptools import setup, find_packages
 
 
 import sys, re
@@ -19,11 +19,22 @@ def readme():
     with open("README.md") as f:
         return f.read()
 
+def read_requirements(file_name):
+
+    with open(file_name, 'r') as f:
+        for line in f.read().split('\n'):
+
+            if re.match(r'(\s*#)|(\s*$)', line):
+                continue
+
+            yield line
+
+
+
 def parse_requirements(file_name):
     requirements = []
-    for line in open(file_name, 'r').read().split('\n'):
-        if re.match(r'(\s*#)|(\s*$)', line):
-            continue
+    for line in read_requirements(file_name):
+
         if re.match(r'\s*-e\s+', line):
             requirements.append(re.sub(r'\s*-e\s+.*#egg=(.*)$', r'\1', line))
         elif re.match(r'\s*-f\s+', line):
@@ -31,13 +42,21 @@ def parse_requirements(file_name):
         else:
             requirements.append(line)
 
+
+    if 'linux' in sys.platform:
+        requirements.append('pysqlite')
+
     return requirements
 
 def parse_dependency_links(file_name):
     dependency_links = []
-    for line in open(file_name, 'r').read().split('\n'):
+    for line in read_requirements(file_name):
         if re.match(r'\s*-[ef]\s+', line):
             dependency_links.append(re.sub(r'\s*-[ef]\s+', '', line))
+
+
+    if 'linux' in sys.platform:
+        dependency_links.append('git+https://github.com/clarinova/pysqlite.git#egg=pysqlite')
 
     return dependency_links
 
@@ -49,8 +68,8 @@ setup(name = "ambry",
       author_email = "eric@clarinova.com",
       url = "https://github.com/clarinova/ambry",
       packages = find_packages(), 
-      scripts=['scripts/bambry', 'scripts/ambry'],
-      package_data = {"ambry": ["support/*", "geo/support/*" ]},
+      scripts=['scripts/bambry', 'scripts/ambry', 'scripts/xambry', 'scripts/ambry-load-sqlite'],
+      package_data = {"ambry": ["support/*"]},
       license = "",
       platforms = "Posix; MacOS X; Linux",
       classifiers=[

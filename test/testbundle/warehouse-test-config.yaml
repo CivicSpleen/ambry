@@ -1,9 +1,27 @@
 # Configuration for a library that is backed by a remote library
 
 library:
-    default:
-      filesystem: default
-      database: default
+  server:
+    filesystem: library
+    database: library
+    host: localhost
+    port: 7979
+    upstream:
+      options: [compress]
+      prefix: library-test
+      bucket: devtest.sandiegodata.org
+      account: devtest.sandiegodata.org
+
+  client:
+    filesystem: library
+    database: library
+    remotes:
+    - http://localhost:7979
+
+  local:
+    filesystem: library
+    database: library
+
 
 warehouse:
     default:
@@ -14,18 +32,12 @@ warehouse:
       database: redshift
       library: redshift_library
 
-    postgres:
+    postgres1:
         service: postgres
         database:
             driver: postgres
-            server: lorne
-            dbname: warehouse
-            username: test
-            password: test
-        library: 
-            driver: postgres
-            server: lorne
-            dbname: library
+            server: warehouse1
+            dbname: test
             username: test
             password: test
 
@@ -33,37 +45,36 @@ warehouse:
       service: relational
       database: mysql_warehouse
       library: mysql_library
- 
+
     sqlite:
-      service: relational
+      service: sqlite
       database: sqlite_warehouse
-      library: sqlite_library
+      xlibrary: sqlite_library
+
+    spatialite:
+      service: spatialite
+      database: spatialite_warehouse
+      xlibrary: sqlite_library
 
 
 database:
   
-    default:
-        dbname: '/tmp/server/library.db'
-        driver: sqlite  
-  
 
-        
-    redshift:
-        driver: postgres
-        server: lorne
-        dbname: test-library
-        account: redshift-test
-        
-    redshift_library:
-        dbname: '/tmp/redshift-library.db'
-        driver: sqlite        
+    library:
+        dbname: '/tmp/warehouse/library.db'
+        driver: sqlite
+
   
+    spatialite_warehouse:
+        dbname: '/tmp/warehouse/spatialite.db'
+        driver: spatialite
+
     sqlite_warehouse:
-        dbname: '/tmp/warehouse.db'
-        driver: sqlite  
+        dbname: '/tmp/warehouse/sqlite.db'
+        driver: sqlite
   
     sqlite_library:
-        dbname: '/tmp/sqlite-library.db'
+        dbname: '/tmp/warehouse/warehouse-library.db'
         driver: sqlite  
         
         
@@ -75,10 +86,6 @@ database:
         password: samizdat 
 
 
-
-
-
-
 filesystem:  
   root_dir: /tmp/warehouse-test/
   default:
@@ -87,6 +94,8 @@ filesystem:
       upstream:
         dir: '{root}/cache-l2'
         options: [compress]
+
+  library: /tmp/server/warehouse/library
 
 
         

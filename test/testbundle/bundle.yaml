@@ -32,7 +32,6 @@ extracts:
     query: select * from  {p_table}
     title: 'Extract for table: {p_table}, a={dima}, b={dimb} and c={dimc}'
 identity:
-    cache_key: source/dataset-subset-variation-0.0.1.db
     dataset: dataset
     id: diEGPXmDC8
     revision: 1
@@ -46,6 +45,35 @@ names:
     vid: diEGPXmDC8001
     vname: source-dataset-subset-variation-0.0.1
 partitions:
-- source-dataset-subset-variation-coding
-- source-dataset-subset-variation-coding_date_codes
-- source-dataset-subset-variation-coding_integer_codes
+-   name: source-dataset-subset-variation-tthree
+    table: tthree
+-   format: geo
+    name: source-dataset-subset-variation-geot1-geo
+    table: geot1
+-   format: geo
+    name: source-dataset-subset-variation-geot2-geo
+    table: geot2
+-   grain: missing
+    name: source-dataset-subset-variation-tone-missing
+    table: tone
+-   name: source-dataset-subset-variation-tone
+    table: tone
+-   format: csv
+    name: source-dataset-subset-variation-csv-csv-1
+    segment: 1
+    table: csv
+-   format: csv
+    name: source-dataset-subset-variation-csv-csv-2
+    segment: 2
+    table: csv
+-   format: csv
+    name: source-dataset-subset-variation-csv-csv-3
+    segment: 3
+    table: csv
+-   format: csv
+    name: source-dataset-subset-variation-csv-csv-4
+    segment: 4
+    table: csv
+-   format: hdf
+    name: source-dataset-subset-variation-hdf5-hdf
+    table: hdf5

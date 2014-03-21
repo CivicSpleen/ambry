@@ -93,3 +93,48 @@ class RemoteLibrary(object):
         self.cache.clean()
 
 
+def remote_rebuild(self):
+    '''Rebuild the library from the contents of the remote'''
+
+    self.logger.info("Rebuild library from: {}".format(self.upstream))
+
+    #self.database.drop()
+    #self.database.create()
+
+    # This should almost always be an object store, like S3. Well, it better be,
+    # inst that is the only cache that has the include_partitions parameter.
+    rlu = self.upstream.last_upstream()
+
+    remote_partitions = rlu.list(include_partitions=True)
+
+    for rel_path in self.upstream.list():
+
+
+        path = self.load(rel_path)
+
+        if not path or not os.path.exists(path):
+            self.logger.error("ERROR: Failed to get load for relpath: '{}' ( '{}' )".format(rel_path, path))
+            continue
+
+        bundle = DbBundle(path)
+        identity = bundle.identity
+
+        self.database.add_file(path, self.cache.repo_id, identity.vid, 'pulled')
+        self.logger.info('Installing: {} '.format(bundle.identity.name))
+        try:
+            self.database.install_bundle_file(identity, path)
+        except Exception as e:
+            self.logger.error("Failed: {}".format(e))
+            continue
+
+        for p in bundle.partitions:
+
+            # This is the slow way to do it:
+            # if self.remote.last_upstream().has(p.identity.cache_key):
+            if p.identity.cache_key in remote_partitions:
+                self.database.add_remote_file(p.identity)
+                self.logger.info('            {} '.format(p.identity.name))
+            else:
+                self.logger.info('            {} Ignored; not in remote'.format(p.identity.name))
+
+

@@ -299,21 +299,23 @@ def _read_body(request):
 def _download_redirect(identity, library):
     '''This is very similar to get_key'''
     from ambry.cache import RemoteMarker
+    from ambry.dbexceptions import NotFoundError
 
     if library.upstream:
-
         remote = library.upstream.get_upstream(RemoteMarker)
-
         if not remote:
-            raise exc.InternalError("Library remote does not have a proper upstream")
-
-        url =  remote.path(identity.cache_key)
-
+            logger.error("Library remote does not have a proper upstream")
     else:
-        url = "{}/files/{}".format(_host_port(library), identity.cache_key)
+        remote = None
+
+    try:
+        return remote.path(identity.cache_key)
+    except NotFoundError:
+        logger.warn("Object not found in upstream. Return local URL; {}".format(identity.fqname))
 
 
-    return url
+    return redirect("{}/files/{}".format(_host_port(library), identity.cache_key))
+
 
 def _send_csv_if(did, pid, table, library):
     '''Send csv function, with a web-processing interface '''
@@ -480,19 +482,18 @@ def get_key(key, library):
     return redirect(url)
 
 
-
-
 @get('/datasets')
 def get_datasets(library):
     '''Return all of the dataset identities, as a dict, 
     indexed by id'''
 
+    from ..orm import Dataset
+
     return { dsid.cache_key : {
                  'identity': dsid.dict ,
                  'refs': {
                     'path': dsid.path,
-                    'cache_key': dsid.cache_key,
-                    'source_path': dsid.source_path
+                    'cache_key': dsid.cache_key
                  }, 
                  'urls': {
                           'partitions': "{}/datasets/{}".format(_host_port(library), dsid.vid),
@@ -504,7 +505,7 @@ def get_datasets(library):
                     'csv':'{}/datasets/{}/schema.csv'.format(_host_port(library),dsid.vid),
                   }
                  } 
-            for dsid in library.list()}
+            for dsid in library.list(locations=Dataset.LOCATION.LIBRARY).values()}
 
 @post('/datasets/find')
 def post_datasets_find(library):
@@ -554,6 +555,7 @@ def post_dataset(did,library):
 
     return b.identity.dict
 
+
 @get('/datasets/<did>') 
 @CaptureException   
 def get_dataset(did, library, pid=None):
@@ -567,8 +569,9 @@ def get_dataset(did, library, pid=None):
     
     # Construct the response
     d = {'identity' : gr.identity.dict, 'partitions' : {}}
-         
-    files = library.database.get_file_by_ref(gr.identity.vid)
+
+
+    files = library.files.query.installed.ref(gr.identity.vid).all
     
     # Get direct access to the cache that implements the remote, so
     # we can get a URL with path()
@@ -592,8 +595,8 @@ def get_dataset(did, library, pid=None):
         d['partitions'][partition.identity.id_] = dict()
 
         d['partitions'][partition.identity.id_]['identity'] = partition.identity.dict
- 
-        files = library.database.get_file_by_ref(partition.identity.vid)
+
+        files = library.files.query.installed.ref(partition.identity.vid).all
         
         if len(files) > 0:
             file_ = files.pop(0)
@@ -638,6 +641,8 @@ def get_dataset(did, library, pid=None):
             'tables': tables
           }
         }
+
+    d['response'] = 'dataset'
 
     return d
 
@@ -723,13 +728,17 @@ def get_dataset_schema(did, typ, library):
 def get_partition(did, pid, library):
     from ambry.cache import RemoteMarker
 
-    return get_dataset(did, library, pid)
+    d =  get_dataset(did, library, pid)
+    d['response'] = 'partition'
+    return d
+
+
 
 @get('/datasets/<did>/partitions/<pid>/db')
 @CaptureException
 def get_partition_file(did, pid, library):
     from ambry.cache import RemoteMarker
-    from ambry.identity import new_identity, Identity
+    from ambry.identity import Identity
 
     b =  library.get(did)
 
@@ -800,11 +809,20 @@ def get_partition_table_csv(did, pid, tid, library):
 def get_partition_table_csv_parts(did, pid, tid, library):
     '''
     '''
+    from ..partition.csv import CsvPartitionName
+    from ..partition.geo import GeoPartitionName
+    from ..partition.sqlite import SqlitePartitionName
 
     did, _, _ = process_did(did, library)
     pid, _, _  = process_pid(did, pid, library)
 
     p = library.get(pid).partition # p_orm is a database entry, not a partition
+
+    if p.identity.format == CsvPartitionName.FORMAT:
+        return ['/datasets/{}/partitions/{}/db'.format(_host_port(library), pid, pid)]
+    elif p.identity.format not in  (SqlitePartitionName.FORMAT, GeoPartitionName.FORMAT):
+        raise exc.BadRequest("Can only get CSV parts for csv, geo or sqlite partitions. Got: {}".format(p.identity.format))
+
 
     table = p.bundle.schema.table(tid)
 
@@ -944,7 +962,6 @@ def test_run(config):
 
     logger.info("Starting test server on http://{}:{}".format(host, port))
     logger.info("Library at: {}".format(l.database.dsn))
-
 
     install(LibraryPlugin(lf))
 

@@ -1,5 +1,5 @@
 '''
-Created on Apr 11, 2013
+Address parsing for US addresses
 
 @author: eric
 '''
@@ -8,6 +8,40 @@ Created on Apr 11, 2013
 import os
 import csv
 import sys
+
+import hashlib
+
+class Bunch(object):
+    '''A Simple class for constructing objects with attributes'''
+
+    def __init__(self, **kwds):
+        self.__dict__.update(kwds)
+
+
+class TopBunch(Bunch):
+    '''The top bunch'''
+
+    @property
+    def dict(self):
+        '''From the top level, return the whole structure as a dict'''
+        return {k: (v.__dict__ if isinstance(v, Bunch) else v) for k, v in self.__dict__.items()}
+
+    @property
+    def args(self):
+        '''Returns kwargs for use in the Geocoder.geocoder method.
+
+        '''
+
+        return dict(
+            number=self.number.number,
+            name=self.road.name,
+            direction=self.road.direction,
+            suffix=self.road.suffix,
+            city=self.locality.city,
+            state=self.locality.state,
+            zip=self.locality.zip
+        )
+
 
 class ParseError(Exception):
     pass
@@ -65,7 +99,7 @@ class Parser(object):
     
 
 
-    def parse(self, addrstr):
+    def parse(self, addrstr, city = None, state = None, zip = None):
      
         if not addrstr.strip():
             return False
@@ -75,46 +109,27 @@ class Parser(object):
         if len(bas) == 0:
             return False
         elif len(bas) == 1:
-            return ParserState(self, addrstr).parse()
+            ps1 =  ParserState(self, addrstr).parse()
         else:
             ps1 = ParserState(self, bas[0]).parse()
             if bas[1]:
                 ps2 = ParserState(self, bas[1]).parse()
-                ps1.cross_street = ps2
-                
-        
-            return ps1
+                ps1.number.cross_street = ps2
 
-    def rdp_parse(self, addrstr):
-        """Parse an address with the recursive descent parser implemented in pyparsing"""
+        if city:
+            ps1.locality.city = str(city).title()
 
-        if not addrstr.strip():
-            raise ParseError("Empty string")
+        if state:
+            ps1.locality.state = str(state)
 
-        p = self.rdp.parseString(addrstr, parseAll=True)
+        if zip:
+            ps1.locality.zip = zip
 
-    def geocode_validate(self, addrstr):
-        """ Validate the  address with google geocoder, then parse.
-        This is for the really difficult addresses that don't parse otherwise."""
-        from geopy.geocoders.googlev3 import GQueryError #@UnresolvedImport
-        from geopy import geocoders #@UnresolvedImport
-        gc = geocoders.GoogleV3()
+        ps1.as_text = str(ps1)
 
-        try:
-            print "Geocoding in address.Parser.parse() "
-            r = gc.geocode(addrstr,exactly_one=False)
-        except GQueryError as e: 
-            
-            raise ParseError("Geocoding failed for {} ".format(addrstr)+str(e))
-               
-        if isinstance(r, list):
-            r = r.pop(0)
-            
-        p = self.rdp.parseString(r[0], parseAll=True)     
-               
-        return p
-  
-    
+        return ps1
+
+
 class Scanner(object):
   
     END = 0
@@ -168,7 +183,7 @@ class Scanner(object):
     def s_fractionnumber(scanner, token): 
         import re
         
-        t1, t2 = re.split(r'\s*[\/]\s*',token,1)
+        t1, t2 = re.split(r'\s*[/]\s*',token,1)
         
         return (Scanner.MULTINUMBER,'{}/{}'.format(t1,t2))
 
@@ -176,7 +191,7 @@ class Scanner(object):
     def s_multinumber(scanner, token): 
         import re
         
-        t1, t2 = re.split(r'\s*[\&\/\-]\s*',token,1)
+        t1, t2 = re.split(r'\s*[&/\-]\s*',token,1)
         
         return (Scanner.MULTINUMBER,'{}-{}'.format(t1,t2))
 
@@ -311,55 +326,68 @@ class ParserState(object):
             raise ParseError(message)
         
         LAST = -2
-        
-        
-        def as_dict(self):
-            
-            return {
-                    'number': self.number,
-                    'multinumber': self.multinumber,
-                    'fraction' : self.fraction, 
-                    'suite' : self.suite, 
-                    'is_block': self.is_block,
-                    'street_name':self.street_name,
-                    'name':self.street_name,
-                    'street_direction':self.street_direction,
-                    'dir':self.street_direction,
-                    'street_type':self.street_type,
-                    'type':self.street_type,
-                    'city':self.city,
-                    'state':self.state,
-                    'zip':self.zip,
-                    'hash':self.hash
-                    }
-        
+
+
+
+        @property
+        def obj(self):
+            '''Return a representation of the parser state as nested objects. '''
+
+            return TopBunch(
+                number=Bunch(
+                    type='P',
+                    number=int(self.number) if self.number else -1,
+                    tnumber=str(self.number),
+                    end_number=self.multinumber,
+                    fraction=self.fraction,
+                    suite=self.suite,
+                    is_block=self.is_block
+                ),
+
+                road=Bunch(
+                    type='P',
+                    name=self.street_name,
+                    direction=self.street_direction if self.street_direction else '',
+                    suffix=self.street_type if self.street_type else ''
+                ),
+
+                locality=Bunch(
+                    type='P',
+                    city=self.city,
+                    state=self.state,
+                    zip=self.zip
+
+                ),
+
+                hash = self.hash,
+
+                text = str(self)
+            )
+
         @property
         def hash(self):
-            
-            if not self._hash:
-                
-                import hashlib
-                m = hashlib.md5()
-                
-                s = '|'.join([
-                        str(self.number),
-                        self.multinumber or '.',
-                        self.fraction or '.', 
-                        self.suite or '.', 
-                        str(self.is_block),
-                        self.street_name or '.',
-                        self.street_direction or '.',
-                        self.street_type or '.',
-                        self.city or '.',
-                        self.state or '.',
-                        str(self.zip)
-                        ])
-                
-                m.update(s)
 
-                self._hash = m.hexdigest()
-            return self._hash
-        
+            import hashlib
+            m = hashlib.md5()
+
+            s = '|'.join([
+                    str(self.number),
+                    self.multinumber or '.',
+                    self.fraction or '.',
+                    self.suite or '.',
+                    str(self.is_block),
+                    self.street_name or '.',
+                    self.street_direction or '.',
+                    self.street_type or '.',
+                    self.city or '.',
+                    self.state or '.',
+                    str(self.zip)
+                    ])
+
+            m.update(s)
+
+            return m.hexdigest()
+
         def next(self, location = 0):
             try:
                 self.ttype, self.toks = self.tokens.pop(location)
@@ -393,7 +421,6 @@ class ParserState(object):
                 return Scanner.END, None       
 
         def has(self, p):
-            import re
             """Return true if the remainder of the string has the given token. 
             p may be a string, rexex or integer. 
             
@@ -402,6 +429,8 @@ class ParserState(object):
                 p, integer: a token type
             
             """
+
+            import re
 
             if isinstance(p, basestring):
                 return str(p) in [ str(toks) for _, toks in self.tokens  ]
@@ -559,8 +588,6 @@ class ParserState(object):
             # Comma delimited strings at the end are usually the city
             #
 
-           
-
             if self.has(self.parser.scanner.COMMA):
                 p = self.find(self.parser.scanner.COMMA, reverse = True)
    
@@ -613,8 +640,8 @@ class ParserState(object):
                 pass
             else:
                 self.fail("Couldn't parse the street name")
-  
-            return self
+
+            return self.obj
 
         def parse_highway(self):
             import re
@@ -667,7 +694,7 @@ class ParserState(object):
                 return
             
             ttype, toks = self.peek()
-            if toks[0] in  ('n','s','e','w'):
+            if toks and toks[0] in  ('n','s','e','w'):
                 if (len(toks) == 1 or toks in ('north','south','east','west','ne','se','nw','sw')):
                     if len(toks) == 2:
                         self.street_direction = toks.upper()
@@ -710,8 +737,6 @@ class ParserState(object):
         
         def parse_simple_street(self):
 
-            
-
             o = []
             i = 0
             while True:
@@ -736,9 +761,3 @@ class ParserState(object):
             self.street_name = ' '.join(o).title()
 
             return True
-        
- 
- 
-                
-
-        

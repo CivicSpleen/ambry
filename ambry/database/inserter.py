@@ -23,6 +23,7 @@ class InserterInterface(object):
     
     def close(self): raise NotImplemented()
 
+
 class UpdaterInterface(object):
     
     def __enter__(self): raise NotImplemented()
@@ -38,6 +39,7 @@ class SegmentInserterFactory(object):
     
     def next_inserter(self, segment): 
         raise NotImplemented()
+
 
 class SegmentedInserter(InserterInterface):
 
@@ -95,26 +97,32 @@ class ValueWriter(InserterInterface):
 
         self.cache_size = cache_size
         self.statement = None
-     
-        
         
         if text_factory:
             self.db.engine.raw_connection().connection.text_factory = text_factory
 
-    def __enter__(self): 
+    def __enter__(self):
+        from ..partitions import Partitions
+        self.db.partition.set_state(Partitions.STATE.BUILDING)
         return self
         
     def rollback(self):
+        from ..partitions import Partitions
         logger.debug("rollback {}".format(repr(self.session)))
         self.session.rollback()
+        self.db.partition.set_state(Partitions.STATE.ERROR)
     
     def commit_end(self):
+        from ..partitions import Partitions
         logger.debug("commit end {}".format(repr(self.session)))
         self.session.commit()
+        self.db.partition.set_state(Partitions.STATE.BUILT)
         
     def commit_continue(self):
+        from ..partitions import Partitions
         logger.debug("commit continue {}".format(repr(self.session)))
         self.session.commit()
+        self.db.partition.set_state(Partitions.STATE.BUILDING)
  
     def close(self):
 
@@ -137,8 +145,11 @@ class ValueWriter(InserterInterface):
     def __exit__(self, type_, value, traceback):
     
         if type_ is not None:
-            try: self.bundle.error("Got Exception: "+str(value))
-            except:  print "ERROR: Got Exception {}: {}".format(type_, str(value))
+            try:
+                self.bundle.error("Got exception while exiting inserter context: "+str(value))
+            except:
+                print "ERROR: Got Exception {}: {}".format(type_, str(value))
+                self.rollback()
             return False
 
         self.close()
@@ -149,7 +160,7 @@ class ValueWriter(InserterInterface):
  
 class CodeCastErrorHandler(object):
     '''Used by the Value Inserter to handle errors in casting
-    data types. This versino will create code table entries
+    data types. This version will create code table entries
     for any values that can't be cast.  '''
     
     def __init__(self, inserter):
@@ -174,7 +185,8 @@ class CodeCastErrorHandler(object):
             with p.inserter() as ins:
                 for code in codes:
                     ins.insert({'code':code})
-            
+
+
 class ValueInserter(ValueWriter):
     '''Inserts arrays of values into  database table'''
     def __init__(self, db,  bundle, table, 
@@ -194,14 +206,15 @@ class ValueInserter(ValueWriter):
         # RelationalDatabase.table() 
         if hasattr(self.table,'_db_orm_table'):
             self.orm_table = self.table._db_orm_table
+            self.caster = self.orm_table.caster
         else:
             self.orm_table = self.bundle.schema.table(table.name)
+            self.caster = self.bundle.schema.caster(table.name)
+
 
         self.null_row = self.orm_table.null_dict
 
         self.cast_error_handler = cast_error_handler(self) if cast_error_handler else None
-
-        self.caster = self.orm_table.caster
 
         self.header = [c.name for c in self.orm_table.columns]
 
@@ -229,6 +242,7 @@ class ValueInserter(ValueWriter):
         code_dict = None
 
         try:
+            cast_errors =  None
 
             if isinstance(values, dict):
 
@@ -267,8 +281,8 @@ class ValueInserter(ValueWriter):
             if len(self.cache) >= self.cache_size: 
                 self.session.execute(self.statement, self.cache)
                 self.cache = []
-
                 self.commit_continue()
+
 
             if cast_errors and self.cast_error_handler:
                 self.cast_error_handler.cast_error(values,cast_errors )
@@ -285,7 +299,8 @@ class ValueInserter(ValueWriter):
             raise
         except Exception as e:
             if self.bundle:
-                self.bundle.error("Exception during ValueInserter.insert: {} for session {}".format(e, repr(self.session)))
+                self.bundle.error("Insert exception: {}".format(e))
+                raise
             else:
                 print "ERROR: Exception during ValueInserter.insert: {}".format(e)
             self.rollback()
@@ -314,7 +329,7 @@ class ValueUpdater(ValueWriter, UpdaterInterface):
     def __init__(self,  db, bundle, table,  cache_size=50000, text_factory = None): 
         
         from sqlalchemy.sql.expression import bindparam, and_
-        super(ValueUpdater, self).__init__(bundle, db, cache_size=50000, text_factory = text_factory)  
+        super(ValueUpdater, self).__init__(db, bundle,  cache_size=50000, text_factory = text_factory)
     
         self.table = table
         self.statement = self.table.update()
@@ -371,4 +386,3 @@ class ValueUpdater(ValueWriter, UpdaterInterface):
             raise e
 
         return True    
-

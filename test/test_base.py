@@ -8,7 +8,7 @@ from  testbundle.bundle import Bundle
 from ambry.identity import * #@UnusedWildImport
 import time, logging
 import ambry.util
-from ambry.run import  RunConfig
+
 
 logger = ambry.util.get_logger(__name__)
 logger.setLevel(logging.DEBUG) 
@@ -114,7 +114,8 @@ class TestBase(unittest.TestCase):
         from functools import  partial
         from ambry.client.rest import RemoteLibrary
 
-        config = self.server_library_config(name)
+        if not config:
+            config = self.server_library_config(name)
 
         self.server_url = "http://localhost:{}".format(config['port'])
         

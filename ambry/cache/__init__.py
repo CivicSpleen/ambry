@@ -5,7 +5,7 @@ from ambry.dbexceptions import ConfigurationError
 
 def new_cache(config):
         """Return a new :class:`FsCache` built on the configured cache directory
-        """   
+        """
 
         if 'size' in config:
             from filesystem import FsLimitedCache
@@ -32,9 +32,12 @@ def new_cache(config):
             raise ConfigurationError("Can't determine cache type: {} ".format(config))
 
         if 'options' in config and 'compress' in config['options'] :
-            config['options'] = [ i for i in config['options'] if i !=  'compress']
+            # Need to clone the config because we don't want to propagate the changes
+            cc = config.to_dict()
+
+            cc['options'] = [ i for i in config['options'] if i !=  'compress']
             from filesystem import FsCompressionCache
-            return FsCompressionCache(upstream=config)
+            return FsCompressionCache(upstream=cc)
         else:
             return  fsclass(**dict(config))
             
@@ -45,7 +48,7 @@ class CacheInterface(object):
     config = None
     upstream = None
 
-    def path(self, rel_path, **kwargs): raise NotImplementedError()
+    def path(self, rel_path, propatate = True, **kwargs): raise NotImplementedError()
 
     def get(self, rel_path, cb=None): raise NotImplementedError()
     

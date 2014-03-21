@@ -236,6 +236,37 @@ class CensusTransform(BasicTransform):
 # Functions for CasterTransformBUilder
 # 
 
+class Int(int):
+    '''An Integer
+    '''
+
+    def __init__(self, v):
+        int.__init__(self, v)
+        if self < 0:
+            raise ValueError("Must be a non negative integer")
+
+
+class NonNegativeInt(int):
+    '''An Integer that is >=0
+    '''
+
+    def __init__(self, v):
+        int.__init__(self, v)
+        if self < 0:
+            raise ValueError("Must be a non negative integer")
+
+
+class NaturalInt(int):
+    ''' An Integer that is > 0
+
+    '''
+
+    def __init__(self, v):
+        int.__init__(self, v)
+        if self <= 0:
+            raise ValueError("Must be a greater than zero")
+
+
 def is_nothing(v):
     
     if isinstance(v, basestring):
@@ -246,7 +277,8 @@ def is_nothing(v):
     else:
         return False
 
-def parse_int(name, v):
+def parse_int(name, v, type_=int):
+    '''Parse as an integer, or a subclass of Int'''
     try:
         if is_nothing(v):
             return None
@@ -254,7 +286,7 @@ def parse_int(name, v):
             return int(round(float(v),0))
     except ValueError:
         raise CastingError(name, v, 
-            "Can't cast '{}' to Integer in field '{}' ".format(v, name))
+            "Can't cast '{}' to {} in field '{}' ".format(v, type_,name))
 
 def parse_type(type_,name, v):
 
@@ -262,9 +294,13 @@ def parse_type(type_,name, v):
         if is_nothing(v):
             return None
         else:
+
             return type_(v)   
     except TypeError:
         raise CastingError(name, v, 
+            "Can't cast '{}' to {} in field '{}' ".format(v, type_, name))
+    except ValueError:
+        raise CastingError(name, v,
             "Can't cast '{}' to {} in field '{}' ".format(v, type_, name))
 
 def parse_date(name, v):
@@ -314,18 +350,23 @@ def parse_datetime(name, v):
     elif isinstance(v, datetime.datetime):
         return v
     else:
-        raise CastingError(name, v, "Expected datetime.datetime or basestring, got {{}}".format(type(v)))        
-        
+        raise CastingError(name, v, "Expected datetime.datetime or basestring, got {{}}".format(type(v)))
 
 class CasterTransformBuilder(object):
     
-    def __init__(self):
+    def __init__(self, env = None):
         self.types = []
         self._compiled = None
-    
+        self.custom_types = {}
+
+        self.dict_code = None
+
     def append(self, name, type_):
         self.types.append((name,type_))
-        
+
+    def add_type(self, t):
+        self.custom_types[t.__name__] = t
+
     def makeListTransform(self):
         import uuid
         import datetime
@@ -376,8 +417,7 @@ def {}(row):
          
         f_name = "dict_transform_"+str(uuid.uuid4()).replace('-','')
         f_name_inner = "dict_transform_"+str(uuid.uuid4()).replace('-','')
-        
-        
+
         c = []
         
         o = """def {}(row):
@@ -394,7 +434,7 @@ def {}(row):
                 
             if type_ == str:
                 type_ = unicode
-                
+
             if type_ == datetime.date:
                 o += "'{name}':parse_date('{name}', row.get('{name}'))".format(name=name)
                 c.append("'{name}':lambda v: parse_date('{name}', v)".format(name=name))
@@ -413,9 +453,9 @@ def {}(row):
           
         o+= """}"""
         
-        c = "caster_funcs={"+','.join(c) + "}"
+        cf = "caster_funcs={"+','.join(c) + "}"
         
-        return f_name, o, c
+        return f_name, o, cf
           
     def compile(self):
         import uuid
@@ -425,11 +465,14 @@ def {}(row):
             #lfn, lf = self.makeListTransform()
             #exec(lf)
             #lf = locals()[lfn]
+
             lf = None
-            
+
+            # Get the code in string form.
             dfn, df, cf = self.makeDictTransform()
-            
+
             exec(df)
+
             df = locals()[dfn]
             
             exec(cf)
@@ -444,12 +487,16 @@ def {}(row):
         If there are casting errors, through an exception, unless
         codify_cast_errors, in which case move the value with the casting
         error to a field that is suffixed with '_code' '''
+
+        for k,v in self.custom_types.items():
+            globals()[k] = v
+
         if codify_cast_errors:
         
             d = {k.lower():v for k,v in row.items()}
-        
+
             try:
-                return  f[1](d),{}
+                return   f[1](d),{}
             except CastingError:
                 do = {}
                 cast_errors = {}

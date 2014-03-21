@@ -10,13 +10,13 @@ import unicodecsv
 from . import DatabaseInterface
 import anydbm
 import os
-
+from ..partitions import Partitions
 
 from .inserter import InserterInterface
 
 class ValueInserter(InserterInterface):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, path, bundle,  table=None, header=None, delimiter = '|',
+    def __init__(self, path, bundle,  partition, table=None, header=None, delimiter = '|',
                  escapechar='\\', encoding='utf-8', 
                  write_header = False,  buffer_size=2*1024*1024): 
      
@@ -28,6 +28,8 @@ class ValueInserter(InserterInterface):
         self.escapechar = escapechar
         self.encoding = encoding
         self.write_header = write_header
+        self.bundle = bundle
+        self.partition = partition
 
         if self.header:
             pass
@@ -114,8 +116,7 @@ class ValueInserter(InserterInterface):
         else:
             raise Exception("Unexpected case for type {}".format(type(row)))
 
-    
-     
+
     def _write_list(self, row):
         self._writer.writerow(row)
      
@@ -149,10 +150,20 @@ class ValueInserter(InserterInterface):
 
         return self._writer
             
-    def __enter__(self): 
+    def __enter__(self):
+
+        self.partition.set_state(Partitions.STATE.BUILDING)
         return self
     
-    def __exit__(self, type_, value, traceback):     
+    def __exit__(self, type_, value, traceback):
+
+        if type_ is not None:
+            self.bundle.error("Got Exception: " + str(value))
+            self.partition.set_state(Partitions.STATE.ERROR)
+            return False
+
+        self.partition.set_state(Partitions.STATE.BUILT)
+
         self.close()
 
 from . import DatabaseInterface
@@ -209,9 +220,8 @@ class CsvDb(DatabaseInterface):
         
         if not skip_header and header is None and self.partition.table is not None:
             header = [c.name for c in self.partition.table.columns]
-        
 
-        return ValueInserter(self.path, self.bundle,  header=header, **kwargs)
+        return ValueInserter(self.path,  self.bundle, self.partition,  header=header, **kwargs)
         
     def reader(self,  encoding='utf-8', *args, **kwargs):
 

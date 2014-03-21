@@ -12,7 +12,8 @@ import ambry
 import ambry.util
 from ambry.util import temp_file_name
 from ambry.bundle import DbBundle
-from ..identity import LocationRef
+from ..identity import LocationRef, Identity
+from ambry.orm import Column, Partition, Table, Dataset, Config, File
 
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
@@ -31,6 +32,7 @@ class LibraryDb(object):
             'postgis':Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}',sql='support/configuration-pg.sql'),
             'postgres':Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}',sql='support/configuration-pg.sql'), # Stored in the ambry module.
             'sqlite':Dbci(dsn_template='sqlite:///{name}',sql='support/configuration-sqlite.sql'),
+            'spatialite': Dbci(dsn_template='sqlite:///{name}', sql='support/configuration-sqlite.sql'),
             'mysql':Dbci(dsn_template='mysql://{user}:{password}@{server}{colon_port}/{name}',sql='support/configuration-sqlite.sql')
             }
 
@@ -48,7 +50,8 @@ class LibraryDb(object):
             self.colon_port = ''
 
         self.dsn_template = self.DBCI[self.driver].dsn_template
-        self.dsn = None
+        self.dsn = self.dsn_template.format(user=self.username, password=self.password,
+                                            server=self.server, name=self.dbname, colon_port=self.colon_port)
 
         self.Session = None
         self._session = None
@@ -82,9 +85,6 @@ class LibraryDb(object):
 
         if not self._engine:
 
-            self.dsn = self.dsn_template.format(user=self.username, password=self.password,
-                            server=self.server, name=self.dbname, colon_port=self.colon_port)
-
             #print "Create Engine",os.getpid(), self.dsn
 
             # There appears to be a problem related to connection pooling on Linux + Postgres, where
@@ -92,14 +92,14 @@ class LibraryDb(object):
             # found. It looks like connections are losing the setting for the search path to the
             # library schema.
             # Disabling connection pooling solves the problem.
-            self._engine = create_engine(self.dsn,echo=False, poolclass=NullPool)
+            self._engine = create_engine(self.dsn,echo=False,   poolclass=NullPool)
 
             from sqlalchemy import event
 
             if self.driver == 'sqlite':
                 event.listen(self._engine, 'connect', _pragma_on_connect)
                 #event.listen(self._engine, 'connect', _on_connect_update_schema)
-                _on_connect_update_sqlite_schema(self.connection)
+                _on_connect_update_sqlite_schema(self.connection, None)
 
         return self._engine
 
@@ -108,6 +108,9 @@ class LibraryDb(object):
         '''Return an SqlAlchemy connection'''
         if not self._connection:
             self._connection = self.engine.connect()
+
+            if self.driver in ['postgres', 'postgis']:
+                self._connection.execute("SET search_path TO library")
 
         return self._connection
 
@@ -129,8 +132,9 @@ class LibraryDb(object):
         if not self._session:
             self._session = self.Session()
             # set the search path
-            if self.driver in ('postgres','postgis') and self._schema:
-                self._session.execute("SET search_path TO {}".format(self._schema))
+
+        if self.driver in ('postgres','postgis') and self._schema:
+            self._session.execute("SET search_path TO {}".format(self._schema))
 
         return self._session
 
@@ -140,6 +144,7 @@ class LibraryDb(object):
         '''Return an SqlAlchemy MetaData object, bound to the engine'''
 
         from sqlalchemy import MetaData
+
         metadata = MetaData(bind=self.engine, schema = self._schema)
 
         metadata.reflect(self.engine)
@@ -159,7 +164,6 @@ class LibraryDb(object):
 
 
     def exists(self):
-        from ambry.orm import Dataset
         from sqlalchemy.exc import  ProgrammingError, OperationalError
 
         if self.driver == 'sqlite' and not os.path.exists(self.dbname):
@@ -195,7 +199,7 @@ class LibraryDb(object):
 
     def clean(self, add_config_root=True):
         s = self.session
-        from ambry.orm import Column, Partition, Table, Dataset, Config, File
+
 
         s.query(Config).delete()
         s.query(File).delete()
@@ -226,8 +230,12 @@ class LibraryDb(object):
         if not self.enable_delete:
             raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
 
+        tables = [Config.__tablename__, Column.__tablename__, Partition.__tablename__,
+                  Table.__tablename__, File.__tablename__,  Dataset.__tablename__]
+
         for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
-            table.drop(self.engine, checkfirst=True)
+            if table.name in  tables:
+                table.drop(self.engine, checkfirst=True)
 
     def drop(self):
         s = self.session
@@ -242,7 +250,6 @@ class LibraryDb(object):
         return self.__class__(self.driver, self.server, self.dbname, self.username, self.password)
 
     def create_tables(self):
-        from ambry.orm import  Dataset, Partition, Table, Column, File, Config
 
         if self.driver == 'sqlite':
 
@@ -274,16 +281,15 @@ class LibraryDb(object):
             it.create(bind=self.engine)
             self.commit()
 
-
         # We have to put the schemas back because when installing to a warehouse.
         # the same library classes can be used to access a Sqlite database, which
         # does not handle schemas.
         if self._schema:
+
             for it, orig_schema in orig_schemas.items():
                 it.schema = orig_schema
 
     def _add_config_root(self):
-        from ambry.orm import Dataset
         from sqlalchemy.orm.exc import NoResultFound
 
         try:
@@ -307,7 +313,6 @@ class LibraryDb(object):
 
     def _clean_config_root(self):
         '''Hack need to clean up some installed databases'''
-        from ambry.orm import Dataset
 
         ds = self.session.query(Dataset).filter(Dataset.id_==ROOT_CONFIG_NAME).one()
 
@@ -419,7 +424,6 @@ class LibraryDb(object):
         return d
 
     def _mark_update(self):
-        from ambry.orm import Config
 
         import datetime
 
@@ -428,6 +432,31 @@ class LibraryDb(object):
     ##
     ## Install and remove bundles and partitions
     ##
+
+    def install_dataset_identity(self, identity, location=Dataset.LOCATION.LIBRARY, data = {}):
+        '''Create the record for the dataset. Does not add an File objects'''
+        from sqlalchemy.exc import IntegrityError
+        from ..dbexceptions import ConflictError
+
+        ds = Dataset(**identity.dict)
+        ds.name = identity.sname
+        ds.vname = identity.vname
+        ds.fqname = identity.fqname
+        ds.cache_key = identity.cache_key
+        ds.creator = 'N/A'
+        ds.location = location
+        ds.data = data
+        try:
+            try:
+                self.session.add(ds)
+                self.commit()
+            except:
+                self.session.rollback()
+                self.session.merge(ds)
+                self.commit()
+        except IntegrityError:
+            raise ConflictError("Can't install dataset; one already exists")
+
 
     def install_bundle_file(self, identity, bundle_file):
         """Install a bundle in the database, starting from a file that may
@@ -444,6 +473,7 @@ class LibraryDb(object):
         if identity.is_bundle:
 
             bundle = DbBundle(bundle_file)
+
             self.install_bundle(bundle)
 
     def install_dataset(self, bundle):
@@ -455,16 +485,21 @@ class LibraryDb(object):
         already exist if before installing again.
         """
 
-        from ambry.orm import Dataset, Config, Column, Table, Partition
-        from ambry.bundle import Bundle
 
         # There should be only one dataset record in the
         # bundle
         db = bundle.database
+        db.update_schema()
+
         bdbs = db.unmanaged_session
 
         s = self.session
+        s.autoflush = False
+
         dataset = bdbs.query(Dataset).one()
+
+        dataset.location = Dataset.LOCATION.LIBRARY
+
         s.merge(dataset)
 
         for config in bdbs.query(Config).all():
@@ -480,33 +515,18 @@ class LibraryDb(object):
         try:
             self.commit()
         except IntegrityError as e:
-            self.logger.error("Failed to merge")
+            self.logger.error("Failed to merge in {}".format(self.dsn))
             self.rollback()
             raise e
 
         return dataset
 
-    def install_dataset_identity(self, identity):
-
-        from ambry.orm import Dataset
-
-        ds = Dataset(**identity.dict)
-        ds.name = identity.sname
-        ds.vname = identity.vname
-        ds.fqname = identity.fqname
-        ds.cache_key = identity.cache_key
-        ds.creator = 'N/A'
-
-        self.session.add(ds)
-
-        self.commit()
 
 
     def install_bundle(self, bundle):
         '''Copy the schema and partitions lists into the library database
 
         '''
-        from ambry.orm import Dataset, Config, Column, Table, Partition
         from ambry.bundle import Bundle
 
         if not isinstance(bundle, Bundle):
@@ -517,8 +537,13 @@ class LibraryDb(object):
 
         self._mark_update()
 
-
-        dataset = self.install_dataset(bundle)
+        try:
+            dataset = self.install_dataset(bundle)
+        except Exception as e:
+            from ..dbexceptions import DatabaseError
+            raise DatabaseError("Failed to install {} into {}: {}".format(
+                bundle.database.path, self.dsn, e.message
+            ))
 
         s = self.session
 
@@ -544,10 +569,20 @@ class LibraryDb(object):
         """Install a single partition and its tables. This is mostly
         used for installing into warehouses, where it isn't desirable to install
         the whole bundle"""
-        from ambry.orm import Table
+
+        from ..dbexceptions import NotFoundError
+        from ..identity import PartitionNameQuery
         from sqlalchemy.orm.exc import NoResultFound
 
-        partition = bundle.partitions.find(p_id)
+        try:
+            b = self.get(bundle.identity.vid)
+        except NotFoundError:
+            b = None
+
+        if not b:
+            self.install_bundle(bundle)
+
+        partition = bundle.partitions.get(p_id)
 
         s = self.session
 
@@ -572,9 +607,8 @@ class LibraryDb(object):
             self.rollback()
             raise e
 
-    def install_table(self, table_or_vid, name=None):
+    def mark_table_installed(self, table_or_vid, name=None):
         """Mark a table record as installed"""
-        from ambry.orm import Table
 
         s = self.session
         table = None
@@ -582,15 +616,46 @@ class LibraryDb(object):
         table = s.query(Table).filter(Table.vid == table_or_vid).one()
 
         if not table:
-            table = s.query(Table).filter(Table.vid == table.vid).one()
+            table = s.query(Table).filter(Table.name == table.vid).one()
 
         if not name:
             name = table.name
 
         table.installed = name
 
+        s.merge(table)
+        s.commit()
+
+    def mark_table_installed(self, table_or_vid, name=None):
+        """Mark a table record as installed"""
+
+        s = self.session
+        table = None
+
+        table = s.query(Table).filter(Table.vid == table_or_vid).one()
+
+        if not table:
+            table = s.query(Table).filter(Table.name == table.vid).one()
+
+        if not name:
+            name = table.name
+
+        table.installed = name
 
         s.merge(table)
+        s.commit()
+
+    def mark_partition_installed(self, p_vid):
+        """Mark a table record as installed"""
+
+        s = self.session
+        table = None
+
+        p = s.query(Partition).filter(Partition.vid == p_vid).one()
+
+        p.installed = 'y'
+
+        s.merge(p)
         s.commit()
 
     def remove_bundle(self, bundle):
@@ -613,7 +678,9 @@ class LibraryDb(object):
             for p in b.partitions:
                 self.remove_partition(p)
 
-        dataset = self.session.query(Dataset).filter(Dataset.vid==dataset.identity.vid).one()
+        dataset = (self.session.query(Dataset)
+                   .filter(Dataset.location == Dataset.LOCATION.LIBRARY)
+                   .filter(Dataset.vid==dataset.identity.vid).one())
 
         # Can't use delete() on the query -- bulk delete queries do not
         # trigger in-python cascades!
@@ -621,21 +688,31 @@ class LibraryDb(object):
 
         self.commit()
 
+    def remove_dataset(self, vid):
+        '''Remove all references to a Dataset'''
+        from ..orm import Dataset
+
+        self.session.query(Dataset).filter(Dataset.vid ==  vid).delete()
+        self.commit()
+
+
     def remove_partition(self, partition):
         from ..bundle import LibraryDbBundle
         from ..orm import Partition
 
         try:
             dataset = self.get(partition.identity.vid) #@UnusedVariable
+            p_vid = partition.identity.vid
         except AttributeError:
             # It is actually an identity, we hope
-            dataset = partition.as_dataset
+            dataset = partition.as_dataset()
+            p_vid = partition.vid
 
         b = LibraryDbBundle(self, dataset.vid)
 
         s = self.session
 
-        s.query(Partition).filter(Partition.t_vid  == dataset.partition.vid).delete()
+        s.query(Partition).filter(Partition.t_vid  == p_vid).delete()
 
         self.commit()
 
@@ -647,33 +724,40 @@ class LibraryDb(object):
         '''Get an identity by a vid. For partitions, returns a nested Identity'''
         from ..identity import ObjectNumber, DatasetNumber, PartitionNumber
         from ..orm import Dataset, Partition
+        from sqlalchemy.orm.exc import NoResultFound
+        from ..dbexceptions import NotFoundError
 
-        if isinstance(vid, basestring):
-            vid = ObjectNumber.parse(vid)
+        try:
+            if isinstance(vid, basestring):
+                vid = ObjectNumber.parse(vid)
 
-        if isinstance(vid, DatasetNumber):
-            d = self.session.query(Dataset).filter(Dataset.vid == str(vid)).one()
-            did = d.identity
+            if isinstance(vid, DatasetNumber):
+                d = (self.session.query(Dataset)
+                     .filter(Dataset.location == Dataset.LOCATION.LIBRARY )
+                     .filter(Dataset.vid == str(vid)).one())
+                did = d.identity
 
-        elif isinstance(vid, PartitionNumber):
-            d,p = self.session.query(Dataset, Partition).join(Partition).filter(Partition.vid == str(vid)).one()
-            did = d.identity
-            did.add_partition(p.identity)
+            elif isinstance(vid, PartitionNumber):
+                d,p = (self.session.query(Dataset, Partition).join(Partition)
+                       .filter(Dataset.location == Dataset.LOCATION.LIBRARY)
+                       .filter(Partition.vid == str(vid)).one())
+                did = d.identity
+                did.add_partition(p.identity)
 
-        else:
-            raise ValueError('vid was wrong type: {}'.format(type(vid)))
+            else:
+                raise ValueError('vid was wrong type: {}'.format(type(vid)))
 
-        return did
+            return did
+        except NoResultFound:
+            raise NotFoundError("No object found for vid {}".format(vid))
 
     def get_table(self, table_vid):
-
-        from ambry.orm import Table
 
         s = self.session
 
         return  s.query(Table).filter(Table.vid == table_vid).one()
 
-    def list(self, datasets=None, location = LocationRef.LOCATION.LIBRARY, key='vid'):
+    def list(self, datasets=None, locations = None, key='vid'):
         """
         :param datasets: If specified, must be a dict, which the internal dataset data will be
         put into.
@@ -681,11 +765,27 @@ class LibraryDb(object):
         """
 
         from ..orm import Dataset, Partition
+        from .files import Files
 
         if datasets is None:
             datasets = {}
 
-        for d,p in self.session.query(Dataset, Partition).join(Partition).filter(Dataset.vid != ROOT_CONFIG_NAME_V).all():
+        q1 = (self.session.query(Dataset, Partition).join(Partition)
+                       .filter(Dataset.vid != ROOT_CONFIG_NAME_V))
+
+        q2 = (self.session.query(Dataset)
+              .filter(Dataset.vid != ROOT_CONFIG_NAME_V))
+
+        if locations:
+
+            if not isinstance(locations,(list, tuple)):
+                locations=[locations]
+
+            for location in locations:
+                q1 = q1.filter(Dataset.location == location)
+                q2 = q2.filter(Dataset.location == location)
+
+        for d,p in (q1.all() + [ (d,None) for d in q2.all()]):
 
             ck = getattr(d.identity, key)
 
@@ -695,26 +795,35 @@ class LibraryDb(object):
             else:
                 dsid = datasets[ck]
 
-            dsid.locations.set(LocationRef.LOCATION.LIBRARY)
+            # The dataset locations are linked to the identity locations
+            dsid.locations.set(d.location)
 
-            if not (dsid.partitions and p.vid in dsid.partitions):
-                datasets[ck].add_partition(p.identity)
-                p = dsid.partitions[p.vid]
+            if p and ( not datasets[ck].partitions or p.vid not in datasets[ck].partitions):
+                pident = p.identity
+                pident.locations.set(d.location)
+                datasets[ck].add_partition(pident)
+
+            if d.location == Files.TYPE.SOURCE:
+                files = Files(self)
+                f = files.query.type(Files.TYPE.SOURCE).ref(dsid.vid).one_maybe
+
+                if f:
+                    dsid.bundle_state = f.state
 
 
-            p.locations.set(LocationRef.LOCATION.LIBRARY)
 
         return datasets
 
     def datasets(self, key='vid'):
         '''List only the dataset records'''
 
-
         from ..orm import Dataset
 
         datasets = {}
 
-        for d in self.session.query(Dataset).filter(Dataset.vid != ROOT_CONFIG_NAME_V).all():
+        for d in (self.session.query(Dataset)
+                  .filter(Dataset.location == Dataset.LOCATION.LIBRARY)
+                  .filter(Dataset.vid != ROOT_CONFIG_NAME_V).all()):
 
             ck = getattr(d.identity, key)
             datasets[ck] = d.identity
@@ -739,10 +848,6 @@ class LibraryDb(object):
 
         '''
 
-        from ambry.orm import Dataset
-        from ambry.orm import Partition
-        from ambry.identity import Identity
-        from ambry.orm import Table, Column
 
         def like_or_eq(c,v):
 
@@ -869,6 +974,7 @@ class LibraryDb(object):
         # If it is a string, it is a name or a dataset id
         if isinstance(identity, str) or isinstance(identity, unicode) :
             query = (s.query(Dataset)
+                     .filter(Dataset.location == Dataset.LOCATION.LIBRARY)
                      .filter( (Dataset.id_==identity) | (Dataset.name==identity)) )
         elif isinstance(identity, PartitionIdentity):
 
@@ -885,7 +991,7 @@ class LibraryDb(object):
             query = query.filter_by(**d)
 
         elif isinstance(identity, Identity):
-            query = s.query(Dataset)
+            query = s.query(Dataset).filter(Dataset.location == Dataset.LOCATION.LIBRARY)
 
             for k,v in identity.to_dict().items():
                 d = {}
@@ -895,7 +1001,7 @@ class LibraryDb(object):
 
 
         elif isinstance(identity, dict):
-            query = s.query(Dataset)
+            query = s.query(Dataset).filter(Dataset.location == Dataset.LOCATION.LIBRARY)
 
             for k,v in identity.items():
                 d = {}
@@ -909,166 +1015,8 @@ class LibraryDb(object):
 
         return query
 
-    ##
-    ## Ticket records
-    ##
-
-    def add_ticket(self, identity, ticket):
-        from ambry.orm import  File
-        import time
-        path = identity.cache_key
-        group = ticket
-        ref = identity.id_
-        state = 'ticketed'
-
-        s = self.session
-
-        s.query(File).filter(File.path == path and File.state == state).delete()
-
-        file_ = File(path=path,
-                     group=group,
-                     ref=ref,
-                     modified=int(time.time()),
-                     state = state,
-                     size=0)
-
-        s.add(file_)
-        self.commit()
-
-    def get_ticket(self, ticket):
-        from ambry.orm import  File
-        s = self.session
-
-        return s.query(File).filter(File.group == ticket).one()
 
 
-    ##
-    ## File records
-    ##
-
-    def add_remote_file(self, identity):
-        self.add_file(identity.cache_key, 'remote', identity.vid, state='remote')
-
-
-    def add_file(self,
-                 path, group, ref,
-                 state='new',
-                 type_='bundle',
-                 data=None,
-                 source_url=None,
-                 hash=None
-                ):
-        from ambry.orm import  File
-
-        if os.path.exists(path):
-            stat = os.stat(path)
-            modified = int(stat.st_mtime)
-            size = stat.st_size
-        else:
-            modified = None
-            size = None
-
-        s = self.session
-
-        try: s.query(File).filter(File.path == path).delete()
-        except ProgrammingError:
-            pass
-        except OperationalError:
-            pass
-
-        file_ = File(path=path,
-                     group=group,
-                     ref=ref,
-                     modified=modified,
-                     state = state,
-                     size=size,
-                     type_=type_,
-                     data=data,
-                     source_url=source_url,
-                     hash = hash
-                     )
-
-        # Sqlalchemy doesn't automatically rollback on exceptions, and you
-        # can't re-try the commit until you roll back.
-        try:
-            s.add(file_)
-            self.commit()
-        except:
-            self.rollback()
-            raise
-
-        self._mark_update()
-
-
-    def get_file_by_state(self, state, type_=None):
-        """Return all files in the database with the given state"""
-        from ambry.orm import  File
-        s = self.session
-
-        # The orderby clause should put bundles before partitions, which is
-        # required to install correctly.
-
-        if state == 'all':
-            q =  s.query(File).order_by(File.ref)
-        else:
-            q =  s.query(File).filter(File.state == state).order_by(File.ref)
-
-        if type_:
-            q = q.filter(File.type_ == type_)
-
-        return q.all()
-
-
-    def get_file_by_ref(self, ref, type_=None):
-        """Return all files in the database with the given state"""
-        from ambry.orm import  File
-        from sqlalchemy.orm.exc import NoResultFound
-        s = self.session
-
-        try:
-            q = s.query(File).filter(File.ref == ref)
-
-            if type_ is not None:
-                q = q.filter(File.type_ == type_)
-
-            return q.all()
-
-        except NoResultFound:
-            return None
-
-
-    def get_file_by_type(self, type_=None):
-        """Return all files in the database with the given state"""
-        from ambry.orm import  File
-        from sqlalchemy.orm.exc import NoResultFound
-        s = self.session
-
-        try:
-            return s.query(File).filter(File.type_ == type_).all()
-
-        except NoResultFound:
-            return None
-
-
-    def get_file_by_path(self, path):
-        """Return all files in the database with the given state"""
-        from ambry.orm import File
-        from sqlalchemy.orm.exc import NoResultFound
-
-        s = self.session
-
-        try:
-            return s.query(File).filter(File.path == path).one()
-
-        except NoResultFound:
-            return None
-
-    def remove_file(self,path):
-        pass
-
-
-    def get_file(self,path):
-        pass
 
     ##
     ## Database backup and restore. Synchronizes the database with
@@ -1077,7 +1025,6 @@ class LibraryDb(object):
     ##
 
     def _copy_db(self, src, dst):
-        from ambry.orm import Dataset
         from sqlalchemy.orm.exc import NoResultFound
 
         try:

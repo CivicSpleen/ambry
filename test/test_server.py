@@ -29,9 +29,10 @@ class Test(TestBase):
         self.bundle_dir =  os.path.join(os.path.dirname(os.path.abspath(__file__)),'testbundle')    
         self.rc = RunConfig([os.path.join(self.bundle_dir,'client-test-config.yaml'),
                              os.path.join(self.bundle_dir,'bundle.yaml'),
-                             RunConfig.USER_CONFIG])
+                             RunConfig.USER_ACCOUNTS])
          
-        self.server_rc = RunConfig([os.path.join(self.bundle_dir,'server-test-config.yaml'),RunConfig.USER_CONFIG])
+        self.server_rc = RunConfig([os.path.join(self.bundle_dir,'server-test-config.yaml'),
+                                    RunConfig.USER_ACCOUNTS])
        
         self.bundle = Bundle()  
         self.bundle_dir = self.bundle.bundle_dir
@@ -163,12 +164,11 @@ class Test(TestBase):
         from ambry.util import md5_for_file
         from ambry.identity import Identity
 
-        self.start_server()
+        config = self.start_server()
+        l = new_library(config)
 
         rl = RemoteLibrary(self.server_url)
 
-        l = self.get_library()
-        print l.info
 
         #
         # Check that the library can list datasets that are inserted externally
@@ -176,7 +176,7 @@ class Test(TestBase):
 
         r = l.put(self.bundle)
 
-        s = set([i.fqname for i in rl.list()])
+        s = set([i.fqname for i in rl.list().values()])
 
         self.assertIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001', s)
 
@@ -194,7 +194,7 @@ class Test(TestBase):
         # Upload the dataset to S3, clear the library, then load it back in
         #
 
-        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_ACCOUNTS))
         cache = new_cache(rc.filesystem('cached-compressed-s3'))
 
         fn = self.bundle.database.path
@@ -202,6 +202,7 @@ class Test(TestBase):
         relpath = identity.cache_key
 
         r = cache.put(fn, relpath, identity.to_meta(file=fn))
+
 
         self.assertTrue(bool(cache.has(relpath)))
 
@@ -218,18 +219,18 @@ class Test(TestBase):
         l.load(identity.cache_key, identity.md5)
 
         self.assertIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
-                      set([i.fqname for i in rl.list()]))
+                      set([i.fqname for i in rl.list().values()]))
 
         # Do it one more time, using the remote library
 
         l.purge()
         self.assertNotIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
-                         set([i.fqname for i in rl.list()]))
+                         set([i.fqname for i in rl.list().values()]))
 
         rl.load_dataset(identity)
 
         self.assertIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
-                      set([i.fqname for i in rl.list()]))
+                      set([i.fqname for i in rl.list().values()]))
 
         # Check that we can get the record from the library
 
@@ -248,7 +249,9 @@ class Test(TestBase):
         # Create the library so we can get the same remote config
         l = new_library(config)
         s3 = l.upstream.last_upstream()
+
         print l.info
+
         db = l.database
         db.enable_delete = True
         try:
@@ -265,7 +268,6 @@ class Test(TestBase):
         def push_cb(expect, action, metadata, time):
             import json
 
-
             self.assertIn(action, expect)
 
             identity = Identity.from_dict(json.loads(metadata['identity']))
@@ -276,7 +278,7 @@ class Test(TestBase):
 
         l.push(cb=partial(push_cb, ('Pushed', 'Pushing')))
 
-        # ALl should be pushed, so suhould not run
+        # ALl should be pushed, so should not run
         l.push(cb=throw_cb)
 
         # Resetting library, but not s3, should already have all
@@ -293,6 +295,9 @@ class Test(TestBase):
 
         for p in self.bundle.partitions:
             self.web_exists(s3, p.identity.cache_key)
+
+        l.sync_upstream()
+
 
 
     def test_caches(self):
@@ -320,7 +325,8 @@ class Test(TestBase):
 
         print "MD5 {}  = {}".format(fn, md5)
 
-        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
+        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),
+                            RunConfig.USER_ACCOUNTS))
 
         for i, fsname in enumerate(['fscache', 'limitedcache', 'compressioncache',
                                     'cached-s3', 'cached-compressed-s3']):
@@ -360,6 +366,7 @@ class Test(TestBase):
         # Create the library so we can get the same remote config
         l = new_library(config)
 
+
         s3 = l.upstream.last_upstream()
 
         s3.clean()
@@ -387,9 +394,7 @@ class Test(TestBase):
         ident.add_md5(file=self.bundle.database.path)
         rl.load_dataset(ident)
         self.assertIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
-                      set([i.fqname for i in rl.list()]))
-
-
+                      set([i.fqname for i in rl.list().values()]))
 
 
         return
@@ -527,6 +532,7 @@ class Test(TestBase):
         # Local only; no connection to server
         local_l  = new_library(self.server_rc.library("local"))
 
+        # A library that connects to the server
         remote_l = new_library(self.server_rc.library("reader"))
         remote_l.purge()
 
@@ -549,6 +555,11 @@ class Test(TestBase):
             self.assertTrue(p.identity.fqname, b.partition.identity.fqname)
 
         self.assertEqual(1, len(remote_l.list()))
+
+        # Test out syncing.
+
+
+        remote_l.sync_remotes()
 
 
     # =======================
