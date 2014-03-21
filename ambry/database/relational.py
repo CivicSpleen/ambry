@@ -90,7 +90,7 @@ class RelationalDatabase(DatabaseInterface):
         
         try:
             self.connection
-        except:
+        except Exception as e:
             return False
         
 
@@ -173,7 +173,12 @@ class RelationalDatabase(DatabaseInterface):
 
         if not self._engine:
             self.require_path()
-            self._engine = create_engine(self.dsn,
+            path = self.dsn
+
+            if path == 'sqlite:///:memory:':
+                path = 'sqlite://'
+
+            self._engine = create_engine(path,
                                          connect_args={
                                              'detect_types': sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES},
                                          native_datetime=True,

@@ -14,7 +14,6 @@ class SqlitePartitionName(PartitionName):
 class SqlitePartitionIdentity(PartitionIdentity):
     _name_class = SqlitePartitionName
 
-
 class SqlitePartition(PartitionBase):
     '''Represents a bundle partition, part of the bundle data broken out in
     time, space, or by table. '''
@@ -53,7 +52,6 @@ class SqlitePartition(PartitionBase):
             table = self.bundle.schema.table(table)
 
         for sql in self.bundle.schema.generate_indexes(table):
-            print '!!!', sql
             self.database.connection.execute(sql)
               
               
@@ -294,7 +292,6 @@ class SqlitePartition(PartitionBase):
         from ..database.selector import RowSelector
 
         return RowSelector(self, sql,*args, **kwargs)
-
 
 
     def write_stats(self):

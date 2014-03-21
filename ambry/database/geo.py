@@ -17,8 +17,7 @@ class FeatureInserter(InserterInterface):
         self.table = table
 
         self.sf = TableShapefile(self.bundle, partition.database.path, table, dest_srs, source_srs, name=layer_name)
-        
-    
+
     def __enter__(self):
         from ..partitions import Partitions
         self.partition.set_state(Partitions.STATE.BUILDING)
@@ -34,7 +33,9 @@ class FeatureInserter(InserterInterface):
 
         self.partition.set_state(Partitions.STATE.BUILT)
         self.close()
-                    
+
+        self.partition.create_indexes()
+
         return self
     
     def insert(self, row, source_srs=None):

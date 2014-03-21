@@ -23,6 +23,7 @@ class InserterInterface(object):
     
     def close(self): raise NotImplemented()
 
+
 class UpdaterInterface(object):
     
     def __enter__(self): raise NotImplemented()
@@ -38,6 +39,7 @@ class SegmentInserterFactory(object):
     
     def next_inserter(self, segment): 
         raise NotImplemented()
+
 
 class SegmentedInserter(InserterInterface):
 
@@ -183,7 +185,8 @@ class CodeCastErrorHandler(object):
             with p.inserter() as ins:
                 for code in codes:
                     ins.insert({'code':code})
-            
+
+
 class ValueInserter(ValueWriter):
     '''Inserts arrays of values into  database table'''
     def __init__(self, db,  bundle, table, 

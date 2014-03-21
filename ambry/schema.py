@@ -452,7 +452,6 @@ class Schema(object):
         for column in table.columns:
             # assemble non unique indexes
             if column.indexes and column.indexes.strip():
-                print column.indexes
                 for cons in column.indexes.strip().split(','):
                     if cons.strip() not in indexes:
                         indexes[cons.strip()] = set()

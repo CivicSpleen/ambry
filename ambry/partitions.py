@@ -312,7 +312,7 @@ class Partitions(object):
 
         return q
     
-    def _new_orm_partition(self, pname, tables=None, data=None):
+    def _new_orm_partition(self, pname, tables=None, data=None, memory = False):
         '''Create a new ORM Partrition object, or return one if
         it already exists '''
         from ambry.orm import Partition as OrmPartition, Table
@@ -378,7 +378,15 @@ class Partitions(object):
                 state = Partitions.STATE.NEW,
                 **d
              )  
-        
+
+        if memory:
+            from random import randint
+            from identity import ObjectNumber
+            op.dataset = self.bundle.get_dataset(session)
+            op.table = table
+            op.set_ids(randint(100000,ObjectNumber.PARTMAXVAL))
+            return op
+
         session.add(op)   
         
         # We need to do this here to ensure that the before_commit()
@@ -569,7 +577,7 @@ class Partitions(object):
         return p
 
 
-    def find_or_new_csv(self, clean = False,  tables=None, data=None, **kwargs):
+    def find_or_new_csv(self, clean = False, tables=None, data=None, **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it. 
         
         Args:
@@ -611,6 +619,37 @@ class Partitions(object):
         if shape_file:
             p.load_shapefile(shape_file)
         
+        return p
+
+
+    def new_memory_partition(self, tables=None, data=None, **kwargs):
+        '''Find a partition identified by pid, and if it does not exist, create it.
+
+        Args:
+            pid A partition Identity
+            tables String or array of tables to copy form the main partition
+        '''
+
+        from partition.sqlite import SqlitePartition
+
+        ppn = PartialPartitionName(**kwargs)
+
+        if tables:
+            tables = set(tables)
+
+        if ppn.table:
+            if not tables:
+                tables = set()
+
+            tables.add(ppn.table)
+
+        op = self._new_orm_partition(ppn, tables=tables, data=data, memory = True)
+
+        p = SqlitePartition(self.bundle, op, memory=True, **kwargs)
+
+
+        p.create_with_tables(tables)
+
         return p
 
     def delete(self, partition):

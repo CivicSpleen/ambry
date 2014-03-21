@@ -148,18 +148,20 @@ class PartitionBase(PartitionInterface):
         
         self.bundle = db
         self.record = record
-        
+
         self.dataset = self.record.dataset
         self.identity = self.record.identity
         self.data = self.record.data
-        self.table = self.get_table()
-        
-        #
-        # These two values take refreshible fields out of the partition ORM record. 
-        # Use these if you are getting DetatchedInstance errors like: 
-        #    sqlalchemy.orm.exc.DetachedInstanceError: Instance <Table at 0x1077d5450> 
+
+        # These two values take refreshible fields out of the partition ORM record.
+        # Use these if you are getting DetatchedInstance errors like:
+        #    sqlalchemy.orm.exc.DetachedInstanceError: Instance <Table at 0x1077d5450>
         #    is not bound to a Session; attribute refresh operation cannot proceed
         self.record_count = self.record.count
+
+        self.table = self.get_table()
+        
+
 
         self._database =  None
 
@@ -253,7 +255,10 @@ class PartitionBase(PartitionInterface):
             
         except:
             raise
-        
+
+    def finalize(self):
+        '''Wrap up the creation of this partition'''
+
 
     def set_state(self, state):
         from ..orm import Partition
@@ -261,15 +266,16 @@ class PartitionBase(PartitionInterface):
         with self.bundle.session as s:
             r = s.query(Partition).get(self.record.vid)
 
-            r.state = state
+            if r: # No record for memory partitions
+                r.state = state
 
-            s.merge(r)
+                s.merge(r)
 
-            s.commit()
+                s.commit()
 
 
     def dbm(self, suffix = None):
-        '''Return a DBMDatabase replated to this partition'''
+        '''Return a DBMDatabase related to this partition'''
         
         from ..database.dbm import Dbm
         

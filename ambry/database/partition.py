@@ -45,6 +45,7 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
     def inserter(self, table_or_name=None,**kwargs):
 
         if not self.exists():
+
             raise Exception("Database doesn't exist yet: '{}'".format(self.dsn))
 
         if table_or_name is None and self.partition.table is not None:

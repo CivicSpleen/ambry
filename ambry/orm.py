@@ -637,7 +637,7 @@ Columns:
         <table>
         <tr><th>Name</th><td>{name}</td></tr>
         <tr><th>Id</th><td>{id_}</td></tr>
-        <tr><th>Vid</th><td>{name}</td></tr>
+        <tr><th>Vid</th><td>{vid}</td></tr>
         </table>
         """.format(**self.dict)
 
@@ -1090,7 +1090,7 @@ class Partition(Base):
         self.format = kwargs.get('format',None)
         self.segment = kwargs.get('segment',None)
         self.data = kwargs.get('data',None)
-        
+
         self.d_id = dataset.id_
         self.d_vid = dataset.vid
         
@@ -1153,29 +1153,36 @@ class Partition(Base):
     def __repr__(self):
         return "<{} partition: {}>".format(self.format, self.vname)
 
+    def set_ids(self, sequence_id):
+        from identity import Identity
+
+        self.sequence_id = sequence_id
+
+        don = ObjectNumber.parse(self.d_vid)
+        pon = PartitionNumber(don, self.sequence_id)
+
+        self.vid = str(pon)
+        self.id_ = str(pon.rev(None))
+        self.fqname = Identity._compose_fqname(self.vname,self.vid)
+
+
     @staticmethod
     def before_insert(mapper, conn, target):
         '''event.listen method for Sqlalchemy to set the sequence for this  
         object and create an ObjectNumber value for the id_'''
         from identity import Identity
-        
+
         if target.sequence_id is None:
             sql = text('''SELECT max(p_sequence_id)+1 FROM Partitions WHERE p_d_id = :did''')
-    
+
             max_id, = conn.execute(sql, did=target.d_id).fetchone()
-      
+
             if not max_id:
                 max_id = 1
-                
+
             target.sequence_id = max_id
-            
-            
-        don = ObjectNumber.parse(target.d_vid)
-        pon = PartitionNumber(don, target.sequence_id)
-        
-        target.vid = str(pon)
-        target.id_ = str(pon.rev(None))
-        target.fqname = Identity._compose_fqname(target.vname,target.vid)
+
+        target.set_ids(target.sequence_id)
 
         Partition.before_update(mapper, conn, target)
 

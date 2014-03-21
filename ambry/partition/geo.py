@@ -18,7 +18,6 @@ class GeoPartitionName(PartitionName):
 class GeoPartitionIdentity(PartitionIdentity):
     _name_class = GeoPartitionName
 
-
 class GeoPartition(SqlitePartition):
     '''A Partition that hosts a Spatialite for geographic data'''
 

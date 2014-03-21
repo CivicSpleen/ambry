@@ -28,6 +28,7 @@ about: {
         "tag2"
     ],
     title: "Bundle title"
+    description. One sentence description of this bundle.
 }
 
 build:

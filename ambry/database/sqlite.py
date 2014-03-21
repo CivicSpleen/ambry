@@ -220,7 +220,7 @@ class SqliteDatabase(RelationalDatabase):
         '''Return an SqlAlchemy connection, but allow for existence check, which
         uses os.path.exists'''
 
-        if not os.path.exists(self.path) and check_exists:
+        if not os.path.exists(self.path) and check_exists and not self.memory:
             from ..dbexceptions import DatabaseMissingError
 
             raise DatabaseMissingError("Trying to make a connection to a sqlite database " +
@@ -258,7 +258,7 @@ class SqliteDatabase(RelationalDatabase):
     MIN_NUMBER_OF_TABLES = 1
     def is_empty(self):
         
-        if not os.path.exists(self.path):
+        if not self.memory and not os.path.exists(self.path):
             return True
         
         if  self.version >= 12:
