@@ -359,6 +359,7 @@ class Library(object):
     def get(self, ref, force=False, cb=None):
         '''Get a bundle, given an id string or a name '''
         from sqlite3 import DatabaseError
+        from sqlalchemy.exc import OperationalError
         from sqlalchemy.orm.exc import NoResultFound
         from ..dbexceptions import NotFoundError
         from .files import  Files
@@ -407,7 +408,7 @@ class Library(object):
         except AttributeError:
             self.logger.error("Failed to load databundle at path {}".format(abs_path))
             raise DatabaseError
-        from sqlalchemy.exc import OperationalError:
+        except OperationalError:
             self.logger.error("Failed to load databundle at path {}".format(abs_path))
             raise DatabaseError
 
