@@ -117,7 +117,8 @@ class Bundle(object):
 
                 return (session.query(Dataset).one())
         except OperationalError:
-            raise NotFoundError("No dataset record found. Probably not a bundle: '{}'".format(self.bundle_dir))
+            raise NotFoundError("No dataset record found. Probably not a bundle: '{}'"
+                                .format(self.path))
         except Exception as e:
             from ..util import get_logger
             # self.logger can get caught in a recursion loop

@@ -100,10 +100,6 @@ def clear_libraries():
     libraries = {}
 
 
-
-import collections
-
-
 class Library(object):
     '''
 
@@ -495,12 +491,14 @@ class Library(object):
         if isinstance(ref, Identity):
             ref = ref.vid
 
-        if use_remote:
-            resolver = RemoteResolver(local_resolver=self.resolver, remote_urls=self._remotes)
-        else:
-            resolver = self.resolver
+        #if False and use_remote: # Do we need the remote resolver with remote sync?
+        #    resolver = RemoteResolver(local_resolver=self.resolver, remote_urls=self._remotes)
+        #else:
+        #    resolver = self.resolver
 
-        ip, ident = resolver.resolve_ref_one(ref, location)
+
+
+        ip, ident = self.resolver.resolve_ref_one(ref, location)
 
         try:
             if ident:
@@ -697,72 +695,16 @@ class Library(object):
     def clean(self, add_config_root=True):
         self.database.clean(add_config_root=add_config_root)
 
-
     def purge(self):
         """Remove all records from the library database, then delete all
         files from the cache"""
         self.clean()
         self.cache.clean()
 
+
     #
-    # Backup and restore
+    # Synchronize
     #
-
-    def run_dumper_thread(self):
-        '''Run a thread that will check the database and call the callback when the database should be
-        backed up after a change. '''
-        from util import DumperThread
-
-        dt = DumperThread(self.clone())
-        dt.start()
-
-        return dt
-
-    def backup(self):
-        '''Backup the database to the remote, but only if the database needs to be backed up. '''
-
-        if not self.database.needs_dump():
-            return False
-
-        backup_file = temp_file_name() + ".db"
-
-        self.database.dump(backup_file)
-
-        path = self.upstream.put(backup_file, '_/library.db')
-
-        os.remove(backup_file)
-
-        return path
-
-    def can_restore(self):
-
-        backup_file = self.cache.get('_/library.db')
-
-        if backup_file:
-            return True
-        else:
-            return False
-
-    def restore(self, backup_file=None):
-        '''Restore the database from the remote'''
-
-        if not backup_file:
-            # This requires that the cache have and upstream that is also the remote
-            backup_file = self.cache.get('_/library.db')
-
-        self.database.restore(backup_file)
-
-        # HACK, fix the dataset root
-        try:
-            self.database._clean_config_root()
-        except:
-            print "ERROR for path: {}, {}".format(self.database.dbname, self.database.dsn)
-            raise
-
-        os.remove(backup_file)
-
-        return backup_file
-
 
     def sync_library(self):
         '''Rebuild the database from the bundles that are already installed
@@ -882,26 +824,25 @@ class Library(object):
         for e in self.upstream.list():
             md =  self.upstream.metadata(e)
             ident = Identity.from_dict(json.loads(md['identity']))
-
-            self.sync_upstream_dataset(ident, md)
+            self.sync_upstream_dataset(e, ident, md)
 
             self.logger.info("Upstream sync: {}".format(ident.fqname))
 
-
-
-    def sync_upstream_dataset(self, ident, metadata):
+    def sync_upstream_dataset(self, path, ident, metadata):
 
         self.database.install_dataset_identity(ident, location=Dataset.LOCATION.UPSTREAM)
 
-        self.files.new_file(
+        f = self.files.new_file(
             merge=True,
-            path=ident.fqname,
+            path=path,
             group='upstream',
             ref=ident.vid,
             state='synced',
             type_=Dataset.LOCATION.UPSTREAM,
             data=metadata,
             source_url=None)
+
+        self.download_upstream(f)
 
 
     def sync_remotes(self):
@@ -922,7 +863,6 @@ class Library(object):
 
                 self.logger.info("Remote {} sync: {}".format(url, ident.fqname))
 
-
     def sync_remote_dataset(self, url, ident):
 
         self.database.install_dataset_identity(ident, location=Dataset.LOCATION.REMOTE)
@@ -937,6 +877,36 @@ class Library(object):
             data=ident.urls,
             source_url=url)
 
+
+
+    def download_upstream(self, f):
+        '''Download all of the upstream bundles and load them as library bundles. '''
+        from .files import Files
+        import json
+
+        #print self.upstream
+        #print f.path, self.upstream.path(f.path)
+
+        try:
+            d = json.loads(f.data.get('identity'))
+        except:
+            return
+
+        identity = Identity.from_dict(d)
+
+        dst = None
+        if not self.cache.has(identity.cache_key):
+            s = self.upstream.get_stream(f.path)
+            dst = self.cache.put(s, identity.cache_key)
+            self.logger.info('Downloaded: {}'.format(dst))
+        else:
+            dst = self.cache.path(identity.cache_key)
+
+        extant = self.files.query.type(Files.TYPE.BUNDLE).ref(f.ref).one_maybe
+        if not extant:
+            b = DbBundle(dst)
+            self.sync_library_dataset(b)
+            self.logger.info('Synchronized to library: {}'.format(dst))
 
     @property
     def remotes(self):

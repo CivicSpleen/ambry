@@ -766,6 +766,7 @@ class LibraryDb(object):
 
         from ..orm import Dataset, Partition
         from .files import Files
+        from sqlalchemy.sql import or_
 
         if datasets is None:
             datasets = {}
@@ -781,9 +782,11 @@ class LibraryDb(object):
             if not isinstance(locations,(list, tuple)):
                 locations=[locations]
 
-            for location in locations:
-                q1 = q1.filter(Dataset.location == location)
-                q2 = q2.filter(Dataset.location == location)
+            terms = [ Dataset.location == location for location in locations]
+
+
+            q1 = q1.filter(or_(*terms))
+            q2 = q2.filter(or_(*terms))
 
         for d,p in (q1.all() + [ (d,None) for d in q2.all()]):
 

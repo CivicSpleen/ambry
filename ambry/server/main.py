@@ -406,6 +406,9 @@ def get_root(library):
                prefix = library.upstream.last_upstream().prefix)
            }
 
+def _resolve(library, ref):
+    from ambry.orm import Dataset
+    return library.resolver.resolve_ref_one(ref, location=[Dataset.LOCATION.LIBRARY,Dataset.LOCATION.UPSTREAM ])
 
 
 @get('/resolve/<ref:path>')
@@ -413,7 +416,7 @@ def get_root(library):
 def get_resolve(library, ref):
     '''Resolve a name or other reference into an identity'''
 
-    ip, dataset = library.resolver.resolve_ref_one(ref)
+    ip, dataset = _resolve(library, ref)
 
     if not dataset:
         return None
@@ -429,7 +432,7 @@ def get_info(ref, library):
     '''Resolve the reference, and redirect to the dataset or partition page'''
     from ambry.cache import RemoteMarker
 
-    ip, dataset = library.resolver.resolve_ref_one(ref)
+    ip, dataset = _resolve(library, ref)
 
     if not dataset:
         return None
@@ -505,7 +508,7 @@ def get_datasets(library):
                     'csv':'{}/datasets/{}/schema.csv'.format(_host_port(library),dsid.vid),
                   }
                  } 
-            for dsid in library.list(locations=Dataset.LOCATION.LIBRARY).values()}
+            for dsid in library.list(locations=[Dataset.LOCATION.LIBRARY,Dataset.LOCATION.UPSTREAM]).values()}
 
 @post('/datasets/find')
 def post_datasets_find(library):

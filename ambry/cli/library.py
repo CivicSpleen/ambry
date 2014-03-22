@@ -70,24 +70,7 @@ def library_parser(cmd):
     group.add_argument('-u', '--upstream', default=False, action="store_true", help='Sync only the upstream')
     group.add_argument('-s', '--source', default=False, action="store_true", help='Sync only the source')
 
-    sp = asp.add_parser('rebuild', help='Rebuild the library database from the files in the library')
-    sp.set_defaults(subcommand='rebuild')
-    sp.add_argument('-r','--remote',  default=False, action="store_true",   help='Rebuild from the remote')
-    
-    sp = asp.add_parser('backup', help='Backup the library database to the remote')
-    sp.set_defaults(subcommand='backup')
-    sp.add_argument('-f','--file',  default=None,   help="Name of file to back up to") 
-    sp.add_argument('-d','--date',  default=False, action="store_true",   help='Append the date and time, in ISO format, to the name of the file ')
-    sp.add_argument('-r','--remote',  default=False, action="store_true",   help='Also load store file to  configured remote')
-    sp.add_argument('-c','--cache',  default=False, action="store_true",   help='Also load store file to  configured cache')
 
-    sp = asp.add_parser('restore', help='Restore the library database from the remote')
-    sp.set_defaults(subcommand='restore')
-    sp.add_argument('-f','--file',  default=None,   help="Base pattern of file to restore from.") 
-    sp.add_argument('-d','--dir',  default=None,   help="Directory where backup files are stored. Will retrieve the most recent. ") 
-    sp.add_argument('-r','--remote',  default=False, action="store_true",   help='Also load file from configured remote')
-    sp.add_argument('-c','--cache',  default=False, action="store_true",   help='Also load file from configured cache')
- 
     sp = asp.add_parser('info', help='Display information about the library')
     sp.set_defaults(subcommand='info')   
 
@@ -107,10 +90,6 @@ def library_parser(cmd):
     sp.set_defaults(subcommand='remove')
     sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Name or ID of the bundle or partition to remove')
 
-    sp = asp.add_parser('load', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
-    sp.set_defaults(subcommand='load')   
-    sp.add_argument('relpath', type=str,help='Cache rel path of dataset to load from remote')
-
 
     sp = asp.add_parser('schema', help='Dump the schema for a bundle')
     sp.set_defaults(subcommand='schema')   
@@ -120,6 +99,11 @@ def library_parser(cmd):
     group.add_argument('-y', '--yaml',  default='csv', dest='format',  action='store_const', const='yaml')
     group.add_argument('-j', '--json',  default='csv', dest='format',  action='store_const', const='json')
     group.add_argument('-c', '--csv',  default='csv', dest='format',  action='store_const', const='csv')
+
+    sp = asp.add_parser('download',
+                        help='Download all of the Upstream bundles into the library. ')
+    sp.set_defaults(subcommand='download')
+
 
 
 def library_command(args, rc):
@@ -453,20 +437,20 @@ def library_open(args, l, config):
         os.execlp('sqlite3', 'sqlite3', abs_path)
 
 
-def library_load(args, l, config):
+def library_download(args, l, config):
 
     from ..identity import Identity
 
-
-    print(Identity.parse_name(args.relpath).to_dict())
-
-    return
+    return l.download_upstream()
 
 
 def library_sync(args, l, config):
     '''Synchronize the remotes and the upstream to a local library
     database'''
 
+    if args.upstream or args.all:
+        l.logger.info("==== Sync Upstream")
+        l.sync_upstream()
 
     if args.library or args.all:
         l.logger.info("==== Sync Library")
@@ -475,10 +459,6 @@ def library_sync(args, l, config):
     if args.remote or args.all:
         l.logger.info("==== Sync Remotes")
         l.sync_remotes()
-
-    if args.upstream or args.all:
-        l.logger.info("==== Sync Upstream")
-        l.sync_upstream()
 
     if args.source or args.all:
         l.logger.info("==== Sync Source")
