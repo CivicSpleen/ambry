@@ -460,7 +460,7 @@ def library_sync(args, l, config):
         l.logger.info("==== Sync Remotes")
         l.sync_remotes()
 
-    if args.source or args.all:
+    if (args.source or args.all) and l.source:
         l.logger.info("==== Sync Source")
         l.source.sync_source()
 

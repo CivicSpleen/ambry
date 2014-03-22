@@ -403,10 +403,13 @@ class Library(object):
             bundle = DbBundle(abs_path)
         except DatabaseError:
             self.logger.error("Failed to load databundle at path {}".format(abs_path))
-            raise
+            raise DatabaseError
         except AttributeError:
             self.logger.error("Failed to load databundle at path {}".format(abs_path))
-            raise
+            raise DatabaseError
+        from sqlalchemy.exc import OperationalError:
+            self.logger.error("Failed to load databundle at path {}".format(abs_path))
+            raise DatabaseError
 
 
         # Do we have it in the database? If not install it.
@@ -501,7 +504,7 @@ class Library(object):
         ip, ident = self.resolver.resolve_ref_one(ref, location)
 
         try:
-            if ident:
+            if ident and self.source:
                 ident.bundle_path = self.source.source_path(ident=ident)
         except ConfigurationError:
             pass  # Warehouse libraries don't have source directories.

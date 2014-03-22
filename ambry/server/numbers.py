@@ -242,7 +242,7 @@ def request_delay(nxt,delay,delay_factor):
 
 @get('/next')
 @CaptureException
-def get_test(redis):
+def get_next(redis):
     from time import time
     from ambry.identity import DatasetNumber
 
