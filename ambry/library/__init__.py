@@ -49,6 +49,19 @@ def _new_library(config):
 
     #print "### Upstream", config['upstream']
 
+    hostport = config.get('host', None)
+
+    if hostport:
+        if ':' in hostport:
+            host, port = hostport.split(':')
+        else:
+            host = hostport
+            port = 80
+    else:
+        host = None
+        port = 80
+
+
     l = Library(cache=cache,
                 database=database,
                 name = config['_name'] if '_name' in config else 'NONE',
@@ -57,9 +70,11 @@ def _new_library(config):
                 sync = config.get('sync', None),
                 require_upload=config.get('require_upload', None),
                 source_dir = source_dir,
-                host=config.get('host', None),
-                port=config.get('port', None),
-                )
+                host = host,
+                port = port,
+                urlhost=config.get('urlhost', None)
+
+    )
 
     return l
 
@@ -111,7 +126,7 @@ class Library(object):
                  upstream=None,  remotes=None,
                  source_dir = None,
                  sync=False, require_upload=False,
-                 host=None, port=None):
+                 host=None, port=None, urlhost = None):
         '''Libraries are constructed on the root cache name for the library.
         If the cache does not exist, it will be created.
 
@@ -137,6 +152,7 @@ class Library(object):
         self.bundle = None # Set externally in bundle.library()
         self.host = host
         self.port = port
+        self.urlhost = urlhost if urlhost else ( '{}:{}'.format(self.host,self.port) if self.port else self.host)
         self.dep_cb = None# Callback for dependency resolution
         self.require_upload = require_upload
         self._dependencies = None

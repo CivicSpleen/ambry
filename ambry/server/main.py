@@ -161,7 +161,8 @@ def enable_cors():
     response.headers['Access-Control-Allow-Origin'] = '*'
     
 def _host_port(library):
-    return  'http://{}{}'.format(library.host, ':'+str(library.port) if library.port != 80 else '')
+    return 'http://{}'.format(library.urlhost)
+    #return  'http://{}{}'.format(library.host, ':'+str(library.port) if library.port != 80 else '')
 
 def process_did(did, library):
     from ..identity import ObjectNumber, DatasetNumber

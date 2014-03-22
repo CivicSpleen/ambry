@@ -268,7 +268,7 @@ def _print_info(l,ident, list_partitions=False):
 
     d = ident
 
-    bundle = l.source.resolve_build_bundle(d.vid)
+
 
     prt("D --- Dataset ---")
     prt("D Vid       : {}",d.vid)
@@ -280,11 +280,14 @@ def _print_info(l,ident, list_partitions=False):
     if d.url:
         prt("D Web Path  : {}",d)
 
-    if bundle:
-        prt('B Bundle Dir: {}', bundle.bundle_dir)
-    else:
-        source_dir = l.source.source_path(d.vid)
-        prt('B Source Dir: {}', source_dir)
+    bundle = l.source.resolve_build_bundle(d.vid) if l.source else None
+
+    if l.source:
+        if bundle:
+            prt('B Bundle Dir: {}', bundle.bundle_dir)
+        else:
+            source_dir = l.source.source_path(d.vid)
+            prt('B Source Dir: {}', source_dir)
 
     if bundle and bundle.is_built:
         cd = dict(bundle.db_config.dict)
