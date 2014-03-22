@@ -17,6 +17,7 @@ import logging
 import logging.handlers
 from ambry.orm import Dataset, Config
 from ..identity import LocationRef, Identity
+from ..util import memoize
 
 libraries = {}
 
@@ -621,7 +622,9 @@ class Library(object):
                     errors[k] = v
 
 
+
     @property
+    @memoize
     def files(self):
         from files import Files
 
@@ -726,7 +729,7 @@ class Library(object):
     # Synchronize
     #
 
-    def sync_library(self):
+    def sync_library(self, clean=False):
         '''Rebuild the database from the bundles that are already installed
         in the repository cache'''
 
@@ -737,12 +740,13 @@ class Library(object):
         assert Files.TYPE.BUNDLE == Dataset.LOCATION.LIBRARY
         assert Files.TYPE.PARTITION == Dataset.LOCATION.PARTITION
 
-        (self.database.session.query(Dataset)
-            .filter(Dataset.vid != ROOT_CONFIG_NAME_V)
-            .filter(Dataset.location == Dataset.LOCATION.LIBRARY).delete())
+        if clean:
+            (self.database.session.query(Dataset)
+                .filter(Dataset.vid != ROOT_CONFIG_NAME_V)
+                .filter(Dataset.location == Dataset.LOCATION.LIBRARY).delete())
 
-        self.files.query.type(Files.TYPE.BUNDLE).delete()
-        self.files.query.type(Files.TYPE.PARTITION).delete()
+            self.files.query.type(Files.TYPE.BUNDLE).delete()
+            self.files.query.type(Files.TYPE.PARTITION).delete()
 
         bundles = []
 
@@ -761,6 +765,12 @@ class Library(object):
 
                 if file_.endswith(".db"):
                     path_ = os.path.join(r, file_)
+
+                    extant_bundle = self.files.query.type(Files.TYPE.BUNDLE).path(path_).one_maybe
+                    extant_partition = self.files.query.type(Files.TYPE.PARTITION).path(path_).one_maybe
+                    if (extant_bundle or extant_partition):
+                        continue
+
                     try:
 
                         b = DbBundle(path_)
@@ -828,13 +838,13 @@ class Library(object):
             data=ident.urls,
             source_url=None)
 
-    def sync_upstream(self):
+    def sync_upstream(self, clean=False):
         import json
         from ..identity import Identity
 
-        self.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.UPSTREAM).delete()
-        self.files.query.type(Dataset.LOCATION.UPSTREAM).delete()
-
+        if clean:
+            self.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.UPSTREAM).delete()
+            self.files.query.type(Dataset.LOCATION.UPSTREAM).delete()
 
         if not self.upstream:
             return
@@ -842,6 +852,11 @@ class Library(object):
         self.logger.info("Upstream sync: {}".format(self.upstream))
 
         for e in self.upstream.list():
+
+            if self.files.query.type(Dataset.LOCATION.UPSTREAM).path(e).one_maybe:
+                #self.logger.info("Upstream found: {}".format(e))
+                continue
+
             md =  self.upstream.metadata(e)
             ident = Identity.from_dict(json.loads(md['identity']))
             self.sync_upstream_dataset(e, ident, md)
@@ -865,20 +880,26 @@ class Library(object):
         self.download_upstream(f)
 
 
-    def sync_remotes(self):
+    def sync_remotes(self, clean=False):
 
         from ambry.client.rest import RemoteLibrary
 
-        self.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.REMOTE).delete()
-        self.files.query.type(Dataset.LOCATION.REMOTE).delete()
+        if clean:
+            self.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.REMOTE).delete()
+            self.files.query.type(Dataset.LOCATION.REMOTE).delete()
 
         if not self.remotes:
             return
 
         for url in self.remotes:
+
             self.logger.info("Remote sync: {}".format(url))
             rl = RemoteLibrary(url)
             for ident in rl.list().values():
+
+                if self.files.query.type(Dataset.LOCATION.REMOTE).ref(ident.vid).one_maybe:
+                    continue
+
                 self.sync_remote_dataset(url, ident)
 
                 self.logger.info("Remote {} sync: {}".format(url, ident.fqname))

@@ -24,6 +24,7 @@ class Files(object):
 
 
     def __init__(self, db, query=None):
+
         self.db = db
 
         self._query = query
@@ -121,6 +122,8 @@ class Files(object):
     def merge(self, f):
         from sqlalchemy.exc import IntegrityError
 
+        s = self.db.session
+
         path = f.path
 
         if os.path.exists(path):
@@ -131,7 +134,7 @@ class Files(object):
             f.modified = None
             f.size = None
 
-        s = self.db.session
+
 
         # Sqlalchemy doesn't automatically rollback on exceptions, and you
         # can't re-try the commit until you roll back.

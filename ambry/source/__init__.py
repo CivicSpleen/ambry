@@ -243,10 +243,11 @@ class SourceTree(object):
             source_url=data['clone_url'])
 
 
-    def sync_source(self):
+    def sync_source(self, clean = False):
 
-        self.library.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.SOURCE).delete()
-        self.library.files.query.type(Dataset.LOCATION.SOURCE).delete()
+        if clean:
+            self.library.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.SOURCE).delete()
+            self.library.files.query.type(Dataset.LOCATION.SOURCE).delete()
 
         for ident in self._dir_list().values():
             self.sync_bundle(ident.bundle_path, ident, ident.bundle)
@@ -267,8 +268,9 @@ class SourceTree(object):
 
 
     def sync_bundle(self, path, ident=None, bundle=None):
-
+        from ..orm import File
         self.logger.info("Sync source bundle: {} ".format(path))
+
 
         if not bundle and os.path.exists(path):
             bundle = self.bundle(path)
@@ -276,12 +278,12 @@ class SourceTree(object):
         if not ident and bundle:
             ident = bundle.identity
 
-        f = self.library.files.query.type(Dataset.LOCATION.SOURCE).ref(ident.vid).one_maybe
+        files = self.library.files
+
+        f = files.query.type(Dataset.LOCATION.SOURCE).ref(ident.vid).one_maybe
 
         # Update the file if it already exists.
         if not f:
-
-            from ..orm import File
 
             f = File(
                 path=path,
@@ -293,28 +295,37 @@ class SourceTree(object):
                 source_url=None)
 
             d = self._bundle_data(ident,bundle)
+            reattach = False
 
         else:
 
             d = f.data
+            reattach = f.oid
 
         #for p in bundle.config.group('partitions'):
         #    if isinstance(p, dict):
         #        print "X!!!",p
+
+        # NOTE -- this code closes ( commits ) the session so the
+        # file f is no longer valid if it came from the database, which is
+        # why we have to refetch it.
+        self.library.database.install_dataset_identity(
+            ident, location=Dataset.LOCATION.SOURCE, data=d)
+
+        if reattach:
+            f = files.db.session.query(File).get(reattach)
+
 
         if bundle and bundle.is_built:
             config = dict(bundle.db_config.dict)
             d['process'] = config['process']
             f.state = 'built'
 
-        d['rev'] = d['rev'] + 1 # Marks bundles that have already beein imported.
+        d['rev'] = d['rev'] + 1  # Marks bundles that have already beein imported.
 
         f.data = d
 
-        self.library.database.install_dataset_identity(
-            ident, location=Dataset.LOCATION.SOURCE, data=d)
-
-        self.library.files.merge(f)
+        files.merge(f)
 
 
     def _dir_list(self, datasets=None, key='vid'):

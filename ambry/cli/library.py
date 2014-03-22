@@ -63,6 +63,7 @@ def library_parser(cmd):
 
     sp = asp.add_parser('sync', help='Synchronize the local directory, upstream and remote with the library')
     sp.set_defaults(subcommand='sync')
+    sp.add_argument('-C', '--clean', default=False, action="store_true", help='Clean before syncing. Will clean only the locations that are also synced')
     group = sp.add_mutually_exclusive_group(required=True)
     group.add_argument('-a', '--all', default=False, action="store_true", help='Sync everything')
     group.add_argument('-l', '--library', default=False, action="store_true", help='Sync only the library')
@@ -450,19 +451,19 @@ def library_sync(args, l, config):
 
     if args.upstream or args.all:
         l.logger.info("==== Sync Upstream")
-        l.sync_upstream()
+        l.sync_upstream(clean=args.clean)
 
     if args.library or args.all:
         l.logger.info("==== Sync Library")
-        l.sync_library()
+        l.sync_library(clean=args.clean)
 
     if args.remote or args.all:
         l.logger.info("==== Sync Remotes")
-        l.sync_remotes()
+        l.sync_remotes(clean=args.clean)
 
     if (args.source or args.all) and l.source:
         l.logger.info("==== Sync Source")
-        l.source.sync_source()
+        l.source.sync_source(clean=args.clean)
 
 
 
