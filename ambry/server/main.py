@@ -164,6 +164,7 @@ def _host_port(library):
     return '{}'.format(library.urlhost)
     #return  'http://{}{}'.format(library.host, ':'+str(library.port) if library.port != 80 else '')
 
+
 def process_did(did, library):
     from ..identity import ObjectNumber, DatasetNumber
 
