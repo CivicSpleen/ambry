@@ -904,7 +904,12 @@ class Library(object):
 
         extant = self.files.query.type(Files.TYPE.BUNDLE).ref(f.ref).one_maybe
         if not extant:
-            b = DbBundle(dst)
+            try:
+                b = DbBundle(dst)
+            except:
+                self.logger.error("Failed to open bundle: {} ".format(dst))
+                return
+
             self.sync_library_dataset(b)
             self.logger.info('Synchronized to library: {}'.format(dst))
 
