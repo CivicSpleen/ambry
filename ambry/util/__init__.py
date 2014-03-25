@@ -401,9 +401,7 @@ class IncludeFile(str):
         s.abspath = abspath
         s.relpath = relpath
         return s
-        
-    def __str__(self):
-        return self.data
+    
  
 def include_representer(dumper, data):
     return dumper.represent_scalar(u'!include', data.relpath)
