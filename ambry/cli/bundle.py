@@ -167,7 +167,8 @@ def bundle_parser(cmd):
     #
 
     sp = asp.add_parser('schema', help='Print the schema')     
-    sp.set_defaults(subcommand='schema') 
+    sp.set_defaults(subcommand='schema')
+
 
     #
     # info command

@@ -106,6 +106,10 @@ def source_parser(cmd):
     group.add_argument('-s', '--shell', default=False, dest='repo_command', action='store_const', const='shell',
                        help='Run a shell command')
 
+    sp = asp.add_parser('number', help='Return the next dataset number from the number server')
+    sp.set_defaults(subcommand='number')
+    sp.add_argument('-k', '--key', help='Number server key')
+
 def source_info(args, l, st, rc):
     from . import _print_bundle_info
 
@@ -196,7 +200,18 @@ def source_get(args, l, st, rc):
             args.terms = [f.source_url]
             return source_get(args, l, st, rc)
 
-                
+def source_number(args, l, st, rc):
+    from ..identity import NumberServer
+
+    nsconfig = rc.group('numbers')
+
+    if args.key:
+        nsconfig['key'] = args.key
+
+    ns = NumberServer(**nsconfig)
+
+    print str(ns.next())
+
 def source_new(args, l, st, rc):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     from ..source.repository import new_repository

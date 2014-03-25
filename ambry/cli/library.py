@@ -101,9 +101,6 @@ def library_parser(cmd):
     group.add_argument('-j', '--json',  default='csv', dest='format',  action='store_const', const='json')
     group.add_argument('-c', '--csv',  default='csv', dest='format',  action='store_const', const='csv')
 
-    sp = asp.add_parser('download',
-                        help='Download all of the Upstream bundles into the library. ')
-    sp.set_defaults(subcommand='download')
 
 
 
@@ -355,9 +352,6 @@ def library_push(args, l, config):
                     rate = 0
 
 
-
-
-
 def library_files(args, l, config):
 
     files_ = l.files.query.state(args.file_state).all
@@ -365,8 +359,6 @@ def library_files(args, l, config):
         prt("-- Display {} files",args.file_state)
         for f in files_:
             prt("{0:11s} {1:4s} {2}",f.ref,f.state,f.path)
-      
-
 
 
 def library_schema(args, l, config):
@@ -436,13 +428,6 @@ def library_open(args, l, config):
             abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
 
         os.execlp('sqlite3', 'sqlite3', abs_path)
-
-
-def library_download(args, l, config):
-
-    from ..identity import Identity
-
-    return l.download_upstream()
 
 
 def library_sync(args, l, config):

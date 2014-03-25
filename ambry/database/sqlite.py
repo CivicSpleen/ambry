@@ -53,8 +53,10 @@ class SqliteAttachmentMixin(object):
             path = id_.database.path
         elif isinstance(id_,Bundle):
             path = id_.database.path
+        elif id_ is None:
+            raise ValueError("Can't attach: None given for parameter id_")
         else:
-            raise Exception("Can't attach: Don't understand id_: {}".format(repr(id_)))
+            raise ValueError("Can't attach: Don't understand id_: {}".format(repr(id_)))
         
         if name is None:
             import random, string

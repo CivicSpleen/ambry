@@ -45,22 +45,16 @@ def remote_info(args, l, rc):
     from ambry.client.exceptions import NotFound
     
     if args.term:
-        try:
-            dsi = l.upstream.get_ref(args.term)
-        except NotFound:
-            dsi = None
+        ip, ident = l.remote_resolver.resolve_ref_one(args.term)
 
-        if not dsi:
-            fatal("Failed to find record for: {}", args.term)
-            return 
 
-        d = Identity.from_dict(dsi['dataset'])
-        p = Identity.from_dict(dsi['partitions'].items()[0][1]) if dsi['ref_type'] == 'partition' else None
-                
-        _print_info(l,d,p)
+        if ident:
+            _print_bundle_entry(ident, prtf=prt)
+
 
     else:
-        prt(str(l.upstream))
+        for r in l.remotes:
+            print r
 
 def remote_list(args, l, rc, return_meta=False):
     from . import _print_bundle_entry

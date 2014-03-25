@@ -9,12 +9,20 @@ class RowSelector(object):
     """Constructed on a query to a partition, this object allorws rows of a database to be acessed in a
         variety of forms"""
 
-    def __init__(self,partition, sql, index_col = None, *args, **kwargs):
+    def __init__(self,partition, sql=None, index_col = None, *args, **kwargs):
+
+
+        if sql is None:
+            pk = partition.get_table().primary_key.name
+            sql = "SELECT * FROM {} ORDER BY {} ".format(partition.get_table().name, pk)
+
         self.partition = partition
         self.sql = sql
         self.index_col = index_col
         self.args = args
         self.kwargs = kwargs
+
+
 
 
     @property

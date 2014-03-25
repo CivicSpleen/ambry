@@ -512,14 +512,12 @@ class Library(object):
         if isinstance(ref, Identity):
             ref = ref.vid
 
-        #if False and use_remote: # Do we need the remote resolver with remote sync?
-        #    resolver = RemoteResolver(local_resolver=self.resolver, remote_urls=self._remotes)
-        #else:
-        #    resolver = self.resolver
+        if use_remote: # Do we need the remote resolver with remote sync?
+            resolver = RemoteResolver(local_resolver=self.resolver, remote_urls=self._remotes)
+        else:
+            resolver = self.resolver
 
-
-
-        ip, ident = self.resolver.resolve_ref_one(ref, location)
+        ip, ident = resolver.resolve_ref_one(ref, location)
 
         try:
             if ident and self.source:

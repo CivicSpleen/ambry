@@ -286,7 +286,7 @@ class SqlitePartition(PartitionBase):
         return self.database.query(*args, **kwargs)
 
 
-    def select(self,sql,*args, **kwargs):
+    def select(self,sql=None,*args, **kwargs):
         '''Run a query and return an object that allows the selected rows to be returned
         as a data object in numpy, pandas, petl or other forms'''
         from ..database.selector import RowSelector
@@ -315,7 +315,24 @@ class SqlitePartition(PartitionBase):
         with self.bundle.session as s:
             s.merge(self.record)
 
+    def add_view(self, view_name):
+        '''Add a view speficied in the configuration in the views.<viewname> dict. '''
+        from ..dbexceptions import ConfigurationError
 
+        vd = self.bundle.config.get('views',{}).get(view_name,None)
+
+        if not vd:
+            raise ConfigurationError("Didn't file requested view in the configuration. "
+                                     "Should have been at: views.{}".format(view_name) )
+
+        e = self.database.connection.execute
+
+        e('DROP VIEW IF EXISTS {}'.format(view_name))
+
+        e('CREATE VIEW {} AS {} '.format(view_name, vd['sql']))
+
+
+        self.bundle.log("Created view {}".format(view_name))
 
 
     def __repr__(self):
