@@ -250,8 +250,10 @@ class SourceTree(object):
             self.library.files.query.type(Dataset.LOCATION.SOURCE).delete()
 
         for ident in self._dir_list().values():
-            self.sync_bundle(ident.bundle_path, ident, ident.bundle)
-
+            try:
+                self.sync_bundle(ident.bundle_path, ident, ident.bundle)
+            except Exception as e:
+                self.logger.error("Failed to sync: {} : {} ".format(ident.bundle_path, e.message))
 
     def _bundle_data(self, ident, bundle):
 

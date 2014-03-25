@@ -697,7 +697,7 @@ class Library(object):
                 what = 'pushed'
 
             if identity.is_bundle:
-                self.sync_upstream_dataset(identity, md)
+                self.sync_upstream_dataset(file_.path, identity, md)
 
             self.database.session.merge(file_)
             self.database.commit()
