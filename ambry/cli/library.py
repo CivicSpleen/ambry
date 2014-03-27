@@ -23,9 +23,7 @@ def library_parser(cmd):
     group.add_argument('-c', '--client', default=False, dest='is_server', action='store_false',
                        help='Select the client configuration')
 
-
     asp = lib_p.add_subparsers(title='library commands', help='command help')
-
 
     sp = asp.add_parser('push', help='Push new library files')
     sp.set_defaults(subcommand='push')
