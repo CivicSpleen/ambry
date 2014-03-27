@@ -281,7 +281,7 @@ class RelationalDatabase(DatabaseInterface):
 
         if self._connection:
 
-            self.unmanaged_session.commit()
+            self._session.commit()
             self.close_session()
 
             self._connection.close()

@@ -62,6 +62,8 @@ class SourceTree(object):
             else:
                 datasets[ck].locations.set(LocationRef.LOCATION.SOURCE.lower())
 
+            bundle.close()
+
             # We want all of the file data, and the 'data' field, at the same level
             d = file_.dict
             sub_dict = d['data']
@@ -251,7 +253,7 @@ class SourceTree(object):
 
         for ident in self._dir_list().values():
             try:
-                self.sync_bundle(ident.bundle_path, ident, ident.bundle)
+                self.sync_bundle(ident.bundle_path, ident)
             except Exception as e:
                 raise
                 self.logger.error("Failed to sync: bundle_path={} : {} ".format(ident.bundle_path, e.message))
@@ -334,6 +336,8 @@ class SourceTree(object):
 
         f.data = d
 
+        bundle.close()
+
         files.merge(f)
 
 
@@ -375,7 +379,8 @@ class SourceTree(object):
                     datasets[ck].locations.set(LocationRef.LOCATION.SOURCE.lower())
 
                 datasets[ck].bundle_path = root
-                datasets[ck].bundle = bundle
+
+                bundle.close()
 
         return datasets
 

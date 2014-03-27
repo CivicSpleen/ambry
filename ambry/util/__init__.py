@@ -297,13 +297,19 @@ def patch_file_open():
     ''' A Monkey patch to log opening and closing of files, which is useful for debugging
     file descriptor exhaustion'''
     import __builtin__
+    import traceback
     openfiles = set()
     oldfile = __builtin__.file
+
     class newfile(oldfile):
         def __init__(self, *args,**kwargs):
             self.x = args[0]
-            print ("### {} OPENING {} ###".format(len(openfiles), str(self.x)))        
+
+            all_fds = count_open_fds()
+
+            print ("### {} OPENING {} ( {} total )###".format(len(openfiles), str(self.x), all_fds ))
             oldfile.__init__(self, *args,**kwargs)
+
             openfiles.add(self)
     
         def close(self):
@@ -447,7 +453,8 @@ class AttrDict(OrderedDict):
     @classmethod
     def from_yaml(cls, path, if_exists=False):
         if if_exists and not os.path.exists(path): return cls()
-        return cls(yaml.load(open(path), OrderedDictYAMLLoader))
+        with open(path) as f:
+            return cls(yaml.load(f, OrderedDictYAMLLoader))
 
     @staticmethod
     def flatten_dict(data, path=tuple()):
@@ -853,7 +860,6 @@ def _log_rate(output_f,d, message=None):
     d[2] -= 1
 
 
-
 def daemonize(f, args,  rc, prog_name='ambry'):
         '''Run a process as a daemon'''
         import daemon #@UnresolvedImport
@@ -1029,4 +1035,25 @@ class session_context(object):
 
         session.close()
 
+def count_open_fds():
+    '''
+    return the number of open file descriptors for current process
 
+    .. warning: will only work on UNIX-like os-es.
+
+    http://stackoverflow.com/a/7142094
+
+    '''
+    import subprocess
+    import os
+
+    pid = os.getpid()
+    procs = subprocess.check_output(
+        [ "lsof", '-w', '-Ff', "-p", str( pid ) ] )
+
+    nprocs = len(
+        filter(
+            lambda s: s and s[ 0 ] == 'f' and s[1: ].isdigit(),
+            procs.split( '\n' ) )
+        )
+    return nprocs

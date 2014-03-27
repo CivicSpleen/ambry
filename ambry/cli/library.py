@@ -6,7 +6,6 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from ..cli import prt, fatal, warn, Progressor, _print_info #@UnresolvedImport
 import os
 
-
 def library_parser(cmd):
 
     import argparse
@@ -64,12 +63,12 @@ def library_parser(cmd):
     sp = asp.add_parser('sync', help='Synchronize the local directory, upstream and remote with the library')
     sp.set_defaults(subcommand='sync')
     sp.add_argument('-C', '--clean', default=False, action="store_true", help='Clean before syncing. Will clean only the locations that are also synced')
-    group = sp.add_mutually_exclusive_group(required=True)
-    group.add_argument('-a', '--all', default=False, action="store_true", help='Sync everything')
-    group.add_argument('-l', '--library', default=False, action="store_true", help='Sync only the library')
-    group.add_argument('-r', '--remote', default=False, action="store_true", help='Sync only the remote')
-    group.add_argument('-u', '--upstream', default=False, action="store_true", help='Sync only the upstream')
-    group.add_argument('-s', '--source', default=False, action="store_true", help='Sync only the source')
+
+    sp.add_argument('-a', '--all', default=False, action="store_true", help='Sync everything')
+    sp.add_argument('-l', '--library', default=False, action="store_true", help='Sync only the library')
+    sp.add_argument('-r', '--remote', default=False, action="store_true", help='Sync only the remote')
+    sp.add_argument('-u', '--upstream', default=False, action="store_true", help='Sync only the upstream')
+    sp.add_argument('-s', '--source', default=False, action="store_true", help='Sync only the source')
 
 
     sp = asp.add_parser('info', help='Display information about the library')
@@ -433,6 +432,7 @@ def library_open(args, l, config):
 def library_sync(args, l, config):
     '''Synchronize the remotes and the upstream to a local library
     database'''
+
 
     if args.upstream or args.all:
         l.logger.info("==== Sync Upstream")
