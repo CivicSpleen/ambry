@@ -322,6 +322,15 @@ class SqliteDatabase(RelationalDatabase):
         os.remove(self.path)
 
 
+    def add_view(self, name, sql):
+
+        e = self.connection.execute
+
+        e('DROP VIEW IF EXISTS {}'.format(name))
+
+        e('CREATE VIEW {} AS {} '.format(name, sql))
+
+
     def load(self,a, table=None, encoding='utf-8', caster = None, logger=None):
         ''' Load the database from a CSV file '''
         
@@ -432,7 +441,7 @@ class BundleLockContext(object):
             #logger.debug("Failing to acquire lock on {}, bundle already has session".format(self._bundle.dsn))
             #raise Locked("Bundle already has a session, {}".format(repr(self._bundle._session)))
         else:
-            Session = sessionmaker(bind=self._bundle.engine,autocommit=False)
+            Session = sessionmaker(bind=self._bundle.engine, autocommit=False)
             self._session =  Session()
 
         logger.debug("Acquiring lock on {}".format(self._bundle.dsn))

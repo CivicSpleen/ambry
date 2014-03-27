@@ -316,7 +316,7 @@ class SqlitePartition(PartitionBase):
             s.merge(self.record)
 
     def add_view(self, view_name):
-        '''Add a view speficied in the configuration in the views.<viewname> dict. '''
+        '''Add a view specified in the configuration in the views.<viewname> dict. '''
         from ..dbexceptions import ConfigurationError
 
         vd = self.bundle.config.get('views',{}).get(view_name,None)
@@ -325,12 +325,7 @@ class SqlitePartition(PartitionBase):
             raise ConfigurationError("Didn't file requested view in the configuration. "
                                      "Should have been at: views.{}".format(view_name) )
 
-        e = self.database.connection.execute
-
-        e('DROP VIEW IF EXISTS {}'.format(view_name))
-
-        e('CREATE VIEW {} AS {} '.format(view_name, vd['sql']))
-
+        self.database.add_view(view_name, vd['sql'])
 
         self.bundle.log("Created view {}".format(view_name))
 

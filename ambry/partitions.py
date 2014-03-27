@@ -621,7 +621,6 @@ class Partitions(object):
         
         return p
 
-
     def new_memory_partition(self, tables=None, data=None, **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it.
 
@@ -631,6 +630,7 @@ class Partitions(object):
         '''
 
         from partition.sqlite import SqlitePartition
+        from partition import partition_classes
 
         ppn = PartialPartitionName(**kwargs)
 
@@ -645,10 +645,14 @@ class Partitions(object):
 
         op = self._new_orm_partition(ppn, tables=tables, data=data, memory = True)
 
-        p = SqlitePartition(self.bundle, op, memory=True, **kwargs)
+        cls = partition_classes().partition_by_format[kwargs.get('format','db')]
 
+        p = cls(self.bundle, op, memory=True, **kwargs)
 
-        p.create_with_tables(tables)
+        if tables:
+            p.create_with_tables(tables)
+        else:
+            p.create()
 
         return p
 

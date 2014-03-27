@@ -425,6 +425,9 @@ class SourceTree(object):
 
         path =  self.source_path(ident=ident)
 
+        if not path:
+            return None
+
         if path[0] != '/':
             root = os.path.join(self.base_dir, path)
         else:

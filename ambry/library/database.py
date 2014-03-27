@@ -478,7 +478,7 @@ class LibraryDb(object):
 
     def install_dataset(self, bundle):
         """Install only the most basic parts of the bundle, excluding the
-        prtitions and tables. Use install_bundle to install everything.
+        partitions and tables. Use install_bundle to install everything.
 
         This will delete all of the tables and partitions associated with the
         bundle, if they already exist, so callers should check that the dataset does not

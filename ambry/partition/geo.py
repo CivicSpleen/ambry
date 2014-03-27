@@ -79,13 +79,15 @@ class GeoPartition(SqlitePartition):
     def create(self, dest_srs=4326, source_srs=None):
 
         from ambry.geo.sfschema import TableShapefile
-        
-        tsf = TableShapefile(self.bundle, self._db_class.make_path(self), self.identity.table,
-                             dest_srs = dest_srs, source_srs = source_srs )
-        
-        tsf.close()
-        
-        self.add_tables(self.data.get('tables',None))
+
+        if self.identity.table:
+
+            tsf = TableShapefile(self.bundle, self._db_class.make_path(self), self.identity.table,
+                                 dest_srs = dest_srs, source_srs = source_srs )
+
+            tsf.close()
+
+            self.add_tables(self.data.get('tables',None))
 
     def convert(self, table_name, progress_f=None):
         """Convert a spatialite geopartition to a regular arg

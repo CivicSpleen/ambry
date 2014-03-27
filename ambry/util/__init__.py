@@ -42,10 +42,12 @@ class curry:
 
 
 def get_logger(name, file_name = None, template=None):
-    
+
     logger = logging.getLogger(name)
 
-    if  name not in logger_init:
+    # To list all loggers: logging.Logger.manager.loggerDict
+
+    if name not in logger_init:
 
         if not template:
             template = "%(name)s %(levelname)s %(message)s"
@@ -58,12 +60,14 @@ def get_logger(name, file_name = None, template=None):
             ch = logging.StreamHandler(stream=sys.stdout)
 
         ch.setFormatter(formatter)
-        #ch.setLevel(logging.DEBUG)
+        ch.setLevel(logging.DEBUG)
+
         logger.addHandler(ch)
         logger.setLevel(logging.INFO)
         logger._stream = ch.stream
         logger_init.add(name)
-     
+
+
     return logger
 
 

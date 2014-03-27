@@ -244,36 +244,24 @@ class Library(object):
     ## Storing
     ##
 
-    def put_bundle(self, bundle, force=False):
+    def put_bundle(self, bundle, force=False, logger=None, install_partitions=True):
 
-
-        dst, cache_key, url = self.put(bundle, force=force)
-
-        for p in bundle.partitions:
-            self.put(p, force=force)
-
-        return dst, cache_key, url
-
-
-    def put(self, bundle, force=False):
-        '''Install a single bundle or partition file into the library.
-
-        :param bundle: the file object to install
-        :rtype: a `Partition`  or `Bundle` object
-
-        '''
-
-        from ..bundle import Bundle
-        from ..partition import PartitionInterface
-
-        if not isinstance(bundle, (PartitionInterface, Bundle)):
-            raise ValueError("Can only install a Partition or Bundle object")
-
+        self.database.install_bundle(bundle)
         dst, cache_key, url = self._put_file(bundle.identity, bundle.database.path,
                                              force=force)
 
+        if install_partitions:
+            for p in bundle.partitions:
+                self.put_partition(bundle, p, force=force)
+
         return dst, cache_key, url
 
+    def put_partition(self, bundle, partition, force=False):
+        self.database.install_partition(bundle, partition.identity.id_)
+        dst, cache_key, url = self._put_file(partition.identity, partition.database.path,
+                                             force=force)
+
+        return dst, cache_key, url
 
 
     def _put_file(self, identity, file_path, state='new', force=False):
@@ -281,13 +269,18 @@ class Library(object):
         to determine what it is, by using  seperate identity'''
         from ..identity import Identity
         from .files import Files
+        from ..util import md5_for_file
+
 
         if isinstance(identity, dict):
             identity = Identity.from_dict(identity)
 
         dst = None
         if not self.cache.has(identity.cache_key) or force:
+            print '!!!', md5_for_file(file_path), file_path
             dst = self.cache.put(file_path, identity.cache_key)
+            print '!!!', md5_for_file(self.cache.path(dst)), self.cache.path(dst)
+            print '!!!', self.cache
         else:
             dst = self.cache.path(identity.cache_key)
 
@@ -297,13 +290,14 @@ class Library(object):
         if self.upstream and self.sync:
             self.upstream.put(identity, file_path)
 
+        self.files.query.path(dst).group(self.cache.repo_id).delete()
+
         f = self.files.new_file(path=dst,
                                 group=self.cache.repo_id,
                                 ref=identity.vid,
                                 state=state)
 
         if identity.is_bundle:
-            self.database.install_bundle_file(identity, file_path)
             f.type_ = Files.TYPE.BUNDLE
         else:
             f.type_ = Files.TYPE.PARTITION
@@ -798,7 +792,7 @@ class Library(object):
             for p in bundle.partitions:
                 if self.cache.has(p.identity.cache_key, use_upstream=False):
                     self.logger.info('            {} '.format(p.identity.vname))
-                    self.sync_library_partition(p.identity)
+                    self.sync_library_partition(bundle, p.identity)
 
         self.database.commit()
         return bundles
@@ -823,8 +817,10 @@ class Library(object):
             data=None,
             source_url=None)
 
-    def sync_library_partition(self, ident):
+    def sync_library_partition(self, bundle, ident):
         from files import Files
+
+        self.database.install_partition(bundle, ident.id_)
 
         self.files.new_file(
             merge=True,

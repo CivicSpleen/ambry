@@ -8,7 +8,8 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from ..filesystem import  BundleFilesystem
 from ..schema import Schema
 from ..partitions import Partitions
-from ..util import memoize
+import logging
+from ..util import get_logger
 
 import os.path
 from ..dbexceptions import  ConfigurationError, ProcessError
@@ -33,7 +34,6 @@ class Bundle(object):
         self._repository = None
         self._dataset_id = None # Needed in LibraryDbBundle to  disambiguate multiple datasets
 
-        
         # This bit of wackiness allows the var(self.run_args) code
         # to work when there have been no artgs parsed. 
         class null_args(object):
@@ -43,25 +43,23 @@ class Bundle(object):
 
         self.run_args = vars(null_args())
 
-        self._logger = logger
+        self._logger =  logger
 
     @property
     def logger(self):
 
         if not self._logger:
-            from ..util import get_logger
-            import logging
 
             try:
                 ident = self.identity
-                template = ident.sname+" %(message)s"
+                template = "%(levelname)s "+ident.sname+" %(message)s"
             except:
                 template = "%(message)s"
 
             self._logger = get_logger(__name__, template=template)
 
+            self._logger.setLevel(logging.INFO)
 
-            self.logger.setLevel(logging.INFO)
 
         return self._logger
 
@@ -980,7 +978,7 @@ class BuildBundle(Bundle):
         
         return True
     
-    def install(self, library_name=None, delete=False,  force=False):  
+    def install(self, library_name=None, delete=False,  force=True):
         '''Install the bundle and all partitions in the default library'''
      
         import ambry.library
@@ -994,9 +992,9 @@ class BuildBundle(Bundle):
             #library = ambry.library.new_library(self.config.library(library_name), reset=True)
             library = self.library
          
-            self.log("{} Install to  library {}".format(self.identity.name, library.database.dsn))
-            dest = library.put_bundle(self, force=force)
-            self.log("{} Installed".format(dest[1]))
+            self.log("Install   {} to  library {}".format(self.identity.name, library.database.dsn))
+            dest = library.put_bundle(self, force=force, install_partitions=False)
+            self.log("Installed {}".format(dest[1]))
             
             skips = self.config.group('build').get('skipinstall',[])
             
@@ -1007,14 +1005,15 @@ class BuildBundle(Bundle):
                     continue
                 
                 if partition.name in skips:
-                    self.log('{} Skipping'.format(partition.name))
+                    self.log('Skipping {}'.format(partition.name))
                 else:
-                    self.log("{} Install".format(partition.name))  
-                    dest = library.put(partition, force=force)
-                    self.log("{} Installed".format(dest[1]))
+                    self.log("Install   {}".format(partition.name))
+                    dest = library.put_partition(self, partition, force=force)
+                    self.log("Installed {}".format(dest[1]))
+
                     if delete:
                         os.remove(partition.database.path)
-                        self.log("{} Deleted".format(partition.database.path))
+                        self.log("Deleted {}".format(partition.database.path))
                     
 
         return True

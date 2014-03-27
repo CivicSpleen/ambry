@@ -184,6 +184,7 @@ class Schema(object):
      
         self._seen_tables[name] = row
 
+
         if extant:
             self.bundle.session.merge(row)
         else:
