@@ -410,9 +410,6 @@ class BundleLockContext(object):
 
         self._lock = FileLock(self._lock_path)
 
-        if not hasattr(self._bundle,'_lock_depth' ):
-            self._bundle._lock_depth  = 0
-
         tb = traceback.extract_stack()[-4:-3][0]
 
         logger.debug("Using Lock Context, from {} in {}:{}".format(tb[2], tb[0], tb[1]))

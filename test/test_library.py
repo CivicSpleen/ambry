@@ -226,9 +226,9 @@ class Test(TestBase):
         l = self.get_library()
         print l.database.dsn
 
-        l.put(self.bundle)
-        l.put(self.bundle)
- 
+        l.put_bundle(self.bundle)
+        l.put_bundle(self.bundle)
+
         r = l.get(self.bundle.identity)
 
         self.assertIsNotNone(r)
@@ -238,8 +238,8 @@ class Test(TestBase):
         # Install the partition, then check that we can fetch it
         # a few different ways.
         for partition in self.bundle.partitions:
-            l.put(partition)
-            l.put(partition)
+            l.put_partition(self.bundle, partition)
+            l.put_partition(self.bundle, partition)
 
             r = l.get(partition.identity)
             self.assertIsNotNone(r)
@@ -251,7 +251,7 @@ class Test(TestBase):
             
         # Re-install the bundle, then check that the partitions are still properly installed
 
-        l.put(self.bundle)
+        l.put_bundle(self.bundle)
         
         for partition in self.bundle.partitions.all:
        
@@ -294,7 +294,7 @@ class Test(TestBase):
         r = l.find(QueryCommand().table(name='tone').partition(any=True))
         self.assertEquals(0, len(r))      
         
-        l.put(self.bundle)
+        l.put_bundle(self.bundle)
     
         r = l.find(QueryCommand().table(name='tone').partition(any=True))
         self.assertEquals(2, len(r))

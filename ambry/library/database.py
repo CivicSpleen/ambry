@@ -348,8 +348,13 @@ class LibraryDb(object):
         self._engine = None
 
     def commit(self):
-        self.session.commit()
-        self.close_session()
+        try:
+            self.session.commit()
+            self.close_session()
+        except Exception as e:
+            self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))
+            raise
+
 
     def rollback(self):
         self.session.rollback()
@@ -454,8 +459,9 @@ class LibraryDb(object):
                 self.session.rollback()
                 self.session.merge(ds)
                 self.commit()
-        except IntegrityError:
-            raise ConflictError("Can't install dataset; one already exists")
+        except IntegrityError as e:
+            raise ConflictError("Can't install dataset vid={} vname={} cache_key={}; \nOne already exists. ('{}')"
+                                .format(identity.vid, identity.vname, identity.cache_key,  e.message))
 
 
     def install_bundle_file(self, identity, bundle_file):

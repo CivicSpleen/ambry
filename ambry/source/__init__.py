@@ -253,7 +253,8 @@ class SourceTree(object):
             try:
                 self.sync_bundle(ident.bundle_path, ident, ident.bundle)
             except Exception as e:
-                self.logger.error("Failed to sync: {} : {} ".format(ident.bundle_path, e.message))
+                raise
+                self.logger.error("Failed to sync: bundle_path={} : {} ".format(ident.bundle_path, e.message))
 
     def _bundle_data(self, ident, bundle):
 
@@ -275,7 +276,13 @@ class SourceTree(object):
 
 
         if not bundle and os.path.exists(path):
-            bundle = self.bundle(path)
+            try:
+                bundle = self.bundle(path)
+            except Exception as e:
+                raise
+                self.logger.error("Failed to load bundle for {}".format(path))
+                pass
+
 
         if not ident and bundle:
             ident = bundle.identity
@@ -570,7 +577,7 @@ class SourceTree(object):
             from ..util import rm_rf
 
             rm_rf(bundle_dir)
-            raise SyncError("Failed to sync bundle at {}  ; {}. Bundle deleted".format(bundle_dir, e.message))
+            raise SyncError("Failed to sync bundle at {} ('{}') . Bundle deleted".format(bundle_dir, e.message))
         else:
             self.logger.info("CREATED: {}, {}", ident.fqname, bundle_dir)
 

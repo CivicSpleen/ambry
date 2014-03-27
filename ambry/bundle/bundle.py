@@ -44,6 +44,7 @@ class Bundle(object):
         self.run_args = vars(null_args())
 
         self._logger =  logger
+        self._library_name = 'default'
 
     def __del__(self):
         self.close()
@@ -135,7 +136,7 @@ class Bundle(object):
     @property
     def dataset(self):
         '''Return the dataset'''
-        return self.get_dataset(self.database.unmanaged_session)
+        return self.get_dataset(self.database.session)
 
     def _dep_cb(self, library, key, name, resolved_bundle):
         '''A callback that is called when the library resolves a dependency.
@@ -160,7 +161,7 @@ class Bundle(object):
         if self._library:
             l = self._library
         else:
-            l = new_library(self.config.library('default'))
+            l = new_library(self.config.library(self._library_name))
 
         l.logger = self.logger
         l.database.logger = self.logger
@@ -172,6 +173,16 @@ class Bundle(object):
     @library.setter
     def library(self, value):
         self._library = value
+
+
+    @property
+    def library_name(self):
+        return self._library_name
+
+    @library_name.setter
+    def library_name(self, value):
+        self._library_name = value
+        self._library = None
 
     @property
     def path(self):
@@ -779,7 +790,7 @@ class BuildBundle(Bundle):
         # Need to expire the unmanaged cache, or the regeneration of the schema may 
         # use the cached schema object rather than the ones we just updated, if the schem objects
         # have alread been loaded. 
-        self.database.unmanaged_session.expire_all()
+        self.database.session.expire_all()
 
         with open(sf_out, 'w') as f:
             self.schema.as_csv(f)    

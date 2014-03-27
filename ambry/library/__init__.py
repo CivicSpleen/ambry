@@ -464,7 +464,7 @@ class Library(object):
             except KeyboardInterrupt:
                 raise
 
-            self.sync_library_partition(partition.identity)
+            self.sync_library_partition(bundle, partition.identity)
 
             if not partition:
                 from ..dbexceptions import NotFoundError
@@ -528,13 +528,17 @@ class Library(object):
         """"Bundle version of get(), which uses a key in the
         bundles configuration group 'dependencies' to resolve to a name"""
         from ..dbexceptions import DependencyError
+        from sqlalchemy.orm.exc import NoResultFound
 
         object_ref = self.dependencies.get(name, False)
 
         if not object_ref:
             raise DependencyError("No dependency named '{}'".format(name))
 
-        o = self.get(object_ref)
+        try:
+            o = self.get(object_ref)
+        except NoResultFound:
+            o = None
 
         if not o:
             raise DependencyError("Failed to get dependency, key={}, id={}".format(name, object_ref))

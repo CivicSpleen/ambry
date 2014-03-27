@@ -59,7 +59,7 @@ class Schema(object):
         
         from ambry.orm import Dataset
 
-        return (self.bundle.database.unmanaged_session.query(Dataset).one())
+        return (self.bundle.database.session.query(Dataset).one())
 
     def clean(self):
         '''Delete all tables and columns. 
@@ -84,7 +84,7 @@ class Schema(object):
 
         from ambry.orm import Table
         
-        q = (self.bundle.database.unmanaged_session.query(Table).filter(Table.d_id==self.d_id))
+        q = (self.bundle.database.session.query(Table).filter(Table.d_id==self.d_id))
 
         return q.all()
 
@@ -125,7 +125,7 @@ class Schema(object):
         of get_table_from_database'''
 
         return Schema.get_table_from_database(self.bundle.database, name_or_id,
-                                              session = self.bundle.database.unmanaged_session,
+                                              session = self.bundle.database.session,
                                               d_vid = self.bundle.identity.vid)
 
     def column(self, table, column_name):
@@ -187,9 +187,9 @@ class Schema(object):
 
 
         if extant:
-            self.bundle.database.unmanaged_session.merge(row)
+            self.bundle.database.session.merge(row)
         else:
-            self.bundle.database.unmanaged_session.add(row)
+            self.bundle.database.session.add(row)
 
         return row
 
@@ -217,7 +217,7 @@ class Schema(object):
         from orm import Table, Column
         from sqlalchemy.orm.exc import NoResultFound
 
-        s = self.bundle.database.unmanaged_session
+        s = self.bundle.database.session
 
         try:
             table = (s.query(Table).filter(Table.name == table_name)).one()
@@ -239,7 +239,7 @@ class Schema(object):
     def columns(self):
         '''Return a list of tables for this bundle'''
         from ambry.orm import Column
-        return (self.bundle.database.unmanaged_session.query(Column).all())
+        return (self.bundle.database.session.query(Column).all())
 
     @classmethod        
     def validate_column(cls, table, column, warnings, errors):  
@@ -330,7 +330,7 @@ class Schema(object):
     def get_table_meta(self, name_or_id, use_id=False, driver=None, alt_name=None):
         '''Method version of get_table_meta_from_db'''
         return self.get_table_meta_from_db(self.bundle.database, name_or_id, use_id, driver,
-                                           session = self.bundle.database.unmanaged_session,
+                                           session = self.bundle.database.session,
                                            alt_name = alt_name)
 
 
@@ -1073,7 +1073,7 @@ class {name}(Base):
 
         # Need to expire the unmanaged cache, or the regeneration of the schema in _revise_schema will 
         # use the cached schema object rather than the ones we just updated. 
-        self.bundle.database.unmanaged_session.expire_all()
+        self.bundle.database.session.expire_all()
     
     
     def extract_columns(self, extract_table, extra_columns=None):
@@ -1333,7 +1333,7 @@ class {name}(Base):
         # Need to expire the unmanaged cache, or the regeneration of the schema in _revise_schema will 
         # use the cached schema object rather than the ones we just updated, if the schem objects
         # have alread been loaded. 
-        self.bundle.database.unmanaged_session.expire_all()
+        self.bundle.database.session.expire_all()
  
     def update(self, table_name, itr, logger=None):
         '''Update the schema from an interator that returns rows. '''

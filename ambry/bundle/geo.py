@@ -43,5 +43,5 @@ class GeoBuildBundle(BuildBundle):
 
 
         for p in self.partitions:
-            print p.info()
+            print p.info
         return True

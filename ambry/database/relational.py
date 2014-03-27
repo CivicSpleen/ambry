@@ -205,11 +205,13 @@ class RelationalDatabase(DatabaseInterface):
 
         if not self._connection:
             try:
+
                 self._connection = self.engine.connect()
                 self._on_create_connection(self._connection)
             except Exception as e:
                 self.error("Failed to open: '{}': {} ".format(self.dsn, e))
                 raise
+
             
         return self._connection
 
