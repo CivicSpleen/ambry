@@ -534,6 +534,38 @@ class Test(TestBase):
         print b.partitions._repr_html_()
 
 
+    def test_session(self):
+
+        from ambry.database.sqlite import logger
+        import logging
+        import uuid
+
+        logger.setLevel(logging.DEBUG)
+
+        b = self.bundle
+
+        uv = str(uuid.uuid4())
+
+        with b.session as s1:
+            with b.session as s2:
+                b.db_config.set_value('test', 'uuid', uv )
+
+        b.close()
+
+
+        self.assertEqual(uv,  b.db_config.get_value('test', 'uuid'))
+
+        uv2 = str(uuid.uuid4())
+
+        self.assertNotEqual(uv, uv2)
+
+        with b.session as s1:
+            with b.session as s2:
+                b.db_config.set_value('test', 'uuid', uv2)
+
+        self.assertEqual(uv2, b.db_config.get_value('test', 'uuid'))
+
+        b.db_config.set_value('test', 'uuid', uv2)
 
 def suite():
     suite = unittest.TestSuite()

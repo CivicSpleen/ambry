@@ -71,7 +71,7 @@ class RelationalDatabase(DatabaseInterface):
         self.logger = get_logger(__name__)
         self.logger.setLevel(logging.INFO) 
         
-        self._unmanaged_session = None
+        self._session = None
 
     def log(self,message):
         self.logger.info(message)
@@ -226,30 +226,32 @@ class RelationalDatabase(DatabaseInterface):
 
     @property
     def unmanaged_session(self):
-        from sqlalchemy import event
+        return self.session
 
-        if not self._unmanaged_session:
-            from sqlalchemy.orm import sessionmaker
-            Session = sessionmaker(bind=self.engine)
-            self._unmanaged_session = Session()
-
-        return self._unmanaged_session
 
     @property
     def session(self):
-        return self.unmanaged_session
+        from sqlalchemy import event
+
+        if not self._session:
+            from sqlalchemy.orm import sessionmaker
+
+            Session = sessionmaker(bind=self.engine)
+            self._session = Session()
+
+        return self._session
 
 
     @property
     def creation_session(self):
         '''Writable Session to be used during databasecreation'''
 
-        return self.unmanaged_session
+        return self.session
 
 
     def close_session(self):
-        self._unmanaged_session.close()
-        self._unmanaged_session = None
+        self._session.close()
+        self._session = None
 
     @property
     def metadata(self):

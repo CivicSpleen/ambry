@@ -404,7 +404,8 @@ class BundleLockContext(object):
         from lockfile import FileLock
 
         self._bundle = bundle
-        
+        self._database = self._bundle.database
+
         self._lock_path = self._bundle.path
 
         self._lock = FileLock(self._lock_path)
@@ -416,52 +417,52 @@ class BundleLockContext(object):
 
         logger.debug("Using Lock Context, from {} in {}:{}".format(tb[2], tb[0], tb[1]))
         
-            
+        self._lock_depth = 0
+
     def __enter__( self ):
         from sqlalchemy.orm import sessionmaker
         from ambry.dbexceptions import Locked
         import lockfile
 
-        self._session =  self._bundle._unmanaged_session
+        logger.debug("Acquiring lock on {}".format(self._database.dsn))
 
-        logger.debug("Acquiring lock on {}".format(self._bundle.dsn))
-        
+
         while True:
             try:
                 self._lock.acquire(5)
-                    
-                self._bundle._lock_depth += 1
-                logger.debug("Acquired lock on {}. Depth = {}".format(self._bundle.dsn, self._bundle._lock_depth))
+                self._lock_depth += 1
+                logger.debug("Acquired lock on {}. Depth = {}".format(self._database.dsn, self._lock_depth))
                 break
             except lockfile.LockTimeout as e:
                 logger.warn(e.message)
 
 
-        return self._session
+        return self._database.session
     
     def __exit__( self, exc_type, exc_val, exc_tb ):
 
         if  exc_type is not None:
             logger.debug("Release lock and rollback on exception: {}".format(exc_val))
-            self._session.rollback()
-            self._bundle._lock_depth -= 1
+            self._database.session.rollback()
+            self._lock_depth -= 1
             self._lock.release()
-            self._session.close()
-            self._session = None
+            self._database.close_session()
             raise
             return False
+
         else:
-            logger.debug("Release lock and commit session {}. Depth = {}".format(repr(self._session), self._bundle._lock_depth))
+            logger.debug("Release lock and commit session {}. Depth = {}".format(repr(self._database.session), self._lock_depth))
             try:
-                self._session.commit()
+                self._database.session.commit()
             except Exception as e:
                 logger.debug('Exception: ' + e.message)
-                self._session.rollback()
+
+                self._database.session.rollback()
                 raise
             finally:
-                self._bundle._lock_depth -= 1
-                if self._bundle._lock_depth == 0:
-                    logger.debug("Released lock and commit session {}".format(repr(self._session)))
+                self._lock_depth -= 1
+                if self._lock_depth == 0:
+                    logger.debug("Released lock and commit session {}".format(repr(self._database.session)))
                     self._lock.release()
             
             return True
@@ -481,8 +482,6 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
         RelationalBundleDatabaseMixin._init(self, bundle)
         super(SqliteBundleDatabase, self).__init__(dbname,  **kwargs)
-
-        self._session = None # This is controlled by the BundleLockContext
 
     def _on_create_connection(self, connection):
         '''Called from get_connection() to update the database'''
@@ -522,16 +521,6 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
             self.post_create()
 
 
-    @property
-    def session(self):
-        from ..dbexceptions import  NoLock
-
-        if not self._session:
-            raise Exception("Should always use a managed session")
-
-        logger.debug("    Using a managed session {} for {}".format(repr(self._session),self.dsn))
-        return self._session
-
 
     @property
     def has_session(self):
@@ -547,12 +536,9 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         except OperationalError as e:
             raise QueryError("Error while executing {} in database {} ({}): {}".format(args, self.dsn, type(self), e.message))
 
-                
-    @property
-    def lock(self):
-        return BundleLockContext(self)
-        
-            
+
+
+
     def copy_table_from(self, source_db, table_name):
         '''Copy the definition of a table from a soruce database to this one
         

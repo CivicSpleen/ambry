@@ -407,6 +407,7 @@ class BuildBundle(Bundle):
     def __init__(self, bundle_dir=None):
         '''
         '''
+        from ..database.sqlite import BundleLockContext
 
         super(BuildBundle, self).__init__()
         
@@ -446,6 +447,9 @@ class BuildBundle(Bundle):
        
         self.exit_on_fatal = True
 
+        self._bundle_lock_context = BundleLockContext(self)
+
+
     def _load_config(self):
         self._config = BundleFileConfig(self.bundle_dir)
 
@@ -482,7 +486,7 @@ class BuildBundle(Bundle):
 
     @property
     def session(self):
-        return self.database.lock
+        return self._bundle_lock_context
 
     @property
     def has_session(self):
