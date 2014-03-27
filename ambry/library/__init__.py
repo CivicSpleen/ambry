@@ -434,6 +434,7 @@ class Library(object):
         if not d:
             self.sync_library_dataset(bundle)
 
+
         bundle.library = self
 
         if dataset.partition:
