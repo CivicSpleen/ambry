@@ -230,21 +230,7 @@ class SqliteDatabase(RelationalDatabase):
 
         return super(SqliteDatabase, self).get_connection(check_exists)
 
-    @property
-    def unmanaged_session(self):
 
-        def abort_flush():
-            from ambry.dbexceptions import ConflictError
-            raise ConflictError('Unmanaged sessions are read-only. Use a managed session to write to the database')
-        
-        if not self._unmanaged_session:
-            from sqlalchemy.orm import sessionmaker
-            Session = sessionmaker(bind=self.engine,autocommit=False, autoflush=False)
-            self._unmanaged_session =  Session()
-            
-            self._unmanaged_session.flush = abort_flush # Monkeypatch to make read-only
-
-        return self._unmanaged_session
 
     def _create(self):
         """Need to ensure the database exists before calling for the connection, but the
@@ -435,14 +421,8 @@ class BundleLockContext(object):
         from sqlalchemy.orm import sessionmaker
         from ambry.dbexceptions import Locked
         import lockfile
-        
-        if self._bundle._session:
-            self._session = self._bundle._session
-            #logger.debug("Failing to acquire lock on {}, bundle already has session".format(self._bundle.dsn))
-            #raise Locked("Bundle already has a session, {}".format(repr(self._bundle._session)))
-        else:
-            Session = sessionmaker(bind=self._bundle.engine, autocommit=False)
-            self._session =  Session()
+
+        self._session =  self._bundle._unmanaged_session
 
         logger.debug("Acquiring lock on {}".format(self._bundle.dsn))
         
@@ -456,7 +436,7 @@ class BundleLockContext(object):
             except lockfile.LockTimeout as e:
                 logger.warn(e.message)
 
-        self._bundle._session = self._session
+
         return self._session
     
     def __exit__( self, exc_type, exc_val, exc_tb ):
@@ -466,15 +446,16 @@ class BundleLockContext(object):
             self._session.rollback()
             self._bundle._lock_depth -= 1
             self._lock.release()
-            self._bundle._session.close()
-            self._bundle._session = None
+            self._session.close()
+            self._session = None
             raise
             return False
         else:
             logger.debug("Release lock and commit session {}. Depth = {}".format(repr(self._session), self._bundle._lock_depth))
             try:
                 self._session.commit()
-            except:
+            except Exception as e:
+                logger.debug('Exception: ' + e.message)
                 self._session.rollback()
                 raise
             finally:
@@ -482,8 +463,6 @@ class BundleLockContext(object):
                 if self._bundle._lock_depth == 0:
                     logger.debug("Released lock and commit session {}".format(repr(self._session)))
                     self._lock.release()
-                    self._bundle._session.close()
-                    self._bundle._session = None
             
             return True
             
@@ -542,19 +521,18 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
             self.post_create()
 
-        
+
     @property
     def session(self):
         from ..dbexceptions import  NoLock
-        
+
         if not self._session:
-            return self.unmanaged_session
+            raise Exception("Should always use a managed session")
 
         logger.debug("    Using a managed session {} for {}".format(repr(self._session),self.dsn))
         return self._session
-        
-    
-        
+
+
     @property
     def has_session(self):
         return self._session is not None
@@ -687,9 +665,6 @@ def _on_connect_update_sqlite_schema(conn, con_record):
 
     conn.execute('PRAGMA user_version = {}'.format(SqliteDatabase.SCHEMA_VERSION))
 
-
-
- 
 def insert_or_ignore(table, columns):
     return  ("""INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values})"""
                             .format(

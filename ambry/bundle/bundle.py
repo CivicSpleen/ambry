@@ -45,6 +45,14 @@ class Bundle(object):
 
         self._logger =  logger
 
+    def __del__(self):
+        self.close()
+
+
+    def close(self):
+        if self._database:
+            self._database.close()
+
     @property
     def logger(self):
 
@@ -127,9 +135,8 @@ class Bundle(object):
     @property
     def dataset(self):
         '''Return the dataset'''
-        return self.get_dataset(self.database.session)
+        return self.get_dataset(self.database.unmanaged_session)
 
-       
     def _dep_cb(self, library, key, name, resolved_bundle):
         '''A callback that is called when the library resolves a dependency.
         It stores the resolved dependency into the bundle database'''
@@ -637,7 +644,8 @@ class BuildBundle(Bundle):
         mf = self.filesystem.meta_path(self.META_COMPLETE_MARKER)
         with open(mf,'w+') as f:
             f.write(str(datetime.datetime.now()))
-    
+
+        self.close()
         return True
 
     ### Prepare is run before building, part of the devel process.  
@@ -807,11 +815,15 @@ class BuildBundle(Bundle):
                 self.log("---- Done Preparing ----")
             else:
                 self.log("---- Prepare exited with failure ----")
-                return False
+                r =  False
         else:
             self.log("---- Skipping prepare ---- ")
 
-        return True
+        r =  True
+
+        self.close()
+        return r
+
 
     ### Build the final package
 
@@ -931,13 +943,16 @@ class BuildBundle(Bundle):
             if self.build_main():
                 self.post_build()
                 self.log("---- Done Building ---")
-                return True
+                r = True
             else:
                 self.log("---- Build exited with failure ---")
-                return False
+                r = False
         else:
             self.log("---- Skipping Build ---- ")
-            return False
+            r = False
+
+        self.close()
+        return r
 
 
 
@@ -967,6 +982,8 @@ class BuildBundle(Bundle):
             self.db_config.set_value('process', 'updated', datetime.now().isoformat())
             self.db_config.set_value('process', 'updatetime',time()-self._update_time)
             self.update_configuration()
+
+        self.close()
         return True
         
     ### Submit the package to the library
@@ -1022,6 +1039,7 @@ class BuildBundle(Bundle):
         from datetime import datetime
         self.db_config.set_value('process', 'installed', datetime.now().isoformat())
         self.library.source.set_bundle_state(self.identity, 'installed')
+        self.close()
         return True
     
     ### Submit the package to the repository
@@ -1041,6 +1059,7 @@ class BuildBundle(Bundle):
     def post_submit(self):
         from datetime import datetime
         self.db_config.set_value('process', 'submitted', datetime.now().isoformat())
+        self.close()
         return True
 
     ### Submit the package to the repository
@@ -1056,6 +1075,7 @@ class BuildBundle(Bundle):
     def post_extract(self):
         from datetime import datetime
         self.db_config.set_value('process', 'extracted', datetime.now().isoformat())
+        self.close()
         return True
     
     

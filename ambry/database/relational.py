@@ -8,10 +8,13 @@ from . import DatabaseInterface #@UnresolvedImport
 from .inserter import  ValueInserter
 import os 
 import logging
-from ambry.util import get_logger
+from ambry.util import get_logger, memoize
 from ..database.inserter import SegmentedInserter, SegmentInserterFactory
 from contextlib import contextmanager
-             
+
+
+
+
 
 class RelationalDatabase(DatabaseInterface):
     '''Represents a Sqlite database'''
@@ -101,7 +104,7 @@ class RelationalDatabase(DatabaseInterface):
         return True
     
     def is_empty(self):
-        
+
         if not 'config' in self.inspector.get_table_names():
             return True
         else:
@@ -134,8 +137,10 @@ class RelationalDatabase(DatabaseInterface):
         
         if not 'config' in self.inspector.get_table_names():
             Config.__table__.create(bind=self.engine) #@UndefinedVariable
-        
-        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'process','dbcreated', datetime.now().isoformat(), session=self.creation_session )
+
+        session = self.creation_session
+        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'process','dbcreated',
+                              datetime.now().isoformat(), session=session )
         
     def post_create(self):
         '''Call all implementations of _post_create in this object's class heirarchy'''
@@ -221,28 +226,30 @@ class RelationalDatabase(DatabaseInterface):
 
     @property
     def unmanaged_session(self):
-        
+        from sqlalchemy import event
 
         if not self._unmanaged_session:
             from sqlalchemy.orm import sessionmaker
-            Session = sessionmaker(bind=self.engine,autocommit=False, autoflush=False)
-            self._unmanaged_session =  Session()
+            Session = sessionmaker(bind=self.engine)
+            self._unmanaged_session = Session()
 
         return self._unmanaged_session
 
     @property
     def session(self):
         return self.unmanaged_session
-    
+
+
     @property
     def creation_session(self):
         '''Writable Session to be used during databasecreation'''
 
-        from sqlalchemy.orm import sessionmaker
-        Session = sessionmaker(bind=self.engine,autocommit=False, autoflush=False)
-        return Session()
+        return self.unmanaged_session
 
 
+    def close_session(self):
+        self._unmanaged_session.close()
+        self._unmanaged_session = None
 
     @property
     def metadata(self):
@@ -269,6 +276,10 @@ class RelationalDatabase(DatabaseInterface):
     def close(self):
 
         if self._connection:
+
+            self.unmanaged_session.commit()
+            self.close_session()
+
             self._connection.close()
             self._connection = None
 
@@ -451,7 +462,7 @@ class RelationalBundleDatabaseMixin(object):
         except:
             ds.creator = 'n/a'
 
-        self.session.merge(ds)
+        self.unmanaged_session.merge(ds)
 
     def _post_create(self):
         from ..orm import Config
@@ -481,7 +492,7 @@ class RelationalPartitionDatabaseMixin(object):
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid )
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'partition','vname', self.partition.identity.vname )
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'partition','vid', self.partition.identity.vid )
-        self.session.commit()
+        self.unmanaged_session.commit()
 
 
 

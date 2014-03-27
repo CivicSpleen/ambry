@@ -47,7 +47,7 @@ class Partitions(object):
         
         from partition import new_partition
         
-        session = self.bundle.database.session
+        session = self.bundle.database.unmanaged_session
 
         if isinstance(arg,OrmPartition):
             orm_partition = arg
@@ -72,7 +72,7 @@ class Partitions(object):
     def count(self):
         from ambry.orm import Partition as OrmPartition
     
-        return (self.bundle.database.session.query(OrmPartition)
+        return (self.bundle.database.unmanaged_session.query(OrmPartition)
                 .filter(OrmPartition.d_vid == self.bundle.dataset.vid)).count()
     
     @property 
@@ -86,7 +86,7 @@ class Partitions(object):
         try:
             ds = self.bundle.dataset
             
-            q = (self.bundle.database.session.query(OrmPartition)
+            q = (self.bundle.database.unmanaged_session.query(OrmPartition)
                                     .filter(OrmPartition.d_vid == ds.vid)
                                     .order_by(OrmPartition.vid.asc())
                                     .order_by(OrmPartition.segment.asc()))
@@ -105,7 +105,7 @@ class Partitions(object):
         try:
             ds = self.bundle.dataset
             
-            q = (self.bundle.database.session.query(OrmPartition)
+            q = (self.bundle.database.unmanaged_session.query(OrmPartition)
                                     .filter(OrmPartition.d_vid == ds.vid)
                                     .filter(OrmPartition.format != 'csv')
                                     .order_by(OrmPartition.vid.asc())
@@ -146,7 +146,7 @@ class Partitions(object):
         if isinstance(id_, PartitionIdentity):
             id_ = id_.identity.id_
      
-        s = self.bundle.database.session
+        s = self.bundle.database.unmanaged_session
         
         q = (s
              .query(OrmPartition)
@@ -192,7 +192,7 @@ class Partitions(object):
         from ambry.orm import Partition as OrmPartition
         from sqlalchemy import or_
 
-        q = (self.bundle.database.session.query(OrmPartition)
+        q = (self.bundle.database.unmanaged_session.query(OrmPartition)
              .filter(or_(
                          OrmPartition.id_==str(id_).encode('ascii'),
                           OrmPartition.vid==str(id_).encode('ascii')
@@ -268,7 +268,7 @@ class Partitions(object):
     
         pnq = pnq.with_none()
 
-        q =  self.bundle.database.session.query(OrmPartition)
+        q =  self.bundle.database.unmanaged_session.query(OrmPartition)
         
         if pnq.fqname is not NameQuery.ANY:
             q = q.filter(OrmPartition.fqname==pnq.fqname)
@@ -331,7 +331,7 @@ class Partitions(object):
      
         pname.is_valid()
      
-        session = self.bundle.database.session
+        session = self.bundle.database.unmanaged_session
 
         if pname.table:
             q =session.query(Table).filter( (Table.name==pname.table) |  (Table.id_==pname.table) )
@@ -659,7 +659,7 @@ class Partitions(object):
     def delete(self, partition):
         from ambry.orm import Partition as OrmPartition
  
-        q = (self.bundle.database.session.query(OrmPartition)
+        q = (self.bundle.database.unmanaged_session.query(OrmPartition)
              .filter(OrmPartition.id_==partition.identity.id_))
       
         q.delete()

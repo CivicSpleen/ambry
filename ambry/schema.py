@@ -59,7 +59,7 @@ class Schema(object):
         
         from ambry.orm import Dataset
 
-        return (self.bundle.database.session.query(Dataset).one())
+        return (self.bundle.database.unmanaged_session.query(Dataset).one())
 
     def clean(self):
         '''Delete all tables and columns. 
@@ -84,7 +84,7 @@ class Schema(object):
 
         from ambry.orm import Table
         
-        q = (self.bundle.database.session.query(Table).filter(Table.d_id==self.d_id))
+        q = (self.bundle.database.unmanaged_session.query(Table).filter(Table.d_id==self.d_id))
 
         return q.all()
 
@@ -124,7 +124,8 @@ class Schema(object):
         '''Return an orm.Table object, from either the id or name. This is the cleaa method version
         of get_table_from_database'''
 
-        return Schema.get_table_from_database(self.bundle.database, name_or_id, session = self.bundle.database.session, 
+        return Schema.get_table_from_database(self.bundle.database, name_or_id,
+                                              session = self.bundle.database.unmanaged_session,
                                               d_vid = self.bundle.identity.vid)
 
     def column(self, table, column_name):
@@ -186,9 +187,9 @@ class Schema(object):
 
 
         if extant:
-            self.bundle.session.merge(row)
+            self.bundle.database.unmanaged_session.merge(row)
         else:
-            self.bundle.session.add(row)
+            self.bundle.database.unmanaged_session.add(row)
 
         return row
 
@@ -216,7 +217,7 @@ class Schema(object):
         from orm import Table, Column
         from sqlalchemy.orm.exc import NoResultFound
 
-        s = self.bundle.database.session
+        s = self.bundle.database.unmanaged_session
 
         try:
             table = (s.query(Table).filter(Table.name == table_name)).one()
@@ -238,7 +239,7 @@ class Schema(object):
     def columns(self):
         '''Return a list of tables for this bundle'''
         from ambry.orm import Column
-        return (self.bundle.database.session.query(Column).all())
+        return (self.bundle.database.unmanaged_session.query(Column).all())
 
     @classmethod        
     def validate_column(cls, table, column, warnings, errors):  
@@ -329,7 +330,7 @@ class Schema(object):
     def get_table_meta(self, name_or_id, use_id=False, driver=None, alt_name=None):
         '''Method version of get_table_meta_from_db'''
         return self.get_table_meta_from_db(self.bundle.database, name_or_id, use_id, driver,
-                                           session = self.bundle.database.session,
+                                           session = self.bundle.database.unmanaged_session,
                                            alt_name = alt_name)
 
 
