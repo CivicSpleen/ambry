@@ -162,8 +162,7 @@ class Bundle(object):
         else:
             l = new_library(self.config.library('default'))
 
-        l.logger =\
-            self.logger
+        l.logger = self.logger
         l.database.logger = self.logger
         l.bundle = self
         l.dep_cb = self._dep_cb

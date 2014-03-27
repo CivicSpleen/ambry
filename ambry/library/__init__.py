@@ -277,10 +277,8 @@ class Library(object):
 
         dst = None
         if not self.cache.has(identity.cache_key) or force:
-            print '!!!', md5_for_file(file_path), file_path
             dst = self.cache.put(file_path, identity.cache_key)
-            print '!!!', md5_for_file(self.cache.path(dst)), self.cache.path(dst)
-            print '!!!', self.cache
+
         else:
             dst = self.cache.path(identity.cache_key)
 
