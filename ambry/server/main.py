@@ -168,7 +168,7 @@ def _host_port(library):
     if not urlh.startswith('http'):
         urlh = "http://"+urlh
 
-    return '{}'.format(library.urlhost)
+    return '{}'.format(urlh)
     #return  'http://{}{}'.format(library.host, ':'+str(library.port) if library.port != 80 else '')
 
 
