@@ -529,7 +529,7 @@ class LibraryDb(object):
 
 
 
-    def install_bundle(self, bundle):
+    def install_bundle(self, bundle, install_partitions = True):
         '''Copy the schema and partitions lists into the library database
 
         '''
@@ -561,8 +561,9 @@ class LibraryDb(object):
                 s.merge(column)
 
 
-        for partition in dataset.partitions:
-            s.merge(partition)
+        if install_partitions:
+            for partition in dataset.partitions:
+                s.merge(partition)
 
         try:
             self.commit()
@@ -571,7 +572,7 @@ class LibraryDb(object):
             self.rollback()
             raise e
 
-    def install_partition(self, bundle,  p_id, install_bundle=True):
+    def install_partition(self, bundle,  p_id, install_bundle=True, install_tables = True):
         """Install a single partition and its tables. This is mostly
         used for installing into warehouses, where it isn't desirable to install
         the whole bundle"""
@@ -593,17 +594,18 @@ class LibraryDb(object):
 
         s = self.session
 
-        for table_name in partition.tables:
-            table = bundle.schema.table(table_name)
+        if install_tables:
+            for table_name in partition.tables:
+                table = bundle.schema.table(table_name)
 
-            try:
-                s.query(Table).filter(Table.vid == table.vid).one()
-                # the library already has the table
-            except NoResultFound as e:
-                s.merge(table)
+                try:
+                    s.query(Table).filter(Table.vid == table.vid).one()
+                    # the library already has the table
+                except NoResultFound as e:
+                    s.merge(table)
 
-                for column in table.columns:
-                    s.merge(column)
+                    for column in table.columns:
+                        s.merge(column)
 
         s.merge(partition.record)
 

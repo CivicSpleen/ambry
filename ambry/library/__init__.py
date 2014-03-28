@@ -779,7 +779,7 @@ class Library(object):
             self.logger.info('Installing: {} '.format(bundle.identity.vname))
 
             try:
-                self.sync_library_dataset(bundle)
+                self.sync_library_dataset(bundle, install_partitions=False)
             except Exception as e:
                 self.logger.error('Failed to install bundle {}'.format(bundle.identity.vname))
                 continue
@@ -787,7 +787,7 @@ class Library(object):
             for p in bundle.partitions:
                 if self.cache.has(p.identity.cache_key, use_upstream=False):
                     self.logger.info('            {} '.format(p.identity.vname))
-                    self.sync_library_partition(bundle, p.identity)
+                    self.sync_library_partition(bundle, p.identity, install_tables=False)
 
         self.database.commit()
         return bundles
@@ -800,9 +800,10 @@ class Library(object):
 
         ident  = bundle.identity
 
-        self.database.install_bundle(bundle)
+        self.database.install_bundle(bundle, install_partitions = False)
 
         self.files.new_file(
+            commit=False,
             merge=True,
             path=bundle.database.path,
             group=self.cache.repo_id,
@@ -812,10 +813,11 @@ class Library(object):
             data=None,
             source_url=None)
 
-    def sync_library_partition(self, bundle, ident):
+    def sync_library_partition(self, bundle, ident, install_tables=True):
         from files import Files
 
-        self.database.install_partition(bundle, ident.id_, install_bundle=False)
+        self.database.install_partition(bundle, ident.id_,
+                                        install_bundle=False, install_tables=install_tables)
 
         self.files.new_file(
             commit = False,
