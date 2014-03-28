@@ -571,7 +571,7 @@ class LibraryDb(object):
             self.rollback()
             raise e
 
-    def install_partition(self, bundle,  p_id):
+    def install_partition(self, bundle,  p_id, install_bundle=True):
         """Install a single partition and its tables. This is mostly
         used for installing into warehouses, where it isn't desirable to install
         the whole bundle"""
@@ -580,13 +580,14 @@ class LibraryDb(object):
         from ..identity import PartitionNameQuery
         from sqlalchemy.orm.exc import NoResultFound
 
-        try:
-            b = self.get(bundle.identity.vid)
-        except NotFoundError:
-            b = None
+        if install_bundle:
+            try:
+                b = self.get(bundle.identity.vid)
+            except NotFoundError:
+                b = None
 
-        if not b:
-            self.install_bundle(bundle)
+            if not b:
+                self.install_bundle(bundle)
 
         partition = bundle.partitions.get(p_id)
 

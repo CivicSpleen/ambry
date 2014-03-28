@@ -365,7 +365,7 @@ class Library(object):
 
         orig_last_upstream.upstream = None
 
-    def get(self, ref, force=False, cb=None):
+    def get(self, ref, force=False, cb=None, use_remote=True):
         '''Get a bundle, given an id string or a name '''
         from sqlite3 import DatabaseError
         from sqlalchemy.exc import OperationalError
@@ -377,19 +377,17 @@ class Library(object):
         # Get a reference to the dataset, partition and relative path
         # from the local database.
 
-        dataset = self.resolve(ref, use_remote=True)
+
+
+        dataset = self.resolve(ref, use_remote=use_remote)
 
         if not dataset:
             return None
 
-        if Dataset.LOCATION.REMOTE in dataset.locations.codes:
+        if (Dataset.LOCATION.REMOTE in dataset.locations.codes and
+            Dataset.LOCATION.LIBRARY not in dataset.locations.codes):
 
-            f  = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
-
-            gets = [dataset]
-
-            if dataset.partition:
-                gets.append(dataset.partition)
+            f = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
 
             # Since it was remote, attach the appropriate remote cache to our cache stack then
             # when we read from the top level, we'l get it from the remote.
@@ -397,7 +395,7 @@ class Library(object):
             # NOTE! The partition and bundle are actually fetched from the remote in _attach_rrc!
             # All of the subsequent cache gets in this function just read from the local cache
 
-            self._attach_rrc(f.source_url, gets, cb=cb)
+            self._attach_rrc(f.source_url, [dataset], cb=cb)
 
         # First, get the bundle and instantiate it. If what was requested
         # was just the bundle, return it, otherwise, return it. If it was
@@ -441,11 +439,10 @@ class Library(object):
                 try:
                     f = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
                 except:
-
                     raise
 
                 # Since it was remote, attach the appropriate remote cache to our cache stack then
-                # when we read from the top level, we'l get it from the remote.
+                # when we read from the top level, we'll get it from the remote.
                 self._attach_rrc(f.source_url, [dataset.partition], cb=cb)
 
             else:
@@ -818,7 +815,7 @@ class Library(object):
     def sync_library_partition(self, bundle, ident):
         from files import Files
 
-        self.database.install_partition(bundle, ident.id_)
+        self.database.install_partition(bundle, ident.id_, install_bundle-False)
 
         self.files.new_file(
             merge=True,

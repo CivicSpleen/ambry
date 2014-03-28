@@ -258,7 +258,7 @@ def library_remove(args, l, config):
             continue
 
         try:
-            b = l.get(name)
+            b = l.get(name, use_remote = False)
 
             if b:
 
