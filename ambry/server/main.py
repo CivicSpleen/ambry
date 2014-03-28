@@ -143,6 +143,7 @@ class AllJSONPlugin(object):
 
 install(AllJSONPlugin())
 
+
 @error(404)
 @CaptureException
 def error404(error):
