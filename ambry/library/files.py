@@ -114,17 +114,17 @@ class Files(object):
                                          File.type_ == self.TYPE.PARTITION))
         return self
 
-    def new_file(self, merge=False, **kwargs):
+    def new_file(self, merge=False, commit = True,  **kwargs):
 
         if merge:
             f = File(**kwargs)
-            self.merge(f)
+            self.merge(f, commit=commit)
             return f
         else:
             return File(**kwargs)
 
 
-    def merge(self, f):
+    def merge(self, f, commit = True):
         from sqlalchemy.exc import IntegrityError
 
         s = self.db.session
@@ -140,12 +140,12 @@ class Files(object):
             f.size = None
 
 
-
         # Sqlalchemy doesn't automatically rollback on exceptions, and you
         # can't re-try the commit until you roll back.
         try:
             s.add(f)
-            self.db.commit()
+            if commit:
+                self.db.commit()
         except IntegrityError as e:
             self.db.rollback()
             s.merge(f)

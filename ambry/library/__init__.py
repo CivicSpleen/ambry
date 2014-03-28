@@ -818,6 +818,7 @@ class Library(object):
         self.database.install_partition(bundle, ident.id_, install_bundle=False)
 
         self.files.new_file(
+            commit = False,
             merge=True,
             path=ident.fqname,
             group=None,
