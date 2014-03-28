@@ -186,8 +186,14 @@ class SourceTree(object):
 
 
     def set_bundle_state(self, ident, state):
+        from sqlalchemy.exc import InvalidRequestError
 
-        f = self.library.files.query.ref(ident.vid).type(Dataset.LOCATION.SOURCE).one_maybe
+        try:
+            f = self.library.files.query.ref(ident.vid).type(Dataset.LOCATION.SOURCE).one_maybe
+        except InvalidRequestError:
+            # Happens when there is an error installing into the library.
+            self.library.database.session.rollback()
+            f = self.library.files.query.ref(ident.vid).type(Dataset.LOCATION.SOURCE).one_maybe
 
         if f:
             f.state = state

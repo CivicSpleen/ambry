@@ -581,6 +581,7 @@ class LibraryDb(object):
         from ..identity import PartitionNameQuery
         from sqlalchemy.orm.exc import NoResultFound
 
+
         if install_bundle:
             try:
                 b = self.get(bundle.identity.vid)

@@ -442,7 +442,8 @@ class BundleLockContext(object):
             logger.debug("Release lock and rollback on exception: {}".format(exc_val))
             self._database.session.rollback()
             self._lock_depth -= 1
-            self._lock.release()
+            if self._lock_depth == 0:
+                self._lock.release()
             self._database.close_session()
             raise
             return False

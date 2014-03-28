@@ -250,6 +250,11 @@ class TableShapefile(object):
         """Return the geometry fields from a row. Returnes a two item tuple, 
         with (x,y) for a point, or (Geometry,non) for blob, wbk or wkt geometry"""
 
+        if not self.geo_col_names[0]:
+            raise ConfigurationError("Failed to get a geomoetry column in table. "
+                                     "Table '{}' must have a column names geometry, wky, or lat and lon "
+                                     .format(self.table.name))
+
         if self.type == 'point':
             if isinstance(row, dict):
                 return (row[self.geo_col_names[0]], row[self.geo_col_names[1]])

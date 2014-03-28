@@ -1180,7 +1180,8 @@ class {name}(Base):
         To finalize, call with row == None
         
         '''
-        from collections import defaultdict
+        from collections import defaultdict, OrderedDict
+        from sqlalchemy.engine import RowProxy
         
         if memo is None :
             memo = {'fields' : None, 'name_index': {}}
@@ -1195,7 +1196,7 @@ class {name}(Base):
                                'n' : 0,
                                'counts': defaultdict(int)} for i in range(len(row))]
             
-            if isinstance(row, dict):
+            if isinstance(row, dict) or isinstance(row, RowProxy):
                 for i,name in enumerate(row.keys()):
                     memo['fields'][i]['name'] = name
                     memo['name_index'][name] = i
@@ -1277,8 +1278,7 @@ class {name}(Base):
                 mfi['maybe']['date'] += 1 if self._maybe_date(v) else 0
                 mfi['maybe']['time'] += 1 if self._maybe_time(v) else 0
                 mfi['maybe']['datetime'] += 1 if self._maybe_datetime(v) else 0
-                continue # No more conversions are possible. 
-
+                continue # No more conversions are possible.
 
             mfi['length'] = max(mfi['length'], len(str(v))) 
             
@@ -1304,9 +1304,22 @@ class {name}(Base):
 
     def _update_from_memo(self, table_name,  memo, logger=None):
         '''Update a table schema using a memo from intuit()'''
-        from datetime import datetime, time, date 
+        from datetime import datetime, time, date
+        from sqlalchemy.orm.exc import NoResultFound
+
         with self.bundle.session as s:
-            table = self.table(table_name)
+            try:
+                table = self.table(table_name)
+            except NoResultFound:
+                table = self.add_table(table_name)
+
+            for d in memo['fields']:
+                name = d['name']
+
+                if name == 'id':
+                    self.add_column(table, 'id', datatype='integer', is_primary_key=True)
+
+                self.add_column(table, d['name'], datatype='integer')
 
             index = memo['name_index'] if len(memo['name_index']) > 0 else None
             fields = memo['fields']
@@ -1323,26 +1336,23 @@ class {name}(Base):
                         # Can happen when new columsn are added during
                         # run, like code columns
                         continue
-                        
 
                 c.size = fields[i]['length'] if fields[i]['prob-type'] == str else None
                 c.datatype = type_map[fields[i]['prob-type']]
                 c.default = '-' if fields[i]['prob-type'] == str  else -1
                 s.merge(c)
-           
-        # Need to expire the unmanaged cache, or the regeneration of the schema in _revise_schema will 
-        # use the cached schema object rather than the ones we just updated, if the schem objects
-        # have alread been loaded. 
-        self.bundle.database.session.expire_all()
  
     def update(self, table_name, itr, logger=None):
-        '''Update the schema from an interator that returns rows. '''
+        '''Update the schema from an iterator that returns rows. This
+        will create a new table with rows that have datatype intuited from the values. '''
         
         memo = None
         
         for row in itr:
-            memo = self.intuit(dict(row), memo)
-            logger()
+            memo = self.intuit(row, memo)
+
+            if logger:
+                logger()
 
             memo = self.intuit(None, memo)
 
@@ -1350,8 +1360,7 @@ class {name}(Base):
 
         with open(self.bundle.filesystem.path('meta',self.bundle.SCHEMA_FILE), 'w') as f:
             self.as_csv(f)        
-        
-        
+
         return memo
 
     def add_code_table(self, source_table_name, source_column_name):
@@ -1401,9 +1410,3 @@ class {name}(Base):
             self.add_column(t, 'id', datatype='integer', is_primary_key = True, sequence_id=1)
             self.add_column(t, 'code', datatype='varchar', description='Value of code',sequence_id=2)
             self.add_column(t, 'description', datatype='varchar', description='Code description', sequence_id = 3)
-            
-
-            
-        
-        
-        

@@ -368,7 +368,7 @@ class Library(object):
     def get(self, ref, force=False, cb=None, use_remote=True):
         '''Get a bundle, given an id string or a name '''
         from sqlite3 import DatabaseError
-        from sqlalchemy.exc import OperationalError
+        from sqlalchemy.exc import OperationalError, IntegrityError
         from sqlalchemy.orm.exc import NoResultFound
         from ..dbexceptions import NotFoundError
         from .files import  Files
@@ -376,8 +376,6 @@ class Library(object):
 
         # Get a reference to the dataset, partition and relative path
         # from the local database.
-
-
 
         dataset = self.resolve(ref, use_remote=use_remote)
 
@@ -459,12 +457,17 @@ class Library(object):
             except KeyboardInterrupt:
                 raise
 
-            self.sync_library_partition(bundle, partition.identity)
 
             if not partition:
                 from ..dbexceptions import NotFoundError
 
                 raise NotFoundError('Failed to get partition {} from bundle '.format(dataset.partition.fqname))
+
+            try:
+                self.sync_library_partition(bundle, partition.identity)
+            except IntegrityError as e:
+                self.database.session.rollback()
+                self.logger.error("Partition is already in Library.: {} ".format(e.message))
 
             # Attach the partition into the bundle, and return both.
             bundle.partition = partition
@@ -775,24 +778,26 @@ class Library(object):
                         raise
                         self.logger.error('Failed to process {}, {} : {} '.format(file_, path_, e))
 
+        bundles = sorted(bundles, key = lambda b: b.partitions.count)
+
         for bundle in bundles:
             self.logger.info('Installing: {} '.format(bundle.identity.vname))
 
             try:
                 self.sync_library_dataset(bundle, install_partitions=False)
             except Exception as e:
-                self.logger.error('Failed to install bundle {}'.format(bundle.identity.vname))
+                self.logger.error('Failed to install bundle {}: {}'.format(bundle.identity.vname, e.message))
                 continue
 
             for p in bundle.partitions:
                 if self.cache.has(p.identity.cache_key, use_upstream=False):
                     self.logger.info('            {} '.format(p.identity.vname))
-                    self.sync_library_partition(bundle, p.identity, install_tables=False)
+                    self.sync_library_partition(bundle, p.identity, commit = False)
 
-        self.database.commit()
+            self.database.commit()
         return bundles
 
-    def sync_library_dataset(self, bundle):
+    def sync_library_dataset(self, bundle, install_partitions=True):
 
         from files import Files
 
@@ -800,7 +805,7 @@ class Library(object):
 
         ident  = bundle.identity
 
-        self.database.install_bundle(bundle, install_partitions = False)
+        self.database.install_bundle(bundle, install_partitions = install_partitions)
 
         self.files.new_file(
             commit=False,
@@ -813,14 +818,16 @@ class Library(object):
             data=None,
             source_url=None)
 
-    def sync_library_partition(self, bundle, ident, install_tables=True):
+    def sync_library_partition(self, bundle, ident, install_tables=True,
+                               install_partition=True, commit = True):
         from files import Files
 
-        self.database.install_partition(bundle, ident.id_,
-                                        install_bundle=False, install_tables=install_tables)
+        if install_partition:
+            self.database.install_partition(bundle, ident.id_,
+                                            install_bundle=False, install_tables=install_tables)
 
         self.files.new_file(
-            commit = False,
+            commit = commit,
             merge=True,
             path=ident.fqname,
             group=None,
@@ -829,6 +836,7 @@ class Library(object):
             type_= Files.TYPE.PARTITION,
             data=ident.urls,
             source_url=None)
+
 
     def sync_upstream(self, clean=False):
         import json
