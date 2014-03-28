@@ -607,6 +607,8 @@ class LibraryDb(object):
 
         s.merge(partition.record)
 
+        return
+
         try:
             self.commit()
         except IntegrityError as e:
