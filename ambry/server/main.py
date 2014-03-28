@@ -161,6 +161,12 @@ def enable_cors():
     response.headers['Access-Control-Allow-Origin'] = '*'
     
 def _host_port(library):
+
+    urlh = library.urlhost
+
+    if not urlh.startswith('http'):
+        urlh = "http://"+urlh
+
     return '{}'.format(library.urlhost)
     #return  'http://{}{}'.format(library.host, ':'+str(library.port) if library.port != 80 else '')
 
