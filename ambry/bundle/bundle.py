@@ -902,6 +902,11 @@ class BuildBundle(Bundle):
 
         self.post_build_write_stats()
 
+        for p in self.partitions:
+            self.log("Closing partition: {}".format(p.identity))
+            p.database.close()
+
+
         self.library.source.set_bundle_state(self.identity, 'built')
 
         return True
