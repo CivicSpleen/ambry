@@ -217,6 +217,7 @@ class RemoteLibrary(object):
 
         info = self.info(ref)
 
+
         if info['response'] == 'dataset':
             url = info['urls']['db']
         else:

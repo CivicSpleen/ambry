@@ -12,10 +12,6 @@ from ambry.util import get_logger, memoize
 from ..database.inserter import SegmentedInserter, SegmentInserterFactory
 from contextlib import contextmanager
 
-
-
-
-
 class RelationalDatabase(DatabaseInterface):
     '''Represents a Sqlite database'''
 
@@ -138,7 +134,7 @@ class RelationalDatabase(DatabaseInterface):
         if not 'config' in self.inspector.get_table_names():
             Config.__table__.create(bind=self.engine) #@UndefinedVariable
 
-        session = self.creation_session
+        session = self.session
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'process','dbcreated',
                               datetime.now().isoformat(), session=session )
         
@@ -150,7 +146,6 @@ class RelationalDatabase(DatabaseInterface):
             for n,f in inspect.getmembers(cls,lambda m: inspect.ismethod(m) and m.__func__ in m.im_class.__dict__.values()):
                 if n == '_post_create':
                     f(self)
-
 
     def drop(self):
         if not self.enable_delete:
@@ -168,7 +163,6 @@ class RelationalDatabase(DatabaseInterface):
         table = self.table(table_name)
         
         table.drop(self.engine)
-
 
     @property
     def engine(self):
@@ -191,6 +185,8 @@ class RelationalDatabase(DatabaseInterface):
 
             self._on_create_engine(self._engine)
 
+            self.get_connection(); # run _on_create_connection
+
         return self._engine
 
     @property
@@ -212,7 +208,6 @@ class RelationalDatabase(DatabaseInterface):
                 self.error("Failed to open: '{}': {} ".format(self.dsn, e))
                 raise
 
-            
         return self._connection
 
 
@@ -242,13 +237,6 @@ class RelationalDatabase(DatabaseInterface):
             self._session = Session()
 
         return self._session
-
-
-    @property
-    def creation_session(self):
-        '''Writable Session to be used during databasecreation'''
-
-        return self.session
 
 
     def close_session(self):
@@ -432,7 +420,7 @@ class RelationalBundleDatabaseMixin(object):
             table.__table__.create(bind=self.engine)
 
         # Create the Dataset record
-        session = self.creation_session
+        session = self.session
         
         ds = Dataset(**self.bundle.config.identity)
 
@@ -472,9 +460,9 @@ class RelationalBundleDatabaseMixin(object):
         from ..orm import Config
         from sqlalchemy.orm import sessionmaker
 
-        self.set_config_value(self.bundle.identity.vid, 'info','type', 'bundle', session=self.creation_session )
-        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname, session=self.creation_session  )
-        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid , session=self.creation_session )
+        self.set_config_value(self.bundle.identity.vid, 'info','type', 'bundle', session=self.session )
+        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname, session=self.session  )
+        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid , session=self.session )
 
 class RelationalPartitionDatabaseMixin(object):
     

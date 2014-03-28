@@ -115,6 +115,9 @@ def root_list(args, l, st, rc):
 
     idents = sorted(l.list(locations=locations, key='fqname').values(), key=key)
 
+    if args.term:
+        idents = [ ident for ident in idents if args.term in ident.fqname ]
+
     _print_bundle_list(idents,
                        fields=fields,
                        show_partitions=args.partitions)

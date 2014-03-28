@@ -444,7 +444,7 @@ def get_info(ref, library):
     ip, dataset = _resolve(library, ref)
 
     if not dataset:
-        return None
+        raise exc.NotFound("No file for reference: {} ".format(ref))
 
 
     if dataset.partition:
@@ -455,7 +455,6 @@ def get_info(ref, library):
         url = '{}/datasets/{}'.format(_host_port(library), dataset.vid)
 
     return redirect(url)
-
 
 @get('/files/<key:path>')
 @CaptureException

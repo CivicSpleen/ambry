@@ -486,7 +486,6 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
         _on_connect_update_sqlite_schema(connection, None) # in both _conn and _engine.
 
-
     def _on_create_engine(self, engine):
         '''Called just after the engine is created '''
         from sqlalchemy import event
@@ -498,7 +497,6 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         #event.listen(self._engine, 'connect', _on_connect_update_sqlite_schema)  # in both _conn and _engine.
 
         event.listen(self._engine, 'connect', _on_connect_bundle)
-
 
     def update_schema(self):
         '''Manually update the schema. This is called when bundles are installed in the library
@@ -517,8 +515,6 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
             self.post_create()
 
-
-
     @property
     def has_session(self):
         return self._session is not None
@@ -532,9 +528,6 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
             return self.connection.execute(*args, **kwargs)
         except OperationalError as e:
             raise QueryError("Error while executing {} in database {} ({}): {}".format(args, self.dsn, type(self), e.message))
-
-
-
 
     def copy_table_from(self, source_db, table_name):
         '''Copy the definition of a table from a soruce database to this one

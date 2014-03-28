@@ -397,7 +397,6 @@ class Library(object):
             # NOTE! The partition and bundle are actually fetched from the remote in _attach_rrc!
             # All of the subsequent cache gets in this function just read from the local cache
 
-
             self._attach_rrc(f.source_url, gets, cb=cb)
 
         # First, get the bundle and instantiate it. If what was requested
@@ -421,7 +420,6 @@ class Library(object):
             self.logger.error("Failed to load databundle at path {}".format(abs_path))
             raise DatabaseError
 
-
         # Do we have it in the database? If not install it.
         # It should be installed if it was retrieved remotely,
         # but may not be installed if there is a local copy in the cache.
@@ -433,7 +431,6 @@ class Library(object):
 
         if not d:
             self.sync_library_dataset(bundle)
-
 
         bundle.library = self
 
@@ -615,8 +612,6 @@ class Library(object):
                     raise NotFoundError("Dependency check failed for key={}, id={}. Failed to get bundle or partition".format(k, v))
                 else:
                     errors[k] = v
-
-
 
     @property
     @memoize

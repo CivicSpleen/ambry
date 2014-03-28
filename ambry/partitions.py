@@ -115,13 +115,11 @@ class Partitions(object):
         except sqlalchemy.exc.OperationalError:
             raise
             return []        
-        
-        
+
     def __iter__(self):
         return iter(self.all)
 
 
-    
     def get(self, id_):
         '''Get a partition by the id number 
         
@@ -141,11 +139,11 @@ class Partitions(object):
         ''' 
         from ambry.orm import Partition as OrmPartition
         from sqlalchemy import or_
-        
 
         if isinstance(id_, PartitionIdentity):
             id_ = id_.identity.id_
-     
+
+
         s = self.bundle.database.session
         
         q = (s
@@ -154,7 +152,7 @@ class Partitions(object):
                          OrmPartition.id_==str(id_).encode('ascii'),
                           OrmPartition.vid==str(id_).encode('ascii')
                          )))
-  
+
         try:
             orm_partition = q.one()
           

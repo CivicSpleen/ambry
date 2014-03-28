@@ -352,7 +352,7 @@ class LibraryDb(object):
             self.session.commit()
             self.close_session()
         except Exception as e:
-            self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))
+            #self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))
             raise
 
 
