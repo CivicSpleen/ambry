@@ -815,7 +815,7 @@ class Library(object):
     def sync_library_partition(self, bundle, ident):
         from files import Files
 
-        self.database.install_partition(bundle, ident.id_, install_bundle-False)
+        self.database.install_partition(bundle, ident.id_, install_bundle=False)
 
         self.files.new_file(
             merge=True,
