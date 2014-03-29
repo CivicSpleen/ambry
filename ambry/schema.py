@@ -684,15 +684,27 @@ class Schema(object):
         with open(self.bundle.filesystem.path('meta',self.bundle.SCHEMA_FILE), 'w') as f:
             self.as_csv(f)
 
-    def copy_table(self, in_table):
+    def copy_table(self, in_table, out_table_name=None):
         '''Copy a table schema into this schema'''
+
+        if not out_table_name:
+            out_table_name = in_table.name
+
         with self.bundle.session as s:
-            table = self.add_table(in_table.name, data=in_table.data)
-            
+
+            cols = []
             for c in in_table.columns:
-                d = c.to_dict()
+                d = c.dict
+
                 del d['t_vid']
-                self.add_column(table, **d) 
+                del d['vid']
+                cols.append(d)
+
+            table = self.add_table(out_table_name, data=in_table.data)
+            for c in cols:
+                self.add_column(table, **c)
+
+
 
     def _dump_gen(self, table_name=None):
         """Yield schema row for use in exporting the schem to other

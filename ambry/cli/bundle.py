@@ -476,3 +476,5 @@ def bundle_source(args, b, st, rc):
 
         return
 
+def bundle_repopulate(args, b, st, rc):
+    return b.repopulate()

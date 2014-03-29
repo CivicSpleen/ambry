@@ -39,8 +39,6 @@ class curry:
 ## end of http://code.activestate.com/recipes/52549/ }}}
 
 
-
-
 def get_logger(name, file_name = None, template=None):
 
     logger = logging.getLogger(name)

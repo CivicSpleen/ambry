@@ -177,11 +177,15 @@ class RelationalDatabase(DatabaseInterface):
             if path == 'sqlite:///:memory:':
                 path = 'sqlite://'
 
-            self._engine = create_engine(path,
-                                         connect_args={
-                                             'detect_types': sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES},
-                                         native_datetime=True,
-                                         echo=False)
+            kwargs = dict(
+                echo = False
+            )
+
+            if self.driver in ('sqlite','spatialite'):
+                kwargs['connect_args'] = {'detect_types': sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES}
+                kwargs['native_datetime'] = True
+
+            self._engine = create_engine(path,**kwargs)
 
             self._on_create_engine(self._engine)
 

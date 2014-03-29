@@ -52,6 +52,7 @@ class Bundle(object):
 
     def close(self):
         if self._database:
+            self._database.session.commit()
             self._database.close()
 
     @property
@@ -587,13 +588,19 @@ class BuildBundle(Bundle):
         from ..util import rm_rf
 
         # Remove partitions
+
         rm_rf(self.sub_path())
         # Remove the database
         
         if self.database.exists():
             self.database.delete()
-        
-        
+
+        # Remove the sqlite journal files, if they exists
+        files = [self.database.path+"-wal", self.database.path+"-shm", self.database.path+"-journal"]
+        for f in files:
+            if os.path.exists(f):
+                os.remove(f)
+
         if clean_meta:
             mf = self.filesystem.meta_path(self.META_COMPLETE_MARKER)
             if os.path.exists(mf):
@@ -902,12 +909,13 @@ class BuildBundle(Bundle):
 
         self.post_build_write_stats()
 
+        self.library.source.set_bundle_state(self.identity, 'built')
+
         for p in self.partitions:
             self.log("Closing partition: {}".format(p.identity))
             p.database.close()
 
-
-        self.library.source.set_bundle_state(self.identity, 'built')
+        self.database.close()
 
         return True
     

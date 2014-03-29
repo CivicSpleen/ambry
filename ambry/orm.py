@@ -512,7 +512,11 @@ class Column(Base):
 
     @property
     def dict(self):
-        x =  {k:v for k,v in self.__dict__.items() if k in ['id','vid','sequence_id', 't_vid', 'name', 'description', 'keywords', 'datatype', 'size', 'is_primary_key', 'data']}
+        x =  {k:v for k,v in self.__dict__.items()
+              if k in ['id','vid','sequence_id', 't_vid', 'name', 'description',
+                       'keywords', 'datatype', 'size', 'is_primary_key', 'data']}
+        if not x:
+            raise Exception(self.__dict__)
         x['schema_type'] = self.schema_type
         return x
     

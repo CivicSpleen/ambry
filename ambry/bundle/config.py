@@ -21,7 +21,7 @@ class BundleDbConfigDict(AttrDict):
         for k,v in parent.dataset.dict.items():
             self['identity'][k] = v
 
-        for row in parent.database.unmanaged_session.query(SAConfig).all():
+        for row in parent.database.session.query(SAConfig).all():
             if row.group not in self:
                 self[row.group] = {}
 
@@ -62,7 +62,7 @@ class BundleDbConfig(BundleConfig):
 
         d = defaultdict(dict)
 
-        for cfg in self.database.unmanaged_session.query(Config).all():
+        for cfg in self.database.session.query(Config).all():
 
             d[cfg.group][cfg.key] = cfg.value
 
@@ -96,13 +96,13 @@ class BundleDbConfig(BundleConfig):
 
             key = key.strip('_')
 
-        self.database.unmanaged_session.query(SAConfig).filter(SAConfig.group == group,
+        self.database.session.query(SAConfig).filter(SAConfig.group == group,
                                   SAConfig.key == key,
                                   SAConfig.d_vid == self.dataset.vid).delete()
 
 
         o = SAConfig(group=group, key=key,d_vid=self.dataset.vid,value = value)
-        self.database.unmanaged_session.add(o)
+        self.database.session.add(o)
 
     def get_value(self, group, key, default=None):
 
@@ -126,7 +126,7 @@ class BundleDbConfig(BundleConfig):
 
         from ambry.orm import Partition
 
-        return  (self.database.unmanaged_session.query(Partition).first())
+        return  (self.database.session.query(Partition).first())
 
 class BundleFileConfig(RunConfig):
     '''Bundle configuration from a bundle.yaml file '''

@@ -135,11 +135,15 @@ class RemoteLibrary(object):
             args[0] = pre_message + str(args[0])
 
         # Add the trace
+        tr = object['exception']['trace']
+        if isinstance(tr, list):
+            tr = '\n'.join(tr)
+
         try:
             if args:
-                args[0] = args[0] + "\n---- Server Trace --- \n" + object['exception']['trace']
+                args[0] = str(args[0]) + "\n---- Server Trace --- \n" + tr
             else:
-                args.append("\n---- Server Trace --- \n" + object['exception']['trace'])
+                args.append("\n---- Server Trace --- \n" + tr)
         except Exception as e:
             print "Failed to augment exception. {}, {}".format(args, object)
             print 'AAA', e, e.message
