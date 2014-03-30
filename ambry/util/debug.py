@@ -8,10 +8,6 @@ To use, just call the listen() function at some point when your program starts u
 
  """
 
-#Copyright (c) 2014 Clarinova. This file is licensed under the terms of the
-#Revised BSD License, included in this distribution as LICENSE.txt
-
-
 # from: http://stackoverflow.com/questions/132058/showing-the-stack-trace-from-a-running-python-application
 
 import code, traceback, signal

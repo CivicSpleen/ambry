@@ -73,7 +73,16 @@ class Bundle(object):
 
         return self._logger
 
-        
+
+    @property
+    def database(self):
+        from ..dbexceptions import DatabaseMissingError
+
+        if self._database is None:
+            raise DatabaseMissingError('Database has not been set')
+
+        return self._database
+
     @property
     def schema(self):
         if self._schema is None:
@@ -137,6 +146,7 @@ class Bundle(object):
     @property
     def dataset(self):
         '''Return the dataset'''
+
         return self.get_dataset(self.database.session)
 
     def _dep_cb(self, library, key, name, resolved_bundle):
@@ -309,7 +319,7 @@ class DbBundle(Bundle):
        
         self.database_file = database_file
 
-        self.database = SqliteBundleDatabase(self, database_file)
+        self._database = SqliteBundleDatabase(self, database_file)
 
         self.db_config = self.config = BundleDbConfig(self, self.database)
         

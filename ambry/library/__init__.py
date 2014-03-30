@@ -417,6 +417,7 @@ class Library(object):
             self.logger.error("Failed to load databundle at path {}".format(abs_path))
             raise DatabaseError
 
+
         # Do we have it in the database? If not install it.
         # It should be installed if it was retrieved remotely,
         # but may not be installed if there is a local copy in the cache.
@@ -438,6 +439,7 @@ class Library(object):
                 try:
                     f = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
                 except:
+                    bundle.close()
                     raise
 
                 # Since it was remote, attach the appropriate remote cache to our cache stack then
@@ -450,18 +452,19 @@ class Library(object):
             abs_path = self.cache.get(dataset.partition.cache_key, cb=cb)
 
             if not abs_path or not os.path.exists(abs_path):
-
+                bundle.close()
                 raise NotFoundError('Failed to get partition {} from cache '.format(dataset.partition.fqname))
 
             try:
                 partition = bundle.partitions.get(dataset.partition.vid)
             except KeyboardInterrupt:
+                bundle.close()
                 raise
 
 
             if not partition:
                 from ..dbexceptions import NotFoundError
-
+                bundle.close()
                 raise NotFoundError('Failed to get partition {} from bundle '.format(dataset.partition.fqname))
 
             try:
@@ -472,6 +475,8 @@ class Library(object):
 
             # Attach the partition into the bundle, and return both.
             bundle.partition = partition
+
+        bundle.close()
 
         return bundle
 

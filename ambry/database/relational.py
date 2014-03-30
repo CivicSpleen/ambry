@@ -16,16 +16,23 @@ import atexit, weakref
 logger = get_logger(__name__)
 logger.setLevel(logging.DEBUG)
 
-connections = weakref.WeakValueDictionary()
+connections = dict()
 
 def close_connections_at_exit():
     '''Close any connections that have not already been closed '''
     logger = get_logger(__name__)
     logger.setLevel(logging.DEBUG)
 
-    for (k,dsn) , connection in connections.items():
-        logger.debug("closing: {}".format(dsn))
-        connection.close()
+    for id_, (conn_ref, dsn, where) in connections.items():
+
+        conn = conn_ref()
+
+        if conn:
+            logger.debug("closing: {}. From: {} ".format(dsn, where))
+            conn.close()
+
+def close_connection_on_ref(ref):
+    pass
 
 atexit.register(close_connections_at_exit)
 
@@ -88,6 +95,9 @@ class RelationalDatabase(DatabaseInterface):
         
         self._session = None
 
+
+    def __del__(self):
+        print "!!!!", self.dsn
 
     def log(self,message):
         self.logger.info(message)
@@ -219,21 +229,38 @@ class RelationalDatabase(DatabaseInterface):
 
         return self.get_connection()
 
+    def _connection_id(self):
+        return self.dsn
 
     def get_connection(self, check_exists=True):
         '''Return an SqlAlchemy connection. check_exists is ignored'''
+        import traceback
 
         if not self._connection:
             try:
 
                 self._connection = self.engine.connect()
-                connections[(id(self._connection), self.dsn)] = self._connection
+
+                id_ = self._connection_id()
+
+                if self.dsn in connections:
+
+                    (conn_ref, dsn, where)  = connections[id_]
+
+                    raise Exception("Duplicate connection to {}: {}, {}, {}".format(self.dsn, conn_ref, dsn, where))
+
+                tb = traceback.extract_stack()[-8:-5][0]
+
+                where = "{} in {}:{}".format(tb[2], tb[0], tb[1])
+
+                connections[id_] = (weakref.ref(self._connection,close_connection_on_ref),
+                                    self.dsn, where)
                 self._on_create_connection(self._connection)
             except Exception as e:
                 self.error("Failed to open: '{}': {} ".format(self.dsn, e))
                 raise
 
-        return self._connection
+        return weakref.proxy(self._connection, close_connection_on_ref)
 
 
     def require_path(self):
@@ -300,8 +327,8 @@ class RelationalDatabase(DatabaseInterface):
             self._connection.close()
             self._connection = None
 
-            if (id(self._connection), self.dsn) in connections:
-                del connections[(id(self._connection), self.dsn)]
+            if self._connection_id() in connections:
+                del connections[self._connection_id()]
 
 
     def clean_table(self, table):
