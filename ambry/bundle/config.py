@@ -18,7 +18,8 @@ class BundleDbConfigDict(AttrDict):
 
         # Load the dataset
         self['identity'] = {}
-        for k,v in parent.dataset.dict.items():
+
+        for k,v in parent.bundle.dataset.dict.items():
             self['identity'][k] = v
 
         for row in parent.database.session.query(SAConfig).all():
@@ -27,13 +28,10 @@ class BundleDbConfigDict(AttrDict):
 
             self[row.group][row.key] = row.value
 
-
 class BundleConfig(object):
 
     def __init__(self):
         pass
-
-
 
 class BundleDbConfig(BundleConfig):
     ''' Retrieves configuration from the database, rather than the .yaml file. '''
@@ -52,7 +50,7 @@ class BundleDbConfig(BundleConfig):
         self.bundle = bundle
         self.database = database
         self.source_ref = self.database.dsn
-        self.dataset = bundle.dataset # (self.database.session.query(Dataset).one())
+
 
     @property
     def dict(self): #@ReservedAssignment
@@ -73,7 +71,6 @@ class BundleDbConfig(BundleConfig):
         attribute-accessible dict'''
 
         return self.group(group)
-
 
     def group(self, group):
         '''return a dict for a group of configuration items.'''
@@ -98,10 +95,10 @@ class BundleDbConfig(BundleConfig):
 
         self.database.session.query(SAConfig).filter(SAConfig.group == group,
                                   SAConfig.key == key,
-                                  SAConfig.d_vid == self.dataset.vid).delete()
+                                  SAConfig.d_vid == self.bundle.dataset.vid).delete()
 
 
-        o = SAConfig(group=group, key=key,d_vid=self.dataset.vid,value = value)
+        o = SAConfig(group=group, key=key,d_vid=self.bundle.dataset.vid,value = value)
         self.database.session.add(o)
 
     def get_value(self, group, key, default=None):

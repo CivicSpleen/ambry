@@ -110,44 +110,12 @@ class Bundle(object):
         return self._repository
     
 
-    def get_dataset(self, session):
-        '''Return the dataset
-        '''
-        from sqlalchemy.orm.exc import NoResultFound
-        from sqlalchemy.exc import OperationalError
-        from ..dbexceptions import NotFoundError
-        
-        from ambry.orm import Dataset
 
-        try:
-            if self._dataset_id:
-                try:
-                    return (session.query(Dataset)
-                            .filter(Dataset.location == Dataset.LOCATION.LIBRARY)
-                            .filter(Dataset.vid == self._dataset_id).one())
-                except NoResultFound:
-                    from ..dbexceptions import NotFoundError
-
-                    raise NotFoundError("Failed to find dataset for id {} in {} "
-                                        .format(self._dataset_id, self.database.dsn))
-            else:
-
-                return (session.query(Dataset).one())
-        except OperationalError:
-            raise NotFoundError("No dataset record found. Probably not a bundle: '{}'"
-                                .format(self.path))
-        except Exception as e:
-            from ..util import get_logger
-            # self.logger can get caught in a recursion loop
-            logger = get_logger(__name__)
-            logger.error("Failed to get dataset: {}; {}".format(e.message, self.database.dsn))
-            raise
 
     @property
     def dataset(self):
         '''Return the dataset'''
-
-        return self.get_dataset(self.database.session)
+        return self.get_dataset()
 
     def _dep_cb(self, library, key, name, resolved_bundle):
         '''A callback that is called when the library resolves a dependency.
@@ -334,17 +302,44 @@ class DbBundle(Bundle):
         '''For constructing paths to partitions'''
         return os.path.join(self.path, *args)
 
-
     @property
     def identity(self):
         '''Return an identity object. '''
         from ..identity import Identity, LocationRef
 
         if not self._identity:
-           self._identity = self.get_dataset(self.database.session).identity
+           self._identity = self.get_dataset().identity
            self._identity.locations.set(LocationRef.LOCATION.LIBRARY)
 
         return self._identity
+
+    def get_dataset(self):
+        '''Return the dataset
+        '''
+
+        from sqlalchemy.exc import OperationalError
+        from ..dbexceptions import NotFoundError
+
+        from ambry.orm import Dataset
+
+        try:
+            ds =  (self.database.session.query(Dataset).one())
+
+            if not ds:
+                raise NotFoundError("No dataset record found. Probably not a bundle: '{}'"
+                                    .format(self.path))
+
+            return ds
+
+        except OperationalError:
+            raise NotFoundError("No dataset record found. Probably not a bundle: '{}'"
+                                .format(self.path))
+        except Exception as e:
+            from ..util import get_logger
+            # self.logger can get caught in a recursion loop
+            logger = get_logger(__name__)
+            logger.error("Failed to get dataset: {}; {}".format(e.message, self.database.dsn))
+            raise
 
     def _info(self, identity=None):
         '''Return a nested, ordered dict  of information about the bundle. '''
@@ -374,12 +369,44 @@ class LibraryDbBundle(Bundle):
         super(LibraryDbBundle, self).__init__(logger=logger)
    
         self._dataset_id = dataset_id
-        self.database = database
+        self._database = database
 
         self.db_config = self.config = BundleDbConfig(self, self.database)
         
         self.partition = None # Set in Library.get() and Library.find() when the user requests a partition. s
-        
+
+
+    def get_dataset(self):
+        '''Return the dataset
+        '''
+        from sqlalchemy.orm.exc import NoResultFound
+        from sqlalchemy.exc import OperationalError
+        from ..dbexceptions import NotFoundError
+
+        from ambry.orm import Dataset
+
+        try:
+            return (self.database.session.query(Dataset)
+                    .filter(Dataset.location == Dataset.LOCATION.LIBRARY)
+                    .filter(Dataset.vid == self._dataset_id).one())
+
+        except NoResultFound:
+            from ..dbexceptions import NotFoundError
+
+            raise NotFoundError("Failed to find dataset for id {} in {} "
+                                .format(self._dataset_id, self.database.dsn))
+
+        except OperationalError:
+            raise NotFoundError("No dataset record found. Probably not a bundle: '{}'"
+                                .format(self.path))
+
+        except Exception as e:
+            from ..util import get_logger
+            # self.logger can get caught in a recursion loop
+            logger = get_logger(__name__)
+            logger.error("Failed to get dataset: {}; {}".format(e.message, self.database.dsn))
+            raise
+
     @property
     def path(self):
         raise NotImplemented()
@@ -394,7 +421,7 @@ class LibraryDbBundle(Bundle):
         from ..identity import Identity, LocationRef
 
         if not self._identity:
-           self._identity = self.get_dataset(self.database.session).identity
+           self._identity = self.get_dataset().identity
            self._identity.locations.set(LocationRef.LOCATION.LIBRARY)
 
 
@@ -473,6 +500,27 @@ class BuildBundle(Bundle):
 
     def _load_config(self):
         self._config = BundleFileConfig(self.bundle_dir)
+
+    def get_dataset(self):
+        '''Return the dataset
+        '''
+        from sqlalchemy.exc import OperationalError
+        from ..dbexceptions import NotFoundError
+
+        from ambry.orm import Dataset
+
+        try:
+            return self.database.session.query(Dataset).one()
+
+        except OperationalError:
+            raise NotFoundError("No dataset record found. Probably not a bundle: '{}'"
+                                .format(self.path))
+        except Exception as e:
+            from ..util import get_logger
+            # self.logger can get caught in a recursion loop
+            logger = get_logger(__name__)
+            logger.error("Failed to get dataset: {}; {}".format(e.message, self.database.dsn))
+            raise
 
     @property
     def build_dir(self):

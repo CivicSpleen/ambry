@@ -407,14 +407,14 @@ class Library(object):
 
         try:
             bundle = DbBundle(abs_path)
-        except DatabaseError:
-            self.logger.error("Failed to load databundle at path {}".format(abs_path))
-            raise DatabaseError
-        except AttributeError:
-            self.logger.error("Failed to load databundle at path {}".format(abs_path))
-            raise DatabaseError
-        except OperationalError:
-            self.logger.error("Failed to load databundle at path {}".format(abs_path))
+        except DatabaseError as e:
+            self.logger.error("Failed to load databundle at path {}: {}".format(abs_path,e))
+            raise
+        except AttributeError as e:
+            self.logger.error("Failed to load databundle at path {}: {}".format(abs_path,e))
+            raise # DatabaseError
+        except OperationalError as e:
+            self.logger.error("Failed to load databundle at path {}: {}".format(abs_path,e))
             raise DatabaseError
 
 

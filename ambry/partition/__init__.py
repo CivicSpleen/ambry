@@ -153,15 +153,13 @@ class PartitionBase(PartitionInterface):
         self.identity = self.record.identity
         self.data = self.record.data
 
-        # These two values take refreshible fields out of the partition ORM record.
+        # These two values take refreshable fields out of the partition ORM record.
         # Use these if you are getting DetatchedInstance errors like:
         #    sqlalchemy.orm.exc.DetachedInstanceError: Instance <Table at 0x1077d5450>
         #    is not bound to a Session; attribute refresh operation cannot proceed
         self.record_count = self.record.count
 
-        self.table = self.get_table()
-        
-
+        #self.table = self.get_table()
 
         self._database =  None
 
@@ -188,6 +186,10 @@ class PartitionBase(PartitionInterface):
     def sub_dir(self, *args):
         """Return a subdirectory relative to the partition path"""
         return  os.path.join(self.path,*args)
+
+    @property
+    def table(self):
+        return self.get_table()
 
     @property
     def tables(self):

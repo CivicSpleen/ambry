@@ -123,17 +123,6 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
             self.post_create()
 
 
-    # DEPRECATED! Should use the session_context instead
-    @property
-    def session(self):
-        '''Return a SqlAlchemy session'''
-        from sqlalchemy.orm import sessionmaker
-        if not self._session:
-            Session = sessionmaker(bind=self.engine,autocommit=False)
-            self._session =  Session()
-            
-        return self._session
-
 def _on_connect_partition(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
     from sqlite import _on_connect_bundle as ocb

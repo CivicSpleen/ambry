@@ -370,7 +370,7 @@ class Partitions(object):
          
         # This code must have the session established in the context be active. 
         op = OrmPartition(
-                self.bundle.get_dataset(session),         
+                self.bundle.get_dataset(),
                 t_id = table.id_ if table else None,
                 data=data,
                 state = Partitions.STATE.NEW,
@@ -380,7 +380,7 @@ class Partitions(object):
         if memory:
             from random import randint
             from identity import ObjectNumber
-            op.dataset = self.bundle.get_dataset(session)
+            op.dataset = self.bundle.get_dataset()
             op.table = table
             op.set_ids(randint(100000,ObjectNumber.PARTMAXVAL))
             return op

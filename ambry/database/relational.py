@@ -14,14 +14,13 @@ from contextlib import contextmanager
 import atexit, weakref
 
 logger = get_logger(__name__)
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
 
 connections = dict()
 
 def close_connections_at_exit():
     '''Close any connections that have not already been closed '''
-    logger = get_logger(__name__)
-    logger.setLevel(logging.DEBUG)
+
 
     for id_, (conn_ref, dsn, where) in connections.items():
 
@@ -49,7 +48,6 @@ class RelationalDatabase(DatabaseInterface):
     
     dsn = None
 
-    for_build_bundle = False # Used to select WAL journal mode
 
     def __init__(self,  driver=None, server=None, dbname = None, username=None, password=None, port=None,  **kwargs):
 
@@ -89,21 +87,17 @@ class RelationalDatabase(DatabaseInterface):
         self.dsn = self.dsn_template.format(user=self.username, password=self.password, 
                     server=self.server, name=self.dbname, colon_port=self.colon_port)
 
-
-        self.logger = get_logger(__name__)
-        self.logger.setLevel(logging.INFO) 
-        
         self._session = None
 
 
     def __del__(self):
-        print "!!!!", self.dsn
+        pass
 
     def log(self,message):
-        self.logger.info(message)
+        logger.info(message)
     
     def error(self, message):
-        self.logger.error(message)
+        logger.error(message)
 
     def create(self):
 
@@ -118,7 +112,8 @@ class RelationalDatabase(DatabaseInterface):
     def exists(self):
         
         try:
-            self.connection
+            conn = self.engine.connect()
+            conn.close()
         except Exception as e:
             return False
         
@@ -243,10 +238,8 @@ class RelationalDatabase(DatabaseInterface):
 
                 id_ = self._connection_id()
 
-                if self.dsn in connections:
-
+                if False and self.dsn in connections:
                     (conn_ref, dsn, where)  = connections[id_]
-
                     raise Exception("Duplicate connection to {}: {}, {}, {}".format(self.dsn, conn_ref, dsn, where))
 
                 tb = traceback.extract_stack()[-8:-5][0]
@@ -256,12 +249,22 @@ class RelationalDatabase(DatabaseInterface):
                 connections[id_] = (weakref.ref(self._connection,close_connection_on_ref),
                                     self.dsn, where)
                 self._on_create_connection(self._connection)
+
+                logger.debug('Create  connection: {}'.format(self.dsn))
+
             except Exception as e:
                 self.error("Failed to open: '{}': {} ".format(self.dsn, e))
                 raise
 
         return weakref.proxy(self._connection, close_connection_on_ref)
 
+
+    @property
+    @contextmanager
+    def connection_context(self):
+        connection = self.engine.connect()
+        yield connection
+        connection.close()
 
     def require_path(self):
         '''Used in engine but only implemented for sqlite'''
@@ -278,22 +281,35 @@ class RelationalDatabase(DatabaseInterface):
         return self.session
 
 
+    def commit_hook(self, session):
+        pass
+
+        #print "before commit!", self.dsn
+
+        #if self.dsn == 'sqlite:////Volumes/DataLibrary/devel/source/clarinova-private/clarinova.com/casnd/geocode/build/clarinova.com/geocode-casnd-1.0.5.db':
+        #    import pdb; pdb.set_trace()
+
     @property
     def session(self):
         from sqlalchemy import event
+
 
         if not self._session:
             from sqlalchemy.orm import sessionmaker
 
             Session = sessionmaker(bind=self.engine)
+
             self._session = Session()
 
-        return self._session
+            event.listen(self._session, "before_commit", self.commit_hook)
 
+
+        return self._session
 
     def close_session(self):
         self._session.close()
         self._session = None
+
 
     @property
     def metadata(self):
@@ -320,7 +336,7 @@ class RelationalDatabase(DatabaseInterface):
     def close(self):
 
         if self._connection:
-
+            logger.debug('Closing connection: {}'.format(self.dsn))
             self._session.commit()
             self.close_session()
 

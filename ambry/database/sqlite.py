@@ -13,7 +13,6 @@ import logging
 
 logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
-logger.debug("Init database logger")
 
 class SqliteAttachmentMixin(object):
     
@@ -280,7 +279,7 @@ class SqliteDatabase(RelationalDatabase):
     def dbapi_cursor(self):
         '''Return an DB_API cursor'''
         if not self._dbapi_cursor:
-        
+
             self._dbapi_cursor = self.dbapi_connection.cursor()
             
         return self._dbapi_cursor
