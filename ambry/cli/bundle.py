@@ -125,6 +125,8 @@ def bundle_command(args, rc):
         st.set_bundle_state(b.identity, 'error:'+phase)
         raise
 
+    b.close()
+
 def bundle_parser(cmd):
     import argparse, multiprocessing
 

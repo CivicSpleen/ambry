@@ -22,7 +22,9 @@ class Bundle(object):
     and top level operations. '''
  
     logger = None
- 
+    log_level = logging.INFO
+
+
     def __init__(self, logger=None):
         '''
         '''
@@ -51,7 +53,13 @@ class Bundle(object):
 
 
     def close(self):
+
+        for p in self.partitions:
+            self.logger.debug("Closing partition: {}".format(p.identity.sname))
+            p.close()
+
         if self._database:
+            self.logger.debug("Closing bundle: {}".format(self.identity.sname))
             self._database.session.commit()
             self._database.close()
 
@@ -68,7 +76,7 @@ class Bundle(object):
 
             self._logger = get_logger(__name__, template=template)
 
-            self._logger.setLevel(logging.INFO)
+            self._logger.setLevel(self.log_level)
 
 
         return self._logger
@@ -969,12 +977,6 @@ class BuildBundle(Bundle):
 
         self.library.source.set_bundle_state(self.identity, 'built')
 
-        for p in self.partitions:
-            self.log("Closing partition: {}".format(p.identity))
-            p.database.close()
-
-        self.database.close()
-
         return True
     
     def post_build_write_stats(self):
@@ -999,6 +1001,7 @@ class BuildBundle(Bundle):
             except OperationalError as e:
                 self.error("Failed to write stats for partition {}: {}".format(p.identity.name, e.message))
                 raise
+
                     
     
     @property
@@ -1312,6 +1315,8 @@ class AnalysisBundle(BuildBundle):
         '''Initialize the analysis bundle by running the prepare phase and starting the pre-build
         portion of the build phase '''
         super(AnalysisBundle, self).__init__(bundle_path)
+
+        self.log_level = logging.CRITICAL
 
         if not self.config.get("build"):
             self.config.build = AttrDict(

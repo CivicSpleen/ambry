@@ -6,23 +6,23 @@ from ..util import lru_cache
 
 @lru_cache()
 def partition_classes():
-    '''Return a holder object that has lists of the known partition types mapped to other keys
+    """Return a holder object that has lists of the known partition types mapped to other keys
 
-    Used for getting a partition class based on simple name, format, extension, etc. '''
+    Used for getting a partition class based on simple name, format, extension, etc. """
 
     from geo import GeoPartitionName,GeoPartitionName,GeoPartition,GeoPartitionIdentity
     from hdf import HdfPartitionName,HdfPartitionName,HdfPartition,HdfPartitionIdentity
     from csv import CsvPartitionName,CsvPartitionName,CsvPartition,CsvPartitionIdentity
-    from sqlite import SqlitePartitionName,SqlitePartitionName,SqlitePartition,SqlitePartitionIdentity
+    from sqlite import SqlitePartitionName, SqlitePartitionName, SqlitePartition, SqlitePartitionIdentity
 
     class PartitionClasses(object):
-        name_by_format = { pnc.format_name():pnc for pnc in (GeoPartitionName, HdfPartitionName,
+        name_by_format = { pnc.format_name(): pnc for pnc in (GeoPartitionName, HdfPartitionName,
                                                             CsvPartitionName, SqlitePartitionName )}
 
         extension_by_format = {pc.format_name(): pc.extension() for pc in (GeoPartitionName, HdfPartitionName,
                                                             CsvPartitionName, SqlitePartitionName )}
 
-        partition_by_format = {pc.format_name():pc for pc in (GeoPartition, HdfPartition,
+        partition_by_format = {pc.format_name(): pc for pc in (GeoPartition, HdfPartition,
                                                             CsvPartition, SqlitePartition )}
 
         identity_by_format = {ic.format_name(): ic for ic in (GeoPartitionIdentity, HdfPartitionIdentity,
@@ -30,6 +30,7 @@ def partition_classes():
 
 
     return PartitionClasses()
+
 
 def name_class_from_format_name(name):
 
@@ -65,6 +66,7 @@ def identity_class_from_format_name(name):
     except KeyError:
         raise KeyError("Unknown format name: {}".format(name))
 
+
 def extension_for_format_name(name):
 
     if not name:
@@ -76,12 +78,12 @@ def extension_for_format_name(name):
         raise KeyError("Unknown format name: {}".format(name))
 
 
-
 def new_partition(bundle, orm_partition, **kwargs):
 
     cls = partition_class_from_format_name(orm_partition.format)
 
     return cls(bundle, orm_partition, **kwargs)
+
 
 def new_identity(d, bundle=None):
 
@@ -97,10 +99,11 @@ def new_identity(d, bundle=None):
 
     return ic.from_dict(d)
 
+
 class PartitionInterface(object):
 
     @property
-    def name(self):  raise NotImplementedError()
+    def name(self): raise NotImplementedError()
     
     def _path_parts(self): 
         raise NotImplementedError()

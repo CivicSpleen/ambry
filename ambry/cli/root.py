@@ -16,13 +16,11 @@ def root_parser(cmd):
     sp.add_argument('-F', '--fields', type=str,
                     help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
-    group = sp.add_mutually_exclusive_group()
-    group.add_argument('-a', '--all', default=False, action="store_true", help='List everything')
-    group.add_argument('-l', '--library', default=False, action="store_true", help='List only the library')
-    group.add_argument('-r', '--remote', default=False, action="store_true", help='List only the remote')
-    group.add_argument('-u', '--upstream', default=False, action="store_true", help='List only the upstream')
-    group.add_argument('-g', '--srepo', default=False, action="store_true", help='List only the srepo')
-    group.add_argument('-s', '--source', default=False, action="store_true", help='List only the source')
+    sp.add_argument('-a', '--all', default=False, action="store_true", help='List everything')
+    sp.add_argument('-l', '--library', default=False, action="store_true", help='List only the library')
+    sp.add_argument('-r', '--remote', default=False, action="store_true", help='List only the remote')
+    sp.add_argument('-u', '--upstream', default=False, action="store_true", help='List only the upstream')
+    sp.add_argument('-s', '--source', default=False, action="store_true", help='List only the source')
     sp.add_argument('term', nargs = '?', type=str, help='Name or ID of the bundle or partition')
 
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
@@ -101,8 +99,6 @@ def root_list(args, l, st, rc):
     if args.source:
         locations.append(Dataset.LOCATION.SOURCE)
 
-    if args.srepo:
-        locations.append(Dataset.LOCATION.SREPO)
 
     if not locations:
         locations = None # list everything.
