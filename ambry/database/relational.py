@@ -27,7 +27,7 @@ def close_connections_at_exit():
         conn = conn_ref()
 
         if conn:
-            logger.debug("closing: {}. From: {} ".format(dsn, where))
+            logger.debug("Close connection {} at exit: {}. From: {} ".format(id(conn),dsn, where))
             conn.close()
 
 def close_connection_on_ref(ref):
@@ -225,7 +225,7 @@ class RelationalDatabase(DatabaseInterface):
         return self.get_connection()
 
     def _connection_id(self):
-        return self.dsn
+        return id(self._connection)
 
     def get_connection(self, check_exists=True):
         '''Return an SqlAlchemy connection. check_exists is ignored'''
@@ -250,7 +250,7 @@ class RelationalDatabase(DatabaseInterface):
                                     self.dsn, where)
                 self._on_create_connection(self._connection)
 
-                logger.debug('Create  connection: {}'.format(self.dsn))
+                logger.debug('Create  connection: {} for {}'.format(id(self._connection), self.dsn))
 
             except Exception as e:
                 self.error("Failed to open: '{}': {} ".format(self.dsn, e))
@@ -310,7 +310,6 @@ class RelationalDatabase(DatabaseInterface):
         self._session.close()
         self._session = None
 
-
     @property
     def metadata(self):
         '''Return an SqlAlchemy MetaData object, bound to the engine'''
@@ -335,10 +334,13 @@ class RelationalDatabase(DatabaseInterface):
    
     def close(self):
 
-        if self._connection:
-            logger.debug('Closing connection: {}'.format(self.dsn))
+        if self._session:
             self._session.commit()
             self.close_session()
+
+        if self._connection:
+            logger.debug('Closing connection: {} for {}'.format(id(self._connection), self.dsn))
+
 
             self._connection.close()
             self._connection = None

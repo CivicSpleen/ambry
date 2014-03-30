@@ -24,6 +24,8 @@ class Partitions(object):
     STATE.BUILT = 'built'
     STATE.ERROR = 'error'
 
+    bundle = None
+    _partitions = {}
 
     def __init__(self, bundle):
         self.bundle = bundle
@@ -43,7 +45,6 @@ class Partitions(object):
         from ambry.identity import PartitionNumber
         from identity import PartitionIdentity
         from sqlalchemy import or_
-        from sqlalchemy.util._collections import KeyedTuple
         
         from partition import new_partition
         
@@ -65,7 +66,14 @@ class Partitions(object):
         else:
             raise ValueError("Arg must be a Partition or PartitionNumber. Got {}".format(type(arg)))
 
-        return new_partition(self.bundle, orm_partition, **kwargs)
+        vid = orm_partition.vid
+
+        if vid in self._partitions:
+            return self._partitions[vid]
+        else:
+            p = new_partition(self.bundle, orm_partition, **kwargs)
+            self._partitions[vid] = p
+            return p
 
 
     @property
@@ -118,6 +126,11 @@ class Partitions(object):
 
     def __iter__(self):
         return iter(self.all)
+
+
+    def close(self):
+        for vid, p in self._partitions.items():
+            p.close()
 
 
     def get(self, id_):
@@ -436,7 +449,9 @@ class Partitions(object):
                 partition.create_with_tables(tables, clean)  
             else:
                 partition.create()
-            
+
+        partition.close()
+
         return partition
 
     def _find_or_new(self, kwargs, clean=False, format=None, tables=None, data=None, create=True):

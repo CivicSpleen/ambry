@@ -44,4 +44,7 @@ class HdfDb(Hdf5File, DatabaseInterface):
    
     def add_post_create(self, f):
         pass
+
+    def close(self):
+        pass # Need ot figure out how to do this ...
     

@@ -36,6 +36,8 @@ class CsvPartition(PartitionBase):
     def create(self):
         self.database.create()
 
+
+
     def write_stats(self, min_key=None, max_key=None, count=None):
         '''Assumes the partition is written without a header and that the 
         first column is the id. '''
