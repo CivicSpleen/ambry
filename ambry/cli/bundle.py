@@ -284,7 +284,7 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='pull', command_group='source')
 
 def bundle_info(args, b, st, rc):
-
+    from ..dbexceptions import DatabaseMissingError
 
     if args.dep:
         #
@@ -326,6 +326,7 @@ def bundle_info(args, b, st, rc):
                 for partition in b.partitions:
                     b.log("    "+partition.identity.sname)
 
+        deps = None
         if b.config.build and b.config.build.get('dependencies', False):
             # For source bundles
             deps = b.config.build.dependencies.items()
@@ -334,6 +335,8 @@ def bundle_info(args, b, st, rc):
             try:
                 deps = b.db_config.odep.items()
             except AttributeError:
+                deps = None
+            except DatabaseMissingError:
                 deps = None
 
         if deps:
@@ -448,7 +451,7 @@ def bundle_config(args, b, st, rc):
     if args.command == 'config':
         if args.subcommand == 'rewrite':
             b.log("Rewriting the config file")
-            with self.session:
+            with b.session:
                 b.update_configuration()
         elif args.subcommand == 'dump':
             print b.config.dump()
@@ -459,22 +462,6 @@ def bundle_config(args, b, st, rc):
 
 
 
-def bundle_source(args, b, st, rc):
-
-    if 'command_group' in args and args.command_group == 'source':
-
-        repo = new_repository(b.config.sourcerepo('default'))
-        repo.bundle = b
-
-        if args.command == 'commit':
-            repo.commit(args.message)
-        elif args.command == 'push':
-            repo.commit(args.message)
-            repo.push()
-        elif args.command == 'pull':
-            repo.pull()
-
-        return
 
 def bundle_repopulate(args, b, st, rc):
     return b.repopulate()

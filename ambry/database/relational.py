@@ -11,6 +11,23 @@ import logging
 from ambry.util import get_logger, memoize
 from ..database.inserter import SegmentedInserter, SegmentInserterFactory
 from contextlib import contextmanager
+import atexit, weakref
+
+logger = get_logger(__name__)
+logger.setLevel(logging.DEBUG)
+
+connections = weakref.WeakValueDictionary()
+
+def close_connections_at_exit():
+    '''Close any connections that have not already been closed '''
+    logger = get_logger(__name__)
+    logger.setLevel(logging.DEBUG)
+
+    for (k,dsn) , connection in connections.items():
+        logger.debug("closing: {}".format(dsn))
+        connection.close()
+
+atexit.register(close_connections_at_exit)
 
 class RelationalDatabase(DatabaseInterface):
     '''Represents a Sqlite database'''
@@ -24,6 +41,8 @@ class RelationalDatabase(DatabaseInterface):
             }
     
     dsn = None
+
+    for_build_bundle = False # Used to select WAL journal mode
 
     def __init__(self,  driver=None, server=None, dbname = None, username=None, password=None, port=None,  **kwargs):
 
@@ -68,6 +87,7 @@ class RelationalDatabase(DatabaseInterface):
         self.logger.setLevel(logging.INFO) 
         
         self._session = None
+
 
     def log(self,message):
         self.logger.info(message)
@@ -207,6 +227,7 @@ class RelationalDatabase(DatabaseInterface):
             try:
 
                 self._connection = self.engine.connect()
+                connections[(id(self._connection), self.dsn)] = self._connection
                 self._on_create_connection(self._connection)
             except Exception as e:
                 self.error("Failed to open: '{}': {} ".format(self.dsn, e))
@@ -278,6 +299,10 @@ class RelationalDatabase(DatabaseInterface):
 
             self._connection.close()
             self._connection = None
+
+            if (id(self._connection), self.dsn) in connections:
+                del connections[(id(self._connection), self.dsn)]
+
 
     def clean_table(self, table):
 

@@ -26,6 +26,7 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
             partition.identity.extension(), self.EXTENSION, type(self)
         ))
 
+
     def query(self,*args, **kwargs):
         """Convenience function for self.connection.execute()"""
         from sqlalchemy.exc import OperationalError

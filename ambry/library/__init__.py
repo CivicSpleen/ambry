@@ -383,7 +383,8 @@ class Library(object):
             return None
 
         if (Dataset.LOCATION.REMOTE in dataset.locations.codes and
-            Dataset.LOCATION.LIBRARY not in dataset.locations.codes):
+            Dataset.LOCATION.LIBRARY not in dataset.locations.codes and
+            use_remote):
 
             f = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
 
@@ -433,7 +434,7 @@ class Library(object):
         if dataset.partition:
 
             # Ensure the partition is in the cache
-            if not self.cache.has(dataset.partition.cache_key):
+            if not self.cache.has(dataset.partition.cache_key) and use_remote:
                 try:
                     f = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
                 except:
