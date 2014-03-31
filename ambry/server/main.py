@@ -28,8 +28,6 @@ class AmbryHooksPlugin(bottle.HooksPlugin):
         return super(AmbryHooksPlugin, self).trigger(name, *a, **ka)
 
 
-bottle.app.hooks = AmbryHooksPlugin()
-
 #
 # The LibraryPlugin allows the library to be inserted into a request handler with a
 # 'library' argument. 
@@ -71,10 +69,6 @@ class LibraryPlugin(object):
 
         # Replace the route callback with the wrapped one.
         return wrapper
-
-##
-## Monkey Patch!
-##
 
 
 
@@ -990,6 +984,7 @@ def test_run(config):
     logger.info("Library at: {}".format(l.database.dsn))
 
     install(LibraryPlugin(lf))
+    install(AmbryHooksPlugin())
 
     return run(host=host, port=port, reloader=False, server='stoppable')
 
@@ -1008,6 +1003,8 @@ def local_run(config, reloader=False):
     logger.info("starting local server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
 
     install(LibraryPlugin(lf))
+    install(AmbryHooksPlugin())
+
     return run(host=l.host, port=l.port, reloader=reloader)
 
 def local_debug_run(config):
@@ -1025,6 +1022,7 @@ def local_debug_run(config):
     l.database.create()
 
     install(LibraryPlugin(lf))
+    install(AmbryHooksPlugin())
 
     return run(host=host, port=port, reloader=True, server='stoppable')
 
@@ -1039,7 +1037,7 @@ def production_run(config, reloader=False):
     logger.info("starting production server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
 
     install(LibraryPlugin(lf))
-
+    install(AmbryHooksPlugin())
 
     return run(host=l.host, port=l.port, reloader=reloader, server='paste')
 
