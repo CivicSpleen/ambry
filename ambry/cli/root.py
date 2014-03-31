@@ -122,6 +122,7 @@ def root_info(args, l, st, rc):
     from ..cli import load_bundle, _print_info
     from ..orm import Dataset
 
+
     ident = l.resolve(args.term, location=None, use_remote = True)
 
     if not ident:

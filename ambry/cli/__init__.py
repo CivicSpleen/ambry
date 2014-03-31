@@ -351,7 +351,6 @@ def _print_bundle_info(bundle=None, ident=None):
         prt('Build time: {}',
             str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
 
-
 def main():
     import argparse
     
@@ -362,8 +361,17 @@ def main():
     parser.add_argument('-l', '--library', dest='library_name', default="default",
                         help="Name of library, from the library secton of the config")
     parser.add_argument('-c','--config', default=None, action='append', help="Path to a run config file") 
-    parser.add_argument('-v','--verbose', default=None, action='append', help="Be verbose") 
+    parser.add_argument('-v','--version', default=None, action="store_true",  help="Display version")
     parser.add_argument('--single-config', default=False,action="store_true", help="Load only the config file specified")
+
+    args = parser.parse_args()
+
+    if args.version:
+        import ambry
+        import sys
+        print ("Ambry {}".format(ambry.__version__))
+        sys.exit(0)
+
 
     cmd = parser.add_subparsers(title='commands', help='command help')
     
