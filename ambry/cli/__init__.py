@@ -353,7 +353,12 @@ def _print_bundle_info(bundle=None, ident=None):
 
 def main():
     import argparse
-    
+    import copy
+
+    ##
+    ## Hack -- set up the parser twice, so 'ambry --version' will work with no following command
+    ##
+
     parser = argparse.ArgumentParser(prog='python -mdatabundles',
                                      description='Databundles {}. Management interface for ambry, libraries and repositories. '.format(__version__),
                                      prefix_chars='-+')
@@ -363,18 +368,35 @@ def main():
     parser.add_argument('-c','--config', default=None, action='append', help="Path to a run config file") 
     parser.add_argument('-v','--version', default=None, action="store_true",  help="Display version")
     parser.add_argument('--single-config', default=False,action="store_true", help="Load only the config file specified")
+    parser.add_argument('args', nargs=argparse.REMAINDER)
 
     args = parser.parse_args()
 
     if args.version:
         import ambry
         import sys
-        print ("Ambry {}".format(ambry.__version__))
+
+        print("Ambry {}".format(ambry.__version__))
         sys.exit(0)
 
+    ##
+    ## Do it again.
+    ##
+
+    parser = argparse.ArgumentParser(prog='python -mdatabundles',
+                                     description='Databundles {}. Management interface for ambry, libraries and repositories. '.format(
+                                         __version__),
+                                     prefix_chars='-+')
+
+
+    parser.add_argument('-l', '--library', dest='library_name', default="default",
+                        help="Name of library, from the library secton of the config")
+    parser.add_argument('-c', '--config', default=None, action='append', help="Path to a run config file")
+    parser.add_argument('-v', '--version', default=None, action="store_true", help="Display version")
+    parser.add_argument('--single-config', default=False, action="store_true", help="Load only the config file specified")
 
     cmd = parser.add_subparsers(title='commands', help='command help')
-    
+
     from .library import library_parser, library_command
     from .warehouse import warehouse_command, warehouse_parser
     from .remote import remote_parser,remote_command
@@ -396,6 +418,12 @@ def main():
     root_parser(cmd)
 
     args = parser.parse_args()
+
+    if args.version:
+        import ambry
+        import sys
+        print ("Ambry {}".format(ambry.__version__))
+        sys.exit(0)
 
     if args.single_config:
         if args.config is None or len(args.config) > 1:
