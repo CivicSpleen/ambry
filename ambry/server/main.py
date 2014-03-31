@@ -167,6 +167,7 @@ def error500(error):
 
 @hook('after_request')
 def close_library_db():
+    print 'AFTER REQUEST'
     pass
 
 @hook('after_request')
