@@ -23,6 +23,9 @@ logger.setLevel(logging.DEBUG)
 
 class AmbryHooksPlugin(bottle.HooksPlugin):
 
+    def __init__(self):
+        super(AmbryHooksPlugin, self).__init__()
+
     def trigger(self, name, *a, **ka):
         print 'HERE!!!', name
         return super(AmbryHooksPlugin, self).trigger(name, *a, **ka)
@@ -996,6 +999,7 @@ def local_run(config, reloader=False):
     debug()
 
     lf = lambda:  new_library(config, True)
+
 
     l = lf()
     l.database.create()
