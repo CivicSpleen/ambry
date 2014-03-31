@@ -116,6 +116,13 @@ def clear_libraries():
     libraries = {}
 
 
+def _create_bundle(library, path):
+    """Centralizes creation of DBBundle so we can close them later. """
+
+    from ambry.bundle import DbBundle
+    print '!!!', id(library), path
+    return DbBundle(path)
+
 class Library(object):
     '''
 
@@ -174,6 +181,7 @@ class Library(object):
                               self.host, self.port)
 
 
+
     @property
     def upstream(self):
         if self._upstream:
@@ -214,7 +222,7 @@ class Library(object):
             raise ConflictError('MD5 Mismatch for {} : file={} != declared={} '.format(rel_path, file_md5, decl_md5))
 
         abs_path = self.cache.path(rel_path)
-        b = DbBundle(abs_path)
+        b = _create_bundle(self, abs_path)
 
         if b.identity.cache_key != rel_path:
             raise ConflictError("Identity of downloaded bundle doesn't match request payload")
@@ -406,7 +414,7 @@ class Library(object):
             return False
 
         try:
-            bundle = DbBundle(abs_path)
+            bundle = _create_bundle(self, abs_path)
         except DatabaseError as e:
             self.logger.error("Failed to load databundle at path {}: {}".format(abs_path,e))
             raise
@@ -729,7 +737,7 @@ class Library(object):
         '''Rebuild the database from the bundles that are already installed
         in the repository cache'''
 
-        from ambry.bundle import DbBundle
+
         from .files import Files
         from database import ROOT_CONFIG_NAME_V
 
@@ -769,7 +777,7 @@ class Library(object):
 
                     try:
 
-                        b = DbBundle(path_)
+                        b = _create_bundle(self, path_)
                         # This is a fragile hack -- there should be a flag in the database
                         # that differentiates a partition from a bundle.
                         f = os.path.splitext(file_)[0]
@@ -952,7 +960,7 @@ class Library(object):
         extant = self.files.query.type(Files.TYPE.BUNDLE).ref(f.ref).one_maybe
         if not extant:
             try:
-                b = DbBundle(dst)
+                b = _create_bundle(self, dst)
             except:
                 self.logger.error("Failed to open bundle: {} ".format(dst))
                 return
