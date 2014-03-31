@@ -21,7 +21,6 @@ from ..util import memoize
 
 libraries = {}
 
-
 def _new_library(config):
     import copy
     from ..cache import new_cache, RemoteMarker
