@@ -21,7 +21,7 @@ __author__ = "Eric Busboom"
 __copyright__ = "Copyright (c) 2014 Clarinova"
 __credits__ = []
 __license__ = "Revised BSD"
-__version__ = '0.3.0'
+__version__ ='0.3.187'
 __maintainer__ = "Eric Busboom"
 __email__ = "eric@clarinova.com"
 __status__ = "Development"
@@ -49,4 +49,3 @@ def ilibrary(name='default'):
     '''Return the default Analysislibrary for this installation, which is like the Library returned by
     library(), but configured for use in IPython'''
     return _l.AnalysisLibrary(library())
-
