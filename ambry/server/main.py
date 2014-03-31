@@ -2,7 +2,7 @@
 REST Server For DataBundle Libraries. 
 '''
 
-
+import bottle
 from bottle import  error, hook, get, put, post, request, response, redirect
 from bottle import HTTPResponse, static_file, install, url
 from bottle import ServerAdapter, server_names, Bottle
@@ -11,16 +11,24 @@ from bottle import run, debug
 from decorator import  decorator
 from  ambry.library import new_library
 import ambry.util
-from ambry.bundle import DbBundle
+
 import logging
 import os
-import json
-from sqlalchemy.orm.exc import NoResultFound
 
 import ambry.client.exceptions as exc
 
 logger = ambry.util.get_logger(__name__)
 logger.setLevel(logging.DEBUG)
+
+
+class AmbryHooksPlugin(bottle.HooksPlugin):
+
+    def trigger(self, name, *a, **ka):
+        print 'HERE!!!', name
+        return super(AmbryHooksPlugin, self).trigger(name, *a, **ka)
+
+
+bottle.app.hooks = AmbryHooksPlugin()
 
 #
 # The LibraryPlugin allows the library to be inserted into a request handler with a
@@ -40,13 +48,11 @@ class LibraryPlugin(object):
 
         # Override global configuration with route-specific values.
         conf = context['config'].get('library') or {}
-        
-        #library = conf.get('library', self.library_creator())
 
         keyword = conf.get('keyword', self.keyword)
         
         # Test if the original callback accepts a 'library' keyword.
-        # Ignore it if it does not need a database handle.
+        # Ignore it otherwise
         args = inspect.getargspec(context['callback'])[0]
         if keyword not in args:
             return callback
@@ -54,7 +60,7 @@ class LibraryPlugin(object):
         def wrapper(*args, **kwargs):
 
             #
-            # NOTE! Creating the library every call. This is bacuase the Sqlite driver
+            # NOTE! Creating the library every call. This is because the Sqlite driver
             # isn't multi-threaded. 
             #
             kwargs[keyword] = self.library_creator()
@@ -65,7 +71,13 @@ class LibraryPlugin(object):
 
         # Replace the route callback with the wrapped one.
         return wrapper
- 
+
+##
+## Monkey Patch!
+##
+
+
+
 def capture_return_exception(e):
     
     import sys
@@ -154,9 +166,8 @@ def error500(error):
     raise exc.InternalError("For Url: {}".format(repr(request.url)))
 
 @hook('after_request')
-def close_library_db(library):
-    print "CLOSING LIBRARY!", id(library)
-    library.close()
+def close_library_db():
+    pass
 
 @hook('after_request')
 def enable_cors():
@@ -189,7 +200,7 @@ def process_did(did, library):
     if not b:
         raise exc.BadRequest("Didn't get bundle for {}".format(did))
 
-
+    b.close()
     return did, d_on, b
 
 def process_pid(did, pid, library):
@@ -263,6 +274,7 @@ def _table_csv_parts(library,b,pid,table=None):
     else:
         for i in range(1, part_count+1):
             parts.append(template +"?i={}&n={}".format(i,part_count))
+
 
     return parts
 
@@ -656,7 +668,7 @@ def get_dataset(did, library, pid=None):
 
     d['response'] = 'dataset'
 
-
+    library.close()
     return d
 
 @get('/datasets/<did>/csv') 
@@ -1026,6 +1038,7 @@ def production_run(config, reloader=False):
     logger.info("starting production server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
 
     install(LibraryPlugin(lf))
+
 
     return run(host=l.host, port=l.port, reloader=reloader, server='paste')
 
