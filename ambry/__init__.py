@@ -26,7 +26,6 @@ __maintainer__ = "Eric Busboom"
 __email__ = "eric@clarinova.com"
 __status__ = "Development"
 
-
 from util import memoize
 import ambry.library as _l
 from ambry.bundle import new_analysis_bundle
