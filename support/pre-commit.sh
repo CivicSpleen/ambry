@@ -2,4 +2,4 @@
 
 count=$(git rev-list HEAD --count)
 
-echo COUNT $count
+echo COUNT $count Yes
