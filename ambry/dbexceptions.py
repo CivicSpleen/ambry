@@ -13,7 +13,6 @@ class BundleError(Exception):
         #Exception.__init__(self,textwrap.fill(message, 120), *args, **kwargs)
         Exception.__init__(self, message, *args, **kwargs)
 
-
 class BadRequest(BundleError):
     '''The functioncall or request was malformed or incorrect'''
 
