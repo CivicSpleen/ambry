@@ -18,7 +18,8 @@ import logging.handlers
 from ambry.orm import Dataset, Config
 from ..identity import LocationRef, Identity
 from ..util import memoize
-
+import weakref
+import collections
 libraries = {}
 
 def _new_library(config):
@@ -115,12 +116,27 @@ def clear_libraries():
     libraries = {}
 
 
+bundles = collections.defaultdict(weakref.WeakValueDictionary)
+
 def _create_bundle(library, path):
     """Centralizes creation of DBBundle so we can close them later. """
 
     from ambry.bundle import DbBundle
     print '!!!', id(library), path
-    return DbBundle(path)
+
+    lid = id(library)
+
+    sd = bundles[lid]
+
+    if path in sd:
+        return sd[path]
+
+    bundle =  DbBundle(path)
+
+    sd[path] = bundle
+
+    return bundle
+
 
 class Library(object):
     '''
@@ -178,6 +194,14 @@ class Library(object):
 
         return self.__class__(self.cache, self.database.clone(), self._upstream, self.sync, self.require_upload,
                               self.host, self.port)
+
+    def close(self):
+
+        sd = bundles[id(self)]
+
+        for path, bundle in sd.items():
+            print 'BUNDLES', path, bundle.identity
+
 
 
 

@@ -154,8 +154,9 @@ def error500(error):
     raise exc.InternalError("For Url: {}".format(repr(request.url)))
 
 @hook('after_request')
-def close_library_db():
-    pass
+def close_library_db(library):
+    print "CLOSING LIBRARY!", id(library)
+    library.close()
 
 @hook('after_request')
 def enable_cors():
