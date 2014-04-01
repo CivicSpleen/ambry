@@ -1031,15 +1031,8 @@ def production_run(config, reloader=False):
     logger.info("starting production server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
 
     install(LibraryPlugin(lf))
-    #install(AmbryHooksPlugin())
 
-    if l.database.driver == 'sqlite':
-        server = 'wsgiref' # Use dfault, single thread server since sqlite can't handle multithreading
-    else:
-        server = 'paste'
-
-
-    return run(host=l.host, port=l.port, reloader=reloader, server=server )
+    return run(host=l.host, port=l.port, reloader=reloader )
 
 if __name__ == '__main__':
     local_debug_run()
