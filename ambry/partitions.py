@@ -130,6 +130,7 @@ class Partitions(object):
 
     def close(self):
         for vid, p in self._partitions.items():
+
             p.close()
 
 

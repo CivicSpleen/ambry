@@ -116,27 +116,6 @@ def clear_libraries():
     libraries = {}
 
 
-bundles = collections.defaultdict(weakref.WeakValueDictionary)
-
-def _create_bundle(library, path):
-    """Centralizes creation of DBBundle so we can close them later. """
-
-    from ambry.bundle import DbBundle
-    print '!!!', id(library), path
-
-    lid = id(library)
-
-    sd = bundles[lid]
-
-    if path in sd:
-        return sd[path]
-
-    bundle =  DbBundle(path)
-
-    sd[path] = bundle
-
-    return bundle
-
 
 class Library(object):
     '''
@@ -189,20 +168,33 @@ class Library(object):
 
         self.needs_update = False
 
+        self.bundles = weakref.WeakValueDictionary()
+
 
     def clone(self):
 
         return self.__class__(self.cache, self.database.clone(), self._upstream, self.sync, self.require_upload,
                               self.host, self.port)
 
+    def _create_bundle(self, path):
+        from ..bundle.bundle import DbBundle
+
+        if path in self.bundles:
+            return self.bundles[path]
+
+        bundle  = DbBundle(path)
+
+        self.bundles[path] = bundle
+
+        return bundle
+
+
     def close(self):
 
-        sd = bundles[id(self)]
+        for path, bundle in self.bundles.items():
+            bundle.close()
 
-        for path, bundle in sd.items():
-            print 'BUNDLES', path, bundle.identity
-
-
+        self.database.close()
 
 
     @property
@@ -245,7 +237,7 @@ class Library(object):
             raise ConflictError('MD5 Mismatch for {} : file={} != declared={} '.format(rel_path, file_md5, decl_md5))
 
         abs_path = self.cache.path(rel_path)
-        b = _create_bundle(self, abs_path)
+        b = self._create_bundle( abs_path)
 
         if b.identity.cache_key != rel_path:
             raise ConflictError("Identity of downloaded bundle doesn't match request payload")
@@ -437,7 +429,7 @@ class Library(object):
             return False
 
         try:
-            bundle = _create_bundle(self, abs_path)
+            bundle = self._create_bundle( abs_path)
         except DatabaseError as e:
             self.logger.error("Failed to load databundle at path {}: {}".format(abs_path,e))
             raise
@@ -800,7 +792,7 @@ class Library(object):
 
                     try:
 
-                        b = _create_bundle(self, path_)
+                        b = self._create_bundle( path_)
                         # This is a fragile hack -- there should be a flag in the database
                         # that differentiates a partition from a bundle.
                         f = os.path.splitext(file_)[0]
@@ -983,7 +975,7 @@ class Library(object):
         extant = self.files.query.type(Files.TYPE.BUNDLE).ref(f.ref).one_maybe
         if not extant:
             try:
-                b = _create_bundle(self, dst)
+                b = self._create_bundle( dst)
             except:
                 self.logger.error("Failed to open bundle: {} ".format(dst))
                 return

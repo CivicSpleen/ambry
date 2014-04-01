@@ -112,7 +112,8 @@ class RelationalDatabase(DatabaseInterface):
     def exists(self):
         
         try:
-            conn = self.engine.connect()
+            # contextual_connect to allow threadlocal connections
+            conn = self.engine.contextual_connect()
             conn.close()
         except Exception as e:
             return False
@@ -194,6 +195,7 @@ class RelationalDatabase(DatabaseInterface):
         '''return the SqlAlchemy engine for this database'''
         from sqlalchemy import create_engine
         import sqlite3
+        from sqlalchemy.pool import NullPool
 
         if not self._engine:
             self.require_path()
@@ -210,7 +212,9 @@ class RelationalDatabase(DatabaseInterface):
                 kwargs['connect_args'] = {'detect_types': sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES}
                 kwargs['native_datetime'] = True
 
-            self._engine = create_engine(path,**kwargs)
+            self._engine = create_engine(path,  poolclass=NullPool, **kwargs)
+
+            self._engine.pool._use_threadlocal = True # Easier than constructing the pool
 
             self._on_create_engine(self._engine)
 
@@ -256,13 +260,15 @@ class RelationalDatabase(DatabaseInterface):
                 self.error("Failed to open: '{}': {} ".format(self.dsn, e))
                 raise
 
+
         return weakref.proxy(self._connection, close_connection_on_ref)
 
 
     @property
     @contextmanager
     def connection_context(self):
-        connection = self.engine.connect()
+        raise Exception
+        #connection = self.engine.connect()
         yield connection
         connection.close()
 
@@ -347,6 +353,9 @@ class RelationalDatabase(DatabaseInterface):
 
             if self._connection_id() in connections:
                 del connections[self._connection_id()]
+
+        if self._engine:
+            self._engine.dispose()
 
 
     def clean_table(self, table):

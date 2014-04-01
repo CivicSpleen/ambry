@@ -94,6 +94,8 @@ class LibraryDb(object):
             # Disabling connection pooling solves the problem.
             self._engine = create_engine(self.dsn,echo=False,   poolclass=NullPool)
 
+            self._engine.pool._use_threadlocal = True  # Easier than constructing the pool
+
             from sqlalchemy import event
 
             if self.driver == 'sqlite':
@@ -114,10 +116,7 @@ class LibraryDb(object):
 
         return self._connection
 
-    def close_connection(self):
-        if self._connection:
-            self._connection.close()
-            self._connection = None
+
 
     @property
     def session(self):
@@ -137,6 +136,41 @@ class LibraryDb(object):
             self._session.execute("SET search_path TO {}".format(self._schema))
 
         return self._session
+
+    def close(self):
+
+        self.close_session()
+
+        self.close_connection()
+
+        if self._engine:
+            self._engine.dispose()
+
+
+    def close_session(self):
+        if self._session:
+            self._session.close()
+            #self._session.bind.dispose()
+            self._session = None
+
+
+    def close_connection(self):
+        if self._connection:
+            self._connection.close()
+            self._connection = None
+
+    def commit(self):
+        try:
+            self.session.commit()
+            self.close_session()
+        except Exception as e:
+            #self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))
+            raise
+
+
+    def rollback(self):
+        self.session.rollback()
+        self.close_session()
 
 
     @property
@@ -339,32 +373,9 @@ class LibraryDb(object):
     ##
     ##
 
-    def close(self):
-        #print "Close Engine",os.getpid(), self.dsn
-        self.close_session()
-        self.close_connection()
-
-        self.engine.dispose()
-        self._engine = None
-
-    def commit(self):
-        try:
-            self.session.commit()
-            self.close_session()
-        except Exception as e:
-            #self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))
-            raise
 
 
-    def rollback(self):
-        self.session.rollback()
-        self.close_session()
 
-    def close_session(self):
-        if self._session:
-            self._session.close()
-            #self._session.bind.dispose()
-            self._session = None
 
 
     ##

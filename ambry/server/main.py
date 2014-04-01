@@ -4,7 +4,7 @@ REST Server For DataBundle Libraries.
 
 import bottle
 from bottle import  error, hook, get, put, post, request, response, redirect
-from bottle import HTTPResponse, static_file, install, url
+from bottle import HTTPResponse, static_file, install, url, local
 from bottle import ServerAdapter, server_names, Bottle
 from bottle import run, debug
 
@@ -20,15 +20,6 @@ import ambry.client.exceptions as exc
 logger = ambry.util.get_logger(__name__)
 logger.setLevel(logging.DEBUG)
 
-
-class AmbryHooksPlugin(bottle.HooksPlugin):
-
-    def __init__(self):
-        super(AmbryHooksPlugin, self).__init__()
-
-    def trigger(self, name, *a, **ka):
-        print 'HERE!!!', name
-        return super(AmbryHooksPlugin, self).trigger(name, *a, **ka)
 
 
 #
@@ -64,9 +55,15 @@ class LibraryPlugin(object):
             # NOTE! Creating the library every call. This is because the Sqlite driver
             # isn't multi-threaded. 
             #
-            kwargs[keyword] = self.library_creator()
+            local.library = kwargs[keyword] = self.library_creator()
 
-            rv = callback(*args, **kwargs)
+            try:
+                rv = callback(*args, **kwargs)
+            except Exception:
+                raise
+            finally:
+                print "Closing .. "
+                local.library.close()
 
             return rv
 
@@ -161,11 +158,6 @@ def error404(error):
 @error(500)
 def error500(error):
     raise exc.InternalError("For Url: {}".format(repr(request.url)))
-
-@hook('after_request')
-def close_library_db():
-    print 'AFTER REQUEST'
-    pass
 
 @hook('after_request')
 def enable_cors():
@@ -585,7 +577,7 @@ def get_dataset(did, library, pid=None):
     the schema and all partitions. '''
 
     gr =  library.get(did)
- 
+
     if not gr:
         raise exc.NotFound("Failed to find dataset for {}".format(did))
     
@@ -987,7 +979,7 @@ def test_run(config):
     logger.info("Library at: {}".format(l.database.dsn))
 
     install(LibraryPlugin(lf))
-    install(AmbryHooksPlugin())
+
 
     return run(host=host, port=port, reloader=False, server='stoppable')
 
@@ -1007,7 +999,6 @@ def local_run(config, reloader=False):
     logger.info("starting local server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
 
     install(LibraryPlugin(lf))
-    install(AmbryHooksPlugin())
 
     return run(host=l.host, port=l.port, reloader=reloader)
 
@@ -1026,7 +1017,7 @@ def local_debug_run(config):
     l.database.create()
 
     install(LibraryPlugin(lf))
-    install(AmbryHooksPlugin())
+
 
     return run(host=host, port=port, reloader=True, server='stoppable')
 
@@ -1041,9 +1032,15 @@ def production_run(config, reloader=False):
     logger.info("starting production server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
 
     install(LibraryPlugin(lf))
-    install(AmbryHooksPlugin())
+    #install(AmbryHooksPlugin())
 
-    return run(host=l.host, port=l.port, reloader=reloader, server='paste')
+    if l.database.driver == 'sqlite':
+        server = 'wsgiref' # Use dfault, single thread server since sqlite can't handle multithreading
+    else:
+        server = 'paste'
+
+
+    return run(host=l.host, port=l.port, reloader=reloader, server=server )
 
 if __name__ == '__main__':
     local_debug_run()
