@@ -407,10 +407,13 @@ def get_root(library):
     
     hp = _host_port(library)
 
+    li = library.dict
+    del li['database'] # DSN has password
+
     return {
            'datasets' : "{}/datasets".format(hp),
            'find': "{}/datasets/find".format(hp),
-           'info': library.dict,
+           'info': li,
            'upstream': dict(
                options = library.upstream.last_upstream().options,
                bucket = library.upstream.last_upstream().bucket_name,
