@@ -62,7 +62,6 @@ class LibraryPlugin(object):
             except Exception:
                 raise
             finally:
-                print "Closing .. "
                 local.library.close()
 
             return rv
