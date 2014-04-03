@@ -27,5 +27,4 @@ do
 	dest_dir=$(dirname $dest)
 	mkdir $dest_dir
 	ipython nbconvert --to html --output $dest $f
-	
 done
