@@ -15,26 +15,25 @@ class Bundle(BuildBundle):
         import uuid
         import random
 
-        p = self.partitions.new_partition(table='example')
-        
-        p.query('DELETE FROM example')
-        nd = p.table.null_dict
         
         lr = self.init_log_rate(print_rate=5)
         
-        with p.database.inserter() as ins:
-
-            for i in range(10000):
-                row = dict(nd.items())
+        
+        for j in range(4):
+            p = self.partitions.new_partition(table='example', segment=j)
+            p.query('DELETE FROM example')
+            nd = p.table.null_dict
+            with p.database.inserter() as ins:
+                for i in range(1000):
             
-                row['uuid'] = str(uuid.uuid4())
-                row['int'] = random.randint(0,100)
-                row['float'] = random.random()*100
+                    row = dict(nd.items())
         
-                ins.insert(row)
-                lr()
-        
-        p.csvize(rows_per_seg=2500)
+                    row['uuid'] = str(uuid.uuid4())
+                    row['int'] = random.randint(0,100)
+                    row['float'] = random.random()*100
+    
+                    ins.insert(row)
+                    lr()
         
         return True
 

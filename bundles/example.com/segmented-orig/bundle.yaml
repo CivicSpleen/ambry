@@ -11,6 +11,7 @@ about:
     tags:
     - example
     title: Simple Example Bundle
+build: {}
 extracts:
     csv:
         description: CSV Format
@@ -55,18 +56,25 @@ extracts:
         partition: example.com-simple-orig-429e.example
 identity:
     dataset: segmented
+    id: d000001l
     revision: 1
     source: example.com
     variation: test
     version: 0.1.1
 names:
-    fqname: example.com-segmented-orig-0.1.1~d00G001
-    name: example.com-segmented-orig
-    vid: d00G001
-    vname: example.com-segmented-orig-0.1.1
+    fqname: example.com-segmented-test-0.1.1~d000001l001
+    name: example.com-segmented-test
+    vid: d000001l001
+    vname: example.com-segmented-test-0.1.1
 partitions:
--   name: example.com-segmented-orig-example
+-   name: example.com-segmented-test-example
     table: example
--   format: csv
-    name: example.com-segmented-orig-example-csv
+-   name: example.com-segmented-test-example-1
+    segment: 1
+    table: example
+-   name: example.com-segmented-test-example-2
+    segment: 2
+    table: example
+-   name: example.com-segmented-test-example-3
+    segment: 3
     table: example

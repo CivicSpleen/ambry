@@ -11,6 +11,7 @@ about:
     tags:
     - example
     title: Simple Example Bundle
+build: {}
 extracts:
     csv:
         description: CSV Format
@@ -55,15 +56,16 @@ extracts:
         partition: example.com-simple-orig-429e.example
 identity:
     dataset: simple
+    id: d000001m
     revision: 2
     source: example.com
     variation: test
     version: 0.1.2
 names:
-    fqname: example.com-simple-orig-0.1.2~d00H002
-    name: example.com-simple-orig
-    vid: d00H002
-    vname: example.com-simple-orig-0.1.2
+    fqname: example.com-simple-test-0.1.2~d000001m002
+    name: example.com-simple-test
+    vid: d000001m002
+    vname: example.com-simple-test-0.1.2
 partitions:
--   name: example.com-simple-orig-example
+-   name: example.com-simple-test-example
     table: example

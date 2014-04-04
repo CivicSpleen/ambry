@@ -218,6 +218,8 @@ class BundleFileConfig(RunConfig):
                          .format(e.message))
             raise
 
+        self.identity['id'] = str(ds)
+
         ident = Identity.from_dict(self.identity)
 
         ident._on = ds.rev(self.identity.revision)
