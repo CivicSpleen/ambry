@@ -1,0 +1,42 @@
+-   name: California Private Schools 2012-2013
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/privateschools1213.csv
+    year: 2012
+-   name: California Private Schools 2011-2012
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/California%20Private%20Schools%202011-2012.csv
+    year: 2011
+-   name: California Private Schools 2010-2011
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/California%20Private%20Schools%202010-2011.csv
+    year: 2010
+-   name: California Private Schools 2009-2010
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/California%20Private%20Schools%202009-2010.csv
+    year: 2009
+-   name: California Private Schools 2008-2009
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/California%20Private%20Schools%202008-2009.csv
+    year: 2008
+-   name: California Private Schools 2007-2008
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/California%20Private%20Schools%202007-2008.csv
+    year: 2007
+-   name: California Private Schools 2006-2007
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/California%20Private%20Schools%202006-2007.csv
+    year: 2006
+-   name: California Private Schools 2005-2006
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/California%20Private%20Schools%202005-2006.csv
+    year: 2005
+-   name: California Private Schools 2004-2005
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/California%20Private%20Schools%202004-2005.csv
+    year: 2004
+-   name: California Private Schools 2003-2004
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/California%20Private%20Schools%202003-2004.csv
+    year: 2003
+-   name: California Private Schools 2002-2003
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/California%20Private%20Schools%202002-2003.csv
+    year: 2002
+-   name: California Private Schools 2001-2002
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/California%20Private%20Schools%202001-2002.csv
+    year: 2001
+-   name: California Private Schools 2000-2001
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/California%20Private%20Schools%202000-2001.csv
+    year: 2000
+-   name: California Private Schools 1999-2000
+    url: http://ds.civicknowledge.org.s3.amazonaws.com/cde.ca.gov/private_schools/California%20Private%20Schools%201999-2000.csv
+    year: 1999

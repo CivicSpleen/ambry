@@ -1,0 +1,100 @@
+# Configuration for a library that is backed by a remote library
+
+library:
+  default:
+    # Remote is the URL of an off-site upstream library. Like a cache, files 
+    # can be read from the remote, but won't be written to it unlessed pushed.
+    remote: http://localhost:7979
+    filesystem: client
+    database: client
+    
+  clean: # Clean library to test downloading from remove
+    remote: http://localhost:7979
+    filesystem: clean
+    database: clean
+    
+  server:
+    port: 7979
+    remote: http://localhost:7979
+    filesystem: server
+    database: server    
+    
+  production:
+      filesystem: client
+      database: client
+      remote: 'http://library.sandiegodata.org'     
+      
+        
+database:
+    client:
+        dbname: '{root}/library.db'
+        driver: sqlite  
+    clean: # A clean library to test the remote. 
+        dbname: '{root}/library-clean.db'
+        driver: sqlite  
+  
+    server:
+        dbname: '/tmp/server/library.db'
+        driver: sqlite  
+    
+filesystem:  
+    root_dir: /tmp/client-test
+    
+    devtest:
+      size: 100
+      dir: '{root}/devtest'
+      upstream:
+        options: [compress]
+        bucket: devtest.sandiegodata.org
+        prefix: test
+        account: devtest.sandiegodata.org
+    
+    devtest-nocache:
+      options: [compress]
+      bucket: devtest.sandiegodata.org
+      prefix: test-remote
+      account: devtest.sandiegodata.org
+    
+    client:
+        dir: '{root}/cache-l1'
+    clean:
+        dir: '{root}/cache-clean' 
+        
+    server:
+        dir: '/tmp/server/cache-l1'
+        size: 5
+        upstream:
+          dir: '/tmp/server//cache-l2'
+          options: [compress]
+          
+
+    cache1:
+      dir: '/tmp/cache-test/cache1'
+      
+    cache2:
+      dir: '/tmp/cache-test/cache1' 
+      upstream:
+        dir: '/tmp/cache-test/cache2' 
+        options: [compress]    
+    cache3:
+      dir: '/tmp/cache-test/cache1' 
+      upstream:
+        dir: '/tmp/cache-test/cache2' 
+        options: [compress]         
+        upstream:
+          bucket: devtest.sandiegodata.org
+          prefix: cache-test/cache3
+
+             
+    google:
+      bucket: sdrdl-test  
+      account: clarinova.com-sdrdl-demo
+      prefix: prefix
+      
+    
+downloads:
+    dir: '{root}/downloads'
+
+extracts: 
+    dir: '{root}/extracts'
+        

@@ -4,7 +4,7 @@ Created on Jun 22, 2012
 @author: eric
 """
 import unittest
-from  testbundle.bundle import Bundle
+from  bundles.testbundle.bundle import Bundle
 from ambry.identity import * #@UnusedWildImport
 import time, logging
 import ambry.util

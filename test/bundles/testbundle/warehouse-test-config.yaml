@@ -1,0 +1,101 @@
+# Configuration for a library that is backed by a remote library
+
+library:
+  server:
+    filesystem: library
+    database: library
+    host: localhost
+    port: 7979
+    upstream:
+      options: [compress]
+      prefix: library-test
+      bucket: devtest.sandiegodata.org
+      account: devtest.sandiegodata.org
+
+  client:
+    filesystem: library
+    database: library
+    remotes:
+    - http://localhost:7979
+
+  local:
+    filesystem: library
+    database: library
+
+
+warehouse:
+    default:
+      database: postgres_warehouse
+
+    redshift:
+      service: redshift
+      database: redshift
+      library: redshift_library
+
+    postgres1:
+        service: postgres
+        database:
+            driver: postgres
+            server: warehouse1
+            dbname: test
+            username: test
+            password: test
+
+    mysql:
+      service: relational
+      database: mysql_warehouse
+      library: mysql_library
+
+    sqlite:
+      service: sqlite
+      database: sqlite_warehouse
+      xlibrary: sqlite_library
+
+    spatialite:
+      service: spatialite
+      database: spatialite_warehouse
+      xlibrary: sqlite_library
+
+
+database:
+  
+
+    library:
+        dbname: '/tmp/warehouse/library.db'
+        driver: sqlite
+
+  
+    spatialite_warehouse:
+        dbname: '/tmp/warehouse/spatialite.db'
+        driver: spatialite
+
+    sqlite_warehouse:
+        dbname: '/tmp/warehouse/sqlite.db'
+        driver: sqlite
+  
+    sqlite_library:
+        dbname: '/tmp/warehouse/warehouse-library.db'
+        driver: sqlite  
+        
+        
+    mysql_warehouse:
+        driver: mysql
+        server: testdb.cnhz40f0cmdb.us-east-1.rds.amazonaws.com
+        dbname: test
+        username: test
+        password: samizdat 
+
+
+filesystem:  
+  root_dir: /tmp/warehouse-test/
+  default:
+      dir: '{root}/cache-l1'
+      size: 50
+      upstream:
+        dir: '{root}/cache-l2'
+        options: [compress]
+
+  library: /tmp/server/warehouse/library
+
+
+        

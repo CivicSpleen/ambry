@@ -1,0 +1,53 @@
+table,seq,column,is_pk,is_fk,type,size,width,description,id
+example1,1,id,1,,INTEGER,,,,c02801001
+example1,2,uuid,,,VARCHAR,36,,A random UUID,c02801002
+example1,3,int,,,INTEGER,3,,A random integer,c02801003
+example1,4,float,,,REAL,,,,c02801004
+,,,,,,,,,
+example2,1,id,1,,INTEGER,,,,c02802001
+example2,2,uuid2,,,VARCHAR,,,A random UUID,c02802002
+example2,3,int2,,,INTEGER,,,A random integer,c02802003
+example2,4,float,,,REAL,,,,c02802004
+,,,,,,,,,
+reservations,1,ogc_fid,1,,INTEGER,,,,c02803001
+reservations,2,r_code,,,TEXT,,4,,c02803002
+reservations,3,ind_name,,,TEXT,,60,,c02803003
+reservations,4,ind_source,,,TEXT,,30,,c02803004
+reservations,5,ind_entity,,,TEXT,,150,,c02803005
+reservations,6,region_nam,,,TEXT,,16,,c02803006
+reservations,7,mail_name,,,TEXT,,50,,c02803007
+reservations,8,street,,,TEXT,,60,,c02803008
+reservations,9,city,,,TEXT,,60,,c02803009
+reservations,10,state,,,TEXT,,2,,c0280300a
+reservations,11,zip,,,TEXT,,5,,c0280300b
+reservations,12,phone,,,TEXT,,10,,c0280300c
+reservations,13,fax,,,TEXT,,10,,c0280300d
+reservations,14,elink,,,TEXT,,100,,c0280300e
+reservations,15,treaty,,,TEXT,,60,,c0280300f
+reservations,16,tribal_est,,,TEXT,,100,,c0280300g
+reservations,17,gov_type,,,TEXT,,100,,c0280300h
+reservations,18,econ_sourc,,,TEXT,,100,,c0280300i
+reservations,19,gaming,,,TEXT,,1,,c0280300j
+reservations,20,med_fac,,,TEXT,,100,,c0280300k
+reservations,21,shape_area,,,NUMERIC,,19,,c0280300l
+reservations,22,shape_len,,,NUMERIC,,19,,c0280300m
+,,,,,,,,,
+municipal,1,ogc_fid,1,,INTEGER,,,,c02804001
+municipal,2,objectid,,,INTEGER64,,9,,c02804002
+municipal,3,name,,,TEXT,,20,,c02804003
+municipal,4,code,,,TEXT,,3,,c02804004
+municipal,5,orig_fid,,,INTEGER64,,9,,c02804005
+municipal,6,shape_leng,,,NUMERIC,,19,,c02804006
+municipal,7,shape_area,,,NUMERIC,,19,,c02804007
+,,,,,,,,,
+publicsafety,1,ogc_fid,1,,INTEGER,,,,c02805001
+publicsafety,2,code,,,TEXT,,2,,c02805002
+publicsafety,3,agency,,,TEXT,,3,,c02805003
+publicsafety,4,agency_des,,,TEXT,,30,,c02805004
+publicsafety,5,code_desc,,,TEXT,,30,,c02805005
+publicsafety,6,shape_area,,,NUMERIC,,19,,c02805006
+publicsafety,7,shape_len,,,NUMERIC,,19,,c02805007
+,,,,,,,,,
+sra,1,ogc_fid,1,,INTEGER,,,,c02806001
+sra,2,sra,,,INTEGER64,,4,,c02806002
+sra,3,name,,,TEXT,,30,,c02806003

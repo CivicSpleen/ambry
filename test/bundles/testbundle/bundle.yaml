@@ -1,0 +1,47 @@
+about:
+    author: Albert Uthor
+    homepage: http://homepage.com
+    license: other-open
+    maintainer: Mark Aintainer
+    tags:
+    - one
+    - two
+    - three
+    title: This is the Title
+    url: http://theurl.com
+build:
+    geoheaderFile: meta/schema.csv
+extracts:
+-   description: 'This is a multi-line description for the extract of {p_name}, with
+        the table named {p_table}
+
+        '
+    each:
+    -   -   dima: 1
+        -   dima: 2
+        -   dima: 3
+    -   -   dimb: x
+        -   dimb: y
+        -   dimb: z
+    -   -   dimc: a
+        -   dimc: b
+        -   dimc: c
+    for: 'True '
+    name: extract-{p_table}.csv
+    partition: any
+    query: select * from  {p_table}
+    title: 'Extract for table: {p_table}, a={dima}, b={dimb} and c={dimc}'
+identity:
+    dataset: dataset
+    id: diEGPXmDC8
+    revision: 1
+    source: source
+    subset: subset
+    variation: variation
+    version: 0.0.1
+names:
+    fqname: source-dataset-subset-variation-0.0.1~diEGPXmDC8001
+    name: source-dataset-subset-variation
+    vid: diEGPXmDC8001
+    vname: source-dataset-subset-variation-0.0.1
+partitions: []

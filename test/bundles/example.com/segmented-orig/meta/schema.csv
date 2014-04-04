@@ -1,0 +1,10 @@
+table,seq,column,is_pk,is_fk,type,size,description,id
+example,1,id,1,,INTEGER,,,c000001l01001
+example,2,uuid,,,VARCHAR,36,A random UUID,c000001l01002
+example,3,int,,,INTEGER,3,A random integer,c000001l01003
+example,4,float,,,REAL,,,c000001l01004
+,,,,,,,,
+example2,1,id,1,,INTEGER,,,c000001l02001
+example2,2,uuid2,,,VARCHAR,,A random UUID,c000001l02002
+example2,3,int2,,,INTEGER,,A random integer,c000001l02003
+example2,4,float,,,REAL,,,c000001l02004
