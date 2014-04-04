@@ -2,7 +2,7 @@
 
 import os
 from ..util import lru_cache
-
+from sqlalchemy.orm import object_session
 
 @lru_cache()
 def partition_classes():
@@ -172,7 +172,7 @@ class PartitionBase(PartitionInterface):
     def __init__(self, db, record, **kwargs):
 
         self.bundle = db
-        self.record = record
+        self._record = record
 
         self.dataset = self.record.dataset
         self.identity = self.record.identity
@@ -202,6 +202,18 @@ class PartitionBase(PartitionInterface):
         return self.bundle.library.get(self.identity.vid).partition
 
     @property
+    def record(self):
+        """Return the SqlAlchemy Partition object, posibly re-fecthing it from the database
+        if it has been detatched from the session. Maybe there is a way to just reattach it? """
+
+        from ..orm import Partition as OrmPartition
+        if not object_session(self._record):
+            self._record = (self.bundle.database.session
+                           .query(OrmPartition).filter(OrmPartition.id_==str(self.identity.id_) ).one()  )
+
+        return self._record
+
+    @property
     def path(self):
         """Return a pathname for the partition, relative to the containing
         directory of the bundle. """
@@ -223,8 +235,8 @@ class PartitionBase(PartitionInterface):
 
     # Call other values on the record
     def __getattr__(self, name):
-        if hasattr(self.record, name):
-            return getattr(self.record, name)
+        if hasattr(self._record, name):
+            return getattr(self._record, name)
         else:
             raise AttributeError(
                 'Partition does not have attribute {} '.format(name))

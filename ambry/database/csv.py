@@ -235,4 +235,6 @@ class CsvDb(DatabaseInterface):
 
         return unicodecsv.DictReader(f,*args, delimiter=self.delimiter, encoding='utf-8', **kwargs)
         
+    def close(self):
+        pass
 

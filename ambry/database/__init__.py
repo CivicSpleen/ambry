@@ -87,7 +87,7 @@ class DatabaseInterface(object):
         raise NotImplementedError() 
     
     def close(self):
-        raise NotImplementedError() 
+        raise NotImplementedError(str(self.__class__))
     
     def inserter(self, table_or_name=None,**kwargs):
         raise NotImplementedError() 

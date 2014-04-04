@@ -21,9 +21,9 @@
 ,,,,,,,,,,,,,,,,,,
 "all",1,"all_id",,,"INTEGER",,,,,,,,,,,"one",1,"d1DxuZ04001"
 "all",2,"text1",,,"VARCHAR",,,20,,"NONE",4,,,,,"two",,"d1DxuZ04002"
-"all",6,"text2",,,"VARCHAR",,,20,,"NONE",5,,,,,,,"d1DxuZ04006"
-"all",5,"integer1",,,"INTEGER",,,,,-1,3,,,,1,"three",,"d1DxuZ04005"
-"all",4,"integer2",,,"INTEGER",,,,,-1,4,,,,1,"four",,"d1DxuZ04004"
+"all",3,"text2",,,"VARCHAR",,,20,,"NONE",5,,,,,,,"d1DxuZ04006"
+"all",4,"integer1",,,"INTEGER",,,,,-1,3,,,,1,"three",,"d1DxuZ04005"
+"all",5,"integer2",,,"INTEGER",,,,,-1,4,,,,1,"four",,"d1DxuZ04004"
 ,,,,,,,,,,,,,,,,,,
 "geot1",1,"geot1_id",1,,"INTEGER",,,,,,,,,,,,,"d1DxuZ05001"
 "geot1",2,"name",,,"VARCHAR",,,20,,,,,,,,,,"d1DxuZ05002"

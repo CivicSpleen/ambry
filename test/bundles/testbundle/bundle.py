@@ -166,11 +166,13 @@ class Bundle(BuildBundle):
     def build_db_inserter(self):  
         
         p = self.partitions.find_or_new_db(table='tthree')
+
         table = p.table
-        
+
         field_gen =  self.fields3
       
         lr = self.init_log_rate(5000)
+
         with p.inserter() as ins:
             
             for i in range(10000):
@@ -178,7 +180,7 @@ class Bundle(BuildBundle):
                 ins.insert(row)
                 lr()
         
-            # SHould be case insensitive
+            # Should be case insensitive
             for i in range(10000):
                 row = { f[0].title():f[1]() for f in field_gen }
                 ins.insert(row)

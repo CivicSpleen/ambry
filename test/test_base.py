@@ -70,9 +70,6 @@ class TestBase(unittest.TestCase):
             names = idnt.names_dict
         )
 
-        bundle = Bundle()  
-
-
         if not os.path.exists(marker):
             logger.info( "Build dir marker ({}) is missing".format(marker))
             # There is a good reason to create a seperate instance, 
@@ -88,7 +85,8 @@ class TestBase(unittest.TestCase):
                     raise Exception("Can only save bundle if version is 0.0.1")
 
                 bundle.build()
-                
+                bundle.close()
+
                 with open(marker, 'w') as f:
                     f.write(str(time.time()))
                 # Copy the newly built bundle to the save directory    

@@ -6,6 +6,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import Column
+from collections import OrderedDict, defaultdict
 
 def _clean_flag( in_flag):
     
@@ -32,6 +33,7 @@ class Schema(object):
     """
     def __init__(self, bundle):
         from bundle import  Bundle
+        from collections import defaultdict
         self.bundle = bundle # COuld also be a partition
         
         # the value for a Partition will be a PartitionNumber, and
@@ -43,7 +45,7 @@ class Schema(object):
  
         self._seen_tables = {}
         self.table_sequence = None
-        self.auto_col_numbering = False
+        self.max_col_id = {}
 
         # Cache for references to code tables. 
         self._code_table_cache = None
@@ -70,7 +72,7 @@ class Schema(object):
         
         self._seen_tables = {}
         self.table_sequence = None
-        self.auto_col_numbering = False
+        self.max_col_id = {}
 
         with self.bundle.session as s:
             s.query(Partition).delete()        
@@ -174,7 +176,7 @@ class Schema(object):
 
             self.table_sequence += 1
             self.col_sequence = 1
-            self.auto_col_numbering = False
+            self.max_col_id = {}
 
 
         for key, value in kwargs.items():
@@ -195,19 +197,25 @@ class Schema(object):
 
     def add_column(self, table, name,  **kwargs):
         '''Add a column to the schema'''
-    
-        if not kwargs.get('sequence_id', False):
-            self.auto_col_numbering = True
 
-        if self.auto_col_numbering:  
-            if kwargs.get('sequence_id', False):
-                raise ConfigurationError("Can't specify a seg number for a column after a columns that was autonumbered. At table {} col: '{}'"
-                                         .format(table.name, name))
-            
-            kwargs['sequence_id'] = int(self.col_sequence)
+        # Make sure that the columnumber is monotonically increasing
+        # when it is specified, and is one more than the last one if not.
 
-        kwargs['sequence_id'] = int(kwargs['sequence_id'])
-        self.col_sequence = max(self.col_sequence,  kwargs['sequence_id']+1)
+        if not table.name in self.max_col_id:
+            self.max_col_id[table.name] = max(*[c.sequence_id for c in table.columns]) if len(table.columns) > 0 else 0
+
+        sequence_id = int(kwargs['sequence_id']) if 'sequence_id' in kwargs else None
+
+        if sequence_id is None:
+            sequence_id = self.max_col_id[table.name] + 1
+
+        elif sequence_id <= self.max_col_id[table.name]:
+                raise Exception("Column {} specifies column number {}, but last number in table {} is {}"
+                            .format(name, sequence_id, table.name, self.max_col_id[table.name]))
+
+
+        self.max_col_id[table.name] = sequence_id
+        kwargs['sequence_id'] = sequence_id
 
         c =  table.add_column(name, **kwargs)
 
@@ -712,7 +720,7 @@ class Schema(object):
 
         """
         
-        from collections import OrderedDict
+
         
         # Collect indexes
         indexes = {}
@@ -851,7 +859,7 @@ class Schema(object):
             last_table = row['table']
              
     def as_struct(self):
-        from collections import defaultdict
+
         
         class GrowingList(list): # http://stackoverflow.com/a/4544699/1144479
             def __setitem__(self, index, value):
@@ -1414,11 +1422,10 @@ class {name}(Base):
             table = self.table(source_table_name)
             self.add_column(table, source_column_name+'_code',
                              datatype = 'varchar',
-                             sequence_id = len(table.columns)+1,
                              description='Non-integer code value for column {}'.format(source_column_name))
 
 
             t = self.add_table(name, data={'code_key':json.dumps([source_table_name, source_column_name])})
-            self.add_column(t, 'id', datatype='integer', is_primary_key = True, sequence_id=1)
-            self.add_column(t, 'code', datatype='varchar', description='Value of code',sequence_id=2)
-            self.add_column(t, 'description', datatype='varchar', description='Code description', sequence_id = 3)
+            self.add_column(t, 'id', datatype='integer', is_primary_key = True)
+            self.add_column(t, 'code', datatype='varchar', description='Value of code')
+            self.add_column(t, 'description', datatype='varchar', description='Code description')

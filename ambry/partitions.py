@@ -25,10 +25,11 @@ class Partitions(object):
     STATE.ERROR = 'error'
 
     bundle = None
-    _partitions = {}
+    _partitions = None
 
     def __init__(self, bundle):
         self.bundle = bundle
+        self._partitions = {}
 
     def partition(self, arg,  **kwargs):
         '''Get a local partition object from either a Partion ORM object, or
@@ -130,8 +131,9 @@ class Partitions(object):
 
     def close(self):
         for vid, p in self._partitions.items():
-
             p.close()
+
+        self._partitions = {}
 
 
     def get(self, id_):
