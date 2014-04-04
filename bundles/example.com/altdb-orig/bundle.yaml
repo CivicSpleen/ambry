@@ -1,0 +1,14 @@
+identity:
+    dataset: altdb
+    revision: 1
+    source: example.com
+    variation: test
+    version: 0.1.1
+names:
+    fqname: example.com-altdb-orig-0.1.1~d00F001
+    name: example.com-altdb-orig
+    vid: d00F001
+    vname: example.com-altdb-orig-0.1.1
+partitions:
+-   name: example.com-altdb-orig-example
+    table: example

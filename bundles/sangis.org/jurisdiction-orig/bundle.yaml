@@ -1,0 +1,45 @@
+about:
+    author: Eric Busboom
+    author_email: eric@sandiegodata.org
+    description: !include 'meta/about.description.md'
+    groups:
+    - group1
+    - group2
+    homepage: https://civicknowledge.org
+    license: other-open
+    maintainer: Eric Busboom
+    maintainer_email: eric@sandiegodata.org
+    tags:
+    - tag1
+    - tag2
+    title: Bundle title
+build:
+    sources:
+        municipal: http://rdw.sandag.org/file_store/Jurisdiction/Municipal_Boundaries.zip
+        publicsafety: http://rdw.sandag.org/file_store/Jurisdiction/Public_Safety_Jurisdictions.zip
+        reservations: http://rdw.sandag.org/file_store/Jurisdiction/Indian_Reservations.zip
+        sra: http://rdw.sandag.org/file_store/Jurisdiction/Subregional_Areas_2010.zip
+identity:
+    dataset: jurisdiction
+    revision: 2
+    source: sangis.org
+    variation: test
+    version: 0.0.2
+names:
+    fqname: sangis.org-jurisdiction-orig-0.0.2~d028002
+    name: sangis.org-jurisdiction-orig
+    vid: d028002
+    vname: sangis.org-jurisdiction-orig-0.0.2
+partitions:
+-   format: geo
+    name: sangis.org-jurisdiction-orig-municipal-geo
+    table: municipal
+-   format: geo
+    name: sangis.org-jurisdiction-orig-publicsafety-geo
+    table: publicsafety
+-   format: geo
+    name: sangis.org-jurisdiction-orig-reservations-geo
+    table: reservations
+-   format: geo
+    name: sangis.org-jurisdiction-orig-sra-geo
+    table: sra

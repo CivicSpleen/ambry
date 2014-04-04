@@ -1,0 +1,244 @@
+2000:
+    base:
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api00bdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef00b.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout00b.asp
+        title: 2000 Base API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api00btx.zip
+        type: base
+        year: 2000
+    growth:
+        base_year: 1999
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api00gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef99g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout99g.asp
+        title: 1999-00 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api00gtx.zip
+        type: growth
+        year: 2000
+2001:
+    base:
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api01bdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef01b.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout01b.asp
+        title: 2001 Base API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api01btx.zip
+        type: base
+        year: 2001
+    growth:
+        base_year: 2000
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api01gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef00g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout00g.asp
+        title: 2000-01 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api01gtx.zip
+        type: growth
+        year: 2001
+2002:
+    base:
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api02bdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef02b.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout02b.asp
+        title: 2002 Base API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api02btx.zip
+        type: base
+        year: 2002
+    growth:
+        base_year: 2001
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api02gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef01g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout01g.asp
+        title: 2001-02 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api02gtx.zip
+        type: growth
+        year: 2002
+2003:
+    base:
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api03bdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef03b.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout03b.asp
+        title: 2003 Base API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api03btx.zip
+        type: base
+        year: 2003
+    growth:
+        base_year: 2002
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api03gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef02g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout02g.asp
+        title: 2002-03 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api03gtx.zip
+        type: growth
+        year: 2003
+2004:
+    base:
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api04bdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef04b.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout04b.asp
+        title: 2004 Base API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api04btx.zip
+        type: base
+        year: 2004
+    growth:
+        base_year: 2003
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api04gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef03g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout03g.asp
+        title: 2003-04 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api04gtx.zip
+        type: growth
+        year: 2004
+2005:
+    base:
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api05bdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef05b.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout05b.asp
+        title: 2005 Base API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api05btx.zip
+        type: base
+        year: 2005
+    growth:
+        base_year: 2004
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api05gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef04g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout04g.asp
+        title: 2004-05 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api05gtx.zip
+        type: growth
+        year: 2005
+2006:
+    base:
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api06bdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef06b.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout06b.asp
+        title: 2006 Base API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api06btx.zip
+        type: base
+        year: 2006
+    growth:
+        base_year: 2005
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api06gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef06g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout06g.asp
+        title: 2006 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api06gtx.zip
+        type: growth
+        year: 2006
+2007:
+    base:
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api07bdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef07b.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout07b.asp
+        title: 2007 Base API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api07btx.zip
+        type: base
+        year: 2007
+    growth:
+        base_year: 2006
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api07gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef07g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout07g.asp
+        title: 2007 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api07gtx.zip
+        type: growth
+        year: 2007
+2008:
+    base:
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api08bdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef08b.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout08b.asp
+        title: 2008 Base API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api08btx.zip
+        type: base
+        year: 2008
+    growth:
+        base_year: 2007
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api08gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef08g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout08g.asp
+        title: 2008 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api08gtx.zip
+        type: growth
+        year: 2008
+2009:
+    base:
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api09bdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef09b.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout09b.asp
+        title: 2009 Base API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api09btx.zip
+        type: base
+        year: 2009
+    growth:
+        base_year: 2008
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api09gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef09g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout09g.asp
+        title: 2009 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api09gtx.zip
+        type: growth
+        year: 2009
+2010:
+    base:
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api10bdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef10b.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout10b.asp
+        title: 2010 Base API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api10btx.zip
+        type: base
+        year: 2010
+    growth:
+        base_year: 2009
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api10gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef10g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout10g.asp
+        title: 2010 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api10gtx.zip
+        type: growth
+        year: 2010
+2011:
+    base:
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api11bdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef11b.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout11b.asp
+        title: 2011 Base API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api11btx.zip
+        type: base
+        year: 2011
+    growth:
+        base_year: 2010
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api11gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef11g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout11g.asp
+        title: 2011 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api11gtx.zip
+        type: growth
+        year: 2011
+2012:
+    base:
+        dbm: http://www3.cde.ca.gov/researchfiles/api/apiB12db.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef12b.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout12b.asp
+        title: 2012 Base API
+        txt: http://www3.cde.ca.gov/researchfiles/api/apiB12tx.zip
+        type: base
+        year: 2012
+    growth:
+        base_year: 2011
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api12gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef12g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout12g.asp
+        title: 2012 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api12gtx.zip
+        type: growth
+        year: 2012
+2013:
+    growth:
+        base_year: 2012
+        dbm: http://www3.cde.ca.gov/researchfiles/api/api13gdb.zip
+        flags: http://www.cde.ca.gov/ta/ac/ap/flagdef13g.asp
+        layout: http://www.cde.ca.gov/ta/ac/ap/reclayout13g.asp
+        title: 2013 Growth API
+        txt: http://www3.cde.ca.gov/researchfiles/api/api13gtx.zip
+        type: growth
+        year: 2013

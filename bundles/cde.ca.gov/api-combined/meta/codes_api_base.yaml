@@ -1,0 +1,123 @@
+aa_gt:
+- a
+- '#'
+aa_targ:
+- a
+- '#'
+acs_46:
+- n/a
+acs_core:
+- n/a
+acs_k3:
+- n/a
+ai_gt:
+- a
+ai_targ:
+- a
+api_targ:
+- a
+- '#'
+- b
+- c
+as_gt:
+- a
+- '#'
+as_targ:
+- a
+- '#'
+avg_ed:
+- n/a
+col_grad:
+- n/a
+dfc:
+- y
+- n
+di_gt:
+- a
+di_targ:
+- a
+el_gt:
+- a
+el_targ:
+- a
+emer:
+- n/a
+enroll:
+- n/a
+- n/r
+fi_gt:
+- a
+- '#'
+fi_targ:
+- a
+- '#'
+full:
+- n/a
+gr_targ:
+- a
+- '#'
+- b
+- c
+grad_sch:
+- n/a
+hi_gt:
+- a
+- '#'
+hi_targ:
+- a
+- '#'
+hsg:
+- n/a
+iep:
+- n/a
+- n/r
+mobility:
+- n/a
+mr_gt:
+- a
+mr_targ:
+- a
+not_hsg:
+- n/a
+parent_opt:
+- n/a
+- n/r
+pct_test:
+- n/a
+- n/r
+pi_gt:
+- a
+pi_targ:
+- a
+sd_gt:
+- a
+- '#'
+sd_targ:
+- a
+- '#'
+sim_rank:
+- i
+- c
+- b
+- n/a
+small:
+- s
+smob:
+- n/a
+some_col:
+- n/a
+st_rank:
+- i
+- c
+- b
+- n/a
+wh_gt:
+- a
+- '#'
+wh_targ:
+- a
+- '#'
+yr_rnd:
+- 'yes'
+- n/a
+- 'no'

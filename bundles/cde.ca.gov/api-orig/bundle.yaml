@@ -1,0 +1,50 @@
+about:
+    website: http://www.cde.ca.gov/ta/ac/ap/
+build:
+    fields_file: meta/fields-{}.yaml
+    index_url: http://www.cde.ca.gov/ta/ac/ap/apidatafiles.asp
+    requirements:
+        bs4: beautifulsoup4
+        dbfpy: http://downloads.sourceforge.net/project/dbfpy/dbfpy/2.2.5/dbfpy-2.2.5.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fdbfpy%2Ffiles%2F&ts=1384979899&use_mirror=hivelocity
+    schema_source_file: meta/schema.yaml
+    urls_file: meta/urls.yaml
+identity:
+    cache_key: cde.ca.gov/api-orig-0.1.1.db
+    dataset: api
+    revision: 1
+    source: cde.ca.gov
+    variation: test
+    version: 0.1.1
+names:
+    fqname: cde.ca.gov-api-orig-0.1.1~d008001
+    name: cde.ca.gov-api-orig
+    vid: d008001
+    vname: cde.ca.gov-api-orig-0.1.1
+partitions:
+- cde.ca.gov-api-orig-base2000-2000-base
+- cde.ca.gov-api-orig-growth2000-2000-growth
+- cde.ca.gov-api-orig-base2001-2001-base
+- cde.ca.gov-api-orig-growth2001-2001-growth
+- cde.ca.gov-api-orig-base2002-2002-base
+- cde.ca.gov-api-orig-growth2002-2002-growth
+- cde.ca.gov-api-orig-base2003-2003-base
+- cde.ca.gov-api-orig-growth2003-2003-growth
+- cde.ca.gov-api-orig-base2004-2004-base
+- cde.ca.gov-api-orig-growth2004-2004-growth
+- cde.ca.gov-api-orig-base2005-2005-base
+- cde.ca.gov-api-orig-growth2005-2005-growth
+- cde.ca.gov-api-orig-base2006-2006-base
+- cde.ca.gov-api-orig-growth2006-2006-growth
+- cde.ca.gov-api-orig-base2007-2007-base
+- cde.ca.gov-api-orig-growth2007-2007-growth
+- cde.ca.gov-api-orig-base2008-2008-base
+- cde.ca.gov-api-orig-growth2008-2008-growth
+- cde.ca.gov-api-orig-base2009-2009-base
+- cde.ca.gov-api-orig-growth2009-2009-growth
+- cde.ca.gov-api-orig-base2010-2010-base
+- cde.ca.gov-api-orig-growth2010-2010-growth
+- cde.ca.gov-api-orig-base2011-2011-base
+- cde.ca.gov-api-orig-growth2011-2011-growth
+- cde.ca.gov-api-orig-base2012-2012-base
+- cde.ca.gov-api-orig-growth2012-2012-growth
+- cde.ca.gov-api-orig-growth2013-2013-growth
