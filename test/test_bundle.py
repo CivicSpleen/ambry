@@ -4,7 +4,7 @@ Created on Jun 22, 2012
 @author: eric
 """
 import unittest
-from  bundles.testbundle.bundle import Bundle
+from bundles.testbundle.bundle import Bundle
 from ambry.identity import *
 from test_base import  TestBase
 

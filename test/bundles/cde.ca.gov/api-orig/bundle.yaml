@@ -11,6 +11,7 @@ build:
 identity:
     cache_key: cde.ca.gov/api-orig-0.1.1.db
     dataset: api
+    id: d000001q
     revision: 1
     source: cde.ca.gov
     variation: test

@@ -109,6 +109,7 @@ def source_parser(cmd):
     sp = asp.add_parser('number', help='Return the next dataset number from the number server')
     sp.set_defaults(subcommand='number')
     sp.add_argument('-k', '--key', help='Number server key')
+    sp.add_argument('-s', '--set',  help='Set the number in the bundle in the specified directory')
 
 def source_info(args, l, st, rc):
     from . import _print_bundle_info
@@ -203,6 +204,7 @@ def source_get(args, l, st, rc):
 def source_number(args, l, st, rc):
     from ..identity import NumberServer
 
+
     nsconfig = rc.group('numbers')
 
     if args.key:
@@ -210,8 +212,22 @@ def source_number(args, l, st, rc):
 
     ns = NumberServer(**nsconfig)
 
-    print str(ns.next())
+    n =  str(ns.next())
 
+
+
+    if args.set:
+        from ..bundle.config import BundleFileConfig
+        d = args.set
+        if os.path.isfile(d):
+            d = os.path.dirname(d)
+
+        c = BundleFileConfig(d, n)
+        c.rewrite()
+        prt("Stored number {} into bundle at {}", n, d)
+    else:
+        print n
+        
 def source_new(args, l, st, rc):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     from ..source.repository import new_repository

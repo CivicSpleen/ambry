@@ -9,6 +9,7 @@ build:
         ckanclient: git+https://github.com/okfn/ckanclient.git
 identity:
     dataset: schools
+    id: d000001u
     revision: 2
     source: cde.ca.gov
     variation: test

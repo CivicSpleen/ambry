@@ -67,15 +67,16 @@ extracts:
         name: schema.csv
 identity:
     dataset: api
+    id: d000001n
     revision: 3
     source: cde.ca.gov
     variation: testcomb
-    version: 0.1.2
+    version: 0.1.3
 names:
-    fqname: cde.ca.gov-api-combined-0.1.2~d007002
-    name: cde.ca.gov-api-combined
-    vid: d007002
-    vname: cde.ca.gov-api-combined-0.1.2
+    fqname: cde.ca.gov-api-testcomb-0.1.3~d000001n003
+    name: cde.ca.gov-api-testcomb
+    vid: d000001n003
+    vname: cde.ca.gov-api-testcomb-0.1.3
 partitions:
 -   name: cde.ca.gov-api-combined-api_base
     table: api_base

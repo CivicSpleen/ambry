@@ -132,7 +132,7 @@ class BundleFileConfig(RunConfig):
 
     local_groups = [ 'build','about','identity','names','partitions','extracts','views','data', 'visualizations' ]
 
-    def __init__(self,bundle_dir):
+    def __init__(self,bundle_dir, number = None ):
         from ..dbexceptions import  ConfigurationError
 
         object.__setattr__(self, 'bundle_dir', bundle_dir)
@@ -141,7 +141,11 @@ class BundleFileConfig(RunConfig):
         super(BundleFileConfig, self).__init__(self.local_file)
 
         if not self.identity.get('id', False):
-            self.init_dataset_number()
+            if not id:
+                raise ConfigurationError("ID number not set in dir {}".format(bundle_dir))
+            else:
+                from ..identity import Identity
+                self.identity['id'] = number
 
         if not os.path.exists(self.local_file):
             raise ConfigurationError("Can't find bundle config file: ")

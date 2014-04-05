@@ -4,6 +4,7 @@ build:
         sdneighborhoods: http://rdw.sandag.org/file_store/Community/Neighborhoods_SD.ZIP
 identity:
     dataset: neighborhoods
+    id: d000001A
     revision: 1
     source: sangis.org
     variation: test

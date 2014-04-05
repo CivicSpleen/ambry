@@ -40,6 +40,7 @@ build:
         sd_neighborhoods: http://rdw.sandag.org/file_store/Community/Neighborhoods_SD.ZIP
 identity:
     dataset: places
+    id: d000001B
     revision: 1
     source: sangis.org
     variation: test

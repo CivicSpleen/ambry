@@ -8,12 +8,15 @@ from __future__ import print_function
 import os.path
 import yaml
 import shutil
+import shlex
 from ambry.run import  get_runconfig
 from ambry.util import Progressor
 from ambry import __version__
 import logging
 from ..util import get_logger
-     
+import argparse
+import copy
+
 logger = None # Set in main
 
 def prt(template, *args, **kwargs):
@@ -351,26 +354,21 @@ def _print_bundle_info(bundle=None, ident=None):
         prt('Build time: {}',
             str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
 
-def main():
-    import argparse
-    import copy
-
-    ##
-    ## Hack -- set up the parser twice, so 'ambry --version' will work with no following command
-    ##
-
-    parser = argparse.ArgumentParser(prog='python -mdatabundles',
+def _first_arg_parse(argsv = None):
+    parser = argparse.ArgumentParser(prog='ambry',
                                      description='Databundles {}. Management interface for ambry, libraries and repositories. '.format(__version__),
                                      prefix_chars='-+')
 
     parser.add_argument('-l', '--library', dest='library_name', default="default",
                         help="Name of library, from the library secton of the config")
-    parser.add_argument('-c','--config', default=None, action='append', help="Path to a run config file") 
+    parser.add_argument('-c','--config', default=None, action='append', help="Path to a run config file")
     parser.add_argument('-v','--version', default=None, action="store_true",  help="Display version")
     parser.add_argument('--single-config', default=False,action="store_true", help="Load only the config file specified")
     parser.add_argument('args', nargs=argparse.REMAINDER)
 
-    args = parser.parse_args()
+
+    argsv = shlex.split(' '.join(argsv)) if argsv else None
+    args = parser.parse_args(argsv)
 
     if args.version:
         import ambry
@@ -378,6 +376,14 @@ def main():
 
         print("Ambry {}".format(ambry.__version__))
         sys.exit(0)
+
+def main(argsv = None):
+
+    ##
+    ## Hack -- set up the parser twice, so 'ambry --version' will work with no following command
+    ##
+
+    _first_arg_parse(argsv)
 
     ##
     ## Do it again.
@@ -417,7 +423,8 @@ def main():
     bundle_parser(cmd)
     root_parser(cmd)
 
-    args = parser.parse_args()
+    argsv = shlex.split(' '.join(argsv)) if argsv else None
+    args = parser.parse_args(argsv)
 
     if args.version:
         import ambry

@@ -679,8 +679,8 @@ def make_acro(past, prefix, s):
         
         s = re.sub(r'\W+', '',s.lower())
         
-        vx = [ x for x in s if x in v ]
-        cx = [ x for x in s if x in c ]
+        vx = [ x for x in s if x in v ] # Vowels in input string
+        cx = [ x for x in s if x in c ] # Consonants in input string
 
         if s.startswith('Mc'):
             
@@ -707,9 +707,8 @@ def make_acro(past, prefix, s):
         
         return None
 
- 
-    
-    for t in [0,1,2,3,4,5,6,7,8,9,10]:
+
+    for t in range(11):
         
         try:
             a = _make_acro(s,t)

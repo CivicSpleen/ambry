@@ -7,6 +7,7 @@ build:
     revised_name_transforms: meta/name_transforms_revised.csv
 identity:
     dataset: schools
+    id: d000001t
     revision: 1
     source: cde.ca.gov
     variation: testcombined

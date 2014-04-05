@@ -13,7 +13,6 @@ about:
     - tag1
     - tag2
     title: Bundle title
-build: {}
 identity:
     dataset: random
     id: d000001j
