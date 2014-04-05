@@ -14,7 +14,7 @@ build:
     codes_file: meta/codes_{}.yaml
     datatypes_file: meta/datatypes_{}.csv
     dependencies:
-        orig: cde.ca.gov-api-orig
+        orig: cde.ca.gov-api-test
     field_codes:
         '#': -100
         '*': -100

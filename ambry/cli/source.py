@@ -151,21 +151,15 @@ def source_list(args, l, st, rc, names=None):
     from collections import defaultdict
     import ambry.library as library
 
-    l = library.new_library(rc.library(args.library_name))
-
-    d = {}
 
     if args.fields:
         fields = args.fields.split(',')
     else:
         fields = ['locations', 'vid', 'vname']
 
+    s_lst =  st.list()
 
-    #l_list = l.list(datasets=d)
-
-    s_lst =  st.list(datasets=d)
-
-    _print_bundle_list(d.values(), fields=fields, sort=False)
+    _print_bundle_list(s_lst.values(), fields=fields, sort=False)
 
 
 
@@ -227,7 +221,7 @@ def source_number(args, l, st, rc):
         prt("Stored number {} into bundle at {}", n, d)
     else:
         print n
-        
+
 def source_new(args, l, st, rc):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
     from ..source.repository import new_repository

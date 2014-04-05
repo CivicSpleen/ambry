@@ -2,7 +2,7 @@ about:
     website: http://www.cde.ca.gov/ta/ac/ap/
 build:
     dependencies:
-        schools: cde.ca.gov-schools-orig
+        schools: cde.ca.gov-schools-test
     name_transforms: meta/name_transforms.csv
     revised_name_transforms: meta/name_transforms_revised.csv
 identity:

@@ -14,13 +14,28 @@ class Test(TestBase):
     test_dir = None
 
     def setUp(self):
-        from ambry.util import temp_file_name
+
+        from ambry.run import  get_runconfig
         import os, tempfile
 
         self.test_dir = tempfile.mkdtemp(prefix='test_cli_')
 
+        self.rc = get_runconfig((self.config_file,RunConfig.USER_ACCOUNTS))
+
     def tearDown(self):
         pass
+
+    @property
+    @memoize
+    def library(self, name = 'default'):
+        """Clear out the database before the test run"""
+        from ambry.library import new_library
+
+        config = self.rc.library(name)
+
+        l =  new_library(config, reset = True)
+
+        return l
 
     @property
     @memoize
@@ -54,13 +69,20 @@ class Test(TestBase):
 
 
     def test_basic(self):
-
         c = self.cmd
 
         c('library','info')
         c('library sync -s')
+        c('list')
+        c('source deps')
 
+        st = self.library.source
 
+        for k,ident in st.list().items():
+            deps=ident.data['dependencies']
+            dc = len(deps) if deps else 0
+            print dc, ident
+            c('bundle -d {} build --clean '.format(ident.vid))
         
 def suite():
     suite = unittest.TestSuite()
