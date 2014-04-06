@@ -1,0 +1,32 @@
+about:
+    author: Eric Busboom
+    author_email: eric@sandiegodata.org
+    description: !include 'README.md'
+    groups:
+    - group1
+    - group2
+    homepage: https://civicknowledge.org
+    license: other-open
+    maintainer: Eric Busboom
+    maintainer_email: eric@sandiegodata.org
+    tags:
+    - tag1
+    - tag2
+    title: Bundle title
+build:
+    dependencies:
+        random: example.com-random-example1
+identity:
+    dataset: dep1
+    id: d000001C
+    revision: 1
+    source: example.com
+    version: 0.0.1
+names:
+    fqname: example.com-dep1-0.0.1~d000001C001
+    name: example.com-dep1
+    vid: d000001C001
+    vname: example.com-dep1-0.0.1
+partitions:
+-   name: example.com-dep1-example1
+    table: example1
