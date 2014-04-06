@@ -132,8 +132,8 @@ class LibraryDb(object):
             self._session = self.Session()
             # set the search path
 
-        if self.driver in ('postgres','postgis') and self._schema:
-            self._session.execute("SET search_path TO {}".format(self._schema))
+            if self.driver in ('postgres','postgis') and self._schema:
+                self._session.execute("SET search_path TO {}".format(self._schema))
 
         return self._session
 
@@ -251,13 +251,34 @@ class LibraryDb(object):
         """Create the database from the base SQL"""
 
         if not self.exists():
+
+            self._create_path()
+
             self.enable_delete = True
+
             self.create_tables()
             self._add_config_root()
 
             return True
 
         return False
+
+    def _create_path(self):
+        """Create the path to hold the database, if one wwas specified"""
+
+        if self.driver == 'sqlite':
+
+            dir_ = os.path.dirname(self.dbname)
+
+            if dir_ and not os.path.exists(dir_):
+                try:
+                    os.makedirs(dir_)  # MUltiple process may try to make, so it could already exist
+                except Exception as e:  #@UnusedVariable
+                    pass
+
+                if not os.path.exists(dir_):
+                    raise Exception("Couldn't create directory " + dir_)
+
 
     def _drop(self, s):
 
@@ -285,17 +306,6 @@ class LibraryDb(object):
 
     def create_tables(self):
 
-        if self.driver == 'sqlite':
-
-            dir_ = os.path.dirname(self.dbname)
-            if not os.path.exists(dir_):
-                try:
-                    os.makedirs(dir_) # MUltiple process may try to make, so it could already exist
-                except Exception as e: #@UnusedVariable
-                    pass
-
-                if not os.path.exists(dir_):
-                    raise Exception("Couldn't create directory "+dir_)
 
         tables = [ Dataset, Config, Table, Column, File, Partition]
 

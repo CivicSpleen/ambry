@@ -230,6 +230,8 @@ class WarehouseInterface(object):
                 # to load the table.
 
                 try:
+                    import pprint
+                    pprint.pprint(rident.data)
                     table_urls[table_name] = ri.get(rident.data['csv']['tables'][t.id_]['parts'])
                 except BadRequest:
                     table_urls[table_name] = None
