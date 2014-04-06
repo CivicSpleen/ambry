@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..cli import prt, fatal, _find, plain_prt, _print_bundle_list, _print_bundle_entry
+from ..cli import prt, fatal, _find, _print_bundle_list, _print_bundle_entry
 import argparse
 
 def remote_parser(cmd):

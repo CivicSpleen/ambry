@@ -8,7 +8,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 
 
-from ..cli import prt, plain_prt, fatal, warn, _find, _print_find, _print_bundle_entry
+from ..cli import prt, fatal, warn, _find, _print_find, _print_bundle_entry
 
 from ..cli import  load_bundle, _print_bundle_list
 from ..source import SourceTree

@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..cli import prt, warn, fatal, _find, plain_prt, _print_bundle_list, _print_bundle_entry
+from ..cli import prt, warn, fatal, _find, _print_bundle_list, _print_bundle_entry
 
 
 def root_parser(cmd):
@@ -219,6 +219,6 @@ def root_find(args, l, st, rc):
             if show[0]:
 
                 if args.plain:
-                    plain_prt('{}'.format(ident.fqname))
+                    prt('{}'.format(ident.fqname))
                 else:
                     _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=fields)

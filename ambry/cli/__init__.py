@@ -17,14 +17,11 @@ from ..util import get_logger
 import argparse
 import copy
 
-logger = None # Set in main
+logger = None # Set in main()
 
 def prt(template, *args, **kwargs):
     global logger
     logger.info(template.format(*args, **kwargs))
-
-def plain_prt(template, *args, **kwargs):
-    print(template.format(*args, **kwargs))
 
 def err(template, *args, **kwargs):
     import sys
@@ -377,7 +374,7 @@ def _first_arg_parse(argsv = None):
         print("Ambry {}".format(ambry.__version__))
         sys.exit(0)
 
-def main(argsv = None):
+def main(argsv = None, ext_logger=None):
 
     ##
     ## Hack -- set up the parser twice, so 'ambry --version' will work with no following command
@@ -463,12 +460,17 @@ def main(argsv = None):
     else:
         rc = get_runconfig(rc_path)
 
+
     global logger
 
-    #logger = get_logger("{}.{}".format(args.command,args.subcommand  ))
-    logger = get_logger("{}.{}".format(args.command, args.subcommand),
-                        template="%(message)s")
-    logger.setLevel(logging.INFO) 
+
+    if ext_logger:
+        logger = ext_logger
+    else:
+        logger = get_logger("{}.{}".format(args.command, args.subcommand),
+                            template="%(message)s")
+
+    logger.setLevel(logging.INFO)
 
     if not f:
         fatal("Error: No command: "+args.command)
