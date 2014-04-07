@@ -298,8 +298,9 @@ class BundleFilesystem(Filesystem):
         return None
 
     def unzip_dir(self,path,   regex=None):
-        '''Context manager to extract a single file from a zip archive, and delete
-        it when finished'''
+        '''Generator that yields the files from a zip file.
+        Yield all the files in the zip, unless a regex is specified, in which case it yields only
+        files with names that match the pattern.'''
         import tempfile, uuid
         
         cache = self.get_cache_by_name('extracts')

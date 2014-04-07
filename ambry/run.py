@@ -319,7 +319,7 @@ def mp_run(mp_run_args):
     ''' Run a bundle in a multi-processor child process. '''
     import traceback, sys
     
-    bundle_dir, method_name, args = mp_run_args
+    bundle_dir, run_args, method_name, args = mp_run_args
 
     try:
         
@@ -335,6 +335,7 @@ def mp_run(mp_run_args):
      
         dir_ = os.path.dirname(rp)
         b = mod.Bundle(dir_)
+        b.run_args = AttrDict(run_args)
 
         method = getattr(b, method_name)
 

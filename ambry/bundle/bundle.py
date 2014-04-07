@@ -1302,7 +1302,7 @@ class BuildBundle(Bundle):
 
             pool = Pool(n)
 
-            pool.map(mp_run, [(self.bundle_dir, method.__name__, args)
+            pool.map(mp_run, [(self.bundle_dir, dict(self.run_args), method.__name__, args)
                               for args in arg_sets])
 
     def _info(self, identity=None):
