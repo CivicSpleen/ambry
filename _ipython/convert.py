@@ -22,7 +22,7 @@ def convert(exportHTML, nb_file):
    
     nb_md = modification_date(nb_file)
 
-    out_file = nb_file.replace('.ipynb','.html')
+    out_file = nb_file.replace('.ipynb','.html').replace(' ','_')
 
     if os.path.exists(out_file):
         out_md = modification_date(out_file)
