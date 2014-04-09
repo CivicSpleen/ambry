@@ -1,0 +1,4 @@
+div.output_prompt {
+    display: inline-block;
+    visibility: hidden;
+}

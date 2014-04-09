@@ -17,6 +17,15 @@ parser.add_argument('files', metavar='files', nargs='+',  type=str,  help='The f
 
 args = parser.parse_args()
 
+root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+
+class IpyJavascriptPreprocessor(Preprocessor):
+    
+    def preprocess(self, nb, resources):
+        resources['ambry'] = {}
+        resources['ambry']['js'] = self.header
+    
+
 def convert(exportHTML, nb_file):
 
    
@@ -48,10 +57,13 @@ def convert(exportHTML, nb_file):
 
     return out_file
     
+
+    
 config=Config(
 {
     'HTMLExporter':{
-        'default_template':'full'
+        'template_file':'local',
+        'template_path': [os.path.join(root_dir,'_ipython')]
     },
     
 }
