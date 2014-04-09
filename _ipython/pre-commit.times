@@ -5,14 +5,19 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd -P )"
 DIR=$(dirname $(dirname $DIR))
 
+IFS=$'\n'
 for f in $(find $DIR/notebooks -name '*.ipynb'); do
-    out=$($DIR/convert.py $f)
     
-    if [ ! -z '$out' ]; then
-        git add $out
+    echo $f
+    
+    out=$($DIR/_ipython/convert.py "$f")
+    
+    if [ ! -z "$out" ]; then
+        git add "$out"
         echo converted: $f
     else
         echo exists: $f
+    fi
     
 done
 
