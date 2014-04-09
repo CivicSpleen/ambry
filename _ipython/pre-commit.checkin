@@ -1,0 +1,20 @@
+#!/bin/sh
+#
+# 
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd -P )"
+DIR=$(dirname $(dirname $DIR))
+
+IFS=$'\n'
+for l in $(git diff --cached --name-only)
+do
+    f=$DIR/$l
+    if [ -f "$f" ]; then
+        is_ipynb=$(echo $f | perl -ne '/\.ipynb$/ && print')
+        if [ ! -z "$is_ipynb" ]; then
+            echo python $DIR/_ipython/convert.py $f
+        fi
+    fi
+    
+done
+
