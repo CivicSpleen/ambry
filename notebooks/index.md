@@ -10,6 +10,6 @@ title: 'Example Notebooks'
 ## Research Examples
 
  * [Crime Overview](crime/Crime_Overview.html)
- * [Crime Heat Maps](crime/Crime_Overview.html)
+ * [Crime Heat Maps](crime/Crime_Heat_Maps.html)
  * [California API Scores](education/California_API.html)
  * [California STAR test Scores](education/California_STAR_Tests.html)
