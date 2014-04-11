@@ -11,9 +11,10 @@ echo "--- Installing base packages. May need to ask for root password"
 command -v brew >/dev/null 2>&1
 
 if [ $? -ne 0 ]; then
-    echo "\nERROR: This script requires the bew package manager "
+    echo
+    echo "ERROR: This script requires the brew package manager "
     echo "Recommended to install Homebrew with: "
-    echo '  ruby -e "$(curl -fsSL https://raw.github.com/mxcl/homebrew/go)"'
+    echo '  ruby -e "$(curl -fsSL https://raw.github.com/mxcl/homebrew/go/install)"'
 
     echo "Press y to visit the Homebrew web page, or any other key to cancel"
     read -n 1 yn
@@ -32,14 +33,16 @@ curl  https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py | sudo pyt
 which clang > /dev/null
 
 if [ $? -ne 0 ]; then
-    echo "\nERROR: First, install XCode and the command line tools to get the C compiler. "
+    echo
+    echo "ERROR: First, install XCode and the command line tools to get the C compiler. "
     exit 1	
 fi	
 
 gdal_version=$(python -c 'import gdal; print gdal.VersionInfo()')
 
 if [ $? -ne 0 ]; then
-    echo "\nERROR: GDAL not found. Install the KyngChaos "GDAL Complete" framework, from http://www.kyngchaos.com/software/frameworks#gdal_complete"
+    echo
+    echo "ERROR: GDAL not found. Install the KyngChaos \"GDAL Complete\" framework, from http://www.kyngchaos.com/software/frameworks#gdal_complete"
     echo "Press y to visit the GDAL download Page, or any other key to cancel"
     read -n 1 yn
     if [ "$yn" == 'y' ]; then
@@ -52,7 +55,8 @@ if [ $? -ne 0 ]; then
 fi	
 
 if [ $gdal_version -lt 1920 ]; then
-    echo "\nERROR: GDAL Found, but version $gdal_version is too old. Upgrade with KyngChaos frame work, "
+    echo
+    echo "ERROR: GDAL Found, but version $gdal_version is too old. Upgrade with KyngChaos frame work, "
     echo "Press y to visit the GDAL download Page, or any other key to cancel"
     read -n 1 yn
     if [ "$yn"  == 'y' ]; then
