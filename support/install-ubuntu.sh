@@ -21,6 +21,16 @@ for pkg in $packages; do
     fi
 done
 
+# Should be setup in setup.py, but
 sudo pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
 sudo pip install -r https://raw.githubusercontent.com/clarinova/ambry/master/requirements.txt
+
+sudo mkdir -p /data/src
+user=$(whoami)
+
+cd /data/src
+
+sudo pip install -e git+https://github.com/clarinova/ambry.git#egg=ambry
+
+sudo chown -R $user /data

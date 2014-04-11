@@ -27,7 +27,7 @@ def root_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='info')
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
-    sp.add_argument('term',  type=str, help='Name or ID of the bundle or partition')
+    sp.add_argument('term',  type=str, nargs = '?', help='Name or ID of the bundle or partition')
 
     sp = cmd.add_parser('find', prefix_chars='-+',
                         help='Search for the argument as a bundle or partition name or id')
@@ -121,6 +121,13 @@ def root_list(args, l, st, rc):
 def root_info(args, l, st, rc):
     from ..cli import load_bundle, _print_info
     from ..orm import Dataset
+    import ambry
+
+    if not args.term:
+        print "Version:  {}".format(ambry.__version__)
+        print "Root dir: {}".format(rc.filesystem('root')['dir'])
+        print "Configs:  {}".format(rc.dict['loaded'])
+        return
 
 
     ident = l.resolve(args.term, location=None, use_remote = True)
