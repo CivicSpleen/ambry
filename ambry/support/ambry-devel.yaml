@@ -24,6 +24,7 @@ filesystem:
     downloads: '{root}/cache/downloads'
     extracts: '{root}/cache/extracts'
     python: '{root}/cache/python'
+    analysis: '{root}/source/analysis'
 
 
 numbers:

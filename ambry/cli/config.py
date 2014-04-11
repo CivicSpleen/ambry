@@ -1,5 +1,5 @@
 
-from ..cli import prt, fatal, warn
+from ..cli import prt, fatal, warn, err
 
 def config_parser(cmd):
     import argparse
@@ -24,7 +24,7 @@ def config_parser(cmd):
     group.add_argument('-f', '--force', default=False, action='store_true',
                       help="Force using the default config; don't re-use the existing config")
 
-    sp.add_argument('args', nargs=argparse.REMAINDER, help='key=value entries') # Get everything else.
+    sp.add_argument('args', nargs='*', help='key=value entries') # Get everything else.
 
 def config_command(args, rc):
     from  ..library import new_library
@@ -36,6 +36,8 @@ def config_install(args, rc):
     import os
     from ambry.run import RunConfig as rc
     import getpass
+
+    edit_args = ' '.join(args.args)
 
     user =  getpass.getuser()
 
@@ -62,11 +64,13 @@ def config_install(args, rc):
     d = yaml.load(contents)
 
     # Set the key-value entries.
-    for p in args.args:
-        key,value = p.split('=')
+    if edit_args:
+        key,value = edit_args.split('=')
+        value = value.strip()
         key_parts = key.split('.')
         e = d
         for k in key_parts:
+            k = k.strip()
             if k == key_parts[-1]:
                 e[k]  = value
 
@@ -76,10 +80,18 @@ def config_install(args, rc):
     if args.root:
         d['filesystem']['root'] = args.root
 
+    if args.remote:
+        try:
+            d['library']['default']['remotes'] = [args.remote]
+        except Exception as e:
+            err("Failed to set remote: {} ".format(e))
+
+
     s =  yaml.dump(d, indent=4, default_flow_style=False)
 
     if args.prt:
         prt(s.replace("{","{{").replace("}","}}"))
+
     else:
 
         dirname = os.path.dirname(install_file)
