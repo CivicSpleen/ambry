@@ -29,7 +29,7 @@ sudo pip install -r https://raw.githubusercontent.com/clarinova/ambry/master/req
 sudo mkdir -p /data/src
 user=$(whoami)
 
-cd /data/src
+cd /data/
 
 sudo pip install -e git+https://github.com/clarinova/ambry.git#egg=ambry
 

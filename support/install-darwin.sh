@@ -113,7 +113,7 @@ sudo mkdir -p /data/source
 
 user=$(whoami)
 
-cd /data/src
+cd /data/
 
 sudo pip install -e git+https://github.com/clarinova/ambry.git#egg=ambry
 
