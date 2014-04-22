@@ -148,7 +148,7 @@ class BundleFileConfig(RunConfig):
                 self.identity['id'] = number
 
         if not os.path.exists(self.local_file):
-            raise ConfigurationError("Can't find bundle config file: ")
+            raise ConfigurationError("Can't find bundle config file: {} ".format(self.local_file))
 
     def __getattr__(self, group):
         '''Fetch a configuration group and return the contents as an
