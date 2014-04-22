@@ -136,7 +136,7 @@ def root_info(args, l, st, rc):
         fatal("Failed to find record for: {}", args.term)
         return
 
-    l.get(ident.vid)
+    l.get(ident.vid, use_remote = False)
 
     if ident.locations.is_in(Dataset.LOCATION.LIBRARY):
         b = l.get(ident.vid)
