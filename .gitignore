@@ -36,8 +36,11 @@ nosetests.xml
 .pydevproject
 .idea
 test/testbundle/build-save
+test/bundles/testbundle/meta/schema-old.csv
 bundle.yaml.old
 schema-revised.csv
 build-save
 *.sqlite3
+
+
 
