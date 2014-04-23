@@ -74,6 +74,3 @@ partitions:
     name: source-dataset-subset-variation-csv-csv-4
     segment: 4
     table: csv
--   format: hdf
-    name: source-dataset-subset-variation-hdf5-hdf
-    table: hdf5

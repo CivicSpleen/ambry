@@ -711,9 +711,14 @@ class BuildBundle(Bundle):
         # if not self.cache_downloads :
         #    self.rm_rf(self.filesystem.downloads_path())
 
-        self.library.source.set_bundle_state(self.identity, 'cleaned')
+
+        self.set_build_state( 'cleaned')
 
         self.close()
+
+    def set_build_state(self, state):
+        pass
+
 
     def progress(self, message):
         """print message to terminal, in place"""
@@ -919,8 +924,8 @@ class BuildBundle(Bundle):
                 datetime.now().isoformat())
 
             self._revise_schema()
-
-        self.library.source.set_bundle_state(self.identity, 'prepared')
+            
+        self.set_build_state( 'prepared')
 
         return True
 
@@ -1018,7 +1023,8 @@ class BuildBundle(Bundle):
 
         self.post_build_write_stats()
 
-        self.library.source.set_bundle_state(self.identity, 'built')
+        
+        self.set_build_state( 'built')
 
         return True
 
@@ -1186,7 +1192,8 @@ class BuildBundle(Bundle):
             'process',
             'installed',
             datetime.now().isoformat())
-        self.library.source.set_bundle_state(self.identity, 'installed')
+        
+        self.set_build_state( 'installed')
 
         return True
 

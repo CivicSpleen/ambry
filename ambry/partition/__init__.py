@@ -186,6 +186,8 @@ class PartitionBase(PartitionInterface):
 
         #self.table = self.get_table()
 
+        self.record_dict = self.record.dict
+
         self._database = None
 
     @classmethod
@@ -235,11 +237,19 @@ class PartitionBase(PartitionInterface):
 
     # Call other values on the record
     def __getattr__(self, name):
-        if hasattr(self._record, name):
-            return getattr(self._record, name)
+
+        from sqlalchemy.orm import object_session
+
+        if hasattr(self.record, name):
+
+            return getattr(self.record, name)
         else:
+
+            if object_session(self.record) is None:
+                raise ValueError("Can't check value for {}  on internal record; object is detached ".format(name))
+
             raise AttributeError(
-                'Partition does not have attribute {} '.format(name))
+                'Partition does not have attribute {}, and not in record {} '.format(name, type(self._record)))
 
     def get_table(self, table_spec=None):
         """Return the orm table for this partition, or None if

@@ -300,10 +300,10 @@ class Test(TestBase):
         p = self.bundle.partitions.find_or_new_csv(time=20, space=20)
         self.assertIsInstance(p, CsvPartition)
 
-        p = self.bundle.partitions.new_hdf_partition(space=30, data={'pid':'pid3'})
-        self.assertIsInstance(p, HdfPartition)
-        p = self.bundle.partitions.find_or_new_hdf(space=30)
-        self.assertIsInstance(p, HdfPartition)
+        #p = self.bundle.partitions.new_hdf_partition(space=30, data={'pid':'pid3'})
+        #self.assertIsInstance(p, HdfPartition)
+        #p = self.bundle.partitions.find_or_new_hdf(space=30)
+        #self.assertIsInstance(p, HdfPartition)
 
         with self.assertRaises(ConflictError):
             self.bundle.partitions.new_db_partition(time=10, space=10, data={'pid':'pid1'})
@@ -311,23 +311,23 @@ class Test(TestBase):
         with self.assertRaises(ConflictError):
             self.bundle.partitions.new_csv_partition(time=20, space=20, data={'pid':'pid21'})
 
-        with self.assertRaises(ConflictError):
-            self.bundle.partitions.new_hdf_partition(space=30, data={'pid':'pid31'})
+        #with self.assertRaises(ConflictError):
+        #    self.bundle.partitions.new_hdf_partition(space=30, data={'pid':'pid31'})
 
 
-        self.assertEqual(3, len(self.bundle.partitions.all))
+        self.assertEqual(2, len(self.bundle.partitions.all))
 
         p = self.bundle.partitions.find_or_new(time=10, space=10)
         p.database.create() # Find will go to the library if the database doesn't exist.
-        self.assertEqual(3, len(self.bundle.partitions.all))
+        self.assertEqual(2, len(self.bundle.partitions.all))
         self.assertEquals('pid1',p.data['pid'] )
       
         p = self.bundle.partitions.find_or_new_csv(time=20, space=20)
         p.database.create()  
         self.assertEquals('pid2',p.data['pid'] ) 
 
-        p = self.bundle.partitions.find_or_new_hdf(space=30)
-        self.assertEquals('pid3',p.data['pid'] ) 
+        #p = self.bundle.partitions.find_or_new_hdf(space=30)
+        #self.assertEquals('pid3',p.data['pid'] )
 
         p = self.bundle.partitions.find(PartitionNameQuery(time=10, space=10))
         self.assertEquals('pid1',p.data['pid'] )
@@ -341,11 +341,13 @@ class Test(TestBase):
         p = self.bundle.partitions.find(time=20, space=20)
         self.assertEquals('pid2',p.data['pid'] )
 
-        pnq3 = PartitionNameQuery(space=30)
+        # This is the HDF partition
+        # pnq3 = PartitionNameQuery(space=30)
+        # p = self.bundle.partitions.find(pnq3)
+        # self.assertEquals('pid3',p.data['pid'] )
 
-        p = self.bundle.partitions.find(pnq3)
-        self.assertEquals('pid3',p.data['pid'] ) 
-         
+        pnq3 = PartitionNameQuery(space=10)
+
         with self.bundle.session as s:
             p = self.bundle.partitions._find_orm(pnq3).first()
             p.data['foo'] = 'bar'
@@ -357,9 +359,9 @@ class Test(TestBase):
         print p.data 
         self.assertEquals('bar',p.data['foo'] ) 
 
-        p = self.bundle.partitions.find(PartitionNameQuery(name='source-dataset-subset-variation-30-hdf'))
-        self.assertTrue(p is not None)
-        self.assertEquals('source-dataset-subset-variation-30-hdf', p.identity.sname)
+        #p = self.bundle.partitions.find(PartitionNameQuery(name='source-dataset-subset-variation-30-hdf'))
+        #self.assertTrue(p is not None)
+        #self.assertEquals('source-dataset-subset-variation-30-hdf', p.identity.sname)
  
         #
         # Create all possible combinations of partition names
@@ -419,7 +421,7 @@ class Test(TestBase):
         self.assertEquals('filesystem3', l['filesystem']['upstream']['upstream']['_name'])
         self.assertEquals('devtest.sandiegodata.org', l['filesystem']['upstream']['upstream']['account']['_name'])
 
-    def test_build_bundle_hdf(self):
+    def x_test_build_bundle_hdf(self):
 
         bundle = Bundle()
         bundle.clean()

@@ -73,6 +73,9 @@ class Bundle(BuildBundle):
         return True
     def build(self):
 
+        #self.log("=== Build hdf")
+        #self.build_hdf()
+
         self.log("=== Build db, using an inserter")
         self.build_db_inserter()
 
@@ -90,10 +93,6 @@ class Bundle(BuildBundle):
 
         self.log("=== Build csv")
         self.build_csv()
-
-
-        self.log("=== Build hdf")
-        self.build_hdf()
 
         return True
 
@@ -233,7 +232,13 @@ class Bundle(BuildBundle):
                 a[x,y] = x*y
  
         ds = hdf.database.create_dataset('hdf', data=a, compression=9)
-        hdf.database.close()       
+        hdf.database.close()
+
+        #hdf = self.partitions.find_or_new_hdf(table='hdf5')
+
+
+
+
 
     def build_csv(self):
         from ambry.identity import Identity

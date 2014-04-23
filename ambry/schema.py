@@ -122,12 +122,16 @@ class Schema(object):
         except sqlalchemy.orm.exc.NoResultFound as e:
             raise sqlalchemy.orm.exc.NoResultFound("No table for name_or_id: {}".format(name_or_id))
 
-    def table(self, name_or_id):
+    def table(self, name_or_id, session = None):
         '''Return an orm.Table object, from either the id or name. This is the cleaa method version
         of get_table_from_database'''
 
+        if session is None:
+            session = self.bundle.database.session
+
+
         return Schema.get_table_from_database(self.bundle.database, name_or_id,
-                                              session = self.bundle.database.session,
+                                              session = session,
                                               d_vid = self.bundle.identity.vid)
 
     def column(self, table, column_name):
@@ -321,10 +325,10 @@ class Schema(object):
 
         if column.datatype == Column.DATATYPE_NUMERIC:
             return type_(column.precision, column.scale)
-        elif column.size:
+        elif column.size and column.datatype != Column.DATATYPE_INTEGER:
             try:
                 return type_(column.size)
-            except TypeError: # usually, the type desont't ake a size
+            except TypeError: # usually, the type does not take a size
                 return type_
         else:
             return type_
@@ -500,37 +504,41 @@ class Schema(object):
 
         from ambry.transform import CasterTransformBuilder
 
+        # The session isn't needed in
+        #with self.bundle.session as s:
+
         table = self.table(table_name)
 
         bdr = CasterTransformBuilder()
 
-        for c in table.columns:
+        with self.bundle.session:
+            for c in table.columns:
 
-            # Try to get a caster type object from the bundle
-            if 'caster' in c.data and c.data['caster']:
-                t = None
+                # Try to get a caster type object from the bundle
+                if 'caster' in c.data and c.data['caster']:
+                    t = None
 
-                for l in [self.bundle, self.bundle.__module__]:
-                    try:
-                        t = getattr(self.bundle,c.data['caster'] )
-                        bdr.add_type(t)
-                        break
-                    except AttributeError:
-                        continue
+                    for l in [self.bundle, self.bundle.__module__]:
+                        try:
+                            t = getattr(self.bundle,c.data['caster'] )
+                            bdr.add_type(t)
+                            break
+                        except AttributeError:
+                            continue
 
-                if not t:
-                    self.bundle.error("Schema declared undefined caster type {} for {}.{}. Ignoring"
-                                      .format(c.data['caster'], table.name, c.name))
+                    if not t:
+                        self.bundle.error("Schema declared undefined caster type {} for {}.{}. Ignoring"
+                                          .format(c.data['caster'], table.name, c.name))
+                        t = c.python_type
+
+                else:
                     t = c.python_type
 
-            else:
-                t = c.python_type
-
-            bdr.append(c.name, t)
+                bdr.append(c.name, t)
 
         return bdr
 
-        
+
     def schema_from_file(self, file_, progress_cb=None):
         return self._schema_from_file(file_, progress_cb)
 

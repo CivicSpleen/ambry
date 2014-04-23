@@ -46,26 +46,32 @@ class Partitions(object):
         from ambry.identity import PartitionNumber
         from identity import PartitionIdentity
         from sqlalchemy import or_
-        
+
+
         from partition import new_partition
         
         session = self.bundle.database.session
+
+        orm_partition = None
 
         if isinstance(arg,OrmPartition):
             orm_partition = arg
             
         elif isinstance(arg, basestring):
       
-            orm_partition = session.query(OrmPartition).filter(or_(OrmPartition.id_==arg,OrmPartition.vid==arg)).one()
+            orm_query = session.query(OrmPartition).filter(or_(OrmPartition.id_==arg,OrmPartition.vid==arg))
 
-        elif isinstance(arg, PartitionNumber):      
-            orm_partition = session.query(OrmPartition).filter(OrmPartition.id_==str(arg) ).one()
+        elif isinstance(arg, PartitionNumber):
+            orm_query = session.query(OrmPartition).filter(OrmPartition.id_==str(arg) )
             
-        elif isinstance(arg, PartitionIdentity):      
-            orm_partition = session.query(OrmPartition).filter(OrmPartition.id_==str(arg.id_) ).one()  
+        elif isinstance(arg, PartitionIdentity):
+            orm_query = session.query(OrmPartition).filter(OrmPartition.id_==str(arg.id_) )
                
         else:
             raise ValueError("Arg must be a Partition or PartitionNumber. Got {}".format(type(arg)))
+
+        if not orm_partition:
+            orm_partition = orm_query.one()
 
         vid = orm_partition.vid
 
@@ -90,6 +96,7 @@ class Partitions(object):
         :type self: object
         '''
         from ambry.orm import Partition as OrmPartition
+        from sqlalchemy.orm import joinedload_all
         import sqlalchemy.exc
 
         try:
@@ -276,8 +283,9 @@ class Partitions(object):
         '''Return a Partition object from the database based on a PartitionId.
         An ORM object is returned, so changes can be persisted. '''
         import sqlalchemy.orm.exc
-        from ambry.orm import Partition as OrmPartition
-               
+        from ambry.orm import Partition as OrmPartition, Table
+        from sqlalchemy.orm import joinedload_all, joinedload
+
         assert isinstance(pnq,PartitionNameQuery), "Expected PartitionNameQuery, got {}".format(type(pnq))
     
         pnq = pnq.with_none()
@@ -323,6 +331,8 @@ class Partitions(object):
         q = q.filter(OrmPartition.d_vid == ds.vid)
 
         q = q.order_by(OrmPartition.vid.asc()).order_by(OrmPartition.segment.asc())
+
+        q = q.options(joinedload(OrmPartition.table))
 
         return q
     
@@ -561,7 +571,9 @@ class Partitions(object):
  
          
     def new_hdf_partition(self, clean=False, tables=None, data=None, **kwargs):
-        
+
+        raise NotImplementedError("HDF is not working well")
+
         p, found =  self._find_or_new(kwargs,format='hdf', data=data)
         
         if found:

@@ -5,7 +5,7 @@ Created on Jun 30, 2012
 '''
 import unittest
 import os.path
-from  testbundle.bundle import Bundle
+from  bundles.testbundle.bundle import Bundle
 from sqlalchemy import * #@UnusedWildImport
 from ambry.run import  get_runconfig, RunConfig
 from ambry.library.query import QueryCommand
@@ -20,8 +20,11 @@ logger.setLevel(logging.DEBUG)
 class Test(TestBase):
  
     def setUp(self):
-        import testbundle.bundle
-        self.bundle_dir = os.path.dirname(testbundle.bundle.__file__)
+        import bundles.testbundle.bundle
+
+
+
+        self.bundle_dir = os.path.dirname(bundles.testbundle.bundle.__file__)
         self.rc = get_runconfig((os.path.join(self.bundle_dir,'library-test-config.yaml'),
                                  os.path.join(self.bundle_dir,'bundle.yaml'),
                                  RunConfig.USER_ACCOUNTS)
@@ -160,7 +163,7 @@ class Test(TestBase):
         l = self.get_library()
         print "Library: ", l.database.dsn
      
-        r = l.put(self.bundle) #@UnusedVariable
+        r = l.put_bundle(self.bundle) #@UnusedVariable
 
         r = l.get(self.bundle.identity.sname)
         self.assertTrue(r is not False)
@@ -171,7 +174,7 @@ class Test(TestBase):
 
         for partition in self.bundle.partitions:
             print "Install and check: ", partition.identity.vname
-            r = l.put(partition)
+            r = l.put_partition(self.bundle, partition)
 
             # Get the partition with a name
             r = l.get(partition.identity.sname)
@@ -209,7 +212,7 @@ class Test(TestBase):
         os.remove(backup_file)
 
         # An extra change so the following tests work
-        l.put(self.bundle)
+        l.put_bundle(self.bundle)
         
         self.assertFalse(l.database.needs_dump())
 
@@ -303,7 +306,7 @@ class Test(TestBase):
         self.assertIn('source-dataset-subset-variation', ds_names)
 
     def test_versions(self):
-        import testbundle.bundle
+        import bundles.testbundle.bundle
         from ambry.run import get_runconfig
         from ambry.library.query import Resolver
         import shutil
@@ -346,7 +349,7 @@ class Test(TestBase):
                 bundle = Bundle()
 
                 print "Installing ", bundle.identity.vname
-                l.put(bundle)
+                l.put_bundle(bundle)
 
         finally:
             pass
@@ -635,47 +638,23 @@ class Test(TestBase):
         from sqlalchemy.exc import IntegrityError
         
         l = self.get_library()
-        
+        print l.info
+
         l.purge()
          
-        #
-        # Create all possible combinations of partition names
-        # 
-        s = set()
-        table = self.bundle.schema.tables[0]
 
-        p = (('time','time2'),('space','space3'),('grain','grain4'))
-        p += p
-        pids = {}
-        for i in range(4):
-            for j in range(4):
-                pid = self.bundle.identity.as_partition(**dict(p[i:i+j+1]))
-                pids[pid.fqname] = pid
-
-        for pid in pids.values():
-            print pid.sname
-            try:
-                # One will fail with an integrity eorror, but it doesn't matter for this test.
-
-                part = self.bundle.partitions.new_db_partition(**pid.dict)
-                part.create()
-                
-                parts = self.bundle.partitions._find_orm(PartitionNameQuery(vid=pid.vid)).all()
-                self.assertIn(pid.sname, [p.name for p in parts])
-            except IntegrityError: 
-                pass
     
     
-        l.put(self.bundle) # Install the partition references in the library. 
+        l.put_bundle(self.bundle) # Install the partition references in the library.
 
         b = l.get(self.bundle.identity)
 
         for partition in self.bundle.partitions:
 
-            l.put(partition)
-            l.put(partition)
+            l.put_partition(self.bundle, partition)
+            l.put_partition(self.bundle, partition)
 
-            print partition.identity.sname
+            print partition.identity.sname, partition.database.path
 
             r = l.get(partition.identity)
             self.assertIsNotNone(r)
@@ -685,10 +664,34 @@ class Test(TestBase):
             self.assertIsNotNone(r)
             self.assertEquals(partition.identity.id_, r.partition.identity.id_)
 
-        hdf = l.get('source-dataset-subset-variation-hdf5-hdf')
-        
-        print hdf.database.path
-        print hdf.partition.database.path
+
+        #
+        # Create all possible combinations of partition names
+        #
+        s = set()
+        table = self.bundle.schema.tables[0]
+
+        p = (('time', 'time2'), ('space', 'space3'), ('grain', 'grain4'))
+        p += p
+        pids = {}
+        for i in range(4):
+            for j in range(4):
+                pid = self.bundle.identity.as_partition(**dict(p[i:i + j + 1]))
+                pids[pid.fqname] = pid
+
+        for pid in pids.values():
+            print pid.sname
+            try:
+                # One will fail with an integrity error, but it doesn't matter for this test.
+
+                part = self.bundle.partitions.new_db_partition(**pid.dict)
+                part.create()
+
+                parts = self.bundle.partitions._find_orm(PartitionNameQuery(vid=pid.vid)).all()
+                self.assertIn(pid.sname, [p.name for p in parts])
+            except IntegrityError:
+                pass
+
         
     def test_s3(self):
 

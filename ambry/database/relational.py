@@ -48,7 +48,6 @@ class RelationalDatabase(DatabaseInterface):
     
     dsn = None
 
-
     def __init__(self,  driver=None, server=None, dbname = None, username=None, password=None, port=None,  **kwargs):
 
         '''Initialize the a database object

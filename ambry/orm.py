@@ -583,7 +583,7 @@ class Table(Base):
         UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
                      )
     
-    columns = relationship(Column, backref='table', cascade="all, delete-orphan")
+    columns = relationship(Column, backref='table', cascade="all, delete-orphan", lazy='joined')
 
     def __init__(self,dataset, **kwargs):
 

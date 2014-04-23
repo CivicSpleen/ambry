@@ -472,11 +472,6 @@ class Library(object):
             else:
                 url = None
 
-            abs_path = self.cache.get(dataset.partition.cache_key, cb=cb)
-
-            if not abs_path or not os.path.exists(abs_path):
-                bundle.close()
-                raise NotFoundError('Failed to get partition {} from cache '.format(dataset.partition.fqname))
 
             try:
                 partition = bundle.partitions.get(dataset.partition.vid)
@@ -484,11 +479,17 @@ class Library(object):
                 bundle.close()
                 raise
 
-
             if not partition:
                 from ..dbexceptions import NotFoundError
                 bundle.close()
-                raise NotFoundError('Failed to get partition {} from bundle '.format(dataset.partition.fqname))
+                raise NotFoundError('Failed to get partition {} from bundle at {} '
+                                    .format(dataset.partition.fqname, abs_path))
+
+            abs_path = self.cache.get(partition.identity.cache_key, cb=cb)
+
+            if not abs_path or not os.path.exists(abs_path):
+                bundle.close()
+                raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.fqname))
 
             try:
                 self.sync_library_partition(bundle, partition.identity)

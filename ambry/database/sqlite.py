@@ -437,10 +437,12 @@ class BundleLockContext(object):
     
     def __exit__( self, exc_type, exc_val, exc_tb ):
 
+        self._lock_depth -= 1
+
         if  exc_type is not None:
             logger.debug("Release lock and rollback on exception: {}".format(exc_val))
             self._database.session.rollback()
-            self._lock_depth -= 1
+
             if self._lock_depth == 0:
                 self._lock.release()
             self._database.close_session()
@@ -448,20 +450,25 @@ class BundleLockContext(object):
             return False
 
         else:
-            logger.debug("Release lock and commit session {}. Depth = {}".format(repr(self._database.session), self._lock_depth))
+
             try:
-                self._database.session.commit()
+                if self._lock_depth == 0:
+                    logger.debug("Commit session {}".format(repr(self._database.session)))
+                    self._database.session.commit()
+                else:
+                    logger.debug("Lock depth: {}".format(self._lock_depth))
+
             except Exception as e:
                 logger.debug('Exception: ' + e.message)
-
                 self._database.session.rollback()
                 raise
+
             finally:
-                self._lock_depth -= 1
                 if self._lock_depth == 0:
-                    logger.debug("Released lock and commit session {}".format(repr(self._database.session)))
+                    logger.debug("Release lock {}".format(repr(self._database.session)))
                     self._lock.release()
-            
+
+            self._database.close_session()
             return True
             
     def add(self,o):
@@ -515,6 +522,7 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
             self.post_create()
 
+
     @property
     def has_session(self):
         return self._session is not None
@@ -551,7 +559,6 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
                 s.merge(column)
 
         return table
-
 
 class SqliteWarehouseDatabase(SqliteDatabase, SqliteAttachmentMixin):
 
