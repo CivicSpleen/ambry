@@ -12,7 +12,7 @@ from ambry.util import get_logger
 import logging
 
 logger = get_logger(__name__)
-#logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 
 class SqliteAttachmentMixin(object):
     
@@ -149,6 +149,8 @@ class SqliteDatabase(RelationalDatabase):
     EXTENSION = '.db'
     SCHEMA_VERSION = 16
 
+    _lock = None
+
     def __init__(self, dbname, memory = False,  **kwargs):   
         ''' '''
     
@@ -190,14 +192,36 @@ class SqliteDatabase(RelationalDatabase):
 
     @property
     def lock_path(self):
-        return self.base_path
+        return self.base_path+'.conn'
+
+    def lock(self):
+
+        from lockfile import FileLock, LockTimeout, AlreadyLocked
+        import os, time
+
+        self._lock = FileLock(self.lock_path)
+
+        for i in range(10):
+            try:
+                self._lock.acquire(0)
+                logger.debug("{} acquired bundle lock".format(os.getpid()))
+
+            except AlreadyLocked as e:
+                #from ..dbexceptions import LockedFailed
+                #raise LockedFailed("Failed to acquire lock on {}".format(self.lock_path))
+                logger.debug("{} waiting for bundle lock".format(os.getpid()))
+                time.sleep(1)
+
+    def unlock(self):
+        from lockfile import FileLock
+
+        self._lock.release()
 
     def require_path(self):
         if not self.memory:
             if not os.path.exists(os.path.dirname(self.base_path)):
                 os.makedirs(os.path.dirname(self.base_path))
-            
-    
+
     @property
     def version(self):
         v =  self.connection.execute('PRAGMA user_version').fetchone()[0]
@@ -237,7 +261,7 @@ class SqliteDatabase(RelationalDatabase):
         
         from sqlalchemy import create_engine  
         
-        engine = create_engine(self.dsn, echo=False)
+        engine = create_engine(self.dsn, echo=False, isolation_level='SERIALIZABLE')
         connection = engine.connect()
         connection.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
         connection.close()
@@ -418,6 +442,11 @@ class BundleLockContext(object):
     def __enter__( self ):
         from sqlalchemy.orm import sessionmaker
         from ambry.dbexceptions import Locked
+
+        self._lock_depth += 1
+        return self._database.session
+
+
         import lockfile
 
         logger.debug("Acquiring lock on {}".format(self._database.dsn))
@@ -466,7 +495,7 @@ class BundleLockContext(object):
             finally:
                 if self._lock_depth == 0:
                     logger.debug("Release lock {}".format(repr(self._database.session)))
-                    self._lock.release()
+                    #self._lock.release()
 
             self._database.close_session()
             return True
@@ -491,11 +520,14 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         '''Called from get_connection() to update the database'''
         super(SqliteBundleDatabase, self)._on_create_connection(connection)
 
+        print "CREATE CONNECTION"
+        self.lock()
         _on_connect_update_sqlite_schema(connection, None) # in both _conn and _engine.
 
     def _on_create_engine(self, engine):
         '''Called just after the engine is created '''
         from sqlalchemy import event
+        from functools import partial
 
         super(SqliteBundleDatabase, self)._on_create_engine(engine)
 
@@ -503,20 +535,18 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
         # old bundles.
         #event.listen(self._engine, 'connect', _on_connect_update_sqlite_schema)  # in both _conn and _engine.
 
-        event.listen(self._engine, 'connect', _on_connect_bundle)
+        event.listen(engine, 'connect', _on_connect_bundle)
 
-        event.listen(self._engine, 'begin', _on_begin_bundle)
+        #event.listen(engine, 'begin', _on_begin_bundle)
 
-    def _create(self):
-        """Need to ensure the database exists before calling for the connection, but the
-        connection expects the database to exist first, so we create it here. """
 
-        from sqlalchemy import create_engine
+    def close(self):
+        import os
 
-        engine = create_engine(self.dsn, echo=False, isolation_level='SERIALIZABLE')
-        connection = engine.connect()
-        connection.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
-        connection.close()
+        print "=== CLOSE ",self.dsn, os.getpid()
+
+        super(SqliteBundleDatabase,self).close()
+        self.unlock()
 
 
     def update_schema(self):
@@ -612,7 +642,7 @@ class BuildBundleDb(SqliteBundleDatabase):
         return self.bundle.path + self.EXTENSION
 
 
-def _on_begin_bundle(dbapi_con, con_record):
+def _on_begin_bundle(dbapi_con):
 
     dbapi_con.execute("BEGIN")
 
@@ -622,7 +652,6 @@ def _on_connect_bundle(dbapi_con, con_record):
     
     Bundles have different parameters because they are more likely to be accessed concurrently. 
     '''
-
 
     ## NOTE ABOUT journal_mode = WAL: it improves concurency, but has some downsides.
     ## See http://sqlite.org/wal.html

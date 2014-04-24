@@ -43,6 +43,9 @@ class NoLock(BundleError):
 class Locked(BundleError):
     '''Error in the configuration files'''
 
+class LockedFailed(BundleError):
+    '''Error in the configuration files'''
+
 class QueryError(BundleError):
     """Error while executing a query"""
 
