@@ -48,7 +48,7 @@ def get_logger(name, file_name = None, template=None):
     if name not in logger_init:
 
         if not template:
-            template = "%(name)s %(levelname)s %(message)s"
+            template = "%(name)s %(process)s %(levelname)s %(message)s"
 
         formatter = logging.Formatter(template)
         
@@ -838,7 +838,9 @@ def _log_rate(output_f,d, message=None):
         # Average the rate over the length of the deque. 
         d[6].append(int( d[3]/(time.time()-d[1])))
         rate = sum(d[6])/len(d[6])
-        
+
+
+
         # Prints the processing rate in 1,000 records per sec.
         output_f(message+': '+str(rate)+'/s '+str(d[0]/1000)+"K ") 
         

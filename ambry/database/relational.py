@@ -12,6 +12,7 @@ from ambry.util import get_logger, memoize
 from ..database.inserter import SegmentedInserter, SegmentInserterFactory
 from contextlib import contextmanager
 import atexit, weakref
+import pdb
 
 logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
@@ -213,7 +214,7 @@ class RelationalDatabase(DatabaseInterface):
                 kwargs['connect_args'] = {'detect_types': sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES}
                 kwargs['native_datetime'] = True
 
-            self._engine = create_engine(path,  poolclass=NullPool, **kwargs)
+            self._engine = create_engine(path,  poolclass=NullPool, isolation_level='SERIALIZABLE', **kwargs)
 
             self.Session = sessionmaker(bind=self._engine)
 
@@ -262,8 +263,8 @@ class RelationalDatabase(DatabaseInterface):
 
             except Exception as e:
                 self.error("Failed to open: '{}': {} ".format(self.dsn, e))
-                raise
 
+                raise
 
         return weakref.proxy(self._connection, close_connection_on_ref)
 
@@ -332,8 +333,11 @@ class RelationalDatabase(DatabaseInterface):
     def inspector(self):
         from sqlalchemy.engine.reflection import Inspector
 
-        return Inspector.from_engine(self.engine)
- 
+        try:
+            return Inspector.from_engine(self.engine)
+        except:
+            #pdb.set_trace()
+            raise
    
     def open(self):
         # Fetching the connection objects the database

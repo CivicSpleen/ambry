@@ -1059,6 +1059,7 @@ class BuildBundle(Bundle):
                         p.identity.name,
                         e.message))
                 raise
+            p.close() # Or, will run out of files/connections and get operational error
 
     @property
     def is_built(self):
@@ -1074,6 +1075,8 @@ class BuildBundle(Bundle):
     def build_main(self):
         """This is the methods that is actually called in do_prepare; it dispatched to
         developer created prepare() methods"""
+
+
         return self.build()
 
     def do_build(self):

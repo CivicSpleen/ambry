@@ -349,9 +349,9 @@ def mp_run(mp_run_args):
         
     except:
         tb = traceback.format_exc()
-        print '==========vvv MR Run Exception: {}==========='.format(args)
+        print '==========vvv MP Run Exception: {} pid = {} ==========='.format(args, os.getpid())
         print tb
-        print '==========^^^ MR Run Exception: {}==========='.format(args)
+        print '==========^^^ MP Run Exception: {} pid = {} ==========='.format(args, os.getpid())
         raise
 
 

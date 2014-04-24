@@ -85,6 +85,9 @@ def bundle_command(args, rc):
     dir_ = os.path.dirname(rp)
     b = mod.Bundle(dir_)
 
+    # In case the bundle lock is hanging around from a previous run
+    b.database.break_lock()
+
     b.set_args(args)
 
     def getf(f):
@@ -125,7 +128,11 @@ def bundle_command(args, rc):
         st.set_bundle_state(b.identity, 'error:'+phase)
         raise
     finally:
-        b.close()
+        import lockfile
+        try:
+            b.close()
+        except lockfile.NotMyLock as e:
+            warn("Got logging error: {}".format(str(e)))
 
 def bundle_parser(cmd):
     import argparse, multiprocessing
@@ -351,6 +358,7 @@ def bundle_clean(args, b, st, rc):
     b.log("---- Cleaning ---")
     # Only clean the meta phases when it is explicityly specified.
     #b.clean(clean_meta=('meta' in phases))
+    b.database.enable_delete = True
     b.clean()
 
 

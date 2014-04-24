@@ -511,30 +511,29 @@ class Schema(object):
 
         bdr = CasterTransformBuilder()
 
-        with self.bundle.session:
-            for c in table.columns:
+        for c in table.columns:
 
-                # Try to get a caster type object from the bundle
-                if 'caster' in c.data and c.data['caster']:
-                    t = None
+            # Try to get a caster type object from the bundle
+            if 'caster' in c.data and c.data['caster']:
+                t = None
 
-                    for l in [self.bundle, self.bundle.__module__]:
-                        try:
-                            t = getattr(self.bundle,c.data['caster'] )
-                            bdr.add_type(t)
-                            break
-                        except AttributeError:
-                            continue
+                for l in [self.bundle, self.bundle.__module__]:
+                    try:
+                        t = getattr(self.bundle,c.data['caster'] )
+                        bdr.add_type(t)
+                        break
+                    except AttributeError:
+                        continue
 
-                    if not t:
-                        self.bundle.error("Schema declared undefined caster type {} for {}.{}. Ignoring"
-                                          .format(c.data['caster'], table.name, c.name))
-                        t = c.python_type
-
-                else:
+                if not t:
+                    self.bundle.error("Schema declared undefined caster type {} for {}.{}. Ignoring"
+                                      .format(c.data['caster'], table.name, c.name))
                     t = c.python_type
 
-                bdr.append(c.name, t)
+            else:
+                t = c.python_type
+
+            bdr.append(c.name, t)
 
         return bdr
 

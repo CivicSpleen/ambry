@@ -343,8 +343,7 @@ class Partitions(object):
         from sqlalchemy.exc import IntegrityError
    
         assert type(pname) == PartialPartitionName, "Expected PartialPartitionName, got {}".format(type(pname))
-        
-   
+
         if tables and not isinstance(tables, (list,tuple, set)):
             raise ValueError("If specified, 'tables' must be a list, set or tuple")
      
@@ -383,18 +382,17 @@ class Partitions(object):
         # the format, which is required to get the correct cache_key
         d['cache_key'] = pname.promote(self.bundle.identity.name).cache_key
 
-
         if not 'format' in d:
             d['format']  = 'db'
 
-        
         try: del d['table'] # OrmPartition requires t_id instead
         except: pass
 
         if 'dataset' in d:
             del d['dataset']
          
-        # This code must have the session established in the context be active. 
+        # This code must have the session established in the context be active.
+
         op = OrmPartition(
                 self.bundle.get_dataset(),
                 t_id = table.id_ if table else None,
@@ -442,9 +440,6 @@ class Partitions(object):
         
         with self.bundle.session as s:
             op = self._new_orm_partition(ppn, tables=tables, data=data)
-          
-            # Return the partition from the managed session, which prevents the
-            #  partition from being tied to a session that is closed.  
 
             fqname = op.fqname
 

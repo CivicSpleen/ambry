@@ -304,17 +304,9 @@ class PartitionBase(PartitionInterface):
         """Wrap up the creation of this partition"""
 
     def set_state(self, state):
-        from ..orm import Partition
+        '''Set a build state value in the database'''
+        pass # Only defined for sqlite.
 
-        with self.bundle.session as s:
-            r = s.query(Partition).get(self.record.vid)
-
-            if r:  # No record for memory partitions
-                r.state = state
-
-                s.merge(r)
-
-                s.commit()
 
     def dbm(self, suffix=None):
         """Return a DBMDatabase related to this partition"""

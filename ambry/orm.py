@@ -1177,6 +1177,7 @@ class Partition(Base):
         from identity import Identity
 
         if target.sequence_id is None:
+            conn.execute("BEGIN IMMEDIATE")
             sql = text('''SELECT max(p_sequence_id)+1 FROM Partitions WHERE p_d_id = :did''')
 
             max_id, = conn.execute(sql, did=target.d_id).fetchone()

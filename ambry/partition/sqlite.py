@@ -129,6 +129,10 @@ class SqlitePartition(PartitionBase):
         else:
             self.database.create()
 
+        # Closing becuase when creating a lot ot them, having more than 64 open will
+        # cause the sqlite driver to return with 'unable to open database' error
+        self.close()
+
 
     def clean(self):
         '''Delete all of the records in the tables declared for this oartition'''
@@ -328,6 +332,37 @@ class SqlitePartition(PartitionBase):
         self.database.add_view(view_name, vd['sql'])
 
         self.bundle.log("Created view {}".format(view_name))
+
+
+    def set_state(self, state):
+        '''Set a build state value in the database'''
+
+        self.set_value('build','state', state)
+
+
+    def set_value(self, group, key, value):
+        from ambry.orm import Config as SAConfig
+
+        self.database.session.query(SAConfig).filter(SAConfig.group == group,
+                                                     SAConfig.key == key,
+                                                     SAConfig.d_vid == self.bundle.dataset.vid).delete()
+
+        o = SAConfig(group=group, key=key, d_vid=self.bundle.dataset.vid, value=value)
+        self.database.session.add(o)
+
+
+    def get_value(self, group, key, default=None):
+        group = self.group(group)
+
+        if not group:
+            return None
+
+        try:
+            return group.__getattr__(key)
+        except KeyError:
+            if default is not None:
+                return default
+            raise
 
 
     def __repr__(self):

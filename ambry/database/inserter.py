@@ -111,19 +111,19 @@ class ValueWriter(InserterInterface):
         logger.debug("rollback {}".format(repr(self.session)))
         self.session.rollback()
         self.db.partition.set_state(Partitions.STATE.ERROR)
-    
+
     def commit_end(self):
         from ..partitions import Partitions
         logger.debug("commit end {}".format(repr(self.session)))
         self.session.commit()
         self.db.partition.set_state(Partitions.STATE.BUILT)
-        
+
     def commit_continue(self):
         from ..partitions import Partitions
         logger.debug("commit continue {}".format(repr(self.session)))
         self.session.commit()
         self.db.partition.set_state(Partitions.STATE.BUILDING)
- 
+
     def close(self):
 
         if len(self.cache) > 0 :       

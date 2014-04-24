@@ -19,6 +19,7 @@ from ambry.orm import Dataset, Config
 from ..identity import LocationRef, Identity
 from ..util import memoize
 import weakref
+from files import Files
 import collections
 libraries = {}
 
@@ -646,7 +647,6 @@ class Library(object):
     @property
     @memoize
     def files(self):
-        from files import Files
 
         return Files(self.database)
 
