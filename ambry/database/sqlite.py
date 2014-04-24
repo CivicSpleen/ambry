@@ -613,7 +613,7 @@ def _on_connect_bundle(dbapi_con, con_record):
     dbapi_con.execute('PRAGMA cache_size = 50000')
     dbapi_con.execute('PRAGMA foreign_keys = OFF')
     dbapi_con.execute('PRAGMA journal_mode = WAL')
-    dbapi_con.execute('PRAGMA synchronous = OFF')
+    #dbapi_con.execute('PRAGMA synchronous = OFF')
 
 
 def _on_connect_update_sqlite_schema(conn, con_record):
