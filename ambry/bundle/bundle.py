@@ -982,6 +982,8 @@ class BuildBundle(Bundle):
         if python_dir and python_dir not in sys.path:
             sys.path.append(python_dir)
 
+        self.close()
+
         return True
 
     def build(self):

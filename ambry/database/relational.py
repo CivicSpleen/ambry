@@ -195,8 +195,10 @@ class RelationalDatabase(DatabaseInterface):
         from sqlalchemy import create_engine
         import sqlite3
         from sqlalchemy.pool import NullPool
+        from sqlalchemy.orm import sessionmaker
 
         if not self._engine:
+
             self.require_path()
             path = self.dsn
 
@@ -213,11 +215,14 @@ class RelationalDatabase(DatabaseInterface):
 
             self._engine = create_engine(path,  poolclass=NullPool, **kwargs)
 
+            self.Session = sessionmaker(bind=self._engine)
+
             self._engine.pool._use_threadlocal = True # Easier than constructing the pool
 
             self._on_create_engine(self._engine)
 
             self.get_connection(); # run _on_create_connection
+
 
         return self._engine
 
@@ -298,13 +303,11 @@ class RelationalDatabase(DatabaseInterface):
     def session(self):
         from sqlalchemy import event
 
-
         if not self._session:
-            from sqlalchemy.orm import sessionmaker
 
-            Session = sessionmaker(bind=self.engine)
+            engine = self.engine # Getting it might construct it.
 
-            self._session = Session()
+            self._session = self.Session()
 
             event.listen(self._session, "before_commit", self.commit_hook)
 
@@ -353,8 +356,8 @@ class RelationalDatabase(DatabaseInterface):
             if self._connection_id() in connections:
                 del connections[self._connection_id()]
 
-        if self._engine:
-            self._engine.dispose()
+        #if self._engine:
+        #    self._engine.dispose()
 
 
     def clean_table(self, table):

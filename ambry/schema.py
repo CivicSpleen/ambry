@@ -540,6 +540,10 @@ class Schema(object):
 
 
     def schema_from_file(self, file_, progress_cb=None):
+
+        if not progress_cb:
+            progress_cb = self.bundle.init_log_rate(N=20)
+
         return self._schema_from_file(file_, progress_cb)
 
         
@@ -557,7 +561,7 @@ class Schema(object):
         file_.seek(0)
 
         if not progress_cb:
-            def progress_cb(m):
+            def progress_cb():
                 pass
 
         reader  = csv.DictReader(file_)
@@ -573,7 +577,7 @@ class Schema(object):
     
         for row in reader:
             line_no += 1
-            
+
             if not row.get('column', False) and not row.get('table', False):
                 continue
             
@@ -585,7 +589,7 @@ class Schema(object):
             
             if new_table and row['table']:
                 
-                progress_cb("Column: {}".format(row['table']))
+                progress_cb("Add schema table: {}".format(row['table']))
                 
                 try: table =  self.table(row['table'])
                 except: table = None 
@@ -636,8 +640,7 @@ class Schema(object):
             
             description = row.get('description','').strip().encode('utf-8')
 
-            
-            progress_cb("Column: {}".format(row['column']))
+            #progress_cb("Column: {}".format(row['column']))
 
             col = self.add_column(t,row['column'],
                                    sequence_id = row.get('seq',None),
@@ -662,7 +665,9 @@ class Schema(object):
                                    units=row.get('units',None),
                                    universe=row.get('universe',None)
                                    )
-            
+
+            self.bundle.database.session.commit()
+
             
             self.validate_column(t, col, warnings, errors)
 

@@ -197,15 +197,16 @@ class SqliteDatabase(RelationalDatabase):
     def lock(self):
 
         from lockfile import FileLock, LockTimeout, AlreadyLocked
-        import os, time
+        import os, time, traceback
 
         self._lock = FileLock(self.lock_path)
 
         for i in range(10):
             try:
-                self._lock.acquire(0)
-                logger.debug("{} acquired bundle lock".format(os.getpid()))
-
+                tb = traceback.extract_stack()[-5:-4][0]
+                self._lock.acquire(-1)
+                logger.debug("{} acquired bundle lock from {}:{}".format(os.getpid(), tb[0], tb[1]))
+                return
             except AlreadyLocked as e:
                 #from ..dbexceptions import LockedFailed
                 #raise LockedFailed("Failed to acquire lock on {}".format(self.lock_path))
@@ -215,6 +216,7 @@ class SqliteDatabase(RelationalDatabase):
     def unlock(self):
         from lockfile import FileLock
 
+        logger.debug("{} released bundle lock".format(os.getpid()))
         self._lock.release()
 
     def require_path(self):
@@ -429,10 +431,6 @@ class BundleLockContext(object):
         self._bundle = bundle
         self._database = self._bundle.database
 
-        self._lock_path = self._bundle.path
-
-        self._lock = FileLock(self._lock_path)
-
         tb = traceback.extract_stack()[-4:-3][0]
 
         logger.debug("Using Lock Context, from {} in {}:{}".format(tb[2], tb[0], tb[1]))
@@ -446,23 +444,6 @@ class BundleLockContext(object):
         self._lock_depth += 1
         return self._database.session
 
-
-        import lockfile
-
-        logger.debug("Acquiring lock on {}".format(self._database.dsn))
-
-
-        while True:
-            try:
-                self._lock.acquire(5)
-                self._lock_depth += 1
-                logger.debug("Acquired lock on {}. Depth = {}".format(self._database.dsn, self._lock_depth))
-                break
-            except lockfile.LockTimeout as e:
-                logger.warn(e.message)
-
-
-        return self._database.session
     
     def __exit__( self, exc_type, exc_val, exc_tb ):
 
@@ -472,8 +453,6 @@ class BundleLockContext(object):
             logger.debug("Release lock and rollback on exception: {}".format(exc_val))
             self._database.session.rollback()
 
-            if self._lock_depth == 0:
-                self._lock.release()
             self._database.close_session()
             raise
             return False
@@ -495,7 +474,6 @@ class BundleLockContext(object):
             finally:
                 if self._lock_depth == 0:
                     logger.debug("Release lock {}".format(repr(self._database.session)))
-                    #self._lock.release()
 
             self._database.close_session()
             return True
@@ -542,8 +520,6 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
     def close(self):
         import os
-
-        print "=== CLOSE ",self.dsn, os.getpid()
 
         super(SqliteBundleDatabase,self).close()
         self.unlock()
