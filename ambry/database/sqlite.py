@@ -505,6 +505,20 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
         event.listen(self._engine, 'connect', _on_connect_bundle)
 
+        event.listen(self._engine, 'begin', _on_begin_bundle)
+
+    def _create(self):
+        """Need to ensure the database exists before calling for the connection, but the
+        connection expects the database to exist first, so we create it here. """
+
+        from sqlalchemy import create_engine
+
+        engine = create_engine(self.dsn, echo=False, isolation_level='SERIALIZABLE')
+        connection = engine.connect()
+        connection.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
+        connection.close()
+
+
     def update_schema(self):
         '''Manually update the schema. This is called when bundles are installed in the library
         becase that use doesn't involve connections, so the _on_create calls dont get used. '''
@@ -598,12 +612,17 @@ class BuildBundleDb(SqliteBundleDatabase):
         return self.bundle.path + self.EXTENSION
 
 
+def _on_begin_bundle(dbapi_con, con_record):
+
+    dbapi_con.execute("BEGIN")
+
 
 def _on_connect_bundle(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created
     
     Bundles have different parameters because they are more likely to be accessed concurrently. 
     '''
+
 
     ## NOTE ABOUT journal_mode = WAL: it improves concurency, but has some downsides.
     ## See http://sqlite.org/wal.html
