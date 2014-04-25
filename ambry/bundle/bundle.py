@@ -59,16 +59,23 @@ class Bundle(object):
 
     @property
     def logger(self):
-
+        import sys
         if not self._logger:
 
             try:
                 ident = self.identity
                 template = "%(levelname)s " + ident.sname + " %(message)s"
+
+                if self.run_args.multi > 1:
+                    template = "%(levelname)s " + ident.sname + " %(process)s %(message)s"
+
+
             except:
                 template = "%(message)s"
 
-            self._logger = get_logger(__name__, template=template)
+            file_name = self.filesystem.build_path('log.txt')
+
+            self._logger = get_logger(__name__, template=template, stream= sys.stdout, file_name = file_name )
 
             self._logger.setLevel(self.log_level)
 
@@ -1082,7 +1089,7 @@ class BuildBundle(Bundle):
     def do_build(self):
 
         if not self.is_prepared:
-            self.prepare()
+            self.do_prepare()
 
         if self.pre_build():
             self.log("---- Build ---")

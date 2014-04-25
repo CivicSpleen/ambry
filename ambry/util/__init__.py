@@ -39,7 +39,7 @@ class curry:
 ## end of http://code.activestate.com/recipes/52549/ }}}
 
 
-def get_logger(name, file_name = None, template=None):
+def get_logger(name, file_name = None, stream = None, template=None):
 
     logger = logging.getLogger(name)
 
@@ -51,18 +51,26 @@ def get_logger(name, file_name = None, template=None):
             template = "%(name)s %(process)s %(levelname)s %(message)s"
 
         formatter = logging.Formatter(template)
-        
-        if file_name:
-            ch = logging.FileHandler(file_name)
-        else:
-            ch = logging.StreamHandler(stream=sys.stdout)
 
-        ch.setFormatter(formatter)
-        ch.setLevel(logging.DEBUG)
+        if not file_name and not stream:
+            stream = sys.stdout
 
-        logger.addHandler(ch)
+        handlers = []
+
+        if stream is not None:
+            handlers.append(logging.StreamHandler(stream=stream))
+
+        if file_name is not None:
+            handlers.append(logging.FileHandler(file_name))
+
+        for ch in handlers:
+            ch.setFormatter(formatter)
+            ch.setLevel(logging.DEBUG)
+            logger.addHandler(ch)
+
+
         logger.setLevel(logging.INFO)
-        logger._stream = ch.stream
+
         logger_init.add(name)
 
 

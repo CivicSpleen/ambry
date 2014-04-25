@@ -26,6 +26,18 @@ import json
 
 SCHEMA_VERSION = 11
 
+# http://stackoverflow.com/a/23175518/1144479
+# SQLAlchemy does not map BigInt to Int by default on the sqlite dialect.
+# It should, but it doesnt.
+
+from sqlalchemy import BigInteger
+from sqlalchemy.dialects import postgresql, mysql, sqlite
+BigIntegerType = BigInteger()
+BigIntegerType = BigIntegerType.with_variant(postgresql.BIGINT(), 'postgresql')
+BigIntegerType = BigIntegerType.with_variant(mysql.BIGINT(), 'mysql')
+BigIntegerType = BigIntegerType.with_variant(sqlite.INTEGER(), 'sqlite')
+
+
 Base = declarative_base()
 
 class JSONEncodedObj(TypeDecorator):
@@ -383,7 +395,7 @@ class Column(Base):
         DATATYPE_VARCHAR:(sqlalchemy.types.String,str,'VARCHAR'),
         DATATYPE_CHAR:(sqlalchemy.types.String,str,'VARCHAR'),
         DATATYPE_INTEGER:(sqlalchemy.types.Integer,int,'INTEGER'),
-        DATATYPE_INTEGER64:(sqlalchemy.types.BigInteger,long,'INTEGER64'),
+        DATATYPE_INTEGER64:(BigIntegerType,long,'INTEGER64'),
         DATATYPE_REAL:(sqlalchemy.types.Float,float,'REAL'),
         DATATYPE_FLOAT:(sqlalchemy.types.Float,float,'REAL'),
         DATATYPE_NUMERIC:(sqlalchemy.types.Float,float,'REAL'),
@@ -1006,7 +1018,7 @@ class File(Base, SavableMixin):
     state = SAColumn('f_state',Text)
     content_hash = SAColumn('f_hash',Text)
     modified = SAColumn('f_modified',Integer)
-    size = SAColumn('f_size',BigInteger)
+    size = SAColumn('f_size',BigIntegerType)
     group = SAColumn('f_group',Text)
 
 
@@ -1039,7 +1051,8 @@ class File(Base, SavableMixin):
 
         return  dict((col, getattr(self, col)) for col 
                      in ['path', 'ref',  'type_',  'source_url', 'process', 'state', 'content_hash', 'modified', 'size', 'group', 'data'])
- 
+
+
 
 class Partition(Base):
     __tablename__ = 'partitions'
@@ -1062,8 +1075,8 @@ class Partition(Base):
     variant = SAColumn('p_variant',String(50))
     format = SAColumn('p_format',String(50))
     segment = SAColumn('p_segment',Integer)
-    min_key = SAColumn('p_min_key',BigInteger)
-    max_key = SAColumn('p_max_key',BigInteger)
+    min_key = SAColumn('p_min_key',BigIntegerType)
+    max_key = SAColumn('p_max_key',BigIntegerType)
     count = SAColumn('p_count',Integer)
     state = SAColumn('p_state',String(50))
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedObj))
