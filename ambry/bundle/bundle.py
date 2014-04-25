@@ -73,7 +73,7 @@ class Bundle(object):
             except:
                 template = "%(message)s"
 
-            file_name = self.filesystem.build_path('log.txt')
+            file_name = self.path+".log"
 
             self._logger = get_logger(__name__, template=template, stream= sys.stdout, file_name = file_name )
 
@@ -722,6 +722,8 @@ class BuildBundle(Bundle):
         self.set_build_state( 'cleaned')
 
         self.close()
+
+
 
     def set_build_state(self, state):
         pass

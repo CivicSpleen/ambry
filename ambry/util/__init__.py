@@ -65,9 +65,7 @@ def get_logger(name, file_name = None, stream = None, template=None):
 
         for ch in handlers:
             ch.setFormatter(formatter)
-            ch.setLevel(logging.DEBUG)
             logger.addHandler(ch)
-
 
         logger.setLevel(logging.INFO)
 
