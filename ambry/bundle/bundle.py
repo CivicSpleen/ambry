@@ -59,7 +59,11 @@ class Bundle(object):
 
     @property
     def log_file(self):
-        return self.path+".log"
+
+        if self.run_args.multi > 1:
+            return self.path + "." + str(os.getpid()) + ".log"
+        else:
+           return self.path+".log"
 
     @property
     def logger(self):
