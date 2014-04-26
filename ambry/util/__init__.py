@@ -47,12 +47,12 @@ def get_logger(name, file_name = None, stream = None, template=None):
 
     logger = logging.getLogger(name)
 
-    for handler in logger.handlers:
-        logger.removeHandler(handler)
-
     # To list all loggers: logging.Logger.manager.loggerDict
 
     if name not in logger_init:
+
+        for handler in logger.handlers:
+            logger.removeHandler(handler)
 
         if not template:
             template = "%(name)s %(process)s %(levelname)s %(message)s"
