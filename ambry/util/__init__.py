@@ -70,6 +70,9 @@ def get_logger(name, file_name = None, stream = None, template=None):
         if file_name is not None:
             if os.path.isdir(os.path.dirname(file_name)):
                 handlers.append(logging.FileHandler(file_name))
+            else:
+                print("ERROR: Can't open log file {}".format(file_name))
+
 
         for ch in handlers:
             ch.setFormatter(formatter)
