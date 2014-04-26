@@ -9,7 +9,7 @@ import logging
 from ..filesystem import BundleFilesystem
 from ..schema import Schema
 from ..partitions import Partitions
-from ..util import get_logger
+from ..util import get_logger, clear_logger
 from ..dbexceptions import ConfigurationError, ProcessError
 
 from config import *
@@ -58,6 +58,10 @@ class Bundle(object):
             self._database.close()
 
     @property
+    def log_file(self):
+        return self.path+".log"
+
+    @property
     def logger(self):
         import sys
         if not self._logger:
@@ -69,17 +73,22 @@ class Bundle(object):
                 if self.run_args.multi > 1:
                     template = "%(levelname)s " + ident.sname + " %(process)s %(message)s"
 
-
             except:
                 template = "%(message)s"
 
-            file_name = self.path+".log"
+            if not os.path.isdir(os.path.dirname(self.log_file)):
+                os.makedirs(os.path.dirname(self.log_file))
 
-            self._logger = get_logger(__name__, template=template, stream= sys.stdout, file_name = file_name )
+            self._logger = get_logger(__name__, template=template, stream= sys.stdout, file_name = self.log_file )
 
             self._logger.setLevel(self.log_level)
 
         return self._logger
+
+    def clear_logger(self):
+        # Force the logger to re-open, which will re-create the file that just got deleted
+        self._logger = None
+        clear_logger(__name__)
 
     @property
     def database(self):
@@ -713,17 +722,19 @@ class BuildBundle(Bundle):
         if os.path.exists(ed):
             rm_rf(ed)
 
+        if os.path.exists(self.log_file):
+            os.remove(self.log_file)
+
         # Should check for a shared download file -- specified
         # as part of the library; Don't delete that.
         # if not self.cache_downloads :
         #    self.rm_rf(self.filesystem.downloads_path())
 
-
         self.set_build_state( 'cleaned')
 
         self.close()
 
-
+        self.clear_logger()
 
     def set_build_state(self, state):
         pass
@@ -951,6 +962,7 @@ class BuildBundle(Bundle):
 
     def do_prepare(self):
         """This method runs pre_, main and post_ prepare methods. """
+
         if self.pre_prepare():
             self.log("---- Preparing ----")
             if self.prepare_main():

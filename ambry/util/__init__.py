@@ -40,8 +40,15 @@ class curry:
 
 
 def get_logger(name, file_name = None, stream = None, template=None):
+    """Get a logger by name
+
+    if file_name is specified, and the dirname() of the file_name exists, it will
+    write to that file. If the dirname dies not exist, it will silently ignre it. """
 
     logger = logging.getLogger(name)
+
+    for handler in logger.handlers:
+        logger.removeHandler(handler)
 
     # To list all loggers: logging.Logger.manager.loggerDict
 
@@ -61,7 +68,8 @@ def get_logger(name, file_name = None, stream = None, template=None):
             handlers.append(logging.StreamHandler(stream=stream))
 
         if file_name is not None:
-            handlers.append(logging.FileHandler(file_name))
+            if os.path.isdir(os.path.dirname(file_name)):
+                handlers.append(logging.FileHandler(file_name))
 
         for ch in handlers:
             ch.setFormatter(formatter)
@@ -73,6 +81,9 @@ def get_logger(name, file_name = None, stream = None, template=None):
 
 
     return logger
+
+def clear_logger(name):
+    logger_init.remove(name)
 
 
 def rm_rf( d):

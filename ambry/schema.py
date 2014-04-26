@@ -206,7 +206,12 @@ class Schema(object):
         # when it is specified, and is one more than the last one if not.
 
         if not table.name in self.max_col_id:
-            self.max_col_id[table.name] = max(*[c.sequence_id for c in table.columns]) if len(table.columns) > 0 else 0
+            if len(table.columns) == 0:
+                self.max_col_id[table.name] = 0
+            elif len(table.columns) == 1:
+                self.max_col_id[table.name] = table.columns[0].sequence_id
+            else:
+                self.max_col_id[table.name] = max(*[c.sequence_id for c in table.columns])
 
         sequence_id = int(kwargs['sequence_id']) if 'sequence_id' in kwargs else None
 
@@ -1205,7 +1210,7 @@ class {name}(Base):
         
         To use, run in the row loop:
         
-            d = bundle.schema.intuit_schema(row,d)
+            memo = bundle.schema.intuit_schema(row,memo)
             
         For row being either a dict or list of row values. 
         
@@ -1386,7 +1391,7 @@ class {name}(Base):
             if logger:
                 logger()
 
-            memo = self.intuit(None, memo)
+        memo = self.intuit(None, memo)
 
         self._update_from_memo(table_name, memo)
 
