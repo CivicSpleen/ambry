@@ -70,21 +70,23 @@ pip install -r https://raw.githubusercontent.com/clarinova/ambry/master/requirem
 ## Check that gdal was installed correctly, and refer user to KyngChaos if not.
 ##
 
-gdal_version=$(python -c 'import gdal; print gdal.VersionInfo()')
+until [ $(python -c 'import gdal; print gdal.VersionInfo()') -ne 0  ]; do
 
-if [ $? -ne 0 ]; then
     echo
-    echo "ERROR: GDAL not found. Install the KyngChaos \"GDAL Complete\" framework, from http://www.kyngchaos.com/software/frameworks#gdal_complete"
+    echo "ERROR: GDAL not found. Install the KyngChaos \"GDAL Complete\" framework, "
+    echo "from http://www.kyngchaos.com/software/frameworks#gdal_complete"
     echo "Press y to visit the GDAL download Page, or any other key to cancel"
     read -n 1 yn
     if [ "$yn" == 'y' ]; then
         open 'http://www.kyngchaos.com/software/frameworks#gdal_complete'
-        echo "\nBe sure to install both GDAL Complete and Numpy"
-        exit 0
+        echo "\nBe sure to install both GDAL Complete and Numpy. "
+        echo "Then hit 'Y' when done. "
     else
         exit 1
     fi
-fi	
+
+done
+
 
 if [ $gdal_version -lt 1920 ]; then
     echo

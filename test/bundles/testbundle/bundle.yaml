@@ -1,26 +1,14 @@
-contact:
-    creator:
-      name: Albert Uthor
-      email: al@uthor.com
-      url: http://albert.com
-    maintainer:
-      name: Mark Aintainer
-    source:
-      name: The Example Corporation
-      url: http://homepage.com
-    publisher:
-    name: The Example Corporation
-
 about:
-    title: This is the Title
+    abstract: An example bundle
+    foobar: baz
     license: other-open
     rights: url of rights document
-    abstract: An example bundle
     subject: What the data is about
     tags:
     - one
     - two
     - three
+    title: This is the Title
     url: http://theurl.com
 build:
     sources:
@@ -30,6 +18,19 @@ build:
         yahoo:
             description: The Yahoo Homepage
             url: http://yahoo.com
+contact:
+    creator:
+        bingo: bingo
+        email: al@uthor.com
+        name: Albert Uthor
+        url: http://albert.com
+    maintainer:
+        name: Mark Aintainer
+    name: The Example Corporation
+    publisher: null
+    source:
+        name: The Example Corporation
+        url: http://homepage.com
 extracts:
 -   description: 'This is a multi-line description for the extract of {p_name}, with
         the table named {p_table}

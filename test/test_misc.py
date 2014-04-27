@@ -67,7 +67,8 @@ class Test(TestBase):
             contact = dict(
                 creator = dict(
                     name = 'Name',
-                    email = 'Email'
+                    email = 'Email',
+                    bingo = 'bingo'
                 )
             ),
             # These are note part of the defined set, so aren't converted to terms
@@ -86,10 +87,13 @@ class Test(TestBase):
                 )]
         )
 
-        top = Top()
+        top = Top(d)
 
         import yaml
-        print yaml.dump(top.dict,default_flow_style=False, indent=4, encoding='utf-8')
+        #print yaml.dump(top.dict,default_flow_style=False, indent=4, encoding='utf-8')
+
+        print top.errors
+
 
         
 def suite():

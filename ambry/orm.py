@@ -546,6 +546,7 @@ class Column(Base):
         object and create an ObjectNumber value for the id_'''
         
         if target.sequence_id is None:
+            conn.execute("BEGIN IMMEDIATE") # In case this happens in multi-process mode
             sql = text('''SELECT max(c_sequence_id)+1 FROM columns WHERE c_t_id = :tid''')
     
             max_id, = conn.execute(sql, tid=target.t_id).fetchone()
@@ -595,7 +596,9 @@ class Table(Base):
         UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
                      )
     
-    columns = relationship(Column, backref='table', cascade="all, delete-orphan", lazy='joined')
+    columns = relationship(Column, backref='table',
+                           order_by="asc(Column.sequence_id)",
+                           cascade="all, delete-orphan", lazy='joined')
 
     def __init__(self,dataset, **kwargs):
 
@@ -1190,6 +1193,8 @@ class Partition(Base):
         from identity import Identity
 
         if target.sequence_id is None:
+            # These records can be added in an multi-process environment, we
+            # we need exclusive locking here, where we don't for other sequence ids.
             conn.execute("BEGIN IMMEDIATE")
             sql = text('''SELECT max(p_sequence_id)+1 FROM Partitions WHERE p_d_id = :did''')
 

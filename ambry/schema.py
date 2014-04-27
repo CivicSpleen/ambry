@@ -215,6 +215,7 @@ class Schema(object):
 
         sequence_id = int(kwargs['sequence_id']) if 'sequence_id' in kwargs else None
 
+
         if sequence_id is None:
             sequence_id = self.max_col_id[table.name] + 1
 
@@ -629,7 +630,7 @@ class Schema(object):
             indexes = [ row['table']+'_'+c for c in row.keys() if (re.match('i\d+', c) and _clean_flag(row[c]))]  
             uindexes = [ row['table']+'_'+c for c in row.keys() if (re.match('ui\d+', c) and _clean_flag(row[c]))]  
             uniques = [ row['table']+'_'+c for c in row.keys() if (re.match('u\d+', c) and  _clean_flag(row[c]))]  
-        
+
             datatype = row['type'].strip().lower()
          
             width = _clean_int(row.get('width', None))
@@ -736,9 +737,7 @@ class Schema(object):
         formats
 
         """
-        
 
-        
         # Collect indexes
         indexes = {}
 

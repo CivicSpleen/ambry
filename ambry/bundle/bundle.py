@@ -115,6 +115,21 @@ class Bundle(object):
         return self._partitions
 
     @property
+    def metadata(self):
+        from .meta import Top
+
+        return Top(
+            dict(
+                about=self.config.about.to_dict(),
+                identity=self.config.identity.to_dict(),
+                names=self.config.names.to_dict(),
+                build=self.config.identity.to_dict(),
+                partitions=[dict(p) for p in self.config.partitions]
+            )
+        )
+
+
+    @property
     def repository(self):
         """Return a repository object """
         from ..repository import Repository  # @UnresolvedImport

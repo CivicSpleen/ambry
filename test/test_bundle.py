@@ -580,6 +580,21 @@ class Test(TestBase):
 
         print compile_tempate(self.bundle, None, None)
 
+    def test_metadata(self):
+        from ambry.bundle.meta import Top, About, Contact
+
+        import yaml
+
+        md = self.bundle.metadata
+
+        print md.errors
+
+        #print yaml.dump(md.dict, default_flow_style=False, indent=4, encoding='utf-8')
+
+
+
+
+
 
 def suite():
     suite = unittest.TestSuite()

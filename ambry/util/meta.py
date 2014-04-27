@@ -12,12 +12,11 @@ class Metadata(object):
 
     _members = None
     _non_term_members = None
-    _errors = []
+    _errors = {}
 
     def __init__(self, d=None):
-        self.visit_members()
-
         self._non_term_members = {}
+        self.visit_members()
 
         if d is not None:
             for k, v in d.items():
@@ -44,6 +43,10 @@ class Metadata(object):
 
         return d
 
+    @property
+    def errors(self):
+        return self._errors
+
 
 
 class Group(object):
@@ -58,12 +61,12 @@ class Group(object):
     def __init__(self):
         self._key = None
         self._term_values = {}
-        self.visit_members()
 
     def init(self,key, parent, top):
         self._key = key
         self._parent = parent
         self._top = top
+        self.visit_members()
 
     def visit_members(self):
         raise NotImplementedError('visit_members not implemented in {}'.format(type(self)))
@@ -103,8 +106,6 @@ class DictGroup(Group):
         for name, m in self._members.items():
             m.init(name, self, self._top)
 
-
-
     @property
     def key(self):
         return str(self.__class__).lower()
@@ -115,8 +116,7 @@ class DictGroup(Group):
             if k in self._members:
                 self._members[k].__set__(self,v)
             else:
-                self._top._errors.append((self._key,k,v))
-
+                self._top._errors[(self._key,k)] = v
 
 
 class Term(object):
@@ -130,6 +130,7 @@ class Term(object):
         pass
 
     def init(self, key, parent, top):
+        assert(top is not None)
         self._key = key
         self._parent = parent
         self._top = top
@@ -159,20 +160,10 @@ class DictTerm(Term):
 
     def __init__(self, default=None):
         self.default = default
-        self.visit_members()
 
     def init(self, key, parent, top):
         super(DictTerm, self).init(key, parent, top)
-
-        # Copy the member term names into the parent _term_values
-        # The sub-terms aren't actually used -- they are just declared for consistency.
-        if not self._key in parent._term_values:
-            h = {}
-            for name, m in self._members.items():
-                h[name] = None
-
-            parent._term_values[self._key] = h
-
+        self.visit_members()
 
     def visit_members(self):
 
@@ -182,6 +173,16 @@ class DictTerm(Term):
 
         for name, m in self._members.items():
             m.init(name, self, self._top)
+
+        # Copy the member term names into the parent _term_values
+        # The sub-terms aren't actually used -- they are just declared for consistency.
+
+        if not self._key in self._parent._term_values:
+            h = {}
+            for name, m in self._members.items():
+                h[name] = None
+
+            self._parent._term_values[self._key] = h
 
     def set(self, value):
         """Set the sub-elements of the term from a dict
@@ -200,7 +201,7 @@ class DictTerm(Term):
                 raise NotImplementedError()
                 self._members[k].__set__(self,v)
             else:
-                self._top._errors.append((self._key,k,v))
+                self._top._errors[(self._parent._key, self._key, k)] = v
 
     def __set__(self, instance, d):
 
@@ -208,7 +209,7 @@ class DictTerm(Term):
             if k in instance._term_values[self._key]:
                 instance._term_values[self._key][k] = d[k]
             else:
-                self._top._errors.append((self._key, k, v))
+                self._top._errors[(self._parent._key, self._key, k)] = v
 
 
     def __get__(self, instance, owner):
