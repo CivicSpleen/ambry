@@ -574,6 +574,13 @@ class Test(TestBase):
 
         b.db_config.set_value('test', 'uuid', uv2)
 
+    def test_templates(self):
+
+        from ambry.util.text import compile_tempate
+
+        print compile_tempate(self.bundle, None, None)
+
+
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))

@@ -53,6 +53,43 @@ class Test(TestBase):
         sleep(4)
         self.assertNotEquals(o, g(1))
 
+    def test_metadata(self):
+        from ambry.bundle.meta import Top, About, Contact
+
+
+        d = dict(
+            about = dict(
+                title = 'title',
+                abstract = 'abstract',
+                rights = 'rights',
+                summary = 'Summary'
+            ),
+            contact = dict(
+                creator = dict(
+                    name = 'Name',
+                    email = 'Email'
+                )
+            ),
+            # These are note part of the defined set, so aren't converted to terms
+            build = dict(
+                foo = 'foo',
+                bar = 'bar'
+            ),
+            partitions = [
+                dict(
+                    foo='foo',
+                    bar='bar'
+                ),
+                dict(
+                    foo='foo',
+                    bar='bar'
+                )]
+        )
+
+        top = Top()
+
+        import yaml
+        print yaml.dump(top.dict,default_flow_style=False, indent=4, encoding='utf-8')
 
         
 def suite():

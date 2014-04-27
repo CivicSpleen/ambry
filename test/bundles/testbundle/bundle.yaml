@@ -1,16 +1,35 @@
+contact:
+    creator:
+      name: Albert Uthor
+      email: al@uthor.com
+      url: http://albert.com
+    maintainer:
+      name: Mark Aintainer
+    source:
+      name: The Example Corporation
+      url: http://homepage.com
+    publisher:
+    name: The Example Corporation
+
 about:
-    author: Albert Uthor
-    homepage: http://homepage.com
+    title: This is the Title
     license: other-open
-    maintainer: Mark Aintainer
+    rights: url of rights document
+    abstract: An example bundle
+    subject: What the data is about
     tags:
     - one
     - two
     - three
-    title: This is the Title
     url: http://theurl.com
 build:
-    geoheaderFile: meta/schema.csv
+    sources:
+        google:
+            description: The Google Homepage
+            url: http://google.com
+        yahoo:
+            description: The Yahoo Homepage
+            url: http://yahoo.com
 extracts:
 -   description: 'This is a multi-line description for the extract of {p_name}, with
         the table named {p_table}

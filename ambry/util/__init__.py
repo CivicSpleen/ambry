@@ -881,9 +881,9 @@ def _log_rate(output_f,d, message=None):
 
 def daemonize(f, args,  rc, prog_name='ambry'):
         '''Run a process as a daemon'''
-        import daemon #@UnresolvedImport
+        #import daemon #@UnresolvedImport
         import lockfile  #@UnresolvedImport
-        import setproctitle #@UnresolvedImport
+        #import setproctitle #@UnresolvedImport
         import os, sys
         import grp, pwd
         import logging
@@ -921,7 +921,7 @@ def daemonize(f, args,  rc, prog_name='ambry'):
         gid =  grp.getgrnam(args.group).gr_gid if args.group is not None else os.getgid()
         uid =  pwd.getpwnam(args.user).pw_uid if args.user  is not None else os.getuid()  
 
-        class DaemonContext(daemon.DaemonContext):
+        class DaemonContext():#daemon.DaemonContext):
      
             def __exit__(self,exc_type, exc_value, exc_traceback):
                 
@@ -946,7 +946,7 @@ def daemonize(f, args,  rc, prog_name='ambry'):
         os.chown(run_dir, uid, gid)
         os.chown(log_dir, uid, gid)
 
-        setproctitle.setproctitle(prog_name)
+        #setproctitle.setproctitle(prog_name)
                 
         with context:
             f(prog_name, args, rc, logger)

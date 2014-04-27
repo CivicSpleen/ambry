@@ -676,14 +676,43 @@ class BuildBundle(Bundle):
             raise ConfigurationError(
                 "Configuration does not have 'build.sources' group")
 
-        return self.config.build.sources
+        d = {}
+        for k in self.config.build.sources.keys():
+            d[k] = self.source(k) # Enforce structure requirements
 
     def source(self, name):
-        """Return a source URL with the given name, from the build.sources configuration
-        value"""
+        """Return a source record with the given name, from the build.sources configuration
+        value.
+
+        This will return the whole record, which may have subcomponents. If the record is define with only a
+        scalar string, it will be reutnred in a dict, mapped to the key 'url' """
 
         s = self.config.build.sources
-        return s.get(name, None)
+        d =  s.get(name, None)
+
+        if isinstance(d, basestring):
+            return { 'url': d}
+        elif isinstance(d, dict):
+
+            if 'url' not in d:
+                raise ValueError("Config value build.sources.{} must be either a string or a dict with a 'url' key "
+                                .format(name))
+            return d
+        else:
+            raise ValueError("Value assigned to config value build.sources.{} must be a string or dict. Got a {}"
+                            .format(name, type(d)))
+
+
+    def source_url(self, name):
+        """Return a source url with the given name, from the build.sources configuration
+        value.
+
+        This will return only the url component of the named source"""
+
+        d = self.source(name)
+
+        return d['url']
+
 
     @property
     def dependencies(self):

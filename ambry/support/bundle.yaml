@@ -15,6 +15,7 @@ names: # Names are generated from the identity
 
 about: {
     author: "Author's email address",
+    summary: "summary",
     description: "**include**", # Description, gets replaces with yaml include when installed.
     groups: [
         "group1",
