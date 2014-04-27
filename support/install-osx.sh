@@ -60,8 +60,11 @@ done
 ## Install the python requirements
 ##
 
+curl https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py -o - | sudo python
+
 sudo easy_install pip
 
+# The ARCHFLAGS bit handles an change to Apple's clang compiler, affecting many packages in fall 2013 to Sprintg 2014
 sudo ARCHFLAGS="-Wno-error=unused-command-line-argument-hard-error-in-future" \
 pip install -r https://raw.githubusercontent.com/clarinova/ambry/master/requirements.txt
 
@@ -70,7 +73,7 @@ pip install -r https://raw.githubusercontent.com/clarinova/ambry/master/requirem
 ## Check that gdal was installed correctly, and refer user to KyngChaos if not.
 ##
 
-until [ $(python -c 'import gdal; print gdal.VersionInfo()') -ne 0  ]; do
+until [ $(python -c 'import gdal; print gdal.VersionInfo()'  ) -ne 0  ]; do
 
     echo
     echo "ERROR: GDAL not found. Install the KyngChaos \"GDAL Complete\" framework, "
@@ -79,7 +82,9 @@ until [ $(python -c 'import gdal; print gdal.VersionInfo()') -ne 0  ]; do
     read -n 1 yn
     if [ "$yn" == 'y' ]; then
         open 'http://www.kyngchaos.com/software/frameworks#gdal_complete'
-        echo "\nBe sure to install both GDAL Complete and Numpy. "
+        echo "Be sure to install both GDAL Complete and Numpy. "
+        echo "NOTE! You may need to right-click on the installer file and select "
+        echo " Open With > Installer to install the files. "
         echo "Then hit 'Y' when done. "
     else
         exit 1

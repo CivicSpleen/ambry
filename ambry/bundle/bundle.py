@@ -741,9 +741,11 @@ class BuildBundle(Bundle):
         # Remove partitions
 
         rm_rf(self.sub_path())
+        self.log("Removing {}".format(self.sub_path()))
         # Remove the database
 
         if self.database.exists():
+            self.log("Removing {}".format(self.database.path))
             self.database.delete()
 
         # Remove the sqlite journal files, if they exists
@@ -756,18 +758,22 @@ class BuildBundle(Bundle):
             "-journal"]
         for f in files:
             if os.path.exists(f):
+                self.log("Removing {}".format(f))
                 os.remove(f)
 
         if clean_meta:
             mf = self.filesystem.meta_path(self.META_COMPLETE_MARKER)
             if os.path.exists(mf):
+                self.log("Removing {}".format(mf))
                 os.remove(mf)
 
         ed = self.filesystem.path('extracts')
         if os.path.exists(ed):
+            self.log("Removing {}".format(ed))
             rm_rf(ed)
 
         if os.path.exists(self.log_file):
+            self.log("Removing {}".format(self.log_file))
             os.remove(self.log_file)
 
         # Should check for a shared download file -- specified
