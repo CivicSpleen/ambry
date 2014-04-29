@@ -6,6 +6,8 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 
 from ..util import AttrDict
+from UserList import UserList
+from UserDict import IterableUserDict
 
 class Metadata(object):
     """A top level group of groups"""
@@ -16,21 +18,27 @@ class Metadata(object):
 
     def __init__(self, d=None):
         self._non_term_members = {}
-        self.visit_members()
+        self.register_members()
 
         if d is not None:
             for k, v in d.items():
                 if k in self._members:
                     self._members[k].set(v)
                 else:
+                    # Top level groups that don't match a member group are preserved,
+                    # not errors like unknown terms in a group.
                     self._non_term_members[k] = v
 
-    def visit_members(self):
+    def register_members(self):
 
         self._members = {name: attr for name, attr in type(self).__dict__.items() if isinstance(attr, Group)}
 
         for name,m in self._members.items():
             m.init(name, self, self)
+
+    def visit(self, f):
+        for _, m in self._members.items():
+            m.visit(f)
 
     @property
     def dict(self):
@@ -48,6 +56,30 @@ class Metadata(object):
         return self._errors
 
 
+    def missing_term(self, path, value):
+        """Called when a term value isn't assigned, try to find a synonym to assign it to
+
+        Currently only assign top-level; terms; it can't do DictTerms
+        """
+        from functools import partial
+        key = '.'.join([ str(p) for p in path])
+
+        failed = [True]
+
+        def match_syn(failed, term):
+            if term._synonym and key in term._synonym :
+                term.__set__(term._parent, value)
+                failed[0] = False
+
+        self.visit(partial(match_syn, failed))
+
+        if failed[0]:
+            self._errors[path] =  value
+
+
+    @property
+    def path(self):
+        return tuple()
 
 class Group(object):
     """A  group of terms"""
@@ -60,22 +92,35 @@ class Group(object):
 
     def __init__(self):
         self._key = None
-        self._term_values = {}
+        try:
+            self._term_values = {}
+        except AttributeError: # its a property in one subclass
+            pass
 
     def init(self,key, parent, top):
         self._key = key
         self._parent = parent
         self._top = top
-        self.visit_members()
+        self.register_members()
 
-    def visit_members(self):
-        raise NotImplementedError('visit_members not implemented in {}'.format(type(self)))
+    def _terms(self):
+        return {name: attr for name, attr in type(self).__dict__.items() if isinstance(attr, Term)}
+
+    def register_members(self):
+        raise NotImplementedError('register_members not implemented in {}'.format(type(self)))
 
     def set(self):
         raise NotImplementedError('set not implemented in {}'.format(type(self)))
 
+    def member(self, name):
+        try:
+            return type(self).__dict__[name]
+        except KeyError:
+            return None
+
     @property
     def dict(self):
+
         if not self._members:
             return {}
 
@@ -91,20 +136,32 @@ class Group(object):
     def x_dict(self):
         return self._term_values
 
+    @property
+    def path(self):
+
+        return self._parent.path + (self._key,)
+
+    def visit(self, f):
+        for _, m in self._members.items():
+            m.visit(f)
+
+
 class DictGroup(Group):
     """A group that holds key/value pairs"""
 
     def __init__(self):
         super(DictGroup, self).__init__()
 
-    def visit_members(self):
+    def register_members(self):
 
         # since the Terms are descriptors, we have to access them from the class, not the instance
         # or we'll be checking the type returned from __get__
-        self._members = {name: attr for name, attr in type(self).__dict__.items() if isinstance(attr, Term)}
+        self._members = self._terms()
 
         for name, m in self._members.items():
             m.init(name, self, self._top)
+
+
 
     @property
     def key(self):
@@ -116,8 +173,93 @@ class DictGroup(Group):
             if k in self._members:
                 self._members[k].__set__(self,v)
             else:
-                self._top._errors[(self._key,k)] = v
+                self._top.missing_term((self._key,k),v)
 
+class VarDictGroup(Group, IterableUserDict):
+    """A group that holds key/value pairs, but all of the same type.
+
+    Probably only works with DictTerms
+    """
+
+    _proto = None
+
+    def __init__(self):
+        super(VarDictGroup, self).__init__()
+        self.data = {}
+
+
+    def register_members(self):
+        # In UserList, the terms are prototypes for the term type used in the elements.
+        self._members = {}
+
+        try:
+            self._proto = self._terms().values()[0]
+        except KeyError:
+            raise
+
+    def __setitem__(self, key, value):
+        if not key in self.data:
+            t = type(self._proto)()
+            t.init(key, self, self._top)
+            self.data[key] = t
+
+        self.data[key].__set__(self, value)
+
+    def __getattr__(self, key):
+        if not key in self.data:
+            t = type(self._proto)()
+            t.init(key, self, self._top)
+            self.data[key] = t
+
+
+        return self.data[key]
+
+    @property
+    def dict(self):
+        return self._term_values
+
+
+class ListGroup(Group, UserList):
+    """A group that holds a list of DictTerms"""
+
+    data = None
+
+    def __init__(self):
+        super(ListGroup, self).__init__()
+        self.data = []
+
+    def register_members(self):
+
+        # In UserList, the terms are prototypes for the term type used in the elements.
+        terms = self._terms()
+
+        try:
+            self._proto = terms.values()[0]
+        except KeyError:
+            raise
+
+
+    @property
+    def key(self):
+        return str(self.__class__).lower()
+
+    def set(self, value):
+        """Set them members of the group from a list"""
+
+        for i,v in enumerate(value):
+            t = type(self._proto)()
+            t.init(i, self, self._top)
+
+            if len(self.data) <= i:
+                self.data.extend([]*(1+i-len(self.data)))
+
+            t.__set__(self, v)
+
+            self.data.append(t)
+
+
+    def visit(self, f):
+        pass
 
 class Term(object):
     """A single term in a group"""
@@ -125,12 +267,22 @@ class Term(object):
     _key = None
     _parent = None
     _top = None
+    _synonym = []
+    _show_none = None
+    _default = None
 
-    def __init__(self):
-        pass
+
+    def __init__(self, synonym=None, show_none=True, default = None):
+        if synonym and not isinstance(synonym, (list, tuple)):
+            synonym = (synonym,)
+
+        self._synonym = tuple(synonym) if synonym else tuple()
+        self._show_none = show_none
+        self._default = default
+
 
     def init(self, key, parent, top):
-        assert(top is not None)
+
         self._key = key
         self._parent = parent
         self._top = top
@@ -142,8 +294,16 @@ class Term(object):
         return instance._term_values.get(self._key)
 
     def get(self, instance, owner):
-        '''A get that turns only dicts, lists and scalars, for us in creating dicts'''
+        '''A get that turns only dicts, lists and scalars, for use in creating dicts'''
         return instance._term_values.get(self._key)
+
+    @property
+    def path(self):
+        return self._parent.path+(self._key,)
+
+    def visit(self, f):
+        f(self)
+
 
 class ScalarTerm(Term):
     """A Term that can only be a string"""
@@ -158,14 +318,11 @@ class DictTerm(Term):
 
     default = None
 
-    def __init__(self, default=None):
-        self.default = default
-
     def init(self, key, parent, top):
         super(DictTerm, self).init(key, parent, top)
-        self.visit_members()
+        self.register_members()
 
-    def visit_members(self):
+    def register_members(self):
 
         # since the Terms are descriptors, we have to access them from the class, not the instance
         # or we'll be checking the type returned from __get__
@@ -184,6 +341,17 @@ class DictTerm(Term):
 
             self._parent._term_values[self._key] = h
 
+    @property
+    def _term_values(self):
+        """Redirects the _term_values dictionary to the pare, so the member terms access to it will
+        save data to the Group."""
+
+        if not self._key in self._parent._term_values:
+            self.instance._term_values[self._key] = {}
+
+        return self._parent._term_values[self._key]
+
+
     def set(self, value):
         """Set the sub-elements of the term from a dict
 
@@ -201,39 +369,23 @@ class DictTerm(Term):
                 raise NotImplementedError()
                 self._members[k].__set__(self,v)
             else:
-                self._top._errors[(self._parent._key, self._key, k)] = v
+                self._top.missing_term((self._parent._key, self._key, k), v)
+
 
     def __set__(self, instance, d):
-
         for k, v in d.items():
             if k in instance._term_values[self._key]:
                 instance._term_values[self._key][k] = d[k]
             else:
-                self._top._errors[(self._parent._key, self._key, k)] = v
+                self._top.missing_term((self._parent._key, self._key, k), v)
+
 
 
     def __get__(self, instance, owner):
+        """This version of __get__ does what would have happened if there were no __get__;
+        it returns the member of the parent directly. """
+        return self._parent._members[self._key]
 
-        class inner_dict(object):
-
-            instance = None
-            key = None
-
-            def __init__(self,instance, key):
-                object.__setattr__(self, 'instance',instance)
-                object.__setattr__(self, 'key', key)
-
-            def __getattr__(self, k):
-                return self.instance._term_values.get(self.key,{}).get(k, None)
-
-            def __setattr__(self, k, v):
-                if not self._key in self.instance._term_values:
-                    self.instance._term_values[self.key]  = {}
-
-                self.instance._term_values[self.key][k] = v
-
-
-        return inner_dict(instance, self._key)
 
     def get(self, instance, owner):
         '''A get that turns only dicts, lists and sclars, for us in creating dicts'''
@@ -243,11 +395,22 @@ class DictTerm(Term):
     @property
     def dict(self):
         d = {}
+
         for k, v in self._members.items():
-            d[k] = v.__get__(self, type(self))
+
+            dv  = v.get(self, type(self))
+
+            if dv is not None  or ( dv is None and v._show_none is True):
+                d[k] = dv
+
 
         return d
 
+
+    def visit(self, f):
+        f(self)
+        for _, m in self._members.items():
+            m.visit(f)
 
 class ListTerm(Term):
     """A Term that is always a list.

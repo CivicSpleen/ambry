@@ -10,6 +10,7 @@ sudo echo
 #  sh install_superpack.sh
 #
 
+
 command -v brew >/dev/null 2>&1
 
 if [ $? -ne 0 ]; then
@@ -19,6 +20,7 @@ if [ $? -ne 0 ]; then
     echo "Press y to download and run brew installation"
     read -n 1 yn
     if [ "$yn" == 'y' ]; then
+
         ruby -e "$(curl -fsSL https://raw.github.com/mxcl/homebrew/go/install)"
     else
         exit 1
@@ -26,8 +28,6 @@ if [ $? -ne 0 ]; then
 
 fi
 
-# Upgrade setuptools
-#curl  https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py | sudo python
 
 which clang > /dev/null
 
@@ -60,7 +60,9 @@ done
 ## Install the python requirements
 ##
 
-curl https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py -o - | sudo python
+# Upgrade setuptools
+curl  https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py | sudo python
+
 
 sudo easy_install pip
 

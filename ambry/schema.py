@@ -205,6 +205,10 @@ class Schema(object):
         # Make sure that the columnumber is monotonically increasing
         # when it is specified, and is one more than the last one if not.
 
+        import pdb;
+
+
+
         if not table.name in self.max_col_id:
             if len(table.columns) == 0:
                 self.max_col_id[table.name] = 0
@@ -646,6 +650,7 @@ class Schema(object):
             description = row.get('description','').strip().encode('utf-8')
 
             #progress_cb("Column: {}".format(row['column']))
+
 
             col = self.add_column(t,row['column'],
                                    sequence_id = row.get('seq',None),

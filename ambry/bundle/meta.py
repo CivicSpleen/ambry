@@ -12,7 +12,7 @@ class About(DictGroup):
     license = ScalarTerm()
     rights = ScalarTerm()
     subject = ScalarTerm()
-    abstract = ScalarTerm()
+    abstract = ScalarTerm(synonym=['about.summary'])
 
     rights = ScalarTerm()
     tags = ListTerm()
@@ -51,6 +51,31 @@ class Names(DictGroup):
     vid = ScalarTerm()
     vname = ScalarTerm()
 
+class PartitionTerm(DictTerm):
+
+    name = ScalarTerm()
+    time = ScalarTerm(show_none=False)
+    space = ScalarTerm(show_none=False)
+    grain = ScalarTerm(show_none=False)
+    table = ScalarTerm(show_none=False)
+    format = ScalarTerm(show_none=False)
+    segment = ScalarTerm(show_none=False)
+
+class Partitions(ListGroup):
+    """Names that are generated from the identity"""
+
+    _item = PartitionTerm()
+
+class SourceTerm(DictTerm):
+
+    url = ScalarTerm()
+    description = ScalarTerm(show_none=False)
+
+
+class Sources(VarDictGroup):
+    """Names that are generated from the identity"""
+
+    _item = SourceTerm()
 
 class Top(Metadata):
 
@@ -58,6 +83,8 @@ class Top(Metadata):
     contact = Contact()
     names = Names()
     identity = Identity()
+    partitions = Partitions()
+    sources = Sources()
 
     def __init__(self, d = None):
         super(Top, self).__init__(d)

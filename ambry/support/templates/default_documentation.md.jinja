@@ -1,7 +1,7 @@
 {%- import 'doc_macros.md.jinja' as macros -%}
 # {{about.title}}
 
-{% if about.summary is not none %}*{{about.summary}}*{% endif %}
+{% if about.abstract is not none %}*{{about.abstract}}*{% endif %}
 
 {{ macros.email_maybe("Created By:",about.author,about.author_email) }}
 {{ macros.email_maybe("Maintained By:",about.maintainer,about.maintainer_email) }}

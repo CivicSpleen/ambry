@@ -12,15 +12,7 @@ def compile_tempate(bundle, source, template):
 
     template = env.get_template('default_documentation.md.jinja')
 
-    d = dict(bundle.config.dict)
-
-    c = dict(
-        identity = d['identity'],
-        about = d['about'],
-        names = d['names'],
-        build = d['build'],
-        partitions = d['partitions']
-    )
+    c = bundle.metadata.dict
 
     #import pprint
     #pprint.pprint(c)

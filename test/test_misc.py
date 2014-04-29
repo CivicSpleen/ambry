@@ -54,15 +54,31 @@ class Test(TestBase):
         self.assertNotEquals(o, g(1))
 
     def test_metadata(self):
-        from ambry.bundle.meta import Top, About, Contact
+        from ambry.bundle.meta import Top, About, Contact, ContactTerm, PartitionTerm, Partitions
+
+
+        c = Contact()
+        c.init('contact',None,None)
+        c.creator.name = "Name"
+        self.assertIn('publisher', c.dict)
+        self.assertIn('name', c.dict['publisher'])
+        self.assertIn('name', c.creator.dict)
+        self.assertEqual("Name", c.creator.name)
+
+        ct = ContactTerm()
+        ct.init('contact', c, None)
+        ct.name = "OtherName"
+        self.assertIn('name', ct.dict)
+        self.assertEqual('OtherName', ct.name)
 
 
         d = dict(
             about = dict(
                 title = 'title',
-                abstract = 'abstract',
+                subject = 'subject',
                 rights = 'rights',
-                summary = 'Summary'
+                summary = 'Summary',
+                tags = 'Foobotom'
             ),
             contact = dict(
                 creator = dict(
@@ -78,22 +94,50 @@ class Test(TestBase):
             ),
             partitions = [
                 dict(
-                    foo='foo',
-                    bar='bar'
+                    name='foo',
+                    grain='bar'
                 ),
                 dict(
-                    foo='foo',
-                    bar='bar'
-                )]
+                    time='foo',
+                    space='bar'
+                ),
+                dict(
+                    name='name',
+                    time='time',
+                    space='space',
+                    grain='grain',
+                    segment=0,
+
+                ),
+                ]
         )
 
         top = Top(d)
 
-        import yaml
+        #import yaml
         #print yaml.dump(top.dict,default_flow_style=False, indent=4, encoding='utf-8')
 
-        print top.errors
+        print "ERRORS", top.errors
 
+        def print_key(term):
+            print term.path
+
+        #top.visit(print_key)
+
+        self.assertIn('publisher', top.contact.dict)
+        self.assertIn('url', top.contact.creator.dict)
+        self.assertEqual('Email',top.contact.creator.email)
+
+        self.assertIn('name', top.partitions[0].dict)
+        self.assertNotIn('space', top.partitions[0].dict)
+        self.assertIn('space', top.partitions[2].dict)
+        self.assertEquals('foo', top.partitions[0].dict['name'])
+
+
+        top.sources.foo.url = 'url'
+        top.sources.bar.description = 'description'
+
+        print top.sources.dict
 
         
 def suite():
