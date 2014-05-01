@@ -558,7 +558,7 @@ def source_init(args, l, st, rc):
     repo.delete_remote()
     import time
     time.sleep(3)
-    repo.init()
+    repo.init_descriptor()
     repo.init_remote()
     
     repo.push()

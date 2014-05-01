@@ -55,39 +55,92 @@ class Test(TestBase):
 
     def test_metadata(self):
         from ambry.bundle.meta import Top, About, Contact, ContactTerm, PartitionTerm, Partitions
-        from ambry.bundle.meta import Metadata, ScalarTerm, DictGroup
+        from ambry.bundle.meta import Metadata, ScalarTerm, TypedDictGroup, VarDictGroup, DictGroup, DictTerm, ListTerm, ListGroup
+        from ambry.util import MapView
         import pprint, yaml
+
+        class TestDictTerm(DictTerm):
+            dterm1 = ScalarTerm()
+            dterm2 = ScalarTerm()
+            unset_term = ScalarTerm()
+
+        class TestListGroup(ListGroup):
+            _proto = TestDictTerm()
 
         class TestGroup(DictGroup):
             term = ScalarTerm()
+            term2 = ScalarTerm()
+            dterm = TestDictTerm()
 
+        class TestTDGroup(TypedDictGroup):
+            _proto = TestDictTerm()
 
         class TestTop(Metadata):
             group = TestGroup()
+            tdgroup = TestTDGroup()
+            lgroup = TestListGroup()
+            vdgroup = VarDictGroup()
+
+        tt = TestTop()
+
+        ##
+        ## Dict Group
+
+        tt.group.term = 'Term'
+        tt.group.term2 = 'Term2'
 
 
-        tt1 = TestTop()
-        tt1.group.term = 'Term'
-
-        tt2 = TestTop()
-
-        self.assertEquals('Term',tt1.group.term)
-        self.assertIsNone(tt2.group.term)
+        with self.assertRaises(AttributeError):
+            tt.group.term3 = 'Term3'
 
 
-        c = Contact()
-        c.init('contact',None,None)
-        c.creator.name = "Name"
-        self.assertIn('publisher', c.dict)
-        self.assertIn('name', c.dict['publisher'])
-        self.assertIn('name', c.creator.dict)
-        self.assertEqual("Name", c.creator.name)
+        self.assertEquals('Term',tt.group.term)
+        self.assertEquals('Term2', tt.group.term2)
+        self.assertEquals('Term', tt.group['term'])
+        self.assertEquals(['Term', 'Term2'], tt.group.values())
 
-        ct = ContactTerm()
-        ct.init('contact', c, None)
-        ct.name = "OtherName"
-        self.assertIn('name', ct.dict)
-        self.assertEqual('OtherName', ct.name)
+        ##
+        ## Dict Term
+
+        tt.group.dterm.dterm1 = 'dterm1'
+        tt.group.dterm.dterm2 = 'dterm2'
+
+        with self.assertRaises(AttributeError):
+            tt.group.dterm.dterm3 = 'dterm3'
+
+
+        self.assertEquals('dterm1', tt.group.dterm.dterm1)
+
+        self.assertEquals(['dterm1', 'unset_term', 'dterm2'], tt.group.dterm.keys())
+        self.assertEquals(['dterm1', None, 'dterm2'], tt.group.dterm.values())
+
+
+        ## List Group
+
+        tt.lgroup.append({'k1':'v1'})
+        tt.lgroup.append({'k2': 'v2'})
+
+        self.assertEquals('v1',tt.lgroup[0]['k1'])
+        self.assertEquals('v2', tt.lgroup[1]['k2'])
+
+        print '----'
+
+        ## TypedDictGroup
+
+        tt.tdgroup.foo.dterm1 = 'foo.dterm1'
+        tt.tdgroup.foo.dterm2 = 'foo.dterm2'
+        tt.tdgroup.baz.dterm1 = 'foo.dterm1'
+
+        ## VarDict Group
+
+        tt.vdgroup.k1['v1'] = 'v1'
+        tt.vdgroup.k1.v2 = 'v2'
+
+        #pprint.pprint(tt._term_values)
+
+        print tt.dump(map_view=MapView(keys = ('group','lgroup')))
+
+        #print yaml.safe_dump(tt._term_values, default_flow_style=False, indent=4, encoding='utf-8')
 
         return
 

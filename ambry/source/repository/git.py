@@ -42,7 +42,7 @@ class GitShellService(object):
         return self.dir_
 
     def init(self):
-        o = git.init()
+        o = git.init_descriptor()
         
         if o.exit_code != 0:
             raise RepositoryException("Failed to init git repo: {}".format(o))
@@ -403,7 +403,7 @@ class GitRepository(RepositoryInterface):
         self.impl.deinit()
 
         self.bundle.log("Create .git directory")
-        self.impl.init()
+        self.impl.init_descriptor()
 
         self.bundle.log("Create .gitignore")
         for p in ('*.pyc', 'build','.project','.pydevproject', 'meta/schema-revised.csv', 'meta/schema-old.csv'):

@@ -438,8 +438,10 @@ def include_representer(dumper, data):
 # http://pypi.python.org/pypi/layered-yaml-attrdict-config/12.07.1
 class AttrDict(OrderedDict):
 
+
     def __init__(self, *argz, **kwz):
         super(AttrDict, self).__init__(*argz, **kwz)
+
 
     def __setitem__(self, k, v):
         super(AttrDict, self).__setitem__( k,
@@ -455,6 +457,11 @@ class AttrDict(OrderedDict):
         if k.startswith('_OrderedDict__'):
             return super(AttrDict, self).__setattr__(k, v)
         self[k] = v
+
+    def __iter__(self):
+       for key in super(OrderedDict,self).keys():
+           yield key
+
 
     ##
     ## __enter__ and __exit__ allow for assigning a  path to a variable
@@ -527,23 +534,89 @@ class AttrDict(OrderedDict):
         self.clear()
         self.update_dict(base)
 
-    def dump(self, stream):
+    def dump(self, stream= None, map_view=None):
+        from StringIO import StringIO
+
+        yaml.representer.SafeRepresenter.add_representer(
+            MapView, yaml.representer.SafeRepresenter.represent_dict)
+
         yaml.representer.SafeRepresenter.add_representer(
             AttrDict, yaml.representer.SafeRepresenter.represent_dict )
+
         yaml.representer.SafeRepresenter.add_representer(
             OrderedDict, yaml.representer.SafeRepresenter.represent_dict )
+
         yaml.representer.SafeRepresenter.add_representer(
             defaultdict, yaml.representer.SafeRepresenter.represent_dict )
+
         yaml.representer.SafeRepresenter.add_representer(
             set, yaml.representer.SafeRepresenter.represent_list )
         
         yaml.representer.SafeRepresenter.add_representer(
             IncludeFile, include_representer)
-        
-        yaml.safe_dump( self, stream,
+
+
+        if stream is None:
+            stream = StringIO()
+
+
+        d = self
+
+        if map_view is not None:
+            map_view.inner = d
+            d = map_view
+
+        yaml.safe_dump( d, stream,
             default_flow_style=False, indent=4, encoding='utf-8' )
 
+        if isinstance(stream, StringIO):
+            return stream.getvalue()
+
+
+class MapView(collections.MutableMapping):
+    """A group that holds key/value pairs"""
+
+    _inner = None
+    _keys = None
+
+    def __init__(self, d=None, keys=None):
+        self._inner = d
+        self._keys = keys
+
+    @property
+    def inner(self):
+        return self._inner
+
+    @inner.setter
+    def inner(self, value):
+        self._inner = value
+
+    def __getitem__(self, key):
+        return self._inner.__getitem__(key)
+
+    def __setitem__(self, key, value):
+        raise NotImplementedError()
+        return self._inner.__setitem__(key, value)
+
+    def __delitem__(self, key):
+        return self._inner.__delitem__(key)
+
+    def __len__(self):
+        return self._inner.__len__()
+
+    def __iter__(self):
+
+        for k in self._inner:
+            if not self._keys or k in self._keys:
+                yield k
+
+    def __getattr__(self, item):
+        print ('!!!', item)
+        return getattr(self._inner, item)
+
+
 from collections import Mapping
+
 
 class CaseInsensitiveDict(Mapping): #http://stackoverflow.com/a/16202162
     def __init__(self, d):
@@ -567,8 +640,10 @@ class CaseInsensitiveDict(Mapping): #http://stackoverflow.com/a/16202162
     def actual_key_case(self, k):
         return self._s.get(k.lower())
 
+
 def lowercase_dict(d):
     return dict((k.lower(), v) for k,v in d.items())
+
 
 def configure_logging(cfg, custom_level=None):
     '''Don't know what this is for .... '''

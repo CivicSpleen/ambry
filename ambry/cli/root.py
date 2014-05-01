@@ -220,7 +220,7 @@ def root_find(args, l, st, rc):
 
             toggle(show, args.commit and repo and repo.needs_commit())
             toggle(show, args.push and repo and repo.needs_push())
-            toggle(show, args.init and repo and repo.needs_init())
+            toggle(show, args.init_descriptor and repo and repo.needs_init())
 
             toggle(show, args.source and ident.locations.is_in(Files.TYPE.SOURCE) )
             toggle(show, args.not_source and not ident.locations.is_in(Files.TYPE.SOURCE))
