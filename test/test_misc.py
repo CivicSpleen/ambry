@@ -55,6 +55,24 @@ class Test(TestBase):
 
     def test_metadata(self):
         from ambry.bundle.meta import Top, About, Contact, ContactTerm, PartitionTerm, Partitions
+        from ambry.bundle.meta import Metadata, ScalarTerm, DictGroup
+        import pprint, yaml
+
+        class TestGroup(DictGroup):
+            term = ScalarTerm()
+
+
+        class TestTop(Metadata):
+            group = TestGroup()
+
+
+        tt1 = TestTop()
+        tt1.group.term = 'Term'
+
+        tt2 = TestTop()
+
+        self.assertEquals('Term',tt1.group.term)
+        self.assertIsNone(tt2.group.term)
 
 
         c = Contact()
@@ -71,6 +89,7 @@ class Test(TestBase):
         self.assertIn('name', ct.dict)
         self.assertEqual('OtherName', ct.name)
 
+        return
 
         d = dict(
             about = dict(
@@ -114,32 +133,81 @@ class Test(TestBase):
 
         top = Top(d)
 
-        #import yaml
-        #print yaml.dump(top.dict,default_flow_style=False, indent=4, encoding='utf-8')
+        #top.write_to_dir('foobar')
 
-        print "ERRORS", top.errors
+        #pprint.pprint(top.rows)
 
-        def print_key(term):
-            print term.path
+        t2 = Top()
+        #t2.load_rows(top.rows)
 
-        #top.visit(print_key)
+        #print yaml.safe_dump(top.dict_by_file(), default_flow_style=False, indent=4, encoding='utf-8')
+        print top.contact.value
+        print top.contact.creator.value
 
-        self.assertIn('publisher', top.contact.dict)
-        self.assertIn('url', top.contact.creator.dict)
+        return
+
+        self.assertIn(('contact', 'creator', 'bingo'), top.errors)
+
+        self.assertIn('publisher', top.contact.value)
+        self.assertIn('url', top.contact.creator.value)
         self.assertEqual('Email',top.contact.creator.email)
 
-        self.assertIn('name', top.partitions[0].dict)
-        self.assertNotIn('space', top.partitions[0].dict)
-        self.assertIn('space', top.partitions[2].dict)
-        self.assertEquals('foo', top.partitions[0].dict['name'])
-
+        self.assertIn('name', top.partitions[0].value)
+        self.assertNotIn('space', top.partitions[0].value)
+        self.assertIn('space', top.partitions[2].value)
+        self.assertEquals('foo', top.partitions[0].value['name'])
 
         top.sources.foo.url = 'url'
         top.sources.bar.description = 'description'
 
-        print top.sources.dict
+        #print top.sources.dict
 
-        
+
+        config_str = """
+partitions:
+-   name: source-dataset-subset-variation-tthree
+    table: tthree
+-   format: geo
+    name: source-dataset-subset-variation-geot1-geo
+    table: geot1
+-   format: geo
+    name: source-dataset-subset-variation-geot2-geo
+    table: geot2
+-   grain: missing
+    name: source-dataset-subset-variation-tone-missing
+    table: tone
+-   name: source-dataset-subset-variation-tone
+    table: tone
+-   format: csv
+    name: source-dataset-subset-variation-csv-csv-1
+    segment: 1
+    table: csv
+sources:
+    google:
+        description: The Google Homepage
+        url: http://google.com
+        foo: bar
+    yahoo:
+        description: The Yahoo Homepage
+        url: http://yahoo.com
+
+"""
+
+        import yaml
+        import pprint
+
+        d1 = yaml.load(config_str)
+
+        top = Top(d1)
+        self.assertEqual(6, len(top.partitions.value))
+
+        parts = top.sources.value
+
+        self.assertIn('google',top.sources.value)
+        self.assertIn('yahoo', top.sources.value)
+
+        print top.errors
+
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))

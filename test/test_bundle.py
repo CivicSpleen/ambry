@@ -519,26 +519,6 @@ class Test(TestBase):
         bundle.post_build()
 
 
-    def test_bundle(self):
-        from ambry.bundle import DbBundle
-        b = self.bundle
-
-
-        p = b.partitions.get('piEGPXmDC8001')
-
-        print p._repr_html_()
-
-        print p.table._repr_html_()
-
-        return
-
-        print b.info
-
-        lb = DbBundle(b.database.path)
-        print '-----'
-        print lb._repr_html_()
-
-        print b.partitions._repr_html_()
 
 
     def test_session(self):
@@ -580,15 +560,13 @@ class Test(TestBase):
 
         print compile_tempate(self.bundle, None, None)
 
-        #md = self.bundle.metadata
+        md = self.bundle.metadata
 
         #print md.errors
 
         #print yaml.dump(md.dict, default_flow_style=False, indent=4, encoding='utf-8')
 
-
-
-
+        self.bundle.update_configuration(use_metadata=True)
 
 
 def suite():

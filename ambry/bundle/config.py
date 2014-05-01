@@ -175,7 +175,7 @@ class BundleFileConfig(RunConfig):
 
         return self.config.dump()
 
-    def rewrite(self, **kwargs):
+    def rewrite(self, use_metadata = False, **kwargs):
         '''Re-writes the file from its own data. Reformats it, and updates
         the modification time. Will also look for a config directory and copy the
         contents of files there into the bundle.yaml file, adding a key derived from the name
@@ -197,6 +197,16 @@ class BundleFileConfig(RunConfig):
         # Replace with items from the arg list.
         for k, v in kwargs.items():
             config[k] = v
+
+        if use_metadata:
+            from meta import Top
+            import pprint
+
+            t = Top(config.to_dict())
+
+            import yaml
+
+            print yaml.safe_dump(t.dict, default_flow_style=False, indent=4, encoding='utf-8')
 
         with open(temp, 'w') as f:
             config.dump(f)

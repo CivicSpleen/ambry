@@ -118,7 +118,7 @@ class Bundle(object):
     def metadata(self):
         from .meta import Top
 
-        return Top(
+        t =  Top(
             dict(
                 about=self.config.about.to_dict(),
                 identity=self.config.identity.to_dict(),
@@ -127,6 +127,14 @@ class Bundle(object):
                 partitions=[dict(p) for p in self.config.partitions]
             )
         )
+
+        if t.errors:
+            self.error("Errors in configured metadata:")
+            for k, v in t.errors:
+                self.error("    k={} v={}".format(k,v))
+
+
+        return t
 
 
     @property
@@ -647,7 +655,7 @@ class BuildBundle(Bundle):
 
         return self._identity
 
-    def update_configuration(self):
+    def update_configuration(self, use_metadata=False):
         from ..dbexceptions import DatabaseError
         # Re-writes the bundle.yaml file, with updates to the identity and partitions
         # sections.
@@ -663,7 +671,8 @@ class BuildBundle(Bundle):
         self.config.rewrite(
             identity=self.identity.ident_dict,
             names=self.identity.names_dict,
-            partitions=partitions
+            partitions=partitions,
+            use_metadata = use_metadata
         )
 
         # Reload some of the values from bundle.yaml into the database

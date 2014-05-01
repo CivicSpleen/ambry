@@ -1,9 +1,8 @@
 about:
-    abstract: An example bundle
-    foobar: baz
     license: other-open
     rights: url of rights document
     subject: What the data is about
+    summary: An example bundle
     tags:
     - one
     - two
@@ -11,13 +10,7 @@ about:
     title: This is the Title
     url: http://theurl.com
 build:
-    sources:
-        google:
-            description: The Google Homepage
-            url: http://google.com
-        yahoo:
-            description: The Yahoo Homepage
-            url: http://yahoo.com
+    some: thing
 contact:
     creator:
         bingo: bingo
@@ -94,3 +87,10 @@ partitions:
     name: source-dataset-subset-variation-csv-csv-4
     segment: 4
     table: csv
+sources:
+    google:
+        description: The Google Homepage
+        url: http://google.com
+    yahoo:
+        description: The Yahoo Homepage
+        url: http://yahoo.com

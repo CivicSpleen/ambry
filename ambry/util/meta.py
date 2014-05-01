@@ -14,27 +14,44 @@ class Metadata(object):
 
     _members = None
     _non_term_members = None
-    _errors = {}
+    _errors = None
 
     def __init__(self, d=None):
         self._non_term_members = {}
+        self._errors = {}
+
         self.register_members()
 
+        self.set(d)
+
+    def set(self, d):
         if d is not None:
             for k, v in d.items():
                 if k in self._members:
-                    self._members[k].set(v)
+                    getattr(self, k).set(v)
                 else:
                     # Top level groups that don't match a member group are preserved,
                     # not errors like unknown terms in a group.
                     self._non_term_members[k] = v
 
     def register_members(self):
+        """Collect the names of the class member and convert them to object members.
 
-        self._members = {name: attr for name, attr in type(self).__dict__.items() if isinstance(attr, Group)}
+        Unlike Terms, the Group class memebrs are cnverted into object members, so the configuration data
+        """
+        import copy
 
-        for name,m in self._members.items():
-            m.init(name, self, self)
+        members = {name: attr for name, attr in type(self).__dict__.items() if isinstance(attr, Group)}
+
+        self._members = {}
+
+        # Deep copy all of the groups.
+        for name,cm in members.items():
+            om = copy.deepcopy(cm)
+
+            setattr(self, name, om)
+            self._members[name] = om
+            om.init(name, self, self)
 
     def visit(self, f):
         for _, m in self._members.items():
@@ -44,12 +61,45 @@ class Metadata(object):
     def dict(self):
         d = {}
         for name, m in self._members.items():
-            d[name] = m.dict
+            d[name] = m.value
 
         for k, v in self._non_term_members.items():
             d[k] = v
 
         return d
+
+    @property
+    def rows(self):
+        """Return the configuration information flattened into database records """
+
+        rows = []
+        for name, m in self._members.items():
+            rows.extend(m.rows)
+
+        return rows
+
+    def load_rows(self, rows):
+        import json
+
+        for group, key, value in rows:
+            key_parts = key.split('.')
+
+            try:
+                v = json.loads(value)
+            except ValueError:
+                pass
+            except TypeError:
+                pass
+
+            m = self._members[group]
+
+            m.set_row(key, value)
+
+
+
+
+
+
 
     @property
     def errors(self):
@@ -81,6 +131,74 @@ class Metadata(object):
     def path(self):
         return tuple()
 
+    def groups_by_file(self):
+        d = {}
+
+        for name, m in self._members.items():
+            file_ = m._file
+
+            if not file_:
+                file_ = 'bundle.yaml'
+
+            if file_ not in d:
+                d[file_] = []
+
+            d[file_].append(m)
+
+
+        return d
+
+    def dict_by_file(self):
+        '''Return as a dictionary, organized by file'''
+        from collections import defaultdict
+
+        d = {}
+
+        for name, m in self._members.items():
+            file_ = m._file
+
+            if not file_:
+                file_ = 'bundle.yaml'
+
+            if file_ not in d:
+                d[file_] = {}
+
+            d[file_][name] = m.value
+
+        file_ = 'bundle.yaml'
+
+        for k, v in self._non_term_members.items():
+
+            if file_ not in d:
+                d[file_] = {}
+
+            d[file_][k] = v
+
+        return d
+
+
+    def load_from_dir(self, path):
+        '''Load groups from sepcified files. '''
+        import os
+        import yaml
+
+        for file, groups in self.groups_by_file():
+            try:
+                with open(os.path.join(path, file)) as f:
+                    d = yaml.load(f)
+
+                    self.set(d)
+
+            except IOError:
+                raise
+
+    def write_to_dir(self, path):
+        for file_, d in self.dict_by_file().items():
+
+            print '======== {} ========='.format(file_)
+
+            print d
+
 class Group(object):
     """A  group of terms"""
 
@@ -89,9 +207,13 @@ class Group(object):
     _top = None
     _members = None
     _term_values = None
+    _file = None
+    _to_rows = None
 
-    def __init__(self):
-        self._key = None
+    def __init__(self, file=None, to_rows=True):
+        self._file = file
+
+        self._to_rows = to_rows
         try:
             self._term_values = {}
         except AttributeError: # its a property in one subclass
@@ -112,6 +234,27 @@ class Group(object):
     def set(self):
         raise NotImplementedError('set not implemented in {}'.format(type(self)))
 
+    def set_row(self,k, v):
+        print k,v
+
+    @property
+    def rows(self):
+        if self._members:
+            for name, m in self._members.items():
+                v = m.get(self, type(self))
+                if v is None:
+                    continue
+                if isinstance(v, dict):
+                    for sk,sv in v.items():
+                        yield self._key, name+'.'+sk, sv
+                elif isinstance(v,list):
+                    for i,sv in enumerate(v):
+                        yield self._key, name + '.' + str(i), sv
+                else:
+                    yield self._key, name, v
+
+
+
     def member(self, name):
         try:
             return type(self).__dict__[name]
@@ -120,21 +263,24 @@ class Group(object):
 
     @property
     def dict(self):
-
+        '''Return a dictionary of terms, for subclasses that can be represented as dicts'''
         if not self._members:
             return {}
 
         d = {}
         for name, m in self._members.items():
-
             d[name] = m.get(self, type(self))
 
         return d
 
+    @property
+    def key(self):
+        return self._key
 
     @property
-    def x_dict(self):
-        return self._term_values
+    def value(self):
+        """Return the most suitable representation for this group, either a dict or a list"""
+        return self.dict
 
     @property
     def path(self):
@@ -146,11 +292,23 @@ class Group(object):
             m.visit(f)
 
 
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+
+        result = cls.__new__(cls)
+
+        memo[id(self)] = result
+
+        # The other values, _key, _parent. etc, get set after the copy
+
+        cls.__init__(result, file=self._file, to_rows = self._to_rows)
+        return result
+
 class DictGroup(Group):
     """A group that holds key/value pairs"""
 
-    def __init__(self):
-        super(DictGroup, self).__init__()
+    def __init__(self, file=None, to_rows=True):
+        super(DictGroup, self).__init__(file=file, to_rows=to_rows)
 
     def register_members(self):
 
@@ -161,21 +319,26 @@ class DictGroup(Group):
         for name, m in self._members.items():
             m.init(name, self, self._top)
 
-
-
     @property
     def key(self):
         return str(self.__class__).lower()
 
     def set(self, value):
         """Copy a dict into the members of the group"""
-        for k,v in value.items():
-            if k in self._members:
-                self._members[k].__set__(self,v)
-            else:
-                self._top.missing_term((self._key,k),v)
 
-class VarDictGroup(Group, IterableUserDict):
+        for k,v in value.items():
+            if v is not None:
+                try:
+                    if k in self._members:
+                        self._members[k].__set__(self,v)
+
+                    else:
+                        self._top.missing_term((self._key,k),v)
+                except:
+                    raise
+
+
+class TypedDictGroup(Group, IterableUserDict):
     """A group that holds key/value pairs, but all of the same type.
 
     Probably only works with DictTerms
@@ -183,8 +346,8 @@ class VarDictGroup(Group, IterableUserDict):
 
     _proto = None
 
-    def __init__(self):
-        super(VarDictGroup, self).__init__()
+    def __init__(self, file=None, to_rows=True):
+        super(TypedDictGroup, self).__init__(file=file, to_rows=to_rows)
         self.data = {}
 
 
@@ -211,12 +374,55 @@ class VarDictGroup(Group, IterableUserDict):
             t.init(key, self, self._top)
             self.data[key] = t
 
-
         return self.data[key]
+
+    def set(self, value):
+        """Copy a dict into the members of the group"""
+
+        for k, v in value.items():
+            if v is not None:
+                self.__setitem__(k,v)
 
     @property
     def dict(self):
-        return self._term_values
+        '''Return a dictionary of terms, for subclasses that can be represetned as dicts'''
+        return { k:v.value for k,v in self.data.items()}
+
+
+
+class VarDictGroup(Group, IterableUserDict):
+    """A Dict group that doesnt' use terms to enforce a structure.
+    """
+
+    def __init__(self, file=None, to_rows=True):
+        super(VarDictGroup, self).__init__(file=file, to_rows=to_rows)
+        self.data = {}
+
+
+    def register_members(self):
+        # In UserList, the terms are prototypes for the term type used in the elements.
+        self._members = {}
+
+
+    @property
+    def dict(self):
+        '''Return a dictionary of terms, for subclasses that can be represented as dicts'''
+        return self.data
+
+
+    def __setitem__(self, key, value):
+        self.data[key]=value
+
+    def __getattr__(self, key):
+        return self.data[key]
+
+    def set(self, value):
+        """Copy a dict into the members of the group"""
+
+        for k, v in value.items():
+            if v is not None:
+                self.data[k] = v
+
 
 
 class ListGroup(Group, UserList):
@@ -224,8 +430,8 @@ class ListGroup(Group, UserList):
 
     data = None
 
-    def __init__(self):
-        super(ListGroup, self).__init__()
+    def __init__(self, file=None, to_rows=True):
+        super(ListGroup, self).__init__(file=file, to_rows = to_rows)
         self.data = []
 
     def register_members(self):
@@ -260,6 +466,25 @@ class ListGroup(Group, UserList):
 
     def visit(self, f):
         pass
+
+    @property
+    def value(self):
+        """Return the most suitable representatino for this group, either a dict or a list"""
+
+        return [ { k:v for k,v in t.get(self, type(self)).items() if v is not None} for t in self.data ]
+
+    @property
+    def rows(self):
+        if not self._to_rows:
+            return
+
+        for i,v in enumerate(self.value):
+            if isinstance(v,dict):
+                for sk,sv in v.items():
+                    yield self._key, str(i)+'.'+sk, sv
+            else:
+                yield self._key, str(i), v
+
 
 class Term(object):
     """A single term in a group"""
@@ -305,6 +530,8 @@ class Term(object):
         f(self)
 
 
+
+
 class ScalarTerm(Term):
     """A Term that can only be a string"""
 
@@ -343,7 +570,7 @@ class DictTerm(Term):
 
     @property
     def _term_values(self):
-        """Redirects the _term_values dictionary to the pare, so the member terms access to it will
+        """Redirects the _term_values dictionary to the parent, so the member terms access to it will
         save data to the Group."""
 
         if not self._key in self._parent._term_values:
@@ -405,6 +632,10 @@ class DictTerm(Term):
 
 
         return d
+
+    @property
+    def value(self):
+        return self.dict
 
 
     def visit(self, f):

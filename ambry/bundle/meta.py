@@ -12,7 +12,7 @@ class About(DictGroup):
     license = ScalarTerm()
     rights = ScalarTerm()
     subject = ScalarTerm()
-    abstract = ScalarTerm(synonym=['about.summary'])
+    summary = ScalarTerm()
 
     rights = ScalarTerm()
     tags = ListTerm()
@@ -72,19 +72,27 @@ class SourceTerm(DictTerm):
     description = ScalarTerm(show_none=False)
 
 
-class Sources(VarDictGroup):
+class Sources(TypedDictGroup):
     """Names that are generated from the identity"""
 
     _item = SourceTerm()
 
+class Build(VarDictGroup):
+    """Build parameters"""
+
+class Extract(VarDictGroup):
+    """Extract parameters"""
+
 class Top(Metadata):
 
-    about = About()
-    contact = Contact()
-    names = Names()
-    identity = Identity()
-    partitions = Partitions()
-    sources = Sources()
+    about = About(file='bundle.yaml')
+    contact = Contact(file='bundle.yaml')
+    sources = Sources(file='bundle.yaml')
+    identity = Identity(file='bundle.yaml')
+    names = Names(file='bundle.yaml')
 
-    def __init__(self, d = None):
-        super(Top, self).__init__(d)
+    partitions = Partitions(file='meta/partitions.yaml', to_rows = False)
+
+    build = Build(file='meta/build.yaml')
+    extract = Extract(file='meta/build.yaml')
+
