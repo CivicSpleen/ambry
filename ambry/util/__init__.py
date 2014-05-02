@@ -520,6 +520,20 @@ class AttrDict(OrderedDict):
             if v is not None or not isinstance(dst.get(k[-1]), Mapping ): 
                 dst[k[-1]] = v
 
+    def unflatten_row(self, k, v):
+        dst = self
+        for slug in k[:-1]:
+
+            if slug is None:
+                continue
+
+            if dst.get(slug) is None:
+                dst[slug] = AttrDict()
+            dst = dst[slug]
+        if v is not None or not isinstance(dst.get(k[-1]), Mapping):
+            dst[k[-1]] = v
+
+
     def update_yaml(self, path): 
         self.update_flat(self.from_yaml(path))
 
@@ -611,7 +625,6 @@ class MapView(collections.MutableMapping):
                 yield k
 
     def __getattr__(self, item):
-        print ('!!!', item)
         return getattr(self._inner, item)
 
 

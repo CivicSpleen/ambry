@@ -9,136 +9,90 @@ from test_base import  TestBase  # @UnresolvedImport
 class Test(TestBase):
 
     def setUp(self):
-
-        pass
+        self.yaml_config = """
+about:
+    groups:
+    - Group 1
+    - Group 2
+    license: license
+    rights: rights
+    subject: subject
+    summary: summary
+    tags:
+    - Tag1
+    - Tag 2
+    title: title
+    url: url
+build:
+    baz: bingo
+    foo: bar
+contact:
+    creator:
+        email: creator.email
+        name: creator.name
+        url: creator.url
+    maintainer:
+        email: null
+        name: null
+        url: null
+    publisher:
+        email: null
+        name: null
+        url: null
+    source:
+        email: source.email
+        name: source.name
+        url: source.url
+extract: {}
+identity:
+    dataset: dataset
+    id: id
+    revision: revision
+    source: source
+    subset: subset
+    variation: variation
+    version: version
+names:
+    fqname: fqname
+    name: name
+    vid: vid
+    vname: vname
+nonterm:
+    a: 1
+    b: 2
+    c: 3
+partitions:
+-   name: source-dataset-subset-variation-tthree
+    table: tthree
+-   format: geo
+    name: source-dataset-subset-variation-geot1-geo
+    table: geot1
+-   format: geo
+    name: source-dataset-subset-variation-geot2-geo
+    table: geot2
+-   grain: missing
+    name: source-dataset-subset-variation-tone-missing
+    table: tone
+-   name: source-dataset-subset-variation-tone
+    table: tone
+-   format: csv
+    name: source-dataset-subset-variation-csv-csv-1
+    segment: 1
+    table: csv
+sources:
+    google:
+        description: The Google Homepage
+        url: http://google.com
+    yahoo:
+        description: The Yahoo Homepage
+        url: http://yahoo.com
+            """
 
     def tearDown(self):
         pass
 
-
-    def test_lru(self):
-        from ambry.util import lru_cache
-        from time import sleep
-
-        @lru_cache(maxsize=3)
-        def f(x):
-            from  random import randint
-
-            return (x,randint(0,1000))
-
-
-        o =  f(1)
-        self.assertEquals(o, f(1))
-        self.assertEquals(o, f(1))
-        f(2)
-        self.assertEquals(o, f(1))
-        f(3)
-        f(4)
-        f(5)
-        self.assertNotEquals(o, f(1))
-
-
-        #
-        # Verify expiration based on time.
-        #
-        @lru_cache(maxtime=3)
-        def g(x):
-            from  random import randint
-
-            return (x, randint(0, 1000))
-
-        o = g(1)
-        sleep(2)
-        self.assertEquals(o, g(1))
-        sleep(4)
-        self.assertNotEquals(o, g(1))
-
-        config_str = """
-    about:
-        groups:
-            - Group 1
-            - Group 2
-        license: license
-        rights: rights
-        subject: subject
-        summary: summary
-        tags:
-            - Tag1
-            - Tag 2
-        title: title
-        url: url
-    build:
-        foo: bar
-        baz: bingo
-    contact:
-        creator:
-            email: creator.email
-            name: creator.name
-            url: creator.url
-        maintainer:
-            email: null
-            name: null
-            url: null
-        publisher:
-            email: null
-            name: null
-            url: null
-        source:
-            email: source.email
-            name: source.name
-            url: source.url
-    extract: {}
-    nonterm:
-        a: 1
-        b: 2
-        c: 3
-    identity:
-        dataset: dataset
-        id: id
-        revision: revision
-        source: source
-        subset: subset
-        variation: variation
-        version: version
-    names:
-        fqname: fqname
-        name: name
-        vid: vid
-        vname: vname
-
-    partitions:
-    -   name: source-dataset-subset-variation-tthree
-        table: tthree
-    -   format: geo
-        name: source-dataset-subset-variation-geot1-geo
-        table: geot1
-    -   format: geo
-        name: source-dataset-subset-variation-geot2-geo
-        table: geot2
-    -   grain: missing
-        name: source-dataset-subset-variation-tone-missing
-        table: tone
-    -   name: source-dataset-subset-variation-tone
-        table: tone
-    -   format: csv
-        name: source-dataset-subset-variation-csv-csv-1
-        segment: 1
-        table: csv
-    sources:
-        google:
-            description: The Google Homepage
-            url: http://google.com
-        yahoo:
-            description: The Yahoo Homepage
-            url: http://yahoo.com
-    """
-
-
-    def test_metadata(self):
-        from ambry.bundle.meta import Top, About, Contact, ContactTerm, PartitionTerm, Partitions
-        from ambry.bundle.meta import Metadata, ScalarTerm, TypedDictGroup, VarDictGroup, DictGroup, DictTerm, ListTerm, ListGroup
-        from ambry.util import MapView
-        import pprint, yaml
+    def test_basic(self):
+        from ambry.bundle.meta import Metadata, ScalarTerm, TypedDictGroup, VarDictGroup, DictGroup, DictTerm, ListGroup
         from ambry.util import AttrDict
 
         class TestDictTerm(DictTerm):
@@ -146,22 +100,27 @@ class Test(TestBase):
             dterm2 = ScalarTerm()
             unset_term = ScalarTerm()
 
+
         class TestListGroup(ListGroup):
             _proto = TestDictTerm()
+
 
         class TestGroup(DictGroup):
             term = ScalarTerm()
             term2 = ScalarTerm()
             dterm = TestDictTerm()
 
+
         class TestTDGroup(TypedDictGroup):
             _proto = TestDictTerm()
+
 
         class TestTop(Metadata):
             group = TestGroup()
             tdgroup = TestTDGroup()
             lgroup = TestListGroup()
             vdgroup = VarDictGroup()
+
 
         tt = TestTop()
 
@@ -172,12 +131,10 @@ class Test(TestBase):
         tt.group.term = 'Term'
         tt.group.term2 = 'Term2'
 
-
         with self.assertRaises(AttributeError):
             tt.group.term3 = 'Term3'
 
-
-        self.assertEquals('Term',tt.group.term)
+        self.assertEquals('Term', tt.group.term)
         self.assertEquals('Term2', tt.group.term2)
         self.assertEquals('Term', tt.group['term'])
         self.assertEquals(['term', 'term2', 'dterm'], tt.group.keys())
@@ -193,7 +150,6 @@ class Test(TestBase):
         with self.assertRaises(AttributeError):
             tt.group.dterm.dterm3 = 'dterm3'
 
-
         self.assertEquals('dterm1', tt.group.dterm.dterm1)
 
         self.assertEquals(['dterm1', 'unset_term', 'dterm2'], tt.group.dterm.keys())
@@ -202,17 +158,17 @@ class Test(TestBase):
 
         ## List Group
 
-        tt.lgroup.append({'k1':'v1'})
+        tt.lgroup.append({'k1': 'v1'})
         tt.lgroup.append({'k2': 'v2'})
 
-        self.assertEquals('v1',tt.lgroup[0]['k1'])
+        self.assertEquals('v1', tt.lgroup[0]['k1'])
         self.assertEquals('v2', tt.lgroup[1]['k2'])
 
         ## TypedDictGroup
 
         tt.tdgroup.foo.dterm1 = 'foo.dterm1'
 
-        self.assertEqual('foo.dterm1', tt.tdgroup.foo.dterm1 )
+        self.assertEqual('foo.dterm1', tt.tdgroup.foo.dterm1)
 
         tt.tdgroup.foo.dterm2 = 'foo.dterm2'
         tt.tdgroup.baz.dterm1 = 'foo.dterm1'
@@ -223,6 +179,8 @@ class Test(TestBase):
         tt.vdgroup.k1.v2 = 'v2'
 
 
+    def test_metadata(self):
+        from ambry.bundle.meta import Top
 
         d = dict(
             about = dict(
@@ -266,8 +224,6 @@ class Test(TestBase):
 
         top = Top(d)
 
-        t2 = Top()
-
         self.assertIn(('contact', 'creator', 'bingo'), top.errors)
 
         self.assertIn('publisher', top.contact.keys())
@@ -283,29 +239,26 @@ class Test(TestBase):
         top.sources.bar.description = 'description'
 
 
-        top = Top(yaml.load(config_str))
+    def test_yaml(self):
+        import yaml
+        from ambry.bundle.meta import Top
 
+        t1 = Top(yaml.load(self.yaml_config))
 
-        self.assertEquals(['foo', 'baz'], top.build.keys())
-        self.assertEquals('bar', top.build.foo)
-        self.assertEquals('bar', top.build['foo'])
+        self.assertEquals(['foo', 'baz'], t1.build.keys())
+        self.assertEquals('bar', t1.build.foo)
+        self.assertEquals('bar', t1.build['foo'])
 
-        self.assertEqual(6, len(top.partitions))
+        self.assertEqual(6, len(t1.partitions))
 
-        self.assertIn('google',top.sources.keys())
-        self.assertIn('yahoo', top.sources.keys())
-        self.assertEquals('http://yahoo.com', top.sources.yahoo.url)
+        self.assertIn('google',t1.sources.keys())
+        self.assertIn('yahoo', t1.sources.keys())
+        self.assertEquals('http://yahoo.com', t1.sources.yahoo.url)
 
-        #print top.write_to_dir(None)
+        t2 = Top()
+        t2.load_rows(t1.rows)
 
-        #for (group, term, subterm),v in top.rows:
-        #    print group, term, subterm,v
-
-
-        t3 = Top()
-        t3.load_rows(top.rows)
-
-        #print t3.dump()
+        self.assertEquals(self.yaml_config.strip(' \n'), t2.dump().strip(' \n'))
 
     def test_metadata_TypedDictGroup(self):
 
@@ -325,7 +278,6 @@ class Test(TestBase):
         class TestTop(Metadata):
             group = TestTDGroup()
 
-
         config_str = """
 group:
     item1:
@@ -341,6 +293,15 @@ group:
 
         self.assertEquals('dterm1', top.group.item1.dterm1)
         self.assertEquals('dterm1', top.group.item1['dterm1'])
+
+
+    def test_read_write(self):
+        import yaml
+        from ambry.bundle.meta import Top
+
+        t1 = Top(yaml.load(self.yaml_config))
+
+        t1.write_to_dir(None)
 
 
 def suite():

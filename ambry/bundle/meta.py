@@ -54,17 +54,17 @@ class Names(DictGroup):
 class PartitionTerm(DictTerm):
 
     name = ScalarTerm()
-    time = ScalarTerm(show_none=False)
-    space = ScalarTerm(show_none=False)
-    grain = ScalarTerm(show_none=False)
-    table = ScalarTerm(show_none=False)
-    format = ScalarTerm(show_none=False)
-    segment = ScalarTerm(show_none=False)
+    time = ScalarTerm()
+    space = ScalarTerm()
+    grain = ScalarTerm()
+    table = ScalarTerm()
+    format = ScalarTerm()
+    segment = ScalarTerm()
 
 class Partitions(ListGroup):
     """Names that are generated from the identity"""
 
-    _item = PartitionTerm()
+    _proto = PartitionTerm()
 
 class SourceTerm(DictTerm):
 
@@ -75,7 +75,7 @@ class SourceTerm(DictTerm):
 class Sources(TypedDictGroup):
     """Names that are generated from the identity"""
 
-    _item = SourceTerm()
+    _proto = SourceTerm()
 
 class Build(VarDictGroup):
     """Build parameters"""
