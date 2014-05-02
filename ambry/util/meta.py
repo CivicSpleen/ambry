@@ -4,7 +4,6 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-
 import collections
 from ..util import AttrDict, MapView
 import copy
@@ -55,10 +54,6 @@ class Metadata(object):
         for name, m in self._members.items():
             m.init_descriptor(name, self)
 
-    def visit(self, f):
-        for _, m in self._members.items():
-            m.visit(f)
-
     @property
     def rows(self):
         """Return the configuration information flattened into database records """
@@ -106,15 +101,6 @@ class Metadata(object):
 
             o.set_row((term, sub_term), value)
 
-    def load_non_term_row(self, group, term, sub_term, value):
-
-        if group not in self._term_values:
-            self._term_values[group] = {}
-
-        if term is not None:
-            if term not in self._term_values[group]:
-                pass
-
     @property
     def errors(self):
         return self._errors
@@ -145,29 +131,42 @@ class Metadata(object):
         return d
 
     def load_from_dir(self, path):
-        '''Load groups from sepcified files. '''
+        '''Load groups from specified files. '''
         import os
         import yaml
 
-        for file, groups in self.groups_by_file():
-            try:
-                with open(os.path.join(path, file)) as f:
-                    d = yaml.load(f)
+        for file_, groups in self.groups_by_file().items():
 
-                    self.set(d)
+            fn = os.path.join(path, file_)
+            try:
+                self._term_values.update_yaml(fn)
 
             except IOError:
                 raise
 
     def write_to_dir(self, path):
+        import os
+
+        non_term_keys = [key for key in self._term_values.keys() if key not in self._members]
+
         for file_, d in self.groups_by_file().items():
-            keys = [ g._key for g in d]
 
-            print '======== {} ========='.format(file_)
+            fn = os.path.join(path, file_)
+            dir_ = os.path.dirname(fn)
 
-            print keys
+            if not os.path.isdir(dir_):
+                os.makedirs(dir_)
 
-            print self.dump(map_view = MapView(keys = keys))
+            with open(fn, 'w+') as f:
+                keys = [ g._key for g in d]
+
+                if (hasattr(self, '_non_term_file')
+                    and file_ == self._non_term_file
+                    and non_term_keys):
+                    keys += non_term_keys
+
+                self.dump(stream=f, map_view = MapView(keys = keys))
+
 
 
 class Group(object):
@@ -240,9 +239,6 @@ class Group(object):
         return object.__setattr__(self, attr, value)
 
 
-    def visit(self, f):
-        for _, m in self._members.items():
-            m.visit(f)
 
 class DictGroup(Group, collections.MutableMapping):
     """A group that holds key/value pairs"""
@@ -483,17 +479,8 @@ class Term(object):
         '''A get that turns only dicts, lists and scalars, for use in creating dicts'''
         return instance._term_values.get(self._key)
 
-
     def set(self,v):
         raise NotImplementedError("Not implemented in {} ".format(type(self)))
-
-    @property
-    def path(self):
-        return self._parent.path+(self._key,)
-
-    def visit(self, f):
-        f(self)
-
 
 class ScalarTerm(Term):
     """A Term that can only be a string"""
@@ -593,9 +580,6 @@ class DictTerm(Term, collections.MutableMapping):
 
         return o
 
-    def get(self, instance, owner):
-        '''A get that turns only dicts, lists and sclars, for us in creating dicts'''
-        return instance._term_values.get(self._key,{})
 
     def null_entry(self):
         d = AttrDict()
@@ -605,10 +589,6 @@ class DictTerm(Term, collections.MutableMapping):
 
         return d
 
-    def visit(self, f):
-        f(self)
-        for _, m in self._members.items():
-            m.visit(f)
 
 class ListTerm(Term):
     """A Term that is always a list.

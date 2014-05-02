@@ -85,6 +85,8 @@ class Extract(VarDictGroup):
 
 class Top(Metadata):
 
+    _non_term_file = 'meta/build.yaml'
+
     about = About(file='bundle.yaml')
     contact = Contact(file='bundle.yaml')
     sources = Sources(file='bundle.yaml')

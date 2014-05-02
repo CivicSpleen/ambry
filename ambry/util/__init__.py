@@ -21,23 +21,6 @@ from flo import * # Legacy; should convert clients to direct import
 
 logger_init = set()
 
-## {{{ http://code.activestate.com/recipes/52549/ (r3)
-class curry:
-    def __init__(self, fun, *args, **kwargs):
-        self.fun = fun
-        self.pending = args[:]
-        self.kwargs = kwargs.copy()
-
-    def __call__(self, *args, **kwargs):
-        if kwargs and self.kwargs:
-            kw = self.kwargs.copy()
-            kw.update(kwargs)
-        else:
-            kw = kwargs or self.kwargs
-
-        return self.fun(*(self.pending + args), **kw)
-## end of http://code.activestate.com/recipes/52549/ }}}
-
 
 def get_logger(name, file_name = None, stream = None, template=None):
     """Get a logger by name
@@ -845,7 +828,10 @@ def temp_file_name():
     f.close()
     
     return f.name
-    
+
+
+
+
 # http://stackoverflow.com/questions/296499/how-do-i-zip-the-contents-of-a-folder-using-python-version-2-5
 def zipdir(basedir, archivename):
     from contextlib import closing

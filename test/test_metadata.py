@@ -239,26 +239,7 @@ sources:
         top.sources.bar.description = 'description'
 
 
-    def test_yaml(self):
-        import yaml
-        from ambry.bundle.meta import Top
 
-        t1 = Top(yaml.load(self.yaml_config))
-
-        self.assertEquals(['foo', 'baz'], t1.build.keys())
-        self.assertEquals('bar', t1.build.foo)
-        self.assertEquals('bar', t1.build['foo'])
-
-        self.assertEqual(6, len(t1.partitions))
-
-        self.assertIn('google',t1.sources.keys())
-        self.assertIn('yahoo', t1.sources.keys())
-        self.assertEquals('http://yahoo.com', t1.sources.yahoo.url)
-
-        t2 = Top()
-        t2.load_rows(t1.rows)
-
-        self.assertEquals(self.yaml_config.strip(' \n'), t2.dump().strip(' \n'))
 
     def test_metadata_TypedDictGroup(self):
 
@@ -295,13 +276,45 @@ group:
         self.assertEquals('dterm1', top.group.item1['dterm1'])
 
 
-    def test_read_write(self):
+    def test_rows(self):
         import yaml
         from ambry.bundle.meta import Top
 
         t1 = Top(yaml.load(self.yaml_config))
 
-        t1.write_to_dir(None)
+        self.assertEquals(['foo', 'baz'], t1.build.keys())
+        self.assertEquals('bar', t1.build.foo)
+        self.assertEquals('bar', t1.build['foo'])
+
+        self.assertEqual(6, len(t1.partitions))
+
+        self.assertIn('google', t1.sources.keys())
+        self.assertIn('yahoo', t1.sources.keys())
+        self.assertEquals('http://yahoo.com', t1.sources.yahoo.url)
+
+        t2 = Top()
+        t2.load_rows(t1.rows)
+
+        self.assertEquals(self.yaml_config.strip(' \n'), t2.dump().strip(' \n'))
+
+    def test_read_write(self):
+        import yaml
+        import tempfile
+        from ambry.bundle.meta import Top
+        import shutil
+
+        d = tempfile.mkdtemp('metadata-test')
+
+        t1 = Top(yaml.load(self.yaml_config))
+
+        t1.write_to_dir(d)
+
+        t2 = Top()
+        t2.load_from_dir(d)
+
+        self.assertEquals(self.yaml_config.strip(' \n'), t2.dump().strip(' \n'))
+
+        shutil.rmtree(d)
 
 
 def suite():
