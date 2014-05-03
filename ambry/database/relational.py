@@ -69,7 +69,7 @@ class RelationalDatabase(DatabaseInterface):
         self.username = username
         self.password = password
 
-        self.enable_delete = False
+        self.enable_delete = True
 
         if port:
             self.colon_port = ':'+str(port)
@@ -473,7 +473,6 @@ class RelationalDatabase(DatabaseInterface):
         session.commit()
 
 
-
     def get_config_value(self, d_vid, group, key):
         from ambry.orm import Config as SAConfig
 
@@ -483,6 +482,7 @@ class RelationalDatabase(DatabaseInterface):
         return self.session.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
                                  SAConfig.d_vid == d_vid).first()
+
 
 
 
@@ -510,10 +510,12 @@ class RelationalBundleDatabaseMixin(object):
 
         # Create the Dataset record
         session = self.session
-        
-        ds = Dataset(**self.bundle.config.identity)
 
-        ident = Identity.from_dict(self.bundle.config.identity)
+        idd = dict(self.bundle.metadata.identity)
+
+        ds = Dataset(**idd)
+
+        ident = Identity.from_dict(idd)
         
         ds.name = ident.sname
         ds.vname = ident.vname

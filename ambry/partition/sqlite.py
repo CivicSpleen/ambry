@@ -333,37 +333,5 @@ class SqlitePartition(PartitionBase):
 
         self.bundle.log("Created view {}".format(view_name))
 
-
-    def set_state(self, state):
-        '''Set a build state value in the database'''
-
-        self.set_value('build','state', state)
-
-
-    def set_value(self, group, key, value):
-        from ambry.orm import Config as SAConfig
-
-        self.database.session.query(SAConfig).filter(SAConfig.group == group,
-                                                     SAConfig.key == key,
-                                                     SAConfig.d_vid == self.bundle.dataset.vid).delete()
-
-        o = SAConfig(group=group, key=key, d_vid=self.bundle.dataset.vid, value=value)
-        self.database.session.add(o)
-
-
-    def get_value(self, group, key, default=None):
-        group = self.group(group)
-
-        if not group:
-            return None
-
-        try:
-            return group.__getattr__(key)
-        except KeyError:
-            if default is not None:
-                return default
-            raise
-
-
     def __repr__(self):
         return "<db partition: {}>".format(self.identity.vname)

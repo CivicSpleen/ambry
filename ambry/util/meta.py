@@ -15,13 +15,17 @@ class Metadata(object):
     _term_values = None
     _errors = None
     _top = None
+    _loaded = None
+    _path = None
 
-    def __init__(self, d=None):
+    def __init__(self, d=None, path=None):
 
         self._top = self
+        self._path = path
 
         self._term_values = AttrDict()
         self._errors = {}
+        self._loaded = set()
 
         self.register_members()
 
@@ -37,6 +41,7 @@ class Metadata(object):
                     o.init_instance(self)
 
                     o.set(v)
+                    self.mark_loaded(k)
                 else:
                     # Top level groups that don't match a member group are preserved,
                     # not errors like unknown terms in a group.
@@ -53,6 +58,23 @@ class Metadata(object):
 
         for name, m in self._members.items():
             m.init_descriptor(name, self)
+
+    def ensure_loaded(self, group):
+        # Called from Group__get__ to ensure that the group is loaded
+
+        if not self.is_loaded(group) and self._path is not None:
+            self.load_group(group)
+            self.mark_loaded(group)
+
+        pass
+
+    # For access to non term entries
+    def __getattr__(self, k):
+        if k.startswith('_'):
+            object.__getattribute__(self, k)
+        else:
+            self.ensure_loaded(k)
+            return self._term_values[k]
 
     @property
     def rows(self):
@@ -101,13 +123,26 @@ class Metadata(object):
 
             o.set_row((term, sub_term), value)
 
+            self.mark_loaded(group)
+
     @property
     def errors(self):
         return self._errors
 
 
+    @property
+    def dict(self):
+        return self._term_values.to_dict()
+
     def add_error(self, group, term, sub_term, value):
         self._errors[(group, term, sub_term)]  =  value
+
+    def mark_loaded(self, group):
+        if self._path is not None:
+            self._loaded.add(group)
+
+    def is_loaded(self, group):
+        return group in self._loaded
 
     def dump(self, stream = None, map_view = None):
         return self._term_values.dump(stream, map_view = map_view)
@@ -130,26 +165,70 @@ class Metadata(object):
 
         return d
 
-    def load_from_dir(self, path):
+    def load_from_dir(self, path, group = None):
         '''Load groups from specified files. '''
         import os
         import yaml
 
+
+        n_loaded = 0
         for file_, groups in self.groups_by_file().items():
 
+            if group is not None and group not in [ g._key for g in groups]:
+                continue
+
             fn = os.path.join(path, file_)
+
+            if not os.path.exists(fn):
+                n_loaded += 1 # so we don't try to load the non terms for files that are missing
+                continue
+
             try:
                 self._term_values.update_yaml(fn)
+                n_loaded += 1
+
+                for g in groups: # Each file causes multiple groups to load.
+                    self.mark_loaded(g._key)
+
 
             except IOError:
                 raise
 
-    def write_to_dir(self, path):
+        # Didn't find the group we intended to load, so try the non term file.
+        if n_loaded == 0 and group is not None:
+            if (hasattr(self, '_non_term_file')):
+                fn = os.path.join(path, self._non_term_file)
+                self._term_values.update_yaml(fn)
+
+                self.mark_loaded(group)
+
+                for file_, groups in self.groups_by_file().items():
+                    if file_ == self._non_term_file:
+                        for g in groups:  # Each file causes multiple groups to load.
+                            self.mark_loaded(g._key)
+
+
+    def load_group(self, group):
+        self.load_from_dir(self._path, group)
+
+
+    def write_to_dir(self, path=None):
         import os
+
+        if path is None:
+            path = self._path
+
+        if path is None:
+            raise ValueError("Must specify a path")
 
         non_term_keys = [key for key in self._term_values.keys() if key not in self._members]
 
-        for file_, d in self.groups_by_file().items():
+        for file_, groups in self.groups_by_file().items():
+
+            # If we are lazy-loading, only write the files that have at least on groups loaded
+            # Actually, all of the groups should be loaded.
+            if self._path and not any([ self.is_loaded(g._key) for g in groups]):
+                continue
 
             fn = os.path.join(path, file_)
             dir_ = os.path.dirname(fn)
@@ -158,15 +237,13 @@ class Metadata(object):
                 os.makedirs(dir_)
 
             with open(fn, 'w+') as f:
-                keys = [ g._key for g in d]
+                keys = [ g._key for g in groups]
 
-                if (hasattr(self, '_non_term_file')
-                    and file_ == self._non_term_file
-                    and non_term_keys):
+                # Include the non-term keys when writing the non-term file
+                if (hasattr(self, '_non_term_file')  and file_ == self._non_term_file and non_term_keys):
                     keys += non_term_keys
 
                 self.dump(stream=f, map_view = MapView(keys = keys))
-
 
 
 class Group(object):
@@ -208,12 +285,17 @@ class Group(object):
         return o
 
     def __set__(self, instance, v):
-        raise NotImplementedError()
+        assert isinstance(v, dict)
+
+        instance._term_values[self._key].update(v)
+
 
     def __get__(self, instance, owner):
         # Instantiate a copy of this group, assign a specific Metadata instance
         # ans return it.
         import copy
+
+        instance.ensure_loaded(self._key)
 
         o = copy.deepcopy(self)
         o.init_instance(instance)
@@ -406,6 +488,17 @@ class ListGroup(Group, collections.MutableSequence):
 
     def insert(self, index, value):
         self._term_values.insert(index,value)
+
+    def __set__(self, instance, v):
+        assert isinstance(v, list)
+
+        o = copy.deepcopy(self)
+        o._key = self._key
+        o.init_instance(instance)
+
+        instance._term_values[self._key] = []
+
+        o.set(v)
 
     def __getitem__(self, index):
         return self._term_values.__getitem__(index)

@@ -319,7 +319,7 @@ def bundle_info(args, b, st, rc):
 
         if b.database.exists():
 
-            cd = dict(b.db_config.dict)
+            cd = dict(b.dict)
             process = cd['process']
             b.log('Created   : ' + process.get('dbcreated', ''))
             b.log('Prepared  : ' + process.get('prepared', ''))
@@ -342,7 +342,7 @@ def bundle_info(args, b, st, rc):
         else:
             # for built bundles
             try:
-                deps = b.db_config.odep.items()
+                deps = b.odep.items()
             except AttributeError:
                 deps = None
             except DatabaseMissingError:

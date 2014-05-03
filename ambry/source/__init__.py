@@ -334,6 +334,7 @@ class SourceTree(object):
 
 
         if bundle and bundle.is_built:
+            raise NotImplementedError()
             config = dict(bundle.db_config.dict)
             d['process'] = config['process']
             f.state = 'built'

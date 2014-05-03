@@ -461,8 +461,10 @@ class AttrDict(OrderedDict):
     @classmethod
     def from_yaml(cls, path, if_exists=False):
         if if_exists and not os.path.exists(path): return cls()
+
         with open(path) as f:
             return cls(yaml.load(f, OrderedDictYAMLLoader))
+
 
     @staticmethod
     def flatten_dict(data, path=tuple()):

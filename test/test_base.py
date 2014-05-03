@@ -55,20 +55,13 @@ class TestBase(unittest.TestCase):
             rm_rf(build_dir)
             rm_rf(save_dir)
 
-        idnt = Identity.from_dict({'subset': 'subset',
-                                   'vid': 'piEGPXmDC8001001',
-                                   'variation': 'variation',
-                                   'dataset': 'dataset',
-                                   'source': 'source',
-                                   'version': '0.0.1',
-                                   'id': 'diEGPXmDC8',
-                                   'revision': 1}
-        )
+        idnt = Identity.from_dict(dict(bundle.metadata.identity))
 
-        bundle.config.rewrite(
-            identity = idnt.ident_dict,
-            names = idnt.names_dict
-        )
+
+        bundle.metadata.identity = idnt.ident_dict
+        bundle.metadata.names = idnt.names_dict
+
+        bundle.metadata.write_to_dir()
 
         if not os.path.exists(marker):
             logger.info( "Build dir marker ({}) is missing".format(marker))
@@ -79,12 +72,19 @@ class TestBase(unittest.TestCase):
             bundle = Bundle()   
             if not os.path.exists(save_dir):
                 logger.info( "Save dir is missing; re-build bundle. ")
+
+                bundle.pre_prepare()
                 bundle.prepare()
+                bundle.post_prepare()
 
                 if str(bundle.identity.name.version) != '0.0.1':
                     raise Exception("Can only save bundle if version is 0.0.1")
 
+
+                bundle.pre_build()
                 bundle.build()
+                bundle.post_build()
+
                 bundle.close()
 
                 with open(marker, 'w') as f:

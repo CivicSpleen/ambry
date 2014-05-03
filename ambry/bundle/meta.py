@@ -71,11 +71,11 @@ class SourceTerm(DictTerm):
     url = ScalarTerm()
     description = ScalarTerm(show_none=False)
 
-
 class Sources(TypedDictGroup):
     """Names that are generated from the identity"""
-
     _proto = SourceTerm()
+
+
 
 class Build(VarDictGroup):
     """Build parameters"""
@@ -89,11 +89,11 @@ class Top(Metadata):
 
     about = About(file='bundle.yaml')
     contact = Contact(file='bundle.yaml')
-    sources = Sources(file='bundle.yaml')
+    sources = Sources(file='meta/build.yaml')
     identity = Identity(file='bundle.yaml')
     names = Names(file='bundle.yaml')
 
-    partitions = Partitions(file='meta/partitions.yaml', to_rows = False)
+    partitions = Partitions(file='meta/partitions.yaml')
 
     build = Build(file='meta/build.yaml')
     extract = Extract(file='meta/build.yaml')

@@ -305,8 +305,30 @@ class PartitionBase(PartitionInterface):
 
     def set_state(self, state):
         '''Set a build state value in the database'''
-        pass # Only defined for sqlite.
+        from ..orm import Partition as OrmPartition
 
+        with self.bundle.session as s:
+            r = s.query(OrmPartition).filter(OrmPartition.id_ == str(self.identity.id_)).one()
+
+            r.state = state
+
+            s.merge(r)
+
+
+    def set_value(self, group, key, value):
+        from ambry.orm import Config as SAConfig
+
+        with self.bundle.session as s:
+            return self.set_config_value(self.bundle.dataset.vid, group, key, value, session=s)
+
+
+    def get_value(self, group, key, default=None):
+        v = self.get_config_value(self.bundle.dataset.vid, group, key)
+
+        if v is None and default is not None:
+            return default
+        else:
+            return v
 
     def dbm(self, suffix=None):
         """Return a DBMDatabase related to this partition"""

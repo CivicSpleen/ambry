@@ -23,33 +23,7 @@ class Test(TestBase):
     def restore_bundle(self):
         pass 
 
-    def test_config(self):
-        from ambry.bundle.config import BundleFileConfig, RunConfig
-        from ambry.util import AttrDict
 
-        import shutil
-
-        p = '/tmp/test_config'
-        if not os.path.exists(p):
-            os.makedirs(p)
-
-        shutil.copyfile(os.path.join(self.bundle.bundle_dir, 'bundle.yaml'),
-                        os.path.join(p, 'bundle.yaml'))
-
-
-        cfg = BundleFileConfig(p)
-
-        print cfg.build
-
-        cfg.build.foo = 'bar'
-
-        print cfg.build
-
-        cfg.rewrite()
-
-        cfg = RunConfig()
-
-        print cfg.get('build')
 
     def test_db_bundle(self):
         
@@ -95,8 +69,8 @@ class Test(TestBase):
     def test_schema_direct(self):
         '''Test adding tables directly to the schema'''
         
-        # If we don't explicitly set the id_, it will change for every run. 
-        self.bundle.config.identity.id_ = 'aTest'
+        # If we don't explicitly set the id_, it will change for every run.
+        self.bundle.metadata.identity.id =  'aTest'
 
         self.bundle.schema.clean()
 
@@ -380,7 +354,7 @@ class Test(TestBase):
         
         with self.bundle.session as s:
         
-            # These two deletely bits clear out all of the old
+            # These two deletey bits clear out all of the old
             # partitions, to avoid a conflict with the next section. We also have
             # to delete the files, since create() adds a partition record to the database, 
             # and if one already exists, it will throw an Integrity Error.
@@ -391,13 +365,23 @@ class Test(TestBase):
             for p in self.bundle.dataset.partitions:
                 s.delete(p)
 
-        import pprint
-
-        pprint.pprint(sorted([ pid.fqname for pid in pids.values()]))
+    def test_partition_2(self):
 
         bundle = Bundle()
         bundle.clean()
+        bundle.pre_prepare()
         bundle.prepare()
+        bundle.post_prepare()
+
+        table = self.bundle.schema.tables[0]
+
+        p = (('time', 'time2'), ('space', 'space3'), ('table', table.name), ('grain', 'grain4'))
+        p += p
+        pids = {}
+        for i in range(4):
+            for j in range(4):
+                pid = self.bundle.identity.as_partition(**dict(p[i:i + j + 1]))
+                pids[pid.fqname] = pid
 
         for pid in pids.values():
             part = bundle.partitions.new_db_partition(**pid.dict)
@@ -444,6 +428,7 @@ class Test(TestBase):
                 bundle.filesystem.path('meta','schema.csv'))
         
         #try:
+        bundle.database.enable_delete   = True
         bundle.clean()
         bundle = Bundle()
         bundle.exit_on_fatal = False
@@ -535,12 +520,12 @@ class Test(TestBase):
 
         with b.session as s1:
             with b.session as s2:
-                b.db_config.set_value('test', 'uuid', uv )
+                b.set_value('test', 'uuid', uv )
 
         b.close()
 
 
-        self.assertEqual(uv,  b.db_config.get_value('test', 'uuid'))
+        self.assertEqual(uv,  b.get_value('test', 'uuid').value)
 
         uv2 = str(uuid.uuid4())
 
@@ -548,11 +533,11 @@ class Test(TestBase):
 
         with b.session as s1:
             with b.session as s2:
-                b.db_config.set_value('test', 'uuid', uv2)
+                b.set_value('test', 'uuid', uv2)
 
-        self.assertEqual(uv2, b.db_config.get_value('test', 'uuid'))
+        self.assertEqual(uv2, b.get_value('test', 'uuid').value)
 
-        b.db_config.set_value('test', 'uuid', uv2)
+        b.set_value('test', 'uuid', uv2)
 
     def test_templates(self):
 

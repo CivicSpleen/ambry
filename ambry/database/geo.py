@@ -48,9 +48,7 @@ class FeatureInserter(InserterInterface):
 
     def close(self):
         self.sf.close()
-    
-        self.partition.database.post_create()
-    
+
         self.partition.convert_dates(self.table)
     
     @property
@@ -81,6 +79,10 @@ class GeoDb(PartitionDb):
     def make_path(cls, container):
         return container.path + cls.EXTENSION
 
+    # In GeoDBs, create() is useless. The database creation happens in the TableShapefile
+    # constructor, called from the inserter. After that is run, the _post_create method is called
+    # def create(self):
+
     def _on_create_connection(self, connection):
         '''Called from get_connection() to update the database'''
         super(GeoDb, self)._on_create_connection(connection)
@@ -96,8 +98,19 @@ class GeoDb(PartitionDb):
         
         if table is None and self.partition.identity.table:
             table = self.partition.identity.table
-        
-        return FeatureInserter(self.partition,  table, dest_srs, source_srs, layer_name = layer_name)
+
+
+        prior_exist = self.exists()
+
+        fi =  FeatureInserter(self.partition,  table, dest_srs, source_srs, layer_name = layer_name)
+
+        if not prior_exist and self.exists():
+            self.post_create()
+
+        self.close() #FeatureInserter needs database to be closed to avoid locks.
+
+        return fi
+
 
 class SpatialiteWarehouseDatabase(GeoDb):
     pass

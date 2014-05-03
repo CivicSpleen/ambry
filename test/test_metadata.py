@@ -46,12 +46,12 @@ contact:
 extract: {}
 identity:
     dataset: dataset
-    id: id
-    revision: revision
+    id: dxxx999
+    revision: 3
     source: source
     subset: subset
     variation: variation
-    version: version
+    version: 1.2.3
 names:
     fqname: fqname
     name: name
@@ -301,7 +301,7 @@ group:
         import yaml
         import tempfile
         from ambry.bundle.meta import Top
-        import shutil
+        import shutil, os
 
         d = tempfile.mkdtemp('metadata-test')
 
@@ -314,7 +314,54 @@ group:
 
         self.assertEquals(self.yaml_config.strip(' \n'), t2.dump().strip(' \n'))
 
+        #Test lazy loading.
+        t3 = Top(path=d)
+        self.assertTrue('license',t3.about.license)
+        self.assertTrue('creator.email',t3.contact.creator.email)
+        self.assertTrue(1,t3.nonterm.a)
+
+        t3.write_to_dir(d)
+
+        t4 = Top()
+        t4.load_from_dir(d)
+
+        self.assertEquals(self.yaml_config.strip(' \n'), t4.dump().strip(' \n'))
+
+
+        # Does it handle missing files?
+
+        os.remove(os.path.join(d, 'meta/partitions.yaml'))
+
+        t5 = Top()
+        t5.load_from_dir(d)
+
         shutil.rmtree(d)
+
+    def test_assignment(self):
+        from ambry.bundle.meta import Top
+        from ambry.identity import Identity
+        import yaml
+
+        t1 = Top(yaml.load(self.yaml_config))
+
+        idnt = Identity.from_dict(dict(t1.identity))
+
+        idd = idnt.ident_dict
+        idd['variation'] = 'v2'
+
+        t1.identity = idd
+
+        self.assertEquals('v2', t1.identity.variation)
+
+        # List Assignment
+
+        t1 = Top(yaml.load(self.yaml_config))
+
+        partitions = list(t1.partitions)
+
+        t1.partitions = partitions
+
+        self.assertEquals(self.yaml_config.strip(' \n'), t1.dump().strip(' \n'))
 
 
 def suite():

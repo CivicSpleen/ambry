@@ -102,8 +102,8 @@ class Name(object):
         """
         for k, _, optional in self.name_parts:
             if not optional and not bool(getattr(self,k)):
-                raise ValueError("Name requires field '{}' to have a value"
-                                 .format(k))
+                raise ValueError("Name requires field '{}' to have a value. Got: {}"
+                                 .format(k, self.name_parts))
         
     @returns(str, debug=2)  
     def _parse_version(self,version):
