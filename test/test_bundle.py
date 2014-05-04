@@ -504,6 +504,12 @@ class Test(TestBase):
         bundle.post_build()
 
 
+    def test_config_update(self):
+
+
+        bundle = Bundle()
+
+        bundle.update_configuration()
 
 
     def test_session(self):

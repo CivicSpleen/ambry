@@ -68,6 +68,21 @@ class Metadata(object):
 
         pass
 
+    def mark_loaded(self, group):
+        if self._path is not None:
+            self._loaded.add(group)
+
+    def is_loaded(self, group):
+        return group in self._loaded
+
+    def load_all(self):
+        """Load all of the files for all of the groups.
+
+        Wont re-load groups that have already been loaded or altered. """
+        for group in self._members.keys():
+            self.ensure_loaded(group)
+
+
     # For access to non term entries
     def __getattr__(self, k):
         if k.startswith('_'):
@@ -94,7 +109,9 @@ class Metadata(object):
     def load_rows(self, rows):
         import json
 
-        for  (group, term, sub_term), value in rows:
+        for  row in rows:
+
+            (group, term, sub_term), value = row
 
             try:
                 v = json.loads(value)
@@ -137,14 +154,13 @@ class Metadata(object):
     def add_error(self, group, term, sub_term, value):
         self._errors[(group, term, sub_term)]  =  value
 
-    def mark_loaded(self, group):
-        if self._path is not None:
-            self._loaded.add(group)
 
-    def is_loaded(self, group):
-        return group in self._loaded
+    def dump(self, stream = None, map_view = None, keys = None):
 
-    def dump(self, stream = None, map_view = None):
+        if map_view is None and keys is not None:
+            from ..util import MapView
+            map_view = MapView(keys = keys )
+
         return self._term_values.dump(stream, map_view = map_view)
 
 
@@ -212,7 +228,7 @@ class Metadata(object):
         self.load_from_dir(self._path, group)
 
 
-    def write_to_dir(self, path=None):
+    def write_to_dir(self, path=None, write_all=False):
         import os
 
         if path is None:
@@ -227,7 +243,7 @@ class Metadata(object):
 
             # If we are lazy-loading, only write the files that have at least on groups loaded
             # Actually, all of the groups should be loaded.
-            if self._path and not any([ self.is_loaded(g._key) for g in groups]):
+            if not write_all and self._path and not any([ self.is_loaded(g._key) for g in groups]):
                 continue
 
             fn = os.path.join(path, file_)
@@ -284,6 +300,12 @@ class Group(object):
         o.init_instance(self)
         return o
 
+    def get_group_instance(self, parent):
+
+        o = copy.deepcopy(self)
+        o.init_instance(parent)
+        return o
+
     def __set__(self, instance, v):
         assert isinstance(v, dict)
 
@@ -297,9 +319,8 @@ class Group(object):
 
         instance.ensure_loaded(self._key)
 
-        o = copy.deepcopy(self)
-        o.init_instance(instance)
-        return o
+        return self.get_group_instance(instance)
+
 
     @property
     def _term_values(self):
@@ -345,6 +366,13 @@ class DictGroup(Group, collections.MutableMapping):
         return self._parent._term_values[self._key]
 
 
+    def ensure_index(self, index):
+
+        if index not in self._term_values:
+            o = self.get_term_instance(index)
+            self._term_values[index] = o.null_entry()
+
+
     def __setattr__(self, k, v):
 
         if k.startswith('_'):
@@ -358,8 +386,13 @@ class DictGroup(Group, collections.MutableMapping):
         else:
             return self.__getitem__(k)
 
+
+
     def __getitem__(self, key):
-        return self._term_values.__getitem__(key)
+
+        o = self.get_term_instance(key)
+        return o.get()
+
 
     def __setitem__(self, key, value):
         if not key in self._members:
@@ -377,18 +410,21 @@ class DictGroup(Group, collections.MutableMapping):
         return self._term_values.__len__()
 
     def __iter__(self):
+        '''Iterated over dictionary values, not Term instances'''
         return self._term_values.__iter__()
 
-
     def set(self, d):
+        assert isinstance(d, dict)
         for k,v in d.items():
             try:
-                self[k] = v
+                self.__setitem__(k,v)
             except AttributeError as e:
                 self._top.add_error(self._key, k, None, v)
 
     def set_row(self, key, value):
+
         key, subkey = key
+
         if subkey:
             self.set({key: { subkey: value}})
         else:
@@ -409,38 +445,36 @@ class TypedDictGroup(DictGroup):
         if '_proto' not in dir(self):
             raise AttributeError("TypeDictGroup must have a _proto Term")
 
-        proto = type(self).__dict__['_proto']
+        proto = type(self).__dict__['_proto'] # Avoids __get___?
 
         proto.init_descriptor('_proto', self._top)
 
-    # This getter wil return a DictTerm, usually, so it is the DictTerm
-    # that actually sets the value.
-    def __getitem__(self, name):
+    def get_term_instance(self, key):
 
         if '_proto' not in dir(self):
             raise AttributeError("TypeDictGroup must have a _proto Term")
 
-        if not name in self._term_values:
-            self._term_values[name] =  { name:None for name, _ in self._proto._members.items() }
-
         o = copy.deepcopy(self._proto)
-        o._key = name
         o.init_instance(self)
-
+        o._key = key
         return o
+
+    # This getter wil return a DictTerm, usually, so it is the DictTerm
+    # that actually sets the value.
+    def __getitem__(self, key):
+
+        if not key in self._term_values:
+            self._term_values[key] =  { name:None for name, _ in self._proto._members.items() }
+
+        o = self.get_term_instance(key)
+
+        return o.get()
 
     def __setitem__(self, key, value):
 
-        if '_proto' not in dir(self):
-            raise AttributeError("TypeDictGroup must have a _proto Term")
-
-        o = copy.deepcopy(self._proto)
-        o._key = key
-        o.init_instance(self)
-
+        o = self.get_term_instance(key)
         o.set(value)
 
-        return o
 
 
 class VarDictGroup(DictGroup):
@@ -477,34 +511,78 @@ class ListGroup(Group, collections.MutableSequence):
         super(ListGroup, self).__init__(file=file, to_rows = to_rows)
 
 
+    def init_descriptor(self, key, top):
+        super(ListGroup, self).init_descriptor(key, top)
+
+        if '_proto' not in dir(self):
+            raise AttributeError("TypeDictGroup must have a _proto Term")
+
+        proto = type(self).__dict__['_proto']  # Avoids __get___?
+
+        proto.init_descriptor('_proto', self._top)
+
+
     @property
     def _term_values(self):
         # This only works after being instantiated in __get__, which sets
         # _parent
+
         if not self._key in self._parent._term_values:
             self._parent._term_values[self._key] = []
 
+
         return self._parent._term_values[self._key]
 
-    def insert(self, index, value):
-        self._term_values.insert(index,value)
+    def get_term_instance(self, key):
+
+        if '_proto' not in dir(self):
+            raise AttributeError("TypeDictGroup must have a _proto Term")
+
+        o = copy.deepcopy(self._proto)
+        o.init_instance(self)
+        o._key = key
+        return o
 
     def __set__(self, instance, v):
         assert isinstance(v, list)
 
-        o = copy.deepcopy(self)
-        o._key = self._key
-        o.init_instance(instance)
-
         instance._term_values[self._key] = []
+
+        o = self.get_group_instance(instance)
 
         o.set(v)
 
+
+    def insert(self, index, value):
+        self.__setitem__(index, value)
+
+    def ensure_index(self,index):
+
+        if index >= len(self._term_values):
+            o = self.get_term_instance(index)
+
+            to_add = (len(self._term_values) - index + 1)
+
+            self._parent._term_values[self._key] += ([o.null_entry()] * to_add)
+
+        assert len(self._parent._term_values[self._key]) > index
+
     def __getitem__(self, index):
-        return self._term_values.__getitem__(index)
+
+        self.ensure_index(index)
+
+        o = self.get_term_instance(index)
+        return o.get()
 
     def __setitem__(self, index, value):
-        return self._term_values.__setitem__(index,value)
+
+        self.ensure_index(index)
+        o = self.get_term_instance(index)
+
+
+
+        o.set(value)
+
 
     def __delitem__(self, index):
         return self._term_values.__delitem__(index)
@@ -516,13 +594,17 @@ class ListGroup(Group, collections.MutableSequence):
         return self._term_values.__iter__()
 
     def set(self,d):
-        for item in d:
-            self.append(item)
+
+        for index, value in enumerate(d):
+            self.__setitem__(index, value)
 
     def set_row(self, key, value):
         index, _ = key
 
-        self.append(value)
+        self.__setitem__(index,value)
+
+    def reformat(self,v):
+        raise NotImplementedError()
 
 
 class Term(object):
@@ -532,11 +614,11 @@ class Term(object):
     _parent = None # set after being cloned in some subclass __get__
     _top = None
     _synonym = None
-    _show_none = None
+    _store_none = None
     _default = None
     _members = None
 
-    def __init__(self, synonym=None, show_none=True, default = None):
+    def __init__(self, synonym=None, store_none=True, default = None):
 
         self._members = {name: attr for name, attr in type(self).__dict__.items() if isinstance(attr, Term)}
 
@@ -544,7 +626,7 @@ class Term(object):
             synonym = (synonym,)
 
         self._synonym = tuple(synonym) if synonym else tuple()
-        self._show_none = show_none
+        self._store_none = store_none
         self._default = default
 
 
@@ -559,6 +641,9 @@ class Term(object):
     def null_entry(self):
         raise NotImplementedError("Not implemented by {}".format(type(self)))
 
+    def reformat(self, v):
+        raise NotImplementedError("Not implemented by {}".format(type(self)))
+
     def __set__(self, instance, v):
         instance._term_values[self._key] = v
 
@@ -566,11 +651,11 @@ class Term(object):
         if self._key is None:
             raise Exception(self._key)
         else:
-            return instance._term_values.get(self._key)
+            return instance._term_values.get(self._key).get()
 
-    def get(self, instance, owner):
-        '''A get that turns only dicts, lists and scalars, for use in creating dicts'''
-        return instance._term_values.get(self._key)
+    def get(self):
+        '''Return the value type for this Term'''
+        raise NotImplementedError("Not implemented by {}".format(type(self)))
 
     def set(self,v):
         raise NotImplementedError("Not implemented in {} ".format(type(self)))
@@ -581,9 +666,14 @@ class ScalarTerm(Term):
     def set(self, v):
         self._parent._term_values[self._key] = v
 
+    def get(self):
+        return self._parent._term_values[self._key]
+
     def null_entry(self):
         return None
 
+    def reformat(self, v):
+        return v
 
 class DictTerm(Term, collections.MutableMapping):
     """A term that contains a dict of sub-parts
@@ -592,6 +682,7 @@ class DictTerm(Term, collections.MutableMapping):
     """
 
     default = None
+    _store_none_map = None
 
     def init_descriptor(self, key, top):
         super(DictTerm, self).init_descriptor(key, top)
@@ -601,14 +692,36 @@ class DictTerm(Term, collections.MutableMapping):
 
         assert(self._key is not None)
 
+
+        self._store_none_map =  {name: m._store_none for name, m in self._members.items()}
+
+    def get_term_instance(self, key):
+        m = self._members[key]
+        o = copy.deepcopy(m)
+        o.init_instance(self)
+        return o
+
+
+    def _new_instance(self, parent):
+        o = copy.deepcopy(self)
+        o.init_instance(parent)
+        o._key = self._key
+
+        return o
+
     @property
     def _term_values(self):
         # This only works after being instantiated in __get__, which sets
         # _parent
-        if not self._key in self._parent._term_values:
-            self._parent._term_values[self._key] =  { name:None for name, _ in self._members.items() }
 
-        return self._parent._term_values[self._key]
+        self._parent.ensure_index(self._key)
+
+        tv =  self._parent._term_values[self._key]
+
+        assert tv is not None
+
+        return tv
+
 
 
     def __setattr__(self, k, v):
@@ -628,13 +741,17 @@ class DictTerm(Term, collections.MutableMapping):
         if key not in dir(self):
             raise AttributeError("No such term: {} ".format(key))
 
-        return self._term_values.__getitem__(key)
+        o = self.get_term_instance(key)
+
+        if key == 'name':
+            pass
+
+        return o.get()
 
     def __setitem__(self, key, value):
-        if key not in dir(self):
-            raise AttributeError("No such term: {} ".format(key))
 
-        return self._term_values.__setitem__(key, value)
+        self.set_row(key,value)
+
 
     def __delitem__(self, key):
         return self._term_values.__delitem__(key)
@@ -643,23 +760,16 @@ class DictTerm(Term, collections.MutableMapping):
         return self._term_values.__len__()
 
     def __iter__(self):
-        return self._term_values.__iter__()
+        if not self._term_values:
+            return iter([])
+        else:
+            return self._term_values.__iter__()
+
 
     def __set__(self, instance, d):
 
-        if not self._key in instance._term_values:
-            instance._term_values[self._key] = {name: None for name, _ in self._members.items()}
-
-        for k, v in d.items():
-            if k in instance._term_values[self._key]:
-                instance._term_values[self._key][k] = d[k]
-            else:
-                self._top.add_error(self._parent._key, self._key, k, v)
-
-    def set(self, d):
-
-        self.__set__(self._parent, d)
-
+        o = self._new_instance(instance)
+        o.set(d)
 
     def __get__(self, instance, owner):
         """ """
@@ -667,20 +777,42 @@ class DictTerm(Term, collections.MutableMapping):
         # and return it.
         import copy
 
-        o = copy.deepcopy(self)
-        o.init_instance(instance)
-        o._key = self._key
+        return self._new_instance(instance)
 
-        return o
 
+    def set(self, d):
+
+        for k, v in d.items():
+            self.set_row(k,v)
+
+
+    def set_row(self, k, v):
+
+        if k not in self._members.keys():
+            self._top.add_error(self._parent._key, self._key, k, v)
+            return
+
+        self._term_values[k] = v
+
+        #if k in self._term_values and self._term_values[k] is None and self._store_none_map[k] is False:
+        #    del self._term_values[k]
+
+    def get(self):
+        return self
 
     def null_entry(self):
         d = AttrDict()
 
         for k, v in self._members.items():
-            d[k] = None
+            if self._store_none_map[k] is True:
+                d[k] = None
 
         return d
+
+
+
+
+
 
 
 class ListTerm(Term):
@@ -698,6 +830,10 @@ class ListTerm(Term):
     def set(self, v):
         self.__set__(self._parent, v)
 
+    def get(self):
+        return self
+
 
     def null_entry(self):
         return []
+

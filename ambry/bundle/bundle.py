@@ -672,12 +672,13 @@ class BuildBundle(Bundle):
             partitions = []
 
         md = self.metadata
+        md.load_all()
 
         md.identity = self.identity.ident_dict
         md.names = self.identity.names_dict
         md.partitions = partitions
 
-        md.write_to_dir()
+        md.write_to_dir(write_all=True)
 
         # Reload some of the values from bundle.yaml into the database
         # configuration
@@ -1010,6 +1011,8 @@ class BuildBundle(Bundle):
             self._revise_schema()
             
         self.set_build_state( 'prepared')
+
+        self.update_configuration()
 
         return True
 

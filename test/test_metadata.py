@@ -125,6 +125,7 @@ sources:
         tt = TestTop()
 
 
+
         ##
         ## Dict Group
 
@@ -147,8 +148,6 @@ sources:
         tt.group.dterm.dterm1 = 'dterm1'
         tt.group.dterm.dterm2 = 'dterm2'
 
-        with self.assertRaises(AttributeError):
-            tt.group.dterm.dterm3 = 'dterm3'
 
         self.assertEquals('dterm1', tt.group.dterm.dterm1)
 
@@ -158,11 +157,13 @@ sources:
 
         ## List Group
 
-        tt.lgroup.append({'k1': 'v1'})
-        tt.lgroup.append({'k2': 'v2'})
 
-        self.assertEquals('v1', tt.lgroup[0]['k1'])
-        self.assertEquals('v2', tt.lgroup[1]['k2'])
+        tt.lgroup.append({'dterm1': 'dterm1'})
+        tt.lgroup.append({'dterm2': 'dterm2'})
+
+        self.assertEquals('dterm2', tt.lgroup[1]['dterm2'])
+        self.assertEquals('dterm1', tt.lgroup[0]['dterm1'])
+
 
         ## TypedDictGroup
 
@@ -224,6 +225,10 @@ sources:
 
         top = Top(d)
 
+        print top.dump()
+
+        print dict(top.partitions[0])
+
         self.assertIn(('contact', 'creator', 'bingo'), top.errors)
 
         self.assertIn('publisher', top.contact.keys())
@@ -231,14 +236,15 @@ sources:
         self.assertEqual('Email',top.contact.creator.email)
 
         self.assertIn('name', top.partitions[0])
-        self.assertNotIn('space', top.partitions[0])
+
+
+
         self.assertIn('space', top.partitions[2])
+        self.assertNotIn('space', top.partitions[0])
         self.assertEquals('foo', top.partitions[0]['name'])
 
         top.sources.foo.url = 'url'
         top.sources.bar.description = 'description'
-
-
 
 
     def test_metadata_TypedDictGroup(self):
@@ -292,7 +298,9 @@ group:
         self.assertIn('yahoo', t1.sources.keys())
         self.assertEquals('http://yahoo.com', t1.sources.yahoo.url)
 
+
         t2 = Top()
+
         t2.load_rows(t1.rows)
 
         self.assertEquals(self.yaml_config.strip(' \n'), t2.dump().strip(' \n'))
@@ -362,6 +370,49 @@ group:
         t1.partitions = partitions
 
         self.assertEquals(self.yaml_config.strip(' \n'), t1.dump().strip(' \n'))
+
+    def test_forced_format(self):
+        yaml_config= """
+external_documentation:
+-   description: description
+    title: title1
+    url: url1
+-   description: description2
+-   title: title3
+"""
+        from ambry.bundle.meta import Top
+        from ambry.identity import Identity
+        import yaml
+
+        t1 = Top(yaml.load(yaml_config))
+
+
+        print t1.dump(keys=['external_documentation'])
+
+        yaml_config = """
+partitions:
+-   name: source-dataset-subset-variation-tthree
+    table: tthree
+-   format: geo
+    name: source-dataset-subset-variation-geot1-geo
+    table: geot1
+-   format: geo
+    name: source-dataset-subset-variation-geot2-geo
+    table: geot2
+-   grain: missing
+    name: source-dataset-subset-variation-tone-missing
+    table: tone
+-   name: source-dataset-subset-variation-tone
+    table: tone
+-   format: csv
+    name: source-dataset-subset-variation-csv-csv-1
+    segment: 1
+    table: csv """
+
+        t2 = Top(yaml.load(yaml_config))
+
+        print t2.dump(keys=['partitions'])
+
 
 
 def suite():

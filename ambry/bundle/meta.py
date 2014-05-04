@@ -53,13 +53,13 @@ class Names(DictGroup):
 
 class PartitionTerm(DictTerm):
 
-    name = ScalarTerm()
-    time = ScalarTerm()
-    space = ScalarTerm()
-    grain = ScalarTerm()
-    table = ScalarTerm()
-    format = ScalarTerm()
-    segment = ScalarTerm()
+    name = ScalarTerm(store_none=False)
+    time = ScalarTerm(store_none=False)
+    space = ScalarTerm(store_none=False)
+    grain = ScalarTerm(store_none=False)
+    table = ScalarTerm(store_none=False)
+    format = ScalarTerm(store_none=False)
+    segment = ScalarTerm(store_none=False)
 
 class Partitions(ListGroup):
     """Names that are generated from the identity"""
@@ -67,14 +67,12 @@ class Partitions(ListGroup):
     _proto = PartitionTerm()
 
 class SourceTerm(DictTerm):
-
     url = ScalarTerm()
-    description = ScalarTerm(show_none=False)
+    description = ScalarTerm(store_none=False)
 
 class Sources(TypedDictGroup):
     """Names that are generated from the identity"""
     _proto = SourceTerm()
-
 
 
 class Build(VarDictGroup):
@@ -82,6 +80,25 @@ class Build(VarDictGroup):
 
 class Extract(VarDictGroup):
     """Extract parameters"""
+
+
+class ExtDocTerm(DictTerm):
+    url = ScalarTerm()
+    title = ScalarTerm()
+    description = ScalarTerm()
+
+class ExtDoc(ListGroup):
+    """External Documentation"""
+    _proto = ExtDocTerm() # Reusing
+
+class VersonTerm(DictTerm):
+    """Version Description"""
+    semver = ScalarTerm()
+    description = ScalarTerm(store_none=False)
+
+class Versions(ListGroup):
+    """Names that are generated from the identity"""
+    _proto = VersonTerm()
 
 class Top(Metadata):
 
@@ -92,9 +109,9 @@ class Top(Metadata):
     sources = Sources(file='meta/build.yaml')
     identity = Identity(file='bundle.yaml')
     names = Names(file='bundle.yaml')
-
     partitions = Partitions(file='meta/partitions.yaml')
-
     build = Build(file='meta/build.yaml')
     extract = Extract(file='meta/build.yaml')
+    external_documentation = ExtDoc(file='bundle.yaml')
+    versions = Versions(file='bundle.yaml')
 
