@@ -1065,13 +1065,27 @@ class Identity(object):
 
         assert isinstance(d,dict)
 
-        if 'id' in d and 'revision' in d:
+        if 'id' in d and d['id'] and 'revision' in d:
             # The vid should be constructed from the id and the revision
-            on = (ObjectNumber.parse(d['id']).rev(d['revision']))
-        elif 'vid' in d:
+
+            if not d['id']:
+                raise ValueError(" 'id' key doesn't have a value in {} ".format(d))
+
+            ono = ObjectNumber.parse(d['id'])
+
+            if not ono:
+                raise ValueError("Failed to parse '{}' as an ObjectNumber ".format(d['id']))
+
+            on = ono.rev(d['revision'])
+
+        elif 'vid' in d and d['vid']:
             on = ObjectNumber.parse(d['vid'])
+
+            if not on:
+                raise ValueError("Failed to parse '{}' as an ObjectNumber ".format(d['vid']))
+
         else:
-            raise ValueError("Must have id and revision, or vid")
+            raise ValueError("Must have id and revision, or vid. Got neither from {}".format(d))
 
 
         if isinstance(on, DatasetNumber):

@@ -152,6 +152,10 @@ class Bundle(object):
         else:
             return v
 
+    def get_value_group(self, group):
+        return self.database.get_config_value_group(self.dataset.vid, group)
+
+
     def _dep_cb(self, library, key, name, resolved_bundle):
         """A callback that is called when the library resolves a dependency.
         It stores the resolved dependency into the bundle database"""
@@ -423,8 +427,6 @@ class LibraryDbBundle(Bundle):
         self._dataset_id = dataset_id
         self._database = database
 
-        self.db_config = self.config = BundleDbConfig(self, self.database)
-
         # Set in Library.get() and Library.find() when the user requests a
         # partition. s
         self.partition = None
@@ -643,55 +645,70 @@ class BuildBundle(Bundle):
         from ..identity import Identity, Name, ObjectNumber, LocationRef
 
 
-
         if not self._identity:
             try:
                 names = self.metadata.names.items()
                 idents = self.metadata.identity.items()
+
+            except KeyError as e:
+                raise ConfigurationError("Bad bundle config in: {}: {} ".format(self.bundle_dir, e))
             except AttributeError:
                 raise AttributeError(
                     "Failed to get required sections of config. " +
                     "\nconfig_source = {}\n".format(
                         self.config.source_ref))
+
             self._identity = Identity.from_dict(dict(names + idents))
             self._identity.locations.set(LocationRef.LOCATION.SOURCE)
 
         return self._identity
 
-    def update_configuration(self, use_metadata=False):
+    def update_configuration(self, rewrite_database=True):
         from ..dbexceptions import DatabaseError
         # Re-writes the bundle.yaml file, with updates to the identity and partitions
         # sections.
         from ..dbexceptions import DatabaseMissingError
 
-        if self.database.exists():
-            partitions = [
-                p.identity.name.partital_dict for p in self.partitions]
-
-        else:
-            partitions = []
-
         md = self.metadata
         md.load_all()
 
+        if len(md.errors) > 0:
+            self.error("Metadata errors in {}".format(md._path))
+            for k,v in md.errors.items():
+                self.error("    {} = {}".format('.'.join([x for x in k if x]), v))
+            raise Exception("Metadata errors")
+
         md.identity = self.identity.ident_dict
         md.names = self.identity.names_dict
-        md.partitions = partitions
+
+        # Partitions is hanging around in some old bundles
+        if 'partitions' in md._term_values:
+            del md._term_values['partitions']
+
+        # Ensure there is an entry for every revision, if only to nag the maintainer to fill it in.
+        for i in range(1, md.identity.revision+1):
+            md.versions[i]
+
+            if i == md.identity.revision:
+                md.versions[i].version = md.identity.version
 
         md.write_to_dir(write_all=True)
+
 
         # Reload some of the values from bundle.yaml into the database
         # configuration
 
-        odep_set = False
-        if self.database.exists():
+        if rewrite_database:
+            odep_set = False
+            if self.database.exists():
 
-            if self.config.build.get('dependencies'):
-                for k, v in self.config.build.get('dependencies').items():
-                    self.set_value('odep', k, v)
-                    odep_set = True
+                if self.config.build.get('dependencies'):
+                    for k, v in self.config.build.get('dependencies').items():
+                        self.set_value('odep', k, v)
+                        odep_set = True
 
-        self.database.rewrite_dataset()
+
+                self.database.rewrite_dataset()
 
     @property
     def sources(self):
@@ -1106,6 +1123,9 @@ class BuildBundle(Bundle):
 
         self.post_build_write_stats()
 
+        self.post_build_write_partitions()
+
+        self.post_build_write_config()
         
         self.set_build_state( 'built')
 
@@ -1141,6 +1161,37 @@ class BuildBundle(Bundle):
                         e.message))
                 raise
             p.close() # Or, will run out of files/connections and get operational error
+
+    def post_build_write_partitions(self):
+        """Write a list of partitions to the meta directory"""
+        import yaml
+
+        if self.database.exists():
+            partitions = [p.identity.name.partital_dict for p in self.partitions]
+
+        else:
+            partitions = []
+
+
+        fn = self.filesystem.path('meta','partitions.yaml')
+
+        with open(fn,'w') as f:
+            yaml.safe_dump(partitions, f,default_flow_style=False, indent=4, encoding='utf-8')
+
+    def post_build_write_config(self):
+        '''Write  the config into the database'''
+        exclude_keys = ('names','identity')
+
+        self.metadata.load_all()
+
+        for row in self.metadata.rows:
+
+            if row[0][0] in exclude_keys:
+                continue
+
+            k = '.'.join([str(x) for x in row[0] if x])
+
+            self.set_value('config', k, row[1])
 
     @property
     def is_built(self):
@@ -1482,6 +1533,7 @@ class AnalysisBundle(BuildBundle):
     def __init__(self, bundle_path):
         """Initialize the analysis bundle by running the prepare phase and starting the pre-build
         portion of the build phase """
+        from ..util import AttrDict
         super(AnalysisBundle, self).__init__(bundle_path)
 
         self.log_level = logging.CRITICAL

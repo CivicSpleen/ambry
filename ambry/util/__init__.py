@@ -48,9 +48,11 @@ def get_logger(name, file_name = None, stream = None, template=None):
         handlers = []
 
         if stream is not None:
+
             handlers.append(logging.StreamHandler(stream=stream))
 
         if file_name is not None:
+
             if os.path.isdir(os.path.dirname(file_name)):
                 handlers.append(logging.FileHandler(file_name))
             else:

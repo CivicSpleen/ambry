@@ -319,8 +319,8 @@ def bundle_info(args, b, st, rc):
 
         if b.database.exists():
 
-            cd = dict(b.dict)
-            process = cd['process']
+            process = b.get_value_group('process')
+
             b.log('Created   : ' + process.get('dbcreated', ''))
             b.log('Prepared  : ' + process.get('prepared', ''))
             b.log('Built     : ' + process.get('built', ''))

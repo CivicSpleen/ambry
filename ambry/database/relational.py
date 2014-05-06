@@ -484,8 +484,16 @@ class RelationalDatabase(DatabaseInterface):
                                  SAConfig.d_vid == d_vid).first()
 
 
+    def get_config_value_group(self, d_vid, group):
+        from ambry.orm import Config as SAConfig
 
+        d = {}
 
+        for row in self.session.query(SAConfig).filter(SAConfig.group == group,
+                                                   SAConfig.d_vid == d_vid).all():
+            d[row.key] = row.value
+
+        return d
         
 
 class RelationalBundleDatabaseMixin(object):

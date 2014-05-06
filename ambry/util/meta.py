@@ -17,8 +17,9 @@ class Metadata(object):
     _top = None
     _loaded = None
     _path = None
+    _synonyms = None
 
-    def __init__(self, d=None, path=None):
+    def __init__(self, d=None, path=None, synonyms = None):
 
         self._top = self
         self._path = path
@@ -27,9 +28,49 @@ class Metadata(object):
         self._errors = {}
         self._loaded = set()
 
+        if self._synonyms is not None:
+
+            # Convert paths to tuples
+            s = self._synonyms
+            self._synonyms = None
+            self.synonyms = s
+
+        self.synonyms = synonyms
+
         self.register_members()
 
         self.set(d)
+
+    @property
+    def synonyms(self):
+
+        if not self._synonyms:
+            return {}
+
+        return self._synonyms
+
+    @synonyms.setter
+    def synonyms(self, synonyms):
+
+        if not synonyms:
+            return
+
+        if self._synonyms is None:
+
+            self._synonyms = {}
+
+
+        for k,v in synonyms.items():
+            parts = v.split('.')
+
+            parts += [None] * ( 3 - len(parts))
+
+            if len(parts) > 3:
+                raise Exception("Can't handle synonyms with more than 3 parts")
+
+            self._synonyms[k] = parts
+
+
 
     def set(self, d):
         if d is not None:
@@ -37,7 +78,7 @@ class Metadata(object):
                 if k in self._members:
 
                     m = self._members[k]
-                    o = copy.deepcopy(m)
+                    o = copy.copy(m)
                     o.init_instance(self)
 
                     o.set(v)
@@ -111,7 +152,11 @@ class Metadata(object):
 
         for  row in rows:
 
-            (group, term, sub_term), value = row
+            try:
+                (group, term, sub_term), value = row
+            except ValueError as e:
+                raise ValueError(str(e)+" : "+str(row))
+
 
             try:
                 v = json.loads(value)
@@ -135,8 +180,9 @@ class Metadata(object):
                 continue
 
             m = self._members[group]
-            o = copy.deepcopy(m)
+            o = copy.copy(m)
             o.init_instance(self)
+
 
             o.set_row((term, sub_term), value)
 
@@ -152,7 +198,16 @@ class Metadata(object):
         return self._term_values.to_dict()
 
     def add_error(self, group, term, sub_term, value):
-        self._errors[(group, term, sub_term)]  =  value
+        '''For records that are not defined as terms, either add it to the errors list,
+        or store it in a synonym'''
+
+        path = '.'.join([ str(x) for x in (group, term, sub_term) if x is not None])
+
+        if path in self.synonyms:
+            self.load_rows([(self.synonyms[path],value)])
+
+        else:
+            self._errors[(group, term, sub_term)]  =  value
 
 
     def dump(self, stream = None, map_view = None, keys = None):
@@ -200,7 +255,11 @@ class Metadata(object):
                 continue
 
             try:
-                self._term_values.update_yaml(fn)
+                d = AttrDict.from_yaml(fn)
+
+
+
+                self.set(d)
                 n_loaded += 1
 
                 for g in groups: # Each file causes multiple groups to load.
@@ -296,21 +355,21 @@ class Group(object):
 
     def get_term_instance(self, key):
         m = self._members[key]
-        o = copy.deepcopy(m)
+        o = copy.copy(m)
         o.init_instance(self)
         return o
 
     def get_group_instance(self, parent):
 
-        o = copy.deepcopy(self)
+        o = copy.copy(self)
         o.init_instance(parent)
         return o
 
     def __set__(self, instance, v):
         assert isinstance(v, dict)
 
-        instance._term_values[self._key].update(v)
-
+        o = self.get_group_instance(instance)
+        o.set(v)
 
     def __get__(self, instance, owner):
         # Instantiate a copy of this group, assign a specific Metadata instance
@@ -454,7 +513,7 @@ class TypedDictGroup(DictGroup):
         if '_proto' not in dir(self):
             raise AttributeError("TypeDictGroup must have a _proto Term")
 
-        o = copy.deepcopy(self._proto)
+        o = copy.copy(self._proto)
         o.init_instance(self)
         o._key = key
         return o
@@ -538,7 +597,7 @@ class ListGroup(Group, collections.MutableSequence):
         if '_proto' not in dir(self):
             raise AttributeError("TypeDictGroup must have a _proto Term")
 
-        o = copy.deepcopy(self._proto)
+        o = copy.copy(self._proto)
         o.init_instance(self)
         o._key = key
         return o
@@ -561,7 +620,7 @@ class ListGroup(Group, collections.MutableSequence):
         if index >= len(self._term_values):
             o = self.get_term_instance(index)
 
-            to_add = (len(self._term_values) - index + 1)
+            to_add = ( index - len(self._term_values) + 1)
 
             self._parent._term_values[self._key] += ([o.null_entry()] * to_add)
 
@@ -578,7 +637,6 @@ class ListGroup(Group, collections.MutableSequence):
 
         self.ensure_index(index)
         o = self.get_term_instance(index)
-
 
 
         o.set(value)
@@ -613,21 +671,19 @@ class Term(object):
     _key = None
     _parent = None # set after being cloned in some subclass __get__
     _top = None
-    _synonym = None
     _store_none = None
     _default = None
     _members = None
+    _link_on_null = None
 
-    def __init__(self, synonym=None, store_none=True, default = None):
+    def __init__(self, store_none=True, link_on_null = None, default = None):
 
         self._members = {name: attr for name, attr in type(self).__dict__.items() if isinstance(attr, Term)}
 
-        if synonym and not isinstance(synonym, (list, tuple)):
-            synonym = (synonym,)
 
-        self._synonym = tuple(synonym) if synonym else tuple()
         self._store_none = store_none
         self._default = default
+        self._link_on_null = link_on_null
 
 
     def init_descriptor(self, key, top):
@@ -660,6 +716,12 @@ class Term(object):
     def set(self,v):
         raise NotImplementedError("Not implemented in {} ".format(type(self)))
 
+    def is_empty(self):
+        raise NotImplementedError("Not implemented in {} ".format(type(self)))
+
+    def after_set(self):
+        pass
+
 class ScalarTerm(Term):
     """A Term that can only be a string"""
 
@@ -674,6 +736,9 @@ class ScalarTerm(Term):
 
     def reformat(self, v):
         return v
+
+    def is_empty(self):
+        return self.get() is None
 
 class DictTerm(Term, collections.MutableMapping):
     """A term that contains a dict of sub-parts
@@ -697,13 +762,13 @@ class DictTerm(Term, collections.MutableMapping):
 
     def get_term_instance(self, key):
         m = self._members[key]
-        o = copy.deepcopy(m)
+        o = copy.copy(m)
         o.init_instance(self)
         return o
 
 
     def _new_instance(self, parent):
-        o = copy.deepcopy(self)
+        o = copy.copy(self)
         o.init_instance(parent)
         o._key = self._key
 
@@ -721,8 +786,6 @@ class DictTerm(Term, collections.MutableMapping):
         assert tv is not None
 
         return tv
-
-
 
     def __setattr__(self, k, v):
         if k.startswith('_'):
@@ -743,10 +806,8 @@ class DictTerm(Term, collections.MutableMapping):
 
         o = self.get_term_instance(key)
 
-        if key == 'name':
-            pass
-
-        return o.get()
+        v =  o.get()
+        return v
 
     def __setitem__(self, key, value):
 
@@ -809,10 +870,8 @@ class DictTerm(Term, collections.MutableMapping):
 
         return d
 
-
-
-
-
+    def is_empty(self):
+        return all( [v is None for v in self._term_values.values()])
 
 
 class ListTerm(Term):
@@ -833,7 +892,9 @@ class ListTerm(Term):
     def get(self):
         return self
 
-
     def null_entry(self):
         return []
+
+    def is_empty(self):
+        return all([v is None for v in self])
 

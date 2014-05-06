@@ -217,7 +217,7 @@ class Schema(object):
             else:
                 self.max_col_id[table.name] = max(*[c.sequence_id for c in table.columns])
 
-        sequence_id = int(kwargs['sequence_id']) if 'sequence_id' in kwargs else None
+        sequence_id = int(kwargs['sequence_id']) if 'sequence_id' in kwargs and kwargs['sequence_id'] is not None else None
 
 
         if sequence_id is None:

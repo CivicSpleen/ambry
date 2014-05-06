@@ -1,6 +1,6 @@
 '''Script for source run to print the umber of dependencies that a source bundle has'''
 
-def run(args, bundle_dir, bundle, repo):
+def run(args, bundle_dir, bundle):
 
     import sys
 
@@ -11,3 +11,6 @@ def run(args, bundle_dir, bundle, repo):
 
     if len(deps) == 0:
         print bundle.identity.fqname
+
+
+

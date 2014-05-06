@@ -334,18 +334,16 @@ class SourceTree(object):
 
 
         if bundle and bundle.is_built:
-            raise NotImplementedError()
-            config = dict(bundle.db_config.dict)
-            d['process'] = config['process']
+
+            d['process'] = bundle.get_value_group('process')
             f.state = 'built'
 
         d['rev'] = d['rev'] + 1  # Marks bundles that have already beein imported.
 
         f.data = d
+        files.merge(f)
 
         bundle.close()
-
-        files.merge(f)
 
 
     def _dir_list(self, datasets=None, key='vid'):

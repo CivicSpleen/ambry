@@ -623,6 +623,7 @@ class Partitions(object):
             raise ConflictError("Partition {} alread exists".format(p.name))
 
         if shape_file:
+            p.database.close()
             p.load_shapefile(shape_file)
 
         return p

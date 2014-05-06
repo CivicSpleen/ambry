@@ -22,34 +22,38 @@ about:
     - Tag1
     - Tag 2
     title: title
-    url: url
 build:
     baz: bingo
     foo: bar
-contact:
+contact_bundle:
     creator:
         email: creator.email
-        name: creator.name
-        url: creator.url
+        name: null
+        url: null
+    maintainer:
+        email: maint.email
+        name: null
+        url: null
+contact_source:
+    creator:
+        email: null
+        name: Source Creator
+        url: null
     maintainer:
         email: null
-        name: null
+        name: Source maintainer
         url: null
-    publisher:
-        email: null
-        name: null
-        url: null
-    source:
-        email: source.email
-        name: source.name
-        url: source.url
+dependencies: {}
 extract: {}
 identity:
+    bspace: null
+    btime: null
     dataset: dataset
-    id: dxxx999
+    id: dxxx
     revision: 3
     source: source
     subset: subset
+    type: null
     variation: variation
     version: 1.2.3
 names:
@@ -61,24 +65,6 @@ nonterm:
     a: 1
     b: 2
     c: 3
-partitions:
--   name: source-dataset-subset-variation-tthree
-    table: tthree
--   format: geo
-    name: source-dataset-subset-variation-geot1-geo
-    table: geot1
--   format: geo
-    name: source-dataset-subset-variation-geot2-geo
-    table: geot2
--   grain: missing
-    name: source-dataset-subset-variation-tone-missing
-    table: tone
--   name: source-dataset-subset-variation-tone
-    table: tone
--   format: csv
-    name: source-dataset-subset-variation-csv-csv-1
-    segment: 1
-    table: csv
 sources:
     google:
         description: The Google Homepage
@@ -86,6 +72,10 @@ sources:
     yahoo:
         description: The Yahoo Homepage
         url: http://yahoo.com
+versions:
+    3:
+        description: d3
+        version: s3
             """
 
     def tearDown(self):
@@ -191,7 +181,7 @@ sources:
                 summary = 'Summary',
                 tags = 'Foobotom'
             ),
-            contact = dict(
+            contact_bundle = dict(
                 creator = dict(
                     name = 'Name',
                     email = 'Email',
@@ -229,11 +219,11 @@ sources:
 
         print dict(top.partitions[0])
 
-        self.assertIn(('contact', 'creator', 'bingo'), top.errors)
+        self.assertIn(('contact_bundle', 'creator', 'bingo'), top.errors)
 
-        self.assertIn('publisher', top.contact.keys())
-        self.assertIn('url', dict(top.contact.creator))
-        self.assertEqual('Email',top.contact.creator.email)
+        self.assertIn('creator', top.contact_bundle.keys())
+        self.assertIn('url', dict(top.contact_bundle.creator))
+        self.assertEqual('Email',top.contact_bundle.creator.email)
 
         self.assertIn('name', top.partitions[0])
 
@@ -292,7 +282,6 @@ group:
         self.assertEquals('bar', t1.build.foo)
         self.assertEquals('bar', t1.build['foo'])
 
-        self.assertEqual(6, len(t1.partitions))
 
         self.assertIn('google', t1.sources.keys())
         self.assertIn('yahoo', t1.sources.keys())
@@ -325,7 +314,7 @@ group:
         #Test lazy loading.
         t3 = Top(path=d)
         self.assertTrue('license',t3.about.license)
-        self.assertTrue('creator.email',t3.contact.creator.email)
+        self.assertTrue('creator.email',t3.contact_bundle.creator.email)
         self.assertTrue(1,t3.nonterm.a)
 
         t3.write_to_dir(d)
@@ -335,15 +324,47 @@ group:
 
         self.assertEquals(self.yaml_config.strip(' \n'), t4.dump().strip(' \n'))
 
+        t5 = Top(path=d)
+
+
+        # Check that load from dir strips out erroneous terms
+        # This depends on write_to_dur not checking and stripping these values.
+
+        t5 = Top(path=d)
+        t5.load_all()
+
+        t5._term_values.about.foobar = 'foobar'
+        t5._term_values.sources.foobar = 'foobar'
+        t5._term_values.contact_bundle.creator.foobar = 'foobar'
+
+
+        t5.write_to_dir(d)
+
+        t52 = Top(path=d)
+        t52.load_all()
+
+        self.assertEquals(self.yaml_config.strip(' \n'), t52.dump().strip(' \n'))
+
+        self.assertEquals(3,len(t52.errors))
+        self.assertIn(('contact_bundle', 'creator', 'foobar'), t52.errors.keys())
+
 
         # Does it handle missing files?
 
-        os.remove(os.path.join(d, 'meta/partitions.yaml'))
+        os.remove(os.path.join(d, 'meta/build.yaml'))
 
-        t5 = Top()
-        t5.load_from_dir(d)
+        t6 = Top()
+        t6.load_from_dir(d)
 
         shutil.rmtree(d)
+
+
+        p = '/data/source/clarinova-public/abc.ca.gov/alcohol_licenses'
+        t7 = Top(path=d)
+        t7.load_all()
+
+        print t7.dump()
+
 
     def test_assignment(self):
         from ambry.bundle.meta import Top
@@ -351,6 +372,8 @@ group:
         import yaml
 
         t1 = Top(yaml.load(self.yaml_config))
+
+        self.assertEquals(self.yaml_config.strip(' \n'), t1.dump().strip(' \n'))
 
         idnt = Identity.from_dict(dict(t1.identity))
 
@@ -361,15 +384,7 @@ group:
 
         self.assertEquals('v2', t1.identity.variation)
 
-        # List Assignment
 
-        t1 = Top(yaml.load(self.yaml_config))
-
-        partitions = list(t1.partitions)
-
-        t1.partitions = partitions
-
-        self.assertEquals(self.yaml_config.strip(' \n'), t1.dump().strip(' \n'))
 
     def test_forced_format(self):
         yaml_config= """
@@ -412,6 +427,57 @@ partitions:
         t2 = Top(yaml.load(yaml_config))
 
         print t2.dump(keys=['partitions'])
+
+
+    def test_links(self):
+        from ambry.bundle.meta import Top
+        import yaml
+
+        t = Top(yaml.load(self.yaml_config))
+
+        t.contact_bundle.creator.name = 'Bob Bobson'
+
+        print t.contact_bundle.creator.name
+
+        idd = dict(t.identity)
+
+        t.identity = idd
+
+        print t.dump()
+
+    def test_errors(self):
+        from ambry.bundle.meta import Top
+        import yaml
+
+        # Check that the invalid fields are removed.
+
+        yaml_config = """
+about:
+    maintainer: maintainer
+    homepage: homepage
+    foo: bar
+    license: license
+    rights: rights
+    subject: subject
+    url: url"""
+
+        t1 = Top(yaml.load(yaml_config))
+
+        yc2 = yaml.load(t1.dump(keys=['about']))
+
+        self.assertIn('rights', yc2['about'])
+        self.assertNotIn('author', yc2['about'])
+        self.assertNotIn('url', yc2['about'])
+        self.assertIsNone(t1.about.summary)
+
+        self.assertIn(('about', 'foo', None), t1.errors)
+
+        t1 = Top(yaml.load(yaml_config), synonyms={'about.foo': 'about.summary'})
+
+        self.assertEquals('bar',t1.about.summary)
+        self.assertNotIn(('about', 'foo', None), t1.errors)
+
+        print t1.errors
 
 
 

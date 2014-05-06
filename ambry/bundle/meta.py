@@ -17,7 +17,6 @@ class About(DictGroup):
     rights = ScalarTerm()
     tags = ListTerm()
     groups = ListTerm()
-    url = ScalarTerm()
 
 class ContactTerm(DictTerm):
 
@@ -27,11 +26,8 @@ class ContactTerm(DictTerm):
 
 class Contact(DictGroup):
     """ """
-
     creator = ContactTerm()
     maintainer = ContactTerm()
-    source = ContactTerm()
-    publisher = ContactTerm()
 
 class Identity(DictGroup):
     """ """
@@ -41,6 +37,9 @@ class Identity(DictGroup):
     source = ScalarTerm()
     subset = ScalarTerm()
     variation = ScalarTerm()
+    btime = ScalarTerm()
+    bspace = ScalarTerm()
+    type = ScalarTerm()
     version = ScalarTerm()
 
 class Names(DictGroup):
@@ -51,20 +50,6 @@ class Names(DictGroup):
     vid = ScalarTerm()
     vname = ScalarTerm()
 
-class PartitionTerm(DictTerm):
-
-    name = ScalarTerm(store_none=False)
-    time = ScalarTerm(store_none=False)
-    space = ScalarTerm(store_none=False)
-    grain = ScalarTerm(store_none=False)
-    table = ScalarTerm(store_none=False)
-    format = ScalarTerm(store_none=False)
-    segment = ScalarTerm(store_none=False)
-
-class Partitions(ListGroup):
-    """Names that are generated from the identity"""
-
-    _proto = PartitionTerm()
 
 class SourceTerm(DictTerm):
     url = ScalarTerm()
@@ -74,6 +59,9 @@ class Sources(TypedDictGroup):
     """Names that are generated from the identity"""
     _proto = SourceTerm()
 
+
+class Dependencies(VarDictGroup):
+    """Names that are generated from the identity"""
 
 class Build(VarDictGroup):
     """Build parameters"""
@@ -86,6 +74,7 @@ class ExtDocTerm(DictTerm):
     url = ScalarTerm()
     title = ScalarTerm()
     description = ScalarTerm()
+    source = ScalarTerm()
 
 class ExtDoc(ListGroup):
     """External Documentation"""
@@ -93,23 +82,39 @@ class ExtDoc(ListGroup):
 
 class VersonTerm(DictTerm):
     """Version Description"""
-    semver = ScalarTerm()
+    version = ScalarTerm()
     description = ScalarTerm(store_none=False)
 
-class Versions(ListGroup):
+class Versions(TypedDictGroup):
     """Names that are generated from the identity"""
     _proto = VersonTerm()
+
 
 class Top(Metadata):
 
     _non_term_file = 'meta/build.yaml'
 
+    _x_synonyms = {
+        'about.maintainer': 'contact_bundle.maintainer.name',
+        'about.maintainer_email': 'contact_bundle.maintainer.email',
+        'about.author': 'contact_bundle.creator.name',
+        'about.author_email': 'contact_bundle.creator.email',
+        'about.homepage': 'contact_source.creator.url',
+        'about.url': 'contact_source.creator.url',
+        'about.website': 'contact_source.creator.url',
+        'about.description': 'about.summary',
+        'about.organization': 'contact_source.creator.name'
+
+
+    }
+
     about = About(file='bundle.yaml')
-    contact = Contact(file='bundle.yaml')
+    contact_source = Contact(file='bundle.yaml')
+    contact_bundle = Contact(file='bundle.yaml')
     sources = Sources(file='meta/build.yaml')
+    dependencies = Dependencies(file='meta/build.yaml')
     identity = Identity(file='bundle.yaml')
     names = Names(file='bundle.yaml')
-    partitions = Partitions(file='meta/partitions.yaml')
     build = Build(file='meta/build.yaml')
     extract = Extract(file='meta/build.yaml')
     external_documentation = ExtDoc(file='bundle.yaml')
