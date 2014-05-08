@@ -290,8 +290,8 @@ def _print_info(l,ident, list_partitions=False):
             prt('B Source Dir: {}', source_dir)
 
     if bundle and bundle.is_built:
-        cd = dict(bundle.db_config.dict)
-        process = cd['process']
+
+        process = bundle.get_value_group('process')
         prt('B Partitions: {}', bundle.partitions.count)
         prt('B Created   : {}', process.get('dbcreated', ''))
         prt('B Prepared  : {}', process.get('prepared', ''))

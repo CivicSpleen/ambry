@@ -118,9 +118,10 @@ class SourceTree(object):
 
                 for v in source.data['dependencies'].values():
                     try:
-                        ident = l.resolve(v, location=None, use_remote=True)
-                    except:
+                        ident = l.resolve(v, location=None, use_remote=False)
+                    except Exception as e:
                         ident = None
+
 
                     if not ident:
                         print 'B', v
