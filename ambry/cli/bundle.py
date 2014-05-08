@@ -123,7 +123,7 @@ def bundle_command(args, rc):
             getf(phase)(args, b, st, rc)
     except DependencyError as e:
         st.set_bundle_state(b.identity, 'error:dependency')
-        fatal("{}: Phase {} failed: {}", b.name, phase, e.message)
+        fatal("{}: Phase {} failed: {}", b.identity.name, phase, e.message)
     except Exception:
         st.set_bundle_state(b.identity, 'error:'+phase)
         raise
