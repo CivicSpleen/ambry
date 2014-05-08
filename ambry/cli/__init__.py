@@ -41,7 +41,7 @@ def warn(template, *args, **kwargs):
     global command
     global subcommand
     
-    logger.warning(template.format(*args, **kwargs))
+    logger.warning("WARN: "+template.format(*args, **kwargs))
 
 def load_bundle(bundle_dir):
     from ambry.run import import_file
