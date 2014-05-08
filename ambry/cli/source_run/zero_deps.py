@@ -7,7 +7,7 @@ def run(args, bundle_dir, bundle):
     #if bundle.is_built:
     #    return
 
-    deps = bundle.config.build.get('dependencies',{})
+    deps = bundle.metadata.dependencies
 
     if len(deps) == 0:
         print bundle.identity.fqname
