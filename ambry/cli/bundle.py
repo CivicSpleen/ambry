@@ -124,7 +124,7 @@ def bundle_command(args, rc):
     except DependencyError as e:
         st.set_bundle_state(b.identity, 'error:dependency')
         fatal("{}: Phase {} failed: {}", b.identity.name, phase, e.message)
-    except Exception:
+    except Exception as e:
         fatal("{}: Phase {} failed: {}", b.identity.name, phase, e.message)
         st.set_bundle_state(b.identity, 'error:'+phase)
 
