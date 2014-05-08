@@ -266,7 +266,11 @@ class SourceTree(object):
 
     def _bundle_data(self, ident, bundle):
 
-        dependencies = bundle.config.build.get('dependencies')
+        try:
+            dependencies = bundle.metadata.dependencies
+        except:
+            print "Dependencies error: ", bundle.bundle_dir
+            dependencies = {}
 
         return dict(
             identity=ident.dict,
@@ -274,9 +278,8 @@ class SourceTree(object):
             bundle_state=None,
             process=None,
             rev=0,
-            dependencies=dependencies
+            dependencies=dict(dependencies)
         )
-
 
     def sync_bundle(self, path, ident=None, bundle=None):
         from ..orm import File
@@ -367,7 +370,11 @@ class SourceTree(object):
 
             if 'bundle.yaml' in files:
 
-                bundle = BuildBundle(root)
+                try:
+                    bundle = BuildBundle(root)
+                except:
+                    print 'ERROR: Failed to open bundle dir={}'.format(root)
+                    raise
 
                 ident = bundle.identity
 
