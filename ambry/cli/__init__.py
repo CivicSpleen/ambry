@@ -214,6 +214,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
                                     if 'order' in ident.data else {'major':-1,'minor':-1})),
         ('locations','{:6s}',  '{:6s}',       lambda ident: ident.locations),
         ('vid',      '{:15s}', '{:20s}',      lambda ident: ident.vid),
+        ('last', '{:20s}', '{:20s}',          lambda ident: ident.data['last'] if 'last' in ident.data else ''),
         ('status',   '{:20s}', '{:20s}',      lambda ident: ident.bundle_state if ident.bundle_state else ''),
         ('vname',    '{:40s}', '    {:40s}',  lambda ident: ident.vname),
         ('sname',    '{:40s}', '    {:40s}',  lambda ident: ident.sname),

@@ -197,6 +197,8 @@ class SourceTree(object):
             f = self.library.files.query.ref(ident.vid).type(Dataset.LOCATION.SOURCE).one_maybe
 
         if f:
+            import time
+            f.modified = int(time.time())
             f.state = state
             self.library.files.merge(f)
 

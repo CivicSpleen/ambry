@@ -133,7 +133,10 @@ class Files(object):
 
         if os.path.exists(path):
             stat = os.stat(path)
-            f.modified = int(stat.st_mtime)
+
+            if not f.modified or stat.st_mtime > f.modified:
+                f.modified = int(stat.st_mtime)
+
             f.size = stat.st_size
         else:
             f.modified = None

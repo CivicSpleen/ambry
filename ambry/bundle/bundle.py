@@ -144,6 +144,7 @@ class Bundle(object):
             return self.database.set_config_value(self.dataset.vid, group, key, value, session=s)
 
 
+
     def get_value(self, group, key, default=None):
         v = self.database.get_config_value(self.dataset.vid, group, key)
 
@@ -818,7 +819,14 @@ class BuildBundle(Bundle):
         self.clear_logger()
 
     def set_build_state(self, state):
-        pass
+        from datetime import datetime
+
+        if state not in ('cleaned','meta'):
+            self.set_value('process', 'state', state)
+            self.set_value('process', 'last', datetime.now().isoformat())
+
+        if self.library.source:
+            self.library.source.set_bundle_state(self.identity, state)
 
 
     def progress(self, message):
@@ -846,12 +854,14 @@ class BuildBundle(Bundle):
     def pre_meta(self):
         """Skips the meta stage if the :class:.`META_COMPLETE_MARKER` file already exists"""
 
+
         mf = self.filesystem.meta_path(self.META_COMPLETE_MARKER)
 
         if os.path.exists(mf) and not self.run_args.get('clean', None):
             self.log("Meta information already generated")
             #raise ProcessError("Bundle has already been prepared")
             return False
+
 
         return True
 
@@ -861,9 +871,12 @@ class BuildBundle(Bundle):
     def post_meta(self):
         """Create the :class:.`META_COMPLETE_MARKER` meta marker so we don't run the meta process again"""
         import datetime
+
+
         mf = self.filesystem.meta_path(self.META_COMPLETE_MARKER)
         with open(mf, 'w+') as f:
             f.write(str(datetime.datetime.now()))
+
 
         return True
 
@@ -901,6 +914,7 @@ class BuildBundle(Bundle):
                     self.log(
                         "Installing required package: {}->{}".format(k, v))
                     install(python_dir, k, v)
+
 
         if self.is_prepared:
             self.log("Bundle has already been prepared")
@@ -960,6 +974,7 @@ class BuildBundle(Bundle):
     def prepare(self):
         from ..dbexceptions import NotFoundError
 
+
         # with self.session: # This will create the database if it doesn't
         # exist, but it will be empty
         if not self.database.exists():
@@ -982,6 +997,7 @@ class BuildBundle(Bundle):
                 self.rebuild_schema()
         else:
             self._prepare_load_schema()
+
 
         return True
 
@@ -1089,6 +1105,7 @@ class BuildBundle(Bundle):
 
         self.close()
 
+
         return True
 
     def build(self):
@@ -1126,7 +1143,8 @@ class BuildBundle(Bundle):
         self.post_build_write_partitions()
 
         self.post_build_write_config()
-        
+
+        self.set_value('process', 'last', datetime.now().isoformat())
         self.set_build_state( 'built')
 
         return True
@@ -1207,7 +1225,6 @@ class BuildBundle(Bundle):
     def build_main(self):
         """This is the methods that is actually called in do_prepare; it dispatched to
         developer created prepare() methods"""
-
 
         return self.build()
 
