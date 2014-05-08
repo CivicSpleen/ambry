@@ -5,7 +5,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 
 
-from ..cli import prt, fatal, warn
+from ..cli import prt, fatal, warn, err
 from ..cli import  _source_list, load_bundle, _print_bundle_list
 from ..source import SourceTree
 
@@ -125,7 +125,9 @@ def bundle_command(args, rc):
         st.set_bundle_state(b.identity, 'error:dependency')
         fatal("{}: Phase {} failed: {}", b.identity.name, phase, e.message)
     except Exception:
+        fatal("{}: Phase {} failed: {}", b.identity.name, phase, e.message)
         st.set_bundle_state(b.identity, 'error:'+phase)
+
         raise
     finally:
         import lockfile
