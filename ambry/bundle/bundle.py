@@ -1225,7 +1225,7 @@ class BuildBundle(Bundle):
     def build_main(self):
         """This is the methods that is actually called in do_prepare; it dispatched to
         developer created prepare() methods"""
-
+        self.set_build_state('building')
         return self.build()
 
     def do_build(self):
