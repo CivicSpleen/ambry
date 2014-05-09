@@ -60,6 +60,28 @@ def parse_dependency_links(file_name):
 
     return dependency_links
 
+def find_package_data():
+    """Return package_data, because setuptools is too stupid to handle nested directories """
+    #
+    #return {"ambry": ["support/*"]}
+
+    l = list()
+
+    import os
+    for root, dirs, files in os.walk("ambry/support"):
+
+        for f in files:
+
+            if f.endswith('.pyc'):
+                continue
+
+            path = os.path.join(root,f).replace("ambry/support",'support')
+
+            l.append(path)
+
+    print {"ambry": l }
+    return {"ambry": l }
+
 setup(name = "ambry",
       version = __version__,
       description = "Data packaging and distribution framework",
@@ -69,7 +91,7 @@ setup(name = "ambry",
       url = "https://github.com/clarinova/ambry",
       packages = find_packages(), 
       scripts=['scripts/bambry', 'scripts/ambry', 'scripts/xambry', 'scripts/ambry-load-sqlite'],
-      package_data = {"ambry": ["support/*", "support/templates/*",]},
+      package_data = find_package_data(),
       license = "",
       platforms = "Posix; MacOS X; Linux",
       classifiers=[
