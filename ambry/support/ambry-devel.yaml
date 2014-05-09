@@ -5,7 +5,7 @@ library:
         database: default
         source: '{root}/source'
         remotes:
-        - 'http://library.civicknowledge.org'
+        - 'http://library.clarinova.com'
 
     server:
         port: 7979

@@ -114,25 +114,30 @@ fi
 
 sudo easy_install pip
 
+# the ARCHFLAGS is a workaround for the Fall 2013 version of clang
 sudo ARCHFLAGS="-Wno-error=unused-command-line-argument-hard-error-in-future" \
 pip install -r https://raw.githubusercontent.com/clarinova/ambry/master/requirements.txt
 
-sudo mkdir -p /data/src
-sudo mkdir -p /data/source
+###
+### Install Ambry
+###
 
+sudo mkdir -p /data/src
 user=$(whoami)
 
 cd /data/
 
-sudo pip install -e git+https://github.com/clarinova/ambry.git#egg=ambry
+sudo pip install git+https://github.com/clarinova/ambry.git#egg=ambry
+
+# Install the example sources
+mkdir /data/source
+
+cd /data/source
+git clone https://github.com/sdrdl/sdrdl-ambry-bundles.git sdrdl
+git clone https://github.com/clarinova/ambry-bundles-public.git clarinova-public
+
 
 sudo chown -R $user /data
-
-##
-## Configure ambry
-##
-
-ambry config install
 
 
 
