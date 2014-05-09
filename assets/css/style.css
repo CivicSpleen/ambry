@@ -4,3 +4,12 @@ body {
   padding-top: 50px;
   padding-bottom: 20px;
 }
+
+div.fixed-height {
+    height: 100px;
+}
+
+.jumbotron {
+  font-size: 18px;
+
+}
