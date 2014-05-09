@@ -43,5 +43,6 @@ cd /data/source
 git clone https://github.com/sdrdl/sdrdl-ambry-bundles.git sdrdl
 git clone https://github.com/clarinova/ambry-bundles-public.git clarinova-public
 
-
 sudo chown -R $user /data
+
+ambry config install # Installs a development config
