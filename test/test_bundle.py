@@ -23,33 +23,7 @@ class Test(TestBase):
     def restore_bundle(self):
         pass 
 
-    def test_config(self):
-        from ambry.bundle.config import BundleFileConfig, RunConfig
-        from ambry.util import AttrDict
 
-        import shutil
-
-        p = '/tmp/test_config'
-        if not os.path.exists(p):
-            os.makedirs(p)
-
-        shutil.copyfile(os.path.join(self.bundle.bundle_dir, 'bundle.yaml'),
-                        os.path.join(p, 'bundle.yaml'))
-
-
-        cfg = BundleFileConfig(p)
-
-        print cfg.build
-
-        cfg.build.foo = 'bar'
-
-        print cfg.build
-
-        cfg.rewrite()
-
-        cfg = RunConfig()
-
-        print cfg.get('build')
 
     def test_db_bundle(self):
         
@@ -95,8 +69,8 @@ class Test(TestBase):
     def test_schema_direct(self):
         '''Test adding tables directly to the schema'''
         
-        # If we don't explicitly set the id_, it will change for every run. 
-        self.bundle.config.identity.id_ = 'aTest'
+        # If we don't explicitly set the id_, it will change for every run.
+        self.bundle.metadata.identity.id =  'aTest'
 
         self.bundle.schema.clean()
 
@@ -300,10 +274,10 @@ class Test(TestBase):
         p = self.bundle.partitions.find_or_new_csv(time=20, space=20)
         self.assertIsInstance(p, CsvPartition)
 
-        p = self.bundle.partitions.new_hdf_partition(space=30, data={'pid':'pid3'})
-        self.assertIsInstance(p, HdfPartition)
-        p = self.bundle.partitions.find_or_new_hdf(space=30)
-        self.assertIsInstance(p, HdfPartition)
+        #p = self.bundle.partitions.new_hdf_partition(space=30, data={'pid':'pid3'})
+        #self.assertIsInstance(p, HdfPartition)
+        #p = self.bundle.partitions.find_or_new_hdf(space=30)
+        #self.assertIsInstance(p, HdfPartition)
 
         with self.assertRaises(ConflictError):
             self.bundle.partitions.new_db_partition(time=10, space=10, data={'pid':'pid1'})
@@ -311,23 +285,23 @@ class Test(TestBase):
         with self.assertRaises(ConflictError):
             self.bundle.partitions.new_csv_partition(time=20, space=20, data={'pid':'pid21'})
 
-        with self.assertRaises(ConflictError):
-            self.bundle.partitions.new_hdf_partition(space=30, data={'pid':'pid31'})
+        #with self.assertRaises(ConflictError):
+        #    self.bundle.partitions.new_hdf_partition(space=30, data={'pid':'pid31'})
 
 
-        self.assertEqual(3, len(self.bundle.partitions.all))
+        self.assertEqual(2, len(self.bundle.partitions.all))
 
         p = self.bundle.partitions.find_or_new(time=10, space=10)
         p.database.create() # Find will go to the library if the database doesn't exist.
-        self.assertEqual(3, len(self.bundle.partitions.all))
+        self.assertEqual(2, len(self.bundle.partitions.all))
         self.assertEquals('pid1',p.data['pid'] )
       
         p = self.bundle.partitions.find_or_new_csv(time=20, space=20)
         p.database.create()  
         self.assertEquals('pid2',p.data['pid'] ) 
 
-        p = self.bundle.partitions.find_or_new_hdf(space=30)
-        self.assertEquals('pid3',p.data['pid'] ) 
+        #p = self.bundle.partitions.find_or_new_hdf(space=30)
+        #self.assertEquals('pid3',p.data['pid'] )
 
         p = self.bundle.partitions.find(PartitionNameQuery(time=10, space=10))
         self.assertEquals('pid1',p.data['pid'] )
@@ -341,11 +315,13 @@ class Test(TestBase):
         p = self.bundle.partitions.find(time=20, space=20)
         self.assertEquals('pid2',p.data['pid'] )
 
-        pnq3 = PartitionNameQuery(space=30)
+        # This is the HDF partition
+        # pnq3 = PartitionNameQuery(space=30)
+        # p = self.bundle.partitions.find(pnq3)
+        # self.assertEquals('pid3',p.data['pid'] )
 
-        p = self.bundle.partitions.find(pnq3)
-        self.assertEquals('pid3',p.data['pid'] ) 
-         
+        pnq3 = PartitionNameQuery(space=10)
+
         with self.bundle.session as s:
             p = self.bundle.partitions._find_orm(pnq3).first()
             p.data['foo'] = 'bar'
@@ -357,9 +333,9 @@ class Test(TestBase):
         print p.data 
         self.assertEquals('bar',p.data['foo'] ) 
 
-        p = self.bundle.partitions.find(PartitionNameQuery(name='source-dataset-subset-variation-30-hdf'))
-        self.assertTrue(p is not None)
-        self.assertEquals('source-dataset-subset-variation-30-hdf', p.identity.sname)
+        #p = self.bundle.partitions.find(PartitionNameQuery(name='source-dataset-subset-variation-30-hdf'))
+        #self.assertTrue(p is not None)
+        #self.assertEquals('source-dataset-subset-variation-30-hdf', p.identity.sname)
  
         #
         # Create all possible combinations of partition names
@@ -378,7 +354,7 @@ class Test(TestBase):
         
         with self.bundle.session as s:
         
-            # These two deletely bits clear out all of the old
+            # These two deletey bits clear out all of the old
             # partitions, to avoid a conflict with the next section. We also have
             # to delete the files, since create() adds a partition record to the database, 
             # and if one already exists, it will throw an Integrity Error.
@@ -389,13 +365,23 @@ class Test(TestBase):
             for p in self.bundle.dataset.partitions:
                 s.delete(p)
 
-        import pprint
-
-        pprint.pprint(sorted([ pid.fqname for pid in pids.values()]))
+    def test_partition_2(self):
 
         bundle = Bundle()
         bundle.clean()
+        bundle.pre_prepare()
         bundle.prepare()
+        bundle.post_prepare()
+
+        table = self.bundle.schema.tables[0]
+
+        p = (('time', 'time2'), ('space', 'space3'), ('table', table.name), ('grain', 'grain4'))
+        p += p
+        pids = {}
+        for i in range(4):
+            for j in range(4):
+                pid = self.bundle.identity.as_partition(**dict(p[i:i + j + 1]))
+                pids[pid.fqname] = pid
 
         for pid in pids.values():
             part = bundle.partitions.new_db_partition(**pid.dict)
@@ -419,7 +405,7 @@ class Test(TestBase):
         self.assertEquals('filesystem3', l['filesystem']['upstream']['upstream']['_name'])
         self.assertEquals('devtest.sandiegodata.org', l['filesystem']['upstream']['upstream']['account']['_name'])
 
-    def test_build_bundle_hdf(self):
+    def x_test_build_bundle_hdf(self):
 
         bundle = Bundle()
         bundle.clean()
@@ -442,6 +428,7 @@ class Test(TestBase):
                 bundle.filesystem.path('meta','schema.csv'))
         
         #try:
+        bundle.database.enable_delete   = True
         bundle.clean()
         bundle = Bundle()
         bundle.exit_on_fatal = False
@@ -517,26 +504,12 @@ class Test(TestBase):
         bundle.post_build()
 
 
-    def test_bundle(self):
-        from ambry.bundle import DbBundle
-        b = self.bundle
+    def test_config_update(self):
 
 
-        p = b.partitions.get('piEGPXmDC8001')
+        bundle = Bundle()
 
-        print p._repr_html_()
-
-        print p.table._repr_html_()
-
-        return
-
-        print b.info
-
-        lb = DbBundle(b.database.path)
-        print '-----'
-        print lb._repr_html_()
-
-        print b.partitions._repr_html_()
+        bundle.update_configuration()
 
 
     def test_session(self):
@@ -553,12 +526,12 @@ class Test(TestBase):
 
         with b.session as s1:
             with b.session as s2:
-                b.db_config.set_value('test', 'uuid', uv )
+                b.set_value('test', 'uuid', uv )
 
         b.close()
 
 
-        self.assertEqual(uv,  b.db_config.get_value('test', 'uuid'))
+        self.assertEqual(uv,  b.get_value('test', 'uuid').value)
 
         uv2 = str(uuid.uuid4())
 
@@ -566,11 +539,26 @@ class Test(TestBase):
 
         with b.session as s1:
             with b.session as s2:
-                b.db_config.set_value('test', 'uuid', uv2)
+                b.set_value('test', 'uuid', uv2)
 
-        self.assertEqual(uv2, b.db_config.get_value('test', 'uuid'))
+        self.assertEqual(uv2, b.get_value('test', 'uuid').value)
 
-        b.db_config.set_value('test', 'uuid', uv2)
+        b.set_value('test', 'uuid', uv2)
+
+    def test_templates(self):
+
+        from ambry.util.text import compile_tempate
+
+        print compile_tempate(self.bundle, None, None)
+
+        md = self.bundle.metadata
+
+        #print md.errors
+
+        #print yaml.dump(md.dict, default_flow_style=False, indent=4, encoding='utf-8')
+
+        self.bundle.update_configuration(use_metadata=True)
+
 
 def suite():
     suite = unittest.TestSuite()

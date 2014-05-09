@@ -340,13 +340,18 @@ def mp_run(mp_run_args):
         method = getattr(b, method_name)
 
         b.log("MP Run: pid={} {}{} ".format(os.getpid(),method.__name__, args))
-        method(*args)
+
+        try:
+            method(*args)
+        except:
+            b.close()
+            raise
         
     except:
         tb = traceback.format_exc()
-        print '==========vvv MR Run Exception: {}==========='.format(args)
+        print '==========vvv MP Run Exception: {} pid = {} ==========='.format(args, os.getpid())
         print tb
-        print '==========^^^ MR Run Exception: {}==========='.format(args)
+        print '==========^^^ MP Run Exception: {} pid = {} ==========='.format(args, os.getpid())
         raise
 
 

@@ -129,6 +129,10 @@ class SqlitePartition(PartitionBase):
         else:
             self.database.create()
 
+        # Closing becuase when creating a lot ot them, having more than 64 open will
+        # cause the sqlite driver to return with 'unable to open database' error
+        self.close()
+
 
     def clean(self):
         '''Delete all of the records in the tables declared for this oartition'''
@@ -328,7 +332,6 @@ class SqlitePartition(PartitionBase):
         self.database.add_view(view_name, vd['sql'])
 
         self.bundle.log("Created view {}".format(view_name))
-
 
     def __repr__(self):
         return "<db partition: {}>".format(self.identity.vname)

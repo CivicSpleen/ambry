@@ -254,10 +254,12 @@ class GeoPartition(SqlitePartition):
                                 type = type,
                                 t_srs = t_srs_opt
                                  )
-        
+
+        self.database.close()
         self.bundle.log("Running: "+ cmd)
-    
         output = subprocess.check_output(cmd, shell=True)
+        self.bundle.log("ogr2ogr: Done")
+
 
         #with self.bundle.session:
         #    for row in self.database.connection.execute("pragma table_info('{}')".format(self.table.name)):

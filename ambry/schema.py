@@ -122,12 +122,16 @@ class Schema(object):
         except sqlalchemy.orm.exc.NoResultFound as e:
             raise sqlalchemy.orm.exc.NoResultFound("No table for name_or_id: {}".format(name_or_id))
 
-    def table(self, name_or_id):
+    def table(self, name_or_id, session = None):
         '''Return an orm.Table object, from either the id or name. This is the cleaa method version
         of get_table_from_database'''
 
+        if session is None:
+            session = self.bundle.database.session
+
+
         return Schema.get_table_from_database(self.bundle.database, name_or_id,
-                                              session = self.bundle.database.session,
+                                              session = session,
                                               d_vid = self.bundle.identity.vid)
 
     def column(self, table, column_name):
@@ -201,10 +205,20 @@ class Schema(object):
         # Make sure that the columnumber is monotonically increasing
         # when it is specified, and is one more than the last one if not.
 
-        if not table.name in self.max_col_id:
-            self.max_col_id[table.name] = max(*[c.sequence_id for c in table.columns]) if len(table.columns) > 0 else 0
+        import pdb;
 
-        sequence_id = int(kwargs['sequence_id']) if 'sequence_id' in kwargs else None
+
+
+        if not table.name in self.max_col_id:
+            if len(table.columns) == 0:
+                self.max_col_id[table.name] = 0
+            elif len(table.columns) == 1:
+                self.max_col_id[table.name] = table.columns[0].sequence_id
+            else:
+                self.max_col_id[table.name] = max(*[c.sequence_id for c in table.columns])
+
+        sequence_id = int(kwargs['sequence_id']) if 'sequence_id' in kwargs and kwargs['sequence_id'] is not None else None
+
 
         if sequence_id is None:
             sequence_id = self.max_col_id[table.name] + 1
@@ -321,10 +335,10 @@ class Schema(object):
 
         if column.datatype == Column.DATATYPE_NUMERIC:
             return type_(column.precision, column.scale)
-        elif column.size:
+        elif column.size and column.datatype != Column.DATATYPE_INTEGER:
             try:
                 return type_(column.size)
-            except TypeError: # usually, the type desont't ake a size
+            except TypeError: # usually, the type does not take a size
                 return type_
         else:
             return type_
@@ -500,6 +514,9 @@ class Schema(object):
 
         from ambry.transform import CasterTransformBuilder
 
+        # The session isn't needed in
+        #with self.bundle.session as s:
+
         table = self.table(table_name)
 
         bdr = CasterTransformBuilder()
@@ -530,8 +547,12 @@ class Schema(object):
 
         return bdr
 
-        
+
     def schema_from_file(self, file_, progress_cb=None):
+
+        if not progress_cb:
+            progress_cb = self.bundle.init_log_rate(N=20)
+
         return self._schema_from_file(file_, progress_cb)
 
         
@@ -549,7 +570,7 @@ class Schema(object):
         file_.seek(0)
 
         if not progress_cb:
-            def progress_cb(m):
+            def progress_cb():
                 pass
 
         reader  = csv.DictReader(file_)
@@ -565,7 +586,7 @@ class Schema(object):
     
         for row in reader:
             line_no += 1
-            
+
             if not row.get('column', False) and not row.get('table', False):
                 continue
             
@@ -577,7 +598,7 @@ class Schema(object):
             
             if new_table and row['table']:
                 
-                progress_cb("Column: {}".format(row['table']))
+                progress_cb("Add schema table: {}".format(row['table']))
                 
                 try: table =  self.table(row['table'])
                 except: table = None 
@@ -613,7 +634,7 @@ class Schema(object):
             indexes = [ row['table']+'_'+c for c in row.keys() if (re.match('i\d+', c) and _clean_flag(row[c]))]  
             uindexes = [ row['table']+'_'+c for c in row.keys() if (re.match('ui\d+', c) and _clean_flag(row[c]))]  
             uniques = [ row['table']+'_'+c for c in row.keys() if (re.match('u\d+', c) and  _clean_flag(row[c]))]  
-        
+
             datatype = row['type'].strip().lower()
          
             width = _clean_int(row.get('width', None))
@@ -628,8 +649,8 @@ class Schema(object):
             
             description = row.get('description','').strip().encode('utf-8')
 
-            
-            progress_cb("Column: {}".format(row['column']))
+            #progress_cb("Column: {}".format(row['column']))
+
 
             col = self.add_column(t,row['column'],
                                    sequence_id = row.get('seq',None),
@@ -654,7 +675,9 @@ class Schema(object):
                                    units=row.get('units',None),
                                    universe=row.get('universe',None)
                                    )
-            
+
+            self.bundle.database.session.commit()
+
             
             self.validate_column(t, col, warnings, errors)
 
@@ -719,9 +742,7 @@ class Schema(object):
         formats
 
         """
-        
 
-        
         # Collect indexes
         indexes = {}
 
@@ -1193,7 +1214,7 @@ class {name}(Base):
         
         To use, run in the row loop:
         
-            d = bundle.schema.intuit_schema(row,d)
+            memo = bundle.schema.intuit_schema(row,memo)
             
         For row being either a dict or list of row values. 
         
@@ -1374,7 +1395,7 @@ class {name}(Base):
             if logger:
                 logger()
 
-            memo = self.intuit(None, memo)
+        memo = self.intuit(None, memo)
 
         self._update_from_memo(table_name, memo)
 

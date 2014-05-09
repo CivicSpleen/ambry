@@ -118,9 +118,10 @@ class SourceTree(object):
 
                 for v in source.data['dependencies'].values():
                     try:
-                        ident = l.resolve(v, location=None, use_remote=True)
-                    except:
+                        ident = l.resolve(v, location=None, use_remote=False)
+                    except Exception as e:
                         ident = None
+
 
                     if not ident:
                         print 'B', v
@@ -196,6 +197,8 @@ class SourceTree(object):
             f = self.library.files.query.ref(ident.vid).type(Dataset.LOCATION.SOURCE).one_maybe
 
         if f:
+            import time
+            f.modified = int(time.time())
             f.state = state
             self.library.files.merge(f)
 
@@ -266,7 +269,11 @@ class SourceTree(object):
 
     def _bundle_data(self, ident, bundle):
 
-        dependencies = bundle.config.build.get('dependencies')
+        try:
+            dependencies = bundle.metadata.dependencies
+        except:
+            print "Dependencies error: ", bundle.bundle_dir
+            dependencies = {}
 
         return dict(
             identity=ident.dict,
@@ -274,9 +281,8 @@ class SourceTree(object):
             bundle_state=None,
             process=None,
             rev=0,
-            dependencies=dependencies
+            dependencies=dict(dependencies)
         )
-
 
     def sync_bundle(self, path, ident=None, bundle=None):
         from ..orm import File
@@ -334,17 +340,16 @@ class SourceTree(object):
 
 
         if bundle and bundle.is_built:
-            config = dict(bundle.db_config.dict)
-            d['process'] = config['process']
+
+            d['process'] = bundle.get_value_group('process')
             f.state = 'built'
 
         d['rev'] = d['rev'] + 1  # Marks bundles that have already beein imported.
 
         f.data = d
+        files.merge(f)
 
         bundle.close()
-
-        files.merge(f)
 
 
     def _dir_list(self, datasets=None, key='vid'):
@@ -368,7 +373,11 @@ class SourceTree(object):
 
             if 'bundle.yaml' in files:
 
-                bundle = BuildBundle(root)
+                try:
+                    bundle = BuildBundle(root)
+                except:
+                    print 'ERROR: Failed to open bundle dir={}'.format(root)
+                    raise
 
                 ident = bundle.identity
 

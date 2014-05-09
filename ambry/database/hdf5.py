@@ -13,9 +13,16 @@ class Hdf5File(h5py.File):
     
     def __init__(self, path):
 
+        # There is an error in the tests HDF files get corrupted on reading,
+        # and they currently aren't being used much.
+        raise NotImplementedError()
+
         self._path = path
         self._is_open = False
-        super(Hdf5File, self).__init__(self._path)  
+        try:
+            super(Hdf5File, self).__init__(self._path)
+        except IOError as e:
+            raise IOError("Failed to open HDF File: {} : {} ".format(self._path, str(e)))
 
     def exists(self):
         import os.path

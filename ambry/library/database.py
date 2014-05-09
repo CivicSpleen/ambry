@@ -845,6 +845,7 @@ class LibraryDb(object):
 
                 if f:
                     dsid.bundle_state = f.state
+                    dsid.data['time'] = f.modified
 
 
 

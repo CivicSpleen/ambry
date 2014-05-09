@@ -73,14 +73,17 @@ class Bundle(BuildBundle):
         return True
     def build(self):
 
+        #self.log("=== Build hdf")
+        #self.build_hdf()
+
+        self.log("=== Build geo")
+        self.build_geo()
+
         self.log("=== Build db, using an inserter")
         self.build_db_inserter()
 
         self.log("=== Update")
         self.build_db_updater()
-
-        self.log("=== Build geo")
-        self.build_geo()
 
         self.log("=== Build missing")
         self.build_with_missing()
@@ -90,10 +93,6 @@ class Bundle(BuildBundle):
 
         self.log("=== Build csv")
         self.build_csv()
-
-
-        self.log("=== Build hdf")
-        self.build_hdf()
 
         return True
 
@@ -167,7 +166,10 @@ class Bundle(BuildBundle):
         
         p = self.partitions.find_or_new_db(table='tthree')
 
-        table = p.table
+        with self.session:
+            table = p.table
+            caster = table.caster
+
 
         field_gen =  self.fields3
       
@@ -187,7 +189,7 @@ class Bundle(BuildBundle):
                 lr()
         
             # The caster should be idempotent
-            caster = table.caster
+
             for i in range(10000):
                 row = { f[0]:f[1]() for f in field_gen }
                 cast_row, cast_errors = caster(row)
@@ -233,7 +235,13 @@ class Bundle(BuildBundle):
                 a[x,y] = x*y
  
         ds = hdf.database.create_dataset('hdf', data=a, compression=9)
-        hdf.database.close()       
+        hdf.database.close()
+
+        #hdf = self.partitions.find_or_new_hdf(table='hdf5')
+
+
+
+
 
     def build_csv(self):
         from ambry.identity import Identity

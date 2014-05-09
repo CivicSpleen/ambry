@@ -12,6 +12,7 @@ from ambry.util import get_logger, memoize
 from ..database.inserter import SegmentedInserter, SegmentInserterFactory
 from contextlib import contextmanager
 import atexit, weakref
+import pdb
 
 logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
@@ -48,7 +49,6 @@ class RelationalDatabase(DatabaseInterface):
     
     dsn = None
 
-
     def __init__(self,  driver=None, server=None, dbname = None, username=None, password=None, port=None,  **kwargs):
 
         '''Initialize the a database object
@@ -69,7 +69,7 @@ class RelationalDatabase(DatabaseInterface):
         self.username = username
         self.password = password
 
-        self.enable_delete = False
+        self.enable_delete = True
 
         if port:
             self.colon_port = ':'+str(port)
@@ -196,8 +196,10 @@ class RelationalDatabase(DatabaseInterface):
         from sqlalchemy import create_engine
         import sqlite3
         from sqlalchemy.pool import NullPool
+        from sqlalchemy.orm import sessionmaker
 
         if not self._engine:
+
             self.require_path()
             path = self.dsn
 
@@ -212,13 +214,16 @@ class RelationalDatabase(DatabaseInterface):
                 kwargs['connect_args'] = {'detect_types': sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES}
                 kwargs['native_datetime'] = True
 
-            self._engine = create_engine(path,  poolclass=NullPool, **kwargs)
+            self._engine = create_engine(path,  poolclass=NullPool, isolation_level='SERIALIZABLE', **kwargs)
+
+            self.Session = sessionmaker(bind=self._engine)
 
             self._engine.pool._use_threadlocal = True # Easier than constructing the pool
 
             self._on_create_engine(self._engine)
 
             self.get_connection(); # run _on_create_connection
+
 
         return self._engine
 
@@ -258,8 +263,8 @@ class RelationalDatabase(DatabaseInterface):
 
             except Exception as e:
                 self.error("Failed to open: '{}': {} ".format(self.dsn, e))
-                raise
 
+                raise
 
         return weakref.proxy(self._connection, close_connection_on_ref)
 
@@ -299,13 +304,11 @@ class RelationalDatabase(DatabaseInterface):
     def session(self):
         from sqlalchemy import event
 
-
         if not self._session:
-            from sqlalchemy.orm import sessionmaker
 
-            Session = sessionmaker(bind=self.engine)
+            engine = self.engine # Getting it might construct it.
 
-            self._session = Session()
+            self._session = self.Session()
 
             event.listen(self._session, "before_commit", self.commit_hook)
 
@@ -330,8 +333,11 @@ class RelationalDatabase(DatabaseInterface):
     def inspector(self):
         from sqlalchemy.engine.reflection import Inspector
 
-        return Inspector.from_engine(self.engine)
- 
+        try:
+            return Inspector.from_engine(self.engine)
+        except:
+            #pdb.set_trace()
+            raise
    
     def open(self):
         # Fetching the connection objects the database
@@ -354,8 +360,8 @@ class RelationalDatabase(DatabaseInterface):
             if self._connection_id() in connections:
                 del connections[self._connection_id()]
 
-        if self._engine:
-            self._engine.dispose()
+        #if self._engine:
+        #    self._engine.dispose()
 
 
     def clean_table(self, table):
@@ -467,7 +473,6 @@ class RelationalDatabase(DatabaseInterface):
         session.commit()
 
 
-
     def get_config_value(self, d_vid, group, key):
         from ambry.orm import Config as SAConfig
 
@@ -479,7 +484,16 @@ class RelationalDatabase(DatabaseInterface):
                                  SAConfig.d_vid == d_vid).first()
 
 
+    def get_config_value_group(self, d_vid, group):
+        from ambry.orm import Config as SAConfig
 
+        d = {}
+
+        for row in self.session.query(SAConfig).filter(SAConfig.group == group,
+                                                   SAConfig.d_vid == d_vid).all():
+            d[row.key] = row.value
+
+        return d
         
 
 class RelationalBundleDatabaseMixin(object):
@@ -504,10 +518,12 @@ class RelationalBundleDatabaseMixin(object):
 
         # Create the Dataset record
         session = self.session
-        
-        ds = Dataset(**self.bundle.config.identity)
 
-        ident = Identity.from_dict(self.bundle.config.identity)
+        idd = dict(self.bundle.metadata.identity)
+
+        ds = Dataset(**idd)
+
+        ident = Identity.from_dict(idd)
         
         ds.name = ident.sname
         ds.vname = ident.vname

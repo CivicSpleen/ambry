@@ -46,26 +46,32 @@ class Partitions(object):
         from ambry.identity import PartitionNumber
         from identity import PartitionIdentity
         from sqlalchemy import or_
-        
+
+
         from partition import new_partition
         
         session = self.bundle.database.session
+
+        orm_partition = None
 
         if isinstance(arg,OrmPartition):
             orm_partition = arg
             
         elif isinstance(arg, basestring):
       
-            orm_partition = session.query(OrmPartition).filter(or_(OrmPartition.id_==arg,OrmPartition.vid==arg)).one()
+            orm_query = session.query(OrmPartition).filter(or_(OrmPartition.id_==arg,OrmPartition.vid==arg))
 
-        elif isinstance(arg, PartitionNumber):      
-            orm_partition = session.query(OrmPartition).filter(OrmPartition.id_==str(arg) ).one()
+        elif isinstance(arg, PartitionNumber):
+            orm_query = session.query(OrmPartition).filter(OrmPartition.id_==str(arg) )
             
-        elif isinstance(arg, PartitionIdentity):      
-            orm_partition = session.query(OrmPartition).filter(OrmPartition.id_==str(arg.id_) ).one()  
+        elif isinstance(arg, PartitionIdentity):
+            orm_query = session.query(OrmPartition).filter(OrmPartition.id_==str(arg.id_) )
                
         else:
             raise ValueError("Arg must be a Partition or PartitionNumber. Got {}".format(type(arg)))
+
+        if not orm_partition:
+            orm_partition = orm_query.one()
 
         vid = orm_partition.vid
 
@@ -90,6 +96,7 @@ class Partitions(object):
         :type self: object
         '''
         from ambry.orm import Partition as OrmPartition
+        from sqlalchemy.orm import joinedload_all
         import sqlalchemy.exc
 
         try:
@@ -276,8 +283,9 @@ class Partitions(object):
         '''Return a Partition object from the database based on a PartitionId.
         An ORM object is returned, so changes can be persisted. '''
         import sqlalchemy.orm.exc
-        from ambry.orm import Partition as OrmPartition
-               
+        from ambry.orm import Partition as OrmPartition, Table
+        from sqlalchemy.orm import joinedload_all, joinedload
+
         assert isinstance(pnq,PartitionNameQuery), "Expected PartitionNameQuery, got {}".format(type(pnq))
     
         pnq = pnq.with_none()
@@ -324,6 +332,8 @@ class Partitions(object):
 
         q = q.order_by(OrmPartition.vid.asc()).order_by(OrmPartition.segment.asc())
 
+        q = q.options(joinedload(OrmPartition.table))
+
         return q
     
     def _new_orm_partition(self, pname, tables=None, data=None, memory = False):
@@ -333,8 +343,7 @@ class Partitions(object):
         from sqlalchemy.exc import IntegrityError
    
         assert type(pname) == PartialPartitionName, "Expected PartialPartitionName, got {}".format(type(pname))
-        
-   
+
         if tables and not isinstance(tables, (list,tuple, set)):
             raise ValueError("If specified, 'tables' must be a list, set or tuple")
      
@@ -373,18 +382,17 @@ class Partitions(object):
         # the format, which is required to get the correct cache_key
         d['cache_key'] = pname.promote(self.bundle.identity.name).cache_key
 
-
         if not 'format' in d:
             d['format']  = 'db'
 
-        
         try: del d['table'] # OrmPartition requires t_id instead
         except: pass
 
         if 'dataset' in d:
             del d['dataset']
          
-        # This code must have the session established in the context be active. 
+        # This code must have the session established in the context be active.
+
         op = OrmPartition(
                 self.bundle.get_dataset(),
                 t_id = table.id_ if table else None,
@@ -432,9 +440,6 @@ class Partitions(object):
         
         with self.bundle.session as s:
             op = self._new_orm_partition(ppn, tables=tables, data=data)
-          
-            # Return the partition from the managed session, which prevents the
-            #  partition from being tied to a session that is closed.  
 
             fqname = op.fqname
 
@@ -561,7 +566,9 @@ class Partitions(object):
  
          
     def new_hdf_partition(self, clean=False, tables=None, data=None, **kwargs):
-        
+
+        raise NotImplementedError("HDF is not working well")
+
         p, found =  self._find_or_new(kwargs,format='hdf', data=data)
         
         if found:
@@ -616,6 +623,7 @@ class Partitions(object):
             raise ConflictError("Partition {} alread exists".format(p.name))
 
         if shape_file:
+            p.database.close()
             p.load_shapefile(shape_file)
 
         return p

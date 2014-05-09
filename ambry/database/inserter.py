@@ -111,19 +111,19 @@ class ValueWriter(InserterInterface):
         logger.debug("rollback {}".format(repr(self.session)))
         self.session.rollback()
         self.db.partition.set_state(Partitions.STATE.ERROR)
-    
+
     def commit_end(self):
         from ..partitions import Partitions
         logger.debug("commit end {}".format(repr(self.session)))
         self.session.commit()
         self.db.partition.set_state(Partitions.STATE.BUILT)
-        
+
     def commit_continue(self):
         from ..partitions import Partitions
         logger.debug("commit continue {}".format(repr(self.session)))
         self.session.commit()
         self.db.partition.set_state(Partitions.STATE.BUILDING)
- 
+
     def close(self):
 
         if len(self.cache) > 0 :       
@@ -189,8 +189,7 @@ class CodeCastErrorHandler(object):
 
 class ValueInserter(ValueWriter):
     '''Inserts arrays of values into  database table'''
-    def __init__(self, db,  bundle, table, 
-                 orm_table = None,
+    def __init__(self, db,  bundle, table,
                  cast_error_handler = None,
                  cache_size=50000, text_factory = None, 
                  replace=False,  skip_none=True, update_size = True):
@@ -202,29 +201,25 @@ class ValueInserter(ValueWriter):
    
         self.table = table
 
-        # The   _db_orm_table is added to the Sqlalchemy metadata in 
-        # RelationalDatabase.table() 
-        if hasattr(self.table,'_db_orm_table'):
-            self.orm_table = self.table._db_orm_table
-            self.caster = self.orm_table.caster
-        else:
-            self.orm_table = self.bundle.schema.table(table.name)
+        with bundle.session as s:
+
+            orm_table = self.bundle.schema.table(table.name, session = s)
             self.caster = self.bundle.schema.caster(table.name)
 
+            self.header = [c.name for c in orm_table.columns]
 
-        self.null_row = self.orm_table.null_dict
+            # Int is included b/c long integer values get a type of integer64
+            self.sizable_fields = [c.name for c in orm_table.columns if
+                                   c.type_is_text() or c.datatype == c.DATATYPE_INTEGER]
+
+            self.null_row = orm_table.null_dict
 
         self.cast_error_handler = cast_error_handler(self) if cast_error_handler else None
 
-        self.header = [c.name for c in self.orm_table.columns]
-
-        # Int is included b/c long integer values get a type of integer64
-        self.sizable_fields = [c.name for c in self.orm_table.columns if c.type_is_text() or c.datatype == c.DATATYPE_INTEGER ]
-
         self._max_lengths = [ 0 for x in self.sizable_fields ]
-   
+
         self.statement = self.table.insert()
- 
+
         self.skip_none = skip_none
 
         self.update_size = update_size

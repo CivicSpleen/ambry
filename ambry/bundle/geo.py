@@ -10,7 +10,6 @@ from bundle import BuildBundle
 
 class GeoBuildBundle(BuildBundle):
 
-
     def __init__(self, bundle_dir=None):
         '''
         '''
@@ -28,9 +27,10 @@ class GeoBuildBundle(BuildBundle):
         def log(x):
             self.log(x)
 
-        for table, url in self.config.build.sources.items():
+        for table, item in self.config.build.sources.items():
+
             with self.session:
-                copy_schema(self.schema, table_name=table, path=url, logger=log)
+                copy_schema(self.schema, table_name=table, path=item.url, logger=log)
 
         self.schema.write_schema()
 
@@ -38,9 +38,10 @@ class GeoBuildBundle(BuildBundle):
 
 
     def build(self):
-        for table, url in self.config.build.sources.items():
-            p = self.partitions.new_geo_partition(table=table, shape_file=url)
-
+        for table, item in self.metadata.sources.items():
+            self.log("Loading table {} from {}".format(table, item.url))
+            p = self.partitions.new_geo_partition(table=table, shape_file=item.url)
+            self.log("Loading table {}. Done".format(table))
 
         for p in self.partitions:
             print p.info

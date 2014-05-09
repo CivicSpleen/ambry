@@ -116,7 +116,7 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
         
 
         self.require_path()
-        
+
         SqliteDatabase._create(self) # Creates the database file
         
         if RelationalDatabase._create(self):

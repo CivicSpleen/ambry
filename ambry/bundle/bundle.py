@@ -6,13 +6,13 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 import logging
+import os
 from ..filesystem import BundleFilesystem
 from ..schema import Schema
 from ..partitions import Partitions
-from ..util import get_logger
+from ..util import get_logger, clear_logger
 from ..dbexceptions import ConfigurationError, ProcessError
-
-from config import *
+from ..util import memoize
 
 
 class Bundle(object):
@@ -58,21 +58,38 @@ class Bundle(object):
             self._database.close()
 
     @property
-    def logger(self):
+    def log_file(self):
 
+        return self.path+".log"
+
+    @property
+    def logger(self):
+        import sys
         if not self._logger:
 
             try:
                 ident = self.identity
                 template = "%(levelname)s " + ident.sname + " %(message)s"
+
+                if self.run_args.multi > 1:
+                    template = "%(levelname)s " + ident.sname + " %(process)s %(message)s"
+
             except:
                 template = "%(message)s"
 
-            self._logger = get_logger(__name__, template=template)
+            if not os.path.isdir(os.path.dirname(self.log_file)):
+                os.makedirs(os.path.dirname(self.log_file))
+
+            self._logger = get_logger(__name__, template=template, stream= sys.stdout, file_name = self.log_file )
 
             self._logger.setLevel(self.log_level)
 
         return self._logger
+
+    def clear_logger(self):
+        # Force the logger to re-open, which will re-create the file that just got deleted
+        self._logger = None
+        clear_logger(__name__)
 
     @property
     def database(self):
@@ -97,6 +114,9 @@ class Bundle(object):
 
         return self._partitions
 
+
+
+
     @property
     def repository(self):
         """Return a repository object """
@@ -115,6 +135,27 @@ class Bundle(object):
     def dataset(self):
         """Return the dataset"""
         return self.get_dataset()
+
+
+    def set_value(self, group, key, value):
+        from ambry.orm import Config as SAConfig
+
+        with self.session as s:
+            return self.database.set_config_value(self.dataset.vid, group, key, value, session=s)
+
+
+
+    def get_value(self, group, key, default=None):
+        v = self.database.get_config_value(self.dataset.vid, group, key)
+
+        if v is None and default is not None:
+            return default
+        else:
+            return v
+
+    def get_value_group(self, group):
+        return self.database.get_config_value_group(self.dataset.vid, group)
+
 
     def _dep_cb(self, library, key, name, resolved_bundle):
         """A callback that is called when the library resolves a dependency.
@@ -300,8 +341,6 @@ class DbBundle(Bundle):
 
         self._database = SqliteBundleDatabase(self, database_file)
 
-        self.db_config = self.config = BundleDbConfig(self, self.database)
-
         # Set in Library.get() and Library.find() when the user requests a
         # partition.
         self.partition = None
@@ -388,8 +427,6 @@ class LibraryDbBundle(Bundle):
 
         self._dataset_id = dataset_id
         self._database = database
-
-        self.db_config = self.config = BundleDbConfig(self, self.database)
 
         # Set in Library.get() and Library.find() when the user requests a
         # partition. s
@@ -479,11 +516,12 @@ class BuildBundle(Bundle):
         """
         """
         from ..database.sqlite import BundleLockContext
+        import os
 
         super(BuildBundle, self).__init__()
 
         if bundle_dir is None:
-            import inspect
+            import inspect, os
             bundle_dir = os.path.abspath(
                 os.path.dirname(
                     inspect.getfile(
@@ -497,10 +535,6 @@ class BuildBundle(Bundle):
         self.bundle_dir = bundle_dir
 
         self._database = None
-
-        # For build bundles, always use the FileConfig though self.config
-        # to get configuration.
-        self._load_config()
 
         self.filesystem = BundleFilesystem(self, self.bundle_dir)
 
@@ -521,8 +555,6 @@ class BuildBundle(Bundle):
 
         self._bundle_lock_context = BundleLockContext(self)
 
-    def _load_config(self):
-        self._config = BundleFileConfig(self.bundle_dir)
 
     def get_dataset(self):
         """Return the dataset
@@ -588,12 +620,24 @@ class BuildBundle(Bundle):
     def has_session(self):
         return self.database.has_session
 
+
     @property
+    @memoize
+    def metadata(self):
+        from ambry.bundle.meta import Top
+        return Top(path=self.bundle_dir)
+
+
+    @property
+    @memoize
     def config(self):
-        return self._config
+        from ..run import get_runconfig
+
+        return  get_runconfig()
 
     @property
     def db_config(self):
+        raise NotImplementedError()
         return BundleDbConfig(self, self.database)
 
     @property
@@ -601,52 +645,71 @@ class BuildBundle(Bundle):
         """Return an identity object. """
         from ..identity import Identity, Name, ObjectNumber, LocationRef
 
+
         if not self._identity:
             try:
-                names = self.config.names.items()
-                idents = self.config.identity.items()
+                names = self.metadata.names.items()
+                idents = self.metadata.identity.items()
+
+            except KeyError as e:
+                raise ConfigurationError("Bad bundle config in: {}: {} ".format(self.bundle_dir, e))
             except AttributeError:
                 raise AttributeError(
                     "Failed to get required sections of config. " +
                     "\nconfig_source = {}\n".format(
                         self.config.source_ref))
+
             self._identity = Identity.from_dict(dict(names + idents))
             self._identity.locations.set(LocationRef.LOCATION.SOURCE)
 
         return self._identity
 
-    def update_configuration(self):
+    def update_configuration(self, rewrite_database=True):
         from ..dbexceptions import DatabaseError
         # Re-writes the bundle.yaml file, with updates to the identity and partitions
         # sections.
         from ..dbexceptions import DatabaseMissingError
 
-        if self.database.exists():
-            partitions = [
-                p.identity.name.partital_dict for p in self.partitions]
+        md = self.metadata
+        md.load_all()
 
-        else:
-            partitions = []
+        if len(md.errors) > 0:
+            self.error("Metadata errors in {}".format(md._path))
+            for k,v in md.errors.items():
+                self.error("    {} = {}".format('.'.join([x for x in k if x]), v))
+            raise Exception("Metadata errors")
 
-        self.config.rewrite(
-            identity=self.identity.ident_dict,
-            names=self.identity.names_dict,
-            partitions=partitions
-        )
+        md.identity = self.identity.ident_dict
+        md.names = self.identity.names_dict
+
+        # Partitions is hanging around in some old bundles
+        if 'partitions' in md._term_values:
+            del md._term_values['partitions']
+
+        # Ensure there is an entry for every revision, if only to nag the maintainer to fill it in.
+        for i in range(1, md.identity.revision+1):
+            md.versions[i]
+
+            if i == md.identity.revision:
+                md.versions[i].version = md.identity.version
+
+        md.write_to_dir(write_all=True)
+
 
         # Reload some of the values from bundle.yaml into the database
         # configuration
 
-        odep_set = False
-        if self.database.exists():
+        if rewrite_database:
+            odep_set = False
+            if self.database.exists():
 
-            if self.config.build.get('dependencies'):
-                dbc = self.db_config
-                for k, v in self.config.build.get('dependencies').items():
-                    dbc.set_value('odep', k, v)
-                    odep_set = True
+                if self.config.build.get('dependencies'):
+                    for k, v in self.config.build.get('dependencies').items():
+                        self.set_value('odep', k, v)
+                        odep_set = True
 
-        self.database.rewrite_dataset()
+
+                self.database.rewrite_dataset()
 
     @property
     def sources(self):
@@ -659,14 +722,43 @@ class BuildBundle(Bundle):
             raise ConfigurationError(
                 "Configuration does not have 'build.sources' group")
 
-        return self.config.build.sources
+        d = {}
+        for k in self.config.build.sources.keys():
+            d[k] = self.source(k) # Enforce structure requirements
 
     def source(self, name):
-        """Return a source URL with the given name, from the build.sources configuration
-        value"""
+        """Return a source record with the given name, from the build.sources configuration
+        value.
+
+        This will return the whole record, which may have subcomponents. If the record is define with only a
+        scalar string, it will be reutnred in a dict, mapped to the key 'url' """
 
         s = self.config.build.sources
-        return s.get(name, None)
+        d =  s.get(name, None)
+
+        if isinstance(d, basestring):
+            return { 'url': d}
+        elif isinstance(d, dict):
+
+            if 'url' not in d:
+                raise ValueError("Config value build.sources.{} must be either a string or a dict with a 'url' key "
+                                .format(name))
+            return d
+        else:
+            raise ValueError("Value assigned to config value build.sources.{} must be a string or dict. Got a {}"
+                            .format(name, type(d)))
+
+
+    def source_url(self, name):
+        """Return a source url with the given name, from the build.sources configuration
+        value.
+
+        This will return only the url component of the named source"""
+
+        d = self.source(name)
+
+        return d['url']
+
 
     @property
     def dependencies(self):
@@ -680,9 +772,11 @@ class BuildBundle(Bundle):
         # Remove partitions
 
         rm_rf(self.sub_path())
+        self.log("Removing {}".format(self.sub_path()))
         # Remove the database
 
         if self.database.exists():
+            self.log("Removing {}".format(self.database.path))
             self.database.delete()
 
         # Remove the sqlite journal files, if they exists
@@ -695,25 +789,45 @@ class BuildBundle(Bundle):
             "-journal"]
         for f in files:
             if os.path.exists(f):
+                self.log("Removing {}".format(f))
                 os.remove(f)
 
         if clean_meta:
             mf = self.filesystem.meta_path(self.META_COMPLETE_MARKER)
             if os.path.exists(mf):
+                self.log("Removing {}".format(mf))
                 os.remove(mf)
 
         ed = self.filesystem.path('extracts')
         if os.path.exists(ed):
+            self.log("Removing {}".format(ed))
             rm_rf(ed)
+
+        if os.path.exists(self.log_file):
+            self.log("Removing {}".format(self.log_file))
+            os.remove(self.log_file)
 
         # Should check for a shared download file -- specified
         # as part of the library; Don't delete that.
         # if not self.cache_downloads :
         #    self.rm_rf(self.filesystem.downloads_path())
 
-        self.library.source.set_bundle_state(self.identity, 'cleaned')
+        self.set_build_state( 'cleaned')
 
         self.close()
+
+        self.clear_logger()
+
+    def set_build_state(self, state):
+        from datetime import datetime
+
+        if state not in ('cleaned','meta'):
+            self.set_value('process', 'state', state)
+            self.set_value('process', 'last', datetime.now().isoformat())
+
+        if self.library.source:
+            self.library.source.set_bundle_state(self.identity, state)
+
 
     def progress(self, message):
         """print message to terminal, in place"""
@@ -740,12 +854,14 @@ class BuildBundle(Bundle):
     def pre_meta(self):
         """Skips the meta stage if the :class:.`META_COMPLETE_MARKER` file already exists"""
 
+
         mf = self.filesystem.meta_path(self.META_COMPLETE_MARKER)
 
         if os.path.exists(mf) and not self.run_args.get('clean', None):
             self.log("Meta information already generated")
             #raise ProcessError("Bundle has already been prepared")
             return False
+
 
         return True
 
@@ -755,9 +871,12 @@ class BuildBundle(Bundle):
     def post_meta(self):
         """Create the :class:.`META_COMPLETE_MARKER` meta marker so we don't run the meta process again"""
         import datetime
+
+
         mf = self.filesystem.meta_path(self.META_COMPLETE_MARKER)
         with open(mf, 'w+') as f:
             f.write(str(datetime.datetime.now()))
+
 
         return True
 
@@ -795,6 +914,7 @@ class BuildBundle(Bundle):
                     self.log(
                         "Installing required package: {}->{}".format(k, v))
                     install(python_dir, k, v)
+
 
         if self.is_prepared:
             self.log("Bundle has already been prepared")
@@ -854,11 +974,16 @@ class BuildBundle(Bundle):
     def prepare(self):
         from ..dbexceptions import NotFoundError
 
+
         # with self.session: # This will create the database if it doesn't
         # exist, but it will be empty
         if not self.database.exists():
             self.log("Creating bundle database")
-            self.database.create()
+            try:
+                self.database.create()
+            except:
+                self.error("Failed to create database: {} ".format(self.database.dsn))
+                raise
         else:
             self.log("Bundle database already exists")
 
@@ -872,6 +997,7 @@ class BuildBundle(Bundle):
                 self.rebuild_schema()
         else:
             self._prepare_load_schema()
+
 
         return True
 
@@ -913,14 +1039,13 @@ class BuildBundle(Bundle):
         from datetime import datetime
 
         with self.session:
-            self.db_config.set_value(
-                'process',
-                'prepared',
-                datetime.now().isoformat())
+            self.set_value('process', 'prepared', datetime.now().isoformat())
 
             self._revise_schema()
+            
+        self.set_build_state( 'prepared')
 
-        self.library.source.set_bundle_state(self.identity, 'prepared')
+        self.update_configuration()
 
         return True
 
@@ -928,7 +1053,7 @@ class BuildBundle(Bundle):
     def is_prepared(self):
         return (self.database.exists()
                 and not self.run_args.get('rebuild', False)
-                and self.db_config.get_value('process', 'prepared', False))
+                and self.get_value('process', 'prepared', False))
 
     def prepare_main(self):
         """This is the methods that is actually called in do_prepare; it dispatched to
@@ -937,6 +1062,7 @@ class BuildBundle(Bundle):
 
     def do_prepare(self):
         """This method runs pre_, main and post_ prepare methods. """
+
         if self.pre_prepare():
             self.log("---- Preparing ----")
             if self.prepare_main():
@@ -967,7 +1093,7 @@ class BuildBundle(Bundle):
             return False
 
         with self.session:
-            if not self.db_config.get_value('process', 'prepared', False):
+            if not self.get_value('process', 'prepared', False):
                 raise ProcessError("Build called before prepare completed")
 
             self._build_time = time()
@@ -976,6 +1102,9 @@ class BuildBundle(Bundle):
 
         if python_dir and python_dir not in sys.path:
             sys.path.append(python_dir)
+
+        self.close()
+
 
         return True
 
@@ -990,15 +1119,8 @@ class BuildBundle(Bundle):
         import shutil
 
         with self.session:
-            self.db_config.set_value(
-                'process',
-                'built',
-                datetime.now().isoformat())
-            self.db_config.set_value(
-                'process',
-                'buildtime',
-                time() -
-                self._build_time)
+            self.set_value('process','built',datetime.now().isoformat())
+            self.set_value( 'process','buildtime',time() -  self._build_time)
             self.update_configuration()
 
             self._revise_schema()
@@ -1018,7 +1140,12 @@ class BuildBundle(Bundle):
 
         self.post_build_write_stats()
 
-        self.library.source.set_bundle_state(self.identity, 'built')
+        self.post_build_write_partitions()
+
+        self.post_build_write_config()
+
+        self.set_value('process', 'last', datetime.now().isoformat())
+        self.set_build_state( 'built')
 
         return True
 
@@ -1051,6 +1178,38 @@ class BuildBundle(Bundle):
                         p.identity.name,
                         e.message))
                 raise
+            p.close() # Or, will run out of files/connections and get operational error
+
+    def post_build_write_partitions(self):
+        """Write a list of partitions to the meta directory"""
+        import yaml
+
+        if self.database.exists():
+            partitions = [p.identity.name.partital_dict for p in self.partitions]
+
+        else:
+            partitions = []
+
+
+        fn = self.filesystem.path('meta','partitions.yaml')
+
+        with open(fn,'w') as f:
+            yaml.safe_dump(partitions, f,default_flow_style=False, indent=4, encoding='utf-8')
+
+    def post_build_write_config(self):
+        '''Write  the config into the database'''
+        exclude_keys = ('names','identity')
+
+        self.metadata.load_all()
+
+        for row in self.metadata.rows:
+
+            if row[0][0] in exclude_keys:
+                continue
+
+            k = '.'.join([str(x) for x in row[0] if x])
+
+            self.set_value('config', k, row[1])
 
     @property
     def is_built(self):
@@ -1059,19 +1218,20 @@ class BuildBundle(Bundle):
         if not self.database.exists():
             return False
 
-        v = self.db_config.get_value('process', 'built', False)
+        v = self.get_value('process', 'built', False)
 
         return bool(v)
 
     def build_main(self):
         """This is the methods that is actually called in do_prepare; it dispatched to
         developer created prepare() methods"""
+        self.set_build_state('building')
         return self.build()
 
     def do_build(self):
 
         if not self.is_prepared:
-            self.prepare()
+            self.do_prepare()
 
         if self.pre_build():
             self.log("---- Build ---")
@@ -1096,7 +1256,7 @@ class BuildBundle(Bundle):
             raise ProcessError(
                 "Database does not exist yet. Was the 'prepare' step run?")
 
-        if not self.db_config.get_value('process', 'prepared'):
+        if not self.get_value('process', 'prepared'):
             raise ProcessError("Update called before prepare completed")
 
         self._update_time = time()
@@ -1110,15 +1270,8 @@ class BuildBundle(Bundle):
         from datetime import datetime
         from time import time
         with self.session:
-            self.db_config.set_value(
-                'process',
-                'updated',
-                datetime.now().isoformat())
-            self.db_config.set_value(
-                'process',
-                'updatetime',
-                time() -
-                self._update_time)
+            self.set_value('process','updated',datetime.now().isoformat())
+            self.set_value('process','updatetime',time() - self._update_time)
             self.update_configuration()
 
 
@@ -1182,11 +1335,9 @@ class BuildBundle(Bundle):
 
     def post_install(self):
         from datetime import datetime
-        self.db_config.set_value(
-            'process',
-            'installed',
-            datetime.now().isoformat())
-        self.library.source.set_bundle_state(self.identity, 'installed')
+        self.set_value('process','installed', datetime.now().isoformat())
+        
+        self.set_build_state( 'installed')
 
         return True
 
@@ -1208,10 +1359,7 @@ class BuildBundle(Bundle):
 
     def post_submit(self):
         from datetime import datetime
-        self.db_config.set_value(
-            'process',
-            'submitted',
-            datetime.now().isoformat())
+        self.set_value('process','submitted', datetime.now().isoformat())
 
         return True
 
@@ -1229,10 +1377,7 @@ class BuildBundle(Bundle):
 
     def post_extract(self):
         from datetime import datetime
-        self.db_config.set_value(
-            'process',
-            'extracted',
-            datetime.now().isoformat())
+        self.set_value('process','extracted',datetime.now().isoformat())
 
         return True
 
@@ -1405,6 +1550,7 @@ class AnalysisBundle(BuildBundle):
     def __init__(self, bundle_path):
         """Initialize the analysis bundle by running the prepare phase and starting the pre-build
         portion of the build phase """
+        from ..util import AttrDict
         super(AnalysisBundle, self).__init__(bundle_path)
 
         self.log_level = logging.CRITICAL
@@ -1449,7 +1595,7 @@ class AnalysisBundle(BuildBundle):
                 "Database does not exist yet. Was the 'prepare' step run?")
 
         with self.session:
-            if not self.db_config.get_value('process', 'prepared', False):
+            if not self.get_value('process', 'prepared', False):
                 raise ProcessError("Build called before prepare completed")
 
             self._build_time = time()

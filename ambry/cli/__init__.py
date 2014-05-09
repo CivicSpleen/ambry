@@ -41,7 +41,7 @@ def warn(template, *args, **kwargs):
     global command
     global subcommand
     
-    logger.warning(template.format(*args, **kwargs))
+    logger.warning("WARN: "+template.format(*args, **kwargs))
 
 def load_bundle(bundle_dir):
     from ambry.run import import_file
@@ -82,6 +82,7 @@ def _find(args, l, config):
 
             if f:
                 ident.bundle_state = f.state
+                ident.data['time'] = f.modified
 
         if ident.vid in identities:
             ident = identities[ident.vid]
@@ -197,7 +198,7 @@ def _source_list(dir_):
     return lst
 
 def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
-
+    from datetime import datetime
 
     record_entry_names = ('name', 'd_format', 'p_format', 'extractor')
 
@@ -214,6 +215,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
                                     if 'order' in ident.data else {'major':-1,'minor':-1})),
         ('locations','{:6s}',  '{:6s}',       lambda ident: ident.locations),
         ('vid',      '{:15s}', '{:20s}',      lambda ident: ident.vid),
+        ('time', '{:20s}', '{:20s}',          lambda ident: datetime.fromtimestamp(ident.data['time']).isoformat() if 'time' in ident.data else ''),
         ('status',   '{:20s}', '{:20s}',      lambda ident: ident.bundle_state if ident.bundle_state else ''),
         ('vname',    '{:40s}', '    {:40s}',  lambda ident: ident.vname),
         ('sname',    '{:40s}', '    {:40s}',  lambda ident: ident.sname),
@@ -228,6 +230,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
     p_format = ""
     extractors = []
 
+
     for e in all_fields:
         e = dict(zip(record_entry_names, e)) # Just to make the following code easier to read
 
@@ -238,6 +241,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
         p_format += e['p_format']
 
         extractors.append(e['extractor'])
+
 
     prtf(d_format, *[ f(ident) for f in extractors ] )
 
@@ -290,8 +294,8 @@ def _print_info(l,ident, list_partitions=False):
             prt('B Source Dir: {}', source_dir)
 
     if bundle and bundle.is_built:
-        cd = dict(bundle.db_config.dict)
-        process = cd['process']
+
+        process = bundle.get_value_group('process')
         prt('B Partitions: {}', bundle.partitions.count)
         prt('B Created   : {}', process.get('dbcreated', ''))
         prt('B Prepared  : {}', process.get('prepared', ''))

@@ -598,7 +598,7 @@ def get_dataset(did, library, pid=None):
     if files and len(files) > 0:
         d['file'] = dict(
             ref = files[0].dict,
-            config = gr.db_config.dict
+            config = gr.dict
         )
 
     if pid:

@@ -1,6 +1,6 @@
 '''Script for source run to print the umber of dependencies that a source bundle has'''
 
-def run(args, bundle_dir, bundle, repo):
+def run(args, bundle_dir, bundle):
 
     #if bundle.is_built:
     #    return

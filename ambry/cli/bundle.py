@@ -5,7 +5,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 
 
-from ..cli import prt, fatal, warn
+from ..cli import prt, fatal, warn, err
 from ..cli import  _source_list, load_bundle, _print_bundle_list
 from ..source import SourceTree
 
@@ -85,6 +85,9 @@ def bundle_command(args, rc):
     dir_ = os.path.dirname(rp)
     b = mod.Bundle(dir_)
 
+    # In case the bundle lock is hanging around from a previous run
+    b.database.break_lock()
+
     b.set_args(args)
 
     def getf(f):
@@ -120,12 +123,17 @@ def bundle_command(args, rc):
             getf(phase)(args, b, st, rc)
     except DependencyError as e:
         st.set_bundle_state(b.identity, 'error:dependency')
-        fatal("Phase {} failed: {}", phase, e.message)
-    except Exception:
+        fatal("{}: Phase {} failed: {}", b.identity.name, phase, e.message)
+    except Exception as e:
+        err("{}: Phase {} failed: {}", b.identity.name, phase, e.message)
         st.set_bundle_state(b.identity, 'error:'+phase)
         raise
     finally:
-        b.close()
+        import lockfile
+        try:
+            b.close()
+        except lockfile.NotMyLock as e:
+            warn("Got logging error: {}".format(str(e)))
 
 def bundle_parser(cmd):
     import argparse, multiprocessing
@@ -312,8 +320,8 @@ def bundle_info(args, b, st, rc):
 
         if b.database.exists():
 
-            cd = dict(b.db_config.dict)
-            process = cd['process']
+            process = b.get_value_group('process')
+
             b.log('Created   : ' + process.get('dbcreated', ''))
             b.log('Prepared  : ' + process.get('prepared', ''))
             b.log('Built     : ' + process.get('built', ''))
@@ -335,7 +343,7 @@ def bundle_info(args, b, st, rc):
         else:
             # for built bundles
             try:
-                deps = b.db_config.odep.items()
+                deps = b.odep.items()
             except AttributeError:
                 deps = None
             except DatabaseMissingError:
@@ -351,6 +359,7 @@ def bundle_clean(args, b, st, rc):
     b.log("---- Cleaning ---")
     # Only clean the meta phases when it is explicityly specified.
     #b.clean(clean_meta=('meta' in phases))
+    b.database.enable_delete = True
     b.clean()
 
 

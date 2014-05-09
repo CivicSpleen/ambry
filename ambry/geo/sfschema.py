@@ -126,7 +126,11 @@ class TableShapefile(object):
 
         self.bundle = bundle
         self.path = path
-        self.table = self.bundle.schema.table(table)
+        self.table_name = table
+        self._table = None
+
+
+        gdal.UseExceptions()
 
         if not self.table:
             raise ConfigurationError("Didn't find table: {}".format(table))
@@ -183,7 +187,18 @@ class TableShapefile(object):
             return False
                 
         return self
-      
+
+    @property
+    def table(self):
+        """Fetch the table from the schema if it is null or has its database sessino expired"""
+        from sqlalchemy.orm import object_session
+
+        if not self._table or not object_session(self._table):
+            self._table = self.bundle.schema.table(self.table_name)
+
+        return self._table
+
+
     def figure_feature_type(self):
         
         typ = None
@@ -302,7 +317,9 @@ class TableShapefile(object):
             
     def add_feature(self, row, source_srs=None):
         import datetime
-        
+
+        gdal.UseExceptions()
+
         geometry = self.get_geometry(row)
 
         if source_srs is not None and source_srs != self.source_srs:
@@ -314,7 +331,7 @@ class TableShapefile(object):
             self.layer = self.ds.CreateLayer( self.name, self.srs, type_)
             
             if self.layer is None:
-                raise Exception("Failed to create layer {} ".format(self.name))
+                raise Exception("Failed to create layer {} in {}".format(self.name, self.path))
             
             self.load_schema(self.layer)
 

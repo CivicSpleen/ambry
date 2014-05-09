@@ -1,36 +1,34 @@
 about:
-    author: Albert Uthor
-    homepage: http://homepage.com
+    groups: []
     license: other-open
-    maintainer: Mark Aintainer
+    rights: url of rights document
+    subject: What the data is about
+    summary: An example bundle
     tags:
     - one
     - two
     - three
     title: This is the Title
     url: http://theurl.com
-build:
-    geoheaderFile: meta/schema.csv
-extracts:
--   description: 'This is a multi-line description for the extract of {p_name}, with
-        the table named {p_table}
-
-        '
-    each:
-    -   -   dima: 1
-        -   dima: 2
-        -   dima: 3
-    -   -   dimb: x
-        -   dimb: y
-        -   dimb: z
-    -   -   dimc: a
-        -   dimc: b
-        -   dimc: c
-    for: 'True '
-    name: extract-{p_table}.csv
-    partition: any
-    query: select * from  {p_table}
-    title: 'Extract for table: {p_table}, a={dima}, b={dimb} and c={dimc}'
+contact:
+    creator:
+        bingo: bingo
+        email: al@uthor.com
+        name: Albert Uthor
+        url: http://albert.com
+    maintainer:
+        email: null
+        name: Mark Aintainer
+        url: null
+    name: The Example Corporation
+    publisher:
+        email: null
+        name: null
+        url: null
+    source:
+        email: null
+        name: The Example Corporation
+        url: http://homepage.com
 identity:
     dataset: dataset
     id: diEGPXmDC8
@@ -44,36 +42,3 @@ names:
     name: source-dataset-subset-variation
     vid: diEGPXmDC8001
     vname: source-dataset-subset-variation-0.0.1
-partitions:
--   name: source-dataset-subset-variation-tthree
-    table: tthree
--   format: geo
-    name: source-dataset-subset-variation-geot1-geo
-    table: geot1
--   format: geo
-    name: source-dataset-subset-variation-geot2-geo
-    table: geot2
--   grain: missing
-    name: source-dataset-subset-variation-tone-missing
-    table: tone
--   name: source-dataset-subset-variation-tone
-    table: tone
--   format: csv
-    name: source-dataset-subset-variation-csv-csv-1
-    segment: 1
-    table: csv
--   format: csv
-    name: source-dataset-subset-variation-csv-csv-2
-    segment: 2
-    table: csv
--   format: csv
-    name: source-dataset-subset-variation-csv-csv-3
-    segment: 3
-    table: csv
--   format: csv
-    name: source-dataset-subset-variation-csv-csv-4
-    segment: 4
-    table: csv
--   format: hdf
-    name: source-dataset-subset-variation-hdf5-hdf
-    table: hdf5

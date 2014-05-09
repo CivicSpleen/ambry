@@ -21,25 +21,12 @@ from flo import * # Legacy; should convert clients to direct import
 
 logger_init = set()
 
-## {{{ http://code.activestate.com/recipes/52549/ (r3)
-class curry:
-    def __init__(self, fun, *args, **kwargs):
-        self.fun = fun
-        self.pending = args[:]
-        self.kwargs = kwargs.copy()
 
-    def __call__(self, *args, **kwargs):
-        if kwargs and self.kwargs:
-            kw = self.kwargs.copy()
-            kw.update(kwargs)
-        else:
-            kw = kwargs or self.kwargs
+def get_logger(name, file_name = None, stream = None, template=None):
+    """Get a logger by name
 
-        return self.fun(*(self.pending + args), **kw)
-## end of http://code.activestate.com/recipes/52549/ }}}
-
-
-def get_logger(name, file_name = None, template=None):
+    if file_name is specified, and the dirname() of the file_name exists, it will
+    write to that file. If the dirname dies not exist, it will silently ignre it. """
 
     logger = logging.getLogger(name)
 
@@ -47,26 +34,44 @@ def get_logger(name, file_name = None, template=None):
 
     if name not in logger_init:
 
+        for handler in logger.handlers:
+            logger.removeHandler(handler)
+
         if not template:
-            template = "%(name)s %(levelname)s %(message)s"
+            template = "%(name)s %(process)s %(levelname)s %(message)s"
 
         formatter = logging.Formatter(template)
-        
-        if file_name:
-            ch = logging.FileHandler(file_name)
-        else:
-            ch = logging.StreamHandler(stream=sys.stdout)
 
-        ch.setFormatter(formatter)
-        ch.setLevel(logging.DEBUG)
+        if not file_name and not stream:
+            stream = sys.stdout
 
-        logger.addHandler(ch)
+        handlers = []
+
+        if stream is not None:
+
+            handlers.append(logging.StreamHandler(stream=stream))
+
+        if file_name is not None:
+
+            if os.path.isdir(os.path.dirname(file_name)):
+                handlers.append(logging.FileHandler(file_name))
+            else:
+                print("ERROR: Can't open log file {}".format(file_name))
+
+
+        for ch in handlers:
+            ch.setFormatter(formatter)
+            logger.addHandler(ch)
+
         logger.setLevel(logging.INFO)
-        logger._stream = ch.stream
+
         logger_init.add(name)
 
 
     return logger
+
+def clear_logger(name):
+    logger_init.remove(name)
 
 
 def rm_rf( d):
@@ -418,8 +423,10 @@ def include_representer(dumper, data):
 # http://pypi.python.org/pypi/layered-yaml-attrdict-config/12.07.1
 class AttrDict(OrderedDict):
 
+
     def __init__(self, *argz, **kwz):
         super(AttrDict, self).__init__(*argz, **kwz)
+
 
     def __setitem__(self, k, v):
         super(AttrDict, self).__setitem__( k,
@@ -436,6 +443,11 @@ class AttrDict(OrderedDict):
             return super(AttrDict, self).__setattr__(k, v)
         self[k] = v
 
+    def __iter__(self):
+       for key in super(OrderedDict,self).keys():
+           yield key
+
+
     ##
     ## __enter__ and __exit__ allow for assigning a  path to a variable
     ## with 'with', which isn't extra functionalm but looks pretty.
@@ -451,8 +463,10 @@ class AttrDict(OrderedDict):
     @classmethod
     def from_yaml(cls, path, if_exists=False):
         if if_exists and not os.path.exists(path): return cls()
+
         with open(path) as f:
             return cls(yaml.load(f, OrderedDictYAMLLoader))
+
 
     @staticmethod
     def flatten_dict(data, path=tuple()):
@@ -493,6 +507,20 @@ class AttrDict(OrderedDict):
             if v is not None or not isinstance(dst.get(k[-1]), Mapping ): 
                 dst[k[-1]] = v
 
+    def unflatten_row(self, k, v):
+        dst = self
+        for slug in k[:-1]:
+
+            if slug is None:
+                continue
+
+            if dst.get(slug) is None:
+                dst[slug] = AttrDict()
+            dst = dst[slug]
+        if v is not None or not isinstance(dst.get(k[-1]), Mapping):
+            dst[k[-1]] = v
+
+
     def update_yaml(self, path): 
         self.update_flat(self.from_yaml(path))
 
@@ -507,23 +535,88 @@ class AttrDict(OrderedDict):
         self.clear()
         self.update_dict(base)
 
-    def dump(self, stream):
+    def dump(self, stream= None, map_view=None):
+        from StringIO import StringIO
+
+        yaml.representer.SafeRepresenter.add_representer(
+            MapView, yaml.representer.SafeRepresenter.represent_dict)
+
         yaml.representer.SafeRepresenter.add_representer(
             AttrDict, yaml.representer.SafeRepresenter.represent_dict )
+
         yaml.representer.SafeRepresenter.add_representer(
             OrderedDict, yaml.representer.SafeRepresenter.represent_dict )
+
         yaml.representer.SafeRepresenter.add_representer(
             defaultdict, yaml.representer.SafeRepresenter.represent_dict )
+
         yaml.representer.SafeRepresenter.add_representer(
             set, yaml.representer.SafeRepresenter.represent_list )
         
         yaml.representer.SafeRepresenter.add_representer(
             IncludeFile, include_representer)
-        
-        yaml.safe_dump( self, stream,
+
+
+        if stream is None:
+            stream = StringIO()
+
+
+        d = self
+
+        if map_view is not None:
+            map_view.inner = d
+            d = map_view
+
+        yaml.safe_dump( d, stream,
             default_flow_style=False, indent=4, encoding='utf-8' )
 
+        if isinstance(stream, StringIO):
+            return stream.getvalue()
+
+
+class MapView(collections.MutableMapping):
+    """A group that holds key/value pairs"""
+
+    _inner = None
+    _keys = None
+
+    def __init__(self, d=None, keys=None):
+        self._inner = d
+        self._keys = keys
+
+    @property
+    def inner(self):
+        return self._inner
+
+    @inner.setter
+    def inner(self, value):
+        self._inner = value
+
+    def __getitem__(self, key):
+        return self._inner.__getitem__(key)
+
+    def __setitem__(self, key, value):
+        raise NotImplementedError()
+        return self._inner.__setitem__(key, value)
+
+    def __delitem__(self, key):
+        return self._inner.__delitem__(key)
+
+    def __len__(self):
+        return self._inner.__len__()
+
+    def __iter__(self):
+
+        for k in self._inner:
+            if not self._keys or k in self._keys:
+                yield k
+
+    def __getattr__(self, item):
+        return getattr(self._inner, item)
+
+
 from collections import Mapping
+
 
 class CaseInsensitiveDict(Mapping): #http://stackoverflow.com/a/16202162
     def __init__(self, d):
@@ -547,8 +640,10 @@ class CaseInsensitiveDict(Mapping): #http://stackoverflow.com/a/16202162
     def actual_key_case(self, k):
         return self._s.get(k.lower())
 
+
 def lowercase_dict(d):
     return dict((k.lower(), v) for k,v in d.items())
+
 
 def configure_logging(cfg, custom_level=None):
     '''Don't know what this is for .... '''
@@ -737,7 +832,10 @@ def temp_file_name():
     f.close()
     
     return f.name
-    
+
+
+
+
 # http://stackoverflow.com/questions/296499/how-do-i-zip-the-contents-of-a-folder-using-python-version-2-5
 def zipdir(basedir, archivename):
     from contextlib import closing
@@ -838,7 +936,9 @@ def _log_rate(output_f,d, message=None):
         # Average the rate over the length of the deque. 
         d[6].append(int( d[3]/(time.time()-d[1])))
         rate = sum(d[6])/len(d[6])
-        
+
+
+
         # Prints the processing rate in 1,000 records per sec.
         output_f(message+': '+str(rate)+'/s '+str(d[0]/1000)+"K ") 
         
@@ -859,9 +959,9 @@ def _log_rate(output_f,d, message=None):
 
 def daemonize(f, args,  rc, prog_name='ambry'):
         '''Run a process as a daemon'''
-        import daemon #@UnresolvedImport
+        #import daemon #@UnresolvedImport
         import lockfile  #@UnresolvedImport
-        import setproctitle #@UnresolvedImport
+        #import setproctitle #@UnresolvedImport
         import os, sys
         import grp, pwd
         import logging
@@ -899,7 +999,7 @@ def daemonize(f, args,  rc, prog_name='ambry'):
         gid =  grp.getgrnam(args.group).gr_gid if args.group is not None else os.getgid()
         uid =  pwd.getpwnam(args.user).pw_uid if args.user  is not None else os.getuid()  
 
-        class DaemonContext(daemon.DaemonContext):
+        class DaemonContext():#daemon.DaemonContext):
      
             def __exit__(self,exc_type, exc_value, exc_traceback):
                 
@@ -924,7 +1024,7 @@ def daemonize(f, args,  rc, prog_name='ambry'):
         os.chown(run_dir, uid, gid)
         os.chown(log_dir, uid, gid)
 
-        setproctitle.setproctitle(prog_name)
+        #setproctitle.setproctitle(prog_name)
                 
         with context:
             f(prog_name, args, rc, logger)

@@ -468,6 +468,7 @@ def source_run(args, l, st, rc):
             warn("Didn't get source bundle for term '{}'; skipping ".format(term))
             continue
 
+
         do_source_run(ident, args, l, st, rc)
 
 
@@ -476,9 +477,6 @@ def do_source_run(ident, args, l, st, rc):
     from ambry.source.repository.git import GitRepository
 
     root = ident.bundle_path
-
-    repo = GitRepository(None, root)
-    repo.bundle_dir = root
 
     if args.python:
 
@@ -505,17 +503,18 @@ def do_source_run(ident, args, l, st, rc):
         if 'bundle_dir' in run_args.args:
             a['bundle_dir'] = root
 
-        if 'repo' in run_args.args:
-            a['repo'] = repo
-
         if 'args' in run_args.args:
-            a['args'] = args.shell_command
+            a['args'] = args.terms
 
         if 'bundle' in run_args.args:
             rp = os.path.join(root, 'bundle.py')
             bundle_mod = import_file(rp)
             dir_ = os.path.dirname(rp)
-            a['bundle'] = bundle_mod.Bundle(dir_)
+            try:
+                a['bundle'] = bundle_mod.Bundle(dir_)
+            except Exception as e:
+                warn("Failed to load bundle from dir: {}: {}", dir_, str(e) )
+                raise
 
         mod.run(**a)
 
@@ -558,7 +557,7 @@ def source_init(args, l, st, rc):
     repo.delete_remote()
     import time
     time.sleep(3)
-    repo.init()
+    repo.init_descriptor()
     repo.init_remote()
     
     repo.push()

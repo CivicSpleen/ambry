@@ -13,6 +13,7 @@ Contents:
 .. toctree::
     :maxdepth: 1
     
+    install/index
     tutorial/index
     cli/index
     tutorial/tips
