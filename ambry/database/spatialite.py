@@ -13,6 +13,8 @@ class SpatialiteDatabase(SqliteDatabase, SqliteAttachmentMixin):
 
         super(SpatialiteDatabase, self).create()
 
+        # Will fail if Spatialite is not installed, which on Linuc
+        # depends on the load_extension call in database.geo._on_connect_geo()
         self.engine.execute("SELECT InitSpatialMetaData();")
 
 

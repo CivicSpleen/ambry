@@ -21,7 +21,8 @@ for pkg in $packages; do
     fi
 done
 
-
+# This package allows Sqlalchemy to load the spatialite shared object to provide
+# Spatialite services.
 sudo pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
 sudo pip install -r https://raw.githubusercontent.com/clarinova/ambry/master/requirements.txt
@@ -31,6 +32,7 @@ user=$(whoami)
 
 cd /data/
 
+# Install Ambry!
 sudo pip install -e git+https://github.com/clarinova/ambry.git#egg=ambry
 
 sudo chown -R $user /data
