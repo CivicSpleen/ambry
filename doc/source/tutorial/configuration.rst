@@ -1,4 +1,4 @@
-.. _configuration_toplevel:
+.. _configuration:
 
 =============
 Configuration

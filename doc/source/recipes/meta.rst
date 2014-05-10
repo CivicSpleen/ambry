@@ -1,8 +1,8 @@
 .. _recipes_meta_toplevel:
 
-=============
+=========
 Meta data
-=============
+=========
 
 Creating A Simple Schema
 ------------------------

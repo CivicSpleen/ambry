@@ -1,4 +1,4 @@
-.. _recipes_meta_toplevel:
+.. _recipes_build_toplevel:
 
 =============
 Bulding
@@ -9,7 +9,7 @@ Inserting List data
 
 The ValueInserter's :func:`~ambry.database.inserter.ValueInserter.insert` function expects a dict, but you may be reading
 rows from a data source. If the order of the fields in the row is the same as the order of the columns, this is easy
-to fix with :zunc:`zip()`
+to fix with :func:`zip()`
 
 
 Custom Casters

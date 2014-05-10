@@ -49,7 +49,7 @@ class Bundle(object):
         self.close()
 
     def close(self):
-
+        """Close the bundle database and all partition databases, committing and closing any sessions and connections"""
         self.partitions.close()
 
         if self._database:
@@ -64,6 +64,7 @@ class Bundle(object):
 
     @property
     def logger(self):
+        """The bundle logger"""
         import sys
         if not self._logger:
 
@@ -93,6 +94,7 @@ class Bundle(object):
 
     @property
     def database(self):
+        """The database object for the bundle"""
         from ..dbexceptions import DatabaseMissingError
 
         if self._database is None:
@@ -102,6 +104,7 @@ class Bundle(object):
 
     @property
     def schema(self):
+        """The Schema object, which access all of the tables and columns in the bundle"""
         if self._schema is None:
             self._schema = Schema(self)
 
@@ -109,6 +112,7 @@ class Bundle(object):
 
     @property
     def partitions(self):
+        """The Partitions object, for creating and accessing partitions"""
         if self._partitions is None:
             self._partitions = Partitions(self)
 
@@ -133,7 +137,7 @@ class Bundle(object):
 
     @property
     def dataset(self):
-        """Return the dataset"""
+        """Return the dataset, the database object that holds the identity values like id, vid, vname, etc. """
         return self.get_dataset()
 
 
@@ -211,7 +215,11 @@ class Bundle(object):
     def sub_dir(self, *args):
         """Return a subdirectory relative to the bundle's database root path
         which based on the path of the database. For paths relative to the
-        directory of a BuildBundle, use the Filesystem object. """
+        directory of a BuildBundle, use the Filesystem object.
+
+        :param *args: Zero or more path elements that will be concatenated and suffixed to the root path
+
+         """
         return os.path.join(self.path, *args)
 
     def query(self, *args, **kwargs):
@@ -222,16 +230,25 @@ class Bundle(object):
         """Log the messsage"""
         self.logger.info(message)
 
-    def error(self, message, **kwargs):
-        """Log an error messsage"""
+    def error(self, message):
+        """Log an error messsage
+
+        :param message:  Log message.
+        """
         self.logger.error(message)
 
-    def warn(self, message, **kwargs):
-        """Log an error messsage"""
+    def warn(self, message):
+        """Log an error messsage
+
+        :param message:  Log message.
+        """
         self.logger.warn(message)
 
-    def fatal(self, message, **kwargs):
-        """Log a fata messsage and exit"""
+    def fatal(self, message):
+        """Log a fatal messsage and exit
+
+        :param message:  Log message.
+        """
         import sys
         self.logger.fatal(message)
         sys.stderr.flush()
