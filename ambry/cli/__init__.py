@@ -11,7 +11,7 @@ import shutil
 import shlex
 from ambry.run import  get_runconfig
 from ambry.util import Progressor
-from ambry import __version__
+from ambry._meta import __version__
 import logging
 from ..util import get_logger
 import argparse

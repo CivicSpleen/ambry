@@ -124,7 +124,7 @@ def root_info(args, l, st, rc):
     import ambry
 
     if not args.term:
-        print "Version:  {}".format(ambry.__version__)
+        print "Version:  {}".format(ambry._meta.__version__)
         print "Root dir: {}".format(rc.filesystem('root')['dir'])
 
         if l.source:
