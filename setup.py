@@ -8,7 +8,7 @@ from setuptools import setup, find_packages
 
 import sys, re
 
-from ambry import __version__
+from ambry._meta import *
 
 if sys.version_info <= (2, 6):
     error = "ERROR: ambry requires Python Version 2.7 or above...exiting."

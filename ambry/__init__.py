@@ -19,24 +19,11 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from _meta import *
 
+from ambry.util import memoize
 import ambry.library as _l
 from ambry.bundle import new_analysis_bundle
 
 
-# This is a copy of util.memoize, included here so we don't have to import
-# util when installing the package through setuptools, which needs the __version__ from this file.
-def memoize(obj):
-    import functools
-    cache = obj.cache = {}
-
-    @functools.wraps(obj)
-    def memoizer(*args, **kwargs):
-        key = str(args) + str(kwargs)
-        if key not in cache:
-            cache[key] = obj(*args, **kwargs)
-        return cache[key]
-
-    return memoizer
 
 
 @memoize
