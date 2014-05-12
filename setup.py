@@ -6,9 +6,15 @@
 from setuptools import setup, find_packages
 
 
-import sys, re
+import sys, re, os.path
 
-from ambry._meta import *
+# Avoiding import so we don't execute ambry.__init__.py, which has imports
+# that aren't installed until after installation.
+
+
+__version__ = None # "Declare", actually set in the execfile
+__author__ = None
+execfile(os.path.join(os.path.dirname(__file__),'ambry/_meta.py'))
 
 if sys.version_info <= (2, 6):
     error = "ERROR: ambry requires Python Version 2.7 or above...exiting."
@@ -85,8 +91,8 @@ setup(name = "ambry",
       version = __version__,
       description = "Data packaging and distribution framework",
       long_description = readme(),
-      author = "Eric Busboom",
-      author_email = "eric@clarinova.com",
+      author = __author__,
+      author_email = __email__,
       url = "https://github.com/clarinova/ambry",
       packages = find_packages(), 
       scripts=['scripts/bambry', 'scripts/ambry', 'scripts/xambry', 'scripts/ambry-load-sqlite'],
