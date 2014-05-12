@@ -8,7 +8,7 @@
           <span class="icon-bar"></span>
           <span class="icon-bar"></span>
         </button>
-        <a class="navbar-brand" href="{{main_site}}">
+        <a class="navbar-brand" href="{{ macros.named_link(theme_navbar_links,'main_site') }}">
           {%- block sidebarlogo %}
             {%- if logo %}<img src="{{ pathto('_static/' + logo, 1) }}">{%- endif %}
           {%- endblock %}
