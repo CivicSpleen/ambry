@@ -17,14 +17,7 @@ Copyright (c) 2014 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-__author__ = "Eric Busboom"
-__copyright__ = "Copyright (c) 2014 Clarinova"
-__credits__ = []
-__license__ = "Revised BSD"
-__version__ = '0.3.280'
-__maintainer__ = "Eric Busboom"
-__email__ = "eric@clarinova.com"
-__status__ = "Development"
+from _meta import *
 
 import ambry.library as _l
 from ambry.bundle import new_analysis_bundle
