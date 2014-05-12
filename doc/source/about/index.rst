@@ -1,9 +1,9 @@
 .. _about:
 
-About Ambry
-===============
+Design and Requirements
+=======================
 
-An overview of the motivation, requirements and design of Ambry
+An overview of the motivations, requirements and design of Ambry
 
 
 .. toctree::
@@ -12,4 +12,4 @@ An overview of the motivation, requirements and design of Ambry
     Requirements and Motivations <requirements>
     General Concepts <concepts>
     Numbering and Naming Specification <numbering>
-    
+

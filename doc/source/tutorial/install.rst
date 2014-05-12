@@ -19,6 +19,9 @@ Source
 
 You can get the source to Ambry from the `Ambry Github Repository <https://github.com/clarinova/ambry>`_, using git:
 
+
+.. code-block:: bash
+
     $ git clone https://github.com/clarinova/ambry.git
     
 Or, download a Zip archive from:
@@ -47,6 +50,8 @@ Script Install
 
 To run the automated installer, execute this line from a Terminal:
 
+.. code-block:: bash
+
     $ sh -c "$(https://raw.githubusercontent.com/clarinova/ambry/master/support/install-osx.sh)"
 
 When it detects a missing packages that you have to install manually, the script will pause and open a web browser for you. If those external installs have any hickups, you may have to run the installer script more than once.
@@ -68,7 +73,9 @@ These packages aren't signed, so Mac OS will issue a warning. Use the right-clic
 
 Sometimes the h5py install fails, with the h5py download not being found. This fixes, at a potential security risk:
 
-    pip install --allow-external h5py --allow-unverified h5py h5py
+.. code-block:: bash
+
+    $ pip install --allow-external h5py --allow-unverified h5py h5py
 
 
 *************
@@ -78,6 +85,8 @@ Linux, Ubuntu
 For Ubuntu, the script usually works. From a terminal shell, run:
 
 
+.. code-block:: bash
+
     $ sh -c "$(curl -fsSL https://raw.githubusercontent.com/clarinova/ambry/master/support/install-ubuntu.sh)"
 
 *************
@@ -86,6 +95,9 @@ Vagrant
 
 To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/installation/index.html>`_, then get the `source`_ code. After unpacking the source, change directory to the vagrant directory and run ``vagrant up``
 
+
+.. code-block:: bash
+
     $ wget https://github.com/clarinova/ambry/archive/master.zip
     $ unzip master.zip
     $ cd ambry-master/support/ambry-vagrant/
@@ -93,9 +105,13 @@ To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/instal
     
 When the build is done, ssh to the box. 
 
+.. code-block:: bash
+
     $ vagrant ssh 
 
 Then run an info command to check that it all worked properly. 
+
+.. code-block:: bash
 
     $ ambry info 
 
@@ -103,7 +119,7 @@ Then run an info command to check that it all worked properly.
 Windows
 *************
 
-For Windows, use the Vagrant installtion method. 
+For Windows, use the Vagrant installation method. 
 
 *************
 Post Install
