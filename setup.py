@@ -79,7 +79,6 @@ def find_package_data():
 
             l.append(path)
 
-    print {"ambry": l }
     return {"ambry": l }
 
 setup(name = "ambry",
