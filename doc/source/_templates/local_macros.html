@@ -1,0 +1,7 @@
+{%- macro named_link(links,name) %}
+      {%- for link in links %}
+        {% if link[0] == name %}
+            {{link[2]}}
+        {% endif %}
+      {%- endfor %}
+{%- endmacro %}
