@@ -6,6 +6,28 @@ Installing Ambry
 
 Ambry is a complex package that has dependencies on a lot of other code, some of which is hard to build from source, so there is an installation script that automates the installation for OS X and Ubuntu.
 
+You can install to different platforms with a few different methods:
+
+* `Source`_
+* `Mac OS X`_
+* `Linux, Ubuntu`_
+* `Vagrant`_
+
+********
+Source
+********
+
+You can get the source to Ambry from the `Ambry Github Repository <https://github.com/clarinova/ambry>`_, using git:
+
+    $ git clone https://github.com/clarinova/ambry.git
+    
+Or, download a Zip archive from:
+
+    https://github.com/clarinova/ambry/archive/master.zip
+
+The source is a standard Python package with a setup.py script. 
+
+
 ********
 Mac OS X
 ********
@@ -57,6 +79,31 @@ For Ubuntu, the script usually works. From a terminal shell, run:
 
 
     $ sh -c "$(curl -fsSL https://raw.githubusercontent.com/clarinova/ambry/master/support/install-ubuntu.sh)"
+
+*************
+Vagrant
+*************
+
+To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/installation/index.html>`_, then get the `source`_ code. After unpacking the source, change directory to the vagrant directory and run ``vagrant up``
+
+    $ wget https://github.com/clarinova/ambry/archive/master.zip
+    $ unzip master.zip
+    $ cd ambry-master/support/ambry-vagrant/
+    $ vagrant up
+    
+When the build is done, ssh to the box. 
+
+    $ vagrant ssh 
+
+Then run an info command to check that it all worked properly. 
+
+    $ ambry info 
+
+*************
+Windows
+*************
+
+For Windows, use the Vagrant installtion method. 
 
 *************
 Post Install

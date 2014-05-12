@@ -20,7 +20,7 @@ import sphinx_bootstrap_theme
 
 
 
-def get_version(source=os.path.abspath('../../ambry/__init__.py')):
+def get_version(source=os.path.abspath('../../ambry/_meta.py')):
     from ast import literal_eval
     with open(source) as f:
         for line in f:
@@ -123,7 +123,17 @@ html_theme = 'bootstrap'
 # further.  For a list of options available for each theme, see the
 # documentation.
 #html_theme_options = {}
+
+def named_link(links, name):
+    
+    for link in links:
+        if link[0] == name:
+            return link[2]
+    
+    return None
+
 html_theme_options = {
+
     # Navigation bar title. (Default: ``project`` value)
     'navbar_title': "Ambry",
 
@@ -138,14 +148,17 @@ html_theme_options = {
     # Note the "1" or "True" value above as the third argument to indicate
     # an arbitrary url.
     'navbar_links': [
-        ("Home", "http://ambry.io", True),
+        ('main_site',"", "http://ambry.io", True),
+        ('doc_site', "", "http://docs.ambry.io", True),
+        ('navbar', "Documentation", "http://docs.ambry.io", True),
+        ('navbar', "About", "http://ambry.io/about/", True),
     ],
 
     # Render the next and previous page links in navbar. (Default: true)
     'navbar_sidebarrel': True,
 
     # Render the current pages TOC in the navbar. (Default: true)
-    'navbar_pagenav': True,
+    'navbar_pagenav': False,
 
     # Global TOC depth for "site" navbar tab. (Default: 1)
     # Switching to -1 shows all levels.
@@ -170,7 +183,7 @@ html_theme_options = {
 
     # Location of link to source.
     # Options are "nav" (default), "footer" or anything else to exclude.
-    'source_link_position': "nav",
+    'source_link_position': "foooter",
 
     # Bootswatch (http://bootswatch.com/) theme.
     #
@@ -181,6 +194,9 @@ html_theme_options = {
     # Choose Bootstrap version.
     # Values: "3" (default) or "2" (in quotes)
     'bootstrap_version': "3",
+    
+
+    
 }
 
 

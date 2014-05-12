@@ -3,12 +3,13 @@
 About Ambry
 ===============
 
-A quick guide to using Ambry
+An overview of the motivation, requirements and design of Ambry
+
 
 .. toctree::
     :maxdepth: 1
 
-    overview
-    design
-    numbering
+    Requirements and Motivations <requirements>
+    General Concepts <concepts>
+    Numbering and Naming Specification <numbering>
     
