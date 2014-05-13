@@ -9,7 +9,7 @@ div.fixed-height {
     height: 100px;
 }
 
-.jumbotron {
-  font-size: 18px;
+body .jumbotron h1 {
+  font-size: 45px;
 
 }
