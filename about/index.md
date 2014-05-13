@@ -12,3 +12,5 @@ The reason data projects are expensive is because they are run in a craft mode o
 <div class="alert alert-info">See <a href="http://www.sandiegodata.org/reports/a-vision-for-shared-data-infrastructure/">A Vision for a Shared Data Infrastructure</a> for a more detailed discussion about the data process and how to reduce costs with specialization, standardization, and mass markets.</div>
 
 Ambry provides a framework for packaging, sharing and installing data. It creates a standard container for data that allows specialists to collaborate, and makes it easier to find data, fix errors, and share results. 
+
+
