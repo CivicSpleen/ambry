@@ -6,16 +6,14 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 from __future__ import print_function
 import os.path
-import yaml
-import shutil
 import shlex
 from ambry.run import  get_runconfig
-from ambry.util import Progressor
-from ambry._meta import __version__
+
+import ambry._meta
 import logging
 from ..util import get_logger
 import argparse
-import copy
+
 
 logger = None # Set in main()
 
@@ -355,38 +353,11 @@ def _print_bundle_info(bundle=None, ident=None):
         prt('Build time: {}',
             str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
 
-def _first_arg_parse(argsv = None):
-    parser = argparse.ArgumentParser(prog='ambry',
-                                     description='Databundles {}. Management interface for ambry, libraries and repositories. '.format(__version__),
-                                     prefix_chars='-+')
-
-    parser.add_argument('-l', '--library', dest='library_name', default="default",
-                        help="Name of library, from the library secton of the config")
-    parser.add_argument('-c','--config', default=None, action='append', help="Path to a run config file")
-    parser.add_argument('-v','--version', default=None, action="store_true",  help="Display version")
-    parser.add_argument('--single-config', default=False,action="store_true", help="Load only the config file specified")
-    parser.add_argument('args', nargs=argparse.REMAINDER)
-
-
-    argsv = shlex.split(' '.join(argsv)) if argsv else None
-    args = parser.parse_args(argsv)
-
-    if args.version:
-        import ambry
-        import sys
-
-        print("Ambry {}".format(ambry.__version__))
-        sys.exit(0)
 
 
 
 def main(argsv = None, ext_logger=None):
-
-    ##
-    ## Hack -- set up the parser twice, so 'ambry --version' will work with no following command
-    ##
-
-    _first_arg_parse(argsv)
+    import ambry._meta
 
     ##
     ## Do it again.
@@ -394,14 +365,13 @@ def main(argsv = None, ext_logger=None):
 
     parser = argparse.ArgumentParser(prog='python -mdatabundles',
                                      description='Databundles {}. Management interface for ambry, libraries and repositories. '.format(
-                                         __version__),
+                                         ambry._meta.__version__),
                                      prefix_chars='-+')
 
 
     parser.add_argument('-l', '--library', dest='library_name', default="default",
                         help="Name of library, from the library secton of the config")
     parser.add_argument('-c', '--config', default=None, action='append', help="Path to a run config file")
-    parser.add_argument('-v', '--version', default=None, action="store_true", help="Display version")
     parser.add_argument('--single-config', default=False, action="store_true", help="Load only the config file specified")
 
     cmd = parser.add_subparsers(title='commands', help='command help')
@@ -429,11 +399,6 @@ def main(argsv = None, ext_logger=None):
     argsv = shlex.split(' '.join(argsv)) if argsv else None
     args = parser.parse_args(argsv)
 
-    if args.version:
-        import ambry
-        import sys
-        print ("Ambry {}".format(ambry.__version__))
-        sys.exit(0)
 
     if args.single_config:
         if args.config is None or len(args.config) > 1:

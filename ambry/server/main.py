@@ -231,7 +231,7 @@ def _get_ct(typ):
 
     return ct
 
-def _table_csv_parts(library,b,pid,table=None):
+def _table_csv_parts(library,b,pid,table_name=None):
     # This partition does not have CSV parts, so we'll have to make them.
     parts = []
 
@@ -241,8 +241,10 @@ def _table_csv_parts(library,b,pid,table=None):
     # can cause the server to run out of disk space.
     p = library.get(pid).partition
 
-    if not table:
+    if not table_name:
         table = p.table # Use the default table
+    else:
+        table = b.schema.table(table_name)
 
 
     count = p.query("SELECT count(*) FROM {}".format(table.name)).fetchone()
@@ -328,7 +330,7 @@ def _download_redirect(identity, library):
     return redirect("{}/files/{}".format(_host_port(library), identity.cache_key))
 
 
-def _send_csv_if(did, pid, table, library):
+def _send_csv_if(did, pid, table_name, library):
     '''Send csv function, with a web-processing interface '''
     did, _, _ = process_did(did, library)
     pid, _, _  = process_pid(did, pid, library)
@@ -341,9 +343,9 @@ def _send_csv_if(did, pid, table, library):
 
     where = request.query.get('where',None)
 
-    return _send_csv(library, did, pid, table, i, n, where, sep)
+    return _send_csv(library, did, pid, table_name, i, n, where, sep)
 
-def _send_csv(library, did, pid, table, i, n, where, sep=',' ):
+def _send_csv(library, did, pid, table_name, i, n, where, sep=',' ):
     '''Send a CSV file to the client. '''
     import unicodecsv
     import csv
@@ -353,8 +355,8 @@ def _send_csv(library, did, pid, table, i, n, where, sep=',' ):
     p = library.get(pid).partition # p_orm is a database entry, not a partition
 
 
-    if not table:
-        table = p.table
+    if not table_name:
+        table_name = p.table.name
 
     if i > n:
         raise exc.BadRequest("Segment number must be less than or equal to the number of segments")
@@ -363,7 +365,7 @@ def _send_csv(library, did, pid, table, i, n, where, sep=',' ):
         raise exc.BadRequest("Segment number starts at 1")
 
 
-    count = p.query("SELECT count(*) FROM {}".format(table.name)).fetchone()
+    count = p.query("SELECT count(*) FROM {}".format(table_name)).fetchone()
 
     if count:
         count = count[0]
@@ -385,11 +387,11 @@ def _send_csv(library, did, pid, table, i, n, where, sep=',' ):
         writer.writerow(tuple([c.name for c in p.table.columns]))
 
     if where:
-        q = "SELECT * FROM {} WHERE {} LIMIT {} OFFSET {} ".format(table.name, where, seg_size, base_seg_size*(i-1))
+        q = "SELECT * FROM {} WHERE {} LIMIT {} OFFSET {} ".format(table_name, where, seg_size, base_seg_size*(i-1))
 
         params = dict(request.query.items())
     else:
-        q = "SELECT * FROM {} LIMIT {} OFFSET {} ".format(table.name, seg_size, base_seg_size*(i-1))
+        q = "SELECT * FROM {} LIMIT {} OFFSET {} ".format(table_name, seg_size, base_seg_size*(i-1))
         params = {}
 
     for row in p.query(text(q), params):
@@ -397,7 +399,7 @@ def _send_csv(library, did, pid, table, i, n, where, sep=',' ):
 
     response.content_type = 'text/csv'
 
-    response.headers["content-disposition"] = "attachment; filename='{}-{}-{}-{}.csv'".format(p.identity.vname,table.name,i,n)
+    response.headers["content-disposition"] = "attachment; filename='{}-{}-{}-{}.csv'".format(p.identity.vname,table_name,i,n)
 
     return out.getvalue()
 
@@ -598,7 +600,7 @@ def get_dataset(did, library, pid=None):
     if files and len(files) > 0:
         d['file'] = dict(
             ref = files[0].dict,
-            config = gr.dict
+            config = gr.identity.data
         )
 
     if pid:
@@ -819,7 +821,7 @@ def get_partition_table_csv(did, pid, tid, library):
     if table == p.table:
         pass
 
-    return _send_csv_if(did, pid, table, library)
+    return _send_csv_if(did, pid, table.name, library)
 
 @get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv/parts')
 @CaptureException
@@ -846,7 +848,7 @@ def get_partition_table_csv_parts(did, pid, tid, library):
     if table == p.table:
         pass
 
-    return _table_csv_parts(library,p.bundle,pid, table)
+    return _table_csv_parts(library,p.bundle,pid, table.name)
 
 @get('/datasets/<did>/partitions/<pid>/csv')
 @CaptureException

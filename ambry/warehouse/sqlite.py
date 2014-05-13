@@ -64,6 +64,8 @@ class SqliteWarehouse(RelationalWarehouse):
 
         for url in urls:
 
+            self.logger.info("Load Sqlite {} -> {}".format(url, self.database.path))
+
             try:
                 ## Call the external program ambry-load-sqlite to load data into
                 ## sqlite

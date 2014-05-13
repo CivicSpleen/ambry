@@ -196,6 +196,7 @@ class RemoteLibrary(object):
         else:
             data = d
 
+
         ident_d = data['identity']
 
         ident =  Identity.from_dict(ident_d)
@@ -203,6 +204,7 @@ class RemoteLibrary(object):
 
         if ident.is_bundle:
             return ident
+
         else:
             dsid = ident.as_dataset()
             dsid.add_partition(ident)

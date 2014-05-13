@@ -226,13 +226,18 @@ class WarehouseInterface(object):
             if rident:
                 import requests
                 from ..client.exceptions import BadRequest
+
                 # If we got an rident, the remotes were defined, and we can get the CSV urls
                 # to load the table.
 
                 try:
-                    import pprint
-                    pprint.pprint(rident.data)
-                    table_urls[table_name] = ri.get(rident.data['csv']['tables'][t.id_]['parts'])
+
+                    urls = ri.get(rident.partition.data['csv']['tables'][t.id_]['parts'])
+
+                    if not isinstance(urls, list ):
+                        urls = [urls]
+
+                    table_urls[table_name] = urls
                 except BadRequest:
                     table_urls[table_name] = None
 
