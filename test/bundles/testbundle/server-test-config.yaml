@@ -22,8 +22,7 @@ library:
     default:
         filesystem: server
         database: server  
-        host: localhost   
-        port: 7979
+        host: localhost:7979
         upstream:
           options: [compress]
           prefix: library-test

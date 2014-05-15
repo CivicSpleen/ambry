@@ -971,21 +971,19 @@ def test_run(config):
 
     debug()
 
-    port = config['port'] if config['port'] else 7979
-    host = config['host'] if config['host'] else 'localhost'
 
     lf = lambda: new_library(config, True)
 
     l = lf()
     l.database.create()
 
-    logger.info("Starting test server on http://{}:{}".format(host, port))
+    logger.info("Starting test server on http://{}:{}".format(l.host, l.port))
     logger.info("Library at: {}".format(l.database.dsn))
 
     install(LibraryPlugin(lf))
 
 
-    return run(host=host, port=port, reloader=False, server='stoppable')
+    return run(host=l.host, port=l.port, reloader=False, server='stoppable')
 
 def local_run(config, reloader=False):
 

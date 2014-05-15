@@ -329,9 +329,14 @@ class Test(TestBase):
                 idnt.name.version_minor = i*10
 
                 bundle = Bundle()
-                bundle.config.rewrite(identity=idnt.ident_dict,
-                                      names=idnt.names_dict)
                 get_runconfig.clear() #clear runconfig cache
+
+                bundle.metadata.load_all()
+
+                bundle.metadata.identity = idnt.ident_dict
+                bundle.metadata.names = idnt.names_dict
+
+                bundle.metadata.write_to_dir(write_all=True)
 
                 print 'Building version {}'.format(i)
 
@@ -422,7 +427,7 @@ class Test(TestBase):
         self.assertEquals('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',str(result))
 
         ip, result = r.resolve_ref_one('source/dataset-subset-variation-0.0.1/tthree.db')
-        self.assertEquals('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8001001',str(result.partition))
+        self.assertEquals('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8003001',str(result.partition))
 
 
         # Now in the library, which has a slightly different interface.
@@ -790,8 +795,17 @@ class Test(TestBase):
         print l.files.query.path('path3').first
 
 
+    def test_sync(self):
+
+        l = self.get_library('upstreamed')
+
+        l.purge()
 
 
+        print "Upstream: {}".format(l.upstream)
+        print "Remotes:  {}".format(', '.join(l.remotes) if l.remotes else '')
+
+        l.sync_upstream(clean=True)
 
 def suite():
     suite = unittest.TestSuite()

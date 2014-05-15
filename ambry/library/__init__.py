@@ -49,8 +49,6 @@ def _new_library(config):
 
     source_dir = config.get('source', None)
 
-    #print "### Upstream", config['upstream']
-
     hostport = config.get('host', None)
 
     if hostport:
@@ -362,7 +360,7 @@ class Library(object):
         return self.cache.path(rel_path)
 
     def _attach_rrc(self, url, gets, cb):
-        '''Attaches a remote library, acessible through a REST interface
+        '''Attaches a remote library, accessible through a REST interface
         to the lowest level of the Library's filesystem cache, allowing
         files to be retrieved from the remote library by making a get() request
         to the local cache '''
@@ -389,7 +387,9 @@ class Library(object):
 
         orig_last_upstream.upstream = None
 
-    def get(self, ref, force=False, cb=None, use_remote=True):
+
+
+    def get(self, ref, force=False, cb=None, use_remote=False):
         '''Get a bundle, given an id string or a name '''
         from sqlite3 import DatabaseError
         from sqlalchemy.exc import OperationalError, IntegrityError
@@ -413,7 +413,7 @@ class Library(object):
             f = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
 
             # Since it was remote, attach the appropriate remote cache to our cache stack then
-            # when we read from the top level, we'l get it from the remote.
+            # when we read from the top level, we'll get it from the remote.
 
             # NOTE! The partition and bundle are actually fetched from the remote in _attach_rrc!
             # All of the subsequent cache gets in this function just read from the local cache
@@ -534,6 +534,7 @@ class Library(object):
             ref = ref.vid
 
         if use_remote: # Do we need the remote resolver with remote sync?
+            raise Exception("Don't be using the remote for resolution")
             resolver = RemoteResolver(local_resolver=self.resolver, remote_urls=self._remotes)
         else:
             resolver = self.resolver
@@ -548,7 +549,6 @@ class Library(object):
 
         return ident
 
-
     ##
     ## Dependencies
     ##
@@ -557,6 +557,7 @@ class Library(object):
         """"Bundle version of get(), which uses a key in the
         bundles configuration group 'dependencies' to resolve to a name"""
         from ..dbexceptions import DependencyError
+
         from sqlalchemy.orm.exc import NoResultFound
 
         object_ref = self.dependencies.get(name, False)
@@ -724,11 +725,13 @@ class Library(object):
             self.database.session.merge(file_)
             self.database.commit()
 
+            return what, start, end, md['size'] if 'size' in md else None
+
         else:
             for file_ in self.new_files:
                 self.push(file_.ref, cb=cb)
 
-        return what, start, end, md['size'] if 'size' in md else None
+
 
 
     #
@@ -798,7 +801,7 @@ class Library(object):
                         # that differentiates a partition from a bundle.
                         f = os.path.splitext(file_)[0]
 
-                        if b.db_config.get_value('info', 'type') == 'bundle':
+                        if b.get_value('info', 'type') == 'bundle':
                             self.logger.info("Queing: {} from {}".format(b.identity.vname, file_))
                             bundles.append(b)
                     except NotFoundError:
@@ -888,6 +891,7 @@ class Library(object):
                 continue
 
             md =  self.upstream.metadata(e)
+            print '!!!', md
             ident = Identity.from_dict(json.loads(md['identity']))
             self.sync_upstream_dataset(e, ident, md)
 
@@ -994,9 +998,9 @@ class Library(object):
 ------ Library {name} ------
 Database: {database}
 Cache:    {cache}
-Remote:   {remote}
+Remotes:  {remotes}
         """.format(name=self.name, database=self.database.dsn,
-                   cache=self.cache, remote=self.upstream if self.upstream else '')
+                   cache=self.cache, remotes=', '.join(self.remotes) if self.remotes else '')
 
     @property
     def dict(self):

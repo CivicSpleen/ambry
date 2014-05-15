@@ -249,7 +249,13 @@ class S3Cache(Cache, RemoteMarker):
         
         if md5:
             metadata['md5'] = md5 # Multipart uploads don't use md5 for etag
-            
+
+        # Some libraries, including apparently, boto, have troubles properly calcing the hash when
+        # metadata values are null, empty, 0, etc.  https://forums.aws.amazon.com/thread.jspa?threadID=117580
+        for k,v in metadata.items():
+            if not v:
+                del metadata[k]
+
         this = self
         
         buffer_size = 50*1024*1024 # Min part size is 5MB

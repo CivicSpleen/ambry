@@ -8,8 +8,8 @@ import unittest
 import os.path
 import logging 
 import ambry.util
-from  testbundle.bundle import Bundle
-from ambry.run import  RunConfig
+from  bundles.testbundle.bundle import Bundle
+from ambry.run import  get_runconfig, RunConfig
 from test_base import  TestBase
 from ambry.library.query import QueryCommand
 from ambry.library  import new_library
@@ -22,18 +22,23 @@ logging.captureWarnings(True)
 class Test(TestBase):
  
     def setUp(self):
-        
+        import bundles.testbundle.bundle
+
         rm_rf('/tmp/server')
 
         self.copy_or_build_bundle()
-        self.bundle_dir =  os.path.join(os.path.dirname(os.path.abspath(__file__)),'testbundle')    
-        self.rc = RunConfig([os.path.join(self.bundle_dir,'client-test-config.yaml'),
-                             os.path.join(self.bundle_dir,'bundle.yaml'),
-                             RunConfig.USER_ACCOUNTS])
+
+        self.bundle_dir = os.path.dirname(bundles.testbundle.bundle.__file__)
+
+        self.rc = get_runconfig((os.path.join(self.bundle_dir, 'client-test-config.yaml'),
+                                 os.path.join(self.bundle_dir, 'bundle.yaml'),
+                                 RunConfig.USER_ACCOUNTS)
+        )
+
+        self.server_rc = get_runconfig((os.path.join(self.bundle_dir, 'server-test-config.yaml'),
+                                        RunConfig.USER_ACCOUNTS))
          
-        self.server_rc = RunConfig([os.path.join(self.bundle_dir,'server-test-config.yaml'),
-                                    RunConfig.USER_ACCOUNTS])
-       
+
         self.bundle = Bundle()  
         self.bundle_dir = self.bundle.bundle_dir
 
@@ -485,6 +490,7 @@ class Test(TestBase):
         fs.clean()
         remote = new_cache(self.server_rc.filesystem('rrc'))
 
+
         config = self.start_server()
 
         l = new_library(config)
@@ -544,7 +550,14 @@ class Test(TestBase):
 
         self.start_server()
 
-        self.assertEquals(vid, remote_l.resolve(vid).vid)
+        remote_l.sync_remotes()
+
+        print local_l.info
+        print remote_l.info
+
+        r = remote_l.resolve(vid)
+
+        self.assertEquals(vid, r.vid)
 
         b = remote_l.get(vid)
 
@@ -559,7 +572,7 @@ class Test(TestBase):
         # Test out syncing.
 
 
-        remote_l.sync_remotes()
+
 
 
     # =======================
@@ -847,7 +860,7 @@ class Test(TestBase):
         
         self.assertEquals(self.bundle.identity.name,  l.get(self.bundle.identity.name).identity.name)
         
-        
+
 
 def suite():
     suite = unittest.TestSuite()

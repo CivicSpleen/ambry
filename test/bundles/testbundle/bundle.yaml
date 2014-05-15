@@ -9,32 +9,33 @@ about:
     - two
     - three
     title: This is the Title
-    url: http://theurl.com
-contact:
+contact_bundle:
     creator:
-        bingo: bingo
-        email: al@uthor.com
-        name: Albert Uthor
-        url: http://albert.com
-    maintainer:
-        email: null
-        name: Mark Aintainer
-        url: null
-    name: The Example Corporation
-    publisher:
         email: null
         name: null
         url: null
-    source:
+    maintainer:
         email: null
-        name: The Example Corporation
-        url: http://homepage.com
+        name: null
+        url: null
+contact_source:
+    creator:
+        email: null
+        name: null
+        url: null
+    maintainer:
+        email: null
+        name: null
+        url: null
 identity:
+    bspace: null
+    btime: null
     dataset: dataset
     id: diEGPXmDC8
     revision: 1
     source: source
     subset: subset
+    type: null
     variation: variation
     version: 0.0.1
 names:

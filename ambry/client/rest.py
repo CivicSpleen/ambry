@@ -34,6 +34,7 @@ class RemoteLibrary(object):
         if not self._url[-1] == '/':
             self._url += '/'
 
+
         self.last_response = None
 
     def url(self,u,*args, **kwargs):
@@ -216,7 +217,9 @@ class RemoteLibrary(object):
         '''Returns the server's information page for an object, given any kind of ref'''
         from ..identity import Identity
 
-        return self.get(self.url("/info/{}", ref))
+        url = self.url("/info/{}", ref)
+
+        return self.get(url)
 
     def get_stream(self, ref):
         '''Return a FLO that streams the file associated with a the given reference'''

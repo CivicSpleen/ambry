@@ -115,7 +115,7 @@ class TestBase(unittest.TestCase):
         if not config:
             config = self.server_library_config(name)
 
-        self.server_url = "http://localhost:{}".format(config['port'])
+        self.server_url = "http://{}".format(config['host'])
         
         logger.info("Checking server at: {}".format(self.server_url))
 

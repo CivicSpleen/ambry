@@ -13,6 +13,16 @@ library:
       filesystem: default
       database: default
 
+    upstreamed:
+        filesystem: default
+        database: default
+        upstream:
+          options: [compress]
+          prefix: library-test
+          bucket: devtest.sandiegodata.org
+          account: devtest.sandiegodata.org
+
+
 sourcerepo:
   dir: '{root}/bundles'
 
