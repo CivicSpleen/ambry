@@ -115,9 +115,6 @@ for row in p.query("SELECT DISTINCT legend FROM incidents LIMIT 5"):
 {% endhighlight %}
 
 
-{% highlight bash %}
-{% endhighlight %}
-
 See the IPython note book [Introduction to Ambry](/notebooks/tutorial/Ambry_Introduction.html) for a more detailed example. 
 
 
@@ -128,15 +125,55 @@ See the IPython note book [Introduction to Ambry](/notebooks/tutorial/Ambry_Intr
 
 ## Building Packages
 
+Naturally, before you canfind, install and use a data bundle, someone had to create it. Bundles are composed of two files, one with Python language code, and the other is a YAML configuration file.  
+
+Creating a bundle involes: 
+
 * Create a Package Directory
 * Write the Bundle Class and Configuration
 * Build The Bundle
 * Submit to the library. 
 
-
 ### Create a Package Directory
 
+The `source new` command creates bundle directories, with skeletons of the required files.
+
+
+
+{% highlight bash %}
+$ ambry source new -s example.com -d demo 
+Got number from number server: d000001F
+Sync source bundle: /data/source/foo/example.com-demo 
+CREATED: example.com-demo-0.0.1~d000001F001, /data/source/foo/example.com-demo
+
+{% endhighlight %}
+
+The resulting director contains all of the required files, and skeleton code, so it can be built immediately. 
+
+{% highlight bash %}
+$ cd example.com-demo
+$ ls -la
+total 32
+drwxr-xr-x  8 eric  staff   272 May 15 08:34 .
+drwxr-xr-x  3 eric  staff   102 May 15 08:34 ..
+-rw-r--r--  1 eric  staff   219 May 15 08:34 README.md
+drwxr-xr-x  3 eric  staff   102 May 15 08:34 build
+-rw-r--r--  1 eric  staff   789 May 15 08:34 bundle.py
+-rw-r--r--  1 eric  staff  1400 May 15 08:34 bundle.pyc
+-rw-r--r--  1 eric  staff   446 May 15 08:34 bundle.yaml
+drwxr-xr-x  3 eric  staff   102 May 15 08:34 meta
+{% endhighlight %}
+
+{% highlight bash %}
+$ bambry build
+{% endhighlight %}
+
+Note that to interact with the bundle, we're using the `bambry` command, which is a synonym for `ambry bundle -d $(pwd)`, a short cut for using the `ambry` program. 
+
 ### Write the Bundle Class and Configuration
+
+{% highlight bash %}
+{% endhighlight %}
 
 ### Build The Bundle
 
