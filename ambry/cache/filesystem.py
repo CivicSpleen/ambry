@@ -31,6 +31,8 @@ class FsCache(Cache):
     files are deleted to free up space. 
     '''
 
+    base_priority = 10  # Priority for this class of cache.
+
     def __init__(self, dir=None,  options=None, upstream=None,**kwargs):
         '''Init a new FileSystem Cache
         
@@ -169,10 +171,14 @@ class FsCache(Cache):
         dirname = os.path.dirname(path)
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
-        
-        with open(path,'w') as f:
-            #shutil.copyfileobj(stream, f)
-            copy_file_or_flo(stream, f, cb=cb)
+
+        try:
+            with open(path,'w') as f:
+                #shutil.copyfileobj(stream, f)
+                copy_file_or_flo(stream, f, cb=cb)
+        except:
+            os.remove(path)
+            raise
 
         try:
             stream.close()
@@ -201,12 +207,45 @@ class FsCache(Cache):
     ## Information
     ##
 
-    def list(self, path=None,with_metadata=False):
+    def list(self, path=None,with_metadata=False, include_partitions=False):
         '''get a list of all of the files in the repository'''
+        from os import walk
+        import json
 
-        raise NotImplementedError()
+        l = {}
+
+
+        for root, dirs, files in os.walk(self._cache_dir):
+            root = root.replace(self._cache_dir,'',1).strip('/')
+
+            if root.startswith('meta'):
+                continue
+
+            if not include_partitions and root.count('/') > 0:
+                continue  # partition files
+
+            for f in files:
+                rel_path = os.path.join(root,f)
+                d = self.metadata(rel_path) if with_metadata else {}
+
+                if d and 'identity' in d:
+                    d['identity'] = json.loads(d['identity'])
+
+                d['caches'] = [self.repo_id]
+
+                l[rel_path] = d
+
+        if self.upstream:
+            for k, v in self.upstream.list(path, with_metadata, include_partitions).items():
+                upstreams = (l[k]['caches'] if k in l else []) + v.get('caches', self.upstream.repo_id)
+
+                l[k] = v
+                l[k]['caches'] = upstreams
+
+        return l
 
     def path(self, rel_path, propagate = True, **kwargs):
+
         abs_path = os.path.join(self.cache_dir, rel_path)
 
         if os.path.exists(abs_path):
@@ -214,6 +253,9 @@ class FsCache(Cache):
 
         if self.upstream and propagate:
             return self.upstream.path(rel_path, **kwargs)
+
+        if not os.path.exists(abs_path):
+            return False
 
         return abs_path
 
@@ -245,7 +287,7 @@ class FsCache(Cache):
         else:
             return {}
 
-    def has(self, rel_path, md5=None, use_upstream=True):
+    def has(self, rel_path, md5=None, propagate=True):
         from ..util import md5_for_file
 
         abs_path = os.path.join(self.cache_dir, rel_path)
@@ -254,8 +296,8 @@ class FsCache(Cache):
         if os.path.exists(abs_path) and ( not md5 or md5 == md5_for_file(abs_path)):
             return abs_path
 
-        if self.upstream and use_upstream:
-            return self.upstream.has(rel_path, md5=md5, use_upstream=use_upstream)
+        if self.upstream and propagate:
+            return self.upstream.has(rel_path, md5=md5, propagate=propagate)
 
         return False
 
@@ -290,15 +332,20 @@ class FsCache(Cache):
     @property
     def repo_id(self):
         '''Return the ID for this repository'''
-        import hashlib
-        m = hashlib.md5()
-        m.update(self.cache_dir)
 
-        return m.hexdigest()
+        return self.cache_dir
+
+        #import hashlib
+        #m = hashlib.md5()
+        #m.update(self.cache_dir)
+
+        #return m.hexdigest()
 
 
     def __repr__(self):
         return "FsCache: dir={} upstream=({})".format(self.cache_dir, self.upstream)
+
+
 
 
 class FsLimitedCache(FsCache):
@@ -458,16 +505,7 @@ class FsLimitedCache(FsCache):
         if len(no_db_entry) > 0:
             raise Exception("Found {} files that don't have db entries: {}"
                             .format(len(no_db_entry), ','.join(no_db_entry)))
-        
-    @property
-    def repo_id(self):
-        '''Return the ID for this repository'''
-        import hashlib
-        m = hashlib.md5()
-        m.update(self.cache_dir)
 
-        return m.hexdigest()
-    
     def get_stream(self, rel_path, cb=None):
         p = self.get(rel_path, cb=cb)
         
@@ -652,7 +690,14 @@ class FsLimitedCache(FsCache):
         if self.upstream:
             return self.upstream.list(path, with_metadata=with_metadata)
         else:
-            raise NotImplementedError() 
+            raise NotImplementedError()
+
+    @property
+    def priority(self):
+        return self.upstream.priority - 1  # give a slightly better priority
+
+    def set_priority(self, i):
+        self.upstream.set_priority(i)
 
 
     def __repr__(self):
@@ -669,6 +714,13 @@ class FsCompressionCache(Cache):
         
         super(FsCompressionCache, self).__init__(upstream)
 
+
+    @property
+    def priority(self):
+        return self.upstream.priority - 1 # give a slightly better priority
+
+    def set_priority(self,i):
+        self.upstream.set_priority(i)
 
     ##
     ## Put
@@ -808,22 +860,22 @@ class FsCompressionCache(Cache):
 
         return md['md5']
 
-    def list(self, path=None,with_metadata=False):
+    def list(self, path=None,with_metadata=False, include_partitions=False):
         '''get a list of all of the files in the repository'''
-        return self.upstream.list(path,with_metadata=with_metadata)
+        return self.upstream.list(path,with_metadata=with_metadata, include_partitions=include_partitions)
 
-    def has(self, rel_path, md5=None, use_upstream=True):
+    def has(self, rel_path, md5=None, propagate=True):
         
         # This odd structure is because the MD5 check won't work if it is computed on a uncompressed
         # file and checked on a compressed file. But it will work if the check is done on an s#
         # file, which stores the md5 as metadada
 
-        r =  self.upstream.has(self._rename(rel_path), md5=md5, use_upstream=use_upstream)
+        r =  self.upstream.has(self._rename(rel_path), md5=md5, propagate=propagate)
 
         if r:
             return True
 
-        return self.upstream.has(self._rename(rel_path), md5=None, use_upstream=use_upstream)
+        return self.upstream.has(self._rename(rel_path), md5=None, propagate=propagate)
 
     def metadata(self, rel_path):
         return self.upstream.metadata(self._rename(rel_path))
@@ -836,7 +888,7 @@ class FsCompressionCache(Cache):
 
     @property
     def repo_id(self):
-        return "c"+self.upstream.repo_id()
+        return self.upstream.repo_id+'#compressed'
 
     @property
     def cache_dir(self):

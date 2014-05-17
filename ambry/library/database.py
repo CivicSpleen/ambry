@@ -58,6 +58,7 @@ class LibraryDb(object):
         self._engine = None
         self._connection  = None
 
+
         if self.driver in ['postgres','postgis']:
             self._schema = 'library'
         else:
@@ -124,9 +125,7 @@ class LibraryDb(object):
         from sqlalchemy.orm import sessionmaker
 
         if not self.Session:
-            # expire_on_commit=False prevents DetatchedInstanceErrors when
-            # using database object outside the database.
-            self.Session = sessionmaker(bind=self.engine, expire_on_commit=False)
+            self.Session = sessionmaker(bind=self.engine)
 
         if not self._session:
             self._session = self.Session()
@@ -136,6 +135,8 @@ class LibraryDb(object):
                 self._session.execute("SET search_path TO {}".format(self._schema))
 
         return self._session
+
+
 
     def close(self):
 
@@ -148,6 +149,7 @@ class LibraryDb(object):
 
 
     def close_session(self):
+
         if self._session:
             self._session.close()
             #self._session.bind.dispose()
@@ -162,7 +164,7 @@ class LibraryDb(object):
     def commit(self):
         try:
             self.session.commit()
-            self.close_session()
+            #self.close_session()
         except Exception as e:
             #self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))
             raise
@@ -170,7 +172,7 @@ class LibraryDb(object):
 
     def rollback(self):
         self.session.rollback()
-        self.close_session()
+        #self.close_session()
 
 
     @property
@@ -280,7 +282,7 @@ class LibraryDb(object):
                     raise Exception("Couldn't create directory " + dir_)
 
 
-    def _drop(self, s):
+    def drop(self):
 
         if not self.enable_delete:
             raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
@@ -292,11 +294,9 @@ class LibraryDb(object):
             if table.name in  tables:
                 table.drop(self.engine, checkfirst=True)
 
-    def drop(self):
-        s = self.session
+        self.commit()
 
-        self._drop(s)
-        s.commit()
+
 
     def __del__(self):
         pass # print  'closing LibraryDb'
@@ -379,13 +379,6 @@ class LibraryDb(object):
 
         return ValueInserter(self, None, table , **kwargs)
 
-    ##
-    ##
-    ##
-
-
-
-
 
 
     ##
@@ -446,7 +439,6 @@ class LibraryDb(object):
         for config in s.query(SAConfig).filter(SAConfig.d_vid == ROOT_CONFIG_NAME_V).all():
             d[(str(config.group),str(config.key))] = config.value
 
-        self.close_session()
         return d
 
     def _mark_update(self):
@@ -459,7 +451,7 @@ class LibraryDb(object):
     ## Install and remove bundles and partitions
     ##
 
-    def install_dataset_identity(self, identity, location=Dataset.LOCATION.LIBRARY, data = {}):
+    def install_dataset_identity(self, identity, data = {}, overwrite = True):
         '''Create the record for the dataset. Does not add an File objects'''
         from sqlalchemy.exc import IntegrityError
         from ..dbexceptions import ConflictError
@@ -470,19 +462,57 @@ class LibraryDb(object):
         ds.fqname = identity.fqname
         ds.cache_key = identity.cache_key
         ds.creator = 'N/A'
-        ds.location = location
         ds.data = data
+
         try:
             try:
                 self.session.add(ds)
                 self.commit()
-            except:
+            except IntegrityError as e:
+
+                if not overwrite:
+                    return
+
                 self.session.rollback()
                 self.session.merge(ds)
                 self.commit()
+
         except IntegrityError as e:
-            raise ConflictError("Can't install dataset vid={} vname={} cache_key={}; \nOne already exists. ('{}')"
-                                .format(identity.vid, identity.vname, identity.cache_key,  e.message))
+            raise ConflictError("Can't install dataset vid={}; \nOne already exists. ('{}');\n {}"
+                                .format(identity.vid,  e.message, ds.dict))
+
+
+    def install_partition_identity(self, identity, data={}, overwrite = True):
+        '''Create the record for the dataset. Does not add an File objects'''
+        from sqlalchemy.exc import IntegrityError
+        from ..dbexceptions import ConflictError
+
+        ds = Dataset(**identity.as_dataset().dict)
+
+        d = identity.dict
+        del d['dataset']
+
+        p = Partition(ds, **d)
+
+        p.data = data
+
+        try:
+            try:
+                self.session.add(p)
+                self.commit()
+
+            except IntegrityError as e:
+
+                if not overwrite:
+                    return
+
+                self.session.rollback()
+                self.session.merge(p)
+                self.commit()
+
+        except IntegrityError as e:
+            raise ConflictError("Can't install partition vid={};\nOne already exists. ('{}');\n{}"
+                                .format(identity.vid, e.message, p.dict))
 
 
     def install_bundle_file(self, identity, bundle_file):
@@ -518,10 +548,9 @@ class LibraryDb(object):
         db = bundle.database
         db.update_schema()
 
-        bdbs = db.unmanaged_session
+        bdbs = db.session
 
         s = self.session
-        s.autoflush = False
 
         dataset = bdbs.query(Dataset).one()
 
@@ -540,15 +569,13 @@ class LibraryDb(object):
         s.query(Table).filter(Table.d_vid == dataset.vid).delete()
 
         try:
-            self.commit()
+            s.commit()
         except IntegrityError as e:
             self.logger.error("Failed to merge in {}".format(self.dsn))
             self.rollback()
             raise e
 
         return dataset
-
-
 
     def install_bundle(self, bundle, install_partitions = True):
         '''Copy the schema and partitions lists into the library database
@@ -562,11 +589,13 @@ class LibraryDb(object):
             # The Tables only get installed when the dataset is installed,
             # not for the partition
 
+
         self._mark_update()
 
         try:
             dataset = self.install_dataset(bundle)
         except Exception as e:
+            raise
             from ..dbexceptions import DatabaseError
             raise DatabaseError("Failed to install {} into {}: {}".format(
                 bundle.database.path, self.dsn, e.message
@@ -575,12 +604,10 @@ class LibraryDb(object):
         s = self.session
 
         for table in dataset.tables:
-
             s.merge(table)
 
             for column in table.columns:
                 s.merge(column)
-
 
         if install_partitions:
             for partition in dataset.partitions:
@@ -589,7 +616,7 @@ class LibraryDb(object):
         try:
             self.commit()
         except IntegrityError as e:
-            self.logger.error("Failed to merge")
+            self.logger.error("Failed to merge into {}".format(self.dsn))
             self.rollback()
             raise e
 
@@ -601,7 +628,6 @@ class LibraryDb(object):
         from ..dbexceptions import NotFoundError
         from ..identity import PartitionNameQuery
         from sqlalchemy.orm.exc import NoResultFound
-
 
         if install_bundle:
             try:
@@ -630,8 +656,6 @@ class LibraryDb(object):
                         s.merge(column)
 
         s.merge(partition.record)
-
-        return
 
         try:
             self.commit()
@@ -711,9 +735,7 @@ class LibraryDb(object):
             for p in b.partitions:
                 self.remove_partition(p)
 
-        dataset = (self.session.query(Dataset)
-                   .filter(Dataset.location == Dataset.LOCATION.LIBRARY)
-                   .filter(Dataset.vid==dataset.identity.vid).one())
+        dataset = (self.session.query(Dataset).filter(Dataset.vid==dataset.identity.vid).one())
 
         # Can't use delete() on the query -- bulk delete queries do not
         # trigger in-python cascades!
@@ -766,13 +788,11 @@ class LibraryDb(object):
 
             if isinstance(vid, DatasetNumber):
                 d = (self.session.query(Dataset)
-                     .filter(Dataset.location == Dataset.LOCATION.LIBRARY )
                      .filter(Dataset.vid == str(vid)).one())
                 did = d.identity
 
             elif isinstance(vid, PartitionNumber):
                 d,p = (self.session.query(Dataset, Partition).join(Partition)
-                       .filter(Dataset.location == Dataset.LOCATION.LIBRARY)
                        .filter(Partition.vid == str(vid)).one())
                 did = d.identity
                 did.add_partition(p.identity)
@@ -790,7 +810,7 @@ class LibraryDb(object):
 
         return  s.query(Table).filter(Table.vid == table_vid).one()
 
-    def list(self, datasets=None, locations = None, key='vid'):
+    def list(self, datasets=None,  key='vid'):
         """
         :param datasets: If specified, must be a dict, which the internal dataset data will be
         put into.
@@ -810,16 +830,6 @@ class LibraryDb(object):
         q2 = (self.session.query(Dataset)
               .filter(Dataset.vid != ROOT_CONFIG_NAME_V))
 
-        if locations:
-
-            if not isinstance(locations,(list, tuple)):
-                locations=[locations]
-
-            terms = [ Dataset.location == location for location in locations]
-
-
-            q1 = q1.filter(or_(*terms))
-            q2 = q2.filter(or_(*terms))
 
         for d,p in (q1.all() + [ (d,None) for d in q2.all()]):
 
@@ -831,25 +841,27 @@ class LibraryDb(object):
             else:
                 dsid = datasets[ck]
 
-            # The dataset locations are linked to the identity locations
-            dsid.locations.set(d.location)
+
 
             if p and ( not datasets[ck].partitions or p.vid not in datasets[ck].partitions):
                 pident = p.identity
-                pident.locations.set(d.location)
                 datasets[ck].add_partition(pident)
-
-            if d.location == Files.TYPE.SOURCE:
-                files = Files(self)
-                f = files.query.type(Files.TYPE.SOURCE).ref(dsid.vid).one_maybe
-
-                if f:
-                    dsid.bundle_state = f.state
-                    dsid.data['time'] = f.modified
-
 
 
         return datasets
+
+    def all_vids(self):
+
+        all = set()
+
+        q = (self.session.query(Dataset, Partition).join(Partition).filter(Dataset.vid != ROOT_CONFIG_NAME_V))
+
+        for row in q.all():
+            all.add(row.Dataset.vid)
+            all.add(row.Partition.vid)
+
+        return all
+
 
     def datasets(self, key='vid'):
         '''List only the dataset records'''
@@ -998,7 +1010,7 @@ class LibraryDb(object):
             self.logger.error("Exception while querrying in {}, schema {}".format(self.dsn, self._schema))
             raise
 
-        self.close_session()
+
         return out
 
     def queryByIdentity(self, identity):

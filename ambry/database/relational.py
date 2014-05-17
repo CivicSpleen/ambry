@@ -287,10 +287,6 @@ class RelationalDatabase(DatabaseInterface):
     def _on_create_engine(self, engine):
         pass
 
-    @property
-    def unmanaged_session(self):
-        return self.session
-
 
     def commit_hook(self, session):
         pass
@@ -553,7 +549,7 @@ class RelationalBundleDatabaseMixin(object):
         except:
             ds.creator = 'n/a'
 
-        self.unmanaged_session.merge(ds)
+        self.session.merge(ds)
 
     def _post_create(self):
         from ..orm import Config
@@ -583,7 +579,7 @@ class RelationalPartitionDatabaseMixin(object):
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid )
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'partition','vname', self.partition.identity.vname )
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'partition','vid', self.partition.identity.vid )
-        self.unmanaged_session.commit()
+        self.session.commit()
 
 
 

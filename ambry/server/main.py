@@ -416,11 +416,7 @@ def get_root(library):
            'datasets' : "{}/datasets".format(hp),
            'find': "{}/datasets/find".format(hp),
            'info': li,
-           'upstream': dict(
-               options = library.upstream.last_upstream().options,
-               bucket = library.upstream.last_upstream().bucket_name,
-               prefix = library.upstream.last_upstream().prefix)
-           }
+           'remotes': [ r.repo_id for r in library.remotes] if library.remotes else [] }
 
 def _resolve(library, ref):
     from ambry.orm import Dataset

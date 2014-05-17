@@ -23,42 +23,46 @@ library:
         filesystem: server
         database: server  
         host: localhost:7979
-        upstream:
-          options: [compress]
-          prefix: library-test
-          bucket: devtest.sandiegodata.org
-          account: devtest.sandiegodata.org
+        remotes:
+          - '{root}/remote'
+
+    s3-remote:
+        filesystem: server
+        database: server
+        host: localhost:7979
+        remotes:
+          - s3:devtest.sandiegodata.org/library-test#compress
 
 
 database:
   
     writer:
-        dbname: '/tmp/server/writer.db'
+        dbname: '{root}/writer.db'
         driver: sqlite  
         
     reader:
-        dbname: '/tmp/server/reader.db'
+        dbname: '{root}/reader.db'
         driver: sqlite  
 
     local:
-        dbname: '/tmp/server/local.db'
+        dbname: '{root}/local.db'
         driver: sqlite
 
     server:
-        dbname: '/tmp/server/server.db'
+        dbname: '{root}/server.db'
         driver: sqlite  
 
 filesystem:
 
-
+    root: '/tmp/server'
     local:
-        dir: '/tmp/server/local'
+        dir: '{root}/local'
 
     writer:
-        dir: '/tmp/server/writer'
+        dir: '{root}/writer'
         
     reader:
-        dir: '/tmp/server/reader'
+        dir: '{root}/reader'
         
     server:
         dir: '/tmp/server/server'

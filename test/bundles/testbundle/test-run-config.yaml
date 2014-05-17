@@ -11,26 +11,46 @@ library:
             
     library2:
         filesystem: filesystem2
-        database: database2  
+        database: database2
+
+
+    # Used to seperate tests that do or dont have a remote.
+    remoted:
+      remotes:
+        - '{root}/url_cache#compress'
+        - s3://devtest.sandiegodata.org/cache-uncompressed
+        - s3://devtest.sandiegodata.org/cache-compressed#compress
+      filesystem: default
+      database: default
+
 
 database:
-    database1:
-        dbname: database1
-        driver: sqlite
-          
-    database2:
-        dbname: database2
-        driver: sqlite  
+
+  default:
+      dbname: '{root}/library.db'
+      driver: sqlite
+
+  database1:
+    dbname: database1
+    driver: sqlite
+
+  database2:
+    dbname: database2
+    driver: sqlite
 
 
-filesystem:  
+filesystem:
+    root: /tmp/cache-test
+
+    default: '{root}/default'
+
     filesystem1:
-        dir: /tmp/cache-test/filesystem1
+        dir: '{root}/filesystem1'
         size: 5000
         upstream: filesystem2
 
     filesystem2:
-        dir: /tmp/cache-test/filesystem2
+        dir: '{root}/filesystem2'
         size: 5000
         upstream:  filesystem3
 
@@ -39,17 +59,17 @@ filesystem:
         account: 'devtest.sandiegodata.org'
         
     fscache:
-      dir: /tmp/cache-test/fscache
+      dir: '{root}/fscache'
       
     limitedcache:
       size: 2000
-      dir: /tmp/cache-test/limitedcache
+      dir: '{root}/limitedcache'
       upstream: fscache
       
     compressioncache:
       options: [compress]
       size: 2000
-      dir: /tmp/cache-test/compressed
+      dir: '{root}/compressed'
       upstream: fscache
       
       
@@ -60,18 +80,18 @@ filesystem:
 
       
     cached-s3:
-      dir: /tmp/cache-test/cached-s3
+      dir: '{root}/cached-s3'
       upstream: s3cache-noupstream
       
     cached-compressed-s3:
-      dir: /tmp/cache-test/cached-compressed-s3
+      dir: '{root}/cached-compressed-s3'
       upstream: 
         options: [compress]
         prefix: library-test
         bucket: devtest.sandiegodata.org
         account: devtest.sandiegodata.org
         
-      
+
     rest-cache:
       host: localhost
       port: 7979
@@ -79,15 +99,13 @@ filesystem:
         prefix: library-test # Must match server config
         bucket: devtest.sandiegodata.org
         account: devtest.sandiegodata.org
-      
 
     wt-fs-1:
-      dir: /tmp/cache-test/wt-fs-1
+      dir: '{root}/wt-fs-1'
 
     wt-fs-2:
-      dir: /tmp/cache-test/wt-fs-2
+      dir: '{root}/wt-fs-2'
 
     write-through:
       upstream: wt-fs-1
       remote_upstream: wt-fs-2
-

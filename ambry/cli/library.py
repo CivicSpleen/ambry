@@ -296,7 +296,7 @@ def library_info(args, l, config, list_all=False):
     prt("Database: {}",l.database.dsn)
     prt("Cache:    {}",l.cache)
     prt("Upstream: {}", l.upstream)
-    prt("Remotes:  {}", ', '.join(l.remotes) if l.remotes else '')
+    prt("Remotes:  {}", ', '.join([ str(r) for r in l.remotes]) if l.remotes else '')
 
     
 def library_push(args, l, config):

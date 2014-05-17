@@ -46,7 +46,10 @@ class Bundle(object):
 
 
     def __del__(self):
-        self.close()
+        try:
+            self.close()
+        except NotImplementedError:
+            pass
 
     def close(self):
         """Close the bundle database and all partition databases, committing and closing any sessions and connections"""
@@ -459,9 +462,7 @@ class LibraryDbBundle(Bundle):
         from ambry.orm import Dataset
 
         try:
-            return (self.database.session.query(Dataset)
-                    .filter(Dataset.location == Dataset.LOCATION.LIBRARY)
-                    .filter(Dataset.vid == self._dataset_id).one())
+            return (self.database.session.query(Dataset).filter(Dataset.vid == self._dataset_id).one())
 
         except NoResultFound:
             from ..dbexceptions import NotFoundError
@@ -486,11 +487,11 @@ class LibraryDbBundle(Bundle):
 
     @property
     def path(self):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def sub_path(self, *args):
         """For constructing paths to partitions"""
-        raise NotImplemented()
+        raise NotImplementedError()
 
     @property
     def identity(self):

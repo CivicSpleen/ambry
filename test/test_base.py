@@ -208,7 +208,22 @@ class TestBase(unittest.TestCase):
             
         time.sleep(2) # Let the socket clear
             
-        
+
+    def new_rand_file(self, path, size = 1024):
+
+        dir_ = os.path.dirname(path)
+
+        if not os.path.isdir(dir_):
+            os.makedirs(dir_)
+
+
+        with open(path,'w+') as f:
+            for i in range(size):
+                f.write(str(i%10)*1024)
+                #f.write('\n')
+
+        return path
+
             
             
         

@@ -14,10 +14,10 @@ from ambry.bundle import DbBundle
 # Setup a default logger. The logger is re-assigned by the
 # bundle when the bundle instantiates the logger.
 import logging
-import logging.handlers
+
 from ambry.orm import Dataset, Config
 from ..identity import LocationRef, Identity
-from ..util import memoize
+from ..util import memoize, get_logger
 import weakref
 from files import Files
 import collections
@@ -39,13 +39,16 @@ def _new_library(config):
         from ..dbexceptions import DatabaseError
         raise DatabaseError('Failed to create {} : {}'.format(database.dsn, e.message))
 
-    upstream = new_cache(config['upstream']) if 'upstream' in config else None
+    if 'upstream' in config:
+        raise DeprecationWarning("Upstream no longer allowed in configuration")
 
-    remotes = config['remotes'] if 'remotes' in config else None
+    root = config['root']
 
-    if upstream and (not isinstance(upstream, RemoteMarker)
-                     and not isinstance(upstream.last_upstream(), RemoteMarker)):
-        raise ConfigurationError("Library upstream must have a RemoteMarker interface: {}".format(config))
+    remotes =  [ new_cache(remote) for remote in config.get('remotes' ,[])]
+
+    for i,remote in enumerate(remotes):
+        remote.set_priority(i)
+
 
     source_dir = config.get('source', None)
 
@@ -65,9 +68,7 @@ def _new_library(config):
     l = Library(cache=cache,
                 database=database,
                 name = config['_name'] if '_name' in config else 'NONE',
-                upstream=upstream,
                 remotes=remotes,
-                sync = config.get('sync', None),
                 require_upload=config.get('require_upload', None),
                 source_dir = source_dir,
                 host = host,
@@ -123,10 +124,9 @@ class Library(object):
 
 
     def __init__(self, cache, database,
-                 name=None,
-                 upstream=None,  remotes=None,
+                 name=None, remotes=None,
                  source_dir = None,
-                 sync=False, require_upload=False,
+                 require_upload=False,
                  host=None, port=None, urlhost = None):
         '''Libraries are constructed on the root cache name for the library.
         If the cache does not exist, it will be created.
@@ -147,9 +147,6 @@ class Library(object):
         self.source_dir = source_dir
 
         self._database = database
-        self._upstream = upstream
-
-        self.sync = sync
         self.bundle = None # Set externally in bundle.library()
         self.host = host
         self.port = port
@@ -159,11 +156,13 @@ class Library(object):
         self._dependencies = None
         self._remotes = remotes
 
+        self._all_vids = None
+
         if not self.cache:
             raise ConfigurationError("Must specify library.cache for the library in bundles.yaml")
 
-        self.logger = logging.getLogger(__name__)
-        #self.logger.setLevel(logging.DEBUG)
+        self.logger = get_logger(__name__)
+        self.logger.setLevel(logging.DEBUG)
 
         self.needs_update = False
 
@@ -172,7 +171,7 @@ class Library(object):
 
     def clone(self):
 
-        return self.__class__(self.cache, self.database.clone(), self._upstream, self.sync, self.require_upload,
+        return self.__class__(self.cache, self.database.clone(),  self.require_upload,
                               self.host, self.port)
 
     def _create_bundle(self, path):
@@ -196,12 +195,6 @@ class Library(object):
         self.database.close()
 
 
-    @property
-    def upstream(self):
-        if self._upstream:
-            return self._upstream # When it is a URL to a REST interface.
-        else:
-            return None
 
     @property
     def database(self):
@@ -212,6 +205,8 @@ class Library(object):
         '''Load a bundle from the remote to the local cache and install it'''
         from ..util.flo import copy_file_or_flo
         from ..dbexceptions import ConflictError
+
+        raise NotImplementedError()
 
         if not self.upstream.has(rel_path):
             raise ConfigurationError('Remote {} does not have cache key  {}'.format(self.upstream, rel_path))
@@ -241,26 +236,11 @@ class Library(object):
         if b.identity.cache_key != rel_path:
             raise ConflictError("Identity of downloaded bundle doesn't match request payload")
 
-        self.put(b)
+        self.put_bundle(b)
 
         return b
 
-    def config(self, bp_id):
 
-        from ..cache import RemoteMarker
-
-        d, p = self.get_ref(bp_id)
-
-        try:
-            api = self.upstream.get_upstream(RemoteMarker)
-        except AttributeError: # No api
-            api = self.upstream
-
-        if self.cache.has(d.cache_key):
-            b = self.get(d.vid)
-            config = b.db_config.dict
-        else:
-            return None
 
     ##
     ## Storing
@@ -269,8 +249,7 @@ class Library(object):
     def put_bundle(self, bundle, force=False, logger=None, install_partitions=True):
 
         self.database.install_bundle(bundle)
-        dst, cache_key, url = self._put_file(bundle.identity, bundle.database.path,
-                                             force=force)
+        dst, cache_key, url = self._put_file(bundle.identity, bundle.database.path, force=force)
 
         if install_partitions:
             for p in bundle.partitions:
@@ -279,7 +258,9 @@ class Library(object):
         return dst, cache_key, url
 
     def put_partition(self, bundle, partition, force=False):
+
         self.database.install_partition(bundle, partition.identity.id_)
+
         dst, cache_key, url = self._put_file(partition.identity, partition.database.path,
                                              force=force)
 
@@ -306,9 +287,6 @@ class Library(object):
 
         if not os.path.exists(dst):
             raise Exception("cache {}.put() didn't return an existent path. got: {}".format(type(self.cache), dst))
-
-        if self.upstream and self.sync:
-            self.upstream.put(identity, file_path)
 
         self.files.query.path(dst).group(self.cache.repo_id).delete()
 
@@ -341,7 +319,7 @@ class Library(object):
     ##
 
 
-    def list(self, datasets=None, with_meta=True, locations=None, key='fqname'):
+    def list(self, datasets=None, with_meta=True, key='fqname'):
         '''Lists all of the datasets in the partition, optionally with
         metadata. Does not include partitions. This returns a dictionary
         in  a form that is similar to the remote and source lists. '''
@@ -350,7 +328,7 @@ class Library(object):
         if datasets is None:
             datasets = {}
 
-        self.database.list(datasets=datasets, locations=locations)
+        self.database.list(datasets=datasets)
 
         return datasets
 
@@ -359,37 +337,18 @@ class Library(object):
 
         return self.cache.path(rel_path)
 
-    def _attach_rrc(self, url, gets, cb):
-        '''Attaches a remote library, accessible through a REST interface
-        to the lowest level of the Library's filesystem cache, allowing
-        files to be retrieved from the remote library by making a get() request
-        to the local cache '''
+    @property
+    def remote_stack(self):
+        """Return a MultiCache that has all of the remotes as upstreams"""
 
-        from ..cache.remote import RestReadCache
+        from ..cache.multi import MultiCache
 
-        # Attach and detach the appropriate RestReadCache
-
-        orig_last_upstream = self.cache.last_upstream()
-        orig_last_upstream.upstream = RestReadCache(url)
-
-        # Gets from the remote are slow, but after that, gets from the
-        # file system cache are fast, so we can afford to repeat the gets later.
-
-        for ident in gets:
-            try:
-                self.cache.get(ident.cache_key, cb=cb)
-            except:
-                orig_last_upstream.upstream = None
-                self.logger.info("Deleting incomplete download: {}".format(self.cache.path(ident.cache_key)))
-                self.cache.remove(ident.cache_key, propagate = True)
-                raise
-
-
-        orig_last_upstream.upstream = None
+        return MultiCache(self.remotes)
 
 
 
-    def get(self, ref, force=False, cb=None, use_remote=False):
+
+    def get(self, ref, force=False, cb=None):
         '''Get a bundle, given an id string or a name '''
         from sqlite3 import DatabaseError
         from sqlalchemy.exc import OperationalError, IntegrityError
@@ -401,30 +360,19 @@ class Library(object):
         # Get a reference to the dataset, partition and relative path
         # from the local database.
 
-        dataset = self.resolve(ref, use_remote=use_remote)
+        dataset = self.resolve(ref)
 
         if not dataset:
-            return None
+            return False
 
-        if (Dataset.LOCATION.REMOTE in dataset.locations.codes and
-            Dataset.LOCATION.LIBRARY not in dataset.locations.codes and
-            use_remote):
+        # Link the remotes to the cache so we can fetch through from any of them
+        # to the local cache.
+        self.cache.attach(self.remote_stack)
 
-            f = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
-
-            # Since it was remote, attach the appropriate remote cache to our cache stack then
-            # when we read from the top level, we'll get it from the remote.
-
-            # NOTE! The partition and bundle are actually fetched from the remote in _attach_rrc!
-            # All of the subsequent cache gets in this function just read from the local cache
-
-            self._attach_rrc(f.source_url, [dataset], cb=cb)
-
-        # First, get the bundle and instantiate it. If what was requested
-        # was just the bundle, return it, otherwise, return it. If it was
-        # a partition, get the partition from the bundle.
-
-        abs_path = self.cache.get(dataset.cache_key, cb=cb)
+        try:
+            abs_path = self.cache.get(dataset.cache_key, cb=cb)
+        finally:
+            self.cache.detach()
 
         if not abs_path or not os.path.exists(abs_path):
             return False
@@ -456,52 +404,37 @@ class Library(object):
 
         bundle.library = self
 
-        if dataset.partition:
+        try:
+            if dataset.partition:
 
-            # Ensure the partition is in the cache
-            if not self.cache.has(dataset.partition.cache_key) and use_remote:
-                try:
-                    f = self.files.query.type(Dataset.LOCATION.REMOTE).ref(dataset.vid).one
-                except:
-                    bundle.close()
-                    raise
-
-                # Since it was remote, attach the appropriate remote cache to our cache stack then
-                # when we read from the top level, we'll get it from the remote.
-                self._attach_rrc(f.source_url, [dataset.partition], cb=cb)
-
-            else:
-                url = None
-
-
-            try:
                 partition = bundle.partitions.get(dataset.partition.vid)
-            except KeyboardInterrupt:
-                bundle.close()
-                raise
 
-            if not partition:
-                from ..dbexceptions import NotFoundError
-                bundle.close()
-                raise NotFoundError('Failed to get partition {} from bundle at {} '
-                                    .format(dataset.partition.fqname, abs_path))
+                if not partition:
+                    from ..dbexceptions import NotFoundError
+                    raise NotFoundError('Failed to get partition {} from bundle at {} '
+                                        .format(dataset.partition.fqname, abs_path))
 
-            abs_path = self.cache.get(partition.identity.cache_key, cb=cb)
+                self.cache.attach(self.remote_stack)
 
-            if not abs_path or not os.path.exists(abs_path):
-                bundle.close()
-                raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.fqname))
+                try:
+                    abs_path = self.cache.get(partition.identity.cache_key, cb=cb)
+                finally:
+                    self.cache.detach()
 
-            try:
-                self.sync_library_partition(bundle, partition.identity)
-            except IntegrityError as e:
-                self.database.session.rollback()
-                self.logger.error("Partition is already in Library.: {} ".format(e.message))
+                if not abs_path or not os.path.exists(abs_path):
+                    raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.fqname))
 
-            # Attach the partition into the bundle, and return both.
-            bundle.partition = partition
+                try:
+                    self.sync_library_partition(bundle, partition.identity)
+                except IntegrityError as e:
+                    self.database.session.rollback()
+                    self.logger.error("Partition is already in Library.: {} ".format(e.message))
 
-        bundle.close()
+                # Attach the partition into the bundle, and return both.
+                bundle.partition = partition
+
+        finally:
+            bundle.close()
 
         return bundle
 
@@ -519,27 +452,15 @@ class Library(object):
 
         return self.database.resolver
 
-    @property
-    def remote_resolver(self):
 
-        from .query import RemoteResolver
-        #return RemoteResolver(local_resolver=self.database.resolver, remote_urls=self._remotes)
-        return RemoteResolver(local_resolver=None, remote_urls=self._remotes)
-
-
-    def resolve(self, ref, location = [Dataset.LOCATION.LIBRARY,Dataset.LOCATION.REMOTE], use_remote = False):
-        from .query import RemoteResolver
+    def resolve(self, ref, location = [Dataset.LOCATION.LIBRARY, Dataset.LOCATION.REMOTE]):
 
         if isinstance(ref, Identity):
             ref = ref.vid
 
-        if use_remote: # Do we need the remote resolver with remote sync?
-            raise Exception("Don't be using the remote for resolution")
-            resolver = RemoteResolver(local_resolver=self.resolver, remote_urls=self._remotes)
-        else:
-            resolver = self.resolver
+        resolver = self.resolver
 
-        ip, ident = resolver.resolve_ref_one(ref, location)
+        ip, ident = resolver.resolve_ref_one(ref)
 
         try:
             if ident and self.source:
@@ -548,6 +469,41 @@ class Library(object):
             pass  # Warehouse libraries don't have source directories.
 
         return ident
+
+    def locate(self, ref):
+        """Return list of files for a reference, indicating where a file for a partition or dataset is located"""
+
+        if isinstance(ref, Identity):
+            ident = ref
+        else:
+            ident = self.resolve(ref)
+
+        if not ident:
+            return None, None
+
+        if self.cache.has(ident.cache_key):
+            return ident, self.cache
+
+
+        for remote in sorted(self.remotes, key = lambda x: x.priority):
+            if remote.has(ident.cache_key):
+                return ident, remote
+
+
+        return ident, None
+
+
+
+    def locate_one(self,ref):
+        """Like locate, but return only the highest priority result, or None if non exists"""
+
+        f = self.locate(ref)
+
+        try:
+            return f.pop(0)
+        except (AttributeError,IndexError):
+            return None
+
 
     ##
     ## Dependencies
@@ -611,7 +567,7 @@ class Library(object):
         for k, v in deps.items():
 
             try:
-                ident = self.resolve(v, use_remote=True)
+                ident = self.resolve(v)
                 if not ident:
                     self.bundle.error("Failed to resolve {} ".format(v))
                     errors += 1
@@ -672,7 +628,9 @@ class Library(object):
         for nf in new_files:
             yield nf
 
-    def push(self, ref=None, cb=None):
+
+
+    def push(self, ref=None, cb=None, upstream = None):
         """Push any files marked 'new' to the upstream
 
         Args:
@@ -684,7 +642,11 @@ class Library(object):
         what = None
         start = None
         end = None
-        if not self.upstream:
+
+        if not upstream:
+            upstream = self.remotes[0]
+
+        if not upstream:
             raise Exception("Can't push() without defining a upstream. ")
 
         if ref is not None:
@@ -703,7 +665,7 @@ class Library(object):
 
             md = identity.to_meta(file=file_.path)
 
-            if False and self.upstream.has(identity.cache_key):
+            if upstream.has(identity.cache_key):
                 if cb: cb('Has', md, 0)
                 what = 'has'
                 file_.state = 'pushed'
@@ -712,15 +674,18 @@ class Library(object):
                 start = time.clock()
                 if cb: cb('Pushing', md, start)
 
-                self.upstream.put(file_.path, identity.cache_key, metadata=md)
+                upstream.put(file_.path, identity.cache_key, metadata=md)
                 end = time.clock()
                 dt = end - start
                 file_.state = 'pushed'
                 if cb: cb('Pushed', md, dt)
                 what = 'pushed'
 
+
             if identity.is_bundle:
-                self.sync_upstream_dataset(file_.path, identity, md)
+                self.sync_remote_dataset(upstream, identity, md)
+            elif identity.is_partition:
+                self.sync_remote_partition(upstream, identity, md)
 
             self.database.session.merge(file_)
             self.database.commit()
@@ -728,11 +693,9 @@ class Library(object):
             return what, start, end, md['size'] if 'size' in md else None
 
         else:
+
             for file_ in self.new_files:
-                self.push(file_.ref, cb=cb)
-
-
-
+                self.push(file_.ref, cb=cb, upstream=upstream)
 
     #
     # Maintainence
@@ -746,7 +709,6 @@ class Library(object):
         files from the cache"""
         self.clean()
         self.cache.clean()
-
 
     #
     # Synchronize
@@ -823,7 +785,7 @@ class Library(object):
                 continue
 
             for p in bundle.partitions:
-                if self.cache.has(p.identity.cache_key, use_upstream=False):
+                if self.cache.has(p.identity.cache_key, propagate=False):
                     self.logger.info('            {} '.format(p.identity.vname))
                     self.sync_library_partition(bundle, p.identity, commit = False)
 
@@ -871,88 +833,74 @@ class Library(object):
             source_url=None)
 
 
-    def sync_upstream(self, clean=False):
-        import json
-        from ..identity import Identity
-
-        if clean:
-            self.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.UPSTREAM).delete()
-            self.files.query.type(Dataset.LOCATION.UPSTREAM).delete()
-
-        if not self.upstream:
-            return
-
-        self.logger.info("Upstream sync: {}".format(self.upstream))
-
-        for e in self.upstream.list():
-
-            if self.files.query.type(Dataset.LOCATION.UPSTREAM).path(e).one_maybe:
-                #self.logger.info("Upstream found: {}".format(e))
-                continue
-
-            md =  self.upstream.metadata(e)
-            print '!!!', md
-            ident = Identity.from_dict(json.loads(md['identity']))
-            self.sync_upstream_dataset(e, ident, md)
-
-            self.logger.info("Upstream sync: {}".format(ident.fqname))
-
-    def sync_upstream_dataset(self, path, ident, metadata):
-
-        self.database.install_dataset_identity(ident, location=Dataset.LOCATION.UPSTREAM)
-
-        f = self.files.new_file(
-            merge=True,
-            path=path,
-            group='upstream',
-            ref=ident.vid,
-            state='synced',
-            type_=Dataset.LOCATION.UPSTREAM,
-            data=metadata,
-            source_url=None)
-
-        self.download_upstream(f)
-
-
-    def sync_remotes(self, clean=False):
+    def sync_remotes(self, clean=False, remotes=None):
 
         from ambry.client.rest import RemoteLibrary
 
+
         if clean:
-            self.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.REMOTE).delete()
             self.files.query.type(Dataset.LOCATION.REMOTE).delete()
 
-        if not self.remotes:
+        if not remotes:
+            remotes = self.remotes
+
+        if not remotes:
             return
 
-        for url in self.remotes:
+        for remote in remotes:
 
-            self.logger.info("Remote sync: {}".format(url))
-            rl = RemoteLibrary(url)
-            for ident in rl.list().values():
+            for entry in remote.list(with_metadata=True, include_partitions=True).values():
 
-                if self.files.query.type(Dataset.LOCATION.REMOTE).ref(ident.vid).one_maybe:
+                if not 'identity' in entry:
+                    raise ValueError('list for remote {} returned bad type. Should have gotten a dict, got : {}'
+                                        .format(str(remote), entry))
+
+
+                ident = Identity.from_dict(entry['identity'])
+
+                if self.files.query.type(Dataset.LOCATION.REMOTE).group(remote.repo_id).ref(ident.vid).one_maybe:
                     continue
 
-                self.sync_remote_dataset(url, ident)
+                if ident.is_bundle:
+                    self.database.install_dataset_identity(ident)
+                elif ident.is_partition:
+                    self.database.install_partition_identity(ident)
 
-                self.logger.info("Remote {} sync: {}".format(url, ident.fqname))
+                self.logger.info("Remote {} sync: {}".format(remote.repo_id, ident.fqname))
 
-    def sync_remote_dataset(self, url, ident):
+    def sync_remote_dataset(self, upstream, ident, metadata):
 
-        self.database.install_dataset_identity(ident, location=Dataset.LOCATION.REMOTE)
+
+        self.database.install_dataset_identity(ident)
 
         self.files.new_file(
             merge=True,
-            path=ident.fqname,
-            group=url,
+            path=ident.cache_key,
+            group=upstream.repo_id,
             ref=ident.vid,
             state='synced',
             type_=Dataset.LOCATION.REMOTE,
-            data=ident.urls,
-            source_url=url)
+            data=metadata,
+            hash=metadata['md5'],
+            priority=upstream.priority,
+            source_url=upstream.repo_id)
 
 
+    def sync_remote_partition(self, upstream, ident, metadata):
+
+        self.database.install_partition_identity(ident)
+
+        self.files.new_file(
+            merge=True,
+            path=ident.cache_key,
+            group=upstream.repo_id,
+            ref=ident.vid,
+            state='synced',
+            type_=Dataset.LOCATION.REMOTE,
+            data=metadata,
+            hash=metadata['md5'],
+            priority = upstream.priority,
+            source_url=upstream.repo_id,)
 
     def download_upstream(self, f):
         '''Download all of the upstream bundles and load them as library bundles. '''
@@ -990,6 +938,11 @@ class Library(object):
 
     @property
     def remotes(self):
+        from ..cache import new_cache
+
+        if not self._remotes:
+            return None
+
         return self._remotes
 
     @property
@@ -1000,14 +953,14 @@ Database: {database}
 Cache:    {cache}
 Remotes:  {remotes}
         """.format(name=self.name, database=self.database.dsn,
-                   cache=self.cache, remotes=', '.join(self.remotes) if self.remotes else '')
+                   cache=self.cache, remotes='\n          '.join([ str(x) for x in self.remotes]) if self.remotes else '')
 
     @property
     def dict(self):
         return dict(name=str(self.name),
                     database=str(self.database.dsn),
                     cache=str(self.cache),
-                    remote=str(self.upstream) if self.upstream else None)
+                    remotes=[ str(r) for r in self.remotes]) if self.remotes else []
 
 
 class AnalysisLibrary(Library):

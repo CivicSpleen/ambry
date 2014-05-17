@@ -13,6 +13,8 @@ class S3Cache(Cache, RemoteMarker):
     
      '''
 
+    base_priority = 30  # Priority for this class of cache.
+
     def __init__(self, bucket=None, prefix=None, account=None, upstream=None, cdn=None, **kwargs):
         '''Init a new S3Cache Cache
 
@@ -119,11 +121,9 @@ class S3Cache(Cache, RemoteMarker):
     @property
     def repo_id(self):
         '''Return the ID for this repository'''
-        import hashlib
-        m = hashlib.md5()
-        m.update(self.bucket_name)
 
-        return m.hexdigest()
+        return "s3:{}/{}".format(self.bucket_name, self.prefix)
+
  
     def get_stream(self, rel_path, cb=None, return_meta=False):
         """Return the object as a stream"""
@@ -350,14 +350,17 @@ class S3Cache(Cache, RemoteMarker):
         '''Get a list of all of bundle files in the cache. Does not return partition files'''
         import json
         
-        path = self.prefix+'/'+path.strip('/') if path else self.prefix
-        
+        sub_path = self.prefix+'/'+path.strip('/') if path else self.prefix
+
         l = {}
-        for e in self.bucket.list(path):
+
+        for e in self.bucket.list(sub_path):
+
             path = e.name.replace(self.prefix,'',1).strip('/')
             if path.startswith('_'):
                 continue
-            
+
+
             if not include_partitions and path.count('/') > 1:
                 continue # partition files
             
@@ -367,7 +370,9 @@ class S3Cache(Cache, RemoteMarker):
                     d['identity'] = json.loads(d['identity'])
             else:
                 d = {}
-            
+
+            d['caches'] = [self.repo_id]
+
             if path:
                 l[path] = d
 
@@ -377,7 +382,7 @@ class S3Cache(Cache, RemoteMarker):
 
         
 
-    def has(self, rel_path, md5=None, use_upstream=True):
+    def has(self, rel_path, md5=None, propagate=True):
 
         k = self._get_boto_key(rel_path)
         

@@ -221,6 +221,51 @@ class RunConfig(object):
         
         return e
 
+    def remotes(self, remotes):
+        # Re-format the string remotes from strings to dicts.
+        import urlparse
+        r = []
+
+        fs = self.group('filesystem')
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
+
+        for remote in remotes:
+
+            if not isinstance(remote, basestring):
+                r.append(remote)
+                continue
+
+            remote = remote.format(root=root_dir)
+
+            parts = urlparse.urlparse(remote)
+            config = {}
+
+
+            config['type'] = scheme = parts.scheme if parts.scheme else 'file'
+
+            if scheme == 's3':
+
+                config['bucket'] = parts.netloc
+                config['prefix'] = parts.path.strip('/')
+
+                config['account'] = config['bucket']
+
+            elif scheme == 'file':
+                config['dir'] = parts.path
+
+            elif scheme == 'rest':
+                config['url'] = "http:{}".format(parts.netloc)
+
+
+
+            config['options'] = parts.fragment.split(';')
+
+
+            r.append(config)
+
+
+        return r
+
 
     def datarepo(self,name):
         e =  self.group_item('datarepo', name) 
@@ -240,11 +285,19 @@ class RunConfig(object):
                                      'database': lambda k,v: self.database(v),
                                      'upstream': lambda k,v: self.filesystem(v),
                                      'account': lambda k, v: self.account(v),
+                                     'remotes': lambda k, v: self.remotes(v),
                                      'cdn': lambda k,v: self.account(v),
                                      'source': lambda k, v: v.format(root=root_dir)
                                      }  )
 
+        if 'remotes' in e:
+            e['remotes'] = [ self._sub_strings(remote, {
+                'account': lambda k, v: self.account(v),
+                'source': lambda k, v: v.format(root=root_dir)
+            }) for remote in e['remotes'] ]
+
         e['_name'] = name
+        e['root'] = root_dir
 
         return e
     

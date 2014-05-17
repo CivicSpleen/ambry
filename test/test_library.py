@@ -49,7 +49,8 @@ class Test(TestBase):
             else:
                 os.unlink(path)
         os.rmdir(d)
-        
+
+
     def get_library(self, name = 'default'):
         """Clear out the database before the test run"""
         from ambry.library import new_library
@@ -63,6 +64,7 @@ class Test(TestBase):
 
     def tearDown(self):
         pass
+
 
     @staticmethod
     def new_db():
@@ -106,6 +108,7 @@ class Test(TestBase):
         self.assertFalse(db.exists())
 
         os.remove(f)
+
 
     def test_database_query(self):
         from ambry.orm import Dataset, Partition
@@ -163,7 +166,7 @@ class Test(TestBase):
         l = self.get_library()
         print "Library: ", l.database.dsn
      
-        r = l.put_bundle(self.bundle) #@UnusedVariable
+        r = l.put_bundle(self.bundle)
 
         r = l.get(self.bundle.identity.sname)
         self.assertTrue(r is not False)
@@ -195,7 +198,7 @@ class Test(TestBase):
         
         l.database.dump(backup_file)
         
-        l.database.close()
+        #l.database.close()
         os.remove(l.database.dbname)
         l.database.create()
 
@@ -225,8 +228,8 @@ class Test(TestBase):
         '''Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent'''
 
-
         l = self.get_library()
+
         print l.database.dsn
 
         l.put_bundle(self.bundle)
@@ -279,7 +282,6 @@ class Test(TestBase):
         r = l.find(QueryCommand().table(name='tthree').partition(format='db', segment=None))
         self.assertEquals('source-dataset-subset-variation-tthree',r[0]['partition']['name'])
 
-
         #
         #  Try getting the files 
         # 
@@ -304,6 +306,83 @@ class Test(TestBase):
        
         ds_names = [ds.sname for ds in l.list().values()]
         self.assertIn('source-dataset-subset-variation', ds_names)
+
+
+    def test_library_push(self):
+        '''Install the bundle and partitions, and check that they are
+        correctly installed. Check that installation is idempotent'''
+
+        l = self.get_library('local-remoted')
+
+        print l.info
+
+        l.put_bundle(self.bundle)
+
+        r = l.get(self.bundle.identity)
+
+        self.assertIsNotNone(r)
+        self.assertTrue(r is not False)
+        self.assertEquals(r.identity.id_, r.identity.id_)
+
+        self.assertEquals(6, len(l.files.query.state('new').all))
+
+        for remote in l.remotes:
+            remote.clean()
+
+        a = l.remotes
+        b = l.files.query.state('new').all
+
+        def cb(what, metadata, start):
+            print "PUSH ", what, metadata['name'], start
+
+        # The zippy bit rotates the files through the three caches.
+        for remote, file_ in zip(a*(len(b)/len(a)+1),b):
+            l.push(file_.ref, upstream=remote, cb=cb)
+
+
+        import yaml
+        self.assertEqual(
+"""source/dataset-subset-variation-0.0.1.db:
+  caches: [/tmp/library-test/remote-cache-1]
+source/dataset-subset-variation-0.0.1/geot1.geodb:
+  caches: [/tmp/library-test/remote-cache-2]
+source/dataset-subset-variation-0.0.1/geot2.geodb:
+  caches: [/tmp/library-test/remote-cache-3]
+source/dataset-subset-variation-0.0.1/tone.db:
+  caches: [/tmp/library-test/remote-cache-3]
+source/dataset-subset-variation-0.0.1/tone/missing.db:
+  caches: [/tmp/library-test/remote-cache-2]
+source/dataset-subset-variation-0.0.1/tthree.db:
+  caches: [/tmp/library-test/remote-cache-1]
+""",
+        yaml.safe_dump(l.remote_stack.list(include_partitions=True)))
+
+        l.purge()
+
+        fn = l.remote_stack.get(self.bundle.identity.cache_key)
+
+        self.assertTrue(bool(fn))
+        self.assertEquals('/tmp/library-test/remote-cache-1/source/dataset-subset-variation-0.0.1.db', fn)
+
+        c = l.cache
+
+        self.assertNotIn('source/dataset-subset-variation-0.0.1.db', c.list())
+        c.attach(l.remote_stack)
+        self.assertIn('source/dataset-subset-variation-0.0.1.db', c.list())
+        c.detach()
+        self.assertNotIn('source/dataset-subset-variation-0.0.1.db', c.list())
+
+        l.sync_remotes(clean=True)
+
+        fn = l.get(self.bundle.identity.vid)
+
+        self.assertTrue(bool(fn))
+        self.assertTrue(os.path.exists(fn))
+
+        b = DbBundle(fn)
+
+        print b.identity
+
 
     def test_versions(self):
         import bundles.testbundle.bundle
@@ -479,113 +558,6 @@ class Test(TestBase):
         self.assertEquals('source-dataset-subset-variation-2.20.2~diEGPXmDC8002',str(result))
 
 
-
-
-    def test_cache(self):
-        
-        from ambry.cache.filesystem import  FsCache, FsLimitedCache
-     
-        root = self.rc.group('filesystem').root
-      
-        l1_repo_dir = os.path.join(root,'repo-l1')
-        os.makedirs(l1_repo_dir)
-        l2_repo_dir = os.path.join(root,'repo-l2')
-        os.makedirs(l2_repo_dir)
-        
-        testfile = os.path.join(root,'testfile')
-        
-        with open(testfile,'w+') as f:
-            for i in range(1024):
-                f.write('.'*1023)
-                f.write('\n')
-        
-        #
-        # Basic operations on a cache with no upstream
-        #
-        l2 =  FsCache(l2_repo_dir)
-
-        p = l2.put(testfile,'tf1')
-        l2.put(testfile,'tf2')
-        g = l2.get('tf1')
-                
-        self.assertTrue(os.path.exists(p))  
-        self.assertTrue(os.path.exists(g))
-        self.assertEqual(p,g)
-
-        self.assertIsNone(l2.get('foobar'))
-
-        l2.remove('tf1')
-        
-        self.assertIsNone(l2.get('tf1'))
-       
-        #
-        # Now create the cache with an upstream, the first
-        # cache we created
-       
-        l1 =  FsLimitedCache(l1_repo_dir, upstream=l2, size=5)
-      
-        print l1
-        print l2
-      
-        g = l1.get('tf2')
-        self.assertTrue(g is not None)
-     
-        # Put to one and check in the other. 
-        
-        l1.put(testfile,'write-through')
-        self.assertIsNotNone(l2.get('write-through'))
-             
-        l1.remove('write-through', propagate=True)
-        self.assertIsNone(l2.get('write-through'))
-
-        # Put a bunch of files in, and check that
-        # l2 gets all of the files, but the size of l1 says constrained
-        for i in range(0,10):
-            l1.put(testfile,'many'+str(i))
-            
-        self.assertEquals(4194304, l1.size)
-
-
-        # Check that the right files got deleted
-        self.assertFalse(os.path.exists(os.path.join(l1.cache_dir, 'many1')))   
-        self.assertFalse(os.path.exists(os.path.join(l1.cache_dir, 'many5')))
-        self.assertTrue(os.path.exists(os.path.join(l1.cache_dir, 'many6')))
-        
-        # Fetch a file that was displaced, to check that it gets loaded back 
-        # into the cache. 
-        p = l1.get('many1')
-        p = l1.get('many2')
-        self.assertTrue(p is not None)
-        self.assertTrue(os.path.exists(os.path.join(l1.cache_dir, 'many1')))  
-        # Should have deleted many6
-        self.assertFalse(os.path.exists(os.path.join(l1.cache_dir, 'many6')))
-        self.assertTrue(os.path.exists(os.path.join(l1.cache_dir, 'many7')))
-        
-        #
-        # Check that verification works
-        # 
-        l1.verify()
-
-        os.remove(os.path.join(l1.cache_dir, 'many8'))
-            
-        with self.assertRaises(Exception):                
-            l1.verify()
-
-        l1.remove('many8')
-      
-        l1.verify()
-        
-        c = l1.database.cursor()
-        c.execute("DELETE FROM  files WHERE path = ?", ('many9',) )
-        l1.database.commit()
-        
-        with self.assertRaises(Exception):        
-            l1.verify()
-        
-        l1.remove('many9')
-      
-        l1.verify()
-
     def x_test_remote(self):
         from ambry.run import RunConfig
         from ambry.library import new_library
@@ -599,7 +571,8 @@ class Test(TestBase):
         print library.upstream.last_upstream()
         print library.cache
         print library.cache.last_upstream()  
-                                           
+
+
     def test_compression_cache(self):
         '''Test a two-level cache where the upstream compresses files '''
         from ambry.cache.filesystem import  FsCache,FsCompressionCache
@@ -611,12 +584,9 @@ class Test(TestBase):
         l2_repo_dir = os.path.join(root,'comp-repo-l2')
         os.makedirs(l2_repo_dir)
         
-        testfile = os.path.join(root,'testfile')
-        
-        with open(testfile,'w+') as f:
-            for i in range(1024): #@UnusedVariable
-                f.write('.'*1023)
-                f.write('\n')
+        testfile = self.new_rand_file(os.path.join(root,'testfile'))
+
+
 
         # Create a cache with an upstream wrapped in compression
         l3 = FsCache(l2_repo_dir)
@@ -748,7 +718,8 @@ class Test(TestBase):
                 
         self.assertTrue(os.path.exists(os.path.join(repo_dir, 'many3')))      
         self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many7'))) 
- 
+
+
     def test_query(self):
         from ambry.library.query import QueryCommand
         
@@ -795,17 +766,6 @@ class Test(TestBase):
         print l.files.query.path('path3').first
 
 
-    def test_sync(self):
-
-        l = self.get_library('upstreamed')
-
-        l.purge()
-
-
-        print "Upstream: {}".format(l.upstream)
-        print "Remotes:  {}".format(', '.join(l.remotes) if l.remotes else '')
-
-        l.sync_upstream(clean=True)
 
 def suite():
     suite = unittest.TestSuite()

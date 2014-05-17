@@ -52,7 +52,7 @@ To run the automated installer, execute this line from a Terminal:
 
 .. code-block:: bash
 
-    $ sh -c "$(https://raw.githubusercontent.com/clarinova/ambry/master/support/install-osx.sh)"
+    $ sh -c "$(curl -fsSL https://raw.githubusercontent.com/clarinova/ambry/master/support/install-osx.sh)"
 
 When it detects a missing packages that you have to install manually, the script will pause and open a web browser for you. If those external installs have any hickups, you may have to run the installer script more than once.
 
