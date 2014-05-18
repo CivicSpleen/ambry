@@ -3,16 +3,24 @@
 import os
 from ambry.dbexceptions import ConfigurationError
 
-def new_cache(config):
+def new_cache(config, root_dir='no_root_dir'):
         """Return a new :class:`FsCache` built on the configured cache directory
         """
+
+        if isinstance(config, basestring):
+            config = parse_cache_string(config, root_dir)
+
 
         if 'size' in config:
             from filesystem import FsLimitedCache
             fsclass = FsLimitedCache
         elif 'url' in config:
-            from remote import RestReadCache
-            fsclass = RestReadCache
+            if 'rest' in config['options']:
+                from remote import RestReadCache
+                fsclass = RestReadCache
+            else:
+                from remote import HttpCache
+                fsclass = HttpCache
         elif 'account' in config:
             
             if config['account']['service'] == 's3':
@@ -43,7 +51,43 @@ def new_cache(config):
             return FsCompressionCache(upstream=cc)
         else:
             return  fsclass(**dict(config))
-            
+
+
+def parse_cache_string(remote, root_dir='no_root_dir'):
+    import urlparse
+
+    remote = remote.format(root=root_dir)
+
+    parts = urlparse.urlparse(remote)
+    config = {}
+
+    config['type'] = scheme = parts.scheme if parts.scheme else 'file'
+
+    config['options'] = []
+
+    if scheme == 's3':
+
+        config['bucket'] = parts.netloc
+        config['prefix'] = parts.path.strip('/')
+
+        config['account'] = config['bucket']
+
+    elif scheme == 'file':
+        config['dir'] = parts.path
+
+    elif scheme == 'http':
+        t = list(parts)
+        t[5] = None # clear out the fragment
+        config['url'] = urlparse.urlunparse(t)
+
+    elif scheme == 'rest':
+        config['url'] = "http:{}".format(parts.netloc)
+        config['options'] +=['rest']
+
+    config['options'] += parts.fragment.split(';')
+
+    return config
+
        
 
 class CacheInterface(object):
@@ -215,6 +259,26 @@ class Cache(CacheInterface):
             return self.upstream.list(path, with_metadata=with_metadata)
         
         return None
+
+    def store_list(self, metadata_map = None, cb=None):
+        """List the cache and store it as metadata. This allows for getting the list from HTTP caches
+        and other types where it is not possible to traverse the tree"""
+
+        from StringIO import StringIO
+        import json
+        from ..util import copy_file_or_flo
+
+        d = {}
+
+        for k, v in self.list(with_metadata=(metadata_map is None), include_partitions=True).items():
+            d[k] = v
+
+        strio = StringIO(json.dumps(d))
+
+        sink = self.put_stream('meta/_list.json')
+
+        copy_file_or_flo(strio, sink, cb=cb)
+        sink.close()
 
     def attach(self,upstream):
         """Attach an upstream to the last upstream. Can be removed with detach"""

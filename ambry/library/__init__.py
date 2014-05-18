@@ -347,7 +347,6 @@ class Library(object):
 
 
 
-
     def get(self, ref, force=False, cb=None):
         '''Get a bundle, given an id string or a name '''
         from sqlite3 import DatabaseError
@@ -356,6 +355,7 @@ class Library(object):
         from ..dbexceptions import NotFoundError
         from .files import  Files
         from ..orm import Dataset
+        from ..cache.multi import AltReadCache
 
         # Get a reference to the dataset, partition and relative path
         # from the local database.
@@ -365,14 +365,9 @@ class Library(object):
         if not dataset:
             return False
 
-        # Link the remotes to the cache so we can fetch through from any of them
-        # to the local cache.
-        self.cache.attach(self.remote_stack)
-
-        try:
-            abs_path = self.cache.get(dataset.cache_key, cb=cb)
-        finally:
-            self.cache.detach()
+        # The AltReadCache will get from the remote stack if the path is not found in the cache.
+        arc = AltReadCache(self.cache, self.remote_stack)
+        abs_path = arc.get(dataset.cache_key, cb=cb)
 
         if not abs_path or not os.path.exists(abs_path):
             return False
@@ -389,18 +384,7 @@ class Library(object):
             self.logger.error("Failed to load databundle at path {}: {}".format(abs_path,e))
             raise DatabaseError
 
-
-        # Do we have it in the database? If not install it.
-        # It should be installed if it was retrieved remotely,
-        # but may not be installed if there is a local copy in the cache.
-
-        try:
-            d = self.database.get(bundle.identity.vid)
-        except NotFoundError:
-            d = None
-
-        if not d:
-            self.sync_library_dataset(bundle)
+        self.sync_library_dataset(bundle)
 
         bundle.library = self
 
@@ -414,18 +398,14 @@ class Library(object):
                     raise NotFoundError('Failed to get partition {} from bundle at {} '
                                         .format(dataset.partition.fqname, abs_path))
 
-                self.cache.attach(self.remote_stack)
-
-                try:
-                    abs_path = self.cache.get(partition.identity.cache_key, cb=cb)
-                finally:
-                    self.cache.detach()
+                arc = AltReadCache(self.cache, self.remote_stack)
+                abs_path = arc.get(partition.identity.cache_key, cb=cb)
 
                 if not abs_path or not os.path.exists(abs_path):
                     raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.fqname))
 
                 try:
-                    self.sync_library_partition(bundle, partition.identity)
+                    self.sync_library_partition(bundle, partition)
                 except IntegrityError as e:
                     self.database.session.rollback()
                     self.logger.error("Partition is already in Library.: {} ".format(e.message))
@@ -697,6 +677,11 @@ class Library(object):
             for file_ in self.new_files:
                 self.push(file_.ref, cb=cb, upstream=upstream)
 
+            try:
+                upstream.store_list()
+            except AttributeError:
+                pass
+
     #
     # Maintainence
     #
@@ -787,47 +772,58 @@ class Library(object):
             for p in bundle.partitions:
                 if self.cache.has(p.identity.cache_key, propagate=False):
                     self.logger.info('            {} '.format(p.identity.vname))
-                    self.sync_library_partition(bundle, p.identity, commit = False)
+                    self.sync_library_partition(bundle, p, commit = False)
 
             self.database.commit()
         return bundles
 
-    def sync_library_dataset(self, bundle, install_partitions=True):
-
+    def sync_library_dataset(self, bundle, install_partitions=True, commit = True):
+        from sqlalchemy.exc import IntegrityError
         from files import Files
 
         assert Files.TYPE.BUNDLE == Dataset.LOCATION.LIBRARY
 
         ident  = bundle.identity
 
-        self.database.install_bundle(bundle, install_partitions = install_partitions)
+        try:
+            d = self.database.get(bundle.identity.vid)
+        except NotFoundError:
+            d = None
 
-        self.files.new_file(
-            commit=False,
-            merge=True,
-            path=bundle.database.path,
-            group=self.cache.repo_id,
-            ref=ident.vid,
-            state='rebuilt',
-            type_= Files.TYPE.BUNDLE,
-            data=None,
-            source_url=None)
+        if not d:
+            self.database.install_bundle(bundle, install_partitions = install_partitions)
 
-    def sync_library_partition(self, bundle, ident, install_tables=True,
+        try:
+            self.files.new_file(
+                commit=commit,
+                merge=True,
+                path=bundle.database.path,
+                group=self.cache.repo_id,
+                ref=ident.vid,
+                state='synced',
+                type_= Files.TYPE.BUNDLE,
+                data=None,
+                source_url=None)
+        except IntegrityError:
+            pass
+
+    def sync_library_partition(self, bundle, partition, install_tables=True,
                                install_partition=True, commit = True):
         from files import Files
 
         if install_partition:
-            self.database.install_partition(bundle, ident.id_,
+            self.database.install_partition(bundle, partition.identity.id_,
                                             install_bundle=False, install_tables=install_tables)
+
+        ident = partition.identity
 
         self.files.new_file(
             commit = commit,
             merge=True,
-            path=ident.fqname,
+            path=partition.database.path,
             group=None,
             ref=ident.vid,
-            state='rebuilt',
+            state='synced',
             type_= Files.TYPE.PARTITION,
             data=ident.urls,
             source_url=None)
@@ -849,7 +845,10 @@ class Library(object):
 
         for remote in remotes:
 
-            for entry in remote.list(with_metadata=True, include_partitions=True).values():
+            for k, entry in remote.list(with_metadata=True, include_partitions=True).items():
+
+
+                print k
 
                 if not 'identity' in entry:
                     raise ValueError('list for remote {} returned bad type. Should have gotten a dict, got : {}'

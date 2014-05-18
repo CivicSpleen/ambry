@@ -244,6 +244,7 @@ class FsCache(Cache):
 
         return l
 
+
     def path(self, rel_path, propagate = True, **kwargs):
 
         abs_path = os.path.join(self.cache_dir, rel_path)
@@ -320,7 +321,7 @@ class FsCache(Cache):
         
         logger.info("Purging: {} ".format(self.cache_dir))
         rm_rf(self.cache_dir)
-        
+
         if self.upstream:
             self.upstream.clean()
 
@@ -692,6 +693,12 @@ class FsLimitedCache(FsCache):
         else:
             raise NotImplementedError()
 
+    def clean(self):
+        if self._database:
+            self._database.close()
+            self._database = None
+        super(FsLimitedCache, self).clean()
+
     @property
     def priority(self):
         return self.upstream.priority - 1  # give a slightly better priority
@@ -799,6 +806,8 @@ class FsCompressionCache(Cache):
 
         uc_rel_path = os.path.join('uncompressed',rel_path)
 
+        # The compression cache doesn't ahve storage, so it writes the uncompressed file back to the upstream,
+        # hoping that it is a real filesystem.
         sink = self.upstream.put_stream(uc_rel_path)
 
         try:
@@ -863,6 +872,11 @@ class FsCompressionCache(Cache):
     def list(self, path=None,with_metadata=False, include_partitions=False):
         '''get a list of all of the files in the repository'''
         return self.upstream.list(path,with_metadata=with_metadata, include_partitions=include_partitions)
+
+    def store_list(self, metadata_map = None, cb=None):
+        """List the cache and store it as metadata. This allows for getting the list from HTTP caches
+        and other types where it is not possible to traverse the tree"""
+        return self.upstream.store_list(metadata_map = None, cb=cb)
 
     def has(self, rel_path, md5=None, propagate=True):
         

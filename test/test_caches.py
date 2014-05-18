@@ -457,6 +457,13 @@ class Test(TestBase):
 
         self.assertIn('foo', fs1.metadata('fs2'))
 
+    def test_http_cache(self):
+
+        from ambry.cache.remote import HttpCache
+
+        c = HttpCache('http://devtest.sandiego')
+
+
 def suite():
 
 

@@ -23,7 +23,159 @@ def raise_for_status(response):
     if e:
         raise e(response.message)
 
-class RemoteLibrary(object):
+
+class RestApi(object):
+
+    _url = None
+
+    def __init__(self, url):
+        self._url = url
+
+    def url(self,u,*args, **kwargs):
+
+        if u.startswith("http"):
+            return u
+
+        if len(u) > 0 and u[0] == '/':
+            u = u[1:]
+
+        return self._url+'/'+u.format(*args, **kwargs)
+
+    def get(self, url, params={}):
+
+        r = requests.get(self.url(url), params=params)
+        self.handle_status(r)
+
+        return self.handle_return(r)
+
+    def head(self, url, params={}):
+
+        r = requests.head(self.url(url), params=params)
+        self.handle_status(r)
+
+        return self.handle_return(r)
+
+
+    def get_stream(self, url, params={}):
+
+        r = requests.get(self.url(url), verify=False, stream=True)
+
+        self.handle_status(r)
+
+        if r.headers.get('content-encoding', '') == 'gzip':
+            from ..util import FileLikeFromIter
+            # In  the requests library, iter_content will auto-decompress
+            response = FileLikeFromIter(r.iter_content(chunk_size=128 * 1024))
+        else:
+            response = r.raw
+
+        response.meta = {}
+
+        for k, v in r.headers.items():
+            if k.startswith('x-amz'):
+                k = k.replace('x-amz','')
+
+            response.meta[k] = v
+
+        return response
+
+    def put(self, url, params={}, data=None):
+
+        if not isinstance(data,(list,dict)):
+            data = [data]
+
+        headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+
+        r = requests.put(self.url(url), params=params, data=json.dumps(data), headers=headers)
+
+        self.handle_status(r)
+
+        return self.handle_return(r)
+
+    def post(self, url, params={}, data=None):
+
+        if not isinstance(data,(list,dict)):
+            data = [data]
+
+        headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+
+        r = requests.post(self.url(url), params=params, data=json.dumps(data), headers=headers)
+
+        self.handle_status(r)
+
+        return self.handle_return(r)
+
+    def handle_status(self, r):
+        import exceptions
+
+        if r.status_code >= 300:
+
+            try:
+                o = r.json()
+            except:
+                o = None
+
+            if isinstance(o, dict) and 'exception' in o:
+                e = self.handle_exception(o)
+                raise e
+
+            if 400 <= r.status_code < 500:
+                raise exceptions.NotFound("Failed to find resource for URL: {}".format(r.url))
+
+            r.raise_for_status()
+
+    def handle_return(self, r):
+
+        if r.headers.get('content-type', False) == 'application/json':
+            self.last_response = r
+            return r.json()
+        else:
+            return r
+
+    def handle_exception(self, object):
+        '''If self.object has an exception, re-construct the exception and
+        return it, to be raised later'''
+
+        import types, sys
+
+        field = object['exception']['class']
+
+        pre_message = ''
+        try:
+            class_ = getattr(sys.modules['ambry.client.exceptions'], field)
+        except AttributeError:
+            pre_message = "(Class: {}.) ".format(field)
+            class_ = Exception
+
+        if not isinstance(class_, (types.ClassType, types.TypeType)):
+            pre_message = "(Class: {},) ".format(field)
+            class_ = Exception
+
+
+        args = object['exception']['args']
+
+        # Add the pre-message, if the real exception type is not known.
+        if isinstance(args, list) and len(args) > 0:
+            args[0] = pre_message + str(args[0])
+
+        # Add the trace
+        tr = object['exception']['trace']
+        if isinstance(tr, list):
+            tr = '\n'.join(tr)
+
+        try:
+            if args:
+                args[0] = str(args[0]) + "\n---- Server Trace --- \n" + tr
+            else:
+                args.append("\n---- Server Trace --- \n" + tr)
+        except Exception as e:
+            print "Failed to augment exception. {}, {}".format(args, object)
+            print 'AAA', e, e.message
+
+        return  class_(*args)
+
+
+class RemoteLibrary(RestApi,object):
 
     def __init__(self, url):
         '''

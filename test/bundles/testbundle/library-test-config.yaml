@@ -14,6 +14,18 @@ library:
       filesystem: default
       database: default
 
+    s3-remoted:
+      remotes:
+        - 's3://devtest.sandiegodata.org/s3-remote#compress'
+      filesystem: default
+      database: default
+
+    http-remoted:
+      remotes:
+        - 'http://devtest.sandiegodata.org/s3-remote#compress'
+      filesystem: default
+      database: default
+
     upstreamed:
         filesystem: default
         database: default

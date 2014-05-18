@@ -831,7 +831,7 @@ class LibraryDb(object):
               .filter(Dataset.vid != ROOT_CONFIG_NAME_V))
 
 
-        for d,p in (q1.all() + [ (d,None) for d in q2.all()]):
+        for d,p in  q1.all():  #(q1.all() + [ (d,None) for d in q2.all()]):
 
             ck = getattr(d.identity, key)
 

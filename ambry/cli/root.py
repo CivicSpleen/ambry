@@ -109,7 +109,7 @@ def root_list(args, l, st, rc):
 
     key = lambda ident : ident.vname
 
-    idents = sorted(l.list(locations=locations, key='fqname').values(), key=key)
+    idents = sorted(l.list( key='fqname').values(), key=key)
 
     if args.term:
         idents = [ ident for ident in idents if args.term in ident.fqname ]
@@ -135,31 +135,20 @@ def root_info(args, l, st, rc):
         return
 
 
-    ident = l.resolve(args.term, location=None, use_remote = True)
+    ident = l.resolve(args.term)
 
     if not ident:
         fatal("Failed to find record for: {}", args.term)
         return
 
-    l.get(ident.vid, use_remote = False)
 
-    if ident.locations.is_in(Dataset.LOCATION.LIBRARY):
-        b = l.get(ident.vid)
+    b = l.get(ident.vid)
 
-        if not ident.partition:
-            for p in b.partitions.all:
-                ident.add_partition(p.identity)
+    if not ident.partition:
+        for p in b.partitions.all:
+            ident.add_partition(p.identity)
 
-    elif ident.locations.is_in(Dataset.LOCATION.REMOTE):
-        from ..client.rest import RemoteLibrary
 
-        f = l.files.query.type(Dataset.LOCATION.REMOTE).ref(ident.vid).one
-        rl = RemoteLibrary(f.group)
-
-        ds = rl.dataset(ident.vid)
-
-        if not ident.partition:
-            ident.partitions = ds.partitions
 
 
     _print_info(l, ident, list_partitions=args.partitions)

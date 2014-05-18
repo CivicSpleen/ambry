@@ -221,9 +221,12 @@ class RunConfig(object):
         
         return e
 
+
+
     def remotes(self, remotes):
+        from cache import parse_cache_string
         # Re-format the string remotes from strings to dicts.
-        import urlparse
+
         r = []
 
         fs = self.group('filesystem')
@@ -235,33 +238,8 @@ class RunConfig(object):
                 r.append(remote)
                 continue
 
-            remote = remote.format(root=root_dir)
 
-            parts = urlparse.urlparse(remote)
-            config = {}
-
-
-            config['type'] = scheme = parts.scheme if parts.scheme else 'file'
-
-            if scheme == 's3':
-
-                config['bucket'] = parts.netloc
-                config['prefix'] = parts.path.strip('/')
-
-                config['account'] = config['bucket']
-
-            elif scheme == 'file':
-                config['dir'] = parts.path
-
-            elif scheme == 'rest':
-                config['url'] = "http:{}".format(parts.netloc)
-
-
-
-            config['options'] = parts.fragment.split(';')
-
-
-            r.append(config)
+            r.append(parse_cache_string(remote, root_dir))
 
 
         return r

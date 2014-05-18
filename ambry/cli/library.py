@@ -295,7 +295,6 @@ def library_info(args, l, config, list_all=False):
     prt("Name:     {}",args.library_name)
     prt("Database: {}",l.database.dsn)
     prt("Cache:    {}",l.cache)
-    prt("Upstream: {}", l.upstream)
     prt("Remotes:  {}", ', '.join([ str(r) for r in l.remotes]) if l.remotes else '')
 
     
@@ -391,7 +390,7 @@ def library_schema(args, l, config):
   
 def library_get(args, l, config):
 
-    ident = l.resolve(args.term, use_remote = True)
+    ident = l.resolve(args.term)
 
     if not ident:
         fatal("Could not resolve term {} ", args.term)

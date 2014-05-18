@@ -166,8 +166,11 @@ class Files(object):
                 self.db.commit()
         except IntegrityError as e:
             self.db.rollback()
-            s.merge(f)
-            self.db.commit()
-
+            try:
+                s.merge(f)
+                self.db.commit()
+            except IntegrityError as e:
+                self.db.rollback()
+                raise
         self.db._mark_update()
 

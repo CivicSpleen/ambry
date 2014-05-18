@@ -311,6 +311,7 @@ class Test(TestBase):
     def test_library_push(self):
         '''Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent'''
+        from ambry.bundle import DbBundle
 
         l = self.get_library('local-remoted')
 
@@ -338,7 +339,6 @@ class Test(TestBase):
         # The zippy bit rotates the files through the three caches.
         for remote, file_ in zip(a*(len(b)/len(a)+1),b):
             l.push(file_.ref, upstream=remote, cb=cb)
-
 
         import yaml
         self.assertEqual(
@@ -374,14 +374,91 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         l.sync_remotes(clean=True)
 
-        fn = l.get(self.bundle.identity.vid)
+        b = l.get(self.bundle.identity.vid)
 
-        self.assertTrue(bool(fn))
-        self.assertTrue(os.path.exists(fn))
-
-        b = DbBundle(fn)
+        self.assertIsNotNone(b)
 
         print b.identity
+
+        for p in b.partitions:
+            bp = l.get(p.identity.vid)
+
+            print '----'
+            print bp.identity.vname
+            print bp.partition.identity.vname
+
+
+    def test_s3_push(self):
+        '''Install the bundle and partitions, and check that they are
+        correctly installed. Check that installation is idempotent'''
+        from ambry.cache.remote import  HttpCache
+
+        root = self.rc.group('filesystem').root
+
+        l = self.get_library('s3-remoted')
+
+        print l.info
+
+        l.purge()
+        l.put_bundle(self.bundle)
+
+        def cb(what, metadata, start):
+            print "PUSH ", what, metadata['name'], start
+
+        l.push(cb=cb)
+
+        l.purge()
+
+        l.sync_remotes()
+
+        b = l.get(self.bundle.identity.vid)
+
+        self.assertTrue(bool(b))
+
+        self.assertEquals(self.bundle.identity.vname, b.identity.vname)
+
+        for p in b.partitions:
+            bp = l.get(p.identity.vid)
+            print p.identity.vname
+            self.assertEquals(self.bundle.identity.vname, bp.identity.vname)
+            self.assertEquals(p.identity.vname, bp.partition.vname)
+
+            file_ = l.files.query.installed.ref(bp.partition.identity.vid).one
+
+
+        dataset = l.resolve(p.identity.vid)
+
+
+        self.assertEquals('piEGPXmDC8005001', dataset.partition.vid)
+
+    def test_http_cache(self):
+
+        l = self.get_library('http-remoted')
+
+        print l.info
+
+        r = l.remotes[0]
+
+        self.assertFalse(r.has('foobar'))
+        self.assertTrue(r.has(self.bundle.identity.cache_key))
+
+
+        l.purge()
+
+        l.sync_remotes()
+
+        b = l.get(self.bundle.identity.cache_key)
+
+        self.assertTrue(bool(b))
+
+        self.assertEquals(self.bundle.identity.vname, b.identity.vname)
+
+        for p in b.partitions:
+            bp = l.get(p.identity.vid)
+            print p.identity.vname
+            self.assertEquals(self.bundle.identity.vname, bp.identity.vname)
+            self.assertEquals(p.identity.vname, bp.partition.vname)
+
 
 
     def test_versions(self):

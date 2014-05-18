@@ -187,6 +187,7 @@ class Bundle(object):
         if self._library:
             l = self._library
         else:
+            print self.config.dump()
             l = new_library(self.config.library(self._library_name))
 
         l.logger = self.logger

@@ -1,6 +1,5 @@
 
 from .  import Cache
-from remote import RemoteMarker
 from ..util import copy_file_or_flo, get_logger
 import os
 
@@ -8,7 +7,7 @@ logger = get_logger(__name__)
 
 #logger.setLevel(logging.DEBUG) 
 
-class S3Cache(Cache, RemoteMarker):
+class S3Cache(Cache):
     '''A cache that transfers files to and from an S3 bucket
     
      '''
@@ -318,7 +317,6 @@ class S3Cache(Cache, RemoteMarker):
                 
                 if public:
                     this.bucket.set_acl('public-read', path)
-                
 
         return flo()
      
@@ -357,13 +355,12 @@ class S3Cache(Cache, RemoteMarker):
         for e in self.bucket.list(sub_path):
 
             path = e.name.replace(self.prefix,'',1).strip('/')
-            if path.startswith('_'):
+            if path.startswith('_') or path.startswith('meta'):
                 continue
-
 
             if not include_partitions and path.count('/') > 1:
                 continue # partition files
-            
+
             if with_metadata:
                 d = self.metadata(path)
                 if d and 'identity' in d:
@@ -380,7 +377,7 @@ class S3Cache(Cache, RemoteMarker):
         return l
 
 
-        
+
 
     def has(self, rel_path, md5=None, propagate=True):
 
@@ -410,7 +407,8 @@ class S3Cache(Cache, RemoteMarker):
         d = k.metadata
         d['size'] = k.size
         d['etag'] = k.etag       
-        
+
+
         return d
 
 
