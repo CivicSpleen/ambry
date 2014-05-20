@@ -91,8 +91,8 @@ class Bundle(BuildBundle):
         self.log("=== Build csvsegments")
         self.build_csvsegments()
 
-        self.log("=== Build csv")
-        self.build_csv()
+        #self.log("=== Build csv")
+        #self.build_csv()
 
         return True
 

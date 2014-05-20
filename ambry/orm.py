@@ -222,12 +222,11 @@ class Dataset(Base):
 
 
     vid = SAColumn('d_vid',String(20), primary_key=True)
-    location = SAColumn('d_location', String(5), primary_key=True, default=LOCATION.LIBRARY)
     id_ = SAColumn('d_id',String(20), )
-    name = SAColumn('d_name',String(200),  nullable=False)
-    vname = SAColumn('d_vname',String(200),  nullable=False)
-    fqname = SAColumn('d_fqname',String(200),  nullable=False)
-    cache_key = SAColumn('d_cache_key',String(200),  nullable=False)
+    name = SAColumn('d_name',String(200),  nullable=False, index=True)
+    vname = SAColumn('d_vname',String(200), unique=True,  nullable=False, index=True)
+    fqname = SAColumn('d_fqname',String(200), unique=True,  nullable=False)
+    cache_key = SAColumn('d_cache_key',String(200), unique=True,  nullable=False, index=True)
     source = SAColumn('d_source',String(200), nullable=False)
     dataset = SAColumn('d_dataset',String(200), nullable=False)
     subset = SAColumn('d_subset',String(200))
@@ -251,11 +250,11 @@ class Dataset(Base):
 
 
 
-    __table_args__ = (
-        UniqueConstraint('d_vid', 'd_location', name='u_vid_location'),
-        UniqueConstraint('d_fqname', 'd_location', name='u_fqname_location'),
-        UniqueConstraint('d_cache_key', 'd_location', name='u_cache_location'),
-    )
+    #__table_args__ = (
+    #    UniqueConstraint('d_vid', 'd_location', name='u_vid_location'),
+    #    UniqueConstraint('d_fqname', 'd_location', name='u_fqname_location'),
+    #    UniqueConstraint('d_cache_key', 'd_location', name='u_cache_location'),
+    #)
 
 
     def __init__(self,**kwargs):
@@ -309,7 +308,6 @@ class Dataset(Base):
         return {
                 'id':self.id_, 
                 'vid':self.vid,
-                'location': self.location,
                 'name':self.name,
                 'vname':self.fqname, 
                 'fqname':self.vname,
@@ -338,7 +336,7 @@ class Column(Base):
     vid = SAColumn('c_vid',String(20), primary_key=True)
     id_ = SAColumn('c_id',String(20))
     sequence_id = SAColumn('c_sequence_id',Integer)
-    t_vid = SAColumn('c_t_vid',String(20),ForeignKey('tables.t_vid'))
+    t_vid = SAColumn('c_t_vid',String(20),ForeignKey('tables.t_vid'), index=True)
     t_id = SAColumn('c_t_id',String(20))
     name = SAColumn('c_name',Text)
     altname = SAColumn('c_altname',Text)
@@ -553,7 +551,7 @@ class Column(Base):
       
             if not max_id:
                 max_id = 1
-                
+
             target.sequence_id = max_id
         
         Column.before_update(mapper, conn, target)
@@ -579,8 +577,7 @@ class Table(Base):
     vid = SAColumn('t_vid',String(20), primary_key=True)
     id_ = SAColumn('t_id',String(20), primary_key=False)
     d_id = SAColumn('t_d_id',String(20))
-    d_vid = SAColumn('t_d_vid',String(20), nullable = False)
-    d_location = SAColumn('t_d_location',String(5), nullable = False, default = Dataset.LOCATION.LIBRARY)
+    d_vid = SAColumn('t_d_vid', String(20), ForeignKey('datasets.d_vid'), index=True)
     sequence_id = SAColumn('t_sequence_id',Integer, nullable = False)
     name = SAColumn('t_name',String(200), nullable = False)
     altname = SAColumn('t_altname',Text)
@@ -591,7 +588,7 @@ class Table(Base):
     installed = SAColumn('t_installed',String(100))
     
     __table_args__ = (
-        ForeignKeyConstraint([d_vid, d_location], ['datasets.d_vid', 'datasets.d_location']),
+        #ForeignKeyConstraint([d_vid, d_location], ['datasets.d_vid', 'datasets.d_location']),
         UniqueConstraint('t_sequence_id', 't_d_vid', name='_uc_tables_1'),
         UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
                      )
@@ -1014,22 +1011,22 @@ class File(Base, SavableMixin):
 
     oid = SAColumn('f_id',Integer, primary_key=True, nullable=False)
     path = SAColumn('f_path',Text, nullable=False)
-    ref = SAColumn('f_ref', Text)
+    ref = SAColumn('f_ref', Text, index=True)
     type_ = SAColumn('f_type', Text)
     source_url = SAColumn('f_source_url',Text)
     process = SAColumn('f_process',Text)
     state = SAColumn('f_state',Text)
-    content_hash = SAColumn('f_hash',Text)
+    hash = SAColumn('f_hash',Text)
     modified = SAColumn('f_modified',Integer)
     size = SAColumn('f_size',BigIntegerType)
     group = SAColumn('f_group',Text)
-
+    priority = SAColumn('f_priority', Integer)
 
     data = SAColumn('f_data',MutationDict.as_mutable(JSONEncodedObj))
 
     __table_args__ = (
-        UniqueConstraint('f_path', 'f_type', name='u_type_path'),
-        UniqueConstraint('f_ref', 'f_type', name='u_ref_path'),
+        UniqueConstraint('f_path', 'f_type', 'f_group', name='u_type_path'),
+        UniqueConstraint('f_ref', 'f_type', 'f_group', name='u_ref_path'),
     )
 
     def __init__(self,**kwargs):
@@ -1042,9 +1039,11 @@ class File(Base, SavableMixin):
         self.size = kwargs.get("size",None)
         self.group = kwargs.get("group",None)
         self.ref = kwargs.get("ref",None)
+        self.hash = kwargs.get("hash", None)
         self.type_ = kwargs.get("type",kwargs.get("type_",None))
         self.content_hash = kwargs.get("content_hash",None) 
         self.data = kwargs.get('data',None)
+        self.priority = kwargs.get('priority', 0)
       
     def __repr__(self):
         return "<file: {}; {}>".format(self.path, self.state)
@@ -1056,21 +1055,19 @@ class File(Base, SavableMixin):
                      in ['path', 'ref',  'type_',  'source_url', 'process', 'state', 'content_hash', 'modified', 'size', 'group', 'data'])
 
 
-
 class Partition(Base):
     __tablename__ = 'partitions'
 
     vid = SAColumn('p_vid',String(20), primary_key=True, nullable=False)
     id_ = SAColumn('p_id',String(20), nullable=False)
-    name = SAColumn('p_name',String(200), nullable=False)
-    vname = SAColumn('p_vname',String(200), unique=True, nullable=False)
-    fqname = SAColumn('p_fqname',String(200), unique=True, nullable=False)
-    cache_key = SAColumn('p_cache_key',String(200), unique=True, nullable=False)
+    name = SAColumn('p_name',String(200), nullable=False, index=True)
+    vname = SAColumn('p_vname',String(200), unique=True, nullable=False, index=True)
+    fqname = SAColumn('p_fqname',String(200), unique=True, nullable=False, index=True)
+    cache_key = SAColumn('p_cache_key',String(200), unique=True, nullable=False, index=True)
     sequence_id = SAColumn('p_sequence_id',Integer)
-    t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'))
+    t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'), index=True)
     t_id = SAColumn('p_t_id',String(20))
-    d_vid = SAColumn('p_d_vid',String(20))
-    d_location = SAColumn('p_d_location',String(5),default = Dataset.LOCATION.LIBRARY)
+    d_vid = SAColumn('p_d_vid',String(20),ForeignKey('datasets.d_vid'), index=True)
     d_id = SAColumn('p_d_id',String(20))
     time = SAColumn('p_time',String(20))
     space = SAColumn('p_space',String(50))
@@ -1086,16 +1083,19 @@ class Partition(Base):
     installed = SAColumn('p_installed',String(100))
 
     __table_args__ = (
-        ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
-        UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'))
+        #ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
+        UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'),
+    )
 
     table = relationship('Table', backref='partitions', lazy='subquery')
+
     # Already have a 'partitions' replationship on Dataset
     #dataset = relationship('Dataset', backref='partitions')
 
 
+    def __init__(self, dataset, **kwargs):
 
-    def __init__(self,dataset, **kwargs):
+        self.vid = kwargs.get("vid", kwargs.get("id_", None))
         self.id_ = kwargs.get("id",kwargs.get("id_",None)) 
         self.name = kwargs.get("name",kwargs.get("name",None)) 
         self.vname = kwargs.get("vname",None) 
@@ -1111,8 +1111,9 @@ class Partition(Base):
         self.segment = kwargs.get('segment',None)
         self.data = kwargs.get('data',None)
 
-        self.d_id = dataset.id_
-        self.d_vid = dataset.vid
+        if dataset:
+            self.d_id = dataset.id_
+            self.d_vid = dataset.vid
         
         # See before_insert for setting self.vid and self.id_
         
@@ -1176,13 +1177,16 @@ class Partition(Base):
     def set_ids(self, sequence_id):
         from identity import Identity
 
-        self.sequence_id = sequence_id
+        if not self.vid or not self.id_:
 
-        don = ObjectNumber.parse(self.d_vid)
-        pon = PartitionNumber(don, self.sequence_id)
+            self.sequence_id = sequence_id
 
-        self.vid = str(pon)
-        self.id_ = str(pon.rev(None))
+            don = ObjectNumber.parse(self.d_vid)
+            pon = PartitionNumber(don, self.sequence_id)
+
+            self.vid = str(pon)
+            self.id_ = str(pon.rev(None))
+
         self.fqname = Identity._compose_fqname(self.vname,self.vid)
 
 
@@ -1214,20 +1218,10 @@ class Partition(Base):
     def before_update(mapper, conn, target):
         '''Set the column id number based on the table number and the 
         sequence id for the column'''
-        dataset = ObjectNumber.parse(target.d_id)
-        target.id_ = str(PartitionNumber(dataset, target.sequence_id))
-        
-    @staticmethod
-    def after_load(target, context):
-        '''Move older way of noting format types to the newer format var'''
-        if not target.format:
-            if 'db_type' in target.data:
-                target.format = target.data['db_type']
-                del target.data['db_type']
-            else:
-                target.format = 'db'
+        if not target.id_:
+            dataset = ObjectNumber.parse(target.d_id)
+            target.id_ = str(PartitionNumber(dataset, target.sequence_id))
 
-        
+
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
-event.listen(Partition, 'load', Partition.after_load)

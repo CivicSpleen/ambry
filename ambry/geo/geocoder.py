@@ -70,5 +70,9 @@ class Geocoder(object):
                                        city=city.title(), state=state.upper(), zip=int(zip)).first()
 
 
+    def geocode_intersection(self, street1, street2):
+        pass
+
+
 
 

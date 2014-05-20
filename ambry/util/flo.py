@@ -68,7 +68,7 @@ def copy_file_or_flo(input_, output, buffer_size=64*1024, cb=None):
                 fdst.write(buf)
                 if cb:
                     cumulative += len(buf)
-                    cb(cumulative, cumulative)
+                    cb(len(buf), cumulative)
         
         copyfileobj(input_, output)
         
@@ -154,6 +154,15 @@ class FileLikeFromIter(object):
                 self.cb(self.cum)
 
             return result
+
+    def push(self,d):
+        """Push data back in; an alternative to seek"""
+        self.data = d + self.data
+
+    def close(self):
+        self.data = ''
+
+        self._iter.close()
 
     
 class MetadataFlo(object):

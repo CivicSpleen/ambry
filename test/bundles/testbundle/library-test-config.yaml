@@ -6,10 +6,23 @@ library:
       database: default
 
     # Used to seperate tests that do or dont have a remote. 
-    default-remote:
-      remote: 
-        host: localhost
-        port: 7979
+    local-remoted:
+      remotes:
+        - '{root}/remote-cache-1'
+        - '{root}/remote-cache-2'
+        - '{root}/remote-cache-3'
+      filesystem: default
+      database: default
+
+    s3-remoted:
+      remotes:
+        - 's3://devtest.sandiegodata.org/s3-remote#compress'
+      filesystem: default
+      database: default
+
+    http-remoted:
+      remotes:
+        - 'http://devtest.sandiegodata.org/s3-remote#compress'
       filesystem: default
       database: default
 
@@ -38,7 +51,8 @@ database:
         driver: sqlite  
 
 filesystem:  
-  root: /tmp/library-test/
+  root: /tmp/library-test
+
   default:
       dir: '{root}/cache-l1'
       size: 50

@@ -38,7 +38,7 @@ database:
         driver: sqlite  
     
 filesystem:  
-    root_dir: /tmp/client-test
+    root: /tmp/client-test
     
     devtest:
       size: 100

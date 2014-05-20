@@ -17,7 +17,6 @@ def library_parser(cmd):
     lib_p = cmd.add_parser('library', help='Manage a library')
     lib_p.set_defaults(command='library')
 
-
     group = lib_p.add_mutually_exclusive_group()
     group.add_argument('-s', '--server', default=False, dest='is_server', action='store_true',
                        help='Select the server configuration')
@@ -76,6 +75,7 @@ def library_parser(cmd):
     sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
     sp.set_defaults(subcommand='get')   
     sp.add_argument('term', type=str,help='Query term')
+    sp.add_argument('-p', '--partitions', default=False, action="store_true", help='Also get all of the partitions. ')
     sp.add_argument('-f','--force',  default=False, action="store_true",  help='Force retrieving from the remote')
 
 
@@ -104,11 +104,11 @@ def library_parser(cmd):
 
 def library_command(args, rc):
     from  ..library import new_library
-    from . import logger
+    from . import global_logger
 
     l = new_library(rc.library(args.library_name))
 
-    l.logger = logger
+    l.logger = global_logger
 
     globals()['library_'+args.subcommand](args, l,rc)
 
@@ -295,8 +295,7 @@ def library_info(args, l, config, list_all=False):
     prt("Name:     {}",args.library_name)
     prt("Database: {}",l.database.dsn)
     prt("Cache:    {}",l.cache)
-    prt("Upstream: {}", l.upstream)
-    prt("Remotes:  {}", ', '.join(l.remotes) if l.remotes else '')
+    prt("Remotes:  {}", ', '.join([ str(r) for r in l.remotes]) if l.remotes else '')
 
     
 def library_push(args, l, config):
@@ -391,25 +390,33 @@ def library_schema(args, l, config):
   
 def library_get(args, l, config):
 
-    ident = l.resolve(args.term, use_remote = True)
+    ident = l.resolve(args.term)
 
     if not ident:
         fatal("Could not resolve term {} ", args.term)
 
 
     # This will fetch the data, but the return values aren't quite right
-    r = l.get(args.term, force=args.force, cb=Progressor('Download {}'.format(args.term)).progress)
+    prt("get: {}".format(ident.vname))
+    b = l.get(args.term, force=args.force, cb=Progressor('Download {}'.format(args.term)).progress)
 
-    if not r:
+    if not b:
         fatal("Downlaod failed: {}", args.term)
 
-    ident = r.identity
-    if r.partition:
-        ident.add_partition(r.partition.identity)
+    ident = b.identity
+
+    if b.partition:
+        ident.add_partition(b.partition.identity)
+
+    if args.partitions:
+        for p in b.partitions:
+            prt("get: {}".format(p.identity.vname))
+            bp = l.get(p.identity.vid)
+
 
     _print_info(l, ident)
 
-    return r
+    return b
 
 
 
@@ -433,21 +440,20 @@ def library_sync(args, l, config):
     database'''
 
 
-    if args.upstream or args.all:
-        l.logger.info("==== Sync Upstream")
-        l.sync_upstream(clean=args.clean)
+    if args.clean:
+        l.clean()
 
     if args.library or args.all:
         l.logger.info("==== Sync Library")
-        l.sync_library(clean=args.clean)
+        l.sync_library()
 
     if args.remote or args.all:
         l.logger.info("==== Sync Remotes")
-        l.sync_remotes(clean=args.clean)
+        l.sync_remotes()
 
     if (args.source or args.all) and l.source:
         l.logger.info("==== Sync Source")
-        l.source.sync_source(clean=args.clean)
+        l.source.sync_source()
 
 
 

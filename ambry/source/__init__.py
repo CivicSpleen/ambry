@@ -332,8 +332,7 @@ class SourceTree(object):
         # NOTE -- this code closes ( commits ) the session so the
         # file f is no longer valid if it came from the database, which is
         # why we have to refetch it.
-        self.library.database.install_dataset_identity(
-            ident, location=Dataset.LOCATION.SOURCE, data=d)
+        self.library.database.install_dataset_identity(ident,  data=d)
 
         if reattach:
             f = files.db.session.query(File).get(reattach)

@@ -15,8 +15,8 @@ from ambry.library import QueryCommand, get_library
 
 server_url = 'http://localhost:7979'
 
-logger = ambry.util.get_logger(__name__)
-logger.setLevel(logging.DEBUG) 
+global_logger = ambry.util.get_logger(__name__)
+global_logger.setLevel(logging.DEBUG)
 
 class Test(TestBase):
  
@@ -28,7 +28,7 @@ class Test(TestBase):
         import time
         from functools import  partial
         
-        logger.info("Starting library server")
+        global_logger.info("Starting library server")
         # Give the server a new RunCOnfig, so we can use a different library. 
       
         server = Thread(target = partial(ambry.server.main.test_run, rc) )
@@ -48,7 +48,7 @@ class Test(TestBase):
                 a.test.echo('foobar').get(bar='baz')
                 break
             except:
-                logger.info( 'Server not started yet, waiting')
+                global_logger.info( 'Server not started yet, waiting')
                 time.sleep(1)
                                
     def setUp(self):

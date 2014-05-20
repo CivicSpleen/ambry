@@ -9,7 +9,7 @@ from ..util import copy_file_or_flo, get_logger
 
 from ..identity import Identity
 
-logger = get_logger(__name__)
+global_logger = get_logger(__name__)
 
 def make_metadata(file_name):
     from ambry.util import md5_for_file
@@ -30,6 +30,8 @@ class FsCache(Cache):
     When a file is added that causes the disk usage to exceed `maxsize`, the oldest
     files are deleted to free up space. 
     '''
+
+    base_priority = 10  # Priority for this class of cache.
 
     def __init__(self, dir=None,  options=None, upstream=None,**kwargs):
         '''Init a new FileSystem Cache
@@ -142,7 +144,7 @@ class FsCache(Cache):
         '''
         import shutil
 
-        logger.debug("FC {} get looking for {}".format(self.repo_id,rel_path)) 
+        global_logger.debug("FC {} get looking for {}".format(self.repo_id,rel_path))
                
         path = os.path.join(self.cache_dir, rel_path)
       
@@ -152,7 +154,7 @@ class FsCache(Cache):
             if not os.path.isfile(path):
                 raise ValueError("Path does not point to a file")
             
-            logger.debug("FC {} get {} found ".format(self.repo_id, path))
+            global_logger.debug("FC {} get {} found ".format(self.repo_id, path))
             return path
             
         if not self.upstream:
@@ -162,17 +164,21 @@ class FsCache(Cache):
         stream = self.upstream.get_stream(rel_path, cb=cb)
         
         if not stream:
-            logger.debug("FC {} get not found in upstream ()".format(self.repo_id,rel_path)) 
+            global_logger.debug("FC {} get not found in upstream ()".format(self.repo_id,rel_path))
             return None
         
         # Got a stream from upstream, so put the file in this cache. 
         dirname = os.path.dirname(path)
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
-        
-        with open(path,'w') as f:
-            #shutil.copyfileobj(stream, f)
-            copy_file_or_flo(stream, f, cb=cb)
+
+        try:
+            with open(path,'w') as f:
+                #shutil.copyfileobj(stream, f)
+                copy_file_or_flo(stream, f, cb=cb)
+        except:
+            os.remove(path)
+            raise
 
         try:
             stream.close()
@@ -182,7 +188,7 @@ class FsCache(Cache):
         if not os.path.exists(path):
             raise Exception("Failed to copy upstream data to {} ".format(path))
         
-        logger.debug("FC {} got return from upstream {}".format(self.repo_id,rel_path)) 
+        global_logger.debug("FC {} got return from upstream {}".format(self.repo_id,rel_path))
         return path
 
     def get_stream(self, rel_path, cb=None):
@@ -201,12 +207,46 @@ class FsCache(Cache):
     ## Information
     ##
 
-    def list(self, path=None,with_metadata=False):
+    def list(self, path=None,with_metadata=False, include_partitions=False):
         '''get a list of all of the files in the repository'''
+        from os import walk
+        import json
 
-        raise NotImplementedError()
+        l = {}
+
+
+        for root, dirs, files in os.walk(self._cache_dir):
+            root = root.replace(self._cache_dir,'',1).strip('/')
+
+            if root.startswith('meta'):
+                continue
+
+            if not include_partitions and root.count('/') > 0:
+                continue  # partition files
+
+            for f in files:
+                rel_path = os.path.join(root,f)
+                d = self.metadata(rel_path) if with_metadata else {}
+
+                if d and 'identity' in d:
+                    d['identity'] = json.loads(d['identity'])
+
+                d['caches'] = [self.repo_id]
+
+                l[rel_path] = d
+
+        if self.upstream:
+            for k, v in self.upstream.list(path, with_metadata, include_partitions).items():
+                upstreams = (l[k]['caches'] if k in l else []) + v.get('caches', self.upstream.repo_id)
+
+                l[k] = v
+                l[k]['caches'] = upstreams
+
+        return l
+
 
     def path(self, rel_path, propagate = True, **kwargs):
+
         abs_path = os.path.join(self.cache_dir, rel_path)
 
         if os.path.exists(abs_path):
@@ -214,6 +254,9 @@ class FsCache(Cache):
 
         if self.upstream and propagate:
             return self.upstream.path(rel_path, **kwargs)
+
+        if not os.path.exists(abs_path):
+            return False
 
         return abs_path
 
@@ -245,7 +288,7 @@ class FsCache(Cache):
         else:
             return {}
 
-    def has(self, rel_path, md5=None, use_upstream=True):
+    def has(self, rel_path, md5=None, propagate=True):
         from ..util import md5_for_file
 
         abs_path = os.path.join(self.cache_dir, rel_path)
@@ -254,8 +297,8 @@ class FsCache(Cache):
         if os.path.exists(abs_path) and ( not md5 or md5 == md5_for_file(abs_path)):
             return abs_path
 
-        if self.upstream and use_upstream:
-            return self.upstream.has(rel_path, md5=md5, use_upstream=use_upstream)
+        if self.upstream and propagate:
+            return self.upstream.has(rel_path, md5=md5, propagate=propagate)
 
         return False
 
@@ -276,9 +319,9 @@ class FsCache(Cache):
     def clean(self):
         from ..util import rm_rf
         
-        logger.info("Purging: {} ".format(self.cache_dir))
+        global_logger.info("Purging: {} ".format(self.cache_dir))
         rm_rf(self.cache_dir)
-        
+
         if self.upstream:
             self.upstream.clean()
 
@@ -290,15 +333,20 @@ class FsCache(Cache):
     @property
     def repo_id(self):
         '''Return the ID for this repository'''
-        import hashlib
-        m = hashlib.md5()
-        m.update(self.cache_dir)
 
-        return m.hexdigest()
+        return self.cache_dir
+
+        #import hashlib
+        #m = hashlib.md5()
+        #m.update(self.cache_dir)
+
+        #return m.hexdigest()
 
 
     def __repr__(self):
         return "FsCache: dir={} upstream=({})".format(self.cache_dir, self.upstream)
+
+
 
 
 class FsLimitedCache(FsCache):
@@ -412,7 +460,7 @@ class FsLimitedCache(FsCache):
   
         for rel_path in removes:
             if rel_path != this_rel_path:
-                logger.debug("Deleting {}".format(rel_path)) 
+                global_logger.debug("Deleting {}".format(rel_path))
                 self.remove(rel_path)
             
     def add_record(self, rel_path, size):
@@ -458,16 +506,7 @@ class FsLimitedCache(FsCache):
         if len(no_db_entry) > 0:
             raise Exception("Found {} files that don't have db entries: {}"
                             .format(len(no_db_entry), ','.join(no_db_entry)))
-        
-    @property
-    def repo_id(self):
-        '''Return the ID for this repository'''
-        import hashlib
-        m = hashlib.md5()
-        m.update(self.cache_dir)
 
-        return m.hexdigest()
-    
     def get_stream(self, rel_path, cb=None):
         p = self.get(rel_path, cb=cb)
         
@@ -489,7 +528,7 @@ class FsLimitedCache(FsCache):
         import shutil
         from ambry.util import bundle_file_type
 
-        logger.debug("LC {} get looking for {}".format(self.repo_id,rel_path)) 
+        global_logger.debug("LC {} get looking for {}".format(self.repo_id,rel_path))
                
         path = os.path.join(self.cache_dir, rel_path)
 
@@ -499,7 +538,7 @@ class FsLimitedCache(FsCache):
             if not os.path.isfile(path):
                 raise ValueError("Path does not point to a file")
             
-            logger.debug("LC {} get {} found ".format(self.repo_id, path))
+            global_logger.debug("LC {} get {} found ".format(self.repo_id, path))
             return path
             
         if not self.upstream:
@@ -510,7 +549,7 @@ class FsLimitedCache(FsCache):
         stream = self.upstream.get_stream(rel_path, cb=cb)
         
         if not stream:
-            logger.debug("LC {} get not found in upstream ()".format(self.repo_id,rel_path)) 
+            global_logger.debug("LC {} get not found in upstream ()".format(self.repo_id,rel_path))
             return None
         
         # Got a stream from upstream, so put the file in this cache. 
@@ -533,7 +572,7 @@ class FsLimitedCache(FsCache):
         if not os.path.exists(path):
             raise Exception("Failed to copy upstream data to {} ".format(path))
         
-        logger.debug("LC {} got return from upstream {} -> {} ".format(self.repo_id,rel_path, path)) 
+        global_logger.debug("LC {} got return from upstream {} -> {} ".format(self.repo_id,rel_path, path))
         return path
 
 
@@ -652,7 +691,20 @@ class FsLimitedCache(FsCache):
         if self.upstream:
             return self.upstream.list(path, with_metadata=with_metadata)
         else:
-            raise NotImplementedError() 
+            raise NotImplementedError()
+
+    def clean(self):
+        if self._database:
+            self._database.close()
+            self._database = None
+        super(FsLimitedCache, self).clean()
+
+    @property
+    def priority(self):
+        return self.upstream.priority - 1  # give a slightly better priority
+
+    def set_priority(self, i):
+        self.upstream.set_priority(i)
 
 
     def __repr__(self):
@@ -669,6 +721,13 @@ class FsCompressionCache(Cache):
         
         super(FsCompressionCache, self).__init__(upstream)
 
+
+    @property
+    def priority(self):
+        return self.upstream.priority - 1 # give a slightly better priority
+
+    def set_priority(self,i):
+        self.upstream.set_priority(i)
 
     ##
     ## Put
@@ -732,10 +791,10 @@ class FsCompressionCache(Cache):
             return None
 
         if bundle_file_type(source) == 'gzip':
-            logger.debug("CC returning {} with decompression".format(rel_path))
+            global_logger.debug("CC returning {} with decompression".format(rel_path))
             return MetadataFlo(gzip.GzipFile(fileobj=source), source.meta)
         else:
-            logger.debug("CC returning {} with passthrough".format(rel_path))
+            global_logger.debug("CC returning {} with passthrough".format(rel_path))
             return source
 
     def get(self, rel_path, cb=None):
@@ -747,6 +806,8 @@ class FsCompressionCache(Cache):
 
         uc_rel_path = os.path.join('uncompressed',rel_path)
 
+        # The compression cache doesn't ahve storage, so it writes the uncompressed file back to the upstream,
+        # hoping that it is a real filesystem.
         sink = self.upstream.put_stream(uc_rel_path)
 
         try:
@@ -808,22 +869,36 @@ class FsCompressionCache(Cache):
 
         return md['md5']
 
-    def list(self, path=None,with_metadata=False):
+    def list(self, path=None,with_metadata=False, include_partitions=False):
         '''get a list of all of the files in the repository'''
-        return self.upstream.list(path,with_metadata=with_metadata)
+        l =  self.upstream.list(path,with_metadata=with_metadata, include_partitions=include_partitions)
 
-    def has(self, rel_path, md5=None, use_upstream=True):
+
+        lp = {}
+        for k,v in l.items():
+            lp[k.replace('.gz','')] = v
+
+
+        return lp
+
+
+    def store_list(self,  cb=None):
+        """List the cache and store it as metadata. This allows for getting the list from HTTP caches
+        and other types where it is not possible to traverse the tree"""
+        return self.upstream.store_list( cb=cb)
+
+    def has(self, rel_path, md5=None, propagate=True):
         
         # This odd structure is because the MD5 check won't work if it is computed on a uncompressed
         # file and checked on a compressed file. But it will work if the check is done on an s#
         # file, which stores the md5 as metadada
 
-        r =  self.upstream.has(self._rename(rel_path), md5=md5, use_upstream=use_upstream)
+        r =  self.upstream.has(self._rename(rel_path), md5=md5, propagate=propagate)
 
         if r:
             return True
 
-        return self.upstream.has(self._rename(rel_path), md5=None, use_upstream=use_upstream)
+        return self.upstream.has(self._rename(rel_path), md5=None, propagate=propagate)
 
     def metadata(self, rel_path):
         return self.upstream.metadata(self._rename(rel_path))
@@ -836,7 +911,7 @@ class FsCompressionCache(Cache):
 
     @property
     def repo_id(self):
-        return "c"+self.upstream.repo_id()
+        return self.upstream.repo_id+'#compressed'
 
     @property
     def cache_dir(self):

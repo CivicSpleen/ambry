@@ -114,13 +114,18 @@ def bundle_file_type(path_or_file):
                 d = f.read(15)
         except AttributeError:
             d = None
+        except TypeError:  # "TypeError: coercing to Unicode: need string or buffer, FileLikeFromIter found"
+            d = None
 
     if not d:
+        d = path_or_file.read(15)
+
         try:
-            d = path_or_file.read(15)
             path_or_file.seek(0)
         except AttributeError as e:
-            d = None
+            # Hopefilly, it is a FileLikeIter
+
+            path_or_file.push(d)
 
 
     if not d:

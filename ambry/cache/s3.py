@@ -1,17 +1,18 @@
 
 from .  import Cache
-from remote import RemoteMarker
 from ..util import copy_file_or_flo, get_logger
 import os
 
-logger = get_logger(__name__)
+global_logger = get_logger(__name__)
 
 #logger.setLevel(logging.DEBUG) 
 
-class S3Cache(Cache, RemoteMarker):
+class S3Cache(Cache):
     '''A cache that transfers files to and from an S3 bucket
     
      '''
+
+    base_priority = 30  # Priority for this class of cache.
 
     def __init__(self, bucket=None, prefix=None, account=None, upstream=None, cdn=None, **kwargs):
         '''Init a new S3Cache Cache
@@ -119,11 +120,9 @@ class S3Cache(Cache, RemoteMarker):
     @property
     def repo_id(self):
         '''Return the ID for this repository'''
-        import hashlib
-        m = hashlib.md5()
-        m.update(self.bucket_name)
 
-        return m.hexdigest()
+        return "s3:{}/{}".format(self.bucket_name, self.prefix)
+
  
     def get_stream(self, rel_path, cb=None, return_meta=False):
         """Return the object as a stream"""
@@ -229,17 +228,17 @@ class S3Cache(Cache, RemoteMarker):
                 while True:
                     mp, part_number, buf = self.queue.get()
                     if mp is None: # Signal to die
-                        logger.debug("put_stream: Thread {} exiting".format(self.n))
+                        global_logger.debug("put_stream: Thread {} exiting".format(self.n))
                         self.queue.task_done()
                         return
-                    logger.debug("put_stream: Thread {}: processing part: {}".format(self.n, part_number))
+                    global_logger.debug("put_stream: Thread {}: processing part: {}".format(self.n, part_number))
                     t1 = time.time()
                     try:
                         mp.upload_part_from_file(buf,part_number  )
                     finally:
                         self.queue.task_done()
                         t2 = time.time()
-                        logger.debug("put_stream: Thread {}, part {}. time = {} rate =  {}b/s"
+                        global_logger.debug("put_stream: Thread {}, part {}. time = {} rate =  {}b/s"
                                      .format(self.n, part_number, round(t2-t1,3), round((float(buf.tell())/(t2-t1)), 2)))
                     
                         
@@ -281,7 +280,7 @@ class S3Cache(Cache, RemoteMarker):
      
             def _send_buffer(self):
                 '''Schedules a buffer to be sent in a thread by queuing it'''
-                logger.debug("_send_buffer: sending part {} to thread pool size: {}, total_size = {}"
+                global_logger.debug("_send_buffer: sending part {} to thread pool size: {}, total_size = {}"
                              .format(self.part_number, self.buffer.tell(), self.total_size))
                 self.buffer.seek(0)
                 thread_upload_queue.put( (self.mp, self.part_number, self.buffer) )
@@ -318,7 +317,6 @@ class S3Cache(Cache, RemoteMarker):
                 
                 if public:
                     this.bucket.set_acl('public-read', path)
-                
 
         return flo()
      
@@ -350,24 +348,28 @@ class S3Cache(Cache, RemoteMarker):
         '''Get a list of all of bundle files in the cache. Does not return partition files'''
         import json
         
-        path = self.prefix+'/'+path.strip('/') if path else self.prefix
-        
+        sub_path = self.prefix+'/'+path.strip('/') if path else self.prefix
+
         l = {}
-        for e in self.bucket.list(path):
+
+        for e in self.bucket.list(sub_path):
+
             path = e.name.replace(self.prefix,'',1).strip('/')
-            if path.startswith('_'):
+            if path.startswith('_') or path.startswith('meta'):
                 continue
-            
+
             if not include_partitions and path.count('/') > 1:
                 continue # partition files
-            
+
             if with_metadata:
                 d = self.metadata(path)
                 if d and 'identity' in d:
                     d['identity'] = json.loads(d['identity'])
             else:
                 d = {}
-            
+
+            d['caches'] = [self.repo_id]
+
             if path:
                 l[path] = d
 
@@ -375,9 +377,9 @@ class S3Cache(Cache, RemoteMarker):
         return l
 
 
-        
 
-    def has(self, rel_path, md5=None, use_upstream=True):
+
+    def has(self, rel_path, md5=None, propagate=True):
 
         k = self._get_boto_key(rel_path)
         
@@ -405,7 +407,8 @@ class S3Cache(Cache, RemoteMarker):
         d = k.metadata
         d['size'] = k.size
         d['etag'] = k.etag       
-        
+
+
         return d
 
 

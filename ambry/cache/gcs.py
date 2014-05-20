@@ -12,7 +12,7 @@ from remote import RemoteMarker
 from ..util import copy_file_or_flo, get_logger
 import os
 
-logger = get_logger(__name__)
+global_logger = get_logger(__name__)
 
 #logger.setLevel(logging.DEBUG) 
 

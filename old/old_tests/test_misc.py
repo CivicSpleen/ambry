@@ -135,10 +135,9 @@ class Test(TestBase):
 
 
     def test_metadata(self):
-        from ambry.bundle.meta import Top, About, Contact, ContactTerm, PartitionTerm, Partitions
-        from ambry.bundle.meta import Metadata, ScalarTerm, TypedDictGroup, VarDictGroup, DictGroup, DictTerm, ListTerm, ListGroup
-        from ambry.util import MapView
-        import pprint, yaml
+        from ambry.bundle.meta import Metadata, ScalarTerm, TypedDictGroup, VarDictGroup, DictGroup, DictTerm, ListGroup
+
+        import yaml
         from ambry.util import AttrDict
 
         class TestDictTerm(DictTerm):

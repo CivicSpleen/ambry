@@ -4,7 +4,7 @@ Created on Aug 31, 2012
 @author: eric
 """
 import unittest
-from  testbundle.bundle import Bundle
+from  bundles.testbundle.bundle import Bundle
 from ambry.run import  RunConfig
 from test_base import  TestBase  # @UnresolvedImport
 

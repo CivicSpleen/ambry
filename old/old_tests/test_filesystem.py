@@ -4,7 +4,7 @@ Created on Aug 31, 2012
 @author: eric
 """
 import unittest
-from  testbundle.bundle import Bundle
+from  bundles.testbundle.bundle import Bundle
 from ambry.run import  RunConfig
 from test_base import  TestBase
 import os
@@ -93,74 +93,6 @@ class Test(TestBase):
                 f.write("{:03d}:".format(i))
 
         return fn
-
-    def test_compression(self):
-        from ambry.run import  get_runconfig
-        from ambry.cache import new_cache
-        from ambry.util import  temp_file_name, md5_for_file, copy_file_or_flo
-        
-        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
-
-        comp_cache = new_cache(rc.filesystem('compressioncache'))
-        
-        test_file_name = 'test_file'
-
-        fn =  temp_file_name()
-        print 'orig file ', fn
-        with open(fn,'wb') as f:
-            for i in range(1000):
-                f.write("{:03d}:".format(i))
-
-        cf = comp_cache.put(fn, test_file_name)
-
-        with open(cf) as stream:
-            from ambry.util.sgzip import GzipFile
-            stream = GzipFile(stream)
-            
-            uncomp_cache = new_cache(rc.filesystem('fscache'))
-            
-            uncomp_stream = uncomp_cache.put_stream('decomp')
-            
-            copy_file_or_flo(stream, uncomp_stream)
-    
-        uncomp_stream.close()
-            
-        dcf = uncomp_cache.get('decomp')
-
-        self.assertEquals(md5_for_file(fn), md5_for_file(dcf))
-
-        os.remove(fn)
-
-    def test_md5(self):
-        from ambry.run import  get_runconfig
-        from ambry.cache import new_cache
-        from ambry.util import md5_for_file
-        from ambry.cache.filesystem import make_metadata
-
-        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_CONFIG))
-
-        fn = self.make_test_file()
-
-        md5 = md5_for_file(fn)
-
-        cache = new_cache(rc.filesystem('fscache'))
-
-        cache.put(fn, 'foo1')
-
-        abs_path = cache.path('foo1')
-
-        self.assertEquals(md5, cache.md5('foo1'))
-
-        cache = new_cache(rc.filesystem('compressioncache'))
-
-        cache.put(fn, 'foo2', metadata = make_metadata(fn) )
-
-        abs_path = cache.path('foo2')
-
-        self.assertEquals(md5, cache.md5('foo2'))
-
-
-        os.remove(fn)
 
     def test_s3(self):
         from ambry.run import  get_runconfig

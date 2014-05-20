@@ -13,6 +13,9 @@ class Test(TestBase):
 
     test_dir = None
 
+    # Source code for the example bundles
+    example_git_url = 'https://github.com/sdrdl/example-bundles.git'
+
     def setUp(self):
         import os
         from ambry.run import  get_runconfig
@@ -20,11 +23,13 @@ class Test(TestBase):
         #self.test_dir = tempfile.mkdtemp(prefix='test_cli_')
         self.test_dir = '/tmp/test_cli'
 
-        self.config_file =  os.path.join(self.test_dir, 'config.yaml')
-        self.rc = get_runconfig((self.config_file,RunConfig.USER_ACCOUNTS))
+        self.reset()
+
+        self.output, self.logger = self.setup_logging()
 
     def tearDown(self):
-        pass
+
+        self.output.close()
 
 
     def setup_logging(self):
@@ -49,6 +54,8 @@ class Test(TestBase):
 
         logger.addHandler(ch)
 
+        self.logging_handler = ch
+
         return output, logger
 
 
@@ -68,6 +75,9 @@ class Test(TestBase):
 
         self.library = self.get_library()
 
+        os.makedirs(self.library.source_dir)
+
+
     def get_library(self, name = 'default'):
         """Clear out the database before the test run"""
         from ambry.library import new_library
@@ -79,6 +89,7 @@ class Test(TestBase):
         return l
 
     def new_config_file(self):
+        """Copy the config file into place. """
         import os
         import configs
         import bundles
@@ -104,40 +115,97 @@ class Test(TestBase):
             '-c',self.config_file
         ] + list(args)
 
-        output, logger = self.setup_logging()
+        error = False
+        try:
+            print "Execute ",args
+            main(args, self.logger)
+        except:
+            error = True
+            raise
+        finally:
+            ## I have no ideal what is going on here ...
+            ## self.output is a StringIO, which is set as a stream to a logger.
+            ## The code below seems to return the output, but the output is also sent to the logger.
+            # I guess the logger wrtes it to the stream .. and then .. um ....
 
-        main(args, logger)
+            self.logging_handler.flush()
+            self.output.flush()
 
-        output.flush()
-        out_val =  output.getvalue()
-        output.close()
+            out_val =  self.output.getvalue()
+            self.output.truncate(0)
+            self.output.seek(0)
+
+            if error:
+                print out_val
+
         return out_val
+
+    def checkout_source(self):
+
+        from sh import git
+
+        git.clone(self.example_git_url, self.library.source_dir)
+
+    def assertInFile(self, s, fn):
+
+        with open(fn) as f:
+            return self.assertIn(s, '\n'.join(f.readlines()))
 
 
     def test_basic(self):
 
-        self.reset()
 
         c = self.cmd
 
+        self.assertIn('sqlite:////tmp/test_cli/library.db', c('library', 'info'))
+        self.assertIn('Cache:    FsCache: dir=/tmp/test_cli/library upstream=(None)', c('library', 'info'))
+
+        self.checkout_source()
+
+    def test_sync(self):
+        import os
+
+        self.reset()
+
+        self.checkout_source()
+
+        c = self.cmd
+
+        c('info')
         c('library','info')
         c('library sync -s')
-        c('list')
 
-        st = self.library.source
+        # Check that we have the exaple bundles, but not eh built library
+        self.assertIn('S    d00H003',c('list'))
+        self.assertNotIn('LS    d00H003', c('list'))
+        self.assertIn('example.com-altdb-orig-0.1.1', c('list'))
+        self.assertIn('example.com-random-0.0.2', c('list'))
 
-        for k,ident in st.list().items():
-            deps=ident.data['dependencies']
-            dc = len(deps) if deps else 0
-            print dc, ident
-            if dc == 0:
-                c('bundle -d {} build --clean '.format(ident.vid))
-                c('bundle -d {} install '.format(ident.vid))
+        # Build the library
+        c('bundle -d d00H003 build --clean ')
 
-        # Build the one with a dependency
-        id_ = 'd000001C'
-        c('bundle -d {} build --clean '.format(id_))
-        c('bundle -d {} install '.format(id_))
+        self.assertTrue(os.path.exists(os.path.join(self.test_dir, 'build/example.com/simple-orig-0.1.3.db')))
+
+        self.assertInFile('Done Building', os.path.join(self.test_dir, 'build/example.com/simple-orig-0.1.3.log'))
+
+        # And install it.
+        c('bundle -d d00H003 install')
+
+        # Now it should show up in the list.
+        self.assertIn('LS    d00H003', c('list'))
+
+        # Can't rebuild an installed library.
+        with self.assertRaises(SystemExit):
+            c('bundle -d d00H003 prepare --clean ')
+
+        # Get all of the other bundles
+        vids = [ y.strip()
+                 for y in c('list -Fvid').strip().replace('test_cli INFO ','').split('\n') if y.strip() != 'd00H003']
+
+
+        for vid in vids:
+            c('bundle -d {} build --clean '.format(vid))
+            c('bundle -d {} install '.format(vid))
 
     def test_library(self):
 

@@ -9,8 +9,8 @@ from ambry.util import AttrDict
 from ambry.util import lru_cache
 
 @lru_cache()
-def get_runconfig(path=None,  is_server=False):
-    return RunConfig(path, is_server)
+def get_runconfig(path=None):
+    return RunConfig(path)
 
 class RunConfig(object):
     '''Runtime configuration object 
@@ -36,7 +36,7 @@ class RunConfig(object):
     config = None
     files = None
 
-    def __init__(self, path=None, is_server = False):
+    def __init__(self, path=None):
         '''Create a new RunConfig object
         
         Arguments
@@ -48,16 +48,18 @@ class RunConfig(object):
         config = AttrDict()
         config['loaded'] = []
 
-    
+        if not path:
+            pass
+
+
         if isinstance(path, (list, tuple, set)):
             files = path
         else:
             files = [
                           RunConfig.ROOT_CONFIG,
-                          RunConfig.USER_CONFIG,
+                          path if path else RunConfig.USER_CONFIG,
                           RunConfig.USER_ACCOUNTS,
-                          RunConfig.DIR_CONFIG, 
-                          path]
+                          RunConfig.DIR_CONFIG]
 
         loaded = False
 
@@ -125,8 +127,7 @@ class RunConfig(object):
             for k,v in values:
                 
                 if v is None:
-                    import pprint
-                    pprint.pprint(e.to_dict())
+
                     raise Exception('Got None value: {} {} {} {} '.format(path, subdicts, k, v))
                 
                 path_parts = path.split('/')
@@ -222,6 +223,29 @@ class RunConfig(object):
         return e
 
 
+
+    def remotes(self, remotes):
+        from cache import parse_cache_string
+        # Re-format the string remotes from strings to dicts.
+
+        r = []
+
+        fs = self.group('filesystem')
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
+
+        for remote in remotes:
+
+            if not isinstance(remote, basestring):
+                r.append(remote)
+                continue
+
+
+            r.append(parse_cache_string(remote, root_dir))
+
+
+        return r
+
+
     def datarepo(self,name):
         e =  self.group_item('datarepo', name) 
 
@@ -240,11 +264,19 @@ class RunConfig(object):
                                      'database': lambda k,v: self.database(v),
                                      'upstream': lambda k,v: self.filesystem(v),
                                      'account': lambda k, v: self.account(v),
+                                     'remotes': lambda k, v: self.remotes(v),
                                      'cdn': lambda k,v: self.account(v),
                                      'source': lambda k, v: v.format(root=root_dir)
                                      }  )
 
+        if 'remotes' in e:
+            e['remotes'] = [ self._sub_strings(remote, {
+                'account': lambda k, v: self.account(v),
+                'source': lambda k, v: v.format(root=root_dir)
+            }) for remote in e['remotes'] ]
+
         e['_name'] = name
+        e['root'] = root_dir
 
         return e
     

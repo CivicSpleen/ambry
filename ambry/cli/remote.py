@@ -25,7 +25,13 @@ def remote_parser(cmd):
     sp.set_defaults(subcommand='list')
     sp.add_argument('-m','--meta', default=False,  action='store_true',  help="Force fetching metadata for remotes that don't provide it while listing, like S3")
     sp.add_argument('term', nargs=argparse.REMAINDER)
-        
+
+    sp = asp.add_parser('fix', help='Repair brokenness')
+    sp.set_defaults(subcommand='fix')
+    sp.add_argument('-l', '--stored-list', default=False, action='store_true', help="Re-generate the stored list")
+    sp.add_argument('term', type=str, nargs=argparse.REMAINDER,help='Query term')
+
+
     sp = asp.add_parser('find', help='Search for the argument as a bundle or partition name or id')
     sp.set_defaults(subcommand='find')   
     sp.add_argument('term', type=str, nargs=argparse.REMAINDER,help='Query term')
@@ -34,7 +40,7 @@ def remote_parser(cmd):
 def remote_command(args, rc):
     from ambry.library import new_library
 
-    l = new_library(rc.library(args.name))
+    l = new_library(rc.library(args.library_name))
 
     globals()['remote_'+args.subcommand](args, l,rc)
 
@@ -103,4 +109,45 @@ def remote_list(args, l, rc, return_meta=False):
 
 def remote_find(args, l, config):
     return _find(args, l, config, True)
+
+def remote_fix(args, l, rc):
+    from sqlalchemy.orm.exc import NoResultFound
+    if args.stored_list:
+        prt('Fix stored list on remotes')
+
+    for remote in l.remotes:
+        prt("  {}".format(remote.repo_id))
+
+        def cb(cum, _):
+            prt("Store list: {} {}".format(remote.repo_id, cum))
+
+        remote.store_list()
+
+    return
+
+
+    d = {}
+    for k,v in  l.list().items():
+        file_ = l.files.query.installed.ref(v.vid).one
+        d[v.cache_key] = v.to_meta(file=file_.path)
+
+        for pvid, pident in v.partitions.items():
+            try:
+                file_ = l.files.query.installed.ref(pident.vid).one
+                meta = pident.to_meta(file=file_.path)
+            except NoResultFound:
+                meta = pident.to_meta(md5='x')
+
+            d[pident.cache_key] = meta
+
+    import pprint
+    pprint.pprint(d)
+
+    return
+
+
+
+
+
+
 

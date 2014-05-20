@@ -29,7 +29,7 @@ class Logger(object):
 def warehouse_command(args, rc):
     from ambry.warehouse import new_warehouse
     from ..library import new_library
-    from . import logger
+    from . import global_logger
     import urlparse
 
     if args.database:
@@ -62,7 +62,7 @@ def warehouse_command(args, rc):
 
 
     l = new_library(rc.library(args.library_name))
-    l.logger = logger
+    l.logger = global_logger
 
     w = new_warehouse(config, l)
 

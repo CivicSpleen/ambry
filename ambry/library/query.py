@@ -6,7 +6,7 @@ of the bundles that have been installed into it.
 # Revised BSD License, included in this distribution as LICENSE.txt
 
 
-from ambry.orm import Dataset, Partition
+from ambry.orm import Dataset, Partition, File
 from ambry.orm import Table, Column
 from ..identity import Identity, PartitionNumber, DatasetNumber
 
@@ -279,7 +279,6 @@ class Resolver(object):
         self.session = session # a Sqlalchemy connection
 
     def _resolve_ref_orm(self, ref):
-        import semantic_version
 
         ip = Identity.classify(ref)
 
@@ -311,60 +310,67 @@ class Resolver(object):
             pqp = Partition.name == ip.sname
 
         out = []
+
+
         if dqp is not None:
 
-            for dataset in (self.session.query(Dataset).filter(dqp).order_by(Dataset.revision.desc()).all()):
-                out.append((dataset, None))
+            for row in (self.session.query(Dataset, File)
+                            .outerjoin(File, File.ref == Dataset.vid)
+                            .filter(dqp).order_by(Dataset.revision.desc()).all()):
+                out.append((row.Dataset, None, row.File))
 
         if pqp is not None:
 
-            for row in (self.session.query(Dataset, Partition).join(Partition).filter(pqp)
-                        .order_by(Dataset.revision.desc()).all()):
-                out.append((row.Dataset, row.Partition))
+            for row in (self.session.query(Dataset, Partition, File)
+                                .join(Partition).filter(pqp)
+                                .outerjoin(File, File.ref == Partition.vid)
+                                .order_by(Dataset.revision.desc()).all()):
+                out.append((row.Dataset, row.Partition, row.File))
+
 
         return ip, out
 
-    def _resolve_ref(self, ref, location = Dataset.LOCATION.LIBRARY):
+    def _resolve_ref(self, ref):
         '''Convert the output from _resolve_ref to nested identities'''
+
         ip, results = self._resolve_ref_orm(ref)
         from collections import OrderedDict
 
-        if location and not isinstance(location,(list, tuple)):
-            location = [location]
 
         # Convert the ORM results to identities
         out = OrderedDict()
-        for d,p in results:
-
-            if location and  d.location not in location:
-                continue
+        for d, p, f in results:
 
             if not d.vid in out:
                 out[d.vid] = d.identity
 
-            out[d.vid].locations.set(d.location)
+            if f:
+                if not p:
+                    out[d.vid].add_file(f)
+                else:
+                    p.identity.add_file(f)
 
-            # Partitions are only added for the LOCATION.LIBRARY location, so
-            # we don't have to deal with duplicate  partitions
             if p:
                 out[d.vid].add_partition(p.identity)
+
 
         return ip, out
 
 
-    def resolve_ref_all(self, ref, location = Dataset.LOCATION.LIBRARY):
+    def resolve_ref_all(self, ref):
 
-        return self._resolve_ref(ref, location)
+        return self._resolve_ref(ref)
 
-    def resolve_ref_one(self, ref, location = Dataset.LOCATION.LIBRARY):
+    def resolve_ref_one(self, ref, location=None):
         '''Return the "best" result for an object specification
 
         '''
         import semantic_version
 
+        ip, refs = self._resolve_ref(ref)
 
-        ip, refs = self._resolve_ref(ref, location)
-
+        if location:
+            refs = { k:v for k, v in refs.items() if v.locations.has(location) }
 
         if not isinstance(ip.version, semantic_version.Spec):
             return ip, refs.values().pop(0) if refs and len(refs.values()) else None
@@ -379,8 +385,8 @@ class Resolver(object):
             else:
                 return ip, versions[best]
 
-    def resolve(self, ref, location = Dataset.LOCATION.LIBRARY):
-        return self.resolve_ref_one(ref, location)[1]
+    def resolve(self, ref):
+        return self.resolve_ref_one(ref)[1]
 
     def find(self, query_command):
         '''Find a bundle or partition record by a QueryCommand or Identity
@@ -482,68 +488,3 @@ class Resolver(object):
         query = query.distinct().order_by(Dataset.revision.desc())
 
         return query
-
-
-class RemoteResolver(object):
-    '''Find a reference to a dataset or partition based on a string,
-    which may be a name or object number '''
-
-    def __init__(self, local_resolver, remote_urls):
-        self.local_resolver = local_resolver
-        self.urls = remote_urls
-
-
-    def resolve_ref_one(self, ref, location = Dataset.LOCATION.LIBRARY):
-        from requests.exceptions import ConnectionError
-        from ambry.client.rest import RemoteLibrary
-        import semantic_version
-        from ..identity import Identity
-
-        if self.local_resolver:
-            ip,ident = self.local_resolver.resolve_ref_one(ref, location)
-            if ident:
-                idents = [ident]
-            else:
-                idents = []
-        else:
-            ip = Identity.classify(ref)
-            idents = []
-
-        # If the local returned a result, we only need to go to the
-        # remote if this is a semantic version request, to possible
-        # get a newer version
-        if len(idents) == 0 or isinstance(ip.version, semantic_version.Spec):
-
-            if self.urls:
-                for url in self.urls:
-                    rl = RemoteLibrary(url)
-
-                    try:
-                        ident = rl.resolve(ref, location)
-
-                    except ConnectionError:
-                        continue
-
-                    if ident:
-                        ident.locations.set(Dataset.LOCATION.REMOTE)
-
-                        ident.url = url
-                        idents.append(ident)
-
-        if not idents:
-            return ip, None
-
-        idents = sorted(idents, reverse=True, key=lambda x: x.on.revision )
-
-        # Since we sorted by revision, and the internal resolutions take care of semantic versioning,
-        # if this is a semantic version request, the idents array should be sorted with the highest revision number
-        # for the spec at the top
-        return ip, idents.pop(0)
-
-    def resolve(self, ref, location = Dataset.LOCATION.LIBRARY):
-        return self.resolve_ref_one(ref, location)[1]
-
-
-    def find(self, query_command):
-        raise NotImplementedError
-

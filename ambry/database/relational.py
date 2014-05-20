@@ -14,7 +14,7 @@ from contextlib import contextmanager
 import atexit, weakref
 import pdb
 
-logger = get_logger(__name__)
+global_logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
 
 connections = dict()
@@ -28,7 +28,7 @@ def close_connections_at_exit():
         conn = conn_ref()
 
         if conn:
-            logger.debug("Close connection {} at exit: {}. From: {} ".format(id(conn),dsn, where))
+            global_logger.debug("Close connection {} at exit: {}. From: {} ".format(id(conn),dsn, where))
             conn.close()
 
 def close_connection_on_ref(ref):
@@ -94,10 +94,10 @@ class RelationalDatabase(DatabaseInterface):
         pass
 
     def log(self,message):
-        logger.info(message)
+        global_logger.info(message)
     
     def error(self, message):
-        logger.error(message)
+        global_logger.error(message)
 
     def create(self):
 
@@ -259,11 +259,10 @@ class RelationalDatabase(DatabaseInterface):
                                     self.dsn, where)
                 self._on_create_connection(self._connection)
 
-                logger.debug('Create  connection: {} for {}'.format(id(self._connection), self.dsn))
+                global_logger.debug('Create  connection: {} for {}'.format(id(self._connection), self.dsn))
 
             except Exception as e:
                 self.error("Failed to open: '{}': {} ".format(self.dsn, e))
-
                 raise
 
         return weakref.proxy(self._connection, close_connection_on_ref)
@@ -286,10 +285,6 @@ class RelationalDatabase(DatabaseInterface):
 
     def _on_create_engine(self, engine):
         pass
-
-    @property
-    def unmanaged_session(self):
-        return self.session
 
 
     def commit_hook(self, session):
@@ -351,7 +346,7 @@ class RelationalDatabase(DatabaseInterface):
             self.close_session()
 
         if self._connection:
-            logger.debug('Closing connection: {} for {}'.format(id(self._connection), self.dsn))
+            global_logger.debug('Closing connection: {} for {}'.format(id(self._connection), self.dsn))
 
 
             self._connection.close()
@@ -553,7 +548,7 @@ class RelationalBundleDatabaseMixin(object):
         except:
             ds.creator = 'n/a'
 
-        self.unmanaged_session.merge(ds)
+        self.session.merge(ds)
 
     def _post_create(self):
         from ..orm import Config
@@ -583,7 +578,7 @@ class RelationalPartitionDatabaseMixin(object):
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid )
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'partition','vname', self.partition.identity.vname )
         self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'partition','vid', self.partition.identity.vid )
-        self.unmanaged_session.commit()
+        self.session.commit()
 
 
 

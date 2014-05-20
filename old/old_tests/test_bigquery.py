@@ -14,8 +14,8 @@ from ambry.run import RunConfig
 
 from test_base import  TestBase
 
-logger = ambry.util.get_logger(__name__)
-logger.setLevel(logging.DEBUG) 
+global_logger = ambry.util.get_logger(__name__)
+global_logger.setLevel(logging.DEBUG)
 
 class Test(TestBase):
  

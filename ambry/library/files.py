@@ -59,9 +59,24 @@ class Files(object):
         except NoResultFound:
             return None
 
+
+    def order(self, c):
+        '''Return the first record that matched the internal query,
+        with the expectation that there is only one'''
+        self._query = self._query.order_by(c)
+
+        return self
+
     def delete(self):
         '''Delete all of the records in the query'''
-        return self._query.delete()
+
+        if self._query.count() > 0:
+            self._query.delete()
+
+    def update(self,d):
+        '''Delete all of the records in the query'''
+
+        self._query.update(d)
 
     @property
     def query(self):
@@ -151,133 +166,9 @@ class Files(object):
                 self.db.commit()
         except IntegrityError as e:
             self.db.rollback()
+
             s.merge(f)
             self.db.commit()
 
         self.db._mark_update()
-
-
-#============================
-
-def add_remote_file(self, identity):
-    self.add_file(identity.cache_key, 'remote', identity.vid, state='remote')
-
-
-def add_file(self,
-             path,
-             group,
-             ref,
-             state='new',
-             type_='bundle',
-             data=None,
-             source_url=None,
-             hash=None
-):
-    from ambry.orm import File
-
-    assert type_ is not None
-
-    self.merge_file(File(path=path,
-                         group=group,
-                         ref=ref,
-                         state=state,
-                         type_=type_,
-                         data=data,
-                         source_url=source_url,
-                         hash=hash
-    ))
-
-    self._mark_update()
-
-
-def get_file_by_state(self, state, type_=None):
-    """Return all files in the database with the given state"""
-    from ambry.orm import File
-
-    s = self.session
-
-    # The orderby clause should put bundles before partitions, which is
-    # required to install correctly.
-
-    if state == 'all':
-        q = s.query(File).order_by(File.ref)
-    else:
-        q = s.query(File).filter(File.state == state).order_by(File.ref)
-
-    if type_:
-        q = q.filter(File.type_ == type_)
-
-    return q.all()
-
-
-def get_file_by_ref(self, ref, type_=None, state=None):
-    """Return all files in the database with the given state"""
-    from ambry.orm import File
-    from sqlalchemy.orm.exc import NoResultFound
-
-    s = self.session
-
-    try:
-        q = s.query(File).filter(File.ref == ref)
-
-        if type_ is not None:
-            q = q.filter(File.type_ == type_)
-
-        if state is not None:
-            q = q.filter(File.state == state)
-
-        return q.all()
-
-    except NoResultFound:
-        return None
-
-
-def get_file_by_type(self, type_=None):
-    """Return all files in the database with the given state"""
-    from ambry.orm import File
-    from sqlalchemy.orm.exc import NoResultFound
-
-    s = self.session
-
-    try:
-        return s.query(File).filter(File.type_ == type_).all()
-
-    except NoResultFound:
-        return None
-
-
-def get_file_by_path(self, path):
-    """Return all files in the database with the given state"""
-    from ambry.orm import File
-    from sqlalchemy.orm.exc import NoResultFound
-
-    s = self.session
-
-    try:
-        return s.query(File).filter(File.path == path).one()
-
-    except NoResultFound:
-        return None
-
-
-def remove_file(self, ref, type_=None, state=None):
-    from ambry.orm import File
-    from sqlalchemy.orm.exc import NoResultFound
-
-    s = self.session
-
-    try:
-        q = s.query(File).filter(File.ref == ref)
-
-        if type_ is not None:
-            q = q.filter(File.type_ == type_)
-
-        if state is not None:
-            q = q.filter(File.state == state)
-
-        return q.delete()
-
-    except NoResultFound:
-        return None
-
 

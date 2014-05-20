@@ -10,7 +10,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from ambry.util import get_logger
 import logging
 
-logger = get_logger(__name__)
+global_logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
 
 class InserterInterface(object):
@@ -108,19 +108,19 @@ class ValueWriter(InserterInterface):
         
     def rollback(self):
         from ..partitions import Partitions
-        logger.debug("rollback {}".format(repr(self.session)))
+        global_logger.debug("rollback {}".format(repr(self.session)))
         self.session.rollback()
         self.db.partition.set_state(Partitions.STATE.ERROR)
 
     def commit_end(self):
         from ..partitions import Partitions
-        logger.debug("commit end {}".format(repr(self.session)))
+        global_logger.debug("commit end {}".format(repr(self.session)))
         self.session.commit()
         self.db.partition.set_state(Partitions.STATE.BUILT)
 
     def commit_continue(self):
         from ..partitions import Partitions
-        logger.debug("commit continue {}".format(repr(self.session)))
+        global_logger.debug("commit continue {}".format(repr(self.session)))
         self.session.commit()
         self.db.partition.set_state(Partitions.STATE.BUILDING)
 
