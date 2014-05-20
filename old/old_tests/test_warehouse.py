@@ -6,7 +6,7 @@ Created on Jun 30, 2012
 
 import unittest
 import os.path
-from  testbundle.bundle import Bundle
+from  bundles.testbundle.bundle import Bundle
 from ambry.run import  get_runconfig
 import logging
 import ambry.util
@@ -14,8 +14,8 @@ import ambry.util
 
 from test_base import  TestBase
 
-logger = ambry.util.get_logger(__name__)
-logger.setLevel(logging.DEBUG)
+global_logger = ambry.util.get_logger(__name__)
+global_logger.setLevel(logging.DEBUG)
 
 
 class TestLogger(object):
@@ -41,10 +41,10 @@ class TestLogger(object):
 class Test(TestBase):
  
     def setUp(self):
-        import testbundle.bundle
+        import bundles.testbundle.bundle
         from ambry.run import RunConfig
 
-        self.bundle_dir = os.path.dirname(testbundle.bundle.__file__)
+        self.bundle_dir = os.path.dirname( bundles.testbundle.bundle.__file__)
         self.rc = get_runconfig((os.path.join(self.bundle_dir,'warehouse-test-config.yaml'),
                                  os.path.join(self.bundle_dir,'bundle.yaml'),
                                  RunConfig.USER_ACCOUNTS))

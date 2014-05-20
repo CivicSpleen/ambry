@@ -18,8 +18,8 @@ import logging
 import ambry.util
 
 
-logger = ambry.util.get_logger(__name__)
-logger.setLevel(logging.DEBUG) 
+global_logger = ambry.util.get_logger(__name__)
+global_logger.setLevel(logging.DEBUG)
 
 class Test(TestBase):
  

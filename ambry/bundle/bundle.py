@@ -271,7 +271,8 @@ class Bundle(object):
     def _build_info(self):
         from collections import OrderedDict
 
-        process = self.config.process
+        process = self.get_value_group('process')
+
         return OrderedDict(
             created=process.get(
                 'dbcreated',
@@ -332,6 +333,7 @@ class Bundle(object):
 
     def _repr_html_(self):
         out = []
+
         for k, v in self._info().items():
 
             if isinstance(v, dict):
@@ -428,6 +430,7 @@ class DbBundle(Bundle):
     def _info(self, identity=None):
         """Return a nested, ordered dict  of information about the bundle. """
         from collections import OrderedDict
+
         d = super(DbBundle, self)._info(identity)
 
         d['source'] = OrderedDict(

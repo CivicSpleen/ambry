@@ -15,8 +15,8 @@ from ambry.library.query import QueryCommand
 from ambry.library  import new_library
 from ambry.util import rm_rf
 
-logger = ambry.util.get_logger(__name__)
-logger.setLevel(logging.DEBUG) 
+global_logger = ambry.util.get_logger(__name__)
+global_logger.setLevel(logging.DEBUG)
 logging.captureWarnings(True)
 
 class Test(TestBase):
