@@ -20,17 +20,18 @@ def bundle_command(args, rc):
     from ..run import import_file
     from ..dbexceptions import  DependencyError
     from ..library import new_library
-    from . import logger
+    from . import global_logger
     from ..orm import Dataset
 
     l = new_library(rc.library(args.library_name))
-    l.logger = logger
+    l.logger = global_logger
+
 
     if not args.bundle_dir:
         bundle_file = os.path.join(os.getcwd(),'bundle.py')
     else:
         st = l.source
-        ident = l.resolve(args.bundle_dir, location=Dataset.LOCATION.SOURCE)
+        ident = l.resolve(args.bundle_dir)
 
         if ident:
 
@@ -322,7 +323,12 @@ def bundle_info(args, b, st, rc):
 
             process = b.get_value_group('process')
 
-            b.log('Created   : ' + process.get('dbcreated', ''))
+            # Older bundles have the dbcreated values assigned to the root dataset vid ('a0/001')
+            # instead of the bundles dataset vid
+            from ambry.orm import Config
+            root_db_created = b.database.get_config_value(Config.ROOT_CONFIG_NAME_V, 'process', 'dbcreated')
+
+            b.log('Created   : ' + process.get('dbcreated', root_db_created.value))
             b.log('Prepared  : ' + process.get('prepared', ''))
             b.log('Built     : ' + process.get('built', ''))
 

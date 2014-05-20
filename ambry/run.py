@@ -9,8 +9,8 @@ from ambry.util import AttrDict
 from ambry.util import lru_cache
 
 @lru_cache()
-def get_runconfig(path=None,  is_server=False):
-    return RunConfig(path, is_server)
+def get_runconfig(path=None):
+    return RunConfig(path)
 
 class RunConfig(object):
     '''Runtime configuration object 
@@ -36,7 +36,7 @@ class RunConfig(object):
     config = None
     files = None
 
-    def __init__(self, path=None, is_server = False):
+    def __init__(self, path=None):
         '''Create a new RunConfig object
         
         Arguments
@@ -48,16 +48,18 @@ class RunConfig(object):
         config = AttrDict()
         config['loaded'] = []
 
-    
+        if not path:
+            pass
+
+
         if isinstance(path, (list, tuple, set)):
             files = path
         else:
             files = [
                           RunConfig.ROOT_CONFIG,
-                          RunConfig.USER_CONFIG,
+                          path if path else RunConfig.USER_CONFIG,
                           RunConfig.USER_ACCOUNTS,
-                          RunConfig.DIR_CONFIG, 
-                          path]
+                          RunConfig.DIR_CONFIG]
 
         loaded = False
 
@@ -125,8 +127,7 @@ class RunConfig(object):
             for k,v in values:
                 
                 if v is None:
-                    import pprint
-                    pprint.pprint(e.to_dict())
+
                     raise Exception('Got None value: {} {} {} {} '.format(path, subdicts, k, v))
                 
                 path_parts = path.split('/')

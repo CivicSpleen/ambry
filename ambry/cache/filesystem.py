@@ -9,7 +9,7 @@ from ..util import copy_file_or_flo, get_logger
 
 from ..identity import Identity
 
-logger = get_logger(__name__)
+global_logger = get_logger(__name__)
 
 def make_metadata(file_name):
     from ambry.util import md5_for_file
@@ -144,7 +144,7 @@ class FsCache(Cache):
         '''
         import shutil
 
-        logger.debug("FC {} get looking for {}".format(self.repo_id,rel_path)) 
+        global_logger.debug("FC {} get looking for {}".format(self.repo_id,rel_path))
                
         path = os.path.join(self.cache_dir, rel_path)
       
@@ -154,7 +154,7 @@ class FsCache(Cache):
             if not os.path.isfile(path):
                 raise ValueError("Path does not point to a file")
             
-            logger.debug("FC {} get {} found ".format(self.repo_id, path))
+            global_logger.debug("FC {} get {} found ".format(self.repo_id, path))
             return path
             
         if not self.upstream:
@@ -164,7 +164,7 @@ class FsCache(Cache):
         stream = self.upstream.get_stream(rel_path, cb=cb)
         
         if not stream:
-            logger.debug("FC {} get not found in upstream ()".format(self.repo_id,rel_path)) 
+            global_logger.debug("FC {} get not found in upstream ()".format(self.repo_id,rel_path))
             return None
         
         # Got a stream from upstream, so put the file in this cache. 
@@ -188,7 +188,7 @@ class FsCache(Cache):
         if not os.path.exists(path):
             raise Exception("Failed to copy upstream data to {} ".format(path))
         
-        logger.debug("FC {} got return from upstream {}".format(self.repo_id,rel_path)) 
+        global_logger.debug("FC {} got return from upstream {}".format(self.repo_id,rel_path))
         return path
 
     def get_stream(self, rel_path, cb=None):
@@ -319,7 +319,7 @@ class FsCache(Cache):
     def clean(self):
         from ..util import rm_rf
         
-        logger.info("Purging: {} ".format(self.cache_dir))
+        global_logger.info("Purging: {} ".format(self.cache_dir))
         rm_rf(self.cache_dir)
 
         if self.upstream:
@@ -460,7 +460,7 @@ class FsLimitedCache(FsCache):
   
         for rel_path in removes:
             if rel_path != this_rel_path:
-                logger.debug("Deleting {}".format(rel_path)) 
+                global_logger.debug("Deleting {}".format(rel_path))
                 self.remove(rel_path)
             
     def add_record(self, rel_path, size):
@@ -528,7 +528,7 @@ class FsLimitedCache(FsCache):
         import shutil
         from ambry.util import bundle_file_type
 
-        logger.debug("LC {} get looking for {}".format(self.repo_id,rel_path)) 
+        global_logger.debug("LC {} get looking for {}".format(self.repo_id,rel_path))
                
         path = os.path.join(self.cache_dir, rel_path)
 
@@ -538,7 +538,7 @@ class FsLimitedCache(FsCache):
             if not os.path.isfile(path):
                 raise ValueError("Path does not point to a file")
             
-            logger.debug("LC {} get {} found ".format(self.repo_id, path))
+            global_logger.debug("LC {} get {} found ".format(self.repo_id, path))
             return path
             
         if not self.upstream:
@@ -549,7 +549,7 @@ class FsLimitedCache(FsCache):
         stream = self.upstream.get_stream(rel_path, cb=cb)
         
         if not stream:
-            logger.debug("LC {} get not found in upstream ()".format(self.repo_id,rel_path)) 
+            global_logger.debug("LC {} get not found in upstream ()".format(self.repo_id,rel_path))
             return None
         
         # Got a stream from upstream, so put the file in this cache. 
@@ -572,7 +572,7 @@ class FsLimitedCache(FsCache):
         if not os.path.exists(path):
             raise Exception("Failed to copy upstream data to {} ".format(path))
         
-        logger.debug("LC {} got return from upstream {} -> {} ".format(self.repo_id,rel_path, path)) 
+        global_logger.debug("LC {} got return from upstream {} -> {} ".format(self.repo_id,rel_path, path))
         return path
 
 
@@ -791,10 +791,10 @@ class FsCompressionCache(Cache):
             return None
 
         if bundle_file_type(source) == 'gzip':
-            logger.debug("CC returning {} with decompression".format(rel_path))
+            global_logger.debug("CC returning {} with decompression".format(rel_path))
             return MetadataFlo(gzip.GzipFile(fileobj=source), source.meta)
         else:
-            logger.debug("CC returning {} with passthrough".format(rel_path))
+            global_logger.debug("CC returning {} with passthrough".format(rel_path))
             return source
 
     def get(self, rel_path, cb=None):
@@ -871,12 +871,21 @@ class FsCompressionCache(Cache):
 
     def list(self, path=None,with_metadata=False, include_partitions=False):
         '''get a list of all of the files in the repository'''
-        return self.upstream.list(path,with_metadata=with_metadata, include_partitions=include_partitions)
+        l =  self.upstream.list(path,with_metadata=with_metadata, include_partitions=include_partitions)
 
-    def store_list(self, metadata_map = None, cb=None):
+
+        lp = {}
+        for k,v in l.items():
+            lp[k.replace('.gz','')] = v
+
+
+        return lp
+
+
+    def store_list(self,  cb=None):
         """List the cache and store it as metadata. This allows for getting the list from HTTP caches
         and other types where it is not possible to traverse the tree"""
-        return self.upstream.store_list(metadata_map = None, cb=cb)
+        return self.upstream.store_list( cb=cb)
 
     def has(self, rel_path, md5=None, propagate=True):
         

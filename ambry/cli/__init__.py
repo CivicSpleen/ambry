@@ -15,23 +15,27 @@ from ..util import get_logger
 import argparse
 
 
-logger = None # Set in main()
+# The Bundle's get_runconfig ( in Bundle:config ) will use this if it is set. It gets set
+# by the CLI when the user assigns a specific configuration to use instead of the defaults.
+global_run_config = None
+
+global_logger = None # Set in main()
 
 def prt(template, *args, **kwargs):
-    global logger
-    logger.info(template.format(*args, **kwargs))
+    global global_logger
+    global_logger.info(template.format(*args, **kwargs))
 
 def err(template, *args, **kwargs):
     import sys
-    global logger
+    global global_logger
     
-    logger.error("ERROR: "+template.format(*args, **kwargs))
+    global_logger.error("ERROR: "+template.format(*args, **kwargs))
 
 def fatal(template, *args, **kwargs):
     import sys
-    global logger
+    global global_logger
 
-    logger.error("FATAL: "+template.format(*args, **kwargs))
+    global_logger.error("FATAL: "+template.format(*args, **kwargs))
     sys.exit(1)
 
 def warn(template, *args, **kwargs):
@@ -39,7 +43,7 @@ def warn(template, *args, **kwargs):
     global command
     global subcommand
     
-    logger.warning("WARN: "+template.format(*args, **kwargs))
+    global_logger.warning("WARN: "+template.format(*args, **kwargs))
 
 def load_bundle(bundle_dir):
     from ambry.run import import_file
@@ -212,6 +216,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
         ('order', '{:6s}', '{:6s}', lambda ident: "{major:02d}:{minor:02d}".format(**ident.data['order']
                                     if 'order' in ident.data else {'major':-1,'minor':-1})),
         ('locations','{:6s}',  '{:6s}',       lambda ident: ident.locations),
+        ('pcount', '{:5s}', '{:5s}', lambda ident: str(len(ident.partitions)) if ident.partitions else ''),
         ('vid',      '{:15s}', '{:20s}',      lambda ident: ident.vid),
         ('time', '{:20s}', '{:20s}',          lambda ident: datetime.fromtimestamp(ident.data['time']).isoformat() if 'time' in ident.data else ''),
         ('status',   '{:20s}', '{:20s}',      lambda ident: ident.bundle_state if ident.bundle_state else ''),
@@ -409,7 +414,7 @@ def main(argsv = None, ext_logger=None):
             rc_path = args.config.pop()
     else:
         rc_path = args.config
-  
+
     funcs = {
         'bundle':bundle_command,
         'library':library_command,
@@ -431,17 +436,20 @@ def main(argsv = None, ext_logger=None):
     else:
         rc = get_runconfig(rc_path)
 
+        global global_run_config
+        global_run_config = rc
 
-    global logger
+
+    global global_logger
 
 
     if ext_logger:
-        logger = ext_logger
+        global_logger = ext_logger
     else:
-        logger = get_logger("{}.{}".format(args.command, args.subcommand),
+        global_logger = get_logger("{}.{}".format(args.command, args.subcommand),
                             template="%(message)s")
 
-    logger.setLevel(logging.INFO)
+    global_logger.setLevel(logging.INFO)
 
     if not f:
         fatal("Error: No command: "+args.command)

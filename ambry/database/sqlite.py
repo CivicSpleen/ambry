@@ -11,7 +11,7 @@ from ambry.util import get_logger
 
 import logging
 
-logger = get_logger(__name__)
+global_logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG)
 
 class SqliteAttachmentMixin(object):
@@ -200,7 +200,7 @@ class SqliteDatabase(RelationalDatabase):
 
         if self._lock:
             tb = traceback.extract_stack()[-5:-4][0]
-            logger.debug("Already has bundle lock from {}:{}".format( tb[0], tb[1]))
+            global_logger.debug("Already has bundle lock from {}:{}".format( tb[0], tb[1]))
             return
 
         self._lock = FileLock(self.lock_path)
@@ -209,10 +209,10 @@ class SqliteDatabase(RelationalDatabase):
             try:
                 tb = traceback.extract_stack()[-5:-4][0]
                 self._lock.acquire(-1)
-                logger.debug("Acquired bundle lock from {}:{}".format(tb[0], tb[1]))
+                global_logger.debug("Acquired bundle lock from {}:{}".format(tb[0], tb[1]))
                 return
             except AlreadyLocked as e:
-                logger.debug("Waiting for bundle lock")
+                global_logger.debug("Waiting for bundle lock")
                 time.sleep(1)
 
         raise LockedFailed("Failed to acquire lock on {}".format(self.lock_path))
@@ -220,7 +220,7 @@ class SqliteDatabase(RelationalDatabase):
 
     def unlock(self):
         '''Release the external lock on the external database'''
-        logger.debug("Released bundle lock")
+        global_logger.debug("Released bundle lock")
         if self._lock is not None:
             self._lock.release()
             self._lock = None
@@ -274,11 +274,16 @@ class SqliteDatabase(RelationalDatabase):
         """Need to ensure the database exists before calling for the connection, but the
         connection expects the database to exist first, so we create it here. """
         
-        from sqlalchemy import create_engine  
+        from sqlalchemy import create_engine
 
         engine = create_engine(self.dsn, echo=False)
         connection = engine.connect()
-        connection.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
+        try:
+            connection.execute("PRAGMA user_version = {}".format(self.SCHEMA_VERSION))
+        except Exception as e:
+            e.args  = ("Failed to open database {}".format(self.dsn),)
+            raise e
+
         connection.close()
         engine.dispose()
 
@@ -410,7 +415,7 @@ class BundleLockContext(object):
 
         tb = traceback.extract_stack()[-4:-3][0]
 
-        logger.debug("Using Session Context, from {} in {}:{}".format(tb[2], tb[0], tb[1]))
+        global_logger.debug("Using Session Context, from {} in {}:{}".format(tb[2], tb[0], tb[1]))
         
         self._lock_depth = 0
 
@@ -423,7 +428,7 @@ class BundleLockContext(object):
         #if self._lock_depth == 0:
         #    self._database.lock()
 
-        logger.debug("Enter session with depth {}".format(repr(self._lock_depth)))
+        global_logger.debug("Enter session with depth {}".format(repr(self._lock_depth)))
 
         self._lock_depth += 1
 
@@ -435,7 +440,7 @@ class BundleLockContext(object):
         self._lock_depth -= 1
 
         if  exc_type is not None:
-            logger.debug("Rollback on exception: {}".format(exc_val))
+            global_logger.debug("Rollback on exception: {}".format(exc_val))
             self._database.session.rollback()
             self._database.close_session()
             #self._database.unlock()
@@ -445,20 +450,20 @@ class BundleLockContext(object):
 
             try:
                 if self._lock_depth == 0:
-                    logger.debug("Commit session {}".format(repr(self._database.session)))
+                    global_logger.debug("Commit session {}".format(repr(self._database.session)))
                     self._database.session.commit()
                 else:
-                    logger.debug("Exit session with depth {}".format(self._lock_depth))
+                    global_logger.debug("Exit session with depth {}".format(self._lock_depth))
 
             except Exception as e:
-                logger.debug('Exception: ' + e.message)
+                global_logger.debug('Exception: ' + e.message)
                 self._database.session.rollback()
                 #self._database.unlock()
                 raise
 
             finally:
                 if self._lock_depth == 0:
-                    logger.debug("Release session {}".format(repr(self._database.session)))
+                    global_logger.debug("Release session {}".format(repr(self._database.session)))
 
                     self._database.close_session()
                     #self._database.unlock()

@@ -111,25 +111,9 @@ def remote_find(args, l, config):
     return _find(args, l, config, True)
 
 def remote_fix(args, l, rc):
-
+    from sqlalchemy.orm.exc import NoResultFound
     if args.stored_list:
         prt('Fix stored list on remotes')
-
-
-    d = {}
-    for k,v in  l.list().items():
-        print k,v
-        file_ = l.files.query.installed.ref(v.vid).one
-
-        d[v.cache_key] = v.to_meta(file=file_.path)
-
-
-
-
-    import pprint
-    pprint.pprint(d)
-
-    return
 
     for remote in l.remotes:
         prt("  {}".format(remote.repo_id))
@@ -139,9 +123,30 @@ def remote_fix(args, l, rc):
 
         remote.store_list()
 
-    file_ = self.files.query.installed.ref(identity.vid).one
+    return
 
-    md = identity.to_meta(file=file_.path)
+
+    d = {}
+    for k,v in  l.list().items():
+        file_ = l.files.query.installed.ref(v.vid).one
+        d[v.cache_key] = v.to_meta(file=file_.path)
+
+        for pvid, pident in v.partitions.items():
+            try:
+                file_ = l.files.query.installed.ref(pident.vid).one
+                meta = pident.to_meta(file=file_.path)
+            except NoResultFound:
+                meta = pident.to_meta(md5='x')
+
+            d[pident.cache_key] = meta
+
+    import pprint
+    pprint.pprint(d)
+
+    return
+
+
+
 
 
 

@@ -14,7 +14,7 @@ import zipfile
 import urllib
 import ambry.util
 
-logger = ambry.util.get_logger(__name__)
+global_logger = ambry.util.get_logger(__name__)
 #import logging; logger.setLevel(logging.DEBUG) 
  
  

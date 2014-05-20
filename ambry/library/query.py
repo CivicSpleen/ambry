@@ -6,7 +6,7 @@ of the bundles that have been installed into it.
 # Revised BSD License, included in this distribution as LICENSE.txt
 
 
-from ambry.orm import Dataset, Partition
+from ambry.orm import Dataset, Partition, File
 from ambry.orm import Table, Column
 from ..identity import Identity, PartitionNumber, DatasetNumber
 
@@ -279,7 +279,6 @@ class Resolver(object):
         self.session = session # a Sqlalchemy connection
 
     def _resolve_ref_orm(self, ref):
-        import semantic_version
 
         ip = Identity.classify(ref)
 
@@ -315,17 +314,18 @@ class Resolver(object):
 
         if dqp is not None:
 
-            for dataset in (self.session.query(Dataset).filter(dqp).order_by(Dataset.revision.desc()).all()):
-                out.append((dataset, None))
+            for row in (self.session.query(Dataset, File)
+                            .outerjoin(File, File.ref == Dataset.vid)
+                            .filter(dqp).order_by(Dataset.revision.desc()).all()):
+                out.append((row.Dataset, None, row.File))
 
         if pqp is not None:
 
-            for row in (self.session.query(Dataset, Partition).join(Partition).filter(pqp)
-                        .order_by(Dataset.revision.desc()).all()):
-                out.append((row.Dataset, row.Partition))
-
-
-
+            for row in (self.session.query(Dataset, Partition, File)
+                                .join(Partition).filter(pqp)
+                                .outerjoin(File, File.ref == Partition.vid)
+                                .order_by(Dataset.revision.desc()).all()):
+                out.append((row.Dataset, row.Partition, row.File))
 
 
         return ip, out
@@ -339,13 +339,20 @@ class Resolver(object):
 
         # Convert the ORM results to identities
         out = OrderedDict()
-        for d,p in results:
+        for d, p, f in results:
 
             if not d.vid in out:
                 out[d.vid] = d.identity
 
+            if f:
+                if not p:
+                    out[d.vid].add_file(f)
+                else:
+                    p.identity.add_file(f)
+
             if p:
                 out[d.vid].add_partition(p.identity)
+
 
         return ip, out
 
@@ -354,15 +361,16 @@ class Resolver(object):
 
         return self._resolve_ref(ref)
 
-    def resolve_ref_one(self, ref):
+    def resolve_ref_one(self, ref, location=None):
         '''Return the "best" result for an object specification
 
         '''
         import semantic_version
 
-
         ip, refs = self._resolve_ref(ref)
 
+        if location:
+            refs = { k:v for k, v in refs.items() if v.locations.has(location) }
 
         if not isinstance(ip.version, semantic_version.Spec):
             return ip, refs.values().pop(0) if refs and len(refs.values()) else None

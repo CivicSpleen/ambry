@@ -7,7 +7,7 @@ import logging #@UnusedImport
 import logging.handlers #@UnusedImport
 from ..util import  get_logger
 
-logger = get_logger(__name__)
+global_logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG) 
 
 class RestReadCache(RemoteInterface):
@@ -172,7 +172,7 @@ class HttpCache( Cache):
             from ..client.exceptions import NotFound
             raise NotFound("Did not find _list.json file at {}".format(self.path('_list.json')))
 
-        return l.json()
+        return { k:{} for k in l.json() }
 
 
 

@@ -12,8 +12,8 @@ from ambry.util import get_logger
 import logging #@UnusedImport
 import logging.handlers #@UnusedImport
 
-logger = get_logger(__name__)
-logger.setLevel(logging.INFO) 
+global_logger = get_logger(__name__)
+global_logger.setLevel(logging.INFO)
 
 class FeatureError(ProcessError):
     pass

@@ -52,8 +52,8 @@ import ambry.client.exceptions as exc
 import ambry.util
 import redis
 
-logger = ambry.util.get_logger(__name__)
-logger.setLevel(logging.DEBUG)
+global_logger = ambry.util.get_logger(__name__)
+global_logger.setLevel(logging.DEBUG)
 
 
 
@@ -292,7 +292,7 @@ def get_next(redis):
         redis.set(next_key, nxt)
         redis.set(delay_key, delay)
 
-    logger.info("ip={} ok={} since={} nxt={} delay={} wait={} safe={}"
+    global_logger.info("ip={} ok={} since={} nxt={} delay={} wait={} safe={}"
                     .format(ip, ok, since, nxt, delay, wait, safe))
 
     if ok:

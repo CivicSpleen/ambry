@@ -227,7 +227,7 @@ class Name(object):
         Excludes the revision'''
         # Need to do this to ensure the function produces the
         # bundle path when called from subclasses
-        names = [k for k, _, _ in Name._name_parts]
+        names = [k for k, _, _ in self._name_parts]
 
         parts = []
 
@@ -414,6 +414,10 @@ class PartitionName(PartialPartitionName, Name):
             raise TypeError("Path failed for partition {}: {}".format(self.name, e.message))
 
     @property
+    def source_path(self):
+        raise NotImplemented("PartitionNames don't have source paths")
+
+    @property
     def sub_path(self):
         '''The path of the partition source, excluding the bundle path parts.
          Includes the revision. '''
@@ -460,7 +464,6 @@ class PartitionName(PartialPartitionName, Name):
         d['name'] = self.name
 
         return d
-
 
 
 class PartialMixin(object):
@@ -968,17 +971,24 @@ class LocationRef(object):
 class Locations(object):
 
     order = [
-        LocationRef.LOCATION.SREPO,
-        LocationRef.LOCATION.SOURCE,
         LocationRef.LOCATION.LIBRARY,
+        LocationRef.LOCATION.SOURCE,
         LocationRef.LOCATION.REMOTE,
+        LocationRef.LOCATION.SREPO,
         LocationRef.LOCATION.UPSTREAM,
         LocationRef.LOCATION.WAREHOUSE
 
     ]
 
+    # Deprecated, Use has()
     def is_in(self, location):
         return location in self.codes
+
+    def has(self, location):
+        if isinstance(location,  basestring ) and len(location) == 1:
+            return location in self.codes
+        else:
+            return any([l in self.codes for l in location])
 
     def __init__(self, ident=None):
         self.ident = ident
@@ -1024,6 +1034,7 @@ class Identity(object):
     # Extra data for the library and remotes
     locations = None
     partitions = None
+    files = None
     urls = None # Url dict, from a remote library.
     url = None # Url of remote where object should be retrieved
     bundle = None # A bundle if it is created during the identity listing process.
@@ -1302,6 +1313,13 @@ class Identity(object):
 
         return self._name.path
 
+    @property
+    def source_path(self):
+        '''The path of the bundle source. Includes the revision. '''
+
+        self.is_valid()
+        return self._name.source_path
+
     # Call other values on the name
     def __getattr__(self, name):
         if hasattr(self._name, name):
@@ -1379,6 +1397,15 @@ class Identity(object):
 
         self.partitions[p.vid] = p
 
+    def add_file(self, f):
+        '''Add a partition identity as a child of a dataset identity'''
+
+        if not self.files:
+            self.files = set()
+
+        self.files.add(f)
+
+        self.locations.set(f.type_)
 
 
     @property

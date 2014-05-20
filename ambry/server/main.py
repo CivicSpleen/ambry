@@ -17,8 +17,8 @@ import os
 
 import ambry.client.exceptions as exc
 
-logger = ambry.util.get_logger(__name__)
-logger.setLevel(logging.DEBUG)
+global_logger = ambry.util.get_logger(__name__)
+global_logger.setLevel(logging.DEBUG)
 
 
 
@@ -317,14 +317,14 @@ def _download_redirect(identity, library):
     if library.upstream:
         remote = library.upstream.get_upstream(RemoteMarker)
         if not remote:
-            logger.error("Library remote does not have a proper upstream")
+            global_logger.error("Library remote does not have a proper upstream")
     else:
         remote = None
 
     try:
         return remote.path(identity.cache_key)
     except NotFoundError:
-        logger.warn("Object not found in upstream. Return local URL; {}".format(identity.fqname))
+        global_logger.warn("Object not found in upstream. Return local URL; {}".format(identity.fqname))
 
 
     return redirect("{}/files/{}".format(_host_port(library), identity.cache_key))
@@ -558,12 +558,12 @@ def post_dataset(did,library):
     db_path = library.load(identity.cache_key, identity.md5)
 
     if not db_path:
-        logger.error("Failed to get {} from cache while posting dataset".format(identity.cache_key))
-        logger.error("  cache =  {}".format(library.cache))
-        logger.error("  remote = {}".format(library.upstream))
+        global_logger.error("Failed to get {} from cache while posting dataset".format(identity.cache_key))
+        global_logger.error("  cache =  {}".format(library.cache))
+        global_logger.error("  remote = {}".format(library.upstream))
         raise exc.NotFound("Didn't  get bundle file for cache key {} ".format(identity.cache_key))
 
-    logger.debug("Loading {} for identity {} ".format(db_path, identity))
+    global_logger.debug("Loading {} for identity {} ".format(db_path, identity))
 
     b = library.load(identity.cache_key, identity.md5)
 
@@ -935,7 +935,7 @@ def get_test_close():
     '''Close the server'''
     global stoppable_wsgi_server_run
     if stoppable_wsgi_server_run is not None:
-        logger.debug("SERVER CLOSING")
+        global_logger.debug("SERVER CLOSING")
         stoppable_wsgi_server_run = False
         return True
 
@@ -973,8 +973,8 @@ def test_run(config):
     l = lf()
     l.database.create()
 
-    logger.info("Starting test server on http://{}:{}".format(l.host, l.port))
-    logger.info("Library at: {}".format(l.database.dsn))
+    global_logger.info("Starting test server on http://{}:{}".format(l.host, l.port))
+    global_logger.info("Library at: {}".format(l.database.dsn))
 
     install(LibraryPlugin(lf))
 
@@ -994,7 +994,7 @@ def local_run(config, reloader=False):
     l = lf()
     l.database.create()
 
-    logger.info("starting local server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
+    global_logger.info("starting local server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
 
     install(LibraryPlugin(lf))
 
@@ -1007,7 +1007,7 @@ def local_debug_run(config):
     port = config['port'] if config['port'] else 7979
     host = config['host'] if config['host'] else 'localhost'
 
-    logger.info("starting debug server on http://{}:{}".format(host, port))
+    global_logger.info("starting debug server on http://{}:{}".format(host, port))
 
     lf = lambda: new_library(config, True)
 
@@ -1027,7 +1027,7 @@ def production_run(config, reloader=False):
     l = lf()
     l.database.create()
 
-    logger.info("starting production server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
+    global_logger.info("starting production server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
 
     install(LibraryPlugin(lf))
 

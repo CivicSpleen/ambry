@@ -5,7 +5,7 @@ Created on Jul 6, 2013
 """
 import unittest
 from ambry.identity import *
-from  testbundle.bundle import Bundle
+from  bundles.testbundle.bundle import Bundle
 from test_base import  TestBase
 
 class Test(TestBase):
@@ -174,8 +174,7 @@ class Test(TestBase):
                                   )
 
 
-        self.assertEquals('source.com/dataset-variation-0.0.1/table/time-space/grain-segment',part_name.path)   
-        self.assertEquals('source.com/dataset-variation/table/time-space/grain-segment',part_name.source_path)  
+        self.assertEquals('source.com/dataset-variation-0.0.1/table/time-space/grain-segment',part_name.path)
          
         part_name = PartitionName(time = 'time',
                                   space='space',
@@ -187,8 +186,7 @@ class Test(TestBase):
 
         self.assertEquals('source.com-dataset-variation-table-time-space',part_name.name)
         self.assertEquals('source.com-dataset-variation-table-time-space-0.0.1',part_name.vname)
-        self.assertEquals('source.com/dataset-variation-0.0.1/table/time-space',part_name.path)   
-        self.assertEquals('source.com/dataset-variation/table/time-space',part_name.source_path)   
+        self.assertEquals('source.com/dataset-variation-0.0.1/table/time-space',part_name.path)
 
         part_name = PartitionName(time = 'time',
                                   space='space',
@@ -196,8 +194,7 @@ class Test(TestBase):
                                   **name.dict
                                   )
    
-        self.assertEquals('source.com/dataset-variation-0.0.1/time-space',part_name.path) 
-        self.assertEquals('source.com/dataset-variation/time-space',part_name.source_path) 
+        self.assertEquals('source.com/dataset-variation-0.0.1/time-space',part_name.path)
 
 
         pname = PartialPartitionName(time = 'time',
@@ -286,8 +283,7 @@ class Test(TestBase):
         self.assertEquals('source.com-foobar-orig-time-space-hdf',str(ident.name))
         self.assertEquals('source.com-foobar-orig-time-space-hdf-0.0.1',ident.vname)
         self.assertEquals('source.com-foobar-orig-time-space-hdf-0.0.1~p002Bi084001',ident.fqname)
-        self.assertEquals('source.com/foobar-orig-0.0.1/time-space',ident.path) 
-        self.assertEquals('source.com/foobar-orig/time-space',ident.source_path) 
+        self.assertEquals('source.com/foobar-orig-0.0.1/time-space',ident.path)
         self.assertEquals('source.com/foobar-orig-0.0.1/time-space.hdf',ident.cache_key)
         
         # Updating partition names that were partially specified
@@ -308,7 +304,7 @@ class Test(TestBase):
         ident.locations.set(LocationRef.LOCATION.LIBRARY, 1)
         ident.locations.set(LocationRef.LOCATION.REMOTE, 2)
         ident.locations.set(LocationRef.LOCATION.SOURCE)
-        self.assertEquals(' SLR  ', str(ident.locations))
+        self.assertEquals('LSR   ', str(ident.locations))
 
         # Partitions, converting to datasets
 
@@ -430,8 +426,7 @@ class Test(TestBase):
 
 
     def test_bundle_build(self):
-        from  testbundle.bundle import Bundle
-        from sqlalchemy.exc import IntegrityError
+
         from ambry.dbexceptions import ConflictError
 
         bundle = Bundle()
@@ -491,6 +486,7 @@ class Test(TestBase):
 
         # Start over, use a higher level function to create the partitions
 
+        bundle.close() # Or you'll get an OperationalError
         bundle = Bundle()
         bundle.exit_on_fatal = False
         bundle.clean()
@@ -519,7 +515,7 @@ class Test(TestBase):
 
 
         # Start over, use a higher level function to create the partitions
-
+        bundle.close()
         bundle = Bundle()
         bundle.exit_on_fatal = False
         bundle.clean()
@@ -548,6 +544,7 @@ class Test(TestBase):
 
         # Ok! Build!
 
+        bundle.close()
         bundle = Bundle()
         bundle.exit_on_fatal = False
 

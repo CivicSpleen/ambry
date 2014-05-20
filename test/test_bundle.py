@@ -514,11 +514,9 @@ class Test(TestBase):
 
     def test_session(self):
 
-        from ambry.database.sqlite import logger
         import logging
         import uuid
 
-        logger.setLevel(logging.DEBUG)
 
         b = self.bundle
 
@@ -557,7 +555,7 @@ class Test(TestBase):
 
         #print yaml.dump(md.dict, default_flow_style=False, indent=4, encoding='utf-8')
 
-        self.bundle.update_configuration(use_metadata=True)
+        self.bundle.update_configuration()
 
 
 def suite():

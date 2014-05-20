@@ -46,8 +46,7 @@ def new_warehouse(config, elibrary):
     # This library instance is only for the warehouse database.
     wlibrary = Library(
         cache=NullCache(),
-        database=library_database,
-        upstream=None)
+        database=library_database)
 
     if service == 'sqlite':
         from .sqlite import SqliteWarehouse

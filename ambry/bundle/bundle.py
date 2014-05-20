@@ -84,9 +84,14 @@ class Bundle(object):
             if not os.path.isdir(os.path.dirname(self.log_file)):
                 os.makedirs(os.path.dirname(self.log_file))
 
-            self._logger = get_logger(__name__, template=template, stream= sys.stdout, file_name = self.log_file )
+            from ambry.cli import global_logger
 
-            self._logger.setLevel(self.log_level)
+            if False and  global_logger: # not quite working yet ...
+                self._logger = global_logger
+            else:
+                self._logger = get_logger(__name__, template=template, stream= sys.stdout, file_name = self.log_file )
+
+                self._logger.setLevel(self.log_level)
 
         return self._logger
 
@@ -152,7 +157,9 @@ class Bundle(object):
 
 
 
+
     def get_value(self, group, key, default=None):
+        """Get a config value using the current bundle's configuration group"""
         v = self.database.get_config_value(self.dataset.vid, group, key)
 
         if v is None and default is not None:
@@ -187,7 +194,6 @@ class Bundle(object):
         if self._library:
             l = self._library
         else:
-            print self.config.dump()
             l = new_library(self.config.library(self._library_name))
 
         l.logger = self.logger
@@ -606,7 +612,7 @@ class BuildBundle(Bundle):
         try:
             cache = self.filesystem.get_cache_by_name('build')
             return cache.cache_dir
-        except ConfigurationError:
+        except ConfigurationError as e:
             return self.filesystem.path(self.filesystem.BUILD_DIR)
 
     @property
@@ -652,12 +658,12 @@ class BuildBundle(Bundle):
     def config(self):
         from ..run import get_runconfig
 
-        return  get_runconfig()
+        from ambry.cli import global_run_config
 
-    @property
-    def db_config(self):
-        raise NotImplementedError()
-        return BundleDbConfig(self, self.database)
+        if global_run_config:
+            return global_run_config
+
+        return  get_runconfig()
 
     @property
     def identity(self):
@@ -942,7 +948,8 @@ class BuildBundle(Bundle):
             return False
 
         try:
-            b = self.library.resolve(self.identity.id_)
+            from ..orm import Dataset
+            b = self.library.resolve(self.identity.id_,location = [Dataset.LOCATION.LIBRARY])
 
             if b and b.on.revision >= self.identity.on.revision:
                 self.fatal(
@@ -1059,6 +1066,12 @@ class BuildBundle(Bundle):
 
         with self.session:
             self.set_value('process', 'prepared', datetime.now().isoformat())
+
+            # At this point, we have a dataset vid, which we didn't have when the dbcreated values was
+            # set, so we can reset the value with to get it into the process configuration group.
+            from ambry.orm import Config
+            root_db_created = self.database.get_config_value(Config.ROOT_CONFIG_NAME_V, 'process', 'dbcreated')
+            self.set_value('process', 'dbcreated', root_db_created.value)
 
             self._revise_schema()
             

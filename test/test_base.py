@@ -10,8 +10,8 @@ import time, logging
 import ambry.util
 
 
-logger = ambry.util.get_logger(__name__)
-logger.setLevel(logging.DEBUG) 
+global_logger = ambry.util.get_logger(__name__)
+global_logger.setLevel(logging.DEBUG)
 logging.captureWarnings(True)
 
 class TestBase(unittest.TestCase):
@@ -64,14 +64,14 @@ class TestBase(unittest.TestCase):
         bundle.metadata.write_to_dir()
 
         if not os.path.exists(marker):
-            logger.info( "Build dir marker ({}) is missing".format(marker))
+            global_logger.info( "Build dir marker ({}) is missing".format(marker))
             # There is a good reason to create a seperate instance, 
             # but don't remember what it is ... 
 
             bundle.clean()
             bundle = Bundle()   
             if not os.path.exists(save_dir):
-                logger.info( "Save dir is missing; re-build bundle. ")
+                global_logger.info( "Save dir is missing; re-build bundle. ")
 
                 bundle.pre_prepare()
                 bundle.prepare()
@@ -93,7 +93,7 @@ class TestBase(unittest.TestCase):
                 os.system("rm -rf {1}; rsync -arv {0} {1} > /dev/null ".format(build_dir, save_dir))
 
         # Always copy, just to be safe. 
-        logger.info(  "Copying bundle from {}".format(save_dir))
+        global_logger.info(  "Copying bundle from {}".format(save_dir))
         os.system("rm -rf {0}; rsync -arv {1} {0}  > /dev/null ".format(build_dir, save_dir))
 
 
@@ -117,7 +117,7 @@ class TestBase(unittest.TestCase):
 
         self.server_url = "http://{}".format(config['host'])
         
-        logger.info("Checking server at: {}".format(self.server_url))
+        global_logger.info("Checking server at: {}".format(self.server_url))
 
         a = RemoteLibrary(self.server_url)
 
@@ -130,15 +130,15 @@ class TestBase(unittest.TestCase):
             r = a.get_is_debug()
             
             if r.object:
-                logger.info( 'Already running a debug server')
+                global_logger.info( 'Already running a debug server')
             else:
-                logger.info( 'Already running a non-debug server')
+                global_logger.info( 'Already running a non-debug server')
     
             # We already have a server, so carry on
             return config
         except:
             # We'll get an exception refused eception if there is not server
-            logger.info( 'No server, starting a local debug server')
+            global_logger.info( 'No server, starting a local debug server')
 
 
         server = Thread(target = partial(ambry.server.main.test_run, config) )
@@ -154,7 +154,7 @@ class TestBase(unittest.TestCase):
                 r = a.get_test_echo('start_server')
                 break
             except:
-                logger.info( 'Server not started yet, waiting')
+                global_logger.info( 'Server not started yet, waiting')
                 time.sleep(1)
                                
         r = a.get_test_echo('start_server')
@@ -184,17 +184,17 @@ class TestBase(unittest.TestCase):
             return
   
         if not is_debug:
-            logger.info("Server is not debug, won't stop")
+            global_logger.info("Server is not debug, won't stop")
             return
         else:
-            logger.info("Server at {} is debug, stopping".format(self.server_url))
+            global_logger.info("Server at {} is debug, stopping".format(self.server_url))
        
         # Wait for the server to shutdown
         
         for i in range(1,10): #@UnusedVariable
             try:
                 a.post_close()
-                logger.info('Teardown: server still running, waiting')
+                global_logger.info('Teardown: server still running, waiting')
                 time.sleep(1)
             except socket.error:
                 pass # Just means that the socket is already closed
@@ -203,7 +203,7 @@ class TestBase(unittest.TestCase):
             except ConnectionError:
                 pass # Another way the socket can be closed. Thrown by requests library.
             except Exception as e:
-                logger.error("Got an exception while stopping: {} {}".format(type(e), e))
+                global_logger.error("Got an exception while stopping: {} {}".format(type(e), e))
                 break   
             
         time.sleep(2) # Let the socket clear

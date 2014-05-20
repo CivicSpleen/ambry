@@ -19,11 +19,11 @@ import shutil
 
 def source_command(args, rc):
     from ..library import new_library
-    from . import logger
+    from . import global_logger
 
 
     l = new_library(rc.library(args.name))
-    l.logger = logger
+    l.logger = global_logger
 
     st = l.source
 

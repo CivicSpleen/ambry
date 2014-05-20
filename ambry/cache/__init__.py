@@ -260,7 +260,7 @@ class Cache(CacheInterface):
         
         return None
 
-    def store_list(self, metadata_map = None, cb=None):
+    def store_list(self, cb=None):
         """List the cache and store it as metadata. This allows for getting the list from HTTP caches
         and other types where it is not possible to traverse the tree"""
 
@@ -270,7 +270,11 @@ class Cache(CacheInterface):
 
         d = {}
 
-        for k, v in self.list(with_metadata=(metadata_map is None), include_partitions=True).items():
+        for k, v in self.list().items():
+
+            if 'caches' in v:
+                del v['caches']
+
             d[k] = v
 
         strio = StringIO(json.dumps(d))

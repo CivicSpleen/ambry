@@ -93,7 +93,7 @@ class LibraryDb(object):
             # found. It looks like connections are losing the setting for the search path to the
             # library schema.
             # Disabling connection pooling solves the problem.
-            self._engine = create_engine(self.dsn,echo=False,   poolclass=NullPool)
+            self._engine = create_engine(self.dsn,   poolclass=NullPool)
 
             self._engine.pool._use_threadlocal = True  # Easier than constructing the pool
 
@@ -131,8 +131,8 @@ class LibraryDb(object):
             self._session = self.Session()
             # set the search path
 
-            if self.driver in ('postgres','postgis') and self._schema:
-                self._session.execute("SET search_path TO {}".format(self._schema))
+        if self.driver in ('postgres','postgis') and self._schema:
+            self._session.execute("SET search_path TO {}".format(self._schema))
 
         return self._session
 
@@ -337,6 +337,8 @@ class LibraryDb(object):
         from sqlalchemy.orm.exc import NoResultFound
 
         try:
+
+
             self.session.query(Dataset).filter(Dataset.vid==ROOT_CONFIG_NAME).one()
             self.close_session()
         except NoResultFound:
@@ -810,42 +812,53 @@ class LibraryDb(object):
 
         return  s.query(Table).filter(Table.vid == table_vid).one()
 
-    def list(self, datasets=None,  key='vid'):
+    def list(self, datasets=None, with_partitions = False,  key='vid'):
         """
         :param datasets: If specified, must be a dict, which the internal dataset data will be
         put into.
         :return: vnames of the datasets in the library.
         """
 
-        from ..orm import Dataset, Partition
+        from ..orm import Dataset, Partition, File
         from .files import Files
         from sqlalchemy.sql import or_
 
         if datasets is None:
             datasets = {}
 
-        q1 = (self.session.query(Dataset, Partition).join(Partition)
-                       .filter(Dataset.vid != ROOT_CONFIG_NAME_V))
+        q1 = (self.session.query(Dataset, Partition, File)
+              .join(Partition)
+              .outerjoin(File, File.ref == Partition.vid)
+              .filter(Dataset.vid != ROOT_CONFIG_NAME_V))
 
-        q2 = (self.session.query(Dataset)
+        q2 = (self.session.query(Dataset, File)
+              .outerjoin(File, File.ref == Dataset.vid)
               .filter(Dataset.vid != ROOT_CONFIG_NAME_V))
 
 
-        for d,p in  q1.all():  #(q1.all() + [ (d,None) for d in q2.all()]):
+        entries = [ (d,None,f) for d,f in q2.all()]
+
+        if with_partitions:
+            entries += q1.all()
+
+
+        for d,p,f in entries:
 
             ck = getattr(d.identity, key)
 
+
             if ck not in datasets:
-                dsid = d.identity
-                datasets[ck] = dsid
-            else:
-                dsid = datasets[ck]
+                datasets[ck] = d.identity
 
 
+            if f:
+                if not p:
+                    datasets[ck].add_file(f)
+                else:
+                    p.identity.add_file(f)
 
             if p and ( not datasets[ck].partitions or p.vid not in datasets[ck].partitions):
-                pident = p.identity
-                datasets[ck].add_partition(pident)
+                datasets[ck].add_partition(p.identity)
 
 
         return datasets

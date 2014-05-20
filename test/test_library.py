@@ -14,8 +14,8 @@ import ambry.util
 
 from test_base import  TestBase
 
-logger = ambry.util.get_logger(__name__)
-logger.setLevel(logging.DEBUG) 
+global_logger = ambry.util.get_logger(__name__)
+global_logger.setLevel(logging.DEBUG)
 
 class Test(TestBase):
  
@@ -145,8 +145,8 @@ class Test(TestBase):
 
         r = Resolver(db.session)
 
-
         for ref, vid in tests.items():
+
             ip, results = r.resolve_ref_all(ref)
 
             self.assertEqual(1, len(results))
@@ -372,7 +372,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         c.detach()
         self.assertNotIn('source/dataset-subset-variation-0.0.1.db', c.list())
 
-        l.sync_remotes(clean=True)
+        l.sync_remotes()
 
         b = l.get(self.bundle.identity.vid)
 
@@ -419,7 +419,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         for p in b.partitions:
             bp = l.get(p.identity.vid)
-            print p.identity.vname
+
             self.assertEquals(self.bundle.identity.vname, bp.identity.vname)
             self.assertEquals(p.identity.vname, bp.partition.vname)
 
@@ -523,7 +523,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         db = l.database
 
-        for d in db.list().values():
+        for d in db.list(with_partitions=True).values():
             datasets[d.vid] = d.dict
             datasets[d.vid]['partitions'] = {}
 
@@ -770,7 +770,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         print "Repo Dir: {}".format(repo_dir)
       
         for i in range(0,10):
-            logger.info("Putting "+str(i))
+            global_logger.info("Putting "+str(i))
             cache.put(testfile,'many'+str(i))
         
         self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many1')))   

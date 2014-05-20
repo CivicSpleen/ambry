@@ -39,7 +39,7 @@ from ambry.util import get_logger
 
 import logging #@UnusedImport
 import logging.handlers #@UnusedImport
-logger = get_logger(__name__)
+global_logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG) 
         
 USER_AGENT = "Python-siesta/%s" % __version__
@@ -291,7 +291,7 @@ class Resource(object):
             
         meta = dict([(k, kwargs.pop(k)) for k in kwargs.keys() if k.startswith("__")])
           
-        logger.debug("Requesting {} {}".format(method, url))
+        global_logger.debug("Requesting {} {}".format(method, url))
         self._request(method, url, data, {}, meta)
           
         return self._getresponse()

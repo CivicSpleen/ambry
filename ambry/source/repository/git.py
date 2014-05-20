@@ -14,8 +14,8 @@ from ambry.util import get_logger
 
 import logging
 
-logger = get_logger(__name__)
-logger.setLevel(logging.FATAL)
+global_logger = get_logger(__name__)
+global_logger.setLevel(logging.FATAL)
 
 class GitShellService(object):
     '''Interact with GIT services using the shell commands'''
@@ -106,7 +106,7 @@ class GitShellService(object):
       
             return False
         except ErrorReturnCode_128:
-            logger.error("Needs_commit failed in {}".format(os.getcwd()))
+            global_logger.error("Needs_commit failed in {}".format(os.getcwd()))
             return False
     
     def needs_push(self):
@@ -120,7 +120,7 @@ class GitShellService(object):
             return True
             
         except ErrorReturnCode_128:
-            logger.error("Needs_push failed in {}".format(os.getcwd()))
+            global_logger.error("Needs_push failed in {}".format(os.getcwd()))
             return False
      
     def needs_init(self):

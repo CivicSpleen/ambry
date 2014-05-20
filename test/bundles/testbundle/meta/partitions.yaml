@@ -1,2 +1,6 @@
--   name: source-dataset-subset-variation-tthree
-    table: tthree
+-   name: source-dataset-subset-variation-coding
+    table: coding
+-   name: source-dataset-subset-variation-coding_date_codes
+    table: coding_date_codes
+-   name: source-dataset-subset-variation-coding_integer_codes
+    table: coding_integer_codes

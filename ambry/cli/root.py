@@ -61,11 +61,11 @@ def root_parser(cmd):
 
 def root_command(args, rc):
     from ..library import new_library
-    from . import logger
+    from . import global_logger
 
 
     l = new_library(rc.library(args.library_name))
-    l.logger = logger
+    l.logger = global_logger
 
     st = l.source
 
@@ -83,33 +83,19 @@ def root_list(args, l, st, rc):
         fields = args.fields.split(',')
 
     else:
-        fields = ['locations', 'vid',  'vname']
+        fields = ['locations',  'vid',  'vname']
 
     locations = []
-
-    if args.library:
-        locations.append(Dataset.LOCATION.LIBRARY)
-
-    if args.remote:
-        locations.append(Dataset.LOCATION.REMOTE)
-
-    if args.upstream:
-        locations.append(Dataset.LOCATION.UPSTREAM)
-
-    if args.source:
-        locations.append(Dataset.LOCATION.SOURCE)
-
-
-    if not locations:
-        locations = None # list everything.
-
-    if args.partitions:
-        locations = [Dataset.LOCATION.LIBRARY]
 
 
     key = lambda ident : ident.vname
 
-    idents = sorted(l.list( key='fqname').values(), key=key)
+    if 'pcount' in fields:
+        with_partitions = True
+    else:
+        with_partitions = False
+
+    idents = sorted(l.list(with_partitions=with_partitions).values(), key=key)
 
     if args.term:
         idents = [ ident for ident in idents if args.term in ident.fqname ]
@@ -134,21 +120,17 @@ def root_info(args, l, st, rc):
 
         return
 
-
     ident = l.resolve(args.term)
 
     if not ident:
         fatal("Failed to find record for: {}", args.term)
         return
 
-
     b = l.get(ident.vid)
 
-    if not ident.partition:
+    if b and not ident.partition:
         for p in b.partitions.all:
             ident.add_partition(p.identity)
-
-
 
 
     _print_info(l, ident, list_partitions=args.partitions)

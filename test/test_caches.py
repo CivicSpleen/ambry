@@ -15,8 +15,8 @@ from ambry.library.query import QueryCommand
 from ambry.library  import new_library
 from ambry.util import rm_rf
 
-logger = ambry.util.get_logger(__name__)
-logger.setLevel(logging.DEBUG) 
+global_logger = ambry.util.get_logger(__name__)
+global_logger.setLevel(logging.DEBUG)
 logging.captureWarnings(True)
 
 class Test(TestBase):
@@ -189,6 +189,75 @@ class Test(TestBase):
         l1.verify()
 
 
+        def test_compression(self):
+            from ambry.run import get_runconfig
+            from ambry.cache import new_cache
+            from ambry.util import temp_file_name, md5_for_file, copy_file_or_flo
+
+            rc = get_runconfig((os.path.join(self.bundle_dir, 'test-run-config.yaml'), RunConfig.USER_CONFIG))
+
+            comp_cache = new_cache(rc.filesystem('compressioncache'))
+
+            test_file_name = 'test_file'
+
+            fn = temp_file_name()
+            print 'orig file ', fn
+            with open(fn, 'wb') as f:
+                for i in range(1000):
+                    f.write("{:03d}:".format(i))
+
+            cf = comp_cache.put(fn, test_file_name)
+
+            with open(cf) as stream:
+                from ambry.util.sgzip import GzipFile
+
+                stream = GzipFile(stream)
+
+                uncomp_cache = new_cache(rc.filesystem('fscache'))
+
+                uncomp_stream = uncomp_cache.put_stream('decomp')
+
+                copy_file_or_flo(stream, uncomp_stream)
+
+            uncomp_stream.close()
+
+            dcf = uncomp_cache.get('decomp')
+
+            self.assertEquals(md5_for_file(fn), md5_for_file(dcf))
+
+            os.remove(fn)
+
+        def test_md5(self):
+            from ambry.run import get_runconfig
+            from ambry.cache import new_cache
+            from ambry.util import md5_for_file
+            from ambry.cache.filesystem import make_metadata
+
+            rc = get_runconfig((os.path.join(self.bundle_dir, 'test-run-config.yaml'), RunConfig.USER_CONFIG))
+
+            fn = self.make_test_file()
+
+            md5 = md5_for_file(fn)
+
+            cache = new_cache(rc.filesystem('fscache'))
+
+            cache.put(fn, 'foo1')
+
+            abs_path = cache.path('foo1')
+
+            self.assertEquals(md5, cache.md5('foo1'))
+
+            cache = new_cache(rc.filesystem('compressioncache'))
+
+            cache.put(fn, 'foo2', metadata=make_metadata(fn))
+
+            abs_path = cache.path('foo2')
+
+            self.assertEquals(md5, cache.md5('foo2'))
+
+            os.remove(fn)
+
+
     def test_configed_caches(self):
         '''Basic test of put(), get() and has() for all cache types'''
         from functools import partial
@@ -264,7 +333,7 @@ class Test(TestBase):
         l.purge() # Remove the entries from the library
 
 
-        l.sync_remotes(clean=True, remotes=l.remotes[0:3])
+        l.sync_remotes(remotes=l.remotes[0:3])
 
         r = l.resolve(self.bundle.identity.vid)
 
@@ -392,6 +461,8 @@ class Test(TestBase):
 
         kc = 'source/dataset-subset-variation-0.0.1.db'
 
+        print mc.list()
+
         self.assertIn(kc, mc.list())
 
         # Check that has() propagates
@@ -462,6 +533,7 @@ class Test(TestBase):
         from ambry.cache.remote import HttpCache
 
         c = HttpCache('http://devtest.sandiego')
+
 
 
 def suite():

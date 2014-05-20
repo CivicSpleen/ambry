@@ -3,7 +3,7 @@ from .  import Cache
 from ..util import copy_file_or_flo, get_logger
 import os
 
-logger = get_logger(__name__)
+global_logger = get_logger(__name__)
 
 #logger.setLevel(logging.DEBUG) 
 
@@ -228,17 +228,17 @@ class S3Cache(Cache):
                 while True:
                     mp, part_number, buf = self.queue.get()
                     if mp is None: # Signal to die
-                        logger.debug("put_stream: Thread {} exiting".format(self.n))
+                        global_logger.debug("put_stream: Thread {} exiting".format(self.n))
                         self.queue.task_done()
                         return
-                    logger.debug("put_stream: Thread {}: processing part: {}".format(self.n, part_number))
+                    global_logger.debug("put_stream: Thread {}: processing part: {}".format(self.n, part_number))
                     t1 = time.time()
                     try:
                         mp.upload_part_from_file(buf,part_number  )
                     finally:
                         self.queue.task_done()
                         t2 = time.time()
-                        logger.debug("put_stream: Thread {}, part {}. time = {} rate =  {}b/s"
+                        global_logger.debug("put_stream: Thread {}, part {}. time = {} rate =  {}b/s"
                                      .format(self.n, part_number, round(t2-t1,3), round((float(buf.tell())/(t2-t1)), 2)))
                     
                         
@@ -280,7 +280,7 @@ class S3Cache(Cache):
      
             def _send_buffer(self):
                 '''Schedules a buffer to be sent in a thread by queuing it'''
-                logger.debug("_send_buffer: sending part {} to thread pool size: {}, total_size = {}"
+                global_logger.debug("_send_buffer: sending part {} to thread pool size: {}, total_size = {}"
                              .format(self.part_number, self.buffer.tell(), self.total_size))
                 self.buffer.seek(0)
                 thread_upload_queue.put( (self.mp, self.part_number, self.buffer) )
