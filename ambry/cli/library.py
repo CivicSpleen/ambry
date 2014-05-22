@@ -235,7 +235,6 @@ def library_purge(args, l, config):
       
 def library_rebuild(args, l, config):  
 
-    
     l.database.enable_delete = True
     if args.upstream:
         prt("Rebuild library from remote")
@@ -243,9 +242,7 @@ def library_rebuild(args, l, config):
     else:
         prt("Rebuild library from local storage")
         l.rebuild()
-        
 
- 
 def library_remove(args, l, config):
     from ..dbexceptions import NotFoundError
 
@@ -253,13 +250,12 @@ def library_remove(args, l, config):
 
         ident = l.resolve(name, location=None)
 
-
         if not ident:
             warn("Found no references to term {}".format(name))
             continue
 
         try:
-            b = l.get(name, use_remote = False)
+            b = l.get(name)
 
             if b:
 

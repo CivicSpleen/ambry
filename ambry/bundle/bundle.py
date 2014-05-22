@@ -182,7 +182,7 @@ class Bundle(object):
 
         if not self.database.is_empty():
             with self.session:
-                self.db_config.set_value('rdep', key, ident.dict)
+                self.set_value('rdep', key, ident.dict)
 
     @property
     def library(self):

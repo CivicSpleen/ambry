@@ -17,6 +17,11 @@ class Bunch(object):
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
 
+    @property
+    def dict(self):
+        '''From the top level, return the whole structure as a dict'''
+        return {k: (v.__dict__ if isinstance(v, Bunch) else v) for k, v in self.__dict__.items() if k not in ('as_text',)}
+
 
 class TopBunch(Bunch):
     '''The top bunch'''
@@ -24,7 +29,7 @@ class TopBunch(Bunch):
     @property
     def dict(self):
         '''From the top level, return the whole structure as a dict'''
-        return {k: (v.__dict__ if isinstance(v, Bunch) else v) for k, v in self.__dict__.items()}
+        return {k: (v.__dict__ if isinstance(v, Bunch) else v) for k, v in self.__dict__.items() if k not in ('as_text',)}
 
     @property
     def args(self):
@@ -41,6 +46,11 @@ class TopBunch(Bunch):
             state=self.locality.state,
             zip=self.locality.zip
         )
+
+    def  __str__(self):
+
+        return str(self.dict)
+
 
 
 class ParseError(Exception):

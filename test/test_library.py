@@ -6,7 +6,6 @@ Created on Jun 30, 2012
 import unittest
 import os.path
 from  bundles.testbundle.bundle import Bundle
-from sqlalchemy import * #@UnusedWildImport
 from ambry.run import  get_runconfig, RunConfig
 from ambry.library.query import QueryCommand
 import logging

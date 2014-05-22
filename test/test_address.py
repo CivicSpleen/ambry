@@ -148,8 +148,8 @@ class TestBase(unittest.TestCase):
         failure = 0
         total = 0
         filename = "crime_addresses"
-        f_input =  os.path.join(os.path.dirname(__file__), '../support',filename + '.txt')
-        f_output =  os.path.join(os.path.dirname(__file__), '../support',filename + '.out.csv')
+        f_input =  os.path.join(os.path.dirname(__file__), 'support',filename + '.txt')
+        f_output =  os.path.join(os.path.dirname(__file__), 'support',filename + '.out.csv')
         with open(f_output, 'w') as out:
             writer = csv.DictWriter(out, self.header)
             writer.writeheader()
@@ -171,11 +171,14 @@ class TestBase(unittest.TestCase):
                         failure += 1
                         continue
 
-                    d = ps.as_dict()
+                    print ps
+                    continue
+
+                    d = ps.dict
                     d['input'] = line.strip()
                     d['output'] = str(ps)
-                    writer.writerow(d)
-
+                    #writer.writerow(d)
+                    print d.keys()
                     if not ps.city:
                         failure += 1
                         print d
@@ -188,34 +191,42 @@ class TestBase(unittest.TestCase):
             print 
             print "total={} success={} failure={} rate={}".format(total, success, failure, round((float(failure)/float(total)*100), 3))
 
-        
-    def x_test_errors(self):
+    def test_geocode(self):
+        from ambry.geo.geocoder import Geocoder
         from ambry.geo.address import Parser
-        import imp
+        import csv
+        import ambry
         import os
         import csv
 
-        parser = Parser()
+        l = ambry.library()
 
-        bundle = imp.load_source('bundle', 
-            '/Users/eric/proj/Bundles/src/civicdata/sandiego.gov/sandiego.gov-businesses-orig/bundle.py')
-        b = bundle.Bundle()
+        gp = l.get('clarinova.com-geocode-casnd-geocoder').partition
 
-        p = b.partitions.find(table='businesses', grain='errors')
+        f_intersections = os.path.join(os.path.dirname(__file__), 'support', 'intersections.csv')
 
-        f_output =  os.path.join(os.path.dirname(__file__), '../support','business_addresses.out.csv')
-        with open(f_output, 'w') as out:
-            writer = csv.DictWriter(out, self.header)
-            writer.writeheader()
+        q = """
+        SELECT *
+        FROM geocoder
+        WHERE name = :name AND  direction = :direction AND suffix = suffix
+        """
 
-            for row in p.query("SELECT * FROM businesses"):
-    
-                ps = parser.parse(row['address'])
-    
-                d = ps.as_dict()
-                d['input'] = row['address'].strip()
-                d['output'] = str(ps)
-                writer.writerow(d)
+        p = Parser()
+
+        with open(f_intersections) as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                ps =  p.parse('1000 '+r['primary_rd'])
+                print ps.road.dict
+
+                for qr in gp.query(q,**ps.road.dict):
+                    print "    ", qr
+
+
+
+
+
+
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

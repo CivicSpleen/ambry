@@ -56,12 +56,12 @@ class SourceTerm(DictTerm):
     description = ScalarTerm(store_none=False)
 
 class Sources(TypedDictGroup):
-    """Names that are generated from the identity"""
+    """References to source URLS"""
     _proto = SourceTerm()
 
 
 class Dependencies(VarDictGroup):
-    """Names that are generated from the identity"""
+    """Bundle dependencies"""
 
 class Build(VarDictGroup):
     """Build parameters"""
@@ -76,7 +76,7 @@ class ExtDocTerm(DictTerm):
     description = ScalarTerm()
     source = ScalarTerm()
 
-class ExtDoc(ListGroup):
+class ExtDoc(TypedDictGroup):
     """External Documentation"""
     _proto = ExtDocTerm() # Reusing
 
@@ -94,6 +94,8 @@ class Top(Metadata):
 
     _non_term_file = 'meta/build.yaml'
 
+
+    # Old synonyms, for converting old file, save in case we need it again, ans an an example of use.
     _x_synonyms = {
         'about.maintainer': 'contact_bundle.maintainer.name',
         'about.maintainer_email': 'contact_bundle.maintainer.email',

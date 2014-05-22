@@ -535,14 +535,9 @@ class Library(object):
         if not self.bundle:
             raise ConfigurationError("Can't use the dep() method for a library that is not attached to a bundle");
 
-        group = self.bundle.config.group('build')
-
         errors = 0
 
-        try:
-            deps = group.get('dependencies')
-        except AttributeError:
-            deps = None
+        deps = self.bundle.metadata.dependencies
 
         if not deps:
             return {}

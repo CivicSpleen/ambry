@@ -1223,7 +1223,7 @@ class {name}(Base):
         '''
         from collections import defaultdict, OrderedDict
         from sqlalchemy.engine import RowProxy
-        
+
         if memo is None :
             memo = {'fields' : None, 'name_index': {}}
             
@@ -1360,7 +1360,7 @@ class {name}(Base):
                 if name == 'id':
                     self.add_column(table, 'id', datatype='integer', is_primary_key=True)
 
-                self.add_column(table, d['name'], datatype='integer')
+                self.add_column(table, d['name'], datatype='integer', data=dict(header=name))
 
             index = memo['name_index'] if len(memo['name_index']) > 0 else None
             fields = memo['fields']
@@ -1374,28 +1374,40 @@ class {name}(Base):
                     try:
                         i = index[c.name]
                     except KeyError:
-                        # Can happen when new columsn are added during
+                        # Can happen when new columns are added during
                         # run, like code columns
                         continue
 
                 c.size = fields[i]['length'] if fields[i]['prob-type'] == str else None
                 c.datatype = type_map[fields[i]['prob-type']]
                 c.default = '-' if fields[i]['prob-type'] == str  else -1
+
                 s.merge(c)
  
-    def update(self, table_name, itr, logger=None):
+    def update(self, table_name, itr, header=None, logger=None):
         '''Update the schema from an iterator that returns rows. This
         will create a new table with rows that have datatype intuited from the values. '''
         
         memo = None
-        
+
+        i = 0
         for row in itr:
-            memo = self.intuit(row, memo)
+            i+= 1
+            try:
+                memo = self.intuit(row, memo)
+            except Exception as e:
+                self.bundle.error("Error updating row {} of {}: {}".format(i, table_name, e))
+                continue
 
             if logger:
                 logger()
 
         memo = self.intuit(None, memo)
+
+        if header:
+            for i, name in enumerate(header):
+                memo['name_index'][name] = i
+                memo['fields'][i]['name'] = name
 
         self._update_from_memo(table_name, memo)
 
@@ -1403,6 +1415,28 @@ class {name}(Base):
             self.as_csv(f)        
 
         return memo
+
+    def update_csv(self, table_name, file_name, n=500, logger=None):
+        """Create a new table, or update an old one, from a CSV file. The CSV file must have a header. """
+        from collections import OrderedDict
+
+        import csv
+
+        # Get just the header row, so we can se the correct order of columns
+        with open(file_name) as f:
+            reader = csv.reader(f)
+            header = reader.next()
+
+            def itr():
+                for i, row in enumerate(reader):
+                    if i > n:
+                        break
+
+                    yield row
+
+            return self.update(table_name, itr(), header=header)
+
+
 
     def add_code_table(self, source_table_name, source_column_name):
         '''Add a table to the schema for codes. The codes are integers that are associated 

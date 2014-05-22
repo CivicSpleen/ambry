@@ -323,7 +323,7 @@ class SqlitePartition(PartitionBase):
         '''Add a view specified in the configuration in the views.<viewname> dict. '''
         from ..dbexceptions import ConfigurationError
 
-        vd = self.bundle.config.get('views',{}).get(view_name,None)
+        vd = self.bundle.metadata.views.get(view_name,None)
 
         if not vd:
             raise ConfigurationError("Didn't file requested view in the configuration. "
