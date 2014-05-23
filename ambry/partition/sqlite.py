@@ -161,7 +161,48 @@ class SqlitePartition(PartitionBase):
             return max
         
         return rows_per_seg
-        
+
+    def finalize(self):
+        self.write_stats()
+        self.write_file()
+
+    def write_file(self):
+        """Create a file entry in the bundle for the partition, storing the md5 checksum and size. """
+
+        import os
+        from ..orm import File
+        from ..util import md5_for_file
+        from sqlalchemy.exc import IntegrityError
+
+        self.database.close()
+
+        statinfo = os.stat(self.database.path)
+
+
+
+        f = File(path=self.identity.cache_key,
+                 group='partition',
+                 ref=self.identity.vid,
+                 state='built',
+                 type_='P',
+                 hash=md5_for_file(self.database.path),
+                 size=statinfo.st_size)
+
+        with self.bundle.session as s:
+
+            s.query(File).filter(File.path==self.identity.cache_key).delete()
+
+            try:
+                s.add(f)
+                s.commit()
+            except IntegrityError:
+                s.rollback()
+                s.merge(f)
+                s.commit()
+
+
+
+
 
     def csvize(self, logger=None, store_library=False, write_header=False, rows_per_seg=None):
         '''Convert this partition to CSV files that are linked to the partition'''

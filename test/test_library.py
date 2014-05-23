@@ -841,6 +841,15 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         print l.files.query.path('path3').first
 
+    def test_ilibrary(self):
+
+        import ambry
+
+        l = ambry.ilibrary()
+        print l.find(name="clarinova.com")
+
+
+
 
 
 def suite():

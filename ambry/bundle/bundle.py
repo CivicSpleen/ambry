@@ -1173,7 +1173,7 @@ class BuildBundle(Bundle):
                 self.filesystem.path('meta', self.SCHEMA_FILE)
             )
 
-        self.post_build_write_stats()
+        self.post_build_finalize()
 
         self.post_build_write_partitions()
 
@@ -1184,7 +1184,7 @@ class BuildBundle(Bundle):
 
         return True
 
-    def post_build_write_stats(self):
+    def post_build_finalize(self):
         from sqlalchemy.exc import OperationalError
 
         # Create stat entries for all of the partitions.
@@ -1192,18 +1192,13 @@ class BuildBundle(Bundle):
             try:
                 from ..partition.sqlite import SqlitePartition
                 from ..partition.geo import GeoPartition
-                self.log("Writting stats for: {}".format(p.identity.name))
-                if isinstance(p, (SqlitePartition, GeoPartition)):
-                    self.log("Writting stats for: {}".format(p.identity.name))
-                    p.write_stats()
-                else:
-                    self.log(
-                        "Skipping stats for non db partition: {}".format(
-                            p.identity.name))
+                self.log("Finalizing partition: {}".format(p.identity.name))
+
+                p.finalize()
 
             except NotImplementedError:
                 self.log(
-                    "Can't write stats (unimplemented) for partition: {}".format(
+                    "Can't finalize (unimplemented) for partition: {}".format(
                         p.identity.name))
             except ConfigurationError as e:
                 self.error(e.message)

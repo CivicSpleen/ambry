@@ -161,8 +161,11 @@ class PartitionInterface(object):
     def updater(self, table_or_name=None, **kwargs):
         raise NotImplementedError()
 
-    def write_stats(self, min_key, max_key, count):
+    def write_stats(self, min_key=None, max_key=None, count=None):
         raise NotImplementedError()
+
+    def finalize(self):
+        """Wrap up the creation of this partition"""
 
 
 class PartitionBase(PartitionInterface):

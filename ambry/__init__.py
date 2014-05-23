@@ -23,9 +23,6 @@ from ambry.util import memoize
 import ambry.library as _l
 from ambry.bundle import new_analysis_bundle
 
-
-
-
 @memoize
 def config():
     '''Return the default run_config object for this installation'''

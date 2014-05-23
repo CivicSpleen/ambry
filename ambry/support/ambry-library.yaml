@@ -1,15 +1,11 @@
 
 library:
     default:
-        port: 80
         host: localhost
         filesystem: default
         database: default
-        upstream:
-            options: [compress]
-            bucket: s3-bucket-name
-            prefix: library
-            account: s3-bucket-name
+        remotes:
+        - 's3://devtest.sandiegodata.org/s3-remote#compress'
 
 database:
     default:

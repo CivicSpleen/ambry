@@ -5,7 +5,7 @@ library:
         database: default
         source: '{root}/source'
         remotes:
-        - 'http://library.clarinova.com'
+        - 'http://s3.sandiegodata.org/library#compress'
 
     server:
         port: 7979

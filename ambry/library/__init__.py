@@ -945,15 +945,17 @@ class AnalysisLibrary(Library):
             elif name:
                 command_string = "identity.name like {}".format(name)
 
-
         qc = QueryCommand.parse(command_string)
+
+        if len(qc.to_dict().items()) < 1:
+            raise ValueError("Malformed find command")
 
         vids = set()
         for entry in self.l.find(qc):
             vids.add(entry['identity']['vid'])
 
         for vid in vids:
-            ident = self.l.resolve(vid, None)
+            ident = self.l.resolve(vid)
             idents.append(ident)
 
         return IdentitySet(idents, fields=fields)
