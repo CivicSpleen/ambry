@@ -1,20 +1,20 @@
 PyYAML
 SQLAlchemy
-simplejson
 boto
 requests
+markdown
+decorator
+simplejson
 unicodecsv
 lockfile
 sh
 petl
-markdown
 psycopg2
 semantic_version
 numpy
-#gdal
+gdal
 pandas
 # These are for the server
-decorator
 paste
 bottle
 ## This pysqlite clone enables load_extension. Only needed on Linux. It is added
