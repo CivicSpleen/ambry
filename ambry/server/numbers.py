@@ -50,7 +50,7 @@ import logging
 
 import ambry.client.exceptions as exc
 import ambry.util
-import redis
+
 
 global_logger = ambry.util.get_logger(__name__)
 global_logger.setLevel(logging.DEBUG)
@@ -87,6 +87,7 @@ class RedisPlugin(object):
 
     def apply(self, callback, context):
         import inspect
+        import redis as rds
 
         # Override global configuration with route-specific values.
         conf = context['config'].get('redis') or {}
@@ -101,7 +102,7 @@ class RedisPlugin(object):
 
         def wrapper(*args, **kwargs):
 
-            kwargs[keyword] = redis.Redis(connection_pool=self.pool)
+            kwargs[keyword] = rds.Redis(connection_pool=self.pool)
 
             rv = callback(*args, **kwargs)
 
@@ -242,7 +243,7 @@ def request_delay(nxt,delay,delay_factor):
 
 @get('/next')
 @CaptureException
-def get_next(redis):
+def get_next(redis, assignment_class=None):
     from time import time
     from ambry.identity import DatasetNumber
 
@@ -263,7 +264,6 @@ def get_next(redis):
     #
     access_key = request.query.access_key
 
-    assignment_class = None
     if access_key:
         assignment_class_key = "assignment_class:"+access_key
         assignment_class = redis.get(assignment_class_key )
@@ -316,20 +316,52 @@ def get_next(redis):
                 delay=delay)
 
 
+@get('/find/<name>')
+def get_echo_term(name, redis):
+    '''Return an existing number for a bundle name, or return a new one. '''
+
+    nk = 'name:'+name
+
+    # This code has a race condition. It can be fixed with pipe lines, but
+    # that requires re-working get_next
+
+    v = redis.get(nk)
+
+    if v:
+        d = dict(
+            ok=True,
+            number=v,
+            assignment_class=None,
+            wait=None,
+            safe_wait=None,
+            nxt=None,
+            delay=0
+        )
+
+        return d
+
+    else:
+        d = get_next(redis)
+
+        # get_next captures exceptions, so we'll have to deal with it as a return value.
+        if 'exception' not in d:
+            redis.set(nk, d['number'])
+
+        return d
+
+
+
 @get('/echo/<term>')
 def get_echo_term(term, redis):
     '''Test function to see if the server is working '''
 
     return [term]
 
-def _run(host, port, unregistered_key,  reloader=False, **kwargs):
+def _run(host, port, redis, unregistered_key,  reloader=False, **kwargs):
+    import redis as rds
+    pool = rds.ConnectionPool(host=redis['host'],port=redis['port'], db=0)
 
-    redis_config = kwargs.get('redis')
-
-    pool = redis.ConnectionPool(host=redis_config['host'],
-                                port=redis_config['port'], db=0)
-
-    rds = redis.Redis(connection_pool=pool)
+    rds = rds.Redis(connection_pool=pool)
 
     # This is the key that can be distributed publically. It is only to
     # keep bots and spiders from sucking up a bunch of numbers.
@@ -346,21 +378,37 @@ if __name__ == '__main__':
 
     group = rc.group('numbers')
 
-    d = group['server']
+    d = group.get('server',{'host' : 'localhost', 'port': 8080, 'unregistered_key': 'fe78d179-8e61-4cc5-ba7b-263d8d3602b9'})
+
+    d['redis'] = d.get('redis',{'host':'localhost','port': 6379})
+
 
     parser = argparse.ArgumentParser(prog='python -mdatabundles.server.numbers',
                                      description='Run an Ambry numbers server')
 
-    parser.add_argument('-H','--host', default=None, help="Server host. Defaults to configured value: {}".format(d['host']))
-    parser.add_argument('-p','--port', default=None, help="Server port. Defaults to configured value: {}".format(d['port']))
+    parser.add_argument('-H','--server-host', default=None, help="Server host. Defaults to configured value: {}".format(d['host']))
+    parser.add_argument('-p','--server-port', default=None, help="Server port. Defaults to configured value: {}".format(d['port']))
+
+    parser.add_argument('-R','--redis-host', default=None, help="Redis host. Defaults to configured value: {}".format(d['redis']['host']))
+    parser.add_argument('-r','--redis-port', default=None, help="Redis port. Defaults to configured value: {}".format(d['redis']['port']))
+
 
     args = parser.parse_args()
 
-    if args.port:
-        d['port'] = args.port
+    if args.server_port:
+        d['port'] = args.server_port
 
-    if args.host:
-        d['host'] = args.host
+    if args.server_host:
+        d['host'] = args.server_host
+
+    if args.redis_port:
+        d['redis']['port'] = args.redis_port
+
+    if args.redis_host:
+        d['redis']['host'] = args.redis_host
+
+
+    print d
 
     _run(**d)
     

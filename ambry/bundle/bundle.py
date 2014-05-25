@@ -1576,6 +1576,8 @@ class Registrar(object):
 
 
 class AnalysisBundle(BuildBundle):
+    """A Bundle class specifically for use in IPython, to analyze datasets and store the results back into a bundle.
+    """
 
     def __init__(self, bundle_path):
         """Initialize the analysis bundle by running the prepare phase and starting the pre-build
