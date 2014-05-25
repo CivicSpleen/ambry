@@ -1,8 +1,9 @@
-
-
 import os
-from ..util import lru_cache
+
 from sqlalchemy.orm import object_session
+
+from ..util import lru_cache
+
 
 @lru_cache()
 def partition_classes():
@@ -11,7 +12,7 @@ def partition_classes():
     Used for getting a partition class based on simple name, format, extension, etc. """
 
     from geo import GeoPartitionName, GeoPartitionName, GeoPartition, GeoPartitionIdentity
-    from hdf import HdfPartitionName, HdfPartitionName, HdfPartition, HdfPartitionIdentity
+    #from hdf import HdfPartitionName, HdfPartition, HdfPartitionIdentity
     from csv import CsvPartitionName, CsvPartitionName, CsvPartition, CsvPartitionIdentity
     from sqlite import SqlitePartitionName, SqlitePartitionName, SqlitePartition, SqlitePartitionIdentity
 
@@ -19,28 +20,28 @@ def partition_classes():
         name_by_format = {
             pnc.format_name(): pnc for pnc in (
                 GeoPartitionName,
-                HdfPartitionName,
+                #HdfPartitionName,
                 CsvPartitionName,
                 SqlitePartitionName)}
 
         extension_by_format = {
             pc.format_name(): pc.extension() for pc in (
                 GeoPartitionName,
-                HdfPartitionName,
+                #HdfPartitionName,
                 CsvPartitionName,
                 SqlitePartitionName)}
 
         partition_by_format = {
             pc.format_name(): pc for pc in (
                 GeoPartition,
-                HdfPartition,
+                #HdfPartition,
                 CsvPartition,
                 SqlitePartition)}
 
         identity_by_format = {
             ic.format_name(): ic for ic in (
                 GeoPartitionIdentity,
-                HdfPartitionIdentity,
+                #HdfPartitionIdentity,
                 CsvPartitionIdentity,
                 SqlitePartitionIdentity)}
 
@@ -203,7 +204,6 @@ class PartitionBase(PartitionInterface):
 
     def get(self):
         """Fetch this partition from the library or remote if it does not exist"""
-        import os
         return self.bundle.library.get(self.identity.vid).partition
 
     @property
@@ -319,7 +319,6 @@ class PartitionBase(PartitionInterface):
 
 
     def set_value(self, group, key, value):
-        from ambry.orm import Config as SAConfig
 
         with self.bundle.session as s:
             return self.set_config_value(self.bundle.dataset.vid, group, key, value, session=s)
@@ -333,12 +332,6 @@ class PartitionBase(PartitionInterface):
         else:
             return v
 
-    def dbm(self, suffix=None):
-        """Return a DBMDatabase related to this partition"""
-
-        from ..database.dbm import Dbm
-
-        return Dbm(self.bundle, base_path=self.path, suffix=suffix)
 
     @classmethod
     def format_name(cls):

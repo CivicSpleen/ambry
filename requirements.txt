@@ -1,30 +1,27 @@
 PyYAML
-semidbm
 SQLAlchemy
 simplejson
-requests
 boto
-python-dateutil
+requests
 unicodecsv
 lockfile
 sh
 petl
-pyparsing
 markdown
 psycopg2
 semantic_version
+
 numpy
 gdal
 h5py
-shapely # Optional libgeos-dev for speedups.
-rtree # also requires libspatialindex-dev,'brew install spatialindex' on mac
+
 pandas
-## This pysqlite clone enables load_extension. Only needed on Linux. It is added
-## in setup.py for linux, so you don't need to uncomment it here.
-# git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 # These are for the server
 decorator
 paste
 bottle
+## This pysqlite clone enables load_extension. Only needed on Linux. It is added
+## in setup.py for linux, so you don't need to uncomment it here.
+# git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
 

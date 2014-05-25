@@ -4,9 +4,11 @@ Created on Jun 22, 2012
 @author: eric
 """
 import unittest
+
 from bundles.testbundle.bundle import Bundle
 from ambry.identity import *
 from test_base import  TestBase
+
 
 class Test(TestBase):
  
@@ -48,7 +50,7 @@ class Test(TestBase):
     def test_paths(self):
         ''' Test that a build bundle and a db bundle both produce the same paths. '''
         
-        from ambry.bundle import BuildBundle, DbBundle
+        from ambry.bundle import DbBundle
         
         b = self.bundle
         db  = DbBundle(b.database.path)
@@ -260,9 +262,8 @@ class Test(TestBase):
         
     def test_partition(self):
         from ambry.dbexceptions import ConflictError
-        from ambry.identity import PartitionIdentity, PartitionNameQuery
+        from ambry.identity import PartitionNameQuery
         from ambry.partition.csv import CsvPartition
-        from ambry.partition.hdf import HdfPartition
 
         self.bundle.clean()
         self.bundle.prepare()
@@ -514,7 +515,6 @@ class Test(TestBase):
 
     def test_session(self):
 
-        import logging
         import uuid
 
 
@@ -543,7 +543,7 @@ class Test(TestBase):
 
         b.set_value('test', 'uuid', uv2)
 
-    def test_templates(self):
+    def x_test_templates(self):
 
         from ambry.util.text import compile_tempate
 

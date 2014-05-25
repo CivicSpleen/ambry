@@ -6,7 +6,7 @@ from . import PartitionBase
 from ..identity import PartitionIdentity, PartitionName
 
 def _hdf_db_class(): # To break an import dependency
-    from ..database.hdf import HdfDb
+    from ..old.hdf import HdfDb
     return HdfDb
 
 class HdfPartitionName(PartitionName):

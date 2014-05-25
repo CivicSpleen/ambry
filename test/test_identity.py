@@ -4,9 +4,11 @@ Created on Jul 6, 2013
 @author: eric
 """
 import unittest
+
 from ambry.identity import *
 from  bundles.testbundle.bundle import Bundle
 from test_base import  TestBase
+
 
 class Test(TestBase):
 
@@ -218,8 +220,6 @@ class Test(TestBase):
 
     def test_identity(self):
 
-        from ambry.partition import new_identity
-
         name = Name(source='source.com', dataset='foobar',  version='0.0.1', variation='orig')
         dn = DatasetNumber(10000, 1, assignment_class='registered')
         
@@ -322,7 +322,7 @@ class Test(TestBase):
 
     def test_identity_from_dict(self):
         from ambry.partition.sqlite import SqlitePartitionIdentity
-        from ambry.partition.hdf import HdfPartitionIdentity
+        from old.partition.hdf import HdfPartitionIdentity
         from ambry.partition.csv import CsvPartitionIdentity
         from ambry.partition.geo import GeoPartitionIdentity
 
@@ -610,7 +610,6 @@ class Test(TestBase):
     #
     def x_test_rewrite(self):
         from  testbundle.bundle import Bundle
-        from sqlalchemy.exc import IntegrityError
         import json
         from ambry.run import get_runconfig
 

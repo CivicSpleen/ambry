@@ -3,10 +3,10 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from . import DatabaseInterface
-from .hdf5 import Hdf5File
-
 import os
+
+from . import DatabaseInterface
+from .old.hdf5 import Hdf5File
 
 
 class HdfDb(Hdf5File, DatabaseInterface):
