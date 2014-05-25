@@ -10,11 +10,8 @@ petl
 markdown
 psycopg2
 semantic_version
-
 numpy
-gdal
-h5py
-
+#gdal
 pandas
 # These are for the server
 decorator

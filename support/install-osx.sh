@@ -45,7 +45,7 @@ export ARCHFLAGS="-Wno-error=unused-command-line-argument-hard-error-in-future"
 
 echo "--- Installing packages with Homebrew"
 
-brew_packages="git gdal spatialite-tools postgresql homebrew/science/hdf5 spatialindex "
+brew_packages="git gdal spatialite-tools postgresql" #homebrew/science/hdf5 spatialindex
 
 for pkg in $brew_packages; do
     brew install $pkg

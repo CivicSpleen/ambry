@@ -3,14 +3,11 @@
 echo "--- Installing base packages. May need to ask for root password"
 sudo apt-get update
 
-packages=" \
-git gcc g++ \
-python-pip python-dev \
-sqlite3  libsqlite3-dev libspatialite3 libspatialite-dev spatialite-bin \
-libpq-dev \
-libgdal-dev gdal-bin python-gdal python-h5py python-numpy python-scipy \
-libhdf5-serial-dev libhdf5-dev hdf5-tools h5utils \
-libspatialindex-dev "
+packages=" git gcc g++ python-pip python-dev sqlite3  libpq-dev
+libsqlite3-dev libspatialite3 libspatialite-dev spatialite-bin "
+#libgdal-dev gdal-bin python-gdalpython-numpy python-scipy \
+#libhdf5-serial-dev libhdf5-dev hdf5-tools h5utils  python-h5py \
+#libspatialindex-dev "
 
 for pkg in $packages; do
     echo "INSTALLING: $pkg"
