@@ -5,21 +5,12 @@ Created on Jun 30, 2012
 """
 
 import unittest
-import os.path
 from test_base import  TestBase
-from  testbundle.bundle import Bundle
-from sqlalchemy import * #@UnusedWildImport
-from ambry.run import  get_runconfig
-from ambry.run import  RunConfig
-
-from ambry.source.repository import new_repository
 
 import logging
 import ambry.util
 
 
-global_logger = ambry.util.get_logger(__name__)
-global_logger.setLevel(logging.DEBUG)
 
 class Test(TestBase):
  
@@ -33,19 +24,19 @@ class Test(TestBase):
     def testBasic(self):
         from ambry.bundle import new_analysis_bundle
 
-        ab = new_analysis_bundle(source='foo.com', dataset='dataset',
-                                 subset='subset', variation='test', revision=2)
+        ab = new_analysis_bundle(source='foo.com', dataset='dataseter',
+                                 subset='subset', variation='test', revision=2,
+                                 ns_key='fe78d179-8e61-4cc5-ba7b-263d8d3602b9')
 
         print "Bundle Dir", ab.bundle_dir
 
-        with ab.config.about as a:
-            a.title = 'This is an Example Analysis Bundle?'
-            a.tags = ['example','another']
-            a.groups = ['examples']
+        a = ab.metadata.about
 
-        ab.config.build.dependencies =  {
-                'random': 'example.com-random-example1'
-            }
+        a.title = 'This is an Example Analysis Bundle?'
+        a.tags = ['example','another']
+        a.groups = ['examples']
+
+        ab.metadata.dependencies['random'] =  'example.com-random-example1'
 
         p = ab.library.dep('random').partition
 
@@ -57,9 +48,6 @@ class Test(TestBase):
 
         out = ab.partitions.new_db_from_pandas(gt90,table = 'gt90')
 
-        # Try attaching
-
-
         ab.post_build()
 
         print p._repr_html_()
@@ -69,19 +57,19 @@ class Test(TestBase):
         from ambry.bundle import new_analysis_bundle
 
         ab = new_analysis_bundle(source='foo.com', dataset='crime',
-                                 subset='attach', variation='test', revision=2)
+                                 subset='attach', variation='test', revision=2,
+                                 ns_key='fe78d179-8e61-4cc5-ba7b-263d8d3602b9')
 
         print "Bundle Dir", ab.bundle_dir
 
-        with ab.config.about as a:
-            a.title = 'This is an Example Analysis Bundle?'
-            a.tags = ['example', 'another']
-            a.groups = ['examples']
+        a = ab.metadata.about
 
-        ab.config.build.dependencies = {
-            'incidents': 'clarinova.com-crime-incidents-casnd-incidents',
-            'addresses': 'clarinova.com-crime-incidents-casnd-addresses'
-        }
+        a.title = 'This is an Example Analysis Bundle?'
+        a.tags = ['example', 'another']
+        a.groups = ['examples']
+
+        ab.metadata.dependencies['incidents'] = 'clarinova.com-crime-incidents-casnd-incidents'
+        ab.metadata.dependencies['addresses'] = 'clarinova.com-crime-incidents-casnd-addresses'
 
 
         incidents = ab.library.dep('incidents').partition

@@ -603,6 +603,10 @@ class Test(TestBase):
         n = ns.next()
         self.assertEqual(8,len(str(n)))
 
+        n1 = ns.find('foobar')
+
+        self.assertEquals(str(n1), str(ns.find('foobar')))
+        self.assertEquals(str(n1), str(ns.find('foobar')))
 
     #
     # This test is turned off because it doesn't delete the bundle at the end,

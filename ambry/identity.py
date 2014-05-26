@@ -1579,6 +1579,31 @@ class NumberServer(object):
 
         return ObjectNumber.parse(d['number'])
 
+    def find(self, name):
+        import requests
+
+        if self.key:
+            params = dict(access_key=self.key)
+        else:
+            params = dict()
+
+        r = requests.get('http://{}{}/find/{}'.format(self.host, self.port_str, name), params=params)
+
+        r.raise_for_status()
+
+        d = r.json()
+
+        self.last_response = d
+
+        import time
+
+        try:
+            self.next_time = time.time() + self.last_response['wait']
+        except TypeError:
+            pass # wait time is None, can be added to time.
+
+        return ObjectNumber.parse(d['number'])
+
     def sleep(self):
         '''Wait for the sleep time of the last response, to
          avoid being rate limited. '''

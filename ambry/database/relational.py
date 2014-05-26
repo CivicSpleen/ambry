@@ -15,26 +15,29 @@ import atexit, weakref
 import pdb
 
 global_logger = get_logger(__name__)
-#logger.setLevel(logging.DEBUG)
+#global_logger.setLevel(logging.DEBUG)
 
 connections = dict()
 
 def close_connections_at_exit():
     '''Close any connections that have not already been closed '''
 
-
     for id_, (conn_ref, dsn, where) in connections.items():
-
         conn = conn_ref()
 
         if conn:
-            global_logger.debug("Close connection {} at exit: {}. From: {} ".format(id(conn),dsn, where))
+            global_logger.debug("Closing connection {}: {}. From: {} ".format(id(conn),dsn, where))
             conn.close()
+
+        del connections[id_]
 
 def close_connection_on_ref(ref):
     pass
 
 atexit.register(close_connections_at_exit)
+
+def close_all_connections():
+    close_connections_at_exit()
 
 class RelationalDatabase(DatabaseInterface):
     '''Represents a Sqlite database'''
@@ -247,7 +250,7 @@ class RelationalDatabase(DatabaseInterface):
 
                 id_ = self._connection_id()
 
-                if False and self.dsn in connections:
+                if self.dsn in connections:
                     (conn_ref, dsn, where)  = connections[id_]
                     raise Exception("Duplicate connection to {}: {}, {}, {}".format(self.dsn, conn_ref, dsn, where))
 

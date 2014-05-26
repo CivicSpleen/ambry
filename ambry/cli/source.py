@@ -303,16 +303,13 @@ def source_new(args, l, st, rc):
         'source': 'source'
     }
 
-
     b.update_configuration()
-
 
     p = lambda x : os.path.join(os.path.dirname(__file__),'..','support',x)
     shutil.copy(p('bundle.py'),bundle_dir)
     shutil.copy(p('README.md'),bundle_dir)
     shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta')  )
     shutil.copy(p('documentation.md'), os.path.join(bundle_dir, 'meta'))
-
 
     try:
         st.sync_bundle(bundle_dir)

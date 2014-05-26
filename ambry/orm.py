@@ -536,7 +536,7 @@ class Column(Base):
         try:
             return re.sub('[^\w_]','_',name).lower()
         except TypeError:
-            raise TypeError('Not a valid type for name '+str(type(name)))
+            raise TypeError('Trying to mangle name with invalid type of: '+str(type(name)))
 
     @staticmethod
     def before_insert(mapper, conn, target):
@@ -717,7 +717,7 @@ Columns:
 
         import sqlalchemy.orm.session
         from sqlalchemy.orm.exc import NoResultFound
-        from dbexceptions import ConfigurationError
+
         
         s = sqlalchemy.orm.session.Session.object_session(self)
         

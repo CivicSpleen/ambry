@@ -492,8 +492,8 @@ def {}(row):
             globals()[k] = v
 
         if codify_cast_errors:
-        
-            d = {k.lower():v for k,v in row.items()}
+
+            d = {k.lower():v for k,v in row.items() if k}
 
             try:
                 return   f[1](d),{}

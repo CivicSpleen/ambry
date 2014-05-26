@@ -463,17 +463,17 @@ class SourceTree(object):
 
 
     def new_bundle(self, rc, repo_dir, source, dataset, type=None, subset=None, bspace=None, btime=None,
-                   variation=None, revision=1, throw=True, examples=True):
+                   variation=None, revision=1, throw=True, examples=True, ns_key=None):
 
         from ..source.repository import new_repository
         from ..identity import DatasetNumber, Identity
         from ..identity import NumberServer
+        from ambry.bundle.meta import Top
+        from ..bundle.bundle import BuildBundle
 
         from requests.exceptions import HTTPError
-        from collections import OrderedDict
         from ..dbexceptions import ConflictError, ConfigurationError, SyncError
         import shutil
-        import yaml
 
         if not repo_dir:
             raise ValueError("Must specify a repo_dir")
@@ -485,6 +485,9 @@ class SourceTree(object):
         l  = self.library
 
         nsconfig = rc.group('numbers')
+
+        if ns_key:
+            nsconfig['key'] = ns_key
 
         ns = NumberServer(**nsconfig)
 
@@ -520,7 +523,7 @@ class SourceTree(object):
         # id number and make it again.
         try:
             if type == 'analysis':
-                d['id'] = str(DatasetNumber())
+                d['id'] = str(ns.find(ident.sname))
             else:
                 d['id'] = str(ns.next())
                 self.logger.info("Got number from number server: {}".format(d['id']))
@@ -531,7 +534,6 @@ class SourceTree(object):
             d['id'] = str(DatasetNumber())
 
         ident = Identity.from_dict(d)
-
 
 
         try:
@@ -548,46 +550,40 @@ class SourceTree(object):
 
             raise ConfigurationError("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
 
-        config = {
-            'identity': ident.ident_dict,
-            'about': {
-                'author': ambry_account.get('name'),
-                'author_email': ambry_account.get('email'),
-                'description': "**include**",  # Can't get YAML to write this properly
-                'groups': ['group1', 'group2'],
-                'homepage': "https://civicknowledge.org",
-                'license': "other-open",
-                'maintainer': ambry_account.get('name'),
-                'maintainer_email': ambry_account.get('email'),
-                'tags': ['tag1', 'tag2'],
-                'title': "Bundle title"
-            }
+        metadata = Top(path=bundle_dir)
+
+        metadata.identity = ident.ident_dict
+        metadata.names = ident.names_dict
+        metadata.write_to_dir(write_all=True)
+
+        # Now that the bundle has an identity, we can load the config through the bundle.
+
+        b = BuildBundle(bundle_dir)
+
+        b.metadata.contact_bundle.creator.email = ambry_account.get('email')
+        b.metadata.contact_bundle.creator.name = ambry_account.get('name')
+        b.metadata.contact_bundle.creator.url = ambry_account.get('url', '')
+
+        b.metadata.contact_bundle.maintainer.email = ambry_account.get('email')
+        b.metadata.contact_bundle.maintainer.name = ambry_account.get('name')
+        b.metadata.contact_bundle.maintainer.url = ambry_account.get('url', '')
+
+        b.metadata.sources.example = {'url': 'http://example.com', 'description': 'description'}
+
+        b.metadata.external_documentation.example = {
+            'url': 'http://example.com',
+            'title': "title",
+            'description': 'description',
+            'source': 'source'
         }
 
-        os.makedirs(os.path.join(bundle_dir, 'meta'))
-
-        file_ = os.path.join(bundle_dir, 'bundle.yaml-in')
-
-        yaml.dump(config, file(file_, 'w'), indent=4, default_flow_style=False)
-
-        # Need to edit the YAML file because the !include line is special metadata
-        # that is hard ( or impossible ) to write through serialization
-
-        with file(file_, 'r') as f_in:
-            with file(os.path.join(bundle_dir, 'bundle.yaml'), 'w') as f_out:
-                f_out.write(f_in.read().replace("'**include**'", "!include 'README.md'"))
-
-        os.remove(file_)
+        b.update_configuration()
 
         p = lambda x: os.path.join(os.path.dirname(__file__), '..', 'support', x)
-
         shutil.copy(p('bundle.py'), bundle_dir)
-
-
         shutil.copy(p('README.md'), bundle_dir)
-        if examples:
-            shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta'))
-            #shutil.copy(p('about.description.md'), os.path.join(bundle_dir, 'meta')  )
+        shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta'))
+        shutil.copy(p('documentation.md'), os.path.join(bundle_dir, 'meta'))
 
         try:
             self.sync_bundle(bundle_dir)
@@ -598,7 +594,7 @@ class SourceTree(object):
             rm_rf(bundle_dir)
             raise SyncError("Failed to sync bundle at {} ('{}') . Bundle deleted".format(bundle_dir, e.message))
         else:
-            self.logger.info("CREATED: {}, {}", ident.fqname, bundle_dir)
+            self.logger.info("CREATED: {}, {}".format(ident.fqname, bundle_dir))
 
         return bundle_dir
 

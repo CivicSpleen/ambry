@@ -519,13 +519,20 @@ class Partitions(object):
         import pandas as pd
         import numpy as np
         from orm import Column
+        from dbexceptions import ConfigurationError
 
         # Create the table from the information in the data frame.
         with self.bundle.session:
             sch = self.bundle.schema
             t = sch.add_table(table)
 
-            sch.add_column(t,frame.index.name,
+            if  frame.index.name:
+                id_name = frame.index.name
+            else:
+                id_name = 'id'
+
+
+            sch.add_column(t,id_name,
                          datatype = Column.convert_numpy_type(frame.index.dtype),
                          is_primary_key = True)
 
@@ -543,6 +550,7 @@ class Partitions(object):
                 for i, row in frame.iterrows():
                     d = dict(row)
                     d[pk_name] = i
+
                     ins.insert(d)
 
 
