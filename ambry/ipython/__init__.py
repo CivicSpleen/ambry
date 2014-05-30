@@ -48,5 +48,6 @@ def get_ipython_server_info():
         if file.startswith("nbserver"):
             with open(os.path.join(security_dir,file)) as f:
                 d = json.loads(f.read())
+                print d
                 if d and d.get('notebook_dir') == root_dir:
                     return d
