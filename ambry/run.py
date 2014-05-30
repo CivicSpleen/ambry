@@ -7,6 +7,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 import os.path
 from ambry.util import AttrDict
 from ambry.util import lru_cache
+from dbexceptions import ConfigurationError
 
 @lru_cache()
 def get_runconfig(path=None):
@@ -75,7 +76,7 @@ class RunConfig(object):
                     pass # Empty files will produce a type error
 
         if not loaded:
-            raise Exception("Failed to load any config from: {}".format(files))
+            raise ConfigurationError("Failed to load any config from: {}".format(files))
 
         object.__setattr__(self, 'config', config)
         object.__setattr__(self, 'files', files)

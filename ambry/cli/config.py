@@ -43,10 +43,13 @@ def config_install(args, rc):
 
     if user == 'root':
         install_file = rc.ROOT_CONFIG
+        default_root = '/ambry'
     else:
         install_file = rc.USER_CONFIG
         warn(("Installing as non-root, to '{}'\n" +
               "Run as root to install for all users.").format(install_file))
+        default_root = os.path.join(os.path.expanduser('~'),'ambry')
+
 
     if os.path.exists(install_file):
         if args.edit:
@@ -79,6 +82,8 @@ def config_install(args, rc):
 
     if args.root:
         d['filesystem']['root'] = args.root
+    else:
+        d['filesystem']['root'] = default_root
 
     if args.remote:
         try:
@@ -100,6 +105,7 @@ def config_install(args, rc):
             os.makedirs(dirname)
 
         with open(install_file,'w') as f:
+            prt('Writing config file: {}'.format(install_file))
             f.write(s)
 
     if not os.path.exists(rc.USER_ACCOUNTS):
@@ -112,4 +118,24 @@ def config_install(args, rc):
                  )
             ))
 
+            prt('Writing config file: {}'.format(rc.USER_ACCOUNTS))
             f.write(yaml.dump(d, indent=4, default_flow_style=False))
+
+    # Make the directories.
+
+    from ..run import get_runconfig
+    rc = get_runconfig(install_file)
+
+    for name in rc.group('filesystem').keys():
+        fs = rc.filesystem(name)
+
+        try:
+            dr = fs['dir']
+            if not os.path.exists(dr):
+                prt("Making directory: {}".format(dr))
+        except KeyError:
+            pass
+
+
+
+

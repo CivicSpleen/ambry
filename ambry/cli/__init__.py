@@ -428,28 +428,32 @@ def main(argsv = None, ext_logger=None):
 
     }
 
+    global global_logger
+
+    if ext_logger:
+        global_logger = ext_logger
+    else:
+        global_logger = get_logger("{}.{}".format(args.command, args.subcommand),
+                                   template="%(message)s")
+
+    global_logger.setLevel(logging.INFO)
+
 
     f = funcs.get(args.command, False)
 
     if args.command == 'config' and args.subcommand == 'install':
         rc = None
     else:
-        rc = get_runconfig(rc_path)
+        try:
+            rc = get_runconfig(rc_path)
+        except:
+            fatal("Could not find configuration file at {}\nRun 'ambry config install; to create one ",rc_path)
 
         global global_run_config
         global_run_config = rc
 
 
-    global global_logger
 
-
-    if ext_logger:
-        global_logger = ext_logger
-    else:
-        global_logger = get_logger("{}.{}".format(args.command, args.subcommand),
-                            template="%(message)s")
-
-    global_logger.setLevel(logging.INFO)
 
     if not f:
         fatal("Error: No command: "+args.command)
