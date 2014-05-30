@@ -32,7 +32,7 @@ user=$(whoami)
 
 cd /data/
 
-sudo pip install git+https://github.com/clarinova/ambry.git#egg=ambry
+sudo pip install 'git+https://github.com/clarinova/ambry.git#egg=ambry'
 
 # Install the example sources
 mkdir /data/source

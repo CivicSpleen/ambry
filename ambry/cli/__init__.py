@@ -390,6 +390,7 @@ def main(argsv = None, ext_logger=None):
     from source import source_command, source_parser
     from bundle import bundle_command, bundle_parser
     from root import root_command, root_parser
+    from ..dbexceptions import ConfigurationError
 
     library_parser(cmd)  
     warehouse_parser(cmd)
@@ -446,7 +447,8 @@ def main(argsv = None, ext_logger=None):
     else:
         try:
             rc = get_runconfig(rc_path)
-        except:
+        except ConfigurationError:
+            raise
             fatal("Could not find configuration file at {}\nRun 'ambry config install; to create one ",rc_path)
 
         global global_run_config
