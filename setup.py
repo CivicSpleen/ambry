@@ -14,6 +14,8 @@ import sys, re, os.path
 
 __version__ = None # "Declare", actually set in the execfile
 __author__ = None
+
+# Load in the metadata. 
 execfile(os.path.join(os.path.dirname(__file__),'ambry/_meta.py'))
 
 if sys.version_info <= (2, 6):
@@ -22,7 +24,7 @@ if sys.version_info <= (2, 6):
     sys.exit(1)
 
 def readme():
-    with open("README.md") as f:
+    with open(os.path.join(os.path.dirname(__file__),"README.md")) as f:
         return f.read()
 
 def read_requirements(file_name):
