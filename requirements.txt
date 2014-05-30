@@ -9,7 +9,7 @@ unicodecsv
 lockfile
 sh
 petl
-psycopg2
+# psycopg2 # Needed for interacting with Postgres databases. 
 semantic_version
 numpy
 gdal
