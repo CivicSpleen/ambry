@@ -1,16 +1,17 @@
 
 library:
     default:
-        port: 80
-        host: localhost
         filesystem: default
         database: default
         source: '{root}/source'
-        upstream:
-            options: [compress]
-            bucket: s3-bucket-name
-            prefix: library
-            account: s3-bucket-name
+        remotes:
+        - 's3://devtest.sandiegodata.org/s3-remote#compress'
+
+    server:
+        port: 7979
+        host: localhost
+        filesystem: default
+        database: default
 
 database:
     default:
@@ -19,13 +20,13 @@ database:
 
 filesystem:
     root: /data
-    
     default: '{root}/library'
     downloads: '{root}/cache/downloads'
     extracts: '{root}/cache/extracts'
     python: '{root}/cache/python'
-    build: '{root}/cache/build'
-
+    analysis: '{root}/source/analysis'
+    source: '{root}/source'
+    notebooks: '{root}/notebooks'
 
 numbers:
     host: numbers.ambry.io
