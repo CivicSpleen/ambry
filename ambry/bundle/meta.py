@@ -106,8 +106,6 @@ class Top(Metadata):
         'about.website': 'contact_source.creator.url',
         'about.description': 'about.summary',
         'about.organization': 'contact_source.creator.name'
-
-
     }
 
     about = About(file='bundle.yaml')

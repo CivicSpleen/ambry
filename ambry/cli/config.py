@@ -133,6 +133,7 @@ def config_install(args, rc):
             dr = fs['dir']
             if not os.path.exists(dr):
                 prt("Making directory: {}".format(dr))
+                os.makedirs(dr)
         except KeyError:
             pass
 
