@@ -36,17 +36,57 @@ Mac OS X
 ********
 
 
+Easy Way
+--------
+
+The easiest way to install ambry is to for install the scientific python distribution, Anaconda. Visit the `Continuum Analytics downloads page <http://continuum.io/downloads>`_ and get the Anaconda installation for your distribution.
+
+After installing Anaconda, open a new Terminal window ( an old one won't have the path set correctly. ) You should now be running the python included with anaconda:
+ 
+.. code-block:: bash
+
+    $ which python 
+    /Users/eric/anaconda/bin/python
+ 
+Most python dependencies are installed with `pip` along with Ambry, but `gdal` requires compiling and doesn't build easily on OS X, so we'll get it with conda:
+ 
+.. code-block:: bash
+
+    $ conda install gdal
+ 
+Finally, install Ambry with pip:
+    
+.. code-block:: bash
+
+    $ pip install ambry
+
+After installing with pip, you'll have to create the configuration files:
+
+.. code-block:: bash
+
+    $ ambry config install 
+   
+Then, check that it worked with:
+   
+.. code-block:: bash
+    
+    $ ambry info 
+    Version:  0.3.315
+    Root dir: /Users/<username>/ambry
+    Source :  /Users/<username>/ambry/source
+    Configs:  ['/Users/<username>/.ambry.yaml', '/Users/<username>/.ambry-accounts.yaml']
+    
+
+Script Install
+--------------
+
 Although the OS X is the main development platform for Ambry, the OS X installation is a bit difficult, requiring a few outside packages. In particular, it will require:
 
 * XCode, for the system compiler
 * Homebrew, to install required binary packages
 * The KyngChaos GDAL Complete package, for GDAL, Numpy and Sqlite.
 
-
 The installation script  will walk you through installing all of these packages, but if the script fails, you may have install them yourself.
-
-Script Install
---------------
 
 To run the automated installer, execute this line from a Terminal:
 
@@ -65,9 +105,6 @@ If the script fails, it is usually a problem with installing one of the external
 * For Homebrew, visit http://brew.sh/
 * For the KyngChaos Packages, visit http://www.kyngchaos.com/software/frameworks#gdal_complete
 
-
-External Package Security
--------------------------
 
 These packages aren't signed, so Mac OS will issue a warning. Use the right-click menu to open them with the installer.
 
@@ -119,14 +156,13 @@ Then run an info command to check that it all worked properly.
 Windows
 *************
 
-For Windows, use the Vagrant installation method. 
+For Windows, you can probably use the "Easy Way" installation: install Anaconda first, then Ambry. If that doesn't work, try Vagrant. 
 
 *************
 Post Install
 *************
-
+    
 The install scripts will also clone example source bundles and insall a basic configuration file. You can verify that the install succeeded with:
-
 
 .. code-block:: bash
 
