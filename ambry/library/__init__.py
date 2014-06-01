@@ -757,7 +757,7 @@ class Library(object):
                         self.sync_library_partition(bundle, p, commit=False)
 
                 self.database.commit()
-                bundle.close()0
+                bundle.close()
 
             except Exception as e:
                 self.logger.error('Failed to install bundle {}: {}'.format(bundle.identity.vname, e.message))
