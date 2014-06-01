@@ -27,20 +27,10 @@ sudo pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 ### Install Ambry
 ###
 
-sudo mkdir -p /data/src
-user=$(whoami)
-
-cd /data/
-
-sudo pip install 'git+https://github.com/clarinova/ambry.git#egg=ambry'
-
-# Install the example sources
-mkdir /data/source
-
-cd /data/source
-git clone https://github.com/sdrdl/sdrdl-ambry-bundles.git sdrdl
-git clone https://github.com/clarinova/ambry-bundles-public.git clarinova-public
-
-sudo chown -R $user /data
+sudo pip install ambry
 
 ambry config install # Installs a development config
+
+cd $(ambry config value filesystem.source)
+
+[ ! -e clarinova-public ] && git clone https://github.com/clarinova/ambry-bundles-public.git clarinova-public

@@ -26,6 +26,12 @@ def config_parser(cmd):
 
     sp.add_argument('args', nargs='*', help='key=value entries') # Get everything else.
 
+    sp = asp.add_parser('value', help='Return a configuration value, or all values if no key is specified')
+    sp.set_defaults(subcommand='value')
+    sp.add_argument('-y', '--yaml', default=False, action='store_true', help="If no key is specified, return the while configuration as yaml")
+    sp.add_argument('key', nargs='*', help='Value key')  # Get everything else.
+
+
 def config_command(args, rc):
     from  ..library import new_library
 
@@ -136,6 +142,46 @@ def config_install(args, rc):
                 os.makedirs(dr)
         except KeyError:
             pass
+
+def config_value(args, rc):
+
+    def sub_value(value, subs):
+
+        if isinstance(value, (list, tuple)):
+            return [i.format(**subs) for i in value]
+        else:
+            try:
+                return value.format(**subs)
+            except AttributeError:
+                return str(value)
+
+
+
+
+    def dump_key(key, subs):
+        for path, value in rc.config.flatten():
+            dot_path = '.'.join(path)
+            if key:
+                if key == dot_path:
+                    print sub_value(value, subs)
+                    return
+            else:
+                print dot_path, '=', sub_value(value, subs)
+
+    subs = dict(
+        root = rc.filesystem_path('root')
+    )
+
+    if not args.key:
+        if args.yaml:
+            print rc.dump()
+        else:
+            dump_key(None, subs)
+    else:
+        dump_key(args.key[0], subs)
+
+
+
 
 
 

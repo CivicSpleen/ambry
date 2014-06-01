@@ -368,8 +368,8 @@ def main(argsv = None, ext_logger=None):
     ## Do it again.
     ##
 
-    parser = argparse.ArgumentParser(prog='python -mdatabundles',
-                                     description='Databundles {}. Management interface for ambry, libraries and repositories. '.format(
+    parser = argparse.ArgumentParser(prog='ambry',
+                                     description='Anbry {}. Management interface for ambry, libraries and repositories. '.format(
                                          ambry._meta.__version__),
                                      prefix_chars='-+')
 

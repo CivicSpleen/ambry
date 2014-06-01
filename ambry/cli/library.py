@@ -435,19 +435,20 @@ def library_sync(args, l, config):
     '''Synchronize the remotes and the upstream to a local library
     database'''
 
-
     if args.clean:
         l.clean()
 
-    if args.library or args.all:
+    all = args.all or not (args.library or args.remote or args.source )
+
+    if args.library or all:
         l.logger.info("==== Sync Library")
         l.sync_library()
 
-    if args.remote or args.all:
+    if args.remote or all:
         l.logger.info("==== Sync Remotes")
         l.sync_remotes()
 
-    if (args.source or args.all) and l.source:
+    if (args.source or all) and l.source:
         l.logger.info("==== Sync Source")
         l.source.sync_source()
 

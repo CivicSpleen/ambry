@@ -114,8 +114,7 @@ For Windows, you can probably use the "Easy Way" installation: install Anaconda 
 Vagrant
 *************
 
-To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/installation/index.html>`_, then get the `source`_ code. After unpacking the source, change directory to the vagrant directory and run ``vagrant up``
-
+To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/installation/index.html>`_, then get the `source`_ code. After unpacking the source, change directory to the vagrant directory, `support/ambry-vagrant` and run ``vagrant up``
 
 .. code-block:: bash
 
