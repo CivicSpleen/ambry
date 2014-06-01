@@ -718,6 +718,7 @@ class Library(object):
             for file_ in f:
 
                 if file_.endswith(".db"):
+
                     path_ = os.path.join(r, file_)
 
                     extant_bundle = self.files.query.type(Files.TYPE.BUNDLE).path(path_).one_maybe
@@ -749,17 +750,19 @@ class Library(object):
 
             try:
                 self.sync_library_dataset(bundle, install_partitions=False)
+
+                for p in bundle.partitions:
+                    if self.cache.has(p.identity.cache_key, propagate=False):
+                        self.logger.info('            {} '.format(p.identity.vname))
+                        self.sync_library_partition(bundle, p, commit=False)
+
+                self.database.commit()
+                bundle.close()
+
             except Exception as e:
                 self.logger.error('Failed to install bundle {}: {}'.format(bundle.identity.vname, e.message))
                 continue
 
-            for p in bundle.partitions:
-                if self.cache.has(p.identity.cache_key, propagate=False):
-                    self.logger.info('            {} '.format(p.identity.vname))
-                    self.sync_library_partition(bundle, p, commit = False)
-
-            self.database.commit()
-            bundle.close()
         return bundles
 
     def sync_library_dataset(self, bundle, install_partitions=True, commit = True):

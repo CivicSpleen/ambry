@@ -53,12 +53,17 @@ class Bundle(object):
 
     def close(self):
         """Close the bundle database and all partition databases, committing and closing any sessions and connections"""
+        from ..dbexceptions import NotFoundError
         self.partitions.close()
 
         if self._database:
-            self.logger.debug("Closing bundle: {}".format(self.identity.sname))
-            self._database.session.commit()
-            self._database.close()
+            try:
+                self.logger.debug("Closing bundle: {}".format(self.identity.sname))
+                self._database.session.commit()
+                self._database.close()
+            except NotFoundError as e:
+                self.logger.debug("Error closing {}: {}".format(self._database.path, e))
+
 
     @property
     def log_file(self):
