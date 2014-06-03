@@ -51,3 +51,6 @@ def get_ipython_server_info():
                 print d
                 if d and d.get('notebook_dir') == root_dir:
                     return d
+
+
+

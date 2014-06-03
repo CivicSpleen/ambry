@@ -832,9 +832,10 @@ class Library(object):
 
             for cache_key in remote.list().keys():
 
+                # This is just for reporting.
+
                 if self.cache.has(cache_key):
                     self.logger.info("Remote {} has: {}".format(remote.repo_id, cache_key))
-                    continue
                 else:
                     self.logger.info("Remote {} sync: {}".format(remote.repo_id, cache_key))
 

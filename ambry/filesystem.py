@@ -341,16 +341,16 @@ class BundleFilesystem(Filesystem):
         import tempfile
         import urlparse
         import urllib2
-      
+
         cache = self.get_cache_by_name('downloads')
-        parsed = urlparse.urlparse(url)
+        parsed = urlparse.urlparse(str(url))
 
         # If the URL doesn't parse as a URL, then it is a name of a source.
         if ( not parsed.scheme and url in self.bundle.metadata.sources):
 
             source_entry = self.bundle.metadata.sources.get(url)
             url = source_entry.url
-            parsed = urlparse.urlparse(url)
+            parsed = urlparse.urlparse(str(url))
 
         file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
 

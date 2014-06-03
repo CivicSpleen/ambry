@@ -397,24 +397,23 @@ def library_get(args, l, config):
     b = l.get(args.term, force=args.force, cb=Progressor('Download {}'.format(args.term)).progress)
 
     if not b:
-        fatal("Downlaod failed: {}", args.term)
+        fatal("Download failed: {}", args.term)
 
     ident = b.identity
 
     if b.partition:
         ident.add_partition(b.partition.identity)
 
-    if args.partitions:
+    elif b.partitions:
         for p in b.partitions:
             prt("get: {}".format(p.identity.vname))
             bp = l.get(p.identity.vid)
 
+        b.partition = None
 
     _print_info(l, ident)
 
     return b
-
-
 
 
 def library_open(args, l, config):
@@ -427,6 +426,7 @@ def library_open(args, l, config):
             abs_path = os.path.join(l.cache.cache_dir, r.partition.identity.cache_key)
         else:
             abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
+
 
         os.execlp('sqlite3', 'sqlite3', abs_path)
 

@@ -107,7 +107,15 @@ class Partitions(object):
                                     .order_by(OrmPartition.vid.asc())
                                     .order_by(OrmPartition.segment.asc()))
 
-            return [self.partition(op) for op in q.all()]
+            partitions = []
+            for op in q.all():
+                try:
+                    partitions.append(self.partition(op))
+                except KeyError: # Unknown partition type, usually 'hdf'
+                    continue
+
+
+            return partitions
         except sqlalchemy.exc.OperationalError:
             raise
             return []
@@ -712,26 +720,33 @@ class Partitions(object):
 
         active_parts = set()
 
+        # Find out which of the name parts are being used, particularly
+        # time, space, grain
         for p in self.all:
             active_parts |= set(p.name.partital_dict.keys())
 
-        cols = ['Id','Name']
+        cols = ['Id','Vid','Name', 'VName']
+
         for np, _, _ in PartitionName._name_parts:
             if np  in active_parts:
-                cols.append(np)
+                cols.append(np.title())
 
         rows = ["<tr>"+''.join([ '<th>{}</th>'.format(c) for c in cols])+"</tr>" ]
 
         for p in self.all:
             cols = []
             d = p.name.partital_dict
+
             cols.append(p.identity.id_)
+            cols.append(p.identity.vid)
             cols.append(p.identity.sname)
+            cols.append(p.identity.vname)
 
             for np, _, _ in PartitionName._name_parts:
 
                 if np not in active_parts:
                     continue
+
                 cols.append(d[np] if np in d else '')
 
             rows.append("<tr>"+''.join([ '<td>{}</td>'.format(c) for c in cols])+"</tr>")
