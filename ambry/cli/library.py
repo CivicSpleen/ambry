@@ -321,7 +321,7 @@ def library_push(args, l, config):
         total_size = 0.0
         rate = 0
 
-        prt("-- Pushing to {}", l.upstream)
+        prt("-- Pushing to {}", l.remotes)
         start = time.clock()
         for ref, t in files:
 
@@ -435,22 +435,21 @@ def library_sync(args, l, config):
     '''Synchronize the remotes and the upstream to a local library
     database'''
 
-    if args.clean:
-        l.clean()
+
 
     all = args.all or not (args.library or args.remote or args.source )
 
     if args.library or all:
         l.logger.info("==== Sync Library")
-        l.sync_library()
+        l.sync_library(clean=args.clean)
 
     if args.remote or all:
         l.logger.info("==== Sync Remotes")
-        l.sync_remotes()
+        l.sync_remotes(clean=args.clean)
 
     if (args.source or all) and l.source:
         l.logger.info("==== Sync Source")
-        l.source.sync_source()
+        l.source.sync_source(clean=args.clean)
 
 
 

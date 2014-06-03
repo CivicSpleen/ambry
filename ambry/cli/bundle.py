@@ -26,7 +26,6 @@ def bundle_command(args, rc):
     l = new_library(rc.library(args.library_name))
     l.logger = global_logger
 
-
     if not args.bundle_dir:
         bundle_file = os.path.join(os.getcwd(),'bundle.py')
     else:
@@ -40,14 +39,8 @@ def bundle_command(args, rc):
             if not os.path.exists(bundle_file):
                 from ..dbexceptions import ConflictError
                 # The bundle exists in the source repo, but is not local
-                prt("Loading bundle from {}".format(ident.url))
-                try:
-                    bundle = st.clone(ident.url)
-                    prt("Loaded {} into {}".format(bundle.identity.sname, bundle.bundle_dir))
+                fatal("Ghost bundle {}; in library but not in source tree".format(ident.vname))
 
-                    bundle_file = os.path.join(bundle.bundle_dir,'bundle.py')
-                except ConflictError as e:
-                    fatal(e.message)
 
 
         elif args.bundle_dir == '-':
@@ -90,6 +83,8 @@ def bundle_command(args, rc):
     b.database.break_lock()
 
     b.set_args(args)
+
+    b.library  = l
 
     def getf(f):
         return globals()['bundle_'+f]

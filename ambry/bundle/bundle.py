@@ -866,7 +866,6 @@ class BuildBundle(Bundle):
         if self.library.source:
             self.library.source.set_bundle_state(self.identity, state)
 
-
     def progress(self, message):
         """print message to terminal, in place"""
         print 'PRG: ', message

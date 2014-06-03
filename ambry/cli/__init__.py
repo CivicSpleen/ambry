@@ -275,8 +275,6 @@ def _print_info(l,ident, list_partitions=False):
 
     d = ident
 
-
-
     prt("D --- Dataset ---")
     prt("D Vid       : {}",d.vid)
     prt("D Vname     : {}", d.vname)

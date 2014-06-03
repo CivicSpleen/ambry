@@ -203,41 +203,6 @@ class SourceTree(object):
             self.library.files.merge(f)
 
 
-    def clone(self,url):
-        '''Clone a new bundle into the source tree'''
-
-        import shutil
-        from ..dbexceptions import ConflictError
-        from ..bundle import BundleFileConfig
-
-        repo = self.temp_repo()
-        repo.clone(url)
-
-        bfc = BundleFileConfig(repo.path)
-        ident = bfc.get_identity()
-        bundle_dir = self.source_path(ident=ident)
-
-        if os.path.exists(bundle_dir):
-            raise ConflictError("Bundle directory '{}' already exists".format(bundle_dir))
-
-        if not os.path.exists(os.path.dirname(bundle_dir)):
-            os.makedirs(os.path.dirname(bundle_dir))
-
-        shutil.move(repo.path, bundle_dir)
-
-        try:
-
-            self.sync_bundle(bundle_dir, ident)
-
-            bundle_class = load_bundle(bundle_dir)
-            bundle = bundle_class(bundle_dir)
-
-            return bundle
-        except Exception as e:
-            self.logger.error("Failed to load bundle source file: {}".format(e.message))
-            self.set_bundle_state(ident, 'error:load')
-            return None
-
 
     def add_source_url(self, ident, repo, data):
 
@@ -257,7 +222,6 @@ class SourceTree(object):
     def sync_source(self, clean = False):
 
         if clean:
-            self.library.database.session.query(Dataset).filter(Dataset.location == Dataset.LOCATION.SOURCE).delete()
             self.library.files.query.type(Dataset.LOCATION.SOURCE).delete()
 
         for ident in self._dir_list().values():
@@ -297,7 +261,6 @@ class SourceTree(object):
                 self.logger.error("Failed to load bundle for {}".format(path))
                 pass
 
-
         if not ident and bundle:
             ident = bundle.identity
 
@@ -310,9 +273,9 @@ class SourceTree(object):
 
             f = File(
                 path=path,
-                group='source',
+                group=self.base_dir,
                 ref=ident.vid,
-                state='',
+                state='synced',
                 type_=Dataset.LOCATION.SOURCE,
                 data=None,
                 source_url=None)

@@ -72,6 +72,7 @@ class Files(object):
 
         if self._query.count() > 0:
             self._query.delete()
+            self.db.commit()
 
     def update(self,d):
         '''Delete all of the records in the query'''

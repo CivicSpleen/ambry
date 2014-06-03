@@ -393,7 +393,6 @@ class Library(object):
 
         bundle = self._get_bundle_by_cache_key(dataset.cache_key)
 
-
         try:
             if dataset.partition:
 
@@ -411,7 +410,8 @@ class Library(object):
                     raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.fqname))
 
                 try:
-                    self.sync_library_partition(bundle, partition)
+                    self.database.install_partition(bundle, dataset.partition.id_,
+                                                    install_bundle=False, install_tables=False)
                 except IntegrityError as e:
                     self.database.session.rollback()
                     self.logger.error("Partition is already in Library.: {} ".format(e.message))
@@ -637,7 +637,11 @@ class Library(object):
             else:
                 identity = dsid
 
-            file_ = self.files.query.installed.ref(identity.vid).one
+            try:
+                file_ = self.files.query.installed.ref(identity.vid).one
+            except:
+                print 'Failed for ', identity.vid
+                raise
 
             md = identity.to_meta(file=file_.path)
 
@@ -691,16 +695,19 @@ class Library(object):
     # Synchronize
     #
 
-    def sync_library(self):
+    def sync_library(self, clean = False):
         '''Rebuild the database from the bundles that are already installed
         in the repository cache'''
 
-
+        from ..orm import Dataset
         from .files import Files
         from database import ROOT_CONFIG_NAME_V
 
         assert Files.TYPE.BUNDLE == Dataset.LOCATION.LIBRARY
         assert Files.TYPE.PARTITION == Dataset.LOCATION.PARTITION
+
+        if clean:
+            self.files.query.type(Dataset.LOCATION.REMOTE).delete()
 
         bundles = []
 
@@ -752,9 +759,8 @@ class Library(object):
                 self.sync_library_dataset(bundle, install_partitions=False)
 
                 for p in bundle.partitions:
-                    if self.cache.has(p.identity.cache_key, propagate=False):
-                        self.logger.info('            {} '.format(p.identity.vname))
-                        self.sync_library_partition(bundle, p, commit=False)
+                    self.logger.info('            {} '.format(p.identity.vname))
+                    self.sync_library_partition(bundle, p, commit=False)
 
                 self.database.commit()
                 bundle.close()
@@ -811,16 +817,19 @@ class Library(object):
             commit = commit,
             merge=True,
             path=partition.database.path,
-            group=None,
+            group=self.cache.repo_id,
             ref=ident.vid,
             state='synced',
             type_= Files.TYPE.PARTITION,
             data=ident.urls,
             source_url=None)
 
-    def sync_remotes(self, remotes=None):
+    def sync_remotes(self, remotes=None, clean = False):
+        from ..orm import Dataset
 
-        from ambry.client.rest import RemoteLibrary
+
+        if clean:
+            self.files.query.type(Dataset.LOCATION.REMOTE).delete()
 
         if not remotes:
             remotes = self.remotes
