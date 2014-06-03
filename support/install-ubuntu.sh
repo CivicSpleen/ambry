@@ -27,7 +27,7 @@ sudo pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 ### Install Ambry
 ###
 
-sudo pip install ambry
+sudo pip install -I ambry
 
 ambry config install # Installs a development config
 
