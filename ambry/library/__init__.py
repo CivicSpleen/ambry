@@ -796,9 +796,10 @@ class Library(object):
         for ident in self.source._dir_list().values():
             try:
                 bundle = self.source.bundle(ident.bundle_path)
+
                 self.logger.info('Installing: {} '.format(bundle.identity.vname))
                 try:
-                    self.database.install_bundle(bundle, install_partitions=False, commit=True)
+                    self.database.install_dataset_identity(bundle.identity)
                 except ConflictError:
                     self.database.rollback()
                     pass
