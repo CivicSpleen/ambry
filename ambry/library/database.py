@@ -469,7 +469,7 @@ class LibraryDb(object):
 
 
         try:
-            self.session.add(ds)
+            self.session.merge(ds)
             self.commit()
         except IntegrityError as e:
             self.session.rollback()
