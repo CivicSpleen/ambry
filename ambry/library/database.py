@@ -132,8 +132,8 @@ class LibraryDb(object):
             self._session = self.Session()
             # set the search path
 
-        if self.driver in ('postgres','postgis') and self._schema:
-            self._session.execute("SET search_path TO {}".format(self._schema))
+            if self.driver in ('postgres','postgis') and self._schema:
+                self._session.execute("SET search_path TO {}".format(self._schema))
 
         return self._session
 
