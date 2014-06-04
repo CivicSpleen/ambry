@@ -1349,9 +1349,7 @@ class BuildBundle(Bundle):
             for partition in self.partitions:
 
                 if not os.path.exists(partition.database.path):
-                    self.log(
-                        "{} File does not exist, skipping".format(
-                            partition.database.path))
+                    self.log("{} File does not exist, skipping".format(partition.database.path))
                     continue
 
                 if partition.name in skips:

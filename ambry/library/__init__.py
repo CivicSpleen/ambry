@@ -216,7 +216,7 @@ class Library(object):
         except ConflictError:
             installed = False
 
-        self.files.install_bundle_file(bundle, self.cache, commit=False)
+        self.files.install_bundle_file(bundle, self.cache, commit=commit)
 
         ident = bundle.identity
         return self.cache.path(ident.cache_key), installed
