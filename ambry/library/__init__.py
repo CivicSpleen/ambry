@@ -671,8 +671,8 @@ class Library(object):
                             continue
 
                         if b.identity.is_bundle:
-                            self.logger.info("Queing: {} from {}".format(b.identity.vname, file_))
                             bundles.append(b)
+
                     except NotFoundError:
                         # Probably a partition, not a bundle.
                         pass
@@ -793,13 +793,16 @@ class Library(object):
         from ..dbexceptions import ConflictError
         from sqlalchemy.exc import IntegrityError
 
+        if clean:
+            self.files.query.type(Dataset.LOCATION.SOURCE).delete()
+
         for ident in self.source._dir_list().values():
             try:
-                bundle = self.source.bundle(ident.bundle_path)
 
-                self.logger.info('Installing: {} '.format(bundle.identity.vname))
+
+                self.logger.info('Installing: {} '.format(ident.vname))
                 try:
-                    self.database.install_dataset_identity(bundle.identity)
+                    self.database.install_dataset_identity(ident)
                     self.database.commit()
                 except (ConflictError, IntegrityError):
                     self.database.rollback()
@@ -807,6 +810,8 @@ class Library(object):
                     pass
 
                 try:
+                    bundle = self.source.bundle(ident.bundle_path)
+
                     self.files.install_bundle_source(bundle, self.source, commit=True)
                     self.database.commit()
                 except IntegrityError:

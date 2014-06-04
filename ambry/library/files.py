@@ -279,7 +279,7 @@ class Files(object):
         return self.new_file(
             commit = commit,
             merge=True,
-            path=bundle.identity.cache_key,
+            path=bundle.bundle_dir,
             group=source.base_dir,
             ref=bundle.identity.vid,
             state='installed',
