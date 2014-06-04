@@ -803,11 +803,12 @@ class Library(object):
                     self.database.commit()
                 except ConflictError:
                     self.database.rollback()
-                    self.database.commit()
+
                     pass
 
                 try:
                     self.files.install_bundle_source(bundle, self.source, commit=True)
+                    self.database.commit()
                 except IntegrityError:
                     self.database.rollback()
                     pass
