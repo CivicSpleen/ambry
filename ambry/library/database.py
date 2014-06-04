@@ -528,7 +528,7 @@ class LibraryDb(object):
         from ..dbexceptions import ConflictError, NotFoundError
 
         if not isinstance(bundle, Bundle):
-            raise ValueError("Can only install a  Bundle object")
+            raise ValueError("Can only install a  Bundle object. Got a {}".format(type(bundle)))
 
             # The Tables only get installed when the dataset is installed,
             # not for the partition

@@ -753,8 +753,11 @@ class Library(object):
                 else:
                     self.logger.info("Remote {} sync: {}".format(remote.repo_id, cache_key))
 
-
                 b = self._get_bundle_by_cache_key(cache_key)
+
+                if not b:
+                    self.logger.error("Failed to fetch bundle for {} ".format(cache_key))
+                    continue
 
                 path, installed =  self.put_bundle(b, install_partitions=False, commit=True)
 
