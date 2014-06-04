@@ -801,7 +801,7 @@ class Library(object):
                 try:
                     self.database.install_dataset_identity(bundle.identity)
                     self.database.commit()
-                except ConflictError:
+                except (ConflictError, IntegrityError):
                     self.database.rollback()
 
                     pass
