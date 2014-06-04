@@ -1340,14 +1340,8 @@ class BuildBundle(Bundle):
             #library = ambry.library.new_library(self.config.library(library_name), reset=True)
             library = self.library
 
-            self.log(
-                "Install   {} to  library {}".format(
-                    self.identity.name,
-                    library.database.dsn))
-            dest = library.put_bundle(
-                self,
-                force=force,
-                install_partitions=False)
+            self.log("Install   {} to  library {}".format(self.identity.name,library.database.dsn))
+            dest = library.put_bundle(self, install_partitions=False)
             self.log("Installed {}".format(dest[1]))
 
             skips = self.config.group('build').get('skipinstall', [])
@@ -1355,16 +1349,14 @@ class BuildBundle(Bundle):
             for partition in self.partitions:
 
                 if not os.path.exists(partition.database.path):
-                    self.log(
-                        "{} File does not exist, skipping".format(
-                            partition.database.path))
+                    self.log("{} File does not exist, skipping".format(partition.database.path))
                     continue
 
                 if partition.name in skips:
                     self.log('Skipping {}'.format(partition.name))
                 else:
                     self.log("Install   {}".format(partition.name))
-                    dest = library.put_partition(self, partition, force=force)
+                    dest = library.put_partition(self, partition)
                     self.log("Installed {}".format(dest[1]))
 
                     if delete:

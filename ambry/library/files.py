@@ -21,6 +21,7 @@ class Files(object):
     TYPE.SREPO = LocationRef.LOCATION.SREPO
     TYPE.UPSTREAM = LocationRef.LOCATION.UPSTREAM
     TYPE.REMOTE = LocationRef.LOCATION.REMOTE
+    TYPE.REMOTEPARTITION = LocationRef.LOCATION.REMOTEPARTITION
 
 
     def __init__(self, db, query=None):
@@ -29,6 +30,7 @@ class Files(object):
 
         self._query = query
 
+        self._collection = []
 
     @property
     def all(self):
@@ -118,7 +120,6 @@ class Files(object):
         self._query = self._query.filter(File.group == v)
         return self
 
-
     #
     # pre-defined type filters
     #
@@ -130,7 +131,11 @@ class Files(object):
                                          File.type_ == self.TYPE.PARTITION))
         return self
 
-    def new_file(self, merge=False, commit = True,  **kwargs):
+    def new_file(self, merge=False, commit = True, **kwargs):
+        """
+        If merge is 'collect', the files will be added to the collection, for later
+        insertion.
+        """
 
         if merge:
             f = File(**kwargs)
@@ -139,25 +144,38 @@ class Files(object):
         else:
             return File(**kwargs)
 
+    def insert_collection(self):
+
+        if len(self._collection) == 0:
+            return
+
+        self.db.session.execute(File.__table__.insert(), self._collection)
+
+        self._collection = []
 
     def merge(self, f, commit = True):
+        '''If commit is 'collect' add the files to the collectoin for later insertion. '''
         from sqlalchemy.exc import IntegrityError
 
         s = self.db.session
 
         path = f.path
 
-        if os.path.exists(path):
-            stat = os.stat(path)
+        if True:
+            if os.path.exists(path):
+                stat = os.stat(path)
 
-            if not f.modified or stat.st_mtime > f.modified:
-                f.modified = int(stat.st_mtime)
+                if not f.modified or stat.st_mtime > f.modified:
+                    f.modified = int(stat.st_mtime)
 
-            f.size = stat.st_size
-        else:
-            f.modified = None
-            f.size = None
+                f.size = stat.st_size
+            else:
+                f.modified = None
+                f.size = None
 
+        if commit == 'collect':
+            self._collection.append(f.insertable_dict)
+            return
 
         # Sqlalchemy doesn't automatically rollback on exceptions, and you
         # can't re-try the commit until you roll back.
@@ -169,7 +187,104 @@ class Files(object):
             self.db.rollback()
 
             s.merge(f)
-            self.db.commit()
+            try:
+                self.db.commit()
+            except IntegrityError as e:
+                self.db.rollback()
+                pass
+
 
         self.db._mark_update()
+
+    def install_bundle_file(self, bundle, cache, commit=True):
+        """Mark a bundle file as having been installed in the library"""
+
+        ident = bundle.identity
+
+        if self.query.group(cache.repo_id).type(Files.TYPE.BUNDLE).path(bundle.database.path).one_maybe:
+            return False
+
+        return self.new_file(
+            commit=commit,
+            merge=True,
+            path=bundle.database.path,
+            group=cache.repo_id,
+            ref=ident.vid,
+            state='installed',
+            type_=Files.TYPE.BUNDLE,
+            data=None,
+            source_url=None)
+
+
+    def install_partition_file(self, partition, cache, commit=True):
+        """Mark a partition file as having been installed in the library
+
+        """
+
+        if self.query.group(cache.repo_id).type(Files.TYPE.PARTITION).path(partition.database.path).one_maybe:
+            return False
+
+        ident = partition.identity
+
+        return self.new_file(
+            commit=commit,
+            merge=True,
+            path=partition.database.path,
+            group=cache.repo_id,
+            ref=ident.vid,
+            state='installed',
+            type_=Files.TYPE.PARTITION,
+            data=None,
+            source_url=None)
+
+
+    def install_remote_bundle(self, ident, upstream, metadata, commit=True):
+        """Set a reference to a remote bundle"""
+
+        return self.new_file(
+            commit=commit,
+            merge=True,
+            path=ident.cache_key,
+            group=upstream.repo_id,
+            ref=ident.vid,
+            state='installed',
+            type_=Files.TYPE.REMOTE,
+            data=metadata,
+            hash=metadata.get('md5', None),
+            priority=upstream.priority,
+            source_url=upstream.repo_id )
+
+
+    def install_remote_partition(self, ident, upstream, metadata, commit=True):
+        """Set a reference to a remote partition"""
+
+
+        return self.new_file(
+            commit = commit,
+            merge=True,
+            path=ident.cache_key,
+            group=upstream.repo_id,
+            ref=ident.vid,
+            state='installed',
+            type_=Files.TYPE.REMOTEPARTITION,
+            data=metadata,
+            hash=metadata.get('md5', None),
+            priority=upstream.priority,
+            source_url=upstream.repo_id, )
+
+    def install_bundle_source(self, bundle, source, commit=True):
+        """Set a reference a bundle source"""
+
+        return self.new_file(
+            commit = commit,
+            merge=True,
+            path=bundle.identity.cache_key,
+            group=source.base_dir,
+            ref=bundle.identity.vid,
+            state='installed',
+            type_=Files.TYPE.SOURCE,
+            data=None,
+            hash=None,
+            priority=None,
+            source_url=None, )
 

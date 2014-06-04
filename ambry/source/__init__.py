@@ -248,70 +248,7 @@ class SourceTree(object):
             dependencies=dict(dependencies)
         )
 
-    def sync_bundle(self, path, ident=None, bundle=None):
-        from ..orm import File
-        self.logger.info("Sync source bundle: {} ".format(path))
 
-
-        if not bundle and os.path.exists(path):
-            try:
-                bundle = self.bundle(path)
-            except Exception as e:
-                raise
-                self.logger.error("Failed to load bundle for {}".format(path))
-                pass
-
-        if not ident and bundle:
-            ident = bundle.identity
-
-        files = self.library.files
-
-        f = files.query.type(Dataset.LOCATION.SOURCE).ref(ident.vid).one_maybe
-
-        # Update the file if it already exists.
-        if not f:
-
-            f = File(
-                path=path,
-                group=self.base_dir,
-                ref=ident.vid,
-                state='synced',
-                type_=Dataset.LOCATION.SOURCE,
-                data=None,
-                source_url=None)
-
-            d = self._bundle_data(ident,bundle)
-            reattach = False
-
-        else:
-
-            d = f.data
-            reattach = f.oid
-
-        #for p in bundle.config.group('partitions'):
-        #    if isinstance(p, dict):
-        #        print "X!!!",p
-
-        # NOTE -- this code closes ( commits ) the session so the
-        # file f is no longer valid if it came from the database, which is
-        # why we have to refetch it.
-        self.library.database.install_dataset_identity(ident,  data=d)
-
-        if reattach:
-            f = files.db.session.query(File).get(reattach)
-
-
-        if bundle and bundle.is_built:
-
-            d['process'] = bundle.get_value_group('process')
-            f.state = 'built'
-
-        d['rev'] = d['rev'] + 1  # Marks bundles that have already beein imported.
-
-        f.data = d
-        files.merge(f)
-
-        bundle.close()
 
 
     def _dir_list(self, datasets=None, key='vid'):

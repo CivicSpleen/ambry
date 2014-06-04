@@ -200,106 +200,37 @@ class Library(object):
         '''Return ambry.database.Database object'''
         return self._database
 
-    def load(self, rel_path, decl_md5=None):
-        '''Load a bundle from the remote to the local cache and install it'''
-        from ..util.flo import copy_file_or_flo
-        from ..dbexceptions import ConflictError
-
-        raise NotImplementedError()
-
-        if not self.upstream.has(rel_path):
-            raise ConfigurationError('Remote {} does not have cache key  {}'.format(self.upstream, rel_path))
-
-        if not self.cache.has(rel_path):
-            source = self.upstream.get_stream(rel_path)
-
-            sink = self.cache.put_stream(rel_path, metadata=source.meta)
-
-            try:
-                copy_file_or_flo(source, sink)
-            except:
-                self.cache.remove(rel_path, propagate=True)
-                raise
-
-            source.close()
-            sink.close()
-
-        file_md5 = self.cache.md5(rel_path)
-
-        if file_md5 != decl_md5:
-            raise ConflictError('MD5 Mismatch for {} : file={} != declared={} '.format(rel_path, file_md5, decl_md5))
-
-        abs_path = self.cache.path(rel_path)
-        b = self._create_bundle( abs_path)
-
-        if b.identity.cache_key != rel_path:
-            raise ConflictError("Identity of downloaded bundle doesn't match request payload")
-
-        self.put_bundle(b)
-
-        return b
-
 
     ##
     ## Storing
     ##
 
-    def put_bundle(self, bundle, force=False, logger=None, install_partitions=True):
+    def put_bundle(self, bundle, logger=None, install_partitions=True, commit = True):
+        """Install the records for the dataset, tables, columns and possibly partitions. Does not
+        install file references """
+        from ..dbexceptions import ConflictError
 
-        self.database.install_bundle(bundle)
-        dst, cache_key, url = self._put_file(bundle.identity, bundle.database.path, force=force)
+        try:
+            self.database.install_bundle(bundle, install_partitions=install_partitions, commit = commit)
+            installed = True
+        except ConflictError:
+            installed = False
 
-        if install_partitions:
-            for p in bundle.partitions:
-                self.put_partition(bundle, p, force=force)
+        self.files.install_bundle_file(bundle, self.cache, commit=commit)
 
-        return dst, cache_key, url
-
-    def put_partition(self, bundle, partition, force=False):
-
-        self.database.install_partition(bundle, partition.identity.id_)
-
-        dst, cache_key, url = self._put_file(partition.identity, partition.database.path,
-                                             force=force)
-
-        return dst, cache_key, url
-
-    def _put_file(self, identity, file_path, state='new', force=False):
-        '''Store a dataset or partition file, without having to open the file
-        to determine what it is, by using  seperate identity'''
-        from ..identity import Identity
-        from .files import Files
-        from ..util import md5_for_file
+        ident = bundle.identity
+        return self.cache.path(ident.cache_key), installed
 
 
-        if isinstance(identity, dict):
-            identity = Identity.from_dict(identity)
+    def put_partition(self, bundle, partition, commit = True):
+        """Install the record and file reference for the partition """
 
-        dst = None
-        if not self.cache.has(identity.cache_key) or force:
-            dst = self.cache.put(file_path, identity.cache_key)
+        self.database.install_partition(bundle, partition, commit = commit)
 
-        else:
-            dst = self.cache.path(identity.cache_key)
+        installed = self.files.install_partition_file(partition, self.cache, commit = commit)
 
-        if not os.path.exists(dst):
-            raise Exception("cache {}.put() didn't return an existent path. got: {}".format(type(self.cache), dst))
+        return self.cache.path(partition.identity.cache_key), installed
 
-        self.files.query.path(dst).group(self.cache.repo_id).delete()
-
-        f = self.files.new_file(path=dst,
-                                group=self.cache.repo_id,
-                                ref=identity.vid,
-                                state=state)
-
-        if identity.is_bundle:
-            f.type_ = Files.TYPE.BUNDLE
-        else:
-            f.type_ = Files.TYPE.PARTITION
-
-        self.files.merge(f)
-
-        return dst, identity.cache_key, self.cache.last_upstream().path(identity.cache_key)
 
     def remove(self, bundle):
         '''Remove a bundle from the library, and delete the configuration for
@@ -366,8 +297,6 @@ class Library(object):
             self.logger.error("Failed to load databundle at path {}: {}".format(abs_path, e))
             raise DatabaseError
 
-        self.sync_library_dataset(bundle)
-
         bundle.library = self
 
         return bundle
@@ -410,7 +339,7 @@ class Library(object):
                     raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.fqname))
 
                 try:
-                    self.database.install_partition(bundle, dataset.partition.id_,
+                    self.database.install_partition_by_id(bundle, dataset.partition.id_,
                                                     install_bundle=False, install_tables=False)
                 except IntegrityError as e:
                     self.database.session.rollback()
@@ -702,6 +631,7 @@ class Library(object):
         from ..orm import Dataset
         from .files import Files
         from database import ROOT_CONFIG_NAME_V
+        from ..dbexceptions import ConflictError
 
         assert Files.TYPE.BUNDLE == Dataset.LOCATION.LIBRARY
         assert Files.TYPE.PARTITION == Dataset.LOCATION.PARTITION
@@ -713,7 +643,7 @@ class Library(object):
 
         self.logger.info("Rebuilding from dir {}".format(self.cache.cache_dir))
 
-        for r, d, f in os.walk(self.cache.cache_dir, topdown=True): #@UnusedVariable
+        for r, d, f in os.walk(self.cache.cache_dir, topdown=True):
 
             # Exclude all of the directories which have the same basename as a database file. These
             # hold only partitions.
@@ -737,6 +667,11 @@ class Library(object):
                     b = None
                     try:
                         b = self._create_bundle( path_)
+
+                        # The path check above is wrong sometime when there are symlinks
+                        if self.files.query.type(Files.TYPE.BUNDLE).ref(b.identity.vid).one_maybe and self.get(bundle.identity.vid):
+                            continue
+
                         if b.identity.is_bundle:
                             self.logger.info("Queing: {} from {}".format(b.identity.vname, file_))
                             bundles.append(b)
@@ -753,80 +688,47 @@ class Library(object):
         bundles = sorted(bundles, key = lambda b: b.partitions.count)
 
         for bundle in bundles:
+
             self.logger.info('Installing: {} '.format(bundle.identity.vname))
 
             try:
-                self.sync_library_dataset(bundle, install_partitions=False)
+
+                try:
+                    self.database.install_bundle(bundle, install_partitions=False, commit=True)
+                    installed = True
+                except ConflictError:
+                    installed = False
+
+                self.files.install_bundle_file(bundle, self.cache, commit=True)
 
                 for p in bundle.partitions:
                     self.logger.info('            {} '.format(p.identity.vname))
-                    self.sync_library_partition(bundle, p, commit=False)
+
+                    if installed:
+                        self.database.install_partition(bundle, p, commit='collect')
+
+                    self.files.install_partition_file(p, self.cache, commit='collect')
+
+
+                self.files.insert_collection()
+
+                if installed:
+                    self.database.insert_partition_collection()
 
                 self.database.commit()
+                self.database.close()
                 bundle.close()
 
             except Exception as e:
                 self.logger.error('Failed to install bundle {}: {}'.format(bundle.identity.vname, e.message))
+                raise
                 continue
 
         return bundles
 
-    def sync_library_dataset(self, bundle, install_partitions=True, commit = True):
-        from sqlalchemy.exc import IntegrityError
-        from files import Files
-
-        assert Files.TYPE.BUNDLE == Dataset.LOCATION.LIBRARY
-
-        ident  = bundle.identity
-
-        try:
-            d = self.database.get(bundle.identity.vid)
-        except NotFoundError:
-            d = None
-
-        if not d:
-            self.database.install_bundle(bundle, install_partitions = install_partitions)
-
-        f = self.files.query.path(bundle.database.path).one_maybe
-
-        if not f:
-
-            self.files.new_file(
-                commit=commit,
-                merge=True,
-                path=bundle.database.path,
-                group=self.cache.repo_id,
-                ref=ident.vid,
-                state='synced',
-                type_= Files.TYPE.BUNDLE,
-                data=None,
-                source_url=None)
-
-
-    def sync_library_partition(self, bundle, partition, install_tables=True,
-                               install_partition=True, commit = True):
-        from files import Files
-
-        if install_partition:
-            self.database.install_partition(bundle, partition.identity.id_,
-                                            install_bundle=False, install_tables=install_tables)
-
-        ident = partition.identity
-
-        self.files.new_file(
-            commit = commit,
-            merge=True,
-            path=partition.database.path,
-            group=self.cache.repo_id,
-            ref=ident.vid,
-            state='synced',
-            type_= Files.TYPE.PARTITION,
-            data=ident.urls,
-            source_url=None)
-
     def sync_remotes(self, remotes=None, clean = False):
         from ..orm import Dataset
-
+        from sqlalchemy.exc import IntegrityError
 
         if clean:
             self.files.query.type(Dataset.LOCATION.REMOTE).delete()
@@ -837,49 +739,84 @@ class Library(object):
         if not remotes:
             return
 
+
+
         for remote in remotes:
+
+            all_keys = [ f.path for f  in self.files.query.type(Dataset.LOCATION.REMOTE).group(remote.repo_id).all ]
 
             for cache_key in remote.list().keys():
 
-                # This is just for reporting.
+                if cache_key in all_keys:
+                    continue
 
-                if self.cache.has(cache_key):
+                if self.cache.has(cache_key):# This is just for reporting.
                     self.logger.info("Remote {} has: {}".format(remote.repo_id, cache_key))
                 else:
                     self.logger.info("Remote {} sync: {}".format(remote.repo_id, cache_key))
 
+
                 b = self._get_bundle_by_cache_key(cache_key)
 
+                path, installed =  self.put_bundle(b, install_partitions=False, commit=True)
+
+                try:
+                    self.files.install_remote_bundle(b.identity, remote, {}, commit=True)
+                except IntegrityError:
+                    b.close()
+                    continue
+
                 for p in b.partitions:
-                    if self.sync_remote_partition(remote, p.identity, {}):
+                    if  installed:
+                        self.database.install_partition(b, p, commit='collect')
+                    if self.files.install_remote_partition(p.identity, remote, {}, commit = 'collect'):
                         self.logger.info("    + {}".format(p.identity.name))
                     else:
                         self.logger.info("    = {}".format(p.identity.name))
 
+                try:
+                    self.files.insert_collection()
+                except IntegrityError:
+                    b.close()
+                    continue
+
+                if installed:
+                    self.database.insert_partition_collection()
+
+
+                self.database.commit()
                 self.database.close()
                 b.close()
 
 
-    def sync_remote_partition(self, upstream, ident, metadata):
+    def sync_source(self, clean=False):
+        '''Rebuild the database from the bundles that are already installed
+        in the repository cache'''
+        from ..dbexceptions import ConflictError
+        from sqlalchemy.exc import IntegrityError
 
-        f = self.files.query.path(ident.cache_key).one_maybe
+        for ident in self.source._dir_list().values():
+            try:
+                bundle = self.source.bundle(ident.bundle_path)
+                self.logger.info('Installing: {} '.format(bundle.identity.vname))
+                try:
+                    self.database.install_bundle(bundle, install_partitions=False, commit=True)
+                except ConflictError:
+                    self.database.rollback()
+                    pass
 
-        if f:
-            return False
+                try:
+                    self.files.install_bundle_source(bundle, self.source, commit=True)
+                except IntegrityError:
+                    self.database.rollback()
+                    pass
 
-        self.files.new_file(
-            merge=True,
-            path=ident.cache_key,
-            group=upstream.repo_id,
-            ref=ident.vid,
-            state='synced',
-            type_=Dataset.LOCATION.REMOTE,
-            data=metadata,
-            hash=metadata.get('md5',None),
-            priority = upstream.priority,
-            source_url=upstream.repo_id,)
+            except Exception as e:
+                raise
+                self.logger.error("Failed to sync: bundle_path={} : {} ".format(ident.bundle_path, e.message))
 
-        return True
+        self.database.commit()
+        bundle.close()
 
     @property
     def remotes(self):

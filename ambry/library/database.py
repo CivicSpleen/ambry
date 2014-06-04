@@ -58,6 +58,7 @@ class LibraryDb(object):
         self._engine = None
         self._connection  = None
 
+        self._partition_collection = []
 
         if self.driver in ['postgres','postgis']:
             self._schema = 'library'
@@ -517,23 +518,68 @@ class LibraryDb(object):
                                 .format(identity.vid, e.message, p.dict))
 
 
-    def install_bundle_file(self, identity, bundle_file):
-        """Install a bundle in the database, starting from a file that may
-        be a partition or a bundle"""
-        from ..identity import Identity
 
-        #
-        # This is really just used to ignore partitions
-        #
+    def install_bundle(self, bundle, install_partitions=True, commit = True):
+        '''Copy the schema and partitions lists into the library database
 
-        if isinstance(identity , dict):
-            identity = Identity.from_dict(identity)
+        '''
+        from ambry.bundle import Bundle
+        from ..dbexceptions import ConflictError, NotFoundError
 
-        if identity.is_bundle:
+        if not isinstance(bundle, Bundle):
+            raise ValueError("Can only install a  Bundle object")
 
-            bundle = DbBundle(bundle_file)
+            # The Tables only get installed when the dataset is installed,
+            # not for the partition
 
-            self.install_bundle(bundle)
+        self._mark_update()
+
+        try:
+            dvid = self.get(bundle.identity.vid)
+        except NotFoundError:
+            dvid = None
+
+        if dvid:
+            raise ConflictError("Bundle {} already installed".format(bundle.identity.fqname))
+
+        try:
+            dataset = self.install_dataset(bundle)
+        except Exception as e:
+            raise
+            from ..dbexceptions import DatabaseError
+
+            raise DatabaseError("Failed to install {} into {}: {}".format(
+                bundle.database.path, self.dsn, e.message
+            ))
+
+        s = self.session
+
+        # using s.merge() is a lot easer, but this is spectacularly faster.
+
+        tables = []
+        columns = []
+
+        for table in dataset.tables:
+            tables.append(table.insertable_dict)
+
+            for column in table.columns:
+                columns.append(column.insertable_dict)
+
+        if tables:
+            s.execute(Table.__table__.insert(), tables)
+            s.execute(Column.__table__.insert(), columns)
+
+        if install_partitions:
+            for partition in dataset.partitions:
+                s.merge(partition)
+
+        if commit:
+            try:
+                self.commit()
+            except IntegrityError as e:
+                self.logger.error("Failed to merge into {}".format(self.dsn))
+                self.rollback()
+                raise e
 
     def install_dataset(self, bundle):
         """Install only the most basic parts of the bundle, excluding the
@@ -579,57 +625,43 @@ class LibraryDb(object):
 
         return dataset
 
-    def install_bundle(self, bundle, install_partitions = True):
-        '''Copy the schema and partitions lists into the library database
 
-        '''
-        from ambry.bundle import Bundle
-
-        if not isinstance(bundle, Bundle):
-            raise ValueError("Can only install a  Bundle object")
-
-            # The Tables only get installed when the dataset is installed,
-            # not for the partition
-
-
-        self._mark_update()
-
-        try:
-            dataset = self.install_dataset(bundle)
-        except Exception as e:
-            raise
-            from ..dbexceptions import DatabaseError
-            raise DatabaseError("Failed to install {} into {}: {}".format(
-                bundle.database.path, self.dsn, e.message
-            ))
-
-        s = self.session
-
-        for table in dataset.tables:
-            s.merge(table)
-
-            for column in table.columns:
-                s.merge(column)
-
-        if install_partitions:
-            for partition in dataset.partitions:
-                s.merge(partition)
-
-        try:
-            self.commit()
-        except IntegrityError as e:
-            self.logger.error("Failed to merge into {}".format(self.dsn))
-            self.rollback()
-            raise e
-
-    def install_partition(self, bundle,  p_id, install_bundle=True, install_tables = True):
+    def install_partition_by_id(self, bundle,  p_id, install_bundle=True, install_tables = True, commit = True):
         """Install a single partition and its tables. This is mostly
         used for installing into warehouses, where it isn't desirable to install
-        the whole bundle"""
+        the whole bundle
+
+        if commit = 'collect', the partitions are collected and inserted with insert_partition_collection,
+        in this case, tables and column will not be installed.
+
+        """
 
         from ..dbexceptions import NotFoundError
         from ..identity import PartitionNameQuery
         from sqlalchemy.orm.exc import NoResultFound
+
+        partition = bundle.partitions.get(p_id)
+
+        return self.install_partition(bundle, partition,
+                                      install_bundle=install_bundle, install_tables=install_tables, commit=commit)
+
+
+    def install_partition(self, bundle, partition, install_bundle=True, install_tables=True, commit=True):
+        """Install a single partition and its tables. This is mostly
+        used for installing into warehouses, where it isn't desirable to install
+        the whole bundle
+
+        if commit = 'collect', the partitions are collected and inserted with insert_partition_collection,
+        in this case, tables and column will not be installed.
+
+        """
+        from ..dbexceptions import NotFoundError
+        from ..identity import PartitionNameQuery
+        from sqlalchemy.orm.exc import NoResultFound
+
+        if commit == 'collect':
+            self._partition_collection.append(partition.record.insertable_dict)
+            return
 
         if install_bundle:
             try:
@@ -640,7 +672,7 @@ class LibraryDb(object):
             if not b:
                 self.install_bundle(bundle)
 
-        partition = bundle.partitions.get(p_id)
+
 
         s = self.session
 
@@ -659,12 +691,22 @@ class LibraryDb(object):
 
         s.merge(partition.record)
 
-        try:
-            self.commit()
-        except IntegrityError as e:
-            self.logger.error("Failed to merge")
-            self.rollback()
-            raise e
+        if commit:
+            try:
+                self.commit()
+            except IntegrityError as e:
+                self.logger.error("Failed to merge")
+                self.rollback()
+                raise e
+
+    def insert_partition_collection(self):
+
+        if len(self._partition_collection) == 0:
+            return
+
+        self.session.execute(Partition.__table__.insert(), self._partition_collection)
+
+        self._partition_collection = []
 
     def mark_table_installed(self, table_or_vid, name=None):
         """Mark a table record as installed"""
@@ -749,8 +791,11 @@ class LibraryDb(object):
         '''Remove all references to a Dataset'''
         from ..orm import Dataset
 
-        self.session.query(Dataset).filter(Dataset.vid ==  vid).delete()
-        self.commit()
+        dataset = (self.session.query(Dataset).filter(Dataset.vid == vid).one())
+
+        # Can't use delete() on the query -- bulk delete queries do not
+        # trigger in-python cascades!
+        self.session.delete(dataset)
 
 
     def remove_partition(self, partition):
@@ -770,6 +815,14 @@ class LibraryDb(object):
         s = self.session
 
         s.query(Partition).filter(Partition.t_vid  == p_vid).delete()
+
+        self.commit()
+
+    def remove_partition_record(self, vid):
+
+        s = self.session
+
+        s.query(Partition).filter(Partition.vid == vid).delete()
 
         self.commit()
 

@@ -108,12 +108,12 @@ class Partitions(object):
                                     .order_by(OrmPartition.segment.asc()))
 
             partitions = []
+
             for op in q.all():
                 try:
                     partitions.append(self.partition(op))
                 except KeyError: # Unknown partition type, usually 'hdf'
                     continue
-
 
             return partitions
         except sqlalchemy.exc.OperationalError:

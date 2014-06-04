@@ -65,7 +65,6 @@ def library_parser(cmd):
     sp.add_argument('-a', '--all', default=False, action="store_true", help='Sync everything')
     sp.add_argument('-l', '--library', default=False, action="store_true", help='Sync only the library')
     sp.add_argument('-r', '--remote', default=False, action="store_true", help='Sync only the remote')
-    sp.add_argument('-u', '--upstream', default=False, action="store_true", help='Sync only the upstream')
     sp.add_argument('-s', '--source', default=False, action="store_true", help='Sync only the source')
 
 
@@ -87,6 +86,11 @@ def library_parser(cmd):
 
     sp = asp.add_parser('remove', help='Delete a file from all local caches and the local library')
     sp.set_defaults(subcommand='remove')
+    sp.add_argument('-a', '--all', default=False, action="store_true", help='Remove all records')
+    sp.add_argument('-b', '--bundle', default=False, action="store_true", help='Remove the dataset and partition records')
+    sp.add_argument('-l', '--library', default=False, action="store_true", help='Remove the library file record and library files')
+    sp.add_argument('-r', '--remote', default=False, action="store_true", help='Remove the remote record')
+    sp.add_argument('-s', '--source', default=False, action="store_true", help='Remove the source record')
     sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Name or ID of the bundle or partition to remove')
 
 
@@ -246,6 +250,9 @@ def library_rebuild(args, l, config):
 def library_remove(args, l, config):
     from ..dbexceptions import NotFoundError
 
+    cache_keys = set()
+    refs = set()
+
     for name in args.terms:
 
         ident = l.resolve(name, location=None)
@@ -255,34 +262,60 @@ def library_remove(args, l, config):
             continue
 
         try:
-            b = l.get(name)
 
-            if b:
+            if ident.partition:
+                cache_keys.add(ident.partition.cache_key)
+                refs.add(ident.partition.vid)
 
-                if b.partition:
-                    k =  b.partition.identity.cache_key
-                    prt("Deleting partition {}",k)
+            else: # The reference is to a bundle, so we have to delete everything
+                cache_keys.add(ident.cache_key)
+                refs.add(ident.vid)
 
-                    l.cache.remove(k, propagate = True)
+                b = l.get(ident.vid)
 
-                else:
 
-                    for p in b.partitions:
-                        k =  p.identity.cache_key
-                        prt("Deleting partition {}",k)
-                        l.cache.remove(k, propagate = True)
+                for p in b.partitions:
+                    cache_keys.add(p.cache_key)
+                    refs.add(p.vid)
 
-                    k = b.identity.cache_key
-                    prt("Deleting bundle {}", k)
-                    l.remove(b)
         except NotFoundError:
             pass
 
-        l.files.query.ref(ident.vid).delete()
 
-        l.database.remove_dataset(ident.vid)
+    if args.library:
+        for ck in cache_keys:
+            l.cache.remove(ck, propagate=True)
+            prt("Remove file {}".format(ck))
 
-        prt("Removed {}".format(ident.fqname))
+    for ref in refs:
+
+        if args.bundle:
+            prt("Remove bundle record {}".format(ref))
+            if ref.startswith('d'):
+                l.database.remove_dataset(ref)
+            if ref.startswith('p'):
+                l.database.remove_partition_record(ref)
+
+            # We also need to delete everything in this case; no point in having
+            # a file record if there there is no bundle or partition.
+            l.files.query.ref(ref).delete()
+
+        if args.library:
+            prt("Remove library record {}".format(ref))
+            if ref.startswith('d'):
+                l.files.query.ref(ref).type(l.files.TYPE.BUNDLE).delete()
+            if ref.startswith('p'):
+                l.files.query.ref(ref).type(l.files.TYPE.PARTITION).delete()
+
+        if args.remote:
+            prt("Remove remote record {}".format(ref))
+            l.files.query.ref(ref).type(l.files.TYPE.REMOTE).delete()
+            l.files.query.ref(ref).type(l.files.TYPE.REMOTEPARTITION).delete()
+
+        if args.source and ref.startswith('d'):
+            prt("Remove source record {}".format(ref))
+            l.files.query.ref(ref).type(l.files.TYPE.SOURCE).delete()
+
 
 
 def library_info(args, l, config, list_all=False):    
@@ -449,7 +482,7 @@ def library_sync(args, l, config):
 
     if (args.source or all) and l.source:
         l.logger.info("==== Sync Source")
-        l.source.sync_source(clean=args.clean)
+        l.sync_source(clean=args.clean)
 
 
 

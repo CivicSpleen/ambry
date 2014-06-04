@@ -160,7 +160,7 @@ class WarehouseInterface(object):
 
         pid = self._to_vid(partition)
 
-        ld.install_partition(bundle, pid)
+        ld.install_partition_by_id(bundle, pid)
 
         p = bundle.partitions.get(pid)
 
