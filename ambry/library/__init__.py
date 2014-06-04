@@ -816,6 +816,7 @@ class Library(object):
                     bundle = self.source.bundle(ident.bundle_path)
 
                     self.files.install_bundle_source(bundle, self.source, commit=True)
+                    bundle.close()
                     self.database.commit()
                 except IntegrityError:
                     self.database.rollback()
@@ -826,7 +827,7 @@ class Library(object):
                 self.logger.error("Failed to sync: bundle_path={} : {} ".format(ident.bundle_path, e.message))
 
         self.database.commit()
-        bundle.close()
+     
 
     @property
     def remotes(self):
