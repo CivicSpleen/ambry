@@ -467,22 +467,23 @@ class LibraryDb(object):
         ds.creator = 'N/A'
         ds.data = data
 
+
         try:
+            self.session.add(ds)
+            self.commit()
+        except IntegrityError as e:
+
+            if not overwrite:
+                return
+
+            self.session.rollback()
             try:
-                self.session.add(ds)
-                self.commit()
-            except IntegrityError as e:
-
-                if not overwrite:
-                    return
-
-                self.session.rollback()
                 self.session.merge(ds)
                 self.commit()
 
-        except IntegrityError as e:
-            raise ConflictError("Can't install dataset vid={}; \nOne already exists. ('{}');\n {}"
-                                .format(identity.vid,  e.message, ds.dict))
+            except IntegrityError as e:
+                raise ConflictError("Can't install dataset vid={}; \nOne already exists. ('{}');\n {}"
+                                    .format(identity.vid,  e.message, ds.dict))
 
 
     def install_partition_identity(self, identity, data={}, overwrite = True):
