@@ -800,8 +800,10 @@ class Library(object):
                 self.logger.info('Installing: {} '.format(bundle.identity.vname))
                 try:
                     self.database.install_dataset_identity(bundle.identity)
+                    self.database.commit()
                 except ConflictError:
                     self.database.rollback()
+                    self.database.commit()
                     pass
 
                 try:
