@@ -191,7 +191,7 @@ class Files(object):
             try:
                 self.db.commit()
             except IntegrityError as e:
-                self.db.rollback()
+                s.rollback()
                 pass
 
 
