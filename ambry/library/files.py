@@ -185,7 +185,7 @@ class Files(object):
                 self.db.commit()
 
         except IntegrityError as e:
-            self.db.rollback()
+            s.rollback()
 
             s.merge(f)
             try:
