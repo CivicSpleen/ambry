@@ -194,12 +194,10 @@ class Library(object):
 
         self.database.close()
 
-
     @property
     def database(self):
         '''Return ambry.database.Database object'''
         return self._database
-
 
     ##
     ## Storing
