@@ -368,6 +368,8 @@ class Column(Base):
     __table_args__ = (UniqueConstraint('c_sequence_id', 'c_t_vid', name='_uc_columns_1'),
                      )
 
+
+
     DATATYPE_TEXT = 'text'
     DATATYPE_INTEGER ='integer' 
     DATATYPE_INTEGER64 ='integer64' 
@@ -520,16 +522,30 @@ class Column(Base):
         self.vid = str(con)
         self.id = str(con.rev(None))
 
+
     @property
     def dict(self):
-        x =  {k:v for k,v in self.__dict__.items()
-              if k in ['id','vid','sequence_id', 't_vid', 'name', 'description',
-                       'keywords', 'datatype', 'size', 'is_primary_key', 'data']}
+        x = {k: v for k, v in self.__dict__.items()
+             if k in ['id_', 'vid', 't_vid',
+                      'sequence_id', 'name', 'altname', 'is_primary_key', 'datatype', 'size',
+                      'precision', 'width', 'sql', 'flags', 'description', 'keywords', 'measure',
+                      'units', 'universe', 'scale', 'data']}
         if not x:
             raise Exception(self.__dict__)
+
         x['schema_type'] = self.schema_type
         return x
-    
+
+
+    @property
+    def insertable_dict(self):
+        x =  {('c_' + k).strip('_'): v for k, v in self.dict.items()}
+
+
+
+        return x
+
+
     @staticmethod
     def mangle_name(name):
         import re
@@ -564,7 +580,8 @@ class Column(Base):
         if target.id_  is None:
             table_on = ObjectNumber.parse(target.t_id)
             target.id_ = str(ColumnNumber(table_on, target.sequence_id))
-   
+
+
     def __repr__(self):
         return "<column: {}, {}>".format(self.name, self.vid)
  
@@ -623,9 +640,21 @@ class Table(Base):
 
     @property
     def dict(self):
-        return {k:v for k,v in self.__dict__.items() if k in ['id_','vid', 'sequence_id', 'name', 
-                                                              'vname', 'description', 'keywords', 'installed', 'data']}
-    
+        return {k:v for k,v in self.__dict__.items() if k in
+                ['id_','vid', 'd_id', 'd_vid', 'sequence_id', 'name', 'altname', 'vname', 'description',
+                 'universe', 'keywords', 'installed', 'data']}
+
+
+    @property
+    def insertable_dict(self):
+        x =  {('t_' + k).strip('_'): v for k, v in self.dict.items()}
+
+        if not 't_vid' in x or not x['t_vid']:
+            raise ValueError("Must have vid set: {} ".format(x))
+
+        return x
+
+
     @property
     def info(self):
         
@@ -1052,7 +1081,12 @@ class File(Base, SavableMixin):
     def dict(self):
 
         return  dict((col, getattr(self, col)) for col 
-                     in ['path', 'ref',  'type_',  'source_url', 'process', 'state', 'content_hash', 'modified', 'size', 'group', 'data'])
+                     in ['oid','path', 'ref',  'type_',  'source_url', 'process', 'state',
+                         'content_hash','hash', 'modified', 'size', 'group', 'data', 'priority'])
+
+    @property
+    def insertable_dict(self):
+        return { ('f_'+k).strip('_'):v for k,v in self.dict.items()}
 
 
 class Partition(Base):
@@ -1170,7 +1204,13 @@ class Partition(Base):
                  'segment':self.segment, 
                  'format': self.format if self.format else 'db'
                 }
-      
+
+
+    @property
+    def insertable_dict(self):
+        return {('p_' + k).strip('_'): v for k, v in self.dict.items()}
+
+
     def __repr__(self):
         return "<{} partition: {}>".format(self.format, self.vname)
 

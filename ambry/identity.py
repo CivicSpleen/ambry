@@ -944,6 +944,7 @@ class LocationRef(object):
     LOCATION.LIBRARY = 'L' # For the bundle
     LOCATION.PARTITION = 'LP' # For the partition, b/c also used in File.type
     LOCATION.REMOTE ='R'
+    LOCATION.REMOTEPARTITION = 'RP'
     LOCATION.UPSTREAM = 'U'
     LOCATION.WAREHOUSE = 'W'
 

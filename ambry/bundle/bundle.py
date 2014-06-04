@@ -1340,14 +1340,8 @@ class BuildBundle(Bundle):
             #library = ambry.library.new_library(self.config.library(library_name), reset=True)
             library = self.library
 
-            self.log(
-                "Install   {} to  library {}".format(
-                    self.identity.name,
-                    library.database.dsn))
-            dest = library.put_bundle(
-                self,
-                force=force,
-                install_partitions=False)
+            self.log("Install   {} to  library {}".format(self.identity.name,library.database.dsn))
+            dest = library.put_bundle(self, install_partitions=False)
             self.log("Installed {}".format(dest[1]))
 
             skips = self.config.group('build').get('skipinstall', [])
@@ -1364,7 +1358,7 @@ class BuildBundle(Bundle):
                     self.log('Skipping {}'.format(partition.name))
                 else:
                     self.log("Install   {}".format(partition.name))
-                    dest = library.put_partition(self, partition, force=force)
+                    dest = library.put_partition(self, partition)
                     self.log("Installed {}".format(dest[1]))
 
                     if delete:

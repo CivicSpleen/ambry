@@ -114,7 +114,7 @@ class Test(TestBase):
 
         print l.info
 
-        r = l.put_bundle(self.bundle)
+        l.put_bundle(self.bundle)
 
         def cb(what, metadata, start):
             return
@@ -159,7 +159,7 @@ class Test(TestBase):
         # Check that the library can list datasets that are inserted externally
         #
 
-        r = l.put_bundle(self.bundle)
+        l.put_bundle(self.bundle)
 
         ident = self.bundle.identity
 
@@ -226,7 +226,7 @@ class Test(TestBase):
         # Check that the library can list datasets that are inserted externally
         #
 
-        r = l.put_bundle(self.bundle)
+        l.put_bundle(self.bundle)
 
         s = set([i.fqname for i in rl.list().values()])
 
