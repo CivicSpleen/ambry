@@ -472,11 +472,11 @@ class LibraryDb(object):
             self.session.add(ds)
             self.commit()
         except IntegrityError as e:
+            self.session.rollback()
 
             if not overwrite:
                 return
 
-            self.session.rollback()
             try:
                 self.session.merge(ds)
                 self.commit()
