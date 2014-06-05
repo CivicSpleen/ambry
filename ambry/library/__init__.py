@@ -214,7 +214,7 @@ class Library(object):
         except ConflictError:
             installed = False
 
-        self.files.install_bundle_file(bundle, self.cache, commit=commit)
+        self.files.install_bundle_file(bundle, self.cache, commit=commit, state = 'new')
 
         ident = bundle.identity
 
@@ -228,7 +228,7 @@ class Library(object):
 
         self.database.install_partition(bundle, partition, commit = commit)
 
-        installed = self.files.install_partition_file(partition, self.cache, commit = commit)
+        installed = self.files.install_partition_file(partition, self.cache, commit = commit, state = 'new')
 
         self.cache.put(partition.database.path, partition.identity.cache_key)
 
