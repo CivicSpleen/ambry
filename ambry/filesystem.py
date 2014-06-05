@@ -222,7 +222,7 @@ class BundleFilesystem(Filesystem):
 
 
     def _get_unzip_file(self, cache, tmpdir, zf, path, name):
-        '''Look for a member of a zip file in the cache, and if it doesn next exist, 
+        '''Look for a member of a zip file in the cache, and if it doesn't next exist,
         extract and cache it. '''
         name = name.replace('..','')
         

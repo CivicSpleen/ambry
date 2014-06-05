@@ -889,10 +889,14 @@ class BuildBundle(Bundle):
 
         return ilr(self.log, N=N, message=message, print_rate=print_rate)
 
+    def run_function(self):
+        pass
+
     # Prepare is run before building, part of the devel process.
     def pre_meta(self):
         """Skips the meta stage if the :class:.`META_COMPLETE_MARKER` file already exists"""
 
+        self.load_requirements()
 
         mf = self.filesystem.meta_path(self.META_COMPLETE_MARKER)
 
@@ -921,11 +925,20 @@ class BuildBundle(Bundle):
 
     # Prepare is run before building, part of the devel process.
 
+    def load_requirements(self):
+        """If there are python library requirements set, append the python dir to the path"""
+
+        import sys
+
+        if self.metadata.build.requirements.items:
+            python_dir = self.config.python_dir()
+            sys.path.append(python_dir)
+
     def pre_prepare(self):
 
         self.log('---- Pre-Prepare ----')
 
-        if self.config.build.get('requirements', False):
+        if self.metadata.build.get('requirements', False):
             from ..util.packages import install
             import sys
             import imp
@@ -943,7 +956,7 @@ class BuildBundle(Bundle):
 
             self.log("Installing required packages in {}".format(python_dir))
 
-            for k, v in self.config.build.requirements.items():
+            for k, v in self.metadata.build.requirements.items():
 
                 try:
                     imp.find_module(k)

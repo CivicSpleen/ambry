@@ -1384,7 +1384,7 @@ class {name}(Base):
 
                 s.merge(c)
  
-    def update(self, table_name, itr, header=None, logger=None):
+    def update(self, table_name, itr, n=None, header=None, logger=None):
         '''Update the schema from an iterator that returns rows. This
         will create a new table with rows that have datatype intuited from the values. '''
         
@@ -1400,7 +1400,10 @@ class {name}(Base):
                 continue
 
             if logger:
-                logger()
+                logger("Schema update, row  {}".format(i))
+
+            if n and i > n:
+                break
 
         memo = self.intuit(None, memo)
 

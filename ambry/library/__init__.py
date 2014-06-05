@@ -790,11 +790,11 @@ class Library(object):
                 b.close()
 
 
+
     def sync_source(self, clean=False):
         '''Rebuild the database from the bundles that are already installed
         in the repository cache'''
-        from ..dbexceptions import ConflictError
-        from sqlalchemy.exc import IntegrityError
+
 
         if clean:
             self.files.query.type(Dataset.LOCATION.SOURCE).delete()
@@ -802,32 +802,39 @@ class Library(object):
         for ident in self.source._dir_list().values():
             try:
 
+                path = ident.bundle_path
 
-                self.logger.info('Installing: {} '.format(ident.vname))
-                try:
-                    self.database.install_dataset_identity(ident)
-                    self.database.commit()
-                except (ConflictError, IntegrityError):
-                    self.database.rollback()
-
-                    pass
-
-                try:
-                    bundle = self.source.bundle(ident.bundle_path)
-
-                    self.files.install_bundle_source(bundle, self.source, commit=True)
-                    bundle.close()
-                    self.database.commit()
-                except IntegrityError:
-                    self.database.rollback()
-                    pass
+                self.sync_source_dir(ident, path)
 
             except Exception as e:
                 raise
                 self.logger.error("Failed to sync: bundle_path={} : {} ".format(ident.bundle_path, e.message))
 
         self.database.commit()
-     
+
+
+    def sync_source_dir(self, ident, path):
+        from ..dbexceptions import ConflictError
+        from sqlalchemy.exc import IntegrityError
+
+        self.logger.info('Installing: {} '.format(ident.vname))
+        try:
+            self.database.install_dataset_identity(ident)
+            self.database.commit()
+        except (ConflictError, IntegrityError) as e:
+            self.database.rollback()
+            pass
+
+        try:
+            bundle = self.source.bundle(path)
+
+            self.files.install_bundle_source(bundle, self.source, commit=True)
+            bundle.close()
+            self.database.commit()
+        except IntegrityError:
+            self.database.rollback()
+            pass
+
 
     @property
     def remotes(self):

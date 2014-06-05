@@ -178,10 +178,11 @@ class CodeCastErrorHandler(object):
     def finish(self):
         '''For each of the code sets generated during casting errors, create
         a new partition that holds all of the codes. '''
+
         for col_name, codes in self.codes.items():
             p = self.inserter.bundle.partitions.find_or_new(
                 table=self.inserter.table.name+'_'+col_name+'_codes')
-            
+
             with p.inserter() as ins:
                 for code in codes:
                     ins.insert({'code':code})

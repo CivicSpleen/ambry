@@ -312,7 +312,8 @@ def source_new(args, l, st, rc):
     shutil.copy(p('documentation.md'), os.path.join(bundle_dir, 'meta'))
 
     try:
-        st.sync_bundle(bundle_dir)
+        l.sync_source_dir(b.identity, bundle_dir)
+
     except ConflictError as e:
 
         from ..util import rm_rf

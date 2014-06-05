@@ -273,23 +273,23 @@ def library_remove(args, l, config):
 
                 b = l.get(ident.vid)
 
-
-                for p in b.partitions:
-                    cache_keys.add(p.cache_key)
-                    refs.add(p.vid)
+                if b:
+                    for p in b.partitions:
+                        cache_keys.add(p.cache_key)
+                        refs.add(p.vid)
 
         except NotFoundError:
             pass
 
 
-    if args.library:
+    if args.library or args.all:
         for ck in cache_keys:
             l.cache.remove(ck, propagate=True)
             prt("Remove file {}".format(ck))
 
     for ref in refs:
 
-        if args.bundle:
+        if args.bundle or args.all:
             prt("Remove bundle record {}".format(ref))
             if ref.startswith('d'):
                 l.database.remove_dataset(ref)
@@ -300,22 +300,23 @@ def library_remove(args, l, config):
             # a file record if there there is no bundle or partition.
             l.files.query.ref(ref).delete()
 
-        if args.library:
+        if args.library or args.all:
             prt("Remove library record {}".format(ref))
             if ref.startswith('d'):
                 l.files.query.ref(ref).type(l.files.TYPE.BUNDLE).delete()
             if ref.startswith('p'):
                 l.files.query.ref(ref).type(l.files.TYPE.PARTITION).delete()
 
-        if args.remote:
+        if args.remote or args.all:
             prt("Remove remote record {}".format(ref))
             l.files.query.ref(ref).type(l.files.TYPE.REMOTE).delete()
             l.files.query.ref(ref).type(l.files.TYPE.REMOTEPARTITION).delete()
 
-        if args.source and ref.startswith('d'):
+        if (args.source or args.all ) and ref.startswith('d') :
             prt("Remove source record {}".format(ref))
             l.files.query.ref(ref).type(l.files.TYPE.SOURCE).delete()
 
+        l.database.commit()
 
 
 def library_info(args, l, config, list_all=False):    
