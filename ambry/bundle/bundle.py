@@ -1348,6 +1348,10 @@ class BuildBundle(Bundle):
 
         force = self.run_args.get('force', force)
 
+        if not self.is_built:
+            self.error("Bundle hasn't been successfully built")
+            return
+
         with self.session:
 
             #library_name = self.run_args.get('library', 'default') if library_name is None else 'default'
@@ -1357,9 +1361,7 @@ class BuildBundle(Bundle):
 
             self.log("Install   {} to  library {}".format(self.identity.name,library.database.dsn))
             dest = library.put_bundle(self, install_partitions=False)
-            self.log("Installed {}".format(dest[1]))
-
-            skips = self.config.group('build').get('skipinstall', [])
+            self.log("Installed {}".format(dest[0]))
 
             for partition in self.partitions:
 
@@ -1367,16 +1369,15 @@ class BuildBundle(Bundle):
                     self.log("{} File does not exist, skipping".format(partition.database.path))
                     continue
 
-                if partition.name in skips:
-                    self.log('Skipping {}'.format(partition.name))
-                else:
-                    self.log("Install   {}".format(partition.name))
-                    dest = library.put_partition(self, partition)
-                    self.log("Installed {}".format(dest[1]))
+                self.log("Install   {}".format(partition.name))
+                dest = library.put_partition(self, partition)
+                self.log("Installed {}".format(dest[0]))
 
-                    if delete:
-                        os.remove(partition.database.path)
-                        self.log("Deleted {}".format(partition.database.path))
+                if delete:
+                    os.remove(partition.database.path)
+                    self.log("Deleted {}".format(partition.database.path))
+
+                pass
 
         return True
 

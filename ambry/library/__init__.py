@@ -217,6 +217,9 @@ class Library(object):
         self.files.install_bundle_file(bundle, self.cache, commit=commit)
 
         ident = bundle.identity
+
+        self.cache.put(bundle.database.path, ident.cache_key)
+
         return self.cache.path(ident.cache_key), installed
 
 
@@ -226,6 +229,8 @@ class Library(object):
         self.database.install_partition(bundle, partition, commit = commit)
 
         installed = self.files.install_partition_file(partition, self.cache, commit = commit)
+
+        self.cache.put(partition.database.path, partition.identity.cache_key)
 
         return self.cache.path(partition.identity.cache_key), installed
 
@@ -736,8 +741,6 @@ class Library(object):
 
         if not remotes:
             return
-
-
 
         for remote in remotes:
 

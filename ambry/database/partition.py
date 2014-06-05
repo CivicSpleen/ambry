@@ -68,7 +68,6 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
         else:
             table = self.table(table_or_name.name)
 
-        
         return ValueInserter(self, self.bundle, table ,  **kwargs)
         
     def updater(self, table_or_name=None,**kwargs):
