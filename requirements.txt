@@ -7,7 +7,7 @@ decorator
 simplejson
 unicodecsv
 lockfile
-sh
+#sh # Needed for git and ogr2ogr, but can't install on Windows
 petl
 # psycopg2 # Needed for interacting with Postgres databases. 
 semantic_version
