@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "--- Installing base packages. May need to ask for root password"
+echo "--- Installing Ambry"
 apt-get update
 locale-gen en_US.UTF-8
 
