@@ -69,7 +69,7 @@ When it is done, you will have a bundle database in the ``build`` subdirectory.
     Creating a bundle source package will register the bundle with the library, so you can run ``ambry list`` to
     find the location of the bundle. But this also means that if you try to re-create the source bundle with the
     same name, you'll get a conflict. Instead, you'll have to delete the reference from the library first, using
-    ```ambry library remove <ref>``, where ``<ref>`` is the id number of name of the bundle.
+    ```ambry library remove -s <ref>``, where ``<ref>`` is the id number of name of the bundle.
 
 Now, you've got a new bundle, and you've verified that it can build. The next step is to update the configuration and
 code.
