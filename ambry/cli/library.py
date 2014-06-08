@@ -461,15 +461,11 @@ def library_open(args, l, config):
         else:
             abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
 
-
         os.execlp('sqlite3', 'sqlite3', abs_path)
-
 
 def library_sync(args, l, config):
     '''Synchronize the remotes and the upstream to a local library
     database'''
-
-
 
     all = args.all or not (args.library or args.remote or args.source )
 
@@ -484,8 +480,6 @@ def library_sync(args, l, config):
     if (args.source or all) and l.source:
         l.logger.info("==== Sync Source")
         l.sync_source(clean=args.clean)
-
-
 
     
 def library_unknown(args, l, config):

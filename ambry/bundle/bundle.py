@@ -415,14 +415,14 @@ class DbBundle(Bundle):
 
             if not ds:
                 raise NotFoundError(
-                    "No dataset record found. Probably not a bundle: '{}'" .format(
+                    "No dataset record found. Probably not a bundle (a): '{}'" .format(
                         self.path))
 
             return ds
 
         except OperationalError:
             raise NotFoundError(
-                "No dataset record found. Probably not a bundle: '{}'" .format(
+                "No dataset record found. Probably not a bundle (b): '{}'" .format(
                     self.path))
         except Exception as e:
             from ..util import get_logger
@@ -489,7 +489,7 @@ class LibraryDbBundle(Bundle):
 
         except OperationalError:
             raise NotFoundError(
-                "No dataset record found. Probably not a bundle: '{}'" .format(
+                "No dataset record found. Probably not a bundle (c): '{}'" .format(
                     self.path))
 
         except Exception as e:
@@ -604,7 +604,7 @@ class BuildBundle(Bundle):
 
         except OperationalError:
             raise NotFoundError(
-                "No dataset record found. Probably not a bundle: '{}'" .format(
+                "No dataset record found. Probably not a bundle (d): '{}'" .format(
                     self.path))
         except Exception as e:
             from ..util import get_logger

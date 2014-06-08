@@ -14,7 +14,7 @@ class BundleError(Exception):
         Exception.__init__(self, message, *args, **kwargs)
 
 class BadRequest(BundleError):
-    '''The functioncall or request was malformed or incorrect'''
+    '''The function call or request was malformed or incorrect'''
 
 class ProcessError(BundleError):
     '''Error in the configuration files'''
@@ -56,8 +56,16 @@ class ConflictError(BundleError):
 class SyncError(BundleError):
     """Could not sync a resource"""
 
+class NotABundle(BundleError):
+    """The referenced object is not a valid bundle, usually because of a non existent or malformed database"""
+
+
 class FatalError(BundleError):
     """A Fatal Bundle Error, generated in testing instead of a system exit. """
+
+##
+##
+##
 
 class DatabaseError(BundleError):
     """A general database error """

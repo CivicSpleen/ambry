@@ -218,7 +218,8 @@ class Library(object):
 
         ident = bundle.identity
 
-        self.cache.put(bundle.database.path, ident.cache_key)
+        if not self.cache.has(ident.cache_key):
+            self.cache.put(bundle.database.path, ident.cache_key)
 
         return self.cache.path(ident.cache_key), installed
 
@@ -672,7 +673,7 @@ class Library(object):
                         b = self._create_bundle( path_)
 
                         # The path check above is wrong sometime when there are symlinks
-                        if self.files.query.type(Files.TYPE.BUNDLE).ref(b.identity.vid).one_maybe and self.get(bundle.identity.vid):
+                        if self.files.query.type(Files.TYPE.BUNDLE).ref(b.identity.vid).one_maybe and self.get(b.identity.vid):
                             continue
 
                         if b.identity.is_bundle:
@@ -732,6 +733,7 @@ class Library(object):
     def sync_remotes(self, remotes=None, clean = False):
         from ..orm import Dataset
         from sqlalchemy.exc import IntegrityError
+        from ..dbexceptions import NotABundle
 
         if clean:
             self.files.query.type(Dataset.LOCATION.REMOTE).delete()
@@ -756,19 +758,29 @@ class Library(object):
                 else:
                     self.logger.info("Remote {} sync: {}".format(remote.repo_id, cache_key))
 
+
                 b = self._get_bundle_by_cache_key(cache_key)
 
                 if not b:
                     self.logger.error("Failed to fetch bundle for {} ".format(cache_key))
+                    b.close()
                     continue
 
-                path, installed =  self.put_bundle(b, install_partitions=False, commit=True)
+                try:
+                    path, installed = self.put_bundle(b, install_partitions=False, commit=True)
+
+                except NotABundle:
+                    self.logger.error("Cache key {} exists, but isn't a valid bundle".format(cache_key))
+                    b.close()
+                    continue
 
                 try:
                     self.files.install_remote_bundle(b.identity, remote, {}, commit=True)
                 except IntegrityError:
-                    b.close()
+                    b.close() # Just means we already have it installed
                     continue
+
+
 
                 for p in b.partitions:
                     if  installed:
@@ -781,7 +793,7 @@ class Library(object):
                 try:
                     self.files.insert_collection()
                 except IntegrityError:
-                    b.close()
+                    b.close() # Just means we already have it installed
                     continue
 
                 if installed:

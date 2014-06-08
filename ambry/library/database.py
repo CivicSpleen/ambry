@@ -591,6 +591,9 @@ class LibraryDb(object):
         already exist if before installing again.
         """
 
+        from sqlalchemy.exc import OperationalError
+        from ..dbexceptions import NotABundle
+
 
         # There should be only one dataset record in the
         # bundle
@@ -601,7 +604,10 @@ class LibraryDb(object):
 
         s = self.session
 
-        dataset = bdbs.query(Dataset).one()
+        try:
+            dataset = bdbs.query(Dataset).one()
+        except OperationalError as e:
+            raise NotABundle("Error when refencing dataset for {} : {} ".format(bundle.database.path, e))
 
         dataset.location = Dataset.LOCATION.LIBRARY
 
