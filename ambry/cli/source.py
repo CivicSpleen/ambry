@@ -247,7 +247,7 @@ def source_new(args, l, st, rc):
 
     if args.key  in ('rand',None,'self'):
         d['id'] = str(DatasetNumber())
-        
+
     else:
         try:
             d['id'] = str(ns.next())
