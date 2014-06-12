@@ -21,7 +21,6 @@ class RelationalWarehouse(WarehouseInterface):
         return table_name in self.database.inspector.get_table_names()
 
 
-
     def table_meta(self, d_vid, p_vid, table_name):
         '''Get the metadata directly from the database. This requires that
         table_name be the same as the table as it is in stalled in the database'''

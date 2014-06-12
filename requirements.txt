@@ -7,18 +7,9 @@ decorator
 simplejson
 unicodecsv
 lockfile
-sh
-petl
-# psycopg2 # Needed for interacting with Postgres databases. 
 semantic_version
 numpy
 gdal
 pandas
-# These are for the server
-paste
-bottle
-## This pysqlite clone enables load_extension. Only needed on Linux. It is added
-## in setup.py for linux, so you don't need to uncomment it here.
-# git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
 

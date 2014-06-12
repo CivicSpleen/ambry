@@ -14,6 +14,7 @@ import sys, re, os.path
 
 __version__ = None # "Declare", actually set in the execfile
 __author__ = None
+__email__ = None
 
 # Load in the metadata. 
 execfile(os.path.join(os.path.dirname(__file__),'ambry/_meta.py'))
@@ -43,10 +44,12 @@ def parse_requirements(file_name):
     requirements = []
     for line in read_requirements(file_name):
 
-        if re.match(r'\s*-e\s+', line):
+        if re.match(r'\s*-e\s+', line):  # '-e' is the pip option for 'editable'
             requirements.append(re.sub(r'\s*-e\s+.*#egg=(.*)$', r'\1', line))
-        elif re.match(r'\s*-f\s+', line):
+
+        elif re.match(r'\s*-f\s+', line): # '-e' is the pip option for 'install a file HTML list of links'
             pass
+
         else:
             requirements.append(line)
 
@@ -58,6 +61,7 @@ def parse_requirements(file_name):
 
 def parse_dependency_links(file_name):
     dependency_links = []
+
     for line in read_requirements(file_name):
         if re.match(r'\s*-[ef]\s+', line):
             dependency_links.append(re.sub(r'\s*-[ef]\s+', '', line))
@@ -113,4 +117,5 @@ setup(name = "ambry",
       #zip_safe=False,
       install_requires = parse_requirements('requirements.txt'),
       dependency_links = parse_dependency_links('requirements.txt'),
+      extras_require = {"pgsql": ["psycopg2"], "geo": ["sh", "gdal"], "server": ["paste", "bottle"]}
       )
