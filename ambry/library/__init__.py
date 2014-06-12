@@ -194,12 +194,10 @@ class Library(object):
 
         self.database.close()
 
-
     @property
     def database(self):
         '''Return ambry.database.Database object'''
         return self._database
-
 
     ##
     ## Storing
@@ -216,9 +214,13 @@ class Library(object):
         except ConflictError:
             installed = False
 
-        self.files.install_bundle_file(bundle, self.cache, commit=commit)
+        self.files.install_bundle_file(bundle, self.cache, commit=commit, state = 'new')
 
         ident = bundle.identity
+
+        if not self.cache.has(ident.cache_key):
+            self.cache.put(bundle.database.path, ident.cache_key)
+
         return self.cache.path(ident.cache_key), installed
 
 
@@ -227,7 +229,9 @@ class Library(object):
 
         self.database.install_partition(bundle, partition, commit = commit)
 
-        installed = self.files.install_partition_file(partition, self.cache, commit = commit)
+        installed = self.files.install_partition_file(partition, self.cache, commit = commit, state = 'new')
+
+        self.cache.put(partition.database.path, partition.identity.cache_key)
 
         return self.cache.path(partition.identity.cache_key), installed
 
@@ -669,12 +673,12 @@ class Library(object):
                         b = self._create_bundle( path_)
 
                         # The path check above is wrong sometime when there are symlinks
-                        if self.files.query.type(Files.TYPE.BUNDLE).ref(b.identity.vid).one_maybe and self.get(bundle.identity.vid):
+                        if self.files.query.type(Files.TYPE.BUNDLE).ref(b.identity.vid).one_maybe and self.get(b.identity.vid):
                             continue
 
                         if b.identity.is_bundle:
-                            self.logger.info("Queing: {} from {}".format(b.identity.vname, file_))
                             bundles.append(b)
+
                     except NotFoundError:
                         # Probably a partition, not a bundle.
                         pass
@@ -729,6 +733,7 @@ class Library(object):
     def sync_remotes(self, remotes=None, clean = False):
         from ..orm import Dataset
         from sqlalchemy.exc import IntegrityError
+        from ..dbexceptions import NotABundle
 
         if clean:
             self.files.query.type(Dataset.LOCATION.REMOTE).delete()
@@ -738,8 +743,6 @@ class Library(object):
 
         if not remotes:
             return
-
-
 
         for remote in remotes:
 
@@ -758,13 +761,26 @@ class Library(object):
 
                 b = self._get_bundle_by_cache_key(cache_key)
 
-                path, installed =  self.put_bundle(b, install_partitions=False, commit=True)
+                if not b:
+                    self.logger.error("Failed to fetch bundle for {} ".format(cache_key))
+                    b.close()
+                    continue
+
+                try:
+                    path, installed = self.put_bundle(b, install_partitions=False, commit=True)
+
+                except NotABundle:
+                    self.logger.error("Cache key {} exists, but isn't a valid bundle".format(cache_key))
+                    b.close()
+                    continue
 
                 try:
                     self.files.install_remote_bundle(b.identity, remote, {}, commit=True)
                 except IntegrityError:
-                    b.close()
+                    b.close() # Just means we already have it installed
                     continue
+
+
 
                 for p in b.partitions:
                     if  installed:
@@ -777,7 +793,7 @@ class Library(object):
                 try:
                     self.files.insert_collection()
                 except IntegrityError:
-                    b.close()
+                    b.close() # Just means we already have it installed
                     continue
 
                 if installed:
@@ -789,34 +805,51 @@ class Library(object):
                 b.close()
 
 
+
     def sync_source(self, clean=False):
         '''Rebuild the database from the bundles that are already installed
         in the repository cache'''
-        from ..dbexceptions import ConflictError
-        from sqlalchemy.exc import IntegrityError
+
+
+        if clean:
+            self.files.query.type(Dataset.LOCATION.SOURCE).delete()
 
         for ident in self.source._dir_list().values():
             try:
-                bundle = self.source.bundle(ident.bundle_path)
-                self.logger.info('Installing: {} '.format(bundle.identity.vname))
-                try:
-                    self.database.install_bundle(bundle, install_partitions=False, commit=True)
-                except ConflictError:
-                    self.database.rollback()
-                    pass
 
-                try:
-                    self.files.install_bundle_source(bundle, self.source, commit=True)
-                except IntegrityError:
-                    self.database.rollback()
-                    pass
+                path = ident.bundle_path
+
+                self.sync_source_dir(ident, path)
 
             except Exception as e:
                 raise
                 self.logger.error("Failed to sync: bundle_path={} : {} ".format(ident.bundle_path, e.message))
 
         self.database.commit()
-        bundle.close()
+
+
+    def sync_source_dir(self, ident, path):
+        from ..dbexceptions import ConflictError
+        from sqlalchemy.exc import IntegrityError
+
+        self.logger.info('Installing: {} '.format(ident.vname))
+        try:
+            self.database.install_dataset_identity(ident)
+            self.database.commit()
+        except (ConflictError, IntegrityError) as e:
+            self.database.rollback()
+            pass
+
+        try:
+            bundle = self.source.bundle(path)
+
+            self.files.install_bundle_source(bundle, self.source, commit=True)
+            bundle.close()
+            self.database.commit()
+        except IntegrityError:
+            self.database.rollback()
+            pass
+
 
     @property
     def remotes(self):

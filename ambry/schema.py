@@ -1223,6 +1223,7 @@ class {name}(Base):
         '''
         from collections import defaultdict, OrderedDict
         from sqlalchemy.engine import RowProxy
+        from datetime import datetime, date, time
 
         if memo is None :
             memo = {'fields' : None, 'name_index': {}}
@@ -1246,7 +1247,9 @@ class {name}(Base):
             
             # Finalize the run by computing the major/minor ratio of types for each column 
             for i in range(len(memo['fields'])):
+
                 col = memo['fields'][i]
+
                 if len(col['counts']):
                     scounts = sorted(col['counts'].items(), key = lambda x: x[1], reverse = True)
                     col['major-type'] = scounts.pop(0) if len(scounts) else None
@@ -1262,14 +1265,18 @@ class {name}(Base):
                 if float(col['maybe']['date'])/float(col['n']) > .90:
                     import datetime
                     col['prob-type'] = datetime.date
+
                 elif float(col['maybe']['time'])/float(col['n']) > .90:
                     import datetime
                     col['prob-type'] = datetime.time
+
                 elif float(col['maybe']['datetime'])/float(col['n']) > .90:
                     import datetime
                     col['prob-type'] = datetime.datetime
+
                 elif col['mmr'] is not None and col['mmr'] < .05:
                     col['prob-type'] = col['major-type'][0]
+
                 else:
                     col['prob-type'] = col['min-type']
 
@@ -1294,9 +1301,24 @@ class {name}(Base):
             # Keep track of the number of possibilities for each
             # field. This is needed to identify fields that are mostly
             # one type ( ie, Integer ) but which have occasional text codes. 
-      
-            
+
+
             try:
+                if isinstance(v, (datetime)):
+                    mfi['counts'][datetime] += 1
+                    mfi['maybe']['datetime'] += 1
+                    continue
+
+                if isinstance(v, (date)):
+                    mfi['counts'][date] += 1
+                    mfi['maybe']['date'] += 1
+                    continue
+
+                if isinstance(v, (time)):
+                    mfi['counts'][time] += 1
+                    mfi['maybe']['time'] += 1
+                    continue
+
                 mfi['counts'][str] += 1
                 float(v)
                 mfi['counts'][float] += 1
@@ -1325,21 +1347,26 @@ class {name}(Base):
             
             # Find the base type, the most specific type that will hold
             # this data
+
+
             if mfi['min-type'] is int:
                 try:
                     int(v)      
                     mfi['min-type'] = int
 
-                except ValueError:
+                except (TypeError, ValueError): # Type error for when v is a datetime
                     mfi['min-type'] = float
+
                     
             if mfi['min-type'] is float or isinstance(v, float):
                 try:
                     float(v)
                     mfi['min-type'] = float
 
-                except ValueError:
+                except (TypeError, ValueError): # Type error for when v is a datetime
                     mfi['min-type'] = str
+
+
 
         return memo
 
@@ -1384,7 +1411,7 @@ class {name}(Base):
 
                 s.merge(c)
  
-    def update(self, table_name, itr, header=None, logger=None):
+    def update(self, table_name, itr, n=None, header=None, logger=None):
         '''Update the schema from an iterator that returns rows. This
         will create a new table with rows that have datatype intuited from the values. '''
         
@@ -1400,7 +1427,10 @@ class {name}(Base):
                 continue
 
             if logger:
-                logger()
+                logger("Schema update, row  {}".format(i))
+
+            if n and i > n:
+                break
 
         memo = self.intuit(None, memo)
 

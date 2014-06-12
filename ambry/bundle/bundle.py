@@ -53,7 +53,7 @@ class Bundle(object):
 
     def close(self):
         """Close the bundle database and all partition databases, committing and closing any sessions and connections"""
-        from ..dbexceptions import NotFoundError
+        from ..dbexceptions import NotFoundError, DatabaseMissingError
         self.partitions.close()
 
         if self._database:
@@ -63,6 +63,8 @@ class Bundle(object):
                 self._database.close()
             except NotFoundError as e:
                 self.logger.debug("Error closing {}: {}".format(self._database.path, e))
+            except DatabaseMissingError:
+                pass # It was never really open
 
 
     @property
@@ -413,14 +415,14 @@ class DbBundle(Bundle):
 
             if not ds:
                 raise NotFoundError(
-                    "No dataset record found. Probably not a bundle: '{}'" .format(
+                    "No dataset record found. Probably not a bundle (a): '{}'" .format(
                         self.path))
 
             return ds
 
         except OperationalError:
             raise NotFoundError(
-                "No dataset record found. Probably not a bundle: '{}'" .format(
+                "No dataset record found. Probably not a bundle (b): '{}'" .format(
                     self.path))
         except Exception as e:
             from ..util import get_logger
@@ -487,7 +489,7 @@ class LibraryDbBundle(Bundle):
 
         except OperationalError:
             raise NotFoundError(
-                "No dataset record found. Probably not a bundle: '{}'" .format(
+                "No dataset record found. Probably not a bundle (c): '{}'" .format(
                     self.path))
 
         except Exception as e:
@@ -602,7 +604,7 @@ class BuildBundle(Bundle):
 
         except OperationalError:
             raise NotFoundError(
-                "No dataset record found. Probably not a bundle: '{}'" .format(
+                "No dataset record found. Probably not a bundle (d): '{}'" .format(
                     self.path))
         except Exception as e:
             from ..util import get_logger
@@ -887,10 +889,14 @@ class BuildBundle(Bundle):
 
         return ilr(self.log, N=N, message=message, print_rate=print_rate)
 
+    def run_function(self):
+        pass
+
     # Prepare is run before building, part of the devel process.
     def pre_meta(self):
         """Skips the meta stage if the :class:.`META_COMPLETE_MARKER` file already exists"""
 
+        self.load_requirements()
 
         mf = self.filesystem.meta_path(self.META_COMPLETE_MARKER)
 
@@ -919,11 +925,20 @@ class BuildBundle(Bundle):
 
     # Prepare is run before building, part of the devel process.
 
+    def load_requirements(self):
+        """If there are python library requirements set, append the python dir to the path"""
+
+        import sys
+
+        if self.metadata.build.requirements.items:
+            python_dir = self.config.python_dir()
+            sys.path.append(python_dir)
+
     def pre_prepare(self):
 
         self.log('---- Pre-Prepare ----')
 
-        if self.config.build.get('requirements', False):
+        if self.metadata.build.get('requirements', False):
             from ..util.packages import install
             import sys
             import imp
@@ -941,7 +956,7 @@ class BuildBundle(Bundle):
 
             self.log("Installing required packages in {}".format(python_dir))
 
-            for k, v in self.config.build.requirements.items():
+            for k, v in self.metadata.build.requirements.items():
 
                 try:
                     imp.find_module(k)
@@ -1333,6 +1348,10 @@ class BuildBundle(Bundle):
 
         force = self.run_args.get('force', force)
 
+        if not self.is_built:
+            self.error("Bundle hasn't been successfully built")
+            return
+
         with self.session:
 
             #library_name = self.run_args.get('library', 'default') if library_name is None else 'default'
@@ -1342,9 +1361,7 @@ class BuildBundle(Bundle):
 
             self.log("Install   {} to  library {}".format(self.identity.name,library.database.dsn))
             dest = library.put_bundle(self, install_partitions=False)
-            self.log("Installed {}".format(dest[1]))
-
-            skips = self.config.group('build').get('skipinstall', [])
+            self.log("Installed {}".format(dest[0]))
 
             for partition in self.partitions:
 
@@ -1352,16 +1369,15 @@ class BuildBundle(Bundle):
                     self.log("{} File does not exist, skipping".format(partition.database.path))
                     continue
 
-                if partition.name in skips:
-                    self.log('Skipping {}'.format(partition.name))
-                else:
-                    self.log("Install   {}".format(partition.name))
-                    dest = library.put_partition(self, partition)
-                    self.log("Installed {}".format(dest[1]))
+                self.log("Install   {}".format(partition.name))
+                dest = library.put_partition(self, partition)
+                self.log("Installed {}".format(dest[0]))
 
-                    if delete:
-                        os.remove(partition.database.path)
-                        self.log("Deleted {}".format(partition.database.path))
+                if delete:
+                    os.remove(partition.database.path)
+                    self.log("Deleted {}".format(partition.database.path))
+
+                pass
 
         return True
 

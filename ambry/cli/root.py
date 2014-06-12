@@ -19,7 +19,6 @@ def root_parser(cmd):
     sp.add_argument('-a', '--all', default=False, action="store_true", help='List everything')
     sp.add_argument('-l', '--library', default=False, action="store_true", help='List only the library')
     sp.add_argument('-r', '--remote', default=False, action="store_true", help='List only the remote')
-    sp.add_argument('-u', '--upstream', default=False, action="store_true", help='List only the upstream')
     sp.add_argument('-s', '--source', default=False, action="store_true", help='List only the source')
     sp.add_argument('term', nargs = '?', type=str, help='Name or ID of the bundle or partition')
 

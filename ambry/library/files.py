@@ -183,20 +183,21 @@ class Files(object):
             s.add(f)
             if commit:
                 self.db.commit()
+
         except IntegrityError as e:
-            self.db.rollback()
+            s.rollback()
 
             s.merge(f)
             try:
                 self.db.commit()
             except IntegrityError as e:
-                self.db.rollback()
+                s.rollback()
                 pass
 
 
         self.db._mark_update()
 
-    def install_bundle_file(self, bundle, cache, commit=True):
+    def install_bundle_file(self, bundle, cache, commit=True, state='installed'):
         """Mark a bundle file as having been installed in the library"""
 
         ident = bundle.identity
@@ -210,13 +211,13 @@ class Files(object):
             path=bundle.database.path,
             group=cache.repo_id,
             ref=ident.vid,
-            state='installed',
+            state=state,
             type_=Files.TYPE.BUNDLE,
             data=None,
             source_url=None)
 
 
-    def install_partition_file(self, partition, cache, commit=True):
+    def install_partition_file(self, partition, cache, commit=True, state='installed'):
         """Mark a partition file as having been installed in the library
 
         """
@@ -232,7 +233,7 @@ class Files(object):
             path=partition.database.path,
             group=cache.repo_id,
             ref=ident.vid,
-            state='installed',
+            state=state,
             type_=Files.TYPE.PARTITION,
             data=None,
             source_url=None)
@@ -278,7 +279,7 @@ class Files(object):
         return self.new_file(
             commit = commit,
             merge=True,
-            path=bundle.identity.cache_key,
+            path=bundle.bundle_dir,
             group=source.base_dir,
             ref=bundle.identity.vid,
             state='installed',

@@ -22,12 +22,12 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   end
 
 
-  config.vm.provision "shell", path: "../install-ubuntu.sh"
+  config.vm.provision "shell", path: "../install-ubuntu.sh", args: "dev"
     
   # Re-install the config zs the vagrant user
   $script = <<SCRIPT
 rm /etc/ambry.yaml
-chown -R vagrant.vagrant /data
+chown -R vagrant.vagrant /ambry
 su vagrant ambry config install 
 SCRIPT
     

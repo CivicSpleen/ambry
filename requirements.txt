@@ -9,7 +9,6 @@ unicodecsv
 lockfile
 semantic_version
 numpy
-gdal
 pandas
 
 
