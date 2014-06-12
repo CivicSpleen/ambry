@@ -42,7 +42,7 @@ def copy_schema(schema, path, table_name=None, fmt='shapefile', logger = None):
         path = schema.bundle.filesystem.download_shapefile(shape_url)
 
 
-    driver, options = driver_by_name(fmt)
+    driver, options, _ = driver_by_name(fmt)
 
     ds = driver.Open(path, 0) # 0 means read-only. 1 means writeable.
 
@@ -83,26 +83,28 @@ def copy_schema(schema, path, table_name=None, fmt='shapefile', logger = None):
 def driver_by_name(fmt):
 
     options = []
+    layer_options = []
     if fmt == 'kml':
         drv = ogr.GetDriverByName("KML")
     elif fmt == 'geojson':
         drv = ogr.GetDriverByName("GeoJSON")
     elif fmt == 'sqlite' or fmt == 'geodb' or fmt == 'db':
         drv = ogr.GetDriverByName("SQLite")
-        options = ['SPATIALITE=YES', 'FORMAT=SPATIALITE', '-gt 50000', 'SPATIAL_INDEX=NO'  ]
+        options = ['SPATIALITE=yes', '-gt 65536']
+        layer_options = ['FORMAT=SPATIALITE', 'SPATIAL_INDEX=yes']
     elif fmt == 'shapefile':
         drv = ogr.GetDriverByName("ESRI Shapefile")
     else:
         raise Exception("Unknown format: {} ".format(fmt))
 
-    return drv, options
+    return drv, options, layer_options
 
 def new_datasource(path, fmt='shapefile'):
     import os
     from ambry.util import rm_rf
 
 
-    drv, options = driver_by_name(fmt)
+    drv, options, layer_options  = driver_by_name(fmt)
 
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
@@ -114,6 +116,8 @@ def new_datasource(path, fmt='shapefile'):
             os.remove(path)
 
     ds = drv.CreateDataSource(path, options=options)
+
+    ds._layer_options = layer_options
 
     if ds is None:
         raise Exception("Failed to create datasource: {}".format(path))
@@ -216,7 +220,10 @@ class TableShapefile(object):
                 
                 return typ ,  geo_col_names,    geo_col_pos 
      
-        vals = 0 
+        vals = 0
+
+        # If there are y/x or lat/lon columns, create a point geometry
+
         for i,c in enumerate(self.table.columns):       
             if c.name == 'lat' or c.name == 'y':
                 typ = 'point'
@@ -298,14 +305,13 @@ class TableShapefile(object):
             geometry.SetPoint_2D(0, x, y )
                 
         elif self.geo_col_names[0].lower() == 'geometry':
-            # ? Not sure what this is?
             geometry = ogr.CreateGeometryFromWkt(x)
         elif self.geo_col_names[0] == 'wkt':
             geometry = ogr.CreateGeometryFromWkt(x)
         elif self.geo_col_names[0] == 'wkb':    
             geometry = ogr.CreateGeometryFromWkb(x)
         else:
-            raise Exception("Didn't find geometery column")
+            raise Exception("Didn't find geometry column")
 
         if geometry:
             if not geometry.TransformTo(self.srs):
@@ -318,6 +324,7 @@ class TableShapefile(object):
     def add_feature(self, row, source_srs=None):
         import datetime
 
+
         gdal.UseExceptions()
 
         geometry = self.get_geometry(row)
@@ -325,37 +332,37 @@ class TableShapefile(object):
         if source_srs is not None and source_srs != self.source_srs:
             self.source_srs = self._get_srs(source_srs)
             self.transform = osr.CoordinateTransformation(self.source_srs, self.srs)
-            
+
         if self.layer is None:
-            type_ =  geometry.GetGeometryType() 
-            self.layer = self.ds.CreateLayer( self.name, self.srs, type_)
-            
+            type_ =  geometry.GetGeometryType()
+            self.layer = self.ds.CreateLayer( self.name, self.srs, type_, options=self.ds._layer_options)
+
             if self.layer is None:
                 raise Exception("Failed to create layer {} in {}".format(self.name, self.path))
-            
+
             self.load_schema(self.layer)
 
-        
+
         feature = ogr.Feature(self.layer.GetLayerDefn())
 
         if isinstance(row, dict):
             for i,c in enumerate(self.table.columns):
                 if i not in self.geo_col_pos or c.name in ['x','y','lat','lon']:
                     v = row.get(c.name, False)
-                  
+
                     if v is not False and  isinstance(v, basestring):
                         try:
                             v = str(v.decode('latin1').encode('utf_8') if v else None)
                         except Exception :
                             print row
                             raise
-   
+
                     if v is not False:
-                        if isinstance(v, datetime.date):         
+                        if isinstance(v, datetime.date):
                             feature.SetField(str(c.name), v.year, v.month, v.day, 0, 0, 0, 0)
                         elif isinstance(v, datetime.datetime):
                             feature.SetField(str(c.name), v.year, v.month, v.day, v.hour, v.minute, v.second, 0)
-                          
+
                         else:
                             feature.SetField(str(c.name), str(v))
                     elif c.default:
@@ -363,12 +370,12 @@ class TableShapefile(object):
                         except:
                             print "Failed for {} ".format(c.name)
                             raise
-                      
+
         else:
             for i,v in enumerate(row):
                 if i not in self.geo_col_pos:
                     feature.SetField(i, row.get(v, c.python_type(c.default) if c.default else None) )
-            
+
         if self.transform:
             geometry.Transform(self.transform)
 
@@ -376,9 +383,9 @@ class TableShapefile(object):
         feature.SetGeometryDirectly(geometry)
         if self.layer.CreateFeature(feature) != 0:
             raise FeatureError('Failed to add feature: {}: geometry={}'.format(gdal.GetLastErrorMsg(), geometry.ExportToWkt()))
-                               
+
         feature.Destroy()
-   
+
 
     def _get_srs(self, srs_spec=None, default=4326):
         

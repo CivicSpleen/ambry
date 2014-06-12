@@ -207,14 +207,7 @@ class Bundle(BuildBundle):
 
 
     def build_geo(self):
-   
-        # Create other types of partitions. 
-        geot1 = self.partitions.find_or_new_geo(table='geot1')
-        
-        with geot1.database.inserter() as ins:
-            for lat in range(10):
-                for lon in range(10):
-                    ins.insert({'name': str(lon)+';'+str(lat), 'lon':lon, 'lat':lat})
+
         
         # Create other types of partitions. 
         geot2 = self.partitions.find_or_new_geo(table='geot2')
@@ -222,9 +215,19 @@ class Bundle(BuildBundle):
         with geot2.database.inserter() as ins:
             for lat in range(10):
                 for lon in range(10):
-                    ins.insert({'name': "Centroid(POINT({} {}))".format(lon,lat),
-                                'wkt':"POINT({} {})".format(lon,lat)})
-        
+                    ins.insert({'name': "POINT({} {})".format(lon,lat),
+                                'geometry':"POINT({} {})".format(lon,lat)})
+
+
+        # Create other types of partitions.
+        geot1 = self.partitions.find_or_new_geo(table='geot1')
+
+        with geot1.database.inserter() as ins:
+            for lat in range(10):
+                for lon in range(10):
+                    ins.insert({'name': str(lon)+';'+str(lat), 'lon':lon, 'lat':lat})
+
+
     def build_hdf(self):
         import numpy as np
         hdf = self.partitions.find_or_new_hdf(table='hdf5')
