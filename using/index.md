@@ -3,6 +3,8 @@ layout: sidebar
 title: 'Using Ambry'
 ---
 
+# Using Ambry
+
 ## Getting Data With Ambry
 
 * List the library
@@ -74,11 +76,11 @@ $
 
 {% endhighlight %}
 
-The locations line now read 'LR' to indicate that the bundle stored locally, and we have an Abs Path for both the bundle metadata and the partition. The path is to a Sqlite file, which you can open and use directly, or can access through other methods. 
+The locations line now reads 'LR' to indicate that the bundle stored locally, and we have an Abs Path for both the bundle metadata and the partition. The path is to a Sqlite file, which you can open and use directly, or can access through other methods. 
 
 ### Use the Partition for Analysis
 
-To use the data in the partition, you'll want to look at the schema. You can dump the schema in a variety of formats with the `library schema` command, which produces CSV by default: 
+To use the data in the partition, you'll probably want to look at the schema. You can dump the schema in a variety of formats with the `library schema` command, which produces CSV by default: 
 
 {% highlight bash %}
 $ ambry library schema p00q001007 | head -5
@@ -123,10 +125,15 @@ See the IPython note book [Introduction to Ambry](/notebooks/tutorial/Ambry_Intr
 
 ### Install to the Database
 
+Bundles can be installed to relational databases. 
+
 ### Install to a Data Repository
 
+Bundle can also be installed to a data repository, such as the repository for the [San Diego Regional Data Library](http://data.sandiegodata.org). 
 
 ## Building Packages
+
+
 
 * Create a Package Directory
 * Write the Bundle Class and Configuration
