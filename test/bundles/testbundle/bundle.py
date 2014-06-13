@@ -6,8 +6,6 @@ Created on Jun 10, 2012
 
 
 from  ambry.bundle import BuildBundle
-import petl.fluent as petl  # @UnresolvedImport
-
 
 class Bundle(BuildBundle):
 

@@ -632,15 +632,30 @@ class Partitions(object):
     
     def new_geo_partition(self, clean=False, tables=None, data=None, shape_file=None,  **kwargs):
         from sqlalchemy.orm.exc import  NoResultFound
-        
-        p, found =  self._find_or_new(kwargs,format='geo')
-        
-        if found:
-            raise ConflictError("Partition {} alread exists".format(p.name))
 
-        if shape_file:
-            p.database.close()
-            p.load_shapefile(shape_file)
+
+        try:
+            import gdal
+
+            p, found =  self._find_or_new(kwargs,format='geo')
+
+            if found:
+                raise ConflictError("Partition {} alread exists".format(p.name))
+
+            if shape_file:
+                p.database.close()
+                p.load_shapefile(shape_file)
+
+        except ImportError:
+            self.bundle.log("GDAL not installed; using non geo database")
+            p, found = self._find_or_new(kwargs)
+
+            if found:
+                raise ConflictError("Partition {} alread exists".format(p.name))
+
+            if shape_file:
+                from  dbexceptions import RequirementError
+                raise RequirementError("GDAL is not installed, so can't load a shapefile")
 
         return p
 
@@ -652,13 +667,25 @@ class Partitions(object):
             pid A partition Identity
             tables String or array of tables to copy form the main partition
         '''
-        
-        p, _ =  self._find_or_new(kwargs, clean = False,  tables=None, 
-                                  data=None, create=False, format='geo')
-        
-        if shape_file:
-            p.load_shapefile(shape_file)
-        
+
+        try:
+            import gdal
+
+            p, _ = self._find_or_new(kwargs, clean=False, tables=None,
+                                     data=None, create=False, format='geo')
+
+            if shape_file:
+                p.load_shapefile(shape_file)
+
+        except ImportError:
+            self.bundle.log("GDAL not installed; using non geo database")
+
+            p, _ = self._find_or_new(kwargs, clean=False, tables=None, data=None, create=True)
+
+            if shape_file:
+                from  dbexceptions import RequirementError
+                raise RequirementError("GDAL is not installed, so can't load a shapefile")
+
         return p
 
     def new_memory_partition(self, tables=None, data=None, **kwargs):

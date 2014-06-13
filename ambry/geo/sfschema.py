@@ -115,6 +115,8 @@ def new_datasource(path, fmt='shapefile'):
         else:
             os.remove(path)
 
+
+
     ds = drv.CreateDataSource(path, options=options)
 
     ds._layer_options = layer_options

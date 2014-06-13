@@ -4,9 +4,6 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..identity import PartitionIdentity
-from osgeo import gdal, gdal_array, osr
-from osgeo.gdalconst import GDT_Float32, GDT_Byte, GDT_Int16
 import numpy as np
 
 class OutOfBounds(Exception): pass

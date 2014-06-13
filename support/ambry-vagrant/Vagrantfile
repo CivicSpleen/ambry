@@ -26,6 +26,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     v.memory = 1500
   end
 
+
   # Re-install the config zs the vagrant user
   $script = <<SCRIPT
 
@@ -48,26 +49,21 @@ for pkg in $packages; do
     fi
 done
 
-if [ ! true ]; then
+pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
-    pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
+cd /ambry/source
 
-    cd /ambry/src/ambry # Better exist -- it is the shared dir
-    python setup.py develop
+[ ! -e clarinova-public ] && git clone https://github.com/clarinova/ambry-bundles-public.git clarinova-public
+[ ! -e sdrdl ] && git clone https://github.com/sdrdl/sdrdl-ambry-bundles.git sdrdl
 
-    ambry config install # Installs a development config
+cd /ambry/src/ambry # Better exist -- it is the shared dir
+python setup.py develop
 
-    cd /ambry/source
-
-    [ ! -e clarinova-public ] && git clone https://github.com/clarinova/ambry-bundles-public.git clarinova-public
-    [ ! -e sdrdl ] && git clone https://github.com/sdrdl/sdrdl-ambry-bundles.git sdrdl
-
-fi
+ambry config install # Installs a development config
 
 SCRIPT
 
   config.vm.provision "shell", inline: $script
     
 end
-
 
