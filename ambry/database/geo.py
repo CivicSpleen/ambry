@@ -99,7 +99,6 @@ class GeoDb(PartitionDb):
         if table is None and self.partition.identity.table:
             table = self.partition.identity.table
 
-
         prior_exist = self.exists()
 
         fi =  FeatureInserter(self.partition,  table, dest_srs, source_srs, layer_name = layer_name)

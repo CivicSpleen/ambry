@@ -29,13 +29,17 @@ pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 ### Install Ambry
 ###
 
-if [ ! -z "$is_dev" ]; then
-    pip install -e "git+https://github.com/clarinova/ambry.git#egg=ambry"
-else
-    pip install ambry
+if [ ! true ]; then
+
+    if [ ! -z "$is_dev" ]; then
+        pip install -e "git+https://github.com/clarinova/ambry.git#egg=ambry"
+    else
+        pip install ambry
+    fi
+    ambry config install # Installs a development config
+
+    cd $(ambry config value filesystem.source)
+
+    [ ! -e clarinova-public ] && git clone https://github.com/clarinova/ambry-bundles-public.git clarinova-public
+
 fi
-ambry config install # Installs a development config
-
-cd $(ambry config value filesystem.source)
-
-[ ! -e clarinova-public ] && git clone https://github.com/clarinova/ambry-bundles-public.git clarinova-public

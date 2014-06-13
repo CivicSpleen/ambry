@@ -89,7 +89,7 @@ def driver_by_name(fmt):
         drv = ogr.GetDriverByName("GeoJSON")
     elif fmt == 'sqlite' or fmt == 'geodb' or fmt == 'db':
         drv = ogr.GetDriverByName("SQLite")
-        options = ['SPATIALITE=YES', 'FORMAT=SPATIALITE', '-gt 50000', 'SPATIAL_INDEX=NO'  ]
+        options = ['SPATIALITE=YES', 'METADATA=YES', '-gt 50000'  ]
     elif fmt == 'shapefile':
         drv = ogr.GetDriverByName("ESRI Shapefile")
     else:
@@ -112,6 +112,8 @@ def new_datasource(path, fmt='shapefile'):
             rm_rf(path)
         else:
             os.remove(path)
+
+
 
     ds = drv.CreateDataSource(path, options=options)
 

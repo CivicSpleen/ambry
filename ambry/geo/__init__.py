@@ -9,6 +9,15 @@ from collections import  namedtuple
 
 Point = namedtuple('Point', ['x', 'y'])
 
+from ..dbexceptions import  RequirementError
+
+# Just testing for gdal
+try:
+
+    from osgeo import gdal
+except ImportError as e:
+    raise RequirementError("Failed to import gdal: {}".format(str(e)))
+
 #from analysisarea import *
 from kernel import *
 from util import *

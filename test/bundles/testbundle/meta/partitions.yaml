@@ -1,8 +1,6 @@
--   format: geo
-    name: source-dataset-subset-variation-geot1-geo
+-   name: source-dataset-subset-variation-geot1
     table: geot1
--   format: geo
-    name: source-dataset-subset-variation-geot2-geo
+-   name: source-dataset-subset-variation-geot2
     table: geot2
 -   name: source-dataset-subset-variation-tthree
     table: tthree

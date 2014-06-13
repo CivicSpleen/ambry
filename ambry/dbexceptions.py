@@ -6,6 +6,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 import textwrap
 
+class RequirementError(ImportError):
+    '''Thrown for required optional modules, such as gdal'''
+
 class BundleError(Exception):
     def __init__(self, message, *args, **kwargs):
 

@@ -315,6 +315,8 @@ class SqliteDatabase(RelationalDatabase):
         self.unlock()
 
 
+
+
     def add_view(self, name, sql):
 
         e = self.connection.execute
@@ -525,6 +527,10 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
             RelationalBundleDatabaseMixin._create(self)
 
             self.post_create()
+
+    def delete(self):
+        os.remove(self.path)
+        self.unlock()
 
 
     @property
