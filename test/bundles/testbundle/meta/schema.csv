@@ -34,7 +34,7 @@ geot1,5,lon,,,REAL,,,,,,,,,,,,,ciEGPXmDC805005
 geot2,1,geot2_id,1,,INTEGER,,,,,,,,,,,,,ciEGPXmDC806001
 geot2,2,name,,,VARCHAR,,,20,,,,,,,,,,ciEGPXmDC806002
 geot2,3,code,,,INTEGER,,,,,,,,,,,,,ciEGPXmDC806003
-geot2,4,wkt,,,BLOB,,,,,,,,,,,,,ciEGPXmDC806004
+geot2,4,geometry,,,BLOB,,,,,,,,,,,,,ciEGPXmDC806004
 ,,,,,,,,,,,,,,,,,,
 hdf5,1,hdf5_id,1,,INTEGER,,,,,,,,,,,,,ciEGPXmDC807001
 ,,,,,,,,,,,,,,,,,,

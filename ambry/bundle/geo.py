@@ -38,6 +38,7 @@ class GeoBuildBundle(BuildBundle):
 
 
     def build(self):
+
         for table, item in self.metadata.sources.items():
             self.log("Loading table {} from {}".format(table, item.url))
             p = self.partitions.new_geo_partition(table=table, shape_file=item.url)
@@ -45,4 +46,5 @@ class GeoBuildBundle(BuildBundle):
 
         for p in self.partitions:
             print p.info
+
         return True
