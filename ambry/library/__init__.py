@@ -763,7 +763,6 @@ class Library(object):
 
                 if not b:
                     self.logger.error("Failed to fetch bundle for {} ".format(cache_key))
-                    b.close()
                     continue
 
                 try:

@@ -15,29 +15,59 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # doesn't already exist on the user's system.
   config.vm.box_url = "http://opscode-vm-bento.s3.amazonaws.com/vagrant/virtualbox/opscode_ubuntu-13.10_chef-provisionerless.box"
 
+  config.vm.synced_folder "../../", "/ambry/src/ambry", type: 'nfs'
+
+  config.vm.network "private_network", type: "dhcp"
+
+  config.vm.network "public_network", type: "dhcp"
 
   config.vm.provider "virtualbox" do |v|
     # Need more memory to get Pandas to complile
     v.memory = 1500
   end
 
-
-  config.vm.provision "shell", path: "../install-ubuntu.sh", args: "dev"
-    
   # Re-install the config zs the vagrant user
   $script = <<SCRIPT
-rm /etc/ambry.yaml
-chown -R vagrant.vagrant /ambry
-su vagrant ambry config install 
+
+echo "--- Installing Ambry"
+apt-get update
+locale-gen en_US.UTF-8
+
+packages=" git gcc g++ python-pip python-dev sqlite3  libpq-dev
+libsqlite3-dev libspatialite3 libspatialite-dev spatialite-bin libspatialindex-dev
+libgdal-dev gdal-bin python-gdal python-numpy python-scipy "
+#libhdf5-serial-dev libhdf5-dev hdf5-tools h5utils  python-h5py \
+# "
+
+for pkg in $packages; do
+    echo "INSTALLING: $pkg"
+    apt-get install -y $pkg
+    if [ $? != 0 ]; then
+        echo "ERROR: Failed to install $pkg"
+        exit $?
+    fi
+done
+
+if [ ! true ]; then
+
+    pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
+
+    cd /ambry/src/ambry # Better exist -- it is the shared dir
+    python setup.py develop
+
+    ambry config install # Installs a development config
+
+    cd /ambry/source
+
+    [ ! -e clarinova-public ] && git clone https://github.com/clarinova/ambry-bundles-public.git clarinova-public
+    [ ! -e sdrdl ] && git clone https://github.com/sdrdl/sdrdl-ambry-bundles.git sdrdl
+
+fi
+
 SCRIPT
-    
+
   config.vm.provision "shell", inline: $script
     
 end
-
-
-
-
-
 
 
