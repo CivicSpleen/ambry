@@ -422,7 +422,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
             self.assertEquals(self.bundle.identity.vname, bp.identity.vname)
             self.assertEquals(p.identity.vname, bp.partition.vname)
 
-            file_ = l.files.query.installed.ref(bp.partition.identity.vid).one
+            file_ = l.files.query.ref(bp.partition.identity.vid).one
 
 
         dataset = l.resolve(p.identity.vid)
@@ -430,17 +430,20 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         self.assertEquals('piEGPXmDC8005001', dataset.partition.vid)
 
+        l.remotes[0].store_list()
+
+
+
     def test_http_cache(self):
 
         l = self.get_library('http-remoted')
 
-        print l.info
 
         r = l.remotes[0]
 
+
         self.assertFalse(r.has('foobar'))
         self.assertTrue(r.has(self.bundle.identity.cache_key))
-
 
         l.purge()
 

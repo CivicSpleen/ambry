@@ -520,7 +520,7 @@ class LibraryDb(object):
 
 
 
-    def install_bundle(self, bundle, install_partitions=True, commit = True):
+    def install_bundle(self, bundle, commit = True):
         '''Copy the schema and partitions lists into the library database
 
         '''
@@ -569,10 +569,6 @@ class LibraryDb(object):
         if tables:
             s.execute(Table.__table__.insert(), tables)
             s.execute(Column.__table__.insert(), columns)
-
-        if install_partitions:
-            for partition in dataset.partitions:
-                s.merge(partition)
 
         if commit:
             try:

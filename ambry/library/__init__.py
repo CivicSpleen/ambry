@@ -209,7 +209,7 @@ class Library(object):
         from ..dbexceptions import ConflictError
 
         try:
-            self.database.install_bundle(bundle, install_partitions=install_partitions, commit = commit)
+            self.database.install_bundle(bundle, commit = commit)
             installed = True
         except ConflictError:
             installed = False
@@ -220,6 +220,12 @@ class Library(object):
 
         if not self.cache.has(ident.cache_key):
             self.cache.put(bundle.database.path, ident.cache_key)
+
+        if install_partitions:
+            for partition in bundle.partitions:
+                self.put_partition(bundle, partition, commit = commit)
+
+
 
         return self.cache.path(ident.cache_key), installed
 
@@ -698,7 +704,7 @@ class Library(object):
             try:
 
                 try:
-                    self.database.install_bundle(bundle, install_partitions=False, commit=True)
+                    self.database.install_bundle(bundle, commit=True)
                     installed = True
                 except ConflictError:
                     installed = False
@@ -748,7 +754,9 @@ class Library(object):
 
             all_keys = [ f.path for f  in self.files.query.type(Dataset.LOCATION.REMOTE).group(remote.repo_id).all ]
 
+
             for cache_key in remote.list().keys():
+
 
                 if cache_key in all_keys:
                     continue
@@ -757,7 +765,6 @@ class Library(object):
                     self.logger.info("Remote {} has: {}".format(remote.repo_id, cache_key))
                 else:
                     self.logger.info("Remote {} sync: {}".format(remote.repo_id, cache_key))
-
 
                 b = self._get_bundle_by_cache_key(cache_key)
 

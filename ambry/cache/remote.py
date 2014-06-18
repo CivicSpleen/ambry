@@ -119,7 +119,6 @@ class HttpCache( Cache):
 
     def has(self, rel_path, md5=None, propagate=True):
         from ..client.exceptions import NotFound
-
         try:
             self.api.head(self._rename(rel_path))
             return True
@@ -172,7 +171,7 @@ class HttpCache( Cache):
             from ..client.exceptions import NotFound
             raise NotFound("Did not find _list.json file at {}".format(self.path('_list.json')))
 
-        return { k:{} for k in l }
+        return { k:{} for k in l.json() }
 
 
 

@@ -39,6 +39,7 @@ class RestApi(object):
         if len(u) > 0 and u[0] == '/':
             u = u[1:]
 
+
         return self._url+'/'+u.format(*args, **kwargs)
 
     def get(self, url, params={}):
