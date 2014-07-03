@@ -58,7 +58,7 @@ class Bundle(object):
 
         if self._database:
             try:
-                self.logger.debug("Closing bundle: {}".format(self.identity.sname))
+                #self.logger.debug("Closing bundle: {}".format(self.identity.sname)) # self.identity makes a DB call
                 self._database.session.commit()
                 self._database.close()
             except NotFoundError as e:
@@ -339,6 +339,7 @@ class Bundle(object):
         return '\n'.join(out)
 
     def _repr_html_(self):
+        """Called by ipython to display HTML"""
         out = []
 
         for k, v in self._info().items():
@@ -356,7 +357,72 @@ class Bundle(object):
         return "<table>\n" + "\n".join(out) + "\n</table>"
 
 
-class DbBundle(Bundle):
+class DbBundleBase(Bundle):
+    """Base class for DbBundle and LibraryDbBundle. A better design would for one to derive fro the other; this is
+    temporary solution"""
+
+    @property
+    def path(self):
+        raise NotImplementedError()
+
+    def get_dataset(self):
+        raise NotImplementedError()
+
+    def sub_path(self, *args):
+        """For constructing paths to partitions"""
+        raise NotImplementedError()
+
+
+    @property
+    @memoize
+    def metadata(self):
+        from ..bundle.meta import Top
+
+
+        ds = self.get_dataset()
+
+        rows = self.database.get_config_rows(ds.vid)
+
+        t = Top()
+
+        t.load_rows(rows)
+
+        # The database config rows don't hold name and identity
+        t.identity = self.identity.ident_dict
+        t.names = self.identity.names_dict
+
+        return t
+
+    def _info(self, identity=None):
+        """Return a nested, ordered dict  of information about the bundle. """
+        from collections import OrderedDict
+
+        d = super(DbBundleBase, self)._info(identity)
+
+        d['source'] = OrderedDict(
+            db=self.database.path
+        )
+
+        d['source'].update(self._build_info())
+
+        d['partitions'] = self.partitions.count
+
+        print 'HERE'
+
+        return d
+
+    @property
+    def identity(self):
+        """Return an identity object. """
+        from ..identity import Identity, LocationRef
+
+        if not self._identity:
+            self._identity = self.get_dataset().identity
+            self._identity.locations.set(LocationRef.LOCATION.LIBRARY)
+
+        return self._identity
+
+class DbBundle(DbBundleBase):
 
     def __init__(self, database_file, logger=None):
         """Initialize a db and all of its sub-components.
@@ -381,25 +447,6 @@ class DbBundle(Bundle):
         # partition.
         self.partition = None
 
-    @property
-    def path(self):
-        base, _ = os.path.splitext(self.database_file)
-        return base
-
-    def sub_path(self, *args):
-        """For constructing paths to partitions"""
-        return os.path.join(self.path, *args)
-
-    @property
-    def identity(self):
-        """Return an identity object. """
-        from ..identity import Identity, LocationRef
-
-        if not self._identity:
-            self._identity = self.get_dataset().identity
-            self._identity.locations.set(LocationRef.LOCATION.LIBRARY)
-
-        return self._identity
 
     def get_dataset(self):
         """Return the dataset
@@ -415,14 +462,14 @@ class DbBundle(Bundle):
 
             if not ds:
                 raise NotFoundError(
-                    "No dataset record found. Probably not a bundle (a): '{}'" .format(
+                    "No dataset record found. Probably not a bundle (a): '{}'".format(
                         self.path))
 
             return ds
 
         except OperationalError:
             raise NotFoundError(
-                "No dataset record found. Probably not a bundle (b): '{}'" .format(
+                "No dataset record found. Probably not a bundle (b): '{}'".format(
                     self.path))
         except Exception as e:
             from ..util import get_logger
@@ -434,24 +481,19 @@ class DbBundle(Bundle):
                     self.database.dsn))
             raise
 
-    def _info(self, identity=None):
-        """Return a nested, ordered dict  of information about the bundle. """
-        from collections import OrderedDict
 
-        d = super(DbBundle, self)._info(identity)
+    @property
+    def path(self):
+        base, _ = os.path.splitext(self.database_file)
+        return base
 
-        d['source'] = OrderedDict(
-            db=self.database.path
-        )
-
-        d['source'].update(self._build_info())
-
-        d['partitions'] = self.partitions.count
-
-        return d
+    def sub_path(self, *args):
+        """For constructing paths to partitions"""
+        return os.path.join(self.path, *args)
 
 
-class LibraryDbBundle(Bundle):
+
+class LibraryDbBundle(DbBundleBase):
 
     """A database bundle that is built in place from the data in a library """
 
@@ -502,39 +544,6 @@ class LibraryDbBundle(Bundle):
                     self.database.dsn))
             raise
 
-    @property
-    def path(self):
-        raise NotImplementedError()
-
-    def sub_path(self, *args):
-        """For constructing paths to partitions"""
-        raise NotImplementedError()
-
-    @property
-    def identity(self):
-        """Return an identity object. """
-        from ..identity import Identity, LocationRef
-
-        if not self._identity:
-            self._identity = self.get_dataset().identity
-            self._identity.locations.set(LocationRef.LOCATION.LIBRARY)
-
-        return self._identity
-
-    def _info(self, identity=None):
-        """Return a nested, ordered dict  of information about the bundle. """
-        from collections import OrderedDict
-        d = super(LibraryDbBundle, self)._info(identity)
-
-        d['source'] = OrderedDict(
-            db=self.database.path
-        )
-
-        d['source'].update(self._build_info())
-
-        d['partitions'] = self.partitions.count
-
-        return d
 
 
 class BuildBundle(Bundle):
@@ -699,7 +708,7 @@ class BuildBundle(Bundle):
 
         return self._identity
 
-    def update_configuration(self, rewrite_database=True):
+    def update_configuration(self, identity=None, rewrite_database=True):
         from ..dbexceptions import DatabaseError
         # Re-writes the bundle.yaml file, with updates to the identity and partitions
         # sections.
@@ -714,8 +723,11 @@ class BuildBundle(Bundle):
                 self.error("    {} = {}".format('.'.join([x for x in k if x]), v))
             raise Exception("Metadata errors: {}".format(md.errors))
 
-        md.identity = self.identity.ident_dict
-        md.names = self.identity.names_dict
+        if not identity:
+            identity = self.identity
+
+        md.identity = identity.ident_dict
+        md.names = identity.names_dict
 
         # Partitions is hanging around in some old bundles
         if 'partitions' in md._term_values:

@@ -815,7 +815,7 @@ Columns:
         return None
     
     def get_fixed_regex(self):
-            '''Using the size values for the columsn for the table, construct a
+            '''Using the size values for the columns for the table, construct a
             regular expression to  parsing a fixed width file.'''
             import re
 

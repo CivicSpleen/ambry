@@ -1211,8 +1211,9 @@ def _pragma_on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
 
     #dbapi_con.execute('PRAGMA foreign_keys = ON;')
-    return # Not clear that there is a performance improvement.
-    dbapi_con.execute('PRAGMA journal_mode = MEMORY')
+    # Not clear that there is a performance improvement.
+
+    dbapi_con.execute('PRAGMA journal_mode = WAL')
     dbapi_con.execute('PRAGMA synchronous = OFF')
     dbapi_con.execute('PRAGMA temp_store = MEMORY')
     dbapi_con.execute('PRAGMA cache_size = 500000')

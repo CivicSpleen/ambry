@@ -492,6 +492,25 @@ class RelationalDatabase(DatabaseInterface):
             d[row.key] = row.value
 
         return d
+
+    def get_config_rows(self, d_vid):
+        from ambry.orm import Config as SAConfig
+
+        rows = []
+
+        for r in self.session.query(SAConfig).filter(SAConfig.group == 'config',
+                                                     SAConfig.d_vid == d_vid).all():
+
+            parts = r.key.split('.',3)
+
+            cr = ( (parts[0] if len(parts) > 0 else None,
+                    parts[1] if len(parts) > 1 else None,
+                    parts[2] if len(parts) > 2 else None
+                   ), r.value)
+
+            rows.append(cr)
+
+        return rows
         
 
 class RelationalBundleDatabaseMixin(object):

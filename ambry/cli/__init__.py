@@ -267,6 +267,7 @@ def _print_bundle_list(idents, subset_names = None, prtf=prt,fields=[], show_par
 def _print_info(l,ident, list_partitions=False):
     from ..cache import RemoteMarker
     from ..bundle import LibraryDbBundle # Get the bundle from the library
+    from ..identity import LocationRef
 
     resolved_ident = l.resolve(ident.vid, None) # Re-resolve to get the URL or Locations
 
@@ -285,24 +286,29 @@ def _print_info(l,ident, list_partitions=False):
     if d.url:
         prt("D Web Path  : {}",d)
 
-    bundle = l.source.resolve_build_bundle(d.vid) if l.source else None
+    ## For Source Bundles
+    ##
 
-    if l.source:
-        if bundle:
-            prt('B Bundle Dir: {}', bundle.bundle_dir)
-        else:
-            source_dir = l.source.source_path(d.vid)
-            prt('B Source Dir: {}', source_dir)
+    if resolved_ident.locations.has(LocationRef.LOCATION.SOURCE):
 
-    if bundle and bundle.is_built:
+        bundle = l.source.resolve_build_bundle(d.vid) if l.source else None
 
-        process = bundle.get_value_group('process')
-        prt('B Partitions: {}', bundle.partitions.count)
-        prt('B Created   : {}', process.get('dbcreated', ''))
-        prt('B Prepared  : {}', process.get('prepared', ''))
-        prt('B Built     : {}', process.get('built', ''))
-        prt('B Build time: {}',
-            str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
+        if l.source:
+            if bundle:
+                prt('B Bundle Dir: {}', bundle.bundle_dir)
+            else:
+                source_dir = l.source.source_path(d.vid)
+                prt('B Source Dir: {}', source_dir)
+
+        if bundle and bundle.is_built:
+
+            process = bundle.get_value_group('process')
+            prt('B Partitions: {}', bundle.partitions.count)
+            prt('B Created   : {}', process.get('dbcreated', ''))
+            prt('B Prepared  : {}', process.get('prepared', ''))
+            prt('B Built     : {}', process.get('built', ''))
+            prt('B Build time: {}',
+                str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
 
     if ident.partitions:
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-#Management program interface for bundles. Equivalent to calling "python bundle.py"
+#Management program interface for bundles. Equivalent to calling "ambry bundle -d `pwd` "
 #in a bundle directory
 
 # Copyright (c) 2013 Clarinova. This file is licensed under the terms of the

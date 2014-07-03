@@ -553,7 +553,7 @@ class BundleFilesystem(Filesystem):
         import yaml
         
         with open(self.path(*args),'wb') as f:
-            return yaml.safe_dump( o, f,default_flow_style=False, indent=4, encoding='utf-8' )       
+            return yaml.safe_dump( o, f, default_flow_style=False, indent=4, encoding='utf-8' )
 
     def get_url(self,source_url, create=False):
         '''Return a database record for a file'''

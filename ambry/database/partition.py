@@ -126,8 +126,8 @@ def _on_connect_partition(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
     from sqlite import _on_connect_bundle as ocb
 
-    ocb(dbapi_con, con_record)
-
-
-
-    #dbapi_con.enable_load_extension(True)
+    dbapi_con.execute('PRAGMA page_size = 8192')
+    dbapi_con.execute('PRAGMA temp_store = MEMORY')
+    dbapi_con.execute('PRAGMA cache_size = 50000')
+    dbapi_con.execute('PRAGMA foreign_keys = OFF')
+    dbapi_con.execute('PRAGMA journal_mode = MEMORY')

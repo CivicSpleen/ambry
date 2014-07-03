@@ -542,6 +542,7 @@ class AttrDict(OrderedDict):
 
     def dump(self, stream= None, map_view=None):
         from StringIO import StringIO
+        from ..orm import MutationList, MutationDict
 
         yaml.representer.SafeRepresenter.add_representer(
             MapView, yaml.representer.SafeRepresenter.represent_dict)
@@ -556,8 +557,14 @@ class AttrDict(OrderedDict):
             defaultdict, yaml.representer.SafeRepresenter.represent_dict )
 
         yaml.representer.SafeRepresenter.add_representer(
+            MutationDict, yaml.representer.SafeRepresenter.represent_dict)
+
+        yaml.representer.SafeRepresenter.add_representer(
             set, yaml.representer.SafeRepresenter.represent_list )
-        
+
+        yaml.representer.SafeRepresenter.add_representer(
+            MutationList, yaml.representer.SafeRepresenter.represent_list)
+
         yaml.representer.SafeRepresenter.add_representer(
             IncludeFile, include_representer)
 
@@ -577,6 +584,13 @@ class AttrDict(OrderedDict):
 
         if isinstance(stream, StringIO):
             return stream.getvalue()
+
+    def json(self):
+        import yaml, json
+
+        o = yaml.load(self.dump())
+
+        return json.dumps(o)
 
 
 class MapView(collections.MutableMapping):

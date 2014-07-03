@@ -118,18 +118,21 @@ def bundle_command(args, rc):
         for phase in phases:
             getf(phase)(args, b, st, rc)
     except DependencyError as e:
-        st.set_bundle_state(b.identity, 'error:dependency')
+        if b:
+            st.set_bundle_state(b.identity, 'error:dependency')
         fatal("{}: Phase {} failed: {}", b.identity.name, phase, e.message)
     except Exception as e:
-        err("{}: Phase {} failed: {}", b.identity.name, phase, e.message)
-        b.close()
         l.close()
-        st.set_bundle_state(b.identity, 'error:'+phase)
+        if b:
+            err("{}: Phase {} failed: {}", b.identity.name, phase, e.message)
+            b.close()
+            st.set_bundle_state(b.identity, 'error:'+phase)
         raise
     finally:
         import lockfile
         try:
-            b.close()
+            if b:
+                b.close()
         except lockfile.NotMyLock as e:
             warn("Got logging error: {}".format(str(e)))
 
@@ -153,34 +156,25 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('config', help='Operations on the bundle configuration file')
     command_p.set_defaults(subcommand='config')
 
-    asp = command_p.add_subparsers(title='Config subcommands', help='Subcommand for operations on a bundl file')
+    asp = command_p.add_subparsers(title='Config subcommands', help='Subcommand for operations on a bundle file')
 
-
-    #
-    # rewrite Command
-    #
-
+    # Config/Rewrite Command
     sp = asp.add_parser('rewrite', help='Re-write the bundle file, updating the formatting')     
-    sp.set_defaults(subcommand='rewrite')
+    sp.set_defaults(subsubcommand='rewrite')
 
-    #
-    # Dump Command
-    #
-
+    # Config/Dump Command
     sp = asp.add_parser('dump', help='dump the configuration')     
-    sp.set_defaults(subcommand='dump')
+    sp.set_defaults(subsubcommand='dump')
 
-    #
-    # Schema Command
-    #
-
+    # Config/Schema Command
     sp = asp.add_parser('schema', help='Print the schema')     
-    sp.set_defaults(subcommand='schema')
+    sp.set_defaults(subsubcommand='schema')
 
+    # Config/Incver Command
+    sp = asp.add_parser('incver', help='Increment the version number')
+    sp.set_defaults(subsubcommand='incver')
 
-    #
-    # info command
-    #
+    # Info command
     command_p = sub_cmd.add_parser('info', help='Print information about the bundle')
     command_p.set_defaults(subcommand='info')
     command_p.set_defaults(subcommand='info')
@@ -463,18 +457,26 @@ def bundle_update(args, b, st, rc):
 
 def bundle_config(args, b, st, rc):
 
-    if args.command == 'config':
-        if args.subcommand == 'rewrite':
-            b.log("Rewriting the config file")
-            with b.session:
-                b.update_configuration()
-        elif args.subcommand == 'dump':
-            print b.config.dump()
-        elif args.subcommand == 'schema':
-            print b.schema.as_markdown()
+    if args.subsubcommand == 'rewrite':
+        b.log("Rewriting the config file")
+        with b.session:
+            b.update_configuration()
+    elif args.subsubcommand == 'dump':
+        print b.config.dump()
+    elif args.subsubcommand == 'schema':
+        print b.schema.as_markdown()
+    elif args.subsubcommand == 'incver':
+        from ..identity import Identity
+        identity = b.identity
 
-    return
+        identity.on.revision = identity.on.revision + 1
 
+        identity = Identity.from_dict(identity.ident_dict)
+
+        b.update_configuration(identity=identity)
+
+    else:
+        err("Unknown args: {}".format(args))
 
 
 

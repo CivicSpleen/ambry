@@ -214,7 +214,7 @@ class Bundle(BuildBundle):
             for lat in range(10):
                 for lon in range(10):
                     ins.insert({'name': "POINT({} {})".format(lon,lat),
-                                'geometry':"POINT({} {})".format(lon,lat)})
+                                'wkt':"POINT({} {})".format(lon,lat)})
 
 
         # Create other types of partitions.

@@ -585,6 +585,7 @@ class Schema(object):
         warnings = []
     
         for row in reader:
+
             line_no += 1
 
             if not row.get('column', False) and not row.get('table', False):
@@ -650,7 +651,6 @@ class Schema(object):
             description = row.get('description','').strip().encode('utf-8')
 
             #progress_cb("Column: {}".format(row['column']))
-
 
             col = self.add_column(t,row['column'],
                                    sequence_id = row.get('seq',None),
@@ -986,6 +986,7 @@ Base = declarative_base()
 
 """
 
+
         def write_class(table):
             return """
 class {name}(Base):
@@ -1028,10 +1029,8 @@ class {name}(Base):
                            that_table_lc=col.foreign_key.lower(), 
                            this_table = table.name,
                            rel_name = rel_name
-                        
                      )
-            
-            
+
             return o
         
         def write_init(table):
@@ -1063,8 +1062,18 @@ class {name}(Base):
             
         with open(os.path.join(lib_dir,'orm.py'),'w') as f:
             f.write(self.as_orm())
-            
-        
+
+    def _repr_html_(self):
+
+        out = ''
+
+        for t in self.tables:
+            out += '\n<h2>{}</h2>\n'.format(t.name)
+            out += t._repr_html_()
+
+        return out
+
+
     def add_views(self):
         """Add views defined in the configuration"""
         

@@ -70,8 +70,6 @@ class Metadata(object):
 
             self._synonyms[k] = parts
 
-
-
     def set(self, d):
         if d is not None:
             for k, v in d.items():
@@ -196,6 +194,28 @@ class Metadata(object):
     @property
     def dict(self):
         return self._term_values.to_dict()
+
+    @property
+    def json(self):
+        return self._term_values.json()
+
+    @property
+    def yaml(self):
+        return self._term_values.dump()
+
+    def html(self):
+
+        out = ''
+
+        for name, group in self._members.items():
+
+            out += getattr(self,name).html()
+
+        return out
+
+    def _repr_html_(self):
+        """Adapts html() to IPython"""
+        return self.html()
 
     def add_error(self, group, term, sub_term, value):
         '''For records that are not defined as terms, either add it to the errors list,
@@ -400,6 +420,13 @@ class Group(object):
 
         return object.__setattr__(self, attr, value)
 
+    def html(self):
+
+        return ''
+
+    def _repr_html_(self):
+        """Adapts html() to IPython"""
+        return self.html()
 
 
 class DictGroup(Group, collections.MutableMapping):
@@ -473,6 +500,7 @@ class DictGroup(Group, collections.MutableMapping):
         return self._term_values.__iter__()
 
     def set(self, d):
+
         assert isinstance(d, dict)
         for k,v in d.items():
             try:
@@ -489,6 +517,22 @@ class DictGroup(Group, collections.MutableMapping):
         else:
             self.set({key:  value})
 
+    def html(self):
+        out = ''
+
+        for name, m in self._members.items():
+
+            ti = self.get_term_instance(name)
+            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
+
+        return ("""
+<h2 class="{cls}">{title}</h2>
+<table class="{cls}">
+{out}</table>
+"""
+                .format(title=self._key.title(),
+                        cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(),self._key),
+                        out=out))
 
 class TypedDictGroup(DictGroup):
     """A DictGroup where the term structure is constrained, but they keys are not.
@@ -534,7 +578,21 @@ class TypedDictGroup(DictGroup):
         o = self.get_term_instance(key)
         o.set(value)
 
+    def html(self):
+        out = ''
 
+        for k,v in self.items():
+            ti = self.get_term_instance(k)
+            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
+
+        return ("""
+<h2 class="{cls}">{title}</h2>
+<table class="{cls}">
+{out}</table>
+"""
+                .format(title=self._key.title(),
+                        cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
+                        out=out))
 
 class VarDictGroup(DictGroup):
     """A Dict group that doesnt' use terms to enforce a structure.
@@ -638,9 +696,7 @@ class ListGroup(Group, collections.MutableSequence):
         self.ensure_index(index)
         o = self.get_term_instance(index)
 
-
         o.set(value)
-
 
     def __delitem__(self, index):
         return self._term_values.__delitem__(index)
@@ -664,6 +720,19 @@ class ListGroup(Group, collections.MutableSequence):
     def reformat(self,v):
         raise NotImplementedError()
 
+    def html(self):
+        out = ''
+
+        for ti in self:
+            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
+
+        return ("""
+<table class="{cls}">
+{out}</table>
+"""
+                .format(title=self._key.title(),
+                        cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
+                        out=out))
 
 class Term(object):
     """A single term in a group"""
@@ -722,6 +791,9 @@ class Term(object):
     def after_set(self):
         pass
 
+    def html(self):
+        return ""
+
 class ScalarTerm(Term):
     """A Term that can only be a string"""
 
@@ -739,6 +811,15 @@ class ScalarTerm(Term):
 
     def is_empty(self):
         return self.get() is None
+
+
+    def html(self):
+        if self._key == 'url' and self.get():
+            return "<a href=\"{url}\" target=\"_blank\">{url}</a>".format(url=self.get())
+        if self._key == 'email' and self.get():
+            return "<a href=\"mailto:{url}\"  target=\"_blank\">{url}</a>".format(url=self.get())
+        else:
+            return self.get()
 
 class DictTerm(Term, collections.MutableMapping):
     """A term that contains a dict of sub-parts
@@ -839,6 +920,21 @@ class DictTerm(Term, collections.MutableMapping):
         import copy
 
         return self._new_instance(instance)
+
+    def html(self):
+            out = ''
+
+            for name, m in self._members.items():
+                ti = self.get_term_instance(name)
+                out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
+
+            return ("""
+<table class="{cls}">
+{out}</table>
+"""
+                    .format(title=str(self._key),
+                            cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
+                            out=out))
 
 
     def set(self, d):
