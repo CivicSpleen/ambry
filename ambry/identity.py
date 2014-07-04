@@ -58,6 +58,7 @@ class Name(object):
         :param args:
         :param kwargs:
         """
+
         for k,default, optional in self.name_parts:
             if optional:
                 setattr(self,k, kwargs.get(k,default))

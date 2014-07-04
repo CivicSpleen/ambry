@@ -101,6 +101,8 @@ class Test(TestBase):
     def _test_local_install(self, name):
 
         l = self.get_library('local')
+        l.clean()
+
 
         l.put_bundle(self.bundle)
 

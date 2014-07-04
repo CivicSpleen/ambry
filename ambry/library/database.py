@@ -663,6 +663,7 @@ class LibraryDb(object):
         from sqlalchemy.orm.exc import NoResultFound
 
         if commit == 'collect':
+
             self._partition_collection.append(partition.record.insertable_dict)
             return
 
@@ -674,8 +675,6 @@ class LibraryDb(object):
 
             if not b:
                 self.install_bundle(bundle)
-
-
 
         s = self.session
 

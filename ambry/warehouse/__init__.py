@@ -134,24 +134,27 @@ class WarehouseInterface(object):
             self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
             return;
 
-        self.install_partition(bundle, p)
+        self.install_partition(bundle, p, tables)
 
-        for table_name, urls in tables.items():
+        for table_name in tables:
 
-            if p.identity.format == 'db':
-                if urls:
-                    itn = self.load_remote(p, table_name, urls)
-                else:
+            try:
+                if p.identity.format == 'db':
+                    self.elibrary.get(p.vid) # ensure it is local
                     itn = self.load_local(p, table_name)
-            else:
-                itn = self.load_ogr(p, table_name)
+                else:
+                    self.elibrary.get(p.vid)  # ensure it is local
+                    itn = self.load_ogr(p, table_name)
 
-            orm_table = p.get_table(table_name)
-            self.library.database.mark_table_installed(orm_table.vid, itn)
+                orm_table = p.get_table(table_name)
+                self.library.database.mark_table_installed(orm_table.vid, itn)
+            except Exception as e:
+                raise
+                self.logger.error("Failed to install table {}: {}".format(table_name,e))
 
         self.library.database.mark_partition_installed(p_vid)
 
-    def install_partition(self, bundle, partition):
+    def install_partition(self, bundle, partition, tables):
         '''Install the records for the partition, the tables referenced by the partition,
         and the bundle, if they aren't already installed'''
         from sqlalchemy.orm.exc import NoResultFound
@@ -164,14 +167,14 @@ class WarehouseInterface(object):
 
         p = bundle.partitions.get(pid)
 
-        for table_name in p.tables:
+        for table_name in tables:
             self.create_table(p, table_name)
 
-    def install_view(self, view_text):
-        raise NotImplementedError()
+    def install_view(self, name, sql):
+        raise NotImplementedError(type(self))
 
     def run_sql(self, sql_text):
-        raise NotImplementedError()
+        raise NotImplementedError(type(self))
 
 
     def load_local(self, partition, table_name):
@@ -188,12 +191,11 @@ class WarehouseInterface(object):
         '''Load geo data using the ogr2ogr program'''
         raise NotImplementedError()
 
-
     def _setup_install(self, ref):
         '''Perform local and remote resolutions to get the bundle, partition and links
         to CSV parts in the remote REST itnerface '''
         from ..identity import Identity
-
+        from sqlalchemy import inspect
         ri = RestInterface()
 
         if isinstance(ref, Identity):
@@ -215,36 +217,10 @@ class WarehouseInterface(object):
         b = self.elibrary.get(dataset)
         p = b.partitions.get(ident.id_)
 
-        rident = self.elibrary.remote_resolver.resolve(ident)
 
-        table_urls = {}
+        inspector = inspect(p.database.engine)
 
-        for table_name in p.tables:
-            t = b.schema.table(table_name)
-
-            if rident:
-                import requests
-                from ..client.exceptions import BadRequest
-
-                # If we got an rident, the remotes were defined, and we can get the CSV urls
-                # to load the table.
-
-                try:
-
-                    urls = ri.get(rident.partition.data['csv']['tables'][t.id_]['parts'])
-
-                    if not isinstance(urls, list ):
-                        urls = [urls]
-
-                    table_urls[table_name] = urls
-                except BadRequest:
-                    table_urls[table_name] = None
-
-            else:
-                table_urls[table_name] = None
-
-        return b, p, table_urls
-
+        return b, p, [ t for t in inspector.get_table_names() if t != 'config' ]
 
     ##
     ## users
@@ -295,8 +271,6 @@ class WarehouseInterface(object):
                 raise ResolutionError("Term referred to a dataset, not a partition: {}".format(partition))
 
             pid = dsid.partition.vid
-
-
 
         elif isinstance(partition, PartitionBase):
             pid = partition.identity.vid

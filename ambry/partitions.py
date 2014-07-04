@@ -239,7 +239,7 @@ class Partitions(object):
             pnq = PartitionNameQuery(**kwargs)
 
         assert isinstance(pnq,PartitionNameQuery), "Expected NameQuery, got {}".format(type(pnq))
-   
+
         try:
 
             partitions = [ self.partition(op, memory=kwargs.get('memory',False)) 
@@ -480,7 +480,7 @@ class Partitions(object):
         pnq = PartitionNameQuery(**kwargs)
         
         ppn = PartialPartitionName(**kwargs)
-        
+
         if tables:
             tables = set(tables)
 
@@ -493,6 +493,7 @@ class Partitions(object):
         if format:
             ppn.format = format
             pnq.format = format
+
 
         partition =  self.find(pnq)
 

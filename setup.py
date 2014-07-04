@@ -80,16 +80,17 @@ def find_package_data():
     l = list()
 
     import os
-    for root, dirs, files in os.walk("ambry/support"):
+    for start in ("ambry/support", "ambry/geo/support"):
+        for root, dirs, files in os.walk(start):
 
-        for f in files:
+            for f in files:
 
-            if f.endswith('.pyc'):
-                continue
+                if f.endswith('.pyc'):
+                    continue
 
-            path = os.path.join(root,f).replace("ambry/support",'support')
+                path = os.path.join(root,f).replace("ambry/",'')
 
-            l.append(path)
+                l.append(path)
 
     return {"ambry": l }
 

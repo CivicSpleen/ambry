@@ -77,6 +77,23 @@ class SqliteWarehouse(RelationalWarehouse):
 
         return a_table_name
 
+    def install_view(self, name, sql):
+
+        self.logger.info('Installing view')
+
+        sql = """
+        DROP VIEW  IF EXISTS {name};
+        CREATE VIEW {name} AS {sql}
+        """.format(name=name, sql=sql)
+
+        self.database.connection.connection.cursor().executescript(sql)
+
+    def run_sql(self, sql_text):
+
+        self.logger.info('Running SQL')
+
+        self.database.connection.executescript(sql_text)
+
 class SpatialiteWarehouse(SqliteWarehouse):
 
     def _ogr_args(self, partition):
@@ -86,3 +103,4 @@ class SpatialiteWarehouse(SqliteWarehouse):
             "-gt 65536",
             partition.database.path,
             "-dsco SPATIALITE=yes"]
+

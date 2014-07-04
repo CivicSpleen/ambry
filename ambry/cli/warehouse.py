@@ -145,17 +145,19 @@ def warehouse_install(args, w,config):
     else:
         partitions = [args.term]
         views = []
+        m = None
+
     for p in partitions:
         try:
             w.install(p)
         except NotFoundError:
             err("Partition {} not found in external library".format(p))
 
-    if m.sql:
+    if m and m.sql:
         w.run_sql(m.sql[w.database.driver])
 
-    for view in views:
-        w.install_view(view)
+    for name, sql in views:
+        w.install_view(name, sql)
 
 def warehouse_remove(args, w,config):
     from functools import partial

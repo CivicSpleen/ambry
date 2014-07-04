@@ -109,46 +109,51 @@ class Manifest(object):
 
     @property
     def views(self):
+        from collections import defaultdict
 
         def yield_lines(data):
+            """Read all of the lines of the manifest and return the lines for views"""
             in_views_section = False
             in_view = False
+            view_name = None
+
 
             for line in data:
                 line = line.strip()
 
-                if line == 'views:':
-                    in_views_section = True
-                    yield 'end', None
-                    continue
+                if line.startswith('view:'): # Start of the views section
 
-                if re.match(r'^\w+:', line):
+                    m = re.match(r'^view:\w*([^\#]+)', line)
+
+                    if m and m.group(1):
+                        view_name =  m.group(1).strip()
+                        if view_name:
+                            in_views_section = True
+                            yield 'end', None, None
+                            continue
+
+                if re.match(r'^\w+:', line): # Start of some other section
                     in_views_section = False
-                    yield 'end', None
+                    yield 'end', None, None
                     continue
 
                 if not in_views_section:
                     continue
 
                 if re.match(r'create view', line.lower()):
-                    yield 'end', None
+                    yield 'end', None, None
 
                 if line.strip():
-                    yield 'viewline', line.strip()
+                    yield 'viewline', view_name, line.strip()
 
-            yield 'end', None
+            yield 'end', None, None
 
-        view_lines = []
+        view_lines = defaultdict(list)
 
-        for cmd, line in yield_lines(self.data):
+        for cmd, view_name, line in yield_lines(self.data):
+            if cmd == 'viewline':
+                view_lines[view_name].append(line)
 
-            if cmd == 'end' and view_lines:
-                yield ' '.join(view_lines)
-                view_lines = []
-
-            elif cmd == 'viewline':
-                view_lines.append(line)
-
-        if view_lines:
-            yield ' '.join(view_lines)
+        for view_name, view_line in view_lines.items():
+            yield view_name, ' '.join(view_line)
 

@@ -186,7 +186,11 @@ class RelationalDatabase(DatabaseInterface):
                 table.drop(self.engine, checkfirst=True)
 
     def delete(self):
-        self.drop()
+        from ..dbexceptions import DatabaseMissingError
+        try:
+            self.drop()
+        except DatabaseMissingError:
+            pass
 
     def drop_table(self, table_name, use_id = False):
         table = self.table(table_name)
