@@ -678,8 +678,14 @@ class Library(object):
                     try:
                         b = self._create_bundle( path_)
 
+                        try:
+                            bident = b.identity
+                        except Exception as e:
+                            self.logger.error("Failed to open bundle from {}: {} ".format(path_, e))
+                            continue
+
                         # The path check above is wrong sometime when there are symlinks
-                        if self.files.query.type(Files.TYPE.BUNDLE).ref(b.identity.vid).one_maybe and self.get(b.identity.vid):
+                        if self.files.query.type(Files.TYPE.BUNDLE).ref(bident.vid).one_maybe and self.get(bident.vid):
                             continue
 
                         if b.identity.is_bundle:
@@ -777,6 +783,10 @@ class Library(object):
 
                 except NotABundle:
                     self.logger.error("Cache key {} exists, but isn't a valid bundle".format(cache_key))
+                    b.close()
+                    continue
+                except Exception as e:
+                    self.logger.error("Failed to put bundle {}: {}".format(cache_key, e))
                     b.close()
                     continue
 

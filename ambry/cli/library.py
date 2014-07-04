@@ -330,7 +330,7 @@ def library_push(args, l, config):
 
     def push_cb(rate, note, md, t):
         if note == 'Has':
-            prt("{} {} {}", note, md['fqname'])
+            prt("{} {}", note, md['fqname'])
         elif note == 'Pushing':
             prt("{} {}  {} KB/s ", note, md['fqname'], rate)
         elif note == 'Pushed':

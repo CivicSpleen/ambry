@@ -627,11 +627,7 @@ def _on_connect_bundle(dbapi_con, con_record):
     except:
         pass
 
-    try:
-        dbapi_con.execute('PRAGMA journal_mode = DELETE')
-    except:
-        pass
-
+    dbapi_con.execute('PRAGMA journal_mode = DELETE')
     dbapi_con.execute('PRAGMA page_size = 8192')
     dbapi_con.execute('PRAGMA temp_store = MEMORY')
     dbapi_con.execute('PRAGMA cache_size = 50000')
@@ -639,7 +635,6 @@ def _on_connect_bundle(dbapi_con, con_record):
 
     #dbapi_con.execute('PRAGMA busy_timeout = 10000')
     #dbapi_con.execute('PRAGMA synchronous = OFF')
-
 
 def _on_connect_update_sqlite_schema(conn, con_record):
     '''Perform on-the-fly schema updates based on the user version'''
