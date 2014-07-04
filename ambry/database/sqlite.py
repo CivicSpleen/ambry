@@ -626,12 +626,17 @@ def _on_connect_bundle(dbapi_con, con_record):
         dbapi_con.execute('COMMIT') # Can't change journal mode in a transaction.
     except:
         pass
-    
+
+    try:
+        dbapi_con.execute('PRAGMA journal_mode = DELETE')
+    except:
+        pass
+
     dbapi_con.execute('PRAGMA page_size = 8192')
     dbapi_con.execute('PRAGMA temp_store = MEMORY')
     dbapi_con.execute('PRAGMA cache_size = 50000')
     dbapi_con.execute('PRAGMA foreign_keys = OFF')
-    dbapi_con.execute('PRAGMA journal_mode = DELETE')
+
     #dbapi_con.execute('PRAGMA busy_timeout = 10000')
     #dbapi_con.execute('PRAGMA synchronous = OFF')
 
