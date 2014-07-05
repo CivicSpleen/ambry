@@ -130,4 +130,4 @@ def _on_connect_partition(dbapi_con, con_record):
     dbapi_con.execute('PRAGMA temp_store = MEMORY')
     dbapi_con.execute('PRAGMA cache_size = 50000')
     dbapi_con.execute('PRAGMA foreign_keys = OFF')
-    dbapi_con.execute('PRAGMA journal_mode = MEMORY')
+    dbapi_con.execute('PRAGMA journal_mode = WAL')

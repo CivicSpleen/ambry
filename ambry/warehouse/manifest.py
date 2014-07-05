@@ -84,7 +84,7 @@ class Manifest(object):
 
     @property
     def partitions(self):
-
+        import re
         in_partitions_section = False
 
         for line in self.data:
@@ -103,8 +103,14 @@ class Manifest(object):
                 continue
 
             if in_partitions_section:
+
                 if line.strip():
-                    yield line.strip()
+                    parts = re.split(r'from', line, flags =  re.IGNORECASE)
+
+                    if len(parts) > 1:
+                        yield re.split(r'\s+|\s*,\s*', parts[0].strip(), flags =  re.IGNORECASE), parts[1].strip()
+                    else:
+                        yield None, line.strip()
 
 
     @property

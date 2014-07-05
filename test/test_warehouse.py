@@ -165,7 +165,7 @@ First Line of documentation
 partitions:
 
 part1 # Comment
-part2 # Comment
+table1, table2 table3,table4 from part2 # Comment
 
 views:
 

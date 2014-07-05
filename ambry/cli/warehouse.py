@@ -13,6 +13,9 @@ class Logger(object):
     def progress(self,type_,name, n, message=None):
         self.lr("{}: {} {}: {}".format(self.prefix,type_, name, n))
 
+    def copy(self, o,t):
+        self.lr("{} {}".format(o,t))
+
     def info(self,message):
         prt("{}: {}",self.prefix, message)
 
@@ -20,6 +23,9 @@ class Logger(object):
         prt("{}: {}",self.prefix, message)
 
     def error(self,message):
+        err("{}: {}",self.prefix, message)
+
+    def fatal(self,message):
         fatal("{}: {}",self.prefix, message)
 
     def warn(self, message):
@@ -147,9 +153,9 @@ def warehouse_install(args, w,config):
         views = []
         m = None
 
-    for p in partitions:
+    for tables, p in partitions:
         try:
-            w.install(p)
+            w.install(p, tables)
         except NotFoundError:
             err("Partition {} not found in external library".format(p))
 

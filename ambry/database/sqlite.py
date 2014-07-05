@@ -627,7 +627,7 @@ def _on_connect_bundle(dbapi_con, con_record):
     except:
         pass
 
-    #dbapi_con.execute('PRAGMA journal_mode = DELETE')
+    dbapi_con.execute('PRAGMA journal_mode = WAL')
     dbapi_con.execute('PRAGMA page_size = 8192')
     dbapi_con.execute('PRAGMA temp_store = MEMORY')
     dbapi_con.execute('PRAGMA cache_size = 50000')

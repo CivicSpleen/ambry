@@ -17,6 +17,9 @@ class NullLogger(object):
     def progress(self, type_, name, n, message=None):
         pass
 
+    def progress(self, o,t):
+        pass
+
     def log(self, message):
         pass
 
@@ -117,7 +120,7 @@ class WarehouseInterface(object):
     ## Installation
     ##
 
-    def install(self, partition):
+    def install(self, partition, tables=None):
         from ..orm import Partition
 
         p_vid = self._to_vid(partition)
@@ -128,13 +131,16 @@ class WarehouseInterface(object):
             self.logger.warn("Skipping {}; already installed".format(p_orm.vname))
             return
 
-        bundle, p, tables = self._setup_install(p_vid)
+        bundle, p = self._setup_install(p_vid)
 
         if p.identity.format not in ('db', 'geo'):
             self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
             return;
 
-        self.install_partition(bundle, p, tables)
+        all_tables = self.install_partition(bundle, p)
+
+        if not tables:
+            tables = all_tables
 
         for table_name in tables:
 
@@ -149,15 +155,15 @@ class WarehouseInterface(object):
                 orm_table = p.get_table(table_name)
                 self.library.database.mark_table_installed(orm_table.vid, itn)
             except Exception as e:
-                raise
-                self.logger.error("Failed to install table {}: {}".format(table_name,e))
+                self.logger.error("Failed to install table '{}': {}".format(table_name,e))
 
         self.library.database.mark_partition_installed(p_vid)
 
-    def install_partition(self, bundle, partition, tables):
+    def install_partition(self, bundle, partition):
         '''Install the records for the partition, the tables referenced by the partition,
         and the bundle, if they aren't already installed'''
         from sqlalchemy.orm.exc import NoResultFound
+        from sqlalchemy import inspect
 
         ld = self.library.database
 
@@ -165,10 +171,20 @@ class WarehouseInterface(object):
 
         ld.install_partition_by_id(bundle, pid)
 
-        p = bundle.partitions.get(pid)
+        p = bundle.partitions.get(pid) # just gets the record
+
+        p = self.elibrary.get(p.vid, cb=self.logger.copy).partition # Gets the database file.
+
+        inspector = inspect(p.database.engine)
+
+        all_tables = [ t.name for t in bundle.schema.tables ]
+
+        tables = [ t for t in inspector.get_table_names() if t != 'config' and t in all_tables ]
 
         for table_name in tables:
             self.create_table(p, table_name)
+
+        return tables
 
     def install_view(self, name, sql):
         raise NotImplementedError(type(self))
@@ -195,7 +211,7 @@ class WarehouseInterface(object):
         '''Perform local and remote resolutions to get the bundle, partition and links
         to CSV parts in the remote REST itnerface '''
         from ..identity import Identity
-        from sqlalchemy import inspect
+
         ri = RestInterface()
 
         if isinstance(ref, Identity):
@@ -217,10 +233,7 @@ class WarehouseInterface(object):
         b = self.elibrary.get(dataset)
         p = b.partitions.get(ident.id_)
 
-
-        inspector = inspect(p.database.engine)
-
-        return b, p, [ t for t in inspector.get_table_names() if t != 'config' ]
+        return b, p
 
     ##
     ## users

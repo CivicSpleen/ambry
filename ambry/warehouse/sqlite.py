@@ -41,7 +41,7 @@ class SqliteWarehouse(RelationalWarehouse):
 
         with self.database.engine.begin() as conn:
             atch_name = self.database.attach(partition, conn=conn)
-            self.logger.info('load_attach {}'.format(partition.database.path))
+            self.logger.info('load_attach {} in {}'.format(table_name, partition.database.path))
             self.database.copy_from_attached( table=(source_table_name, dest_table_name),
                                               on_conflict='REPLACE',
                                               name=atch_name, conn=conn)
