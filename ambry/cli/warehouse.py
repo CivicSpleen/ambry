@@ -86,6 +86,10 @@ def warehouse_parser(cmd):
 
     whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
     whsp.set_defaults(subcommand='install')
+    whsp.add_argument('-t', '--test', default=False, action='store_true', help='Load only 100 records per table')
+    whsp.add_argument('-w', '--work-dir', default=None,help='Working directory for file installs and temporaty databases.')
+    whsp.add_argument('-d', '--dir', default=None,
+                      help='Publication directory for file installs, if different from the work-dir.')
     whsp.add_argument('term', type=str,help='Name of bundle or partition')
 
     whsp = whp.add_parser('remove', help='Remove a bundle or partition from a warehouse')
@@ -133,8 +137,10 @@ def warehouse_install(args, w,config):
     from ..library import new_library
     import os.path
     from ambry.util import init_log_rate
-    from ..dbexceptions import NotFoundError
-    
+    from ..dbexceptions import NotFoundError, ConfigurationError
+    from ambry.warehouse.extractors import extract
+    from ambry.cache import new_cache
+
     if not w.exists():
         w.create()
 
@@ -142,16 +148,30 @@ def warehouse_install(args, w,config):
 
     w.logger = Logger('Warehouse Install',init_log_rate(prt,N=2000))
 
+    w.test = args.test
+
     if os.path.isfile(args.term): # Assume it is a Manifest file.
         from ..warehouse.manifest import Manifest
         m  = Manifest(args.term)
 
         partitions = m.partitions
         views = m.views
+        sql =  m.sql
+        extracts = m.extracts
     else:
         partitions = [args.term]
         views = []
-        m = None
+        sql = []
+        extracts = []
+
+    if extracts:
+        work_dir = pub_dir = args.work_dir if args.work_dir else None
+
+        pub_dir = args.dir if args.dir else work_dir
+
+        if not pub_dir:
+            raise ConfigurationError("Manifest has extracts. Must specify either a work dir or publication dir")
+
 
     for tables, p in partitions:
         try:
@@ -159,11 +179,19 @@ def warehouse_install(args, w,config):
         except NotFoundError:
             err("Partition {} not found in external library".format(p))
 
-    if m and m.sql:
-        w.run_sql(m.sql[w.database.driver])
+    if sql:
+        w.run_sql(sql[w.database.driver])
 
-    for name, sql in views:
-        w.install_view(name, sql)
+    for name, view in views:
+        w.install_view(name, view)
+
+    for table, format, dest in extracts:
+        prt("Extracting {} to {} as {}".format(table, format, dest))
+        cache = new_cache(pub_dir)
+        abs_path = extract(w.database, table, format, cache, dest)
+        prt("Extracted to {}".format(abs_path))
+
+
 
 def warehouse_remove(args, w,config):
     from functools import partial

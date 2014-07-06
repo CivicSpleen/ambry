@@ -346,7 +346,7 @@ class Library(object):
                 abs_path = arc.get(partition.identity.cache_key, cb=cb)
 
                 if not abs_path or not os.path.exists(abs_path):
-                    raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.fqname))
+                    raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.cache_key))
 
                 try:
                     self.database.install_partition_by_id(bundle, dataset.partition.id_,

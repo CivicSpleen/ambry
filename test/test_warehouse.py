@@ -210,6 +210,10 @@ sql:driver2
 seven
 eight
 
+EXTRACT: foobar AS csv TO /bin/bar/bingo
+EXTRACT: fringo AS geojson TO /bin/bar/geojson
+
+
         """)
 
         for view in m.views:
@@ -223,6 +227,19 @@ eight
         print '----'
 
         print m.sql
+
+        print '----'
+
+        print [x for x in m.extracts ]
+
+    def test_extract(self):
+
+        from ambry.warehouse.extractors import extract
+
+        p = self.bundle.partitions.find(table='tthree')
+
+        print extract(p.database, 'tthree', 'csv', '/tmp/extract/', 'foo/bar')
+
 
     def x_test_install(self):
         

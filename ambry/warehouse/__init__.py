@@ -84,7 +84,8 @@ class WarehouseInterface(object):
                  database,
                  wlibrary=None, # Warehouse library
                  elibrary=None, # external Library
-                 logger=None):
+                 logger=None,
+                 test=False):
 
         assert wlibrary is not None
         assert elibrary is not None
@@ -93,6 +94,7 @@ class WarehouseInterface(object):
         self.database = database
         self.wlibrary = wlibrary
         self.elibrary = elibrary
+        self.test = test
 
         self.logger = logger if logger else NullLogger()
 
@@ -211,8 +213,6 @@ class WarehouseInterface(object):
         '''Perform local and remote resolutions to get the bundle, partition and links
         to CSV parts in the remote REST itnerface '''
         from ..identity import Identity
-
-        ri = RestInterface()
 
         if isinstance(ref, Identity):
             ref = ref.vid
@@ -344,81 +344,3 @@ class WarehouseInterface(object):
         if 'password' in config['database']: del config['database']['password']
         return config
 
-
-
-
-class RestInterface(object):
-
-
-    def _handle_status(self, r):
-        import exceptions
-
-        if r.status_code >= 300:
-
-            try:
-                o = r.json()
-            except:
-                o = None
-
-            if isinstance(o, dict) and 'exception' in o:
-                e = self._handle_exception(o)
-                raise e
-
-            if 400 <= r.status_code < 500:
-                raise exceptions.NotFound("Failed to find resource for URL: {}".format(r.url))
-
-            r.raise_for_status()
-
-
-    def _handle_return(self, r):
-        if r.headers.get('content-type', False) == 'application/json':
-            self.last_response = r
-            return r.json()
-        else:
-            return r
-
-    def _handle_exception(self, object):
-        '''If self.object has an exception, re-construct the exception and
-        return it, to be raised later'''
-
-        import types, sys
-
-        field = object['exception']['class']
-
-        pre_message = ''
-        try:
-            class_ = getattr(sys.modules['ambry.client.exceptions'], field)
-        except AttributeError:
-            pre_message = "(Class: {}.) ".format(field)
-            class_ = Exception
-
-        if not isinstance(class_, (types.ClassType, types.TypeType)):
-            pre_message = "(Class: {},) ".format(field)
-            class_ = Exception
-
-        args = object['exception']['args']
-
-        # Add the pre-message, if the real exception type is not known.
-        if isinstance(args, list) and len(args) > 0:
-            args[0] = pre_message + str(args[0])
-
-        # Add the trace
-        try:
-            if args:
-                args[0] = args[0] + "\n---- Server Trace --- \n" + str('\n'.join(object['exception']['trace']))
-            else:
-                args.append("\n---- Server Trace --- \n" + str('\n'.join(object['exception']['trace'])))
-        except Exception as e:
-            print "Failed to augment exception. {}, {}".format(args, object)
-
-        return class_(*args)
-
-
-    def get(self, url, params={}):
-        import requests
-
-        r = requests.get(url, params=params)
-
-        self._handle_status(r)
-
-        return self._handle_return(r)

@@ -8,9 +8,15 @@ Class for handling manifest files.
 import os.path
 import re
 
+class null_logger(object):
+
+    def error(self, w):
+        pass
+
+
 class Manifest(object):
 
-    def __init__(self, file_or_data):
+    def __init__(self, file_or_data, logger=None):
 
         if os.path.exists(file_or_data):
             with open(file_or_data, 'r') as f:
@@ -24,6 +30,8 @@ class Manifest(object):
                 self.data = file_or_data.splitlines()
             self.file = None
 
+        self.logger = logger if logger else null_logger()
+
 
     @property
     def documentation(self):
@@ -34,7 +42,7 @@ class Manifest(object):
 
         for line in self.data:
 
-            if line.strip() == 'doc:':
+            if line.lower().strip().startswith('doc:'):
                 in_doc_section = True
                 continue
 
@@ -63,7 +71,7 @@ class Manifest(object):
 
             m = re.match(r'^(\w+):\s*([\w+|\s]+)\s*', line)
 
-            if m and m.group(1) == 'sql':
+            if m and m.group(1).lower() == 'sql':
                 in_sql_section = True
                 drivers = [ d.strip() for d in m.groups()[1].split('|') ]
 
@@ -94,7 +102,7 @@ class Manifest(object):
             if m:
                 line = m.groups()[0]
 
-            if line == 'partitions:':
+            if line.lower().startswith('partitions:'):
                 in_partitions_section = True
                 continue
 
@@ -111,6 +119,33 @@ class Manifest(object):
                         yield re.split(r'\s+|\s*,\s*', parts[0].strip(), flags =  re.IGNORECASE), parts[1].strip()
                     else:
                         yield None, line.strip()
+
+    @property
+    def extracts(self):
+        import re
+
+
+        for line in self.data:
+            line = line.strip()
+
+            if line.lower().startswith('extract:'):
+                in_extracts_section = True
+
+                words  = line.split()
+
+                if len(words) != 6:
+                    self.logger.error('Extract line has wrong format; expected 6 words, got: {}'.format(line))
+                    continue;
+
+                _, table, as_w, format, to_w, rpath = words
+
+                if not as_w.lower() == 'as':
+                    self.logger.error('Extract line malformed. Expected 3rd word to be \'as\' got: {}'.format(as_w))
+
+                if not as_w.lower() == 'to_w':
+                    self.logger.error('Extract line malformed. Expected 5th word to be \'to\' got: {}'.format(to_w))
+
+                yield table, format, rpath
 
 
     @property

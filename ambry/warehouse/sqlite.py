@@ -39,12 +39,14 @@ class SqliteWarehouse(RelationalWarehouse):
         source_table_name = table_name
         dest_table_name =  self.augmented_table_name(d_vid, table_name)
 
+        copy_n = 100 if self.test else None
+
         with self.database.engine.begin() as conn:
             atch_name = self.database.attach(partition, conn=conn)
             self.logger.info('load_attach {} in {}'.format(table_name, partition.database.path))
             self.database.copy_from_attached( table=(source_table_name, dest_table_name),
                                               on_conflict='REPLACE',
-                                              name=atch_name, conn=conn)
+                                              name=atch_name, conn=conn, copy_n = copy_n)
 
         self.logger.info('done {}'.format(partition.identity.vname))
 
@@ -79,7 +81,7 @@ class SqliteWarehouse(RelationalWarehouse):
 
     def install_view(self, name, sql):
 
-        self.logger.info('Installing view')
+        self.logger.info('Installing view {}'.format(name))
 
         sql = """
         DROP VIEW  IF EXISTS {name};

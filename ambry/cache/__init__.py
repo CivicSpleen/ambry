@@ -65,16 +65,20 @@ def parse_cache_string(remote, root_dir='no_root_dir'):
 
     config['options'] = []
 
-    if scheme == 's3':
+    # s3://bucket/prefix
+    # Account name handle is the same as the bucket
+    if scheme == 'file' or not bool(scheme) :
+        config['dir'] = parts.path
+
+
+    elif scheme == 's3':
 
         config['bucket'] = parts.netloc
         config['prefix'] = parts.path.strip('/')
 
         config['account'] = config['bucket']
 
-    elif scheme == 'file':
-        config['dir'] = parts.path
-
+    # file://path
     elif scheme == 'http':
         t = list(parts)
         t[5] = None # clear out the fragment

@@ -93,7 +93,8 @@ class SqliteAttachmentMixin(object):
     
     
     def copy_from_attached(self, table, columns=None, name=None, 
-                           on_conflict= 'ABORT', where=None, conn=None):
+                           on_conflict= 'ABORT', where=None, conn=None, copy_n = None):
+
         """ Copy from this database to an attached database
         
         Args:
@@ -136,6 +137,9 @@ class SqliteAttachmentMixin(object):
     
         if where is not None:
             q = q + " " + where.format(**f)
+
+        if copy_n:
+            q += ' LIMIT {}'.format(copy_n)
 
         if conn:
             conn.execute(q)

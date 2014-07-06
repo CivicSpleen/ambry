@@ -93,7 +93,7 @@ class FsCache(Cache):
         if isinstance(rel_path, Identity):
             rel_path = rel_path.cache_key
 
-        repo_path = os.path.join(self.cache_dir, rel_path)
+        repo_path = os.path.join(self.cache_dir, rel_path.strip("/"))
 
         if not os.path.isdir(os.path.dirname(repo_path)):
             os.makedirs(os.path.dirname(repo_path))
@@ -646,7 +646,7 @@ class FsLimitedCache(FsCache):
         if isinstance(rel_path, Identity):
             rel_path = rel_path.cache_key
         
-        repo_path = os.path.join(self.cache_dir, rel_path)
+        repo_path = os.path.join(self.cache_dir, rel_path.strip('/'))
       
         if not os.path.isdir(os.path.dirname(repo_path)):
             os.makedirs(os.path.dirname(repo_path))
