@@ -150,8 +150,11 @@ def warehouse_install(args, w,config):
 
     w.test = args.test
 
-    if os.path.isfile(args.term): # Assume it is a Manifest file.
+
+
+    if os.path.isfile(args.term) or args.term.startswith('http'): # Assume it is a Manifest file.
         from ..warehouse.manifest import Manifest
+
         m  = Manifest(args.term)
 
         partitions = m.partitions
@@ -190,7 +193,6 @@ def warehouse_install(args, w,config):
         cache = new_cache(pub_dir)
         abs_path = extract(w.database, table, format, cache, dest)
         prt("Extracted to {}".format(abs_path))
-
 
 
 def warehouse_remove(args, w,config):

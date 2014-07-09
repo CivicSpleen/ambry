@@ -21,16 +21,21 @@ class RelationalWarehouse(WarehouseInterface):
         return table_name in self.database.inspector.get_table_names()
 
 
-    def table_meta(self, d_vid, p_vid, table_name):
+    def table_meta(self, identity, table_name):
         '''Get the metadata directly from the database. This requires that
         table_name be the same as the table as it is in stalled in the database'''
         from ..schema import Schema
+
+        assert identity.is_partition
+
+        p_vid = self._to_vid(identity)
+        d_vid = self._partition_to_dataset_vid(identity)
 
         meta, table = Schema.get_table_meta_from_db(self.library.database,
                                                     table_name,
                                                     d_vid=d_vid,
                                                     driver=self.database.driver,
-                                                    alt_name=self.augmented_table_name(d_vid, table_name),
+                                                    alt_name=self.augmented_table_name(identity, table_name),
                                                     session=self.library.database.session)
 
         return meta, table
@@ -39,13 +44,7 @@ class RelationalWarehouse(WarehouseInterface):
         '''Create the table in the warehouse, using an augmented table name '''
         from ..schema import Schema
 
-        p_vid = self._to_vid(partition)
-        d_vid = self._partition_to_dataset_vid(partition)
-
-        meta, table = self.table_meta(d_vid, p_vid, table_name)
-
-
-
+        meta, table = self.table_meta(partition.identity, table_name)
 
         if not self.has_table(table.name):
             table.create(bind=self.database.engine)
@@ -94,7 +93,7 @@ class RelationalWarehouse(WarehouseInterface):
         d_vid = partition.identity.as_dataset().vid
 
         source_table_name = table_name
-        dest_table_name = self.augmented_table_name(d_vid, table_name)
+        dest_table_name = self.augmented_table_name(partition.identity, table_name)
 
         self.logger.info('populate_table {}'.format(table_name))
 
@@ -141,7 +140,7 @@ class RelationalWarehouse(WarehouseInterface):
         p_vid = partition.identity.vid
         d_vid = partition.identity.as_dataset().vid
 
-        a_table_name = self.augmented_table_name(d_vid, table_name)
+        a_table_name = self.augmented_table_name(partition.identity, table_name)
 
         args = [
             "-t_srs EPSG:4326",
@@ -190,7 +189,7 @@ class RelationalWarehouse(WarehouseInterface):
             self.logger.info("Dropping tables in partition {}".format(p.identity.vname))
             for table_name in p.tables:  # Table name without the id prefix
 
-                table_name = self.augmented_table_name(p.identity.as_dataset().vid, table_name)
+                table_name = self.augmented_table_name(p.identity, table_name)
 
                 try:
                     self.database.drop_table(table_name)

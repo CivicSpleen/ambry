@@ -49,7 +49,7 @@ def source_parser(cmd):
     sp.add_argument('-v','--variation', default=None, help='Name of the variation')
     sp.add_argument('-c','--creator',  required=False, help='Id of the creator')
     sp.add_argument('-n','--dryrun', default=False, help='Dry run')
-    sp.add_argument('-k', '--key', help='Number server key')
+    sp.add_argument('-k', '--key', help='Number server key. Use \'self\' for a random, self-generated key.')
     sp.add_argument('args', nargs=argparse.REMAINDER) # Get everything else. 
 
     sp = asp.add_parser('info', help='Information about the source configuration')
@@ -245,7 +245,7 @@ def source_new(args, l, st, rc):
     d['btime'] = d.get('time',None)
     d['bspace'] = d.get('space', None)
 
-    if args.key  in ('rand',None,'self'):
+    if args.key  in ('rand','self'):
         d['id'] = str(DatasetNumber())
 
     else:

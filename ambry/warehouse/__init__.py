@@ -311,12 +311,20 @@ class WarehouseInterface(object):
         return did
 
 
-    def augmented_table_name(self, d_vid, table_name):
-        return d_vid.replace('/', '_') + '_' + table_name
+    def augmented_table_name(self, identity, table_name):
+        """Create a table name that is prefixed with the dataset number and the
+        partition grain, if it has one"""
 
-    def is_augmented_name(self, d_vid, table_name):
+        name = identity.as_dataset().vid.replace('/', '_') + '_' + table_name
 
-        return table_name.startswith(d_vid.replace('/', '_') + '_')
+        if identity.grain:
+            name = name + '_' + identity.grain
+
+        return name
+
+    def is_augmented_name(self, identity, table_name):
+
+        return table_name.startswith(identity.vid.replace('/', '_') + '_')
 
     def _ogr_args(self, partition):
         '''Return a arguments for ogr2ogr to connect to the database'''

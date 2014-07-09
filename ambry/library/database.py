@@ -1027,9 +1027,9 @@ class LibraryDb(object):
                     # or a table name
                     query = query.join(Table)
                     query = query.filter( or_(Partition.t_id  == v,
-                                              like_or_eq(Table.name,v)))
+                                              like_or_eq(Table.name,v.lower())))
                 elif k == 'space':
-                    query = query.filter( or_( like_or_eq(Partition.space,v)))
+                    query = query.filter( or_( like_or_eq(Partition.space,v.lower())))
 
                 else:
                     query = query.filter(  like_or_eq(getattr(Partition, k),v) )

@@ -834,8 +834,8 @@ Columns:
             
                 regex += "(.{{{}}})".format(size)
                 header.append(col.name)
-           
-            return header, re.compile(regex) , regex 
+
+            return header, re.compile(regex) , regex
 
     def get_fixed_unpack(self):
             '''Using the size values for the columns for the table, construct a

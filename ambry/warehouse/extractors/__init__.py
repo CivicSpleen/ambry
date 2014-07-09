@@ -17,9 +17,11 @@ def extract(database, table, format, cache, dest):
     if not ex:
         raise ValueError("Unknown format name '{}'".format(format))
 
-    row_gen = database.connection.execute("SELECT * FROM {}".format(table))
+    if not cache.has(dest):
 
-    ex.extract(row_gen, cache.put_stream(dest))
+        row_gen = database.connection.execute("SELECT * FROM {}".format(table))
+
+        ex.extract(row_gen, cache.put_stream(dest))
 
     return cache.path(dest)
 

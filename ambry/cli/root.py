@@ -172,7 +172,7 @@ def root_meta(args, l, st, rc):
         elif args.json:
             print meta.json
 
-        elif args.kv:
+        elif args.key:
             for row in meta.rows:
                 print '.'.join([e for e in row[0] if e])+'='+str(row[1] if row[1] else '')
         else:
@@ -210,10 +210,6 @@ def root_meta(args, l, st, rc):
                 print o.dump()
 
 
-
-
-
-
 def root_find(args, l, st, rc):
     from ..source.repository.git import GitRepository
     from ..library.files import Files
@@ -233,9 +229,11 @@ def root_find(args, l, st, rc):
 
     if args.terms:
 
+        show_partitions = any(['partition' in term for term in args.terms])
+
         identities = sorted(_find(args, l, rc).values(), key=key)
 
-        _print_bundle_list(identities,fields=fields)
+        _print_bundle_list(identities,fields=fields, show_partitions=show_partitions)
 
     else:
 

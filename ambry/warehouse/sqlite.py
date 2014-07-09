@@ -37,7 +37,7 @@ class SqliteWarehouse(RelationalWarehouse):
         d_vid = partition.identity.as_dataset().vid
 
         source_table_name = table_name
-        dest_table_name =  self.augmented_table_name(d_vid, table_name)
+        dest_table_name =  self.augmented_table_name(partition.identity, table_name)
 
         copy_n = 100 if self.test else None
 
@@ -62,7 +62,7 @@ class SqliteWarehouse(RelationalWarehouse):
 
         d_vid = partition.identity.as_dataset().vid
 
-        a_table_name = self.augmented_table_name(d_vid, table_name)
+        a_table_name = self.augmented_table_name(partition.identity, table_name)
 
         for url in urls:
 

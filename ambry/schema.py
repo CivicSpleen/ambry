@@ -344,9 +344,11 @@ class Schema(object):
             return type_
 
     @staticmethod
-    def munge_index_name(table, n):
-        return table.vid_enc + '_' + n
-
+    def munge_index_name(table, n, alt=None):
+        if alt:
+            return alt + '_' + n
+        else:
+            return table.vid_enc + '_' + n
 
 
     def get_table_meta(self, name_or_id, use_id=False, driver=None, alt_name=None):
@@ -354,7 +356,6 @@ class Schema(object):
         return self.get_table_meta_from_db(self.bundle.database, name_or_id, use_id, driver,
                                            session = self.bundle.database.session,
                                            alt_name = alt_name)
-
 
     @classmethod
     def get_table_meta_from_db(self,db,  name_or_id,  use_id=False, 
@@ -452,15 +453,15 @@ class Schema(object):
 
         # Append constraints. 
         for constraint, columns in constraints.items():
-            at.append_constraint(UniqueConstraint(name=self.munge_index_name(table, constraint),*columns))
+            at.append_constraint(UniqueConstraint(name=self.munge_index_name(table, constraint, alt=alt_name),*columns))
              
         # Add indexes   
         for index, columns in indexes.items():
-            Index(self.munge_index_name(table, index), unique = False ,*columns)
+            Index(self.munge_index_name(table, index, alt=alt_name), unique = False ,*columns)
     
         # Add unique indexes   
         for index, columns in uindexes.items():
-            Index(self.munge_index_name(table, index), unique = True ,*columns)
+            Index(self.munge_index_name(table, index, alt=alt_name), unique = True ,*columns)
         
         #for from_col, to_col in foreign_keys.items():
         #    at.append_constraint(ForeignKeyConstraint(from_col, to_col))

@@ -18,7 +18,19 @@ class Manifest(object):
 
     def __init__(self, file_or_data, logger=None):
 
-        if os.path.exists(file_or_data):
+
+
+        if file_or_data.startswith('http'):
+            import requests
+
+            r = requests.get(file_or_data)
+            r.raise_for_status()
+
+            self.file = None
+
+            self.data = r.text.splitlines()
+
+        elif os.path.exists(file_or_data):
             with open(file_or_data, 'r') as f:
                 self.data = f.readlines()
                 self.file = file_or_data
@@ -162,9 +174,9 @@ class Manifest(object):
             for line in data:
                 line = line.strip()
 
-                if line.startswith('view:'): # Start of the views section
+                if line.lower().startswith('view:'): # Start of the views section
 
-                    m = re.match(r'^view:\w*([^\#]+)', line)
+                    m = re.match(r'^view:\w*([^\#]+)', line, flags =  re.IGNORECASE)
 
                     if m and m.group(1):
                         view_name =  m.group(1).strip()
