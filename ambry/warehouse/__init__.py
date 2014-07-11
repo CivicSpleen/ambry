@@ -146,13 +146,17 @@ class WarehouseInterface(object):
 
         for table_name in tables:
 
+            if isinstance(table_name, (list, tuple)):
+                table_name, where = table_name
+            else:
+                where = None
             try:
                 if p.identity.format == 'db':
                     self.elibrary.get(p.vid) # ensure it is local
-                    itn = self.load_local(p, table_name)
+                    itn = self.load_local(p, table_name, where)
                 else:
                     self.elibrary.get(p.vid)  # ensure it is local
-                    itn = self.load_ogr(p, table_name)
+                    itn = self.load_ogr(p, table_name, where)
 
                 orm_table = p.get_table(table_name)
                 self.library.database.mark_table_installed(orm_table.vid, itn)
@@ -195,7 +199,7 @@ class WarehouseInterface(object):
         raise NotImplementedError(type(self))
 
 
-    def load_local(self, partition, table_name):
+    def load_local(self, partition, table_name, where):
         '''Load data using a network connection to the warehouse and
         INSERT commands'''
         raise NotImplementedError()
@@ -205,7 +209,7 @@ class WarehouseInterface(object):
         facility of the target warehouse'''
         raise NotImplementedError()
 
-    def load_ogr(self, partition, table_name):
+    def load_ogr(self, partition, table_name, where):
         '''Load geo data using the ogr2ogr program'''
         raise NotImplementedError()
 

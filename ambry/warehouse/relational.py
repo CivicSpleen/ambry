@@ -54,6 +54,22 @@ class RelationalWarehouse(WarehouseInterface):
 
         return table, meta
 
+    def create_index(self, name, table, columns):
+
+        from sqlalchemy.exc import OperationalError
+
+        sql = "CREATE INDEX {} ON {} ({})".format(name, table, ','.join(columns))
+
+        try:
+            self.database.connection.execute(sql)
+            self.logger.info('create_index {}'.format(name))
+        except OperationalError as e:
+            if 'exists' not in str(e).lower():
+                raise
+            self.logger.info('index_exists {}'.format(name))
+            # Ignore if it already exists.
+
+
     def tables(self):
 
         return self.metadata.sorted_tables
@@ -130,7 +146,7 @@ class RelationalWarehouse(WarehouseInterface):
         return dest_table_name
 
 
-    def load_ogr(self, partition, table_name):
+    def load_ogr(self, partition, table_name, where):
         #
         # Use ogr2ogr to copy.
         #

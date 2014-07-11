@@ -407,8 +407,6 @@ class DbBundleBase(Bundle):
 
         d['partitions'] = self.partitions.count
 
-        print 'HERE'
-
         return d
 
     @property

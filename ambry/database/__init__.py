@@ -45,10 +45,11 @@ def new_database(config, bundle=None, class_=None):
         return SqliteBundleDatabase(bundle=bundle, **config)
     
     elif k == ('sqlite','warehouse'):
-        from .sqlite import SqliteWarehouseDatabase
+
+        from .spatialite import SpatialiteWarehouseDatabase
         dbname = config['dbname']
         del config['dbname']
-        return SqliteWarehouseDatabase(dbname, **config)
+        return SpatialiteWarehouseDatabase(dbname, **config)
 
     elif k == ('spatialite', 'warehouse'):
         from .spatialite import SpatialiteDatabase

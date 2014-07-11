@@ -32,48 +32,59 @@ class Logger(object):
         warn("{}: {}", self.prefix, message)
 
 
+def database_config(db):
+    import urlparse
+
+    parts = urlparse.urlparse(db)
+
+    if parts.scheme == 'sqlite':
+        config = dict(service='sqlite', database=dict(dbname=parts.path, driver='sqlite'))
+    elif parts.scheme == 'spatialite':
+        config = dict(service='spatialite', database=dict(dbname=parts.path, driver='sqlite'))
+    elif parts.scheme == 'postgres':
+        config = dict(service='postgres',
+                      database=dict(driver='postgres',
+                                    server=parts.hostname,
+                                    username=parts.username,
+                                    password=parts.password,
+                                    dbname=parts.path.strip('/')
+                      ))
+    elif parts.scheme == 'postgis':
+        config = dict(service='postgis',
+                      database=dict(driver='postgis',
+                                    server=parts.hostname,
+                                    username=parts.username,
+                                    password=parts.password,
+                                    dbname=parts.path.strip('/')
+                      ))
+    else:
+        raise ValueError("Unknown database connection scheme: {}".format(parts.scheme))
+
+    return config
+
+
 def warehouse_command(args, rc):
     from ambry.warehouse import new_warehouse
     from ..library import new_library
     from . import global_logger
-    import urlparse
-
-    if args.database:
-        parts = urlparse.urlparse(args.database)
-
-        if parts.scheme == 'sqlite':
-            config = dict(service='sqlite', database=dict(dbname=parts.path, driver='sqlite'))
-        elif parts.scheme == 'spatialite':
-            config = dict(service='spatialite', database=dict(dbname=args.spatialite, driver='sqlite'))
-        elif parts.scheme == 'postgres':
-            config = dict(service='postgres',
-                          database=dict(driver='postgres',
-                                        server=parts.hostname,
-                                        username=parts.username,
-                                        password=parts.password,
-                                        dbname=parts.path.strip('/')
-                          ))
-        elif parts.scheme == 'postgis':
-            config = dict(service='postgis',
-                          database=dict(driver='postgis',
-                                        server=parts.hostname,
-                                        username=parts.username,
-                                        password=parts.password,
-                                        dbname=parts.path.strip('/')
-                          ))
-        else:
-            raise ValueError("Unknown database connection scheme: {}".format(parts.scheme))
-    else:
-        config = rc.warehouse(args.name)
-
 
     l = new_library(rc.library(args.library_name))
+
     l.logger = global_logger
 
-    w = new_warehouse(config, l)
+    if args.subcommand != 'install':
 
-    globals()['warehouse_'+args.subcommand](args, w,rc)
+        if args.database:
+            config = database_config(args.database)
+        else:
+            config = rc.warehouse(args.name)
 
+        w = new_warehouse(config, l)
+
+        globals()['warehouse_'+args.subcommand](args, w,rc)
+    else:
+
+        globals()['warehouse_' + args.subcommand](args, l, rc)
 
 def warehouse_parser(cmd):
    
@@ -133,24 +144,14 @@ def warehouse_info(args, w,config):
     prt("ELibrary: {}",w.elibrary.database.dsn)
 
 
-def warehouse_install(args, w,config):
+def warehouse_install(args, l ,config):
     from ..library import new_library
     import os.path
     from ambry.util import init_log_rate
     from ..dbexceptions import NotFoundError, ConfigurationError
     from ambry.warehouse.extractors import extract
     from ambry.cache import new_cache
-
-    if not w.exists():
-        w.create()
-
-    l = new_library(config.library(args.library_name))
-
-    w.logger = Logger('Warehouse Install',init_log_rate(prt,N=2000))
-
-    w.test = args.test
-
-
+    from ambry.warehouse import new_warehouse
 
     if os.path.isfile(args.term) or args.term.startswith('http'): # Assume it is a Manifest file.
         from ..warehouse.manifest import Manifest
@@ -159,34 +160,73 @@ def warehouse_install(args, w,config):
 
         partitions = m.partitions
         views = m.views
+        mviews = m.mviews
         sql =  m.sql
         extracts = m.extracts
+        indexes = m.indexes
+
+        destination =  m.destination
+        work_dir = m.work_dir
+
     else:
-        partitions = [args.term]
+        partitions = {'partition': args.term}
         views = []
+        mviews = []
         sql = []
         extracts = []
+        destination = None
+        indexes = None
+
+    if args.database:
+        config = database_config(args.database)
+
+    elif destination:
+        config = database_config(destination)
+
+    else:
+        config = config.warehouse(args.name)
+
+    w = new_warehouse(config, l)
+
+    if not w.exists():
+        w.create()
+
+    w.logger = Logger('Warehouse Install', init_log_rate(prt, N=2000))
+
+    w.test = args.test
 
     if extracts:
-        work_dir = pub_dir = args.work_dir if args.work_dir else None
+        work_dir = pub_dir = args.work_dir if args.work_dir else work_dir
 
         pub_dir = args.dir if args.dir else work_dir
 
         if not pub_dir:
             raise ConfigurationError("Manifest has extracts. Must specify either a work dir or publication dir")
 
-
-    for tables, p in partitions:
+    for pd in partitions:
         try:
-            w.install(p, tables)
+
+            tables = pd['tables']
+
+            if pd['where'] and len(pd['tables']) == 1:
+                tables = (pd['tables'][0], pd['where'])
+
+            w.install(pd['partition'], tables)
         except NotFoundError:
-            err("Partition {} not found in external library".format(p))
+            err("Partition {} not found in external library".format(pd['partition']))
+
+    if indexes:
+        for name, table, columns in indexes:
+            w.create_index(name, table, columns)
 
     if sql:
         w.run_sql(sql[w.database.driver])
 
     for name, view in views:
         w.install_view(name, view)
+
+    for name, view in mviews:
+        w.install_material_view(name, view)
 
     for table, format, dest in extracts:
         prt("Extracting {} to {} as {}".format(table, format, dest))

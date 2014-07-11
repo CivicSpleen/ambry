@@ -166,6 +166,12 @@ partitions:
 
 part1 # Comment
 table1, table2 table3,table4 from part2 # Comment
+sangis.org-business-sites-orig-businesses-geo-0.1.1
+table from sangis.org-business-sites-orig-businesses-geo-0.1.1
+table FROM sangis.org-business-sites-orig-businesses-geo-0.1.1
+table1, table2 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1
+table1, table2 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1 WHERE foo and bar and bas
+table1, table2 , table3,table4 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1 # Wot you got?
 
 views:
 
@@ -231,6 +237,25 @@ EXTRACT: fringo AS geojson TO /bin/bar/geojson
         print '----'
 
         print [x for x in m.extracts ]
+
+    def test_manifest_parser(self):
+        from ambry.warehouse.manifest import Manifest
+        import pprint
+        lines = [
+            "sangis.org-business-sites-orig-businesses-geo-0.1.1",
+            "table from sangis.org-business-sites-orig-businesses-geo-0.1.1",
+            "table FROM sangis.org-business-sites-orig-businesses-geo-0.1.1",
+            "table1, table2 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1",
+            "table1, table2 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1 WHERE foo and bar and bas",
+            "table1, table2 , table3,table4 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1 # Wot you got?",
+        ]
+
+
+        for line in lines:
+            print '----', line
+            pprint.pprint( Manifest.parse_partition_line(line))
+
+
 
     def test_extract(self):
 

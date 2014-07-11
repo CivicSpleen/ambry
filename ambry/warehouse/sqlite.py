@@ -26,7 +26,7 @@ class SqliteWarehouse(RelationalWarehouse):
             "-dsco SPATIALITE=no"]
 
 
-    def load_local(self, partition, table_name):
+    def load_local(self, partition, table_name, where):
         return self.load_attach(partition, table_name)
 
     def load_attach(self, partition, table_name):
@@ -90,6 +90,23 @@ class SqliteWarehouse(RelationalWarehouse):
 
         self.database.connection.connection.cursor().executescript(sql)
 
+    def install_material_view(self, name, sql):
+        from pysqlite2.dbapi2 import  OperationalError
+        self.logger.info('Installing materialized view {}'.format(name))
+
+        sql = """
+        CREATE TABLE {name} AS {sql}
+        """.format(name=name, sql=sql)
+
+        try:
+            self.database.connection.connection.cursor().executescript(sql)
+        except OperationalError as e:
+            if 'exists' not in str(e).lower():
+                raise
+            self.logger.info('mview_exists {}'.format(name))
+            # Ignore if it already exists.
+
+
     def run_sql(self, sql_text):
 
         self.logger.info('Running SQL')
@@ -105,4 +122,22 @@ class SpatialiteWarehouse(SqliteWarehouse):
             "-gt 65536",
             partition.database.path,
             "-dsco SPATIALITE=yes"]
+
+
+    def install_material_view(self, name, sql):
+
+        super(SpatialiteWarehouse, self).install_material_view(name, sql)
+
+        ce = self.database.connection.execute
+
+        types = ce('SELECT count(*) AS count, GeometryType(geometry) AS type,  CoordDimension(geometry) AS cd '
+                   'FROM place_boundaries GROUP BY type ORDER BY type desc;').fetchall()
+
+        t = types[0][1]
+        cd = types[0][2]
+
+        ce("SELECT RecoverGeometryColumn('{}', 'geometry', 4326, '{}', '{}');".format(name, t, cd))
+
+
+
 
