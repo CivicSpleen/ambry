@@ -7,6 +7,7 @@ Class for handling manifest files.
 
 import os.path
 import re
+import sqlparse
 
 class null_logger(object):
 
@@ -46,14 +47,17 @@ class Manifest(object):
 
         self.logger = logger if logger else null_logger()
 
+        self.sectionalize()
+
     def single_line(self, keyword):
-        import re
-        for line in self.data:
-            if line.lower().strip().startswith('{}:'.format(keyword)):
-                return re.match(r'\w+:([^#]+)', line).group(1).strip()
+        for line, section in self.sections.items():
+            if section['tag'] == keyword:
+                return section['args'].strip()
 
         return None
 
+    def count_sections(self,tag):
+        return sum( section['tag'] == tag for section in self.sections.values())
 
     @property
     def destination(self):
@@ -64,65 +68,127 @@ class Manifest(object):
         return self.single_line('dir')
 
     @property
-    def documentation(self):
+    def uid(self):
+        return self.single_line('uid')
 
-        in_doc_section = True # Start in doc mode
+    def sectionalize(self):
+        """Break the file into sections"""
 
-        doc_lines = []
+        import re
 
-        for line in self.data:
+        sections = {}
 
-            if line.lower().strip().startswith('doc:'):
-                in_doc_section = True
+        def make_item(tag, line_number, args):
+            sections[line_number] = dict(tag=tag, line_number=line_number, args=args, lines=[])
+
+        line_number = 1
+        tag = 'doc'  # Starts in the Doc section
+        args = ''
+
+        make_item(tag, line_number, args)
+
+        for i, line in enumerate(self.data):
+            line = re.sub(r'#.*$','', line ) # Remove comments
+
+            if not line.strip():
                 continue
 
-            if re.match(r'^\w+:', line.strip()):
-                in_doc_section = False
+            rx = re.match(r'^(\w+):(.*)$', line.strip())
+
+            if rx: # Section tag lines
+                line_number = i+1
+                tag = rx.group(1).strip().lower()
+                args = re.sub(r'#.*$','', rx.group(2) ).strip()
+                make_item(tag, line_number, args)
                 continue
 
-            if in_doc_section and line.strip():
-                doc_lines.append(line)
+            sections[line_number]['lines'].append(line)
 
-        return '\n'.join(doc_lines)
+        for line in sections.keys():
+
+            section = sections[line]
+
+            fn = '_process_{}'.format(section['tag'])
+            pf = getattr(self, fn, False)
+
+            if pf:
+                section['content'] = pf(section)
+
+
+        self.sections = sections
+
+    def _process_doc(self, section):
+        return '\n'.join(section['lines'])
+
+    def _process_sql(self, section):
+        return sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
+
+    def _process_mview(self, section):
+        return sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
+
+    def _process_view(self, section):
+        return sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
+
+    def _process_extract(self, section):
+
+        line = section['args']
+
+        words = line.split()
+
+        if len(words) != 6:
+            self.logger.error('Extract line has wrong format; expected 6 words, got: {}'.format(line))
+            return
+
+        _, table, as_w, format, to_w, rpath = words
+
+        if not as_w.lower() == 'as':
+            self.logger.error('Extract line malformed. Expected 3rd word to be \'as\' got: {}'.format(as_w))
+
+        if not as_w.lower() == 'to_w':
+            self.logger.error('Extract line malformed. Expected 5th word to be \'to\' got: {}'.format(to_w))
+
+        return dict(table=table, format=format, rpath=rpath)
+
+
+    def _process_partitions(self, section):
+
+        content = []
+        start_line  = section['line_number']
+        for i,line in enumerate(section['lines']):
+            try:
+                content.append(Manifest.parse_partition_line(line))
+            except ParseError as e:
+                raise ParseError("Failed to parse line #{}: {}".format(start_line+i, e))
+
+        return content
+
+    def _process_index(self, section):
+
+        line = section['args']
+
+        line = re.sub('index:', '', line, flags=re.IGNORECASE).strip()
+
+        tokens, remainder = Manifest.tokenize_line(line.strip())
+
+        (_, index_name), tokens = Manifest.extract("NAME", tokens)
+
+        (_, table), tokens = Manifest.extract_next('ON', 'NAME', tokens)
+
+        columns, tokens = Manifest.coalesce_list('NAME', tokens)
+
+        return dict(name=index_name, table=table, columns=columns)
 
     @property
-    def sql(self):
-        ''' Collect all of the SQL entries by driver. Each block can apply to
-        multiple drivers.
-        '''
-        from collections import defaultdict
+    def documentation(self):
+        pass
 
-        in_sql_section = False
-        drivers = None
-
-        sql_lines = defaultdict(list)
-
-        for line in self.data:
-
-            m = re.match(r'^(\w+):\s*([\w+|\s]+)\s*', line)
-
-            if m and m.group(1).lower() == 'sql':
-                in_sql_section = True
-                drivers = [ d.strip() for d in m.groups()[1].split('|') ]
-
-                continue
-
-            if re.match(r'^\w+:', line.strip()):
-                in_sql_section = False
-                continue
-
-            if in_sql_section and line.strip():
-                for driver in drivers:
-                    sql_lines[driver].append(line)
-
-        return { driver:'\n'.join(lines) for driver, lines in sql_lines.items() }
 
     @staticmethod
     def tokenize_line(line):
         import re
 
         scanner = re.Scanner([
-                                 (r"#.*$", lambda scanner, token: ("COMMENT", token)),
+            (r"#.*$", lambda scanner, token: ("COMMENT", token)),
             (r"from", lambda scanner, token: ("FROM", token)),
             (r"as", lambda scanner, token: ("AS", token)),
             (r"to", lambda scanner, token: ("TO", token)),
@@ -182,7 +248,6 @@ class Manifest(object):
 
         return l, tokens
 
-
     @staticmethod
     def parse_partition_line(line):
         import re
@@ -213,144 +278,7 @@ class Manifest(object):
                 tables = tables,
                 where = where
             )
+
         except Exception as e:
             raise ParseError("Failed to parse {} : {}".format(line, e))
 
-
-
-    @property
-    def partitions(self):
-        import re
-        in_partitions_section = False
-
-        for line in self.data:
-            line = line.strip()
-
-            m = re.match(r'^(.*)#.*$', line)
-            if m:
-                line = m.groups()[0]
-
-            if line.lower().startswith('partitions:'):
-                in_partitions_section = True
-                continue
-
-            if re.match(r'^\w+:', line):
-                in_partitions_section = False
-                continue
-
-            if in_partitions_section and line.strip():
-                yield Manifest.parse_partition_line(line)
-
-
-    @property
-    def indexes(self):
-        import re
-
-        for line in self.data:
-            line = line.strip()
-
-            if line.lower().startswith('index:'):
-
-                line = re.sub('index:','',line, flags=re.IGNORECASE).strip()
-
-                tokens, remainder = Manifest.tokenize_line(line.strip())
-
-                (_, index_name), tokens = Manifest.extract("NAME", tokens)
-
-                (_, table), tokens = Manifest.extract_next('ON', 'NAME', tokens)
-
-                columns, tokens = Manifest.coalesce_list('NAME', tokens)
-
-                yield index_name, table, columns
-
-    @property
-    def extracts(self):
-        import re
-
-
-        for line in self.data:
-            line = line.strip()
-
-            if line.lower().startswith('extract:'):
-                in_extracts_section = True
-
-                words  = line.split()
-
-                if len(words) != 6:
-                    self.logger.error('Extract line has wrong format; expected 6 words, got: {}'.format(line))
-                    continue;
-
-                _, table, as_w, format, to_w, rpath = words
-
-                if not as_w.lower() == 'as':
-                    self.logger.error('Extract line malformed. Expected 3rd word to be \'as\' got: {}'.format(as_w))
-
-                if not as_w.lower() == 'to_w':
-                    self.logger.error('Extract line malformed. Expected 5th word to be \'to\' got: {}'.format(to_w))
-
-                yield table, format, rpath
-
-
-    def yield_view_lines(self, data):
-        """Read all of the lines of the manifest and return the lines for views"""
-        in_views_section = False
-        in_view = False
-        view_name = None
-
-        for line in data:
-            line = line.strip()
-
-            if line.lower().startswith('view:') or line.lower().startswith('mview:'):  # Start of the views section
-
-                m = re.match(r'^(m?view):\w*([^\#]+)', line, flags=re.IGNORECASE)
-
-                if m and m.group(2):
-                    view_name = m.group(2).strip()
-                    if view_name:
-                        in_views_section = True
-                        view_type = m.group(1).lower()
-                        yield 'end', None, None
-                        continue
-
-            if re.match(r'^\w+:', line):  # Start of some other section
-                in_views_section = False
-                yield 'end', None, None
-                continue
-
-            if not in_views_section:
-                continue
-
-            if re.match(r'create view', line.lower()):
-                yield 'end', None, None
-
-            if line.strip():
-                if view_type == 'view':
-                    yield 'viewline', view_name, line.strip()
-                elif view_type == 'mview':
-                    yield 'mviewline', view_name, line.strip()
-                else:
-                    raise Exception(view_type)
-
-        yield 'end', None, None
-
-    def _views(self, type_):
-
-        from collections import defaultdict
-
-        view_lines = defaultdict(list)
-
-        for cmd, view_name, line in self.yield_view_lines(self.data):
-            if cmd == type_:
-                view_lines[view_name].append(line)
-
-        for view_name, view_line in view_lines.items():
-            yield view_name, ' '.join(view_line)
-
-
-    @property
-    def views(self):
-        return self._views('viewline')
-
-    @property
-    def mviews(self):
-        return self._views('mviewline')

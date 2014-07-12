@@ -157,16 +157,27 @@ class SqliteDatabase(RelationalDatabase):
 
     def __init__(self, dbname, memory = False,  **kwargs):   
         ''' '''
-    
+        import os
+
+
         # For database bundles, where we have to pass in the whole file path
         if memory:
             base_path = ':memory:'
         else:
+
+            if not dbname:
+                raise ValueError("Must have a dbname")
+
+            if dbname[0] != '/':
+                import os
+                dbname = os.path.join(os.getcwd(), dbname)
+
+
             base_path, ext = os.path.splitext(dbname)
             
             if ext and ext != self.EXTENSION:
-                raise Exception("Bad extension to file {}: {}: {}".format(dbname, base_path, ext))
-            
+                raise Exception("Bad extension to file '{}': '{}'. Expected: {}".format(dbname, ext, self.EXTENSION))
+
             self.base_path = base_path
 
         self._last_attach_name = None
@@ -239,7 +250,10 @@ class SqliteDatabase(RelationalDatabase):
 
     def require_path(self):
         if not self.memory:
-            if not os.path.exists(os.path.dirname(self.base_path)):
+
+            dir = os.path.dirname(self.base_path)
+
+            if dir and not os.path.exists(dir):
                 os.makedirs(os.path.dirname(self.base_path))
 
     @property

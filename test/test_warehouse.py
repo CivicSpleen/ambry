@@ -162,10 +162,12 @@ class Test(TestBase):
 
 First Line of documentation
 
-partitions:
+DESTINATION: spatialite:///tmp/census-race-ethnicity.db
+DIR: /tmp/warehouse
 
-part1 # Comment
-table1, table2 table3,table4 from part2 # Comment
+PARTITIONS:
+
+
 sangis.org-business-sites-orig-businesses-geo-0.1.1
 table from sangis.org-business-sites-orig-businesses-geo-0.1.1
 table FROM sangis.org-business-sites-orig-businesses-geo-0.1.1
@@ -173,28 +175,32 @@ table1, table2 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1
 table1, table2 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1 WHERE foo and bar and bas
 table1, table2 , table3,table4 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1 # Wot you got?
 
-views:
 
-create view foobar1 as
-one
-two
-three;
 
-create view foobar2 as
-one
-two
-three;
+census.gov-acs-geo-p5ye2012-geofile-0.0.3
+census.gov-acs-p5ye2012-b02001-estimates-0.0.4 # Race
+census.gov-acs-p5ye2012-b02001-margins-0.0.4 # Race margins
+census.gov-acs-p5ye2012-b03003-estimates-0.0.4 # Total hispanic
+census.gov-acs-p5ye2012-b03002-estimates-0.0.4 # HISPANIC OR LATINO ORIGIN BY RACE
+census.gov-acs-p5ye2012-b01001-estimates-0.0.4 # Sex by Age
 
-documentation:
+census.gov-tigerline-2012-blockgroups-ca-geo
+census.gov-tigerline-2012-places-ca-geo
+census.gov-tigerline-2012-tracts-ca-geo
+census.gov-acs-geo-p5ye2012-geofile
 
-Foo Doc
 
-views:
 
-create view foobar3 as
-one
-two
-three;
+MVIEW: mview1
+
+SELECT 'mview1'
+
+MVIEW: mview2
+
+SELECT 'mview2'
+
+INDEX: name ON table column1, column1
+
 
 doc:
 
@@ -222,21 +228,8 @@ EXTRACT: fringo AS geojson TO /bin/bar/geojson
 
         """)
 
-        for view in m.views:
-            print "view", view
-
-        for partition in m.partitions:
-            print 'partition', partition
-
-        print 'doc', m.documentation
-
-        print '----'
-
-        print m.sql
-
-        print '----'
-
-        print [x for x in m.extracts ]
+        import yaml
+        print yaml.dump(m.sections, default_flow_style=False)
 
     def test_manifest_parser(self):
         from ambry.warehouse.manifest import Manifest

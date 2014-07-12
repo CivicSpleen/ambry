@@ -10,5 +10,6 @@ lockfile
 semantic_version
 numpy
 pandas
+sqlparse
 
 

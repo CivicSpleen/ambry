@@ -143,10 +143,21 @@ def warehouse_info(args, w,config):
     prt("WLibrary: {}",w.wlibrary.database.dsn)
     prt("ELibrary: {}",w.elibrary.database.dsn)
 
-
 def warehouse_install(args, l ,config):
+    from os import getcwd, chdir
+
+    last_wd = getcwd()
+
+    try:
+        _warehouse_install(args, l ,config)
+    finally:
+        chdir(last_wd)
+
+
+def _warehouse_install(args, l ,config):
     from ..library import new_library
     import os.path
+
     from ambry.util import init_log_rate
     from ..dbexceptions import NotFoundError, ConfigurationError
     from ambry.warehouse.extractors import extract
@@ -157,25 +168,33 @@ def warehouse_install(args, l ,config):
         from ..warehouse.manifest import Manifest
 
         m  = Manifest(args.term)
-
-        partitions = m.partitions
-        views = m.views
-        mviews = m.mviews
-        sql =  m.sql
-        extracts = m.extracts
-        indexes = m.indexes
-
-        destination =  m.destination
-        work_dir = m.work_dir
+        destination = m.destination
 
     else:
-        partitions = {'partition': args.term}
-        views = []
-        mviews = []
-        sql = []
-        extracts = []
+        m = None
         destination = None
-        indexes = None
+
+    pub_dir = args.dir
+    work_dir = args.work_dir
+
+    if m.count_sections('extract') > 0:
+        work_dir = pub_dir = args.work_dir if args.work_dir else m.work_dir
+
+        pub_dir = args.dir if args.dir else work_dir
+
+        if not pub_dir:
+            raise ConfigurationError("Manifest has extracts. Must specify either a work dir or publication dir")
+
+    if work_dir:
+
+        if not os.path.isdir(work_dir):
+            os.makedirs(work_dir)
+
+        os.chdir(work_dir)
+
+        prt("Working directory: {}".format(work_dir))
+
+
 
     if args.database:
         config = database_config(args.database)
@@ -195,38 +214,67 @@ def warehouse_install(args, l ,config):
 
     w.test = args.test
 
-    if extracts:
-        work_dir = pub_dir = args.work_dir if args.work_dir else work_dir
-
-        pub_dir = args.dir if args.dir else work_dir
-
-        if not pub_dir:
-            raise ConfigurationError("Manifest has extracts. Must specify either a work dir or publication dir")
-
-    for pd in partitions:
+    ##
+    ## If it isn't a manifest, install a single partition and return
+    ##
+    if not m:
         try:
-
-            tables = pd['tables']
-
-            if pd['where'] and len(pd['tables']) == 1:
-                tables = (pd['tables'][0], pd['where'])
-
-            w.install(pd['partition'], tables)
+            w.install(args.term)
         except NotFoundError:
-            err("Partition {} not found in external library".format(pd['partition']))
+            err("Partition {} not found in external library".format(args.term))
 
-    if indexes:
-        for name, table, columns in indexes:
-            w.create_index(name, table, columns)
+        return
 
-    if sql:
-        w.run_sql(sql[w.database.driver])
+    ##
+    ## Finally! Now we can iterate over the section and do the installation.
+    ##
 
-    for name, view in views:
-        w.install_view(name, view)
+    if not m.uid:
+        import uuid
+        fatal("Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(uuid.uuid4()))
 
-    for name, view in mviews:
-        w.install_material_view(name, view)
+
+    for line in sorted(m.sections.keys()):
+        section = m.sections[line]
+
+        tag = section['tag']
+
+        prt("== Processing manifest section {} at line {}",section['tag'], section['line_number'])
+
+        if tag == 'partitions':
+            for pd in section['content']:
+                try:
+                    tables = pd['tables']
+
+                    if pd['where'] and len(pd['tables']) == 1:
+                        tables = (pd['tables'][0], pd['where'])
+
+                    w.install(pd['partition'], tables)
+                except NotFoundError:
+                    err("Partition {} not found in external library".format(pd['partition']))
+
+        elif tag == 'sql':
+            sql = section['content']
+
+            if w.database.driver in sql:
+                w.run_sql(sql[w.database.driver])
+
+        elif tag == 'index':
+            c = section['content']
+            w.create_index(c['name'], c['table'], c['columns'])
+
+        elif tag == 'mview':
+            w.install_material_view(section['args'], section['content'])
+
+        elif tag == 'view':
+            w.install_view(section['args'], section['content'])
+
+        elif tag == 'extract':
+            print section
+
+    return
+
+
 
     for table, format, dest in extracts:
         prt("Extracting {} to {} as {}".format(table, format, dest))
