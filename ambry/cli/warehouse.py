@@ -233,7 +233,6 @@ def _warehouse_install(args, l ,config):
         import uuid
         fatal("Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(uuid.uuid4()))
 
-
     for line in sorted(m.sections.keys()):
         section = m.sections[line]
 
@@ -270,17 +269,13 @@ def _warehouse_install(args, l ,config):
             w.install_view(section['args'], section['content'])
 
         elif tag == 'extract':
+
             print section
+            #prt("Extracting {} to {} as {}".format(table, format, dest))
+            #cache = new_cache(pub_dir)
+            #abs_path = extract(w.database, table, format, cache, dest)
+            #prt("Extracted to {}".format(abs_path))
 
-    return
-
-
-
-    for table, format, dest in extracts:
-        prt("Extracting {} to {} as {}".format(table, format, dest))
-        cache = new_cache(pub_dir)
-        abs_path = extract(w.database, table, format, cache, dest)
-        prt("Extracted to {}".format(abs_path))
 
 
 def warehouse_remove(args, w,config):
