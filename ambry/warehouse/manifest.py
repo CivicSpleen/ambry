@@ -135,17 +135,18 @@ class Manifest(object):
 
         words = line.split()
 
-        if len(words) != 6:
-            self.logger.error('Extract line has wrong format; expected 6 words, got: {}'.format(line))
-            return
+        if len(words) != 5:
+            raise ParseError('Extract line has wrong format; expected 5 words, got: {}'.format(line))
 
-        _, table, as_w, format, to_w, rpath = words
+        table, as_w, format, to_w, rpath = words
 
-        if not as_w.lower() == 'as':
+        if not as_w.upper() == 'as':
             self.logger.error('Extract line malformed. Expected 3rd word to be \'as\' got: {}'.format(as_w))
 
-        if not as_w.lower() == 'to_w':
+        if not as_w.upper() == 'to_w':
             self.logger.error('Extract line malformed. Expected 5th word to be \'to\' got: {}'.format(to_w))
+
+
 
         return dict(table=table, format=format, rpath=rpath)
 

@@ -163,11 +163,12 @@ def _warehouse_install(args, l ,config):
     from ambry.warehouse.extractors import extract
     from ambry.cache import new_cache
     from ambry.warehouse import new_warehouse
+    from . import global_logger
 
     if os.path.isfile(args.term) or args.term.startswith('http'): # Assume it is a Manifest file.
         from ..warehouse.manifest import Manifest
 
-        m  = Manifest(args.term)
+        m  = Manifest(args.term, global_logger)
         destination = m.destination
 
     else:
@@ -269,12 +270,15 @@ def _warehouse_install(args, l ,config):
             w.install_view(section['args'], section['content'])
 
         elif tag == 'extract':
+            c = section['content']
+            table = c['table']
+            format = c['format']
+            dest = c['rpath']
 
-            print section
-            #prt("Extracting {} to {} as {}".format(table, format, dest))
-            #cache = new_cache(pub_dir)
-            #abs_path = extract(w.database, table, format, cache, dest)
-            #prt("Extracted to {}".format(abs_path))
+            prt("Extracting {} to {} as {}".format(table, format, dest))
+            cache = new_cache(pub_dir)
+            abs_path = extract(w.database, table, format, cache, dest)
+            prt("Extracted to {}".format(abs_path))
 
 
 

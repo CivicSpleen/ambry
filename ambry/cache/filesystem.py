@@ -245,7 +245,7 @@ class FsCache(Cache):
         return l
 
 
-    def path(self, rel_path, propagate = True, **kwargs):
+    def path(self, rel_path, propagate = True, missing_ok = False,  **kwargs):
 
         abs_path = os.path.join(self.cache_dir, rel_path)
 
@@ -255,7 +255,7 @@ class FsCache(Cache):
         if self.upstream and propagate:
             return self.upstream.path(rel_path, **kwargs)
 
-        if not os.path.exists(abs_path):
+        if not os.path.exists(abs_path) and missing_ok == False:
             return False
 
         return abs_path
