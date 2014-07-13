@@ -15,6 +15,9 @@ class null_logger(object):
         pass
 
 
+def new_manifest(ref, logger):
+    return Manifest(ref, logger)
+
 class ParseError(Exception):
     pass
 
@@ -140,11 +143,11 @@ class Manifest(object):
 
         table, as_w, format, to_w, rpath = words
 
-        if not as_w.upper() == 'as':
-            self.logger.error('Extract line malformed. Expected 3rd word to be \'as\' got: {}'.format(as_w))
+        if not as_w.upper() == 'AS':
+            raise ParseError('Extract line malformed. Expected 3rd word to be \'as\' got: {}'.format(as_w))
 
-        if not as_w.upper() == 'to_w':
-            self.logger.error('Extract line malformed. Expected 5th word to be \'to\' got: {}'.format(to_w))
+        if not to_w.upper() == 'TO':
+            raise ParseError('Extract line malformed. Expected 5th word to be \'to\' got: {}'.format(to_w))
 
 
 
@@ -283,3 +286,112 @@ class Manifest(object):
         except Exception as e:
             raise ParseError("Failed to parse {} : {}".format(line, e))
 
+
+    def install(self, l, base_dir):
+        from os import getcwd, chdir
+
+        last_wd = getcwd()
+
+        try:
+            self._install(l, base_dir)
+        finally:
+            chdir(last_wd)
+
+    def _install(self, l, base_dir):
+        import os.path
+        from ..dbexceptions import NotFoundError, ConfigurationError
+        from ambry.util import init_log_rate
+        from ambry.warehouse.extractors import extract
+        from . import database_config, new_warehouse, Logger
+        from ..cache import new_cache
+
+        # legacy
+        m = self
+        logger = self.logger
+
+        destination = m.destination
+
+        if not base_dir:
+            raise ConfigurationError("Must specify a base dir")
+
+        if not os.path.isdir(base_dir):
+            os.makedirs(base_dir)
+
+        work_dir = os.path.join(base_dir, m.work_dir if m.work_dir else None)
+
+        pub_dir = work_dir
+
+        if not os.path.isdir(work_dir):
+            os.makedirs(work_dir)
+
+        if not work_dir or not os.path.isdir(work_dir):
+            raise ConfigurationError("Must specify either work dir ")
+
+        os.chdir(work_dir)
+
+        logger.info("Working directory: {}".format(work_dir))
+
+        config = database_config(destination)
+
+        w = new_warehouse(config, l)
+
+        if not w.exists():
+            w.create()
+
+        w.logger = Logger(logger, init_log_rate(2000))
+
+        if not m.uid:
+            import uuid
+
+            raise ConfigurationError(
+                "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(uuid.uuid4()))
+
+        for line in sorted(m.sections.keys()):
+            section = m.sections[line]
+
+            tag = section['tag']
+
+            logger.info("== Processing manifest section {} at line {}".format(section['tag'], section['line_number']))
+
+            if tag == 'partitions':
+                for pd in section['content']:
+                    try:
+                        tables = pd['tables']
+
+                        if pd['where'] and len(pd['tables']) == 1:
+                            tables = (pd['tables'][0], pd['where'])
+
+                        w.install(pd['partition'], tables)
+                    except NotFoundError:
+                        logger.error("Partition {} not found in external library".format(pd['partition']))
+
+            elif tag == 'sql':
+                sql = section['content']
+
+                if w.database.driver in sql:
+                    w.run_sql(sql[w.database.driver])
+
+            elif tag == 'index':
+                c = section['content']
+                w.create_index(c['name'], c['table'], c['columns'])
+
+            elif tag == 'mview':
+                w.install_material_view(section['args'], section['content'])
+
+            elif tag == 'view':
+                w.install_view(section['args'], section['content'])
+
+            elif tag == 'extract':
+                c = section['content']
+                table = c['table']
+                format = c['format']
+                dest = c['rpath']
+
+                logger.info("Extracting {} to {} as {}".format(table, format, dest))
+                cache = new_cache(pub_dir)
+                abs_path = extract(w.database, table, format, cache, dest)
+                logger.info("Extracted to {}".format(abs_path))
+
+
+    def html_doc(self):
+        from ..web import Web

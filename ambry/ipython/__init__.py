@@ -1,4 +1,18 @@
 
+"""
+Copyright (c) 2014 Clarinova. This file is licensed under the terms of the
+Revised BSD License, included in this distribution as LICENSE.txt
+"""
+
+from ambry import library as _lf
+
+
+def library(name='default'):
+    '''Return the default Analysislibrary for this installation, which is like the Library returned by
+    library(), but configured for use in IPython'''
+    from ambry.library import AnalysisLibrary
+
+    return AnalysisLibrary(_lf())
 
 def get_ipython_notebook_path():
     """Return the path to the current notebook file

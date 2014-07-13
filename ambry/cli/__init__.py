@@ -35,7 +35,7 @@ def fatal(template, *args, **kwargs):
     import sys
     global global_logger
 
-    global_logger.error("FATAL: "+template.format(*args, **kwargs))
+    global_logger.critical("FATAL: "+template.format(*args, **kwargs))
     sys.exit(1)
 
 def warn(template, *args, **kwargs):
@@ -438,8 +438,8 @@ def main(argsv = None, ext_logger=None):
     if ext_logger:
         global_logger = ext_logger
     else:
-        global_logger = get_logger("{}.{}".format(args.command, args.subcommand),
-                                   template="%(message)s")
+        name = "{}.{}".format(args.command, args.subcommand)
+        global_logger = get_logger(name, template="%(levelname)s: %(message)s")
 
     global_logger.setLevel(logging.INFO)
 
@@ -468,4 +468,6 @@ def main(argsv = None, ext_logger=None):
         except KeyboardInterrupt:
             prt('\nExiting...')
             pass
+        except ConfigurationError as e:
+            fatal("{}: {}".format(str(e.__class__.__name__),str(e)))
         

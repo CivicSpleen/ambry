@@ -969,3 +969,14 @@ class AnalysisLibrary(Library):
     def _repr_html_(self):
         return self.info.replace('\n','<br/>')
 
+    def install_manifest(self, ref, base_dir=None):
+        from ..warehouse import install_manifest
+        import os
+        import warnings
+
+        warnings.filterwarnings('ignore')
+
+        if not base_dir:
+            base_dir = os.getcwd()
+
+        return install_manifest(self.l, ref, base_dir)

@@ -32,41 +32,11 @@ class Logger(object):
         warn("{}: {}", self.prefix, message)
 
 
-def database_config(db):
-    import urlparse
-
-    parts = urlparse.urlparse(db)
-
-    if parts.scheme == 'sqlite':
-        config = dict(service='sqlite', database=dict(dbname=parts.path, driver='sqlite'))
-    elif parts.scheme == 'spatialite':
-        config = dict(service='spatialite', database=dict(dbname=parts.path, driver='sqlite'))
-    elif parts.scheme == 'postgres':
-        config = dict(service='postgres',
-                      database=dict(driver='postgres',
-                                    server=parts.hostname,
-                                    username=parts.username,
-                                    password=parts.password,
-                                    dbname=parts.path.strip('/')
-                      ))
-    elif parts.scheme == 'postgis':
-        config = dict(service='postgis',
-                      database=dict(driver='postgis',
-                                    server=parts.hostname,
-                                    username=parts.username,
-                                    password=parts.password,
-                                    dbname=parts.path.strip('/')
-                      ))
-    else:
-        raise ValueError("Unknown database connection scheme: {}".format(parts.scheme))
-
-    return config
-
-
 def warehouse_command(args, rc):
     from ambry.warehouse import new_warehouse
     from ..library import new_library
     from . import global_logger
+    from ambry.warehouse import database_config
 
     l = new_library(rc.library(args.library_name))
 
@@ -83,7 +53,6 @@ def warehouse_command(args, rc):
 
         globals()['warehouse_'+args.subcommand](args, w,rc)
     else:
-
         globals()['warehouse_' + args.subcommand](args, l, rc)
 
 def warehouse_parser(cmd):
@@ -98,7 +67,7 @@ def warehouse_parser(cmd):
     whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
     whsp.set_defaults(subcommand='install')
     whsp.add_argument('-t', '--test', default=False, action='store_true', help='Load only 100 records per table')
-    whsp.add_argument('-w', '--work-dir', default=None,help='Working directory for file installs and temporaty databases.')
+    whsp.add_argument('-b', '--base-dir', default=None,help='Base directory for installed. Defaults to <ambry-install>/warehouse')
     whsp.add_argument('-d', '--dir', default=None,
                       help='Publication directory for file installs, if different from the work-dir.')
     whsp.add_argument('term', type=str,help='Name of bundle or partition')
@@ -153,133 +122,31 @@ def warehouse_install(args, l ,config):
     finally:
         chdir(last_wd)
 
-
 def _warehouse_install(args, l ,config):
-    from ..library import new_library
-    import os.path
+    from ambry.dbexceptions import ConfigurationError
+    from ambry.warehouse.manifest import new_manifest
+    from ..util import get_logger
 
-    from ambry.util import init_log_rate
-    from ..dbexceptions import NotFoundError, ConfigurationError
-    from ambry.warehouse.extractors import extract
-    from ambry.cache import new_cache
-    from ambry.warehouse import new_warehouse
-    from . import global_logger
+    logger = get_logger('warehouse',template="WH %(levelname)s: %(message)s")
 
-    if os.path.isfile(args.term) or args.term.startswith('http'): # Assume it is a Manifest file.
-        from ..warehouse.manifest import Manifest
+    try:
+        d =  config.filesystem('warehouse')
 
-        m  = Manifest(args.term, global_logger)
-        destination = m.destination
+        base_dir = d['dir']
 
-    else:
-        m = None
-        destination = None
+    except ConfigurationError:
+        base_dir = args.base_dir
 
-    pub_dir = args.dir
-    work_dir = args.work_dir
+    if not base_dir:
+        raise ConfigurationError("Must specify -b for base director,  or set filesystem.warehouse in configuration")
 
-    if m.count_sections('extract') > 0:
-        work_dir = pub_dir = args.work_dir if args.work_dir else m.work_dir
+    m = new_manifest(args.term, logger)
 
-        pub_dir = args.dir if args.dir else work_dir
+    m.install(l, base_dir)
 
-        if not pub_dir:
-            raise ConfigurationError("Manifest has extracts. Must specify either a work dir or publication dir")
+    print m.html_doc()
 
-    if work_dir:
-
-        if not os.path.isdir(work_dir):
-            os.makedirs(work_dir)
-
-        os.chdir(work_dir)
-
-        prt("Working directory: {}".format(work_dir))
-
-
-
-    if args.database:
-        config = database_config(args.database)
-
-    elif destination:
-        config = database_config(destination)
-
-    else:
-        config = config.warehouse(args.name)
-
-    w = new_warehouse(config, l)
-
-    if not w.exists():
-        w.create()
-
-    w.logger = Logger('Warehouse Install', init_log_rate(prt, N=2000))
-
-    w.test = args.test
-
-    ##
-    ## If it isn't a manifest, install a single partition and return
-    ##
-    if not m:
-        try:
-            w.install(args.term)
-        except NotFoundError:
-            err("Partition {} not found in external library".format(args.term))
-
-        return
-
-    ##
-    ## Finally! Now we can iterate over the section and do the installation.
-    ##
-
-    if not m.uid:
-        import uuid
-        fatal("Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(uuid.uuid4()))
-
-    for line in sorted(m.sections.keys()):
-        section = m.sections[line]
-
-        tag = section['tag']
-
-        prt("== Processing manifest section {} at line {}",section['tag'], section['line_number'])
-
-        if tag == 'partitions':
-            for pd in section['content']:
-                try:
-                    tables = pd['tables']
-
-                    if pd['where'] and len(pd['tables']) == 1:
-                        tables = (pd['tables'][0], pd['where'])
-
-                    w.install(pd['partition'], tables)
-                except NotFoundError:
-                    err("Partition {} not found in external library".format(pd['partition']))
-
-        elif tag == 'sql':
-            sql = section['content']
-
-            if w.database.driver in sql:
-                w.run_sql(sql[w.database.driver])
-
-        elif tag == 'index':
-            c = section['content']
-            w.create_index(c['name'], c['table'], c['columns'])
-
-        elif tag == 'mview':
-            w.install_material_view(section['args'], section['content'])
-
-        elif tag == 'view':
-            w.install_view(section['args'], section['content'])
-
-        elif tag == 'extract':
-            c = section['content']
-            table = c['table']
-            format = c['format']
-            dest = c['rpath']
-
-            prt("Extracting {} to {} as {}".format(table, format, dest))
-            cache = new_cache(pub_dir)
-            abs_path = extract(w.database, table, format, cache, dest)
-            prt("Extracted to {}".format(abs_path))
-
+    # return install_manifest(l, args.term, base_dir, logger)
 
 
 def warehouse_remove(args, w,config):

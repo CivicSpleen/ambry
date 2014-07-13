@@ -98,11 +98,13 @@ class SqliteWarehouse(RelationalWarehouse):
         CREATE TABLE {name} AS {sql}
         """.format(name=name, sql=sql)
 
+
         try:
             self.database.connection.connection.cursor().executescript(sql)
         except OperationalError as e:
             if 'exists' not in str(e).lower():
                 raise
+
             self.logger.info('mview_exists {}'.format(name))
             # Ignore if it already exists.
 

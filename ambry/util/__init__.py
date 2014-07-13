@@ -22,13 +22,19 @@ from flo import * # Legacy; should convert clients to direct import
 logger_init = set()
 
 
-def get_logger(name, file_name = None, stream = None, template=None):
+def get_logger(name, file_name = None, stream = None, template=None, clear=False):
     """Get a logger by name
 
     if file_name is specified, and the dirname() of the file_name exists, it will
     write to that file. If the dirname dies not exist, it will silently ignre it. """
 
+
+
     logger = logging.getLogger(name)
+
+    if clear:
+        logger.handlers = []
+
 
     # To list all loggers: logging.Logger.manager.loggerDict
 

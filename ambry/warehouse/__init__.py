@@ -356,3 +356,58 @@ class WarehouseInterface(object):
         if 'password' in config['database']: del config['database']['password']
         return config
 
+def database_config(db):
+    import urlparse
+
+    parts = urlparse.urlparse(db)
+
+    if parts.scheme == 'sqlite':
+        config = dict(service='sqlite', database=dict(dbname=parts.path, driver='sqlite'))
+    elif parts.scheme == 'spatialite':
+        config = dict(service='spatialite', database=dict(dbname=parts.path, driver='sqlite'))
+    elif parts.scheme == 'postgres':
+        config = dict(service='postgres',
+                      database=dict(driver='postgres',
+                                    server=parts.hostname,
+                                    username=parts.username,
+                                    password=parts.password,
+                                    dbname=parts.path.strip('/')
+                      ))
+    elif parts.scheme == 'postgis':
+        config = dict(service='postgis',
+                      database=dict(driver='postgis',
+                                    server=parts.hostname,
+                                    username=parts.username,
+                                    password=parts.password,
+                                    dbname=parts.path.strip('/')
+                      ))
+    else:
+        raise ValueError("Unknown database connection scheme: {}".format(parts.scheme))
+
+    return config
+
+class Logger(object):
+    def __init__(self, logger, lr):
+        self.lr = lr
+        self.logger = logger
+
+    def progress(self,type_,name, n, message=None):
+        self.lr("{} {}: {}".format(type_, name, n))
+
+    def copy(self, o,t):
+        self.lr("{} {}".format(o,t))
+
+    def info(self,message):
+        self.logger.info(message)
+
+    def log(self,message):
+        self.logger.info(message)
+
+    def error(self,message):
+        self.logger.error(message)
+
+    def fatal(self,message):
+        self.logger.fatal(message)
+
+    def warn(self, message):
+        self.logger.warn(message)

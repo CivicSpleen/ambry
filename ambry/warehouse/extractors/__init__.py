@@ -6,6 +6,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 import ogr
 
+class ExtractError(Exception):
+    pass
+
 def extract(database, table, format, cache, dest):
 
     from ambry.warehouse.extractors import CsvExtractor
@@ -71,14 +74,21 @@ class ShapeExtractor(object):
         # There are a lot more , add them as they are encountered.
     }
 
-    ogr_type_map = {
+    _ogr_type_map = {
         None: ogr.OFTString,
         '': ogr.OFTString,
         'TEXT': ogr.OFTString,
+        'VARCHAR': ogr.OFTString,
         'INT': ogr.OFTInteger,
+        'INTEGER': ogr.OFTInteger,
         'REAL': ogr.OFTReal,
 
     }
+
+    def ogr_type_map(self, v):
+
+        return self._ogr_type_map[v.split('(',1)[0]] # Sometimes 'VARCHAR', sometimes 'VARCHAR(10)'
+
 
     def create_schema(self, database, table, layer):
         ce = database.connection.execute
@@ -88,7 +98,9 @@ class ShapeExtractor(object):
             if row['name'].lower() in ('geometry', 'wkt','wkb'):
                 continue
 
-            fdfn = ogr.FieldDefn(str(row['name']), self.ogr_type_map[row['type']])
+            name = str(row['name'])[:8]
+
+            fdfn = ogr.FieldDefn(name, self.ogr_type_map(row['type']))
 
             if row['type'] == '':
                 fdfn.SetWidth(254) # FIXME Wasteful, but would have to scan table for max value.
@@ -114,7 +126,12 @@ class ShapeExtractor(object):
         srs = ogr.osr.SpatialReference()
         srs.ImportFromEPSG(epsg)
 
-        layer = ds.CreateLayer(table, srs, self.geo_map[self.geometry_type(database, table)[0]])
+        t, cd = self.geometry_type(database, table)
+
+        if not t:
+            raise ExtractError("No geometries in {}".format(table))
+
+        layer = ds.CreateLayer(table, srs, self.geo_map[t])
 
         self.create_schema(database, table, layer)
 
@@ -130,7 +147,8 @@ class ShapeExtractor(object):
                         if isinstance(value, unicode):
                             value = str(value)
 
-                        feature.SetField(str(name), value)
+                        name = str(name)[:8]
+                        feature.SetField(name, value)
                     except Exception as e:
                         print 'Failed for {}={} ({})'.format(name, value, type(value))
                         raise
