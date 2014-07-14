@@ -1,0 +1,7 @@
+{% if section.content.html -%}
+<!-- View, line {{section.line_number}} -->
+<h2 class="{{section.tag}}" id="ambrm_{{section.line_number}}">View {{section.args}}</h2>
+<div class="{{section.tag}}" >
+{{section.content.html}}
+</div>
+{% endif -%}

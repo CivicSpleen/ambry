@@ -8,6 +8,11 @@ Class for handling manifest files.
 import os.path
 import re
 import sqlparse
+import markdown
+from ..util import memoize
+from pygments import highlight
+from pygments.lexers import PythonLexer
+from pygments.formatters import HtmlFormatter
 
 class null_logger(object):
 
@@ -23,7 +28,7 @@ class ParseError(Exception):
 
 class Manifest(object):
 
-    def __init__(self, file_or_data, logger=None, library=None, base_dir=None):
+    def __init__(self, file_or_data, logger=None, library=None, base_dir=None, pub_dest=None):
         from ..dbexceptions import NotFoundError, ConfigurationError
 
         self.library = library
@@ -56,13 +61,21 @@ class Manifest(object):
 
         self.sectionalize()
 
+        if not self.uid:
+            import uuid
+
+            raise ConfigurationError(
+                "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(uuid.uuid4()))
+
         if not self.base_dir:
             raise ConfigurationError("Must specify a base dir")
 
         if not os.path.isdir(self.base_dir):
             os.makedirs(self.base_dir)
 
-        self.abs_work_dir = os.path.join(self.base_dir, self.work_dir if self.work_dir else None)
+        work_dir = self.work_dir if self.work_dir else self.uid
+
+        self.abs_work_dir = os.path.join(self.base_dir, work_dir)
 
         self.pub_dir = self.abs_work_dir
 
@@ -73,6 +86,8 @@ class Manifest(object):
             raise ConfigurationError("Must specify  work dir ")
 
 
+        self.file_installs = set()
+        self.publishable = set()
 
     @property
     def sorted_sections(self):
@@ -89,9 +104,18 @@ class Manifest(object):
     def count_sections(self,tag):
         return sum( section['tag'] == tag for section in self.sections.values())
 
+    # Deprecated! Use database
     @property
     def destination(self):
-        return self.single_line('destination')
+        return self.single_line('database')
+
+    @property
+    def database(self):
+        return self.single_line('database')
+
+    @property
+    def publication(self):
+        return self.single_line('publication')
 
     @property
     def work_dir(self):
@@ -105,6 +129,15 @@ class Manifest(object):
     def title(self):
         return self.single_line('title')
 
+    def pygmentize_sql(self,c):
+
+
+        return  highlight(c, PythonLexer(), HtmlFormatter())
+
+    @property
+    def css(self):
+        return HtmlFormatter(style='manni').get_style_defs('.highlight')
+
     def sectionalize(self):
         """Break the file into sections"""
 
@@ -113,7 +146,7 @@ class Manifest(object):
         sections = {}
 
         # These tags have only a single line; revert back to 'doc' afterward
-        singles = ['uid', 'title','extract','dir','destination', 'author', 'url']
+        singles = ['uid', 'title','extract','dir','destination','database','publish', 'author', 'url']
 
         def make_item(tag, i, args):
             line_number = i + 1
@@ -128,7 +161,8 @@ class Manifest(object):
 
         for i, line in enumerate(self.data):
 
-            line = re.sub(r'#.*$','', line ) # Remove comments
+            if tag != 'doc':
+                line = re.sub(r'#.*$','', line ) # Remove comments
 
             if not line.strip():
                 if non_tag_is_doc:
@@ -187,6 +221,7 @@ class Manifest(object):
             return out
         else:
             t = '\n'.join(section['lines']).strip()
+
             # Normal markdown documentation
             return dict(text=t,html=markdown.markdown(t))
 
@@ -194,10 +229,14 @@ class Manifest(object):
         return sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
 
     def _process_mview(self, section):
-        return sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
+        t = sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
+        md = '\n'.join(['    '+l for l in t.splitlines()])
+        return dict(text=t,html=self.pygmentize_sql(t))
 
     def _process_view(self, section):
-        return sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
+        t = sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
+        md = '\n'.join(['    ' + l for l in t.splitlines()])
+        return dict(text=t,html=self.pygmentize_sql(t))
 
     def _process_extract(self, section):
 
@@ -217,21 +256,41 @@ class Manifest(object):
             raise ParseError('Extract line malformed. Expected 5th word to be \'to\' got: {}'.format(to_w))
 
 
-
         return dict(table=table, format=format, rpath=rpath)
 
 
     def _process_partitions(self, section):
 
-        content = []
+        def row(cell, *args):
+            return "<tr>{}</tr>\n".format(''.join([ "<{}>{}</{}>".format(cell,v,cell) for v in args]))
+
+        partitions = []
+        html = '<table class="partitions table table-striped table-bordered table-condensed">\n'
+        html += row('th','d_vid','p_vid','vname','time','space','grain','format','tables')
         start_line  = section['line_number']
         for i,line in enumerate(section['lines']):
             try:
-                content.append(Manifest.parse_partition_line(line))
+                d = Manifest.parse_partition_line(line)
+
+                partitions.append(d)
+
+                if self.library:
+                    ident = self.library.resolve(d['partition']).partition
+
+                    html +=row('td',ident.as_dataset().vid, ident.vid, ident.vname,
+                               ident.time if ident.time else '',
+                               ident.space if ident.space else '',
+                               ident.grain if ident.grain else '',
+                               ident.format if ident.format else '',
+                               d['tables'] if d['tables'] else '')
+
             except ParseError as e:
                 raise ParseError("Failed to parse line #{}: {}".format(start_line+i, e))
 
-        return content
+        html += '</table>'
+
+        return dict(partitions=partitions, html=html)
+
 
     def _process_index(self, section):
 
@@ -363,8 +422,9 @@ class Manifest(object):
         except Exception as e:
             raise ParseError("Failed to parse {} : {}".format(line, e))
 
-
-    def new_warehouse(self):
+    @property
+    @memoize
+    def warehouse(self):
         from ..dbexceptions import NotFoundError, ConfigurationError
         from . import database_config, new_warehouse
 
@@ -383,7 +443,7 @@ class Manifest(object):
         last_wd = getcwd()
 
         try:
-            self._install()
+            return self._install()
         finally:
             chdir(last_wd)
 
@@ -401,17 +461,14 @@ class Manifest(object):
         m = self
         logger = self.logger
 
-        w = self.new_warehouse()
+        w = self.warehouse
 
         w.logger = Logger(logger, init_log_rate(2000))
 
-        if not m.uid:
-            import uuid
+        self.file_installs = set([w.database.path])
+        self.publishable = set()
 
-            raise ConfigurationError(
-                "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(uuid.uuid4()))
-
-        results = []
+        working_cache = new_cache(self.abs_work_dir)
 
         for line in sorted(m.sections.keys()):
             section = m.sections[line]
@@ -421,8 +478,9 @@ class Manifest(object):
             logger.info("== Processing manifest section {} at line {}".format(section['tag'], section['line_number']))
 
             if tag == 'partitions':
-                for pd in section['content']:
+                for pd in section['content']['partitions']:
                     try:
+
                         tables = pd['tables']
 
                         if pd['where'] and len(pd['tables']) == 1:
@@ -456,9 +514,53 @@ class Manifest(object):
                 dest = c['rpath']
 
                 logger.info("Extracting {} to {} as {}".format(table, format, dest))
-                cache = new_cache(self.pub_dir)
-                abs_path = extract(w.database, table, format, cache, dest)
+
+                abs_path = extract(w.database, table, format, working_cache, dest)
                 logger.info("Extracted to {}".format(abs_path))
+
+                self.file_installs.add(abs_path)
+                self.publishable.add(abs_path)
+
+
+        fn = 'documentation.html'
+        working_cache.put_stream(fn).write(m.html_doc())
+
+        self.publishable.add(working_cache.path(fn))
+        self.file_installs.add(working_cache.path(fn))
+
+
+    def publish(self, run_config, dest=None):
+
+        from ..cache import new_cache, parse_cache_string
+
+        if not dest:
+            dest = self.publication
+
+        cache_config = parse_cache_string(dest)
+
+        # Re-write account to get login credentials
+        if 'account' in cache_config:
+            cache_config['account'] = run_config.account(cache_config['account'])
+
+        pub = new_cache(cache_config)
+
+        for p in self.publishable:
+
+            rel = p.replace(self.abs_work_dir, '', 1).strip('/')
+            meta = {}
+
+            if rel.endswith('.html'):
+                meta['Content-Type'] = 'text/html'
+
+            self.logger.info("Publishing: {}".format(rel))
+            pub.put(p, rel, metadata=meta)
+
+            self.logger.info("Published: {}".format(pub.path(rel)))
+
+        # Write the documentation seperately, since it will require extract paths that are relative to
+        # the web files we just wrote.
+
+
 
 
 
@@ -476,7 +578,7 @@ class Manifest(object):
         import textwrap
         out = ""
 
-        w = self.new_warehouse()
+        w = self.warehouse()
 
         def indent(lines, amount=4, ch=' '):
             padding = amount * ch
@@ -512,20 +614,6 @@ class Manifest(object):
         return out
 
         out += '\n\n### Partitions\n\n'
-
-        out += '<table>'
-        out += "</tr><th></th><th>vid</th><th>vname</th><th>summary</th></tr>\n"
-        for dvid, d in  wl.list(with_partitions = True).items():
-            out +=  "<tr><td>{}</td><td>{}</td><td>{}</td></tr>\n".format(dvid, d.vname, d.summary)
-            out += '<table>'
-            out += "</tr><th></th><th>vid</th><th>vname</th><th>time</th><th>space</th><th>grain</th></tr>\n"
-            for pvid, p in d.partitions.items():
-                out += "</tr><td></td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n".format(p.vid, p.vname, p.time, p.space, p.grain)
-            out += '</table>'
-        out += '</table>'
-
-        out += '\n\n'
-
 
 
 

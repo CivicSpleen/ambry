@@ -203,7 +203,7 @@ class S3Cache(Cache):
                 k.set_contents_from_filename(source)
       
     def put_stream(self, rel_path,  metadata=None):
-        '''Return a flie object that can be written to to send data to S3. 
+        '''Return a Flo object that can be written to to send data to S3.
         This will result in a multi-part upload, possibly with each part
         being sent in its own thread '''
 
@@ -213,6 +213,7 @@ class S3Cache(Cache):
 
         md5 = metadata.get('md5',None) if metadata else None
         public = metadata.get('public',False) if metadata else None
+
 
         path = self._prefix(self._rename(rel_path))
 

@@ -11,5 +11,5 @@ semantic_version
 numpy
 pandas
 sqlparse
-
+pygments
 

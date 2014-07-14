@@ -60,7 +60,7 @@ class Test(TestBase):
 TITLE:  A Test Manifest, For Testing
 UID: b4303f85-7d07-471d-9bcb-6980ea1bbf18
 
-First Line of documentation
+This is the test documentation for a file *that is* just for testing.
 
 DESTINATION: spatialite:///tmp/census-race-ethnicity.db
 
@@ -97,36 +97,40 @@ census.gov-acs-geo-p5ye2012-geofile
 
 MVIEW: mview1
 
-SELECT 'mview1'
+SELECT
+     geofile.*,
+     groups.GEOMETRY
+FROM d02G003_geofile as geofile
+LEFT JOIN d025004_blockgroups AS groups ON
+        groups.statefp = geofile.state
+    AND groups.countyfp = geofile.county
+    AND groups.tractce = geofile.tract
+    AND groups.blkgrpce = geofile.blkgrp
+WHERE geofile.state = 6  AND groups.OGC_FID is not NULL AND geofile.sumlevel = 150
 
-MVIEW: mview2
+VIEW: view2
 
-SELECT 'mview2'
+SELECT
+     geofile.*,
+     groups.GEOMETRY
+FROM d02G003_geofile as geofile
+LEFT JOIN d025004_blockgroups AS groups ON
+        groups.statefp = geofile.state
+    AND groups.countyfp = geofile.county
+    AND groups.tractce = geofile.tract
+    AND groups.blkgrpce = geofile.blkgrp
+WHERE geofile.state = 6  AND groups.OGC_FID is not NULL AND geofile.sumlevel = 150
 
 INDEX: name ON table column1, column1
 
-
-doc:
-
-More Documentation
-
-sql:driver1|driver2
-
-one
-two
-three
-
-sql:driver1
-
-four
-five
-
-sql:driver2
-
-seven
-eight
+More Documentation About the following Extract.
 
 EXTRACT: foobar AS csv TO /bin/bar/bingo
+
+## Foodoc
+
+Yet more documentation, about the Fringo extract.
+
 EXTRACT: fringo AS geojson TO /bin/bar/geojson"""
 
     def tearDown(self):
@@ -248,7 +252,6 @@ EXTRACT: fringo AS geojson TO /bin/bar/geojson"""
         m = Manifest(self.m, l, base_dir = '/tmp' )
 
         print m.html_doc()
-
 
     def test_manifest_parser(self):
 

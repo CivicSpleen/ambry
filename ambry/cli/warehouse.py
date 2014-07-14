@@ -72,6 +72,7 @@ def warehouse_parser(cmd):
     whsp.add_argument('-b', '--base-dir', default=None,help='Base directory for installed. Defaults to <ambry-install>/warehouse')
     whsp.add_argument('-d', '--dir', default=None,
                       help='Publication directory for file installs, if different from the work-dir.')
+    whsp.add_argument('-p', '--publish', nargs='?', default=False, help='Publication url')
     whsp.add_argument('term', type=str,help='Name of bundle or partition')
 
     whsp = whp.add_parser('remove', help='Remove a bundle or partition from a warehouse')
@@ -147,11 +148,16 @@ def _warehouse_install(args, l ,config):
     if not args.no_install:
         m.install()
 
+        logger.info('Installed:')
+        for fn in m.file_installs:
+            logger.info('    {}'.format(fn))
+
+
+    if args.publish != False:
+        m.publish(config, args.publish)
+
     if args.gen_doc:
-        print m.gen_doc()
-
-    #print m.html_doc()
-
+        print m.html_doc()
 
 def warehouse_remove(args, w,config):
     from functools import partial
