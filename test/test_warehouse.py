@@ -57,14 +57,20 @@ class Test(TestBase):
         ambry.util.rm_rf(self.rc.group('filesystem').root_dir)
 
     m = """
+TITLE:  A Test Manifest, For Testing
+UID: b4303f85-7d07-471d-9bcb-6980ea1bbf18
 
 First Line of documentation
 
 DESTINATION: spatialite:///tmp/census-race-ethnicity.db
+
+Here is more documentation about the directory:
+
 DIR: /tmp/warehouse
 
-PARTITIONS:
+We've got a while lot of partitions.
 
+PARTITIONS:
 
 sangis.org-business-sites-orig-businesses-geo-0.1.1
 table from sangis.org-business-sites-orig-businesses-geo-0.1.1
@@ -232,12 +238,16 @@ EXTRACT: fringo AS geojson TO /bin/bar/geojson"""
         print yaml.dump(self.m.sections, default_flow_style=False)
 
     def test_manifest_doc(self):
-
+        from ambry.util import get_logger
+        import logging
         from ambry.text import ManifestDoc
 
-        md = ManifestDoc(self.m)
+        l  = get_logger('TL')
+        l.setLevel(logging.DEBUG)
 
+        m = Manifest(self.m, l, base_dir = '/tmp' )
 
+        print m.html_doc()
 
 
     def test_manifest_parser(self):
@@ -257,6 +267,55 @@ EXTRACT: fringo AS geojson TO /bin/bar/geojson"""
             print '----', line
             pprint.pprint( Manifest.parse_partition_line(line))
 
+
+    def test_sql_parser(self):
+
+        sql = """
+SELECT
+    geo.state, -- comment 1
+    geo.county, -- comment 2
+    geo.tract,
+    geo.blkgrp,
+    bb.geometry,
+    CAST(Area(Transform(geometry,26946)) AS REAL) AS area,
+    CAST(b02001001 AS INTEGER) AS total_pop,
+    CAST(b03003001 AS INTEGER) AS total_hisp,
+    CAST(b02001002 AS INTEGER) AS wht_alone,
+    CAST(b02001002*1.0/b02001001 AS REAL) AS wht_frac,
+    CAST(b02001003 AS INTEGER) AS blk_alone,
+    CAST(b02001003*1.0/b02001001 AS REAL) AS blk_frac,
+    CAST(b02001005 AS INTEGER) AS as_alone,
+    CAST(b02001005*1.0/b02001001 AS REAL) AS as_frac,
+    CAST(b03003002 AS INTEGER) AS not_hisp,
+    CAST(b03003003 AS INTEGER) AS hisp,
+    CAST(b03003003*1.0/b02001001 AS REAL) AS hisp_frac,
+    CAST(C17002002+C17002003+C17002004 AS VARCHAR) AS poverty,
+    CAST((C17002002+C17002003+C17002004)*1.0/b02001001 AS REAL) AS pov_frac
+FROM d02G003_geofile  AS geo
+ JOIN d024004_b02001_estimates AS b02001e ON geo.stusab = b02001e.stusab AND geo.logrecno = b02001e.logrecno
+ JOIN d024004_b03002_estimates AS b03002e ON geo.stusab = b03002e.stusab AND geo.logrecno = b03002e.logrecno
+ JOIN d024004_b03003_estimates AS b03003e ON geo.stusab = b03003e.stusab AND geo.logrecno = b03003e.logrecno
+ JOIN d024004_b01001_estimates AS b01001e ON geo.stusab = b01001e.stusab AND geo.logrecno = b01001e.logrecno
+ JOIN d024004_c17002_estimates AS c17002e ON geo.stusab = c17002e.stusab AND geo.logrecno = c17002e.logrecno
+ JOIN blockgroup_boundaries AS bb ON geo.state = bb.state AND geo.county = bb.county AND bb.tract = geo.tract AND bb.blkgrp = geo.blkgrp
+WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
+
+
+"""
+
+        import sqlparse
+        import sqlparse.sql
+
+
+        r =  sqlparse.parse(sql)
+
+        for t in  r[0].tokens:
+            if isinstance(t, sqlparse.sql.IdentifierList):
+                for i in t.get_identifiers():
+                    print i, i.get_alias(),  type(i)
+
+
+        #print sqlparse.format(sql, strip_comments = True, reindent = True)
 
 
     def test_extract(self):

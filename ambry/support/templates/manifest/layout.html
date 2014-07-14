@@ -1,0 +1,13 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
+<html lang="en">
+<head>
+    <title>{{m.title}}</title>
+</head>
+<body>
+{% if m.title -%}<h1 class="title">{{m.title}}</h1>{% endif %}
+{% if m.uid -%}<p class="uid">UID:{{m.uid}}</p>{% endif %}
+{% for line, section in m.sorted_sections -%}
+{% include section.tag+'.html'  ignore missing -%}
+{% endfor %}
+</body>
+</html>

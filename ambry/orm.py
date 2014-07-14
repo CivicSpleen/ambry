@@ -237,7 +237,6 @@ class Dataset(Base):
     revision = SAColumn('d_revision',Integer, nullable=False)
     version = SAColumn('d_version',String(20), nullable=False)
 
-
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
     path = None  # Set by the LIbrary and other queries. 
@@ -686,15 +685,21 @@ Columns:
         </table>
         """.format(**self.dict)
 
+        return t1+self.html_table()
+
+    def html_table(self):
+        ''''''
+
         rows = []
         rows.append(
             "<tr><th>#</th><th>Name</th><th>Datatype</th><th>description</th></tr>")
         for c in self.columns:
-            rows.append("<tr><td>{sequence_id:d}</td><td>{name:s}</td><td>{schema_type:s}</td><td>{description}</td></tr>".format(**c.dict))
+            rows.append(
+                "<tr><td>{sequence_id:d}</td><td>{name:s}</td><td>{schema_type:s}</td><td>{description}</td></tr>".format(
+                    **c.dict))
 
+        return "<table>\n" + "\n".join(rows) + "\n</table>"
 
-        return t1+"<table>\n"+"\n".join(rows)+"\n</table>"
-    
     @orm.reconstructor
     def init_on_load(self):
         self._or_validator = None

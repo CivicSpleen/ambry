@@ -430,6 +430,21 @@ class LibraryDb(object):
         except:
             return None
 
+    def get_bundle_value(self, dvid, group, key):
+
+        from ambry.orm import Config as SAConfig
+
+        s = self.session
+
+        try:
+            c = s.query(SAConfig).filter(SAConfig.group == group,
+                                         SAConfig.key == key,
+                                         SAConfig.d_vid == dvid).first()
+
+            return c.value
+        except:
+            return None
+
     @property
     def config_values(self):
 
@@ -867,6 +882,19 @@ class LibraryDb(object):
 
         return  s.query(Table).filter(Table.vid == table_vid).one()
 
+    def tables(self):
+
+        s = self.session
+
+        out = []
+
+        for t in s.query(Table).all():
+            out[t.name] = t.dict
+
+        return out
+
+
+
     def list(self, datasets=None, with_partitions = False,  key='vid'):
         """
         :param datasets: If specified, must be a dict, which the internal dataset data will be
@@ -901,10 +929,9 @@ class LibraryDb(object):
 
             ck = getattr(d.identity, key)
 
-
             if ck not in datasets:
                 datasets[ck] = d.identity
-
+                datasets[ck].summary = self.get_bundle_value(d.vid, 'config','about.title')
 
             if f:
                 if not p:
@@ -944,6 +971,7 @@ class LibraryDb(object):
 
             ck = getattr(d.identity, key)
             datasets[ck] = d.identity
+
 
         return datasets
 

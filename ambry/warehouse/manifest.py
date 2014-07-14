@@ -15,16 +15,19 @@ class null_logger(object):
         pass
 
 
-def new_manifest(ref, logger):
-    return Manifest(ref, logger)
+def new_manifest(ref, logger, library, base_dir):
+    return Manifest(ref, logger, library = library, base_dir = base_dir)
 
 class ParseError(Exception):
     pass
 
 class Manifest(object):
 
-    def __init__(self, file_or_data, logger=None):
+    def __init__(self, file_or_data, logger=None, library=None, base_dir=None):
+        from ..dbexceptions import NotFoundError, ConfigurationError
 
+        self.library = library
+        self.base_dir = base_dir
 
         if file_or_data.startswith('http'):
             import requests
@@ -48,9 +51,33 @@ class Manifest(object):
                 self.data = file_or_data.splitlines()
             self.file = None
 
+
         self.logger = logger if logger else null_logger()
 
         self.sectionalize()
+
+        if not self.base_dir:
+            raise ConfigurationError("Must specify a base dir")
+
+        if not os.path.isdir(self.base_dir):
+            os.makedirs(self.base_dir)
+
+        self.abs_work_dir = os.path.join(self.base_dir, self.work_dir if self.work_dir else None)
+
+        self.pub_dir = self.abs_work_dir
+
+        if not os.path.isdir(self.abs_work_dir):
+            os.makedirs(self.abs_work_dir)
+
+        if not self.work_dir or not os.path.isdir(self.abs_work_dir):
+            raise ConfigurationError("Must specify  work dir ")
+
+
+
+    @property
+    def sorted_sections(self):
+        for line in sorted(self.sections.keys()):
+            yield (line, self.sections[line])
 
     def single_line(self, keyword):
         for line, section in self.sections.items():
@@ -74,6 +101,10 @@ class Manifest(object):
     def uid(self):
         return self.single_line('uid')
 
+    @property
+    def title(self):
+        return self.single_line('title')
+
     def sectionalize(self):
         """Break the file into sections"""
 
@@ -81,29 +112,48 @@ class Manifest(object):
 
         sections = {}
 
-        def make_item(tag, line_number, args):
-            sections[line_number] = dict(tag=tag, line_number=line_number, args=args, lines=[])
+        # These tags have only a single line; revert back to 'doc' afterward
+        singles = ['uid', 'title','extract','dir','destination', 'author', 'url']
 
-        line_number = 1
+        def make_item(tag, i, args):
+            line_number = i + 1
+            sections[line_number] = dict(tag=tag, line_number=line_number, args=args, lines=[])
+            return line_number
+
         tag = 'doc'  # Starts in the Doc section
         args = ''
+        non_tag_is_doc = False
 
-        make_item(tag, line_number, args)
+        line_number =  make_item(tag, 0, args)
 
         for i, line in enumerate(self.data):
+
             line = re.sub(r'#.*$','', line ) # Remove comments
 
             if not line.strip():
+                if non_tag_is_doc:
+                    non_tag_is_doc = False
+                    tag = 'doc'
+                    line_number = make_item(tag, i, None)
                 continue
 
             rx = re.match(r'^(\w+):(.*)$', line.strip())
 
             if rx: # Section tag lines
-                line_number = i+1
+
                 tag = rx.group(1).strip().lower()
                 args = re.sub(r'#.*$','', rx.group(2) ).strip()
-                make_item(tag, line_number, args)
+                line_number = make_item(tag, i, args)
+
+                if tag in singles:
+                    non_tag_is_doc = True
+
                 continue
+
+            elif non_tag_is_doc:
+                non_tag_is_doc = False
+                tag = 'doc'
+                line_number = make_item(tag, i, None)
 
             sections[line_number]['lines'].append(line)
 
@@ -121,7 +171,24 @@ class Manifest(object):
         self.sections = sections
 
     def _process_doc(self, section):
-        return '\n'.join(section['lines'])
+        import markdown
+
+        if section['args']:
+            # Table documentation
+            from collections import OrderedDict
+            out = OrderedDict()
+            for l in section['lines']:
+                parts = l.strip().split(' ',2)
+                name = parts.pop(0) if parts else None
+                type = parts.pop(0) if parts else 'UNK'
+                doc = parts.pop(0).strip() if parts else ''
+                out[name.lower()] = (name, type, doc)
+
+            return out
+        else:
+            t = '\n'.join(section['lines']).strip()
+            # Normal markdown documentation
+            return dict(text=t,html=markdown.markdown(t))
 
     def _process_sql(self, section):
         return sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
@@ -186,6 +253,16 @@ class Manifest(object):
     def documentation(self):
         pass
 
+
+    def documentation_for(self, name):
+        """Return documentation for a table"""
+
+        for line, section in self.sorted_sections:
+
+            if section['tag'] =='doc' and section['args'] == name:
+                return section
+
+        return None
 
     @staticmethod
     def tokenize_line(line):
@@ -287,56 +364,44 @@ class Manifest(object):
             raise ParseError("Failed to parse {} : {}".format(line, e))
 
 
-    def install(self, l, base_dir):
+    def new_warehouse(self):
+        from ..dbexceptions import NotFoundError, ConfigurationError
+        from . import database_config, new_warehouse
+
+        config = database_config(self.destination, self.abs_work_dir)
+
+        w = new_warehouse(config, self.library)
+
+        if not w.exists():
+            w.create()
+
+        return w
+
+    def install(self):
         from os import getcwd, chdir
 
         last_wd = getcwd()
 
         try:
-            self._install(l, base_dir)
+            self._install()
         finally:
             chdir(last_wd)
 
-    def _install(self, l, base_dir):
-        import os.path
+    def _install(self):
+
         from ..dbexceptions import NotFoundError, ConfigurationError
         from ambry.util import init_log_rate
         from ambry.warehouse.extractors import extract
-        from . import database_config, new_warehouse, Logger
+        from . import  Logger
         from ..cache import new_cache
+
+        self.logger.info("Working directory: {}".format(self.abs_work_dir))
 
         # legacy
         m = self
         logger = self.logger
 
-        destination = m.destination
-
-        if not base_dir:
-            raise ConfigurationError("Must specify a base dir")
-
-        if not os.path.isdir(base_dir):
-            os.makedirs(base_dir)
-
-        work_dir = os.path.join(base_dir, m.work_dir if m.work_dir else None)
-
-        pub_dir = work_dir
-
-        if not os.path.isdir(work_dir):
-            os.makedirs(work_dir)
-
-        if not work_dir or not os.path.isdir(work_dir):
-            raise ConfigurationError("Must specify either work dir ")
-
-        os.chdir(work_dir)
-
-        logger.info("Working directory: {}".format(work_dir))
-
-        config = database_config(destination)
-
-        w = new_warehouse(config, l)
-
-        if not w.exists():
-            w.create()
+        w = self.new_warehouse()
 
         w.logger = Logger(logger, init_log_rate(2000))
 
@@ -345,6 +410,8 @@ class Manifest(object):
 
             raise ConfigurationError(
                 "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(uuid.uuid4()))
+
+        results = []
 
         for line in sorted(m.sections.keys()):
             section = m.sections[line]
@@ -362,6 +429,7 @@ class Manifest(object):
                             tables = (pd['tables'][0], pd['where'])
 
                         w.install(pd['partition'], tables)
+
                     except NotFoundError:
                         logger.error("Partition {} not found in external library".format(pd['partition']))
 
@@ -388,10 +456,77 @@ class Manifest(object):
                 dest = c['rpath']
 
                 logger.info("Extracting {} to {} as {}".format(table, format, dest))
-                cache = new_cache(pub_dir)
+                cache = new_cache(self.pub_dir)
                 abs_path = extract(w.database, table, format, cache, dest)
                 logger.info("Extracted to {}".format(abs_path))
 
 
+
     def html_doc(self):
-        from ..web import Web
+        from ..text import ManifestDoc
+
+        md = ManifestDoc(self)
+
+        return md.render()
+
+
+    def gen_doc(self):
+        """Generate schema documentation for direct inclusion in the manifest. This documentation requires having
+        a database and is usually hand-edited, so it cant be fully automatic"""
+        import textwrap
+        out = ""
+
+        w = self.new_warehouse()
+
+        def indent(lines, amount=4, ch=' '):
+            padding = amount * ch
+            return padding + ('\n' + padding).join(lines.split('\n'))
+
+        print self.documentation_for('crime_demo')
+
+        for line, section in self.sorted_sections:
+            if section['tag'] == 'view' or section['tag'] == 'mview':
+
+                doccontent = self.documentation_for(section['args'].lower())
+
+                out += "\n\nDOC: for {}\n".format(section['args'])
+
+                for cols in w.installed_table(section['args']):
+                    default = (cols['name'], cols['type'], '')
+
+                    if doccontent:
+                        (name, type, doc) = doccontent['content'].get(cols['name'].lower(), default)
+                    else:
+                        (name, type, doc) = default
+
+                    out += "    {} {} {}\n".format(name.lower(), type, doc)
+
+            else:
+                continue
+
+
+
+        wl = w.library
+
+
+        return out
+
+        out += '\n\n### Partitions\n\n'
+
+        out += '<table>'
+        out += "</tr><th></th><th>vid</th><th>vname</th><th>summary</th></tr>\n"
+        for dvid, d in  wl.list(with_partitions = True).items():
+            out +=  "<tr><td>{}</td><td>{}</td><td>{}</td></tr>\n".format(dvid, d.vname, d.summary)
+            out += '<table>'
+            out += "</tr><th></th><th>vid</th><th>vname</th><th>time</th><th>space</th><th>grain</th></tr>\n"
+            for pvid, p in d.partitions.items():
+                out += "</tr><td></td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n".format(p.vid, p.vname, p.time, p.space, p.grain)
+            out += '</table>'
+        out += '</table>'
+
+        out += '\n\n'
+
+
+
+
+        return out

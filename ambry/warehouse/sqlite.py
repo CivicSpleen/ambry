@@ -90,6 +90,8 @@ class SqliteWarehouse(RelationalWarehouse):
 
         self.database.connection.connection.cursor().executescript(sql)
 
+
+
     def install_material_view(self, name, sql):
         from pysqlite2.dbapi2 import  OperationalError
         self.logger.info('Installing materialized view {}'.format(name))
@@ -108,12 +110,29 @@ class SqliteWarehouse(RelationalWarehouse):
             self.logger.info('mview_exists {}'.format(name))
             # Ignore if it already exists.
 
-
     def run_sql(self, sql_text):
 
         self.logger.info('Running SQL')
 
         self.database.connection.executescript(sql_text)
+
+    def installed_table(self, name):
+        """Return schema information for tables and views """
+
+        ce = self.database.connection.execute
+
+        out = []
+        for row in ce('PRAGMA table_info({})'.format(name)).fetchall():
+             out.append(
+                dict(
+                    name = row['name'],
+                    type = row['type'] if row['type'] else 'TEXT',
+
+                 ),
+             )
+
+        return out
+
 
 class SpatialiteWarehouse(SqliteWarehouse):
 

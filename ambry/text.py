@@ -10,13 +10,12 @@ class ManifestDoc(object):
 
         self.m = m
 
-        self.env = Environment(loader=PackageLoader('ambry.support', 'templates'))
-
+        self.env = Environment(loader=PackageLoader('ambry.support.templates', 'manifest'))
 
     def render(self):
-        template = self.env.get_template('test.html.jinja')
+        template = self.env.get_template('layout.html')
 
-        return template.render(the='variables', go='here')
+        return template.render(m=self.m)
 
 
 
