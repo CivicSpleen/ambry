@@ -16,8 +16,7 @@ import ambry.util
 
 global_logger = ambry.util.get_logger(__name__)
 #import logging; logger.setLevel(logging.DEBUG) 
- 
- 
+
  
 ##makedirs
 ## Monkey Patch!
@@ -340,7 +339,7 @@ class BundleFilesystem(Filesystem):
 
         import tempfile
         import urlparse
-        import urllib2
+        import urllib2, urllib
 
         cache = self.get_cache_by_name('downloads')
         parsed = urlparse.urlparse(str(url))
@@ -350,6 +349,17 @@ class BundleFilesystem(Filesystem):
 
             source_entry = self.bundle.metadata.sources.get(url)
             url = source_entry.url
+            parsed = urlparse.urlparse(str(url))
+
+        if parsed.scheme  == 's3':
+            # To keep the rest of the code simple, we'll use the S# cache to generate a signed URL, then
+            # download that through the normal process.
+            from cache import new_cache
+
+            s3cache = new_cache("s3://{}".format(parsed.netloc.strip('/')),
+                                run_config = self.bundle.config)
+
+            url = s3cache.path(urllib.unquote_plus(parsed.path.strip('/')))
             parsed = urlparse.urlparse(str(url))
 
         file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')

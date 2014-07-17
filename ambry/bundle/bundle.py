@@ -554,6 +554,9 @@ class BuildBundle(Bundle):
     SCHEMA_REVISED_FILE = 'schema-revised.csv'
     SCHEMA_OLD_FILE = 'schema-old.csv'
 
+    README_FILE = 'README.md'
+    DOC_FILE = 'meta/documentation.md'
+
     def __init__(self, bundle_dir=None):
         """
         """
@@ -738,6 +741,19 @@ class BuildBundle(Bundle):
             if i == md.identity.revision:
                 md.versions[i].version = md.identity.version
 
+        ## Load the documentation
+
+        def read_file(fn):
+            try:
+                with open(self.filesystem.path(fn)) as f:
+                    return f.read()
+            except IOError:
+                return ''
+
+        md.documentation.readme = read_file(self.README_FILE)
+        md.documentation.main = read_file(self.DOC_FILE)
+
+
         md.write_to_dir(write_all=True)
 
 
@@ -755,6 +771,8 @@ class BuildBundle(Bundle):
 
 
                 self.database.rewrite_dataset()
+
+
 
     @property
     def sources(self):
@@ -1128,7 +1146,7 @@ class BuildBundle(Bundle):
                 and self.get_value('process', 'prepared', False))
 
     def prepare_main(self):
-        """This is the methods that is actually called in do_prepare; it dispatched to
+        """This is the methods that is actually called in do_prepare; it dispatches to
         developer created prepare() methods"""
         return self.prepare()
 
@@ -1229,6 +1247,10 @@ class BuildBundle(Bundle):
             try:
                 from ..partition.sqlite import SqlitePartition
                 from ..partition.geo import GeoPartition
+
+                if p.ref:
+                    continue
+
                 self.log("Finalizing partition: {}".format(p.identity.name))
 
                 p.finalize()
@@ -1290,7 +1312,7 @@ class BuildBundle(Bundle):
         return bool(v)
 
     def build_main(self):
-        """This is the methods that is actually called in do_prepare; it dispatched to
+        """This is the methods that is actually called in do_build; it dispatches to
         developer created prepare() methods"""
         self.set_build_state('building')
         return self.build()
@@ -1318,6 +1340,7 @@ class BuildBundle(Bundle):
     # Update is like build, but calls into an earlier version of the package.
     def pre_update(self):
         from time import time
+        from ..identity import Identity
 
         if not self.database.exists():
             raise ProcessError(
@@ -1328,10 +1351,86 @@ class BuildBundle(Bundle):
 
         self._update_time = time()
 
+        self._build_time = time()
+
+        self.update_copy_schema()
+
+        self.log('Copied schema')
+
+        self.update_copy_partitions()
+
         return True
+
+
+    def update_main(self):
+        """This is the methods that is actually called in do_update; it dispatches to
+        developer created update() methods"""
+        return self.update()
+
 
     def update(self):
         return False
+
+    def update_copy_partitions(self):
+
+        prior_ident = self.library.resolve(self.identity.name)
+        prior = self.library.get(prior_ident.vname)
+
+        self.partitions.clean(self.database.session)
+
+        with self.session:
+            for pp in prior.partitions:
+                d = pp.record.dict
+                p, _ = self.partitions._find_or_new( d,  format=d.get('format',None), tables=d.get('tables',None),
+                                                  data=d.get('data',None), create = False)
+                if pp.record.ref: # The referenced partition is also a reference.
+                    p.record.ref = pp.record.ref
+                else:
+                    p.record.ref = pp.vid
+
+                self.log("Copied partition {} to {}".format(pp.identity, p.identity))
+
+
+    def update_copy_schema(self):
+        """Copy the schema from a previous version, updating the vids"""
+        from ..orm import Table, Column
+        from sqlalchemy.exc import IntegrityError
+
+        self.schema.clean()
+
+        tables = []
+        columns = []
+
+        prior_ident = self.library.resolve(self.identity.name)
+        prior = self.library.get(prior_ident.vname)
+
+        s = self.database.session
+
+        ds = self.dataset
+
+        for table in prior.dataset.tables:
+            d =  table.dict
+            del d['vid']
+            t = Table(ds, **d)
+
+            tables.append(t.insertable_dict)
+
+            for column in table.columns:
+                c = Column(t, **column.dict)
+
+                columns.append(c.insertable_dict)
+
+        if tables:
+            s.execute(Table.__table__.insert(), tables)
+            s.execute(Column.__table__.insert(), columns)
+
+        try:
+            s.commit()
+        except IntegrityError as e:
+            self.logger.error("Failed to merge into {}".format(self.dsn))
+            s.rollback()
+            raise e
+
 
     def post_update(self):
         from datetime import datetime
@@ -1341,8 +1440,29 @@ class BuildBundle(Bundle):
             self.set_value('process','updatetime',time() - self._update_time)
             self.update_configuration()
 
+        self.post_build()
 
         return True
+
+    def do_update(self):
+
+        if not self.is_prepared:
+            self.do_prepare()
+
+        if self.pre_update():
+            self.log("---- Update ---")
+            if self.update_main():
+                self.post_update()
+                self.log("---- Done Update ---")
+                r = True
+            else:
+                self.log("---- Update exited with failure ---")
+                r = False
+        else:
+            self.log("---- Skipping Update ---- ")
+            r = False
+
+        return r
 
     # Submit the package to the library
 
@@ -1376,6 +1496,11 @@ class BuildBundle(Bundle):
             self.log("Installed {}".format(dest[0]))
 
             for partition in self.partitions:
+
+                if partition.ref:
+                    self.log("{} is a reference. Not installing file".format(partition.identity))
+                    self.library.database.install_partition(self, partition, commit=True)
+                    continue
 
                 if not os.path.exists(partition.database.path):
                     self.log("{} File does not exist, skipping".format(partition.database.path))
@@ -1473,6 +1598,8 @@ class BuildBundle(Bundle):
                 os.makedirs(dir_)
 
             shutil.copy(b.partition.database.path, newp.database.path)
+
+
 
     def set_args(self, args):
 

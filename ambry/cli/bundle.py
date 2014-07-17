@@ -174,6 +174,12 @@ def bundle_parser(cmd):
     sp = asp.add_parser('incver', help='Increment the version number')
     sp.set_defaults(subsubcommand='incver')
 
+    # Config/Incver Command
+    sp = asp.add_parser('s3urls', help='Add all of the URLS below an S3 prefix as sources. ')
+    sp.set_defaults(subsubcommand='s3urls')
+    sp.add_argument('term', type=str, nargs=1, help='S3url with buckets and prefix')
+
+
     # Info command
     command_p = sub_cmd.add_parser('info', help='Print information about the bundle')
     command_p.set_defaults(subcommand='info')
@@ -469,16 +475,59 @@ def bundle_config(args, b, st, rc):
         from ..identity import Identity
         identity = b.identity
 
-        identity.on.revision = identity.on.revision + 1
+        # Get the latest installed version of this dataset
+        prior_ident = b.library.resolve(b.identity.name)
+
+        if prior_ident:
+            prior_version = prior_ident.on.revision
+        else:
+            prior_version = identity.on.revision
+
+        # Now, update this version to be one more.
+        ident = b.identity
+
+        identity.on.revision = prior_version + 1
 
         identity = Identity.from_dict(identity.ident_dict)
 
         b.update_configuration(identity=identity)
 
+        print identity.fqname
+
+
+    elif args.subsubcommand == 's3urls':
+        return bundle_config_s3urls(args, b, st, rc)
+
     else:
         err("Unknown args: {}".format(args))
 
+def bundle_config_s3urls(args, b, st, rc):
+    from ..cache import new_cache, parse_cache_string
+    import urllib
+    import os, binascii
 
+
+    cache = new_cache(urllib.unquote_plus(args.term[0]), run_config=rc)
+
+    def has_url(url):
+        for k,v in b.metadata.sources.items():
+
+            if v and v.url == url:
+                return True
+
+        else:
+            return False
+
+
+    for e, v in cache.list().items():
+
+        url = cache.s3path(e)
+        if not has_url(url):
+            rand_name = binascii.b2a_hex(os.urandom(6))
+            b.metadata.sources[rand_name].url = url
+            prt("Adding: {}".format(url))
+
+    b.metadata.write_to_dir()
 
 def bundle_repopulate(args, b, st, rc):
     return b.repopulate()

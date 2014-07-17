@@ -1,0 +1,157 @@
+documentation:
+    main: "Processed crime incidents, based on data supplied by SANDAG.\n\nImportant:\n\
+        \n  * See Caveats for limitations and warnings regarding this data. \n  *\
+        \ Use of this data is subject to multiple terms and conditions. See Terms\
+        \ for details. \n\nThis dataset includes geocoded crime incidents from 1 Jan\
+        \ 2007 to 31 March 2013 that were returned by SANDAG for Public Records request\
+        \ 12-075. \n\nThe extracts from the dataset include both CSV files, for use\
+        \ in spreadsheet applications, and ESRI shapefiles, for use in GIS applications.\
+        \ Both files are partitioned by year and include the following fields. Shapefiles\
+        \ also include point geometries for each incident. \n\nMany of the columns\
+        \ use [Clarinova Place Codes](https://sandiegodata.atlassian.net/wiki/display/SDD/Clarinova+Place+Codes)\
+        \ (CPC) to identify places, such as neighborhoods, council districts and communities.\
+        \ \n\n  * date: ISO date, in YY-MM-DD format\n  * year: Four digit year. \n\
+        \  * month: Month number extracted from the date\n  * day: Day number, starting\
+        \ from Jan 1, 2000\n  * week: ISO week of the year\n  * dow: Day of week,\
+        \ as a number. 0 is Sunday\n  * time: Time, in H:MM:SS format\n  * hour: Hour\
+        \ number, extracted from the time\n  * is_night: 1 if time is between dusk\
+        \ and dawn, rounded to nearest hour. All comparisons are performed against\
+        \ the dusk and dawn times for the 15th of the month. \n  * type: Crime category,\
+        \ provided by SANDAG *This is the short crime type*\n  * address: Block address,\
+        \ street and city name\n  * segment_id: segment identifier from SANGID road\
+        \ network data. \n  * city: CPC code for the city. \n  * nbrhood: CPC code\
+        \ for the neighborhood. San Diego only. \n  * community: CPC code for the\
+        \ community planning area. San Diego only.\n  * comm\\_pop: Population of\
+        \ the community area, from the 2010 Census \n  * council: CPC code for the\
+        \ city council district. San Diego only. \n  * council\\_pop: Population of\
+        \ the council area, from the 2010 Census\n  * place: Census place code, for\
+        \ future use. \n  * asr_zone_: Assessor's zone code for nearest parcel. \n\
+        \  * lampdist: Distance to nearest streetlamp in centimeters\n  * state: State.\
+        \ Always \"CA\"\n  * lat: Latitude, provided by the geocoder.\n  * lon: Longitude,\
+        \ provided by the geocoder.\n  * desc: Long description of incident. \n\n\n\
+        City, District and Community Codes\n===================================\n\n\
+        Four of the fields use custom codes to identify geographic regions: \n\n \
+        \ * neighborhood/nbrhood\n  * community\n  * council\n  * city\n\nThese fields\
+        \ use [Clarinova Place Codes](https://sandiegodata.atlassian.net/wiki/display/SDD/Clarinova+Place+Codes),\
+        \ 6 character codes that are designed to be memorable and unambiguous. See\
+        \ the [place codes Google spreadsheet](https://docs.google.com/a/clarinova.com/spreadsheet/ccc?key=0AhnSJoCKXnSUdE1SMXVDYzBGYjVXX3kwUkRBUi1NaHc#gid=0)\
+        \ for a list all of the codes. \n\nAsr\\_zone Codes\n===============\n\nThe\
+        \ integer values in the asr\\_zone field are taken directly from the [SANGIS\
+        \ parcel data](http://rdw.sandag.org/file_store/Parcel/Parcels.pdf). These\
+        \ values are: \n\n\t\u2554\u2550\u2550\u2550\u2550\u2566\u2550\u2550\u2550\
+        \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\
+        \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\
+        \u2550\u2550\u2550\u2550\u2557\n\t\u2551 -1 \u2551 Unset                 \
+        \          \u2551\n\t\u2551  0 \u2551 Unzoned                         \u2551\
+        \n\t\u2551  1 \u2551 Single family residential (R-1) \u2551\n\t\u2551  2 \u2551\
+        \ Minor multiple (R-2)            \u2551\n\t\u2551  3 \u2551 Restricted multiple\
+        \ (R-3)       \u2551\n\t\u2551  4 \u2551 Multiple residential (R-4)      \u2551\
+        \n\t\u2551  5 \u2551 Restricted commercial           \u2551\n\t\u2551  6 \u2551\
+        \ Commercial                      \u2551\n\t\u2551  7 \u2551 Industrial (M\
+        \ zone)             \u2551\n\t\u2551  8 \u2551 Agricultural              \
+        \      \u2551\n\t\u2551  9 \u2551 Special and/or misc.            \u2551\n\
+        \t\u255A\u2550\u2550\u2550\u2550\u2569\u2550\u2550\u2550\u2550\u2550\u2550\
+        \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\
+        \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\
+        \u2550\u255D\t\t\t\t\n\n\n\nAddresses and Geocoding\n=======================\n\
+        SANDAG returns the position of incidents as a block address, and occasionally\
+        \ as an intersection. Block addresses are the original address of the incident,\
+        \ with the last two digits set to '00'. \n\nBefore geocoding, all of the original\
+        \ block addresses are normalized to be more consistent and to remove different\
+        \ versions of the same address. There are a few transformations performed\
+        \ on the address, including:\n\n  * Converting street types synonyms like\
+        \ 'Avenue', 'Avenu' and 'ave.' to standard abbreviations like 'ave.'\n  *\
+        \ Converting street directions ( 'West main Street' ) to abbreviations like\
+        \ 'W Main st'\n\nMany geocoders are designed to work with mailable addresses,\
+        \ and block addresses are not real postal addresses. This data is geocoded\
+        \ with custom code that uses the SANGIS streets database, matching the block\
+        \ addresses to a street segment. This produces more sensible results, because\
+        \ the crime is attributed to an entire block, rather than to an arbitrary\
+        \ point on the block. However, with the crime is represented as a point, it\
+        \ will appear at the location of the center of the street segment, usually\
+        \ in the middle of the block. \n\nThis means that all of the incidents on\
+        \ a block will appear at a single location. In most GIS programs, it is difficult\
+        \ to see that there are actually many points in one place. Be aware that each\
+        \ point you see may actually be dozens of incidents. \n\nThe files that SANDAG\
+        \ returned included 1,008,524 incident records, and 953,824 records were geocoded\
+        \ (95%). The 'gctype' field has a value of NONE when the  record was not geocoded,\
+        \ and any field that depends on a locations, such as x, y, lon, lat, segment_id,\
+        \ community, and others, will have default values. \n\nCaveats\n=======\n\n\
+        As with most crime data, there are many issues, limitations and problems that\
+        \ users must be aware of to avoid making incorrect conclusions. \n\n*Crime\
+        \ incident data is inherently problematic.* Crime incident reports are collected\
+        \ by busy officers in stressful situations who are trying to describe complex\
+        \ situations with rigid categories. Virtually every point of the data collection\
+        \ process has multiple opportunities for errors and few opportunities for\
+        \ correction after the fact. Analysts must consider the difficulties of collecting\
+        \ crime data when assessing the validity of any conclusions. \n\n*Data is\
+        \ collected by 19 different agencies.* While the data is all sourced from\
+        \ SANDAG, it originates with 19 different police departments. These departments\
+        \ may have different policies that can result in different categorizations\
+        \ for the same crime, and they may have different emphases on  which crimes\
+        \ they pursue. \n\n*Many incidents at a single point.* Because all of the\
+        \ crimes on a block are geocoded to the middle of the block, many incidents\
+        \ will appear as a single point. \n\n*5% of crimes are not geocoded*. GIS\
+        \ users should consider that about 5% of the incidents were not properly geocoded,\
+        \ and are not included in the shapefiles. These crimes appear in the CSV files,\
+        \ and can be included in time series analysis, but they will not be available\
+        \ for spatial analysis. \n\n*Time and dates are often unreliable* Time and\
+        \ dates for many incidents are unreliable, with times being more unreliable\
+        \ than dates. \n\n  * Property crimes that occur while the owner is gone may\
+        \ be recorded as the time a responsible person left the property, arrived\
+        \ at the property to discover the crime, or the average between the two. There\
+        \ is no information available to select among these possibilities, so these\
+        \ incidents have very unreliable times. \n\n  * Because the time is unreliable,\
+        \ so is the date, for crimes that occurred at night. \n\n  * Times may have\
+        \ not been recorded in the original report. These times may be entered as\
+        \ midnight, or as another time. \n\n\n*Multiple crime incidents may not have\
+        \ all crimes recorded.* If a single person is charged with multiple violations\
+        \ for a single arrest, departments may enter only the most serious charge,\
+        \ the last charge, or all of the charges. There is no information to disambiguate\
+        \ these possibilities. \n\n*Locations may be unreliable*. Crimes that involve\
+        \ pursuits or violations committed and multiple locations may be recorded\
+        \ and any of many different locations.  When the location is ambiguous, tt\
+        \ is common for incidents to have the address recorded as the location where\
+        \ the arrested person was charged. Because of this, the highest crime block\
+        \ in San Diego is the downtown police station. Check high crime locations\
+        \ to ensure they are not police stations. \n\n\nDataset Statistics\n==================\n\
+        \nNumber of incidents by year:\n\n\tyear        count     \n\t---------- \
+        \ ----------\n\t2007        186014    \n\t2008        178445    \n\t2009 \
+        \       163646    \n\t2010        160133    \n\t2011        147270    \n\t\
+        2012        141318    \n\t2013        31699\n\nCrime types, from the \"type\"\
+        \ field, and the number of that type\n\n\ttype                      count\
+        \     \n\t------------------------  ----------\n\tDRUGS/ALCOHOL VIOLATIONS\
+        \  230462    \n\tTHEFT/LARCENY             138030    \n\tVEHICLE BREAK-IN/THEFT\
+        \    123955    \n\tMOTOR VEHICLE THEFT       97498     \n\tBURGLARY      \
+        \            91695     \n\tVANDALISM                 83912     \n\tASSAULT\
+        \                   70687     \n\tDUI                       58311     \n\t\
+        FRAUD                     55219     \n\tROBBERY                   22685  \
+        \   \n\tSEX CRIMES                22281     \n\tWEAPONS                  \
+        \ 11117     \n\tARSON                     2145      \n\tHOMICIDE         \
+        \         528\n\nIncidents by city:\n\n\tname                       code \
+        \       count     \n\t-------------------------  ----------  ----------\n\t\
+        San Diego                  SndSAN      401787    \n\tS.D. County         \
+        \       SndSDO      342282    \n\tOceanside                  SndOCN      44022\
+        \     \n\tChula Vista                SndCHU      38387     \n\tEscondido \
+        \                 SndESC      26079     \n\tVista                      SndVIS\
+        \      20044     \n\tCarlsbad                   SndCAR      18330     \n\t\
+        La Mesa                    SndLAM      17871     \n\tEl Cajon            \
+        \       SndELC      16548     \n\tNational City              SndNAT      16509\
+        \     \n\tSan Marcos                 SndSNM      14230     \n\tSantee    \
+        \                 SndSNT      12328     \n\tEncinitas                  SndENC\
+        \      12302     \n\tPoway                      SndPOW      8565      \n\t\
+        Imperial Beach             SndIMP      5442      \n\tDel Mar             \
+        \       SndDEL      4876      \n\tLemon Grove                SndLEM      4198\
+        \      \n\tCoronado                   SndCOR      2466      \n\tSolana Beach\
+        \               SndSOL      2259\n\n\nCitation\n=========\n\n*Name of file*,\
+        \ extracted from {bundle_name}. San Diego Regional Data Library. {date} http://sandiegodata.org\n\
+        \n\nTerms\n=======================\n\nThis data is released under the following\
+        \ terms and conditions. \n\nClarinova and the San Diego Regional Data Library\
+        \ disclaim any warranty for this data shall not be liable for loss or harm.\
+        \ [See the SDRDL Disclaimers and Limitations web page for complete details.](http://www.sandiegodata.org/get-data/data-disclaimers-and-limitations/)\n\
+        \nThis data is based on data from SANGIS, which is subject to its own terms\
+        \ and conditions. See the [SANGIS Legal Notice for details](http://www.sangis.org/Legal_Notice.htm).\
+        \ \n\nThis data is based on data from SANDAG, which is subject to its own\
+        \ terms and conditions. See the [SANDAG Legal Notice for details](http://rdw.sandag.org/m).\
+        \ \n\n"
+    readme: What do you know? A readme!

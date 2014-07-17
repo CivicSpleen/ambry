@@ -512,7 +512,7 @@ class Column(Base):
         self.table_name = kwargs.get("table_name",None) 
 
         if not self.name:
-            raise ValueError('Column must have a name')
+            raise ValueError('Column must have a name. Got: {}'.format(kwargs))
 
         self.t_id = table.id_
         self.t_vid = table.vid
@@ -525,7 +525,7 @@ class Column(Base):
     @property
     def dict(self):
         x = {k: v for k, v in self.__dict__.items()
-             if k in ['id_', 'vid', 't_vid',
+             if k in ['id_', 'vid', 't_vid','t_id',
                       'sequence_id', 'name', 'altname', 'is_primary_key', 'datatype', 'size',
                       'precision', 'width', 'sql', 'flags', 'description', 'keywords', 'measure',
                       'units', 'universe', 'scale', 'data']}
@@ -533,14 +533,13 @@ class Column(Base):
             raise Exception(self.__dict__)
 
         x['schema_type'] = self.schema_type
+
         return x
 
 
     @property
     def insertable_dict(self):
         x =  {('c_' + k).strip('_'): v for k, v in self.dict.items()}
-
-
 
         return x
 
@@ -1102,6 +1101,7 @@ class Partition(Base):
     name = SAColumn('p_name',String(200), nullable=False, index=True)
     vname = SAColumn('p_vname',String(200), unique=True, nullable=False, index=True)
     fqname = SAColumn('p_fqname',String(200), unique=True, nullable=False, index=True)
+    ref = SAColumn('p_ref', String(200), index=True)
     cache_key = SAColumn('p_cache_key',String(200), unique=True, nullable=False, index=True)
     sequence_id = SAColumn('p_sequence_id',Integer)
     t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'), index=True)
@@ -1137,7 +1137,8 @@ class Partition(Base):
         self.vid = kwargs.get("vid", kwargs.get("id_", None))
         self.id_ = kwargs.get("id",kwargs.get("id_",None)) 
         self.name = kwargs.get("name",kwargs.get("name",None)) 
-        self.vname = kwargs.get("vname",None) 
+        self.vname = kwargs.get("vname",None)
+        self.ref = kwargs.get("ref", None)
         self.fqname = kwargs.get("fqname",None)
         self.cache_key = kwargs.get("cache_key",None)
         self.sequence_id = kwargs.get("sequence_id",None) 
@@ -1191,11 +1192,12 @@ class Partition(Base):
     @property
     def dict(self):
 
-        return {
+        d =  {
                  'id':self.id_, 
                  'vid':self.vid,
                  'name':self.name,
                  'vname':self.vname,
+                 'ref': self.ref,
                  'fqname':self.fqname,
                  'cache_key':self.cache_key,
                  'd_id': self.d_id,
@@ -1210,6 +1212,11 @@ class Partition(Base):
                  'format': self.format if self.format else 'db'
                 }
 
+        if 'tables' in self.data:
+            d['tables'] = self.data['tables'] # Allows passing dict into bundle.partitions.new_partition
+
+
+        return d
 
     @property
     def insertable_dict(self):

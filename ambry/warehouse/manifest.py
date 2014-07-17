@@ -230,12 +230,12 @@ class Manifest(object):
 
     def _process_mview(self, section):
         t = sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
-        md = '\n'.join(['    '+l for l in t.splitlines()])
+
         return dict(text=t,html=self.pygmentize_sql(t))
 
     def _process_view(self, section):
         t = sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
-        md = '\n'.join(['    ' + l for l in t.splitlines()])
+
         return dict(text=t,html=self.pygmentize_sql(t))
 
     def _process_extract(self, section):
@@ -502,12 +502,14 @@ class Manifest(object):
                 w.create_index(c['name'], c['table'], c['columns'])
 
             elif tag == 'mview':
-                w.install_material_view(section['args'], section['content'])
+                w.install_material_view(section['args'], section['content']['text'])
 
             elif tag == 'view':
-                w.install_view(section['args'], section['content'])
+                w.install_view(section['args'], section['content']['text'])
 
             elif tag == 'extract':
+                import os
+
                 c = section['content']
                 table = c['table']
                 format = c['format']
@@ -518,16 +520,33 @@ class Manifest(object):
                 abs_path = extract(w.database, table, format, working_cache, dest)
                 logger.info("Extracted to {}".format(abs_path))
 
-                self.file_installs.add(abs_path)
-                self.publishable.add(abs_path)
+                if os.path.isfile(abs_path):
+                    self.file_installs.add(abs_path)
+                    self.publishable.add(abs_path)
 
+                    c['dlrpath'] = c['rpath']
+
+                elif os.path.isdir(abs_path):
+                    logger.info("Zipping directory {}".format(abs_path))
+
+                    import zipfile
+                    zfn = abs_path+".zip"
+                    c['dlrpath'] = c['rpath']+".zip"
+                    zf = zipfile.ZipFile(zfn, 'w')
+
+                    for root, dirs, files in os.walk(abs_path):
+                        for f in files:
+                            zf.write(os.path.join(root, f), dest)
+                        zf.close()
+
+                    self.file_installs.add(abs_path)
+                    self.publishable.add(zfn)
 
         fn = 'documentation.html'
         working_cache.put_stream(fn).write(m.html_doc())
-
-        self.publishable.add(working_cache.path(fn))
-        self.file_installs.add(working_cache.path(fn))
-
+        afn = working_cache.path(fn)
+        self.file_installs.add(afn)
+        self.publishable.add(afn)
 
     def publish(self, run_config, dest=None):
 
@@ -542,7 +561,12 @@ class Manifest(object):
         if 'account' in cache_config:
             cache_config['account'] = run_config.account(cache_config['account'])
 
+        if cache_config.get('prefix', False):
+            cache_config['prefix'] = cache_config['prefix'] + '/' + self.uid
+
         pub = new_cache(cache_config)
+
+
 
         for p in self.publishable:
 
@@ -554,14 +578,11 @@ class Manifest(object):
 
             self.logger.info("Publishing: {}".format(rel))
             pub.put(p, rel, metadata=meta)
+            self.logger.info("Published: {}".format(pub.path(rel, public_url = True)))
 
-            self.logger.info("Published: {}".format(pub.path(rel)))
-
-        # Write the documentation seperately, since it will require extract paths that are relative to
-        # the web files we just wrote.
-
-
-
+        self.logger.info("Publishing manifest file")
+        pub.put(self.file, 'manifest.ambry')
+        self.logger.info("Published: {}".format(pub.path('manifest.ambry', public_url = True)))
 
 
     def html_doc(self):

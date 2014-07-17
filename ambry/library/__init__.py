@@ -337,12 +337,20 @@ class Library(object):
 
                 partition = bundle.partitions.get(dataset.partition.vid)
 
+
                 if not partition:
                     from ..dbexceptions import NotFoundError
                     raise NotFoundError('Failed to get partition {} from bundle at {} '
                                         .format(dataset.partition.fqname, dataset.cache_key))
 
                 arc = AltReadCache(self.cache, self.remote_stack)
+
+                # If the partition has a reference, get that instead. This will load it into the local file
+                if partition.ref:
+                    ref_partition = self.resolve(partition.ref)
+                else:
+                    ref_partition = partition
+
                 abs_path = arc.get(partition.identity.cache_key, cb=cb)
 
                 if not abs_path or not os.path.exists(abs_path):

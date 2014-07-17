@@ -3,13 +3,12 @@
 import os
 from ambry.dbexceptions import ConfigurationError
 
-def new_cache(config, root_dir='no_root_dir'):
+def new_cache(config, root_dir='no_root_dir', run_config=None):
         """Return a new :class:`FsCache` built on the configured cache directory
         """
 
         if isinstance(config, basestring):
             config = parse_cache_string(config, root_dir)
-
 
         if 'size' in config:
             from filesystem import FsLimitedCache
@@ -22,7 +21,13 @@ def new_cache(config, root_dir='no_root_dir'):
                 from remote import HttpCache
                 fsclass = HttpCache
         elif 'account' in config:
-            
+
+            if isinstance(config['account'], basestring):
+                if not run_config:
+                    raise ConfigurationError("Config has an account, but run_config was not specified to resolve the account")
+
+                config['account'] = run_config.account(config['account'])
+
             if config['account']['service'] == 's3':
                 from s3 import S3Cache
                 fsclass = S3Cache
@@ -65,12 +70,12 @@ def parse_cache_string(remote, root_dir='no_root_dir'):
 
     config['options'] = []
 
-    # s3://bucket/prefix
-    # Account name handle is the same as the bucket
+
     if scheme == 'file' or not bool(scheme) :
         config['dir'] = parts.path
 
-
+    # s3://bucket/prefix
+    # Account name handle is the same as the bucket
     elif scheme == 's3':
 
         config['bucket'] = parts.netloc

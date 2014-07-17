@@ -558,6 +558,12 @@ class Test(TestBase):
         self.bundle.update_configuration()
 
 
+    def test_doc(self):
+
+        b = self.bundle
+
+        b.update_configuration()
+
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))

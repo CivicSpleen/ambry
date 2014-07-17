@@ -100,7 +100,34 @@ class S3Cache(Cache):
                 from ..dbexceptions import NotFoundError
                 raise NotFoundError("Didn't find key for {}/{}, {} ".format(self.bucket_name, self.prefix, rel_path))
 
-            return k.generate_url(300, method=method) # expires in 5 minutes
+            if kwargs.get('public_url', False):
+                url =  k.generate_url(1, method=method)
+                url, _ = url.split('?',2)
+                return url
+            else:
+                if kwargs.get('expire_time', False):
+                    time = int(kwargs['expire_time'])
+                else:
+                    time = 300
+
+                return k.generate_url(time, method=method) # expires in 5 minutes
+
+    def s3path(self, rel_path):
+        """Return the path as an S3 schema"""
+        import urlparse
+
+        path = self.path(rel_path, public_url = True)
+
+        parts = list(urlparse.urlparse(path))
+
+        parts[0] = 's3'
+        parts[1] = self.bucket_name
+
+        return urlparse.urlunparse(parts)
+
+
+
+
 
     @property
     def cache_dir(self):

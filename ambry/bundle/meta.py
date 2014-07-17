@@ -18,6 +18,11 @@ class About(DictGroup):
     tags = ListTerm()
     groups = ListTerm()
 
+class Documentation(DictGroup):
+
+    readme = ScalarTerm()
+    main = ScalarTerm()
+
 class ContactTerm(DictTerm):
 
     name = ScalarTerm()
@@ -118,5 +123,6 @@ class Top(Metadata):
     build = Build(file='meta/build.yaml')
     extract = Extract(file='meta/build.yaml')
     external_documentation = ExtDoc(file='bundle.yaml')
+    documentation = Documentation(file='meta/doc.yaml')
     versions = Versions(file='bundle.yaml')
 

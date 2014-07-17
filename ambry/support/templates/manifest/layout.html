@@ -37,6 +37,7 @@
             </div>
             <div class="col-md-9">
                 <div class="ambry-manifest">
+
                 {% for line, section in m.sorted_sections -%}
                 {% include section.tag+'.html'  ignore missing -%}
                 {% endfor %}

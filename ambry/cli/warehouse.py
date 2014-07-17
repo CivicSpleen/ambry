@@ -135,7 +135,7 @@ def _warehouse_install(args, l ,config):
     try:
         d =  config.filesystem('warehouse')
 
-        base_dir = d['dir']
+        base_dir = args.base_dir if args.base_dir else d['dir']
 
     except ConfigurationError:
         base_dir = args.base_dir
