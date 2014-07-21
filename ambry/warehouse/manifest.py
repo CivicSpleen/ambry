@@ -20,19 +20,20 @@ class null_logger(object):
         pass
 
 
-def new_manifest(ref, logger, library, base_dir):
-    return Manifest(ref, logger, library = library, base_dir = base_dir)
+def new_manifest(ref, logger, library, base_dir, force=False):
+    return Manifest(ref, logger, library = library, base_dir = base_dir, force=force)
 
 class ParseError(Exception):
     pass
 
 class Manifest(object):
 
-    def __init__(self, file_or_data, logger=None, library=None, base_dir=None, pub_dest=None):
+    def __init__(self, file_or_data, logger=None, library=None, base_dir=None, pub_dest=None, force=False):
         from ..dbexceptions import NotFoundError, ConfigurationError
 
         self.library = library
         self.base_dir = base_dir
+        self.force = force
 
         if file_or_data.startswith('http'):
             import requests
@@ -85,14 +86,19 @@ class Manifest(object):
         if not self.work_dir or not os.path.isdir(self.abs_work_dir):
             raise ConfigurationError("Must specify  work dir ")
 
-
         self.file_installs = set()
         self.publishable = set()
+        self.installed_partitions = list()
 
     @property
     def sorted_sections(self):
         for line in sorted(self.sections.keys()):
             yield (line, self.sections[line])
+
+    def tagged_sections(self, tag):
+        for line in sorted(self.sections.keys()):
+            if self.sections[line]['tag'] == tag:
+                yield (line, self.sections[line])
 
     def single_line(self, keyword):
         for line, section in self.sections.items():
@@ -118,6 +124,10 @@ class Manifest(object):
         return self.single_line('publication')
 
     @property
+    def ckan(self):
+        return self.single_line('ckan')
+
+    @property
     def work_dir(self):
         return self.single_line('dir')
 
@@ -128,6 +138,30 @@ class Manifest(object):
     @property
     def title(self):
         return self.single_line('title')
+
+    @property
+    def bundles(self):
+        """Metadata for bundles, each with the partitions that are installed here. """
+
+        bundles = {}
+
+        for p in self.partitions:
+            b_ident = p['bundle']
+
+            if not b_ident.vid in bundles:
+                b = self.library.get(b_ident.vid)
+                bundles[b_ident.vid] = dict(
+                    partitions = [],
+                    metadata = b.metadata,
+                    ident = b_ident
+                )
+
+            bundles[b_ident.vid]['partitions'].append(p)
+
+        return bundles
+
+
+
 
     def pygmentize_sql(self,c):
 
@@ -272,23 +306,29 @@ class Manifest(object):
             try:
                 d = Manifest.parse_partition_line(line)
 
-                partitions.append(d)
-
                 if self.library:
-                    ident = self.library.resolve(d['partition']).partition
+                    b = self.library.resolve(d['partition'])
 
-                    html +=row('td',ident.as_dataset().vid, ident.vid, ident.vname,
-                               ident.time if ident.time else '',
-                               ident.space if ident.space else '',
-                               ident.grain if ident.grain else '',
-                               ident.format if ident.format else '',
-                               d['tables'] if d['tables'] else '')
+                    d['bundle'] = b
+                    d['ident']  = b.partition
+
+                    ident = b.partition
+                    d['config']=dict(
+                        time=ident.time if ident.time else '',
+                        space=ident.space if ident.space else '',
+                        grain=ident.grain if ident.grain else '',
+                        format=ident.format if ident.format else '',
+                    )
+
+
+                partitions.append(d)
 
             except ParseError as e:
                 raise ParseError("Failed to parse line #{}: {}".format(start_line+i, e))
 
         html += '</table>'
 
+        self.partitions = partitions
         return dict(partitions=partitions, html=html)
 
 
@@ -333,8 +373,9 @@ class Manifest(object):
             (r"as", lambda scanner, token: ("AS", token)),
             (r"to", lambda scanner, token: ("TO", token)),
             (r"on", lambda scanner, token: ("ON", token)),
+            (r"prefix", lambda scanner, token: ("PREFIX", token)),
             (r"where.*", lambda scanner, token: ("WHERE", token)),
-            (r"[a-z0-9\.\-_]+", lambda scanner, token: ("NAME", token)),
+            (r"[a-z0-9\.\-_\']+", lambda scanner, token: ("NAME", token)),
             (r"\s+", None),  # None == skip token.
             (r",\s*", lambda scanner, token: ("SEP", token)),
             (r"[^\s]+", lambda scanner, token: ("OTHER", token)),
@@ -413,10 +454,20 @@ class Manifest(object):
             except (TypeError, ValueError):
                 where = None
 
+            try:
+                (_, prefix), tokens = Manifest.extract_next('PREFIX', 'NAME', tokens)
+
+                prefix = re.sub(r'^where', '', prefix, flags=re.IGNORECASE).strip().strip("'")
+
+
+            except (TypeError, ValueError):
+                prefix = None
+
             return dict(
                 partition=partition,
                 tables = tables,
-                where = where
+                where = where,
+                prefix = prefix
             )
 
         except Exception as e:
@@ -470,12 +521,14 @@ class Manifest(object):
 
         working_cache = new_cache(self.abs_work_dir)
 
+        ## First pass
         for line in sorted(m.sections.keys()):
             section = m.sections[line]
 
             tag = section['tag']
 
-            logger.info("== Processing manifest section {} at line {}".format(section['tag'], section['line_number']))
+            if tag in ('partitions','sql','index','mview','view'):
+                logger.info("== Processing manifest section {} at line {}".format(section['tag'], section['line_number']))
 
             if tag == 'partitions':
                 for pd in section['content']['partitions']:
@@ -487,6 +540,7 @@ class Manifest(object):
                             tables = (pd['tables'][0], pd['where'])
 
                         w.install(pd['partition'], tables)
+                        self.installed_partitions.append(pd['partition'])
 
                     except NotFoundError:
                         logger.error("Partition {} not found in external library".format(pd['partition']))
@@ -502,12 +556,21 @@ class Manifest(object):
                 w.create_index(c['name'], c['table'], c['columns'])
 
             elif tag == 'mview':
-                w.install_material_view(section['args'], section['content']['text'])
+                w.install_material_view(section['args'], section['content']['text'], clean=self.force)
 
             elif tag == 'view':
                 w.install_view(section['args'], section['content']['text'])
 
-            elif tag == 'extract':
+        ## Second Pass. Extracts must come after everything else.
+        for line in sorted(m.sections.keys()):
+            section = m.sections[line]
+
+            tag = section['tag']
+
+            if tag in ('extract'):
+                logger.info("== Processing manifest section {} at line {}".format(section['tag'], section['line_number']))
+
+            if tag == 'extract':
                 import os
 
                 c = section['content']
@@ -516,9 +579,11 @@ class Manifest(object):
                 dest = c['rpath']
 
                 logger.info("Extracting {} to {} as {}".format(table, format, dest))
+                extracted, abs_path = extract(w.database, table, format, working_cache, dest, force=self.force)
 
-                abs_path = extract(w.database, table, format, working_cache, dest)
-                logger.info("Extracted to {}".format(abs_path))
+                if not extracted:
+                    logger.info("Skipping {}; it already existed".format(dest))
+
 
                 if os.path.isfile(abs_path):
                     self.file_installs.add(abs_path)
@@ -542,11 +607,39 @@ class Manifest(object):
                     self.file_installs.add(abs_path)
                     self.publishable.add(zfn)
 
+        self.write_documentation(working_cache)
+
+
+    def write_documentation(self, cache):
         fn = 'documentation.html'
-        working_cache.put_stream(fn).write(m.html_doc())
-        afn = working_cache.path(fn)
+        cache.put_stream(fn).write(self.html_doc())
+        afn = cache.path(fn)
         self.file_installs.add(afn)
         self.publishable.add(afn)
+
+
+        bundles = {}
+        for p_name in self.installed_partitions:
+            ident = self.library.resolve(p_name).partition
+            b = self.library.get(ident.vid)
+            bundles[b.identity.vid] = b
+            # Write the partition documentation
+            p = b.partition
+            fn = ident.vid+".html"
+            cache.put_stream(fn).write(p.html_doc())
+            afn = cache.path(fn)
+            self.file_installs.add(afn)
+            self.publishable.add(afn)
+
+        for b in bundles.values():
+            fn = b.identity.vid + ".html"
+            cache.put_stream(fn).write(b.html_doc())
+            afn = cache.path(fn)
+            self.file_installs.add(afn)
+            self.publishable.add(afn)
+
+            b.close()
+
 
     def publish(self, run_config, dest=None):
 
@@ -566,8 +659,6 @@ class Manifest(object):
 
         pub = new_cache(cache_config)
 
-
-
         for p in self.publishable:
 
             rel = p.replace(self.abs_work_dir, '', 1).strip('/')
@@ -584,6 +675,9 @@ class Manifest(object):
         pub.put(self.file, 'manifest.ambry')
         self.logger.info("Published: {}".format(pub.path('manifest.ambry', public_url = True)))
 
+    def publish_ckan(self,d):
+
+        pass
 
     def html_doc(self):
         from ..text import ManifestDoc
@@ -591,7 +685,6 @@ class Manifest(object):
         md = ManifestDoc(self)
 
         return md.render()
-
 
     def gen_doc(self):
         """Generate schema documentation for direct inclusion in the manifest. This documentation requires having
@@ -626,7 +719,6 @@ class Manifest(object):
 
             else:
                 continue
-
 
 
         wl = w.library

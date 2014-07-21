@@ -341,6 +341,15 @@ class PartitionBase(PartitionInterface):
     def extension(cls):
         return cls._id_class._name_class.PATH_EXTENSION
 
+
+
+    def html_doc(self):
+        from ..text import PartitionDoc
+
+        pd = PartitionDoc(self)
+
+        return pd.render()
+
     @property
     def info(self):
         """Returns a human readable string of useful information"""

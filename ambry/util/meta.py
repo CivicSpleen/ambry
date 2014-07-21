@@ -776,7 +776,10 @@ class Term(object):
         if self._key is None:
             raise Exception(self._key)
         else:
-            return instance._term_values.get(self._key).get()
+            try:
+                return instance._term_values.get(self._key).get()
+            except TypeError:
+                return None
 
     def get(self):
         '''Return the value type for this Term'''

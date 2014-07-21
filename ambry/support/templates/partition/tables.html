@@ -1,0 +1,15 @@
+<table class="table_toc table table-striped table-bordered table-condensed">
+    <tr>
+        <th>Name</th>
+        <th>Id</th>
+        <th>Description</th>
+    </tr>
+    {% for table_name in p.tables -%}
+    {% set table = p.get_table(table_name) %}
+    <tr>
+        <td>{{table.name}}</td>
+        <td>{{table.id}}</td>
+        <td>{{table.description}}</td>
+    </tr>
+    {% endfor %}
+</table>

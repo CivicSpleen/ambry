@@ -9,10 +9,9 @@ import ogr
 class ExtractError(Exception):
     pass
 
-def extract(database, table, format, cache, dest):
+def extract(database, table, format, cache, dest, force=False):
 
     from ambry.warehouse.extractors import CsvExtractor
-
 
     ex = dict(
         csv=CsvExtractor(),
@@ -23,20 +22,22 @@ def extract(database, table, format, cache, dest):
     if not ex:
         raise ValueError("Unknown format name '{}'".format(format))
 
-    if not cache.has(dest):
-
-        ex.extract(database, table, cache, dest)
-
-    return cache.path(dest)
+    return ex.extract(database, table, cache, dest, force=force)
 
 class CsvExtractor(object):
 
     def __init__(self):
         pass
 
-    def extract(self, database, table, cache, dest):
+    def extract(self, database, table, cache, dest, force=False):
 
         import unicodecsv
+
+        if cache.has(dest):
+            if force:
+                cache.remove(dest, True)
+            else:
+                return False, cache.path(dest)
 
         row_gen = database.connection.execute("SELECT * FROM {}".format(table))
 
@@ -47,6 +48,8 @@ class CsvExtractor(object):
                 w.writerow(row.keys())
 
             w.writerow(row)
+
+        return True, cache.path(dest)
 
 class ShapeExtractor(object):
 
@@ -107,9 +110,10 @@ class ShapeExtractor(object):
 
             layer.CreateField(fdfn)
 
-    def extract(self, database, table, cache, dest):
+    def extract(self, database, table, cache, dest, force=False):
 
         import ogr
+        import os
 
         epsg = 4326
 
@@ -119,6 +123,13 @@ class ShapeExtractor(object):
         """.format(epsg, table)
 
         abs_dest = cache.path(dest, missing_ok = True)
+
+        if os.path.exists(abs_dest):
+            if force:
+                from ambry.util import rm_rf
+                rm_rf(abs_dest)
+            else:
+                return False, abs_dest
 
         driver = ogr.GetDriverByName('Esri Shapefile')
         ds = driver.CreateDataSource(abs_dest)
@@ -166,5 +177,7 @@ class ShapeExtractor(object):
 
         ds.SyncToDisk()
         ds.Release()
+
+        return True, abs_dest
 
 

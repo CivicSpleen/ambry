@@ -53,7 +53,6 @@ def new_warehouse(config, elibrary):
 
     if service == 'sqlite':
         from .sqlite import SqliteWarehouse
-
         return SqliteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
 
     if service == 'spatialite':
@@ -122,7 +121,7 @@ class WarehouseInterface(object):
     ## Installation
     ##
 
-    def install(self, partition, tables=None):
+    def install(self, partition, tables=None, prefix=None):
         from ..orm import Partition
 
         results = dict(
@@ -144,7 +143,7 @@ class WarehouseInterface(object):
             self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
             return;
 
-        all_tables = self.install_partition(bundle, p)
+        all_tables = self.install_partition(bundle, p, prefix=prefix)
 
         if not tables:
             tables = all_tables
@@ -174,7 +173,7 @@ class WarehouseInterface(object):
         self.library.database.mark_partition_installed(p_vid)
 
 
-    def install_partition(self, bundle, partition):
+    def install_partition(self, bundle, partition, prefix=None):
         '''Install the records for the partition, the tables referenced by the partition,
         and the bundle, if they aren't already installed'''
         from sqlalchemy.orm.exc import NoResultFound
@@ -374,10 +373,6 @@ class WarehouseInterface(object):
 
 
 
-
-
-
-
 def database_config(db, base_dir=''):
     import urlparse
     import os
@@ -387,7 +382,7 @@ def database_config(db, base_dir=''):
     if parts.scheme == 'sqlite':
         config = dict(service='sqlite', database=dict(dbname=os.path.join(base_dir,parts.path), driver='sqlite'))
     elif parts.scheme == 'spatialite':
-        config = dict(service='spatialite', database=dict(dbname=os.path.join(base_dir,parts.path), driver='sqlite'))
+        config = dict(service='spatialite', database=dict(dbname=os.path.join(base_dir,parts.path), driver='spatialite'))
     elif parts.scheme == 'postgres':
         config = dict(service='postgres',
                       database=dict(driver='postgres',

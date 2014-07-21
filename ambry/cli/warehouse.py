@@ -67,6 +67,7 @@ def warehouse_parser(cmd):
     whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
     whsp.set_defaults(subcommand='install')
     whsp.add_argument('-t', '--test', default=False, action='store_true', help='Load only 100 records per table')
+    whsp.add_argument('-f', '--force', default=False, action='store_true', help='Force re-creation of tables and fiels that already exist')
     whsp.add_argument('-g', '--gen-doc', default=False, action='store_true', help='After installation, generate documentation')
     whsp.add_argument('-n', '--no_install', default=False, action='store_true', help="Don't install")
     whsp.add_argument('-b', '--base-dir', default=None,help='Base directory for installed. Defaults to <ambry-install>/warehouse')
@@ -143,7 +144,7 @@ def _warehouse_install(args, l ,config):
     if not base_dir:
         raise ConfigurationError("Must specify -b for base director,  or set filesystem.warehouse in configuration")
 
-    m = new_manifest(args.term, logger=logger, library=l, base_dir = base_dir)
+    m = new_manifest(args.term, logger=logger, library=l, base_dir = base_dir, force = args.force)
 
     if not args.no_install:
         m.install()

@@ -504,7 +504,6 @@ class Partitions(object):
 
         return partition, False      
 
-
     def new_partition(self, clean=False, tables=None, data=None, **kwargs):
         return self.new_db_partition(clean=clean, tables=tables, data=data, **kwargs)
 

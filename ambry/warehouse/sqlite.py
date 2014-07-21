@@ -92,9 +92,13 @@ class SqliteWarehouse(RelationalWarehouse):
 
 
 
-    def install_material_view(self, name, sql):
+    def install_material_view(self, name, sql, clean=False):
         from pysqlite2.dbapi2 import  OperationalError
         self.logger.info('Installing materialized view {}'.format(name))
+
+        if clean:
+            self.logger.info('mview_remove {}'.format(name))
+            self.database.connection.connection.cursor().executescript("DROP TABLE IF EXISTS {}".format(name))
 
         sql = """
         CREATE TABLE {name} AS {sql}
@@ -145,9 +149,9 @@ class SpatialiteWarehouse(SqliteWarehouse):
             "-dsco SPATIALITE=yes"]
 
 
-    def install_material_view(self, name, sql):
+    def install_material_view(self, name, sql, clean=False):
 
-        super(SpatialiteWarehouse, self).install_material_view(name, sql)
+        super(SpatialiteWarehouse, self).install_material_view(name, sql, clean=clean)
 
         ce = self.database.connection.execute
 
@@ -159,7 +163,3 @@ class SpatialiteWarehouse(SqliteWarehouse):
             cd = types[0][2]
 
             ce("SELECT RecoverGeometryColumn('{}', 'geometry', 4326, '{}', '{}');".format(name, t, cd))
-
-
-
-

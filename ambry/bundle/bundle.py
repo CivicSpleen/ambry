@@ -357,6 +357,13 @@ class Bundle(object):
         return "<table>\n" + "\n".join(out) + "\n</table>"
 
 
+    def html_doc(self):
+        from ..text import BundleDoc
+
+        pd = BundleDoc(self)
+
+        return pd.render()
+
 class DbBundleBase(Bundle):
     """Base class for DbBundle and LibraryDbBundle. A better design would for one to derive fro the other; this is
     temporary solution"""
@@ -555,6 +562,7 @@ class BuildBundle(Bundle):
     SCHEMA_OLD_FILE = 'schema-old.csv'
 
     README_FILE = 'README.md'
+    README_FILE_TEMPLATE = 'meta/README.md.template'
     DOC_FILE = 'meta/documentation.md'
 
     def __init__(self, bundle_dir=None):
@@ -750,9 +758,12 @@ class BuildBundle(Bundle):
             except IOError:
                 return ''
 
-        md.documentation.readme = read_file(self.README_FILE)
-        md.documentation.main = read_file(self.DOC_FILE)
+        self.rewrite_readme()
 
+        # The main doc is subbed on the fly, but the README has to be a real
+        # file, since it is displayed in github
+        md.documentation.readme = read_file(self.README_FILE)
+        md.documentation.main = self.sub_template(read_file(self.DOC_FILE))
 
         md.write_to_dir(write_all=True)
 
@@ -771,6 +782,28 @@ class BuildBundle(Bundle):
 
 
                 self.database.rewrite_dataset()
+
+
+    def sub_template(self, t):
+
+        d = {}
+        for r in self.metadata.rows:
+
+            if r[0][0] in ('about',):
+                k = '_'.join([str(x) for x in r[0] if x])
+                d[k] = r[1]
+
+        return t.format(**d)
+
+
+    def rewrite_readme(self):
+
+        tf = self.filesystem.path(self.README_FILE_TEMPLATE)
+        if os.path.exists(tf):
+            with open(self.filesystem.path(tf)) as fi:
+                rmf = self.filesystem.path(self.README_FILE)
+                with open(self.filesystem.path(rmf),'w') as fo:
+                    fo.write(self.sub_template(fi.read()))
 
 
 
