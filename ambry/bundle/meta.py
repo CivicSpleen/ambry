@@ -74,6 +74,8 @@ class Build(VarDictGroup):
 class Extract(VarDictGroup):
     """Extract parameters"""
 
+class Process(VarDictGroup):
+    """Process data. Build times, etc."""
 
 class ExtDocTerm(DictTerm):
     url = ScalarTerm()
@@ -125,4 +127,5 @@ class Top(Metadata):
     external_documentation = ExtDoc(file='bundle.yaml')
     documentation = Documentation(file='meta/doc.yaml')
     versions = Versions(file='bundle.yaml')
+    process = Process()
 

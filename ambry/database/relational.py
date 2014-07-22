@@ -499,13 +499,17 @@ class RelationalDatabase(DatabaseInterface):
 
     def get_config_rows(self, d_vid):
         from ambry.orm import Config as SAConfig
+        from sqlalchemy import or_
 
         rows = []
 
-        for r in self.session.query(SAConfig).filter(SAConfig.group == 'config',
+        for r in self.session.query(SAConfig).filter(or_(SAConfig.group == 'config', SAConfig.group == 'process'),
                                                      SAConfig.d_vid == d_vid).all():
 
             parts = r.key.split('.',3)
+
+            if r.group == 'process':
+                parts = ['process'] + parts
 
             cr = ( (parts[0] if len(parts) > 0 else None,
                     parts[1] if len(parts) > 1 else None,

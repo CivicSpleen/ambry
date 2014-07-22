@@ -146,15 +146,15 @@ class Metadata(object):
                 yield k,v
 
     def load_rows(self, rows):
+        """Load the metadata from the config table in a database """
         import json
 
-        for  row in rows:
+        for row in rows:
 
             try:
                 (group, term, sub_term), value = row
             except ValueError as e:
                 raise ValueError(str(e)+" : "+str(row))
-
 
             try:
                 v = json.loads(value)
@@ -162,6 +162,8 @@ class Metadata(object):
                 pass
             except TypeError:
                 pass
+
+
 
             try:
                 m = self._members[group]
