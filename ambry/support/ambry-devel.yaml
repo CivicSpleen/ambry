@@ -23,10 +23,12 @@ filesystem:
     default: '{root}/library'
     downloads: '{root}/cache/downloads'
     extracts: '{root}/cache/extracts'
+    documentation: '{root}/cache/documentation'
     python: '{root}/cache/python'
     analysis: '{root}/source/analysis'
     source: '{root}/source'
     notebooks: '{root}/notebooks'
+    warehouse: '{root}/warehouse'
 
 numbers:
     host: numbers.ambry.io
