@@ -1404,7 +1404,9 @@ class {name}(Base):
             
             type_map = {int: 'integer', str: 'varchar',  float: 'real', 
                         datetime: 'datetime', date: 'date', time: 'time'}
-            
+
+
+
             for i,c in enumerate(table.columns):
 
                 if index:
@@ -1424,7 +1426,7 @@ class {name}(Base):
     def update(self, table_name, itr, n=None, header=None, logger=None):
         '''Update the schema from an iterator that returns rows. This
         will create a new table with rows that have datatype intuited from the values. '''
-        
+
         memo = None
 
         i = 0
@@ -1433,7 +1435,7 @@ class {name}(Base):
             try:
                 memo = self.intuit(row, memo)
             except Exception as e:
-                self.bundle.error("Error updating row {} of {}: {}".format(i, table_name, e))
+                self.bundle.error("Error updating row {} of {}: {}\n{}".format(i, table_name, e, row))
                 continue
 
             if logger:
@@ -1443,6 +1445,7 @@ class {name}(Base):
                 break
 
         memo = self.intuit(None, memo)
+
 
         if header:
             for i, name in enumerate(header):

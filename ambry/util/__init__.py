@@ -938,6 +938,8 @@ def init_log_rate(output_f, N=None, message='', print_rate=None):
             deque([], maxlen=4) # Deque for averaging last N rates
             ]
 
+    assert callable(output_f)
+
     f = partial(_log_rate, output_f, d)
     f.always = output_f
     f.count = lambda: d[0]

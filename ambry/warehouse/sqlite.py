@@ -27,9 +27,9 @@ class SqliteWarehouse(RelationalWarehouse):
 
 
     def load_local(self, partition, table_name, where):
-        return self.load_attach(partition, table_name)
+        return self.load_attach(partition, table_name, where)
 
-    def load_attach(self, partition, table_name):
+    def load_attach(self, partition, table_name, where = None):
 
         self.logger.info('load_attach {}'.format(partition.identity.name))
 
@@ -46,7 +46,7 @@ class SqliteWarehouse(RelationalWarehouse):
             self.logger.info('load_attach {} in {}'.format(table_name, partition.database.path))
             self.database.copy_from_attached( table=(source_table_name, dest_table_name),
                                               on_conflict='REPLACE',
-                                              name=atch_name, conn=conn, copy_n = copy_n)
+                                              name=atch_name, conn=conn, copy_n = copy_n, where = where)
 
         self.logger.info('done {}'.format(partition.identity.vname))
 

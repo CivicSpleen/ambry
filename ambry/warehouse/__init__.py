@@ -150,10 +150,12 @@ class WarehouseInterface(object):
 
         for table_name in tables:
 
+
             if isinstance(table_name, (list, tuple)):
                 table_name, where = table_name
             else:
                 where = None
+
             try:
                 if p.identity.format == 'db':
                     self.elibrary.get(p.vid) # ensure it is local
@@ -408,6 +410,7 @@ class Logger(object):
     def __init__(self, logger, lr):
         self.lr = lr
         self.logger = logger
+        self.lr('Init warehouse logger')
 
     def progress(self,type_,name, n, message=None):
         self.lr("{} {}: {}".format(type_, name, n))

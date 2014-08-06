@@ -139,7 +139,7 @@ class TestBase(unittest.TestCase):
 
     def test_address_files(self):
         import os           
-        from ambry.geo.address import Parser
+        from address_parser import Parser
         import csv
 
         parser = Parser()
@@ -193,7 +193,7 @@ class TestBase(unittest.TestCase):
 
     def test_geocode(self):
         from ambry.geo.geocoder import Geocoder
-        from ambry.geo.address import Parser
+        from address_parser import Parser
         import csv
         import ambry
         import os

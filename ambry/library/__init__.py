@@ -723,24 +723,28 @@ class Library(object):
                 except ConflictError:
                     installed = False
 
-                self.files.install_bundle_file(bundle, self.cache, commit=True)
+                try:
+                    self.files.install_bundle_file(bundle, self.cache, commit=True)
 
-                for p in bundle.partitions:
-                    self.logger.info('            {} '.format(p.identity.vname))
+                    for p in bundle.partitions:
+                        self.logger.info('            {} '.format(p.identity.vname))
+
+                        if installed:
+                            self.database.install_partition(bundle, p, commit='collect')
+
+                        self.files.install_partition_file(p, self.cache, commit='collect')
+
+
+                    self.files.insert_collection()
 
                     if installed:
-                        self.database.install_partition(bundle, p, commit='collect')
+                        self.database.insert_partition_collection()
 
-                    self.files.install_partition_file(p, self.cache, commit='collect')
+                    self.database.commit()
+                    self.database.close()
+                except Exception as e:
+                    self.logger.error("Failed to sync {}; {}".format(bundle.identity.vname, e))
 
-
-                self.files.insert_collection()
-
-                if installed:
-                    self.database.insert_partition_collection()
-
-                self.database.commit()
-                self.database.close()
                 bundle.close()
 
             except Exception as e:
@@ -846,7 +850,6 @@ class Library(object):
                 self.sync_source_dir(ident, path)
 
             except Exception as e:
-                raise
                 self.logger.error("Failed to sync: bundle_path={} : {} ".format(ident.bundle_path, e.message))
 
         self.database.commit()

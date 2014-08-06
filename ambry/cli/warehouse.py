@@ -69,11 +69,11 @@ def warehouse_parser(cmd):
     whsp.add_argument('-t', '--test', default=False, action='store_true', help='Load only 100 records per table')
     whsp.add_argument('-f', '--force', default=False, action='store_true', help='Force re-creation of tables and fiels that already exist')
     whsp.add_argument('-g', '--gen-doc', default=False, action='store_true', help='After installation, generate documentation')
-    whsp.add_argument('-n', '--no_install', default=False, action='store_true', help="Don't install")
+    whsp.add_argument('-n', '--no_install', default=False, action='store_true', help="Don't install, just talk about it.")
     whsp.add_argument('-b', '--base-dir', default=None,help='Base directory for installed. Defaults to <ambry-install>/warehouse')
     whsp.add_argument('-d', '--dir', default=None,
                       help='Publication directory for file installs, if different from the work-dir.')
-    whsp.add_argument('-p', '--publish', nargs='?', default=False, help='Publication url')
+    whsp.add_argument('-p', '--publish', nargs='?', default=False, help="Publication url, or 'default' for the URL specified in the manifest")
     whsp.add_argument('term', type=str,help='Name of bundle or partition')
 
     whsp = whp.add_parser('remove', help='Remove a bundle or partition from a warehouse')
@@ -94,8 +94,12 @@ def warehouse_parser(cmd):
     whsp.set_defaults(subcommand='drop')   
  
     whsp = whp.add_parser('create', help='Create required tables')
-    whsp.set_defaults(subcommand='create')   
- 
+    whsp.set_defaults(subcommand='create')
+
+    whsp = whp.add_parser('index', help='Create an Index webpage for a warehouse')
+    whsp.set_defaults(subcommand='index')
+    whsp.add_argument('term', type=str, help="Cache's root URL must have a 'meta' subdirectory")
+
     whsp = whp.add_parser('users', help='Create and configure warehouse users')
     whsp.set_defaults(subcommand='users')  
     group = whsp.add_mutually_exclusive_group()
@@ -202,7 +206,6 @@ def warehouse_list(args, w, config):
 
     if not args.term:
 
-
         _print_bundle_list(w.list(),show_partitions=False)
             
     else:
@@ -210,3 +213,33 @@ def warehouse_list(args, w, config):
         d, p = l.get_ref(args.term)
                 
         _print_info(l,d,p, list_partitions=True)
+
+def warehouse_index(args, w, config):
+    from ..cache import new_cache, parse_cache_string
+    import json
+    from ..text import WarehouseIndex
+
+
+    cache_config = parse_cache_string(args.term)
+
+    # Re-write account to get login credentials
+    if 'account' in cache_config:
+        cache_config['account'] = config.account(cache_config['account'])
+
+    pub = new_cache(cache_config)
+
+    d = {}
+    d['entries'] = []
+
+    for i in pub.bucket.list('meta'):
+        d['entries'].append(json.loads(i.get_contents_as_string()))
+
+    wi = WarehouseIndex(d)
+
+    meta = {'public': True, 'Content-Type': 'text/html'}
+
+    s = pub.put_stream('index.html',metadata=meta)
+    s.write(wi.render().encode('utf-8'))
+    s.close()
+
+    prt("Wrote {}".format(pub.path('index.html', public_url=True)))

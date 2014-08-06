@@ -81,6 +81,7 @@ class S3Cache(Cache):
             return rel_path
 
     def path(self, rel_path, propagate=True, **kwargs):
+        import re
 
         if self.cdn:
             rel_path = self._rename(rel_path)
@@ -103,14 +104,21 @@ class S3Cache(Cache):
             if kwargs.get('public_url', False):
                 url =  k.generate_url(1, method=method)
                 url, _ = url.split('?',2)
-                return url
+
             else:
                 if kwargs.get('expire_time', False):
                     time = int(kwargs['expire_time'])
                 else:
                     time = 300
 
-                return k.generate_url(time, method=method) # expires in 5 minutes
+                url =  k.generate_url(time, method=method) # expires in 5 minutes
+
+            if kwargs.get('use_cname', False):
+                # For websites, assume there is a CNAME, so remove the AWS part
+                url = re.sub(r'\.s3-website[^\.]+\.amazonaws.com','',url)
+                url = re.sub(r'\.s3.amazonaws.com', '', url)
+
+            return url
 
     def s3path(self, rel_path):
         """Return the path as an S3 schema"""
@@ -239,8 +247,9 @@ class S3Cache(Cache):
         import threading
 
         md5 = metadata.get('md5',None) if metadata else None
-        public = metadata.get('public',False) if metadata else None
 
+        # Horrible, but doing it anyway because I can.
+        acl = ('public-read' if metadata.get('public', False) else metadata.get('acl', 'public-read')) if metadata else 'public-read'
 
         path = self._prefix(self._rename(rel_path))
 
@@ -342,9 +351,9 @@ class S3Cache(Cache):
                 thread_upload_queue.join()  # Wait for all of the threads to exit
                              
                 self.mp.complete_upload()
-                
-                if public:
-                    this.bucket.set_acl('public-read', path)
+
+                print '!!!', path, acl
+                this.bucket.set_acl(acl, path)
 
         return flo()
      

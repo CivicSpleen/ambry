@@ -140,6 +140,16 @@ class Manifest(object):
         return self.single_line('title')
 
     @property
+    def access(self):
+        acl =  self.single_line('access')
+
+        if not acl:
+            acl = 'public-read'
+
+        return acl
+
+
+    @property
     def bundles(self):
         """Metadata for bundles, each with the partitions that are installed here. """
 
@@ -160,12 +170,19 @@ class Manifest(object):
 
         return bundles
 
+    @property
+    def summary(self):
+        """The first doc section"""
 
+        for line, section in self.sorted_sections:
+
+            if section['tag'] == 'doc':
+                return section['content']
+
+        return None
 
 
     def pygmentize_sql(self,c):
-
-
         return  highlight(c, PythonLexer(), HtmlFormatter())
 
     @property
@@ -180,7 +197,7 @@ class Manifest(object):
         sections = {}
 
         # These tags have only a single line; revert back to 'doc' afterward
-        singles = ['uid', 'title','extract','dir','destination','database','publish', 'author', 'url']
+        singles = ['uid', 'title','extract','dir','destination','database','publish', 'author', 'url', 'access']
 
         def make_item(tag, i, args):
             line_number = i + 1
@@ -194,6 +211,8 @@ class Manifest(object):
         line_number =  make_item(tag, 0, args)
 
         for i, line in enumerate(self.data):
+
+            line_w_comments = line # A hack to handle '#compress' in cache specification
 
             if tag != 'doc':
                 line = re.sub(r'#.*$','', line ) # Remove comments
@@ -210,7 +229,11 @@ class Manifest(object):
             if rx: # Section tag lines
 
                 tag = rx.group(1).strip().lower()
-                args = re.sub(r'#.*$','', rx.group(2) ).strip()
+
+                if tag == 'publication' and '#' in line_w_comments:
+                    rx = re.match(r'^(\w+):(.*)$', line_w_comments.strip())
+
+                args = rx.group(2).strip()
                 line_number = make_item(tag, i, args)
 
                 if tag in singles:
@@ -309,6 +332,12 @@ class Manifest(object):
                 if self.library:
                     b = self.library.resolve(d['partition'])
 
+                    if not b:
+                        raise ParseError("Partition reference not resolved to a bundle: '{}' ".format(d['partition']))
+
+                    if not b.partition:
+                        raise ParseError("Partition reference not resolved to a partition: '{}' ".format(d['partition']))
+
                     d['bundle'] = b
                     d['ident']  = b.partition
 
@@ -324,7 +353,7 @@ class Manifest(object):
                 partitions.append(d)
 
             except ParseError as e:
-                raise ParseError("Failed to parse line #{}: {}".format(start_line+i, e))
+                raise ParseError("Failed to parse in section at line #{}: {}".format(start_line+i, e))
 
         html += '</table>'
 
@@ -493,6 +522,7 @@ class Manifest(object):
 
         last_wd = getcwd()
 
+
         try:
             return self._install()
         finally:
@@ -514,7 +544,7 @@ class Manifest(object):
 
         w = self.warehouse
 
-        w.logger = Logger(logger, init_log_rate(2000))
+        w.logger = Logger(logger, init_log_rate(logger.info, N=2000))
 
         self.file_installs = set([w.database.path])
         self.publishable = set()
@@ -537,7 +567,7 @@ class Manifest(object):
                         tables = pd['tables']
 
                         if pd['where'] and len(pd['tables']) == 1:
-                            tables = (pd['tables'][0], pd['where'])
+                            tables = [ (pd['tables'][0], "WHERE ("+pd['where']+")") ]
 
                         w.install(pd['partition'], tables)
                         self.installed_partitions.append(pd['partition'])
@@ -576,13 +606,20 @@ class Manifest(object):
                 c = section['content']
                 table = c['table']
                 format = c['format']
+
+                # rpath is the realtive path
+                # dlrpath is the rpath for downloads. It is different for shapefile, which must be zipped to download.
+
                 dest = c['rpath']
 
                 logger.info("Extracting {} to {} as {}".format(table, format, dest))
                 extracted, abs_path = extract(w.database, table, format, working_cache, dest, force=self.force)
 
                 if not extracted:
-                    logger.info("Skipping {}; it already existed".format(dest))
+                    logger.info("Didn't extract {}; it already existed".format(abs_path))
+
+                elif os.path.exists(abs_path + ".zip"):
+                    os.remove(abs_path + ".zip") # Get rid of old zip file.
 
 
                 if os.path.isfile(abs_path):
@@ -592,31 +629,43 @@ class Manifest(object):
                     c['dlrpath'] = c['rpath']
 
                 elif os.path.isdir(abs_path):
-                    logger.info("Zipping directory {}".format(abs_path))
-
                     import zipfile
-                    zfn = abs_path+".zip"
-                    c['dlrpath'] = c['rpath']+".zip"
-                    zf = zipfile.ZipFile(zfn, 'w')
 
-                    for root, dirs, files in os.walk(abs_path):
-                        for f in files:
-                            zf.write(os.path.join(root, f), dest)
-                        zf.close()
+                    zfn = abs_path + ".zip"
+                    c['dlrpath'] = c['rpath'] + ".zip"
+
+                    if os.path.exists(zfn):
+                        logger.info("Zip dir for {} already exists".format(abs_path))
+
+                    else:
+                        logger.info("Zipping directory {}".format(abs_path))
+
+
+
+                        zf = zipfile.ZipFile(zfn, 'w', zipfile.ZIP_DEFLATED)
+
+                        for root, dirs, files in os.walk(abs_path):
+                            for f in files:
+                                zf.write(os.path.join(root, f), os.path.join(dest,f))
+
+                            zf.close()
 
                     self.file_installs.add(abs_path)
                     self.publishable.add(zfn)
+
 
         self.write_documentation(working_cache)
 
 
     def write_documentation(self, cache):
-        fn = 'documentation.html'
-        cache.put_stream(fn).write(self.html_doc())
+
+        fn = 'index.html'
+        s = cache.put_stream(fn)
+        s.write(self.html_doc())
+        s.close()
         afn = cache.path(fn)
         self.file_installs.add(afn)
         self.publishable.add(afn)
-
 
         bundles = {}
         for p_name in self.installed_partitions:
@@ -626,14 +675,18 @@ class Manifest(object):
             # Write the partition documentation
             p = b.partition
             fn = ident.vid+".html"
-            cache.put_stream(fn).write(p.html_doc())
+            s = cache.put_stream(fn)
+            s.write(p.html_doc())
+            s.close()
             afn = cache.path(fn)
             self.file_installs.add(afn)
             self.publishable.add(afn)
 
         for b in bundles.values():
             fn = b.identity.vid + ".html"
-            cache.put_stream(fn).write(b.html_doc())
+            s = cache.put_stream(fn)
+            s.write(b.html_doc())
+            s.close()
             afn = cache.path(fn)
             self.file_installs.add(afn)
             self.publishable.add(afn)
@@ -641,11 +694,24 @@ class Manifest(object):
             b.close()
 
 
+
     def publish(self, run_config, dest=None):
-
+        from ..util import md5_for_file
         from ..cache import new_cache, parse_cache_string
+        import json
 
-        if not dest:
+        if self.access == 'public' or self.access == 'private-data':
+            doc_acl = 'public-read'
+        else:
+            doc_acl = 'private'
+
+        if self.access == 'private' or self.access == 'private-data':
+            data_acl = 'private'
+        else:
+            data_acl = 'public-read'
+
+
+        if not dest or  dest == 'default':
             dest = self.publication
 
         cache_config = parse_cache_string(dest)
@@ -659,21 +725,67 @@ class Manifest(object):
 
         pub = new_cache(cache_config)
 
+        self.logger.info("Publishing to {}".format(pub))
+
+        self.publishable.add(self.file)
+
+        doc_url = None
+
         for p in self.publishable:
 
-            rel = p.replace(self.abs_work_dir, '', 1).strip('/')
-            meta = {}
+            if p.endswith('.ambry'): # its the manifest file.
+                rel = os.path.basename(p)
+            else:
+                rel = p.replace(self.abs_work_dir, '', 1).strip('/')
+
+            md5 = md5_for_file(p)
+
+            if pub.has(rel):
+                meta =  pub.metadata(rel)
+                if meta.get('md5',False) == md5:
+                    self.logger.info("Md5 match, skipping : {}".format(rel))
+                    if 'index.html' in rel:
+                        doc_url = pub.path(rel, public_url=True, use_cname = True)
+                    continue
+                else:
+                    self.logger.info("Remote has, but md5's don't match : {}".format(rel))
+            else:
+                self.logger.info("Publishing: {}".format(rel))
+
+
+            meta = {
+                'md5': md5
+            }
 
             if rel.endswith('.html'):
                 meta['Content-Type'] = 'text/html'
+                meta['acl'] = doc_acl
+            else:
+                meta['acl'] = data_acl
 
-            self.logger.info("Publishing: {}".format(rel))
+
             pub.put(p, rel, metadata=meta)
-            self.logger.info("Published: {}".format(pub.path(rel, public_url = True)))
 
-        self.logger.info("Publishing manifest file")
-        pub.put(self.file, 'manifest.ambry')
-        self.logger.info("Published: {}".format(pub.path('manifest.ambry', public_url = True)))
+            self.logger.info("Published: {}".format(pub.path(rel, public_url = True, use_cname = True)))
+
+            if 'index.html' in rel:
+                doc_url = pub.path(rel, public_url = True, use_cname = True)
+
+
+        # Write the Metadata
+        cache_config['prefix'] = ''
+        cache_config['options'] = []
+        root = new_cache(cache_config)
+        meta = self.meta
+        meta['url'] = doc_url
+
+        rel = os.path.join('meta', self.uid + '.json')
+
+        s = root.put_stream(rel)
+        s.write(json.dumps(meta))
+        s.close()
+
+        self.logger.info("Finished publication. Documentation at: {}".format(doc_url))
 
     def publish_ckan(self,d):
 
@@ -688,7 +800,7 @@ class Manifest(object):
 
     def gen_doc(self):
         """Generate schema documentation for direct inclusion in the manifest. This documentation requires having
-        a database and is usually hand-edited, so it cant be fully automatic"""
+        a database and is usually hand-edited, so it can't be fully automatic"""
         import textwrap
         out = ""
 
@@ -723,11 +835,21 @@ class Manifest(object):
 
         wl = w.library
 
-
         return out
 
         out += '\n\n### Partitions\n\n'
 
-
-
         return out
+
+    @property
+    def meta(self):
+
+        return {
+            'title': self.title,
+            'uid': self.uid,
+            'summary': self.summary,
+            'url': None,
+            'access': self.access
+        }
+
+

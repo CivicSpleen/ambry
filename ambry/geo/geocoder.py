@@ -6,7 +6,7 @@ Functions for geocoding using Ambry data.
 class Geocoder(object):
 
     def __init__(self,partition):
-        from ambry.geo.address import Parser
+        from address_parser import Parser
 
         self.p = partition
 

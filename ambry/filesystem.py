@@ -362,6 +362,8 @@ class BundleFilesystem(Filesystem):
             url = s3cache.path(urllib.unquote_plus(parsed.path.strip('/')))
             parsed = urlparse.urlparse(str(url))
 
+
+
         file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
 
         # We download to a temp file, then move it into place when 
@@ -450,7 +452,7 @@ class BundleFilesystem(Filesystem):
                 excpt = e
                 
             except Exception as e:
-                self.bundle.error("Unexpected download error '"+str(e)+"' when downloading "+url)
+                self.bundle.error("Unexpected download error '"+str(e)+"' when downloading "+str(url))
                 cache.remove(file_path, propagate = True)
                 raise 
     

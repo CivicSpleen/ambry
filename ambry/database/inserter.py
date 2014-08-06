@@ -253,11 +253,12 @@ class ValueInserter(ValueWriter):
 
             if isinstance(values, dict):
 
+
                 if self.caster:
                     d, cast_errors = self.caster(values)
 
                 else:
-                    d = dict((k.lower(), v) for k,v in values.items())
+                    d = dict((k.lower().replace(' ','_'), v) for k,v in values.items())
 
                 if self.skip_none:
 

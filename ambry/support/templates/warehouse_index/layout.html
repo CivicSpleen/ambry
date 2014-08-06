@@ -1,0 +1,54 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
+<html lang="en">
+<head>
+    <title>Data Warehouse</title>
+    <link href="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet">
+
+    <style media="screen" type="text/css">
+{{embed_css}}
+    </style>
+</head>
+<body>
+
+<div class="col-md-12">
+
+    <header class="masthead">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-12">
+                  <h1 class="title">Warehouse Index</h1>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="ambry-manifest">
+                <ul>
+                {% for entry in m['entries'] -%}
+                  <li><a href="{{entry.url}}">{{entry.title}} ({{entry.access}})</a></li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+<script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
+<script src="http://code.jquery.com/jquery-migrate-1.2.1.min.js"></script>
+<script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+<script src="http://assets.s3.clarinova.com/js/toc.min.js"></script>
+<script>
+$('#toc').toc();
+$('#toc ul').addClass('nav nav-stacked')
+
+$('#sidebar').affix({
+      offset: {
+        top: $('header').height()
+      }
+});
+
+</script>
+</body>
+</html>

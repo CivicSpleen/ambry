@@ -156,7 +156,7 @@ class AltReadCache(PassthroughCache):
             try:
                 copy_file_or_flo(source, sink, cb=cb)
             except:
-                self.cache.remove(rel_path, propagate=True)
+                self.upstream.remove(rel_path, propagate=True)
                 raise
 
             source.close()

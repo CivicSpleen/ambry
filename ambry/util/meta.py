@@ -79,7 +79,11 @@ class Metadata(object):
                     o = copy.copy(m)
                     o.init_instance(self)
 
-                    o.set(v)
+                    try:
+                        o.set(v)
+                    except:
+                        raise
+
                     self.mark_loaded(k)
                 else:
                     # Top level groups that don't match a member group are preserved,
@@ -102,8 +106,12 @@ class Metadata(object):
         # Called from Group__get__ to ensure that the group is loaded
 
         if not self.is_loaded(group) and self._path is not None:
-            self.load_group(group)
-            self.mark_loaded(group)
+            try:
+                self.load_group(group)
+                self.mark_loaded(group)
+            except:
+                print "ERROR Failed to load group '{}' from '{}'".format(group, self._path)
+                raise
 
         pass
 
@@ -279,9 +287,8 @@ class Metadata(object):
             try:
                 d = AttrDict.from_yaml(fn)
 
-
-
                 self.set(d)
+
                 n_loaded += 1
 
                 for g in groups: # Each file causes multiple groups to load.

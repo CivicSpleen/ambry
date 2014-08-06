@@ -22,7 +22,9 @@ def extract(database, table, format, cache, dest, force=False):
     if not ex:
         raise ValueError("Unknown format name '{}'".format(format))
 
-    return ex.extract(database, table, cache, dest, force=force)
+    extracted, path =  ex.extract(database, table, cache, dest, force=force)
+
+    return extracted, path
 
 class CsvExtractor(object):
 
@@ -53,8 +55,13 @@ class CsvExtractor(object):
 
 class ShapeExtractor(object):
 
+    epsg = 4326
+    max_name_len = 8 # For ESRI SHapefiles
+
     def __init__(self):
         pass
+
+        self.mangled_names = {}
 
 
     def geometry_type(self, database, table):
@@ -66,6 +73,9 @@ class ShapeExtractor(object):
 
         t = types[0][1]
         cd = types[0][2]
+
+        if not t:
+            raise ExtractError("No geometries in {}".format(table))
 
         return t, cd
 
@@ -89,7 +99,6 @@ class ShapeExtractor(object):
     }
 
     def ogr_type_map(self, v):
-
         return self._ogr_type_map[v.split('(',1)[0]] # Sometimes 'VARCHAR', sometimes 'VARCHAR(10)'
 
 
@@ -101,26 +110,51 @@ class ShapeExtractor(object):
             if row['name'].lower() in ('geometry', 'wkt','wkb'):
                 continue
 
-            name = str(row['name'])[:8]
+            name = self.mangle_name(str(row['name']))
 
             fdfn = ogr.FieldDefn(name, self.ogr_type_map(row['type']))
+
+            print "CREATE", name, self.ogr_type_map(row['type'])
 
             if row['type'] == '':
                 fdfn.SetWidth(254) # FIXME Wasteful, but would have to scan table for max value.
 
             layer.CreateField(fdfn)
 
+    def new_layer(self, abs_dest, name, t):
+
+        driver = ogr.GetDriverByName('Esri Shapefile')
+        ds = driver.CreateDataSource(abs_dest)
+
+        srs = ogr.osr.SpatialReference()
+        srs.ImportFromEPSG(self.epsg)
+
+        layer = ds.CreateLayer(name, srs, self.geo_map[t])
+
+        return ds, layer
+
+    def mangle_name(self, name):
+
+        if len(name) <= self.max_name_len:
+            return name
+
+        if name in self.mangled_names:
+            return self.mangled_names[name]
+
+        for i in range(0,20):
+            mname = name[:8]+str(i)
+            if mname not in  self.mangled_names.values():
+                self.mangled_names[name] = mname
+                return mname
+
+        raise Exception("Ran out of names")
+
+
     def extract(self, database, table, cache, dest, force=False):
 
         import ogr
         import os
 
-        epsg = 4326
-
-        q = """
-        SELECT *, AsText(Transform(geometry, {} )) AS _wkt
-        FROM {}
-        """.format(epsg, table)
 
         abs_dest = cache.path(dest, missing_ok = True)
 
@@ -131,20 +165,13 @@ class ShapeExtractor(object):
             else:
                 return False, abs_dest
 
-        driver = ogr.GetDriverByName('Esri Shapefile')
-        ds = driver.CreateDataSource(abs_dest)
-
-        srs = ogr.osr.SpatialReference()
-        srs.ImportFromEPSG(epsg)
-
         t, cd = self.geometry_type(database, table)
 
-        if not t:
-            raise ExtractError("No geometries in {}".format(table))
-
-        layer = ds.CreateLayer(table, srs, self.geo_map[t])
+        ds, layer = self.new_layer(abs_dest, table, t)
 
         self.create_schema(database, table, layer)
+
+        q = "SELECT *, AsText(Transform(geometry, {} )) AS _wkt FROM {}".format(self.epsg, table)
 
         for i,row in enumerate(database.connection.execute(q)):
 
@@ -158,7 +185,8 @@ class ShapeExtractor(object):
                         if isinstance(value, unicode):
                             value = str(value)
 
-                        name = str(name)[:8]
+                        name = self.mangle_name(str(name))
+
                         feature.SetField(name, value)
                     except Exception as e:
                         print 'Failed for {}={} ({})'.format(name, value, type(value))
@@ -181,3 +209,5 @@ class ShapeExtractor(object):
         return True, abs_dest
 
 
+class GeoJsonExtractor(object):
+    pass
