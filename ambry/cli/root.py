@@ -31,6 +31,11 @@ def root_parser(cmd):
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
     sp.add_argument('term',  type=str, nargs = '?', help='Name or ID of the bundle or partition')
 
+    sp = cmd.add_parser('doc', help='Open a browser displaying documentation')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='doc')
+    sp.add_argument('term',  type=str, nargs = '?', help='Name or ID of the bundle or partition')
+
     sp = cmd.add_parser('meta', help='Dump the metadata for a bundle')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='meta')
@@ -281,3 +286,38 @@ def root_find(args, l, st, rc):
                     prt('{}'.format(ident.fqname))
                 else:
                     _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=fields)
+
+def root_doc(args, l, st, rc):
+    from ambry.cache import new_cache
+    import webbrowser
+
+    ident = l.resolve(args.term)
+
+    if not ident:
+        fatal("Failed to find record for: {}", args.term)
+        return
+
+    b = l.get(ident.vid)
+
+    if b.partition:
+        ck = b.partition.identity + '.html'
+        doc = b.partition.html_doc()
+    else:
+        ck = b.identity.path + '.html'
+        doc = b.html_doc()
+
+
+    cache_config = rc.filesystem('documentation')
+
+    cache = new_cache(cache_config)
+
+    s = cache.put_stream(ck,{'Content-Type':'text/html'})
+    s.write(doc)
+    s.close()
+
+    path = cache.path(ck)
+
+    prt("Opening file: {} ".format(path))
+
+    webbrowser.open_new("file://"+path)
+
