@@ -1181,3 +1181,48 @@ def count_open_fds():
             procs.split( '\n' ) )
         )
     return nprocs
+
+def parse_url_to_dict(url):
+    """Parse a url and returna dict with keys for all of the parts. The urlparse function() returns a wacky combination of
+    a namedtuple with properties. """
+
+    from urlparse import urlparse
+
+    p = urlparse(url)
+
+    return {
+        'scheme':p.scheme,
+        'netloc':p.netloc,
+        'path':p.path,
+        'params':p.params,
+        'query':p.query,
+        'fragment':p.fragment,
+        'username':p.username,
+        'password':p.password,
+        'hostname':p.hostname,
+        'port':p.port
+    }
+
+def unparse_url_dict(d):
+
+    host_port = d['hostname']
+
+    if d['port']:
+        host_port+= ":" + str(d['port'])
+
+    user_pass = ''
+    if d['username']:
+        user_pass += d['username']
+
+    if d['password']:
+        user_pass += ':' + d['password']
+
+    if user_pass:
+        host_port = user_pass + '@' + host_port
+
+    url = "{}://{}/{}".format(d['scheme'], host_port, d['path'].lstrip('/'))
+
+    if d['query']:
+        url += '?' + d['query']
+
+    return url

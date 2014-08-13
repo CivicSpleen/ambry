@@ -601,6 +601,7 @@ class BuildBundle(Bundle):
             import sys
             sys.path.append(lib_dir)
 
+
         self._build_time = None
         self._update_time = None
 
@@ -729,7 +730,7 @@ class BuildBundle(Bundle):
         if len(md.errors) > 0:
             self.error("Metadata errors in {}".format(md._path))
             for k,v in md.errors.items():
-                self.error("    {} = {}".format('.'.join([x for x in k if x]), v))
+                self.error("    {} = {}".format('.'.join([str(x) for x in k if x]), v))
             raise Exception("Metadata errors: {}".format(md.errors))
 
         if not identity:
@@ -804,8 +805,6 @@ class BuildBundle(Bundle):
                 rmf = self.filesystem.path(self.README_FILE)
                 with open(self.filesystem.path(rmf),'w') as fo:
                     fo.write(self.sub_template(fi.read()))
-
-
 
     @property
     def sources(self):

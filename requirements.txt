@@ -13,4 +13,4 @@ pandas
 sqlparse
 pygments
 jinja2
-#-e git+https://github.com/clarinova/address_parser.git
+git+https://github.com/clarinova/address_parser.git

@@ -772,7 +772,6 @@ class Library(object):
 
             all_keys = [ f.path for f  in self.files.query.type(Dataset.LOCATION.REMOTE).group(remote.repo_id).all ]
 
-
             for cache_key in remote.list().keys():
 
 
@@ -807,7 +806,6 @@ class Library(object):
                 except IntegrityError:
                     b.close() # Just means we already have it installed
                     continue
-
 
 
                 for p in b.partitions:

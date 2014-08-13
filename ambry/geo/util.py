@@ -567,7 +567,55 @@ def segment_points(areas,table_name=None,  query_template=None, places_query=Non
 
         yield area, query, is_in
 
+def find_geo_containment(geometries, points, sink):
+    """Call a callback for each point that is contained in a geometry.
 
-    
+    `Geometries` is an iterable that contains  -- or an generator that yields :
+
+            ( id, poly_obj, WKT)
+
+    `Id` must be an integer that is unique for the polygon. `Poly_obj` can be any object to return to the callback.
+    `WKT` is the polygon in WKT format.
+
+    `Points` holds :
+
+            ( x, y, point_obj )
+
+    For `x` and `y` are floats, and `point_obj` is any object.
+
+    For each point that is contained in a polygon, the routine calls sends to the `sink` generator, which should have a line like:
+
+        Point(x,y), point_obj, poly_obj)  = yield
+
+    Where `Point` is a shapely point.
+
+    """
+    from rtree import index
+    from shapely.geometry import Point
+    from shapely.wkt import loads
+
+    idx = index.Index()
+
+    # Load the index
+    for i, poly_obj, wkt in geometries:
+        geometry = loads(wkt)
+        idx.insert(i, geometry.bounds, obj=(poly_obj, geometry))
+
+    # Start the sink generator
+    sink.send(None)
+
+    # Find the point containment
+    for x, y, point_obj in points:
+
+        locations = idx.intersection((x, y), objects=True)
+
+        p = Point((x, y))
+
+        for r in locations:
+            poly_obj, geometry = r.object
+            if geometry.contains(p):
+                sink.send( (p, point_obj, poly_obj) )
+
+    sink.close()
     
     

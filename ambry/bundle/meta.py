@@ -59,6 +59,7 @@ class Names(DictGroup):
 class SourceTerm(DictTerm):
     url = ScalarTerm()
     description = ScalarTerm(store_none=False)
+    dd_url = ScalarTerm(store_none=False)
 
 class Sources(TypedDictGroup):
     """References to source URLS"""
@@ -101,19 +102,6 @@ class Top(Metadata):
 
     _non_term_file = 'meta/build.yaml'
 
-
-    # Old synonyms, for converting old file, save in case we need it again, ans an an example of use.
-    _x_synonyms = {
-        'about.maintainer': 'contact_bundle.maintainer.name',
-        'about.maintainer_email': 'contact_bundle.maintainer.email',
-        'about.author': 'contact_bundle.creator.name',
-        'about.author_email': 'contact_bundle.creator.email',
-        'about.homepage': 'contact_source.creator.url',
-        'about.url': 'contact_source.creator.url',
-        'about.website': 'contact_source.creator.url',
-        'about.description': 'about.summary',
-        'about.organization': 'contact_source.creator.name'
-    }
 
     about = About(file='bundle.yaml')
     contact_source = Contact(file='bundle.yaml')

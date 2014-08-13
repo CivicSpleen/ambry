@@ -99,7 +99,7 @@ class S3Cache(Cache):
 
             if not k:
                 from ..dbexceptions import NotFoundError
-                raise NotFoundError("Didn't find key for {}/{}, {} ".format(self.bucket_name, self.prefix, rel_path))
+                raise NotFoundError("Didn't find key for bucket='{}' prefix='{}', path='{}' ".format(self.bucket_name, self.prefix, rel_path))
 
             if kwargs.get('public_url', False):
                 url =  k.generate_url(1, method=method)
@@ -352,7 +352,6 @@ class S3Cache(Cache):
                              
                 self.mp.complete_upload()
 
-                print '!!!', path, acl
                 this.bucket.set_acl(acl, path)
 
         return flo()

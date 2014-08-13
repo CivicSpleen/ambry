@@ -366,6 +366,12 @@ class BundleFilesystem(Filesystem):
 
         file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
 
+        if parsed.query:
+            import hashlib
+
+            hash = hashlib.sha224(parsed.query).hexdigest()
+            file_path += '_' + hash
+
         # We download to a temp file, then move it into place when 
         # done. This allows the code to detect and correct partial
         # downloads. 

@@ -291,7 +291,10 @@ def root_doc(args, l, st, rc):
     from ambry.cache import new_cache
     import webbrowser
 
-    ident = l.resolve(args.term)
+    try:
+        ident = l.resolve(args.term)
+    except ValueError:
+        fatal("Can't parse ref: {} ".format(args.term))
 
     if not ident:
         fatal("Failed to find record for: {}", args.term)
