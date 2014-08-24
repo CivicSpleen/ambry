@@ -373,7 +373,7 @@ def main(argsv = None, ext_logger=None):
     ##
 
     parser = argparse.ArgumentParser(prog='ambry',
-                                     description='Anbry {}. Management interface for ambry, libraries and repositories. '.format(
+                                     description='Ambry {}. Management interface for ambry, libraries and repositories. '.format(
                                          ambry._meta.__version__),
                                      prefix_chars='-+')
 
@@ -382,6 +382,7 @@ def main(argsv = None, ext_logger=None):
                         help="Name of library, from the library secton of the config")
     parser.add_argument('-c', '--config', default=None, action='append', help="Path to a run config file")
     parser.add_argument('--single-config', default=False, action="store_true", help="Load only the config file specified")
+    parser.add_argument('-E', '--exceptions', default=False, action="store_true",help="Show full exception trace on all exceptions")
 
     cmd = parser.add_subparsers(title='commands', help='command help')
 
@@ -469,5 +470,7 @@ def main(argsv = None, ext_logger=None):
             prt('\nExiting...')
             pass
         except ConfigurationError as e:
+            if args.exceptions:
+                raise
             fatal("{}: {}".format(str(e.__class__.__name__),str(e)))
         

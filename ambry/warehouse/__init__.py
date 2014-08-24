@@ -134,7 +134,7 @@ class WarehouseInterface(object):
         p_orm = self.wlibrary.database.session.query(Partition).filter(Partition.vid == p_vid).first()
 
         if p_orm and p_orm.installed == 'y':
-            self.logger.warn("Skipping {}; already installed".format(p_orm.vname))
+            self.logger.info("Skipping {}; already installed".format(p_orm.vname))
             return
 
         bundle, p = self._setup_install(p_vid)

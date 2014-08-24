@@ -644,7 +644,8 @@ class Partitions(object):
 
             if shape_file:
                 p.database.close()
-                p.load_shapefile(shape_file)
+
+                p.load_shapefile(shape_file, s_srs = kwargs.get('s_srs', None))
 
         except ImportError:
             self.bundle.log("GDAL not installed; using non geo database")

@@ -386,7 +386,12 @@ class Library(object):
 
         return self.database.resolver
 
-    def resolve(self, ref, location = None):
+    def resolve(self, ref, location = 'default'):
+        from ..identity import LocationRef
+
+        # If the location is not explicitly defined, set it to everything but source
+        if location is 'default':
+            location = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.REMOTE ]
 
         if isinstance(ref, Identity):
             ref = ref.vid
@@ -811,6 +816,7 @@ class Library(object):
                 for p in b.partitions:
                     if  installed:
                         self.database.install_partition(b, p, commit='collect')
+
                     if self.files.install_remote_partition(p.identity, remote, {}, commit = 'collect'):
                         self.logger.info("    + {}".format(p.identity.name))
                     else:

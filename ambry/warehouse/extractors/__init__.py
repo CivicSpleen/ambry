@@ -15,7 +15,9 @@ def extract(database, table, format, cache, dest, force=False):
 
     ex = dict(
         csv=CsvExtractor(),
-        shapefile = ShapeExtractor()
+        shapefile = ShapeExtractor(),
+        geojson = GeoJsonExtractor(),
+        kml = KmlExtractor()
     ).get(format, False)
 
 
@@ -53,10 +55,11 @@ class CsvExtractor(object):
 
         return True, cache.path(dest)
 
-class ShapeExtractor(object):
+
+
+class OgrExtractor(object):
 
     epsg = 4326
-    max_name_len = 8 # For ESRI SHapefiles
 
     def __init__(self):
         pass
@@ -95,6 +98,7 @@ class ShapeExtractor(object):
         'INT': ogr.OFTInteger,
         'INTEGER': ogr.OFTInteger,
         'REAL': ogr.OFTReal,
+        'FLOAT': ogr.OFTReal,
 
     }
 
@@ -121,9 +125,11 @@ class ShapeExtractor(object):
 
             layer.CreateField(fdfn)
 
+
+
     def new_layer(self, abs_dest, name, t):
 
-        driver = ogr.GetDriverByName('Esri Shapefile')
+        driver = ogr.GetDriverByName(self.driver_name)
         ds = driver.CreateDataSource(abs_dest)
 
         srs = ogr.osr.SpatialReference()
@@ -142,7 +148,7 @@ class ShapeExtractor(object):
             return self.mangled_names[name]
 
         for i in range(0,20):
-            mname = name[:8]+str(i)
+            mname = name[:self.max_name_len]+str(i)
             if mname not in  self.mangled_names.values():
                 self.mangled_names[name] = mname
                 return mname
@@ -154,7 +160,6 @@ class ShapeExtractor(object):
 
         import ogr
         import os
-
 
         abs_dest = cache.path(dest, missing_ok = True)
 
@@ -208,6 +213,15 @@ class ShapeExtractor(object):
 
         return True, abs_dest
 
+class ShapeExtractor(OgrExtractor):
+    driver_name = 'Esri Shapefile'
+    max_name_len = 8 # For ESRI SHapefiles
 
-class GeoJsonExtractor(object):
-    pass
+
+class GeoJsonExtractor(OgrExtractor):
+    driver_name = 'GeoJSON'
+    max_name_len = 40
+
+class KmlExtractor(OgrExtractor):
+    driver_name = 'KML'
+    max_name_len = 40

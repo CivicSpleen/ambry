@@ -57,81 +57,52 @@ class Test(TestBase):
         ambry.util.rm_rf(self.rc.group('filesystem').root_dir)
 
     m = """
-TITLE:  A Test Manifest, For Testing
+TITLE: A Test Manifest, For Testing
 UID: b4303f85-7d07-471d-9bcb-6980ea1bbf18
+ACCESS: public
 
+DOC: None
 This is the test documentation for a file *that is* just for testing.
 
 DESTINATION: spatialite:///tmp/census-race-ethnicity.db
 
+DOC: None
 Here is more documentation about the directory:
 
 DIR: /tmp/warehouse
 
+DOC: None
 We've got a while lot of partitions.
 
 PARTITIONS:
-
 sangis.org-business-sites-orig-businesses-geo-0.1.1
 table from sangis.org-business-sites-orig-businesses-geo-0.1.1
 table FROM sangis.org-business-sites-orig-businesses-geo-0.1.1
 table1, table2 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1
 table1, table2 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1 WHERE foo and bar and bas
-table1, table2 , table3,table4 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1 # Wot you got?
-
-
-
+table1, table2 , table3,table4 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1
 census.gov-acs-geo-p5ye2012-geofile-0.0.3
-census.gov-acs-p5ye2012-b02001-estimates-0.0.4 # Race
-census.gov-acs-p5ye2012-b02001-margins-0.0.4 # Race margins
-census.gov-acs-p5ye2012-b03003-estimates-0.0.4 # Total hispanic
-census.gov-acs-p5ye2012-b03002-estimates-0.0.4 # HISPANIC OR LATINO ORIGIN BY RACE
-census.gov-acs-p5ye2012-b01001-estimates-0.0.4 # Sex by Age
-
-census.gov-tigerline-2012-blockgroups-ca-geo
-census.gov-tigerline-2012-places-ca-geo
-census.gov-tigerline-2012-tracts-ca-geo
-census.gov-acs-geo-p5ye2012-geofile
-
-
+census.gov-acs-p5ye2012-b02001-estimates-0.0.4
 
 MVIEW: mview1
-
-SELECT
-     geofile.*,
-     groups.GEOMETRY
-FROM d02G003_geofile as geofile
-LEFT JOIN d025004_blockgroups AS groups ON
-        groups.statefp = geofile.state
-    AND groups.countyfp = geofile.county
-    AND groups.tractce = geofile.tract
-    AND groups.blkgrpce = geofile.blkgrp
-WHERE geofile.state = 6  AND groups.OGC_FID is not NULL AND geofile.sumlevel = 150
+SELECT 'mview1'
+FROM foobar
 
 VIEW: view2
-
-SELECT
-     geofile.*,
-     groups.GEOMETRY
-FROM d02G003_geofile as geofile
-LEFT JOIN d025004_blockgroups AS groups ON
-        groups.statefp = geofile.state
-    AND groups.countyfp = geofile.county
-    AND groups.tractce = geofile.tract
-    AND groups.blkgrpce = geofile.blkgrp
-WHERE geofile.state = 6  AND groups.OGC_FID is not NULL AND geofile.sumlevel = 150
+SELECT 'view2'
+FROM foobar
 
 INDEX: name ON table column1, column1
-
 More Documentation About the following Extract.
 
 EXTRACT: foobar AS csv TO /bin/bar/bingo
 
+DOC: None
 ## Foodoc
-
 Yet more documentation, about the Fringo extract.
 
-EXTRACT: fringo AS geojson TO /bin/bar/geojson"""
+EXTRACT: fringo AS geojson TO /bin/bar/geojson
+"""
 
     def tearDown(self):
         pass
@@ -232,14 +203,17 @@ EXTRACT: fringo AS geojson TO /bin/bar/geojson"""
         self._test_remote_install('postgres1')
 
     def test_manifest(self):
-
+        """Load the manifest and convert it to a string to check the round-trip"""
         from ambry.warehouse.manifest import Manifest
         from ambry.util import get_logger
 
-        m = Manifest(self.m,get_logger('TL') )
+        m = Manifest(self.m,get_logger('TL'), base_dir = '/tmp' )
 
         import yaml
-        print yaml.dump(self.m.sections, default_flow_style=False)
+        #print yaml.dump(m.sections, default_flow_style=False)
+
+        self.assertEqual(self.m.strip(), str(m).strip())
+
 
     def test_manifest_doc(self):
         from ambry.util import get_logger
@@ -270,6 +244,47 @@ EXTRACT: fringo AS geojson TO /bin/bar/geojson"""
             print '----', line
             pprint.pprint( Manifest.parse_partition_line(line))
 
+
+    def test_manifest_parts(self):
+        from ambry.warehouse.manifest import Manifest
+        from ambry.util import get_logger
+        from ambry.ipython.manifest import ManifestMagicsImpl
+        import yaml
+
+        m = Manifest('', get_logger('TL'), base_dir='/tmp')
+        mmi = ManifestMagicsImpl(m)
+
+        m_head = """
+TITLE:  A Test Manifest, For Testing
+UID: b4303f85-7d07-471d-9bcb-6980ea1bbf18
+DESTINATION: spatialite:///tmp/census-race-ethnicity.db
+DIR: /tmp/warehouse
+        """
+
+        mmi.manifest('',m_head)
+
+        mmi.extract('foobar AS csv TO /bin/bar/bingo')
+        mmi.extract('foobar AS csv TO /bin/bar/bingo')
+        mmi.extract('foobar AS csv TO /bin/bar/bingo2')
+        mmi.extract('foobar AS csv TO /bin/bar/bingo')
+
+        mmi.partitions('','one\ntwo\nthree\nfour')
+
+        mmi.view('foo_view_1','1234\n5678\n')
+        mmi.view('foo_view_2', '1234\n5678\n')
+
+        mmi.mview('foo_mview_1', '1234\n5678\n')
+        mmi.mview('foo_mview_2', '1234\n5678\n')
+
+        mmi.view('foo_view_1', '1234\n5678\n')
+        mmi.view('foo_view_2', '1234\n5678\n')
+
+        mmi.mview('foo_mview_1', '1234\n5678\n')
+        mmi.mview('foo_mview_2', '1234\n5678\n')
+
+        #print yaml.dump(m.sections, default_flow_style=False)
+
+        print str(m)
 
     def test_sql_parser(self):
 
@@ -319,7 +334,6 @@ WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
 
 
         #print sqlparse.format(sql, strip_comments = True, reindent = True)
-
 
     def test_extract(self):
 
@@ -388,6 +402,8 @@ WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
         for p in self.bundle.partitions:
             lr = self.bundle.init_log_rate(10000)
             w.install(p, progress_cb = partial(progress_cb, lr))
+
+
 
 
 def suite():

@@ -5,6 +5,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from ..cli import prt, warn, fatal, _find, _print_bundle_list, _print_bundle_entry
 
+from ..identity import LocationRef
+
+default_locations = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.REMOTE ]
 
 def root_parser(cmd):
     import argparse
@@ -28,6 +31,9 @@ def root_parser(cmd):
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='info')
+    sp.add_argument('-l', '--library', default=False, action="store_const", const = lr.LIBRARY, help='Search only the library')
+    sp.add_argument('-r', '--remote', default=False, action="store_const", const = lr.REMOTE, help='Search only the remote')
+    sp.add_argument('-s', '--source', default=False, action="store_const", const = lr.SOURCE, help='Search only the source')
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
     sp.add_argument('term',  type=str, nargs = '?', help='Name or ID of the bundle or partition')
 
@@ -129,6 +135,11 @@ def root_info(args, l, st, rc):
     from ..orm import Dataset
     import ambry
 
+    locations = filter(bool, [args.library, args.remote, args.source])
+
+    if not locations:
+        locations = default_locations
+
     if not args.term:
         print "Version:  {}".format(ambry._meta.__version__)
         print "Root dir: {}".format(rc.filesystem('root')['dir'])
@@ -140,7 +151,7 @@ def root_info(args, l, st, rc):
 
         return
 
-    ident = l.resolve(args.term)
+    ident = l.resolve(args.term, location=locations)
 
     if not ident:
         fatal("Failed to find record for: {}", args.term)
@@ -290,6 +301,8 @@ def root_find(args, l, st, rc):
 def root_doc(args, l, st, rc):
     from ambry.cache import new_cache
     import webbrowser
+    from ..identity import LocationRef
+
 
     try:
         ident = l.resolve(args.term)
@@ -301,6 +314,11 @@ def root_doc(args, l, st, rc):
         return
 
     b = l.get(ident.vid)
+
+    if not b:
+        fatal("Failed to get bundle for: {}", args.term)
+        return
+
 
     if b.partition:
         ck = b.partition.identity + '.html'

@@ -852,8 +852,14 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         print l.find(name="clarinova.com")
 
 
+    def test_adhoc(self):
+        from ambry.library import new_library
 
+        config = get_runconfig().library('default')
 
+        l = new_library(config, reset=True)
+
+        print l.resolve('211sandiego.org-calls-p1ye2014-orig-calls')
 
 def suite():
     suite = unittest.TestSuite()

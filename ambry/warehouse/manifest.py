@@ -20,75 +20,114 @@ class null_logger(object):
         pass
 
 
-def new_manifest(ref, logger, library, base_dir, force=False):
-    return Manifest(ref, logger, library = library, base_dir = base_dir, force=force)
+def new_manifest(ref, logger, library, base_dir, force=False, install_db = False):
+    return Manifest(ref, logger, library = library, base_dir = base_dir, force=force, install_db = install_db)
 
 class ParseError(Exception):
     pass
 
+class ManifestSection(object):
+
+    def __init__(self, tag, linenumber, args):
+        self.linenumber = linenumber
+        self.args = args
+        self.tag = tag
+
+        self.lines = []
+        self.content = None
+        self.html = None
+
+
 class Manifest(object):
 
-    def __init__(self, file_or_data, logger=None, library=None, base_dir=None, pub_dest=None, force=False):
-        from ..dbexceptions import NotFoundError, ConfigurationError
+    # These tags have only a single line; revert back to 'doc' afterward
+    singles = ['uid', 'title', 'extract', 'dir', 'destination', 'database', 'publish', 'author', 'url', 'access']
+
+
+    def __init__(self, file_or_data, logger=None, library=None, base_dir=None,
+                 pub_dest=None, force=False, install_db=False):
+
+        from ..dbexceptions import ConfigurationError
 
         self.library = library
         self.base_dir = base_dir
         self.force = force
+        self._install_db = install_db
 
-        if file_or_data.startswith('http'):
+        self.logger = logger if logger else null_logger()
+        self.last_line = 0
+        self.sections = {}
+
+        self.file, self.data = self._extract_file_data(file_or_data)
+
+        if self.data:
+            self.sectionalize(self.data)
+
+        if not self.base_dir:
+            raise ConfigurationError("Must specify a base dir")
+
+        self.file_installs = set()
+        self.installed_partitions = list()
+
+        self._warehouse = None
+
+    def _extract_file_data(self, file_or_data):
+        if file_or_data.startswith('http'):  # A URL
             import requests
 
             r = requests.get(file_or_data)
             r.raise_for_status()
 
-            self.file = None
+            file = None
 
-            self.data = r.text.splitlines()
+            data = r.text.splitlines()
 
-        elif os.path.exists(file_or_data):
+        elif os.path.exists(file_or_data):  # A file
             with open(file_or_data, 'r') as f:
-                self.data = f.readlines()
-                self.file = file_or_data
-        else:
+                data = f.readlines()
+                file = file_or_data
+
+        else:  # String data
 
             if isinstance(file_or_data, list):
-                self.data = file_or_data
+                data = file_or_data
             else:
-                self.data = file_or_data.splitlines()
-            self.file = None
+                data = file_or_data.splitlines()
+            file = None
+
+        return file, data
 
 
-        self.logger = logger if logger else null_logger()
-
-        self.sectionalize()
-
-        if not self.uid:
-            import uuid
-
-            raise ConfigurationError(
-                "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(uuid.uuid4()))
-
-        if not self.base_dir:
-            raise ConfigurationError("Must specify a base dir")
+    @property
+    def abs_work_dir(self):
+        from ..dbexceptions import  ConfigurationError
 
         if not os.path.isdir(self.base_dir):
             os.makedirs(self.base_dir)
 
         work_dir = self.work_dir if self.work_dir else self.uid
 
-        self.abs_work_dir = os.path.join(self.base_dir, work_dir)
+        abs_work_dir = os.path.join(self.base_dir, work_dir)
 
-        self.pub_dir = self.abs_work_dir
+        if not os.path.isdir(abs_work_dir):
+            os.makedirs(abs_work_dir)
 
-        if not os.path.isdir(self.abs_work_dir):
-            os.makedirs(self.abs_work_dir)
-
-        if not self.work_dir or not os.path.isdir(self.abs_work_dir):
+        if not self.work_dir or not os.path.isdir(abs_work_dir):
             raise ConfigurationError("Must specify  work dir ")
 
-        self.file_installs = set()
-        self.publishable = set()
-        self.installed_partitions = list()
+
+        return abs_work_dir
+
+
+
+    @property
+    def install_db(self):
+        """Return true if both the install_db flag was set on construction, and the database is installable"""
+        if  self._install_db and os.path.exists(self.warehouse.database.path):
+            return os.path.basename(self.warehouse.database.path)
+        else:
+            return False
+
 
     @property
     def sorted_sections(self):
@@ -97,18 +136,18 @@ class Manifest(object):
 
     def tagged_sections(self, tag):
         for line in sorted(self.sections.keys()):
-            if self.sections[line]['tag'] == tag:
+            if self.sections[line].tag == tag:
                 yield (line, self.sections[line])
 
     def single_line(self, keyword):
         for line, section in self.sections.items():
-            if section['tag'] == keyword:
-                return section['args'].strip()
+            if section.tag == keyword:
+                return section.args.strip()
 
         return None
 
     def count_sections(self,tag):
-        return sum( section['tag'] == tag for section in self.sections.values())
+        return sum( section.tag == tag for section in self.sections.values())
 
     # Deprecated! Use database
     @property
@@ -133,7 +172,16 @@ class Manifest(object):
 
     @property
     def uid(self):
-        return self.single_line('uid')
+        from ..dbexceptions import ConfigurationError
+
+        uid =  self.single_line('uid')
+
+        if not uid:
+            import uuid
+            raise ConfigurationError(
+                "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(uuid.uuid4()))
+
+        return uid
 
     @property
     def title(self):
@@ -176,8 +224,8 @@ class Manifest(object):
 
         for line, section in self.sorted_sections:
 
-            if section['tag'] == 'doc':
-                return section['content']
+            if section.tag == 'doc':
+                return section.content
 
         return None
 
@@ -189,28 +237,30 @@ class Manifest(object):
     def css(self):
         return HtmlFormatter(style='manni').get_style_defs('.highlight')
 
-    def sectionalize(self):
+
+    def make_item(self, sections, tag, i, args):
+        """Creates a new entry in sections, which will later have lines appended to it. """
+        line_number = i + 1
+        section = ManifestSection(tag=tag, linenumber=line_number, args=args)
+        sections[line_number] = section
+        return line_number, section
+
+    def sectionalize(self, data, first_line=0):
         """Break the file into sections"""
 
         import re
 
         sections = {}
 
-        # These tags have only a single line; revert back to 'doc' afterward
-        singles = ['uid', 'title','extract','dir','destination','database','publish', 'author', 'url', 'access']
-
-        def make_item(tag, i, args):
-            line_number = i + 1
-            sections[line_number] = dict(tag=tag, line_number=line_number, args=args, lines=[])
-            return line_number
-
         tag = 'doc'  # Starts in the Doc section
         args = ''
-        non_tag_is_doc = False
+        non_tag_is_doc = False # The line isn't a tag, and we're in a doc section
 
-        line_number =  make_item(tag, 0, args)
+        section_start_line_number, section =  self.make_item(sections, tag,  first_line, args)
 
-        for i, line in enumerate(self.data):
+        for i, line in enumerate(data):
+
+            line_number = first_line + i
 
             line_w_comments = line # A hack to handle '#compress' in cache specification
 
@@ -221,7 +271,11 @@ class Manifest(object):
                 if non_tag_is_doc:
                     non_tag_is_doc = False
                     tag = 'doc'
-                    line_number = make_item(tag, i, None)
+                    section_start_line_number, section = self.make_item(sections, tag,line_number, None)
+
+                if tag == 'doc': # save newlines for doc sections
+                    section.lines.append(line)
+
                 continue
 
             rx = re.match(r'^(\w+):(.*)$', line.strip())
@@ -230,13 +284,14 @@ class Manifest(object):
 
                 tag = rx.group(1).strip().lower()
 
+                # The '#' is a valid char in publication URLs
                 if tag == 'publication' and '#' in line_w_comments:
                     rx = re.match(r'^(\w+):(.*)$', line_w_comments.strip())
 
                 args = rx.group(2).strip()
-                line_number = make_item(tag, i, args)
+                section_start_line_number, section = self.make_item(sections, tag, line_number, args)
 
-                if tag in singles:
+                if tag in self.singles: # Following a single line tag, the next line revers to DOC
                     non_tag_is_doc = True
 
                 continue
@@ -244,31 +299,40 @@ class Manifest(object):
             elif non_tag_is_doc:
                 non_tag_is_doc = False
                 tag = 'doc'
-                line_number = make_item(tag, i, None)
+                section_start_line_number, section = self.make_item(sections, tag, line_number, None)
 
-            sections[line_number]['lines'].append(line)
+
+            section.lines.append(line)
 
         for line in sections.keys():
 
             section = sections[line]
 
-            fn = '_process_{}'.format(section['tag'])
+            # clear out any empty doc sections. These tend to get created for blank lines.
+            if section.tag == 'doc' and len(section.lines) == 0:
+                del sections[line]
+                continue
+
+            fn = '_process_{}'.format(section.tag)
             pf = getattr(self, fn, False)
 
             if pf:
-                section['content'] = pf(section)
+                section.content = pf(section)
 
+        first_line  = i
 
-        self.sections = sections
+        self.sections.update(sections)
 
     def _process_doc(self, section):
         import markdown
+        from ..util import normalize_newlines
+        import textwrap
 
-        if section['args']:
+        if section.args:
             # Table documentation
             from collections import OrderedDict
             out = OrderedDict()
-            for l in section['lines']:
+            for l in section.lines:
                 parts = l.strip().split(' ',2)
                 name = parts.pop(0) if parts else None
                 type = parts.pop(0) if parts else 'UNK'
@@ -277,27 +341,27 @@ class Manifest(object):
 
             return out
         else:
-            t = '\n'.join(section['lines']).strip()
+            t = '\n'.join(section.lines)
 
             # Normal markdown documentation
             return dict(text=t,html=markdown.markdown(t))
 
     def _process_sql(self, section):
-        return sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
+        return sqlparse.format(''.join(section.lines), reindent=True, keyword_case='upper')
 
     def _process_mview(self, section):
-        t = sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
+        t = sqlparse.format(''.join(section.lines), reindent=True, keyword_case='upper')
 
         return dict(text=t,html=self.pygmentize_sql(t))
 
     def _process_view(self, section):
-        t = sqlparse.format(''.join(section['lines']), reindent=True, keyword_case='upper')
+        t = sqlparse.format(''.join(section.lines), reindent=True, keyword_case='upper')
 
         return dict(text=t,html=self.pygmentize_sql(t))
 
     def _process_extract(self, section):
 
-        line = section['args']
+        line = section.args
 
         words = line.split()
 
@@ -324,8 +388,8 @@ class Manifest(object):
         partitions = []
         html = '<table class="partitions table table-striped table-bordered table-condensed">\n'
         html += row('th','d_vid','p_vid','vname','time','space','grain','format','tables')
-        start_line  = section['line_number']
-        for i,line in enumerate(section['lines']):
+        start_line  = section.linenumber
+        for i,line in enumerate(section.lines):
             try:
                 d = Manifest.parse_partition_line(line)
 
@@ -363,7 +427,7 @@ class Manifest(object):
 
     def _process_index(self, section):
 
-        line = section['args']
+        line = section.args
 
         line = re.sub('index:', '', line, flags=re.IGNORECASE).strip()
 
@@ -387,7 +451,7 @@ class Manifest(object):
 
         for line, section in self.sorted_sections:
 
-            if section['tag'] =='doc' and section['args'] == name:
+            if section.tag =='doc' and section.args == name:
                 return section
 
         return None
@@ -503,10 +567,14 @@ class Manifest(object):
             raise ParseError("Failed to parse {} : {}".format(line, e))
 
     @property
-    @memoize
     def warehouse(self):
         from ..dbexceptions import NotFoundError, ConfigurationError
         from . import database_config, new_warehouse
+
+        if self._warehouse and self._warehouse.exists():
+            # When the manifest is created in IPython, the warehouse ca be deleted while the
+            # manifest object exists.
+            return self._warehouse
 
         config = database_config(self.destination, self.abs_work_dir)
 
@@ -515,7 +583,11 @@ class Manifest(object):
         if not w.exists():
             w.create()
 
-        return w
+        self._warehouse = w
+
+        return self._warehouse
+
+
 
     def install(self):
         from os import getcwd, chdir
@@ -535,6 +607,7 @@ class Manifest(object):
         from ambry.warehouse.extractors import extract
         from . import  Logger
         from ..cache import new_cache
+        import os
 
         self.logger.info("Working directory: {}".format(self.abs_work_dir))
 
@@ -546,8 +619,8 @@ class Manifest(object):
 
         w.logger = Logger(logger, init_log_rate(logger.info, N=2000))
 
-        self.file_installs = set([w.database.path])
-        self.publishable = set()
+        if os.path.exists(w.database.path):
+            self.file_installs = set([w.database.path])
 
         working_cache = new_cache(self.abs_work_dir)
 
@@ -555,13 +628,13 @@ class Manifest(object):
         for line in sorted(m.sections.keys()):
             section = m.sections[line]
 
-            tag = section['tag']
+            tag = section.tag
 
             if tag in ('partitions','sql','index','mview','view'):
-                logger.info("== Processing manifest section {} at line {}".format(section['tag'], section['line_number']))
+                logger.info("== Processing manifest section {} at line {}".format(section.tag, section.linenumber))
 
             if tag == 'partitions':
-                for pd in section['content']['partitions']:
+                for pd in section.content['partitions']:
                     try:
 
                         tables = pd['tables']
@@ -576,34 +649,34 @@ class Manifest(object):
                         logger.error("Partition {} not found in external library".format(pd['partition']))
 
             elif tag == 'sql':
-                sql = section['content']
+                sql = section.content
 
                 if w.database.driver in sql:
                     w.run_sql(sql[w.database.driver])
 
             elif tag == 'index':
-                c = section['content']
+                c = section.content
                 w.create_index(c['name'], c['table'], c['columns'])
 
             elif tag == 'mview':
-                w.install_material_view(section['args'], section['content']['text'], clean=self.force)
+                w.install_material_view(section.args, section.content['text'], clean=self.force)
 
             elif tag == 'view':
-                w.install_view(section['args'], section['content']['text'])
+                w.install_view(section.args, section.content['text'])
 
         ## Second Pass. Extracts must come after everything else.
         for line in sorted(m.sections.keys()):
             section = m.sections[line]
 
-            tag = section['tag']
+            tag = section.tag
 
             if tag in ('extract'):
-                logger.info("== Processing manifest section {} at line {}".format(section['tag'], section['line_number']))
+                logger.info("== Processing manifest section {} at line {}".format(section.tag, section.linenumber))
 
             if tag == 'extract':
                 import os
 
-                c = section['content']
+                c = section.content
                 table = c['table']
                 format = c['format']
 
@@ -624,7 +697,7 @@ class Manifest(object):
 
                 if os.path.isfile(abs_path):
                     self.file_installs.add(abs_path)
-                    self.publishable.add(abs_path)
+
 
                     c['dlrpath'] = c['rpath']
 
@@ -650,11 +723,35 @@ class Manifest(object):
 
                             zf.close()
 
-                    self.file_installs.add(abs_path)
-                    self.publishable.add(zfn)
+                    self.file_installs.add(zfn)
 
+        if self.file:
+            fn = 'manifest.ambry'
+            working_cache.put(self.file, fn)
+            self.file_installs.add(working_cache.path(fn))
 
-        self.write_documentation(working_cache)
+        index = self.write_documentation(working_cache)
+
+        class InstallResult(object):
+            """Returned by install() to capture the results of installation, and display it for
+            IPython"""
+
+            def __init__(self, manifest, index):
+                self.index = index
+                self.manifest = manifest
+                self.warehouse = manifest.warehouse
+
+            def _repr_html_(self):
+                return """
+<table>
+<tr><td>Directory</td><td>{base_dir}</td></tr>
+<tr><td>Documentation</td><td>{index}</td></tr>
+<tr><td>Warehouse</td><td>{warehouse}</td></tr>
+</table>""".format(warehouse=self.warehouse.database.dsn, index=self.index, uid=self.manifest.uid, base_dir = self.manifest.base_dir)
+
+        self.logger.info("Done")
+
+        return InstallResult(self, index)
 
 
     def write_documentation(self, cache):
@@ -663,9 +760,8 @@ class Manifest(object):
         s = cache.put_stream(fn)
         s.write(self.html_doc())
         s.close()
-        afn = cache.path(fn)
+        index = afn = cache.path(fn)
         self.file_installs.add(afn)
-        self.publishable.add(afn)
 
         bundles = {}
         for p_name in self.installed_partitions:
@@ -680,7 +776,6 @@ class Manifest(object):
             s.close()
             afn = cache.path(fn)
             self.file_installs.add(afn)
-            self.publishable.add(afn)
 
         for b in bundles.values():
             fn = b.identity.vid + ".html"
@@ -689,11 +784,11 @@ class Manifest(object):
             s.close()
             afn = cache.path(fn)
             self.file_installs.add(afn)
-            self.publishable.add(afn)
 
             b.close()
 
 
+        return index
 
     def publish(self, run_config, dest=None):
         from ..util import md5_for_file
@@ -727,16 +822,16 @@ class Manifest(object):
 
         self.logger.info("Publishing to {}".format(pub))
 
-        self.publishable.add(self.file)
 
         doc_url = None
 
-        for p in self.publishable:
+        for p in self.file_installs:
 
-            if p.endswith('.ambry'): # its the manifest file.
-                rel = os.path.basename(p)
-            else:
-                rel = p.replace(self.abs_work_dir, '', 1).strip('/')
+            if p == self.warehouse.database.path and not self.install_db:
+                self.logger.info("Not installing database, skipping : {}".format(self.warehouse.database.path))
+                continue
+
+            rel = p.replace(self.abs_work_dir, '', 1).strip('/')
 
             md5 = md5_for_file(p)
 
@@ -793,6 +888,7 @@ class Manifest(object):
 
     def html_doc(self):
         from ..text import ManifestDoc
+        import os
 
         md = ManifestDoc(self)
 
@@ -813,17 +909,17 @@ class Manifest(object):
         print self.documentation_for('crime_demo')
 
         for line, section in self.sorted_sections:
-            if section['tag'] == 'view' or section['tag'] == 'mview':
+            if section.tag == 'view' or section.tag == 'mview':
 
-                doccontent = self.documentation_for(section['args'].lower())
+                doccontent = self.documentation_for(section.args.lower())
 
-                out += "\n\nDOC: for {}\n".format(section['args'])
+                out += "\n\nDOC: for {}\n".format(section.args)
 
-                for cols in w.installed_table(section['args']):
+                for cols in w.installed_table(section.args):
                     default = (cols['name'], cols['type'], '')
 
                     if doccontent:
-                        (name, type, doc) = doccontent['content'].get(cols['name'].lower(), default)
+                        (name, type, doc) = doccontent.content.get(cols['name'].lower(), default)
                     else:
                         (name, type, doc) = default
 
@@ -851,5 +947,61 @@ class Manifest(object):
             'url': None,
             'access': self.access
         }
+
+    def save(self,filename=None):
+        """Write the manifest to a file.
+        Writes to the current base_dir if a filename is not given or if the filename is not absolute
+        """
+        if not filename:
+            import re
+            filename = re.sub(r'[\s\\\/]','_',"{}.ambry".format(self.title))
+
+
+        if not os.path.isabs(filename):
+            filename = os.path.join(self.abs_work_dir, filename)
+
+        with open(filename, 'w') as f:
+            f.write(str(self))
+
+    def __str__(self):
+
+        o = ""
+
+        last_tag_single = False
+
+        for l, c in self.sorted_sections:
+
+            if l == 1 and c.tag == 'doc' and not c.lines:
+                last_tag_single = True
+                continue # Skip the opening doc if it doesn't exist.
+
+            this_tag_single = (c.tag  in self.singles)
+
+            if not ( this_tag_single and last_tag_single ):
+                o += '\n'
+
+            if not(l == 1 and c.tag == 'doc' and not c.args):  # DOC is default for start, so don't need to print it
+                if c.args:
+                    o += "{}: {}\n".format(c.tag.upper(), c.args)
+                else:
+                    o += "{}:\n".format(c.tag.upper())
+
+            if c.lines:
+
+                if 'text' in c.content:
+                    o+= c.content['text']
+                else:
+                    o += '\n'.join(c.lines)
+
+                if not ( this_tag_single and last_tag_single ):
+                    o += '\n'
+
+            last_tag_single = this_tag_single
+
+        return o
+
+    def _repr_html_(self):
+        return "<pre>" + str(self) + "</pre>"
+
 
 

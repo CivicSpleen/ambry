@@ -245,7 +245,10 @@ class Name(object):
     @property
     def cache_key(self):
         '''The name in a form suitable for use as a cache-key'''
-        return self.path+self.PATH_EXTENSION
+        try:
+            return self.path+self.PATH_EXTENSION
+        except TypeError:
+            raise TypeError("self.path is invalild: '{}', '{}'".format(str(self.path), type(self.path)))
 
     def clone(self):
         return self.__class__(**self.dict)
@@ -940,12 +943,16 @@ class LocationRef(object):
     LOCATION=Constant()
 
     LOCATION.UNKNOWN = ' '
-    LOCATION.SREPO = 'G' # Source repository, 'github'
+
     LOCATION.SOURCE = 'S'
     LOCATION.LIBRARY = 'L' # For the bundle
-    LOCATION.PARTITION = 'LP' # For the partition, b/c also used in File.type
     LOCATION.REMOTE ='R'
     LOCATION.REMOTEPARTITION = 'RP'
+    LOCATION.PARTITION = 'LP'  # For the partition, b/c also used in File.type
+
+    # These are rarely or never used.
+
+    LOCATION.SREPO = 'G'  # Source repository, 'github'
     LOCATION.UPSTREAM = 'U'
     LOCATION.WAREHOUSE = 'W'
 

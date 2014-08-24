@@ -5,10 +5,11 @@ Support for creating web pages and text representations of schemas.
 import os
 
 class ManifestDoc(object):
-    def __init__(self, m):
+    def __init__(self, m, link_database=False):
         from jinja2 import Environment, PackageLoader
 
         self.m = m
+        self.link_database = link_database
 
         self.env = Environment(loader=PackageLoader('ambry.support.templates', 'manifest'))
 
@@ -28,8 +29,7 @@ class ManifestDoc(object):
 
         css = self.m.css + '\n' + self.css
 
-        return template.render(m=self.m, embed_css = css)
-
+        return template.render(m=self.m, embed_css = css, link_database = self.link_database)
 
 class PartitionDoc(object):
     def __init__(self, p):

@@ -259,6 +259,7 @@ class Dataset(Base):
     def __init__(self,**kwargs):
         self.id_ = kwargs.get("oid",kwargs.get("id",kwargs.get("id_", None)) )
         self.vid = kwargs.get("vid", None)
+        # Deprecated?
         self.location = kwargs.get("location", self.LOCATION.LIBRARY)
         self.name = kwargs.get("name",None) 
         self.vname = kwargs.get("vname",None) 

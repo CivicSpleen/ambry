@@ -42,7 +42,7 @@ def warehouse_command(args, rc):
 
     l.logger = global_logger
 
-    if args.subcommand != 'install':
+    if args.subcommand not in ('install', 'index'):
 
         if args.database:
             config = database_config(args.database)
@@ -71,6 +71,7 @@ def warehouse_parser(cmd):
     whsp.add_argument('-g', '--gen-doc', default=False, action='store_true', help='After installation, generate documentation')
     whsp.add_argument('-n', '--no_install', default=False, action='store_true', help="Don't install, just talk about it.")
     whsp.add_argument('-b', '--base-dir', default=None,help='Base directory for installed. Defaults to <ambry-install>/warehouse')
+    whsp.add_argument('-D', '--install-db', action='store_true',help='Also install the database, if it has a filesystem path ( Sqlite / Spatialite )')
     whsp.add_argument('-d', '--dir', default=None,
                       help='Publication directory for file installs, if different from the work-dir.')
     whsp.add_argument('-p', '--publish', nargs='?', default=False, help="Publication url, or 'default' for the URL specified in the manifest")
@@ -148,7 +149,7 @@ def _warehouse_install(args, l ,config):
     if not base_dir:
         raise ConfigurationError("Must specify -b for base director,  or set filesystem.warehouse in configuration")
 
-    m = new_manifest(args.term, logger=logger, library=l, base_dir = base_dir, force = args.force)
+    m = new_manifest(args.term, logger=logger, library=l, base_dir = base_dir, force = args.force, install_db = args.install_db)
 
     if not args.no_install:
         m.install()
@@ -156,7 +157,6 @@ def _warehouse_install(args, l ,config):
         logger.info('Installed:')
         for fn in m.file_installs:
             logger.info('    {}'.format(fn))
-
 
     if args.publish != False:
         m.publish(config, args.publish)
@@ -218,7 +218,6 @@ def warehouse_index(args, w, config):
     from ..cache import new_cache, parse_cache_string
     import json
     from ..text import WarehouseIndex
-
 
     cache_config = parse_cache_string(args.term)
 

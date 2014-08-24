@@ -27,7 +27,7 @@ class GeoBuildBundle(BuildBundle):
         def log(x):
             self.log(x)
 
-        for table, item in self.config.build.sources.items():
+        for table, item in self.metadata.sources.items():
 
             with self.session:
                 copy_schema(self.schema, table_name=table, path=item.url, logger=log)
@@ -41,7 +41,14 @@ class GeoBuildBundle(BuildBundle):
 
         for table, item in self.metadata.sources.items():
             self.log("Loading table {} from {}".format(table, item.url))
-            p = self.partitions.new_geo_partition(table=table, shape_file=item.url)
+
+            # Set the source SRS, if it was not set in the input file
+            if self.metadata.build.get('s_srs', False):
+                s_srs = self.metadata.build.s_srs
+            else:
+                s_srs = None
+
+            p = self.partitions.new_geo_partition(table=table, shape_file=item.url, s_srs=s_srs)
             self.log("Loading table {}. Done".format(table))
 
         for p in self.partitions:

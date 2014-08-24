@@ -22,7 +22,7 @@ from flo import * # Legacy; should convert clients to direct import
 logger_init = set()
 
 
-def get_logger(name, file_name = None, stream = None, template=None, clear=False):
+def get_logger(name, file_name = None, stream = None, template=None, clear=False, propagate = False):
     """Get a logger by name
 
     if file_name is specified, and the dirname() of the file_name exists, it will
@@ -31,6 +31,9 @@ def get_logger(name, file_name = None, stream = None, template=None, clear=False
 
 
     logger = logging.getLogger(name)
+
+    if propagate is not None:
+        logger.propagate = propagate
 
     if clear:
         logger.handlers = []
@@ -1226,3 +1229,8 @@ def unparse_url_dict(d):
         url += '?' + d['query']
 
     return url
+
+def normalize_newlines(string):
+    """Convert \r\n or \r to \n"""
+    import re
+    return re.sub(r'(\r\n|\r|\n)', '\n', string)

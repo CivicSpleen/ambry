@@ -26,4 +26,12 @@ div.object_type {
    position:static;
 }
 
+div.doc {
+    margin-top: 10px
+}
+
+div.extract {
+    text-indent: 2em;
+}
+
 

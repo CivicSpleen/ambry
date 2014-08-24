@@ -17,7 +17,8 @@
             <div class="row">
                 <div class="col-md-9">
                   {% if m.title -%}<h1 class="title">{{m.title}}</h1>{% endif %}
-                  {% if m.uid -%}<p class="uid">Manifest {{m.uid}}</p>{% endif %}
+                  {% if m.uid -%}<p class="uid"><a href="manifest.ambry">Manifest {{m.uid}}</a></p>{% endif %}
+                  {% if m.install_db -%}<p class="uid"><a href="{{m.install_db}}">Database</a></p>{% endif %}
                 </div>
                 <div class="col-md-3">
                   <div class="pull-right hidden-sm">
