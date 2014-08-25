@@ -44,6 +44,12 @@ def new_cache(config, root_dir='no_root_dir', run_config=None):
             
             raise ConfigurationError("Can't determine cache type: {} ".format(config))
 
+
+        # Re-write account to get login credentials, if the run_config is available
+        if 'account' in config and run_config:
+            config['account'] = run_config.account(config['account'])
+
+
         if 'options' in config and 'compress' in config['options'] :
             # Need to clone the config because we don't want to propagate the changes
             try:
@@ -56,6 +62,7 @@ def new_cache(config, root_dir='no_root_dir', run_config=None):
             return FsCompressionCache(upstream=cc)
         else:
             return  fsclass(**dict(config))
+
 
 
 def parse_cache_string(remote, root_dir='no_root_dir'):
@@ -155,11 +162,9 @@ class Cache(CacheInterface):
     _priority = 0
     _prior_upstreams = None
     
-    def __init__(self,  upstream=None,**kwargs):   
+    def __init__(self,  upstream=None ,**kwargs):
         self.upstream = upstream
-   
         self.args = kwargs
-   
         self.readonly = False
         self.usreadonly = False   
 
@@ -170,6 +175,11 @@ class Cache(CacheInterface):
                 self.upstream = upstream
             else:
                 self.upstream = new_cache(upstream)
+
+
+    def clone(self):
+        return Cache(upstream=self.upstream, **self.args)
+
 
 
     @property
@@ -329,6 +339,8 @@ class Cache(CacheInterface):
 
     def __repr__(self):
         return "{}".format(type(self))
+
+
 
 
 class RemoteMarker(object):

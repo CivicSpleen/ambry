@@ -9,7 +9,7 @@ import sqlalchemy
 from sqlalchemy import orm
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, BigInteger, Boolean, UniqueConstraint, ForeignKeyConstraint
-from sqlalchemy import Float as Real,  Text, String, ForeignKey
+from sqlalchemy import Float as Real,  Text, String, ForeignKey, Binary
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator, TEXT, PickleType
 from sqlalchemy.ext.declarative import declarative_base
@@ -1058,6 +1058,8 @@ class File(Base, SavableMixin):
 
     data = SAColumn('f_data',MutationDict.as_mutable(JSONEncodedObj))
 
+    content = SAColumn('f_content', Binary)
+
     __table_args__ = (
         UniqueConstraint('f_path', 'f_type', 'f_group', name='u_type_path'),
         UniqueConstraint('f_ref', 'f_type', 'f_group', name='u_ref_path'),
@@ -1078,6 +1080,7 @@ class File(Base, SavableMixin):
         self.content_hash = kwargs.get("content_hash",None) 
         self.data = kwargs.get('data',None)
         self.priority = kwargs.get('priority', 0)
+        self.content = kwargs.get('content', None)
       
     def __repr__(self):
         return "<file: {}; {}>".format(self.path, self.state)
@@ -1120,6 +1123,7 @@ class Partition(Base):
     count = SAColumn('p_count',Integer)
     state = SAColumn('p_state',String(50))
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedObj))
+
     installed = SAColumn('p_installed',String(100))
 
     __table_args__ = (
@@ -1278,3 +1282,5 @@ class Partition(Base):
 
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
+
+

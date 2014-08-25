@@ -3,7 +3,7 @@ from ..library import Library
 from ..library.database import LibraryDb
 from ..cache import new_cache, CacheInterface
 from ..database import new_database
-
+import os
 
 class NullCache(CacheInterface):
     def has(self, rel_path, md5=None, use_upstream=True):
@@ -172,6 +172,14 @@ class WarehouseInterface(object):
             except Exception as e:
                 self.logger.error("Failed to install table '{}': {}".format(table_name,e))
 
+        # Install bundle doc, if it doesn't exist.
+        if not self.library.files.query.type('text/html').ref(bundle.identity.vid).first:
+            self.install_file(path=os.path.join('doc', bundle.identity.vid) + '.html',
+                              ref=bundle.identity.vid, type='text/html', content=bundle.html_doc())
+
+        # install the partition documentation
+        self.install_file(path=os.path.join('doc', p.vid)+'.html', ref=p.vid, type='text/html',  content = p.html_doc())
+
         self.library.database.mark_partition_installed(p_vid)
 
 
@@ -202,7 +210,91 @@ class WarehouseInterface(object):
 
         return tables
 
+    def install_manifest(self, manifest):
+
+        from ..dbexceptions import NotFoundError, ConfigurationError
+        from ambry.util import init_log_rate
+
+        from . import Logger
+        from ..cache import new_cache
+        import os
+
+
+        # Update the manifest with bundle information, since it doesn't normally have access to a library
+        manifest.add_bundles(self.elibrary)
+
+        self.logger.info("Working directory: {}".format(manifest.abs_work_dir))
+
+        self.logger = Logger(self.logger, init_log_rate(self.logger.info, N=2000))
+
+        working_cache = new_cache(manifest.abs_work_dir)
+
+        ## First pass
+        for line, section in manifest.sorted_sections:
+
+            tag = section.tag
+
+            if tag in ('partitions', 'sql', 'index', 'mview', 'view'):
+                self.logger.info("== Processing manifest section {} at line {}".format(section.tag, section.linenumber))
+
+            if tag == 'partitions':
+                for pd in section.content['partitions']:
+                    try:
+
+                        tables = pd['tables']
+
+                        if pd['where'] and len(pd['tables']) == 1:
+                            tables = [(pd['tables'][0], "WHERE (" + pd['where'] + ")")]
+
+                        self.install(pd['partition'], tables)
+
+                    except NotFoundError:
+                        self.logger.error("Partition {} not found in external library".format(pd['partition']))
+
+            elif tag == 'sql':
+                sql = section.content
+
+                if self.database.driver in sql:
+                    self.run_sql(sql[self.database.driver])
+
+            elif tag == 'index':
+                c = section.content
+                self.create_index(c['name'], c['table'], c['columns'])
+
+            elif tag == 'mview':
+                self.install_material_view(section.args, section.content['text'], clean=manifest.force)
+
+            elif tag == 'view':
+                self.install_view(section.args, section.content['text'])
+
+            elif tag == 'extract':
+                import json
+
+                d = section.content
+                doc = manifest.doc_for(section)
+                if doc:
+                    d['doc'] = doc.content['html']
+
+                self.install_file(path=os.path.join('extracts', d['rpath']), ref=d['table'], type='extract', data=d)
+
+
+        # Manifest documentation
+        self.install_file(path=os.path.join('doc', 'index.html'), ref=manifest.uid, type='text/html',
+                          content=manifest.html_doc())
+
+        # Manifest data
+        self.install_file(path=os.path.join('manifests', manifest.uid)+'.ambry', ref=manifest.uid, type='manifest',
+                          content=str(manifest))
+
+        if os.path.exists(self.database.path):
+            return self.database.path
+        else:
+            return self.database.dsn
+
     def install_view(self, name, sql):
+        raise NotImplementedError(type(self))
+
+    def install_file(self, path,  ref, content=None, source=None, type=None, data=None):
         raise NotImplementedError(type(self))
 
     def run_sql(self, sql_text):
@@ -248,6 +340,22 @@ class WarehouseInterface(object):
         p = b.partitions.get(ident.id_)
 
         return b, p
+
+
+    def extract(self, cache, force=False):
+        """Generate the extracts"""
+
+        from .extractors import new_extractor
+
+        for f in self.library.files.query.type('extract').all:
+
+            print f.path, f.ref
+            table = f.data['table']
+            format = f.data['format']
+
+            ex = new_extractor(format, self, cache, force=False)
+
+            ex.extract(table, cache, f.path)
 
     ##
     ## users
@@ -383,8 +491,10 @@ def database_config(db, base_dir=''):
 
     if parts.scheme == 'sqlite':
         config = dict(service='sqlite', database=dict(dbname=os.path.join(base_dir,parts.path), driver='sqlite'))
+
     elif parts.scheme == 'spatialite':
         config = dict(service='spatialite', database=dict(dbname=os.path.join(base_dir,parts.path), driver='spatialite'))
+
     elif parts.scheme == 'postgres':
         config = dict(service='postgres',
                       database=dict(driver='postgres',
@@ -393,6 +503,7 @@ def database_config(db, base_dir=''):
                                     password=parts.password,
                                     dbname=parts.path.strip('/')
                       ))
+
     elif parts.scheme == 'postgis':
         config = dict(service='postgis',
                       database=dict(driver='postgis',

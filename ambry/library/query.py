@@ -272,11 +272,13 @@ class Resolver(object):
     '''Find a reference to a dataset or partition based on a string,
     which may be a name or object number '''
 
+
     def __init__(self, session):
 
         self.session = session # a Sqlalchemy connection
 
     def _resolve_ref_orm(self, ref):
+        from ..identity import Locations
 
         ip = Identity.classify(ref)
 
@@ -309,19 +311,26 @@ class Resolver(object):
 
         out = []
 
+
         if dqp is not None:
 
-            for row in (self.session.query(Dataset, File)
-                            .outerjoin(File, File.ref == Dataset.vid)
-                            .filter(dqp).order_by(Dataset.revision.desc()).all()):
+            q = (self.session.query(Dataset, File)
+                .outerjoin(File, File.ref == Dataset.vid)
+                .filter(dqp)
+                #.filter(File.type_.in_(Locations.order))
+                .order_by(Dataset.revision.desc()))
+
+            for row in (q.all()):
                 out.append((row.Dataset, None, row.File))
 
         if pqp is not None:
 
             for row in (self.session.query(Dataset, Partition, File)
-                                .join(Partition).filter(pqp)
+                                .join(Partition)
+                                .filter(pqp)
                                 .outerjoin(File, File.ref == Partition.vid)
                                 .order_by(Dataset.revision.desc()).all()):
+
                 out.append((row.Dataset, row.Partition, row.File))
 
 

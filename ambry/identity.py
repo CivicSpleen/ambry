@@ -983,6 +983,7 @@ class Locations(object):
         LocationRef.LOCATION.LIBRARY,
         LocationRef.LOCATION.SOURCE,
         LocationRef.LOCATION.REMOTE,
+        LocationRef.LOCATION.REMOTEPARTITION,
         LocationRef.LOCATION.SREPO,
         LocationRef.LOCATION.UPSTREAM,
         LocationRef.LOCATION.WAREHOUSE

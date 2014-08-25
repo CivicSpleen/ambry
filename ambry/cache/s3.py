@@ -14,7 +14,7 @@ class S3Cache(Cache):
 
     base_priority = 30  # Priority for this class of cache.
 
-    def __init__(self, bucket=None, prefix=None, account=None, upstream=None, cdn=None, **kwargs):
+    def __init__(self, bucket=None, prefix=None, account=None, upstream=None, cdn=None, options = None, **kwargs):
         '''Init a new S3Cache Cache
 
         '''
@@ -22,21 +22,32 @@ class S3Cache(Cache):
 
         super(S3Cache, self).__init__(upstream=upstream)
 
+
         self.is_remote = False
-        self.access_key = account['access']
-        self.secret = account['secret']
         self.bucket_name = bucket
         self.prefix = prefix
+
+        self.account = account
+        self.access_key = account['access']
+        self.secret = account['secret']
 
         self.conn = S3Connection(self.access_key, self.secret, is_secure = False )
         self.bucket = self.conn.get_bucket(self.bucket_name)
 
-        self.options = kwargs.get('options',None)
+        self.options = options
 
         self.cdn = None
+        self.cdn_config = None
+
         if cdn:
             self._init_cdn(cdn)
-            
+
+    def clone(self):
+        from boto.s3.connection import S3Connection
+
+        return S3Cache(bucket=self.bucket, prefix=self.prefix, account=self.account,
+                       options = self.options, upstream=self.upstream, cdn=self.cdn, **self.args)
+
     def _init_cdn(self, config):
         import boto
         import time

@@ -8,10 +8,6 @@ from . import WarehouseInterface
 
 class RelationalWarehouse(WarehouseInterface):
 
-
-
-
-
     ##
     ## Tables
     ##
@@ -237,3 +233,45 @@ class RelationalWarehouse(WarehouseInterface):
         e = self.database.connection.execute
 
         e(sql_text)
+
+
+    def install_file(self, path,  ref, type = None, content=None, source = None, data=None):
+        """Install a file reference, possibly with binary content"""
+        import os
+        from ..util import md5_for_file
+        import hashlib
+        import time
+
+        files = self.library.files
+
+        f  = files.new_file(path=path, ref = ref, type_=type, data=data)
+
+        if source:
+            try:
+                f.content = source.read()
+
+                f.hash = hashlib.md5(f.content).hexdigest()
+                f.size = len(f.content)
+                f.modified = int(time.time())
+
+            except IOError:
+                with open(source) as sf:
+                    f.content = sf.read()
+
+                stat = os.stat(path)
+
+                if not f.modified or stat.st_mtime > f.modified:
+                    f.modified = int(stat.st_mtime)
+
+                f.size = stat.st_size
+
+                f.hash = md5_for_file(source)
+
+        elif content:
+            f.content = content
+            f.hash = hashlib.md5(f.content).hexdigest()
+            f.size = len(f.content)
+            f.modified = int(time.time())
+
+        files.merge(f)
+

@@ -19,7 +19,6 @@ class null_logger(object):
     def error(self, w):
         pass
 
-
 def new_manifest(ref, logger, library, base_dir, force=False, install_db = False):
     return Manifest(ref, logger, library = library, base_dir = base_dir, force=force, install_db = install_db)
 
@@ -35,17 +34,29 @@ class ManifestSection(object):
 
         self.lines = []
         self.content = None
-        self.html = None
 
+    @property
+    def name(self):
+        if self.content and 'name' in self.content:
+            return self.content['name']
+
+        return None
+
+    @property
+    def ref(self):
+        if self.content and 'ref' in self.content:
+            return self.content['ref']
+
+        return None
 
 class Manifest(object):
 
     # These tags have only a single line; revert back to 'doc' afterward
-    singles = ['uid', 'title', 'extract', 'dir', 'destination', 'database', 'publish', 'author', 'url', 'access']
-
+    singles = ['uid', 'title', 'extract', 'dir',  'database', 'publish', 'author', 'url', 'access', 'index']
+    multi_line = ['partitions','view','mview','sql','doc']
 
     def __init__(self, file_or_data, logger=None, library=None, base_dir=None,
-                 pub_dest=None, force=False, install_db=False):
+                 force=False, install_db=False):
 
         from ..dbexceptions import ConfigurationError
 
@@ -68,8 +79,6 @@ class Manifest(object):
 
         self.file_installs = set()
         self.installed_partitions = list()
-
-        self._warehouse = None
 
     def _extract_file_data(self, file_or_data):
         if file_or_data.startswith('http'):  # A URL
@@ -118,8 +127,6 @@ class Manifest(object):
 
         return abs_work_dir
 
-
-
     @property
     def install_db(self):
         """Return true if both the install_db flag was set on construction, and the database is installable"""
@@ -149,10 +156,6 @@ class Manifest(object):
     def count_sections(self,tag):
         return sum( section.tag == tag for section in self.sections.values())
 
-    # Deprecated! Use database
-    @property
-    def destination(self):
-        return self.single_line('database')
 
     @property
     def database(self):
@@ -199,19 +202,25 @@ class Manifest(object):
 
     @property
     def bundles(self):
-        """Metadata for bundles, each with the partitions that are installed here. """
+        """Metadata for bundles, each with the partitions that are installed here.
+
+        This extracts the bundle information that is in the partitions list, but it requires
+        that the add_bundle() method has been run first, because the manifest doesn't usually ahve access to
+        a library
+        """
 
         bundles = {}
 
         for p in self.partitions:
+
             b_ident = p['bundle']
 
             if not b_ident.vid in bundles:
-                b = self.library.get(b_ident.vid)
+
                 bundles[b_ident.vid] = dict(
                     partitions = [],
-                    metadata = b.metadata,
-                    ident = b_ident
+                    ident=b_ident,
+                    metadata=p['metadata']
                 )
 
             bundles[b_ident.vid]['partitions'].append(p)
@@ -229,6 +238,19 @@ class Manifest(object):
 
         return None
 
+    def doc_for(self, section):
+        """Return a doc section that referrs to a named section. """
+
+        if not section.name:
+            return None
+
+        for line, other in self.sorted_sections:
+
+            if other.tag == 'doc' and other.ref == section.name:
+                return other
+
+        return None
+
 
     def pygmentize_sql(self,c):
         return  highlight(c, PythonLexer(), HtmlFormatter())
@@ -240,6 +262,11 @@ class Manifest(object):
 
     def make_item(self, sections, tag, i, args):
         """Creates a new entry in sections, which will later have lines appended to it. """
+        from ..dbexceptions import  ConfigurationError
+
+        if tag not in self.singles and tag not in self.multi_line:
+            raise ConfigurationError("Unknown tag '{}' on line {}".format(tag, i))
+
         line_number = i + 1
         section = ManifestSection(tag=tag, linenumber=line_number, args=args)
         sections[line_number] = section
@@ -301,15 +328,17 @@ class Manifest(object):
                 tag = 'doc'
                 section_start_line_number, section = self.make_item(sections, tag, line_number, None)
 
-
             section.lines.append(line)
 
+        # Postprocessing cleanup
         for line in sections.keys():
 
             section = sections[line]
 
+            non_empty_lines = len([l for l in section.lines if l.strip()])
+
             # clear out any empty doc sections. These tend to get created for blank lines.
-            if section.tag == 'doc' and len(section.lines) == 0:
+            if section.tag == 'doc' and non_empty_lines == 0:
                 del sections[line]
                 continue
 
@@ -319,7 +348,16 @@ class Manifest(object):
             if pf:
                 section.content = pf(section)
 
-        first_line  = i
+        # Link docs to previous sections, where appropriate
+
+        previous_section = None
+        for line_no in sorted(sections.keys()):
+            section = sections[line_no]
+
+            if section.tag == 'doc' and previous_section.tag in ['view','mview','extract']:
+                section.content['ref'] = previous_section.name
+
+            previous_section = section
 
         self.sections.update(sections)
 
@@ -377,7 +415,7 @@ class Manifest(object):
             raise ParseError('Extract line malformed. Expected 5th word to be \'to\' got: {}'.format(to_w))
 
 
-        return dict(table=table, format=format, rpath=rpath)
+        return dict(table=table, format=format, rpath=rpath, name=rpath)
 
 
     def _process_partitions(self, section):
@@ -386,44 +424,50 @@ class Manifest(object):
             return "<tr>{}</tr>\n".format(''.join([ "<{}>{}</{}>".format(cell,v,cell) for v in args]))
 
         partitions = []
-        html = '<table class="partitions table table-striped table-bordered table-condensed">\n'
-        html += row('th','d_vid','p_vid','vname','time','space','grain','format','tables')
+
         start_line  = section.linenumber
         for i,line in enumerate(section.lines):
             try:
                 d = Manifest.parse_partition_line(line)
 
-                if self.library:
-                    b = self.library.resolve(d['partition'])
-
-                    if not b:
-                        raise ParseError("Partition reference not resolved to a bundle: '{}' ".format(d['partition']))
-
-                    if not b.partition:
-                        raise ParseError("Partition reference not resolved to a partition: '{}' ".format(d['partition']))
-
-                    d['bundle'] = b
-                    d['ident']  = b.partition
-
-                    ident = b.partition
-                    d['config']=dict(
-                        time=ident.time if ident.time else '',
-                        space=ident.space if ident.space else '',
-                        grain=ident.grain if ident.grain else '',
-                        format=ident.format if ident.format else '',
-                    )
-
-
                 partitions.append(d)
 
             except ParseError as e:
+                raise
                 raise ParseError("Failed to parse in section at line #{}: {}".format(start_line+i, e))
 
-        html += '</table>'
-
         self.partitions = partitions
-        return dict(partitions=partitions, html=html)
+        return dict(partitions=partitions)
 
+
+    def add_bundles(self, library):
+        """Add bundle information when a Library is available"""
+
+        for line, partitions in self.tagged_sections('partitions'):
+
+            for partition in partitions.content['partitions']:
+
+                ident = library.resolve(partition['partition'])
+                b = library.get(ident.vid)
+
+                if not ident:
+                    raise ParseError("Partition reference not resolved to a bundle: '{}' in library {}"
+                                     .format(partition['partition'], library.database.dsn))
+
+                if not ident.partition:
+                    raise ParseError("Partition reference not resolved to a partition: '{}' ".format(partition['partition']))
+
+                partition['bundle'] = ident
+                partition['metadata'] = b.metadata
+                partition['ident'] = ident.partition
+
+                ident = ident.partition
+                partition['config'] = dict(
+                    time=ident.time if ident.time else '',
+                    space=ident.space if ident.space else '',
+                    grain=ident.grain if ident.grain else '',
+                    format=ident.format if ident.format else '',
+                )
 
     def _process_index(self, section):
 
@@ -433,7 +477,7 @@ class Manifest(object):
 
         tokens, remainder = Manifest.tokenize_line(line.strip())
 
-        (_, index_name), tokens = Manifest.extract("NAME", tokens)
+        (_, index_name), tokens = Manifest.extract_token("NAME", tokens)
 
         (_, table), tokens = Manifest.extract_next('ON', 'NAME', tokens)
 
@@ -483,7 +527,7 @@ class Manifest(object):
         return any(filter(lambda x: x[0] == tp.upper(), tokens))
 
     @staticmethod
-    def extract(tp, tokens):
+    def extract_token(tp, tokens):
         '''Extract the first token of the named type. '''
 
         i = [t[0] for t in tokens].index(tp)
@@ -508,7 +552,7 @@ class Manifest(object):
     def coalesce_list(tp, tokens):
         '''Extract the token types, and all after it that are seperated with SEP '''
 
-        t, tokens = Manifest.extract(tp, tokens)
+        t, tokens = Manifest.extract_token(tp, tokens)
 
         l = [t[1]]
 
@@ -536,11 +580,11 @@ class Manifest(object):
             if partition:
                 tables, tokens = Manifest.coalesce_list('NAME', tokens)
             else:
-                (_,partition), tokens = Manifest.extract("NAME", tokens)
+                (_,partition), tokens = Manifest.extract_token("NAME", tokens)
                 tables = None
 
             try:
-                (_, where), tokens = Manifest.extract('WHERE', tokens)
+                (_, where), tokens = Manifest.extract_token('WHERE', tokens)
 
                 where = re.sub(r'^where','', where, flags =  re.IGNORECASE).strip()
 
@@ -566,192 +610,35 @@ class Manifest(object):
         except Exception as e:
             raise ParseError("Failed to parse {} : {}".format(line, e))
 
-    @property
-    def warehouse(self):
+    def get_warehouse(self,w=None):
+        """Return the argument if it a warehouse, construct a warehouse if it is a string,
+        or construct a warehosue from the "DATABASE" tag if is is None"""
+
         from ..dbexceptions import NotFoundError, ConfigurationError
         from . import database_config, new_warehouse
+        from ..warehouse import WarehouseInterface
 
-        if self._warehouse and self._warehouse.exists():
-            # When the manifest is created in IPython, the warehouse ca be deleted while the
-            # manifest object exists.
-            return self._warehouse
+        if w and isinstance(w, WarehouseInterface):
+            return w
 
-        config = database_config(self.destination, self.abs_work_dir)
+        elif w and isinstance(w, basestring):
+            config = database_config(w, self.abs_work_dir)
+
+        else:
+            config = database_config(self.database, self.abs_work_dir)
 
         w = new_warehouse(config, self.library)
 
         if not w.exists():
             w.create()
 
-        self._warehouse = w
+        return w
 
-        return self._warehouse
+    def install(self, w=None):
 
+        w = self.get_warehouse(w)
 
-
-    def install(self):
-        from os import getcwd, chdir
-
-        last_wd = getcwd()
-
-
-        try:
-            return self._install()
-        finally:
-            chdir(last_wd)
-
-    def _install(self):
-
-        from ..dbexceptions import NotFoundError, ConfigurationError
-        from ambry.util import init_log_rate
-        from ambry.warehouse.extractors import extract
-        from . import  Logger
-        from ..cache import new_cache
-        import os
-
-        self.logger.info("Working directory: {}".format(self.abs_work_dir))
-
-        # legacy
-        m = self
-        logger = self.logger
-
-        w = self.warehouse
-
-        w.logger = Logger(logger, init_log_rate(logger.info, N=2000))
-
-        if os.path.exists(w.database.path):
-            self.file_installs = set([w.database.path])
-
-        working_cache = new_cache(self.abs_work_dir)
-
-        ## First pass
-        for line in sorted(m.sections.keys()):
-            section = m.sections[line]
-
-            tag = section.tag
-
-            if tag in ('partitions','sql','index','mview','view'):
-                logger.info("== Processing manifest section {} at line {}".format(section.tag, section.linenumber))
-
-            if tag == 'partitions':
-                for pd in section.content['partitions']:
-                    try:
-
-                        tables = pd['tables']
-
-                        if pd['where'] and len(pd['tables']) == 1:
-                            tables = [ (pd['tables'][0], "WHERE ("+pd['where']+")") ]
-
-                        w.install(pd['partition'], tables)
-                        self.installed_partitions.append(pd['partition'])
-
-                    except NotFoundError:
-                        logger.error("Partition {} not found in external library".format(pd['partition']))
-
-            elif tag == 'sql':
-                sql = section.content
-
-                if w.database.driver in sql:
-                    w.run_sql(sql[w.database.driver])
-
-            elif tag == 'index':
-                c = section.content
-                w.create_index(c['name'], c['table'], c['columns'])
-
-            elif tag == 'mview':
-                w.install_material_view(section.args, section.content['text'], clean=self.force)
-
-            elif tag == 'view':
-                w.install_view(section.args, section.content['text'])
-
-        ## Second Pass. Extracts must come after everything else.
-        for line in sorted(m.sections.keys()):
-            section = m.sections[line]
-
-            tag = section.tag
-
-            if tag in ('extract'):
-                logger.info("== Processing manifest section {} at line {}".format(section.tag, section.linenumber))
-
-            if tag == 'extract':
-                import os
-
-                c = section.content
-                table = c['table']
-                format = c['format']
-
-                # rpath is the realtive path
-                # dlrpath is the rpath for downloads. It is different for shapefile, which must be zipped to download.
-
-                dest = c['rpath']
-
-                logger.info("Extracting {} to {} as {}".format(table, format, dest))
-                extracted, abs_path = extract(w.database, table, format, working_cache, dest, force=self.force)
-
-                if not extracted:
-                    logger.info("Didn't extract {}; it already existed".format(abs_path))
-
-                elif os.path.exists(abs_path + ".zip"):
-                    os.remove(abs_path + ".zip") # Get rid of old zip file.
-
-
-                if os.path.isfile(abs_path):
-                    self.file_installs.add(abs_path)
-
-
-                    c['dlrpath'] = c['rpath']
-
-                elif os.path.isdir(abs_path):
-                    import zipfile
-
-                    zfn = abs_path + ".zip"
-                    c['dlrpath'] = c['rpath'] + ".zip"
-
-                    if os.path.exists(zfn):
-                        logger.info("Zip dir for {} already exists".format(abs_path))
-
-                    else:
-                        logger.info("Zipping directory {}".format(abs_path))
-
-
-
-                        zf = zipfile.ZipFile(zfn, 'w', zipfile.ZIP_DEFLATED)
-
-                        for root, dirs, files in os.walk(abs_path):
-                            for f in files:
-                                zf.write(os.path.join(root, f), os.path.join(dest,f))
-
-                            zf.close()
-
-                    self.file_installs.add(zfn)
-
-        if self.file:
-            fn = 'manifest.ambry'
-            working_cache.put(self.file, fn)
-            self.file_installs.add(working_cache.path(fn))
-
-        index = self.write_documentation(working_cache)
-
-        class InstallResult(object):
-            """Returned by install() to capture the results of installation, and display it for
-            IPython"""
-
-            def __init__(self, manifest, index):
-                self.index = index
-                self.manifest = manifest
-                self.warehouse = manifest.warehouse
-
-            def _repr_html_(self):
-                return """
-<table>
-<tr><td>Directory</td><td>{base_dir}</td></tr>
-<tr><td>Documentation</td><td>{index}</td></tr>
-<tr><td>Warehouse</td><td>{warehouse}</td></tr>
-</table>""".format(warehouse=self.warehouse.database.dsn, index=self.index, uid=self.manifest.uid, base_dir = self.manifest.base_dir)
-
-        self.logger.info("Done")
-
-        return InstallResult(self, index)
+        return w.install_manifest(self)
 
 
     def write_documentation(self, cache):
@@ -763,128 +650,7 @@ class Manifest(object):
         index = afn = cache.path(fn)
         self.file_installs.add(afn)
 
-        bundles = {}
-        for p_name in self.installed_partitions:
-            ident = self.library.resolve(p_name).partition
-            b = self.library.get(ident.vid)
-            bundles[b.identity.vid] = b
-            # Write the partition documentation
-            p = b.partition
-            fn = ident.vid+".html"
-            s = cache.put_stream(fn)
-            s.write(p.html_doc())
-            s.close()
-            afn = cache.path(fn)
-            self.file_installs.add(afn)
-
-        for b in bundles.values():
-            fn = b.identity.vid + ".html"
-            s = cache.put_stream(fn)
-            s.write(b.html_doc())
-            s.close()
-            afn = cache.path(fn)
-            self.file_installs.add(afn)
-
-            b.close()
-
-
         return index
-
-    def publish(self, run_config, dest=None):
-        from ..util import md5_for_file
-        from ..cache import new_cache, parse_cache_string
-        import json
-
-        if self.access == 'public' or self.access == 'private-data':
-            doc_acl = 'public-read'
-        else:
-            doc_acl = 'private'
-
-        if self.access == 'private' or self.access == 'private-data':
-            data_acl = 'private'
-        else:
-            data_acl = 'public-read'
-
-
-        if not dest or  dest == 'default':
-            dest = self.publication
-
-        cache_config = parse_cache_string(dest)
-
-        # Re-write account to get login credentials
-        if 'account' in cache_config:
-            cache_config['account'] = run_config.account(cache_config['account'])
-
-        if cache_config.get('prefix', False):
-            cache_config['prefix'] = cache_config['prefix'] + '/' + self.uid
-
-        pub = new_cache(cache_config)
-
-        self.logger.info("Publishing to {}".format(pub))
-
-
-        doc_url = None
-
-        for p in self.file_installs:
-
-            if p == self.warehouse.database.path and not self.install_db:
-                self.logger.info("Not installing database, skipping : {}".format(self.warehouse.database.path))
-                continue
-
-            rel = p.replace(self.abs_work_dir, '', 1).strip('/')
-
-            md5 = md5_for_file(p)
-
-            if pub.has(rel):
-                meta =  pub.metadata(rel)
-                if meta.get('md5',False) == md5:
-                    self.logger.info("Md5 match, skipping : {}".format(rel))
-                    if 'index.html' in rel:
-                        doc_url = pub.path(rel, public_url=True, use_cname = True)
-                    continue
-                else:
-                    self.logger.info("Remote has, but md5's don't match : {}".format(rel))
-            else:
-                self.logger.info("Publishing: {}".format(rel))
-
-
-            meta = {
-                'md5': md5
-            }
-
-            if rel.endswith('.html'):
-                meta['Content-Type'] = 'text/html'
-                meta['acl'] = doc_acl
-            else:
-                meta['acl'] = data_acl
-
-
-            pub.put(p, rel, metadata=meta)
-
-            self.logger.info("Published: {}".format(pub.path(rel, public_url = True, use_cname = True)))
-
-            if 'index.html' in rel:
-                doc_url = pub.path(rel, public_url = True, use_cname = True)
-
-
-        # Write the Metadata
-        cache_config['prefix'] = ''
-        cache_config['options'] = []
-        root = new_cache(cache_config)
-        meta = self.meta
-        meta['url'] = doc_url
-
-        rel = os.path.join('meta', self.uid + '.json')
-
-        s = root.put_stream(rel)
-        s.write(json.dumps(meta))
-        s.close()
-
-        self.logger.info("Finished publication. Documentation at: {}".format(doc_url))
-
-    def publish_ckan(self,d):
-
-        pass
 
     def html_doc(self):
         from ..text import ManifestDoc
@@ -893,49 +659,6 @@ class Manifest(object):
         md = ManifestDoc(self)
 
         return md.render()
-
-    def gen_doc(self):
-        """Generate schema documentation for direct inclusion in the manifest. This documentation requires having
-        a database and is usually hand-edited, so it can't be fully automatic"""
-        import textwrap
-        out = ""
-
-        w = self.warehouse()
-
-        def indent(lines, amount=4, ch=' '):
-            padding = amount * ch
-            return padding + ('\n' + padding).join(lines.split('\n'))
-
-        print self.documentation_for('crime_demo')
-
-        for line, section in self.sorted_sections:
-            if section.tag == 'view' or section.tag == 'mview':
-
-                doccontent = self.documentation_for(section.args.lower())
-
-                out += "\n\nDOC: for {}\n".format(section.args)
-
-                for cols in w.installed_table(section.args):
-                    default = (cols['name'], cols['type'], '')
-
-                    if doccontent:
-                        (name, type, doc) = doccontent.content.get(cols['name'].lower(), default)
-                    else:
-                        (name, type, doc) = default
-
-                    out += "    {} {} {}\n".format(name.lower(), type, doc)
-
-            else:
-                continue
-
-
-        wl = w.library
-
-        return out
-
-        out += '\n\n### Partitions\n\n'
-
-        return out
 
     @property
     def meta(self):
@@ -993,7 +716,7 @@ class Manifest(object):
                 else:
                     o += '\n'.join(c.lines)
 
-                if not ( this_tag_single and last_tag_single ):
+                if not ( this_tag_single and last_tag_single  ) and not c.tag == 'doc':
                     o += '\n'
 
             last_tag_single = this_tag_single

@@ -9,43 +9,58 @@ import ogr
 class ExtractError(Exception):
     pass
 
-def extract(database, table, format, cache, dest, force=False):
+def new_extractor(format, warehouse, cache, force=False):
 
-    from ambry.warehouse.extractors import CsvExtractor
-
-    ex = dict(
-        csv=CsvExtractor(),
-        shapefile = ShapeExtractor(),
-        geojson = GeoJsonExtractor(),
-        kml = KmlExtractor()
+    ex_class = dict(
+        csv=CsvExtractor,
+        shapefile=ShapeExtractor,
+        geojson=GeoJsonExtractor,
+        kml=KmlExtractor
     ).get(format, False)
 
+    if not ex_class:
+        raise ValueError("Unknown format: {} ".format(format))
 
-    if not ex:
-        raise ValueError("Unknown format name '{}'".format(format))
+    return ex_class(warehouse, cache, force=force)
 
-    extracted, path =  ex.extract(database, table, cache, dest, force=force)
+class Extractor(object):
 
-    return extracted, path
+    def __init__(self, warehouse, cache, force=False):
 
-class CsvExtractor(object):
+        self.warehouse = warehouse
+        self.database = self.warehouse.database
+        self.cache = cache
+        self.force = force
+
+    def mangle_path(self,rel_path):
+        return rel_path
+
+    def extract(self, table, cache, rel_path):
+
+        if cache.has(self.mangle_path(rel_path)):
+            if self.force:
+                cache.remove(self.mangle_path(rel_path), True)
+            else:
+                return False, cache.path(self.mangle_path(rel_path))
+
+        self._extract(table, cache, rel_path)
+
+        return cache.path(self.mangle_path(rel_path))
+
+class CsvExtractor(Extractor):
 
     def __init__(self):
         pass
 
-    def extract(self, database, table, cache, dest, force=False):
+    def _extract(self, table, cache, rel_path):
 
         import unicodecsv
 
-        if cache.has(dest):
-            if force:
-                cache.remove(dest, True)
-            else:
-                return False, cache.path(dest)
+        rel_path = self.mangle_path(rel_path)
 
-        row_gen = database.connection.execute("SELECT * FROM {}".format(table))
+        row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table))
 
-        w = unicodecsv.writer(cache.put_stream(dest))
+        w = unicodecsv.writer(cache.put_stream(rel_path))
 
         for i,row in enumerate(row_gen):
             if i == 0:
@@ -53,11 +68,9 @@ class CsvExtractor(object):
 
             w.writerow(row)
 
-        return True, cache.path(dest)
+        return True, cache.path(rel_path)
 
-
-
-class OgrExtractor(object):
+class OgrExtractor(Extractor):
 
     epsg = 4326
 
@@ -65,7 +78,6 @@ class OgrExtractor(object):
         pass
 
         self.mangled_names = {}
-
 
     def geometry_type(self, database, table):
         """Return the name of the most common geometry type and the coordinate dimensions"""
@@ -99,12 +111,10 @@ class OgrExtractor(object):
         'INTEGER': ogr.OFTInteger,
         'REAL': ogr.OFTReal,
         'FLOAT': ogr.OFTReal,
-
     }
 
     def ogr_type_map(self, v):
         return self._ogr_type_map[v.split('(',1)[0]] # Sometimes 'VARCHAR', sometimes 'VARCHAR(10)'
-
 
     def create_schema(self, database, table, layer):
         ce = database.connection.execute
@@ -124,8 +134,6 @@ class OgrExtractor(object):
                 fdfn.SetWidth(254) # FIXME Wasteful, but would have to scan table for max value.
 
             layer.CreateField(fdfn)
-
-
 
     def new_layer(self, abs_dest, name, t):
 
@@ -155,30 +163,20 @@ class OgrExtractor(object):
 
         raise Exception("Ran out of names")
 
-
-    def extract(self, database, table, cache, dest, force=False):
+    def _extract_shapes(self, abs_dest, table):
 
         import ogr
         import os
 
-        abs_dest = cache.path(dest, missing_ok = True)
-
-        if os.path.exists(abs_dest):
-            if force:
-                from ambry.util import rm_rf
-                rm_rf(abs_dest)
-            else:
-                return False, abs_dest
-
-        t, cd = self.geometry_type(database, table)
+        t, cd = self.geometry_type(self.database, table)
 
         ds, layer = self.new_layer(abs_dest, table, t)
 
-        self.create_schema(database, table, layer)
+        self.create_schema(self.database, table, layer)
 
         q = "SELECT *, AsText(Transform(geometry, {} )) AS _wkt FROM {}".format(self.epsg, table)
 
-        for i,row in enumerate(database.connection.execute(q)):
+        for i,row in enumerate(self.database.connection.execute(q)):
 
             feature = ogr.Feature(layer.GetLayerDefn())
 
@@ -196,7 +194,6 @@ class OgrExtractor(object):
                     except Exception as e:
                         print 'Failed for {}={} ({})'.format(name, value, type(value))
                         raise
-
 
             geometry = ogr.CreateGeometryFromWkt(row['_wkt'])
 
@@ -217,11 +214,95 @@ class ShapeExtractor(OgrExtractor):
     driver_name = 'Esri Shapefile'
     max_name_len = 8 # For ESRI SHapefiles
 
+    def mangle_path(self,rel_path):
+        if not rel_path.endswith('.zip'):
+            rel_path += '.zip'
+
+        return rel_path
+
+    def zip_dir(self, layer_name, source_dir, dest_path):
+        """
+        layer_name The name of the top level directory in
+        """
+        import zipfile
+        import os
+
+        zf = zipfile.ZipFile(dest_path, 'w', zipfile.ZIP_DEFLATED)
+
+        for root, dirs, files in os.walk(source_dir):
+            for f in files:
+                zf.write(os.path.join(root, f), os.path.join(layer_name, f))
+
+            zf.close()
+
+    def _extract(self, table, cache, rel_path):
+        import tempfile
+        from ambry.util import temp_file_name
+        from ambry.util.flo import copy_file_or_flo
+        import shutil
+        import os
+
+        rel_path = self.mangle_name(rel_path)
+
+        shapefile_dir = tempfile.gettempdir()
+
+        self._extract_shapes(shapefile_dir, table)
+
+        zf =  temp_file_name()
+
+        self.zip_dir(table, shapefile_dir,  zf)
+
+        copy_file_or_flo(zf, cache.put_stream(rel_path))
+
+        shutil.rmtree(shapefile_dir)
+        os.remove(zf)
+
+        return cache.path(rel_path)
 
 class GeoJsonExtractor(OgrExtractor):
     driver_name = 'GeoJSON'
     max_name_len = 40
 
+    def temp_dest(self):
+        from ambry.util import temp_file_name
+        return temp_file_name()
+
+    def _extract(self, table, cache, rel_path):
+        import tempfile
+        from ambry.util import temp_file_name
+        from ambry.util.flo import copy_file_or_flo
+        import os
+
+        rel_path = self.mangle_name(rel_path)
+
+        tf = temp_file_name()
+
+        self._extract_shapes(tf, table)
+
+        copy_file_or_flo(tf, cache.put_stream(rel_path))
+
+        os.remove(tf)
+
+        return cache.path(rel_path)
+
 class KmlExtractor(OgrExtractor):
     driver_name = 'KML'
     max_name_len = 40
+
+    def _extract(self, table, cache, rel_path):
+        import tempfile
+        from ambry.util import temp_file_name
+        from ambry.util.flo import copy_file_or_flo
+        import os
+
+        rel_path = self.mangle_name(rel_path)
+
+        tf = temp_file_name()
+
+        self._extract_shapes(tf, table)
+
+        copy_file_or_flo(tf, cache.put_stream(rel_path))
+
+        os.remove(tf)
+
+        return cache.path(rel_path)

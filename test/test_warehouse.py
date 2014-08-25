@@ -37,6 +37,8 @@ class TestLogger(object):
     def warn(self, message):
         print("Warn: {}".format(message))
 
+    def copy(self):
+        return self
 
 class Test(TestBase):
  
@@ -58,20 +60,23 @@ class Test(TestBase):
 
     m = """
 TITLE: A Test Manifest, For Testing
-UID: b4303f85-7d07-471d-9bcb-6980ea1bbf18
+UID: xxx-yyy-zzz
 ACCESS: public
 
-DOC: None
+DOC:
+
 This is the test documentation for a file *that is* just for testing.
 
-DESTINATION: spatialite:///tmp/census-race-ethnicity.db
+DATABASE: sqlite:///tmp/test/warehouse.db
 
-DOC: None
+DOC:
+
 Here is more documentation about the directory:
 
 DIR: /tmp/warehouse
 
-DOC: None
+DOC:
+
 We've got a while lot of partitions.
 
 PARTITIONS:
@@ -93,16 +98,21 @@ SELECT 'view2'
 FROM foobar
 
 INDEX: name ON table column1, column1
-More Documentation About the following Extract.
-
 EXTRACT: foobar AS csv TO /bin/bar/bingo
 
-DOC: None
+DOC:
+More Documentation About the following Extract.
+
+EXTRACT: fringo AS geojson TO /bin/bar/geojson
+
+DOC:
+
 ## Foodoc
 Yet more documentation, about the Fringo extract.
 
-EXTRACT: fringo AS geojson TO /bin/bar/geojson
 """
+
+
 
     def tearDown(self):
         pass
@@ -158,6 +168,7 @@ EXTRACT: fringo AS geojson TO /bin/bar/geojson
         print "Warehouse: ", w.database.dsn
         print "Library: ", l.database.dsn
 
+
         w.install("source-dataset-subset-variation-tone-0.0.1")
         w.install("source-dataset-subset-variation-tthree-0.0.1")
         w.install("source-dataset-subset-variation-geot1-geo-0.0.1")
@@ -174,6 +185,7 @@ EXTRACT: fringo AS geojson TO /bin/bar/geojson
 
     def test_local_postgres_install(self):
         self._test_local_install('postgres1')
+
 
     def _test_remote_install(self, name):
 
@@ -209,11 +221,41 @@ EXTRACT: fringo AS geojson TO /bin/bar/geojson
 
         m = Manifest(self.m,get_logger('TL'), base_dir = '/tmp' )
 
-        import yaml
-        #print yaml.dump(m.sections, default_flow_style=False)
-
         self.assertEqual(self.m.strip(), str(m).strip())
 
+        mtext = """
+TITLE: A Test Manifest, For Testing
+UID: xxx-yyy-zzz
+ACCESS: public
+DIR: test_dir
+
+PARTITIONS:
+source-dataset-subset-variation-geot2-geo-0.0.1
+source-dataset-subset-variation-geot1-geo-0.0.1
+source-dataset-subset-variation-tthree-0.0.1
+source-dataset-subset-variation-tone-missing-0.0.1
+source-dataset-subset-variation-tone-0.0.1
+
+EXTRACT: diEGPXmDC8001_tone_missing AS csv TO tone_missing.csv
+
+This is documentation for tone_missing.csv
+
+EXTRACT: diegpxmdc8001_geot1 AS geojson TO geot1.geojson
+
+This is documentation for the geot1.geojson extract
+
+"""
+
+        m = Manifest(mtext, get_logger('TL'), base_dir='/tmp')
+
+        l = self.get_library('local')
+        l.put_bundle(self.bundle)
+
+        w = self.get_warehouse(l, 'spatialite')
+        print 'Installing to ', w.database.path
+        m.install(w)
+
+        w.extract(None)
 
     def test_manifest_doc(self):
         from ambry.util import get_logger
@@ -297,28 +339,10 @@ SELECT
     bb.geometry,
     CAST(Area(Transform(geometry,26946)) AS REAL) AS area,
     CAST(b02001001 AS INTEGER) AS total_pop,
-    CAST(b03003001 AS INTEGER) AS total_hisp,
-    CAST(b02001002 AS INTEGER) AS wht_alone,
-    CAST(b02001002*1.0/b02001001 AS REAL) AS wht_frac,
-    CAST(b02001003 AS INTEGER) AS blk_alone,
-    CAST(b02001003*1.0/b02001001 AS REAL) AS blk_frac,
-    CAST(b02001005 AS INTEGER) AS as_alone,
-    CAST(b02001005*1.0/b02001001 AS REAL) AS as_frac,
-    CAST(b03003002 AS INTEGER) AS not_hisp,
-    CAST(b03003003 AS INTEGER) AS hisp,
-    CAST(b03003003*1.0/b02001001 AS REAL) AS hisp_frac,
-    CAST(C17002002+C17002003+C17002004 AS VARCHAR) AS poverty,
-    CAST((C17002002+C17002003+C17002004)*1.0/b02001001 AS REAL) AS pov_frac
 FROM d02G003_geofile  AS geo
  JOIN d024004_b02001_estimates AS b02001e ON geo.stusab = b02001e.stusab AND geo.logrecno = b02001e.logrecno
- JOIN d024004_b03002_estimates AS b03002e ON geo.stusab = b03002e.stusab AND geo.logrecno = b03002e.logrecno
- JOIN d024004_b03003_estimates AS b03003e ON geo.stusab = b03003e.stusab AND geo.logrecno = b03003e.logrecno
- JOIN d024004_b01001_estimates AS b01001e ON geo.stusab = b01001e.stusab AND geo.logrecno = b01001e.logrecno
- JOIN d024004_c17002_estimates AS c17002e ON geo.stusab = c17002e.stusab AND geo.logrecno = c17002e.logrecno
  JOIN blockgroup_boundaries AS bb ON geo.state = bb.state AND geo.county = bb.county AND bb.tract = geo.tract AND bb.blkgrp = geo.blkgrp
 WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
-
-
 """
 
         import sqlparse
