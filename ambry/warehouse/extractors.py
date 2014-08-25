@@ -41,16 +41,17 @@ class Extractor(object):
             if self.force:
                 cache.remove(self.mangle_path(rel_path), True)
             else:
-                return False, cache.path(self.mangle_path(rel_path))
+                return False, (table, rel_path, self.__class__), cache.path(self.mangle_path(rel_path))
 
         self._extract(table, cache, rel_path)
 
-        return cache.path(self.mangle_path(rel_path))
+        return True, (table, rel_path, self.__class__), cache.path(self.mangle_path(rel_path))
 
 class CsvExtractor(Extractor):
 
-    def __init__(self):
-        pass
+    def __init__(self, warehouse, cache, force=False):
+        super(CsvExtractor, self).__init__(warehouse, cache, force=force)
+
 
     def _extract(self, table, cache, rel_path):
 
@@ -74,8 +75,9 @@ class OgrExtractor(Extractor):
 
     epsg = 4326
 
-    def __init__(self):
-        pass
+    def __init__(self, warehouse, cache, force=False):
+
+        super(OgrExtractor, self).__init__(warehouse, cache, force=force)
 
         self.mangled_names = {}
 
@@ -137,13 +139,21 @@ class OgrExtractor(Extractor):
 
     def new_layer(self, abs_dest, name, t):
 
+        ogr.UseExceptions()
+
         driver = ogr.GetDriverByName(self.driver_name)
+
         ds = driver.CreateDataSource(abs_dest)
+
+        if  ds is None:
+            raise ExtractError("Failed to create data source for driver '{}' at dest '{}'".format(self.driver_name, abs_dest))
 
         srs = ogr.osr.SpatialReference()
         srs.ImportFromEPSG(self.epsg)
 
-        layer = ds.CreateLayer(name, srs, self.geo_map[t])
+        # Gotcha! You can't create a layer with a unicode layername!
+        # http://gis.stackexchange.com/a/53939/12543
+        layer = ds.CreateLayer(name.encode('utf-8'), srs, self.geo_map[t])
 
         return ds, layer
 
@@ -236,7 +246,7 @@ class ShapeExtractor(OgrExtractor):
             zf.close()
 
     def _extract(self, table, cache, rel_path):
-        import tempfile
+
         from ambry.util import temp_file_name
         from ambry.util.flo import copy_file_or_flo
         import shutil
@@ -244,7 +254,7 @@ class ShapeExtractor(OgrExtractor):
 
         rel_path = self.mangle_name(rel_path)
 
-        shapefile_dir = tempfile.gettempdir()
+        shapefile_dir = temp_file_name()
 
         self._extract_shapes(shapefile_dir, table)
 
@@ -268,14 +278,13 @@ class GeoJsonExtractor(OgrExtractor):
         return temp_file_name()
 
     def _extract(self, table, cache, rel_path):
-        import tempfile
         from ambry.util import temp_file_name
         from ambry.util.flo import copy_file_or_flo
         import os
 
         rel_path = self.mangle_name(rel_path)
 
-        tf = temp_file_name()
+        tf = temp_file_name() +'.geojson'
 
         self._extract_shapes(tf, table)
 

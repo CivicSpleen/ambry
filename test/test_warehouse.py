@@ -138,23 +138,38 @@ Yet more documentation, about the Fringo extract.
         return l
 
 
-    def get_warehouse(self, l, name):
+    def get_warehouse(self, l, name, delete = True):
         from  ambry.util import get_logger
         from ambry.warehouse import new_warehouse
 
         w = new_warehouse(self.rc.warehouse(name), l)
         w.logger = get_logger('unit_test')
 
-
         lr = self.bundle.init_log_rate(10000)
         w.logger = TestLogger(lr)
 
-        w.database.enable_delete = True
-        w.database.delete()
-
-        w.create()
+        if delete:
+            w.database.enable_delete = True
+            w.database.delete()
+            w.create()
 
         return w
+
+    def get_fs_cache(self,name):
+        import tempfile
+        from ambry.cache.filesystem import FsCache
+        import shutil
+
+        root = os.path.join(tempfile.gettempdir(),'test-cache')
+
+        cache_dir = os.path.join(root, name)
+
+        if os.path.exists(cache_dir):
+            shutil.rmtree(cache_dir)
+
+        return FsCache(cache_dir)
+
+
 
     def _test_local_install(self, name):
 
@@ -255,7 +270,35 @@ This is documentation for the geot1.geojson extract
         print 'Installing to ', w.database.path
         m.install(w)
 
-        w.extract(None)
+        cache = self.get_fs_cache('foobar')
+
+        extracts = w.extract(cache)
+
+        from ambry.util import print_yaml
+
+        print print_yaml(extracts)
+
+        print '===='
+
+        print print_yaml(w.extract(cache))
+
+
+    def test_extract(self):
+        l = self.get_library('local')
+        w = self.get_warehouse(l, 'spatialite', delete=False)
+
+        cache = self.get_fs_cache('foobar')
+
+        extracts = w.extract(cache)
+
+        from ambry.util import print_yaml
+
+        print print_yaml(extracts)
+
+        print '===='
+
+        print print_yaml(w.extract(cache))
+
 
     def test_manifest_doc(self):
         from ambry.util import get_logger
@@ -358,14 +401,6 @@ WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
 
 
         #print sqlparse.format(sql, strip_comments = True, reindent = True)
-
-    def test_extract(self):
-
-        from ambry.warehouse.extractors import extract
-
-        p = self.bundle.partitions.find(table='tthree')
-
-        print extract(p.database, 'tthree', 'csv', '/tmp/extract/', 'foo/bar')
 
 
     def x_test_install(self):

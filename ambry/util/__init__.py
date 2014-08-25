@@ -432,7 +432,9 @@ class IncludeFile(str):
  
 def include_representer(dumper, data):
     return dumper.represent_scalar(u'!include', data.relpath)
-    
+
+def include_representer(dumper, data):
+    return dumper.represent_scalar(u'!include', data.relpath)
 
 # http://pypi.python.org/pypi/layered-yaml-attrdict-config/12.07.1
 class AttrDict(OrderedDict):
@@ -853,15 +855,30 @@ def make_acro(past, prefix, s):
 
 def temp_file_name():
     '''Create a path to a file in the temp directory'''
-    
-    import tempfile
-    
-    f = tempfile.NamedTemporaryFile(delete=False)
-    f.close()
-    
-    return f.name
+
+    if True:
+
+        import uuid
+
+        tmp_dir = '/tmp/ambry'
+
+        if not os.path.exists(tmp_dir):
+            os.makedirs(tmp_dir)
 
 
+        return os.path.join(tmp_dir, str(uuid.uuid4()))
+
+    else:
+
+        import tempfile
+
+        f = tempfile.NamedTemporaryFile(delete=True)
+        f.close()
+
+        if os.path.exists(f.name):
+            os.remove(f.name)
+
+        return f.name
 
 
 # http://stackoverflow.com/questions/296499/how-do-i-zip-the-contents-of-a-folder-using-python-version-2-5
@@ -1234,3 +1251,12 @@ def normalize_newlines(string):
     """Convert \r\n or \r to \n"""
     import re
     return re.sub(r'(\r\n|\r|\n)', '\n', string)
+
+def print_yaml(o):
+    """Pretty print an object as YAML"""
+    import yaml
+    from ..orm import MutationList, MutationDict
+
+    return yaml.dump(o, default_flow_style=False, indent=4, encoding='utf-8')
+
+

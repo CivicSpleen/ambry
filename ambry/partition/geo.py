@@ -8,7 +8,12 @@ from sqlite import SqlitePartition
 
 
 def _geo_db_class(): # To break an import dependency
-    from ..database.geo import GeoDb
+
+    import ambry.database.geo
+
+    print '!!!!', ambry.database.__file__,  dir(ambry.database)
+
+    from ambry.database.geo import GeoDb
     return GeoDb
 
 class GeoPartitionName(PartitionName):

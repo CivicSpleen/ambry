@@ -275,11 +275,11 @@ class WarehouseInterface(object):
                 if doc:
                     d['doc'] = doc.content['html']
 
-                self.install_file(path=os.path.join('extracts', d['rpath']), ref=d['table'], type='extract', data=d)
+                self.install_file(path=os.path.join(manifest.work_dir, 'extracts', d['rpath']), ref=d['table'], type='extract', data=d)
 
 
         # Manifest documentation
-        self.install_file(path=os.path.join('doc', 'index.html'), ref=manifest.uid, type='text/html',
+        self.install_file(path=os.path.join(manifest.work_dir, 'doc', 'index.html'), ref=manifest.uid, type='text/html',
                           content=manifest.html_doc())
 
         # Manifest data
@@ -343,19 +343,30 @@ class WarehouseInterface(object):
 
 
     def extract(self, cache, force=False):
-        """Generate the extracts"""
+        """Generate the extracts and return a struture listing the extracted files. """
 
         from .extractors import new_extractor
 
+        extracts = []
+
+        # Generate the file etracts
+
         for f in self.library.files.query.type('extract').all:
 
-            print f.path, f.ref
             table = f.data['table']
             format = f.data['format']
 
             ex = new_extractor(format, self, cache, force=False)
 
-            ex.extract(table, cache, f.path)
+            extracts.append(ex.extract(table, cache, f.path))
+
+        # HTML files.
+        for f in self.library.files.query.type('text/html').all:
+            content = f.content
+            path = f.path
+
+
+        return extracts
 
     ##
     ## users

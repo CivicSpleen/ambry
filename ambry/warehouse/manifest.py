@@ -171,7 +171,13 @@ class Manifest(object):
 
     @property
     def work_dir(self):
-        return self.single_line('dir')
+        wd =  self.single_line('dir')
+
+        if not wd:
+            wd = self.uid
+
+        return wd
+
 
     @property
     def uid(self):
