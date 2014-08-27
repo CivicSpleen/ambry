@@ -856,19 +856,9 @@ def make_acro(past, prefix, s):
 def temp_file_name():
     '''Create a path to a file in the temp directory'''
 
-    if True:
+    import platform
 
-        import uuid
-
-        tmp_dir = '/tmp/ambry'
-
-        if not os.path.exists(tmp_dir):
-            os.makedirs(tmp_dir)
-
-
-        return os.path.join(tmp_dir, str(uuid.uuid4()))
-
-    else:
+    if platform.system() == 'Windows':
 
         import tempfile
 
@@ -879,6 +869,19 @@ def temp_file_name():
             os.remove(f.name)
 
         return f.name
+
+    else:
+
+        import uuid
+
+        tmp_dir = '/tmp/ambry'
+
+        if not os.path.exists(tmp_dir):
+            os.makedirs(tmp_dir)
+
+        return os.path.join(tmp_dir, str(uuid.uuid4()))
+
+
 
 
 # http://stackoverflow.com/questions/296499/how-do-i-zip-the-contents-of-a-folder-using-python-version-2-5
@@ -1257,6 +1260,6 @@ def print_yaml(o):
     import yaml
     from ..orm import MutationList, MutationDict
 
-    return yaml.dump(o, default_flow_style=False, indent=4, encoding='utf-8')
+    print (yaml.dump(o, default_flow_style=False, indent=4, encoding='utf-8'))
 
 

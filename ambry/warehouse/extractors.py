@@ -41,11 +41,11 @@ class Extractor(object):
             if self.force:
                 cache.remove(self.mangle_path(rel_path), True)
             else:
-                return False, (table, rel_path, self.__class__), cache.path(self.mangle_path(rel_path))
+                return False, rel_path, cache.path(self.mangle_path(rel_path)), (table, self.__class__)
 
         self._extract(table, cache, rel_path)
 
-        return True, (table, rel_path, self.__class__), cache.path(self.mangle_path(rel_path))
+        return True, rel_path, cache.path(self.mangle_path(rel_path)),(table, self.__class__)
 
 class CsvExtractor(Extractor):
 

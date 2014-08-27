@@ -1,0 +1,11 @@
+<!-- Partitions  -->
+<ul class="list-unstyled">
+{% for k,b in w.bundles.items() -%}
+    <li><a href="doc/{{b.vid}}.html">{{b.vname}}</a> <em>{{b.data.about_title}}</em></li>
+    <ul>
+    {% for k,p in b.partitions.items() -%}
+        <li><a href="doc/{{p.vid}}.html">{{p.vname}}</a></li>
+    {%endfor-%}
+    </ul>
+{% endfor -%}
+</ul>

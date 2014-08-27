@@ -4,6 +4,7 @@ from ..library.database import LibraryDb
 from ..cache import new_cache, CacheInterface
 from ..database import new_database
 import os
+from ..util import Constant
 
 class NullCache(CacheInterface):
     def has(self, rel_path, md5=None, use_upstream=True):
@@ -79,6 +80,18 @@ class ResolutionError(Exception):
     pass
 
 class WarehouseInterface(object):
+
+    FILE_TYPE = Constant()
+
+    FILE_TYPE.MANIFEST = 'manifest'
+    FILE_TYPE.HTML = 'text/html'
+
+    FILE_GROUP = Constant()
+
+    FILE_GROUP.MANIFEST = 'manifest'
+    FILE_GROUP.DOC = 'doc'
+    FILE_GROUP.EXTRACT = 'extract'
+
     def __init__(self,
                  database,
                  wlibrary=None, # Warehouse library
@@ -116,6 +129,88 @@ class WarehouseInterface(object):
     @property
     def library(self):
         return self.wlibrary
+
+    ##
+    ## Metadata
+    ##
+
+    def _meta_set(self, key, value):
+        from ..orm import Config
+        return self.library.database.set_config_value('warehouse', key, value)
+
+    def _meta_get(self, key):
+        from ..orm import Config
+
+        return self.library.database.get_config_value('warehouse', key).value
+
+    @property
+    def title(self):
+        t =  self._meta_get('title')
+        if t:
+            return t
+        else:
+            return self.database.dsn
+
+
+    @title.setter
+    def title(self, v):
+        return  self._meta_set('title', v)
+
+    @property
+    def about(self):
+        return self._meta_get('about')
+
+    @about.setter
+    def about(self, v):
+        return self._meta_set('about', v)
+
+    @property
+    def manifests(self):
+        """Return the parsed manifests that have been installed"""
+        from .manifest import Manifest
+
+        manifests = []
+
+        for f in self.library.files.query.type(self.FILE_TYPE.MANIFEST).group(self.FILE_GROUP.MANIFEST).all:
+            index = self.library.files.query.type(self.FILE_TYPE.HTML).group(self.FILE_GROUP.MANIFEST).first
+            manifests.append((index, f, Manifest(f.content)))
+
+        return manifests
+
+    @property
+    def index(self):
+        """Return, and possibly generate, the index HTML document"""
+
+        from ..text import WarehouseIndex
+
+        wi = WarehouseIndex(self)
+
+        return wi.render()
+
+
+    @property
+    def bundles(self):
+        """Metadata for bundles, each with the partitions that are installed here.
+
+        This extracts the bundle information that is in the partitions list, but it requires
+        that the add_bundle() method has been run first, because the manifest doesn't usually ahve access to
+        a library
+        """
+
+        l =  self.library.list(with_partitions=True)
+
+        for k, v in l.items():
+            d = { e.key.replace('.','_'):e.value for e in self.library.database.get_bundle_values(k,'config')}
+            v.data.update(d)
+
+        return l
+
+    @property
+    def tables(self):
+        from ..orm import Table
+
+        for table in self.library.database.session.query(Table).all():
+            yield table
 
     ##
     ## Installation
@@ -175,10 +270,8 @@ class WarehouseInterface(object):
         # Install bundle doc, if it doesn't exist.
         if not self.library.files.query.type('text/html').ref(bundle.identity.vid).first:
             self.install_file(path=os.path.join('doc', bundle.identity.vid) + '.html',
-                              ref=bundle.identity.vid, type='text/html', content=bundle.html_doc())
+                              ref=bundle.identity.vid, group='doc', type='text/html', content=bundle.html_doc())
 
-        # install the partition documentation
-        self.install_file(path=os.path.join('doc', p.vid)+'.html', ref=p.vid, type='text/html',  content = p.html_doc())
 
         self.library.database.mark_partition_installed(p_vid)
 
@@ -211,7 +304,7 @@ class WarehouseInterface(object):
         return tables
 
     def install_manifest(self, manifest):
-
+        """Install the partitions and views specified in a manifest file """
         from ..dbexceptions import NotFoundError, ConfigurationError
         from ambry.util import init_log_rate
 
@@ -223,11 +316,7 @@ class WarehouseInterface(object):
         # Update the manifest with bundle information, since it doesn't normally have access to a library
         manifest.add_bundles(self.elibrary)
 
-        self.logger.info("Working directory: {}".format(manifest.abs_work_dir))
-
         self.logger = Logger(self.logger, init_log_rate(self.logger.info, N=2000))
-
-        working_cache = new_cache(manifest.abs_work_dir)
 
         ## First pass
         for line, section in manifest.sorted_sections:
@@ -275,16 +364,12 @@ class WarehouseInterface(object):
                 if doc:
                     d['doc'] = doc.content['html']
 
-                self.install_file(path=os.path.join(manifest.work_dir, 'extracts', d['rpath']), ref=d['table'], type='extract', data=d)
-
-
-        # Manifest documentation
-        self.install_file(path=os.path.join(manifest.work_dir, 'doc', 'index.html'), ref=manifest.uid, type='text/html',
-                          content=manifest.html_doc())
+                self.install_file(path=os.path.join(manifest.uid, 'extracts', d['rpath']), ref=d['table'],
+                                  type=d['format'], group='extract', data=d)
 
         # Manifest data
-        self.install_file(path=os.path.join('manifests', manifest.uid)+'.ambry', ref=manifest.uid, type='manifest',
-                          content=str(manifest))
+        self.install_file(path=os.path.join('manifests', manifest.uid)+'.ambry', ref=manifest.uid,
+                          type=self.FILE_TYPE.MANIFEST, group=self.FILE_GROUP.MANIFEST, content=str(manifest))
 
         if os.path.exists(self.database.path):
             return self.database.path
@@ -294,7 +379,7 @@ class WarehouseInterface(object):
     def install_view(self, name, sql):
         raise NotImplementedError(type(self))
 
-    def install_file(self, path,  ref, content=None, source=None, type=None, data=None):
+    def install_file(self, path,  ref, content=None, source=None, type=None, group=None, data=None):
         raise NotImplementedError(type(self))
 
     def run_sql(self, sql_text):
@@ -341,11 +426,32 @@ class WarehouseInterface(object):
 
         return b, p
 
+    class extract_entry(object):
+        def __init__(self, extracted, rel_path, abs_path, data=None):
+            self.extracted = extracted
+            self.rel_path = rel_path
+            self.abs_path = abs_path
+            self.data = data
 
     def extract(self, cache, force=False):
         """Generate the extracts and return a struture listing the extracted files. """
+        from contextlib import closing
 
         from .extractors import new_extractor
+        from ..text import Tables
+
+        def maybe_render(rel_path, render_lambda):
+
+            if not cache.has(rel_path):
+                with cache.put_stream(rel_path) as s:
+                    s.write(render_lambda())
+                extracted = True
+            else:
+                extracted = False
+
+            return WarehouseInterface.extract_entry(extracted, rel_path, cache.path(rel_path))
+
+
 
         extracts = []
 
@@ -358,12 +464,37 @@ class WarehouseInterface(object):
 
             ex = new_extractor(format, self, cache, force=False)
 
-            extracts.append(ex.extract(table, cache, f.path))
+            extracts.append(WarehouseInterface.extract_entry(*ex.extract(table, cache, f.path)))
 
         # HTML files.
         for f in self.library.files.query.type('text/html').all:
-            content = f.content
-            path = f.path
+            extracts.append(maybe_render(f.path, lambda: f.content))
+
+
+        # Bundles
+        for k,b in self.bundles.items():
+            extracts.append(maybe_render('doc/{}.html'.format(b.vid), lambda: b.html_doc()))
+
+        # Partitions
+
+        # Tables
+        for t in self.tables:
+            renderer = Tables(self, t)
+
+            extracts.append(maybe_render('doc/{}.html'.format(t.vid), lambda: renderer.render_table() ))
+
+
+        with cache.put_stream('index.html') as s:
+            s.write(self.index)
+
+        extracts.append((True, 'index.html', cache.path('index.html')))
+
+        with cache.put_stream('toc.html') as s:
+            from ..text import WarehouseIndex
+
+            wi = WarehouseIndex(self)
+
+            s.write(wi.render_toc(extracts))
 
 
         return extracts
@@ -484,14 +615,6 @@ class WarehouseInterface(object):
 
         if 'password' in config['database']: del config['database']['password']
         return config
-
-
-    def table_docs(self):
-        from ..orm import Table
-
-        for table in self.wlibrary.database.session.query(Table).all():
-            print table.markdown_table
-
 
 
 def database_config(db, base_dir=''):

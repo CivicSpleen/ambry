@@ -9,11 +9,8 @@ from sqlite import SqlitePartition
 
 def _geo_db_class(): # To break an import dependency
 
-    import ambry.database.geo
+    from  ambry.database.geo import GeoDb
 
-    print '!!!!', ambry.database.__file__,  dir(ambry.database)
-
-    from ambry.database.geo import GeoDb
     return GeoDb
 
 class GeoPartitionName(PartitionName):
@@ -27,7 +24,7 @@ class GeoPartition(SqlitePartition):
     '''A Partition that hosts a Spatialite for geographic data'''
 
     _id_class = GeoPartitionIdentity
-    _db_class = _geo_db_class()
+
     
     def __init__(self, bundle, record, **kwargs):
         super(GeoPartition, self).__init__(bundle, record)
@@ -35,7 +32,8 @@ class GeoPartition(SqlitePartition):
     @property
     def database(self):
         if self._database is None:
-            self._database = self._db_class(self.bundle, self, base_path=self.path)
+            _db_class = _geo_db_class()
+            self._database = _db_class(self.bundle, self, base_path=self.path)
         return self._database
 
     def _get_srs_wkt(self):
@@ -86,9 +84,10 @@ class GeoPartition(SqlitePartition):
         from ambry.geo.sfschema import TableShapefile
 
         if self.identity.table:
-
-            tsf = TableShapefile(self.bundle, self._db_class.make_path(self), self.identity.table,
+            _db_class = _geo_db_class()
+            tsf = TableShapefile(self.bundle, _db_class.make_path(self), self.identity.table,
                                  dest_srs = dest_srs, source_srs = source_srs )
+
 
             tsf.close()
 

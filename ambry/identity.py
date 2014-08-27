@@ -1017,6 +1017,10 @@ class Locations(object):
 
         uc_code = code.upper()
 
+        # In warehouses, there are many other file types that are not locations.
+        if uc_code not in Locations.order:
+            return
+
         if not revision:
             revision = self.ident.on.revision
             version = self.ident.name.version

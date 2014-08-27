@@ -65,11 +65,6 @@ class RelationalWarehouse(WarehouseInterface):
             self.logger.info('index_exists {}'.format(name))
             # Ignore if it already exists.
 
-
-    def tables(self):
-
-        return self.metadata.sorted_tables
-
     def table(self, table_name):
         '''Get table metadata from the database'''
         from sqlalchemy import Table
@@ -79,7 +74,7 @@ class RelationalWarehouse(WarehouseInterface):
         if table is not False:
             r = table
         else:
-            metadata = self.metadata
+            metadata = self.metadata # FIXME Will probably fail ..
             table = Table(table_name, metadata, autoload=True)
             self._table_meta_cache[table_name] = table
             r = table
@@ -235,7 +230,7 @@ class RelationalWarehouse(WarehouseInterface):
         e(sql_text)
 
 
-    def install_file(self, path,  ref, type = None, content=None, source = None, data=None):
+    def install_file(self, path, ref, content = None, source = None, type = None, group = None, data = None):
         """Install a file reference, possibly with binary content"""
         import os
         from ..util import md5_for_file
@@ -244,7 +239,7 @@ class RelationalWarehouse(WarehouseInterface):
 
         files = self.library.files
 
-        f  = files.new_file(path=path, ref = ref, type_=type, data=data)
+        f  = files.new_file(path=path, ref = ref, type_=type, group=group, data=data)
 
         if source:
             try:

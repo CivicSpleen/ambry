@@ -7,6 +7,8 @@ from inserter import InserterInterface, UpdaterInterface
 from .partition import PartitionDb
 from ..partition.geo import GeoPartitionName
 
+
+
 class FeatureInserter(InserterInterface):
     
     def __init__(self, partition, table, dest_srs=4326, source_srs=None, layer_name = None):

@@ -1,7 +1,7 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
 <html lang="en">
 <head>
-    <title>{{m.about.title}}</title>
+    <title>Table: {{table.name}}</title>
     <link href="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet">
 
     <style media="screen" type="text/css">
@@ -16,8 +16,10 @@
         <div class="container">
             <div class="row">
                 <div class="col-md-12">
-                  <h1 class="title">Bundle: {{m.about.title}}</h1>
+                  <h1 class="title">Table: {{table.name}}</h1>
                   <p>Warehouse: <a href="../index.html">{{w.title}}</a></p>
+                  <p>Bundle: <a href="../doc/{{table.dataset.vid}}.html">{{table.dataset.fqname}}</a></p>
+                  <p>{{table.description}}</p>
                 </div>
             </div>
         </div>
@@ -25,25 +27,30 @@
 
     <div class="container">
         <div class="row">
-            <div class="col-md-3">
-                <div  id="sidebar">
-                    <div  id="toc"></div>
-                </div>
+            <div class="col-md-12">
+                <h2>Schema</h2>
+                {% include 'table.html' -%}
             </div>
-            <div class="col-md-9">
-                <div class="ambry-manifest">
-                {% include 'documentation.html' -%}
-                <h1>Tables</h1>
-                {% if b.schema.tables|length > 1 -%}
-                {% include 'tables.html' -%}
-                {% endif -%}
-                {% for table in b.schema.tables -%}
-                    {% include 'table.html' -%}
-                {% endfor %}
-                </div>
+        </div>
+
+    </div>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                  {% if table.partitions -%}
+                   <h2>Partitions</h2>
+                   <ul>
+                       {% for p in table.partitions -%}
+                       <li><a href="../doc/{{p.vid}}.html">{{p.vname}}</a></li>
+                       {% endfor %}
+                   </ul>
+                  {% endif %}
             </div>
         </div>
     </div>
+
+</div>
 
 <script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
 <script src="http://code.jquery.com/jquery-migrate-1.2.1.min.js"></script>

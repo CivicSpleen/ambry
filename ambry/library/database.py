@@ -445,6 +445,18 @@ class LibraryDb(object):
         except:
             return None
 
+    def get_bundle_values(self, dvid, group):
+        """Get an entire group of bundle values"""
+
+        from ambry.orm import Config as SAConfig
+
+        s = self.session
+
+        try:
+            return s.query(SAConfig).filter(SAConfig.group == group,SAConfig.d_vid == dvid).all()
+        except:
+            return None
+
     @property
     def config_values(self):
 

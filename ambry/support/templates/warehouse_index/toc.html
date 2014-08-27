@@ -1,7 +1,7 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
 <html lang="en">
 <head>
-    <title>{{m.about.title}}</title>
+    <title>Data Warehouse: {{w.title}}</title>
     <link href="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet">
 
     <style media="screen" type="text/css">
@@ -15,9 +15,10 @@
     <header class="masthead">
         <div class="container">
             <div class="row">
+
                 <div class="col-md-12">
-                  <h1 class="title">Bundle: {{m.about.title}}</h1>
-                  <p>Warehouse: <a href="../index.html">{{w.title}}</a></p>
+                  <h1 class="title">Warehouse TOC: {{w.title}}</h1>
+                  <p>{{w.about}}</p>
                 </div>
             </div>
         </div>
@@ -25,25 +26,19 @@
 
     <div class="container">
         <div class="row">
-            <div class="col-md-3">
-                <div  id="sidebar">
-                    <div  id="toc"></div>
-                </div>
-            </div>
-            <div class="col-md-9">
+            <div class="col-md-12">
+                <h1>Manifests</h1>
                 <div class="ambry-manifest">
-                {% include 'documentation.html' -%}
-                <h1>Tables</h1>
-                {% if b.schema.tables|length > 1 -%}
-                {% include 'tables.html' -%}
-                {% endif -%}
-                {% for table in b.schema.tables -%}
-                    {% include 'table.html' -%}
+                <ul>
+                {% for e in toc -%}
+                  <li><a href="{{e.rel_path}}">{{e.rel_path}}</a></li>
                 {% endfor %}
-                </div>
+                </ul>
             </div>
         </div>
     </div>
+</div>
+
 
 <script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
 <script src="http://code.jquery.com/jquery-migrate-1.2.1.min.js"></script>

@@ -87,12 +87,13 @@ class BundleDoc(object):
                                embed_css=self.css)
 
 class WarehouseIndex(object):
-    def __init__(self, m):
+    """Creates the index webpage for awarehouse"""
+    def __init__(self, w):
         from jinja2 import Environment, PackageLoader
 
         self.env = Environment(loader=PackageLoader('ambry.support.templates', 'warehouse_index'))
 
-        self.m = m # List of metadatas
+        self.w = w
 
     @property
     def css(self):
@@ -108,4 +109,45 @@ class WarehouseIndex(object):
 
         template = self.env.get_template('layout.html')
 
-        return template.render(m = self.m, embed_css=self.css)
+        return template.render(w = self.w, embed_css=self.css)
+
+    def render_toc(self, toc):
+        template = self.env.get_template('toc.html')
+
+        return template.render(w=self.w,toc = toc,  embed_css=self.css)
+
+
+
+class Tables(object):
+    """Creates the index webpage for """
+    def __init__(self, w, table):
+
+        self.w = w
+        self.table = table
+
+    @property
+    def css(self):
+        import ambry.support.templates.warehouse_index as pdir
+
+        css_path = os.path.join(os.path.dirname(pdir.__file__), 'index.css')
+
+        with open(css_path) as f:
+            return f.read()
+
+    def render_index(self):
+        from jinja2 import Environment, PackageLoader
+
+        self.env = Environment(loader=PackageLoader('ambry.support.templates', 'table'))
+
+        template = self.env.get_template('layout.html')
+
+        return template.render(w = self.w, embed_css=self.css)
+
+    def render_table(self):
+        from jinja2 import Environment, PackageLoader
+
+        self.env = Environment(loader=PackageLoader('ambry.support.templates', 'table'))
+
+        template = self.env.get_template('table_layout.html')
+
+        return template.render(w=self.w, table = self.table, embed_css=self.css)

@@ -128,6 +128,14 @@ class FsCache(Cache):
                     if self._upstream and not self._upstream.readonly and not self._upstream.usreadonly:
                         self._upstream.put(self._repo_path, self._rel_path, metadata=metadata)
 
+            def __enter__(self):
+                return self
+
+            def __exit__(self, type_, value, traceback):
+                if type_:
+                    return False
+
+                self.close()
 
         self.put_metadata(rel_path, metadata)
 

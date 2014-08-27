@@ -1,11 +1,11 @@
 <!-- Partitions View, line {{section.line_number}} -->
 <h2 class="{{section.tag}}" id="ambrm_{{section.line_number}}">Bundles and Partitions</h2>
 <ul class="list-unstyled">
-{% for b in m.bundles.values() -%}
-    <li><a href="{{b.ident.vid}}.html">{{b.ident.vname}}</a> <em>{{b.metadata.about.title}}</em></li>
+{% for k,b in m.bundles -%}
+    <li><a href="../../doc/{{b.ident.vid}}.html">{{b.ident.vname}}</a> <em>{{b.metadata.about.title}}</em></li>
     <ul>
     {% for p in b.partitions -%}
-        <li><a href="{{p.ident.vid}}.html">{{p.ident.vname}}</a></li>
+        <li><a href="../../doc/{{p.ident.vid}}.html">{{p.ident.vname}}</a></li>
     {%endfor-%}
     </ul>
 {% endfor -%}

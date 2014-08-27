@@ -317,7 +317,6 @@ class Resolver(object):
             q = (self.session.query(Dataset, File)
                 .outerjoin(File, File.ref == Dataset.vid)
                 .filter(dqp)
-                #.filter(File.type_.in_(Locations.order))
                 .order_by(Dataset.revision.desc()))
 
             for row in (q.all()):

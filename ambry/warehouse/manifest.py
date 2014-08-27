@@ -19,8 +19,6 @@ class null_logger(object):
     def error(self, w):
         pass
 
-def new_manifest(ref, logger, library, base_dir, force=False, install_db = False):
-    return Manifest(ref, logger, library = library, base_dir = base_dir, force=force, install_db = install_db)
 
 class ParseError(Exception):
     pass
@@ -55,15 +53,9 @@ class Manifest(object):
     singles = ['uid', 'title', 'extract', 'dir',  'database', 'publish', 'author', 'url', 'access', 'index']
     multi_line = ['partitions','view','mview','sql','doc']
 
-    def __init__(self, file_or_data, logger=None, library=None, base_dir=None,
-                 force=False, install_db=False):
+    def __init__(self, file_or_data, logger=None):
 
         from ..dbexceptions import ConfigurationError
-
-        self.library = library
-        self.base_dir = base_dir
-        self.force = force
-        self._install_db = install_db
 
         self.logger = logger if logger else null_logger()
         self.last_line = 0
@@ -73,9 +65,6 @@ class Manifest(object):
 
         if self.data:
             self.sectionalize(self.data)
-
-        if not self.base_dir:
-            raise ConfigurationError("Must specify a base dir")
 
         self.file_installs = set()
         self.installed_partitions = list()
@@ -105,36 +94,6 @@ class Manifest(object):
             file = None
 
         return file, data
-
-
-    @property
-    def abs_work_dir(self):
-        from ..dbexceptions import  ConfigurationError
-
-        if not os.path.isdir(self.base_dir):
-            os.makedirs(self.base_dir)
-
-        work_dir = self.work_dir if self.work_dir else self.uid
-
-        abs_work_dir = os.path.join(self.base_dir, work_dir)
-
-        if not os.path.isdir(abs_work_dir):
-            os.makedirs(abs_work_dir)
-
-        if not self.work_dir or not os.path.isdir(abs_work_dir):
-            raise ConfigurationError("Must specify  work dir ")
-
-
-        return abs_work_dir
-
-    @property
-    def install_db(self):
-        """Return true if both the install_db flag was set on construction, and the database is installable"""
-        if  self._install_db and os.path.exists(self.warehouse.database.path):
-            return os.path.basename(self.warehouse.database.path)
-        else:
-            return False
-
 
     @property
     def sorted_sections(self):
@@ -616,48 +575,6 @@ class Manifest(object):
         except Exception as e:
             raise ParseError("Failed to parse {} : {}".format(line, e))
 
-    def get_warehouse(self,w=None):
-        """Return the argument if it a warehouse, construct a warehouse if it is a string,
-        or construct a warehosue from the "DATABASE" tag if is is None"""
-
-        from ..dbexceptions import NotFoundError, ConfigurationError
-        from . import database_config, new_warehouse
-        from ..warehouse import WarehouseInterface
-
-        if w and isinstance(w, WarehouseInterface):
-            return w
-
-        elif w and isinstance(w, basestring):
-            config = database_config(w, self.abs_work_dir)
-
-        else:
-            config = database_config(self.database, self.abs_work_dir)
-
-        w = new_warehouse(config, self.library)
-
-        if not w.exists():
-            w.create()
-
-        return w
-
-    def install(self, w=None):
-
-        w = self.get_warehouse(w)
-
-        return w.install_manifest(self)
-
-
-    def write_documentation(self, cache):
-
-        fn = 'index.html'
-        s = cache.put_stream(fn)
-        s.write(self.html_doc())
-        s.close()
-        index = afn = cache.path(fn)
-        self.file_installs.add(afn)
-
-        return index
-
     def html_doc(self):
         from ..text import ManifestDoc
         import os
@@ -677,23 +594,8 @@ class Manifest(object):
             'access': self.access
         }
 
-    def save(self,filename=None):
-        """Write the manifest to a file.
-        Writes to the current base_dir if a filename is not given or if the filename is not absolute
-        """
-        if not filename:
-            import re
-            filename = re.sub(r'[\s\\\/]','_',"{}.ambry".format(self.title))
-
-
-        if not os.path.isabs(filename):
-            filename = os.path.join(self.abs_work_dir, filename)
-
-        with open(filename, 'w') as f:
-            f.write(str(self))
-
     def __str__(self):
-
+        """Re-create the Manifest text from the sections. """
         o = ""
 
         last_tag_single = False
@@ -731,6 +633,3 @@ class Manifest(object):
 
     def _repr_html_(self):
         return "<pre>" + str(self) + "</pre>"
-
-
-

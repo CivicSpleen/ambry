@@ -156,33 +156,29 @@ Yet more documentation, about the Fringo extract.
         return w
 
     def get_fs_cache(self,name):
-        import tempfile
+        from ambry.util import temp_file_name
         from ambry.cache.filesystem import FsCache
         import shutil
 
-        root = os.path.join(tempfile.gettempdir(),'test-cache')
+        #cache_dir = os.path.join(temp_file_name(), 'warehouse-test', name)
 
-        cache_dir = os.path.join(root, name)
+        cache_dir = os.path.join('/tmp/ambry/test-warehouse', 'warehouse-test', name)
 
         if os.path.exists(cache_dir):
             shutil.rmtree(cache_dir)
 
         return FsCache(cache_dir)
 
-
-
     def _test_local_install(self, name):
 
         l = self.get_library('local')
         l.clean()
-
 
         l.put_bundle(self.bundle)
 
         w = self.get_warehouse(l, name)
         print "Warehouse: ", w.database.dsn
         print "Library: ", l.database.dsn
-
 
         w.install("source-dataset-subset-variation-tone-0.0.1")
         w.install("source-dataset-subset-variation-tthree-0.0.1")
@@ -233,8 +229,9 @@ Yet more documentation, about the Fringo extract.
         """Load the manifest and convert it to a string to check the round-trip"""
         from ambry.warehouse.manifest import Manifest
         from ambry.util import get_logger
+        from ambry.util import print_yaml
 
-        m = Manifest(self.m,get_logger('TL'), base_dir = '/tmp' )
+        m = Manifest(self.m,get_logger('TL') )
 
         self.assertEqual(self.m.strip(), str(m).strip())
 
@@ -261,27 +258,23 @@ This is documentation for the geot1.geojson extract
 
 """
 
-        m = Manifest(mtext, get_logger('TL'), base_dir='/tmp')
+        m = Manifest(mtext, get_logger('TL'))
 
         l = self.get_library('local')
         l.put_bundle(self.bundle)
 
         w = self.get_warehouse(l, 'spatialite')
         print 'Installing to ', w.database.path
-        m.install(w)
 
-        cache = self.get_fs_cache('foobar')
+        w.title = "This is the Warehouse!"
 
-        extracts = w.extract(cache)
+        w.about = "A Warehouse full of wonder"
 
-        from ambry.util import print_yaml
+        w.install_manifest(m)
+
+        extracts = w.extract(self.get_fs_cache('foobar'))
 
         print print_yaml(extracts)
-
-        print '===='
-
-        print print_yaml(w.extract(cache))
-
 
     def test_extract(self):
         l = self.get_library('local')
@@ -291,14 +284,8 @@ This is documentation for the geot1.geojson extract
 
         extracts = w.extract(cache)
 
-        from ambry.util import print_yaml
-
-        print print_yaml(extracts)
-
-        print '===='
-
-        print print_yaml(w.extract(cache))
-
+        #from ambry.util import print_yaml
+        #print_yaml(extracts)
 
     def test_manifest_doc(self):
         from ambry.util import get_logger
