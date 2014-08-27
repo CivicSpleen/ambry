@@ -183,9 +183,9 @@ class WarehouseInterface(object):
 
         from ..text import WarehouseIndex
 
-        wi = WarehouseIndex(self)
+        wi = WarehouseIndex()
 
-        return wi.render()
+        return wi.render(self)
 
 
     @property
@@ -438,20 +438,19 @@ class WarehouseInterface(object):
         from contextlib import closing
 
         from .extractors import new_extractor
-        from ..text import Tables
+        from ..text import Tables, BundleDoc
 
-        def maybe_render(rel_path, render_lambda):
+        def maybe_render(rel_path, render_lambda, force=False):
 
-            if not cache.has(rel_path):
+            if not cache.has(rel_path) or force:
                 with cache.put_stream(rel_path) as s:
+                    print rel_path
                     s.write(render_lambda())
                 extracted = True
             else:
                 extracted = False
 
             return WarehouseInterface.extract_entry(extracted, rel_path, cache.path(rel_path))
-
-
 
         extracts = []
 
@@ -464,7 +463,7 @@ class WarehouseInterface(object):
 
             ex = new_extractor(format, self, cache, force=False)
 
-            extracts.append(WarehouseInterface.extract_entry(*ex.extract(table, cache, f.path)))
+            extracts.append(WarehouseInterface.extract_entry(*ex.extract(table, cache, f.path), force=force))
 
         # HTML files.
         for f in self.library.files.query.type('text/html').all:
@@ -473,15 +472,15 @@ class WarehouseInterface(object):
 
         # Bundles
         for k,b in self.bundles.items():
-            extracts.append(maybe_render('doc/{}.html'.format(b.vid), lambda: b.html_doc()))
+            renderer = BundleDoc()
+            extracts.append(maybe_render('doc/{}.html'.format(b.vid), lambda: renderer.render(b), force=force))
 
         # Partitions
 
         # Tables
         for t in self.tables:
-            renderer = Tables(self, t)
-
-            extracts.append(maybe_render('doc/{}.html'.format(t.vid), lambda: renderer.render_table() ))
+            renderer = Tables()
+            extracts.append(maybe_render('doc/{}.html'.format(t.vid), lambda: renderer.render_table(self, t), force=force ))
 
 
         with cache.put_stream('index.html') as s:
@@ -489,12 +488,16 @@ class WarehouseInterface(object):
 
         extracts.append((True, 'index.html', cache.path('index.html')))
 
+        with cache.put_stream('css/style.css') as s:
+            from ..text import Renderer
+            s.write(Renderer().css)
+
         with cache.put_stream('toc.html') as s:
             from ..text import WarehouseIndex
 
-            wi = WarehouseIndex(self)
+            wi = WarehouseIndex()
 
-            s.write(wi.render_toc(extracts))
+            s.write(wi.render_toc(self, extracts))
 
 
         return extracts

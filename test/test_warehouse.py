@@ -272,7 +272,7 @@ This is documentation for the geot1.geojson extract
 
         w.install_manifest(m)
 
-        extracts = w.extract(self.get_fs_cache('foobar'))
+        extracts = w.extract(self.get_fs_cache('foobar'), force=True)
 
         print print_yaml(extracts)
 
