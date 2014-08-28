@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% block title %}Bundle: {{m.about.title}}{% endblock %}
+{% block head %}
+    {{ super() }}
+{% endblock %}
+{% block masthead %}
+    <h1 class="title">Bundle: {{m.about.title}}</h1>
+    <p>{{m.about.summary}}</p>
+{% endblock %}
+
+{% block body %}
+<div>
+
+    {% if documentation.main -%}
+    <div class="documentation_section" >
+    {{documentation.main}}
+    </div>
+    {% endif -%}
+    <div>
+        {% if b.schema.tables|length > 1 -%}
+            <h2>Tables</h2>
+            {% for table in b.schema.tables -%}
+                <h3>{{table.name}}</h3>
+                {% include 'table_block.html' -%}
+            {% endfor %}
+        {% endif -%}
+    </div>
+</div>
+{% endblock %}
+

@@ -32,6 +32,7 @@ class ManifestSection(object):
 
         self.lines = []
         self.content = None
+        self.doc = None
 
     @property
     def name(self):
@@ -50,7 +51,7 @@ class ManifestSection(object):
 class Manifest(object):
 
     # These tags have only a single line; revert back to 'doc' afterward
-    singles = ['uid', 'title', 'extract', 'dir',  'database', 'publish', 'author', 'url', 'access', 'index']
+    singles = ['uid', 'title', 'extract', 'dir',  'database', 'publish', 'author', 'url', 'access', 'index', 'include']
     multi_line = ['partitions','view','mview','sql','doc']
 
     def __init__(self, file_or_data, logger=None):
@@ -61,7 +62,7 @@ class Manifest(object):
         self.last_line = 0
         self.sections = {}
 
-        self.file, self.data = self._extract_file_data(file_or_data)
+        self.file, self.data, self.path = self._extract_file_data(file_or_data)
 
         if self.data:
             self.sectionalize(self.data)
@@ -70,10 +71,13 @@ class Manifest(object):
         self.installed_partitions = list()
 
     def _extract_file_data(self, file_or_data):
+
         if file_or_data.startswith('http'):  # A URL
             import requests
 
-            r = requests.get(file_or_data)
+            path = file_or_data
+
+            r = requests.get(path)
             r.raise_for_status()
 
             file = None
@@ -83,7 +87,9 @@ class Manifest(object):
         elif os.path.exists(file_or_data):  # A file
             with open(file_or_data, 'r') as f:
                 data = f.readlines()
-                file = file_or_data
+
+            file = file_or_data
+            path = file_or_data
 
         else:  # String data
 
@@ -92,8 +98,9 @@ class Manifest(object):
             else:
                 data = file_or_data.splitlines()
             file = None
+            path = None
 
-        return file, data
+        return file, data, path
 
     @property
     def sorted_sections(self):
@@ -128,15 +135,6 @@ class Manifest(object):
     def ckan(self):
         return self.single_line('ckan')
 
-    @property
-    def work_dir(self):
-        wd =  self.single_line('dir')
-
-        if not wd:
-            wd = self.uid
-
-        return wd
-
 
     @property
     def uid(self):
@@ -154,6 +152,14 @@ class Manifest(object):
     @property
     def title(self):
         return self.single_line('title')
+
+    @property
+    def summary(self):
+
+        t = self.tagged_sections('title').pop()
+
+        print t.doc
+
 
     @property
     def access(self):
@@ -319,8 +325,9 @@ class Manifest(object):
         for line_no in sorted(sections.keys()):
             section = sections[line_no]
 
-            if section.tag == 'doc' and previous_section.tag in ['view','mview','extract']:
+            if section.tag == 'doc' and previous_section.tag in ['title', 'view','mview','extract']:
                 section.content['ref'] = previous_section.name
+                previous_section.doc = section.content
 
             previous_section = section
 
@@ -347,7 +354,7 @@ class Manifest(object):
             t = '\n'.join(section.lines)
 
             # Normal markdown documentation
-            return dict(text=t,html=markdown.markdown(t))
+            return dict(text=t.strip(),html=markdown.markdown(t))
 
     def _process_sql(self, section):
         return sqlparse.format(''.join(section.lines), reindent=True, keyword_case='upper')
@@ -382,6 +389,21 @@ class Manifest(object):
 
         return dict(table=table, format=format, rpath=rpath, name=rpath)
 
+    def _process_include(self, section):
+        import os.path
+        path = section.args.strip()
+
+        if not self.path:
+            raise ParseError("Manifest doesn't have a path, so can't resolve INCLUDE")
+
+
+        if self.path.startswith('http'):
+            raise NotImplementedError
+        else:
+            if not os.path.isabs(path):
+                path = os.path.join(os.path.dirname(self.path), path)
+
+        return dict(path = path )
 
     def _process_partitions(self, section):
 

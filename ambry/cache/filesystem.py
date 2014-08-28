@@ -115,6 +115,9 @@ class FsCache(Cache):
                 self._repo_path = repo_path
                 self._rel_path = rel_path
 
+            @property
+            def rel_path(self):
+                return self._rel_path
 
             def write(self, str_):
                 self._sink.write(str_)

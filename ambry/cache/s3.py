@@ -91,7 +91,7 @@ class S3Cache(Cache):
         else:
             return rel_path
 
-    def path(self, rel_path, propagate=True, **kwargs):
+    def path(self, rel_path, propagate=True, missing_ok = False, **kwargs):
         import re
 
         if self.cdn:
@@ -105,8 +105,8 @@ class S3Cache(Cache):
                 method = kwargs['method'].upper()
             else:
                 method = 'GET'
-            
-            k = self._get_boto_key(rel_path)
+
+            k = self._get_boto_key(rel_path, validate= not missing_ok)
 
             if not k:
                 from ..dbexceptions import NotFoundError
@@ -209,13 +209,13 @@ class S3Cache(Cache):
         
         raise NotImplemented("Can't get() from an S3, since it has no place to put a file. Wrap with an FsCache. ")
     
-    def _get_boto_key(self, rel_path):
+    def _get_boto_key(self, rel_path, validate = True):
         from boto.s3.key import Key
 
         rel_path = self._rename(rel_path)
         path = self._prefix(rel_path)
 
-        k = self.bucket.get_key(path)
+        k = self.bucket.get_key(path, validate = validate)
         
         return k        
   
@@ -318,13 +318,16 @@ class S3Cache(Cache):
             '''Object that is returned to the caller, for the caller to issue
             write() or writeline() calls on '''
        
-            def __init__(self):
+            def __init__(self, rel_path):
                 import io
 
                 self.mp = this.bucket.initiate_multipart_upload(path, metadata=metadata)
                 self.part_number = 1
                 self.buffer = io.BytesIO()
                 self.total_size = 0
+
+                self.rel_path = rel_path
+
      
             def _send_buffer(self):
                 '''Schedules a buffer to be sent in a thread by queuing it'''
@@ -336,7 +339,8 @@ class S3Cache(Cache):
 
             def write(self, d):
                 import io
-                
+
+
                 self.buffer.write(d) # Load the requested data into a buffer
                 self.total_size += len(d)
                 # After the buffer is large enough, send it, then create a new buffer. 
@@ -360,12 +364,23 @@ class S3Cache(Cache):
                     thread_upload_queue.put( (None,None,None) ) # Tell all of the threads to die
  
                 thread_upload_queue.join()  # Wait for all of the threads to exit
-                             
-                self.mp.complete_upload()
 
-                this.bucket.set_acl(acl, path)
+                # Multi-part uploads throw a 400 Bad Request if they are completed without writing any data.
+                if self.total_size > 0:
+                    self.mp.complete_upload()
 
-        return flo()
+                    this.bucket.set_acl(acl, path)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, type_, value, traceback):
+                if type_:
+                    return False
+
+                self.close()
+
+        return flo(rel_path)
      
             
     def find(self,query):

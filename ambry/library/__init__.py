@@ -328,7 +328,7 @@ class Library(object):
         dataset = self.resolve(ref)
 
         if not dataset:
-            return False
+            raise NotFoundError("Failed to resolve reference '{}'".format(ref))
 
         bundle = self._get_bundle_by_cache_key(dataset.cache_key)
 
@@ -369,6 +369,7 @@ class Library(object):
         finally:
             if bundle:
                 bundle.close()
+
 
         return bundle
 

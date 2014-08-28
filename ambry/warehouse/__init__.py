@@ -5,6 +5,7 @@ from ..cache import new_cache, CacheInterface
 from ..database import new_database
 import os
 from ..util import Constant
+from ambry.util import init_log_rate
 
 class NullCache(CacheInterface):
     def has(self, rel_path, md5=None, use_upstream=True):
@@ -24,13 +25,17 @@ class NullLogger(object):
     def log(self, message):
         pass
 
+    def info(self, message):
+        pass
+
     def error(self, message):
         pass
 
     def warn(self, message):
         pass
 
-def new_warehouse(config, elibrary):
+
+def new_warehouse(config, elibrary, logger=None):
 
     assert elibrary is not None
 
@@ -50,27 +55,28 @@ def new_warehouse(config, elibrary):
     # This library instance is only for the warehouse database.
     wlibrary = Library(
         cache=NullCache(),
-        database=library_database)
+        database=library_database
+    )
 
     if service == 'sqlite':
         from .sqlite import SqliteWarehouse
-        return SqliteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
+        return SqliteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
 
     if service == 'spatialite':
 
         from .sqlite import SpatialiteWarehouse
 
-        return SpatialiteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
+        return SpatialiteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
 
     elif service == 'postgres':
         from .postgres import PostgresWarehouse
 
-        return PostgresWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
+        return PostgresWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
 
     elif service == 'postgis':
         from .postgis import PostgisWarehouse
 
-        return PostgisWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary)
+        return PostgisWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
 
     else:
         raise Exception("Unknown warehouse type: {}".format(service))
@@ -108,7 +114,9 @@ class WarehouseInterface(object):
         self.elibrary = elibrary
         self.test = test
 
-        self.logger = logger if logger else NullLogger()
+        logger = logger if logger else NullLogger()
+
+        self.logger =  Logger(logger, init_log_rate(logger.info, N=2000))
 
     def create(self):
         self.database.create()
@@ -141,16 +149,14 @@ class WarehouseInterface(object):
     def _meta_get(self, key):
         from ..orm import Config
 
-        return self.library.database.get_config_value('warehouse', key).value
+        try:
+            return self.library.database.get_config_value('warehouse', key).value
+        except AttributeError:
+            return None
 
     @property
     def title(self):
-        t =  self._meta_get('title')
-        if t:
-            return t
-        else:
-            return self.database.dsn
-
+        return self._meta_get('title')
 
     @title.setter
     def title(self, v):
@@ -173,19 +179,9 @@ class WarehouseInterface(object):
 
         for f in self.library.files.query.type(self.FILE_TYPE.MANIFEST).group(self.FILE_GROUP.MANIFEST).all:
             index = self.library.files.query.type(self.FILE_TYPE.HTML).group(self.FILE_GROUP.MANIFEST).first
-            manifests.append((index, f, Manifest(f.content)))
+            manifests.append((f, Manifest(f.content)))
 
         return manifests
-
-    @property
-    def index(self):
-        """Return, and possibly generate, the index HTML document"""
-
-        from ..text import WarehouseIndex
-
-        wi = WarehouseIndex()
-
-        return wi.render(self)
 
 
     @property
@@ -267,11 +263,6 @@ class WarehouseInterface(object):
             except Exception as e:
                 self.logger.error("Failed to install table '{}': {}".format(table_name,e))
 
-        # Install bundle doc, if it doesn't exist.
-        if not self.library.files.query.type('text/html').ref(bundle.identity.vid).first:
-            self.install_file(path=os.path.join('doc', bundle.identity.vid) + '.html',
-                              ref=bundle.identity.vid, group='doc', type='text/html', content=bundle.html_doc())
-
 
         self.library.database.mark_partition_installed(p_vid)
 
@@ -303,20 +294,22 @@ class WarehouseInterface(object):
 
         return tables
 
-    def install_manifest(self, manifest):
+    def install_manifest(self, manifest, force = None):
         """Install the partitions and views specified in a manifest file """
         from ..dbexceptions import NotFoundError, ConfigurationError
-        from ambry.util import init_log_rate
 
-        from . import Logger
-        from ..cache import new_cache
         import os
-
 
         # Update the manifest with bundle information, since it doesn't normally have access to a library
         manifest.add_bundles(self.elibrary)
 
-        self.logger = Logger(self.logger, init_log_rate(self.logger.info, N=2000))
+        # If the manifest doesn't have a title or description, get it fro the manifest.
+
+        if not self.title:
+            self.title = manifest.title
+
+        if not self.about:
+            self.about = manifest.summary['html']
 
         ## First pass
         for line, section in manifest.sorted_sections:
@@ -351,7 +344,7 @@ class WarehouseInterface(object):
                 self.create_index(c['name'], c['table'], c['columns'])
 
             elif tag == 'mview':
-                self.install_material_view(section.args, section.content['text'], clean=manifest.force)
+                self.install_material_view(section.args, section.content['text'], clean= force)
 
             elif tag == 'view':
                 self.install_view(section.args, section.content['text'])
@@ -366,6 +359,11 @@ class WarehouseInterface(object):
 
                 self.install_file(path=os.path.join(manifest.uid, 'extracts', d['rpath']), ref=d['table'],
                                   type=d['format'], group='extract', data=d)
+
+            elif tag == 'include':
+                from .manifest import Manifest
+                m = Manifest(section.content['path'])
+                self.install_manifest(m, force = force)
 
         # Manifest data
         self.install_file(path=os.path.join('manifests', manifest.uid)+'.ambry', ref=manifest.uid,
@@ -440,12 +438,21 @@ class WarehouseInterface(object):
         from .extractors import new_extractor
         from ..text import Tables, BundleDoc
 
-        def maybe_render(rel_path, render_lambda, force=False):
+        # Get the URL to the root. The public_utl arg only affects S3, and gives a URL without a signature.
+        root = cache.path('', missing_ok = True, public_url = True)
+
+
+        def maybe_render(rel_path, render_lambda, metadata = {}, force=False):
+
+
+            if rel_path.endswith('.html'):
+                metadata['content-type']  = 'text/html'
+            elif rel_path.endswith('.css'):
+                metadata['content-type'] = 'text/css'
 
             if not cache.has(rel_path) or force:
-                with cache.put_stream(rel_path) as s:
-                    print rel_path
-                    s.write(render_lambda())
+                with cache.put_stream(rel_path, metadata=metadata) as s:
+                    s.write(render_lambda().encode('utf-8'))
                 extracted = True
             else:
                 extracted = False
@@ -469,35 +476,48 @@ class WarehouseInterface(object):
         for f in self.library.files.query.type('text/html').all:
             extracts.append(maybe_render(f.path, lambda: f.content))
 
+        # Manifests
+        for f, m in self.manifests:
+            from ..text import ManifestDoc
+
+            extracts.append(maybe_render('doc/{}.html'.format(m.uid), lambda: ManifestDoc(root).render(m, self.elibrary), force=force))
+
+            extracts.append(maybe_render(f.path, lambda: f.content, force=force))
 
         # Bundles
-        for k,b in self.bundles.items():
-            renderer = BundleDoc()
-            extracts.append(maybe_render('doc/{}.html'.format(b.vid), lambda: renderer.render(b), force=force))
+        l = self.elibrary
+        for k,b_ident in self.bundles.items():
+            b = l.get(b_ident.vid)
+
+            if not b:
+                from ..dbexceptions import NotFoundError
+                raise NotFoundError("No bundle in library {} for  '{}' ".format(l.database.dsn, b_ident.vid))
+
+            renderer = BundleDoc(root)
+            extracts.append(maybe_render('doc/{}.html'.format(b_ident.vid), lambda: renderer.render(self,b), force=force))
 
         # Partitions
 
         # Tables
         for t in self.tables:
-            renderer = Tables()
+            renderer = Tables(root)
             extracts.append(maybe_render('doc/{}.html'.format(t.vid), lambda: renderer.render_table(self, t), force=force ))
 
 
         with cache.put_stream('index.html') as s:
-            s.write(self.index)
+            from ..text import WarehouseIndex
+            extracts.append(maybe_render(s.rel_path, lambda: WarehouseIndex(root).render(self), force=force))
 
         extracts.append((True, 'index.html', cache.path('index.html')))
 
         with cache.put_stream('css/style.css') as s:
             from ..text import Renderer
-            s.write(Renderer().css)
+            extracts.append(maybe_render(s.rel_path, lambda: Renderer(root).css, force=force))
 
         with cache.put_stream('toc.html') as s:
             from ..text import WarehouseIndex
 
-            wi = WarehouseIndex()
-
-            s.write(wi.render_toc(self, extracts))
+            extracts.append(maybe_render(s.rel_path, lambda: WarehouseIndex(root).render_toc(self, extracts), force=force))
 
 
         return extracts

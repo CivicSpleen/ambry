@@ -5,32 +5,6 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from . import prt, fatal, err, warn,  _print_info, _print_bundle_list
 
-class Logger(object):
-    def __init__(self,  prefix, lr):
-        self.prefix = prefix
-        self.lr = lr
-
-    def progress(self,type_,name, n, message=None):
-        self.lr("{}: {} {}: {}".format(self.prefix,type_, name, n))
-
-    def copy(self, o,t):
-        self.lr("{} {}".format(o,t))
-
-    def info(self,message):
-        prt("{}: {}",self.prefix, message)
-
-    def log(self,message):
-        prt("{}: {}",self.prefix, message)
-
-    def error(self,message):
-        err("{}: {}",self.prefix, message)
-
-    def fatal(self,message):
-        fatal("{}: {}",self.prefix, message)
-
-    def warn(self, message):
-        warn("{}: {}", self.prefix, message)
-
 
 def warehouse_command(args, rc):
     from ambry.warehouse import new_warehouse
@@ -42,18 +16,18 @@ def warehouse_command(args, rc):
 
     l.logger = global_logger
 
-    if args.subcommand not in ('install', 'index'):
-
-        if args.database:
-            config = database_config(args.database)
-        else:
-            config = rc.warehouse(args.name)
-
-        w = new_warehouse(config, l)
-
-        globals()['warehouse_'+args.subcommand](args, w,rc)
+    if args.database:
+        config = database_config(args.database)
     else:
-        globals()['warehouse_' + args.subcommand](args, l, rc)
+        config = rc.warehouse(args.name)
+
+    w = new_warehouse(config, l, logger = global_logger)
+
+    if not w.exists():
+        w.create()
+
+    globals()['warehouse_'+args.subcommand](args, w,rc)
+
 
 def warehouse_parser(cmd):
    
@@ -121,48 +95,6 @@ def warehouse_info(args, w,config):
     prt("WLibrary: {}",w.wlibrary.database.dsn)
     prt("ELibrary: {}",w.elibrary.database.dsn)
 
-def warehouse_install(args, l ,config):
-    from os import getcwd, chdir
-
-    last_wd = getcwd()
-
-    try:
-        _warehouse_install(args, l ,config)
-    finally:
-        chdir(last_wd)
-
-def _warehouse_install(args, l ,config):
-    from ambry.dbexceptions import ConfigurationError
-    from ambry.warehouse.manifest import new_manifest
-    from ..util import get_logger
-
-    logger = get_logger('warehouse',template="WH %(levelname)s: %(message)s")
-
-    try:
-        d =  config.filesystem('warehouse')
-
-        base_dir = args.base_dir if args.base_dir else d['dir']
-
-    except ConfigurationError:
-        base_dir = args.base_dir
-
-    if not base_dir:
-        raise ConfigurationError("Must specify -b for base director,  or set filesystem.warehouse in configuration")
-
-    m = new_manifest(args.term, logger=logger, library=l, base_dir = base_dir, force = args.force, install_db = args.install_db)
-
-    if not args.no_install:
-        m.install()
-
-        logger.info('Installed:')
-        for fn in m.file_installs:
-            logger.info('    {}'.format(fn))
-
-    if args.publish != False:
-        m.publish(config, args.publish)
-
-    if args.gen_doc:
-        print m.html_doc()
 
 def warehouse_remove(args, w,config):
     from functools import partial
@@ -214,31 +146,29 @@ def warehouse_list(args, w, config):
                 
         _print_info(l,d,p, list_partitions=True)
 
-def warehouse_index(args, w, config):
-    from ..cache import new_cache, parse_cache_string
-    import json
-    from ..text import WarehouseIndex
+def warehouse_install(args, w ,config):
+    from ambry.dbexceptions import ConfigurationError
+    from ambry.warehouse.manifest import Manifest
 
-    cache_config = parse_cache_string(args.term)
+    from ..util import get_logger
 
-    # Re-write account to get login credentials
-    if 'account' in cache_config:
-        cache_config['account'] = config.account(cache_config['account'])
+    logger = get_logger('warehouse',template="WH %(levelname)s: %(message)s")
 
-    pub = new_cache(cache_config)
+    try:
+        d =  config.filesystem('warehouse')
 
-    d = {}
-    d['entries'] = []
+        base_dir = args.base_dir if args.base_dir else d['dir']
 
-    for i in pub.bucket.list('meta'):
-        d['entries'].append(json.loads(i.get_contents_as_string()))
+    except ConfigurationError:
+        base_dir = args.base_dir
 
-    wi = WarehouseIndex(d)
+    if not base_dir:
+        raise ConfigurationError("Must specify -b for base director,  or set filesystem.warehouse in configuration")
 
-    meta = {'public': True, 'Content-Type': 'text/html'}
+    m = Manifest(args.term)
 
-    s = pub.put_stream('index.html',metadata=meta)
-    s.write(wi.render().encode('utf-8'))
-    s.close()
+    if not args.no_install:
+        w.install_manifest(m)
 
-    prt("Wrote {}".format(pub.path('index.html', public_url=True)))
+    if args.test:
+        print str(m)

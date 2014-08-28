@@ -263,7 +263,7 @@ This is documentation for the geot1.geojson extract
         l = self.get_library('local')
         l.put_bundle(self.bundle)
 
-        w = self.get_warehouse(l, 'spatialite')
+        w = self.get_warehouse(l, 'sqlite')
         print 'Installing to ', w.database.path
 
         w.title = "This is the Warehouse!"
@@ -277,15 +277,22 @@ This is documentation for the geot1.geojson extract
         print print_yaml(extracts)
 
     def test_extract(self):
+        from ambry.cache import new_cache
+
         l = self.get_library('local')
-        w = self.get_warehouse(l, 'spatialite', delete=False)
+        l.put_bundle(self.bundle)
+        w = self.get_warehouse(l, 'sqlite', delete=False)
+
+        print 'WAREHOUSE: ', w.database.dsn
 
         cache = self.get_fs_cache('foobar')
 
-        extracts = w.extract(cache)
+        #cache = new_cache('s3://warehouse.sandiegodata.org/test', run_config = get_runconfig())
 
-        #from ambry.util import print_yaml
-        #print_yaml(extracts)
+        extracts = w.extract(cache, force = True)
+
+        from ambry.util import print_yaml
+        print_yaml(extracts)
 
     def test_manifest_doc(self):
         from ambry.util import get_logger

@@ -333,6 +333,8 @@ class Resolver(object):
                 out.append((row.Dataset, row.Partition, row.File))
 
 
+
+
         return ip, out
 
     def _resolve_ref(self, ref):
@@ -381,8 +383,6 @@ class Resolver(object):
         from collections import OrderedDict
 
         ip, refs = self._resolve_ref(ref)
-
-
 
         if location:
             refs = OrderedDict( [ (k,v) for k, v in refs.items() if v.locations.has(location) ] )

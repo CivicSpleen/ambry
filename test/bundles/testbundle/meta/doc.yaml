@@ -144,11 +144,12 @@ documentation:
         \       SndDEL      4876      \n\tLemon Grove                SndLEM      4198\
         \      \n\tCoronado                   SndCOR      2466      \n\tSolana Beach\
         \               SndSOL      2259\n\n\nCitation\n=========\n\n*Name of file*,\
-        \ extracted from {bundle_name}. San Diego Regional Data Library. {date} http://sandiegodata.org\n\
-        \n\nTerms\n=======================\n\nThis data is released under the following\
-        \ terms and conditions. \n\nClarinova and the San Diego Regional Data Library\
-        \ disclaim any warranty for this data shall not be liable for loss or harm.\
-        \ [See the SDRDL Disclaimers and Limitations web page for complete details.](http://www.sandiegodata.org/get-data/data-disclaimers-and-limitations/)\n\
+        \ extracted from bundle source-dataset-subset-variation-0.0.1. San Diego Regional\
+        \ Data Library.  http://sandiegodata.org\n\n\nTerms\n=======================\n\
+        \nThis data is released under the following terms and conditions. \n\nClarinova\
+        \ and the San Diego Regional Data Library disclaim any warranty for this data\
+        \ shall not be liable for loss or harm. [See the SDRDL Disclaimers and Limitations\
+        \ web page for complete details.](http://www.sandiegodata.org/get-data/data-disclaimers-and-limitations/)\n\
         \nThis data is based on data from SANGIS, which is subject to its own terms\
         \ and conditions. See the [SANGIS Legal Notice for details](http://www.sangis.org/Legal_Notice.htm).\
         \ \n\nThis data is based on data from SANDAG, which is subject to its own\

@@ -360,9 +360,9 @@ class Bundle(object):
     def html_doc(self):
         from ..text import BundleDoc
 
-        pd = BundleDoc(self)
+        pd = BundleDoc()
 
-        return pd.render()
+        return pd.render(self)
 
 class DbBundleBase(Bundle):
     """Base class for DbBundle and LibraryDbBundle. A better design would for one to derive fro the other; this is
@@ -790,7 +790,7 @@ class BuildBundle(Bundle):
         d = {}
         for r in self.metadata.rows:
 
-            if r[0][0] in ('about',):
+            if r[0][0] in ('about','identity', 'names', 'config'):
                 k = '_'.join([str(x) for x in r[0] if x])
                 d[k] = r[1]
 

@@ -175,7 +175,7 @@ Incidents by city:
 Citation
 =========
 
-*Name of file*, extracted from {bundle_name}. San Diego Regional Data Library. {date} http://sandiegodata.org
+*Name of file*, extracted from bundle {names_vname}. San Diego Regional Data Library.  http://sandiegodata.org
 
 
 Terms

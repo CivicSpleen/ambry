@@ -46,9 +46,11 @@ def new_cache(config, root_dir='no_root_dir', run_config=None):
 
 
         # Re-write account to get login credentials, if the run_config is available
-        if 'account' in config and run_config:
-            config['account'] = run_config.account(config['account'])
-
+        if 'account' in config and run_config :
+            try:
+                config['account'] = run_config.account(config['account'])
+            except TypeError: # config['account'] is already a dict
+                pass
 
         if 'options' in config and 'compress' in config['options'] :
             # Need to clone the config because we don't want to propagate the changes

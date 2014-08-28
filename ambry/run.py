@@ -244,10 +244,10 @@ class RunConfig(object):
         return e
 
     def account(self,name):
+
         e = self.group_item('accounts', name) 
 
         e =  self._sub_strings(e, {'store': lambda k,v: self.filesystem(v)}  )
-
 
         e['_name'] = name
         
