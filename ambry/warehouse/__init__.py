@@ -154,8 +154,11 @@ class WarehouseInterface(object):
         except AttributeError:
             return None
 
+    configurable = ('title','about','local_cache','remote_cache')
+
     @property
     def title(self):
+        """Title of the warehouse"""
         return self._meta_get('title')
 
     @title.setter
@@ -164,11 +167,31 @@ class WarehouseInterface(object):
 
     @property
     def about(self):
+        """Short description of the warehouse"""
         return self._meta_get('about')
 
     @about.setter
     def about(self, v):
         return self._meta_set('about', v)
+
+    @property
+    def local_cache(self):
+        """Cache name for local publications. Usually a filesystem path"""
+        return self._meta_get('local_cache')
+
+    @local_cache.setter
+    def local_cache(self, v):
+        return self._meta_set('local_cache', v)
+
+    @property
+    def remote_cache(self):
+        """Cache name for remote publications. Usually S3"""
+        return self._meta_get('remote_cache')
+
+    @remote_cache.setter
+    def remote_cache(self, v):
+        return self._meta_set('remote_cache', v)
+
 
     @property
     def manifests(self):
@@ -294,7 +317,7 @@ class WarehouseInterface(object):
 
         return tables
 
-    def install_manifest(self, manifest, force = None):
+    def install_manifest(self, manifest, force = None, reset=False):
         """Install the partitions and views specified in a manifest file """
         from ..dbexceptions import NotFoundError, ConfigurationError
 
@@ -305,11 +328,17 @@ class WarehouseInterface(object):
 
         # If the manifest doesn't have a title or description, get it fro the manifest.
 
-        if not self.title:
+        if reset or not self.title:
             self.title = manifest.title
 
-        if not self.about:
+        if reset or not self.about:
             self.about = manifest.summary['html']
+
+        if reset or not self.local_cache:
+            self.local_cache = manifest.local
+
+        if reset or not self.remote_cache:
+            self.remote_cache = manifest.remote
 
         ## First pass
         for line, section in manifest.sorted_sections:
@@ -507,8 +536,6 @@ class WarehouseInterface(object):
         with cache.put_stream('index.html') as s:
             from ..text import WarehouseIndex
             extracts.append(maybe_render(s.rel_path, lambda: WarehouseIndex(root).render(self), force=force))
-
-        extracts.append((True, 'index.html', cache.path('index.html')))
 
         with cache.put_stream('css/style.css') as s:
             from ..text import Renderer

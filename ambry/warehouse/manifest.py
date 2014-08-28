@@ -51,7 +51,7 @@ class ManifestSection(object):
 class Manifest(object):
 
     # These tags have only a single line; revert back to 'doc' afterward
-    singles = ['uid', 'title', 'extract', 'dir',  'database', 'publish', 'author', 'url', 'access', 'index', 'include']
+    singles = ['uid', 'title', 'extract', 'dir',  'database', 'local', 'remote', 'author', 'url', 'access', 'index', 'include']
     multi_line = ['partitions','view','mview','sql','doc']
 
     def __init__(self, file_or_data, logger=None):
@@ -132,8 +132,12 @@ class Manifest(object):
         return self.single_line('publication')
 
     @property
-    def ckan(self):
-        return self.single_line('ckan')
+    def local(self):
+        return self.single_line('local')
+
+    @property
+    def remote(self):
+        return self.single_line('remote')
 
 
     @property

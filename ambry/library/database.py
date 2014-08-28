@@ -422,6 +422,7 @@ class LibraryDb(object):
         s = self.session
 
         try:
+
             c = s.query(SAConfig).filter(SAConfig.group == group,
                                      SAConfig.key == key,
                                      SAConfig.d_vid == ROOT_CONFIG_NAME_V).first()

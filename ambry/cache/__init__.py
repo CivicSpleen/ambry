@@ -22,11 +22,13 @@ def new_cache(config, root_dir='no_root_dir', run_config=None):
                 fsclass = HttpCache
         elif 'account' in config:
 
+
             if isinstance(config['account'], basestring):
                 if not run_config:
                     raise ConfigurationError("Config has an account, but run_config was not specified to resolve the account")
 
                 config['account'] = run_config.account(config['account'])
+
 
             if config['account']['service'] == 's3':
                 from s3 import S3Cache

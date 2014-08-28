@@ -11,22 +11,60 @@ def warehouse_command(args, rc):
     from ..library import new_library
     from . import global_logger
     from ambry.warehouse import database_config
+    from ..dbexceptions import ConfigurationError
 
     l = new_library(rc.library(args.library_name))
 
     l.logger = global_logger
 
-    if args.database:
-        config = database_config(args.database)
-    else:
-        config = rc.warehouse(args.name)
+    try:
+        if args.database:
+            config = database_config(args.database)
+        else:
+            config = rc.warehouse(args.name)
 
-    w = new_warehouse(config, l, logger = global_logger)
+        w = new_warehouse(config, l, logger = global_logger)
 
-    if not w.exists():
-        w.create()
+        if not w.exists():
+            w.create()
+
+    except ConfigurationError:
+        # There was no database configured, so let the called function provide additional information
+        from functools import partial
+        w = partial(create_warehouse,rc, global_logger, l)
 
     globals()['warehouse_'+args.subcommand](args, w,rc)
+
+def create_warehouse(rc, logger, library, manifest=None):
+    from ..dbexceptions import ConfigurationError
+    from ambry.warehouse import database_config
+    from ambry.warehouse import new_warehouse
+    import os.path
+
+    if manifest:
+        database = manifest.database
+
+        if not database:
+            raise ConfigurationError('Warehouse database must either be specified on the command line or in the manifest')
+
+        try:
+
+            base_dir = os.path.join(rc.filesystem('warehouse')['dir'], manifest.uid)
+        except ConfigurationError:
+            base_dir = ''
+
+        config = database_config(database, base_dir = base_dir)
+
+
+        w = new_warehouse(config, library, logger=logger)
+
+        if not w.exists():
+            w.create()
+
+        return w
+
+    raise ConfigurationError('No warehouse database specified')
+
 
 
 def warehouse_parser(cmd):
@@ -40,25 +78,34 @@ def warehouse_parser(cmd):
 
     whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
     whsp.set_defaults(subcommand='install')
-    whsp.add_argument('-t', '--test', default=False, action='store_true', help='Load only 100 records per table')
-    whsp.add_argument('-f', '--force', default=False, action='store_true', help='Force re-creation of tables and fiels that already exist')
-    whsp.add_argument('-g', '--gen-doc', default=False, action='store_true', help='After installation, generate documentation')
-    whsp.add_argument('-n', '--no_install', default=False, action='store_true', help="Don't install, just talk about it.")
-    whsp.add_argument('-b', '--base-dir', default=None,help='Base directory for installed. Defaults to <ambry-install>/warehouse')
-    whsp.add_argument('-D', '--install-db', action='store_true',help='Also install the database, if it has a filesystem path ( Sqlite / Spatialite )')
-    whsp.add_argument('-d', '--dir', default=None,
-                      help='Publication directory for file installs, if different from the work-dir.')
-    whsp.add_argument('-p', '--publish', nargs='?', default=False, help="Publication url, or 'default' for the URL specified in the manifest")
+    whsp.add_argument('-n', '--name-only', default=False, action='store_true', help='The only output will be the DSN of the warehouse')
+    whsp.add_argument('-r', '--reset-config', default=False, action='store_true',
+                      help='Reset all of the values, like title and about, that come from the manifest')
+
+    whsp.add_argument('-f', '--force', default=False, action='store_true', help='Force re-creation of tables and files that already exist')
     whsp.add_argument('term', type=str,help='Name of bundle or partition')
+
+    whsp = whp.add_parser('extract', help='Extract files or documentation to a cache')
+    whsp.set_defaults(subcommand='extract')
+    whsp.add_argument('-f', '--files-only', default=False, action='store_true', help='Only extract the extract files')
+    whsp.add_argument('-d', '--doc-only', default=False, action='store_true', help='Only extract the documentation files')
+    group = whsp.add_mutually_exclusive_group()
+    group.add_argument('-l', '--local', dest='dest',  action='store_const', const='local', default='local')
+    group.add_argument('-r', '--remote', dest='dest', action='store_const', const='remote')
+    group.add_argument('-c', '--cache' )
+    whsp.add_argument('-F', '--force', default=False, action='store_true',
+                      help='Force re-creation of files that already exist')
+    whsp.add_argument('-D', '--dir', default = '', help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
+
+    whsp = whp.add_parser('config', help='Configure varibles')
+    whsp.set_defaults(subcommand='config')
+    whsp.add_argument('-v', '--var', help="Name of the variable. One of'local','remote','title','about' ")
+    whsp.add_argument('term', type=str, nargs = '?', help='Value of the variable')
 
     whsp = whp.add_parser('remove', help='Remove a bundle or partition from a warehouse')
     whsp.set_defaults(subcommand='remove')
     whsp.add_argument('term', type=str,help='Name of bundle or partition')
-    
-    whsp = whp.add_parser('sync', help='Syncronize database to a list of names')
-    whsp.set_defaults(subcommand='sync')
-    whsp.add_argument('file', type=str,help='Name of file containing a list of names')
-    
+
     whsp = whp.add_parser('connect', help='Test connection to a warehouse')
     whsp.set_defaults(subcommand='connect')
 
@@ -95,12 +142,11 @@ def warehouse_info(args, w,config):
     prt("WLibrary: {}",w.wlibrary.database.dsn)
     prt("ELibrary: {}",w.elibrary.database.dsn)
 
-
 def warehouse_remove(args, w,config):
     from functools import partial
     from ambry.util import init_log_rate
 
-    w.logger = Logger('Warehouse Remove',init_log_rate(prt,N=2000))
+    #w.logger = Logger('Warehouse Remove',init_log_rate(prt,N=2000))
     
     w.remove(args.term )
       
@@ -147,28 +193,76 @@ def warehouse_list(args, w, config):
         _print_info(l,d,p, list_partitions=True)
 
 def warehouse_install(args, w ,config):
-    from ambry.dbexceptions import ConfigurationError
     from ambry.warehouse.manifest import Manifest
-
-    from ..util import get_logger
-
-    logger = get_logger('warehouse',template="WH %(levelname)s: %(message)s")
-
-    try:
-        d =  config.filesystem('warehouse')
-
-        base_dir = args.base_dir if args.base_dir else d['dir']
-
-    except ConfigurationError:
-        base_dir = args.base_dir
-
-    if not base_dir:
-        raise ConfigurationError("Must specify -b for base director,  or set filesystem.warehouse in configuration")
 
     m = Manifest(args.term)
 
-    if not args.no_install:
-        w.install_manifest(m)
+    if callable(w):
+        w = w(manifest=m)
 
-    if args.test:
-        print str(m)
+    if args.name_only:
+        from ambry.warehouse import NullLogger
+        w.logger = NullLogger()
+
+    w.logger.info("Installing to {}".format(w.database.dsn))
+
+    w.install_manifest(m, reset = args.reset_config)
+
+    w.logger.info("Installed to {}".format(w.database.dsn))
+
+    if args.name_only:
+        print w.database.dsn
+
+def warehouse_extract(args, w, rc):
+    from ambry.cache import new_cache, parse_cache_string
+    from ..dbexceptions import ConfigurationError
+    import os.path
+
+    if callable(w):
+        w = w()
+
+    if args.cache:
+        c_string = args.cache
+
+    elif args.dest == 'local':
+        c_string = w.local_cache
+
+    elif args.dest == 'remote' :
+        c_string = w.remote_cache
+
+    config =  parse_cache_string(c_string, root_dir=args.dir)
+
+    if not config:
+        raise ConfigurationError("Failed to parse cache spec: '{}'".format(c_string))
+
+    if args.dir and config['type'] == 'file' and not os.path.isabs(config['dir']):
+        config['dir'] = os.path.join(args.dir, config['dir'])
+
+    if config['type'] == 'file':
+        os.makedirs(config['dir'])
+
+
+    cache = new_cache(config, run_config = rc)
+
+    w.logger.info("Extracting to: {}".format(cache))
+
+    extracts = w.extract(cache, force=args.force)
+
+
+    print cache.path('', missing_ok=True, public_url = True)
+
+def warehouse_config(args, w, config):
+    from ..dbexceptions import ConfigurationError
+    if callable(w):
+        w = w()
+
+    if not args.var in w.configurable:
+        raise ConfigurationError("Value {} is not configurable. Must be one of: {}".format(args.var, w.configurable))
+
+    print args
+
+    if args.term:
+        setattr(w, args.var, args.term)
+    else:
+        print getattr(w, args.var)
+

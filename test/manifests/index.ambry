@@ -3,6 +3,9 @@ TITLE: This is an example warehouse
 This is the example warehouse. The first doc section after the title is the summary of the warehouse.
 
 UID: 04572b2e-0a96-4d87-bc13-bd82c3b785a3
+AUTHOR: Eric Busboom <eric@sandiegodata.org>
+LOCAL: test_manifests
+REMOTE:  s3://warehouse.sandiegodata.org/test/test_manifests#compress
 
 INCLUDE: crime.ambry
 INCLUDE: education.ambry
