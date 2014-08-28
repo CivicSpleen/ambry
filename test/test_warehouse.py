@@ -64,19 +64,16 @@ UID: xxx-yyy-zzz
 ACCESS: public
 
 DOC:
-
 This is the test documentation for a file *that is* just for testing.
 
 DATABASE: sqlite:///tmp/test/warehouse.db
 
 DOC:
-
 Here is more documentation about the directory:
 
 DIR: /tmp/warehouse
 
 DOC:
-
 We've got a while lot of partitions.
 
 PARTITIONS:
@@ -106,10 +103,8 @@ More Documentation About the following Extract.
 EXTRACT: fringo AS geojson TO /bin/bar/geojson
 
 DOC:
-
 ## Foodoc
 Yet more documentation, about the Fringo extract.
-
 """
 
 

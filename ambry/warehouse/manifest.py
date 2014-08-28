@@ -646,7 +646,7 @@ class Manifest(object):
                 else:
                     o += '\n'.join(c.lines)
 
-                if not ( this_tag_single and last_tag_single  ) and not c.tag == 'doc':
+                if not ( this_tag_single and last_tag_single  ):
                     o += '\n'
 
             last_tag_single = this_tag_single
