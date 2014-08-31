@@ -603,6 +603,7 @@ def find_geo_containment(containers, containeds, sink, method = 'contains'):
     def gen_index():
         for i, container_obj, wkt in containers:
             container_geometry = loads(wkt)
+
             yield (i, container_geometry.bounds, (container_obj, container_geometry))
 
     idx = index.Index(gen_index())

@@ -1,0 +1,15 @@
+<!-- contacts -->
+{% macro contact(t,e) %}
+<p>{{t}}:</p>
+<ul>
+    {% if e.name -%}<li>Name: {{e.name}}</li>{% endif -%}
+    {% if e.email -%}<li>Email: <a href="mailto:{{e.email}}">{{e.email}}</a></li>{% endif -%}
+    {% if e.url -%}<li>Url: <a href="{{e.url}}">{{e.url}}</a></li>{% endif -%}
+</ul>
+{% endmacro %}
+<h2>Bundle Contacts</h2>
+{% if m.contact_bundle.creator -%}{{ contact('Creator',m.contact_bundle.creator) }}{% endif %}
+{% if m.contact_bundle.maintainer -%}{{ contact('Maintainer',m.contact_bundle.maintainer) }}{% endif %}
+<h2>Source Contacts</h2>
+{% if m.contact_source.creator -%}{{ contact('Creator',m.contact_source.creator) }}{% endif %}
+{% if m.contact_source.maintainer -%}{{ contact('Maintainer',m.contact_source.maintainer) }}{% endif %}

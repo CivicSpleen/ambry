@@ -10,13 +10,21 @@
 {% endblock %}
 
 {% block body %}
-<div>
-    <div class="ambry-manifest">
-    {% for line, section in m.sorted_sections -%}
-    {% include 'manifest/'+section.tag+'.html'  ignore missing -%}
-    {% endfor %}
+<div class="ambry-manifest">
+    <div>
+        <h2>Partitions</h2>
+        {% for line, section in m.tagged_sections('partitions') -%}
+        {% include 'manifest/'+section.tag+'.html'  ignore missing -%}
+        {% endfor %}
+    </div>
+    <div>
+        <h2>Views and MViews</h2>
+        {% for line, section in m.tagged_sections(['view', 'mview']) -%}
+        {% include 'manifest/'+section.tag+'.html'  ignore missing -%}
+        {% endfor %}
     </div>
 </div>
+
 {% endblock %}
 
 

@@ -29,10 +29,17 @@ class ContactTerm(DictTerm):
     email = ScalarTerm()
     url = ScalarTerm()
 
+    def __nonzero__(self):
+        return bool(self.name or self.email or self.url)
+
+    def __bool__(self):
+        return self.__nonzero__()
+
 class Contact(DictGroup):
     """ """
     creator = ContactTerm()
     maintainer = ContactTerm()
+
 
 class Identity(DictGroup):
     """ """

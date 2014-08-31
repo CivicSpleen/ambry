@@ -236,7 +236,7 @@ class PartitionBase(PartitionInterface):
 
     @property
     def tables(self):
-        return self.data.get('tables', [])
+        return set(self.data.get('tables', []) + [self.table.name] )
 
     # Call other values on the record
     def __getattr__(self, name):

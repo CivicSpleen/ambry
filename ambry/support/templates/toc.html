@@ -45,7 +45,9 @@
 <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
 <script src="http://assets.s3.clarinova.com/js/toc.min.js"></script>
 <script>
-$('#toc').toc();
+$('#toc').toc({ // seehttp://projects.jga.me/toc/
+    'selectors': 'h1,h2' //elements to use as headings
+});
 $('#toc ul').addClass('nav nav-stacked')
 
 $('#sidebar').affix({

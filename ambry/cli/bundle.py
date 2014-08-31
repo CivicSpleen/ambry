@@ -340,9 +340,9 @@ def bundle_info(args, b, st, rc):
                     b.log("    "+partition.identity.sname)
 
         deps = None
-        if b.config.build and b.config.build.get('dependencies', False):
+        if b.metadata.dependencies:
             # For source bundles
-            deps = b.config.build.dependencies.items()
+            deps = b.metadata.dependencies.items()
         else:
             # for built bundles
             try:

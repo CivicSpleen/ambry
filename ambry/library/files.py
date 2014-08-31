@@ -120,6 +120,11 @@ class Files(object):
         self._query = self._query.filter(File.group == v)
         return self
 
+    def source_url(self, v):
+        self._check_query()
+        self._query = self._query.filter(File.source_url == v)
+        return self
+
     #
     # pre-defined type filters
     #

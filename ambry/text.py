@@ -45,6 +45,9 @@ class BundleDoc(Renderer):
 
         template = self.env.get_template('bundle.html')
 
+        if not m.about.title:
+            m.about.title = b.identity.vname
+
         return template.render(root_path=self.root_path, b=b, m=m,w=w,
                                documentation = {
                                   'main': markdown.markdown(m.documentation.main) if m.documentation.main else None,

@@ -33,7 +33,6 @@ class RelationalWarehouse(WarehouseInterface):
                                                     driver=self.database.driver,
                                                     alt_name=self.augmented_table_name(identity, table_name),
                                                     session=self.library.database.session)
-
         return meta, table
 
     def create_table(self, partition, table_name):
@@ -230,7 +229,7 @@ class RelationalWarehouse(WarehouseInterface):
         e(sql_text)
 
 
-    def install_file(self, path, ref, content = None, source = None, type = None, group = None, data = None):
+    def install_file(self, path, ref, content = None, source = None, type = None, group = None, source_url = None,  data = None):
         """Install a file reference, possibly with binary content"""
         import os
         from ..util import md5_for_file
@@ -239,7 +238,7 @@ class RelationalWarehouse(WarehouseInterface):
 
         files = self.library.files
 
-        f  = files.new_file(path=path, ref = ref, type_=type, group=group, data=data)
+        f  = files.new_file(path=path, ref = ref, type_=type, group=group, data=data, source_url = source_url)
 
         if source:
             try:

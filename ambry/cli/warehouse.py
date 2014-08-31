@@ -78,11 +78,21 @@ def warehouse_parser(cmd):
 
     whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
     whsp.set_defaults(subcommand='install')
+    whsp.add_argument('-C', '--clean', default=False, action='store_true', help='Remove all data from the database before installing')
     whsp.add_argument('-n', '--name-only', default=False, action='store_true', help='The only output will be the DSN of the warehouse')
-    whsp.add_argument('-r', '--reset-config', default=False, action='store_true',
-                      help='Reset all of the values, like title and about, that come from the manifest')
+    whsp.add_argument('-R', '--reset-config', default=False, action='store_true',
+                      help='Reset all of the values, like title and about, that come from the manifest'),
+    whsp.add_argument('-F', '--force', default=False, action='store_true',
+                      help='Force re-creation of files that already exist')
 
-    whsp.add_argument('-f', '--force', default=False, action='store_true', help='Force re-creation of tables and files that already exist')
+    # For extract, when called from install
+    group = whsp.add_mutually_exclusive_group()
+    group.add_argument('-l', '--local', dest='dest',  action='store_const', const='local', default='local')
+    group.add_argument('-r', '--remote', dest='dest', action='store_const', const='remote')
+    group.add_argument('-c', '--cache' )
+    whsp.add_argument('-D', '--dir', default = '', help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
+
+
     whsp.add_argument('term', type=str,help='Name of bundle or partition')
 
     whsp = whp.add_parser('extract', help='Extract files or documentation to a cache')
@@ -200,6 +210,10 @@ def warehouse_install(args, w ,config):
     if callable(w):
         w = w(manifest=m)
 
+    if args.clean:
+        w.clean()
+        w.create()
+
     if args.name_only:
         from ambry.warehouse import NullLogger
         w.logger = NullLogger()
@@ -212,6 +226,10 @@ def warehouse_install(args, w ,config):
 
     if args.name_only:
         print w.database.dsn
+
+    if args.dest or args.cache:
+        warehouse_extract(args, w, config)
+
 
 def warehouse_extract(args, w, rc):
     from ambry.cache import new_cache, parse_cache_string
@@ -227,6 +245,10 @@ def warehouse_extract(args, w, rc):
     elif args.dest == 'local':
         c_string = w.local_cache
 
+        # Join will return c_string if c_string is an absolute path
+        c_string = os.path.join(rc.filesystem('warehouse')['dir'], c_string)
+
+
     elif args.dest == 'remote' :
         c_string = w.remote_cache
 
@@ -238,7 +260,7 @@ def warehouse_extract(args, w, rc):
     if args.dir and config['type'] == 'file' and not os.path.isabs(config['dir']):
         config['dir'] = os.path.join(args.dir, config['dir'])
 
-    if config['type'] == 'file':
+    if config['type'] == 'file' and not os.path.exists(config['dir']):
         os.makedirs(config['dir'])
 
 
@@ -248,8 +270,10 @@ def warehouse_extract(args, w, rc):
 
     extracts = w.extract(cache, force=args.force)
 
+    for extract in extracts:
+        print extract
 
-    print cache.path('', missing_ok=True, public_url = True)
+    print cache.path('index.html', missing_ok=True, public_url = True)
 
 def warehouse_config(args, w, config):
     from ..dbexceptions import ConfigurationError

@@ -304,7 +304,6 @@ class FsCache(Cache):
 
         abs_path = os.path.join(self.cache_dir, rel_path)
 
-
         if os.path.exists(abs_path) and ( not md5 or md5 == md5_for_file(abs_path)):
             return abs_path
 

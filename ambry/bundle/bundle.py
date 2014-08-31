@@ -357,13 +357,6 @@ class Bundle(object):
         return "<table>\n" + "\n".join(out) + "\n</table>"
 
 
-    def html_doc(self):
-        from ..text import BundleDoc
-
-        pd = BundleDoc()
-
-        return pd.render(self)
-
 class DbBundleBase(Bundle):
     """Base class for DbBundle and LibraryDbBundle. A better design would for one to derive fro the other; this is
     temporary solution"""

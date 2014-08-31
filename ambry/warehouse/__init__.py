@@ -119,8 +119,13 @@ class WarehouseInterface(object):
         self.logger =  Logger(logger, init_log_rate(logger.info, N=2000))
 
     def create(self):
+        from datetime import datetime
+
         self.database.create()
         self.wlibrary.database.create()
+
+        self._meta_set('created', datetime.now().isoformat())
+
 
     def clean(self):
         self.database.clean()
@@ -231,6 +236,17 @@ class WarehouseInterface(object):
         for table in self.library.database.session.query(Table).all():
             yield table
 
+
+    def orm_table(self, vid):
+        from ..orm import Table
+
+        return self.library.database.session.query(Table).filter(Table.vid == vid).first()
+
+    def partition(self, vid):
+        from ..orm import Partition
+
+        return self.library.database.session.query(Partition).filter(Partition.vid == vid).first()
+
     ##
     ## Installation
     ##
@@ -264,7 +280,6 @@ class WarehouseInterface(object):
 
         for table_name in tables:
 
-
             if isinstance(table_name, (list, tuple)):
                 table_name, where = table_name
             else:
@@ -286,9 +301,7 @@ class WarehouseInterface(object):
             except Exception as e:
                 self.logger.error("Failed to install table '{}': {}".format(table_name,e))
 
-
         self.library.database.mark_partition_installed(p_vid)
-
 
     def install_partition(self, bundle, partition, prefix=None):
         '''Install the records for the partition, the tables referenced by the partition,
@@ -313,15 +326,23 @@ class WarehouseInterface(object):
         tables = [ t for t in inspector.get_table_names() if t != 'config' and t in all_tables ]
 
         for table_name in tables:
-            self.create_table(p, table_name)
+            table, meta = self.create_table(p, table_name)
+
+            alias = p.identity.as_dataset().id_ + '_' + table_name
+
+            self.install_table_alias(table, alias)
 
         return tables
 
     def install_manifest(self, manifest, force = None, reset=False):
         """Install the partitions and views specified in a manifest file """
         from ..dbexceptions import NotFoundError, ConfigurationError
-
+        from datetime import datetime
         import os
+
+
+        # Delete everything related to this manifest
+        (self.library.files.query.source_url(manifest.uid)).delete()
 
         # Update the manifest with bundle information, since it doesn't normally have access to a library
         manifest.add_bundles(self.elibrary)
@@ -331,7 +352,7 @@ class WarehouseInterface(object):
         if reset or not self.title:
             self.title = manifest.title
 
-        if reset or not self.about:
+        if (reset or not self.about) and manifest.summary:
             self.about = manifest.summary['html']
 
         if reset or not self.local_cache:
@@ -386,8 +407,8 @@ class WarehouseInterface(object):
                 if doc:
                     d['doc'] = doc.content['html']
 
-                self.install_file(path=os.path.join(manifest.uid, 'extracts', d['rpath']), ref=d['table'],
-                                  type=d['format'], group='extract', data=d)
+                self.install_file(path=os.path.join('extracts', manifest.uid, d['rpath']), ref=d['table'],
+                                  type=d['format'], group='extract', source_url = manifest.uid, data=d)
 
             elif tag == 'include':
                 from .manifest import Manifest
@@ -395,8 +416,12 @@ class WarehouseInterface(object):
                 self.install_manifest(m, force = force)
 
         # Manifest data
+
         self.install_file(path=os.path.join('manifests', manifest.uid)+'.ambry', ref=manifest.uid,
-                          type=self.FILE_TYPE.MANIFEST, group=self.FILE_GROUP.MANIFEST, content=str(manifest))
+                          type=self.FILE_TYPE.MANIFEST, group=self.FILE_GROUP.MANIFEST, source_url = manifest.uid,
+                          content=str(manifest))
+
+        self._meta_set(manifest.uid, datetime.now().isoformat())
 
         if os.path.exists(self.database.path):
             return self.database.path
@@ -406,7 +431,10 @@ class WarehouseInterface(object):
     def install_view(self, name, sql):
         raise NotImplementedError(type(self))
 
-    def install_file(self, path,  ref, content=None, source=None, type=None, group=None, data=None):
+    def install_table_alias(self, table, alias):
+        self.install_view(alias, "SELECT * FROM {}".format(table))
+
+    def install_file(self, path,  ref, content=None, source=None, type=None, group=None, source_url= None, data=None):
         raise NotImplementedError(type(self))
 
     def run_sql(self, sql_text):
@@ -460,19 +488,21 @@ class WarehouseInterface(object):
             self.abs_path = abs_path
             self.data = data
 
+        def __str__(self):
+            return 'extracted={} rel={} abs={} data={}'.format(self.extracted, self.rel_path, self.abs_path, self.data)
+
+
     def extract(self, cache, force=False):
         """Generate the extracts and return a struture listing the extracted files. """
         from contextlib import closing
 
         from .extractors import new_extractor
-        from ..text import Tables, BundleDoc
+        from ..text import Tables, BundleDoc, Renderer, WarehouseIndex
 
         # Get the URL to the root. The public_utl arg only affects S3, and gives a URL without a signature.
         root = cache.path('', missing_ok = True, public_url = True)
 
-
         def maybe_render(rel_path, render_lambda, metadata = {}, force=False):
-
 
             if rel_path.endswith('.html'):
                 metadata['content-type']  = 'text/html'
@@ -484,22 +514,24 @@ class WarehouseInterface(object):
                     s.write(render_lambda().encode('utf-8'))
                 extracted = True
             else:
+
                 extracted = False
 
             return WarehouseInterface.extract_entry(extracted, rel_path, cache.path(rel_path))
+
 
         extracts = []
 
         # Generate the file etracts
 
-        for f in self.library.files.query.type('extract').all:
+        for f in self.library.files.query.group('extract').all:
 
             table = f.data['table']
             format = f.data['format']
 
-            ex = new_extractor(format, self, cache, force=False)
+            ex = new_extractor(format, self, cache, force=force)
 
-            extracts.append(WarehouseInterface.extract_entry(*ex.extract(table, cache, f.path), force=force))
+            extracts.append(WarehouseInterface.extract_entry(*ex.extract(table, cache, f.path)))
 
         # HTML files.
         for f in self.library.files.query.type('text/html').all:
@@ -533,18 +565,11 @@ class WarehouseInterface(object):
             extracts.append(maybe_render('doc/{}.html'.format(t.vid), lambda: renderer.render_table(self, t), force=force ))
 
 
-        with cache.put_stream('index.html') as s:
-            from ..text import WarehouseIndex
-            extracts.append(maybe_render(s.rel_path, lambda: WarehouseIndex(root).render(self), force=force))
+        extracts.append(maybe_render('index.html', lambda: WarehouseIndex(root).render(self), force=force))
 
-        with cache.put_stream('css/style.css') as s:
-            from ..text import Renderer
-            extracts.append(maybe_render(s.rel_path, lambda: Renderer(root).css, force=force))
+        extracts.append(maybe_render('css/style.css', lambda: Renderer(root).css, force=force))
 
-        with cache.put_stream('toc.html') as s:
-            from ..text import WarehouseIndex
-
-            extracts.append(maybe_render(s.rel_path, lambda: WarehouseIndex(root).render_toc(self, extracts), force=force))
+        extracts.append(maybe_render('toc.html', lambda: WarehouseIndex(root).render_toc(self, extracts), force=force))
 
 
         return extracts
@@ -635,10 +660,6 @@ class WarehouseInterface(object):
             name = name + '_' + identity.grain
 
         return name
-
-    def is_augmented_name(self, identity, table_name):
-
-        return table_name.startswith(identity.vid.replace('/', '_') + '_')
 
     def _ogr_args(self, partition):
         '''Return a arguments for ogr2ogr to connect to the database'''

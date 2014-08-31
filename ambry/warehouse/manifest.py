@@ -36,6 +36,7 @@ class ManifestSection(object):
 
     @property
     def name(self):
+
         if self.content and 'name' in self.content:
             return self.content['name']
 
@@ -47,6 +48,10 @@ class ManifestSection(object):
             return self.content['ref']
 
         return None
+
+    def __str__(self):
+        return "Section: tag={} line={} args={} content={} doc={}".format(self.tag, self.linenumber, self.args, self.content, self.doc)
+
 
 class Manifest(object):
 
@@ -108,8 +113,12 @@ class Manifest(object):
             yield (line, self.sections[line])
 
     def tagged_sections(self, tag):
+
+        if isinstance(tag,basestring):
+            tag = [tag]
+
         for line in sorted(self.sections.keys()):
-            if self.sections[line].tag == tag:
+            if self.sections[line].tag in tag:
                 yield (line, self.sections[line])
 
     def single_line(self, keyword):
@@ -333,7 +342,8 @@ class Manifest(object):
                 section.content['ref'] = previous_section.name
                 previous_section.doc = section.content
 
-            previous_section = section
+            else:
+                previous_section = section
 
         self.sections.update(sections)
 
@@ -342,36 +352,26 @@ class Manifest(object):
         from ..util import normalize_newlines
         import textwrap
 
-        if section.args:
-            # Table documentation
-            from collections import OrderedDict
-            out = OrderedDict()
-            for l in section.lines:
-                parts = l.strip().split(' ',2)
-                name = parts.pop(0) if parts else None
-                type = parts.pop(0) if parts else 'UNK'
-                doc = parts.pop(0).strip() if parts else ''
-                out[name.lower()] = (name, type, doc)
+        t = '\n'.join(section.lines)
 
-            return out
-        else:
-            t = '\n'.join(section.lines)
-
-            # Normal markdown documentation
-            return dict(text=t.strip(),html=markdown.markdown(t))
+        # Normal markdown documentation
+        return dict(text=t.strip(),html=markdown.markdown(t))
 
     def _process_sql(self, section):
+
         return sqlparse.format(''.join(section.lines), reindent=True, keyword_case='upper')
 
     def _process_mview(self, section):
+
         t = sqlparse.format(''.join(section.lines), reindent=True, keyword_case='upper')
 
-        return dict(text=t,html=self.pygmentize_sql(t))
+        return dict(text=t,html=self.pygmentize_sql(t), name = section.args.strip())
 
     def _process_view(self, section):
+
         t = sqlparse.format(''.join(section.lines), reindent=True, keyword_case='upper')
 
-        return dict(text=t,html=self.pygmentize_sql(t))
+        return dict(text=t,html=self.pygmentize_sql(t), name = section.args.strip())
 
     def _process_extract(self, section):
 
@@ -439,7 +439,6 @@ class Manifest(object):
             for partition in partitions.content['partitions']:
 
                 ident = library.resolve(partition['partition'])
-                b = library.get(ident.vid)
 
                 if not ident:
                     raise ParseError("Partition reference not resolved to a bundle: '{}' in library {}"
@@ -447,6 +446,8 @@ class Manifest(object):
 
                 if not ident.partition:
                     raise ParseError("Partition reference not resolved to a partition: '{}' ".format(partition['partition']))
+
+                b = library.get(ident.vid)
 
                 partition['bundle'] = ident
                 partition['metadata'] = b.metadata

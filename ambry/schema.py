@@ -374,7 +374,7 @@ class Schema(object):
 
         if alt_name and use_id:
             raise ConfigurationError("Can't specify both alt_name and use_id")
-        
+
         if alt_name:
             table_name = alt_name
         elif use_id:
