@@ -8,10 +8,6 @@ from . import WarehouseInterface
 
 class RelationalWarehouse(WarehouseInterface):
 
-
-
-
-
     ##
     ## Tables
     ##
@@ -21,31 +17,29 @@ class RelationalWarehouse(WarehouseInterface):
         return table_name in self.database.inspector.get_table_names()
 
 
-    def table_meta(self, d_vid, p_vid, table_name):
+    def table_meta(self, identity, table_name):
         '''Get the metadata directly from the database. This requires that
         table_name be the same as the table as it is in stalled in the database'''
         from ..schema import Schema
+
+        assert identity.is_partition
+
+        p_vid = self._to_vid(identity)
+        d_vid = self._partition_to_dataset_vid(identity)
 
         meta, table = Schema.get_table_meta_from_db(self.library.database,
                                                     table_name,
                                                     d_vid=d_vid,
                                                     driver=self.database.driver,
-                                                    alt_name=self.augmented_table_name(d_vid, table_name),
+                                                    alt_name=self.augmented_table_name(identity, table_name),
                                                     session=self.library.database.session)
-
         return meta, table
 
     def create_table(self, partition, table_name):
         '''Create the table in the warehouse, using an augmented table name '''
         from ..schema import Schema
 
-        p_vid = self._to_vid(partition)
-        d_vid = self._partition_to_dataset_vid(partition)
-
-        meta, table = self.table_meta(d_vid, p_vid, table_name)
-
-
-
+        meta, table = self.table_meta(partition.identity, table_name)
 
         if not self.has_table(table.name):
             table.create(bind=self.database.engine)
@@ -55,9 +49,20 @@ class RelationalWarehouse(WarehouseInterface):
 
         return table, meta
 
-    def tables(self):
+    def create_index(self, name, table, columns):
 
-        return self.metadata.sorted_tables
+        from sqlalchemy.exc import OperationalError
+
+        sql = "CREATE INDEX {} ON {} ({})".format(name, table, ','.join(columns))
+
+        try:
+            self.database.connection.execute(sql)
+            self.logger.info('create_index {}'.format(name))
+        except OperationalError as e:
+            if 'exists' not in str(e).lower():
+                raise
+            self.logger.info('index_exists {}'.format(name))
+            # Ignore if it already exists.
 
     def table(self, table_name):
         '''Get table metadata from the database'''
@@ -68,7 +73,7 @@ class RelationalWarehouse(WarehouseInterface):
         if table is not False:
             r = table
         else:
-            metadata = self.metadata
+            metadata = self.metadata # FIXME Will probably fail ..
             table = Table(table_name, metadata, autoload=True)
             self._table_meta_cache[table_name] = table
             r = table
@@ -94,7 +99,7 @@ class RelationalWarehouse(WarehouseInterface):
         d_vid = partition.identity.as_dataset().vid
 
         source_table_name = table_name
-        dest_table_name = self.augmented_table_name(d_vid, table_name)
+        dest_table_name = self.augmented_table_name(partition.identity, table_name)
 
         self.logger.info('populate_table {}'.format(table_name))
 
@@ -131,7 +136,7 @@ class RelationalWarehouse(WarehouseInterface):
         return dest_table_name
 
 
-    def load_ogr(self, partition, table_name):
+    def load_ogr(self, partition, table_name, where):
         #
         # Use ogr2ogr to copy.
         #
@@ -141,7 +146,7 @@ class RelationalWarehouse(WarehouseInterface):
         p_vid = partition.identity.vid
         d_vid = partition.identity.as_dataset().vid
 
-        a_table_name = self.augmented_table_name(d_vid, table_name)
+        a_table_name = self.augmented_table_name(partition.identity, table_name)
 
         args = [
             "-t_srs EPSG:4326",
@@ -190,7 +195,7 @@ class RelationalWarehouse(WarehouseInterface):
             self.logger.info("Dropping tables in partition {}".format(p.identity.vname))
             for table_name in p.tables:  # Table name without the id prefix
 
-                table_name = self.augmented_table_name(p.identity.as_dataset().vid, table_name)
+                table_name = self.augmented_table_name(p.identity, table_name)
 
                 try:
                     self.database.drop_table(table_name)
@@ -222,3 +227,45 @@ class RelationalWarehouse(WarehouseInterface):
         e = self.database.connection.execute
 
         e(sql_text)
+
+
+    def install_file(self, path, ref, content = None, source = None, type = None, group = None, source_url = None,  data = None):
+        """Install a file reference, possibly with binary content"""
+        import os
+        from ..util import md5_for_file
+        import hashlib
+        import time
+
+        files = self.library.files
+
+        f  = files.new_file(path=path, ref = ref, type_=type, group=group, data=data, source_url = source_url)
+
+        if source:
+            try:
+                f.content = source.read()
+
+                f.hash = hashlib.md5(f.content).hexdigest()
+                f.size = len(f.content)
+                f.modified = int(time.time())
+
+            except IOError:
+                with open(source) as sf:
+                    f.content = sf.read()
+
+                stat = os.stat(path)
+
+                if not f.modified or stat.st_mtime > f.modified:
+                    f.modified = int(stat.st_mtime)
+
+                f.size = stat.st_size
+
+                f.hash = md5_for_file(source)
+
+        elif content:
+            f.content = content
+            f.hash = hashlib.md5(f.content).hexdigest()
+            f.size = len(f.content)
+            f.modified = int(time.time())
+
+        files.merge(f)
+

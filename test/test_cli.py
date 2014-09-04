@@ -110,35 +110,24 @@ class Test(TestBase):
     def cmd(self, *args):
 
         from ambry.cli import main
+        import subprocess
+        import shlex
 
-        args = [
-            '-c',self.config_file
-        ] + list(args)
+        args = shlex.split(' '.join(args))
 
-        error = False
+
+        args = [  '-c',self.config_file ] + list(args)
+
+        args = ['python','-mambry.cli'] + args
+        print "=== Execute: ", " ".join(args)
         try:
-            print "Execute ",args
-            main(args, self.logger)
-        except:
-            error = True
+            s=subprocess.check_output(args)
+        except subprocess.CalledProcessError as e:
+            print "ERROR: ", e
+            print e.output
             raise
-        finally:
-            ## I have no ideal what is going on here ...
-            ## self.output is a StringIO, which is set as a stream to a logger.
-            ## The code below seems to return the output, but the output is also sent to the logger.
-            # I guess the logger wrtes it to the stream .. and then .. um ....
 
-            self.logging_handler.flush()
-            self.output.flush()
-
-            out_val =  self.output.getvalue()
-            self.output.truncate(0)
-            self.output.seek(0)
-
-            if error:
-                print out_val
-
-        return out_val
+        return s
 
     def checkout_source(self):
 
@@ -164,6 +153,7 @@ class Test(TestBase):
 
     def test_sync(self):
         import os
+        from subprocess import CalledProcessError
 
         self.reset()
 
@@ -172,10 +162,14 @@ class Test(TestBase):
         c = self.cmd
 
         c('info')
+
         c('library','info')
+
+        c('library drop')
+
         c('library sync -s')
 
-        # Check that we have the exaple bundles, but not eh built library
+        # Check that we have the example bundles, but not eh built library
         self.assertIn('S    d00H003',c('list'))
         self.assertNotIn('LS    d00H003', c('list'))
         self.assertIn('example.com-altdb-orig-0.1.1', c('list'))
@@ -195,13 +189,12 @@ class Test(TestBase):
         self.assertIn('LS    d00H003', c('list'))
 
         # Can't rebuild an installed library.
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(CalledProcessError):
             c('bundle -d d00H003 prepare --clean ')
 
         # Get all of the other bundles
         vids = [ y.strip()
                  for y in c('list -Fvid').strip().replace('test_cli INFO ','').split('\n') if y.strip() != 'd00H003']
-
 
         for vid in vids:
             c('bundle -d {} build --clean '.format(vid))

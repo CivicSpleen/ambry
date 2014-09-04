@@ -24,7 +24,7 @@ class Test(TestBase):
     def setUp(self):
         import bundles.testbundle.bundle
 
-        rm_rf('/tmp/server')
+        rm_rf('/tmp/cache-test')
 
         self.copy_or_build_bundle()
 
@@ -81,11 +81,24 @@ class Test(TestBase):
     
         return True
 
+    def make_test_file(self):
+        root = self.rc.group('filesystem').root
+
+        testfile = os.path.join(root, 'testfile')
+
+        if not os.path.exists(root):
+            os.makedirs(root)
+
+        with open(testfile, 'w+') as f:
+            for i in range(1024):
+                f.write('.' * 1023)
+                f.write('\n')
+
+        return testfile
 
     def test_basic(self):
 
         from ambry.cache.filesystem import FsCache, FsLimitedCache
-
 
         root = self.rc.group('filesystem').root
 
@@ -94,13 +107,7 @@ class Test(TestBase):
         l2_repo_dir = os.path.join(root, 'repo-l2')
         os.makedirs(l2_repo_dir)
 
-        testfile = os.path.join(root, 'testfile')
-
-        with open(testfile, 'w+') as f:
-            for i in range(1024):
-                f.write('.' * 1023)
-                f.write('\n')
-
+        testfile = self.make_test_file()
         #
         # Basic operations on a cache with no upstream
         #
@@ -188,74 +195,93 @@ class Test(TestBase):
 
         l1.verify()
 
+    def test_basic_prefix(self):
+        from ambry.cache.filesystem import FsCache, FsLimitedCache
 
-        def test_compression(self):
-            from ambry.run import get_runconfig
-            from ambry.cache import new_cache
-            from ambry.util import temp_file_name, md5_for_file, copy_file_or_flo
+        root = self.rc.group('filesystem').root
 
-            rc = get_runconfig((os.path.join(self.bundle_dir, 'test-run-config.yaml'), RunConfig.USER_CONFIG))
+        cache_dir = os.path.join(root, 'test_prefixes')
 
-            comp_cache = new_cache(rc.filesystem('compressioncache'))
+        prefix = 'prefix'
 
-            test_file_name = 'test_file'
+        cache1 = FsCache(cache_dir)
 
-            fn = temp_file_name()
-            print 'orig file ', fn
-            with open(fn, 'wb') as f:
-                for i in range(1000):
-                    f.write("{:03d}:".format(i))
+        cache2 = FsCache(cache_dir, prefix = prefix)
 
-            cf = comp_cache.put(fn, test_file_name)
+        tf = self.make_test_file()
 
-            with open(cf) as stream:
-                from ambry.util.sgzip import GzipFile
+        cache2.put(tf, 'tf')
 
-                stream = GzipFile(stream)
+        self.assertTrue(cache1.has('{}/{}'.format(prefix,'tf')))
 
-                uncomp_cache = new_cache(rc.filesystem('fscache'))
 
-                uncomp_stream = uncomp_cache.put_stream('decomp')
+    def test_compression(self):
+        from ambry.run import get_runconfig
+        from ambry.cache import new_cache
+        from ambry.util import temp_file_name, md5_for_file, copy_file_or_flo
 
-                copy_file_or_flo(stream, uncomp_stream)
+        rc = get_runconfig((os.path.join(self.bundle_dir, 'test-run-config.yaml'), RunConfig.USER_CONFIG))
 
-            uncomp_stream.close()
+        comp_cache = new_cache(rc.filesystem('compressioncache'))
 
-            dcf = uncomp_cache.get('decomp')
+        test_file_name = 'test_file'
 
-            self.assertEquals(md5_for_file(fn), md5_for_file(dcf))
+        fn = temp_file_name()
+        print 'orig file ', fn
+        with open(fn, 'wb') as f:
+            for i in range(1000):
+                f.write("{:03d}:".format(i))
 
-            os.remove(fn)
+        cf = comp_cache.put(fn, test_file_name)
 
-        def test_md5(self):
-            from ambry.run import get_runconfig
-            from ambry.cache import new_cache
-            from ambry.util import md5_for_file
-            from ambry.cache.filesystem import make_metadata
+        with open(cf) as stream:
+            from ambry.util.sgzip import GzipFile
 
-            rc = get_runconfig((os.path.join(self.bundle_dir, 'test-run-config.yaml'), RunConfig.USER_CONFIG))
+            stream = GzipFile(stream)
 
-            fn = self.make_test_file()
+            uncomp_cache = new_cache(rc.filesystem('fscache'))
 
-            md5 = md5_for_file(fn)
+            uncomp_stream = uncomp_cache.put_stream('decomp')
 
-            cache = new_cache(rc.filesystem('fscache'))
+            copy_file_or_flo(stream, uncomp_stream)
 
-            cache.put(fn, 'foo1')
+        uncomp_stream.close()
 
-            abs_path = cache.path('foo1')
+        dcf = uncomp_cache.get('decomp')
 
-            self.assertEquals(md5, cache.md5('foo1'))
+        self.assertEquals(md5_for_file(fn), md5_for_file(dcf))
 
-            cache = new_cache(rc.filesystem('compressioncache'))
+        os.remove(fn)
 
-            cache.put(fn, 'foo2', metadata=make_metadata(fn))
+    def test_md5(self):
+        from ambry.run import get_runconfig
+        from ambry.cache import new_cache
+        from ambry.util import md5_for_file
+        from ambry.cache.filesystem import make_metadata
 
-            abs_path = cache.path('foo2')
+        rc = get_runconfig((os.path.join(self.bundle_dir, 'test-run-config.yaml'), RunConfig.USER_CONFIG))
 
-            self.assertEquals(md5, cache.md5('foo2'))
+        fn = self.make_test_file()
 
-            os.remove(fn)
+        md5 = md5_for_file(fn)
+
+        cache = new_cache(rc.filesystem('fscache'))
+
+        cache.put(fn, 'foo1')
+
+        abs_path = cache.path('foo1')
+
+        self.assertEquals(md5, cache.md5('foo1'))
+
+        cache = new_cache(rc.filesystem('compressioncache'))
+
+        cache.put(fn, 'foo2', metadata=make_metadata(fn))
+
+        abs_path = cache.path('foo2')
+
+        self.assertEquals(md5, cache.md5('foo2'))
+
+        os.remove(fn)
 
 
     def test_configed_caches(self):
@@ -294,10 +320,16 @@ class Test(TestBase):
 
             self.assertTrue(cache.has(relpath, md5=md5))
 
+            clone = cache.clone()
+
+            self.assertTrue(clone.has(relpath, md5=md5), '{}'.format(type(clone)))
+
             cache.remove(relpath, propagate=True)
 
             self.assertFalse(os.path.exists(r), str(cache))
+
             self.assertFalse(cache.has(relpath))
+            self.assertFalse(clone.has(relpath))
 
 
 
@@ -346,14 +378,13 @@ class Test(TestBase):
 
         r = l.locate(self.bundle.identity.vid)
 
-    def test_url_caches_2(self):
+    def x_test_url_caches_2(self):
 
         l = self.get_library('remoted')
 
-        ident, r =  l.locate(self.bundle.identity.vid)
+        ident, r = l.locate(self.bundle.identity.vid)
 
-        print ident, r.repo_id
-
+        print ident
 
         b = r.get(ident.cache_key)
 

@@ -1,0 +1,12 @@
+
+services:
+  dstk: postgres://scott:tiger@foo.bar.bingo:5432/mydatabase
+
+  geocoder:
+    type: dstk
+    url: postgres://scott:tiger@foo.bar.bingo:5432/mydatabase
+
+accounts:
+  foo.bar.bingo:
+    username: account-username
+    password: account-password

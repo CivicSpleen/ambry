@@ -10,5 +10,7 @@ lockfile
 semantic_version
 numpy
 pandas
-
-
+sqlparse
+pygments
+jinja2
+address_parser

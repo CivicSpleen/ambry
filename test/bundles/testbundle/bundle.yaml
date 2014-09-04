@@ -43,6 +43,7 @@ names:
     name: source-dataset-subset-variation
     vid: diEGPXmDC8001
     vname: source-dataset-subset-variation-0.0.1
+process: {}
 versions:
     1:
         description: null

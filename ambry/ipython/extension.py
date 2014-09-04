@@ -9,6 +9,7 @@ class MyMagics(Magics):
     @line_magic
     def lmagic(self, line):
         "my line magic"
+        print line
         print("Full access to the main IPython object:", self.shell)
         print("Variables in the user namespace:", list(self.shell.user_ns.keys()))
         print dir(self)
@@ -31,6 +32,10 @@ class MyMagics(Magics):
             print("Called as cell magic")
             return line, cell
 
+
+
+
+
 def load_ipython_extension(ipython):
     print "Loading"
 
@@ -45,4 +50,22 @@ ip = get_ipython()
 # You can register the class itself without instantiating it.  IPython will
 # call the default constructor on it.
 ip.register_magics(MyMagics)
+
+@magics_class
+class StatefulMagics(Magics):
+    "Magics that hold additional state"
+
+    def __init__(self, shell, data):
+        # You must call the parent constructor
+        super(StatefulMagics, self).__init__(shell)
+        self.data = data
+
+    # etc...
+
+# This class must then be registered with a manually created instance,
+# since its constructor has different arguments from the default:
+ip = get_ipython()
+magics = StatefulMagics(ip, 'this is the data')
+ip.register_magics(magics)
+
 

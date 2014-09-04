@@ -120,6 +120,11 @@ class Files(object):
         self._query = self._query.filter(File.group == v)
         return self
 
+    def source_url(self, v):
+        self._check_query()
+        self._query = self._query.filter(File.source_url == v)
+        return self
+
     #
     # pre-defined type filters
     #
@@ -170,8 +175,8 @@ class Files(object):
 
                 f.size = stat.st_size
             else:
-                f.modified = None
-                f.size = None
+                f.modified = f.modified if f.modified else None
+                f.size = f.size if f.size else None
 
         if commit == 'collect':
             self._collection.append(f.insertable_dict)

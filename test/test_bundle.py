@@ -558,6 +558,20 @@ class Test(TestBase):
         self.bundle.update_configuration()
 
 
+    def test_partition_doc(self):
+
+        b = self.bundle
+
+        for p in b.partitions:
+            print p.html_doc()
+
+
+    def test_bundle_doc(self):
+        b = self.bundle
+
+        print b.html_doc()
+
+
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))

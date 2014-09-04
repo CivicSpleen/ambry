@@ -58,6 +58,7 @@ class Name(object):
         :param args:
         :param kwargs:
         """
+
         for k,default, optional in self.name_parts:
             if optional:
                 setattr(self,k, kwargs.get(k,default))
@@ -244,7 +245,10 @@ class Name(object):
     @property
     def cache_key(self):
         '''The name in a form suitable for use as a cache-key'''
-        return self.path+self.PATH_EXTENSION
+        try:
+            return self.path+self.PATH_EXTENSION
+        except TypeError:
+            raise TypeError("self.path is invalild: '{}', '{}'".format(str(self.path), type(self.path)))
 
     def clone(self):
         return self.__class__(**self.dict)
@@ -807,6 +811,43 @@ class ObjectNumber(object):
                 if bool(revision) else '')
 
 
+
+class TopNumber(ObjectNumber):
+    '''A general top level number, with a given number space. Just like a DatasetNumber, with without the 'd' '''
+    def __init__(self, space, dataset=None, revision=None, assignment_class='self'):
+        '''
+        Constructor
+        '''
+
+        if len(space) > 1:
+            raise  ValueError("Number space must be a single letter")
+
+        self.space = space
+
+        self.assignment_class = assignment_class
+
+        if dataset is None:
+
+            import random
+            digit_length = self.DLEN.DATASET_CLASSES[self.assignment_class]
+            # On 64 bit machine, max is about 10^17, 2^53
+            # That should be random enough to prevent
+            # collisions for a small number of self assigned numbers
+            max = 62**digit_length
+            dataset = random.randint(0,max)
+
+        self.dataset = dataset
+        self.revision = revision
+
+    def _ds_str(self):
+
+        ds_len = self.DLEN.DATASET_CLASSES[self.assignment_class]
+
+        return (ObjectNumber.base62_encode(self.dataset).rjust(ds_len,'0') )
+
+    def __str__(self):
+        return (self.space + self._ds_str() + ObjectNumber._rev_str(self.revision))
+
 class DatasetNumber(ObjectNumber):
     '''An identifier for a dataset'''
     def __init__(self, dataset=None, revision=None, assignment_class='self'):
@@ -845,6 +886,8 @@ class DatasetNumber(ObjectNumber):
         return (ObjectNumber.TYPE.DATASET+
                 self._ds_str()+
                 ObjectNumber._rev_str(self.revision))
+
+
 
 class TableNumber(ObjectNumber):
     '''An identifier for a table'''
@@ -939,12 +982,16 @@ class LocationRef(object):
     LOCATION=Constant()
 
     LOCATION.UNKNOWN = ' '
-    LOCATION.SREPO = 'G' # Source repository, 'github'
+
     LOCATION.SOURCE = 'S'
     LOCATION.LIBRARY = 'L' # For the bundle
-    LOCATION.PARTITION = 'LP' # For the partition, b/c also used in File.type
     LOCATION.REMOTE ='R'
     LOCATION.REMOTEPARTITION = 'RP'
+    LOCATION.PARTITION = 'LP'  # For the partition, b/c also used in File.type
+
+    # These are rarely or never used.
+
+    LOCATION.SREPO = 'G'  # Source repository, 'github'
     LOCATION.UPSTREAM = 'U'
     LOCATION.WAREHOUSE = 'W'
 
@@ -975,6 +1022,7 @@ class Locations(object):
         LocationRef.LOCATION.LIBRARY,
         LocationRef.LOCATION.SOURCE,
         LocationRef.LOCATION.REMOTE,
+        LocationRef.LOCATION.REMOTEPARTITION,
         LocationRef.LOCATION.SREPO,
         LocationRef.LOCATION.UPSTREAM,
         LocationRef.LOCATION.WAREHOUSE
@@ -1007,6 +1055,10 @@ class Locations(object):
     def set(self, code, revision=None, version=None):
 
         uc_code = code.upper()
+
+        # In warehouses, there are many other file types that are not locations.
+        if uc_code not in Locations.order:
+            return
 
         if not revision:
             revision = self.ident.on.revision

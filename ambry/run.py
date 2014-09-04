@@ -212,12 +212,42 @@ class RunConfig(object):
                                      }  )
 
         return e
-    
+
+
+    def service(self, name):
+
+        from util import parse_url_to_dict, unparse_url_dict
+
+
+
+        e = self.group_item('services', name)
+
+        # If the value is a string, rather than a dict, it is for a
+        # FsCache. Re-write it to be the expected type.
+
+        if isinstance(e, basestring):
+            e = parse_url_to_dict(e)
+
+        if e.get('url', False):
+            e.update(parse_url_to_dict(e['url']))
+
+        try:
+            account = self.account(e['hostname'])
+            e['account'] = account
+            e['password'] = account.get('password', e['password'])
+            e['username'] = account.get('username', e['username'])
+        except ConfigurationError:
+            e['account'] = 'No account found'
+
+        e['url'] = unparse_url_dict(e)
+
+        return e
+
     def account(self,name):
+
         e = self.group_item('accounts', name) 
 
         e =  self._sub_strings(e, {'store': lambda k,v: self.filesystem(v)}  )
-
 
         e['_name'] = name
         

@@ -5,7 +5,6 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from __future__ import absolute_import
 from ..dbexceptions import ConfigurationError
-from collections import namedtuple
 
 def new_database(config, bundle=None, class_=None):
 
@@ -51,6 +50,7 @@ def new_database(config, bundle=None, class_=None):
         return SqliteWarehouseDatabase(dbname, **config)
 
     elif k == ('spatialite', 'warehouse'):
+
         from .spatialite import SpatialiteDatabase
 
         dbname = config['dbname']

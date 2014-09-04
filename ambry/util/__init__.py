@@ -22,13 +22,22 @@ from flo import * # Legacy; should convert clients to direct import
 logger_init = set()
 
 
-def get_logger(name, file_name = None, stream = None, template=None):
+def get_logger(name, file_name = None, stream = None, template=None, clear=False, propagate = False):
     """Get a logger by name
 
     if file_name is specified, and the dirname() of the file_name exists, it will
     write to that file. If the dirname dies not exist, it will silently ignre it. """
 
+
+
     logger = logging.getLogger(name)
+
+    if propagate is not None:
+        logger.propagate = propagate
+
+    if clear:
+        logger.handlers = []
+
 
     # To list all loggers: logging.Logger.manager.loggerDict
 
@@ -423,7 +432,9 @@ class IncludeFile(str):
  
 def include_representer(dumper, data):
     return dumper.represent_scalar(u'!include', data.relpath)
-    
+
+def include_representer(dumper, data):
+    return dumper.represent_scalar(u'!include', data.relpath)
 
 # http://pypi.python.org/pypi/layered-yaml-attrdict-config/12.07.1
 class AttrDict(OrderedDict):
@@ -542,6 +553,7 @@ class AttrDict(OrderedDict):
 
     def dump(self, stream= None, map_view=None):
         from StringIO import StringIO
+        from ..orm import MutationList, MutationDict
 
         yaml.representer.SafeRepresenter.add_representer(
             MapView, yaml.representer.SafeRepresenter.represent_dict)
@@ -556,8 +568,14 @@ class AttrDict(OrderedDict):
             defaultdict, yaml.representer.SafeRepresenter.represent_dict )
 
         yaml.representer.SafeRepresenter.add_representer(
+            MutationDict, yaml.representer.SafeRepresenter.represent_dict)
+
+        yaml.representer.SafeRepresenter.add_representer(
             set, yaml.representer.SafeRepresenter.represent_list )
-        
+
+        yaml.representer.SafeRepresenter.add_representer(
+            MutationList, yaml.representer.SafeRepresenter.represent_list)
+
         yaml.representer.SafeRepresenter.add_representer(
             IncludeFile, include_representer)
 
@@ -577,6 +595,13 @@ class AttrDict(OrderedDict):
 
         if isinstance(stream, StringIO):
             return stream.getvalue()
+
+    def json(self):
+        import yaml, json
+
+        o = yaml.load(self.dump())
+
+        return json.dumps(o)
 
 
 class MapView(collections.MutableMapping):
@@ -830,13 +855,31 @@ def make_acro(past, prefix, s):
 
 def temp_file_name():
     '''Create a path to a file in the temp directory'''
-    
-    import tempfile
-    
-    f = tempfile.NamedTemporaryFile(delete=False)
-    f.close()
-    
-    return f.name
+
+    import platform
+
+    if platform.system() == 'Windows':
+
+        import tempfile
+
+        f = tempfile.NamedTemporaryFile(delete=True)
+        f.close()
+
+        if os.path.exists(f.name):
+            os.remove(f.name)
+
+        return f.name
+
+    else:
+
+        import uuid
+
+        tmp_dir = '/tmp/ambry'
+
+        if not os.path.exists(tmp_dir):
+            os.makedirs(tmp_dir)
+
+        return os.path.join(tmp_dir, str(uuid.uuid4()))
 
 
 
@@ -917,6 +960,8 @@ def init_log_rate(output_f, N=None, message='', print_rate=None):
             print_rate,
             deque([], maxlen=4) # Deque for averaging last N rates
             ]
+
+    assert callable(output_f)
 
     f = partial(_log_rate, output_f, d)
     f.always = output_f
@@ -1159,3 +1204,62 @@ def count_open_fds():
             procs.split( '\n' ) )
         )
     return nprocs
+
+def parse_url_to_dict(url):
+    """Parse a url and returna dict with keys for all of the parts. The urlparse function() returns a wacky combination of
+    a namedtuple with properties. """
+
+    from urlparse import urlparse
+
+    p = urlparse(url)
+
+    return {
+        'scheme':p.scheme,
+        'netloc':p.netloc,
+        'path':p.path,
+        'params':p.params,
+        'query':p.query,
+        'fragment':p.fragment,
+        'username':p.username,
+        'password':p.password,
+        'hostname':p.hostname,
+        'port':p.port
+    }
+
+def unparse_url_dict(d):
+
+    host_port = d['hostname']
+
+    if d['port']:
+        host_port+= ":" + str(d['port'])
+
+    user_pass = ''
+    if d['username']:
+        user_pass += d['username']
+
+    if d['password']:
+        user_pass += ':' + d['password']
+
+    if user_pass:
+        host_port = user_pass + '@' + host_port
+
+    url = "{}://{}/{}".format(d['scheme'], host_port, d['path'].lstrip('/'))
+
+    if d['query']:
+        url += '?' + d['query']
+
+    return url
+
+def normalize_newlines(string):
+    """Convert \r\n or \r to \n"""
+    import re
+    return re.sub(r'(\r\n|\r|\n)', '\n', string)
+
+def print_yaml(o):
+    """Pretty print an object as YAML"""
+    import yaml
+    from ..orm import MutationList, MutationDict
+
+    print (yaml.dump(o, default_flow_style=False, indent=4, encoding='utf-8'))
+
+

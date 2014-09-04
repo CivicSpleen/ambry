@@ -48,8 +48,8 @@ def source_parser(cmd):
     sp.add_argument('-p', '--space', default=None, help='Spatial extent name')
     sp.add_argument('-v','--variation', default=None, help='Name of the variation')
     sp.add_argument('-c','--creator',  required=False, help='Id of the creator')
-    sp.add_argument('-n','--dryrun', default=False, help='Dry run')
-    sp.add_argument('-k', '--key', help='Number server key')
+    sp.add_argument('-n','--dryrun',action="store_true", default=False, help='Dry run')
+    sp.add_argument('-k', '--key', help='Number server key. Use \'self\' for a random, self-generated key.')
     sp.add_argument('args', nargs=argparse.REMAINDER) # Get everything else. 
 
     sp = asp.add_parser('info', help='Information about the source configuration')
@@ -237,6 +237,10 @@ def source_new(args, l, st, rc):
     if args.key:
         nsconfig['key'] = args.key
 
+    if args.dryrun:
+        prt("For dryrun, using self-generated id")
+        nsconfig['key'] = 'self'
+
     ns = NumberServer(**nsconfig)
 
     d = vars(args)
@@ -245,7 +249,7 @@ def source_new(args, l, st, rc):
     d['btime'] = d.get('time',None)
     d['bspace'] = d.get('space', None)
 
-    if args.key  in ('rand',None,'self'):
+    if args.dryrun or args.key  in ('rand','self'):
         d['id'] = str(DatasetNumber())
 
     else:
@@ -257,15 +261,6 @@ def source_new(args, l, st, rc):
             warn("Using self-generated number. There is no problem with this, but they are longer than centrally generated numbers.")
             d['id'] = str(DatasetNumber())
 
-    ident = Identity.from_dict(d)
-
-    bundle_dir =  os.path.join(os.getcwd(),ident.source_path)
-
-    if not os.path.exists(bundle_dir):
-        os.makedirs(bundle_dir)
-
-    elif os.path.isdir(bundle_dir):
-        fatal("Directory already exists: "+bundle_dir)
 
     try:
         ambry_account = rc.group('accounts').get('ambry', {})
@@ -279,6 +274,22 @@ def source_new(args, l, st, rc):
         from ambry.run import RunConfig as rc
         fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
 
+
+    ident = Identity.from_dict(d)
+
+    bundle_dir = os.path.join(os.getcwd(), ident.source_path)
+
+    if args.dryrun:
+        prt("Creating  {}".format(ident.fqname))
+        prt("Directory {}".format(bundle_dir))
+
+        return
+
+    if not os.path.exists(bundle_dir):
+        os.makedirs(bundle_dir)
+
+    elif os.path.isdir(bundle_dir):
+        fatal("Directory already exists: " + bundle_dir)
 
     metadata = Top(path=bundle_dir)
 
@@ -311,9 +322,10 @@ def source_new(args, l, st, rc):
 
     p = lambda x : os.path.join(os.path.dirname(__file__),'..','support',x)
     shutil.copy(p('bundle.py'),bundle_dir)
-    shutil.copy(p('README.md'),bundle_dir)
+    #shutil.copy(p('README.md'),bundle_dir)
     shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta')  )
     shutil.copy(p('documentation.md'), os.path.join(bundle_dir, 'meta'))
+    shutil.copy(p('README.md.template'), os.path.join(bundle_dir, 'meta'))
 
     try:
         l.sync_source_dir(b.identity, bundle_dir)

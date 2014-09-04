@@ -103,9 +103,6 @@ def library_parser(cmd):
     group.add_argument('-j', '--json',  default='csv', dest='format',  action='store_const', const='json')
     group.add_argument('-c', '--csv',  default='csv', dest='format',  action='store_const', const='csv')
 
-
-
-
 def library_command(args, rc):
     from  ..library import new_library
     from . import global_logger
@@ -237,15 +234,7 @@ def library_purge(args, l, config):
     prt("Purge library")
     l.purge()
       
-def library_rebuild(args, l, config):  
 
-    l.database.enable_delete = True
-    if args.upstream:
-        prt("Rebuild library from remote")
-        l.remote_rebuild()
-    else:
-        prt("Rebuild library from local storage")
-        l.rebuild()
 
 def library_remove(args, l, config):
     from ..dbexceptions import NotFoundError
@@ -341,7 +330,7 @@ def library_push(args, l, config):
 
     def push_cb(rate, note, md, t):
         if note == 'Has':
-            prt("{} {} {}", note, md['fqname'])
+            prt("{} {}", note, md['fqname'])
         elif note == 'Pushing':
             prt("{} {}  {} KB/s ", note, md['fqname'], rate)
         elif note == 'Pushed':

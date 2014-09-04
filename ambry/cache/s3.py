@@ -14,7 +14,7 @@ class S3Cache(Cache):
 
     base_priority = 30  # Priority for this class of cache.
 
-    def __init__(self, bucket=None, prefix=None, account=None, upstream=None, cdn=None, **kwargs):
+    def __init__(self, bucket=None, prefix=None, account=None, upstream=None, cdn=None, options = None, **kwargs):
         '''Init a new S3Cache Cache
 
         '''
@@ -22,21 +22,32 @@ class S3Cache(Cache):
 
         super(S3Cache, self).__init__(upstream=upstream)
 
+
         self.is_remote = False
-        self.access_key = account['access']
-        self.secret = account['secret']
         self.bucket_name = bucket
         self.prefix = prefix
+
+        self.account = account
+        self.access_key = account['access']
+        self.secret = account['secret']
 
         self.conn = S3Connection(self.access_key, self.secret, is_secure = False )
         self.bucket = self.conn.get_bucket(self.bucket_name)
 
-        self.options = kwargs.get('options',None)
+        self.options = options
 
         self.cdn = None
+        self.cdn_config = None
+
         if cdn:
             self._init_cdn(cdn)
-            
+
+    def clone(self):
+        from boto.s3.connection import S3Connection
+
+        return S3Cache(bucket=self.bucket, prefix=self.prefix, account=self.account,
+                       options = self.options, upstream=self.upstream, cdn=self.cdn, **self.args)
+
     def _init_cdn(self, config):
         import boto
         import time
@@ -80,7 +91,8 @@ class S3Cache(Cache):
         else:
             return rel_path
 
-    def path(self, rel_path, propagate=True, **kwargs):
+    def path(self, rel_path, propagate=True, missing_ok = False, **kwargs):
+        import re
 
         if self.cdn:
             rel_path = self._rename(rel_path)
@@ -93,14 +105,48 @@ class S3Cache(Cache):
                 method = kwargs['method'].upper()
             else:
                 method = 'GET'
-            
-            k = self._get_boto_key(rel_path)
+
+            k = self._get_boto_key(rel_path, validate= not missing_ok)
 
             if not k:
                 from ..dbexceptions import NotFoundError
-                raise NotFoundError("Didn't find key for {}/{}, {} ".format(self.bucket_name, self.prefix, rel_path))
+                raise NotFoundError("Didn't find key for bucket='{}' prefix='{}', path='{}' ".format(self.bucket_name, self.prefix, rel_path))
 
-            return k.generate_url(300, method=method) # expires in 5 minutes
+            if kwargs.get('public_url', False):
+                url =  k.generate_url(1, method=method)
+                url, _ = url.split('?',2)
+
+            else:
+                if kwargs.get('expire_time', False):
+                    time = int(kwargs['expire_time'])
+                else:
+                    time = 300
+
+                url =  k.generate_url(time, method=method) # expires in 5 minutes
+
+            if kwargs.get('use_cname', False):
+                # For websites, assume there is a CNAME, so remove the AWS part
+                url = re.sub(r'\.s3-website[^\.]+\.amazonaws.com','',url)
+                url = re.sub(r'\.s3.amazonaws.com', '', url)
+
+            return url
+
+    def s3path(self, rel_path):
+        """Return the path as an S3 schema"""
+        import urlparse
+
+        path = self.path(rel_path, public_url = True)
+
+        parts = list(urlparse.urlparse(path))
+
+        parts[0] = 's3'
+        parts[1] = self.bucket_name
+
+        return urlparse.urlunparse(parts)
+
+
+
+
 
     @property
     def cache_dir(self):
@@ -163,13 +209,13 @@ class S3Cache(Cache):
         
         raise NotImplemented("Can't get() from an S3, since it has no place to put a file. Wrap with an FsCache. ")
     
-    def _get_boto_key(self, rel_path):
+    def _get_boto_key(self, rel_path, validate = True):
         from boto.s3.key import Key
 
         rel_path = self._rename(rel_path)
         path = self._prefix(rel_path)
 
-        k = self.bucket.get_key(path)
+        k = self.bucket.get_key(path, validate = validate)
         
         return k        
   
@@ -203,7 +249,7 @@ class S3Cache(Cache):
                 k.set_contents_from_filename(source)
       
     def put_stream(self, rel_path,  metadata=None):
-        '''Return a flie object that can be written to to send data to S3. 
+        '''Return a Flo object that can be written to to send data to S3.
         This will result in a multi-part upload, possibly with each part
         being sent in its own thread '''
 
@@ -212,7 +258,9 @@ class S3Cache(Cache):
         import threading
 
         md5 = metadata.get('md5',None) if metadata else None
-        public = metadata.get('public',False) if metadata else None
+
+        # Horrible, but doing it anyway because I can.
+        acl = ('public-read' if metadata.get('public', False) else metadata.get('acl', 'public-read')) if metadata else 'public-read'
 
         path = self._prefix(self._rename(rel_path))
 
@@ -270,13 +318,16 @@ class S3Cache(Cache):
             '''Object that is returned to the caller, for the caller to issue
             write() or writeline() calls on '''
        
-            def __init__(self):
+            def __init__(self, rel_path):
                 import io
 
                 self.mp = this.bucket.initiate_multipart_upload(path, metadata=metadata)
                 self.part_number = 1
                 self.buffer = io.BytesIO()
                 self.total_size = 0
+
+                self.rel_path = rel_path
+
      
             def _send_buffer(self):
                 '''Schedules a buffer to be sent in a thread by queuing it'''
@@ -288,7 +339,8 @@ class S3Cache(Cache):
 
             def write(self, d):
                 import io
-                
+
+
                 self.buffer.write(d) # Load the requested data into a buffer
                 self.total_size += len(d)
                 # After the buffer is large enough, send it, then create a new buffer. 
@@ -312,13 +364,23 @@ class S3Cache(Cache):
                     thread_upload_queue.put( (None,None,None) ) # Tell all of the threads to die
  
                 thread_upload_queue.join()  # Wait for all of the threads to exit
-                             
-                self.mp.complete_upload()
-                
-                if public:
-                    this.bucket.set_acl('public-read', path)
 
-        return flo()
+                # Multi-part uploads throw a 400 Bad Request if they are completed without writing any data.
+                if self.total_size > 0:
+                    self.mp.complete_upload()
+
+                    this.bucket.set_acl(acl, path)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, type_, value, traceback):
+                if type_:
+                    return False
+
+                self.close()
+
+        return flo(rel_path)
      
             
     def find(self,query):

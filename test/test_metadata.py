@@ -38,11 +38,11 @@ contact_source:
     creator:
         email: null
         name: Source Creator
-        url: null
+        url: http://clarinova.com
     maintainer:
         email: null
         name: Source maintainer
-        url: null
+        url: http://clarinova.com
 dependencies: {}
 extract: {}
 identity:
@@ -389,11 +389,14 @@ group:
     def test_forced_format(self):
         yaml_config= """
 external_documentation:
--   description: description
-    title: title1
-    url: url1
--   description: description2
--   title: title3
+    foodoc1:
+        description: description
+        title: title1
+        url: url1
+    foodoc2:
+        description: description2
+    foodoc3:
+        title: title3
 """
         from ambry.bundle.meta import Top
         from ambry.identity import Identity
@@ -478,6 +481,14 @@ about:
         self.assertNotIn(('about', 'foo', None), t1.errors)
 
         print t1.errors
+
+    def test_html(self):
+        from ambry.bundle.meta import Top
+        import yaml
+
+        t = Top(yaml.load(self.yaml_config))
+        print t.about.html()
+
 
 
 

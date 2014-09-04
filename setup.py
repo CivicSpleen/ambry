@@ -80,16 +80,17 @@ def find_package_data():
     l = list()
 
     import os
-    for root, dirs, files in os.walk("ambry/support"):
+    for start in ("ambry/support", "ambry/geo/support"):
+        for root, dirs, files in os.walk(start):
 
-        for f in files:
+            for f in files:
 
-            if f.endswith('.pyc'):
-                continue
+                if f.endswith('.pyc'):
+                    continue
 
-            path = os.path.join(root,f).replace("ambry/support",'support')
+                path = os.path.join(root,f).replace("ambry/",'')
 
-            l.append(path)
+                l.append(path)
 
     return {"ambry": l }
 
@@ -101,7 +102,10 @@ setup(name = "ambry",
       author_email = __email__,
       url = "https://github.com/clarinova/ambry",
       packages = find_packages(), 
-      scripts=['scripts/bambry', 'scripts/ambry', 'scripts/xambry', 'scripts/ambry-load-sqlite'],
+      scripts=['scripts/bambry', 'scripts/bambry.bat',
+               'scripts/ambry', 'scripts/ambry.bat',
+               'scripts/xambry',
+               'scripts/ambry-load-sqlite'],
       package_data = find_package_data(),
       license = "",
       platforms = "Posix; MacOS X; Linux",

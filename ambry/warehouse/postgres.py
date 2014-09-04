@@ -64,13 +64,15 @@ class PostgresWarehouse(RelationalWarehouse):
                 in self.database.connection.execute(q) }
 
 
-    def table_meta(self, d_vid, p_vid, table_name):
+    def table_meta(self, identity, table_name):
         '''Get the metadata directly from the database. This requires that
         table_name be the same as the table as it is in stalled in the database'''
 
+        assert identity.is_partition
+
         self.library.database.session.execute("SET search_path TO library")
 
-        return super(PostgresWarehouse, self).table_meta(d_vid, p_vid, table_name)
+        return super(PostgresWarehouse, self).table_meta(identity, table_name)
 
 
     def remove_by_name(self,name):
@@ -133,9 +135,6 @@ class PostgresWarehouse(RelationalWarehouse):
 
 
     def install_view(self, view_text):
-
-
-        print '!!!!', view_text
 
         return
 

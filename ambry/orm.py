@@ -9,7 +9,7 @@ import sqlalchemy
 from sqlalchemy import orm
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, BigInteger, Boolean, UniqueConstraint, ForeignKeyConstraint
-from sqlalchemy import Float as Real,  Text, String, ForeignKey
+from sqlalchemy import Float as Real,  Text, String, ForeignKey, Binary
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator, TEXT, PickleType
 from sqlalchemy.ext.declarative import declarative_base
@@ -237,7 +237,6 @@ class Dataset(Base):
     revision = SAColumn('d_revision',Integer, nullable=False)
     version = SAColumn('d_version',String(20), nullable=False)
 
-
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
     path = None  # Set by the LIbrary and other queries. 
@@ -260,6 +259,7 @@ class Dataset(Base):
     def __init__(self,**kwargs):
         self.id_ = kwargs.get("oid",kwargs.get("id",kwargs.get("id_", None)) )
         self.vid = kwargs.get("vid", None)
+        # Deprecated?
         self.location = kwargs.get("location", self.LOCATION.LIBRARY)
         self.name = kwargs.get("name",None) 
         self.vname = kwargs.get("vname",None) 
@@ -513,7 +513,7 @@ class Column(Base):
         self.table_name = kwargs.get("table_name",None) 
 
         if not self.name:
-            raise ValueError('Column must have a name')
+            raise ValueError('Column must have a name. Got: {}'.format(kwargs))
 
         self.t_id = table.id_
         self.t_vid = table.vid
@@ -526,7 +526,7 @@ class Column(Base):
     @property
     def dict(self):
         x = {k: v for k, v in self.__dict__.items()
-             if k in ['id_', 'vid', 't_vid',
+             if k in ['id_', 'vid', 't_vid','t_id',
                       'sequence_id', 'name', 'altname', 'is_primary_key', 'datatype', 'size',
                       'precision', 'width', 'sql', 'flags', 'description', 'keywords', 'measure',
                       'units', 'universe', 'scale', 'data']}
@@ -534,14 +534,13 @@ class Column(Base):
             raise Exception(self.__dict__)
 
         x['schema_type'] = self.schema_type
+
         return x
 
 
     @property
     def insertable_dict(self):
         x =  {('c_' + k).strip('_'): v for k, v in self.dict.items()}
-
-
 
         return x
 
@@ -686,15 +685,21 @@ Columns:
         </table>
         """.format(**self.dict)
 
+        return t1+self.html_table()
+
+    def html_table(self):
+        ''''''
+
         rows = []
         rows.append(
             "<tr><th>#</th><th>Name</th><th>Datatype</th><th>description</th></tr>")
         for c in self.columns:
-            rows.append("<tr><td>{sequence_id:d}</td><td>{name:s}</td><td>{schema_type:s}</td><td>{description}</td></tr>".format(**c.dict))
+            rows.append(
+                "<tr><td>{sequence_id:d}</td><td>{name:s}</td><td>{schema_type:s}</td><td>{description}</td></tr>".format(
+                    **c.dict))
 
+        return "<table>\n" + "\n".join(rows) + "\n</table>"
 
-        return t1+"<table>\n"+"\n".join(rows)+"\n</table>"
-    
     @orm.reconstructor
     def init_on_load(self):
         self._or_validator = None
@@ -815,7 +820,7 @@ Columns:
         return None
     
     def get_fixed_regex(self):
-            '''Using the size values for the columsn for the table, construct a
+            '''Using the size values for the columns for the table, construct a
             regular expression to  parsing a fixed width file.'''
             import re
 
@@ -834,8 +839,8 @@ Columns:
             
                 regex += "(.{{{}}})".format(size)
                 header.append(col.name)
-           
-            return header, re.compile(regex) , regex 
+
+            return header, re.compile(regex) , regex
 
     def get_fixed_unpack(self):
             '''Using the size values for the columns for the table, construct a
@@ -1053,6 +1058,8 @@ class File(Base, SavableMixin):
 
     data = SAColumn('f_data',MutationDict.as_mutable(JSONEncodedObj))
 
+    content = SAColumn('f_content', Binary)
+
     __table_args__ = (
         UniqueConstraint('f_path', 'f_type', 'f_group', name='u_type_path'),
         UniqueConstraint('f_ref', 'f_type', 'f_group', name='u_ref_path'),
@@ -1073,6 +1080,7 @@ class File(Base, SavableMixin):
         self.content_hash = kwargs.get("content_hash",None) 
         self.data = kwargs.get('data',None)
         self.priority = kwargs.get('priority', 0)
+        self.content = kwargs.get('content', None)
       
     def __repr__(self):
         return "<file: {}; {}>".format(self.path, self.state)
@@ -1097,6 +1105,7 @@ class Partition(Base):
     name = SAColumn('p_name',String(200), nullable=False, index=True)
     vname = SAColumn('p_vname',String(200), unique=True, nullable=False, index=True)
     fqname = SAColumn('p_fqname',String(200), unique=True, nullable=False, index=True)
+    ref = SAColumn('p_ref', String(200), index=True)
     cache_key = SAColumn('p_cache_key',String(200), unique=True, nullable=False, index=True)
     sequence_id = SAColumn('p_sequence_id',Integer)
     t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'), index=True)
@@ -1114,6 +1123,7 @@ class Partition(Base):
     count = SAColumn('p_count',Integer)
     state = SAColumn('p_state',String(50))
     data = SAColumn('p_data',MutationDict.as_mutable(JSONEncodedObj))
+
     installed = SAColumn('p_installed',String(100))
 
     __table_args__ = (
@@ -1132,7 +1142,8 @@ class Partition(Base):
         self.vid = kwargs.get("vid", kwargs.get("id_", None))
         self.id_ = kwargs.get("id",kwargs.get("id_",None)) 
         self.name = kwargs.get("name",kwargs.get("name",None)) 
-        self.vname = kwargs.get("vname",None) 
+        self.vname = kwargs.get("vname",None)
+        self.ref = kwargs.get("ref", None)
         self.fqname = kwargs.get("fqname",None)
         self.cache_key = kwargs.get("cache_key",None)
         self.sequence_id = kwargs.get("sequence_id",None) 
@@ -1186,12 +1197,13 @@ class Partition(Base):
     @property
     def dict(self):
 
-        return {
+        d =  {
                  'id':self.id_, 
                  'vid':self.vid,
                  'name':self.name,
-                 'vname':self.fqname, 
-                 'fqname':self.vname,
+                 'vname':self.vname,
+                 'ref': self.ref,
+                 'fqname':self.fqname,
                  'cache_key':self.cache_key,
                  'd_id': self.d_id,
                  'd_vid': self. d_vid,
@@ -1205,6 +1217,11 @@ class Partition(Base):
                  'format': self.format if self.format else 'db'
                 }
 
+        if 'tables' in self.data:
+            d['tables'] = self.data['tables'] # Allows passing dict into bundle.partitions.new_partition
+
+
+        return d
 
     @property
     def insertable_dict(self):
@@ -1265,3 +1282,5 @@ class Partition(Base):
 
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
+
+

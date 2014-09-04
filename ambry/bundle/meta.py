@@ -18,16 +18,28 @@ class About(DictGroup):
     tags = ListTerm()
     groups = ListTerm()
 
+class Documentation(DictGroup):
+
+    readme = ScalarTerm()
+    main = ScalarTerm()
+
 class ContactTerm(DictTerm):
 
     name = ScalarTerm()
     email = ScalarTerm()
     url = ScalarTerm()
 
+    def __nonzero__(self):
+        return bool(self.name or self.email or self.url)
+
+    def __bool__(self):
+        return self.__nonzero__()
+
 class Contact(DictGroup):
     """ """
     creator = ContactTerm()
     maintainer = ContactTerm()
+
 
 class Identity(DictGroup):
     """ """
@@ -54,6 +66,7 @@ class Names(DictGroup):
 class SourceTerm(DictTerm):
     url = ScalarTerm()
     description = ScalarTerm(store_none=False)
+    dd_url = ScalarTerm(store_none=False)
 
 class Sources(TypedDictGroup):
     """References to source URLS"""
@@ -69,6 +82,8 @@ class Build(VarDictGroup):
 class Extract(VarDictGroup):
     """Extract parameters"""
 
+class Process(VarDictGroup):
+    """Process data. Build times, etc."""
 
 class ExtDocTerm(DictTerm):
     url = ScalarTerm()
@@ -95,19 +110,6 @@ class Top(Metadata):
     _non_term_file = 'meta/build.yaml'
 
 
-    # Old synonyms, for converting old file, save in case we need it again, ans an an example of use.
-    _x_synonyms = {
-        'about.maintainer': 'contact_bundle.maintainer.name',
-        'about.maintainer_email': 'contact_bundle.maintainer.email',
-        'about.author': 'contact_bundle.creator.name',
-        'about.author_email': 'contact_bundle.creator.email',
-        'about.homepage': 'contact_source.creator.url',
-        'about.url': 'contact_source.creator.url',
-        'about.website': 'contact_source.creator.url',
-        'about.description': 'about.summary',
-        'about.organization': 'contact_source.creator.name'
-    }
-
     about = About(file='bundle.yaml')
     contact_source = Contact(file='bundle.yaml')
     contact_bundle = Contact(file='bundle.yaml')
@@ -118,5 +120,7 @@ class Top(Metadata):
     build = Build(file='meta/build.yaml')
     extract = Extract(file='meta/build.yaml')
     external_documentation = ExtDoc(file='bundle.yaml')
+    documentation = Documentation(file='meta/doc.yaml')
     versions = Versions(file='bundle.yaml')
+    process = Process()
 

@@ -5,9 +5,15 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from ..cli import prt, warn, fatal, _find, _print_bundle_list, _print_bundle_entry
 
+from ..identity import LocationRef
+
+default_locations = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.REMOTE ]
 
 def root_parser(cmd):
     import argparse
+    from ..identity import LocationRef
+
+    lr = LocationRef.LOCATION
 
     sp = cmd.add_parser('list', help='List bundles and partitions')
     sp.set_defaults(command='root')
@@ -17,16 +23,36 @@ def root_parser(cmd):
                     help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
     sp.add_argument('-a', '--all', default=False, action="store_true", help='List everything')
-    sp.add_argument('-l', '--library', default=False, action="store_true", help='List only the library')
-    sp.add_argument('-r', '--remote', default=False, action="store_true", help='List only the remote')
-    sp.add_argument('-s', '--source', default=False, action="store_true", help='List only the source')
+    sp.add_argument('-l', '--library', default=False, action="store_const", const = lr.LIBRARY, help='List only the library')
+    sp.add_argument('-r', '--remote', default=False, action="store_const", const = lr.REMOTE, help='List only the remote')
+    sp.add_argument('-s', '--source', default=False, action="store_const", const = lr.SOURCE, help='List only the source')
     sp.add_argument('term', nargs = '?', type=str, help='Name or ID of the bundle or partition')
 
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='info')
+    sp.add_argument('-l', '--library', default=False, action="store_const", const = lr.LIBRARY, help='Search only the library')
+    sp.add_argument('-r', '--remote', default=False, action="store_const", const = lr.REMOTE, help='Search only the remote')
+    sp.add_argument('-s', '--source', default=False, action="store_const", const = lr.SOURCE, help='Search only the source')
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
     sp.add_argument('term',  type=str, nargs = '?', help='Name or ID of the bundle or partition')
+
+    sp = cmd.add_parser('doc', help='Open a browser displaying documentation')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='doc')
+    sp.add_argument('-f', '--force', default=False, action="store_true", help='Force generating files that already exist')
+    sp.add_argument('term',  type=str, nargs = '?', help='Name or ID of the bundle or partition')
+
+    sp = cmd.add_parser('meta', help='Dump the metadata for a bundle')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='meta')
+    sp.add_argument('term',  type=str, nargs = '?', help='Name or ID of the bundle or partition')
+    sp.add_argument('-k', '--key', default=False, type=str, help='Return the value of a specific key')
+    group = sp.add_mutually_exclusive_group()
+    group.add_argument('-y', '--yaml', default=False, action='store_true', help='Output yaml')
+    group.add_argument('-j', '--json', default=False, action='store_true', help='Output json')
+    group.add_argument('-r', '--rows', default=False, action='store_true', help='Output key/value pair rows')
+
 
     sp = cmd.add_parser('find', prefix_chars='-+',
                         help='Search for the argument as a bundle or partition name or id')
@@ -62,7 +88,6 @@ def root_command(args, rc):
     from ..library import new_library
     from . import global_logger
 
-
     l = new_library(rc.library(args.library_name))
     l.logger = global_logger
 
@@ -84,8 +109,7 @@ def root_list(args, l, st, rc):
     else:
         fields = ['locations',  'vid',  'vname']
 
-    locations = []
-
+    locations = filter(bool, [args.library, args.remote, args.source])
 
     key = lambda ident : ident.vname
 
@@ -99,6 +123,10 @@ def root_list(args, l, st, rc):
     if args.term:
         idents = [ ident for ident in idents if args.term in ident.fqname ]
 
+    if locations:
+        idents = [ ident for ident in idents if ident.locations.has(locations)]
+
+
     _print_bundle_list(idents,
                        fields=fields,
                        show_partitions=args.partitions)
@@ -106,7 +134,13 @@ def root_list(args, l, st, rc):
 def root_info(args, l, st, rc):
     from ..cli import load_bundle, _print_info
     from ..orm import Dataset
+    from ..dbexceptions import NotFoundError
     import ambry
+
+    locations = filter(bool, [args.library, args.remote, args.source])
+
+    if not locations:
+        locations = default_locations
 
     if not args.term:
         print "Version:  {}".format(ambry._meta.__version__)
@@ -119,6 +153,31 @@ def root_info(args, l, st, rc):
 
         return
 
+    ident = l.resolve(args.term, location=locations)
+
+    if not ident:
+        fatal("Failed to find record for: {}", args.term)
+        return
+
+    try:
+        b = l.get(ident.vid)
+
+        if not ident.partition:
+            for p in b.partitions.all:
+                ident.add_partition(p.identity)
+
+    except NotFoundError:
+
+        pass
+
+
+    _print_info(l, ident, list_partitions=args.partitions)
+
+def root_meta(args, l, st, rc):
+    from ..cli import load_bundle, _print_info
+    from ..orm import Dataset
+    import ambry
+
     ident = l.resolve(args.term)
 
     if not ident:
@@ -127,12 +186,52 @@ def root_info(args, l, st, rc):
 
     b = l.get(ident.vid)
 
-    if b and not ident.partition:
-        for p in b.partitions.all:
-            ident.add_partition(p.identity)
+    meta = b.metadata
 
+    if not args.key:
+        # Return all of the rows
+        if args.yaml:
+            print meta.yaml
 
-    _print_info(l, ident, list_partitions=args.partitions)
+        elif args.json:
+            print meta.json
+
+        elif args.key:
+            for row in meta.rows:
+                print '.'.join([e for e in row[0] if e])+'='+str(row[1] if row[1] else '')
+        else:
+            print meta.yaml
+
+    else:
+
+        v = None
+        from ..util import AttrDict
+        o = AttrDict()
+        count = 0
+
+        for row in meta.rows:
+            k = '.'.join([e for e in row[0] if e])
+            if k.startswith(args.key):
+                v = row[1]
+                o.unflatten_row(row[0], row[1])
+                count +=1
+
+        if count == 1:
+            print v
+
+        else:
+            if args.yaml:
+                print o.dump()
+
+            elif args.json:
+                print o.json()
+
+            elif args.rows:
+                for row in o.flatten():
+                    print '.'.join([e for e in row[0] if e]) + '=' + str(row[1] if row[1] else '')
+
+            else:
+                print o.dump()
 
 
 def root_find(args, l, st, rc):
@@ -154,9 +253,11 @@ def root_find(args, l, st, rc):
 
     if args.terms:
 
+        show_partitions = any(['partition' in term for term in args.terms])
+
         identities = sorted(_find(args, l, rc).values(), key=key)
 
-        _print_bundle_list(identities,fields=fields)
+        _print_bundle_list(identities,fields=fields, show_partitions=show_partitions)
 
     else:
 
@@ -204,3 +305,54 @@ def root_find(args, l, st, rc):
                     prt('{}'.format(ident.fqname))
                 else:
                     _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=fields)
+
+def root_doc(args, l, st, rc):
+    from ambry.cache import new_cache
+    import webbrowser
+    from ..identity import LocationRef
+    from ambry.text import BundleDoc, PartitionDoc, Renderer
+
+
+    try:
+        ident = l.resolve(args.term)
+    except ValueError:
+        fatal("Can't parse ref: {} ".format(args.term))
+
+    if not ident:
+        fatal("Failed to find record for: {}", args.term)
+        return
+
+    b = l.get(ident.vid)
+
+    if not b:
+        fatal("Failed to get bundle for: {}", args.term)
+        return
+
+
+    cache_config = rc.filesystem('documentation')
+
+    cache = new_cache(cache_config)
+
+    root_dir = cache.path('', missing_ok = True)
+
+    if b.partition:
+        ck = b.partition.identity + '.html'
+        doc = BundleDoc(root_dir).render(p=p)
+
+    else:
+        ck = b.identity.path + '.html'
+        doc = BundleDoc(root_dir).render(w=None, b=b)
+
+    if not cache.path(ck) or args.force:
+        with cache.put_stream(ck,{'Content-Type':'text/html'}) as s:
+            s.write(doc)
+
+    if not cache.path('css/style.css') or args.force:
+        with cache.put_stream('css/style.css', {'Content-Type': 'text/css'}) as s:
+            s.write(Renderer(root_dir).css)
+
+    path = cache.path(ck)
+
+    prt("Opening file: {} ".format(path))
+
+    webbrowser.open_new("file://"+path)

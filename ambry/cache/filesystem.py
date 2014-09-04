@@ -33,7 +33,7 @@ class FsCache(Cache):
 
     base_priority = 10  # Priority for this class of cache.
 
-    def __init__(self, dir=None,  options=None, upstream=None,**kwargs):
+    def __init__(self, dir=None,  options=None, upstream=None, prefix = '', **kwargs):
         '''Init a new FileSystem Cache
         
         Args:
@@ -45,17 +45,17 @@ class FsCache(Cache):
         from ambry.dbexceptions import ConfigurationError
         
         
-        super(FsCache, self).__init__(upstream)
+        super(FsCache, self).__init__(upstream, **kwargs)
         
         self._cache_dir = dir
 
-        if not os.path.isdir(self._cache_dir):
-            os.makedirs(self._cache_dir)
-        
-        if not os.path.isdir(self._cache_dir):
-            raise ConfigurationError("Cache dir '{}' is not valid".format(self._cache_dir)) 
+        self.prefix = prefix
+
 
     ##
+
+    def clone(self):
+        return FsCache(dir=self._cache_dir, upstream=self.upstream, prefix=self.prefix, **self.args)
 
 
     def put(self, source, rel_path, metadata=None):
@@ -93,7 +93,7 @@ class FsCache(Cache):
         if isinstance(rel_path, Identity):
             rel_path = rel_path.cache_key
 
-        repo_path = os.path.join(self.cache_dir, rel_path)
+        repo_path = os.path.join(self.cache_dir, rel_path.strip("/"))
 
         if not os.path.isdir(os.path.dirname(repo_path)):
             os.makedirs(os.path.dirname(repo_path))
@@ -115,6 +115,9 @@ class FsCache(Cache):
                 self._repo_path = repo_path
                 self._rel_path = rel_path
 
+            @property
+            def rel_path(self):
+                return self._rel_path
 
             def write(self, str_):
                 self._sink.write(str_)
@@ -128,6 +131,14 @@ class FsCache(Cache):
                     if self._upstream and not self._upstream.readonly and not self._upstream.usreadonly:
                         self._upstream.put(self._repo_path, self._rel_path, metadata=metadata)
 
+            def __enter__(self):
+                return self
+
+            def __exit__(self, type_, value, traceback):
+                if type_:
+                    return False
+
+                self.close()
 
         self.put_metadata(rel_path, metadata)
 
@@ -215,8 +226,8 @@ class FsCache(Cache):
         l = {}
 
 
-        for root, dirs, files in os.walk(self._cache_dir):
-            root = root.replace(self._cache_dir,'',1).strip('/')
+        for root, dirs, files in os.walk(self.cache_dir):
+            root = root.replace(self.cache_dir,'',1).strip('/')
 
             if root.startswith('meta'):
                 continue
@@ -245,7 +256,7 @@ class FsCache(Cache):
         return l
 
 
-    def path(self, rel_path, propagate = True, **kwargs):
+    def path(self, rel_path, propagate = True, missing_ok = False,  **kwargs):
 
         abs_path = os.path.join(self.cache_dir, rel_path)
 
@@ -255,7 +266,7 @@ class FsCache(Cache):
         if self.upstream and propagate:
             return self.upstream.path(rel_path, **kwargs)
 
-        if not os.path.exists(abs_path):
+        if not os.path.exists(abs_path) and missing_ok == False:
             return False
 
         return abs_path
@@ -293,7 +304,6 @@ class FsCache(Cache):
 
         abs_path = os.path.join(self.cache_dir, rel_path)
 
-
         if os.path.exists(abs_path) and ( not md5 or md5 == md5_for_file(abs_path)):
             return abs_path
 
@@ -328,7 +338,18 @@ class FsCache(Cache):
 
     @property
     def cache_dir(self):
-        return self._cache_dir
+
+        from ..dbexceptions import ConfigurationError
+
+        cache_dir = os.path.join(self._cache_dir, self.prefix).rstrip('/')
+
+        if not os.path.isdir(cache_dir):
+            os.makedirs(cache_dir)
+
+        if not os.path.isdir(cache_dir):
+            raise ConfigurationError("Cache dir '{}' is not valid".format(cache_dir))
+
+        return cache_dir
 
     @property
     def repo_id(self):
@@ -375,7 +396,9 @@ class FsLimitedCache(FsCache):
         from ambry.dbexceptions import ConfigurationError
 
         super(FsLimitedCache, self).__init__(dir, upstream=upstream,**kwargs)
-        
+
+
+        self._size = size
         self.maxsize = int(size) * 1048578  # size in MB
 
         self.readonly = False
@@ -388,8 +411,19 @@ class FsLimitedCache(FsCache):
             os.makedirs(self.cache_dir)
         
         if not os.path.isdir(self.cache_dir):
-            raise ConfigurationError("Cache dir '{}' is not valid".format(self.cache_dir)) 
-        
+            raise ConfigurationError("Cache dir '{}' is not valid".format(self.cache_dir))
+
+    def clone(self):
+        c =  FsLimitedCache(dir = self._cache_dir, size = self._size, upstream = self.upstream, **self.args )
+
+        c.maxsize = self.maxsize
+        c.readonly = self.readonly
+        c.usreadonly = self.usreadonly
+        c._database = self._database
+        c.use_db = self.use_db
+
+        return c
+
     @property
     def database_path(self):
         return  os.path.join(self.cache_dir, 'file_database.db')
@@ -646,7 +680,7 @@ class FsLimitedCache(FsCache):
         if isinstance(rel_path, Identity):
             rel_path = rel_path.cache_key
         
-        repo_path = os.path.join(self.cache_dir, rel_path)
+        repo_path = os.path.join(self.cache_dir, rel_path.strip('/'))
       
         if not os.path.isdir(os.path.dirname(repo_path)):
             os.makedirs(os.path.dirname(repo_path))
@@ -718,8 +752,10 @@ class FsCompressionCache(Cache):
      '''
 
     def __init__(self, upstream=None,**kwargs):
-        
         super(FsCompressionCache, self).__init__(upstream)
+
+    def clone(self):
+        return FsCompressionCache(upstream=self.upstream, **self.args)
 
 
     @property

@@ -268,17 +268,17 @@ class QueryCommand(object):
         return str(self._dict)
 
 
-
-
 class Resolver(object):
     '''Find a reference to a dataset or partition based on a string,
     which may be a name or object number '''
+
 
     def __init__(self, session):
 
         self.session = session # a Sqlalchemy connection
 
     def _resolve_ref_orm(self, ref):
+        from ..identity import Locations
 
         ip = Identity.classify(ref)
 
@@ -314,18 +314,25 @@ class Resolver(object):
 
         if dqp is not None:
 
-            for row in (self.session.query(Dataset, File)
-                            .outerjoin(File, File.ref == Dataset.vid)
-                            .filter(dqp).order_by(Dataset.revision.desc()).all()):
+            q = (self.session.query(Dataset, File)
+                .outerjoin(File, File.ref == Dataset.vid)
+                .filter(dqp)
+                .order_by(Dataset.revision.desc()))
+
+            for row in (q.all()):
                 out.append((row.Dataset, None, row.File))
 
         if pqp is not None:
 
             for row in (self.session.query(Dataset, Partition, File)
-                                .join(Partition).filter(pqp)
+                                .join(Partition)
+                                .filter(pqp)
                                 .outerjoin(File, File.ref == Partition.vid)
                                 .order_by(Dataset.revision.desc()).all()):
+
                 out.append((row.Dataset, row.Partition, row.File))
+
+
 
 
         return ip, out
@@ -335,27 +342,34 @@ class Resolver(object):
 
         ip, results = self._resolve_ref_orm(ref)
         from collections import OrderedDict
-
+        from ..identity import LocationRef
 
         # Convert the ORM results to identities
         out = OrderedDict()
+
         for d, p, f in results:
 
             if not d.vid in out:
                 out[d.vid] = d.identity
 
+            # Locations in the identity are set in add_file
             if f:
+
                 if not p:
                     out[d.vid].add_file(f)
                 else:
                     p.identity.add_file(f)
 
+                    # Also need to set the location in the dataset, or the location
+                    # filtering may fail later.
+                    lrc = LocationRef.LOCATION
+                    d_f_type = {lrc.REMOTEPARTITION: lrc.REMOTE,lrc.PARTITION: lrc.LIBRARY}.get(f.type_, None)
+                    out[d.vid].locations.set(d_f_type)
+
             if p:
                 out[d.vid].add_partition(p.identity)
 
-
         return ip, out
-
 
     def resolve_ref_all(self, ref):
 
@@ -366,11 +380,12 @@ class Resolver(object):
 
         '''
         import semantic_version
+        from collections import OrderedDict
 
         ip, refs = self._resolve_ref(ref)
 
         if location:
-            refs = { k:v for k, v in refs.items() if v.locations.has(location) }
+            refs = OrderedDict( [ (k,v) for k, v in refs.items() if v.locations.has(location) ] )
 
         if not isinstance(ip.version, semantic_version.Spec):
             return ip, refs.values().pop(0) if refs and len(refs.values()) else None

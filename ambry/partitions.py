@@ -239,7 +239,7 @@ class Partitions(object):
             pnq = PartitionNameQuery(**kwargs)
 
         assert isinstance(pnq,PartitionNameQuery), "Expected NameQuery, got {}".format(type(pnq))
-   
+
         try:
 
             partitions = [ self.partition(op, memory=kwargs.get('memory',False)) 
@@ -480,7 +480,7 @@ class Partitions(object):
         pnq = PartitionNameQuery(**kwargs)
         
         ppn = PartialPartitionName(**kwargs)
-        
+
         if tables:
             tables = set(tables)
 
@@ -494,6 +494,7 @@ class Partitions(object):
             ppn.format = format
             pnq.format = format
 
+
         partition =  self.find(pnq)
 
         if partition:
@@ -502,7 +503,6 @@ class Partitions(object):
         partition =  self._new_partition(ppn, tables=tables, data=data, create=create)
 
         return partition, False      
-
 
     def new_partition(self, clean=False, tables=None, data=None, **kwargs):
         return self.new_db_partition(clean=clean, tables=tables, data=data, **kwargs)
@@ -644,7 +644,8 @@ class Partitions(object):
 
             if shape_file:
                 p.database.close()
-                p.load_shapefile(shape_file)
+
+                p.load_shapefile(shape_file, s_srs = kwargs.get('s_srs', None))
 
         except ImportError:
             self.bundle.log("GDAL not installed; using non geo database")

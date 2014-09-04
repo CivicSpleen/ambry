@@ -16,8 +16,7 @@ import ambry.util
 
 global_logger = ambry.util.get_logger(__name__)
 #import logging; logger.setLevel(logging.DEBUG) 
- 
- 
+
  
 ##makedirs
 ## Monkey Patch!
@@ -316,6 +315,9 @@ class BundleFilesystem(Filesystem):
             with zipfile.ZipFile(path) as zf:
                 abs_path = None 
                 for name in zf.namelist():
+                    if '__MACOSX' in name: # Noidea about this, but it seems useless.
+                        continue
+
                     abs_path = self._get_unzip_file(cache, tmpdir, zf, path, name)  
                     if regex and regex.match(name) or not regex:
                         yield abs_path
@@ -340,7 +342,7 @@ class BundleFilesystem(Filesystem):
 
         import tempfile
         import urlparse
-        import urllib2
+        import urllib2, urllib
 
         cache = self.get_cache_by_name('downloads')
         parsed = urlparse.urlparse(str(url))
@@ -352,7 +354,31 @@ class BundleFilesystem(Filesystem):
             url = source_entry.url
             parsed = urlparse.urlparse(str(url))
 
-        file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
+
+        if parsed.scheme  == 's3':
+            # To keep the rest of the code simple, we'll use the S# cache to generate a signed URL, then
+            # download that through the normal process.
+            from cache import new_cache
+
+            s3cache = new_cache("s3://{}".format(parsed.netloc.strip('/')),
+                                run_config = self.bundle.config)
+
+            url = s3cache.path(urllib.unquote_plus(parsed.path.strip('/')))
+            parsed = urlparse.urlparse(str(url))
+            use_hash = False
+        else:
+            use_hash = True
+
+        #file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
+        file_path = os.path.join(parsed.netloc,parsed.path)
+
+        if use_hash and  parsed.query: # S3 has time in the query, so it nevery caches
+            import hashlib
+
+            hash = hashlib.sha224(parsed.query).hexdigest()
+            file_path =  os.path.join(file_path, hash)
+
+        file_path = file_path.strip('/')
 
         # We download to a temp file, then move it into place when 
         # done. This allows the code to detect and correct partial
@@ -385,7 +411,7 @@ class BundleFilesystem(Filesystem):
 
                 cached_file = cache.get(file_path)
                 size = os.stat(cached_file).st_size if cached_file else None
-   
+
                 if cached_file and size:
 
                     out_file = cached_file
@@ -440,7 +466,7 @@ class BundleFilesystem(Filesystem):
                 excpt = e
                 
             except Exception as e:
-                self.bundle.error("Unexpected download error '"+str(e)+"' when downloading "+url)
+                self.bundle.error("Unexpected download error '"+str(e)+"' when downloading "+str(url))
                 cache.remove(file_path, propagate = True)
                 raise 
     
@@ -510,8 +536,8 @@ class BundleFilesystem(Filesystem):
         if not zip_file or not os.path.exists(zip_file):
             raise Exception("Failed to download: {} ".format(url))
             
-        for file_ in self.unzip_dir(zip_file, 
-                                regex=re.compile('.*\.shp$')): pass # Should only be one
+        for file_ in self.unzip_dir(zip_file, regex=re.compile('.*\.shp$')):
+            pass # Should only be one
         
         if not file_ or not os.path.exists(file_):
             raise Exception("Failed to unzip {} and get .shp file ".format(zip_file))
@@ -553,7 +579,7 @@ class BundleFilesystem(Filesystem):
         import yaml
         
         with open(self.path(*args),'wb') as f:
-            return yaml.safe_dump( o, f,default_flow_style=False, indent=4, encoding='utf-8' )       
+            return yaml.safe_dump( o, f, default_flow_style=False, indent=4, encoding='utf-8' )
 
     def get_url(self,source_url, create=False):
         '''Return a database record for a file'''

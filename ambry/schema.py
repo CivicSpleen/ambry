@@ -344,9 +344,11 @@ class Schema(object):
             return type_
 
     @staticmethod
-    def munge_index_name(table, n):
-        return table.vid_enc + '_' + n
-
+    def munge_index_name(table, n, alt=None):
+        if alt:
+            return alt + '_' + n
+        else:
+            return table.vid_enc + '_' + n
 
 
     def get_table_meta(self, name_or_id, use_id=False, driver=None, alt_name=None):
@@ -354,7 +356,6 @@ class Schema(object):
         return self.get_table_meta_from_db(self.bundle.database, name_or_id, use_id, driver,
                                            session = self.bundle.database.session,
                                            alt_name = alt_name)
-
 
     @classmethod
     def get_table_meta_from_db(self,db,  name_or_id,  use_id=False, 
@@ -373,7 +374,7 @@ class Schema(object):
 
         if alt_name and use_id:
             raise ConfigurationError("Can't specify both alt_name and use_id")
-        
+
         if alt_name:
             table_name = alt_name
         elif use_id:
@@ -452,15 +453,15 @@ class Schema(object):
 
         # Append constraints. 
         for constraint, columns in constraints.items():
-            at.append_constraint(UniqueConstraint(name=self.munge_index_name(table, constraint),*columns))
+            at.append_constraint(UniqueConstraint(name=self.munge_index_name(table, constraint, alt=alt_name),*columns))
              
         # Add indexes   
         for index, columns in indexes.items():
-            Index(self.munge_index_name(table, index), unique = False ,*columns)
+            Index(self.munge_index_name(table, index, alt=alt_name), unique = False ,*columns)
     
         # Add unique indexes   
         for index, columns in uindexes.items():
-            Index(self.munge_index_name(table, index), unique = True ,*columns)
+            Index(self.munge_index_name(table, index, alt=alt_name), unique = True ,*columns)
         
         #for from_col, to_col in foreign_keys.items():
         #    at.append_constraint(ForeignKeyConstraint(from_col, to_col))
@@ -585,6 +586,7 @@ class Schema(object):
         warnings = []
     
         for row in reader:
+
             line_no += 1
 
             if not row.get('column', False) and not row.get('table', False):
@@ -650,7 +652,6 @@ class Schema(object):
             description = row.get('description','').strip().encode('utf-8')
 
             #progress_cb("Column: {}".format(row['column']))
-
 
             col = self.add_column(t,row['column'],
                                    sequence_id = row.get('seq',None),
@@ -986,6 +987,7 @@ Base = declarative_base()
 
 """
 
+
         def write_class(table):
             return """
 class {name}(Base):
@@ -1028,10 +1030,8 @@ class {name}(Base):
                            that_table_lc=col.foreign_key.lower(), 
                            this_table = table.name,
                            rel_name = rel_name
-                        
                      )
-            
-            
+
             return o
         
         def write_init(table):
@@ -1063,8 +1063,18 @@ class {name}(Base):
             
         with open(os.path.join(lib_dir,'orm.py'),'w') as f:
             f.write(self.as_orm())
-            
-        
+
+    def _repr_html_(self):
+
+        out = ''
+
+        for t in self.tables:
+            out += '\n<h2>{}</h2>\n'.format(t.name)
+            out += t._repr_html_()
+
+        return out
+
+
     def add_views(self):
         """Add views defined in the configuration"""
         
@@ -1300,8 +1310,12 @@ class {name}(Base):
            
             # Keep track of the number of possibilities for each
             # field. This is needed to identify fields that are mostly
-            # one type ( ie, Integer ) but which have occasional text codes. 
+            # one type ( ie, Integer ) but which have occasional text codes.
 
+            if v is None:
+                mfi['counts'][None] += 1
+
+                continue
 
             try:
                 if isinstance(v, (datetime)):
@@ -1375,7 +1389,14 @@ class {name}(Base):
         from datetime import datetime, time, date
         from sqlalchemy.orm.exc import NoResultFound
 
+        type_map = {int: 'integer', str: 'varchar', float: 'real',
+                    datetime: 'datetime', date: 'date', time: 'time'}
+
+        index = memo['name_index'] if len(memo['name_index']) > 0 else None
+        fields = memo['fields']
+
         with self.bundle.session as s:
+
             try:
                 table = self.table(table_name)
             except NoResultFound:
@@ -1387,34 +1408,19 @@ class {name}(Base):
                 if name == 'id':
                     self.add_column(table, 'id', datatype='integer', is_primary_key=True)
 
-                self.add_column(table, d['name'], datatype='integer', data=dict(header=name))
+                else:
+                    i = index[d['name']]
+                    # add_column will update existing columns
+                    self.add_column(table, d['name'],
+                                    datatype = type_map[fields[i]['prob-type']],
+                                    size = fields[i]['length'] if fields[i]['prob-type'] == str else None,
+                                    data=dict(header=name))
 
-            index = memo['name_index'] if len(memo['name_index']) > 0 else None
-            fields = memo['fields']
-            
-            type_map = {int: 'integer', str: 'varchar',  float: 'real', 
-                        datetime: 'datetime', date: 'date', time: 'time'}
-            
-            for i,c in enumerate(table.columns):
-
-                if index:
-                    try:
-                        i = index[c.name]
-                    except KeyError:
-                        # Can happen when new columns are added during
-                        # run, like code columns
-                        continue
-
-                c.size = fields[i]['length'] if fields[i]['prob-type'] == str else None
-                c.datatype = type_map[fields[i]['prob-type']]
-                c.default = '-' if fields[i]['prob-type'] == str  else -1
-
-                s.merge(c)
  
     def update(self, table_name, itr, n=None, header=None, logger=None):
         '''Update the schema from an iterator that returns rows. This
         will create a new table with rows that have datatype intuited from the values. '''
-        
+
         memo = None
 
         i = 0
@@ -1423,7 +1429,7 @@ class {name}(Base):
             try:
                 memo = self.intuit(row, memo)
             except Exception as e:
-                self.bundle.error("Error updating row {} of {}: {}".format(i, table_name, e))
+                self.bundle.error("Error updating row {} of {}: {}\n{}".format(i, table_name, e, row))
                 continue
 
             if logger:
@@ -1436,6 +1442,7 @@ class {name}(Base):
 
         if header:
             for i, name in enumerate(header):
+
                 memo['name_index'][name] = i
                 memo['fields'][i]['name'] = name
 

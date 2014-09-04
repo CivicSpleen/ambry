@@ -93,7 +93,8 @@ class SqliteAttachmentMixin(object):
     
     
     def copy_from_attached(self, table, columns=None, name=None, 
-                           on_conflict= 'ABORT', where=None, conn=None):
+                           on_conflict= 'ABORT', where=None, conn=None, copy_n = None):
+
         """ Copy from this database to an attached database
         
         Args:
@@ -137,6 +138,9 @@ class SqliteAttachmentMixin(object):
         if where is not None:
             q = q + " " + where.format(**f)
 
+        if copy_n:
+            q += ' LIMIT {}'.format(copy_n)
+
         if conn:
             conn.execute(q)
         else:
@@ -147,22 +151,33 @@ class SqliteAttachmentMixin(object):
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
-    SCHEMA_VERSION = 16
+    SCHEMA_VERSION = 18
 
     _lock = None
 
     def __init__(self, dbname, memory = False,  **kwargs):   
         ''' '''
-    
+        import os
+
+
         # For database bundles, where we have to pass in the whole file path
         if memory:
             base_path = ':memory:'
         else:
+
+            if not dbname:
+                raise ValueError("Must have a dbname")
+
+            if dbname[0] != '/':
+                import os
+                dbname = os.path.join(os.getcwd(), dbname)
+
+
             base_path, ext = os.path.splitext(dbname)
             
             if ext and ext != self.EXTENSION:
-                raise Exception("Bad extension to file {}: {}: {}".format(dbname, base_path, ext))
-            
+                raise Exception("Bad extension to file '{}': '{}'. Expected: {}".format(dbname, ext, self.EXTENSION))
+
             self.base_path = base_path
 
         self._last_attach_name = None
@@ -235,7 +250,10 @@ class SqliteDatabase(RelationalDatabase):
 
     def require_path(self):
         if not self.memory:
-            if not os.path.exists(os.path.dirname(self.base_path)):
+
+            dir = os.path.dirname(self.base_path)
+
+            if dir and not os.path.exists(dir):
                 os.makedirs(os.path.dirname(self.base_path))
 
     @property
@@ -619,17 +637,22 @@ def _on_connect_bundle(dbapi_con, con_record):
     Bundles have different parameters because they are more likely to be accessed concurrently. 
     '''
 
-    ## NOTE ABOUT journal_mode = WAL: it improves concurency, but has some downsides.
+    ## NOTE ABOUT journal_mode = WAL: it improves concurrency, but has some downsides.
     ## See http://sqlite.org/wal.html
 
+    try:
+        dbapi_con.execute('COMMIT') # Can't change journal mode in a transaction.
+    except:
+        pass
+
+    dbapi_con.execute('PRAGMA journal_mode = WAL')
     dbapi_con.execute('PRAGMA page_size = 8192')
     dbapi_con.execute('PRAGMA temp_store = MEMORY')
     dbapi_con.execute('PRAGMA cache_size = 50000')
     dbapi_con.execute('PRAGMA foreign_keys = OFF')
-    dbapi_con.execute('PRAGMA journal_mode = WAL')
+
     #dbapi_con.execute('PRAGMA busy_timeout = 10000')
     #dbapi_con.execute('PRAGMA synchronous = OFF')
-
 
 def _on_connect_update_sqlite_schema(conn, con_record):
     '''Perform on-the-fly schema updates based on the user version'''
@@ -660,6 +683,19 @@ def _on_connect_update_sqlite_schema(conn, con_record):
             except Exception as e:
                 pass
 
+        if version < 17:
+
+            try:
+                conn.execute('ALTER TABLE partitions ADD COLUMN p_ref VARCHAR(200);')
+            except:
+                pass
+
+        if version < 18:
+
+            try:
+                conn.execute('ALTER TABLE files ADD COLUMN f_content BLOB;')
+            except:
+                pass
 
     if version < SqliteDatabase.SCHEMA_VERSION:
         conn.execute('PRAGMA user_version = {}'.format(SqliteDatabase.SCHEMA_VERSION))

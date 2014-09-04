@@ -8,7 +8,9 @@ from sqlite import SqlitePartition
 
 
 def _geo_db_class(): # To break an import dependency
-    from ..database.geo import GeoDb
+
+    from  ambry.database.geo import GeoDb
+
     return GeoDb
 
 class GeoPartitionName(PartitionName):
@@ -22,7 +24,7 @@ class GeoPartition(SqlitePartition):
     '''A Partition that hosts a Spatialite for geographic data'''
 
     _id_class = GeoPartitionIdentity
-    _db_class = _geo_db_class()
+
     
     def __init__(self, bundle, record, **kwargs):
         super(GeoPartition, self).__init__(bundle, record)
@@ -30,7 +32,8 @@ class GeoPartition(SqlitePartition):
     @property
     def database(self):
         if self._database is None:
-            self._database = self._db_class(self.bundle, self, base_path=self.path)
+            _db_class = _geo_db_class()
+            self._database = _db_class(self.bundle, self, base_path=self.path)
         return self._database
 
     def _get_srs_wkt(self):
@@ -81,9 +84,10 @@ class GeoPartition(SqlitePartition):
         from ambry.geo.sfschema import TableShapefile
 
         if self.identity.table:
-
-            tsf = TableShapefile(self.bundle, self._db_class.make_path(self), self.identity.table,
+            _db_class = _geo_db_class()
+            tsf = TableShapefile(self.bundle, _db_class.make_path(self), self.identity.table,
                                  dest_srs = dest_srs, source_srs = source_srs )
+
 
             tsf.close()
 
@@ -206,7 +210,7 @@ class GeoPartition(SqlitePartition):
             print 'convert_dates HERE', self.database.dsn
             self.database.connection.execute( "UPDATE {} SET {}".format(table.name, ','.join(clauses)))
 
-    def load_shapefile(self, path, t_srs = '4326',  **kwargs):
+    def load_shapefile(self, path, t_srs = '4326', s_srs = None,  **kwargs):
         """Load a shape file into a partition as a spatialite database. 
         
         Will also create a schema entry for the table speficified in the 
@@ -234,10 +238,11 @@ class GeoPartition(SqlitePartition):
         
         self.bundle.log("Checking types in file {}".format(path))
         types, type = get_shapefile_geometry_types(path)
-        
+
         #ogr_create="ogr2ogr -explodecollections -skipfailures -f SQLite {output} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
         
-        ogr_create="ogr2ogr  -overwrite -progress -skipfailures -f SQLite {output} -gt 65536 {t_srs} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
+        ogr_create="ogr2ogr  -overwrite -progress -skipfailures -f SQLite {output} -gt 65536 {t_srs} {s_srs_arg} -nlt  {type} " \
+                   "-nln \"{table}\" {input}  -dsco SPATIALITE=yes"
 
         dir_ = os.path.dirname(self.database.path)
 
@@ -252,7 +257,8 @@ class GeoPartition(SqlitePartition):
                                 output = self.database.path,
                                 table = self.table.name,
                                 type = type,
-                                t_srs = t_srs_opt
+                                t_srs = t_srs_opt,
+                                s_srs_arg = '-s_srs EPSG:'+str(s_srs) if s_srs else ''
                                  )
 
         self.database.close()

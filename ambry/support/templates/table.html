@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+{% block title %}Table: {{table.name}}{% endblock %}
+{% block head %}
+    {{ super() }}
+{% endblock %}
+{% block masthead %}
+    <h1 class="title">Table: {{table.name}}</h1>
+{% endblock %}
+
+{% block body %}
+{% include 'table_block.html' %}
+{% endblock %}

@@ -1,7 +1,0 @@
-{% macro email_maybe(lead, name, email) -%}
-{%- if name is defined and email is not defined -%}{{lead}} {{name}}
-{%- elif name is defined and email is defined -%}{{lead}} [{{name}}](mailto:{{email}})
-{%- elif name is not defined and email is defined -%}{{lead}} [{{email}}](mailto:{{email}})
-{%- else -%}
-{%- endif -%}
-{%- endmacro %}

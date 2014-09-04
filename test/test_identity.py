@@ -254,16 +254,16 @@ class Test(TestBase):
 
         pi = ident.as_partition(8,time = 'time',
                                   space='space',
-                                  format='hdf')
+                                  format='geo')
 
-        self.assertEquals('source.com-foobar-orig-time-space-hdf-0.0.1~p002Bi008001',pi.fqname)
+        self.assertEquals('source.com-foobar-orig-time-space-geo-0.0.1~p002Bi008001',pi.fqname)
 
 
         # PartitionIdentity
 
         part_name = PartitionName(time = 'time',
                                   space='space',
-                                  format='hdf',
+                                  format='geo',
                                   **name.dict
                                   )
         
@@ -280,11 +280,11 @@ class Test(TestBase):
         
         self.assertEquals('p002Bi084',ident.id_)   
         self.assertEquals('p002Bi084001',ident.vid)   
-        self.assertEquals('source.com-foobar-orig-time-space-hdf',str(ident.name))
-        self.assertEquals('source.com-foobar-orig-time-space-hdf-0.0.1',ident.vname)
-        self.assertEquals('source.com-foobar-orig-time-space-hdf-0.0.1~p002Bi084001',ident.fqname)
+        self.assertEquals('source.com-foobar-orig-time-space-geo',str(ident.name))
+        self.assertEquals('source.com-foobar-orig-time-space-geo-0.0.1',ident.vname)
+        self.assertEquals('source.com-foobar-orig-time-space-geo-0.0.1~p002Bi084001',ident.fqname)
         self.assertEquals('source.com/foobar-orig-0.0.1/time-space',ident.path)
-        self.assertEquals('source.com/foobar-orig-0.0.1/time-space.hdf',ident.cache_key)
+        self.assertEquals('source.com/foobar-orig-0.0.1/time-space.geodb',ident.cache_key)
         
         # Updating partition names that were partially specified
         
@@ -311,9 +311,9 @@ class Test(TestBase):
         ident = Identity(name, dn)
         pi = ident.as_partition(8, time='time',
                                 space='space',
-                                format='hdf')
+                                format='geo')
 
-        self.assertEquals('source.com-foobar-orig-time-space-hdf-0.0.1~p002Bi008001', pi.fqname)
+        self.assertEquals('source.com-foobar-orig-time-space-geo-0.0.1~p002Bi008001', pi.fqname)
 
         iid = pi.as_dataset()
 
@@ -322,7 +322,6 @@ class Test(TestBase):
 
     def test_identity_from_dict(self):
         from ambry.partition.sqlite import SqlitePartitionIdentity
-        from old.partition.hdf import HdfPartitionIdentity
         from ambry.partition.csv import CsvPartitionIdentity
         from ambry.partition.geo import GeoPartitionIdentity
 
@@ -344,10 +343,6 @@ class Test(TestBase):
         self.assertIsInstance(ident, SqlitePartitionIdentity)
         self.assertEquals('source.com/foobar-orig-0.0.1.db', ident.cache_key)
 
-        pidict['format'] = 'hdf'
-        ident = Identity.from_dict(pidict)
-        self.assertIsInstance(ident, HdfPartitionIdentity)
-        self.assertEquals('source.com/foobar-orig-0.0.1.hdf', ident.cache_key)
 
         pidict['format'] = 'csv'
         ident = Identity.from_dict(pidict)
@@ -532,14 +527,12 @@ class Test(TestBase):
         p = bp.find_or_new(time = 't1', space='s2')
         self.assertEquals('source-dataset-subset-variation-t1-s2-0.0.1~piEGPXmDC8002001', p.identity.fqname)
 
-        p = bp.find_or_new_hdf(time = 't2', space='s1')
-        self.assertEquals('source-dataset-subset-variation-t2-s1-hdf-0.0.1~piEGPXmDC8003001', p.identity.fqname)
 
         p = bp.find_or_new_geo(time = 't2', space='s1')
-        self.assertEquals('source-dataset-subset-variation-t2-s1-geo-0.0.1~piEGPXmDC8004001', p.identity.fqname)
+        self.assertEquals('source-dataset-subset-variation-t2-s1-geo-0.0.1~piEGPXmDC8003001', p.identity.fqname)
 
         p = bp.find_or_new_csv(time = 't2', space='s1')
-        self.assertEquals('source-dataset-subset-variation-t2-s1-csv-0.0.1~piEGPXmDC8005001', p.identity.fqname)
+        self.assertEquals('source-dataset-subset-variation-t2-s1-csv-0.0.1~piEGPXmDC8004001', p.identity.fqname)
 
 
         # Ok! Build!
@@ -675,7 +668,7 @@ class Test(TestBase):
         name = Name(source='source.com', dataset='foobar',  version='0.0.1')
         dn = DatasetNumber(10000, 1, assignment_class='registered')
 
-        for format in ('geo','hdf','csv','db'):
+        for format in ('geo','db'):
             pi = Identity(name, dn).as_partition(space='space', format=format)
             print type(pi), pi.path
 
@@ -721,6 +714,13 @@ class Test(TestBase):
                 'revision': 1,
                 'version': '0.0.1'
             }
+
+    def test_namequery(self):
+        from ambry.identity import PartitionNameQuery
+        pnq = PartitionNameQuery(table='foobar', time='tomorrow')
+
+        print pnq
+
 
 
 def suite():

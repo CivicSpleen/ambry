@@ -306,6 +306,7 @@ def parse_type(type_,name, v):
 def parse_date(name, v):
     import dateutil.parser as dp
     import datetime
+
     if is_nothing(v):
         return None
     elif isinstance(v, basestring):

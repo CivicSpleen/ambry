@@ -10,9 +10,24 @@ from pip.commands import InstallCommand
 
 
 def install(install_dir,egg,url):
-    
+
     initial_args = ['install', '--install-option=--install-purelib={}'.format(install_dir), url]
-    cmd_name, options, args, parser = pip.parseopts(initial_args)
-           
-    command = InstallCommand(parser)
-    return command.main(args[1:], options)
+
+    try:
+        # An earlier version of pip
+        cmd_name, options, args, parser = pip.parseopts(initial_args)
+
+        command = InstallCommand(parser)
+        return command.main(args[1:], options)
+
+    except ValueError:
+        from pip.commands import commands
+        cmd_name, cmd_args = pip.parseopts(initial_args)
+        command = commands[cmd_name]()
+        return command.main(cmd_args)
+
+
+    raise Exception()
+
+
+

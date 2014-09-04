@@ -422,11 +422,39 @@ class LibraryDb(object):
         s = self.session
 
         try:
+
             c = s.query(SAConfig).filter(SAConfig.group == group,
                                      SAConfig.key == key,
                                      SAConfig.d_vid == ROOT_CONFIG_NAME_V).first()
 
             return c
+        except:
+            return None
+
+    def get_bundle_value(self, dvid, group, key):
+
+        from ambry.orm import Config as SAConfig
+
+        s = self.session
+
+        try:
+            c = s.query(SAConfig).filter(SAConfig.group == group,
+                                         SAConfig.key == key,
+                                         SAConfig.d_vid == dvid).first()
+
+            return c.value
+        except:
+            return None
+
+    def get_bundle_values(self, dvid, group):
+        """Get an entire group of bundle values"""
+
+        from ambry.orm import Config as SAConfig
+
+        s = self.session
+
+        try:
+            return s.query(SAConfig).filter(SAConfig.group == group,SAConfig.d_vid == dvid).all()
         except:
             return None
 
@@ -663,6 +691,7 @@ class LibraryDb(object):
         from sqlalchemy.orm.exc import NoResultFound
 
         if commit == 'collect':
+
             self._partition_collection.append(partition.record.insertable_dict)
             return
 
@@ -674,8 +703,6 @@ class LibraryDb(object):
 
             if not b:
                 self.install_bundle(bundle)
-
-
 
         s = self.session
 
@@ -868,6 +895,19 @@ class LibraryDb(object):
 
         return  s.query(Table).filter(Table.vid == table_vid).one()
 
+    def tables(self):
+
+        s = self.session
+
+        out = []
+
+        for t in s.query(Table).all():
+            out[t.name] = t.dict
+
+        return out
+
+
+
     def list(self, datasets=None, with_partitions = False,  key='vid'):
         """
         :param datasets: If specified, must be a dict, which the internal dataset data will be
@@ -902,10 +942,9 @@ class LibraryDb(object):
 
             ck = getattr(d.identity, key)
 
-
             if ck not in datasets:
                 datasets[ck] = d.identity
-
+                datasets[ck].summary = self.get_bundle_value(d.vid, 'config','about.title')
 
             if f:
                 if not p:
@@ -945,6 +984,7 @@ class LibraryDb(object):
 
             ck = getattr(d.identity, key)
             datasets[ck] = d.identity
+
 
         return datasets
 
@@ -1028,9 +1068,9 @@ class LibraryDb(object):
                     # or a table name
                     query = query.join(Table)
                     query = query.filter( or_(Partition.t_id  == v,
-                                              like_or_eq(Table.name,v)))
+                                              like_or_eq(Table.name,v.lower())))
                 elif k == 'space':
-                    query = query.filter( or_( like_or_eq(Partition.space,v)))
+                    query = query.filter( or_( like_or_eq(Partition.space,v.lower())))
 
                 else:
                     query = query.filter(  like_or_eq(getattr(Partition, k),v) )
@@ -1211,8 +1251,9 @@ def _pragma_on_connect(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
 
     #dbapi_con.execute('PRAGMA foreign_keys = ON;')
-    return # Not clear that there is a performance improvement.
-    dbapi_con.execute('PRAGMA journal_mode = MEMORY')
+    # Not clear that there is a performance improvement.
+
+    dbapi_con.execute('PRAGMA journal_mode = WAL')
     dbapi_con.execute('PRAGMA synchronous = OFF')
     dbapi_con.execute('PRAGMA temp_store = MEMORY')
     dbapi_con.execute('PRAGMA cache_size = 500000')

@@ -171,7 +171,10 @@ class HttpCache( Cache):
             from ..client.exceptions import NotFound
             raise NotFound("Did not find _list.json file at {}".format(self.path('_list.json')))
 
-        return { k:{} for k in l.json() }
+        if not isinstance(l, dict):
+            l = l.json()
+
+        return { k:{} for k in l }
 
 
 

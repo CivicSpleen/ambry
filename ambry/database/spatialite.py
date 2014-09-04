@@ -40,3 +40,6 @@ class SpatialiteDatabase(SqliteDatabase, SqliteAttachmentMixin):
 
         event.listen(self._engine, 'connect', _on_connect_geo)
 
+class SpatialiteWarehouseDatabase(SpatialiteDatabase):
+
+    pass

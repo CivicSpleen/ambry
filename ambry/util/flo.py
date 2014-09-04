@@ -207,4 +207,13 @@ class MetadataFlo(object):
     @property
     def closed(self):
         return self.o.closed
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type_, value, traceback):
+        if type_:
+            return False
+
+        self.close()
     

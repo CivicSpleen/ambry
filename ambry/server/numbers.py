@@ -3,7 +3,7 @@
 Server application for assigning dataset numbers. Requires a redis instance for
 data storage.
 
-Run with: python -mdatabundles.server.numbers
+Run with: python -mambry.server.numbers
 
 Requires a run_config configuration item:
 
@@ -55,9 +55,8 @@ import ambry.util
 global_logger = ambry.util.get_logger(__name__)
 global_logger.setLevel(logging.DEBUG)
 
-
-
-
+# Alternative number spaces, mostly for manifests
+NUMBER_SPACES = ('m','x')
 
 def capture_return_exception(e):
     
@@ -240,12 +239,11 @@ def request_delay(nxt,delay,delay_factor):
 
     return ok, since, nxt,  delay, nxt-now, (nxt+4*delay)-now
 
-
 @get('/next')
 @CaptureException
-def get_next(redis, assignment_class=None):
+def get_next(redis, assignment_class=None, space=''):
     from time import time
-    from ambry.identity import DatasetNumber
+    from ambry.identity import DatasetNumber, TopNumber
 
     delay_factor = 2
 
@@ -254,8 +252,11 @@ def get_next(redis, assignment_class=None):
 
     next_key = "next:"+ip
     delay_key = "delay:"+ip
-    ipallocated_key = "allocated:"+ip
 
+    if space and space in NUMBER_SPACES:
+        spacestr = space + ':'
+    else:
+        spacestr = ''
 
     #
     # The assignment class determine how long the resulting number will be
@@ -271,10 +272,13 @@ def get_next(redis, assignment_class=None):
     if not assignment_class:
         raise exc.NotAuthorized('Use an access key to gain access to this service')
 
-    # The number space depends on the assignment class.
-
-    number_key = "dataset_number:"+assignment_class
-    authallocated_key = "allocated:"+assignment_class
+    #
+    # These are the keys that store values, so they need to be augmented with the numebr space.
+    # For backwards compatiility, the 'd' space is empty, but the other spaces have strings.
+    #
+    number_key = "dataset_number:"+spacestr+assignment_class # The number space depends on the assignment class.
+    authallocated_key = "allocated:"+spacestr+assignment_class
+    ipallocated_key = "allocated:" + spacestr+ip # Keep track of allocatiosn by IP
 
     nxt = redis.get(next_key)
     delay = redis.get(delay_key)
@@ -298,14 +302,17 @@ def get_next(redis, assignment_class=None):
     if ok:
         number = redis.incr(number_key)
 
-        dn = DatasetNumber(number, None, assignment_class)
+        if not space:
+            dn = DatasetNumber(number, None, assignment_class)
+        else:
+            dn = TopNumber(space, number, None, assignment_class)
 
         redis.sadd(ipallocated_key, dn)
         redis.sadd(authallocated_key, dn)
 
     else:
         number = None
-        raise exc.TooManyRequests("Requests will resume in {} seconds".format(wait))
+        raise exc.TooManyRequests(" Access will resume in {} seconds".format(wait))
 
     return dict(ok=ok,
                 number=str(dn),
@@ -315,6 +322,15 @@ def get_next(redis, assignment_class=None):
                 nxt=nxt,
                 delay=delay)
 
+
+@get('/next/<space>')
+@CaptureException
+def get_next_space(redis, assignment_class=None, space=''):
+
+    if not space in NUMBER_SPACES:
+        raise exc.NotFound('Invalid number space: {}'.format(space))
+
+    return get_next(redis,assignment_class=assignment_class, space=space)
 
 @get('/find/<name>')
 def get_echo_term(name, redis):
@@ -369,6 +385,8 @@ def _run(host, port, redis, unregistered_key,  reloader=False, **kwargs):
 
     install(RedisPlugin(pool))
 
+    print host, port
+
     return run( host=host, port=port, reloader=reloader, server='paste')
     
 if __name__ == '__main__':
@@ -383,7 +401,7 @@ if __name__ == '__main__':
     d['redis'] = d.get('redis',{'host':'localhost','port': 6379})
 
 
-    parser = argparse.ArgumentParser(prog='python -mdatabundles.server.numbers',
+    parser = argparse.ArgumentParser(prog='python -mambry.server.numbers',
                                      description='Run an Ambry numbers server')
 
     parser.add_argument('-H','--server-host', default=None, help="Server host. Defaults to configured value: {}".format(d['host']))
@@ -391,7 +409,7 @@ if __name__ == '__main__':
 
     parser.add_argument('-R','--redis-host', default=None, help="Redis host. Defaults to configured value: {}".format(d['redis']['host']))
     parser.add_argument('-r','--redis-port', default=None, help="Redis port. Defaults to configured value: {}".format(d['redis']['port']))
-
+    parser.add_argument('-u', '--unregistered-key', default=None,help="access_key value for unregistered access")
 
     args = parser.parse_args()
 
@@ -407,6 +425,10 @@ if __name__ == '__main__':
     if args.redis_host:
         d['redis']['host'] = args.redis_host
 
+
+
+    if args.unregistered_key:
+        d['unregistered_key'] = args.unregistered_key
 
     print d
 

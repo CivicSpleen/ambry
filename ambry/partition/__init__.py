@@ -236,7 +236,7 @@ class PartitionBase(PartitionInterface):
 
     @property
     def tables(self):
-        return self.data.get('tables', [])
+        return set(self.data.get('tables', []) + [self.table.name] )
 
     # Call other values on the record
     def __getattr__(self, name):
@@ -340,6 +340,15 @@ class PartitionBase(PartitionInterface):
     @classmethod
     def extension(cls):
         return cls._id_class._name_class.PATH_EXTENSION
+
+
+
+    def html_doc(self):
+        from ..text import PartitionDoc
+
+        pd = PartitionDoc(self)
+
+        return pd.render()
 
     @property
     def info(self):

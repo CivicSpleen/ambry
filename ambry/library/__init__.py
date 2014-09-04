@@ -328,7 +328,7 @@ class Library(object):
         dataset = self.resolve(ref)
 
         if not dataset:
-            return False
+            raise NotFoundError("Failed to resolve reference '{}'".format(ref))
 
         bundle = self._get_bundle_by_cache_key(dataset.cache_key)
 
@@ -337,16 +337,24 @@ class Library(object):
 
                 partition = bundle.partitions.get(dataset.partition.vid)
 
+
                 if not partition:
                     from ..dbexceptions import NotFoundError
                     raise NotFoundError('Failed to get partition {} from bundle at {} '
                                         .format(dataset.partition.fqname, dataset.cache_key))
 
                 arc = AltReadCache(self.cache, self.remote_stack)
+
+                # If the partition has a reference, get that instead. This will load it into the local file
+                if partition.ref:
+                    ref_partition = self.resolve(partition.ref)
+                else:
+                    ref_partition = partition
+
                 abs_path = arc.get(partition.identity.cache_key, cb=cb)
 
                 if not abs_path or not os.path.exists(abs_path):
-                    raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.fqname))
+                    raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.cache_key))
 
                 try:
                     self.database.install_partition_by_id(bundle, dataset.partition.id_,
@@ -361,6 +369,7 @@ class Library(object):
         finally:
             if bundle:
                 bundle.close()
+
 
         return bundle
 
@@ -378,7 +387,12 @@ class Library(object):
 
         return self.database.resolver
 
-    def resolve(self, ref, location = None):
+    def resolve(self, ref, location = 'default'):
+        from ..identity import LocationRef
+
+        # If the location is not explicitly defined, set it to everything but source
+        if location is 'default':
+            location = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.REMOTE ]
 
         if isinstance(ref, Identity):
             ref = ref.vid
@@ -678,8 +692,14 @@ class Library(object):
                     try:
                         b = self._create_bundle( path_)
 
+                        try:
+                            bident = b.identity
+                        except Exception as e:
+                            self.logger.error("Failed to open bundle from {}: {} ".format(path_, e))
+                            continue
+
                         # The path check above is wrong sometime when there are symlinks
-                        if self.files.query.type(Files.TYPE.BUNDLE).ref(b.identity.vid).one_maybe and self.get(b.identity.vid):
+                        if self.files.query.type(Files.TYPE.BUNDLE).ref(bident.vid).one_maybe and self.get(bident.vid):
                             continue
 
                         if b.identity.is_bundle:
@@ -709,24 +729,28 @@ class Library(object):
                 except ConflictError:
                     installed = False
 
-                self.files.install_bundle_file(bundle, self.cache, commit=True)
+                try:
+                    self.files.install_bundle_file(bundle, self.cache, commit=True)
 
-                for p in bundle.partitions:
-                    self.logger.info('            {} '.format(p.identity.vname))
+                    for p in bundle.partitions:
+                        self.logger.info('            {} '.format(p.identity.vname))
+
+                        if installed:
+                            self.database.install_partition(bundle, p, commit='collect')
+
+                        self.files.install_partition_file(p, self.cache, commit='collect')
+
+
+                    self.files.insert_collection()
 
                     if installed:
-                        self.database.install_partition(bundle, p, commit='collect')
+                        self.database.insert_partition_collection()
 
-                    self.files.install_partition_file(p, self.cache, commit='collect')
+                    self.database.commit()
+                    self.database.close()
+                except Exception as e:
+                    self.logger.error("Failed to sync {}; {}".format(bundle.identity.vname, e))
 
-
-                self.files.insert_collection()
-
-                if installed:
-                    self.database.insert_partition_collection()
-
-                self.database.commit()
-                self.database.close()
                 bundle.close()
 
             except Exception as e:
@@ -754,7 +778,6 @@ class Library(object):
 
             all_keys = [ f.path for f  in self.files.query.type(Dataset.LOCATION.REMOTE).group(remote.repo_id).all ]
 
-
             for cache_key in remote.list().keys():
 
 
@@ -779,6 +802,10 @@ class Library(object):
                     self.logger.error("Cache key {} exists, but isn't a valid bundle".format(cache_key))
                     b.close()
                     continue
+                except Exception as e:
+                    self.logger.error("Failed to put bundle {}: {}".format(cache_key, e))
+                    b.close()
+                    continue
 
                 try:
                     self.files.install_remote_bundle(b.identity, remote, {}, commit=True)
@@ -787,10 +814,10 @@ class Library(object):
                     continue
 
 
-
                 for p in b.partitions:
                     if  installed:
                         self.database.install_partition(b, p, commit='collect')
+
                     if self.files.install_remote_partition(p.identity, remote, {}, commit = 'collect'):
                         self.logger.info("    + {}".format(p.identity.name))
                     else:
@@ -828,7 +855,6 @@ class Library(object):
                 self.sync_source_dir(ident, path)
 
             except Exception as e:
-                raise
                 self.logger.error("Failed to sync: bundle_path={} : {} ".format(ident.bundle_path, e.message))
 
         self.database.commit()
@@ -959,3 +985,14 @@ class AnalysisLibrary(Library):
     def _repr_html_(self):
         return self.info.replace('\n','<br/>')
 
+    def install_manifest(self, ref, base_dir=None):
+        from ..warehouse import install_manifest
+        import os
+        import warnings
+
+        warnings.filterwarnings('ignore')
+
+        if not base_dir:
+            base_dir = os.getcwd()
+
+        return install_manifest(self.l, ref, base_dir)
