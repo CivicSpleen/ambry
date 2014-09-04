@@ -1310,8 +1310,12 @@ class {name}(Base):
            
             # Keep track of the number of possibilities for each
             # field. This is needed to identify fields that are mostly
-            # one type ( ie, Integer ) but which have occasional text codes. 
+            # one type ( ie, Integer ) but which have occasional text codes.
 
+            if v is None:
+                mfi['counts'][None] += 1
+
+                continue
 
             try:
                 if isinstance(v, (datetime)):
@@ -1385,7 +1389,14 @@ class {name}(Base):
         from datetime import datetime, time, date
         from sqlalchemy.orm.exc import NoResultFound
 
+        type_map = {int: 'integer', str: 'varchar', float: 'real',
+                    datetime: 'datetime', date: 'date', time: 'time'}
+
+        index = memo['name_index'] if len(memo['name_index']) > 0 else None
+        fields = memo['fields']
+
         with self.bundle.session as s:
+
             try:
                 table = self.table(table_name)
             except NoResultFound:
@@ -1397,31 +1408,14 @@ class {name}(Base):
                 if name == 'id':
                     self.add_column(table, 'id', datatype='integer', is_primary_key=True)
 
-                self.add_column(table, d['name'], datatype='integer', data=dict(header=name))
+                else:
+                    i = index[d['name']]
+                    # add_column will update existing columns
+                    self.add_column(table, d['name'],
+                                    datatype = type_map[fields[i]['prob-type']],
+                                    size = fields[i]['length'] if fields[i]['prob-type'] == str else None,
+                                    data=dict(header=name))
 
-            index = memo['name_index'] if len(memo['name_index']) > 0 else None
-            fields = memo['fields']
-            
-            type_map = {int: 'integer', str: 'varchar',  float: 'real', 
-                        datetime: 'datetime', date: 'date', time: 'time'}
-
-
-
-            for i,c in enumerate(table.columns):
-
-                if index:
-                    try:
-                        i = index[c.name]
-                    except KeyError:
-                        # Can happen when new columns are added during
-                        # run, like code columns
-                        continue
-
-                c.size = fields[i]['length'] if fields[i]['prob-type'] == str else None
-                c.datatype = type_map[fields[i]['prob-type']]
-                c.default = '-' if fields[i]['prob-type'] == str  else -1
-
-                s.merge(c)
  
     def update(self, table_name, itr, n=None, header=None, logger=None):
         '''Update the schema from an iterator that returns rows. This
@@ -1446,9 +1440,9 @@ class {name}(Base):
 
         memo = self.intuit(None, memo)
 
-
         if header:
             for i, name in enumerate(header):
+
                 memo['name_index'][name] = i
                 memo['fields'][i]['name'] = name
 
