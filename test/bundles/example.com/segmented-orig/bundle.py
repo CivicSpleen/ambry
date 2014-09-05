@@ -16,24 +16,26 @@ class Bundle(BuildBundle):
         import random
 
         
-        lr = self.init_log_rate(print_rate=5)
         
+        lr = self.init_log_rate(N=2000)
         
-        for j in range(4):
-            p = self.partitions.new_partition(table='example', segment=j)
-            p.query('DELETE FROM example')
-            nd = p.table.null_dict
-            with p.database.inserter() as ins:
-                for i in range(1000):
+        for seg in range(1,4):
             
+            p = self.partitions.find_or_new(table='example', segment=seg)
+            p.clean()
+            nd = p.table.null_dict
+            
+            with p.database.inserter() as ins:
+
+                for i in range(5000):
                     row = dict(nd.items())
-        
+            
                     row['uuid'] = str(uuid.uuid4())
                     row['int'] = random.randint(0,100)
                     row['float'] = random.random()*100
-    
-                    ins.insert(row)
-                    lr()
         
+                    ins.insert(row)
+                    lr("Seg {}".format(seg))
+
         return True
 

@@ -1,15 +1,46 @@
+about:
+    groups: []
+    license: null
+    rights: null
+    subject: null
+    summary: null
+    tags: []
+    title: null
+contact_bundle:
+    creator:
+        email: null
+        name: null
+        url: null
+    maintainer:
+        email: null
+        name: null
+        url: null
+contact_source:
+    creator:
+        email: null
+        name: null
+        url: null
+    maintainer:
+        email: null
+        name: null
+        url: null
 identity:
+    bspace: null
+    btime: null
     dataset: altdb
-    id: d000001k
+    id: d00F
     revision: 1
     source: example.com
-    variation: test
+    subset: null
+    type: null
+    variation: orig
     version: 0.1.1
 names:
-    fqname: example.com-altdb-test-0.1.1~d000001k001
-    name: example.com-altdb-test
-    vid: d000001k001
-    vname: example.com-altdb-test-0.1.1
-partitions:
--   name: example.com-altdb-test-example
-    table: example
+    fqname: example.com-altdb-orig-0.1.1~d00F001
+    name: example.com-altdb-orig
+    vid: d00F001
+    vname: example.com-altdb-orig-0.1.1
+versions:
+    1:
+        description: null
+        version: 0.1.1

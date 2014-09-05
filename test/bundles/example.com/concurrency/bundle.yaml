@@ -5,25 +5,25 @@ about:
     license: other-open
     rights: null
     subject: null
-    summary: null
+    summary: !include 'meta/about.description.md'
     tags:
     - tag1
     - tag2
     title: Bundle title
 contact_bundle:
     creator:
-        email: null
-        name: null
+        email: eric@sandiegodata.org
+        name: Eric Busboom
         url: null
     maintainer:
-        email: null
-        name: null
+        email: eric@sandiegodata.org
+        name: Eric Busboom
         url: null
 contact_source:
     creator:
         email: null
         name: null
-        url: null
+        url: https://civicknowledge.org
     maintainer:
         email: null
         name: null
@@ -31,23 +31,20 @@ contact_source:
 identity:
     bspace: null
     btime: null
-    dataset: random
-    id: dHSyDm4MNR
-    revision: 2
+    dataset: concurrency
+    id: d000001E
+    revision: 1
     source: example.com
     subset: null
     type: null
     variation: null
-    version: 0.0.2
+    version: 0.0.1
 names:
-    fqname: example.com-random-0.0.2~dHSyDm4MNR002
-    name: example.com-random
-    vid: dHSyDm4MNR002
-    vname: example.com-random-0.0.2
+    fqname: example.com-concurrency-0.0.1~d000001E001
+    name: example.com-concurrency
+    vid: d000001E001
+    vname: example.com-concurrency-0.0.1
 versions:
     1:
         description: null
-        version: null
-    2:
-        description: null
-        version: 0.0.2
+        version: 0.0.1

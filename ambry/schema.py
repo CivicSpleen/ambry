@@ -641,6 +641,7 @@ class Schema(object):
          
             width = _clean_int(row.get('width', None))
             size = _clean_int(row.get('size',None))
+            start = _clean_int(row.get('start', None))
             
             if  width and width > 0:
                 illegal_value = '9' * width
@@ -665,6 +666,7 @@ class Schema(object):
                                    default = default,
                                    illegal_value = illegal_value,
                                    size = size,
+                                   start = start,
                                    width = width,
                                    data=data,
                                    sql=row.get('sql',None),
@@ -736,8 +738,6 @@ class Schema(object):
             for c in cols:
                 self.add_column(table, **c)
 
-
-
     def _dump_gen(self, table_name=None):
         """Yield schema row for use in exporting the schem to other
         formats
@@ -747,7 +747,7 @@ class Schema(object):
         # Collect indexes
         indexes = {}
 
-        all_opt_col_fields = ["size", "precision","scale", "default","width", 
+        all_opt_col_fields = ["size", "precision","scale", "default","start", "width",
                               "description","sql","flags","keywords",
                               "measure","units","universe"]
         
@@ -760,7 +760,7 @@ class Schema(object):
             
         
         data_fields = set()
-        # Need to get all of the indexes figured out forst, since there are a variable number of indexes. 
+        # Need to get all of the indexes figured out first, since there are a variable number of indexes.
         for table in tables:
 
             for col in table.columns: 
@@ -793,7 +793,7 @@ class Schema(object):
             
         data_fields = sorted(data_fields)
                      
-        # Put back into same order as in app_opt_col_fields            
+        # Put back into same order as in all_opt_col_fields
         opt_col_fields = [ field for field in all_opt_col_fields if field in opt_col_fields]
 
         indexes = OrderedDict(sorted(indexes.items(), key=lambda t: t[0]))

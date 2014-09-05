@@ -34,28 +34,6 @@ class Bundle(BuildBundle):
                 ins.insert(row)
                 lr()
         
-        dbm = p.dbm('foosuffix')
-        
-        lr = self.init_log_rate(message='Write',print_rate=1)
-        
-        with closing(dbm.writer) as w:
-            for row in p.rows:
-                w[row['id']] = dict(row)
-                lr()
-
-        lr = self.init_log_rate(message='Read',print_rate=1)
-        
-        with closing(dbm.reader) as r:
-            acc = 0
-            for k in  r.keys():
-                lr()
-                d = r[k]
-                
-                acc += int(d['int'])
-            
-        
-        print "Accumulated: ", acc
-        
         
         return True
 

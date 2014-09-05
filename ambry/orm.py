@@ -342,6 +342,7 @@ class Column(Base):
     altname = SAColumn('c_altname',Text)
     datatype = SAColumn('c_datatype',Text)
     size = SAColumn('c_size',Integer)
+    start = SAColumn('c_start', Integer)
     width = SAColumn('c_width',Integer)
     sql = SAColumn('c_sql',Text)
     precision = SAColumn('c_precision',Integer)
@@ -496,7 +497,8 @@ class Column(Base):
         self.is_primary_key = _clean_flag(kwargs.get("is_primary_key",False))
         self.datatype = kwargs.get("datatype",None) 
         self.size = kwargs.get("size",None) 
-        self.precision = kwargs.get("precision",None) 
+        self.precision = kwargs.get("precision",None)
+        self.start = kwargs.get("start", None)
         self.width = kwargs.get("width",None)    
         self.sql = kwargs.get("sql",None)      
         self.flags = kwargs.get("flags",None) 
@@ -528,7 +530,7 @@ class Column(Base):
         x = {k: v for k, v in self.__dict__.items()
              if k in ['id_', 'vid', 't_vid','t_id',
                       'sequence_id', 'name', 'altname', 'is_primary_key', 'datatype', 'size',
-                      'precision', 'width', 'sql', 'flags', 'description', 'keywords', 'measure',
+                      'precision', 'start', 'width', 'sql', 'flags', 'description', 'keywords', 'measure',
                       'units', 'universe', 'scale', 'data']}
         if not x:
             raise Exception(self.__dict__)
@@ -865,6 +867,21 @@ Columns:
                 header.append(col.name)
            
             return partial(struct.unpack, unpack_str), header, unpack_str, length
+
+    def get_fixed_colspec(self):
+        """Return the column specification suitable for use in  the Panads read_fwf function
+
+        This will ignore any columns that don't have one or both of the start and width values
+        """
+
+        # Warning! Assuming th start values are sorted. Really should check.
+
+        return (
+            [ c.name for c in self.columns if c.start and c.width],
+            [ ( c.start, c.start + c.width ) for c in self.columns if c.start and c.width]
+        )
+
+
 
     @property
     def null_row(self):
