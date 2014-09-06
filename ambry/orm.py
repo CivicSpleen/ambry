@@ -786,6 +786,11 @@ Columns:
                     value = False
                     setattr(row, key, value)
 
+        # If the id column has a description and the table does not, add it to the table.
+        if row.name == 'id' and row.is_primary_key and not self.description:
+            self.description = row.description
+            s.merge(self)
+
         if extant:
             s.merge(row)
         else:
@@ -793,7 +798,8 @@ Columns:
      
         if kwargs.get('commit', True):
             s.commit()
-    
+
+
         return row
    
     def column(self, name_or_id, default=None):
@@ -1157,17 +1163,17 @@ class Partition(Base):
     def __init__(self, dataset, **kwargs):
 
         self.vid = kwargs.get("vid", kwargs.get("id_", None))
-        self.id_ = kwargs.get("id",kwargs.get("id_",None)) 
-        self.name = kwargs.get("name",kwargs.get("name",None)) 
+        self.id_ = kwargs.get("id",kwargs.get("id_",None))
+        self.name = kwargs.get("name",kwargs.get("name",None))
         self.vname = kwargs.get("vname",None)
         self.ref = kwargs.get("ref", None)
         self.fqname = kwargs.get("fqname",None)
         self.cache_key = kwargs.get("cache_key",None)
-        self.sequence_id = kwargs.get("sequence_id",None) 
-        self.d_id = kwargs.get("d_id",None) 
-        self.space = kwargs.get("space",None) 
-        self.time = kwargs.get("time",None)  
-        self.t_id = kwargs.get("t_id",None) 
+        self.sequence_id = kwargs.get("sequence_id",None)
+        self.d_id = kwargs.get("d_id",None)
+        self.space = kwargs.get("space",None)
+        self.time = kwargs.get("time",None)
+        self.t_id = kwargs.get("t_id",None)
         self.grain = kwargs.get('grain',None)
         self.format = kwargs.get('format',None)
         self.segment = kwargs.get('segment',None)
@@ -1176,9 +1182,9 @@ class Partition(Base):
         if dataset:
             self.d_id = dataset.id_
             self.d_vid = dataset.vid
-        
+
         # See before_insert for setting self.vid and self.id_
-        
+
         if self.t_id:
             don = ObjectNumber.parse(self.d_vid)
             ton = ObjectNumber.parse(self.t_id)
@@ -1206,7 +1212,7 @@ class Partition(Base):
             ds = s.query(Dataset).filter(Dataset.id_ == self.d_id).one()
         else:
             ds = self.dataset
-            
+
         d = dict(ds.dict.items() + self.dict.items())
 
         return PartitionIdentity.from_dict(d)
@@ -1215,7 +1221,7 @@ class Partition(Base):
     def dict(self):
 
         d =  {
-                 'id':self.id_, 
+                 'id':self.id_,
                  'vid':self.vid,
                  'name':self.name,
                  'vname':self.vname,
@@ -1226,11 +1232,11 @@ class Partition(Base):
                  'd_vid': self. d_vid,
                  't_id': self.t_id,
                  't_vid': self. t_vid,
-                 'space':self.space, 
-                 'time':self.time, 
+                 'space':self.space,
+                 'time':self.time,
                  'table': self.table.name if self.t_vid is not None else None,
-                 'grain':self.grain, 
-                 'segment':self.segment, 
+                 'grain':self.grain,
+                 'segment':self.segment,
                  'format': self.format if self.format else 'db'
                 }
 
@@ -1263,10 +1269,9 @@ class Partition(Base):
 
         self.fqname = Identity._compose_fqname(self.vname,self.vid)
 
-
     @staticmethod
     def before_insert(mapper, conn, target):
-        '''event.listen method for Sqlalchemy to set the sequence for this  
+        '''event.listen method for Sqlalchemy to set the sequence for this
         object and create an ObjectNumber value for the id_'''
         from identity import Identity
 
@@ -1290,7 +1295,7 @@ class Partition(Base):
 
     @staticmethod
     def before_update(mapper, conn, target):
-        '''Set the column id number based on the table number and the 
+        '''Set the column id number based on the table number and the
         sequence id for the column'''
         if not target.id_:
             dataset = ObjectNumber.parse(target.d_id)

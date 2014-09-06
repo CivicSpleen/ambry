@@ -1,0 +1,12 @@
+build: {}
+dependencies:
+    random: example.com-random-example1
+    simple: example.com-simple-orig-example
+extract: {}
+sources:
+    example1:
+        description: The First Example File
+        url: http://ds-public.civicknowledge.org.s3.amazonaws.com/example.com/example1.csv
+    example2:
+        description: The Second Example File
+        url: http://ds-public.civicknowledge.org.s3.amazonaws.com/example.com/example2.csv

@@ -1,6 +1,6 @@
 body {
     padding-top: 50px;
-   
+    overflow: hidden;
 }
 #wrapper {
     min-height: 100%;

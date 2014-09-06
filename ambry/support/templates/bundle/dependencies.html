@@ -1,0 +1,8 @@
+<!-- Sources -->
+<h2>Dependencies</h2>
+<dl class="dl-horizontal">
+{% for k,e in m.dependencies.items() %}
+    <dt>{{k}}</dt>
+    <dd>{{e}}</dd>
+{% endfor -%}
+</dl>

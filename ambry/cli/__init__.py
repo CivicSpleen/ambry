@@ -28,14 +28,16 @@ def prt(template, *args, **kwargs):
 def err(template, *args, **kwargs):
     import sys
     global global_logger
-    
-    global_logger.error("ERROR: "+template.format(*args, **kwargs))
+
+    global_logger.error(template.format(*args, **kwargs))
+
 
 def fatal(template, *args, **kwargs):
     import sys
     global global_logger
 
-    global_logger.critical("FATAL: "+template.format(*args, **kwargs))
+
+    global_logger.critical(template.format(*args, **kwargs))
     sys.exit(1)
 
 def warn(template, *args, **kwargs):
@@ -43,7 +45,7 @@ def warn(template, *args, **kwargs):
     global command
     global subcommand
     
-    global_logger.warning("WARN: "+template.format(*args, **kwargs))
+    global_logger.warning(template.format(*args, **kwargs))
 
 def load_bundle(bundle_dir):
     from ambry.run import import_file
@@ -457,8 +459,6 @@ def main(argsv = None, ext_logger=None):
 
         global global_run_config
         global_run_config = rc
-
-
 
 
     if not f:

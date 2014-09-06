@@ -5,9 +5,6 @@
     <title>{% block title %}{% endblock %}</title>
     <link href="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="{{root_path}}/css/style.css" rel="stylesheet">
-    <style media="screen" type="text/css">
-{{embed_css}}
-    </style>
     {% endblock %}
 </head>
 <body>
@@ -51,43 +48,33 @@
     </nav>
 </div>
 <div id="wrapper">
-    <div id="sidebar-wrapper" class="col-md-2">
-        <div id="sidebar">
-            <div  id="toc"></div>
-        </div>
-    </div>
-    <div id="main-wrapper" class="col-md-10 pull-right">
-        <div id="main">
-            <div class="page-header">
-                {% block masthead %} {% endblock %}
+    <div class="row">
+        <div id="sidebar-wrapper" class="col-md-2">
+            <div id="sidebar">
+                <div  id="toc"></div>
             </div>
-
-            <div>
-                {% block body %} {% endblock %}
-            </div>
-         </div>
-
-        <div class="col-md-12 footer">
-            <ul class="nav navbar-nav">{% block footer %} {% endblock %}</ul>
         </div>
+        <div id="main-wrapper" class="col-md-10 pull-right">
+            <div id="main">
+                <div class="page-header">
+                    {% block masthead %} {% endblock %}
+                </div>
 
+                <div>
+                    {% block body %} {% endblock %}
+                </div>
+             </div>
+
+            <div class="col-md-12 footer">
+                <ul class="nav navbar-nav">{% block footer %} {% endblock %}</ul>
+            </div>
+        </div>
     </div>
 </div>
 
     <script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
     <script src="http://code.jquery.com/jquery-migrate-1.2.1.min.js"></script>
     <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
-    <script src="http://assets.s3.clarinova.com/js/toc.min.js"></script>
-    <script>
-    $('#toc').toc();
-    $('#toc ul').addClass('nav nav-stacked')
-
-    $('#sidebar').affix({
-          offset: {
-            top: $('header').height()
-          }
-    });
-
-    </script>
+    {% include 'tocjs.html' -%}
 </body>
 </html>

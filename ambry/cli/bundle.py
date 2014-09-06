@@ -117,14 +117,16 @@ def bundle_command(args, rc):
     try:
         for phase in phases:
             getf(phase)(args, b, st, rc)
+
     except DependencyError as e:
         if b:
             st.set_bundle_state(b.identity, 'error:dependency')
         fatal("{}: Phase {} failed: {}", b.identity.name, phase, e.message)
     except Exception as e:
+
         l.close()
         if b:
-            err("{}: Phase {} failed: {}", b.identity.name, phase, e.message)
+            err("{}: Phase {} failed: {}", b.identity.name, phase, e)
             b.close()
             st.set_bundle_state(b.identity, 'error:'+phase)
         raise
@@ -175,10 +177,14 @@ def bundle_parser(cmd):
     sp.set_defaults(subsubcommand='incver')
 
     # Config/Incver Command
+    sp = asp.add_parser('newnum', help='Get a new dataset number')
+    sp.set_defaults(subsubcommand='newnum')
+    sp.add_argument('-k', '--key', default=False, help="Set the number server key, or 'self' for self assignment ")
+
+    # Config/Incver Command
     sp = asp.add_parser('s3urls', help='Add all of the URLS below an S3 prefix as sources. ')
     sp.set_defaults(subsubcommand='s3urls')
     sp.add_argument('term', type=str, nargs=1, help='S3url with buckets and prefix')
-
 
     # Info command
     command_p = sub_cmd.add_parser('info', help='Print information about the bundle')
@@ -469,8 +475,10 @@ def bundle_config(args, b, st, rc):
             b.update_configuration()
     elif args.subsubcommand == 'dump':
         print b.config.dump()
+
     elif args.subsubcommand == 'schema':
         print b.schema.as_markdown()
+
     elif args.subsubcommand == 'incver':
         from ..identity import Identity
         identity = b.identity
@@ -498,8 +506,44 @@ def bundle_config(args, b, st, rc):
     elif args.subsubcommand == 's3urls':
         return bundle_config_s3urls(args, b, st, rc)
 
+    elif args.subsubcommand == 'newnum':
+
+        from ..identity import NumberServer
+        from requests.exceptions import HTTPError
+        from ..identity import DatasetNumber, Identity
+
+        nsconfig = rc.group('numbers')
+
+        if args.key:
+            nsconfig['key'] = args.key
+
+        ns = NumberServer(**nsconfig)
+
+        d = b.identity.dict
+
+        if args.key in ('rand', 'self'):
+            d['id'] = str(DatasetNumber())
+
+        else:
+            try:
+                d['id'] = str(ns.next())
+                prt("Got number from number server: {}".format(d['id']))
+            except HTTPError as e:
+                warn("Failed to get number from number server. Config = {}: {}".format(nsconfig, e.message))
+                warn(
+                    "Using self-generated number. There is no problem with this, but they are longer than centrally generated numbers.")
+                d['id'] = str(DatasetNumber())
+
+        ident = Identity.from_dict(d)
+
+        b.metadata.identity = ident.ident_dict
+        b.metadata.names = ident.names_dict
+        b.metadata.write_to_dir(write_all=True)
+
+        prt("New object number: {}".format(ident.id_))
+
     else:
-        err("Unknown args: {}".format(args))
+        err("Unknown subsubcommand for 'config' subcommand: {}".format(args))
 
 def bundle_config_s3urls(args, b, st, rc):
     from ..cache import new_cache, parse_cache_string

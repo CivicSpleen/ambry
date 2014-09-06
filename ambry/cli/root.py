@@ -310,7 +310,7 @@ def root_doc(args, l, st, rc):
     from ambry.cache import new_cache
     import webbrowser
     from ..identity import LocationRef
-    from ambry.text import BundleDoc, PartitionDoc, Renderer
+    from ambry.text import BundleDoc, Renderer
 
 
     try:
@@ -322,36 +322,24 @@ def root_doc(args, l, st, rc):
         fatal("Failed to find record for: {}", args.term)
         return
 
-    b = l.get(ident.vid)
+
+    b = l.get(ident.partition.vid if ident.partition else ident.vid)
 
     if not b:
         fatal("Failed to get bundle for: {}", args.term)
         return
 
 
-    cache_config = rc.filesystem('documentation')
-
-    cache = new_cache(cache_config)
-
-    root_dir = cache.path('', missing_ok = True)
-
     if b.partition:
-        ck = b.partition.identity + '.html'
-        doc = BundleDoc(root_dir).render(p=p)
+
+        raise NotImplementedError()
+        path = None
+        #ck = b.partition.identity + '.html'
+        #doc = BundleDoc(root_dir).render(p=p)
 
     else:
-        ck = b.identity.path + '.html'
-        doc = BundleDoc(root_dir).render(w=None, b=b)
+        path = b.write_doc(l.doc_cache, library = l)
 
-    if not cache.path(ck) or args.force:
-        with cache.put_stream(ck,{'Content-Type':'text/html'}) as s:
-            s.write(doc)
-
-    if not cache.path('css/style.css') or args.force:
-        with cache.put_stream('css/style.css', {'Content-Type': 'text/css'}) as s:
-            s.write(Renderer(root_dir).css)
-
-    path = cache.path(ck)
 
     prt("Opening file: {} ".format(path))
 

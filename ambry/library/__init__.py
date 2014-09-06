@@ -127,6 +127,7 @@ class Library(object):
                  name=None, remotes=None,
                  source_dir = None,
                  require_upload=False,
+                 doc_cache = None,
                  host=None, port=None, urlhost = None):
         '''Libraries are constructed on the root cache name for the library.
         If the cache does not exist, it will be created.
@@ -144,6 +145,7 @@ class Library(object):
 
         self.name = name
         self.cache = cache
+        self._doc_cache = doc_cache
         self.source_dir = source_dir
 
         self._database = database
@@ -167,6 +169,8 @@ class Library(object):
         self.needs_update = False
 
         self.bundles = weakref.WeakValueDictionary()
+
+
 
 
     def clone(self):
@@ -226,6 +230,7 @@ class Library(object):
                 self.put_partition(bundle, partition, commit = commit)
 
 
+        ## Install the documentation
 
         return self.cache.path(ident.cache_key), installed
 
@@ -249,6 +254,21 @@ class Library(object):
         self.database.remove_bundle(bundle)
 
         self.cache.remove(bundle.identity.cache_key, propagate=True)
+
+    @property
+    def doc_cache(self):
+        """Return the cache for documentation"""
+
+        if self._doc_cache is None:
+            doc_cache = self.cache.clone()
+            doc_cache.prefix = '_doc'
+
+            return doc_cache
+
+        else:
+            return self._doc_cache
+
+
 
 
     ##

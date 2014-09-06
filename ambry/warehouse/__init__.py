@@ -506,6 +506,7 @@ class WarehouseInterface(object):
 
             if rel_path.endswith('.html'):
                 metadata['content-type']  = 'text/html'
+
             elif rel_path.endswith('.css'):
                 metadata['content-type'] = 'text/css'
 

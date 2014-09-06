@@ -44,6 +44,7 @@ names:
     name: example.com-random
     vid: dHSyDm4MNR002
     vname: example.com-random-0.0.2
+process: {}
 versions:
     1:
         description: null

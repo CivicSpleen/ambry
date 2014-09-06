@@ -238,6 +238,23 @@ class PartitionBase(PartitionInterface):
     def tables(self):
         return set(self.data.get('tables', []) + [self.table.name] )
 
+    @property
+    def orm_tables(self):
+        return [ self.get_table(t) for t in self.tables  ]
+
+    def get_table(self, table_spec=None):
+        """Return the orm table for this partition, or None if
+        no table is specified.
+        """
+
+        if not table_spec:
+            table_spec = self.identity.table
+
+            if table_spec is None:
+                return None
+
+        return self.bundle.schema.table(table_spec)
+
     # Call other values on the record
     def __getattr__(self, name):
 
@@ -254,18 +271,7 @@ class PartitionBase(PartitionInterface):
             raise AttributeError(
                 'Partition does not have attribute {}, and not in record {} '.format(name, type(self._record)))
 
-    def get_table(self, table_spec=None):
-        """Return the orm table for this partition, or None if
-        no table is specified.
-        """
 
-        if not table_spec:
-            table_spec = self.identity.table
-
-            if table_spec is None:
-                return None
-
-        return self.bundle.schema.table(table_spec)
 
     def unset_database(self):
         """Removes the database record from the object"""
