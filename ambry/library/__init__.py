@@ -268,8 +268,34 @@ class Library(object):
         else:
             return self._doc_cache
 
+    def write_doc_toc(self, cache=None):
+
+        from ambry.text import Renderer, BundleDoc, Tables, LibraryIndex, maybe_render
+        from os.path import join
+        from functools import partial
+
+        if cache is None:
+            cache = self.doc_cache
+
+        root = cache.path('', missing_ok=True)
+
+        extracts = []
+
+        mr = partial(maybe_render, extracts, cache)
 
 
+        mr('css/style.css', lambda: Renderer(root).css)
+
+        self.logger.info('Rendering index')
+        mr('index.html', lambda: LibraryIndex(root, library=self).render())
+
+        self.logger.info('Rendering bundles')
+        mr('bundles.html', lambda: LibraryIndex(root, library = self).bundles())
+
+        self.logger.info('Rendering tables')
+        mr('tables.html', lambda: LibraryIndex(root, library = self).tables())
+
+        return cache.path('bundles.html', missing_ok=True), extracts
 
     ##
     ## Retreiving
@@ -288,6 +314,59 @@ class Library(object):
         self.database.list(datasets=datasets, with_partitions = with_partitions)
 
         return datasets
+
+    def list_bundles(self, last_version_only = True, key = None):
+        """Like list(), but returns bundles instead of a dict with identities. key is a parameter to sorted(self.list())"""
+
+        if last_version_only:
+
+            # Unlike other properties, name is an object, not a string, so
+            # it won't compare properly unless you cast it.
+            if key is None:
+                key = lambda ident: str(ident.name)
+
+            def rev_cmp(a,b):
+
+                ka = key(a)
+                kb = key(b)
+
+                if ka == kb:
+                    return - cmp(a.on.revision, b.on.revision)
+                else:
+                    return cmp(ka, kb)
+
+            current = None
+
+            for ident in sorted(self.list().values(), cmp = rev_cmp ):
+
+                if not current or ident.id_ != current.identity.id_:
+
+                    if current:
+                        yield current
+                        current.close()
+
+
+                    current = self.get(ident.vid)
+                    current.identity.data['other_versions'] = set()
+
+                else:
+
+                    current.identity.data['other_versions'].add(ident)
+
+
+            yield current
+            current.close()
+
+        else:
+
+            if key is None:
+                key = lambda ident: ident.vname
+
+            for ident in sorted(self.list().values(), key = key ):
+                b =  self.get(ident.vid)
+                yield b
+                b.close()
+
 
     def path(self, rel_path):
         """Return the cache path for a cache key"""

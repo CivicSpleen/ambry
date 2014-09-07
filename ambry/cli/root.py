@@ -338,7 +338,7 @@ def root_doc(args, l, st, rc):
         #doc = BundleDoc(root_dir).render(p=p)
 
     else:
-        path = b.write_doc(l.doc_cache, library = l)
+        path, extracts = b.write_doc(l.doc_cache, library = l)
 
 
     prt("Opening file: {} ".format(path))

@@ -1,6 +1,6 @@
 body {
     padding-top: 50px;
-   
+
 }
 #wrapper {
     min-height: 100%;
@@ -70,4 +70,12 @@ body {
   	position:fixed;
     padding:10px;
 }
+
+.bundle_toc .toc_summary {
+
+}
+.bundle_toc .toc_title {
+
+}
+
 

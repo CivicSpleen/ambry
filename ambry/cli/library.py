@@ -3,7 +3,8 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..cli import prt, fatal, warn, _print_info #@UnresolvedImport
+from ..cli import prt, fatal, warn, err, _print_info #@UnresolvedImport
+
 import os
 from ambry.util import Progressor
 
@@ -102,6 +103,10 @@ def library_parser(cmd):
     group.add_argument('-y', '--yaml',  default='csv', dest='format',  action='store_const', const='yaml')
     group.add_argument('-j', '--json',  default='csv', dest='format',  action='store_const', const='json')
     group.add_argument('-c', '--csv',  default='csv', dest='format',  action='store_const', const='csv')
+
+    sp = asp.add_parser('doc', help='Generate documentation')
+    sp.set_defaults(subcommand='doc')
+
 
 def library_command(args, rc):
     from  ..library import new_library
@@ -469,6 +474,29 @@ def library_sync(args, l, config):
     if (args.source or all) and l.source:
         l.logger.info("==== Sync Source")
         l.sync_source(clean=args.clean)
+
+
+def library_doc(args, l, config):
+
+    cache = l.doc_cache
+
+    for ident in l.list().values():
+
+        b = l.get(ident.vid)
+
+        if not b:
+            continue
+
+        try:
+            pass
+            #path, extracts = b.write_doc(l.doc_cache, library=l)
+            #prt("Wrote {}",path)
+        except:
+            err("Failed to write doc for: {}", ident.fqname)
+
+    path, extracts = l.write_doc_toc()
+
+    print path
 
     
 def library_unknown(args, l, config):

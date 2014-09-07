@@ -359,7 +359,7 @@ class Bundle(object):
     def write_doc(self, cache, library = None, w = None, force=False):
         """ Write the bundle documentation into the documentation store """
 
-        from ambry.text import Renderer, BundleDoc, Tables
+        from ambry.text import Renderer, BundleDoc, Tables, maybe_render
         from os.path import join
         from functools import partial
 
@@ -369,45 +369,25 @@ class Bundle(object):
 
         jbp = partial(join, self.identity.path)
 
-        def maybe_render(rel_path, render_lambda, metadata={}, force=False):
+        mr = partial(maybe_render, extracts, cache)
 
-            if rel_path.endswith('.html'):
-                metadata['content-type'] = 'text/html'
+        mr('css/style.css', lambda: Renderer(root).css)
 
-            elif rel_path.endswith('.css'):
-                metadata['content-type'] = 'text/css'
+        try:
+            mr(jbp('index.html'), lambda: BundleDoc(root).render(w=w, b=self))
 
-            if not cache.has(rel_path) or force:
-                with cache.put_stream(rel_path, metadata=metadata) as s:
-                    t = render_lambda()
-                    if t:
-                        s.write(t.encode('utf-8'))
-                extracted = True
-            else:
+            for t in self.schema.tables:
+                mr(jbp(t.vid) + '.html', lambda: Tables(root).render_table(self,t), force=force )
 
-                extracted = False
+            return cache.path(jbp('index.html')), extracts
+        except:
+            self.error("Doc write failed, deleting generated files")
 
-            class extract_entry(object):
-                def __init__(self, extracted, rel_path, abs_path, data=None):
-                    self.extracted = extracted
-                    self.rel_path = rel_path
-                    self.abs_path = abs_path
-                    self.data = data
+            for e in extracts:
+                if e.completed == False and os.path.exists(e.abs_path):
+                    os.remove(e.abs_path)
 
-                def __str__(self):
-                    return 'extracted={} rel={} abs={} data={}'.format(self.extracted, self.rel_path, self.abs_path,
-                                                                       self.data)
-
-            extracts.append( extract_entry(extracted, rel_path, cache.path(rel_path)) )
-
-        maybe_render('css/style.css', lambda: Renderer(root).css)
-
-        maybe_render(jbp('index.html'), lambda: BundleDoc(root).render(w=w, b=self))
-
-        for t in self.schema.tables:
-            maybe_render(jbp(t.vid) + '.html', lambda: Tables(root).render_table(self,t), force=force )
-
-        return cache.path(jbp('index.html'))
+            raise
 
 
 class DbBundleBase(Bundle):
