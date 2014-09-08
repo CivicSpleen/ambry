@@ -11,36 +11,47 @@
 {% block body %}
 
 <div class="container">
-    <div class="row">
-        <div class="col-md-10">
-            <h2>Bundles</h2>
-            <table class="table table-hover" >
-                {% for b in l.list_bundles() -%}
-                    <tr class="bundle_toc">
-                        <td class="toc_vid"><a href="{{b.identity.path}}/index.html">{{b.identity.vid}}</a></td>
-                        <td class="toc_source">{{b.identity.source}}</td>
-                        <td class="toc_dataset">{{b.identity.dataset}}</td>
-                        <td class="toc_name">{{b.identity.name}}</td>
-                        <td class="toc_version">
-                            <ul  class="list-inline">
-                                <li><a href="{{b.identity.path}}/index.html">{{b.identity.version}}</a></li>
-                                {% if b.identity.data.other_versions -%}
-                                {% for v in b.identity.data.other_versions -%}
-                                <li><a href="{{v.path}}/index.html">{{v.version}}</a></li>
-                                {% endfor %}
-                                {% endif -%}
-                            </ul>
-                        </td>
 
-                        <td class="toc_title" data-toggle="tooltip" data-placement="left"
-                            title="{{(b.metadata.about.summary or '')|truncate(length=600)}}">
-                            {{b.metadata.about.title or ''}}</td>
-                        </td>
-                    </tr>
-                {% endfor %}
-            </table>
-        </div>
+    {% if w -%}
+    <div>
+        <h2>Collections</h2>
+        <ul>
+        {% for f, m in w.manifests -%}
+          <li><a href="{{m.uid}}.html">{{m.title}} ({{m.access}})</a></li>
+        {% endfor %}
+        </ul>
     </div>
+    {% endif %}
+    <div>
+        <h2>Bundles</h2>
+        <table class="table table-hover" >
+            {% for b in l.list_bundles() -%}
+                <tr class="bundle_toc">
+                    <td class="toc_vid"><a href="{{b.identity.path}}/index.html">{{b.identity.vid}}</a></td>
+                    <td class="toc_source">{{b.identity.source}}</td>
+                    <td class="toc_dataset">{{b.identity.dataset}}</td>
+                    <td class="toc_name">{{b.identity.name}}</td>
+                    <td class="toc_version">
+                        <ul  class="list-inline">
+                            <li><a href="{{b.identity.path}}/index.html">{{b.identity.version}}</a></li>
+                            {% if b.identity.data.other_versions -%}
+                            {% for v in b.identity.data.other_versions -%}
+                            <li><a href="{{v.path}}/index.html">{{v.version}}</a></li>
+                            {% endfor %}
+                            {% endif -%}
+                        </ul>
+                    </td>
+
+                    <td class="toc_title" data-toggle="tooltip" data-placement="left"
+                        title="{{(b.metadata.about.summary or '')|truncate(length=600)}}">
+                        {{b.metadata.about.title or ''}}</td>
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+
 </div>
 
 

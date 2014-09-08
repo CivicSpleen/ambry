@@ -385,6 +385,7 @@ class Resolver(object):
         ip, refs = self._resolve_ref(ref)
 
         if location:
+
             refs = OrderedDict( [ (k,v) for k, v in refs.items() if v.locations.has(location) ] )
 
         if not isinstance(ip.version, semantic_version.Spec):

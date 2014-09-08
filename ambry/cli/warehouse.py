@@ -87,7 +87,7 @@ def warehouse_parser(cmd):
 
     # For extract, when called from install
     group = whsp.add_mutually_exclusive_group()
-    group.add_argument('-l', '--local', dest='dest',  action='store_const', const='local', default='local')
+    group.add_argument('-l', '--local', dest='dest',  action='store_const', const='local')
     group.add_argument('-r', '--remote', dest='dest', action='store_const', const='remote')
     group.add_argument('-c', '--cache' )
     whsp.add_argument('-D', '--dir', default = '', help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
@@ -111,6 +111,17 @@ def warehouse_parser(cmd):
     whsp.set_defaults(subcommand='config')
     whsp.add_argument('-v', '--var', help="Name of the variable. One of'local','remote','title','about' ")
     whsp.add_argument('term', type=str, nargs = '?', help='Value of the variable')
+
+    whsp = whp.add_parser('doc', help='Build documentation')
+    whsp.set_defaults(subcommand='doc')
+    group = whsp.add_mutually_exclusive_group()
+    group.add_argument('-l', '--local', dest='dest',  action='store_const', const='local', default='local')
+    group.add_argument('-r', '--remote', dest='dest', action='store_const', const='remote')
+    group.add_argument('-c', '--cache' )
+    whsp.add_argument('-D', '--dir', default='',
+                      help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
+    whsp.add_argument('-F', '--force', default=False, action='store_true',
+                      help='Force re-creation of files that already exist')
 
     whsp = whp.add_parser('remove', help='Remove a bundle or partition from a warehouse')
     whsp.set_defaults(subcommand='remove')
@@ -228,31 +239,33 @@ def warehouse_install(args, w ,config):
         print w.database.dsn
 
     if args.dest or args.cache:
+
         warehouse_extract(args, w, config)
 
-
-def warehouse_extract(args, w, rc):
-    from ambry.cache import new_cache, parse_cache_string
+def get_cache(w, args, rc):
     from ..dbexceptions import ConfigurationError
+    from ambry.cache import new_cache, parse_cache_string
     import os.path
-
-    if callable(w):
-        w = w()
 
     if args.cache:
         c_string = args.cache
 
     elif args.dest == 'local':
+
         c_string = w.local_cache
+
+        if not c_string:
+            raise ConfigurationError(
+                "For extracts, must set an extract location, either in the manifest or the warehouse")
 
         # Join will return c_string if c_string is an absolute path
         c_string = os.path.join(rc.filesystem('warehouse')['dir'], c_string)
 
 
-    elif args.dest == 'remote' :
+    elif args.dest == 'remote':
         c_string = w.remote_cache
 
-    config =  parse_cache_string(c_string, root_dir=args.dir)
+    config = parse_cache_string(c_string, root_dir=args.dir)
 
     if not config:
         raise ConfigurationError("Failed to parse cache spec: '{}'".format(c_string))
@@ -263,8 +276,16 @@ def warehouse_extract(args, w, rc):
     if config['type'] == 'file' and not os.path.exists(config['dir']):
         os.makedirs(config['dir'])
 
+    cache = new_cache(config, run_config=rc)
 
-    cache = new_cache(config, run_config = rc)
+    return cache
+
+def warehouse_extract(args, w, config):
+
+    if callable(w):
+        w = w()
+
+    cache = get_cache(w, args, config)
 
     w.logger.info("Extracting to: {}".format(cache))
 
@@ -275,18 +296,56 @@ def warehouse_extract(args, w, rc):
 
     print cache.path('index.html', missing_ok=True, public_url = True)
 
+def warehouse_doc(args, w, config):
+    from ..dbexceptions import NotFoundError
+    from ..text import write_all_bundle_doc, write_doc_toc, write_all_manifest_doc
+    import os.path
+
+    if callable(w):
+        w = w()
+
+    cache = get_cache(w, args, config)
+
+    cache.prefix = os.path.join(cache.prefix, 'doc')
+
+    w.logger.info("Extracting to: {}".format(cache))
+
+    l = w.library
+
+    for ident in l.list().values():
+
+        try:
+            b = l.get(ident.vid)
+            if not b:
+                continue
+
+        except NotFoundError:
+            b = None
+            print "Not Found", ident.vid
+
+    write_all_bundle_doc( cache, library=l, w=w, force=args.force)
+
+    write_all_manifest_doc(cache, library=l, warehouse=w, force=False)
+
+    path, extracts = write_doc_toc(l, warehouse=w, cache = cache)
+
+    for e in extracts:
+        print e.abs_path
+
+    print path
+
+
 def warehouse_config(args, w, config):
     from ..dbexceptions import ConfigurationError
+
     if callable(w):
         w = w()
 
     if not args.var in w.configurable:
         raise ConfigurationError("Value {} is not configurable. Must be one of: {}".format(args.var, w.configurable))
 
-    print args
-
     if args.term:
         setattr(w, args.var, args.term)
-    else:
-        print getattr(w, args.var)
+
+    print getattr(w, args.var)
 

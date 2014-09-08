@@ -338,7 +338,7 @@ class Manifest(object):
         for line_no in sorted(sections.keys()):
             section = sections[line_no]
 
-            if section.tag == 'doc' and previous_section.tag in ['title', 'view','mview','extract']:
+            if previous_section and section.tag == 'doc' and previous_section.tag in ['title', 'view','mview','extract']:
                 section.content['ref'] = previous_section.name
                 previous_section.doc = section.content
 
@@ -433,7 +433,7 @@ class Manifest(object):
 
     def add_bundles(self, library):
         """Add bundle information when a Library is available"""
-
+        from ..bundle import LibraryDbBundle
         for line, partitions in self.tagged_sections('partitions'):
 
             for partition in partitions.content['partitions']:
@@ -447,7 +447,7 @@ class Manifest(object):
                 if not ident.partition:
                     raise ParseError("Partition reference not resolved to a partition: '{}' ".format(partition['partition']))
 
-                b = library.get(ident.vid)
+                b = LibraryDbBundle(library.database, ident.vid)
 
                 partition['bundle'] = ident
                 partition['metadata'] = b.metadata

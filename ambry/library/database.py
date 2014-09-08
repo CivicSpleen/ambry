@@ -431,6 +431,30 @@ class LibraryDb(object):
         except:
             return None
 
+    def get_config_rows(self, d_vid):
+        """Return configuration in a form that can be used to reconstitute a Metadataobject """
+        from ambry.orm import Config as SAConfig
+        from sqlalchemy import or_
+
+        rows = []
+
+        for r in self.session.query(SAConfig).filter(or_(SAConfig.group == 'config', SAConfig.group == 'process'),
+                                                     SAConfig.d_vid == d_vid).all():
+
+            parts = r.key.split('.', 3)
+
+            if r.group == 'process':
+                parts = ['process'] + parts
+
+            cr = ( (parts[0] if len(parts) > 0 else None,
+                    parts[1] if len(parts) > 1 else None,
+                    parts[2] if len(parts) > 2 else None
+                   ), r.value)
+
+            rows.append(cr)
+
+        return rows
+
     def get_bundle_value(self, dvid, group, key):
 
         from ambry.orm import Config as SAConfig
@@ -568,8 +592,10 @@ class LibraryDb(object):
         except NotFoundError:
             dvid = None
 
-        if dvid:
-            raise ConflictError("Bundle {} already installed".format(bundle.identity.fqname))
+        # This was taken out because it prevents library bundles from being installed when the
+        # dataset already exists because the source bundle was installed.
+        #if dvid:
+        #   raise ConflictError("Bundle {} already installed".format(bundle.identity.fqname))
 
         try:
             dataset = self.install_dataset(bundle)

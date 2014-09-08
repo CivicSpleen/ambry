@@ -27,9 +27,6 @@ def build_readme(bundle):
     """
     pass
 
-
-
-
 def build_documentation(bundle):
     """Create the HTML version of the documentation"""
     pass

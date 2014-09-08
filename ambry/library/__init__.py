@@ -268,39 +268,9 @@ class Library(object):
         else:
             return self._doc_cache
 
-    def write_doc_toc(self, cache=None):
-
-        from ambry.text import Renderer, BundleDoc, Tables, LibraryIndex, maybe_render
-        from os.path import join
-        from functools import partial
-
-        if cache is None:
-            cache = self.doc_cache
-
-        root = cache.path('', missing_ok=True)
-
-        extracts = []
-
-        mr = partial(maybe_render, extracts, cache)
-
-
-        mr('css/style.css', lambda: Renderer(root).css)
-
-        self.logger.info('Rendering index')
-        mr('index.html', lambda: LibraryIndex(root, library=self).render())
-
-        self.logger.info('Rendering bundles')
-        mr('bundles.html', lambda: LibraryIndex(root, library = self).bundles())
-
-        self.logger.info('Rendering tables')
-        mr('tables.html', lambda: LibraryIndex(root, library = self).tables())
-
-        return cache.path('bundles.html', missing_ok=True), extracts
-
     ##
     ## Retreiving
     ##
-
 
     def list(self, datasets=None, with_partitions = False):
         '''Lists all of the datasets in the partition, optionally with
@@ -317,6 +287,8 @@ class Library(object):
 
     def list_bundles(self, last_version_only = True, key = None):
         """Like list(), but returns bundles instead of a dict with identities. key is a parameter to sorted(self.list())"""
+        from ..dbexceptions import NotFoundError
+        from ..bundle import LibraryDbBundle
 
         if last_version_only:
 
@@ -345,17 +317,24 @@ class Library(object):
                         yield current
                         current.close()
 
+                    try:
 
-                    current = self.get(ident.vid)
-                    current.identity.data['other_versions'] = set()
+                        current = LibraryDbBundle(self.database, ident.vid)
 
+                        current.identity.data['other_versions'] = set()
+                    except NotFoundError:
+
+                        # This happens frequently in warehosues, where only one version of the
+                        # dataset is installed.
+                        pass
                 else:
 
                     current.identity.data['other_versions'].add(ident)
 
 
-            yield current
-            current.close()
+            if current:
+                yield current
+                current.close()
 
         else:
 
@@ -411,7 +390,7 @@ class Library(object):
         return bundle
 
 
-    def get(self, ref, force=False, cb=None):
+    def get(self, ref, force=False, cb=None, location = 'default'):
         '''Get a bundle, given an id string or a name '''
         from sqlite3 import DatabaseError
         from sqlalchemy.exc import OperationalError, IntegrityError
@@ -424,7 +403,7 @@ class Library(object):
         # Get a reference to the dataset, partition and relative path
         # from the local database.
 
-        dataset = self.resolve(ref)
+        dataset = self.resolve(ref, location=location)
 
         if not dataset:
             raise NotFoundError("Failed to resolve reference '{}'".format(ref))
@@ -491,7 +470,7 @@ class Library(object):
 
         # If the location is not explicitly defined, set it to everything but source
         if location is 'default':
-            location = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.REMOTE ]
+            location = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.PARTITION, LocationRef.LOCATION.REMOTE ]
 
         if isinstance(ref, Identity):
             ref = ref.vid
@@ -784,8 +763,8 @@ class Library(object):
                     extant_bundle = self.files.query.type(Files.TYPE.BUNDLE).path(path_).one_maybe
                     extant_partition = self.files.query.type(Files.TYPE.PARTITION).path(path_).one_maybe
 
-                    if (extant_bundle or extant_partition):
-                        continue
+                    #if (extant_bundle or extant_partition):
+                    #    continue
 
                     b = None
                     try:

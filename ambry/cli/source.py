@@ -584,6 +584,7 @@ def source_deps(args, l, st, rc):
     """Produce a list of dependencies for all of the source bundles"""
     from ..dbexceptions import NotFoundError
     from ..orm import Dataset
+    from ..identity import LocationRef
 
     if args.fields:
         fields = args.fields.split(',')
@@ -591,6 +592,32 @@ def source_deps(args, l, st, rc):
         fields = ['locations', 'vid', 'vname','order']
 
     term = args.terms[0] if args.terms else None
+
+
+    from collections import defaultdict
+    deps = defaultdict(set)
+    for e in st.list():
+        b = st.resolve_bundle(e)
+        for d in b.metadata.dependencies.values():
+
+            db = l.resolve(d, location = None)
+
+            if db:
+                deps[b.identity.vid].add(db.vid)
+            else:
+                print "F", d
+
+        b.close()
+
+    for k, d in deps.items():
+        kr = l.resolve(k, location = None)
+        print kr
+        for e in d:
+            er = l.resolve(e, location=None)
+            print '   ', er
+
+
+    return
 
 
     try:
@@ -607,6 +634,10 @@ def source_deps(args, l, st, rc):
         print "----"
 
     identities = []
+
+
+
+    return
 
     for i, level in enumerate(graph):
         for j, name in enumerate(level):

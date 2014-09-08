@@ -35,6 +35,14 @@ class NullLogger(object):
         pass
 
 
+class WLibrary(Library):
+    """Extends the Library class to remove the Location parameter on identity resolution"""
+
+    def resolve(self, ref, location=None):
+
+        return super(WLibrary, self).resolve(ref, location=location)
+
+
 def new_warehouse(config, elibrary, logger=None):
 
     assert elibrary is not None
@@ -53,7 +61,7 @@ def new_warehouse(config, elibrary, logger=None):
     library_database = LibraryDb(**config['library']) if 'library' in config else  LibraryDb(**db_config)
 
     # This library instance is only for the warehouse database.
-    wlibrary = Library(
+    wlibrary = WLibrary(
         cache=NullCache(),
         database=library_database
     )
@@ -182,7 +190,13 @@ class WarehouseInterface(object):
     @property
     def local_cache(self):
         """Cache name for local publications. Usually a filesystem path"""
-        return self._meta_get('local_cache')
+        lc =  self._meta_get('local_cache')
+
+        if not lc and os.path.exists(self.database.path):
+            lc = os.path.dirname(self.database.path)
+
+        return lc
+
 
     @local_cache.setter
     def local_cache(self, v):
@@ -355,10 +369,10 @@ class WarehouseInterface(object):
         if (reset or not self.about) and manifest.summary:
             self.about = manifest.summary['html']
 
-        if reset or not self.local_cache:
+        if (reset or not self.local_cache) and manifest.local:
             self.local_cache = manifest.local
 
-        if reset or not self.remote_cache:
+        if (reset or not self.remote_cache) and manifest.remote:
             self.remote_cache = manifest.remote
 
         ## First pass
@@ -502,25 +516,6 @@ class WarehouseInterface(object):
         # Get the URL to the root. The public_utl arg only affects S3, and gives a URL without a signature.
         root = cache.path('', missing_ok = True, public_url = True)
 
-        def maybe_render(rel_path, render_lambda, metadata = {}, force=False):
-
-            if rel_path.endswith('.html'):
-                metadata['content-type']  = 'text/html'
-
-            elif rel_path.endswith('.css'):
-                metadata['content-type'] = 'text/css'
-
-            if not cache.has(rel_path) or force:
-                with cache.put_stream(rel_path, metadata=metadata) as s:
-                    s.write(render_lambda().encode('utf-8'))
-                extracted = True
-            else:
-
-                extracted = False
-
-            return WarehouseInterface.extract_entry(extracted, rel_path, cache.path(rel_path))
-
-
         extracts = []
 
         # Generate the file etracts
@@ -533,44 +528,6 @@ class WarehouseInterface(object):
             ex = new_extractor(format, self, cache, force=force)
 
             extracts.append(WarehouseInterface.extract_entry(*ex.extract(table, cache, f.path)))
-
-        # HTML files.
-        for f in self.library.files.query.type('text/html').all:
-            extracts.append(maybe_render(f.path, lambda: f.content))
-
-        # Manifests
-        for f, m in self.manifests:
-            from ..text import ManifestDoc
-
-            extracts.append(maybe_render('doc/{}.html'.format(m.uid), lambda: ManifestDoc(root).render(m, self.elibrary), force=force))
-
-            extracts.append(maybe_render(f.path, lambda: f.content, force=force))
-
-        # Bundles
-        l = self.elibrary
-        for k,b_ident in self.bundles.items():
-            b = l.get(b_ident.vid)
-
-            if not b:
-                from ..dbexceptions import NotFoundError
-                raise NotFoundError("No bundle in library {} for  '{}' ".format(l.database.dsn, b_ident.vid))
-
-            renderer = BundleDoc(root)
-            extracts.append(maybe_render('doc/{}.html'.format(b_ident.vid), lambda: renderer.render(self,b), force=force))
-
-        # Partitions
-
-        # Tables
-        for t in self.tables:
-            renderer = Tables(root)
-            extracts.append(maybe_render('doc/{}.html'.format(t.vid), lambda: renderer.render_table(self, t), force=force ))
-
-
-        extracts.append(maybe_render('index.html', lambda: WarehouseIndex(root).render(self), force=force))
-
-        extracts.append(maybe_render('css/style.css', lambda: Renderer(root).css, force=force))
-
-        extracts.append(maybe_render('toc.html', lambda: WarehouseIndex(root).render_toc(self, extracts), force=force))
 
 
         return extracts

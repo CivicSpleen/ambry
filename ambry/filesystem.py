@@ -62,7 +62,7 @@ class FileRef(File):
        
     def update(self):
         self.modified = os.path.getmtime(self.abs_path)
-        self.content_hash = Filesystem.file_hash(self.abs_path)
+        self.hash = Filesystem.file_hash(self.abs_path)
         self.bundle.database.session.commit()
 
 class Filesystem(object):
@@ -629,7 +629,7 @@ class BundleFilesystem(Filesystem):
            
             a_path = self.filesystem.path(rel_path)
             o = File(path=rel_path,
-                     content_hash=Filesystem.file_hash(a_path),
+                      hash=Filesystem.file_hash(a_path),
                      modified=os.path.getmtime(a_path),
                      process='none'
                      )

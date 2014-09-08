@@ -36,6 +36,8 @@ class MultiCache(CacheInterface):
 
     def first_has(self, rel_path, md5=None):
 
+        assert self.upstreams # Why have multi if there are no upstreams?
+
         for upstream in self.upstreams:
             h = upstream.has(rel_path, md5=md5)
             if h:

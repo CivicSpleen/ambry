@@ -1100,7 +1100,7 @@ class File(Base, SavableMixin):
         self.ref = kwargs.get("ref",None)
         self.hash = kwargs.get("hash", None)
         self.type_ = kwargs.get("type",kwargs.get("type_",None))
-        self.content_hash = kwargs.get("content_hash",None) 
+
         self.data = kwargs.get('data',None)
         self.priority = kwargs.get('priority', 0)
         self.content = kwargs.get('content', None)
@@ -1113,7 +1113,7 @@ class File(Base, SavableMixin):
 
         return  dict((col, getattr(self, col)) for col 
                      in ['oid','path', 'ref',  'type_',  'source_url', 'process', 'state',
-                         'content_hash','hash', 'modified', 'size', 'group', 'data', 'priority'])
+                         'hash', 'modified', 'size', 'group', 'data', 'priority'])
 
     @property
     def insertable_dict(self):

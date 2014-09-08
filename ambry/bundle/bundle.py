@@ -356,40 +356,6 @@ class Bundle(object):
 
         return "<table>\n" + "\n".join(out) + "\n</table>"
 
-    def write_doc(self, cache, library = None, w = None, force=False):
-        """ Write the bundle documentation into the documentation store """
-
-        from ambry.text import Renderer, BundleDoc, Tables, maybe_render
-        from os.path import join
-        from functools import partial
-
-        root = cache.path('', missing_ok=True)
-
-        extracts = []
-
-        jbp = partial(join, self.identity.path)
-
-        mr = partial(maybe_render, extracts, cache)
-
-        mr('css/style.css', lambda: Renderer(root).css)
-
-        try:
-            mr(jbp('index.html'), lambda: BundleDoc(root).render(w=w, b=self))
-
-            for t in self.schema.tables:
-                mr(jbp(t.vid) + '.html', lambda: Tables(root).render_table(self,t), force=force )
-
-            return cache.path(jbp('index.html')), extracts
-        except:
-            self.error("Doc write failed, deleting generated files")
-
-            for e in extracts:
-                if e.completed == False and os.path.exists(e.abs_path):
-                    os.remove(e.abs_path)
-
-            raise
-
-
 class DbBundleBase(Bundle):
     """Base class for DbBundle and LibraryDbBundle. A better design would for one to derive fro the other; this is
     temporary solution"""

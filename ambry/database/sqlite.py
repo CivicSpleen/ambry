@@ -704,6 +704,8 @@ def _on_connect_update_sqlite_schema(conn, con_record):
             except:
                 pass
 
+
+
     if version < SqliteDatabase.SCHEMA_VERSION:
         conn.execute('PRAGMA user_version = {}'.format(SqliteDatabase.SCHEMA_VERSION))
 

@@ -312,7 +312,6 @@ def root_doc(args, l, st, rc):
     from ..identity import LocationRef
     from ambry.text import BundleDoc, Renderer
 
-
     try:
         ident = l.resolve(args.term)
     except ValueError:
