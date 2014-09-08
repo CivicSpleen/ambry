@@ -290,6 +290,11 @@ class RunConfig(object):
         fs = self.group('filesystem')
         root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
 
+        if not 'source' in e:
+            e['source'] = fs.get('source',None)
+
+
+
         e =  self._sub_strings(e, {
                                      'filesystem': lambda k,v: self.filesystem(v),
                                      'database': lambda k,v: self.database(v),

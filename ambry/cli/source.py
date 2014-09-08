@@ -2,10 +2,7 @@
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 
-
-
 """
-
 
 
 from ..cli import prt, fatal, warn, _find, _print_find, _print_bundle_entry
@@ -76,16 +73,20 @@ def source_parser(cmd):
     sp.set_defaults(subcommand='list')
     sp.add_argument('-F', '--fields', type=str, help="Specify fields to use")
 
+
+    sp = asp.add_parser('buildable', help='List source bundles that can be built')
+    sp.set_defaults(subcommand='buildable')
+    sp.add_argument('-F', '--fields', type=str, help="Specify fields to use")
+
     sp = asp.add_parser('build', help='Build sources')
     sp.set_defaults(subcommand='build')
 
-    sp.add_argument('-f','--force', default=False,action="store_true", help='Build even if built or in library')
-    sp.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
-    sp.add_argument('-i','--install', default=False,action="store_true", help='Install after build')
-    sp.add_argument('-n','--dryrun', default=False,action="store_true", help='Only display what would be built')
+    sp.add_argument('-f', '--force', default=False, action="store_true", help='Build even if built or in library')
+    sp.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
+    sp.add_argument('-i', '--install', default=False, action="store_true", help='Install after build')
+    sp.add_argument('-n', '--dryrun', default=False, action="store_true", help='Only display what would be built')
 
-    sp.add_argument('dir', type=str,nargs='?',help='Directory to start search for sources in. ')      
- 
+    sp.add_argument('dir', type=str, nargs='?', help='Directory to start search for sources in. ')
 
     sp = asp.add_parser('edit', help='Run the editor defined in the EDITOR env var on the bundle directory')
     sp.set_defaults(subcommand='edit')
@@ -125,7 +126,6 @@ def source_info(args, l, st, rc):
         for line in sys.stdin.readlines():
             args.terms = [line.strip()]
             source_info(args,st,rc)
-
 
     else:
         import ambry.library as library
@@ -579,7 +579,6 @@ def source_init(args, l, st, rc):
 
     st.sync_bundle(dir_)
 
-
 def source_deps(args, l, st, rc):
     """Produce a list of dependencies for all of the source bundles"""
     from ..dbexceptions import NotFoundError
@@ -592,7 +591,6 @@ def source_deps(args, l, st, rc):
         fields = ['locations', 'vid', 'vname','order']
 
     term = args.terms[0] if args.terms else None
-
 
     from collections import defaultdict
     deps = defaultdict(set)
@@ -684,6 +682,34 @@ def source_edit(args, l, st, rc):
     Popen(['env',editor,root])
 
 
+def source_buildable(args, l, st, rc):
+    from ambry.dbexceptions import DependencyError
 
+    if args.fields:
+        fields = args.fields.split(',')
+    else:
+        fields = ['locations', 'vid', 'vname']
 
+    s_lst = st.list()
 
+    buildable = []
+
+    for vid, v in s_lst.items():
+
+        try:
+            bundle = st.resolve_bundle(vid)
+            bundle.library.check_dependencies()
+
+            if not bundle.is_built and not bundle.is_installed:
+                buildable.append(v)
+
+        except DependencyError:
+            pass
+        finally:
+            bundle.close()
+
+    if not buildable:
+        import sys
+        sys.exit(1)
+
+    _print_bundle_list(buildable,  fields=fields, sort=False)

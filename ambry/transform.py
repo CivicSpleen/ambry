@@ -6,6 +6,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 import textwrap
 
+class CasterError(Exception):
+    pass
+
 class CastingError(TypeError):
     def __init__(self, field_name, value, message, *args, **kwargs):
 
@@ -524,7 +527,7 @@ def {}(row):
             return self._call_dict(f,row, codify_cast_errors)
 
         elif isinstance(row, (list,tuple)):
-            raise Exception("Casters are not implemented for lists and tuples, use zip() to create a dict: dict(zip(headers,row))")
+            raise CasterError("Casters are not implemented for lists and tuples, use zip() to create a dict: dict(zip(headers,row))")
             return f[0](row) 
           
         elif isinstance(row, RowProxy):

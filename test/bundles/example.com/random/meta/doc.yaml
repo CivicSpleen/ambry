@@ -11,7 +11,7 @@ documentation:
         \ [Syntax][] page for details pertaining to\nMarkdown's formatting syntax.\
         \ You can try it out, right now, using the\nonline [Dingus][].\n\n  [syntax]:\
         \ /projects/markdown/syntax\n  [dingus]: /projects/markdown/dingus\n"
-    readme: '# Bundle title
+    readme: '# Random Data
 
 
-        None'
+        This is a simple file of random data.'

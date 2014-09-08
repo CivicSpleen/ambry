@@ -1,3 +1,3 @@
-# Bundle title
+# Random Data
 
-None
+This is a simple file of random data.

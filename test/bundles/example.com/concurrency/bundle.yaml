@@ -5,7 +5,8 @@ about:
     license: other-open
     rights: null
     subject: null
-    summary: This bundle can run in multiprocessor mode, building many partitions simultaneously. 
+    summary: This bundle can run in multiprocessor mode, building many partitions
+        simultaneously.
     tags:
     - tag1
     - tag2
@@ -20,6 +21,10 @@ contact_bundle:
         name: Eric Busboom
         url: http://sandiegodata.org
 contact_source:
+    creator:
+        email: null
+        name: null
+        url: null
     maintainer:
         email: eric@sandiegodata.org
         name: Eric Busboom
@@ -46,6 +51,7 @@ names:
     name: example.com-concurrency
     vid: d000001E001
     vname: example.com-concurrency-0.0.1
+process: {}
 versions:
     1:
         description: null

@@ -576,24 +576,16 @@ class Library(object):
         out = {}
         for k, v in deps.items():
 
-            try:
-                ident = self.resolve(v)
-                if not ident:
-                    self.bundle.error("Failed to resolve {} ".format(v))
-                    errors += 1
-                    continue
+            ident = self.resolve(v)
+            if not ident:
+                raise DependencyError("Failed to resolve {} ".format(v))
 
-                if ident.partition:
-                    out[k] = ident.partition
-                else:
-                    out[k] = ident
-            except Exception as e:
-                self.bundle.error(
-                    "Failed to parse dependency name '{}' for '{}': {}".format(v, self.bundle.identity.name, e.message))
-                errors += 1
+            if ident.partition:
+                out[k] = ident.partition
+            else:
+                out[k] = ident
 
-        if errors > 0:
-            raise DependencyError("Failed to find one or more dependencies")
+
 
         return out
 
@@ -602,7 +594,7 @@ class Library(object):
 
         errors = {}
         for k, v in self.dependencies.items():
-            self.logger.info('Download and check dependency: {}'.format(v))
+            self.logger.debug('Download and check dependency: {}'.format(v))
             b = self.get(v, cb=Progressor().progress)
 
             if not b:

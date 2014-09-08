@@ -22,15 +22,17 @@ def bundle_command(args, rc):
     from ..library import new_library
     from . import global_logger
     from ..orm import Dataset
+    from ..identity import  LocationRef
 
     l = new_library(rc.library(args.library_name))
     l.logger = global_logger
 
     if not args.bundle_dir:
         bundle_file = os.path.join(os.getcwd(),'bundle.py')
+
     else:
         st = l.source
-        ident = l.resolve(args.bundle_dir)
+        ident = l.resolve(args.bundle_dir, location = LocationRef.LOCATION.SOURCE)
 
         if ident:
 
@@ -224,7 +226,7 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='build')
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     command_p.add_argument('-f', '--force', default=False, action="store_true", help='Force build. ( --clean is usually preferred ) ')
-    
+    command_p.add_argument('-i', '--install', default=False, action="store_true", help='Install after building')
     command_p.add_argument('-o','--opt', action='append', help='Set options for the build phase')
     
     #
@@ -393,8 +395,12 @@ def bundle_prepare(args, b, st, rc):
 
 
 def bundle_build(args, b, st, rc):
-    return b.do_build()
+    r =  b.do_build()
 
+    if args.install:
+        bundle_install(args, b, st, rc)
+
+    return r
 
 def bundle_install(args, b, st, rc):
 

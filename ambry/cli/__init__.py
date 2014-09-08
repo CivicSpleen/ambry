@@ -22,8 +22,8 @@ global_run_config = None
 global_logger = None # Set in main()
 
 def prt(template, *args, **kwargs):
-    global global_logger
-    global_logger.info(template.format(*args, **kwargs))
+    #global global_logger
+    print(template.format(*args, **kwargs))
 
 def err(template, *args, **kwargs):
     import sys
@@ -35,7 +35,6 @@ def err(template, *args, **kwargs):
 def fatal(template, *args, **kwargs):
     import sys
     global global_logger
-
 
     global_logger.critical(template.format(*args, **kwargs))
     sys.exit(1)
@@ -443,6 +442,7 @@ def main(argsv = None, ext_logger=None):
     else:
         name = "{}.{}".format(args.command, args.subcommand)
         global_logger = get_logger(name, template="%(levelname)s: %(message)s")
+
 
     global_logger.setLevel(logging.INFO)
 

@@ -1335,6 +1335,14 @@ class BuildBundle(Bundle):
 
         return bool(v)
 
+    @property
+    def is_installed(self):
+        """Return True if the bundle is installed"""
+
+        r = self.library.resolve(self.identity.vid)
+
+        return r is not None
+
     def build_main(self):
         """This is the methods that is actually called in do_build; it dispatches to
         developer created prepare() methods"""
