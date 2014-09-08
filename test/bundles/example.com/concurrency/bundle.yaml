@@ -5,29 +5,31 @@ about:
     license: other-open
     rights: null
     subject: null
-    summary: !include 'meta/about.description.md'
+    summary: This bundle can run in multiprocessor mode, building many partitions simultaneously. 
     tags:
     - tag1
     - tag2
-    title: Bundle title
+    title: A Test of Concurency
 contact_bundle:
     creator:
         email: eric@sandiegodata.org
         name: Eric Busboom
-        url: null
+        url: http://sandiegodata.org
     maintainer:
         email: eric@sandiegodata.org
         name: Eric Busboom
-        url: null
+        url: http://sandiegodata.org
 contact_source:
-    creator:
-        email: null
-        name: null
-        url: https://civicknowledge.org
     maintainer:
-        email: null
-        name: null
-        url: null
+        email: eric@sandiegodata.org
+        name: Eric Busboom
+        url: http://sandiegodata.org
+external_documentation:
+    main:
+        description: The Main Website for the example
+        source: source
+        title: Main Website
+        url: http://example.com
 identity:
     bspace: null
     btime: null

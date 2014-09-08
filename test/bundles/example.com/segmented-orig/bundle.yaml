@@ -4,28 +4,27 @@ about:
     license: other-open
     rights: null
     subject: null
-    summary: !include 'meta/about.description.md'
+    summary: A bundle with four segments
     tags:
     - example
-    title: Simple Example Bundle
+    title: A Segmented Bundle
 contact_bundle:
     creator:
-        email: null
-        name: Examplearium
-        url: null
-    maintainer:
-        email: null
-        name: Examplearium
-        url: null
+        email: bob@bob.com
+        name: Bob Bobson
+        url: http://example.com
+
 contact_source:
     creator:
-        email: null
-        name: example
-        url: https://clarinova.com
-    maintainer:
-        email: null
-        name: null
-        url: null
+        email: bob@bob.com
+        name: Bob Bobson
+        url: http://example.com
+external_documentation:
+    main:
+        description: The Main Website for the example
+        source: source
+        title: Main Website
+        url: http://example.com
 identity:
     bspace: null
     btime: null

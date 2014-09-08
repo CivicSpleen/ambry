@@ -298,7 +298,7 @@ def warehouse_extract(args, w, config):
 
 def warehouse_doc(args, w, config):
     from ..dbexceptions import NotFoundError
-    from ..text import write_all_bundle_doc, write_doc_toc, write_all_manifest_doc
+    from ..text import Renderer
     import os.path
 
     if callable(w):
@@ -310,27 +310,10 @@ def warehouse_doc(args, w, config):
 
     w.logger.info("Extracting to: {}".format(cache))
 
-    l = w.library
+    r = Renderer(cache, warehouse = w)
 
-    for ident in l.list().values():
+    path, extracts = r.write_library_doc()
 
-        try:
-            b = l.get(ident.vid)
-            if not b:
-                continue
-
-        except NotFoundError:
-            b = None
-            print "Not Found", ident.vid
-
-    write_all_bundle_doc( cache, library=l, w=w, force=args.force)
-
-    write_all_manifest_doc(cache, library=l, warehouse=w, force=False)
-
-    path, extracts = write_doc_toc(l, warehouse=w, cache = cache)
-
-    for e in extracts:
-        print e.abs_path
 
     print path
 

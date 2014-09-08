@@ -231,13 +231,14 @@ class WarehouseInterface(object):
         """Metadata for bundles, each with the partitions that are installed here.
 
         This extracts the bundle information that is in the partitions list, but it requires
-        that the add_bundle() method has been run first, because the manifest doesn't usually ahve access to
+        that the add_bundle() method has been run first, because the manifest doesn't usually have access to
         a library
         """
 
         l =  self.library.list(with_partitions=True)
 
         for k, v in l.items():
+
             d = { e.key.replace('.','_'):e.value for e in self.library.database.get_bundle_values(k,'config')}
             v.data.update(d)
 

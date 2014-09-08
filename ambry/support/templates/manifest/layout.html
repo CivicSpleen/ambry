@@ -12,7 +12,6 @@
 {% block body %}
 <div class="ambry-manifest">
     <div>
-        <h2>Partitions</h2>
         {% for line, section in m.tagged_sections('partitions') -%}
         {% include 'manifest/'+section.tag+'.html'  ignore missing -%}
         {% endfor %}
