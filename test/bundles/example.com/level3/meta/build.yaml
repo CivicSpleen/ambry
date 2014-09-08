@@ -1,0 +1,6 @@
+build: {}
+dependencies:
+    combined: example.com-combined-example
+    random: example.com-random-example1
+    simple: example.com-simple-orig-example
+extract: {}

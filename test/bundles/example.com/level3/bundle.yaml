@@ -1,0 +1,53 @@
+about:
+    groups: []
+    license: null
+    rights: null
+    subject: null
+    summary: null
+    tags: []
+    title: null
+contact_bundle:
+    creator:
+        email: eric@sandiegodata.org
+        name: Eric Busboom
+        url: http://www.sandiegodata.org
+    maintainer:
+        email: eric@sandiegodata.org
+        name: Eric Busboom
+        url: http://www.sandiegodata.org
+contact_source:
+    creator:
+        email: null
+        name: null
+        url: null
+    maintainer:
+        email: null
+        name: null
+        url: null
+external_documentation:
+    example:
+        description: description
+        source: source
+        title: title
+        url: http://example.com
+identity:
+    bspace: null
+    btime: null
+    dataset: level3
+    id: daqWdKwyyB
+    revision: 1
+    source: example.com
+    subset: null
+    type: null
+    variation: null
+    version: 0.0.1
+names:
+    fqname: example.com-level3-0.0.1~daqWdKwyyB001
+    name: example.com-level3
+    vid: daqWdKwyyB001
+    vname: example.com-level3-0.0.1
+process: {}
+versions:
+    1:
+        description: null
+        version: 0.0.1
