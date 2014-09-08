@@ -3,9 +3,9 @@ about:
     license: null
     rights: null
     subject: null
-    summary: null
+    summary: This bundle depends on a bundle that has dependencies. 
     tags: []
-    title: null
+    title: A Third Level Bundle
 contact_bundle:
     creator:
         email: eric@sandiegodata.org
@@ -17,18 +17,18 @@ contact_bundle:
         url: http://www.sandiegodata.org
 contact_source:
     creator:
-        email: null
-        name: null
-        url: null
+        email: eric@sandiegodata.org
+        name: Eric Busboom
+        url: http://www.sandiegodata.org
     maintainer:
-        email: null
-        name: null
-        url: null
+        email: eric@sandiegodata.org
+        name: Eric Busboom
+        url: http://www.sandiegodata.org
 external_documentation:
-    example:
-        description: description
+    main:
+        description: The Main Website for the example
         source: source
-        title: title
+        title: Main Website
         url: http://example.com
 identity:
     bspace: null
