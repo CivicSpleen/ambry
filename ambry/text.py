@@ -201,9 +201,10 @@ class Renderer(object):
         self.logger.info('Rendering bundles index')
         self.maybe_render('bundles.html', lambda: self.bundles_index())
 
-        self.logger.info('Rendering manifests')
-        for f, m in self.warehouse.manifests:
-            self.maybe_render(m.uid + ".html", lambda: self.manifest(m))
+        if self.warehouse:
+            self.logger.info('Rendering manifests')
+            for f, m in self.warehouse.manifests:
+                self.maybe_render(m.uid + ".html", lambda: self.manifest(m))
 
         #self.logger.info('Rendering tables')
         #self.maybe_render('tables.html', lambda: self.tables())

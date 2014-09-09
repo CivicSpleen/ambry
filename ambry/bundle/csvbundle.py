@@ -20,20 +20,23 @@ class CsvBundle(BuildBundle):
         """Generate rows for a source file. The source value ust be specified in the sources config"""
         import csv
 
+        print dir(csv)
+
         fn = self.get_source(source)
 
         with open(fn) as f:
-            reader = csv.reader(f)
+
+            r = csv.reader(f)
 
             header =  self.source_header(source)
 
             if as_dict:
-                for row in reader:
+                for row in r:
                     yield dict(zip(header, [None] + row))
             else:
                 # It might seem inefficient to return the header every time, but it really adds only a
                 # fraction of a section for millions of rows.
-                for row in reader:
+                for row in r:
                      yield header, [None] + row
 
     def source_header(self, source):
@@ -42,9 +45,9 @@ class CsvBundle(BuildBundle):
         fn = self.get_source(source)
 
         with open(fn) as f:
-            reader = csv.reader(f)
+            r = csv.reader(f)
 
-            return ['id'] + reader.next()
+            return ['id'] + r.next()
 
 
     def meta_gen_schema(self, source):

@@ -481,8 +481,13 @@ def get_shapefile_geometry_types(shape_file):
         checked = 0
         for i in range(0,layer.GetFeatureCount(),skip):
             feature = layer.GetFeature(i)
-            types.add(type_map[ogr.GeometryTypeToName(feature.geometry().GetGeometryType())])
-            checked += 1
+            geometry = feature.geometry()
+            if geometry:
+                types.add(type_map[ogr.GeometryTypeToName(geometry.GetGeometryType())])
+                checked += 1
+            else:
+                # This happens rarely, seems to be a problem with the source shapefiles.
+                pass
 
         if len(types) == 1:
             type_ = list(types).pop()

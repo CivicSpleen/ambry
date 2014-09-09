@@ -393,27 +393,21 @@ class LibraryDb(object):
         '''Set a configuration value in the database'''
         from ambry.orm import Config as SAConfig
         from sqlalchemy.exc import IntegrityError, ProgrammingError
+        from sqlalchemy.orm.exc import NoResultFound
 
         s = self.session
 
-        s.query(SAConfig).filter(SAConfig.group == group,
-                                 SAConfig.key == key,
-                                 SAConfig.d_vid == ROOT_CONFIG_NAME_V).delete()
-
-
         try:
-            o = SAConfig(group=group,key=key,d_vid=ROOT_CONFIG_NAME_V,value = value)
-            s.add(o)
-            self.commit()
-        except IntegrityError:
-            self.rollback()
             o = s.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
                                  SAConfig.d_vid == ROOT_CONFIG_NAME_V).one()
 
-            o.value = value
-            s.merge(o)
-            self.commit()
+        except NoResultFound:
+            o = SAConfig(group=group, key=key, d_vid=ROOT_CONFIG_NAME_V, value=value)
+
+        o.value = value
+        s.merge(o)
+        self.commit()
 
     def get_config_value(self, group, key):
 
@@ -972,9 +966,13 @@ class LibraryDb(object):
                 datasets[ck] = d.identity
                 datasets[ck].summary = self.get_bundle_value(d.vid, 'config','about.title')
 
+            # Adding the file to the identity gets us the bundle state and modification time.
             if f:
                 if not p:
+
                     datasets[ck].add_file(f)
+                    datasets[ck].bundle_state = f.state if (f.state and not datasets[ck].bundle_state) else datasets[ck].bundle_state
+
                 else:
                     p.identity.add_file(f)
 

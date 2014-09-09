@@ -398,8 +398,8 @@ class Manifest(object):
         path = section.args.strip()
 
         if not self.path:
-            raise ParseError("Manifest doesn't have a path, so can't resolve INCLUDE")
-
+            self.logger.warn("Manifest doesn't have a path, so can't resolve INCLUDE")
+            return
 
         if self.path.startswith('http'):
             raise NotImplementedError
@@ -424,7 +424,6 @@ class Manifest(object):
                 partitions.append(d)
 
             except ParseError as e:
-                raise
                 raise ParseError("Failed to parse in section at line #{}: {}".format(start_line+i, e))
 
         self.partitions = partitions

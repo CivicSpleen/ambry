@@ -476,7 +476,7 @@ def library_sync(args, l, config):
         l.sync_source(clean=args.clean)
 
 
-def library_doc(args, l, config):
+def x_library_doc(args, l, config):
 
     cache = l.doc_cache
 
@@ -498,7 +498,20 @@ def library_doc(args, l, config):
 
     print path
 
-    
+
+def library_doc(args, l, config):
+        from ..text import Renderer
+
+        cache = l.doc_cache
+
+        l.logger.info("Extracting to: {}".format(cache))
+
+        r = Renderer(cache, library=l)
+
+        path, extracts = r.write_library_doc()
+
+        print path
+
 def library_unknown(args, l, config):
     fatal("Unknown subcommand")
     fatal(args)

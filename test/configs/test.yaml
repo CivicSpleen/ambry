@@ -1,0 +1,34 @@
+
+database:
+    default:
+        dbname: '{root}/library.db'
+        driver: sqlite
+    data_builder:
+        dbname: gala
+        driver: postgres
+        password: data-builder
+        server: warehouse2
+        username: data-builder
+
+filesystem:
+    root: '/tmp/ambry-clitest'
+    default: '{root}/library'
+    downloads: '{root}/cache/downloads'
+    extracts: '{root}/cache/extracts'
+    python: '{root}/cache/python'
+    analysis: '{root}/source/analysis'
+    build: '{root}/build'
+    source: /Users/eric/proj/ambry/test/bundles/example.com
+    warehouse: '{root}/warehouse'
+
+library:
+    default:
+        database: data_builder
+        filesystem: default
+        remotes:
+            - '{root}/remote'
+
+numbers:
+    host: numbers.ambry.io
+    key: fe78d179-8e61-4cc5-ba7b-263d8d3602b9
+    port: 80

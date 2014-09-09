@@ -59,7 +59,11 @@ def create_warehouse(rc, logger, library, manifest=None):
         w = new_warehouse(config, library, logger=logger)
 
         if not w.exists():
-            w.create()
+            try:
+                w.create()
+            except:
+                w.logger.error("Failed to create warehouse at: {}".format(w.database.dsn))
+                raise
 
         return w
 
@@ -297,7 +301,7 @@ def warehouse_extract(args, w, config):
     print cache.path('index.html', missing_ok=True, public_url = True)
 
 def warehouse_doc(args, w, config):
-    from ..dbexceptions import NotFoundError
+
     from ..text import Renderer
     import os.path
 

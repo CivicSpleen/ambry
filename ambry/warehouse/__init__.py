@@ -221,7 +221,7 @@ class WarehouseInterface(object):
 
         for f in self.library.files.query.type(self.FILE_TYPE.MANIFEST).group(self.FILE_GROUP.MANIFEST).all:
             index = self.library.files.query.type(self.FILE_TYPE.HTML).group(self.FILE_GROUP.MANIFEST).first
-            manifests.append((f, Manifest(f.content)))
+            manifests.append((f, Manifest(f.content, logger=self.logger)))
 
         return manifests
 
@@ -355,7 +355,6 @@ class WarehouseInterface(object):
         from datetime import datetime
         import os
 
-
         # Delete everything related to this manifest
         (self.library.files.query.source_url(manifest.uid)).delete()
 
@@ -432,7 +431,7 @@ class WarehouseInterface(object):
 
         # Manifest data
 
-        self.install_file(path=os.path.join('manifests', manifest.uid)+'.ambry', ref=manifest.uid,
+        self.install_file(path=manifest.path, ref=manifest.uid,
                           type=self.FILE_TYPE.MANIFEST, group=self.FILE_GROUP.MANIFEST, source_url = manifest.uid,
                           content=str(manifest))
 
@@ -512,7 +511,6 @@ class WarehouseInterface(object):
         from contextlib import closing
 
         from .extractors import new_extractor
-        from ..text import Tables, BundleDoc, Renderer, WarehouseIndex
 
         # Get the URL to the root. The public_utl arg only affects S3, and gives a URL without a signature.
         root = cache.path('', missing_ok = True, public_url = True)

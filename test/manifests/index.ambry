@@ -4,8 +4,11 @@ This is the example warehouse. The first doc section after the title is the summ
 
 UID: 04572b2e-0a96-4d87-bc13-bd82c3b785a3
 AUTHOR: Eric Busboom <eric@sandiegodata.org>
+
+DATABASE: sqlite:manifest_test.db
 LOCAL: test_manifests
 REMOTE:  s3://warehouse.sandiegodata.org/test/test_manifests#compress
 
 INCLUDE: crime.ambry
 INCLUDE: education.ambry
+INCLUDE: health.ambry

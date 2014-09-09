@@ -261,6 +261,9 @@ class Library(object):
 
         if self._doc_cache is None:
             doc_cache = self.cache.clone()
+
+            assert doc_cache
+
             doc_cache.prefix = '_doc'
 
             return doc_cache
