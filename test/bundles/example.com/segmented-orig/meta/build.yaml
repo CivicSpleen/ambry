@@ -1,46 +1,4 @@
-build:
-    dependencies: {}
+build: {}
 dependencies: {}
 extract: {}
-extracts:
-    csv:
-        description: CSV Format
-        name: example.csv
-        partition: example.com-simple-orig-429e.example
-    documentation:
-        description: Dataset documentation
-        file: meta/about.documentation.md
-        name: documentation.html
-        title: Documentation
-    double_split_csv:
-        description: CSV Format, split by int value from {int_min} to {int_max} and
-            float from {float_min} to {float_max}
-        each:
-        -   -   int_max: 33
-                int_min: 0
-            -   int_max: 66
-                int_min: 33
-        -   -   float_max: 50
-                float_min: 0
-            -   float_max: 100
-                float_min: 50
-        extract_where: int BETWEEN {int_min} AND {int_max} AND float BETWEEN {float_min}
-            AND {float_max}
-        name: example-{int_min}-{int_max}-{float_min}-{float_max}.csv
-        partition: example.com-simple-orig-429e.example
-    schema:
-        description: The schema for all tables, as a CSV file.
-        file: meta/schema.csv
-        name: schema.csv
-    split_csv:
-        description: CSV Format, split by int value, from {min} to {max}
-        each:
-        -   max: 33
-            min: 0
-        -   max: 66
-            min: 33
-        -   max: 100
-            min: 66
-        extract_where: int BETWEEN {min} AND {max}
-        name: example-{min}-{max}.csv
-        partition: example.com-simple-orig-429e.example
+

@@ -121,6 +121,7 @@ def _on_connect_geo(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
     from ..util import RedirectStdStreams
     from sqlite import _on_connect_bundle as ocb
+    from ..dbexceptions import DatabaseError
 
     ocb(dbapi_con, con_record)
 
@@ -144,11 +145,19 @@ def _on_connect_geo(dbapi_con, con_record):
             raise
 
 
-    try:
-        with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it.
-            dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so')")
-    except:
-        with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it.
-            dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so.3')")
+    # This is so wrong, but I don't know what's right.
+    # ( My code has become a Country song. )
 
+    libs = [
+        "select load_extension('/usr/lib/libspatialite.so')",
+        "select load_extension('/usr/lib/libspatialite.so.3')",
+        "select load_extension('/usr/lib/x86_64-linux-gnu/libspatialite.so.5')",
+    ]
+
+    for l in libs:
+        with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it.
+            dbapi_con.execute(l)
+        return
+
+    raise DatabaseError("Could not load the spatialite extension. Tried: {}".format(libs))
 
