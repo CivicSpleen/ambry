@@ -122,6 +122,7 @@ def _on_connect_geo(dbapi_con, con_record):
     from ..util import RedirectStdStreams
     from sqlite import _on_connect_bundle as ocb
     from ..dbexceptions import DatabaseError
+    from pysqlite2.dbapi2 import OperationalError
 
     ocb(dbapi_con, con_record)
 
@@ -155,9 +156,12 @@ def _on_connect_geo(dbapi_con, con_record):
     ]
 
     for l in libs:
-        with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it.
-            dbapi_con.execute(l)
-        return
+        try:
+            with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it.
+                dbapi_con.execute(l)
+            return
+        except OperationalError:
+            continue
 
     raise DatabaseError("Could not load the spatialite extension. Tried: {}".format(libs))
 

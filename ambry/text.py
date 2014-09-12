@@ -21,8 +21,10 @@ class extract_entry(object):
 
 class Renderer(object):
 
+
+
     def __init__(self, cache, library = None, warehouse = None):
-        import ambry.support.templates as tdir
+
         from jinja2 import Environment, PackageLoader
 
         self.warehouse = warehouse
@@ -35,19 +37,14 @@ class Renderer(object):
             self.logger = self.library.logger
 
         self.cache = cache
-        self.css_path = os.path.join(os.path.dirname(tdir.__file__), 'css','style.css')
+
+        self.css_files = ['css/style.css', 'css/pygments.css' ]
+
         self.env = Environment(loader=PackageLoader('ambry.support', 'templates'))
 
-        self.root_path =  cache.path('', missing_ok=True)
+        self.root_path =  cache.path('', missing_ok=True).rstrip("/")
 
         self.extracts = []
-
-
-
-    @property
-    def css(self):
-        with open(self.css_path) as f:
-            return f.read()
 
 
     def maybe_render(self, rel_path, render_lambda, metadata={}, force=False):
@@ -182,14 +179,47 @@ class Renderer(object):
 
         m.add_bundles(self.library)
 
-        return template.render(root_path=self.root_path, m=m)
+        tables = {}
+
+        if m.partitions:
+            for k, b in m.bundles.items():
+                tables.update(dict( [ (t, self.library.table(t)) for p in b['partitions'] for t in p['table_vids'] ]))
+
+        table_dicts = {}
+
+        for k,t in tables.items():
+
+            d = t.dict
+            d['description'] = t.description
+            d['bundle'] = t.dataset.dict
+
+            b = self.warehouse.elibrary.get(t.dataset.vid)
+            d['bundle']['metadata'] = b.metadata
+            d['bundle']['path'] = b.identity.path
+
+            table_dicts[k] = d
+
+
+
+        #for line, section in m.tagged_sections(['view', 'mview']):
+        #    print section.content['html']
+
+
+        return template.render(root_path=self.root_path, m=m, tables = table_dicts.values() )
 
     def write_library_doc(self):
         """Create the table of contents document with links to all of the bundles and tables """
+        import ambry.support.templates as tdir
 
         root = self.cache.path('', missing_ok=True)
 
-        self.maybe_render('css/style.css', lambda: self.css)
+        for css_fn in self.css_files:
+            source = os.path.join(os.path.dirname(tdir.__file__),css_fn)
+            def _css():
+                with open(source) as f:
+                    return f.read()
+
+            self.maybe_render(css_fn, lambda: _css())
 
         self.logger.info('Rendering index')
         self.maybe_render('index.html', lambda: self.index())

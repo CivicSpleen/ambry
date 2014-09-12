@@ -23,7 +23,7 @@ filesystem:
 
 library:
     default:
-        database: data_builder
+        database: default
         filesystem: default
         remotes:
             - '{root}/remote'

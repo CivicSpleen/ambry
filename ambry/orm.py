@@ -309,8 +309,8 @@ class Dataset(Base):
                 'id':self.id_, 
                 'vid':self.vid,
                 'name':self.name,
-                'vname':self.fqname, 
-                'fqname':self.vname,
+                'vname':self.vname,
+                'fqname':self.fqname,
                 'cache_key':self.cache_key,
                 'source':self.source,
                 'dataset':self.dataset, 
@@ -546,7 +546,6 @@ class Column(Base):
 
         return x
 
-
     @staticmethod
     def mangle_name(name):
         import re
@@ -635,7 +634,7 @@ class Table(Base):
         self.id_ = str(ton.rev(None))
 
         if self.name:
-            self.name = self.mangle_name(self.name)
+            self.name = self.mangle_name(self.name, kwargs.get('preserve_case', False))
 
         self.init_on_load()
 
@@ -737,10 +736,15 @@ Columns:
             target.id_ = str(TableNumber(dataset_id, target.sequence_id))
 
     @staticmethod
-    def mangle_name(name):
+    def mangle_name(name, preserve_case = False):
         import re
         try:
-            return re.sub('[^\w_]','_',name.strip()).lower()
+            r =  re.sub('[^\w_]','_',name.strip())
+
+            if not preserve_case:
+                r = r.lower()
+
+            return r
         except TypeError:
             raise TypeError('Not a valid type for name '+str(type(name)))
 
@@ -1037,10 +1041,7 @@ event.listen(Table, 'before_insert', Table.before_insert)
 event.listen(Table, 'before_update', Table.before_update)
 
 class Config(Base):
-    
-    ROOT_CONFIG_NAME = 'a0'
-    ROOT_CONFIG_NAME_V = 'a0/001'
-    
+
     __tablename__ = 'config'
 
     d_vid = SAColumn('co_d_vid',String(16), primary_key=True)

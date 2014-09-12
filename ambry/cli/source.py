@@ -701,6 +701,7 @@ def source_buildable(args, l, st, rc):
             bundle.library.check_dependencies()
 
             if not bundle.is_built and not bundle.is_installed:
+
                 buildable.append(v)
 
         except DependencyError:

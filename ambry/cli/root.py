@@ -109,6 +109,10 @@ def root_list(args, l, st, rc):
     else:
         fields = ['locations',  'vid',  'vname']
 
+        if args.source:
+            fields += ['status']
+
+
     locations = filter(bool, [args.library, args.remote, args.source])
 
     key = lambda ident : ident.vname
@@ -162,12 +166,14 @@ def root_info(args, l, st, rc):
     try:
         b = l.get(ident.vid)
 
+
+
         if not ident.partition:
             for p in b.partitions.all:
                 ident.add_partition(p.identity)
 
     except NotFoundError:
-
+        fatal("Could not get bundle file for '{}'".format(ident.path))
         pass
 
 

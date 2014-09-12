@@ -136,7 +136,7 @@ class PostgresWarehouse(RelationalWarehouse):
 
     def install_view(self, view_text):
 
-        return
+        raise NotImplementedError()
 
         e = self.database.connection.execute
 

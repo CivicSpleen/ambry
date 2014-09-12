@@ -397,6 +397,10 @@ def bundle_prepare(args, b, st, rc):
 def bundle_build(args, b, st, rc):
     r =  b.do_build()
 
+    # Closing is generally important. In this case, if the bundle isn't closed, and the bundle is installed below,
+    # the config table won't have metadata. No idea why.
+    b.close()
+
     if args.install:
         bundle_install(args, b, st, rc)
 

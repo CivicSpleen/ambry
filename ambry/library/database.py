@@ -618,6 +618,10 @@ class LibraryDb(object):
             s.execute(Table.__table__.insert(), tables)
             s.execute(Column.__table__.insert(), columns)
 
+        for config in bundle.database.session.query(Config).all():
+
+            s.merge(config)
+
         if commit:
             try:
                 self.commit()

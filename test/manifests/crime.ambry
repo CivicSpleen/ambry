@@ -9,3 +9,32 @@ PARTITIONS:
 example.com-random-example1-0.0.2
 example.com-segmented-orig-example-1
 
+VIEW: doubled_int
+
+SELECT
+    *,
+    2*`int` as doubled
+FROM dHSyDm4MNR_example1
+
+DOC:
+
+The `doubled_int` view just doubles the int.
+
+MVIEW: quadrupled
+
+SELECT
+    *,
+    2*doubled as quadrupled
+FROM doubled_int
+
+DOC:
+
+The `quadrupled` column of this table is twice the doubled int value.
+
+VIEW: combined
+
+SELECT
+    quadrupled.*,
+    ex.uuid as ex_uuid
+FROM quadrupled
+LEFT JOIN d00G001_example as ex on ex.id = quadrupled.id

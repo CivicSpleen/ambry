@@ -88,6 +88,7 @@ def warehouse_parser(cmd):
                       help='Reset all of the values, like title and about, that come from the manifest'),
     whsp.add_argument('-F', '--force', default=False, action='store_true',
                       help='Force re-creation of files that already exist')
+    whsp.add_argument('-K', '--doc', default=False, action='store_true', help='Also generate documentation')
 
     # For extract, when called from install
     group = whsp.add_mutually_exclusive_group()
@@ -154,9 +155,13 @@ def warehouse_parser(cmd):
     group.add_argument('-a', '--add' )
     group.add_argument('-d', '--delete')
        
-    whsp = whp.add_parser('list', help='List the datasets inthe warehouse')
+    whsp = whp.add_parser('list', help='List the datasets in the warehouse')
     whsp.set_defaults(subcommand='list')   
     whsp.add_argument('term', type=str, nargs='?', help='Name of bundle, to list partitions')
+
+    whsp = whp.add_parser('test', help='Run a test')
+    whsp.set_defaults(subcommand='test')
+    whsp.add_argument('term', type=str, nargs='?', help='A test argument')
 
 def warehouse_info(args, w,config):
     
@@ -243,13 +248,17 @@ def warehouse_install(args, w ,config):
         print w.database.dsn
 
     if args.dest or args.cache:
-
         warehouse_extract(args, w, config)
+
+    if args.doc:
+        warehouse_doc(args, w, config)
 
 def get_cache(w, args, rc):
     from ..dbexceptions import ConfigurationError
     from ambry.cache import new_cache, parse_cache_string
     import os.path
+
+
 
     if args.cache:
         c_string = args.cache
@@ -263,7 +272,9 @@ def get_cache(w, args, rc):
                 "For extracts, must set an extract location, either in the manifest or the warehouse")
 
         # Join will return c_string if c_string is an absolute path
-        c_string = os.path.join(rc.filesystem('warehouse')['dir'], c_string)
+        c_string = os.path.join(rc.filesystem('warehouse')['dir'], c_string).replace('//','/')
+
+
 
 
     elif args.dest == 'remote':
@@ -298,7 +309,6 @@ def warehouse_extract(args, w, config):
     for extract in extracts:
         print extract
 
-    print cache.path('index.html', missing_ok=True, public_url = True)
 
 def warehouse_doc(args, w, config):
 
@@ -335,4 +345,32 @@ def warehouse_config(args, w, config):
         setattr(w, args.var, args.term)
 
     print getattr(w, args.var)
+
+def warehouse_test(args, w, config):
+    from ..dbexceptions import ConfigurationError
+    from ..util import print_yaml
+
+
+
+    def resolve_tables(w):
+
+
+
+
+        def resolve(name):
+
+            td = deps.get(name,None)
+
+            if td:
+                return reduce( lambda a,b : a + b , [ resolve(tn) for tn in td ] )
+            else:
+                return [name]
+
+
+        for table_name, t_deps in deps.items():
+            print table_name, resolve(table_name)
+
+    resolve_tables()
+
+
 

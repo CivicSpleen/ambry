@@ -16,6 +16,9 @@
         {% include 'manifest/'+section.tag+'.html'  ignore missing -%}
         {% endfor %}
     </div>
+
+    {% include 'manifest/tables.html' -%}
+
     <div>
         <h2>Views and MViews</h2>
         {% for line, section in m.tagged_sections(['view', 'mview']) -%}
@@ -23,6 +26,10 @@
         {% endfor %}
     </div>
 </div>
+
+
+
+
 
 {% endblock %}
 

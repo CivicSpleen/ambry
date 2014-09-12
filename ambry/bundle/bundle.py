@@ -205,7 +205,7 @@ class Bundle(object):
 
         l.logger = self.logger
         l.database.logger = self.logger
-        l.bundle = self
+        l._bundle = self
         l.dep_cb = self._dep_cb
 
         return l
@@ -620,11 +620,11 @@ class BuildBundle(Bundle):
         except Exception as e:
             from ..util import get_logger
             # self.logger can get caught in a recursion loop
-            logger = get_logger(__name__)
-            logger.error(
-                "Failed to get dataset: {}; {}".format(
-                    e.message,
-                    self.database.dsn))
+            #logger = get_logger(__name__)
+            #logger.error(
+            #    "Failed to get dataset: {}; {}".format(
+            #        e.message,
+            #        self.database.dsn))
             raise
 
     @property
@@ -912,15 +912,7 @@ class BuildBundle(Bundle):
                 os.remove(self.database.path)
 
 
-    def set_build_state(self, state):
-        from datetime import datetime
 
-        if state not in ('cleaned','meta'):
-            self.set_value('process', 'state', state)
-            self.set_value('process', 'last', datetime.now().isoformat())
-
-        if self.library.source:
-            self.library.source.set_bundle_state(self.identity, state)
 
     def progress(self, message):
         """print message to terminal, in place"""
@@ -1145,6 +1137,7 @@ class BuildBundle(Bundle):
     def post_prepare(self):
         """Set a marker in the database that it is already prepared. """
         from datetime import datetime
+        from ..library.database import ROOT_CONFIG_NAME_V
 
         with self.session:
             self.set_value('process', 'prepared', datetime.now().isoformat())
@@ -1152,7 +1145,7 @@ class BuildBundle(Bundle):
             # At this point, we have a dataset vid, which we didn't have when the dbcreated values was
             # set, so we can reset the value with to get it into the process configuration group.
             from ambry.orm import Config
-            root_db_created = self.database.get_config_value(Config.ROOT_CONFIG_NAME_V, 'process', 'dbcreated')
+            root_db_created = self.database.get_config_value(ROOT_CONFIG_NAME_V, 'process', 'dbcreated')
             self.set_value('process', 'dbcreated', root_db_created.value)
 
             self._revise_schema()
@@ -1342,6 +1335,27 @@ class BuildBundle(Bundle):
         r = self.library.resolve(self.identity.vid)
 
         return r is not None
+
+    @property
+    def build_state(self):
+        from ..dbexceptions import DatabaseMissingError
+
+        try:
+            c =  self.get_value('process', 'state')
+            return c.value
+        except DatabaseMissingError:
+            return 'new'
+
+    def set_build_state(self, state):
+        from datetime import datetime
+
+        if state not in ('cleaned', 'meta'):
+            self.set_value('process', 'state', state)
+            self.set_value('process', 'last', datetime.now().isoformat())
+
+        if self.library.source:
+            self.library.source.set_bundle_state(self.identity, state)
+
 
     def build_main(self):
         """This is the methods that is actually called in do_build; it dispatches to

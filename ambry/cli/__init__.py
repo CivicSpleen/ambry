@@ -384,7 +384,7 @@ def main(argsv = None, ext_logger=None):
 
     parser.add_argument('-l', '--library', dest='library_name', default="default",
                         help="Name of library, from the library secton of the config")
-    parser.add_argument('-c', '--config', default=os.getenv(AMBRY_CONFIG_ENV_VAR), action='append', help="Path to a run config file")
+    parser.add_argument('-c', '--config', default=os.getenv(AMBRY_CONFIG_ENV_VAR), action='append', help="Path to a run config file. Alternatively, set the AMBRY_CONFIG env var")
     parser.add_argument('--single-config', default=False, action="store_true", help="Load only the config file specified")
     parser.add_argument('-E', '--exceptions', default=False, action="store_true",help="Show full exception trace on all exceptions")
 

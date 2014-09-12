@@ -79,7 +79,7 @@ class SqliteWarehouse(RelationalWarehouse):
 
         return a_table_name
 
-    def install_view(self, name, sql):
+    def install_view(self, name, sql, data = None):
 
         self.logger.info('Installing view {}'.format(name))
 
@@ -90,9 +90,10 @@ class SqliteWarehouse(RelationalWarehouse):
 
         self.database.connection.connection.cursor().executescript(sql)
 
+        self.install_table(name, data = data)
 
 
-    def install_material_view(self, name, sql, clean=False):
+    def install_material_view(self, name, sql, clean=False, data = None):
         from pysqlite2.dbapi2 import  OperationalError
         self.logger.info('Installing materialized view {}'.format(name))
 
@@ -104,7 +105,6 @@ class SqliteWarehouse(RelationalWarehouse):
         CREATE TABLE {name} AS {sql}
         """.format(name=name, sql=sql)
 
-
         try:
             self.database.connection.connection.cursor().executescript(sql)
         except OperationalError as e:
@@ -113,6 +113,8 @@ class SqliteWarehouse(RelationalWarehouse):
 
             self.logger.info('mview_exists {}'.format(name))
             # Ignore if it already exists.
+
+        self.install_table(name, data = data)
 
     def run_sql(self, sql_text):
 

@@ -476,29 +476,6 @@ def library_sync(args, l, config):
         l.sync_source(clean=args.clean)
 
 
-def x_library_doc(args, l, config):
-
-    cache = l.doc_cache
-
-    for ident in l.list().values():
-
-        b = l.get(ident.vid)
-
-        if not b:
-            continue
-
-        try:
-            pass
-            #path, extracts = b.write_doc(l.doc_cache, library=l)
-            #prt("Wrote {}",path)
-        except:
-            err("Failed to write doc for: {}", ident.fqname)
-
-    path, extracts = l.write_doc_toc()
-
-    print path
-
-
 def library_doc(args, l, config):
         from ..text import Renderer
 

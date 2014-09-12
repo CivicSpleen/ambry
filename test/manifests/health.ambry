@@ -9,3 +9,11 @@ PARTITIONS:
 example.com-segmented-orig-example-2
 example.com-combined-example
 
+VIEW: health_view
+
+SELECT * FROM dIjqPRbrGq001_example
+
+VIEW: health_mview
+
+SELECT *
+FROM dIjqPRbrGq001_example

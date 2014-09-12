@@ -287,7 +287,7 @@ class Files(object):
             path=bundle.bundle_dir,
             group=source.base_dir,
             ref=bundle.identity.vid,
-            state='installed',
+            state=bundle.build_state,
             type_=Files.TYPE.SOURCE,
             data=None,
             hash=None,

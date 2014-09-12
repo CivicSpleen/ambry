@@ -159,12 +159,13 @@ class RelationalDatabase(DatabaseInterface):
         # call the post create function
         from ..orm import Config
         from datetime import datetime
+        from ..library.database import ROOT_CONFIG_NAME_V
         
         if not 'config' in self.inspector.get_table_names():
             Config.__table__.create(bind=self.engine) #@UndefinedVariable
 
         session = self.session
-        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'process','dbcreated',
+        self.set_config_value(ROOT_CONFIG_NAME_V, 'process','dbcreated',
                               datetime.now().isoformat(), session=session )
         
     def post_create(self):
@@ -455,8 +456,10 @@ class RelationalDatabase(DatabaseInterface):
 
     def set_config_value(self, d_vid, group, key, value, session=None):
         from ambry.orm import Config as SAConfig
-        
-        if group == 'identity' and d_vid != SAConfig.ROOT_CONFIG_NAME_V:
+        from ..library.database import ROOT_CONFIG_NAME_V
+        from sqlalchemy.orm.exc import NoResultFound
+
+        if group == 'identity' and d_vid != ROOT_CONFIG_NAME_V:
             raise ValueError("Can't set identity group from this interface. Use the dataset")
 
       
@@ -464,14 +467,17 @@ class RelationalDatabase(DatabaseInterface):
   
 
         session = self.session if not session else session
-  
-        session.query(SAConfig).filter(SAConfig.group == group,
-                                 SAConfig.key == key,
-                                 SAConfig.d_vid == d_vid).delete()
-        
 
-        o = SAConfig(group=group, key=key,d_vid=d_vid,value = value)
-        session.add(o)
+        try:
+            o = session.query(SAConfig).filter(SAConfig.group == group,
+                                  SAConfig.key == key,
+                                  SAConfig.d_vid == d_vid).one()
+            o.value = value
+        except NoResultFound:
+            o = SAConfig(group=group, key=key, d_vid=d_vid, value=value)
+
+
+        session.merge(o)
         session.commit()
 
 
@@ -581,12 +587,12 @@ class RelationalBundleDatabaseMixin(object):
         self.session.merge(ds)
 
     def _post_create(self):
-        from ..orm import Config
+        from ..library.database import ROOT_CONFIG_NAME_V
         from sqlalchemy.orm import sessionmaker
 
         self.set_config_value(self.bundle.identity.vid, 'info','type', 'bundle', session=self.session )
-        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname, session=self.session  )
-        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid , session=self.session )
+        self.set_config_value(ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname, session=self.session  )
+        self.set_config_value(ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid , session=self.session )
 
 class RelationalPartitionDatabaseMixin(object):
     
@@ -598,16 +604,16 @@ class RelationalPartitionDatabaseMixin(object):
         self.bundle = bundle 
 
     def _post_create(self):
-        from ..orm import Config
+        from ..library.database import ROOT_CONFIG_NAME_V
 
         if not 'config' in self.inspector.get_table_names():
             Config.__table__.create(bind=self.engine) #@UndefinedVariable
             
         self.set_config_value(self.bundle.identity.vid, 'info','type', 'partition' )
-        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname )
-        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid )
-        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'partition','vname', self.partition.identity.vname )
-        self.set_config_value(Config.ROOT_CONFIG_NAME_V, 'partition','vid', self.partition.identity.vid )
+        self.set_config_value(ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname )
+        self.set_config_value(ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid )
+        self.set_config_value(ROOT_CONFIG_NAME_V, 'partition','vname', self.partition.identity.vname )
+        self.set_config_value(ROOT_CONFIG_NAME_V, 'partition','vid', self.partition.identity.vid )
         self.session.commit()
 
 

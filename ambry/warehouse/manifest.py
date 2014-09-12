@@ -59,6 +59,8 @@ class Manifest(object):
     singles = ['uid', 'title', 'extract', 'dir',  'database', 'local', 'remote', 'author', 'url', 'access', 'index', 'include']
     multi_line = ['partitions','view','mview','sql','doc']
 
+    partitions = None
+
     def __init__(self, file_or_data, logger=None):
 
         from ..dbexceptions import ConfigurationError
@@ -74,6 +76,8 @@ class Manifest(object):
 
         self.file_installs = set()
         self.installed_partitions = list()
+
+
 
     def _extract_file_data(self, file_or_data):
 
@@ -189,7 +193,7 @@ class Manifest(object):
         """Metadata for bundles, each with the partitions that are installed here.
 
         This extracts the bundle information that is in the partitions list, but it requires
-        that the add_bundle() method has been run first, because the manifest doesn't usually ahve access to
+        that the add_bundle() method has been run first, because the manifest doesn't usually have access to
         a library
         """
 
@@ -359,19 +363,37 @@ class Manifest(object):
 
     def _process_sql(self, section):
 
-        return sqlparse.format(''.join(section.lines), reindent=True, keyword_case='upper')
+        return sqlparse.format('\n'.join(section.lines), reindent=True, keyword_case='upper')
 
     def _process_mview(self, section):
 
-        t = sqlparse.format(''.join(section.lines), reindent=True, keyword_case='upper')
+        t = sqlparse.format('\n'.join(section.lines), reindent=True, keyword_case='upper')
 
-        return dict(text=t,html=self.pygmentize_sql(t), name = section.args.strip())
+        tc_names = set()  # table and column names
+
+        # Add table names from parsing the SQL, so we can build dependencies for views. Unfortunately,
+        # it also add column names, which are removed when the template context is created.
+        for s in sqlparse.parse('\n'.join(section.lines)):
+            for tok in s.flatten():
+                if tok.ttype == sqlparse.tokens.Name:
+                    tc_names.add(str(tok))
+
+
+        return dict(text=t,html=self.pygmentize_sql(t), name = section.args.strip(), tc_names = list(tc_names))
 
     def _process_view(self, section):
+        import sqlparse.tokens
+        t = sqlparse.format('\n'.join(section.lines), reindent=True, keyword_case='upper')
 
-        t = sqlparse.format(''.join(section.lines), reindent=True, keyword_case='upper')
+        tc_names = set() # table and column names
 
-        return dict(text=t,html=self.pygmentize_sql(t), name = section.args.strip())
+        for s in sqlparse.parse('\n'.join(section.lines)):
+            for tok in s.flatten():
+                if tok.ttype == sqlparse.tokens.Name:
+                    tc_names.add(str(tok))
+
+
+        return dict(text=t,html=self.pygmentize_sql(t), name = section.args.strip(), tc_names = list(tc_names))
 
     def _process_extract(self, section):
 
@@ -411,9 +433,6 @@ class Manifest(object):
 
     def _process_partitions(self, section):
 
-        def row(cell, *args):
-            return "<tr>{}</tr>\n".format(''.join([ "<{}>{}</{}>".format(cell,v,cell) for v in args]))
-
         partitions = []
 
         start_line  = section.linenumber
@@ -451,6 +470,11 @@ class Manifest(object):
                 partition['bundle'] = ident
                 partition['metadata'] = b.metadata
                 partition['ident'] = ident.partition
+
+                p = b.partitions.get(ident.partition.vid)
+
+                # The 'tables' key is used for tables specified on the partitions line in the manifest.
+                partition['table_vids'] = [ b.schema.table(t).vid for t in  p.tables]
 
                 ident = ident.partition
                 partition['config'] = dict(
@@ -601,13 +625,6 @@ class Manifest(object):
         except Exception as e:
             raise ParseError("Failed to parse {} : {}".format(line, e))
 
-    def html_doc(self):
-        from ..text import ManifestDoc
-        import os
-
-        md = ManifestDoc(self)
-
-        return md.render()
 
     @property
     def meta(self):

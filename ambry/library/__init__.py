@@ -149,7 +149,7 @@ class Library(object):
         self.source_dir = source_dir
 
         self._database = database
-        self.bundle = None # Set externally in bundle.library()
+        self._bundle = None # Set externally in bundle.library()
         self.host = host
         self.port = port
         self.urlhost = urlhost if urlhost else ( '{}:{}'.format(self.host,self.port) if self.port else self.host)
@@ -169,9 +169,6 @@ class Library(object):
         self.needs_update = False
 
         self.bundles = weakref.WeakValueDictionary()
-
-
-
 
     def clone(self):
 
@@ -451,8 +448,21 @@ class Library(object):
             if bundle:
                 bundle.close()
 
-
         return bundle
+
+    def table(self, vid):
+        from ..orm import Table
+
+        return (self.database.session.query(Table).filter(Table.vid == vid).one())
+
+    def bundle(self, vid):
+        """Returns a LibraryDbBundle for the given vid"""
+        from ..bundle import LibraryDbBundle
+
+        b = LibraryDbBundle(self.database, vid)
+
+        return b
+
 
     ##
     ## Finding
@@ -566,12 +576,12 @@ class Library(object):
     def _get_dependencies(self):
         from ..orm import Dataset
 
-        if not self.bundle:
+        if not self._bundle:
             raise ConfigurationError("Can't use the dep() method for a library that is not attached to a bundle");
 
         errors = 0
 
-        deps = self.bundle.metadata.dependencies
+        deps = self._bundle.metadata.dependencies
 
         if not deps:
             return {}

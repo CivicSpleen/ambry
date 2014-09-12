@@ -251,11 +251,30 @@ class WarehouseInterface(object):
         for table in self.library.database.session.query(Table).all():
             yield table
 
-
     def orm_table(self, vid):
         from ..orm import Table
 
         return self.library.database.session.query(Table).filter(Table.vid == vid).first()
+
+    def expand_table_deps(self):
+        """Expand the information about table dependencies so that only leaf tables are included. """
+
+        deps = {}
+
+        for t in self.tables:
+
+            deps[t.name] = [tn for tn in t.data.get('tc_names', []) if tn != t.name] + [t.altname]
+
+            if t.altname:
+                deps[t.altname] = [tn for tn in t.data.get('tc_names', []) if tn != t.altname]
+
+        # Get rid of column names, which get into the set because the sqlparser does not distiguish
+        # between column names and table names
+
+        for table_name, t_deps in deps.items():
+            deps[table_name] = [self.orm_table(tn) for tn in t_deps if tn in deps.keys()]
+
+        return deps
 
     def partition(self, vid):
         from ..orm import Partition
@@ -268,6 +287,7 @@ class WarehouseInterface(object):
 
     def install(self, partition, tables=None, prefix=None):
         from ..orm import Partition
+        from sqlalchemy.exc import OperationalError
 
         results = dict(
             tables = {},
@@ -313,8 +333,9 @@ class WarehouseInterface(object):
 
                 self.library.database.mark_table_installed(orm_table.vid, itn)
 
-            except Exception as e:
+            except OperationalError as e:
                 self.logger.error("Failed to install table '{}': {}".format(table_name,e))
+                raise
 
         self.library.database.mark_partition_installed(p_vid)
 
@@ -381,13 +402,14 @@ class WarehouseInterface(object):
             tag = section.tag
 
             if tag in ('partitions', 'sql', 'index', 'mview', 'view'):
-                self.logger.info("== Processing manifest section {} at line {}".format(section.tag, section.linenumber))
+                self.logger.info("== Processing manifest '{}' section '{}' at line {}"
+                                 .format(manifest.path, section.tag, section.linenumber))
 
             if tag == 'partitions':
                 for pd in section.content['partitions']:
                     try:
 
-                        tables = pd['tables']
+                        tables = pd['tables'] # Tables that were specified on the parittion line; install only these
 
                         if pd['where'] and len(pd['tables']) == 1:
                             tables = [(pd['tables'][0], "WHERE (" + pd['where'] + ")")]
@@ -408,10 +430,12 @@ class WarehouseInterface(object):
                 self.create_index(c['name'], c['table'], c['columns'])
 
             elif tag == 'mview':
-                self.install_material_view(section.args, section.content['text'], clean= force)
+                self.install_material_view(section.args, section.content['text'], clean= force,
+                                           data=dict(tc_names=section.content['tc_names']))
 
             elif tag == 'view':
-                self.install_view(section.args, section.content['text'])
+                self.install_view(section.args, section.content['text'],
+                                  data = dict(tc_names = section.content['tc_names']))
 
             elif tag == 'extract':
                 import json
@@ -442,14 +466,64 @@ class WarehouseInterface(object):
         else:
             return self.database.dsn
 
-    def install_view(self, name, sql):
+    def install_material_view(self, name, sql, clean = False, data=None):
+        raise NotImplementedError(type(self))
+
+    def install_view(self, name, sql, data=None):
         raise NotImplementedError(type(self))
 
     def install_table_alias(self, table, alias):
         self.install_view(alias, "SELECT * FROM {}".format(table))
 
+        self.install_table(alias, orig_name = table)
+
     def install_file(self, path,  ref, content=None, source=None, type=None, group=None, source_url= None, data=None):
         raise NotImplementedError(type(self))
+
+    def install_table(self, name, orig_name = None, data = None ):
+
+        """Install a view, mview or alias as a Table record. """
+        from ..orm import Table, Config, Dataset
+        from ..library.database import ROOT_CONFIG_NAME_V
+        from sqlalchemy import func
+        from sqlalchemy.orm.exc import NoResultFound
+
+        s = self.library.database.session
+
+        try:
+            from sqlalchemy.orm import lazyload
+
+            q = (s.query(Table).filter(Table.d_vid == ROOT_CONFIG_NAME_V, Table.name == name )
+                 .options(lazyload('columns')))
+
+            t = q.one()
+
+        except NoResultFound:
+
+            ds = s.query(Dataset).filter(Dataset.vid == ROOT_CONFIG_NAME_V).one()
+
+            q = ( s.query(func.max(Table.sequence_id)) .filter(Table.d_vid == ROOT_CONFIG_NAME_V))
+
+            seq = q.one()[0]
+
+            seq = 0 if not seq else seq
+
+            seq += 1
+
+            t = Table(ds,name=name, sequence_id = seq, preserve_case = True)
+
+        if orig_name is not None:
+            t.altname = str(orig_name)
+
+        if t.data:
+            t.data.update(data if data else {})
+        else:
+            t.data = data
+
+        s.merge(t)
+        s.commit()
+
+
 
     def run_sql(self, sql_text):
         raise NotImplementedError(type(self))
