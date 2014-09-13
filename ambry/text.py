@@ -119,7 +119,7 @@ class Renderer(object):
 
 
     def _bundle_main(self, b):
-
+        """This actually call the renderer for the bundle """
         import markdown
 
         m = b.metadata
@@ -131,9 +131,9 @@ class Renderer(object):
 
         return template.render(root_path=self.root_path, b=b, m=m, w=self.warehouse,
                                documentation={
-                                   'main': markdown.markdown(m.documentation.main) if m.documentation.main else None,
+                                   'main': markdown.markdown(b.sub_template(m.documentation.main)) if m.documentation.main else None,
                                    'readme': markdown.markdown(
-                                       m.documentation.readme) if m.documentation.readme else None,
+                                       b.sub_template(m.documentation.readme)) if m.documentation.readme else None,
                                })
 
     def bundle(self, b):
@@ -143,7 +143,10 @@ class Renderer(object):
 
         jbp = partial(join, b.identity.path)
 
-        self.maybe_render(jbp('index.html'), lambda: self._bundle_main(b))
+        try:
+            self.maybe_render(jbp('index.html'), lambda: self._bundle_main(b))
+        except Exception as e:
+            self.library.logger.error("Failed to render {}: {} ".format(b.identity, e))
 
         for t in b.schema.tables:
             self.maybe_render(jbp(t.vid) + '.html', lambda: self.table(b, t))
@@ -199,8 +202,6 @@ class Renderer(object):
 
             table_dicts[k] = d
 
-
-
         #for line, section in m.tagged_sections(['view', 'mview']):
         #    print section.content['html']
 
@@ -225,7 +226,7 @@ class Renderer(object):
         self.maybe_render('index.html', lambda: self.index())
 
         self.logger.info('Rendering bundles')
-        for b in self.library.list_bundles():
+        for b in self.library.list_bundles(last_version_only = False):
             self.bundle(b)
 
         self.logger.info('Rendering bundles index')

@@ -42,6 +42,7 @@ class Schema(object):
             raise Exception("Can only construct schema on a Bundle")
 
         self.d_id=self.bundle.identity.id_
+        self.d_vid = self.bundle.identity.vid
  
         self._seen_tables = {}
         self.table_sequence = None
@@ -86,7 +87,7 @@ class Schema(object):
 
         from ambry.orm import Table
         
-        q = (self.bundle.database.session.query(Table).filter(Table.d_id==self.d_id))
+        q = (self.bundle.database.session.query(Table).filter(Table.d_vid==self.d_vid))
 
         return q.all()
 

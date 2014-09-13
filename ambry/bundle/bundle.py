@@ -1296,7 +1296,6 @@ class BuildBundle(Bundle):
         else:
             partitions = []
 
-
         fn = self.filesystem.path('meta','partitions.yaml')
 
         with open(fn,'w') as f:

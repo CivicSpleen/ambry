@@ -95,6 +95,9 @@ def source_parser(cmd):
     sp = asp.add_parser('run', help='Run a shell command in source directories passed in on stdin')
     sp.set_defaults(subcommand='run')
 
+    sp = asp.add_parser('test', help='Run some deveopment test code. ')
+    sp.set_defaults(subcommand='test')
+
     sp.add_argument('-P','--python', default=None, help=
                     'Path to a python class file to run. Loads as module and calls run(). The '+
                     'run() function can have any combination of arguments of these names: bundle_dir,'+
@@ -714,3 +717,19 @@ def source_buildable(args, l, st, rc):
         sys.exit(1)
 
     _print_bundle_list(buildable,  fields=fields, sort=False)
+
+
+def source_test(args, l, st, rc):
+    """Development text code"""
+
+    from ambry.dbexceptions import DependencyError
+
+    for vid, v in st.list().items():
+
+        bundle = st.resolve_bundle(vid)
+
+        from ..util import Progressor
+
+        for k, v in bundle.dependencies.items():
+            b = l.get(v, cb=Progressor().progress)
+

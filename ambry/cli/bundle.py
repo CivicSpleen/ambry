@@ -119,6 +119,7 @@ def bundle_command(args, rc):
     try:
         for phase in phases:
             getf(phase)(args, b, st, rc)
+            b.close()
 
     except DependencyError as e:
         if b:
@@ -420,6 +421,7 @@ def bundle_install(args, b, st, rc):
             return False
     else:
         b.log("---- Skipping Install ---- ")
+
 
     return True
 

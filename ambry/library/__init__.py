@@ -342,7 +342,7 @@ class Library(object):
                 key = lambda ident: ident.vname
 
             for ident in sorted(self.list().values(), key = key ):
-                b =  self.get(ident.vid)
+                b =  LibraryDbBundle(self.database, ident.vid)
                 yield b
                 b.close()
 
