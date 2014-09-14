@@ -326,8 +326,7 @@ def warehouse_doc(args, w, config):
 
     r = Renderer(cache, warehouse = w)
 
-    path, extracts = r.write_library_doc()
-
+    path, extracts = r.write_library_doc(force=args.force)
 
     print path
 
@@ -353,9 +352,6 @@ def warehouse_test(args, w, config):
 
 
     def resolve_tables(w):
-
-
-
 
         def resolve(name):
 

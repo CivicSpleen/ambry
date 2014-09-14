@@ -813,7 +813,7 @@ class ScalarTerm(Term):
         self._parent._term_values[self._key] = v
 
     def get(self):
-        return self._parent._term_values[self._key]
+        return self._parent._term_values.get(self._key,None) # Supresses KeyError HACK?
 
     def null_entry(self):
         return None

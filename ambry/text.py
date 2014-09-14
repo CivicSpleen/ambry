@@ -136,7 +136,7 @@ class Renderer(object):
                                        b.sub_template(m.documentation.readme)) if m.documentation.readme else None,
                                })
 
-    def bundle(self, b):
+    def bundle(self, b, force=False):
         """ Write the bundle documentation into the documentation store """
         from os.path import join
         from functools import partial
@@ -144,17 +144,18 @@ class Renderer(object):
         jbp = partial(join, b.identity.path)
 
         try:
-            self.maybe_render(jbp('index.html'), lambda: self._bundle_main(b))
+            self.maybe_render(jbp('index.html'), lambda: self._bundle_main(b), force=force)
         except Exception as e:
-            self.library.logger.error("Failed to render {}: {} ".format(b.identity, e))
+            self.library.logger.error("Failed to render {}: {} ".format(b.identity, str(e)))
+            raise
 
         for t in b.schema.tables:
-            self.maybe_render(jbp(t.vid) + '.html', lambda: self.table(b, t))
+            self.maybe_render(jbp(t.vid) + '.html', lambda: self.table(b, t), force=force)
 
 
         for p in b.partitions:
             if p.installed:
-                self.maybe_render(jbp(p.vid) + '.html', lambda: self.partition(b, p))
+                self.maybe_render(jbp(p.vid) + '.html', lambda: self.partition(b, p), force=force)
 
         return self.cache.path(jbp('index.html'))
 
@@ -208,7 +209,7 @@ class Renderer(object):
 
         return template.render(root_path=self.root_path, m=m, tables = table_dicts.values() )
 
-    def write_library_doc(self):
+    def write_library_doc(self, force=False, force_index = False):
         """Create the table of contents document with links to all of the bundles and tables """
         import ambry.support.templates as tdir
 
@@ -220,22 +221,30 @@ class Renderer(object):
                 with open(source) as f:
                     return f.read()
 
-            self.maybe_render(css_fn, lambda: _css())
+            self.maybe_render(css_fn, lambda: _css(), force=force)
 
-        self.logger.info('Rendering index')
-        self.maybe_render('index.html', lambda: self.index())
+
 
         self.logger.info('Rendering bundles')
         for b in self.library.list_bundles(last_version_only = False):
-            self.bundle(b)
+            self.bundle(b, force=force)
 
-        self.logger.info('Rendering bundles index')
-        self.maybe_render('bundles.html', lambda: self.bundles_index())
+        if sum( 1 for i in self.extracts if i.extracted ):
+            force_index = True
 
         if self.warehouse:
             self.logger.info('Rendering manifests')
             for f, m in self.warehouse.manifests:
-                self.maybe_render(m.uid + ".html", lambda: self.manifest(m))
+                self.maybe_render(m.uid + ".html", lambda: self.manifest(m), force=force or force_index )
+
+        if sum( 1 for i in self.extracts if i.extracted ):
+            force_index = True
+
+        self.logger.info('Rendering bundles index')
+        self.maybe_render('bundles.html', lambda: self.bundles_index(), force=force or force_index)
+
+        self.logger.info('Rendering index')
+        self.maybe_render('index.html', lambda: self.index(), force=force or force_index)
 
         #self.logger.info('Rendering tables')
         #self.maybe_render('tables.html', lambda: self.tables())

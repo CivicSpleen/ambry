@@ -114,9 +114,7 @@ class BundleFilesystem(Filesystem):
             self.root_directory = root_directory
         else:
             self.root_directory = Filesystem.find_root_dir()
- 
-        if not os.path.exists(self.path(BundleFilesystem.BUILD_DIR)):
-            os.makedirs(self.path(BundleFilesystem.BUILD_DIR),0755)
+
  
     @staticmethod
     def find_root_dir(testFile='bundle.yaml', start_dir =  None):

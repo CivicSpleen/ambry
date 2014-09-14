@@ -106,7 +106,9 @@ def library_parser(cmd):
 
     sp = asp.add_parser('doc', help='Generate documentation')
     sp.set_defaults(subcommand='doc')
-
+    sp.add_argument('-e', '--report-extracts', default=False, action="store_true", help="Print the paths of the files that were generated")
+    sp.add_argument('-f', '--force', default=False, action="store_true", help='Force re-generation of all documents')
+    sp.add_argument('-i', '--force-index', default=False, action="store_true", help='Force re-generation of the index documents')
 
 def library_command(args, rc):
     from  ..library import new_library
@@ -485,9 +487,15 @@ def library_doc(args, l, config):
 
         r = Renderer(cache, library=l)
 
-        path, extracts = r.write_library_doc()
+        path, extracts = r.write_library_doc(force=args.force, force_index = args.force_index)
 
-        print path
+        if args.report_extracts:
+            for e in extracts:
+                if e.extracted:
+                    print "Generated: ", e.abs_path
+
+
+        print "Index: ", path
 
 def library_unknown(args, l, config):
     fatal("Unknown subcommand")

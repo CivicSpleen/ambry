@@ -12,9 +12,19 @@
 <div class="container">
     <div class="row">
         <div class="col-md-10">
-            <table class="table table-hover" >
+                <table class="table table-hover table-condensed" >
+                <tr>
+                    <th>#</th>
+                    <th>VID</th>
+                    <th>Source</th>
+                    <th>Dataset</th>
+                    <th>Name</th>
+                    <th>Versions</th>
+                    <th>Title</th>
+                </tr>
                 {% for b in l.list_bundles() -%}
                     <tr class="bundle_toc">
+                        <td class="toc_n">{{loop.index}}</td>
                         <td class="toc_vid"><a href="{{b.identity.path}}/index.html">{{b.identity.vid}}</a></td>
                         <td class="toc_source">{{b.identity.source}}</td>
                         <td class="toc_dataset">{{b.identity.dataset}}</td>

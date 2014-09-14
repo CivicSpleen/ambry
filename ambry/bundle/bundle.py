@@ -88,15 +88,21 @@ class Bundle(object):
             except:
                 template = "%(message)s"
 
-            if not os.path.isdir(os.path.dirname(self.log_file)):
-                os.makedirs(os.path.dirname(self.log_file))
+            try:
+                if not os.path.isdir(os.path.dirname(self.log_file)):
+                    os.makedirs(os.path.dirname(self.log_file))
+
+                log_file = self.log_file
+            except NotImplementedError:
+                log_file = None
+
 
             from ambry.cli import global_logger
 
             if False and  global_logger: # not quite working yet ...
                 self._logger = global_logger
             else:
-                self._logger = get_logger(__name__, template=template, stream= sys.stdout, file_name = self.log_file )
+                self._logger = get_logger(__name__, template=template, stream= sys.stdout, file_name = log_file )
 
                 self._logger.setLevel(self.log_level)
 
@@ -190,6 +196,21 @@ class Bundle(object):
         if not self.database.is_empty():
             with self.session:
                 self.set_value('rdep', key, ident.dict)
+
+    def sub_template(self, t):
+        '''Substitute some betadata values into a format() template '''
+        d = {}
+        for r in self.metadata.rows:
+
+            if r[0][0] in ('about', 'identity', 'names', 'config'):
+                k = '_'.join([str(x) for x in r[0] if x])
+                d[k] = r[1]
+
+        try:
+            return t.format(**d)
+        except KeyError as e:
+            self.error("Failed to substitute template in {}. Key Error: {}".format(self.identity, e))
+            return t
 
     @property
     def library(self):
@@ -777,16 +798,6 @@ class BuildBundle(Bundle):
                 self.database.rewrite_dataset()
 
 
-    def sub_template(self, t):
-
-        d = {}
-        for r in self.metadata.rows:
-
-            if r[0][0] in ('about','identity', 'names', 'config'):
-                k = '_'.join([str(x) for x in r[0] if x])
-                d[k] = r[1]
-
-        return t.format(**d)
 
 
     def rewrite_readme(self):
