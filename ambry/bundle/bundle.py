@@ -1062,6 +1062,7 @@ class BuildBundle(Bundle):
                 'schema_file',
                 'meta/' +
                 self.SCHEMA_FILE))
+
         if os.path.exists(sf):
             with open(sf, 'rbU') as f:
                 self.log("Loading schema from file: {}".format(sf))

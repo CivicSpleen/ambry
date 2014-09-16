@@ -410,6 +410,9 @@ def mp_run(mp_run_args):
         b.log("MP Run: pid={} {}{} ".format(os.getpid(),method.__name__, args))
 
         try:
+            # This close is really important; the child process can't be allowed to use the database
+            # connection created by the parent; you get horrible breakages in random places. 
+            b.close()
             method(*args)
         except:
             b.close()

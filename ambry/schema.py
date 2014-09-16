@@ -121,7 +121,7 @@ class Schema(object):
                         ).one())
                 
         except sqlalchemy.orm.exc.NoResultFound as e:
-            raise sqlalchemy.orm.exc.NoResultFound("No table for name_or_id: {}".format(name_or_id))
+            raise sqlalchemy.orm.exc.NoResultFound("No table for name_or_id: '{}'".format(name_or_id))
 
     def table(self, name_or_id, session = None):
         '''Return an orm.Table object, from either the id or name. This is the cleaa method version
@@ -823,6 +823,12 @@ class Schema(object):
                     # For the primary key, the data comes from the table. 
                     for k in data_fields:
                         row['d_'+k]=table.data.get(k,None)
+
+                    # In CSV files the table description is stored as the description of the
+                    # id column
+                    if not col.description and table.description:
+                        col.description = table.description
+
                 else:
                     for k in data_fields:
                         row['d_'+k]=col.data.get(k,None)
@@ -1518,7 +1524,9 @@ class {name}(Base):
                              description='Non-integer code value for column {}'.format(source_column_name))
 
 
-            t = self.add_table(name, data={'code_key':json.dumps([source_table_name, source_column_name])})
+            t = self.add_table(name,
+                               data={'code_key':json.dumps([source_table_name, source_column_name])},
+                               description='Non-integer code value for column {}'.format(source_column_name))
             self.add_column(t, 'id', datatype='integer', is_primary_key = True)
             self.add_column(t, 'code', datatype='varchar', description='Value of code')
             self.add_column(t, 'description', datatype='varchar', description='Code description')

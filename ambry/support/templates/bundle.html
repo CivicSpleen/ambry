@@ -12,20 +12,10 @@
 {% block body %}
 <div>
     <div class="row">
-        <div class="col-md-5">
-            {% include 'bundle/ext_documentation.html' -%}
-        </div>
-        <div class="col-md-5">
-            {% include 'bundle/contact.html' -%}
-        </div>
-    </div>
-    <div class="row">
-        <div class="col-md-5">
-            {% include 'bundle/sources.html' -%}
-        </div>
-        <div class="col-md-5">
-            {% include 'bundle/dependencies.html' -%}
-        </div>
+        {% include 'bundle/ext_documentation.html' -%}
+        {% include 'bundle/contact.html' -%}
+        {% include 'bundle/sources.html' -%}
+        {% include 'bundle/dependencies.html' -%}
     </div>
     {% include 'bundle/documentation.html' -%}
     <div>

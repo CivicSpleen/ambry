@@ -645,11 +645,15 @@ def _on_connect_bundle(dbapi_con, con_record):
     except:
         pass
 
-    dbapi_con.execute('PRAGMA journal_mode = WAL')
-    dbapi_con.execute('PRAGMA page_size = 8192')
-    dbapi_con.execute('PRAGMA temp_store = MEMORY')
-    dbapi_con.execute('PRAGMA cache_size = 50000')
-    dbapi_con.execute('PRAGMA foreign_keys = OFF')
+    try:
+        dbapi_con.execute('PRAGMA journal_mode = WAL')
+        dbapi_con.execute('PRAGMA page_size = 8192')
+        dbapi_con.execute('PRAGMA temp_store = MEMORY')
+        dbapi_con.execute('PRAGMA cache_size = 50000')
+        dbapi_con.execute('PRAGMA foreign_keys = OFF')
+    except:
+        global_logger.error("Exception in {} ".format(dbapi_con))
+        raise
 
     #dbapi_con.execute('PRAGMA busy_timeout = 10000')
     #dbapi_con.execute('PRAGMA synchronous = OFF')

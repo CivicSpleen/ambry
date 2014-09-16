@@ -368,9 +368,9 @@ class BundleFilesystem(Filesystem):
             use_hash = True
 
         #file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
-        file_path = os.path.join(parsed.netloc,parsed.path)
+        file_path = os.path.join(parsed.netloc,parsed.path.strip('/'))
 
-        if use_hash and  parsed.query: # S3 has time in the query, so it nevery caches
+        if use_hash and  parsed.query: # S3 has time in the query, so it never caches
             import hashlib
 
             hash = hashlib.sha224(parsed.query).hexdigest()

@@ -1,8 +1,13 @@
 <!-- Sources -->
-<h2>Sources</h2>
-<dl class="dl-horizontal">
-{% for k,e in m.sources.items() %}
-    <dt><a href="{{e.url}}" target="{{e.title}}">{{k}}</a></dt>
-    <dd>{{e.description}}</dd>
-{% endfor -%}
-</dl>
+{% if m.sources.items() -%}
+<div class = 'ck-sources pull-left col-md-5'>
+    <h2>Sources</h2>
+    <dl class="dl-horizontal">
+    {% for k,e in m.sources.items() %}
+        <dt><a href="{{e.url}}" target="{{e.title}}">{{k}}</a></dt>
+        <dd>{{e.description}}</dd>
+    {% endfor -%}
+    </dl>
+</div>
+{% endif -%}
+

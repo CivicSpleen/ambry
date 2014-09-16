@@ -393,11 +393,8 @@ class Library(object):
     def get(self, ref, force=False, cb=None, location = 'default'):
         '''Get a bundle, given an id string or a name '''
         from sqlite3 import DatabaseError
-        from sqlalchemy.exc import OperationalError, IntegrityError
-        from sqlalchemy.orm.exc import NoResultFound
-        from ..dbexceptions import NotFoundError
+        from sqlalchemy.exc import IntegrityError
         from .files import  Files
-        from ..orm import Dataset
         from ..cache.multi import AltReadCache
 
         # Get a reference to the dataset, partition and relative path
@@ -429,7 +426,7 @@ class Library(object):
                 else:
                     ref_partition = partition
 
-                abs_path = arc.get(partition.identity.cache_key, cb=cb)
+                abs_path = arc.get(ref_partition.identity.cache_key, cb=cb)
 
                 if not abs_path or not os.path.exists(abs_path):
                     raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.cache_key))
@@ -462,7 +459,6 @@ class Library(object):
         b = LibraryDbBundle(self.database, vid)
 
         return b
-
 
     ##
     ## Finding

@@ -331,8 +331,8 @@ def bundle_info(args, b, st, rc):
 
             # Older bundles have the dbcreated values assigned to the root dataset vid ('a0/001')
             # instead of the bundles dataset vid
-            from ambry.orm import Config
-            root_db_created = b.database.get_config_value(Config.ROOT_CONFIG_NAME_V, 'process', 'dbcreated')
+            from ambry.library.database import ROOT_CONFIG_NAME_V
+            root_db_created = b.database.get_config_value(ROOT_CONFIG_NAME_V, 'process', 'dbcreated')
 
             b.log('Created   : ' + process.get('dbcreated', root_db_created.value))
             b.log('Prepared  : ' + process.get('prepared', ''))
