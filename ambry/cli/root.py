@@ -166,8 +166,6 @@ def root_info(args, l, st, rc):
     try:
         b = l.get(ident.vid)
 
-
-
         if not ident.partition:
             for p in b.partitions.all:
                 ident.add_partition(p.identity)
@@ -175,7 +173,6 @@ def root_info(args, l, st, rc):
     except NotFoundError:
         fatal("Could not get bundle file for '{}'".format(ident.path))
         pass
-
 
     _print_info(l, ident, list_partitions=args.partitions)
 

@@ -1426,9 +1426,15 @@ class BuildBundle(Bundle):
 
 
     def update(self):
-        return False
+
+        self.update_copy_schema()
+        self.prepare()
+        self.update_copy_partitions()
+
+        return True
 
     def update_copy_partitions(self):
+        """Create partition references for all of the partitions from the previous version of the bundle"""
 
         prior_ident = self.library.resolve(self.identity.name)
         prior = self.library.get(prior_ident.vname)
@@ -1554,12 +1560,9 @@ class BuildBundle(Bundle):
 
             for partition in self.partitions:
 
-                if partition.ref:
-                    self.log("{} is a reference. Not installing file".format(partition.identity))
-                    self.library.database.install_partition(self, partition, commit=True)
-                    continue
-
-                if not os.path.exists(partition.database.path):
+                # Skip files that don't exist, but not if the partition is a reference to an
+                # other partition.
+                if not os.path.exists(partition.database.path) and not partition.ref:
                     self.log("{} File does not exist, skipping".format(partition.database.path))
                     continue
 

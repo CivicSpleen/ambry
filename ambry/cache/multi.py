@@ -144,6 +144,8 @@ class AltReadCache(PassthroughCache):
         return l
 
     def _copy_across(self, rel_path, cb=None):
+        """If the upstream doesn't have the file, get it from the alternate and store it in the upstream"""
+
         from ..util.flo import copy_file_or_flo
 
         if not self.upstream.has(rel_path):
@@ -165,7 +167,9 @@ class AltReadCache(PassthroughCache):
             sink.close()
 
     def get(self, rel_path, cb=None):
+
         self._copy_across(rel_path, cb)
+
         return self.upstream.get(rel_path, cb)
 
     def get_stream(self, rel_path, cb=None):

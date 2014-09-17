@@ -239,7 +239,9 @@ class Library(object):
 
         installed = self.files.install_partition_file(partition, self.cache, commit = commit, state = 'new')
 
-        self.cache.put(partition.database.path, partition.identity.cache_key)
+        # Ref partitions use the file of an earlier version, so there is no find to install
+        if not partition.ref:
+            self.cache.put(partition.database.path, partition.identity.cache_key)
 
         return self.cache.path(partition.identity.cache_key), installed
 
@@ -396,6 +398,7 @@ class Library(object):
         from sqlalchemy.exc import IntegrityError
         from .files import  Files
         from ..cache.multi import AltReadCache
+        from ..dbexceptions import NotFoundError
 
         # Get a reference to the dataset, partition and relative path
         # from the local database.
@@ -414,7 +417,7 @@ class Library(object):
 
 
                 if not partition:
-                    from ..dbexceptions import NotFoundError
+
                     raise NotFoundError('Failed to get partition {} from bundle at {} '
                                         .format(dataset.partition.fqname, dataset.cache_key))
 
@@ -422,11 +425,40 @@ class Library(object):
 
                 # If the partition has a reference, get that instead. This will load it into the local file
                 if partition.ref:
-                    ref_partition = self.resolve(partition.ref)
-                else:
-                    ref_partition = partition
 
-                abs_path = arc.get(ref_partition.identity.cache_key, cb=cb)
+                    ref_ident = self.resolve(partition.ref)
+
+                    if not ref_ident:
+                        raise NotFoundError("Reference '{}' refers to another partition, '{}', which does not exist"
+                                            .format(ref, partition.ref))
+
+                    ref_partition_ident = ref_ident.partition
+
+                    if self.cache.has(ref_partition_ident.cache_key):
+                        # The referenced partition already exists, so it should be copied to the
+                        # refferent path
+                        delete = False
+
+                    else:
+                        # The referenced partition does not exist, so it should be moved to the
+                        # refferent path
+                        # BUT, moving is not really supported by the caches, so we will copy then
+                        # delete.
+
+                        delete = True
+
+                    ref_abs_path = arc.get(ref_partition_ident.cache_key, cb=cb)
+
+                    abs_path = self.cache.put(ref_abs_path, partition.cache_key)
+
+                    if delete:
+                        os.remove(ref_abs_path)
+
+
+                else:
+
+                    abs_path = arc.get(partition.identity.cache_key, cb=cb)
+
 
                 if not abs_path or not os.path.exists(abs_path):
                     raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.cache_key))

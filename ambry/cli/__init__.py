@@ -284,8 +284,9 @@ def _print_info(l,ident, list_partitions=False):
     prt("D Vname     : {}", d.vname)
     prt("D Fqname    : {}", d.fqname)
     prt("D Locations : {}",str(resolved_ident.locations))
+    prt("P Is Local  : {}", (l.cache.has(d.cache_key) is not False) if d else '')
     prt("D Rel Path  : {}",d.cache_key)
-    prt("D Abs Path  : {}",l.cache.path(d.cache_key) if l.cache.has(d.cache_key) else '')
+    prt("D Abs Path  : {}",l.cache.path(d.cache_key, missing_ok = True)  )
     if d.url:
         prt("D Web Path  : {}",d)
 
@@ -329,7 +330,7 @@ def _print_info(l,ident, list_partitions=False):
             prt("P Partition : {}; {}",p.vid, p.vname)
             prt("P Is Local  : {}",(l.cache.has(p.cache_key) is not False) if p else '')
             prt("P Rel Path  : {}",p.cache_key)
-            prt("P Abs Path  : {}",l.cache.path(p.cache_key) if l.cache.has(p.cache_key) else '' )
+            prt("P Abs Path  : {}",l.cache.path(p.cache_key, missing_ok = True)  )
 
             if resolved_ident.url:
                 prt("P Web Path  : {}",resolved_ident.url)

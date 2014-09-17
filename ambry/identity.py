@@ -155,17 +155,12 @@ class Name(object):
 
         return self.clear_dict(d) 
 
-
-
-
     @property
     def name(self):
         '''String version of the name, excluding the version, and
         excluding the format, if the format is 'db' '''
         
         d = self._dict(with_name=False)
-
-
 
         return self.NAME_PART_SEP.join([ str(d[k]) for (k,_,_) in self.name_parts
                          if k and d.get(k,False)

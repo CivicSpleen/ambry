@@ -411,7 +411,7 @@ def mp_run(mp_run_args):
 
         try:
             # This close is really important; the child process can't be allowed to use the database
-            # connection created by the parent; you get horrible breakages in random places. 
+            # connection created by the parent; you get horrible breakages in random places.
             b.close()
             method(*args)
         except:

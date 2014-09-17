@@ -421,7 +421,6 @@ def library_get(args, l, config):
     if not ident:
         fatal("Could not resolve term {} ", args.term)
 
-
     # This will fetch the data, but the return values aren't quite right
     prt("get: {}".format(ident.vname))
     b = l.get(args.term, force=args.force, cb=Progressor('Download {}'.format(args.term)).progress)
