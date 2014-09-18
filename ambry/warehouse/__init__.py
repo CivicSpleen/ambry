@@ -411,7 +411,7 @@ class WarehouseInterface(object):
 
                         tables = pd['tables'] # Tables that were specified on the parittion line; install only these
 
-                        if pd['where'] and len(pd['tables']) == 1:
+                        if pd['where'] and len(tables) == 1:
                             tables = [(pd['tables'][0], "WHERE (" + pd['where'] + ")")]
 
                         self.install(pd['partition'], tables)

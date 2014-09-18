@@ -55,8 +55,9 @@ import ambry.util
 global_logger = ambry.util.get_logger(__name__)
 global_logger.setLevel(logging.DEBUG)
 
-# Alternative number spaces, mostly for manifests
-NUMBER_SPACES = ('m','x')
+# Alternative number spaces, mostly for manifests and databases
+# The main number space for datasets is 'd'
+NUMBER_SPACES = ('m','x','b')
 
 def capture_return_exception(e):
     

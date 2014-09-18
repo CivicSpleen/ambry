@@ -42,7 +42,7 @@ class Renderer(object):
 
         self.env = Environment(loader=PackageLoader('ambry.support', 'templates'))
 
-        self.root_path =  cache.path('', missing_ok=True).rstrip("/")
+        self.root_path =  cache.path('', missing_ok=True, public_url=True).rstrip("/")
 
         self.extracts = []
 
@@ -250,4 +250,4 @@ class Renderer(object):
         #self.maybe_render('tables.html', lambda: self.tables())
 
 
-        return self.cache.path('index.html', missing_ok=True), self.extracts
+        return self.cache.path('index.html', missing_ok=True, public_url = True), self.extracts

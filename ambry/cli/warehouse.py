@@ -258,8 +258,6 @@ def get_cache(w, args, rc):
     from ambry.cache import new_cache, parse_cache_string
     import os.path
 
-
-
     if args.cache:
         c_string = args.cache
 
@@ -273,9 +271,6 @@ def get_cache(w, args, rc):
 
         # Join will return c_string if c_string is an absolute path
         c_string = os.path.join(rc.filesystem('warehouse')['dir'], c_string).replace('//','/')
-
-
-
 
     elif args.dest == 'remote':
         c_string = w.remote_cache

@@ -109,6 +109,8 @@ def library_parser(cmd):
     sp.add_argument('-e', '--report-extracts', default=False, action="store_true", help="Print the paths of the files that were generated")
     sp.add_argument('-f', '--force', default=False, action="store_true", help='Force re-generation of all documents')
     sp.add_argument('-i', '--force-index', default=False, action="store_true", help='Force re-generation of the index documents')
+    sp.add_argument('-c', '--cache', help='URL of the destination cache. Defaults to library documentation cache')
+
 
 def library_command(args, rc):
     from  ..library import new_library
@@ -477,10 +479,15 @@ def library_sync(args, l, config):
         l.sync_source(clean=args.clean)
 
 
-def library_doc(args, l, config):
+def library_doc(args, l, rc):
         from ..text import Renderer
+        from ambry.cache import new_cache, parse_cache_string
 
-        cache = l.doc_cache
+        if args.cache:
+            config = parse_cache_string(args.cache)
+            cache = new_cache(config, run_config=rc)
+        else:
+            cache = l.doc_cache
 
         l.logger.info("Extracting to: {}".format(cache))
 
