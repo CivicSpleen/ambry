@@ -2,7 +2,7 @@ TITLE: This is an example warehouse
 
 This is the example warehouse. The first doc section after the title is the summary of the warehouse.
 
-UID: 04572b2e-0a96-4d87-bc13-bd82c3b785a3
+UID: mKEkZAlayQ
 AUTHOR: Eric Busboom <eric@sandiegodata.org>
 
 DATABASE: sqlite:manifest_test.db

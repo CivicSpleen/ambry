@@ -160,9 +160,10 @@ class Manifest(object):
         uid =  self.single_line('uid')
 
         if not uid:
-            import uuid
+            from ..identity import TopNumber
+            tn = TopNumber('m')
             raise ConfigurationError(
-                "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(uuid.uuid4()))
+                "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(str(tn)))
 
         return uid
 

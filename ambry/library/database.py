@@ -13,7 +13,7 @@ import ambry.util
 from ambry.util import temp_file_name
 from ambry.bundle import DbBundle
 from ..identity import LocationRef, Identity
-from ambry.orm import Column, Partition, Table, Dataset, Config, File
+from ambry.orm import Column, Partition, Table, Dataset, Config, File, stored_partitions, file_link, Base
 
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
@@ -288,7 +288,8 @@ class LibraryDb(object):
         if not self.enable_delete:
             raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
 
-        tables = [Config.__tablename__, Column.__tablename__, Partition.__tablename__,
+        tables = ["stored_partitions", "file_link",
+                  Config.__tablename__, Column.__tablename__, Partition.__tablename__,
                   Table.__tablename__, File.__tablename__,  Dataset.__tablename__]
 
         for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
@@ -297,8 +298,6 @@ class LibraryDb(object):
 
         self.commit()
 
-
-
     def __del__(self):
         pass # print  'closing LibraryDb'
 
@@ -306,7 +305,6 @@ class LibraryDb(object):
         return self.__class__(self.driver, self.server, self.dbname, self.username, self.password)
 
     def create_tables(self):
-
 
         tables = [ Dataset, Config, Table, Column, File, Partition]
 
@@ -333,6 +331,9 @@ class LibraryDb(object):
 
             for it, orig_schema in orig_schemas.items():
                 it.schema = orig_schema
+
+        stored_partitions.create(bind=self.engine)
+        file_link.create(bind=self.engine)
 
     def _add_config_root(self):
         from sqlalchemy.orm.exc import NoResultFound

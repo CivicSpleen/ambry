@@ -724,12 +724,17 @@ def source_test(args, l, st, rc):
 
     from ambry.dbexceptions import DependencyError
 
-    for vid, v in st.list().items():
+    from sqlalchemy.orm.attributes import InstrumentedAttribute
+    import inspect
 
-        bundle = st.resolve_bundle(vid)
+    for e in l.list():
+        b = l.get(e)
 
-        from ..util import Progressor
+        print b
 
-        for k, v in bundle.dependencies.items():
-            b = l.get(v, cb=Progressor().progress)
+        d =  b.get_dataset()
 
+        for k,v  in inspect.getmembers(d.__class__, lambda x: isinstance(x, InstrumentedAttribute)):
+            print k, type(v)
+
+        break

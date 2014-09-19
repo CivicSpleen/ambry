@@ -484,6 +484,18 @@ class Library(object):
 
         return (self.database.session.query(Table).filter(Table.vid == vid).one())
 
+    def partition(self, vid):
+        from ..orm import Partition
+
+        return (self.database.session.query(Partition).filter(Partition.vid == vid).one())
+
+    @property
+    def partitions(self):
+        from ..orm import Partition
+
+        return (self.database.session.query(Partition).all())
+
+
     def bundle(self, vid):
         """Returns a LibraryDbBundle for the given vid"""
         from ..bundle import LibraryDbBundle
@@ -992,6 +1004,34 @@ class Library(object):
         except IntegrityError:
             self.database.rollback()
             pass
+
+    def sync_warehouse(self, w):
+        """Create a reference to the warehouse and link all of the partitions to it. """
+
+        from sqlalchemy.exc import IntegrityError
+
+        f = self.files.install_data_store(w.database.dsn, str(w.__class__))
+
+        self.database.session.commit()
+
+        ## First, load in the partitions.
+
+        for remote_p in w.library.partitions:
+            p = self.partition(remote_p.vid)
+
+            p.stores.append(f)
+
+        self.database.session.commit()
+
+
+        ## Next, we can load the manifests.
+
+        for f, m in w.manifests:
+            m.path  = f.path
+
+            self.files.install_manifest(m, warehouse=w)
+
+
 
 
     @property

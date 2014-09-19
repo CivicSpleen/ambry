@@ -244,6 +244,10 @@ def warehouse_install(args, w ,config):
 
     w.logger.info("Installed to {}".format(w.database.dsn))
 
+    l = w.elibrary
+
+    l.sync_warehouse(w)
+
     if args.name_only:
         print w.database.dsn
 
@@ -304,7 +308,6 @@ def warehouse_extract(args, w, config):
     for extract in extracts:
         print extract
 
-
 def warehouse_doc(args, w, config):
 
     from ..text import Renderer
@@ -344,24 +347,6 @@ def warehouse_test(args, w, config):
     from ..dbexceptions import ConfigurationError
     from ..util import print_yaml
 
-
-
-    def resolve_tables(w):
-
-        def resolve(name):
-
-            td = deps.get(name,None)
-
-            if td:
-                return reduce( lambda a,b : a + b , [ resolve(tn) for tn in td ] )
-            else:
-                return [name]
-
-
-        for table_name, t_deps in deps.items():
-            print table_name, resolve(table_name)
-
-    resolve_tables()
 
 
 

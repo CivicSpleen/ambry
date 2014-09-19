@@ -23,6 +23,11 @@ class Files(object):
     TYPE.REMOTE = LocationRef.LOCATION.REMOTE
     TYPE.REMOTEPARTITION = LocationRef.LOCATION.REMOTEPARTITION
 
+    TYPE.MANIFEST = 'manifest'
+    TYPE.DOC = 'doc'
+    TYPE.EXTRACT = 'extract'
+    TYPE.STORE = 'store'
+
 
     def __init__(self, db, query=None):
 
@@ -149,6 +154,7 @@ class Files(object):
         else:
             return File(**kwargs)
 
+
     def insert_collection(self):
 
         if len(self._collection) == 0:
@@ -190,6 +196,7 @@ class Files(object):
                 self.db.commit()
 
         except IntegrityError as e:
+
             s.rollback()
 
             s.merge(f)
@@ -197,8 +204,7 @@ class Files(object):
                 self.db.commit()
             except IntegrityError as e:
                 s.rollback()
-                pass
-
+                raise
 
         self.db._mark_update()
 
@@ -294,3 +300,129 @@ class Files(object):
             priority=None,
             source_url=None, )
 
+    def install_data_store(self, dsn, type, commit=True):
+        """A reference for a data store, such as a warehouse or a file store.
+        """
+
+        import hashlib
+
+        f  = self.query.path(dsn).group(self.TYPE.STORE).one_maybe
+
+        if f:
+            return f
+
+        return self.new_file(
+            commit=commit,
+            merge=True,
+            path=dsn,
+            group=self.TYPE.STORE,
+            ref=hashlib.sha224(dsn).hexdigest(),
+            state=None,
+            type_=type,
+            data=None,
+            source_url=None)
+
+
+    def _process_source_content(self, path, source = None, content = None):
+        """Install a file reference, possibly with binary content"""
+        import os
+        from ..util import md5_for_file
+        import hashlib
+        import time
+
+        hash = None
+        size = None
+        modified = None
+
+        if not source and os.path.exists(path):
+            source = path
+
+        if source:
+            try:
+                # Try source as file-like
+                content = source.read()
+
+                hash = hashlib.md5(content).hexdigest()
+                size = len(content)
+                modified = int(time.time())
+
+            except (IOError, AttributeError): # Nope, try it as a filename.
+                with open(source) as sf:
+                    content = sf.read()
+
+                stat = os.stat(source)
+
+                if not modified or stat.st_mtime > modified:
+                    modified = int(stat.st_mtime)
+
+                size = stat.st_size
+
+                hash = md5_for_file(source)
+
+        elif content:
+            content = content
+            hash = hashlib.md5(content).hexdigest()
+            size = len(content)
+            modified = int(time.time())
+
+        return dict(hash=hash, size=size, modified=modified, content=content)
+
+
+    def install_manifest(self, manifest, warehouse = None, commit=True):
+        """Store a references to, and content for, a manifest
+        """
+
+        f = self.query.ref(manifest.uid).group(self.TYPE.MANIFEST).one_maybe
+
+        if not f:
+
+            f =  self.new_file(
+                commit=commit,
+                merge=True,
+                path=manifest.path,
+                group=self.TYPE.MANIFEST,
+                ref=manifest.uid,
+                state=None,
+                type_=self.TYPE.MANIFEST,
+                data=None,
+                source_url=manifest.uid,
+                **(self._process_source_content(manifest.path) if os.path.exists(manifest.path) else {})
+            )
+
+        if warehouse:
+
+            whf = self.query.path(warehouse.database.dsn).group(self.TYPE.STORE).one_maybe
+
+            if not whf:
+                from ..dbexceptions import NotFoundError
+                raise NotFoundError("No record for database with dsn: '{}'".format(warehouse.database.dsn))
+
+
+            f.left_files.append(whf)
+
+            self.db.commit()
+
+        return f
+
+
+    def install_extract(self, path, manifest, d, commit=True):
+        """Create a references for an extract. The extract hasn't been extracted yet, so
+        there is no content, hash, etc. """
+
+        f = self.query.ref(manifest.uid).group(self.TYPE.EXTRACT).one_maybe
+
+        if f:
+            return f
+
+        return self.new_file(
+            commit=commit,
+            merge=True,
+            path=path,
+            group=self.TYPE.EXTRACT,
+            ref=d['table'],
+            format = d['format'],
+            state=None,
+            type_=self.TYPE.MANIFEST,
+            data=d,
+            source_url=manifest.uid
+        )

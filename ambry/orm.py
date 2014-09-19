@@ -9,7 +9,7 @@ import sqlalchemy
 from sqlalchemy import orm
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, BigInteger, Boolean, UniqueConstraint, ForeignKeyConstraint
-from sqlalchemy import Float as Real,  Text, String, ForeignKey, Binary
+from sqlalchemy import Float as Real,  Text, String, ForeignKey, Binary, Table as SATable
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator, TEXT, PickleType
 from sqlalchemy.ext.declarative import declarative_base
@@ -39,6 +39,27 @@ BigIntegerType = BigIntegerType.with_variant(sqlite.INTEGER(), 'sqlite')
 
 
 Base = declarative_base()
+
+# Sould have things derived from this, once there are test cases for it.
+# Actually, this is a mixin.
+class Dictable(object):
+
+    def set_attributes(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    @property
+    def dict(self):
+        from sqlalchemy.orm.attributes import InstrumentedAttribute
+        import inspect
+
+
+        return dict(inspect.getmembers(self.__class__, lambda x: isinstance(x, InstrumentedAttribute)))
+
+
+    def __repr__(self):
+        return "<{}: {}>".format(type(self), self.dict)
+
 
 class JSONEncodedObj(TypeDecorator):
     "Represents an immutable structure as a json-encoded string."
@@ -1062,7 +1083,23 @@ class Config(Base):
 
     def __repr__(self):
         return "<config: {},{},{} = {}>".format(self.d_vid, self.group, self.key, self.value)
-     
+
+
+# Links partitions to the data store ( database, directory ) that holds the partition
+# Primarily for warehouses, databases and extracts.
+stored_partitions = SATable('stored_partitions', Base.metadata,
+                          SAColumn('p_vid', Integer, ForeignKey('partitions.p_vid')),
+                          SAColumn('f_id', Integer, ForeignKey('files.f_id')),
+                          UniqueConstraint('p_vid', 'f_id', name='u_stored_partitions'),
+)
+
+file_link = SATable('file_link', Base.metadata,
+                            SAColumn('fl_right_id', Integer, ForeignKey('files.f_id'), primary_key=True),
+                            SAColumn('fl_left_id', Integer, ForeignKey('files.f_id'), primary_key=True),
+                            UniqueConstraint('fl_right_id', 'fl_left_id', name='u_file_link')
+)
+
+
 
 class File(Base, SavableMixin):
     __tablename__ = 'files'
@@ -1088,6 +1125,17 @@ class File(Base, SavableMixin):
         UniqueConstraint('f_path', 'f_type', 'f_group', name='u_type_path'),
         UniqueConstraint('f_ref', 'f_type', 'f_group', name='u_ref_path'),
     )
+
+
+    partitions = relationship('Partition', secondary=stored_partitions, backref='stores')
+
+    right_files = relationship("File",
+                               secondary=file_link,
+                               primaryjoin= oid == file_link.c.fl_right_id,
+                               secondaryjoin= oid == file_link.c.fl_left_id,
+                               backref="left_files"
+    )
+
 
     def __init__(self,**kwargs):
         self.oid = kwargs.get("oid",None) 
@@ -1119,6 +1167,8 @@ class File(Base, SavableMixin):
     @property
     def insertable_dict(self):
         return { ('f_'+k).strip('_'):v for k,v in self.dict.items()}
+
+
 
 
 class Partition(Base):
@@ -1305,5 +1355,4 @@ class Partition(Base):
 
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
-
 
