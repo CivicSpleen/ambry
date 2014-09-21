@@ -8,6 +8,10 @@ from ..cli import prt, fatal, warn, err, _print_info #@UnresolvedImport
 import os
 from ambry.util import Progressor
 
+# If the devel module exists, this is a development system.
+try: from ambry.support.devel import *
+except ImportError as e: from ambry.support.production import *
+
 def library_parser(cmd):
 
     import argparse
@@ -110,6 +114,11 @@ def library_parser(cmd):
     sp.add_argument('-f', '--force', default=False, action="store_true", help='Force re-generation of all documents')
     sp.add_argument('-i', '--force-index', default=False, action="store_true", help='Force re-generation of the index documents')
     sp.add_argument('-c', '--cache', help='URL of the destination cache. Defaults to library documentation cache')
+
+    if IN_DEVELOPMENT:
+        sp = asp.add_parser('test', help='Run development test code')
+        sp.set_defaults(subcommand='test')
+
 
 
 def library_command(args, rc):
@@ -242,8 +251,6 @@ def library_purge(args, l, config):
 
     prt("Purge library")
     l.purge()
-      
-
 
 def library_remove(args, l, config):
     from ..dbexceptions import NotFoundError
@@ -506,3 +513,25 @@ def library_doc(args, l, rc):
 def library_unknown(args, l, config):
     fatal("Unknown subcommand")
     fatal(args)
+
+def library_test(args, l, config):
+
+    for mf in l.manifests:
+
+        print mf, mf.left_files
+
+    print '---'
+
+    for mf in l.stores:
+        print mf, mf.right_files
+
+    print '---'
+
+    for mf in l.stores:
+        print mf, mf.type_, mf.partitions
+
+
+
+
+
+

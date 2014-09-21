@@ -4,7 +4,11 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from . import prt, fatal, err, warn,  _print_info, _print_bundle_list
+from ..dbexceptions import ConfigurationError
 
+# If the devel module exists, this is a development system.
+try: from ambry.support.devel import *
+except ImportError as e: from ambry.support.production import *
 
 def warehouse_command(args, rc):
     from ambry.warehouse import new_warehouse
@@ -17,59 +21,50 @@ def warehouse_command(args, rc):
 
     l.logger = global_logger
 
-    try:
-        if args.database:
-            config = database_config(args.database)
-        else:
-            config = rc.warehouse(args.name)
+    if args.database:
+        config = database_config(args.database)
 
+
+    config  = None
+
+    if not config and args.name:
+
+        f  = l.files.query.ref(args.name).group(l.files.TYPE.STORE).one_maybe
+        if f:
+            config = database_config(f.path)
+
+    if not config and args.subcommand == 'install':
+        from ..warehouse.manifest import Manifest
+        import os.path
+        m = Manifest(args.term)
+
+        base_dir = os.path.join(rc.filesystem('warehouse')['dir'])
+
+        config = database_config(m.database, base_dir=base_dir)
+
+    if not config and  args.subcommand != 'list':
+        raise ConfigurationError("Must set the name of the database somewhere. ")
+
+    if config:
         w = new_warehouse(config, l, logger = global_logger)
 
         if not w.exists():
             w.create()
 
-    except ConfigurationError:
-        # There was no database configured, so let the called function provide additional information
-        from functools import partial
-        w = partial(create_warehouse,rc, global_logger, l)
+        if args.name:
+            store_warehouse(l,w,args.name)
+    else:
+        w = None
 
     globals()['warehouse_'+args.subcommand](args, w,rc)
 
-def create_warehouse(rc, logger, library, manifest=None):
-    from ..dbexceptions import ConfigurationError
-    from ambry.warehouse import database_config
-    from ambry.warehouse import new_warehouse
-    import os.path
+def store_warehouse(l,w, name):
 
-    if manifest:
-        database = manifest.database
+    w.name = name
 
-        if not database:
-            raise ConfigurationError('Warehouse database must either be specified on the command line or in the manifest')
-
-        try:
-
-            base_dir = os.path.join(rc.filesystem('warehouse')['dir'], manifest.uid)
-        except ConfigurationError:
-            base_dir = ''
-
-        config = database_config(database, base_dir = base_dir)
-
-
-        w = new_warehouse(config, library, logger=logger)
-
-        if not w.exists():
-            try:
-                w.create()
-            except:
-                w.logger.error("Failed to create warehouse at: {}".format(w.database.dsn))
-                raise
-
-        return w
-
-    raise ConfigurationError('No warehouse database specified')
-
-
+    if not l.files.query.ref(name).group(l.files.TYPE.STORE).one_maybe:
+        l.files.install_data_store(w.database.dsn, w.__class__.__name__, ref = name,
+                                   title = w.title, summary  = w.summary )
 
 def warehouse_parser(cmd):
    
@@ -78,7 +73,7 @@ def warehouse_parser(cmd):
     whp = whr_p.add_subparsers(title='warehouse commands', help='command help')
 
     whr_p.add_argument('-d', '--database', help='Path or connection url for a database. ')
-    whr_p.add_argument('-n','--name',  default='default',  help='Select a different name for the warehouse')
+    whr_p.add_argument('-n','--name',  help='Select a different name for the warehouse')
 
     whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
     whsp.set_defaults(subcommand='install')
@@ -158,13 +153,19 @@ def warehouse_parser(cmd):
     whsp = whp.add_parser('list', help='List the datasets in the warehouse')
     whsp.set_defaults(subcommand='list')   
     whsp.add_argument('term', type=str, nargs='?', help='Name of bundle, to list partitions')
+    group = whsp.add_mutually_exclusive_group()
+    group.add_argument('-m', '--manifests',   action='store_true', help='List manifest')
+    group.add_argument('-p', '--partitions',   action='store_true', help='List partitions')
 
-    whsp = whp.add_parser('test', help='Run a test')
-    whsp.set_defaults(subcommand='test')
-    whsp.add_argument('term', type=str, nargs='?', help='A test argument')
+    if IN_DEVELOPMENT:
+        whsp = whp.add_parser('test', help='Run a test')
+        whsp.set_defaults(subcommand='test')
+        whsp.add_argument('term', type=str, nargs='?', help='A test argument')
 
 def warehouse_info(args, w,config):
-    
+
+
+
     prt("Warehouse Info")
     prt("Name:     {}",args.name)
     prt("Class:    {}",w.__class__)
@@ -210,11 +211,23 @@ def warehouse_users(args, w,config):
     
 def warehouse_list(args, w, config):    
 
+
+    if not w:
+        # List all of the warehouses referenced in the library
+        from ..library import new_library
+        l = new_library(config.library(args.library_name))
+
+        for w in l.warehouses:
+            print "{:10s} {}".format(w.ref, w.path)
+
+        return
+
+
     l = w.library
 
     if not args.term:
 
-        _print_bundle_list(w.list(),show_partitions=False)
+        _print_bundle_list(w.list(),fields=['vid','vname'],show_partitions=False)
             
     else:
         raise NotImplementedError()
@@ -226,9 +239,6 @@ def warehouse_install(args, w ,config):
     from ambry.warehouse.manifest import Manifest
 
     m = Manifest(args.term)
-
-    if callable(w):
-        w = w(manifest=m)
 
     if args.clean:
         w.clean()
@@ -296,8 +306,6 @@ def get_cache(w, args, rc):
 
 def warehouse_extract(args, w, config):
 
-    if callable(w):
-        w = w()
 
     cache = get_cache(w, args, config)
 
@@ -313,8 +321,6 @@ def warehouse_doc(args, w, config):
     from ..text import Renderer
     import os.path
 
-    if callable(w):
-        w = w()
 
     cache = get_cache(w, args, config)
 
@@ -331,9 +337,6 @@ def warehouse_doc(args, w, config):
 
 def warehouse_config(args, w, config):
     from ..dbexceptions import ConfigurationError
-
-    if callable(w):
-        w = w()
 
     if not args.var in w.configurable:
         raise ConfigurationError("Value {} is not configurable. Must be one of: {}".format(args.var, w.configurable))

@@ -116,7 +116,6 @@ def clear_libraries():
     libraries = {}
 
 
-
 class Library(object):
     '''
 
@@ -503,6 +502,33 @@ class Library(object):
         b = LibraryDbBundle(self.database, vid)
 
         return b
+
+    @property
+    def stores(self):
+        """Return all of the refistered data stores. """
+        from ..orm import Partition
+
+        return self.files.query.group(self.files.TYPE.STORE).all
+
+    @property
+    def manifests(self):
+        """Return all of the refistered data stores. """
+        from ..orm import Partition
+        from ..warehouse.manifest import  Manifest
+
+        return [(f, Manifest(f.content, logger=self.logger))
+                for f in self.files.query.group(self.files.TYPE.MANIFEST).all]
+
+
+    @property
+    def remotes(self):
+        from ..cache import new_cache
+
+        if not self._remotes:
+            return None
+
+        return self._remotes
+
 
     ##
     ## Finding
@@ -960,8 +986,6 @@ class Library(object):
                 self.database.close()
                 b.close()
 
-
-
     def sync_source(self, clean=False):
         '''Rebuild the database from the bundles that are already installed
         in the repository cache'''
@@ -1009,8 +1033,9 @@ class Library(object):
         """Create a reference to the warehouse and link all of the partitions to it. """
 
         from sqlalchemy.exc import IntegrityError
+        from ambry.util.packages import qualified_name
 
-        f = self.files.install_data_store(w.database.dsn, str(w.__class__))
+        f = self.files.install_data_store(w.database.dsn, qualified_name(w), title=w.title, summary=w.about)
 
         self.database.session.commit()
 
@@ -1023,25 +1048,12 @@ class Library(object):
 
         self.database.session.commit()
 
-
         ## Next, we can load the manifests.
 
         for f, m in w.manifests:
             m.path  = f.path
 
             self.files.install_manifest(m, warehouse=w)
-
-
-
-
-    @property
-    def remotes(self):
-        from ..cache import new_cache
-
-        if not self._remotes:
-            return None
-
-        return self._remotes
 
     @property
     def info(self):

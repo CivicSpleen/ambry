@@ -188,6 +188,15 @@ class WarehouseInterface(object):
         return self._meta_set('about', v)
 
     @property
+    def name(self):
+        """name of the warehouse"""
+        return self._meta_get('name')
+
+    @name.setter
+    def name(self, v):
+        return self._meta_set('name', v)
+
+    @property
     def local_cache(self):
         """Cache name for local publications. Usually a filesystem path"""
         lc =  self._meta_get('local_cache')
@@ -713,6 +722,7 @@ class WarehouseInterface(object):
 
         if 'password' in config['database']: del config['database']['password']
         return config
+
 
 
 def database_config(db, base_dir=''):

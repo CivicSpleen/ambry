@@ -1,10 +1,15 @@
 {% if section.content.html -%}
 <!-- View, line {{section.line_number}} -->
-<h3 class="{{section.tag}}" id="ambrm_{{section.line_number}}">View {{section.args}}</h3>
-<div class="{{section.tag}} codehilite " >
-{{section.content.html}}
-</div>
 <div>
-{{section.doc.html}}
+    <h3 class="{{section.tag}}">View {{section.args}}
+        <button class="btn btn-primary btn-xs" data-toggle="modal" data-target="#myModal">View Data</button>
+    </h3>
+    <div class="{{section.tag}} codehilite " >
+    {{section.content.html}}
+    </div>
+    <div>
+    {{section.doc.html}}
+    </div>
+
 </div>
 {% endif -%}

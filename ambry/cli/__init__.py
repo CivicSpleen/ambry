@@ -220,7 +220,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
                                     if 'order' in ident.data else {'major':-1,'minor':-1})),
         ('locations','{:6s}',  '{:6s}',       lambda ident: ident.locations),
         ('pcount', '{:5s}', '{:5s}', lambda ident: str(len(ident.partitions)) if ident.partitions else ''),
-        ('vid',      '{:15s}', '{:20s}',      lambda ident: ident.vid),
+        ('vid',      '{:18s}', '{:20s}',      lambda ident: ident.vid),
         ('time', '{:20s}', '{:20s}',          lambda ident: datetime.fromtimestamp(ident.data['time']).isoformat() if 'time' in ident.data else ''),
         ('status',   '{:20s}', '{:20s}',      lambda ident: ident.bundle_state if ident.bundle_state else ''),
         ('vname',    '{:40s}', '    {:40s}',  lambda ident: ident.vname),
@@ -236,7 +236,6 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
     p_format = ""
     extractors = []
 
-
     for e in all_fields:
         e = dict(zip(record_entry_names, e)) # Just to make the following code easier to read
 
@@ -247,7 +246,6 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
         p_format += e['p_format']
 
         extractors.append(e['extractor'])
-
 
     prtf(d_format, *[ f(ident) for f in extractors ] )
 

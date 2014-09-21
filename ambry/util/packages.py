@@ -7,7 +7,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 import pip
 from pip.commands import InstallCommand
-
+from ..util import memoize
 
 def install(install_dir,egg,url):
 
@@ -31,3 +31,21 @@ def install(install_dir,egg,url):
 
 
 
+def qualified_name(o):
+    """Return the fully qualfied name of the class of an object """
+
+    return o.__module__ + '.' + o.__class__.__name__
+
+
+@memoize
+def import_class_by_string(name):
+    """Return a class by importing its module from a fully qualified string"""
+    components = name.split('.')
+    clazz = components.pop()
+    mod = __import__('.'.join(components))
+
+    components += [clazz]
+    for comp in components[1:]:
+        mod = getattr(mod, comp)
+
+    return mod

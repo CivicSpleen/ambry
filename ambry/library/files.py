@@ -300,11 +300,12 @@ class Files(object):
             priority=None,
             source_url=None, )
 
-    def install_data_store(self, dsn, type, commit=True):
+    def install_data_store(self, dsn, type, ref = None, title = None, summary = None, commit=True):
         """A reference for a data store, such as a warehouse or a file store.
         """
 
         import hashlib
+        from ..identity import TopNumber
 
         f  = self.query.path(dsn).group(self.TYPE.STORE).one_maybe
 
@@ -316,10 +317,13 @@ class Files(object):
             merge=True,
             path=dsn,
             group=self.TYPE.STORE,
-            ref=hashlib.sha224(dsn).hexdigest(),
+            ref=ref if ref else str(TopNumber('s')) ,
             state=None,
             type_=type,
-            data=None,
+            data=dict(
+                title = title,
+                summary = summary
+            ),
             source_url=None)
 
 
@@ -384,7 +388,10 @@ class Files(object):
                 ref=manifest.uid,
                 state=None,
                 type_=self.TYPE.MANIFEST,
-                data=None,
+                data=dict(
+                    title = manifest.title,
+                    summary = manifest.summary['text']
+                ),
                 source_url=manifest.uid,
                 **(self._process_source_content(manifest.path) if os.path.exists(manifest.path) else {})
             )

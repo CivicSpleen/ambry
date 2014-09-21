@@ -1,10 +1,14 @@
 {% if section.content.html -%}
 <!-- Materialized View, line {{section.line_number}} -->
-<h3 class="{{section.tag}}" id="ambrm_{{section.line_number}}">MView {{section.args}}</h2>
-<div class="{{section.tag}} codehilite" >
-{{section.content.html}}
-</div>
 <div>
-{{section.doc.html}}
+    <h3 class="{{section.tag}}" id="ambrm_{{section.line_number}}">MView {{section.args}}
+        <button class="btn btn-primary btn-xs" data-toggle="modal" data-target="#myModal">View Data</button>
+    </h3>
+    <div class="{{section.tag}} codehilite" >
+    {{section.content.html}}
+    </div>
+    <div>
+    {{section.doc.html}}
+    </div>
 </div>
 {% endif -%}

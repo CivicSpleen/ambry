@@ -4,8 +4,11 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from ..cli import prt, warn, fatal, _find, _print_bundle_list, _print_bundle_entry
-
 from ..identity import LocationRef
+
+# If the devel module exists, this is a development system.
+try: from ambry.support.devel import *
+except ImportError as e: from ambry.support.production import *
 
 default_locations = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.REMOTE ]
 
@@ -147,7 +150,7 @@ def root_info(args, l, st, rc):
         locations = default_locations
 
     if not args.term:
-        print "Version:  {}".format(ambry._meta.__version__)
+        print "Version:  {}, {}".format(ambry._meta.__version__, 'production' if IN_PRODUCTION else 'development')
         print "Root dir: {}".format(rc.filesystem('root')['dir'])
 
         if l.source:
