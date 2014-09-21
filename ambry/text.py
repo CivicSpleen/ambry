@@ -47,6 +47,8 @@ class Renderer(object):
         self.extracts = []
 
 
+
+
     def maybe_render(self, rel_path, render_lambda, metadata={}, force=False):
         """Check if a file exists and maybe runder it"""
 
@@ -86,7 +88,7 @@ class Renderer(object):
 
     def index(self):
 
-        template = self.env.get_template('library_index.html')
+        template = self.env.get_template('index.html')
 
         return template.render(root_path=self.root_path, l=self.library, w=self.warehouse)
 
@@ -124,7 +126,7 @@ class Renderer(object):
 
         m = b.metadata
 
-        template = self.env.get_template('bundle.html')
+        template = self.env.get_template('bundle/index.html')
 
         if not m.about.title:
             m.about.title = b.identity.vname
@@ -152,7 +154,6 @@ class Renderer(object):
         for t in b.schema.tables:
             self.maybe_render(jbp(t.vid) + '.html', lambda: self.table(b, t), force=force)
 
-
         for p in b.partitions:
             if p.installed:
                 self.maybe_render(jbp(p.vid) + '.html', lambda: self.partition(b, p), force=force)
@@ -175,11 +176,14 @@ class Renderer(object):
 
         template = self.env.get_template('bundle/partition.html')
 
+
+
         return template.render(root_path=self.root_path, w=self.warehouse, b=bundle, partition=partition)
 
-    def manifest(self, m):
+    def manifest(self, f, m):
+        """F is the file object associated with the manifest"""
 
-        template = self.env.get_template('manifest/layout.html')
+        template = self.env.get_template('manifest/index.html')
 
         m.add_bundles(self.library)
 
@@ -197,7 +201,11 @@ class Renderer(object):
             d['description'] = t.description
             d['bundle'] = t.dataset.dict
 
-            b = self.warehouse.elibrary.get(t.dataset.vid)
+            if self.warehouse:
+                b = self.warehouse.elibrary.get(t.dataset.vid)
+            else:
+                b = self.library.get(t.dataset.vid)
+
             d['bundle']['metadata'] = b.metadata
             d['bundle']['path'] = b.identity.path
 
@@ -207,11 +215,12 @@ class Renderer(object):
         #    print section.content['html']
 
 
-        return template.render(root_path=self.root_path, m=m, tables = table_dicts.values() )
+        return template.render(root_path=self.root_path, m=m, manifest_file_ref = f, tables = table_dicts.values() )
 
     def write_library_doc(self, force=False, force_index = False):
         """Create the table of contents document with links to all of the bundles and tables """
         import ambry.support.templates as tdir
+        from os.path import join
 
         root = self.cache.path('', missing_ok=True)
 
@@ -224,7 +233,6 @@ class Renderer(object):
             self.maybe_render(css_fn, lambda: _css(), force=force)
 
 
-
         self.logger.info('Rendering bundles')
         for b in self.library.list_bundles(last_version_only = False):
             self.bundle(b, force=force)
@@ -232,10 +240,10 @@ class Renderer(object):
         if sum( 1 for i in self.extracts if i.extracted ):
             force_index = True
 
-        if self.warehouse:
+        if self.warehouse or self.library:
             self.logger.info('Rendering manifests')
-            for f, m in self.warehouse.manifests:
-                self.maybe_render(m.uid + ".html", lambda: self.manifest(m), force=force or force_index )
+            for f, m in (self.warehouse if self.warehouse else self.library).manifests:
+                self.maybe_render(join('manifests',m.uid + ".html"), lambda: self.manifest(f,m), force=force or force_index )
 
         if sum( 1 for i in self.extracts if i.extracted ):
             force_index = True

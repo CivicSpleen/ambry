@@ -61,7 +61,18 @@
     <script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
     <script src="http://code.jquery.com/jquery-migrate-1.2.1.min.js"></script>
     <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
-    {% include 'tocjs.html' -%}
+    <script src="http://assets.s3.clarinova.com/js/toc.min.js"></script>
+    <script>
+    $('#toc').toc();
+    $('#toc ul').addClass('nav nav-stacked')
+
+    $('#sidebar').affix({
+          offset: {
+            top: $('header').height()
+          }
+    });
+
+    </script>
     {% endblock %}
 </body>
 </html>

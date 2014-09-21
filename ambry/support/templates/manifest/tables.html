@@ -8,6 +8,7 @@
             <th>Description</th>
             <th>Bundle</th>
             <th>Bundle Title</th>
+            <th>View</th>
         </tr>
         {% for t in tables -%}
         <tr>
@@ -15,7 +16,10 @@
             <td>{{t.installed}}</td>
             <td>{{t.description}}</td>
             <td><a href="{{root_path}}/{{t.bundle.path}}/index.html">{{t.bundle.vname}}</a></td>
-            <td>{{t.bundle.metadata.about.title}}</td></tr>
+            <td>{{t.bundle.metadata.about.title}}</td>
+            <td><button class="btn btn-primary btn-xs" data-toggle="modal" data-target="#myModal">View Data</button></td>
+        </tr>
+
         {% endfor -%}
     </table>
 </div>

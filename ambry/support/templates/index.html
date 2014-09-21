@@ -10,16 +10,63 @@
 
 {% block body %}
 
-<div class="container">
+<div >
 
-    {% if w -%}
+    {% if w and w.manifests -%}
     <div>
         <h2>Collections</h2>
-        <ul>
-        {% for f, m in w.manifests -%}
-          <li><a href="{{m.uid}}.html">{{m.title}} ({{m.access}})</a></li>
+        <table class="table table-hover table-condensed" >
+        <tr>
+            <th>Id</th>
+            <th>Title</th>
+            <th>Summary</th>
+        </tr>
+        {% for f,m in w.manifests -%}
+            <tr>
+                <td><a href="manifests/{{f.ref}}.html">{{f.ref}}</a></td>
+                <td>{{f.data.title}}</td>
+                <td>{{f.data.summary}}</td>
+            </tr>
         {% endfor %}
-        </ul>
+        </table>
+    </div>
+    {% endif %}
+    {% if l and l.manifests -%}
+    <div>
+        <h2>Collections</h2>
+        <table class="table table-hover table-condensed" >
+        <tr>
+            <th>Id</th>
+            <th>Title</th>
+            <th>Summary</th>
+        </tr>
+        {% for f,m in l.manifests -%}
+            <tr>
+                <td><a href="manifests/{{f.ref}}.html">{{f.ref}}</a></td>
+                <td>{{f.data.title}}</td>
+                <td>{{f.data.summary}}</td>
+            </tr>
+        {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+    {% if l and l.stores -%}
+    <div>
+        <h2>Databases</h2>
+        <table class="table table-hover  table-condensed" >
+        <tr>
+            <th>Id</th>
+            <th>Title</th>
+            <th>Summary</th>
+        </tr>
+        {% for s in l.stores -%}
+            <tr>
+                <td><a href="stores/{{s.ref}}.html">{{s.ref}}</a></td>
+                <td>{{s.data.title}}</td>
+                <td>{{s.data.summary}}</td>
+            </tr>
+        {% endfor %}
+        </table>
     </div>
     {% endif %}
     <div>

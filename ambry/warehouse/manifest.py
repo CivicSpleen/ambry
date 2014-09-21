@@ -77,8 +77,6 @@ class Manifest(object):
         self.file_installs = set()
         self.installed_partitions = list()
 
-
-
     def _extract_file_data(self, file_or_data):
 
         if file_or_data.startswith('http'):  # A URL
@@ -135,7 +133,6 @@ class Manifest(object):
     def count_sections(self,tag):
         return sum( section.tag == tag for section in self.sections.values())
 
-
     @property
     def database(self):
         return self.single_line('database')
@@ -160,9 +157,10 @@ class Manifest(object):
         uid =  self.single_line('uid')
 
         if not uid:
-            import uuid
+            from ..identity import TopNumber
+            tn = TopNumber('m')
             raise ConfigurationError(
-                "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(uuid.uuid4()))
+                "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(str(tn)))
 
         return uid
 
@@ -176,7 +174,6 @@ class Manifest(object):
         t = self.tagged_sections('title').pop()
 
         print t.doc
-
 
     @property
     def access(self):

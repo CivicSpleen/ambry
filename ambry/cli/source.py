@@ -4,15 +4,14 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-
 from ..cli import prt, fatal, warn, _find, _print_find, _print_bundle_entry
-
 from ..cli import  load_bundle, _print_bundle_list
-from ..source import SourceTree
-
 import os
-import yaml
 import shutil
+
+# If the devel module exists, this is a development system.
+try: from ambry.support.devel import *
+except ImportError as e: from ambry.support.production import *
 
 def source_command(args, rc):
     from ..library import new_library
@@ -95,9 +94,6 @@ def source_parser(cmd):
     sp = asp.add_parser('run', help='Run a shell command in source directories passed in on stdin')
     sp.set_defaults(subcommand='run')
 
-    sp = asp.add_parser('test', help='Run some deveopment test code. ')
-    sp.set_defaults(subcommand='test')
-
     sp.add_argument('-P','--python', default=None, help=
                     'Path to a python class file to run. Loads as module and calls run(). The '+
                     'run() function can have any combination of arguments of these names: bundle_dir,'+
@@ -114,6 +110,11 @@ def source_parser(cmd):
     sp.set_defaults(subcommand='number')
     sp.add_argument('-k', '--key', help='Number server key')
     sp.add_argument('-s', '--set',  help='Set the number in the bundle in the specified directory')
+
+    if IN_DEVELOPMENT:
+        sp = asp.add_parser('test', help='Run some deveopment test code. ')
+        sp.set_defaults(subcommand='test')
+
 
 def source_info(args, l, st, rc):
     from . import _print_bundle_info
@@ -724,12 +725,17 @@ def source_test(args, l, st, rc):
 
     from ambry.dbexceptions import DependencyError
 
-    for vid, v in st.list().items():
+    from sqlalchemy.orm.attributes import InstrumentedAttribute
+    import inspect
 
-        bundle = st.resolve_bundle(vid)
+    for e in l.list():
+        b = l.get(e)
 
-        from ..util import Progressor
+        print b
 
-        for k, v in bundle.dependencies.items():
-            b = l.get(v, cb=Progressor().progress)
+        d =  b.get_dataset()
 
+        for k,v  in inspect.getmembers(d.__class__, lambda x: isinstance(x, InstrumentedAttribute)):
+            print k, type(v)
+
+        break

@@ -6,6 +6,7 @@ from ..database import new_database
 import os
 from ..util import Constant
 from ambry.util import init_log_rate
+from ..library.files import Files
 
 class NullCache(CacheInterface):
     def has(self, rel_path, md5=None, use_upstream=True):
@@ -102,9 +103,9 @@ class WarehouseInterface(object):
 
     FILE_GROUP = Constant()
 
-    FILE_GROUP.MANIFEST = 'manifest'
-    FILE_GROUP.DOC = 'doc'
-    FILE_GROUP.EXTRACT = 'extract'
+    FILE_GROUP.MANIFEST = Files.TYPE.MANIFEST
+    FILE_GROUP.DOC = Files.TYPE.DOC
+    FILE_GROUP.EXTRACT = Files.TYPE.EXTRACT
 
     def __init__(self,
                  database,
@@ -133,7 +134,6 @@ class WarehouseInterface(object):
         self.wlibrary.database.create()
 
         self._meta_set('created', datetime.now().isoformat())
-
 
     def clean(self):
         self.database.clean()
@@ -186,6 +186,15 @@ class WarehouseInterface(object):
     @about.setter
     def about(self, v):
         return self._meta_set('about', v)
+
+    @property
+    def name(self):
+        """name of the warehouse"""
+        return self._meta_get('name')
+
+    @name.setter
+    def name(self, v):
+        return self._meta_set('name', v)
 
     @property
     def local_cache(self):
@@ -368,6 +377,8 @@ class WarehouseInterface(object):
 
             self.install_table_alias(table, alias)
 
+
+
         return tables
 
     def install_manifest(self, manifest, force = None, reset=False):
@@ -445,8 +456,7 @@ class WarehouseInterface(object):
                 if doc:
                     d['doc'] = doc.content['html']
 
-                self.install_file(path=os.path.join('extracts', manifest.uid, d['rpath']), ref=d['table'],
-                                  type=d['format'], group='extract', source_url = manifest.uid, data=d)
+                self.install_extract(os.path.join('extracts', manifest.uid, d['rpath']), manifest, d)
 
             elif tag == 'include':
                 from .manifest import Manifest
@@ -455,9 +465,7 @@ class WarehouseInterface(object):
 
         # Manifest data
 
-        self.install_file(path=manifest.path, ref=manifest.uid,
-                          type=self.FILE_TYPE.MANIFEST, group=self.FILE_GROUP.MANIFEST, source_url = manifest.uid,
-                          content=str(manifest))
+        self.wlibrary.files.install_manifest(manifest)
 
         self._meta_set(manifest.uid, datetime.now().isoformat())
 
@@ -476,9 +484,6 @@ class WarehouseInterface(object):
         self.install_view(alias, "SELECT * FROM {}".format(table))
 
         self.install_table(alias, orig_name = table)
-
-    def install_file(self, path,  ref, content=None, source=None, type=None, group=None, source_url= None, data=None):
-        raise NotImplementedError(type(self))
 
     def install_table(self, name, orig_name = None, data = None ):
 
@@ -717,6 +722,7 @@ class WarehouseInterface(object):
 
         if 'password' in config['database']: del config['database']['password']
         return config
+
 
 
 def database_config(db, base_dir=''):
