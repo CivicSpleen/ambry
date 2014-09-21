@@ -240,9 +240,12 @@ class GeoPartition(SqlitePartition):
         types, type = get_shapefile_geometry_types(path)
 
         #ogr_create="ogr2ogr -explodecollections -skipfailures -f SQLite {output} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
-        
-        ogr_create="ogr2ogr  -overwrite -progress -skipfailures -f SQLite {output} -gt 65536 {t_srs} {s_srs_arg} -nlt  {type} " \
-                   "-nln \"{table}\" {input}  -dsco SPATIALITE=yes"
+
+        # The  '-dim 2' forces 2.5D and 3D shapes to 2D
+
+        ogr_create="ogr2ogr  -overwrite -progress -skipfailures -f SQLite {output} " \
+                   "-gt 65536 {t_srs} {s_srs_arg} -nlt  {type} " \
+                   "-nln \"{table}\" {input} -dim 2 -dsco SPATIALITE=yes"
 
         dir_ = os.path.dirname(self.database.path)
 
