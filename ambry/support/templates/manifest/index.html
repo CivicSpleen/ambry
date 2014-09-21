@@ -27,6 +27,9 @@
         {% for line, section in m.tagged_sections(['view', 'mview']) -%}
         {% include 'manifest/'+section.tag+'.html'  ignore missing -%}
         {% endfor %}
+
+
+
     </div>
 </div>
 
