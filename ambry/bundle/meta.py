@@ -82,6 +82,9 @@ class Build(VarDictGroup):
 class Extract(VarDictGroup):
     """Extract parameters"""
 
+class Views(VarDictGroup):
+    """Extract parameters"""
+
 class Process(VarDictGroup):
     """Process data. Build times, etc."""
 
@@ -119,6 +122,7 @@ class Top(Metadata):
     names = Names(file='bundle.yaml')
     build = Build(file='meta/build.yaml')
     extract = Extract(file='meta/build.yaml')
+    views = Views(file='meta/build.yaml')
     external_documentation = ExtDoc(file='bundle.yaml')
     documentation = Documentation(file='meta/doc.yaml')
     versions = Versions(file='bundle.yaml')
