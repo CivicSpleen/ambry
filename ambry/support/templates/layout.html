@@ -17,6 +17,7 @@
             </button>
             <a class="navbar-brand" href="#">Ambry</a>
         </div>
+
         <nav class="collapse navbar-collapse">
             <ul class="nav navbar-nav">
                 <li><a href="{{root_path}}/index.html">Home</a></li>
@@ -30,16 +31,28 @@
                 <li><a href="{{root_path}}/views.html">Views</a></li>
                 {% endif %}
             </ul>
+
+            <div class="col-sm-3 col-md-3 pull-right">
+                <form class="navbar-form" role="search">
+                    <div class="input-group">
+                        <input type="text" class="form-control" placeholder="Search" name="srch-term" id="srch-term">
+
+                        <div class="input-group-btn">
+                            <button class="btn btn-default" type="submit"><i class="glyphicon glyphicon-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
         </nav>
     </div>
+
+
+
     <div id="container">
         <div class="row">
-            <div id="sidebar-wrapper" class="col-md-2">
-                <div id="sidebar">
-                    <div  id="toc"></div>
-                </div>
-            </div>
-            <div class="col-md-10 pull-right">
+            <div class="col-md-12 pull-right">
                 <div>
                     <div class="page-header">
                         {% block masthead %} {% endblock %}
@@ -51,7 +64,9 @@
                  </div>
 
                 <div class="col-md-12 footer">
-                    <ul class="nav navbar-nav">{% block footer %} {% endblock %}</ul>
+                    <ul class="nav navbar-nav">{% block footer %}
+                        Civic Knowledge, data for social development.
+                    {% endblock %}</ul>
                 </div>
             </div>
         </div>
@@ -61,18 +76,6 @@
     <script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
     <script src="http://code.jquery.com/jquery-migrate-1.2.1.min.js"></script>
     <script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
-    <script src="http://assets.s3.clarinova.com/js/toc.min.js"></script>
-    <script>
-    $('#toc').toc();
-    $('#toc ul').addClass('nav nav-stacked')
-
-    $('#sidebar').affix({
-          offset: {
-            top: $('header').height()
-          }
-    });
-
-    </script>
     {% endblock %}
 </body>
 </html>

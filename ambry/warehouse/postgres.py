@@ -110,7 +110,7 @@ class PostgresWarehouse(RelationalWarehouse):
         return template.format(table=table, url=url)
 
 
-    def load_local(self, partition, table_name):
+    def load_local(self, partition, table_name, data = None):
         return self.load_insert(partition, table_name)
 
     def load_remote(self, partition, table_name, urls):
@@ -134,12 +134,46 @@ class PostgresWarehouse(RelationalWarehouse):
             r = self.database.connection.execute('commit')
 
 
-    def install_view(self, view_text):
+    def install_view(self, name, sql, data=None):
 
-        raise NotImplementedError()
+        self.logger.info('Installing view {}'.format(name))
 
-        e = self.database.connection.execute
+        assert name
+        assert sql
 
-        e(view_text)
+        sql = """
+        DROP VIEW  IF EXISTS "{name}";
+        CREATE VIEW "{name}" AS {sql}
+        """.format(name=name, sql=sql)
 
+        try:
+            self.database.connection.connection.cursor().execute(sql)
+            self.install_table(name, data=data)
+        except Exception as e:
+            self.logger.error("Failed to install view: \n{}".format(sql))
+            raise
+
+    def install_material_view(self, name, sql, clean=False, data=None):
+        from pysqlite2.dbapi2 import OperationalError
+
+        self.logger.info('Installing materialized view {}'.format(name))
+
+        if clean:
+            self.logger.info('mview_remove {}'.format(name))
+            self.database.connection.connection.cursor().executescript("DROP TABLE IF EXISTS {}".format(name))
+
+        sql = """
+        CREATE TABLE {name} AS {sql}
+        """.format(name=name, sql=sql)
+
+        try:
+            self.database.connection.connection.cursor().execute(sql)
+        except OperationalError as e:
+            if 'exists' not in str(e).lower():
+                raise
+
+            self.logger.info('mview_exists {}'.format(name))
+            # Ignore if it already exists.
+
+        self.install_table(name, data=data)
 

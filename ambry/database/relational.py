@@ -182,7 +182,6 @@ class RelationalDatabase(DatabaseInterface):
             raise Exception("Deleting not enabled")
 
         for table in reversed(self.metadata.sorted_tables):  # sorted by foreign key dependency
-
             if table.name not in ['spatial_ref_sys']:
                 table.drop(self.engine, checkfirst=True)
 

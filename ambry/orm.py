@@ -1088,8 +1088,8 @@ class Config(Base):
 # Links partitions to the data store ( database, directory ) that holds the partition
 # Primarily for warehouses, databases and extracts.
 stored_partitions = SATable('stored_partitions', Base.metadata,
-                          SAColumn('p_vid', Integer, ForeignKey('partitions.p_vid')),
-                          SAColumn('f_id', Integer, ForeignKey('files.f_id')),
+                          SAColumn('p_vid', String(20), ForeignKey('partitions.p_vid'), primary_key=True),
+                          SAColumn('f_id', Integer, ForeignKey('files.f_id'), primary_key=True),
                           UniqueConstraint('p_vid', 'f_id', name='u_stored_partitions'),
 )
 

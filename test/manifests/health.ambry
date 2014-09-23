@@ -11,9 +11,9 @@ example.com-combined-example
 
 VIEW: health_view
 
-SELECT * FROM dIjqPRbrGq001_example
+SELECT * FROM "pIjqPRbrGq001001_example"
 
 VIEW: health_mview
 
 SELECT *
-FROM dIjqPRbrGq001_example
+FROM "p00G002001_example"

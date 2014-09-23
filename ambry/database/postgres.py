@@ -3,8 +3,9 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from relational import RelationalDatabase 
-             
+from relational import RelationalDatabase
+
+
 
 class PostgresDatabase(RelationalDatabase):
 
@@ -22,4 +23,18 @@ class PostgresDatabase(RelationalDatabase):
             return True  #signal did create
 
         return False  # signal didn't create
+
+
+    def drop(self):
+        """Uses DROP ... CASCADE to drop tables"""
+
+        if not self.enable_delete:
+            raise Exception("Deleting not enabled")
+
+        for table in reversed(self.metadata.sorted_tables):  # sorted by foreign key dependency
+
+            if table.name not in ['spatial_ref_sys']: # Leave spatial tables alone.
+                sql = 'DROP TABLE IF EXISTS  "{}" CASCADE'.format(table.name)
+
+                self.connection.execute(sql)
 

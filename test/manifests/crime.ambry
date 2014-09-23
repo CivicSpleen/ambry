@@ -13,8 +13,8 @@ VIEW: doubled_int
 
 SELECT
     *,
-    2*`int` as doubled
-FROM dHSyDm4MNR_example1
+    2*cast("int" AS INTEGER) as doubled
+FROM "pHSyDm4MNR001002_example1"
 
 DOC:
 
@@ -37,4 +37,4 @@ SELECT
     quadrupled.*,
     ex.uuid as ex_uuid
 FROM quadrupled
-LEFT JOIN d00G001_example as ex on ex.id = quadrupled.id
+LEFT JOIN "p00G001001_example" as ex on ex.id = quadrupled.id

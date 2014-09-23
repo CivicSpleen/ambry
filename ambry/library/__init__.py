@@ -485,8 +485,13 @@ class Library(object):
 
     def partition(self, vid):
         from ..orm import Partition
+        from sqlalchemy.orm.exc import NoResultFound
+        try:
+            return (self.database.session.query(Partition).filter(Partition.vid == vid).one())
+        except NoResultFound:
+            self.logger.error("No partition found: {} for {}".format(vid, self.database.dsn))
+            raise
 
-        return (self.database.session.query(Partition).filter(Partition.vid == vid).one())
 
     @property
     def partitions(self):

@@ -83,14 +83,20 @@ class SqliteWarehouse(RelationalWarehouse):
 
         self.logger.info('Installing view {}'.format(name))
 
+        assert name
+        assert sql
+
         sql = """
         DROP VIEW  IF EXISTS {name};
         CREATE VIEW {name} AS {sql}
         """.format(name=name, sql=sql)
 
-        self.database.connection.connection.cursor().executescript(sql)
-
-        self.install_table(name, data = data)
+        try:
+            self.database.connection.connection.cursor().executescript(sql)
+            self.install_table(name, data = data)
+        except Exception as e:
+            self.logger.error("Failed to install view: \n{}".format(sql))
+            raise
 
 
     def install_material_view(self, name, sql, clean=False, data = None):

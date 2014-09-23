@@ -201,6 +201,12 @@ class WarehouseInterface(object):
         """Cache name for local publications. Usually a filesystem path"""
         lc =  self._meta_get('local_cache')
 
+        try:
+            path = self.database.path
+        except AttributeError: # Non file database, like Postgress, has no path
+            return None
+
+
         if not lc and os.path.exists(self.database.path):
             lc = os.path.dirname(self.database.path)
 
@@ -373,7 +379,7 @@ class WarehouseInterface(object):
         for table_name in tables:
             table, meta = self.create_table(p, table_name)
 
-            alias = p.identity.as_dataset().id_ + '_' + table_name
+            alias = p.identity.id_ + '_' + table_name
 
             self.install_table_alias(table, alias)
 
@@ -469,7 +475,7 @@ class WarehouseInterface(object):
 
         self._meta_set(manifest.uid, datetime.now().isoformat())
 
-        if os.path.exists(self.database.path):
+        if hasattr(self.database, 'path') and os.path.exists(self.database.path):
             return self.database.path
         else:
             return self.database.dsn
@@ -481,7 +487,7 @@ class WarehouseInterface(object):
         raise NotImplementedError(type(self))
 
     def install_table_alias(self, table, alias):
-        self.install_view(alias, "SELECT * FROM {}".format(table))
+        self.install_view(alias, "SELECT * FROM \"{}\" ".format(table))
 
         self.install_table(alias, orig_name = table)
 
@@ -690,7 +696,7 @@ class WarehouseInterface(object):
         """Create a table name that is prefixed with the dataset number and the
         partition grain, if it has one"""
 
-        name = identity.as_dataset().vid.replace('/', '_') + '_' + table_name
+        name = identity.vid.replace('/', '_') + '_' + table_name
 
         if identity.grain:
             name = name + '_' + identity.grain

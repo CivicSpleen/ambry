@@ -306,17 +306,21 @@ class LibraryDb(object):
 
     def create_tables(self):
 
-        tables = [ Dataset, Config, Table, Column, File, Partition]
+        tables = [ Dataset, Config, Table, Column, File, Partition, stored_partitions, file_link]
 
         self.drop()
 
         orig_schemas = {}
 
         for table in tables:
-            it = table.__table__
+            try:
+                it = table.__table__
+            except AttributeError: # stored_partitions, file_link are already tables.
+                it = table
 
             # These schema shenanigans are almost certainly wrong.
-            # But they are expedient
+            # But they are expedient. For Postgres, it puts the library
+            # tables in the Library schema.
             if self._schema:
                 orig_schemas[it] = it.schema
                 it.schema = self._schema
@@ -332,8 +336,6 @@ class LibraryDb(object):
             for it, orig_schema in orig_schemas.items():
                 it.schema = orig_schema
 
-        stored_partitions.create(bind=self.engine)
-        file_link.create(bind=self.engine)
 
     def _add_config_root(self):
         from sqlalchemy.orm.exc import NoResultFound

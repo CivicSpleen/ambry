@@ -90,8 +90,10 @@ class RelationalWarehouse(WarehouseInterface):
 
         if self.database.driver == 'mysql':
             cache_size = 5000
+
         elif self.database.driver == 'postgres':
             cache_size = 20000
+
         else:
             cache_size = 50000
 
@@ -118,18 +120,51 @@ class RelationalWarehouse(WarehouseInterface):
 
         cache = []
 
-        with self.database.engine.begin() as conn:
+        # Psycopg executemany function doesn't use the mulitle insert syntax of Postgres,
+        # so it is fantastically slow. So, we have to do it ourselves.
+        # Using multiple row inserts is more than 100 times faster.
+        import re
+
+        conn = self.database.engine.raw_connection()
+
+        with conn.cursor() as cur:
+
+            def execute_many(insert_statement, values):
+
+                mogd_values = []
+
+                inst, vals = insert_statement.split("VALUES")
+
+                for value in values:
+                    _, vals = cur.mogrify(insert_statement, value).split("VALUES")
+
+                    mogd_values.append(vals)
+
+                sql = inst+" VALUES "+','.join(mogd_values)
+
+                cur.execute(sql)
+
+
+            insert_statement = re.sub(r':([\w_-]+)', r'%(\1)s', str(insert_statement))
+
+
             for i, row in enumerate(partition.database.session.execute(select_statement)):
                 self.logger.progress('add_row', table_name, i)
 
-                cache.append(row)
+                cache.append(dict(row))
 
-                if len(cache) > cache_size:
-                    conn.execute(insert_statement, cache)
+                if len(cache) >= cache_size:
+                    self.logger.info('committing {} rows'.format(len(cache)))
+                    execute_many(insert_statement, cache)
                     cache = []
 
+
             if len(cache):
-                conn.execute(insert_statement, cache)
+                self.logger.info('committing {} rows'.format(len(cache)))
+                execute_many(insert_statement, cache)
+
+
+
 
         self.logger.info('done {}'.format(partition.identity.vname))
 

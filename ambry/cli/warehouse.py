@@ -21,11 +21,11 @@ def warehouse_command(args, rc):
 
     l.logger = global_logger
 
+    config = None
+
     if args.database:
         config = database_config(args.database)
 
-
-    config  = None
 
     if not config and args.name:
 

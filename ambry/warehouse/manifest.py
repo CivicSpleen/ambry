@@ -25,7 +25,8 @@ class ParseError(Exception):
 
 class ManifestSection(object):
 
-    def __init__(self, tag, linenumber, args):
+    def __init__(self, path, tag, linenumber, args):
+        self.path = path
         self.linenumber = linenumber
         self.args = args
         self.tag = tag
@@ -33,6 +34,10 @@ class ManifestSection(object):
         self.lines = []
         self.content = None
         self.doc = None
+
+    @property
+    def file_line(self):
+        return "{}:{}".format(self.path, self.linenumber)
 
     @property
     def name(self):
@@ -51,7 +56,6 @@ class ManifestSection(object):
 
     def __str__(self):
         return "Section: tag={} line={} args={} content={} doc={}".format(self.tag, self.linenumber, self.args, self.content, self.doc)
-
 
 class Manifest(object):
 
@@ -253,7 +257,7 @@ class Manifest(object):
             raise ConfigurationError("Unknown tag '{}' on line {}".format(tag, i))
 
         line_number = i + 1
-        section = ManifestSection(tag=tag, linenumber=line_number, args=args)
+        section = ManifestSection(self.path, tag=tag, linenumber=line_number, args=args)
         sections[line_number] = section
         return line_number, section
 
@@ -364,7 +368,13 @@ class Manifest(object):
 
     def _process_mview(self, section):
 
+        if not section.args.strip():
+            raise ParseError('No name specified for view at {}'.format(section.file_line))
+
         t = sqlparse.format('\n'.join(section.lines), reindent=True, keyword_case='upper')
+
+        if not t.strip():
+            raise ParseError('No sql specified for view at {}'.format(section.file_line))
 
         tc_names = set()  # table and column names
 
@@ -380,7 +390,14 @@ class Manifest(object):
 
     def _process_view(self, section):
         import sqlparse.tokens
+
+        if not section.args.strip():
+            raise ParseError('No name specified for view at {}'.format(section.file_line))
+
         t = sqlparse.format('\n'.join(section.lines), reindent=True, keyword_case='upper')
+
+        if not t.strip():
+            raise ParseError('No sql specified for view at {}'.format(section.file_line))
 
         tc_names = set() # table and column names
 
