@@ -174,7 +174,7 @@ def root_info(args, l, st, rc):
                 ident.add_partition(p.identity)
 
     except NotFoundError:
-        fatal("Could not get bundle file for '{}'".format(ident.path))
+        #fatal("Could not find bundle file for '{}'".format(ident.path))
         pass
 
     _print_info(l, ident, list_partitions=args.partitions)
