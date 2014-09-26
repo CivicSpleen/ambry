@@ -29,10 +29,14 @@ class RunConfig(object):
     earlier ones. 
     '''
 
+    AMBRY_CONFIG_ENV_VAR = 'AMBRY_CONFIG'  # Name of the evironmental var for the config file.
+
     ROOT_CONFIG = '/etc/ambry.yaml'
-    USER_CONFIG = os.path.expanduser('~/.ambry.yaml')
+    USER_CONFIG = os.getenv(AMBRY_CONFIG_ENV_VAR) if os.getenv(AMBRY_CONFIG_ENV_VAR) else os.path.expanduser('~/.ambry.yaml')
     USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
     DIR_CONFIG = os.path.join(os.getcwd(),'ambry.yaml')
+
+
 
     config = None
     files = None
@@ -103,7 +107,11 @@ class RunConfig(object):
 
     def group(self, name):
         '''return a dict for a group of configuration items.'''
-        
+
+        if not name in self.config:
+            raise ConfigurationError( ("No group '{}' in configuration.\n" +
+                                     "Config has: {}\nLoaded: {}").format(name, self.config.keys(), self.loaded))
+
         return self.config.get(name,{})
 
     def group_item(self, group, name):
@@ -111,7 +119,7 @@ class RunConfig(object):
         from dbexceptions import ConfigurationError
         
         g = self.group(group)
-        
+
         if not name in g:
             raise ConfigurationError(("Could not find name '{}' in group '{}'. \n"+
                                       "Config has: {}\nLoaded: {}").format(name, group, g.keys(), self.loaded))
@@ -215,7 +223,7 @@ class RunConfig(object):
 
 
     def service(self, name):
-
+        """For configuring the client side of services"""
         from util import parse_url_to_dict, unparse_url_dict
 
 
@@ -240,6 +248,31 @@ class RunConfig(object):
             e['account'] = 'No account found'
 
         e['url'] = unparse_url_dict(e)
+
+        return e
+
+    def servers(self, name, default = None):
+        """For configuring the server side of services"""
+        from util import parse_url_to_dict, unparse_url_dict
+
+        try:
+            e = self.group_item('servers', name)
+        except ConfigurationError:
+            if not default:
+                raise
+            e = default
+
+        # If the value is a string, rather than a dict, it is for a
+        # FsCache. Re-write it to be the expected type.
+
+        try:
+            account = self.account(e['host'])
+            e['account'] = account
+            e['password'] = account.get('password', e['password'])
+            e['username'] = account.get('username', e['username'])
+        except ConfigurationError:
+            e['account'] = 'No account found'
+
 
         return e
 

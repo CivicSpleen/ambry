@@ -199,16 +199,18 @@ class WarehouseInterface(object):
     @property
     def local_cache(self):
         """Cache name for local publications. Usually a filesystem path"""
+
         lc =  self._meta_get('local_cache')
 
-        try:
-            path = self.database.path
-        except AttributeError: # Non file database, like Postgress, has no path
-            return None
+        if not lc:
+            try:
+                path = self.database.path
 
+                if os.path.exists(path):
+                    lc = os.path.dirname(path)
 
-        if not lc and os.path.exists(self.database.path):
-            lc = os.path.dirname(self.database.path)
+            except AttributeError: # Non file database, like Postgress, has no path
+                return None
 
         return lc
 
@@ -407,8 +409,8 @@ class WarehouseInterface(object):
         if (reset or not self.about) and manifest.summary:
             self.about = manifest.summary['html']
 
-        if (reset or not self.local_cache) and manifest.local:
-            self.local_cache = manifest.local
+        if (reset or not self._meta_get('local_cache')) and manifest.local:
+            self.local_cache = manifest.cache_path
 
         if (reset or not self.remote_cache) and manifest.remote:
             self.remote_cache = manifest.remote
@@ -462,7 +464,9 @@ class WarehouseInterface(object):
                 if doc:
                     d['doc'] = doc.content['html']
 
-                self.install_extract(os.path.join('extracts', manifest.uid, d['rpath']), manifest, d)
+                extract_path = os.path.join('extracts',  d['rpath'])
+
+                self.wlibrary.files.install_extract(extract_path, manifest, d)
 
             elif tag == 'include':
                 from .manifest import Manifest
@@ -485,6 +489,8 @@ class WarehouseInterface(object):
 
     def install_view(self, name, sql, data=None):
         raise NotImplementedError(type(self))
+
+
 
     def install_table_alias(self, table, alias):
         self.install_view(alias, "SELECT * FROM \"{}\" ".format(table))

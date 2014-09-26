@@ -4,3 +4,4 @@ dependencies:
     random: example.com-random-example1
     simple: example.com-simple-orig-example
 extract: {}
+views: {}

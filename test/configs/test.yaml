@@ -28,7 +28,20 @@ library:
         remotes:
             - '{root}/remote'
 
-numbers:
-    host: numbers.ambry.io
-    key: fe78d179-8e61-4cc5-ba7b-263d8d3602b9
-    port: 80
+services:
+  dstk:
+      url: ec2-54-89-212-167.compute-1.amazonaws.com
+      type: dstk
+
+servers:
+  documentation:
+      host: localhost
+      port: 5001
+  numbers:
+    host: localhost
+    port: 5002
+    unregistered_key: 8f73cc64-ebd5-4dcc-b498-c61ccb0ca4cf
+    cache: /tmp/ambry-clitest/doc-cache
+    redis:
+      host: redis
+      port: 6379

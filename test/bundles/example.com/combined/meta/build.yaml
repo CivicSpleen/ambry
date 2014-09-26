@@ -10,3 +10,4 @@ sources:
     example2:
         description: The Second Example File
         url: http://ds-public.civicknowledge.org.s3.amazonaws.com/example.com/example2.csv
+views: {}

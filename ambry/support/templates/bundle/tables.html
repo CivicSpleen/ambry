@@ -9,13 +9,13 @@
     </tr>
     {% for t in b.schema.tables -%}
     <tr>
-        <td><a href="{{t.vid}}.html">{{t.vid}}</a></td>
+        <td><a href="{{table_path(b,t)}}">{{t.vid}}</a></td>
         <td>{{t.name}}</td>
         {% if w %}<td>{{w.orm_table(t.vid).installed|default('', true)}}</td>{% endif %}
         <td>{% if t.partitions -%}
             <ul>
                 {% for p in t.partitions -%}
-                <li><a href="{{p.vid}}.html">{{p.name}}</a></li>
+                <li><a href="{{partition_path(b,p)}}">{{p.name}}</a></li>
                 {% endfor %}
             </ul>
         {% endif -%}</td>

@@ -153,7 +153,6 @@ class Manifest(object):
     def remote(self):
         return self.single_line('remote')
 
-
     @property
     def uid(self):
         from ..dbexceptions import ConfigurationError
@@ -167,6 +166,16 @@ class Manifest(object):
                 "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(str(tn)))
 
         return uid
+
+    @property
+    def cache_path(self):
+        """The path component to use for sqlite databases, documentation and etracts"""
+
+        if self.local:
+            return self.local
+        else:
+            return self.uid
+
 
     @property
     def title(self):
@@ -347,8 +356,7 @@ class Manifest(object):
                 section.content['ref'] = previous_section.name
                 previous_section.doc = section.content
 
-            else:
-                previous_section = section
+            previous_section = section
 
         self.sections.update(sections)
 

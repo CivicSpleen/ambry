@@ -24,13 +24,13 @@
             </tr>
             {% for t in partition.orm_tables -%}
             <tr>
-                <td><a href="{{t.vid}}.html">{{t.vid}}</a></td>
+                <td><a href="{{table_path(b,t)}}">{{t.vid}}</a></td>
                 <td>{{t.name}}</td>
                 {% if w %}<td>{{t.installed|default('', true)}}</td>{% endif %}
                 <td>{% if t.partitions -%}
                     <ul>
                         {% for p in t.partitions -%}
-                        <li><a href="{{p.vid}}.html">{{p.name}}</a></li>
+                        <li><a href="{{partition_path(b,p)}}">{{p.name}}</a></li>
                         {% endfor %}
                     </ul>
                 {% endif -%}</td>

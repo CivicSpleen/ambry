@@ -28,8 +28,6 @@ def get_logger(name, file_name = None, stream = None, template=None, clear=False
     if file_name is specified, and the dirname() of the file_name exists, it will
     write to that file. If the dirname dies not exist, it will silently ignre it. """
 
-
-
     logger = logging.getLogger(name)
 
     if propagate is not None:

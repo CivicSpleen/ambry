@@ -77,16 +77,16 @@
             {% for b in l.list_bundles() -%}
                 <tr class="bundle_toc">
                     <td>{{loop.index}}</td>
-                    <td class="toc_vid"><a href="{{b.identity.path}}/index.html">{{b.identity.vid}}</a></td>
+                    <td class="toc_vid"><a href="{{bundle_path(b)}}">{{b.identity.vid}}</a></td>
                     <td class="toc_source">{{b.identity.source}}</td>
                     <td class="toc_dataset">{{b.identity.dataset}}</td>
                     <td class="toc_name">{{b.identity.name}}</td>
                     <td class="toc_version">
                         <ul  class="list-inline">
-                            <li><a href="{{b.identity.path}}/index.html">{{b.identity.version}}</a></li>
+                            <li><a href="{{bundle_path(b)}}">{{b.identity.version}}</a></li>
                             {% if b.identity.data.other_versions -%}
                             {% for v in b.identity.data.other_versions -%}
-                            <li><a href="{{v.path}}/index.html">{{v.version}}</a></li>
+                            <li><a href="{{bundle_path(v)}}">{{v.version}}</a></li>
                             {% endfor %}
                             {% endif -%}
                         </ul>

@@ -159,7 +159,7 @@ class SpatialiteWarehouse(SqliteWarehouse):
 
     def install_material_view(self, name, sql, clean=False):
 
-        super(SpatialiteWarehouse, self).install_material_view(name, sql, clean=clean)
+        super(SpatialiteWarehouse, self).install_material_view(name, sql, clean=clean, data = data)
 
         ce = self.database.connection.execute
 

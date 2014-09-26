@@ -967,7 +967,6 @@ def test_run(config):
 
     debug()
 
-
     lf = lambda: new_library(config, True)
 
     l = lf()

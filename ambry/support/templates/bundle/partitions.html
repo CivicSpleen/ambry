@@ -10,12 +10,12 @@
     </tr>
     {% for p in b.partitions -%}
     <tr>
-        <td><a href="{{p.vid}}.html">{{p.vid}}</a></td>
+        <td><a href="{{partition_path(b,p)}}">{{p.vid}}</a></td>
         <td>{{p.name}}</td>
         <td>{% if p.tables -%}
             <ul>
                 {% for t in p.orm_tables -%}
-                <li><a href="{{t.vid}}.html">{{t.name}}</a></li>
+                <li><a href="{{table_path(b,t)}}">{{t.name}}</a></li>
                 {% endfor %}
             </ul>
         {% endif -%}</td>

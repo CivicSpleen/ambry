@@ -36,9 +36,10 @@ def warehouse_command(args, rc):
     if not config and args.subcommand == 'install':
         from ..warehouse.manifest import Manifest
         import os.path
+
         m = Manifest(args.term)
 
-        base_dir = os.path.join(rc.filesystem('warehouse')['dir'])
+        base_dir = os.path.join(rc.filesystem('warehouse')['dir'], m.cache_path)
 
         config = database_config(m.database, base_dir=base_dir)
 
