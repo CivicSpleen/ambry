@@ -20,6 +20,13 @@ class null_logger(object):
         pass
 
 
+    def warn(self, w):
+        pass
+
+
+    def info(self, w):
+        pass
+
 class ParseError(Exception):
     pass
 

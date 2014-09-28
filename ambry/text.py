@@ -5,6 +5,38 @@ Support for creating web pages and text representations of schemas.
 import os
 
 
+# Path functions, for generating URL paths.
+def bundle_path(b):
+    from ambry.bundle import Bundle
+    from ambry.identity import Identity
+    return "bundles/{}.html".format(
+        b.identity.vid if isinstance(b, Bundle) else b.vid if isinstance(b, Identity) else b.get('vid', None),
+    )
+
+
+def table_path(b, t):
+    from ambry.bundle import Bundle
+    from ambry.identity import Identity
+    from ambry.orm import Table
+
+    return "bundles/{}/tables/{}.html".format(
+        b.identity.vid if isinstance(b, Bundle) else b.vid if isinstance(b, Identity) else b.get('vid', None),
+        t.vid if isinstance(t, Identity) else t.vid if isinstance(t, Table) else t.get('vid', None)
+    )
+
+
+def partition_path(b, p):
+    return "bundles/{}/partitions/{}.html".format(b.identity.vid, p.identity.vid)
+
+
+def manifest_path(m):
+    return "manifests/{}.html".format(m.uid)
+
+
+def store_path(s):
+    return "{}".format(s),
+
+
 class extract_entry(object):
     def __init__(self, extracted, completed, rel_path, abs_path, data=None):
         self.extracted = extracted
@@ -51,6 +83,9 @@ class Renderer(object):
     def maybe_render(self, rel_path, render_lambda, metadata={}, force=False):
         """Check if a file exists and maybe runder it"""
 
+        if rel_path[0] == '/':
+            rel_path = rel_path[1:]
+
         if rel_path.endswith('.html'):
             metadata['content-type'] = 'text/html'
 
@@ -59,6 +94,7 @@ class Renderer(object):
 
         try:
             if not self.cache.has(rel_path) or force:
+
                 with self.cache.put_stream(rel_path, metadata=metadata) as s:
                     t = render_lambda()
                     if t:
@@ -78,15 +114,25 @@ class Renderer(object):
             self.extracts.append(extract_entry(extracted, completed, rel_path, self.cache.path(rel_path)))
 
 
+
     def cc(self):
         """return common context values"""
+        from functools import wraps
+
+
+        def prefix_root(r,f):
+            @wraps(f)
+            def wrapper(*args, **kwds):
+                return os.path.join(r,f(*args, **kwds))
+            return wrapper
 
         return {
-            'bundle_path': lambda b: "/bundles/{}.html".format(b.identity.vid),
-            'table_path' : lambda b,t: "/bundles/{}/tables/{}.html".format(b.identity.vid,t.vid),
-            'partition_path': lambda b, p: "/bundles/{}/partitions/{}.html".format(b.identity.vid,p.identity.vid),
-            'manifest_path': lambda m: "/manifests/{}.html".format(m.uid),
-            'store_path': lambda s: "{}".format(s),
+            'from_root': lambda p : os.path.join(self.root_path,p),
+            'bundle_path': prefix_root(self.root_path, bundle_path),
+            'table_path' : prefix_root(self.root_path, table_path),
+            'partition_path': prefix_root(self.root_path, partition_path),
+            'manifest_path': prefix_root(self.root_path, manifest_path),
+            'store_path': prefix_root(self.root_path, store_path)
         }
 
     def clean(self):
@@ -102,6 +148,15 @@ class Renderer(object):
 
         return template.render(root_path=self.root_path, l=self.library, w=self.warehouse, **self.cc())
 
+
+
+    def bundles_index(self):
+        """Render the bundle Table of Contents for a library"""
+        template = self.env.get_template('toc/bundles.html')
+
+        return template.render(root_path=self.root_path, l=self.library, w=self.warehouse, **self.cc())
+
+
     def tables_index(self):
         from collections import OrderedDict
 
@@ -114,6 +169,7 @@ class Renderer(object):
                     bundle=b.identity,
                     name=t.name,
                     id_=t.id_,
+                    vid=t.vid,
                     description=t.description
                 ))
 
@@ -121,15 +177,6 @@ class Renderer(object):
 
         return template.render(root_path=self.root_path, l=self.library,
                                w=self.warehouse, tables=tables, **self.cc())
-
-
-
-    def bundles_index(self):
-        """Render the bundle Table of Contents for a library"""
-        template = self.env.get_template('toc/bundles.html')
-
-        return template.render(root_path=self.root_path, l=self.library, w=self.warehouse, **self.cc())
-
 
     def _bundle_main(self, b):
         """This actually call the renderer for the bundle """
@@ -154,22 +201,20 @@ class Renderer(object):
         from os.path import join
         from functools import partial
 
-        jbp = partial(join, b.identity.path)
-
         try:
-            self.maybe_render(jbp('index.html'), lambda: self._bundle_main(b), force=force)
+            self.maybe_render(bundle_path(b), lambda: self._bundle_main(b), force=force)
         except Exception as e:
             self.library.logger.error("Failed to render {}: {} ".format(b.identity, str(e)))
             raise
 
         for t in b.schema.tables:
-            self.maybe_render(jbp(t.vid) + '.html', lambda: self.table(b, t), force=force)
+            self.maybe_render(table_path(b,t), lambda: self.table(b, t), force=force)
 
         for p in b.partitions:
             if p.installed:
-                self.maybe_render(jbp(p.vid) + '.html', lambda: self.partition(b, p), force=force)
+                self.maybe_render(partition_path(b,p), lambda: self.partition(b, p), force=force)
 
-        return self.cache.path(jbp('index.html'))
+        return self.cache.path(bundle_path(b))
 
     def table(self, bundle, table):
 
@@ -177,11 +222,6 @@ class Renderer(object):
 
         return template.render(root_path=self.root_path, w=self.warehouse, b=bundle, table=table, **self.cc())
 
-    def tables_index(self, bundle, table):
-
-        template = self.env.get_template('table.html')
-
-        return template.render(root_path=self.root_path, w=self.warehouse, b=bundle, table=table, **self.cc())
 
     def partition(self, bundle, partition):
 
@@ -189,10 +229,31 @@ class Renderer(object):
 
         return template.render(root_path=self.root_path, w=self.warehouse, b=bundle, partition=partition, **self.cc())
 
-    def manifest(self, f, m):
+    def store(self, store):
+
+        template = self.env.get_template('store/index.html')
+
+        return template.render(root_path=self.root_path, w=self.warehouse, s=store, **self.cc())
+
+    def info(self, app_config, run_config):
+
+        template = self.env.get_template('info.html')
+
+        return template.render(root_path=self.root_path,
+                               w=self.warehouse, l=self.library,
+                               run_config = run_config,
+                               app_config = app_config,
+                               **self.cc())
+
+    def manifest(self, f, m=None):
         """F is the file object associated with the manifest"""
 
         template = self.env.get_template('manifest/index.html')
+
+        if m is None:
+            from ..warehouse.manifest import Manifest
+
+            m = Manifest(f.content)
 
         m.add_bundles(self.library)
 
@@ -231,6 +292,12 @@ class Renderer(object):
         import ambry.support.templates as tdir
 
         return os.path.join(os.path.dirname(tdir.__file__),'css')
+
+
+    def css_path(self, name):
+        import ambry.support.templates as tdir
+
+        return os.path.join(os.path.dirname(tdir.__file__), 'css', name)
 
     def write_library_doc(self, force=False, force_index = False):
         """Create the table of contents document with links to all of the bundles and tables """

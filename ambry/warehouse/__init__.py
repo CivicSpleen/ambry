@@ -59,6 +59,8 @@ def new_warehouse(config, elibrary, logger=None):
 
     storage = new_cache(config['storage']) if 'storage' in config else None
 
+    # If the warehouse specifies a seperate external library, use it, otherwise, use the
+    # warehouse datbase for the library
     library_database = LibraryDb(**config['library']) if 'library' in config else  LibraryDb(**db_config)
 
     # This library instance is only for the warehouse database.

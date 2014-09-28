@@ -1,3 +1,4 @@
+{% from 'macros.html' import modal, modal_button, exampledata %}
 <h2>Tables</h2>
 <table class="table table-striped table-bordered table-condensed">
     <tr>
@@ -6,6 +7,7 @@
         {% if w %}<th>Installed As</th>{% endif %}
         <th>Partitions</th>
         <th>Description</th>
+        <th>Data</th>
     </tr>
     {% for t in b.schema.tables -%}
     <tr>
@@ -20,6 +22,12 @@
             </ul>
         {% endif -%}</td>
         <td>{{t.description}}</td>
+        <td>{{modal_button('sample_data-'+t.vid,'Sample Data ')}}
+            {% call modal(id='sample_data-'+t.vid,title='Sample Data For "'+t.name+'"') %}{{exampledata()}}{% endcall %}
+        </td>
     </tr>
     {% endfor %}
 </table>
+
+
+

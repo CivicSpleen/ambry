@@ -4,8 +4,8 @@
     {% block head %}
     <title>{% block title %}{% endblock %}</title>
     <link href="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet">
-    <link href="{{root_path}}/css/style.css" rel="stylesheet">
-    <link href="{{root_path}}/css/pygments.css" rel="stylesheet">
+    <link href="{{from_root('css/style.css')}}" rel="stylesheet">
+    <link href="{{from_root('css/pygments.css')}}" rel="stylesheet">
     {% endblock %}
 </head>
 <body>
@@ -20,15 +20,15 @@
 
         <nav class="collapse navbar-collapse">
             <ul class="nav navbar-nav">
-                <li><a href="{{root_path}}/index.html">Home</a></li>
-                <li><a href="{{root_path}}/bundles.html">Bundles</a></li>
-                <li><a href="{{root_path}}/tables.html">Tables</a></li>
+                <li><a href="{{from_root('')}}">Home</a></li>
+                <li><a href="{{from_root('bundles.html')}}">Bundles</a></li>
+                <li><a href="{{from_root('tables.html')}}">Tables</a></li>
 
                 {% if w -%}
 
-                <li><a href="{{root_path}}/manifests.html">Manifests</a></li>
-                <li><a href="{{root_path}}/partitions.html">Partitions</a></li>
-                <li><a href="{{root_path}}/views.html">Views</a></li>
+                <li><a href="{{from_root('manifests.html')}}">Manifests</a></li>
+                <li><a href="{{from_root('partitions.html')}}">Partitions</a></li>
+                <li><a href="{{from_root('views.html')}}">Views</a></li>
                 {% endif %}
             </ul>
 

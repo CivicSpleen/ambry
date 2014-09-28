@@ -1,11 +1,25 @@
 {% extends "layout.html" %}
-{% block title %}Ambry Library{% endblock %}
+{% if w and w.manifests -%}
+    {% set lw = w -%}
+    {% set lw_type = 'database' -%}
+    {% set desc = "in this database" -%}
+{% elif not w and l and l.manifests -%}
+    {% set lw = l -%}
+    {% set lw_type = 'library' -%}
+    {% set desc = "based on this library" -%}
+{% else -%}
+    {% set lw = None -%}
+{% endif -%}
+
+{% block title %}Ambry {{lw_type|capitalize}}{% endblock %}
 {% block head %}
     {{ super() }}
 {% endblock %}
 {% block masthead %}
-    <h1 class="title">Ambry Library</h1>
-    <p>{{l.database.dsn}}</p>
+    <h1 class="title">Ambry {{lw_type|capitalize}}</h1>
+    <h2>{{lw.title}}</h2>
+    <p>{{lw.about}}</p>
+    <p>{{lw.database.dsn}}</p>
 {% endblock %}
 
 {% block body %}
@@ -14,50 +28,37 @@
 
     <div class = "row">
         <div class="col-md-6">
-             {% if w and w.manifests -%}
+
+
+            {% if lw -%}
             <div>
-                <h2>Collections <small>in this database</small></small></h2>
-                <table class="table table-hover table-condensed" >
-                <tr>
-                    <th>Id</th>
-                    <th>Title</th>
-                    <th>Summary</th>
-                </tr>
-                {% for f,m in w.manifests -%}
+                <h2>Collections <small>{{desc}}</small></small></h2>
+                <p>Collections of data bundles around a specific topic.</p>
+                <table  class="table table-hover table-condensed" >
+                {% for f,m in lw.manifests -%}
                     <tr>
-                        <td><a href="manifests/{{f.ref}}.html">{{f.ref}}</a></td>
-                        <td>{{f.data.title}}<br/><small>{{f.data.summary}}</small></td>
-                        <td>{{f.data.summary}}</td>
+                    <td><a href="manifests/{{f.ref}}.html">{{f.data.title}}</a></td>
+                    <td>{{f.data.summary}}</td>
                     </tr>
                 {% endfor %}
                 </table>
             </div>
-            {% endif %}
-            {% if l and l.manifests -%}
-            <div>
-                <h2>Collections <small>based on this library</small></small></h2>
-                <p>Collections of data bundles around a specific topic.</p>
-                <dl class="dl-horizontal">
-                {% for f,m in l.manifests -%}
-                    <dt><a href="manifests/{{f.ref}}.html">{{f.data.title}}</a></dt>
-                    <dd>{{f.data.summary}}</dd>
-                {% endfor %}
-                </dl>
-            </div>
-            {% endif %}
+            {% endif -%}
+
         </div>
         <div class="col-md-6">
-            {% if l and l.stores -%}
+            {% if not w and l and l.stores -%}
             <div>
-                <h2>Databases {%if not w -%}<small>based on this library</small>{%endif%}</h2>
+                <h2>Databases {%if not w -%}<small>build from this library</small>{%endif%}</h2>
                 <p>Remote databases that use data from this library. </p>
-                <dl class="dl-horizontal">
+                <table  class="table table-hover table-condensed" >
                 {% for s in l.stores -%}
-                    <dt><a href="stores/{{s.ref}}.html">{{s.data.title}}</a></dt>
-                    <dd>{{s.data.summary}}</dd>
+                    <tr>
+                    <td><a href="stores/{{s.ref}}.html">{{s.data.title}}</a></td>
+                    <td>{{s.data.summary}}</td>
+                    </tr>
                 {% endfor %}
-                </dl>
-
+                </table>
             </div>
         {% endif %}
         </div>

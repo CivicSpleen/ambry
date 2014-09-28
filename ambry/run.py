@@ -245,7 +245,7 @@ class RunConfig(object):
             e['password'] = account.get('password', e['password'])
             e['username'] = account.get('username', e['username'])
         except ConfigurationError:
-            e['account'] = 'No account found'
+            e['account'] = None
 
         e['url'] = unparse_url_dict(e)
 
@@ -271,7 +271,7 @@ class RunConfig(object):
             e['password'] = account.get('password', e['password'])
             e['username'] = account.get('username', e['username'])
         except ConfigurationError:
-            e['account'] = 'No account found'
+            e['account'] = None
 
 
         return e
@@ -350,15 +350,22 @@ class RunConfig(object):
         return e
     
 
-    
     def warehouse(self,name):
-        e =  self.group_item('warehouse', name) 
+        from warehouse import database_config
 
-        return self._sub_strings(e, {
-                                     'database': lambda k,v: self.database(v),
-                                     'account': lambda k,v: self.account(v),
-                                     'library': lambda k,v: self.database(v),
-                                     }  )
+        e =  self.group_item('warehouse', name)
+
+        # The warehouse can be specified as a single database string.
+        if isinstance(e, basestring):
+            return database_config(e)
+
+        else:
+
+            return self._sub_strings(e, {
+                                         'database': lambda k,v: database_config(v),
+                                         'account': lambda k,v: self.account(v),
+                                         'library': lambda k,v: self.database(v),
+                                         }  )
     def database(self,name):
         
         fs = self.group('filesystem') 

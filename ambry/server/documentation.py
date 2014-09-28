@@ -207,7 +207,6 @@ def _run( host, port,  reloader=False, **kwargs):
 if __name__ == '__main__':
     import argparse
     from ambry.run import  get_runconfig
-    from ..util import print_yaml
     from ambry.cache import new_cache, parse_cache_string
 
     rc = get_runconfig()
@@ -221,7 +220,7 @@ if __name__ == '__main__':
 
 
     parser = argparse.ArgumentParser(prog='python -mambry.server.documentation',
-                                     description='Run an Ambry documentation')
+                                     description='Run an Ambry documentation server')
 
     parser.add_argument('-H', '--host', default=None,
                         help="Server host. Defaults to configured value: {}".format(d['host']))
@@ -249,7 +248,9 @@ if __name__ == '__main__':
 
     config = parse_cache_string(d['cache'])
     cache = new_cache(config, run_config=rc)
-    install(RendererPlugin(cache, lf))
+
+
+
 
     _run( **d)
     

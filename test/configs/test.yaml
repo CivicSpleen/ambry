@@ -28,6 +28,9 @@ library:
         remotes:
             - '{root}/remote'
 
+warehouse:
+    default: 'sqlite:/tmp/ambry-clitest/warehouse.db'
+
 services:
   dstk:
       url: ec2-54-89-212-167.compute-1.amazonaws.com
@@ -37,6 +40,8 @@ servers:
   documentation:
       host: localhost
       port: 5001
+      library: default
+      warehouse: sqlite:////tmp/ambry-clitest/warehouse/test_manifests/manifest_test.db
   numbers:
     host: localhost
     port: 5002

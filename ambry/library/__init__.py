@@ -515,6 +515,13 @@ class Library(object):
 
         return self.files.query.group(self.files.TYPE.STORE).all
 
+    def store(self, uid):
+        """Return a tuple of a manifest file object and the manifest. . """
+
+        f = self.files.query.group(self.files.TYPE.STORE).ref(uid).one_maybe
+
+        return f
+
     @property
     def manifests(self):
         """Return all of the refistered data stores. """
@@ -523,6 +530,16 @@ class Library(object):
 
         return [(f, Manifest(f.content, logger=self.logger))
                 for f in self.files.query.group(self.files.TYPE.MANIFEST).all]
+
+
+    def manifest(self, uid):
+        """Return a tuple of a manifest file object and the manifest. . """
+
+        from ..warehouse.manifest import Manifest
+
+        f = self.files.query.group(self.files.TYPE.MANIFEST).ref(uid).one_maybe
+
+        return f, Manifest(f.content)
 
 
     @property
