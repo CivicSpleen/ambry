@@ -402,10 +402,10 @@ class Library(object):
         # Get a reference to the dataset, partition and relative path
         # from the local database.
 
-        dataset = self.resolve(ref, location=location)
+        dataset = self.resolve(ref,  location=location)
 
         if not dataset:
-            raise NotFoundError("Failed to resolve reference '{}'".format(ref))
+            raise NotFoundError("Failed to resolve reference '{}' in library '{}' ".format(ref, self.database.dsn))
 
         bundle = self._get_bundle_by_cache_key(dataset.cache_key)
 
@@ -571,7 +571,8 @@ class Library(object):
 
         # If the location is not explicitly defined, set it to everything but source
         if location is 'default':
-            location = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.PARTITION, LocationRef.LOCATION.REMOTE ]
+            location = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.PARTITION,
+                        LocationRef.LOCATION.REMOTE ]
 
         if isinstance(ref, Identity):
             ref = ref.vid

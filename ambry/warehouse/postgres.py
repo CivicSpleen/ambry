@@ -141,14 +141,16 @@ class PostgresWarehouse(RelationalWarehouse):
         assert name
         assert sql
 
-        sql = """
-        DROP VIEW  IF EXISTS "{name}";
-        CREATE VIEW "{name}" AS {sql}
-        """.format(name=name, sql=sql)
+        sqls = ['DROP VIEW  IF EXISTS "{name}" CASCADE'.format(name=name),
+        'CREATE VIEW "{name}" AS {sql}'.format(name=name, sql=sql)]
 
         try:
-            self.database.connection.connection.cursor().execute(sql)
+            for sql in sqls:
+                self.database.connection.execute(sql)
+
             self.install_table(name, data=data)
+
+
         except Exception as e:
             self.logger.error("Failed to install view: \n{}".format(sql))
             raise
@@ -160,14 +162,15 @@ class PostgresWarehouse(RelationalWarehouse):
 
         if clean:
             self.logger.info('mview_remove {}'.format(name))
-            self.database.connection.connection.cursor().executescript("DROP TABLE IF EXISTS {}".format(name))
+            self.database.connection.execute("DROP TABLE IF EXISTS {}".format(name))
 
         sql = """
         CREATE TABLE {name} AS {sql}
         """.format(name=name, sql=sql)
 
         try:
-            self.database.connection.connection.cursor().execute(sql)
+            self.database.connection.execute(sql)
+
         except OperationalError as e:
             if 'exists' not in str(e).lower():
                 raise

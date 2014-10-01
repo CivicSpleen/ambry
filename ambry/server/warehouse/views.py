@@ -24,7 +24,7 @@ def index():
 @app.route('/bundles/<vid>.html')
 def get_bundle(vid):
 
-    b = library().get(vid)
+    b = library().bundle(vid)
 
     return renderer()._bundle_main(b)
 
@@ -41,7 +41,7 @@ def get_tables():
 @app.route('/bundles/<bvid>/tables/<tvid>.html')
 def get_table(bvid, tvid):
 
-    b = library().get(bvid)
+    b = library().bundle(bvid)
 
     t = b.schema.table(tvid)
 
@@ -50,7 +50,7 @@ def get_table(bvid, tvid):
 @app.route('/bundles/<bvid>/partitions/<pvid>.html')
 def get_partitions(bvid, pvid):
 
-    b = library().get(bvid)
+    b = library().bundle(bvid)
 
     p = b.partitions.get(pvid)
 

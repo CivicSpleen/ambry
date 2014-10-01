@@ -136,9 +136,13 @@ class RelationalWarehouse(WarehouseInterface):
                 inst, vals = insert_statement.split("VALUES")
 
                 for value in values:
-                    _, vals = cur.mogrify(insert_statement, value).split("VALUES")
 
-                    mogd_values.append(vals)
+                    mogd = cur.mogrify(insert_statement, value)
+                    # Hopefully, inluding the parens will make it unique enough to not
+                    # cause problems. Using just 'VALUES' files when there is a column of the same name.
+                    _, vals = mogd.split(") VALUES (", 1)
+
+                    mogd_values.append("("+vals)
 
                 sql = inst+" VALUES "+','.join(mogd_values)
 
@@ -164,6 +168,7 @@ class RelationalWarehouse(WarehouseInterface):
                 execute_many(insert_statement, cache)
 
 
+        conn.commit()
 
 
         self.logger.info('done {}'.format(partition.identity.vname))
@@ -190,29 +195,25 @@ class RelationalWarehouse(WarehouseInterface):
             "-progress ",
             "-overwrite",
             "-skipfailures",
+            "-lco GEOMETRY_NAME=geometry",
             ] + self._ogr_args(partition)
 
         def err_output(line):
             self.logger.error(line)
 
-        global count
-        count = 0
-
-
-        def out_output(c):
-            global count
-            count += 1
-            if count % 10 == 0:
-                pct = (int(count / 10) - 1) * 20
-                if pct <= 100:
-                    self.logger.info("Loading {}%".format(pct))
-
-
         self.logger.info("Loading with: ogr2ogr {}".format(' '.join(args)))
 
         # Need to shlex it b/c the "PG:" part gets bungled otherwise.
-        p = ogr2ogr(*shlex.split(' '.join(args)), _err=err_output, _out=out_output, _iter=True, _out_bufsize=0)
-        p.wait()
+        pct_str = ''
+        for c in ogr2ogr(*shlex.split(' '.join(args)), _iter=True,  _out_bufsize=0, _err = err_output ):
+
+            if c.isdigit():
+                pct_str += c
+            elif pct_str:
+                self.logger.info("Loading with ogr2ogr: {}% done ".format(pct_str))
+                pct_str = ''
+
+        self.logger.log("Done loading with: ogr2ogr ")
 
         return a_table_name
 

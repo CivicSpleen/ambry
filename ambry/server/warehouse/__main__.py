@@ -40,6 +40,6 @@ if args.use_proxy:
 
 config = configure_application(config)
 
-app.run(host = config['host'], port = config['port'], debug = args.debug)
+app.run(host = config['host'], port = int(config['port']), debug = args.debug)
 
 

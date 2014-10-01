@@ -66,14 +66,17 @@ class PostgisWarehouse(PostgresWarehouse):
          .format(username=db.username, password=db.password, 
                     host=db.server, dbname=db.dbname)),
         partition.database.path,
-        "--config PG_USE_COPY YES"]
+        "-lco GEOMETRY_NAME=geometry",
+        "--config PG_USE_COPY YES"
+        ]
         
         def err_output(line):
             self.logger.error(line)
         
         global count
         count = 0
-        def out_output(c): 
+        def out_output(c):
+            self.logger.log("!!!! {} ".foramt(c))
             global count
             count +=  1
             if count % 10 == 0:
@@ -85,9 +88,19 @@ class PostgisWarehouse(PostgresWarehouse):
 
         self.logger.log("Loading with: ogr2ogr {}".format(' '.join(args)))
         
-        # Need to shlex it b/c the "PG:" part gets bungled otherwise. 
-        p = ogr2ogr(*shlex.split(' '.join(args)),  _err=err_output, _out=out_output, _iter=True, _out_bufsize=0)
-        p.wait()
+        # Need to shlex it b/c the "PG:" part gets bungled otherwise.
+        pct_str = ''
+        for c in ogr2ogr(*shlex.split(' '.join(args)), _iter=True, _out_bufsize=0, _err=err_output):
+
+            if c.isdigit():
+                pct_str += c
+            elif pct_str:
+                self.logger.info("Loading with ogr2ogr: {}% done ".format(pct_str))
+                pct_str = ''
+
+        self.logger.log("Done loading with: ogr2ogr ")
+
+        self.logger.log("Done loading with: ogr2ogr ")
 
         return
         

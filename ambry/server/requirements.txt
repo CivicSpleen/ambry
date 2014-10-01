@@ -10,3 +10,4 @@ lockfile
 decorator
 bottle
 redis
+flask

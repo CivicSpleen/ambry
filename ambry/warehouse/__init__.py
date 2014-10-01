@@ -349,6 +349,10 @@ class WarehouseInterface(object):
 
                 orm_table = p.get_table(table_name)
 
+                # Creating the table alias should be part of instal_partition, where the
+                # table is created, but
+                alias = p.identity.id_ + '_' + table_name
+                self.install_table_alias(self.augmented_table_name(p.identity, table_name), alias)
 
                 self.library.database.mark_table_installed(orm_table.vid, itn)
 
@@ -383,12 +387,6 @@ class WarehouseInterface(object):
         for table_name in tables:
             table, meta = self.create_table(p, table_name)
 
-            alias = p.identity.id_ + '_' + table_name
-
-            self.install_table_alias(table, alias)
-
-
-
         return tables
 
     def install_manifest(self, manifest, force = None, reset=False):
@@ -396,6 +394,8 @@ class WarehouseInterface(object):
         from ..dbexceptions import NotFoundError, ConfigurationError
         from datetime import datetime
         import os
+
+        errors = []
 
         # Delete everything related to this manifest
         (self.library.files.query.source_url(manifest.uid)).delete()
@@ -455,8 +455,13 @@ class WarehouseInterface(object):
                                            data=dict(tc_names=section.content['tc_names']))
 
             elif tag == 'view':
-                self.install_view(section.args, section.content['text'],
-                                  data = dict(tc_names = section.content['tc_names']))
+                try:
+                    self.install_view(section.args, section.content['text'],
+                                      data = dict(tc_names = section.content['tc_names']))
+                except Exception as e:
+                    errors.append((section, e))
+                    self.logger.error("Failed to install view {}: {}".format(section.args, e))
+
 
             elif tag == 'extract':
                 import json
@@ -481,6 +486,13 @@ class WarehouseInterface(object):
 
         self._meta_set(manifest.uid, datetime.now().isoformat())
 
+        if errors:
+            self.logger.error("")
+            self.logger.error("===== Install Errors =====")
+            for section, e  in errors:
+                self.logger.error("Failed to install view {}: at {}\n{}".format(section.args, section.file_line,  e))
+                self.logger.error('----------')
+
         if hasattr(self.database, 'path') and os.path.exists(self.database.path):
             return self.database.path
         else:
@@ -495,6 +507,7 @@ class WarehouseInterface(object):
 
 
     def install_table_alias(self, table, alias):
+
         self.install_view(alias, "SELECT * FROM \"{}\" ".format(table))
 
         self.install_table(alias, orig_name = table)

@@ -17,6 +17,7 @@ def warehouse_command(args, rc):
     from ambry.warehouse import database_config
     from ..dbexceptions import ConfigurationError
 
+
     l = new_library(rc.library(args.library_name))
 
     l.logger = global_logger
@@ -24,7 +25,11 @@ def warehouse_command(args, rc):
     config = None
 
     if args.database:
-        config = database_config(args.database)
+
+        try: # Its a name for the warehouse section of the config
+            config = rc.warehouse(args.database)
+        except ConfigurationError: # It is a database connection string.
+            config = database_config(args.database)
 
 
     if not config and args.name:

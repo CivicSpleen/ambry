@@ -44,7 +44,7 @@ def configure_application(command_args = None):
 def library():
 
     if current_app.app_config.get('warehouse', False):
-        return warehouse().elibrary
+        return warehouse().library
     else:
         l = new_library(current_app.run_config.library(current_app.app_config['library']), True)
         l.logger = global_logger
