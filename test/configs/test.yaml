@@ -41,7 +41,8 @@ servers:
       host: localhost
       port: 5001
       library: default
-      warehouse: sqlite:////tmp/ambry-clitest/warehouse/test_manifests/manifest_test.db
+      #warehouse: sqlite:////tmp/ambry-clitest/warehouse/test_manifests/manifest_test.db
+
   numbers:
     host: localhost
     port: 5002
