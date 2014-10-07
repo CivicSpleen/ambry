@@ -503,6 +503,12 @@ def bundle_config(args, b, st, rc):
         else:
             prior_version = identity.on.revision
 
+        # If the source bundle is already incremented past the installed versions
+        # use that instead.
+        if b.identity.on.revision > prior_version:
+            prior_version = b.identity.on.revision
+            b.close()
+
         # Now, update this version to be one more.
         ident = b.identity
 
