@@ -4,13 +4,13 @@
 Installing Ambry
 ################
 
-Ambry is a complex package that has dependencies on a lot of other code, some of which is hard to build from source, so there are a few different was to install it. 
+Ambry is a complex package that has dependencies on a lot of other code, some of which are hard to build from source, so there are a few different was to install it. 
 
 * `Mac OS X`_
 * `Linux, Ubuntu`_
 * `Windows`_
 * `Vagrant`_
-* `Source`_
+
 
 
 ********
@@ -42,21 +42,7 @@ Finally, install Ambry with pip:
 
     $ pip install ambry
 
-After installing with pip, you'll have to create the configuration files:
-
-.. code-block:: bash
-
-    $ ambry config install 
-   
-Then, check that it worked with:
-   
-.. code-block:: bash
-    
-    $ ambry info 
-    Version:  0.3.315
-    Root dir: /Users/<username>/ambry
-    Source :  /Users/<username>/ambry/source
-    Configs:  ['/Users/<username>/.ambry.yaml', '/Users/<username>/.ambry-accounts.yaml']
+Now see :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
     
 
 Script Install
@@ -74,12 +60,9 @@ To run the automated installer, execute this line from a Terminal:
 
 .. code-block:: bash
 
-    $ sh -c "$(curl -fsSL https://raw.githubusercontent.com/clarinova/ambry/master/support/install-osx.sh)"
+    $ sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/clarinova/ambry/master/support/install-osx.sh)"
 
-When it detects a missing packages that you have to install manually, the script will pause and open a web browser for you. If those external installs have any hickups, you may have to run the installer script more than once.
-
-Manual Install
---------------
+When it detects a missing packages that you have to install manually, the script will pause and open a web browser for you. If those external installs have any hickups, you may have to run the installer script more than once. 
 
 If the script fails, it is usually a problem with installing one of the external packages. You can try to install them outside of the sccript, then run the script to finish.
 
@@ -87,21 +70,22 @@ If the script fails, it is usually a problem with installing one of the external
 * For Homebrew, visit http://brew.sh/
 * For the KyngChaos Packages, visit http://www.kyngchaos.com/software/frameworks#gdal_complete
 
-These packages aren't signed, so Mac OS will issue a warning. Use the right-click menu to open them with the installer.
+The KyngChaos packages aren't signed, so Mac OS will issue a warning. Use the right-click menu to open them with the installer.
 
-After manually installing these packages, you can install Ambry by re-running the script, or by using pip. 
-
+Then,  see :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
+   
 *************
 Linux, Ubuntu
 *************
 
-For Ubuntu, the script usually works. From a terminal shell, run:
-
+For Ubuntu 13.04 through 14.04, use this script to install the dependencies and the Ambry package.
 
 .. code-block:: bash
 
-    $ sh -c "$(curl -fsSL https://raw.githubusercontent.com/clarinova/ambry/master/support/install-ubuntu.sh)"
+    $ sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/clarinova/ambry/master/support/install-ubuntu.sh)"
 
+Follow up with :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
+   
 
 *************
 Windows
@@ -114,7 +98,16 @@ For Windows, you can probably use the "Easy Way" installation: install Anaconda 
 Vagrant
 *************
 
-To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/installation/index.html>`_, then get the `source`_ code. After unpacking the source, change directory to the vagrant directory, `support/ambry-vagrant` and run ``vagrant up``
+To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/installation/index.html>`_, then get the source code. 
+
+.. code-block:: bash
+
+    $ git clone https://github.com/clarinova/ambry.git
+    
+Or, download a Zip archive from: https://github.com/clarinova/ambry/archive/master.zip
+
+
+After unpacking the source, change directory to the vagrant directory, :file:`support/ambry-vagrant` and run :command:`vagrant up`
 
 .. code-block:: bash
 
@@ -129,50 +122,39 @@ When the build is done, ssh to the box.
 
     $ vagrant ssh 
 
-Then run an info command to check that it all worked properly. 
+Then, follow the instrictions at :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
+   
 
-.. code-block:: bash
-
-    $ ambry info 
-
-********
-Source
-********
-
-You can get the source to Ambry from the `Ambry Github Repository <https://github.com/clarinova/ambry>`_, using git:
-
-
-.. code-block:: bash
-
-    $ git clone https://github.com/clarinova/ambry.git
-    
-Or, download a Zip archive from:
-
-    https://github.com/clarinova/ambry/archive/master.zip
-
-The source is a standard Python package with a setup.py script. 
+.. _install-post-install:
 
 *************
 Post Install
 *************
-    
-The install scripts will also clone example source bundles and insall a basic configuration file. You can verify that the install succeeded with:
+  
+After installing Ambry and its dependencies, you need to install a configuration file. 
 
 .. code-block:: bash
 
-    $ ambry info 
-    Version:  0.3.270
-    Root dir: /data
-    Source :  /data/source
-    Configs:  ['/etc/ambry.yaml', '/root/.ambry-accounts.yaml']
+    $ ambry config install 
 
-    $  ambry library info 
+ If you run this as a non-root user, it will create `~/.ambry.yaml` to store your configuration and `~/ambry` to store data and packages. If you run it as root, it will create the configuration as `/etc/ambry` and put the data store at `/ambry/`
+ 
+Then, check that it worked with:
+   
+.. code-block:: bash
+    
+    $ ambry info 
+    Version:  0.3.420
+    Root dir: /home/eric/ambry
+    Source :  /home/eric/ambry/source
+    Configs:  ['/home/eric/.ambry.yaml', '/home/eric/.ambry-accounts.yaml']
+
+    $ ambry library info 
     Library Info
     Name:     default
-    Database: sqlite:////data/library.db
-    Cache:    FsCache: dir=/data/library upstream=(None)
-    Upstream: None
-    Remotes:  http://library.clarinova.com
+    Database: sqlite:////home/eric/ambry/library.db
+    Cache:    FsCache: dir=/home/eric/ambry/library upstream=(None)
+    Remotes:  FsCompressionCache: upstream=(HttpCache: url=http://s3.sandiegodata.org/library/)
 
 After installation, you can customize the configuation. See: :ref:`configuration`
 

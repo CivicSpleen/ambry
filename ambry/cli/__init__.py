@@ -38,7 +38,11 @@ def fatal(template, *args, **kwargs):
     import sys
     global global_logger
 
-    global_logger.critical(template.format(*args, **kwargs))
+    try:
+        global_logger.critical(template.replace('{','{{').replace('}','}}').format(*args, **kwargs))
+    except KeyError:
+        # When the error string is a template
+        global_logger.critical(template.format(*args, **kwargs))
     sys.exit(1)
 
 def warn(template, *args, **kwargs):

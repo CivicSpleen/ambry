@@ -1230,18 +1230,18 @@ def unparse_url_dict(d):
         host_port+= ":" + str(d['port'])
 
     user_pass = ''
-    if d['username']:
+    if 'username' in d and d['username']:
         user_pass += d['username']
 
-    if d['password']:
+    if 'password' in d and d['password']:
         user_pass += ':' + d['password']
 
     if user_pass:
         host_port = user_pass + '@' + host_port
 
-    url = "{}://{}/{}".format(d['scheme'], host_port, d['path'].lstrip('/'))
+    url = "{}://{}/{}".format(d.get('scheme','http'), host_port, d.get('path','').lstrip('/'))
 
-    if d['query']:
+    if 'query' in d and d['query']:
         url += '?' + d['query']
 
     return url

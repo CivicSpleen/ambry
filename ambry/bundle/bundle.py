@@ -255,7 +255,7 @@ class Bundle(object):
         which based on the path of the database. For paths relative to the
         directory of a BuildBundle, use the Filesystem object.
 
-        :param *args: Zero or more path elements that will be concatenated and suffixed to the root path
+        :param args: Zero or more path elements that will be concatenated and suffixed to the root path
 
          """
         return os.path.join(self.path, *args)
