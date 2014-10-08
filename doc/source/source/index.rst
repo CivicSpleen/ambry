@@ -6,6 +6,8 @@ Ambry Source
 A quick guide to using Ambry
 
 .. toctree::
-    :maxdepth: 3
+    :maxdepth: 2
 
-    bundles
+    bundle_structure
+    bundle_types
+    
