@@ -39,6 +39,7 @@ def fatal(template, *args, **kwargs):
     global global_logger
 
     global_logger.critical(template.format(*args, **kwargs))
+
     sys.exit(1)
 
 def warn(template, *args, **kwargs):
@@ -475,5 +476,5 @@ def main(argsv = None, ext_logger=None):
         except ConfigurationError as e:
             if args.exceptions:
                 raise
-            fatal("{}: {}".format(str(e.__class__.__name__),str(e)))
+            fatal("{}: {}".format(str(e.__class__.__name__),str(e).replace('{','{{').replace('}','}}')))
         
