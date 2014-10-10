@@ -374,7 +374,10 @@ class Column(Base):
     units = SAColumn('c_units',Text)
     universe = SAColumn('c_universe',Text)
     scale = SAColumn('c_scale',Real)
+    # Reference to a column that provides an example of whow this column should be used.
+    proto = SAColumn('c_proto', String(20), ForeignKey('Column.c_vid'), index=True)
     data = SAColumn('c_data',MutationDict.as_mutable(JSONEncodedObj))
+
 
     is_primary_key = SAColumn('c_is_primary_key',Boolean, default = False)
     
@@ -1100,7 +1103,6 @@ file_link = SATable('file_link', Base.metadata,
 )
 
 
-
 class File(Base, SavableMixin):
     __tablename__ = 'files'
 
@@ -1126,7 +1128,6 @@ class File(Base, SavableMixin):
         UniqueConstraint('f_ref', 'f_type', 'f_group', name='u_ref_path'),
     )
 
-
     partitions = relationship('Partition', secondary=stored_partitions, backref='stores')
 
     right_files = relationship("File",
@@ -1135,7 +1136,6 @@ class File(Base, SavableMixin):
                                secondaryjoin= oid == file_link.c.fl_left_id,
                                backref="left_files"
     )
-
 
     def __init__(self,**kwargs):
         self.oid = kwargs.get("oid",None) 
@@ -1167,9 +1167,6 @@ class File(Base, SavableMixin):
     @property
     def insertable_dict(self):
         return { ('f_'+k).strip('_'):v for k,v in self.dict.items()}
-
-
-
 
 class Partition(Base):
     __tablename__ = 'partitions'
