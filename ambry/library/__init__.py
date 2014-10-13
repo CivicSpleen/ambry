@@ -478,19 +478,38 @@ class Library(object):
 
         return bundle
 
-    def table(self, vid):
+    def tables(self):
+        """Return ORM records for all tables"""
         from ..orm import Table
 
-        return (self.database.session.query(Table).filter(Table.vid == vid).one())
+        return self.database.session.query(Table).all()
+
+
+    def table(self, vid):
+        from ..orm import Table
+        from sqlalchemy.orm.exc import NoResultFound
+        from ..dbexceptions import NotFoundError
+
+        try:
+            return (self.database.session.query(Table).filter(Table.vid == vid).one())
+        except NoResultFound:
+            try:
+                return (self.database.session.query(Table).filter(Table.id_ == vid).one())
+            except NoResultFound:
+                raise NotFoundError("Did not find table ref {} in library {}".format(vid, self.database.dsn))
 
     def partition(self, vid):
         from ..orm import Partition
         from sqlalchemy.orm.exc import NoResultFound
+
         try:
             return (self.database.session.query(Partition).filter(Partition.vid == vid).one())
         except NoResultFound:
-            self.logger.error("No partition found: {} for {}".format(vid, self.database.dsn))
-            raise
+            try:
+                return (self.database.session.query(Partition).filter(Partition.id_ == vid).one())
+            except NoResultFound:
+                self.logger.error("No partition found: {} for {}".format(vid, self.database.dsn))
+                raise
 
 
     @property

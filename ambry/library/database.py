@@ -516,7 +516,6 @@ class LibraryDb(object):
         ds.creator = 'N/A'
         ds.data = data
 
-
         try:
             self.session.merge(ds)
             self.commit()
@@ -574,7 +573,9 @@ class LibraryDb(object):
 
         '''
         from ambry.bundle import Bundle
+        from sqlalchemy.orm.exc import NoResultFound
         from ..dbexceptions import ConflictError, NotFoundError
+        from sqlalchemy import update, or_
 
         if not isinstance(bundle, Bundle):
             raise ValueError("Can only install a  Bundle object. Got a {}".format(type(bundle)))
@@ -611,18 +612,22 @@ class LibraryDb(object):
         tables = []
         columns = []
 
+        foreign_keys = [] # Link these after the tables and columns are created
+
         for table in dataset.tables:
             tables.append(table.insertable_dict)
 
             for column in table.columns:
-                columns.append(column.insertable_dict)
+
+                d = column.insertable_dict
+
+                columns.append(d)
 
         if tables:
             s.execute(Table.__table__.insert(), tables)
             s.execute(Column.__table__.insert(), columns)
 
         for config in bundle.database.session.query(Config).all():
-
             s.merge(config)
 
         if commit:
@@ -632,6 +637,9 @@ class LibraryDb(object):
                 self.logger.error("Failed to merge into {}".format(self.dsn))
                 self.rollback()
                 raise e
+
+
+
 
     def install_dataset(self, bundle):
         """Install only the most basic parts of the bundle, excluding the
@@ -644,6 +652,7 @@ class LibraryDb(object):
 
         from sqlalchemy.exc import OperationalError
         from ..dbexceptions import NotABundle
+
 
 
         # There should be only one dataset record in the

@@ -4,8 +4,9 @@
 Creating a New Bundle
 =====================
 
-First, you will need to properly :doc:`configure your Ambry installation <configuration>`. In particular, you will need
-to set your email and name in the ``.ambry-accounts.yaml`` file.
+.. important::
+
+    First, you will need to properly :ref:`configure your Ambry installation <configuration>`. In particular, you will need to set your email and name in the ``.ambry-accounts.yaml`` file.
 
 
 In your ``Source`` directory, clone a source repo. Here are a few:

@@ -5,7 +5,7 @@ Bulding
 =============
 
 Locating region that cointains a point
--------------------------------------
+--------------------------------------
 
 A common geographic task is to find the census block that a point is within.
 

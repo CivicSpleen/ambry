@@ -255,7 +255,7 @@ class Bundle(object):
         which based on the path of the database. For paths relative to the
         directory of a BuildBundle, use the Filesystem object.
 
-        :param *args: Zero or more path elements that will be concatenated and suffixed to the root path
+        :param args: Zero or more path elements that will be concatenated and suffixed to the root path
 
          """
         return os.path.join(self.path, *args)
@@ -1047,10 +1047,7 @@ class BuildBundle(Bundle):
 
         except Exception as e:
             raise
-            self.error(
-                "Error in consulting library: {}\nException: {}".format(
-                    self.library.info,
-                    e.message))
+
 
 
         return True
@@ -1070,6 +1067,8 @@ class BuildBundle(Bundle):
                 with self.session:
                     warnings, errors = self.schema.schema_from_file(f)
 
+                    self.schema.expand_prototypes()
+
                 for title, s, f in (("Errors", errors, self.error), ("Warnings", warnings, self.warn)):
                     if s:
                         self.log("----- Schema {} ".format(title))
@@ -1082,6 +1081,9 @@ class BuildBundle(Bundle):
                     self.fatal("Schema load filed. Exiting")
         else:
             self.log("No schema file ('{}') not loading schema".format(sf))
+
+
+
 
     def prepare(self):
         from ..dbexceptions import NotFoundError
@@ -1161,7 +1163,9 @@ class BuildBundle(Bundle):
             self.set_value('process', 'dbcreated', root_db_created.value)
 
             self._revise_schema()
-            
+
+        self.schema.move_revised_schema()
+
         self.set_build_state( 'prepared')
 
         self.update_configuration()
@@ -1244,18 +1248,7 @@ class BuildBundle(Bundle):
 
             self._revise_schema()
 
-        # Some original import files don't have a schema, particularly
-        # imported Shapefiles
-        if os.path.exists(self.filesystem.path('meta', self.SCHEMA_FILE)):
-            shutil.copy(
-                self.filesystem.path('meta', self.SCHEMA_FILE),
-                self.filesystem.path('meta', self.SCHEMA_OLD_FILE)
-            )
-
-            shutil.copy(
-                self.filesystem.path('meta', self.SCHEMA_REVISED_FILE),
-                self.filesystem.path('meta', self.SCHEMA_FILE)
-            )
+        self.schema.move_revised_schema()
 
         self.post_build_finalize()
 

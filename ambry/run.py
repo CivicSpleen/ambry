@@ -134,11 +134,10 @@ class RunConfig(object):
 
         for path, subdicts, values in walk_dict(e):
             for k,v in values:
-                
-                if v is None:
 
-                    raise Exception('Got None value: {} {} {} {} '.format(path, subdicts, k, v))
-                
+                if v is None:
+                    continue
+
                 path_parts = path.split('/')
                 path_parts.pop()
                 path_parts.pop(0)
@@ -198,8 +197,16 @@ class RunConfig(object):
             return stream
         
 
-    def filesystem(self,name):
-        e =  self.group_item('filesystem', name) 
+    def filesystem(self,name, missing_is_dir=False):
+
+        try:
+            e =  self.group_item('filesystem', name)
+        except ConfigurationError:
+
+            if missing_is_dir:
+                e = dict(dir=name)
+            else:
+                raise
 
         # If the value is a string, rather than a dict, it is for a
         # FsCache. Re-write it to be the expected type.
@@ -239,15 +246,21 @@ class RunConfig(object):
         if e.get('url', False):
             e.update(parse_url_to_dict(e['url']))
 
+        hn = e.get('hostname',e.get('host', None))
+
         try:
-            account = self.account(e['hostname'])
+            account = self.account(hn)
             e['account'] = account
             e['password'] = account.get('password', e['password'])
             e['username'] = account.get('username', e['username'])
         except ConfigurationError:
             e['account'] = None
 
+        e['hostname'] = e['host'] = hn
+
+
         e['url'] = unparse_url_dict(e)
+
 
         return e
 
@@ -329,8 +342,8 @@ class RunConfig(object):
 
 
         e =  self._sub_strings(e, {
-                                     'filesystem': lambda k,v: self.filesystem(v),
-                                     'database': lambda k,v: self.database(v),
+                                     'filesystem': lambda k,v: self.filesystem(v, missing_is_dir=True),
+                                     'database': lambda k,v: self.database(v, missing_is_dsn=True),
                                      'upstream': lambda k,v: self.filesystem(v),
                                      'account': lambda k, v: self.account(v),
                                      'remotes': lambda k, v: self.remotes(v),
@@ -366,12 +379,37 @@ class RunConfig(object):
                                          'account': lambda k,v: self.account(v),
                                          'library': lambda k,v: self.database(v),
                                          }  )
-    def database(self,name):
+
+    def database(self,name, missing_is_dsn = False):
         
         fs = self.group('filesystem') 
         root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
-        
-        e = self.group_item('database', name) 
+
+        try:
+            e = self.group_item('database', name)
+        except ConfigurationError:
+            if missing_is_dsn:
+                e = name.format(root=root_dir.rstrip('/'))
+            else:
+                raise
+
+
+        # If the value is a string rather than a dict, it is a DSN string
+
+        if isinstance(e, basestring):
+            from util import parse_url_to_dict
+            d = parse_url_to_dict(e)
+
+            e = dict(
+                server=d['hostname'],
+                dbname = d['path'].rstrip('/'),
+                driver = d['scheme'],
+                password = d.get('password', None),
+                username = d.get('username',None)
+            )
+
+            if e['server'] and not e['password']:
+                e['account']  = "{driver}://{username}@{server}/{dbname}".format(**e)
 
         e =  self._sub_strings(e, {'dbname' : lambda k,v: v.format(root=root_dir),
                                    'account': lambda k,v: self.account(v),}  )
@@ -383,9 +421,11 @@ class RunConfig(object):
             if 'password' in account:
                 e['user'] = account['user']
                 e['password'] = account['password']
-                
-        e = e.to_dict()
 
+        try:
+            e = e.to_dict()
+        except AttributeError:
+            pass # Already a dict b/c converted from string
         return e
 
 

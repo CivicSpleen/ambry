@@ -300,11 +300,11 @@ class Test(TestBase):
         #
 
         print str(ident.locations)
-        self.assertEquals('      ', str(ident.locations))
+        self.assertEquals('       ', str(ident.locations))
         ident.locations.set(LocationRef.LOCATION.LIBRARY, 1)
         ident.locations.set(LocationRef.LOCATION.REMOTE, 2)
         ident.locations.set(LocationRef.LOCATION.SOURCE)
-        self.assertEquals('LSR   ', str(ident.locations))
+        self.assertEquals('LSR    ', str(ident.locations))
 
         # Partitions, converting to datasets
 

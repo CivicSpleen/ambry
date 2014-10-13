@@ -185,9 +185,12 @@ class Schema(object):
 
 
         for key, value in kwargs.items():
+            # Why aren't we just setting values thorugh the constructor? Because there are a bunch of values in
+            # the kwargs that aren't meant for the table constructor?
             if not key:
                 continue
-            if key[0] != '_' and key not in ['id','id_', 'd_id','name','sequence_id','table','column']:       
+            if key[0] != '_' and key not in ['id','id_', 'd_id','name','sequence_id','table','column']:
+
                 setattr(row, key, value)
      
         self._seen_tables[name] = row
@@ -202,13 +205,10 @@ class Schema(object):
 
     def add_column(self, table, name,  **kwargs):
         '''Add a column to the schema'''
+        from dbexceptions import ConfigurationError
 
         # Make sure that the columnumber is monotonically increasing
         # when it is specified, and is one more than the last one if not.
-
-        import pdb;
-
-
 
         if not table.name in self.max_col_id:
             if len(table.columns) == 0:
@@ -218,6 +218,12 @@ class Schema(object):
             else:
                 self.max_col_id[table.name] = max(*[c.sequence_id for c in table.columns])
 
+        try:
+            int(kwargs['sequence_id'])
+        except ValueError:
+            raise ConfigurationError("Sequence id value '{}' is not an integer in table '{}' col '{}'"
+                                        .format(kwargs['sequence_id'], table.name, name ))
+
         sequence_id = int(kwargs['sequence_id']) if 'sequence_id' in kwargs and kwargs['sequence_id'] is not None else None
 
 
@@ -225,8 +231,9 @@ class Schema(object):
             sequence_id = self.max_col_id[table.name] + 1
 
         elif sequence_id <= self.max_col_id[table.name]:
-                raise Exception("Column {} specifies column number {}, but last number in table {} is {}"
-                            .format(name, sequence_id, table.name, self.max_col_id[table.name]))
+
+            raise ConfigurationError("Column '{}' specifies column number '{}', but last number in table '{}' is {}"
+                        .format(name, sequence_id, table.name, self.max_col_id[table.name]))
 
 
         self.max_col_id[table.name] = sequence_id
@@ -423,6 +430,7 @@ class Schema(object):
             at.append_column(ac)
 
             if column.foreign_key:
+                raise NotImplementedError("Need to lookup foreign key")
                 fk = column.foreign_key
                 fks = "{}.{}_id".format(fk.capitalize(), fk)
                 foreign_keys[column.name] = fks
@@ -593,7 +601,8 @@ class Schema(object):
             if not row.get('column', False) and not row.get('table', False):
                 continue
             
-            row = { k:str(v).decode('utf8', 'ignore').encode('ascii','ignore').strip() for k,v in row.items() }
+            row = { k:str(v).decode('utf8', 'ignore').encode('ascii','ignore').strip()
+                    for k,v in row.items() }
 
             if  row['table'] and row['table'] != last_table:
                 new_table = True
@@ -611,9 +620,10 @@ class Schema(object):
                     return warnings, errors 
    
                 try:
+
                     t = self.add_table(row['table'], **row)
                 except Exception as e:
-                    errors.append((None,None," Failed to add table: {}. Row={}. Exceptoin={}".format(row['table'], row, e)))
+                    errors.append((None,None," Failed to add table: {}. Row={}. Exception={}".format(row['table'], row, e)))
                     return warnings, errors
                 
                 new_table = False
@@ -655,10 +665,12 @@ class Schema(object):
 
             #progress_cb("Column: {}".format(row['column']))
 
+
+
             col = self.add_column(t,row['column'],
                                    sequence_id = row.get('seq',None),
                                    is_primary_key= True if row.get('is_pk', False) else False,
-                                   foreign_key= row['is_fk'] if row.get('is_fk', False) else None,
+                                   fk_vid= row['is_fk'] if row.get('is_fk', False) else None,
                                    description=description,
                                    datatype=datatype,
                                    unique_constraints = ','.join(uniques),
@@ -680,12 +692,67 @@ class Schema(object):
                                    universe=row.get('universe',None)
                                    )
 
+
             self.bundle.database.session.commit()
 
             
             self.validate_column(t, col, warnings, errors)
 
         return warnings, errors
+
+    def expand_prototypes(self):
+        """Look for tables that have prototypes, get the original table, and expand the
+        local definition to include all of the prototypes's columns"""
+        from orm import Table, Column
+        from dbexceptions import NotFoundError
+        from identity import ObjectNumber
+
+        q = (self.bundle.database.session.query(Table).filter(Table.proto_vid != None))
+
+        l = self.bundle.library
+
+        for t in q.all():
+
+            try:
+                proto_table = l.table(t.proto_vid)
+            except NotFoundError:
+                self.bundle.error("Can't expand prototype for table {}: missing prototype reference {}"
+                                  .format(t.name, t.proto_vid))
+                continue
+
+            t_on = ObjectNumber.parse(t.proto_vid)
+
+            for c in proto_table.columns:
+
+
+                if c.name == 'id':
+                    # This column already exists, not re-adding it preserves numbering
+                    idc = t.column('id')
+                    idc.description = proto_table.description
+                    idc.proto_vid = t.proto_vid
+                    idc.datatype = c.datatype
+                    idc.is_primary_key = True
+
+                else:
+
+                    d = c.dict
+
+                    del d['id_']
+                    del d['vid']
+                    del d['t_id']
+                    del d['t_vid']
+                    name = d['name']
+                    del d['name']
+                    del d['sequence_id']
+
+                    # Use a revision in the id if the table id has one
+                    if t_on.revision:
+                        d['proto_vid'] = c.vid
+                    else:
+                        d['proto_vid'] = c.id_
+
+                    self.add_column(t, name, **d)
+
 
     def extract_schema(self, db):
         '''Extract an Ambry schema from a database and create it in this bundle '''
@@ -719,6 +786,36 @@ class Schema(object):
         with open(self.bundle.filesystem.path('meta',self.bundle.SCHEMA_FILE), 'w') as f:
             self.as_csv(f)
 
+    def move_revised_schema(self):
+        """Move the revised schema file into place, saving the old one"""
+        import filecmp
+        import shutil
+        import os
+        from functools import partial
+
+        # Some original import files don't have a schema, particularly
+        # imported Shapefiles
+
+
+        fsp = partial(self.bundle.filesystem.path,'meta')
+        sb = self.bundle
+
+
+        if os.path.exists(fsp(sb.SCHEMA_FILE)):
+
+            try:
+                if not filecmp.cmp( fsp(sb.SCHEMA_FILE),fsp(sb.SCHEMA_OLD_FILE)):
+                    shutil.copy(fsp(sb.SCHEMA_FILE),fsp(sb.SCHEMA_OLD_FILE))
+            except OSError: # hopefully only a file not found error
+                pass
+
+            try:
+                if not filecmp.cmp(fsp(sb.SCHEMA_REVISED_FILE),fsp(sb.SCHEMA_FILE)):
+                    shutil.copy(fsp(sb.SCHEMA_REVISED_FILE),fsp(sb.SCHEMA_FILE))
+            except OSError: # hopefully only a file not found error
+                pass
+
+
     def copy_table(self, in_table, out_table_name=None):
         '''Copy a table schema into this schema'''
 
@@ -748,11 +845,13 @@ class Schema(object):
         # Collect indexes
         indexes = {}
 
+        # Sets the order of the fields
         all_opt_col_fields = ["size", "precision","scale", "default","start", "width",
                               "description","sql","flags","keywords",
                               "measure","units","universe"]
-        
-        opt_col_fields = []
+
+        # Collects what fields actually exist
+        opt_col_fields_set = set()
         
         if table_name:
             tables = [ table for table in self.tables if table.name == table_name]
@@ -764,11 +863,15 @@ class Schema(object):
         # Need to get all of the indexes figured out first, since there are a variable number of indexes.
         for table in tables:
 
+            if table.proto_vid:
+                opt_col_fields_set.add("proto_vid")
+
             for col in table.columns: 
                 
                 for index_set in [col.indexes, col.uindexes, col.unique_constraints]:
                     if not index_set:
                         continue # HACK. This probably shouldnot happen
+
                     for idx in index_set.split(','):
                         
                         idx = idx.replace(table.name+'_','')
@@ -780,8 +883,8 @@ class Schema(object):
                 for field in all_opt_col_fields:
 
                     v = getattr(col, field)
-                    if v and field not in opt_col_fields:
-                        opt_col_fields.append(field)
+                    if v and field not in opt_col_fields_set:
+                        opt_col_fields_set.add(field)
 
                 for k,v in col.data.items():
                     data_fields.add(k) 
@@ -791,11 +894,10 @@ class Schema(object):
             for k,v in table.data.items():
                 data_fields.add(k)
 
-            
         data_fields = sorted(data_fields)
-                     
+
         # Put back into same order as in all_opt_col_fields
-        opt_col_fields = [ field for field in all_opt_col_fields if field in opt_col_fields]
+        opt_col_fields = [ field for field in all_opt_col_fields if field in opt_col_fields_set]
 
         indexes = OrderedDict(sorted(indexes.items(), key=lambda t: t[0]))
 
@@ -811,6 +913,7 @@ class Schema(object):
                 row['is_pk'] = 1 if col.is_primary_key else ''
                 row['is_fk'] = col.foreign_key if col.foreign_key else None
                 row['type'] = col.datatype.upper()   if col.datatype else None
+
 
                 for idx,s in indexes.items():
                     if idx:
@@ -829,18 +932,30 @@ class Schema(object):
                     if not col.description and table.description:
                         col.description = table.description
 
+
                 else:
                     for k in data_fields:
                         row['d_'+k]=col.data.get(k,None)
 
                 row['description'] = col.description
 
-                row['id'] = col.id_
+                # The primary key is special. It is always first and it always exists,
+                # so it can hold the id of the table instead. ( The columns's id field is not first,
+                # but the column record for the tables id field is first.
+                if row['is_pk']:
+                    row['id'] = table.id_
+                    if table.proto_vid:
+                        row['proto_vid'] = table.proto_vid
+                else:
+                    row['id'] = col.id_
+                    if col.proto_vid:
+                        row['proto_vid'] = col.proto_vid
+
 
                 if first:
                     first = False
                     yield row.keys()
-                    
+
                 yield row
   
              
@@ -1009,9 +1124,14 @@ class {name}(Base):
                 opts = []
                 optstr = ''
 
-                if col.is_primary_key: opts.append("primary_key=True") 
-                if col.foreign_key: opts.append("ForeignKey('{tablelc}')".format(
-                                                    tableuc=col.foreign_key.capitalize(), tablelc=col.foreign_key)) 
+                if col.is_primary_key: opts.append("primary_key=True")
+
+
+
+                if col.foreign_key:
+                    raise NotImplemented("Foreign keys are now column vid references.")
+                    opts.append("ForeignKey('{tablelc}')".format(
+                                tableuc=col.foreign_key.capitalize(), tablelc=col.foreign_key))
                 
                 if  len(opts):
                     optstr = ',' + ','.join(opts)

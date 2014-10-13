@@ -1,9 +1,0 @@
--   name: example.com-segmented-orig-example-1
-    segment: 1
-    table: example
--   name: example.com-segmented-orig-example-2
-    segment: 2
-    table: example
--   name: example.com-segmented-orig-example-3
-    segment: 3
-    table: example

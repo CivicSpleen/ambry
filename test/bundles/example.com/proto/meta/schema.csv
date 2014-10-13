@@ -1,0 +1,11 @@
+table,seq,column,is_pk,is_fk,type,size,description,id
+example1,1,id,1,,INTEGER,,A Pretty Good Table,t4y30WDM9f01
+example1,2,uuid,,,VARCHAR,36,A random UUID,c4y30WDM9f01002
+example1,3,int,,,INTEGER,3,A random integer,c4y30WDM9f01003
+example1,4,float,,,REAL,,,c4y30WDM9f01004
+,,,,,,,,
+example2,1,id,1,,INTEGER,,Another Table,t4y30WDM9f02
+example2,2,uuid2,,,VARCHAR,,A random UUID,c4y30WDM9f02002
+example2,3,int2,,,INTEGER,,A random integer,c4y30WDM9f02003
+example2,4,example1_id,,c4y30WDM9f01002,INTEGER,,A Foreign Key link,c4y30WDM9f02004
+example2,5,float,,,REAL,,,c4y30WDM9f02005

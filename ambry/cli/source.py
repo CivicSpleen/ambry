@@ -120,9 +120,9 @@ def source_info(args, l, st, rc):
     from . import _print_bundle_info
 
     if not args.terms:
-        prt("Source dir: {}", rc.sourcerepo.dir)
-        for repo in  rc.sourcerepo.list:
-            prt("Repo      : {}", repo.ident)
+        prt("Source dir: {}", st.base_dir)
+        return
+
     if args.terms[0] == '-':
         # Read terms from stdin, one per line.
         import sys
@@ -236,7 +236,7 @@ def source_new(args, l, st, rc):
     from ambry.bundle.meta import Top
     from ..dbexceptions import ConflictError
 
-    nsconfig = rc.group('numbers')
+    nsconfig = rc.service('numbers')
 
     if args.key:
         nsconfig['key'] = args.key

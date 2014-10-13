@@ -1,5 +1,5 @@
 table,seq,column,is_pk,is_fk,type,size,description,id
-rand,1,id,1,,INTEGER,,,c000001E01001
+rand,1,id,1,,INTEGER,,,t000001E01
 rand,2,uuid,,,VARCHAR,36,A random UUID,c000001E01002
 rand,3,int,,,INTEGER,3,A random integer,c000001E01003
 rand,4,float,,,REAL,,,c000001E01004
