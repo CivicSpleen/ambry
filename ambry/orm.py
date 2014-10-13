@@ -374,16 +374,17 @@ class Column(Base):
     units = SAColumn('c_units',Text)
     universe = SAColumn('c_universe',Text)
     scale = SAColumn('c_scale',Real)
-    # Reference to a column that provides an example of whow this column should be used.
-    proto = SAColumn('c_proto', String(20), ForeignKey('Column.c_vid'), index=True)
+
+    # Reference to a column that provides an example of how this column should be used.
+    proto_vid = SAColumn('c_proto_vid', String(20), index=True)
+
+    # Reference to a column that this column links to.
+    fk_vid = SAColumn('c_fk_vid', String(20),  index=True)
+
     data = SAColumn('c_data',MutationDict.as_mutable(JSONEncodedObj))
 
-
     is_primary_key = SAColumn('c_is_primary_key',Boolean, default = False)
-    
-    _is_foreign_key = SAColumn('c_is_foreign_key',Boolean, default = False)
-    _foreign_key = SAColumn('c_foreign_key',String(16), nullable=True)
-    
+
     unique_constraints = SAColumn('c_unique_constraints',Text)
     indexes = SAColumn('c_indexes',Text)
     uindexes = SAColumn('c_uindexes',Text)
@@ -392,8 +393,6 @@ class Column(Base):
 
     __table_args__ = (UniqueConstraint('c_sequence_id', 'c_t_vid', name='_uc_columns_1'),
                      )
-
-
 
     DATATYPE_TEXT = 'text'
     DATATYPE_INTEGER ='integer' 
@@ -492,26 +491,9 @@ class Column(Base):
 
     @property
     def foreign_key(self):
-        try:
-            return self._foreign_key
-        except OperationalError:
-            try:
-                return self._is_foreign_key if bool(self._is_foreign_key) else None
-            except TypeError: # Something about requiring an integer
-                return False
-    
-    @foreign_key.setter
-    def foreign_key(self, value):
-        try:
-            self._foreign_key  = value
-        except OperationalError:
-            self._is_foreign_key  = value     
-       
-    @property
-    def is_foreign_key(self): raise NotImplementedError("Use foreign_key instead")
-    
-    @is_foreign_key.setter
-    def is_foreign_key(self, value): raise NotImplementedError("Use foreign_key instead")
+        return self.fk_vid
+
+
         
     def __init__(self,table, **kwargs):
 
@@ -531,7 +513,9 @@ class Column(Base):
         self.measure = kwargs.get("measure",None) 
         self.units = kwargs.get("units",None) 
         self.universe = kwargs.get("universe",None) 
-        self.scale = kwargs.get("scale",None) 
+        self.scale = kwargs.get("scale",None)
+        self.fk_vid = kwargs.get("fk_vid", kwargs.get("foreign_key", None))
+        self.proto_vid = kwargs.get("proto_vid",kwargs.get("proto",None))
         self.data = kwargs.get("data",None) 
 
         # the table_name attribute is not stored. It is only for
@@ -555,7 +539,7 @@ class Column(Base):
              if k in ['id_', 'vid', 't_vid','t_id',
                       'sequence_id', 'name', 'altname', 'is_primary_key', 'datatype', 'size',
                       'precision', 'start', 'width', 'sql', 'flags', 'description', 'keywords', 'measure',
-                      'units', 'universe', 'scale', 'data']}
+                      'units', 'universe', 'scale', 'proto_vid', 'fk_vid', 'data']}
         if not x:
             raise Exception(self.__dict__)
 
@@ -625,8 +609,12 @@ class Table(Base):
     description = SAColumn('t_description',Text)
     universe = SAColumn('t_universe',String(200))
     keywords = SAColumn('t_keywords',Text)
+    # Reference to a column that provides an example of whow this column should be used.
+    proto_vid = SAColumn('t_proto_vid', String(20), index=True)
+
+    installed = SAColumn('t_installed', String(100))
     data = SAColumn('t_data',MutationDict.as_mutable(JSONEncodedObj))
-    installed = SAColumn('t_installed',String(100))
+
     
     __table_args__ = (
         #ForeignKeyConstraint([d_vid, d_location], ['datasets.d_vid', 'datasets.d_location']),
@@ -640,13 +628,17 @@ class Table(Base):
 
     def __init__(self,dataset, **kwargs):
 
+        assert 'proto' not in kwargs
+
+
         self.sequence_id = kwargs.get("sequence_id",None)  
         self.name = kwargs.get("name",None) 
         self.vname = kwargs.get("vname",None) 
         self.altname = kwargs.get("altname",None) 
         self.description = kwargs.get("description",None)
         self.universe = kwargs.get("universe", None)
-        self.keywords = kwargs.get("keywords",None) 
+        self.keywords = kwargs.get("keywords",None)
+        self.proto_vid = kwargs.get("proto_vid")
         self.data = kwargs.get("data",None) 
         
         self.d_id = dataset.id_
@@ -666,7 +658,7 @@ class Table(Base):
     def dict(self):
         return {k:v for k,v in self.__dict__.items() if k in
                 ['id_','vid', 'd_id', 'd_vid', 'sequence_id', 'name', 'altname', 'vname', 'description',
-                 'universe', 'keywords', 'installed', 'data']}
+                 'universe', 'keywords', 'installed', 'proto_vid', 'data']}
 
 
     @property
@@ -803,11 +795,17 @@ Columns:
 
             excludes = ['d_id','t_id','name', 'schema_type']
 
+            if key == 'proto' and isinstance(value, basestring):  # Proto is the name of the object.
+                key = 'proto_vid'
+
             if extant:
                 excludes.append('sequence_id')
 
             if key[0] != '_' and key not in excludes :
-                setattr(row, key, value)
+                try:
+                    setattr(row, key, value)
+                except AttributeError:
+                    raise AttributeError("Column record has no attribute {}".format(key))
 
             if isinstance(value, basestring) and len(value) == 0:
                 if key == 'is_primary_key':
@@ -1128,7 +1126,7 @@ class File(Base, SavableMixin):
         UniqueConstraint('f_ref', 'f_type', 'f_group', name='u_ref_path'),
     )
 
-    partitions = relationship('Partition', secondary=stored_partitions, backref='stores')
+    partitions = relationship('Partition', secondary=stored_partitions, backref='stores', viewonly=True)
 
     right_files = relationship("File",
                                secondary=file_link,
