@@ -352,9 +352,15 @@ class Test(TestBase):
                 pid = self.bundle.identity.as_partition(**dict(p[i:i+j+1]))
                 pids[pid.fqname] = pid
 
-        
+
+
+        #print '!!!', self.bundle.database.dsn
+        #return
+
         with self.bundle.session as s:
-        
+
+            s.commit()
+
             # These two deletey bits clear out all of the old
             # partitions, to avoid a conflict with the next section. We also have
             # to delete the files, since create() adds a partition record to the database, 
@@ -364,7 +370,10 @@ class Test(TestBase):
                     os.remove(p.database.path)
             
             for p in self.bundle.dataset.partitions:
-                s.delete(p)
+                # Using SQL instead of s.delete() because we want to avoid the cascade to stored_partitions, since
+                # that table doesn't exist in the bundle, only in the library
+                s.execute("DELETE FROM partitions WHERE p_vid = :vid", {'vid':p.vid})
+                #s.delete(p)
 
     def test_partition_2(self):
 
@@ -558,18 +567,7 @@ class Test(TestBase):
         self.bundle.update_configuration()
 
 
-    def test_partition_doc(self):
 
-        b = self.bundle
-
-        for p in b.partitions:
-            print p.html_doc()
-
-
-    def test_bundle_doc(self):
-        b = self.bundle
-
-        print b.html_doc()
 
 
 def suite():

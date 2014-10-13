@@ -481,5 +481,5 @@ def main(argsv = None, ext_logger=None):
         except ConfigurationError as e:
             if args.exceptions:
                 raise
-            fatal("{}: {}".format(str(e.__class__.__name__),str(e).replace('{','{{').replace('}','}}')))
+            fatal("{}: {}".format(str(e.__class__.__name__),str(e)))
         

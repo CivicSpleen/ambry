@@ -25,6 +25,7 @@ def root_parser(cmd):
     sp.add_argument('-F', '--fields', type=str,
                     help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
+    sp.add_argument('-t', '--tables', default=False, action="store_true", help="Show tables")
     sp.add_argument('-a', '--all', default=False, action="store_true", help='List everything')
     sp.add_argument('-l', '--library', default=False, action="store_const", const = lr.LIBRARY, help='List only the library')
     sp.add_argument('-r', '--remote', default=False, action="store_const", const = lr.REMOTE, help='List only the remote')
@@ -103,6 +104,12 @@ def root_list(args, l, st, rc):
     from ..cli import load_bundle, _print_bundle_list
     from ..orm import Dataset
 
+    if args.tables:
+        for table in l.tables():
+            print table.name, table.vid, table.dataset.identity.fqname
+
+        return
+
     if args.plain:
         fields = ['vid']
 
@@ -123,7 +130,7 @@ def root_list(args, l, st, rc):
     if 'pcount' in fields:
         with_partitions = True
     else:
-        with_partitions = False
+        with_partitions = args.partitions
 
     idents = sorted(l.list(with_partitions=with_partitions).values(), key=key)
 

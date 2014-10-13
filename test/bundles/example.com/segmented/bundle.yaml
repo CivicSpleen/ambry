@@ -41,13 +41,13 @@ identity:
     source: example.com
     subset: null
     type: null
-    variation: orig
+    variation: null
     version: 0.1.1
 names:
-    fqname: example.com-segmented-orig-0.1.1~d00G001
-    name: example.com-segmented-orig
+    fqname: example.com-segmented-0.1.1~d00G001
+    name: example.com-segmented
     vid: d00G001
-    vname: example.com-segmented-orig-0.1.1
+    vname: example.com-segmented-0.1.1
 process: {}
 versions:
     1:

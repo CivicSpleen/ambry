@@ -44,6 +44,9 @@ contact_source:
         name: Source maintainer
         url: http://clarinova.com
 dependencies: {}
+documentation:
+    main: null
+    readme: null
 extract: {}
 identity:
     bspace: null
@@ -65,6 +68,7 @@ nonterm:
     a: 1
     b: 2
     c: 3
+process: {}
 sources:
     google:
         description: The Google Homepage
@@ -76,6 +80,7 @@ versions:
     3:
         description: d3
         version: s3
+views: {}
             """
 
     def tearDown(self):
