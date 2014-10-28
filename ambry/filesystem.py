@@ -223,14 +223,23 @@ class BundleFilesystem(Filesystem):
         extract and cache it. '''
         name = name.replace('..','')
         
-        if name[0] == '/':
+        if name.startswith('/'):
             name = name[1:]
-        
-        base = os.path.basename(path)
-        
-        rel_path = (urllib.quote_plus(base.replace('/','_'),'_')+'/'+
-                    urllib.quote_plus(name.replace('/','_'),'_') )
-     
+
+        if name.endswith('/'): # Its a ZIP file directory
+            return None
+
+        # If the file is comming from the download cache, be sure to use the entire
+        # cache path, so files are always unique.
+        download_cache = self.get_cache_by_name('downloads')
+
+        if path.startswith(download_cache.cache_dir):
+            base = path.replace(download_cache.cache_dir, '').lstrip('/')
+        else:
+            base = urllib.quote_plus(os.path.basename(path).replace('/', '_'), '_')
+
+        rel_path = os.path.join(base,urllib.quote_plus(name.replace('/', '_'), '_'))
+
         # Check if it is already in the cache
         cached_file = cache.get(rel_path)
         
@@ -243,7 +252,8 @@ class BundleFilesystem(Filesystem):
         if not os.path.exists(tmp_abs_path):
             zf.extract(name,tmpdir )
             
-        # Store it in the cache.           
+        # Store it in the cache.
+
         abs_path = cache.put(tmp_abs_path, rel_path)
         
         # There have been zip files that have been truncated, but I don't know
@@ -254,7 +264,7 @@ class BundleFilesystem(Filesystem):
 
         return abs_path
  
-    def unzip(self,path, regex=None):
+    def unzip(self, path, regex=None):
         '''Context manager to extract a single file from a zip archive, and delete
         it when finished'''
         import tempfile, uuid
@@ -316,7 +326,13 @@ class BundleFilesystem(Filesystem):
                     if '__MACOSX' in name: # Noidea about this, but it seems useless.
                         continue
 
-                    abs_path = self._get_unzip_file(cache, tmpdir, zf, path, name)  
+                    abs_path = self._get_unzip_file(cache, tmpdir, zf, path, name)
+
+                    if not abs_path:
+                        continue
+
+
+
                     if regex and regex.match(name) or not regex:
                         yield abs_path
         except Exception as e:
@@ -327,7 +343,7 @@ class BundleFilesystem(Filesystem):
             self.rm_rf(tmpdir)
     
         
-    def download(self,url, test_f=None):
+    def download(self,url, test_f=None, unzip=False):
         '''Context manager to download a file, return it for us, 
         and delete it when done.
 
@@ -475,7 +491,18 @@ class BundleFilesystem(Filesystem):
         if excpt:
             raise excpt
 
-        return out_file
+        if unzip:
+
+            if isinstance(unzip, bool):
+                return self.unzip(out_file)
+            elif unzip == 'dir':
+                return self.unzip_dir(out_file)
+            else:
+                return self.unzip_dir(out_file, regex=unzip)
+
+
+        else:
+            return out_file
 
     def read_csv(self, f, key = None):
         """Read a CSV into a dictionary of dicts or list of dicts

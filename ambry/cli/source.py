@@ -315,11 +315,10 @@ def source_new(args, l, st, rc):
 
     b.metadata.sources.example = { 'url': 'http://example.com', 'description': 'description'}
 
-    b.metadata.external_documentation.example = {
+    b.metadata.external_documentation.download = {
         'url': 'http://example.com',
-        'title': "title",
-        'description': 'description',
-        'source': 'source'
+        'title': "Download Page",
+        'description': 'Web page that links to the source files.'
     }
 
     b.update_configuration()

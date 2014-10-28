@@ -798,8 +798,6 @@ class BuildBundle(Bundle):
                 self.database.rewrite_dataset()
 
 
-
-
     def rewrite_readme(self):
 
         tf = self.filesystem.path(self.README_FILE_TEMPLATE)
@@ -809,53 +807,47 @@ class BuildBundle(Bundle):
                 with open(self.filesystem.path(rmf),'w') as fo:
                     fo.write(self.sub_template(fi.read()))
 
-    @property
     def sources(self):
-        """Return a dictionary of sources from the build.sources configuration key"""
+        """
+        Iterate over the sources. If the file is a zip file, unzip it, and if 'file' is specified,
+        extract  first file that matches the 'file' regex.
+        """
 
-        if not self.config.group('build'):
-            raise ConfigurationError(
-                "Configuration does not have 'build' group")
-        if not self.config.group('build').get('sources', None):
-            raise ConfigurationError(
-                "Configuration does not have 'build.sources' group")
+        for name in self.metadata.sources:
+            yield ( str(name),self.source(name))
 
-        d = {}
-        for k in self.config.build.sources.keys():
-            d[k] = self.source(k) # Enforce structure requirements
+    def source(self,name):
+        """Return a source file path, downloaded and unzipped"""
 
-    def source(self, name):
-        """Return a source record with the given name, from the build.sources configuration
-        value.
+        import re
 
-        This will return the whole record, which may have subcomponents. If the record is define with only a
-        scalar string, it will be reutnred in a dict, mapped to the key 'url' """
+        v = self.metadata.sources.get(name)
 
-        s = self.config.build.sources
-        d =  s.get(name, None)
+        if not v:
+            # Try fetching as an int; a lot of the keys are years, which YAML always interprets as an int
+            try:
+                name = int(name)
+                v = self.metadata.sources.get(name)
+            except ValueError:
+                v = None
 
-        if isinstance(d, basestring):
-            return { 'url': d}
-        elif isinstance(d, dict):
+        if not v:
+            from ..dbexceptions import ConfigurationError
+            raise ConfigurationError("No key in sources for '{}' ".format(name))
 
-            if 'url' not in d:
-                raise ValueError("Config value build.sources.{} must be either a string or a dict with a 'url' key "
-                                .format(name))
-            return d
+
+
+        if '.zip' in v.url:
+            if 'file' in v:
+                unzip = re.compile(v.file)
+            else:
+                unzip = True
+
+            for fn in self.filesystem.download(name, unzip=unzip):
+                return  fn
+
         else:
-            raise ValueError("Value assigned to config value build.sources.{} must be a string or dict. Got a {}"
-                            .format(name, type(d)))
-
-
-    def source_url(self, name):
-        """Return a source url with the given name, from the build.sources configuration
-        value.
-
-        This will return only the url component of the named source"""
-
-        d = self.source(name)
-
-        return d['url']
+            return self.filesystem.download(name)
 
 
     @property

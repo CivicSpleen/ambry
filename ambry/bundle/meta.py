@@ -25,9 +25,9 @@ class Documentation(DictGroup):
 
 class ContactTerm(DictTerm):
 
-    name = ScalarTerm()
-    email = ScalarTerm()
-    url = ScalarTerm()
+    name = ScalarTerm(store_none=False)
+    email = ScalarTerm(store_none=False)
+    url = ScalarTerm(store_none=False)
 
     def __nonzero__(self):
         return bool(self.name or self.email or self.url)
@@ -66,7 +66,16 @@ class Names(DictGroup):
 class SourceTerm(DictTerm):
     url = ScalarTerm()
     description = ScalarTerm(store_none=False)
-    dd_url = ScalarTerm(store_none=False)
+    dd_url = ScalarTerm(store_none=False) # Data Dictitionary URL
+    file = ScalarTerm(store_none=False) # A name or regex to extract from a multi-file ZIP
+    comment = ScalarTerm(store_none=False)  # Just a comment
+
+    def __nonzero__(self):
+        return bool(self.url or self.file or self.description or self.dd_url)
+
+    def __bool__(self):
+        return self.__nonzero__()
+
 
 class Sources(TypedDictGroup):
     """References to source URLS"""

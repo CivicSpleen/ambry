@@ -48,12 +48,16 @@ def sas2pd(sasfile):
     import pandas as pd
     from sas7bdat import SAS7BDAT
     a = []
-    for i, x in enumerate(SAS7BDAT(sasfile).readData()):
+
+    sf = SAS7BDAT(sasfile)
+
+    for i, x in enumerate(sf.readData()):
         if i == 0:
             cols = x
         else:
             a.append(x)
+
     df = pd.DataFrame(a)
     df.columns = cols
-    return df
+    return pd.header, df
 
