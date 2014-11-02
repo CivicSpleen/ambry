@@ -163,8 +163,40 @@ class SqlitePartition(PartitionBase):
         return rows_per_seg
 
     def finalize(self):
-        self.write_stats()
-        self.write_file()
+
+        if not self.is_finalized():
+            self.write_stats()
+            self.write_file()
+
+
+    def write_stats(self):
+        '''Record in the partition entry basic statistics for the partition's
+        primary table'''
+        from ..partitions import Partitions
+
+        t = self.get_table()
+
+        if not t:
+            return
+
+        if not t.primary_key:
+            from ..dbexceptions import ConfigurationError
+
+            raise ConfigurationError("Table {} does not have a primary key; can't compute states".format(t.name))
+
+        s = self.database.session
+        self.record.count = s.execute("SELECT COUNT(*) FROM {}".format(self.table.name)).scalar()
+        self.record.min_key = s.execute(
+            "SELECT MIN({}) FROM {}".format(t.primary_key.name, self.table.name)).scalar()
+        self.record.max_key = s.execute(
+            "SELECT MAX({}) FROM {}".format(t.primary_key.name, self.table.name)).scalar()
+        s.commit()
+
+        with self.bundle.session as s:
+            s.merge(self.record)
+
+        self.set_state(Partitions.STATE.FINALIZED)
+
 
     def write_file(self):
         """Create a file entry in the bundle for the partition, storing the md5 checksum and size. """
@@ -177,8 +209,6 @@ class SqlitePartition(PartitionBase):
         self.database.close()
 
         statinfo = os.stat(self.database.path)
-
-
 
         f = File(path=self.identity.cache_key,
                  group='partition',
@@ -201,12 +231,11 @@ class SqlitePartition(PartitionBase):
                 s.commit()
 
 
-
-
-
     def csvize(self, logger=None, store_library=False, write_header=False, rows_per_seg=None):
         '''Convert this partition to CSV files that are linked to the partition'''
-        
+
+        raise DeprecationWarning()
+
         self.table = self.get_table()
         
         if self.record_count:
@@ -284,11 +313,15 @@ class SqlitePartition(PartitionBase):
         ident.format = 'csv'
         ident.segment = PartitionNameQuery.ANY
 
+        raise DeprecationWarning()
+
         return self.bundle.partitions.find_all(PartitionNameQuery(id_=ident))
 
     def load_csv(self, table=None, parts=None):
         '''Loads the database from a collection of CSV files that have the same identity, 
         except for a format of 'csv' and possible segments. '''
+
+        raise DeprecationWarning()
 
         if not parts:
             parts = self.get_csv_parts()
@@ -339,26 +372,6 @@ class SqlitePartition(PartitionBase):
         return RowSelector(self, sql,*args, **kwargs)
 
 
-    def write_stats(self):
-        '''Record in the partition entry basic statistics for the partition's
-        primary table'''
-        t = self.get_table()
-        
-        if not t:
-            return
-
-        if not t.primary_key:
-            from ..dbexceptions import ConfigurationError
-            raise ConfigurationError("Table {} does not have a primary key; can't compute states".format(t.name))
-        
-        s = self.database.session
-        self.record.count = s.execute("SELECT COUNT(*) FROM {}".format(self.table.name)).scalar()
-        self.record.min_key = s.execute("SELECT MIN({}) FROM {}".format(t.primary_key.name,self.table.name)).scalar()
-        self.record.max_key = s.execute("SELECT MAX({}) FROM {}".format(t.primary_key.name,self.table.name)).scalar()
-        s.commit()
-        
-        with self.bundle.session as s:
-            s.merge(self.record)
 
     def add_view(self, view_name):
         '''Add a view specified in the configuration in the views.<viewname> dict. '''

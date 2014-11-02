@@ -391,6 +391,14 @@ class Library(object):
         return bundle
 
 
+    def has(self, ref, location = 'default'):
+        dataset = self.resolve(ref, location=location)
+
+        if dataset.partition:
+            return self.cache.has(dataset.partition.cache_key)
+        else:
+            return self.cache.has(dataset.cache_key)
+
     def get(self, ref, force=False, cb=None, location = 'default'):
         '''Get a bundle, given an id string or a name '''
         from sqlite3 import DatabaseError

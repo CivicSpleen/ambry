@@ -1262,7 +1262,7 @@ class BuildBundle(Bundle):
                 from ..partition.sqlite import SqlitePartition
                 from ..partition.geo import GeoPartition
 
-                if p.ref:
+                if p.ref or p.is_finalized:
                     continue
 
                 self.log("Finalizing partition: {}".format(p.identity.name))
@@ -1676,6 +1676,10 @@ class BuildBundle(Bundle):
                 method(*args)
         else:
             self.log("Multi processor run with {} processes".format(n))
+
+            # Closing is really important!
+            self.database.close(); # Don't let the database file descriptor cross into the child process.
+            self.library.database.close()
 
             pool = Pool(n)
 

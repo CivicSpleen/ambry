@@ -464,8 +464,16 @@ class Column(Base):
 
     @property
     def schema_type(self):
-        return self.types[self.datatype][2]
 
+        if not self.datatype:
+            from dbexceptions import ConfigurationError
+            raise ConfigurationError("Column '{}' has no datatype".format(self.name))
+
+        try:
+            return self.types[self.datatype][2]
+        except KeyError:
+            print '!!!', self.datatype, self.types
+            raise
     @classmethod
     def convert_numpy_type(cls,dtype):
         '''Convert a numpy dtype into a Column datatype. Only handles common types.
@@ -774,7 +782,6 @@ Columns:
         import sqlalchemy.orm.session
         from sqlalchemy.orm.exc import NoResultFound
 
-        
         s = sqlalchemy.orm.session.Session.object_session(self)
         
         name = Column.mangle_name(name)
@@ -811,6 +818,8 @@ Columns:
                 if key == 'is_primary_key':
                     value = False
                     setattr(row, key, value)
+
+
 
         # If the id column has a description and the table does not, add it to the table.
         if row.name == 'id' and row.is_primary_key and not self.description:

@@ -1,11 +1,37 @@
-table,seq,column,is_pk,is_fk,type,size,description,id,proto_vid
-example,1,id,1,,INTEGER,,A Pretty Good Table,tfY0NJscai01,t4y30WDM9f01001
-example,2,uuid,,,VARCHAR,36,A random UUID,cfY0NJscai01002,
-example,3,int,,,INTEGER,3,A random integer,cfY0NJscai01003,
-example,4,float,,,REAL,,,cfY0NJscai01004,
+table,seq,column,is_pk,is_fk,type,size,description,proto_vid,id
+example,1,id,1,,INTEGER,,A Pretty Good Table,t4y30WDM9f01001,tfY0NJscai01
+example,2,uuid,,,VARCHAR,36,A random UUID,,cfY0NJscai01002
+example,3,int,,,INTEGER,3,A random integer,,cfY0NJscai01003
+example,4,float,,,REAL,,,,cfY0NJscai01004
 ,,,,,,,,,
-example2,1,id,1,,INTEGER,,Another Table,tfY0NJscai02,t4y30WDM9f02
-example2,2,uuid2,,,VARCHAR,,A random UUID,cfY0NJscai02002,
-example2,3,int2,,,INTEGER,,A random integer,cfY0NJscai02003,
-example2,4,example1_id,,c4y30WDM9f01002,INTEGER,,A Foreign Key link,cfY0NJscai02004,
-example2,5,float,,,REAL,,,cfY0NJscai02005,
+example2,1,id,1,,INTEGER,,Another Table,t4y30WDM9f02,tfY0NJscai02
+example2,2,uuid2,,,VARCHAR,,A random UUID,,cfY0NJscai02002
+example2,3,int2,,,INTEGER,,A random integer,,cfY0NJscai02003
+example2,4,example1_id,,tfY0NJscai01,INTEGER,,A Foreign Key link,,cfY0NJscai02004
+example2,5,float,,,REAL,,,,cfY0NJscai02005
+,,,,,,,,,
+example3,1,id,1,,INTEGER,,Another Table,t4y30WDM9f02,tfY0NJscai03
+example3,2,uuid2,,,VARCHAR,,A random UUID,,cfY0NJscai03002
+example3,3,int2,,,INTEGER,,A random integer,,cfY0NJscai03003
+example3,4,example1_id,,tfY0NJscai02,INTEGER,,A Foreign Key link,,cfY0NJscai03004
+example3,5,float,,,REAL,,,,cfY0NJscai03005
+,,,,,,,,,
+example4,1,id,1,,INTEGER,,Counties,"t00104,t00109",tfY0NJscai04
+example4,2,gvid,,,VARCHAR,,"Geo version id, Civic Knowledge defined",c00109003,cfY0NJscai04002
+example4,3,year,,,INTEGER,,Year boundaries were established,c00109002,cfY0NJscai04003
+example4,4,sumlevel,,,INTEGER,,Summary Level,c00104004,cfY0NJscai04004
+example4,5,geoid,,,VARCHAR,,"Geographic id, ACS format",c00104005,cfY0NJscai04005
+example4,6,geoidt,,,VARCHAR,,"Geographic id, Tiger format",c00104006,cfY0NJscai04006
+example4,7,lsadc,,,VARCHAR,,Legal/Statistical Area Description Code,c00104007,cfY0NJscai04007
+example4,8,intptlat,,,REAL,,Internal point latitude,c00104008,cfY0NJscai04008
+example4,9,intptlon,,,REAL,,Internal point longitude,c00104009,cfY0NJscai04009
+example4,10,hu100,,,INTEGER,,Number of housing units,c0010400a,cfY0NJscai0400a
+example4,11,pop100,,,INTEGER,,Population,c0010400b,cfY0NJscai0400b
+example4,12,arealand,,,REAL,,Land area in m^2,c0010400c,cfY0NJscai0400c
+example4,13,areawatr,,,REAL,,Water area in m^2,c0010400d,cfY0NJscai0400d
+example4,14,name,,,VARCHAR,,Census name of area,c0010400e,cfY0NJscai0400e
+example4,17,state,,,INTEGER,,State (FIPS),c00109004,cfY0NJscai0400h
+example4,18,county,,,INTEGER,,County (FIPS),c00109005,cfY0NJscai0400i
+example4,19,countyns,,,INTEGER,,County (ANSI),c00109006,cfY0NJscai0400j
+example4,20,countycc,,,VARCHAR,,County class code,c00109007,cfY0NJscai0400k
+example4,21,countysc,,,INTEGER,,County Size Code,c00109008,cfY0NJscai0400l

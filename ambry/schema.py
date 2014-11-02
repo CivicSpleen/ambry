@@ -210,6 +210,8 @@ class Schema(object):
         # Make sure that the columnumber is monotonically increasing
         # when it is specified, and is one more than the last one if not.
 
+
+
         if not table.name in self.max_col_id:
             if len(table.columns) == 0:
                 self.max_col_id[table.name] = 0
@@ -220,6 +222,8 @@ class Schema(object):
 
         try:
             int(kwargs['sequence_id'])
+        except (TypeError,KeyError):
+            pass # Value is None, probably.
         except ValueError:
             raise ConfigurationError("Sequence id value '{}' is not an integer in table '{}' col '{}'"
                                         .format(kwargs['sequence_id'], table.name, name ))
@@ -238,6 +242,8 @@ class Schema(object):
 
         self.max_col_id[table.name] = sequence_id
         kwargs['sequence_id'] = sequence_id
+
+
 
         c =  table.add_column(name, **kwargs)
 
@@ -609,7 +615,9 @@ class Schema(object):
                 last_table = row['table']
             
             if new_table and row['table']:
-                
+
+                self.bundle.database.session.commit()
+
                 progress_cb("Add schema table: {}".format(row['table']))
                 
                 try: table =  self.table(row['table'])
@@ -673,6 +681,7 @@ class Schema(object):
                                    fk_vid= row['is_fk'] if row.get('is_fk', False) else None,
                                    description=description,
                                    datatype=datatype,
+                                   proto_vid = row.get('proto_vid',None) if row.get('proto_vid',None) else None,
                                    unique_constraints = ','.join(uniques),
                                    indexes = ','.join(indexes),
                                    uindexes = ','.join(uindexes),
@@ -689,14 +698,17 @@ class Schema(object):
                                    keywords=row.get('keywords',None),
                                    measure=row.get('measure',None),
                                    units=row.get('units',None),
-                                   universe=row.get('universe',None)
+                                   universe=row.get('universe',None),
+                                   commit = False
                                    )
 
+            if col:
+                self.validate_column(t, col, warnings, errors)
 
-            self.bundle.database.session.commit()
+        self.bundle.database.session.commit()
 
             
-            self.validate_column(t, col, warnings, errors)
+
 
         return warnings, errors
 
@@ -711,25 +723,38 @@ class Schema(object):
 
         l = self.bundle.library
 
-        for t in q.all():
+        def table_protos():
+
+            for t in q.all():
+
+                if not t.proto_vid:
+                    continue
+
+                for proto in t.proto_vid.split(','):
+                    yield (t, proto.strip())
+
+
+
+        for t, proto_vid in table_protos():
+
 
             try:
-                proto_table = l.table(t.proto_vid)
+                proto_table = l.table(proto_vid)
             except NotFoundError:
                 self.bundle.error("Can't expand prototype for table {}: missing prototype reference {}"
-                                  .format(t.name, t.proto_vid))
+                                  .format(t.name, proto_vid))
                 continue
 
-            t_on = ObjectNumber.parse(t.proto_vid)
+            t_on = ObjectNumber.parse(proto_vid)
+
 
             for c in proto_table.columns:
-
 
                 if c.name == 'id':
                     # This column already exists, not re-adding it preserves numbering
                     idc = t.column('id')
                     idc.description = proto_table.description
-                    idc.proto_vid = t.proto_vid
+                    idc.proto_vid = proto_vid
                     idc.datatype = c.datatype
                     idc.is_primary_key = True
 
@@ -817,7 +842,9 @@ class Schema(object):
 
 
     def copy_table(self, in_table, out_table_name=None):
-        '''Copy a table schema into this schema'''
+        '''Copy a table schema into this schema
+      
+        '''
 
         if not out_table_name:
             out_table_name = in_table.name
@@ -848,7 +875,7 @@ class Schema(object):
         # Sets the order of the fields
         all_opt_col_fields = ["size", "precision","scale", "default","start", "width",
                               "description","sql","flags","keywords",
-                              "measure","units","universe"]
+                              "measure","units","universe", 'proto_vid']
 
         # Collects what fields actually exist
         opt_col_fields_set = set()
@@ -857,8 +884,7 @@ class Schema(object):
             tables = [ table for table in self.tables if table.name == table_name]
         else:
             tables = self.tables
-            
-        
+
         data_fields = set()
         # Need to get all of the indexes figured out first, since there are a variable number of indexes.
         for table in tables:
@@ -866,8 +892,11 @@ class Schema(object):
             if table.proto_vid:
                 opt_col_fields_set.add("proto_vid")
 
-            for col in table.columns: 
-                
+            for col in table.columns:
+
+                if col.proto_vid:
+                    opt_col_fields_set.add("proto_vid")
+
                 for index_set in [col.indexes, col.uindexes, col.unique_constraints]:
                     if not index_set:
                         continue # HACK. This probably shouldnot happen

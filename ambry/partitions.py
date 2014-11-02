@@ -23,6 +23,7 @@ class Partitions(object):
     STATE.BUILDING = 'building'
     STATE.BUILT = 'built'
     STATE.ERROR = 'error'
+    STATE.FINALIZED = 'finalized'
 
     bundle = None
     _partitions = None
@@ -277,12 +278,18 @@ class Partitions(object):
         '''Return a Partition object from the database based on a PartitionId.
         The object returned is immutable; changes are not persisted'''
         from identity import Identity
+        from sqlalchemy.orm.exc import NoResultFound
         
         if pnq is None:
             pnq = PartitionNameQuery(**kwargs)
 
-        ops = self._find_orm(pnq).all()
-        
+        try:
+            ops = self._find_orm(pnq).all()
+        except NoResultFound:
+            from dbexceptions import NotFoundError
+
+            raise NotFoundError("Failed to find partition for '{}' ".format(pnq.as_partialname()))
+
         return [ self.partition(op) for op in ops]
 
 
