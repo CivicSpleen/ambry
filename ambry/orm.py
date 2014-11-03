@@ -1164,6 +1164,17 @@ class File(Base, SavableMixin):
     def __repr__(self):
         return "<file: {}; {}>".format(self.path, self.state)
 
+    def update(self, f):
+        """Copy anohter fiels properties into this one. """
+
+        for k in self.dict.keys():
+            if k in ['oid']:
+                continue
+            setattr(self, k, getattr(f, k))
+
+        self.content = f.content
+
+
     @property
     def dict(self):
 

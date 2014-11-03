@@ -61,13 +61,14 @@ class CsvExtractor(Extractor):
 
         row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table))
 
-        w = unicodecsv.writer(cache.put_stream(rel_path))
+        with cache.put_stream(rel_path) as stream:
+            w = unicodecsv.writer(stream)
 
-        for i,row in enumerate(row_gen):
-            if i == 0:
-                w.writerow(row.keys())
+            for i,row in enumerate(row_gen):
+                if i == 0:
+                    w.writerow(row.keys())
 
-            w.writerow(row)
+                w.writerow(row)
 
         return True, cache.path(rel_path)
 

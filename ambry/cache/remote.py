@@ -128,7 +128,7 @@ class HttpCache( Cache):
 
     def put(self, source, rel_path, metadata=None): raise NotImplementedError()
 
-    def put_stream(self,rel_path, metadata=None): raise NotImplementedError()
+    def put_stream(self,rel_path, metadata=None, cb=None): raise NotImplementedError()
 
     def put_metadata(self,rel_path, metadata): raise NotImplementedError()
 

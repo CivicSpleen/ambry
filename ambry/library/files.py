@@ -141,18 +141,22 @@ class Files(object):
                                          File.type_ == self.TYPE.PARTITION))
         return self
 
-    def new_file(self, merge=False, commit = True, **kwargs):
+    def new_file(self, merge=False, commit = True, extant = None, **kwargs):
         """
         If merge is 'collect', the files will be added to the collection, for later
         insertion.
         """
 
+        f = File(**kwargs)
+
+        if extant:
+            extant.update(f)
+            f = extant
+
         if merge:
-            f = File(**kwargs)
             self.merge(f, commit=commit)
-            return f
-        else:
-            return File(**kwargs)
+
+        return f
 
 
     def insert_collection(self):
@@ -165,7 +169,7 @@ class Files(object):
         self._collection = []
 
     def merge(self, f, commit = True):
-        '''If commit is 'collect' add the files to the collectoin for later insertion. '''
+        '''If commit is 'collect' add the files to the collection for later insertion. '''
         from sqlalchemy.exc import IntegrityError
 
         s = self.db.session
@@ -300,21 +304,19 @@ class Files(object):
             priority=None,
             source_url=None, )
 
-    def install_data_store(self, dsn, type, ref = None, title = None, summary = None, commit=True):
+    def install_data_store(self, dsn, type, ref = None,
+                           title = None, summary = None,
+                           local_cache = None, remote_cache = None,
+                           commit=True):
         """A reference for a data store, such as a warehouse or a file store.
         """
 
         import hashlib
         from ..identity import TopNumber
 
-        f  = self.query.path(dsn).group(self.TYPE.STORE).one_maybe
+        extant  = self.query.path(dsn).group(self.TYPE.STORE).one_maybe
 
-        if f:
-            return f
-
-        return self.new_file(
-            commit=commit,
-            merge=True,
+        f = self.new_file(commit=commit, merge=True, extant=extant,
             path=dsn,
             group=self.TYPE.STORE,
             ref=ref if ref else str(TopNumber('s')) ,
@@ -322,9 +324,14 @@ class Files(object):
             type_=type,
             data=dict(
                 title = title,
-                summary = summary
+                summary = summary,
+                local_cache = local_cache,
+                remote_cache = remote_cache
+
             ),
             source_url=None)
+
+        return f
 
 
     def _process_source_content(self, path, source = None, content = None):
@@ -376,25 +383,22 @@ class Files(object):
         """Store a references to, and content for, a manifest
         """
 
-        f = self.query.ref(manifest.uid).group(self.TYPE.MANIFEST).one_maybe
+        extant = self.query.ref(manifest.uid).group(self.TYPE.MANIFEST).one_maybe
 
-        if not f:
+        f = self.new_file(commit=commit, merge=True, extant = extant,
+            path=manifest.path,
+            group=self.TYPE.MANIFEST,
+            ref=manifest.uid,
+            state=None,
+            type_=self.TYPE.MANIFEST,
+            data=dict(
+                title=manifest.title,
+                summary=manifest.summary['text']
+            ),
+            source_url=manifest.uid,
+            **(self._process_source_content(manifest.path) if os.path.exists(manifest.path) else {})
 
-            f =  self.new_file(
-                commit=commit,
-                merge=True,
-                path=manifest.path,
-                group=self.TYPE.MANIFEST,
-                ref=manifest.uid,
-                state=None,
-                type_=self.TYPE.MANIFEST,
-                data=dict(
-                    title = manifest.title,
-                    summary = manifest.summary['text']
-                ),
-                source_url=manifest.uid,
-                **(self._process_source_content(manifest.path) if os.path.exists(manifest.path) else {})
-            )
+        )
 
         if warehouse:
 

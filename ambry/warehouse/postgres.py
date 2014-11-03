@@ -30,25 +30,26 @@ class PostgresWarehouse(RelationalWarehouse):
         try: e("DROP ROLE {}".format(u))  
         except: pass
               
-    def create_user(self, u):
+    def create_user(self, user, password):
         
         e = self.database.connection.execute
         
         
-        e("CREATE ROLE {0} LOGIN PASSWORD '{0}'".format(u))
+        e("CREATE ROLE {} LOGIN PASSWORD '{}'".format(user, password))
         
-        e("CREATE SCHEMA {0} AUTHORIZATION {0};".format(u))
+        e("CREATE SCHEMA {0} AUTHORIZATION {0};".format(user))
         
-        e("ALTER ROLE {0} SET search_path TO library,public,{0};".format(u))
+        e("ALTER ROLE {0} SET search_path TO library,public,{0};".format(user))
         
         # From http://stackoverflow.com/a/8247052
-        e("GRANT SELECT ON ALL TABLES IN SCHEMA public TO {}".format(u))
+        e("GRANT SELECT ON ALL TABLES IN SCHEMA public TO {}".format(user))
         e("""ALTER DEFAULT PRIVILEGES IN SCHEMA public 
-             GRANT SELECT ON TABLES  TO {}; """.format(u))
+             GRANT SELECT ON TABLES  TO {}; """.format(user))
 
-        e("GRANT SELECT, USAGE ON ALL SEQUENCES IN SCHEMA public TO {}".format(u))
+        e("GRANT SELECT, USAGE ON ALL SEQUENCES IN SCHEMA public TO {}".format(user))
+
         e("""ALTER DEFAULT PRIVILEGES IN SCHEMA public 
-          GRANT SELECT, USAGE ON SEQUENCES  TO {}""".format(u))
+          GRANT SELECT, USAGE ON SEQUENCES  TO {}""".format(user))
         
     def users(self):
         

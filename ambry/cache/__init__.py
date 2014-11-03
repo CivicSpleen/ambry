@@ -127,7 +127,7 @@ class CacheInterface(object):
     
     def put(self, source, rel_path, metadata=None): raise NotImplementedError()
     
-    def put_stream(self,rel_path, metadata=None): raise NotImplementedError()
+    def put_stream(self,rel_path, metadata=None, cb=None): raise NotImplementedError()
 
     def find(self,query): raise NotImplementedError()
 
@@ -206,7 +206,7 @@ class Cache(CacheInterface):
 
         if self.upstream:
             return self.upstream.get_stream(rel_path, cb)
-        
+
         return None
 
     def has(self, rel_path, md5=None, propagate=True):
@@ -221,9 +221,9 @@ class Cache(CacheInterface):
         
         return None
 
-    def put_stream(self,rel_path, metadata=None):
+    def put_stream(self,rel_path, metadata=None, cb=None):
         if self.upstream:
-            return self.upstream.put_stream(self,rel_path, metadata=metadata)
+            return self.upstream.put_stream(self,rel_path, metadata=metadata, cb=cb)
         
         return None
 

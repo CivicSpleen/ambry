@@ -409,7 +409,7 @@ class WarehouseInterface(object):
             self.title = manifest.title
 
         if (reset or not self.about) and manifest.summary:
-            self.about = manifest.summary['html']
+            self.about = manifest.summary['text']
 
         if (reset or not self._meta_get('local_cache')) and manifest.local:
             self.local_cache = manifest.cache_path

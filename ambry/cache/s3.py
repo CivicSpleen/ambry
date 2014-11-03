@@ -2,10 +2,11 @@
 from .  import Cache
 from ..util import copy_file_or_flo, get_logger
 import os
+import logging
 
 global_logger = get_logger(__name__)
 
-#logger.setLevel(logging.DEBUG) 
+#global_logger.setLevel(logging.DEBUG)
 
 class S3Cache(Cache):
     '''A cache that transfers files to and from an S3 bucket
@@ -106,7 +107,7 @@ class S3Cache(Cache):
             else:
                 method = 'GET'
 
-            k = self._get_boto_key(rel_path, validate= not missing_ok)
+            k = self._get_boto_key(rel_path, validate = not missing_ok)
 
             if not k:
                 from ..dbexceptions import NotFoundError
@@ -248,7 +249,7 @@ class S3Cache(Cache):
             else:
                 k.set_contents_from_filename(source)
       
-    def put_stream(self, rel_path,  metadata=None):
+    def put_stream(self, rel_path,  metadata=None, cb=None):
         '''Return a Flo object that can be written to to send data to S3.
         This will result in a multi-part upload, possibly with each part
         being sent in its own thread '''
@@ -286,7 +287,7 @@ class S3Cache(Cache):
                     finally:
                         self.queue.task_done()
                         t2 = time.time()
-                        global_logger.debug("put_stream: Thread {}, part {}. time = {} rate =  {}b/s"
+                        global_logger.debug("put_stream: Thread {}, part {}. time = {} rate =  {} b/s"
                                      .format(self.n, part_number, round(t2-t1,3), round((float(buf.tell())/(t2-t1)), 2)))
                     
                         

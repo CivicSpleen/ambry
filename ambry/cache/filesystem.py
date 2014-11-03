@@ -84,7 +84,7 @@ class FsCache(Cache):
 
         return os.path.join(self.cache_dir, rel_path)
 
-    def put_stream(self,rel_path, metadata=None):
+    def put_stream(self,rel_path, metadata=None, cb=None):
         """return a file object to write into the cache. The caller
         is responsibile for closing the stream
         """
@@ -640,7 +640,7 @@ class FsLimitedCache(FsCache):
 
         return self.get(rel_path)
 
-    def put_stream(self,rel_path, metadata=None):
+    def put_stream(self,rel_path, metadata=None, cb=None):
         """return a file object to write into the cache. The caller
         is responsibile for closing the stream. Bad things happen
         if you dont close the stream
@@ -797,7 +797,7 @@ class FsCompressionCache(Cache):
 
         return self.path(self._rename(rel_path))
 
-    def put_stream(self, rel_path,  metadata=None):
+    def put_stream(self, rel_path,  metadata=None, cb=None):
         import gzip
 
         if not metadata:
@@ -805,7 +805,7 @@ class FsCompressionCache(Cache):
 
         metadata['Content-Encoding'] = 'gzip'
 
-        sink = self.upstream.put_stream(self._rename(rel_path),  metadata=metadata)
+        sink = self.upstream.put_stream(self._rename(rel_path),  metadata=metadata, cb=None)
 
 
         self.put_metadata(rel_path, metadata)

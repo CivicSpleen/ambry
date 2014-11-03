@@ -436,10 +436,15 @@ class Schema(object):
             at.append_column(ac)
 
             if column.foreign_key:
-                raise NotImplementedError("Need to lookup foreign key")
+
                 fk = column.foreign_key
-                fks = "{}.{}_id".format(fk.capitalize(), fk)
-                foreign_keys[column.name] = fks
+
+                fk_table = self.get_table_from_database(db, fk, d_vid = d_vid, session=session)
+
+                if not fk_table:
+                    raise NotImplementedError("Need to lookup foreign key")
+
+                foreign_keys[column.name] = fk_table.id_
            
             # assemble non unique indexes
             if column.indexes and column.indexes.strip():

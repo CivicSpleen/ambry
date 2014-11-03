@@ -410,6 +410,7 @@ class LibraryDb(object):
 
         o.value = value
         s.merge(o)
+
         self.commit()
 
     def get_config_value(self, group, key):

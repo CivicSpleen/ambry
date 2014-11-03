@@ -1085,7 +1085,13 @@ class Library(object):
         from sqlalchemy.exc import IntegrityError
         from ambry.util.packages import qualified_name
 
-        f = self.files.install_data_store(w.database.dsn, qualified_name(w), title=w.title, summary=w.about)
+        f = self.files.install_data_store(w.database.dsn, qualified_name(w),
+                                          title=w.title,
+                                          summary=w.about,
+                                          local_cache = w.local_cache,
+                                          remote_cache = w.remote_cache
+
+        )
 
         self.database.session.commit()
 

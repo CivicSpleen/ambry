@@ -131,7 +131,7 @@ def warehouse_parser(cmd):
 
     whsp = whp.add_parser('remove', help='Remove a bundle or partition from a warehouse')
     whsp.set_defaults(subcommand='remove')
-    whsp.add_argument('term', type=str,help='Name of bundle or partition')
+    whsp.add_argument('term', type=str,help='Name of bundle, partition, manifest or database')
 
     whsp = whp.add_parser('connect', help='Test connection to a warehouse')
     whsp.set_defaults(subcommand='connect')
@@ -155,12 +155,16 @@ def warehouse_parser(cmd):
     group.add_argument('-L', '--list', dest='action',  action='store_const', const='list')
     group.add_argument('-a', '--add' )
     group.add_argument('-d', '--delete')
+
+    whsp.add_argument('-p', '--password')
+
        
     whsp = whp.add_parser('list', help='List the datasets in the warehouse')
     whsp.set_defaults(subcommand='list')   
     whsp.add_argument('term', type=str, nargs='?', help='Name of bundle, to list partitions')
     group = whsp.add_mutually_exclusive_group()
-    group.add_argument('-m', '--manifests',   action='store_true', help='List manifest')
+    group.add_argument('-m', '--manifests',   action='store_true', help='List manifests')
+    group.add_argument('-d', '--databases', action='store_true', help='List Databases')
     group.add_argument('-p', '--partitions',   action='store_true', help='List partitions')
 
     if IN_DEVELOPMENT:
@@ -211,7 +215,7 @@ def warehouse_users(args, w,config):
     elif bool(args.delete):
         w.drop_user(args.delete)   
     elif bool(args.add):
-        w.create_user(args.add)   
+        w.create_user(args.add, args.password)
 
     #w.configure_default_users()
     
@@ -219,14 +223,38 @@ def warehouse_list(args, w, config):
 
 
     if not w:
-        # List all of the warehouses referenced in the library
-        from ..library import new_library
-        l = new_library(config.library(args.library_name))
+        if args.databases:
+            # List all of the warehouses referenced in the library
+            from ..library import new_library
 
-        for w in l.warehouses:
-            print "{:10s} {}".format(w.ref, w.path)
+            l = new_library(config.library(args.library_name))
 
-        return
+            for s in l.stores:
+                print "{:10s} {:25s} {}".format(s.ref, s.data['title'], s.data['summary'] )
+
+
+                print "{:10s} {:25s} dsn =    {}".format('','',s.path)
+
+                if s.data['local_cache']:
+                    print "{:10s} {:25s} local =  {}".format('', '', s.data['local_cache'])
+
+                if s.data['remote_cache']:
+                    print "{:10s} {:25s} remote = {}".format('', '', s.data['remote_cache'])
+
+
+
+            return
+
+        else:
+
+            # List all of the manifests referenced in the library
+            from ..library import new_library
+            l = new_library(config.library(args.library_name))
+
+            for f, m in l.manifests:
+                print "{:10s} {:25s}| {}".format(m.uid, m.title, m.summary['text'])
+
+            return
 
 
     l = w.library
@@ -294,6 +322,10 @@ def get_cache(w, args, rc):
 
     elif args.dest == 'remote':
         c_string = w.remote_cache
+
+    else:
+        raise ConfigurationError("Must specify a cahce name, or local or remote. ")
+
 
     config = parse_cache_string(c_string, root_dir=args.dir)
 
