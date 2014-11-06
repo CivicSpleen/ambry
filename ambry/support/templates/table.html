@@ -1,15 +1,16 @@
 {% extends "layout.html" %}
-{% block title %}Table: {{table.name}}{% endblock %}
+{% block title %}Table: {{t.name}}{% endblock %}
 {% block head %}
     {{ super() }}
 {% endblock %}
 {% block masthead %}
-    <h1 class="title">Table: {{table.name}}</h1>
+    <h1 class="title">Table: {{t.name}}</h1>
     <p><a href="{{bundle_path(b)}}">{{b.identity.fqname}}</a></p>
-    {% if table.description -%}<p>{{table.description}}</p>{% endif -%}
+    {% if t.description -%}<p>{{t.description}}</p>{% endif -%}
 {% endblock %}
 
 {% block body %}
+
 <table class="table table-striped table-bordered table-condensed">
     <tr>
         <th>#</th>
@@ -18,7 +19,7 @@
         <th>Size</th>
         <th>Description</th>
     </tr>
-    {% for c in table.columns -%}
+    {% for cvid, c in t.columns.items() -%}
     <tr>
         <td>{{c.sequence_id}}</td>
         <td>{{c.name}}</td>

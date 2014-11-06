@@ -232,7 +232,6 @@ class SavableMixin(object):
 class Dataset(Base):
     __tablename__ = 'datasets'
 
-
     LOCATION = Constant()
     LOCATION.LIBRARY = LocationRef.LOCATION.LIBRARY
     LOCATION.PARTITION = LocationRef.LOCATION.PARTITION
@@ -240,7 +239,6 @@ class Dataset(Base):
     LOCATION.SOURCE = LocationRef.LOCATION.SOURCE
     LOCATION.REMOTE =  LocationRef.LOCATION.REMOTE
     LOCATION.UPSTREAM = LocationRef.LOCATION.UPSTREAM
-
 
     vid = SAColumn('d_vid',String(20), primary_key=True)
     id_ = SAColumn('d_id',String(20), )
@@ -555,6 +553,10 @@ class Column(Base):
 
         return x
 
+    @property
+    def nonull_dict(self):
+        return {k: v for k, v in self.dict.items() if v}
+
 
     @property
     def insertable_dict(self):
@@ -623,7 +625,6 @@ class Table(Base):
     installed = SAColumn('t_installed', String(100))
     data = SAColumn('t_data',MutationDict.as_mutable(JSONEncodedObj))
 
-    
     __table_args__ = (
         #ForeignKeyConstraint([d_vid, d_location], ['datasets.d_vid', 'datasets.d_location']),
         UniqueConstraint('t_sequence_id', 't_d_vid', name='_uc_tables_1'),
@@ -668,6 +669,21 @@ class Table(Base):
                 ['id_','vid', 'd_id', 'd_vid', 'sequence_id', 'name', 'altname', 'vname', 'description',
                  'universe', 'keywords', 'installed', 'proto_vid', 'data']}
 
+    @property
+    def nonull_dict(self):
+        return {k: v for k, v in self.dict.items() if v}
+
+    @property
+    def nonull_col_dict(self):
+
+        tdc = {}
+        for c in self.columns:
+            tdc[c.id_] = c.nonull_dict
+
+        td = self.nonull_dict
+        td['columns'] = tdc
+
+        return td
 
     @property
     def insertable_dict(self):
@@ -1311,6 +1327,10 @@ class Partition(Base):
 
 
         return d
+
+    @property
+    def nonull_dict(self):
+        return {k: v for k, v in self.dict.items() if v}
 
     @property
     def insertable_dict(self):

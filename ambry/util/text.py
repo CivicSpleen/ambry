@@ -32,3 +32,70 @@ def build_documentation(bundle):
     pass
 
 
+
+def generate_pdf_pages(fp):
+    import sys
+    from pdfminer.pdfdocument import PDFDocument
+    from pdfminer.pdfparser import PDFParser
+    from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
+    from pdfminer.pdfdevice import PDFDevice, TagExtractor
+    from pdfminer.pdfpage import PDFPage
+    from pdfminer.converter import XMLConverter, HTMLConverter, TextConverter
+    from pdfminer.cmapdb import CMapDB
+    from pdfminer.layout import LAParams
+
+    import re
+
+
+    debug = 0
+    # input option
+    password = ''
+    pagenos = set()
+    maxpages = 0
+    # output option
+    outfile = None
+    outtype = None
+    imagewriter = None
+    rotation = 0
+    layoutmode = 'normal'
+    codec = 'utf-8'
+
+    scale = 1
+    caching = True
+
+    laparams = LAParams()
+
+    #
+    PDFDocument.debug = debug
+    PDFParser.debug = debug
+    CMapDB.debug = debug
+    PDFResourceManager.debug = debug
+    PDFPageInterpreter.debug = debug
+    PDFDevice.debug = debug
+    #
+    rsrcmgr = PDFResourceManager(caching=caching)
+
+    from cStringIO import StringIO
+
+    outfp = StringIO()
+
+    device = TextConverter(rsrcmgr, outfp, codec='utf-8', laparams=laparams,
+                               imagewriter=imagewriter)
+
+
+    interpreter = PDFPageInterpreter(rsrcmgr, device)
+    for page in PDFPage.get_pages(fp, pagenos,
+                                  maxpages=maxpages, password=password,
+                                  caching=caching, check_extractable=True):
+        page.rotate = (page.rotate + rotation) % 360
+        interpreter.process_page(page)
+
+    fp.close()
+
+    device.close()
+
+    r =  outfp.getvalue()
+
+    outfp.close()
+
+    return re.sub(r'[ ]+',' ', r) # Get rid of all of those damn spaces.

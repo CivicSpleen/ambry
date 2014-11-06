@@ -1,7 +1,7 @@
 <!-- Documentation -->
-{% if documentation.main -%}
+{% if b.meta.documentation and  b.meta.documentation.main -%}
     <div class="documentation_section" >
-    {{documentation.main}}
+    {{b.meta.documentation.main}}
     </div>
 {% endif -%}
 

@@ -1,9 +1,9 @@
 <!-- Sources -->
-{% if m.sources.items() -%}
+{% if b.meta.sources and b.meta.sources.items() -%}
 <div class = 'ck-sources pull-left col-md-5'>
     <h2>Sources</h2>
     <dl class="">
-    {% for k,e in m.sources.items() %}
+    {% for k,e in b.meta.sources.items() %}
         <dt><a href="{{e.url}}" target="{{e.title}}">{{k}}</a></dt>
         <dd>{{e.description}}</dd>
     {% endfor -%}

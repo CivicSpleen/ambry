@@ -8,7 +8,7 @@
         <th>Tables</th>
         {% if w %}<th>Installed</th>{% endif %}
     </tr>
-    {% for p in b.partitions -%}
+    {% for pid, p in b.partitions.items() -%}
     <tr>
         <td><a href="{{partition_path(b,p)}}">{{p.vid}}</a></td>
         <td>{{p.name}}</td>

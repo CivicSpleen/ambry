@@ -5,29 +5,37 @@ Support for creating web pages and text representations of schemas.
 import os
 
 
+
+def resolve(t):
+
+    from ambry.identity import Identity
+    from ambry.orm import Table, Partition
+    from ambry.bundle import Bundle
+
+    if isinstance(t, basestring):
+        return t
+    elif isinstance(t, (Identity, Table)):
+        return t.vid
+    elif isinstance(t, (Table, Partition)):
+        return t.identity.vid
+    elif isinstance(t, dict):
+        if 'identity' in t:
+            return t['identity'].get('vid',None)
+        else:
+            return t.get('vid', None)
+    else:
+        return None
+
+
 # Path functions, for generating URL paths.
 def bundle_path(b):
-    from ambry.bundle import Bundle
-    from ambry.identity import Identity
-    return "bundles/{}.html".format(
-        b.identity.vid if isinstance(b, Bundle) else b.vid if isinstance(b, Identity) else b.get('vid', None),
-    )
-
+    return "bundles/{}.html".format(resolve(b))
 
 def table_path(b, t):
-    from ambry.bundle import Bundle
-    from ambry.identity import Identity
-    from ambry.orm import Table
-
-    return "bundles/{}/tables/{}.html".format(
-        b.identity.vid if isinstance(b, Bundle) else b.vid if isinstance(b, Identity) else b.get('vid', None),
-        t.vid if isinstance(t, Identity) else t.vid if isinstance(t, Table) else t.get('vid', None)
-    )
-
+    return "bundles/{}/tables/{}.html".format(resolve(b), resolve(t))
 
 def partition_path(b, p):
-    return "bundles/{}/partitions/{}.html".format(b.identity.vid, p.identity.vid)
-
+    return "bundles/{}/partitions/{}.html".format(resolve(b), resolve(p))
 
 def manifest_path(m):
     return "manifests/{}.html".format(m.uid)
@@ -81,7 +89,7 @@ class Renderer(object):
         self.extracts = []
 
     def maybe_render(self, rel_path, render_lambda, metadata={}, force=False):
-        """Check if a file exists and maybe runder it"""
+        """Check if a file exists and maybe render it"""
 
         if rel_path[0] == '/':
             rel_path = rel_path[1:]
@@ -114,11 +122,9 @@ class Renderer(object):
             self.extracts.append(extract_entry(extracted, completed, rel_path, self.cache.path(rel_path)))
 
 
-
     def cc(self):
         """return common context values"""
         from functools import wraps
-
 
         def prefix_root(r,f):
             @wraps(f)
@@ -132,7 +138,8 @@ class Renderer(object):
             'table_path' : prefix_root(self.root_path, table_path),
             'partition_path': prefix_root(self.root_path, partition_path),
             'manifest_path': prefix_root(self.root_path, manifest_path),
-            'store_path': prefix_root(self.root_path, store_path)
+            'store_path': prefix_root(self.root_path, store_path),
+            'bundle_sort': lambda l, key: sorted(l,key=lambda x: x['identity'][key])
         }
 
     def clean(self):
@@ -146,13 +153,18 @@ class Renderer(object):
 
         template = self.env.get_template('index.html')
 
-        return template.render(root_path=self.root_path, l=self.library, w=self.warehouse, **self.cc())
+        l = self.library
 
+        return template.render(root_path=self.root_path,
+                               lj = l.cached_dict, l=l, w=self.warehouse,
+                               **self.cc())
 
 
     def bundles_index(self):
         """Render the bundle Table of Contents for a library"""
         template = self.env.get_template('toc/bundles.html')
+
+
 
         return template.render(root_path=self.root_path, l=self.library, w=self.warehouse, **self.cc())
 
@@ -178,23 +190,13 @@ class Renderer(object):
         return template.render(root_path=self.root_path, l=self.library,
                                w=self.warehouse, tables=tables, **self.cc())
 
-    def _bundle_main(self, b):
-        """This actually call the renderer for the bundle """
-        import markdown
-
-        m = b.metadata
+    def _bundle_main(self, vid):
+        """Render documentation for a single bundle """
+        from ambry.bundle.bjson import BundleJson
 
         template = self.env.get_template('bundle/index.html')
 
-        if not m.about.title:
-            m.about.title = b.identity.vname
-
-        return template.render(root_path=self.root_path, b=b, m=m, w=self.warehouse,
-                               documentation={
-                                   'main': markdown.markdown(b.sub_template(m.documentation.main)) if m.documentation.main else None,
-                                   'readme': markdown.markdown(
-                                       b.sub_template(m.documentation.readme)) if m.documentation.readme else None,
-                               }, **self.cc())
+        return template.render(root_path=self.root_path, b = self.library.bundle_doc.bundle(vid), **self.cc())
 
     def bundle(self, b, force=False):
         """ Write the bundle documentation into the documentation store """
@@ -216,18 +218,26 @@ class Renderer(object):
 
         return self.cache.path(bundle_path(b))
 
-    def table(self, bundle, table):
+    def table(self, bvid, tid):
 
         template = self.env.get_template('table.html')
 
-        return template.render(root_path=self.root_path, w=self.warehouse, b=bundle, table=table, **self.cc())
+        b = self.library.bundle_doc.bundle(bvid)
+
+        t = self.library.bundle_doc.table(bvid, tid)
+
+        return template.render(root_path=self.root_path, w=self.warehouse, b=b, t=t, **self.cc())
 
 
-    def partition(self, bundle, partition):
+    def partition(self, bvid, pvid):
 
         template = self.env.get_template('bundle/partition.html')
 
-        return template.render(root_path=self.root_path, w=self.warehouse, b=bundle, partition=partition, **self.cc())
+        b = self.library.bundle_doc.bundle(bvid)
+
+        p = b['partitions'][pvid]
+
+        return template.render(root_path=self.root_path, w=self.warehouse, b=b, p=p, **self.cc())
 
     def store(self, store):
 

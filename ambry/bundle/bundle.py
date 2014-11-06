@@ -440,6 +440,51 @@ class DbBundleBase(Bundle):
 
         return self._identity
 
+    @property
+    def dict(self):
+        """Return most important information, excluding the complete schema, as a dict, suitable for conversion
+        to json """
+
+        import json
+        import markdown
+
+        d = {}
+
+        #d['dataset'] = self.dataset.dict
+        d['partitions'] = {p.vid: p.nonull_dict for p in self.partitions}
+
+
+        d['tables'] = {t.vid: t.nonull_dict for t in self.schema.tables}
+
+        # Convert the list of table names in the partition record to a dict, indexed by tvid.
+        tables_by_name = { t.name: t.nonull_dict for t in self.schema.tables }
+
+        for pvid, p in d['partitions'].items():
+            p['table_vids'] = [ tables_by_name[t]['vid']  for t in p['tables']]
+
+        metadata = self.metadata.dict
+
+        d['identity'] = metadata['identity']
+        d['identity'].update(metadata['names'])
+        del metadata['names']
+        del metadata['identity']
+        d['meta'] = metadata
+
+        d['counts'] = dict(
+            tables=len(self.schema.tables),
+            partitions=self.partitions.count
+        )
+
+        if "documentation" in d['meta']:
+            d['meta']['documentation']['readme'] = markdown.markdown(
+                self.sub_template(d['meta']['documentation']['readme'] if d['meta']['documentation']['readme'] else ''))
+            d['meta']['documentation']['main'] = markdown.markdown(
+                self.sub_template(d['meta']['documentation']['main'] if d['meta']['documentation']['main'] else ''))
+
+
+        return d
+
+
 class DbBundle(DbBundleBase):
 
     def __init__(self, database_file, logger=None):

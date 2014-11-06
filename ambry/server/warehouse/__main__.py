@@ -15,7 +15,7 @@ parser.add_argument('-p', '--port', default=None, help="Server port")
 parser.add_argument('-c', '--cache', default=None, help="Generated file cache. ")
 
 parser.add_argument('-P', '--use-proxy', default=False, action='store_true',
-                    help="Setup for using a proxy in front of server, usingwerkzeug.contrib.fixers.ProxyFix")
+                    help="Setup for using a proxy in front of server, using werkzeug.contrib.fixers.ProxyFix")
 
 parser.add_argument('-d', '--debug', default=False, action='store_true',
                     help="Set debugging mode")

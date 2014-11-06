@@ -1,15 +1,17 @@
 {% extends "layout.html" %}
-{% block title %}Bundle: {{m.about.title}}{% endblock %}
+{% block title %}{{b.identity.name}}{% endblock %}
 {% block head %}
     {{ super() }}
 {% endblock %}
 {% block masthead %}
-    <h1 class="title">Bundle: {{m.about.title}}</h1>
+    <h1 class="title">{{b.identity.name}}</h1>
     <p>{{b.identity.fqname}}</p>
-    {% if m.about.summary -%}<p>{{m.about.summary}}</p>{% endif -%}
+    {% if b.meta.about.summary -%}<p>{{b.meta.about.summary}}</p>{% endif -%}
 {% endblock %}
 
 {% block body %}
+
+
 <div>
     <div class="row">
         {% include 'bundle/ext_documentation.html' -%}

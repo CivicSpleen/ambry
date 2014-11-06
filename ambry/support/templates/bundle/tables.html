@@ -9,7 +9,7 @@
         <th>Description</th>
         <th>Data</th>
     </tr>
-    {% for t in b.schema.tables -%}
+    {% for tid, t in b.tables.items() -%}
     <tr>
         <td><a href="{{table_path(b,t)}}">{{t.vid}}</a></td>
         <td>{{t.name}}</td>

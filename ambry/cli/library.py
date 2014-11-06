@@ -68,9 +68,10 @@ def library_parser(cmd):
     sp.add_argument('-C', '--clean', default=False, action="store_true", help='Clean before syncing. Will clean only the locations that are also synced')
 
     sp.add_argument('-a', '--all', default=False, action="store_true", help='Sync everything')
-    sp.add_argument('-l', '--library', default=False, action="store_true", help='Sync only the library')
-    sp.add_argument('-r', '--remote', default=False, action="store_true", help='Sync only the remote')
-    sp.add_argument('-s', '--source', default=False, action="store_true", help='Sync only the source')
+    sp.add_argument('-l', '--library', default=False, action="store_true", help='Sync the library')
+    sp.add_argument('-r', '--remote', default=False, action="store_true", help='Sync the remote')
+    sp.add_argument('-s', '--source', default=False, action="store_true", help='Sync the source')
+    sp.add_argument('-j', '--json', default=False, action="store_true", help='Cache JSON versions of library objects')
 
 
     sp = asp.add_parser('info', help='Display information about the library')
@@ -118,7 +119,8 @@ def library_parser(cmd):
     if IN_DEVELOPMENT:
         sp = asp.add_parser('test', help='Run development test code')
         sp.set_defaults(subcommand='test')
-
+        sp.add_argument('terms', type=str, nargs=argparse.REMAINDER,
+                        help='Name or ID of the bundle or partition to remove')
 
 
 def library_command(args, rc):
@@ -474,7 +476,7 @@ def library_sync(args, l, config):
     '''Synchronize the remotes and the upstream to a local library
     database'''
 
-    all = args.all or not (args.library or args.remote or args.source )
+    all = args.all or not (args.library or args.remote or args.source or args.json )
 
     if args.library or all:
         l.logger.info("==== Sync Library")
@@ -488,6 +490,9 @@ def library_sync(args, l, config):
         l.logger.info("==== Sync Source")
         l.sync_source(clean=args.clean)
 
+    if (args.json or all):
+        l.logger.info("==== Sync Cached JSON")
+        l.sync_doc_json()
 
 def library_doc(args, l, rc):
         from ..text import Renderer
@@ -519,22 +524,46 @@ def library_unknown(args, l, config):
 
 def library_test(args, l, config):
 
-    for mf in l.manifests:
+    import pdfminer
+    from ambry.cache import new_cache
+    import requests
+    from requests.exceptions import InvalidSchema
+    from ambry.util.text import generate_pdf_pages
 
-        print mf, mf.left_files
+    cache = new_cache(config.filesystem('downloads')).subcache('ext_doc')
 
-    print '---'
+    for b in l.list_bundles():
 
-    for mf in l.stores:
-        print mf, mf.right_files
+        for k,v in b.metadata.external_documentation.items():
 
-    print '---'
-
-    for mf in l.stores:
-        print mf, mf.type_, mf.partitions
-
-
-
+            if not v.url.lower().endswith('.pdf'):
+                continue
 
 
 
+            continue
+
+            path = "{}/{}".format(b.identity.vid, k)
+
+            if not v.url.startswith('http'):
+
+                continue
+
+            r =  requests.get(v.url, stream=True)
+
+            cache.put(r.raw, path)
+
+            if v.url.lower().endswith('.pdf'):
+
+                print '------------'
+                print b.identity.vname, k, v.url, '-->', cache.path(path)
+                try:
+                    with cache.get_stream(path) as fp:
+
+                        with cache.put_stream( path+'.txt') as out:
+                            out.write(generate_pdf_pages(fp))
+
+                except Exception as e:
+                    print "Failed: ", e
+
+                print '-----------'

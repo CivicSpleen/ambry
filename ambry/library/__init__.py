@@ -286,8 +286,9 @@ class Library(object):
 
         return datasets
 
-    def list_bundles(self, last_version_only = True, key = None):
-        """Like list(), but returns bundles instead of a dict with identities. key is a parameter to sorted(self.list())"""
+    def list_bundles(self, last_version_only = True, locations = [LocationRef.LOCATION.LIBRARY], key = None):
+        """Like list(), but returns bundles instead of a dict with identities.
+        key is a parameter to sorted(self.list())"""
         from ..dbexceptions import NotFoundError
         from ..bundle import LibraryDbBundle
 
@@ -311,6 +312,9 @@ class Library(object):
             current = None
 
             for ident in sorted(self.list().values(), cmp = rev_cmp ):
+
+                if locations and not ident.locations.has(locations):
+                    continue
 
                 if not current or ident.id_ != current.identity.id_:
 
@@ -1090,7 +1094,6 @@ class Library(object):
                                           summary=w.about,
                                           local_cache = w.local_cache,
                                           remote_cache = w.remote_cache
-
         )
 
         self.database.session.commit()
@@ -1111,6 +1114,57 @@ class Library(object):
 
             self.files.install_manifest(m, warehouse=w)
 
+    def sync_doc_json(self):
+        """Write the json for all bundles and the library"""
+
+        from ambry.bundle.bjson import BundleJson, LibraryJson
+
+        cache = self.doc_cache.subcache('json')
+
+        LibraryJson(cache, self).get()
+
+        for vid in self.list():
+
+            ident = self.resolve(vid)
+
+            if not ident:
+                continue  # resolve resolve does not return source bundles.
+
+            try:
+                b = self.get(vid)
+
+                bj = BundleJson(cache, b)
+
+                if not bj.has():
+                    self.logger.info("Processing json for {}".format(vid))
+                    bj.bundle()
+                    bj.schema()
+                    bj.tables()
+
+            except Exception as e:
+                self.logger.error("Error on {}: {}".format(vid, e))
+
+
+
+    @property
+    def json_doc_cache(self):
+        cache = self.doc_cache.clone()
+        cache.prefix = os.path.join(cache.prefix if cache.prefix else '', 'json')
+        return cache
+
+    @property
+    def cached_dict(self):
+
+        from ambry.bundle.bjson import  LibraryJson
+
+        return LibraryJson(self.json_doc_cache, self).get()
+
+    @property
+    def bundle_doc(self):
+        from ambry.bundle.bjson import BundleJson
+
+        return BundleJson(self.json_doc_cache)
+
     @property
     def info(self):
         return """
@@ -1126,7 +1180,22 @@ Remotes:  {remotes}
         return dict(name=str(self.name),
                     database=str(self.database.dsn),
                     cache=str(self.cache),
-                    remotes=[ str(r) for r in self.remotes]) if self.remotes else []
+                    remotes=[str(r) for r in self.remotes] if self.remotes else [],
+                    manifests={m.uid: dict(
+                        title=m.title,
+                        summary=m.summary['text']) for f, m in self.manifests},
+                    stores={f.ref: dict(
+                        title=f.data['title'],
+                        summary=f.data['summary'],
+                        local_cache=f.data['local_cache'],
+                        remote_cache=f.data['remote_cache'],
+                        class_type=f.type_) for f in self.stores},
+                    bundles={b.identity.vid: dict(
+                        about=b.metadata.dict['about'],
+                        identity=b.identity.dict,
+                        other_versions=[ ov.dict for ov in b.identity.data['other_versions'] ]
+                    ) for b in self.list_bundles()}
+        )
 
 
 class AnalysisLibrary(Library):

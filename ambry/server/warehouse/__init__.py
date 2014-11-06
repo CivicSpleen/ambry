@@ -81,4 +81,4 @@ def renderer():
 
 
 import views
-configure_application() # May get run again in __main__, with running in develop mode.
+configure_application() # May get run again in __main__, when running in develop mode.

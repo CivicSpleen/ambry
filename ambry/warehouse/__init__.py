@@ -185,6 +185,11 @@ class WarehouseInterface(object):
         """Short description of the warehouse"""
         return self._meta_get('about')
 
+    @property
+    def summary(self): # Everything else names this property summary
+        """Short description of the warehouse"""
+        return self.about
+
     @about.setter
     def about(self, v):
         return self._meta_set('about', v)

@@ -1,25 +1,14 @@
 {% extends "layout.html" %}
-{% if w -%}
-    {% set lw = w -%}
-    {% set lw_type = 'database' -%}
-    {% set desc = "in this database" -%}
-{% elif l -%}
-    {% set lw = l -%}
-    {% set lw_type = 'library' -%}
-    {% set desc = "based on this library" -%}
-{% else -%}
-    {% set lw = None -%}
-{% endif -%}
 
-{% block title %}Ambry {{lw_type|capitalize}}{% endblock %}
+
+{% block title %}{{lj.title}}{% endblock %}
 {% block head %}
     {{ super() }}
 {% endblock %}
 {% block masthead %}
-    <h1 class="title">Ambry {{lw_type|capitalize}}</h1>
-    <h2>{{lw.title}}</h2>
-    <p>{{lw.about}}</p>
-    <p>{{lw.database.dsn}}</p>
+    <h1 class="title">{{lj.title}}</h1>
+    <p>{{lj.summary}}</p>
+    <p>{{lj.database}}</p>
 {% endblock %}
 
 {% block body %}
@@ -29,16 +18,15 @@
     <div class = "row">
         <div class="col-md-6">
 
-
-            {% if lw and lw.manifests-%}
+            {% if lj.manifests-%}
             <div>
-                <h2>Collections <small>{{desc}}</small></small></h2>
+                <h2>Collections</h2>
                 <p>Collections of data bundles around a specific topic.</p>
                 <table  class="table table-hover table-condensed" >
-                {% for f,m in lw.manifests -%}
+                {% for uid, m in lj.manifests.items() -%}
                     <tr>
-                    <td><a href="manifests/{{f.ref}}.html">{{f.data.title}}</a></td>
-                    <td>{{f.data.summary}}</td>
+                    <td><a href="manifest_path(uid)">{{m.title}}</a></td>
+                    <td>{{m.summary}}</td>
                     </tr>
                 {% endfor %}
                 </table>
@@ -47,15 +35,15 @@
 
         </div>
         <div class="col-md-6">
-            {% if not w and l and l.stores -%}
+            {% if lj.stores -%}
             <div>
-                <h2>Databases {%if not w -%}<small>build from this library</small>{%endif%}</h2>
-                <p>Remote databases that use data from this library. </p>
+                <h2>Databases</h2>
+                <p>Databases that use data from this library. </p>
                 <table  class="table table-hover table-condensed" >
-                {% for s in l.stores -%}
+                {% for ref,s in lj.stores.items() -%}
                     <tr>
-                    <td><a href="stores/{{s.ref}}.html">{{s.data.title}}</a></td>
-                    <td>{{s.data.summary}}</td>
+                    <td><a href="store_path(ref)">{{s.title}}</a></td>
+                    <td>{{s.summary}}</td>
                     </tr>
                 {% endfor %}
                 </table>
@@ -75,7 +63,7 @@
                 <th>Versions</th>
                 <th>Title</th>
             </tr>
-            {% for b in l.list_bundles() -%}
+            {% for b in bundle_sort(lj.bundles.values(), 'name') -%}
                 <tr class="bundle_toc">
                     <td>{{loop.index}}</td>
                     <td class="toc_vid"><a href="{{bundle_path(b)}}">{{b.identity.vid}}</a></td>
@@ -84,18 +72,18 @@
                     <td class="toc_name">{{b.identity.name}}</td>
                     <td class="toc_version">
                         <ul  class="list-inline">
-                            <li><a href="{{bundle_path(b)}}">{{b.identity.version}}</a></li>
-                            {% if b.identity.data.other_versions -%}
-                            {% for v in b.identity.data.other_versions -%}
-                            <li><a href="{{bundle_path(v)}}">{{v.version}}</a></li>
+                            <li><a href="{{bundle_path(b.identity.vid)}}">{{b.identity.version}}</a></li>
+                            {% if b.other_versions -%}
+                            {% for v in b.other_versions|sort(attribute='revision',reverse=True) -%}
+                            <li><a href="{{bundle_path(v.vid)}}">{{v.version}}</a></li>
                             {% endfor %}
                             {% endif -%}
                         </ul>
                     </td>
 
                     <td class="toc_title" data-toggle="tooltip" data-placement="left"
-                        title="{{(b.metadata.about.summary or '')|truncate(length=600)}}">
-                        {{b.metadata.about.title or ''}}</td>
+                        title="{{(b.about.summary or '')|truncate(length=600)}}">
+                        {{b.about.title or ''}}</td>
                     </td>
                 </tr>
             {% endfor %}

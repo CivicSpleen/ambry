@@ -1020,21 +1020,7 @@ class Schema(object):
             w.writerow(row)
         
             last_table = row['table']
-             
-    def as_gs_json(self, table):
 
-        
-        g = self._dump_gen()
-        
-        header = g.next()
-
-        last_table = None
-        for row in g:
-            
-            # Blank row to seperate tables. 
-            if last_table and row['table'] != last_table:
-                pass
-            last_table = row['table']
              
     def as_struct(self):
 
@@ -1224,6 +1210,16 @@ class {name}(Base):
             
         with open(os.path.join(lib_dir,'orm.py'),'w') as f:
             f.write(self.as_orm())
+
+    @property
+    def dict(self):
+        """Represent the entire schema as a dict, suitable for conversion to json"""
+        s = {}
+
+        for t in self.tables:
+            s[t.id_] = t.nonull_col_dict
+
+        return s
 
     def _repr_html_(self):
 

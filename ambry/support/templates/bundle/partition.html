@@ -1,12 +1,11 @@
 {% extends "layout.html" %}
-{% block title %}{{partition.vname}}{% endblock %}
+{% block title %}{{p.vname}}{% endblock %}
 {% block head %}
     {{ super() }}
 {% endblock %}
 {% block masthead %}
-    <h1 class="title">Partition: {{partition.identity.vname}}</h1>
-    <p><a href="index.html">{{partition.identity.fqname}}</a></p>
-    {% if b.metadata.about.summary -%}<p>{{b.metadata.about.summary}}</p>{% endif -%}
+    <h1 class="title">Partition: {{p.vname}}</h1>
+    <p><a href="index.html">{{p.fqname}}</a></p>
 {% endblock %}
 
 {% block body %}
@@ -19,21 +18,14 @@
                 <th>id</th>
                 <th>Name</th>
                 {% if w %}<th>Installed As</th>{% endif %}
-                <th>Partitions</th>
                 <th>Description</th>
             </tr>
-            {% for t in partition.orm_tables -%}
+            {% for tvid in p.table_vids -%}
+            {% set t = b.tables[tvid] -%}
             <tr>
                 <td><a href="{{table_path(b,t)}}">{{t.vid}}</a></td>
                 <td>{{t.name}}</td>
                 {% if w %}<td>{{t.installed|default('', true)}}</td>{% endif %}
-                <td>{% if t.partitions -%}
-                    <ul>
-                        {% for p in t.partitions -%}
-                        <li><a href="{{partition_path(b,p)}}">{{p.name}}</a></li>
-                        {% endfor %}
-                    </ul>
-                {% endif -%}</td>
                 <td>{{t.description}}</td>
             </tr>
             {% endfor %}

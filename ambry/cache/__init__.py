@@ -157,6 +157,10 @@ class CacheInterface(object):
 
     def detach(self): raise NotImplementedError(type(self))
 
+    def subcache(self,path):
+        raise NotImplementedError(type(self))
+
+
 class Cache(CacheInterface):
     
     upstream = None
@@ -184,7 +188,13 @@ class Cache(CacheInterface):
     def clone(self):
         return Cache(upstream=self.upstream, **self.args)
 
+    def subcache(self,path):
+        """Clone this case, and extend the prefix"""
 
+        cache = self.clone()
+        cache.prefix = os.path.join(cache.prefix if cache.prefix else '', path)
+
+        return cache
 
     @property
     def repo_id(self):
