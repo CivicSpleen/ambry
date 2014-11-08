@@ -1,7 +1,6 @@
-import unittest
+
 
 from bundles.testbundle.bundle import Bundle
-from ambry.identity import *
 from test_base import  TestBase
 
 
@@ -17,7 +16,6 @@ class Test(TestBase):
 
 
     def test_misc(self):
-        from ambry.bundle.bjson import Json
         from ambry.cache.filesystem import FsCache
 
         cache = FsCache('/tmp/foocache')

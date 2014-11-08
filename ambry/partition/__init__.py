@@ -1,7 +1,5 @@
 import os
-
 from sqlalchemy.orm import object_session
-
 from ..util import lru_cache
 
 

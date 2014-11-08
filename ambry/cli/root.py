@@ -101,8 +101,7 @@ def root_command(args, rc):
 
 
 def root_list(args, l, st, rc):
-    from ..cli import load_bundle, _print_bundle_list
-    from ..orm import Dataset
+    from ..cli import  _print_bundle_list
 
     if args.tables:
         for table in l.tables():
@@ -146,8 +145,7 @@ def root_list(args, l, st, rc):
                        show_partitions=args.partitions)
 
 def root_info(args, l, st, rc):
-    from ..cli import load_bundle, _print_info
-    from ..orm import Dataset
+    from ..cli import  _print_info
     from ..dbexceptions import NotFoundError
     import ambry
 
@@ -187,9 +185,6 @@ def root_info(args, l, st, rc):
     _print_info(l, ident, list_partitions=args.partitions)
 
 def root_meta(args, l, st, rc):
-    from ..cli import load_bundle, _print_info
-    from ..orm import Dataset
-    import ambry
 
     ident = l.resolve(args.term)
 
@@ -250,8 +245,6 @@ def root_meta(args, l, st, rc):
 def root_find(args, l, st, rc):
     from ..source.repository.git import GitRepository
     from ..library.files import Files
-    from ..identity import Identity
-    from ..bundle.bundle import BuildBundle
 
     if args.plain:
         fields = ['vid']
@@ -320,10 +313,7 @@ def root_find(args, l, st, rc):
                     _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=fields)
 
 def root_doc(args, l, st, rc):
-    from ambry.cache import new_cache
     import webbrowser
-    from ..identity import LocationRef
-    from ambry.text import BundleDoc, Renderer
 
     try:
         ident = l.resolve(args.term)

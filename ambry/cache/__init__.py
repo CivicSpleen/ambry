@@ -8,7 +8,7 @@ def new_cache(config, root_dir='no_root_dir', run_config=None):
         """
 
         if isinstance(config, basestring):
-            config = parse_cache_string(config, root_dir)
+            config = parse_cache_string(config)
 
         if 'size' in config:
             from filesystem import FsLimitedCache
@@ -20,25 +20,10 @@ def new_cache(config, root_dir='no_root_dir', run_config=None):
             else:
                 from remote import HttpCache
                 fsclass = HttpCache
-        elif 'account' in config:
+        elif 'bucket' in config:
+            from s3 import S3Cache
+            fsclass = S3Cache
 
-
-            if isinstance(config['account'], basestring):
-                if not run_config:
-                    raise ConfigurationError("Config has an account, but run_config was not specified to resolve the account")
-
-                config['account'] = run_config.account(config['account'])
-
-
-            if config['account']['service'] == 's3':
-                from s3 import S3Cache
-                fsclass = S3Cache
-            elif config['account']['service'] == 'gcs':
-                from gcs import GcsCache
-                fsclass = GcsCache
-            else:
-                raise ConfigurationError("Unknown account service: {}".format(config['account']['service']))
-                                                                 
         elif 'dir' in config:
             from filesystem import FsCache
             fsclass = FsCache
@@ -48,9 +33,16 @@ def new_cache(config, root_dir='no_root_dir', run_config=None):
 
 
         # Re-write account to get login credentials, if the run_config is available
-        if 'account' in config and run_config :
+        if 'account' in config :
             try:
-                config['account'] = run_config.account(config['account'])
+
+                acts = accounts()
+
+                if not config['account'] in acts:
+                    raise ConfigurationError("Account '{}' is not defined in accounts configuration file ".format(config['account']))
+
+                config['account'] = acts[config['account']]
+
             except TypeError: # config['account'] is already a dict
                 pass
 
@@ -65,48 +57,17 @@ def new_cache(config, root_dir='no_root_dir', run_config=None):
             from filesystem import FsCompressionCache
             return FsCompressionCache(upstream=cc)
         else:
-            return  fsclass(**dict(config))
+
+            config = dict(config)
+
+            if 'upstream' in config:
+                config['upstream'] = new_cache(config['upstream'],root_dir = root_dir, run_config=run_config)
+
+            return  fsclass(**config)
 
 
 
-def parse_cache_string(remote, root_dir='no_root_dir'):
-    import urlparse
 
-    remote = remote.format(root=root_dir)
-
-    parts = urlparse.urlparse(remote)
-    config = {}
-
-    config['type'] = scheme = parts.scheme if parts.scheme else 'file'
-
-    config['options'] = []
-
-
-    if scheme == 'file' or not bool(scheme) :
-        config['dir'] = parts.path
-
-    # s3://bucket/prefix
-    # Account name handle is the same as the bucket
-    elif scheme == 's3':
-
-        config['bucket'] = parts.netloc
-        config['prefix'] = parts.path.strip('/')
-
-        config['account'] = config['bucket']
-
-    # file://path
-    elif scheme == 'http':
-        t = list(parts)
-        t[5] = None # clear out the fragment
-        config['url'] = urlparse.urlunparse(t)
-
-    elif scheme == 'rest':
-        config['url'] = "http:{}".format(parts.netloc)
-        config['options'] +=['rest']
-
-    config['options'] += parts.fragment.split(';')
-
-    return config
 
        
 

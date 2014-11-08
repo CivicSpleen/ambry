@@ -223,8 +223,3 @@ class TestBase(unittest.TestCase):
                 #f.write('\n')
 
         return path
-
-            
-            
-        
- 

@@ -3,8 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from . import prt, fatal, err, warn,  _print_info, _print_bundle_list
-from ..dbexceptions import ConfigurationError
+from . import prt,   _print_info, _print_bundle_list
 
 # If the devel module exists, this is a development system.
 try: from ambry.support.devel import *
@@ -184,8 +183,6 @@ def warehouse_info(args, w,config):
     prt("ELibrary: {}",w.elibrary.database.dsn)
 
 def warehouse_remove(args, w,config):
-    from functools import partial
-    from ambry.util import init_log_rate
 
     #w.logger = Logger('Warehouse Remove',init_log_rate(prt,N=2000))
     
@@ -387,7 +384,6 @@ def warehouse_config(args, w, config):
 def warehouse_test(args, w, config):
     from ..dbexceptions import ConfigurationError
     from ..util import print_yaml
-
 
 
 

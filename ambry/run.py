@@ -319,7 +319,6 @@ class RunConfig(object):
 
             r.append(parse_cache_string(remote, root_dir))
 
-
         return r
 
 
@@ -340,11 +339,9 @@ class RunConfig(object):
             e['source'] = fs.get('source',None)
 
 
-
         e =  self._sub_strings(e, {
                                      'filesystem': lambda k,v: self.filesystem(v, missing_is_dir=True),
                                      'database': lambda k,v: self.database(v, missing_is_dsn=True),
-                                     'upstream': lambda k,v: self.filesystem(v),
                                      'account': lambda k, v: self.account(v),
                                      'remotes': lambda k, v: self.remotes(v),
                                      'cdn': lambda k,v: self.account(v),

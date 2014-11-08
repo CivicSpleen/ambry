@@ -264,9 +264,10 @@ class FsCache(Cache):
             return abs_path
 
         if self.upstream and propagate:
-            return self.upstream.path(rel_path, **kwargs)
+            return self.upstream.path(rel_path, missing_ok = missing_ok, **kwargs)
 
         if not os.path.exists(abs_path) and missing_ok == False:
+            raise Exception()
             return False
 
         return abs_path

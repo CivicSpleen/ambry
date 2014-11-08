@@ -4,7 +4,6 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-
 from __future__ import print_function
 import collections
 import functools
@@ -20,7 +19,6 @@ import sys
 from flo import * # Legacy; should convert clients to direct import
 
 logger_init = set()
-
 
 def get_logger(name, file_name = None, stream = None, template=None, clear=False, propagate = False):
     """Get a logger by name

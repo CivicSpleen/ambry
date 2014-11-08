@@ -36,7 +36,10 @@ def copy_file_or_flo(input_, output, buffer_size=64*1024, cb=None):
     """ Copy a file name or file-like-object to another
     file name or file-like object"""
     import shutil 
-    
+
+    assert bool(input_)
+    assert bool(output)
+
     input_opened = False
     output_opened = False
 

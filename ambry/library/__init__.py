@@ -6,30 +6,30 @@ of the bundles that have been installed into it.
 # Revised BSD License, included in this distribution as LICENSE.txt
 
 import os.path
-
-from ambry.util import temp_file_name
 from ambry.dbexceptions import ConfigurationError, NotFoundError, DependencyError
-from ambry.bundle import DbBundle
 
 # Setup a default logger. The logger is re-assigned by the
 # bundle when the bundle instantiates the logger.
 import logging
 
-from ambry.orm import Dataset, Config
+from ambry.orm import Dataset
 from ..identity import LocationRef, Identity
 from ..util import memoize, get_logger
 import weakref
 from files import Files
-import collections
 libraries = {}
 
 def _new_library(config):
-    import copy
-    from ..cache import new_cache, RemoteMarker
+    from ..cache import new_cache
     from database import LibraryDb
     from sqlalchemy.exc import OperationalError
 
     cache = new_cache(config['filesystem'])
+
+    if 'documentation' in config:
+        doc_cache = new_cache(config['documentation'])
+    else:
+        doc_cache = cache.subcache('_doc')
 
     database = LibraryDb(**dict(config['database']))
 
@@ -66,6 +66,7 @@ def _new_library(config):
 
 
     l = Library(cache=cache,
+                doc_cache = doc_cache,
                 database=database,
                 name = config['_name'] if '_name' in config else 'NONE',
                 remotes=remotes,
@@ -253,21 +254,6 @@ class Library(object):
 
         self.cache.remove(bundle.identity.cache_key, propagate=True)
 
-    @property
-    def doc_cache(self):
-        """Return the cache for documentation"""
-
-        if self._doc_cache is None:
-            doc_cache = self.cache.clone()
-
-            assert doc_cache
-
-            doc_cache.prefix = '_doc'
-
-            return doc_cache
-
-        else:
-            return self._doc_cache
 
     ##
     ## Retreiving
@@ -277,7 +263,6 @@ class Library(object):
         '''Lists all of the datasets in the partition, optionally with
         metadata. Does not include partitions. This returns a dictionary
         in  a form that is similar to the remote and source lists. '''
-        import socket
 
         if datasets is None:
             datasets = {}
@@ -369,7 +354,7 @@ class Library(object):
     def _get_bundle_by_cache_key(self, cache_key, cb=None):
         from ..cache.multi import AltReadCache
         from sqlite3 import DatabaseError
-        from sqlalchemy.exc import OperationalError, IntegrityError
+        from sqlalchemy.exc import OperationalError
 
         # The AltReadCache will get from the remote stack if the path is not found in the cache.
         arc = AltReadCache(self.cache, self.remote_stack)
@@ -405,7 +390,6 @@ class Library(object):
 
     def get(self, ref, force=False, cb=None, location = 'default'):
         '''Get a bundle, given an id string or a name '''
-        from sqlite3 import DatabaseError
         from sqlalchemy.exc import IntegrityError
         from .files import  Files
         from ..cache.multi import AltReadCache
@@ -542,7 +526,6 @@ class Library(object):
     @property
     def stores(self):
         """Return all of the refistered data stores. """
-        from ..orm import Partition
 
         return self.files.query.group(self.files.TYPE.STORE).all
 
@@ -556,7 +539,6 @@ class Library(object):
     @property
     def manifests(self):
         """Return all of the refistered data stores. """
-        from ..orm import Partition
         from ..warehouse.manifest import  Manifest
 
         return [(f, Manifest(f.content, logger=self.logger))
@@ -575,7 +557,6 @@ class Library(object):
 
     @property
     def remotes(self):
-        from ..cache import new_cache
 
         if not self._remotes:
             return None
@@ -694,7 +675,6 @@ class Library(object):
         self._dependencies = None
 
     def _get_dependencies(self):
-        from ..orm import Dataset
 
         if not self._bundle:
             raise ConfigurationError("Can't use the dep() method for a library that is not attached to a bundle");
@@ -1086,7 +1066,6 @@ class Library(object):
     def sync_warehouse(self, w):
         """Create a reference to the warehouse and link all of the partitions to it. """
 
-        from sqlalchemy.exc import IntegrityError
         from ambry.util.packages import qualified_name
 
         f = self.files.install_data_store(w.database.dsn, qualified_name(w),
@@ -1116,12 +1095,16 @@ class Library(object):
 
     def sync_doc_json(self):
         """Write the json for all bundles and the library"""
+        from contexttimer import Timer
 
-        from ambry.bundle.bjson import BundleJson, LibraryJson
+        dc = self.doc_cache
 
-        cache = self.doc_cache.subcache('json')
+        self.logger.info("Caching json to {}".format(self._doc_cache))
 
-        LibraryJson(cache, self).get()
+        dc.put_library(self)
+
+        for f, m in self.manifests:
+            dc.put_manifest(m, f)
 
         for vid in self.list():
 
@@ -1133,37 +1116,27 @@ class Library(object):
             try:
                 b = self.get(vid)
 
-                bj = BundleJson(cache, b)
+                if not dc.get_bundle(vid):
 
-                if not bj.has():
                     self.logger.info("Processing json for {}".format(vid))
-                    bj.bundle()
-                    bj.schema()
-                    bj.tables()
+
+                    dc.put_bundle(b)
+                    dc.put_schema(b)
+
+                    for t in b.schema.tables:
+                        dc.put_table(t)
 
             except Exception as e:
                 self.logger.error("Error on {}: {}".format(vid, e))
-
-
-
-    @property
-    def json_doc_cache(self):
-        cache = self.doc_cache.clone()
-        cache.prefix = os.path.join(cache.prefix if cache.prefix else '', 'json')
-        return cache
+                raise
 
     @property
-    def cached_dict(self):
+    def doc_cache(self):
+        """Return the documentation cache. """
+        from ambrydoc.cache import  DocCache
 
-        from ambry.bundle.bjson import  LibraryJson
+        return DocCache(self._doc_cache)
 
-        return LibraryJson(self.json_doc_cache, self).get()
-
-    @property
-    def bundle_doc(self):
-        from ambry.bundle.bjson import BundleJson
-
-        return BundleJson(self.json_doc_cache)
 
     @property
     def info(self):

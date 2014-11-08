@@ -654,6 +654,12 @@ class Manifest(object):
         except Exception as e:
             raise ParseError("Failed to parse {} : {}".format(line, e))
 
+    @property
+    def dict(self):
+        m = self.meta
+        m['sections'] =  [ s.__dict__ for l, s in self.sorted_sections ]
+
+        return m
 
     @property
     def meta(self):

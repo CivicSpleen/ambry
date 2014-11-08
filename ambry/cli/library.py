@@ -3,9 +3,8 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..cli import prt, fatal, warn, err, _print_info #@UnresolvedImport
-
 import os
+from ..cli import prt, fatal, warn,  _print_info #@UnresolvedImport
 from ambry.util import Progressor
 
 # If the devel module exists, this is a development system.
@@ -524,10 +523,8 @@ def library_unknown(args, l, config):
 
 def library_test(args, l, config):
 
-    import pdfminer
     from ambry.cache import new_cache
     import requests
-    from requests.exceptions import InvalidSchema
     from ambry.util.text import generate_pdf_pages
 
     cache = new_cache(config.filesystem('downloads')).subcache('ext_doc')

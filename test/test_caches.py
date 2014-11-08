@@ -40,7 +40,6 @@ class Test(TestBase):
         self.bundle = Bundle()  
         self.bundle_dir = self.bundle.bundle_dir
 
-
     def tearDown(self):
         from ambry.library import clear_libraries
 
@@ -51,7 +50,6 @@ class Test(TestBase):
 
         self.stop_server()
 
-
     def get_library(self, name = 'default'):
         """Return the same library that the server uses. """
         from ambry.library import new_library
@@ -61,7 +59,6 @@ class Test(TestBase):
         l =  new_library(config, reset = True)
 
         return l
-
 
     def web_exists(self,s3, rel_path):
     
@@ -214,7 +211,6 @@ class Test(TestBase):
 
         self.assertTrue(cache1.has('{}/{}'.format(prefix,'tf')))
 
-
     def test_compression(self):
         from ambry.run import get_runconfig
         from ambry.cache import new_cache
@@ -282,7 +278,6 @@ class Test(TestBase):
         self.assertEquals(md5, cache.md5('foo2'))
 
         os.remove(fn)
-
 
     def test_configed_caches(self):
         '''Basic test of put(), get() and has() for all cache types'''
@@ -392,7 +387,6 @@ class Test(TestBase):
 
         print l.locate_one(self.bundle.identity.vid)
         print l.locate_one('dfoobar')
-
 
     def test_attachment(self):
         from ambry.cache import new_cache

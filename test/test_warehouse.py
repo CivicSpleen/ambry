@@ -6,13 +6,13 @@ Created on Jun 30, 2012
 
 import unittest
 import os.path
+import logging
 from  bundles.testbundle.bundle import Bundle
 from ambry.run import  get_runconfig
-import logging
 import ambry.util
 from ambry.warehouse.manifest import Manifest
-
 from test_base import  TestBase
+
 
 global_logger = ambry.util.get_logger(__name__)
 global_logger.setLevel(logging.DEBUG)
@@ -151,7 +151,6 @@ Yet more documentation, about the Fringo extract.
         return w
 
     def get_fs_cache(self,name):
-        from ambry.util import temp_file_name
         from ambry.cache.filesystem import FsCache
         import shutil
 
@@ -272,7 +271,6 @@ This is documentation for the geot1.geojson extract
         print print_yaml(extracts)
 
     def test_extract(self):
-        from ambry.cache import new_cache
 
         l = self.get_library('local')
         l.put_bundle(self.bundle)
@@ -292,7 +290,6 @@ This is documentation for the geot1.geojson extract
     def test_manifest_doc(self):
         from ambry.util import get_logger
         import logging
-        from ambry.text import ManifestDoc
 
         l  = get_logger('TL')
         l.setLevel(logging.DEBUG)
@@ -323,7 +320,6 @@ This is documentation for the geot1.geojson extract
         from ambry.warehouse.manifest import Manifest
         from ambry.util import get_logger
         from ambry.ipython.manifest import ManifestMagicsImpl
-        import yaml
 
         m = Manifest('', get_logger('TL'), base_dir='/tmp')
         mmi = ManifestMagicsImpl(m)
