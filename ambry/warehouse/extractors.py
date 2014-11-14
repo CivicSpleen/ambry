@@ -16,7 +16,7 @@ def new_extractor(format, warehouse, cache, force=False):
         shapefile=ShapeExtractor,
         geojson=GeoJsonExtractor,
         kml=KmlExtractor
-    ).get(format, False)
+    ).get(format.lower(), False)
 
     if not ex_class:
         raise ValueError("Unknown format: {} ".format(format))

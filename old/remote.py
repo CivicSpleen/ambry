@@ -1,4 +1,4 @@
-from . import  RemoteInterface, Cache, new_cache
+
 from ..client.rest import RemoteLibrary, RestApi
 
 # Setup a default logger. The logger is re-assigned by the
@@ -10,7 +10,7 @@ from ..util import  get_logger
 global_logger = get_logger(__name__)
 #logger.setLevel(logging.DEBUG) 
 
-class RestReadCache(RemoteInterface):
+class RestReadCache(object):
     '''A cache that looks up the cache key with the remote API and returns
     a URL to download '''
 

@@ -227,7 +227,7 @@ views: {}
         self.assertIn(('contact_bundle', 'creator', 'bingo'), top.errors)
 
         self.assertIn('creator', top.contact_bundle.keys())
-        self.assertIn('url', dict(top.contact_bundle.creator))
+        self.assertNotIn('url', dict(top.contact_bundle.creator))
         self.assertEqual('Email',top.contact_bundle.creator.email)
 
         self.assertIn('name', top.partitions[0])

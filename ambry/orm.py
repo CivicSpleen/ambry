@@ -24,7 +24,6 @@ from ambry.identity import TableNumber, PartitionNumber, ObjectNumber
 
 import json
 
-SCHEMA_VERSION = 11
 
 # http://stackoverflow.com/a/23175518/1144479
 # SQLAlchemy does not map BigInt to Int by default on the sqlite dialect.
@@ -1126,82 +1125,6 @@ file_link = SATable('file_link', Base.metadata,
 )
 
 
-class File(Base, SavableMixin):
-    __tablename__ = 'files'
-
-    oid = SAColumn('f_id',Integer, primary_key=True, nullable=False)
-    path = SAColumn('f_path',Text, nullable=False)
-    ref = SAColumn('f_ref', Text, index=True)
-    type_ = SAColumn('f_type', Text)
-    source_url = SAColumn('f_source_url',Text)
-    process = SAColumn('f_process',Text)
-    state = SAColumn('f_state',Text)
-    hash = SAColumn('f_hash',Text)
-    modified = SAColumn('f_modified',Integer)
-    size = SAColumn('f_size',BigIntegerType)
-    group = SAColumn('f_group',Text)
-    priority = SAColumn('f_priority', Integer)
-
-    data = SAColumn('f_data',MutationDict.as_mutable(JSONEncodedObj))
-
-    content = SAColumn('f_content', Binary)
-
-    __table_args__ = (
-        UniqueConstraint('f_path', 'f_type', 'f_group', name='u_type_path'),
-        UniqueConstraint('f_ref', 'f_type', 'f_group', name='u_ref_path'),
-    )
-
-    partitions = relationship('Partition', secondary=stored_partitions, backref='stores', viewonly=True)
-
-    right_files = relationship("File",
-                               secondary=file_link,
-                               primaryjoin= oid == file_link.c.fl_right_id,
-                               secondaryjoin= oid == file_link.c.fl_left_id,
-                               backref="left_files"
-    )
-
-    def __init__(self,**kwargs):
-        self.oid = kwargs.get("oid",None) 
-        self.path = kwargs.get("path",None)
-        self.source_url = kwargs.get("source_url",None) 
-        self.process = kwargs.get("process",None) 
-        self.state = kwargs.get("state",None) 
-        self.modified = kwargs.get("modified",None) 
-        self.size = kwargs.get("size",None)
-        self.group = kwargs.get("group",None)
-        self.ref = kwargs.get("ref",None)
-        self.hash = kwargs.get("hash", None)
-        self.type_ = kwargs.get("type",kwargs.get("type_",None))
-
-        self.data = kwargs.get('data',None)
-        self.priority = kwargs.get('priority', 0)
-        self.content = kwargs.get('content', None)
-      
-    def __repr__(self):
-        return "<file: {}; {}>".format(self.path, self.state)
-
-    def update(self, f):
-        """Copy anohter fiels properties into this one. """
-
-        for k in self.dict.keys():
-            if k in ['oid']:
-                continue
-            setattr(self, k, getattr(f, k))
-
-        self.content = f.content
-
-
-    @property
-    def dict(self):
-
-        return  dict((col, getattr(self, col)) for col 
-                     in ['oid','path', 'ref',  'type_',  'source_url', 'process', 'state',
-                         'hash', 'modified', 'size', 'group', 'data', 'priority'])
-
-    @property
-    def insertable_dict(self):
-        return { ('f_'+k).strip('_'):v for k,v in self.dict.items()}
-
 class Partition(Base):
     __tablename__ = 'partitions'
 
@@ -1390,4 +1313,99 @@ class Partition(Base):
 
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
+
+
+class File(Base, SavableMixin):
+    __tablename__ = 'files'
+
+    oid = SAColumn('f_id',Integer, primary_key=True, nullable=False)
+    path = SAColumn('f_path',Text, nullable=False)
+    ref = SAColumn('f_ref', Text, index=True)
+    type_ = SAColumn('f_type', Text)
+    source_url = SAColumn('f_source_url',Text)
+    process = SAColumn('f_process',Text)
+    state = SAColumn('f_state',Text)
+    hash = SAColumn('f_hash',Text)
+    modified = SAColumn('f_modified',Integer)
+    size = SAColumn('f_size',BigIntegerType)
+    group = SAColumn('f_group',Text)
+    priority = SAColumn('f_priority', Integer)
+
+    data = SAColumn('f_data',MutationDict.as_mutable(JSONEncodedObj))
+
+    content = SAColumn('f_content', Binary)
+
+    __table_args__ = (
+        UniqueConstraint('f_path', 'f_type', 'f_group', name='u_type_path'),
+        UniqueConstraint('f_ref', 'f_type', 'f_group', name='u_ref_path'),
+    )
+
+    partitions = relationship('Partition',
+                              secondary=stored_partitions,
+                              primaryjoin = oid == stored_partitions.c.f_id,
+                              secondaryjoin = Partition.vid == stored_partitions.c.p_vid,
+                              backref='files')
+
+    right_files = relationship("File",
+                               secondary=file_link,
+                               primaryjoin= oid == file_link.c.fl_right_id,
+                               secondaryjoin= oid == file_link.c.fl_left_id,
+                               backref="left_files"
+    )
+
+    def __init__(self,**kwargs):
+        self.oid = kwargs.get("oid",None)
+        self.path = kwargs.get("path",None)
+        self.source_url = kwargs.get("source_url",None)
+        self.process = kwargs.get("process",None)
+        self.state = kwargs.get("state",None)
+        self.modified = kwargs.get("modified",None)
+        self.size = kwargs.get("size",None)
+        self.group = kwargs.get("group",None)
+        self.ref = kwargs.get("ref",None)
+        self.hash = kwargs.get("hash", None)
+        self.type_ = kwargs.get("type",kwargs.get("type_",None))
+
+        self.data = kwargs.get('data',None)
+        self.priority = kwargs.get('priority', 0)
+        self.content = kwargs.get('content', None)
+
+    def __repr__(self):
+        return "<file: {}; {}>".format(self.path, self.state)
+
+    def update(self, f):
+        """Copy anohter fiels properties into this one. """
+
+        for k in self.dict.keys():
+            if k in ['oid']:
+                continue
+            setattr(self, k, getattr(f, k))
+
+        self.content = f.content
+
+
+    @property
+    def dict(self):
+
+        return  dict((col, getattr(self, col)) for col
+                     in ['oid','path', 'ref',  'type_',  'source_url', 'process', 'state',
+                         'hash', 'modified', 'size', 'group', 'data', 'priority'])
+
+    @property
+    def insertable_dict(self):
+        return { ('f_'+k).strip('_'):v for k,v in self.dict.items()}
+
+    def clear_links(self):
+        """Clear out all of the links then delete this record
+
+        THis probably should be handled with a cascade, but  I don't understand how they work.
+        """
+
+        [self.partitions.remove(x) for x in self.partitions]
+
+        [self.right_files.remove(x) for x in self.right_files]
+
+        [self.left_files.remove(x) for x in self.left_files]
+
+        return self
 

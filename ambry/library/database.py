@@ -883,6 +883,7 @@ class LibraryDb(object):
 
         s.query(Partition).filter(Partition.t_vid  == p_vid).delete()
 
+
         self.commit()
 
     def remove_partition_record(self, vid):

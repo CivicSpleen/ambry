@@ -17,6 +17,8 @@ from ..identity import LocationRef, Identity
 from ..util import memoize, get_logger
 import weakref
 from files import Files
+from ckcache import NullCache
+
 libraries = {}
 
 def _new_library(config):
@@ -129,6 +131,7 @@ class Library(object):
                  require_upload=False,
                  doc_cache = None,
                  host=None, port=None, urlhost = None):
+
         '''Libraries are constructed on the root cache name for the library.
         If the cache does not exist, it will be created.
 
@@ -140,6 +143,7 @@ class Library(object):
         sync: If true, put to remote synchronously. Defaults to False.
 
         '''
+
 
         assert database is not None
 
@@ -346,13 +350,13 @@ class Library(object):
     def remote_stack(self):
         """Return a MultiCache that has all of the remotes as upstreams"""
 
-        from ..cache.multi import MultiCache
+        from ckcache.multi import MultiCache
 
         return MultiCache(self.remotes)
 
 
     def _get_bundle_by_cache_key(self, cache_key, cb=None):
-        from ..cache.multi import AltReadCache
+        from ckcache.multi import AltReadCache
         from sqlite3 import DatabaseError
         from sqlalchemy.exc import OperationalError
 
@@ -392,7 +396,7 @@ class Library(object):
         '''Get a bundle, given an id string or a name '''
         from sqlalchemy.exc import IntegrityError
         from .files import  Files
-        from ..cache.multi import AltReadCache
+        from ckcache.multi import AltReadCache
         from ..dbexceptions import NotFoundError
 
         # Get a reference to the dataset, partition and relative path
@@ -536,6 +540,18 @@ class Library(object):
 
         return f
 
+    def remove_store(self, uid):
+        from ..dbexceptions import NotFoundError
+
+        s = self.store(uid)
+
+        if not s:
+            raise NotFoundError("Didn't find store for uid '{}' ".format(uid))
+
+        self.database.session.delete(s.clear_links())
+        self.database.commit()
+
+
     @property
     def manifests(self):
         """Return all of the refistered data stores. """
@@ -552,8 +568,20 @@ class Library(object):
 
         f = self.files.query.group(self.files.TYPE.MANIFEST).ref(uid).one_maybe
 
+        if not f:
+            return None, None
+
         return f, Manifest(f.content)
 
+    def remove_manifest(self, uid):
+
+        f,m = self.manifest(uid)
+
+        if not f:
+            raise NotFoundError("Didn't find manifest for uid '{}' ".format(uid))
+
+        self.database.session.delete(f.clear_links())
+        self.database.commit()
 
     @property
     def remotes(self):
@@ -579,7 +607,8 @@ class Library(object):
         return self.database.resolver
 
     def resolve(self, ref, location = 'default'):
-        from ..identity import LocationRef
+        from ..identity import LocationRef, NotObjectNumberError
+
 
         # If the location is not explicitly defined, set it to everything but source
         if location is 'default':
@@ -591,7 +620,10 @@ class Library(object):
 
         resolver = self.resolver
 
-        ip, ident = resolver.resolve_ref_one(ref, location)
+        try:
+            ip, ident = resolver.resolve_ref_one(ref, location)
+        except NotObjectNumberError:
+            ip, ident = None, None
 
         try:
             if ident and self.source:
@@ -1075,16 +1107,24 @@ class Library(object):
                                           remote_cache = w.remote_cache
         )
 
-        self.database.session.commit()
+        s = self.database.session
+
+        s.commit()
 
         ## First, load in the partitions.
 
         for remote_p in w.library.partitions:
+
             p = self.partition(remote_p.vid)
 
-            p.stores.append(f)
+            f.partitions.append(p)
 
-        self.database.session.commit()
+
+        s.merge(f)
+
+        s.commit()
+
+        s.expire_all()
 
         ## Next, we can load the manifests.
 
@@ -1093,18 +1133,28 @@ class Library(object):
 
             self.files.install_manifest(m, warehouse=w)
 
-    def sync_doc_json(self):
+            for p in f.partitions:
+                f.partitions.append(self.partition(p.vid))
+
+            s.merge(f)
+
+            s.commit()
+
+
+
+
+    def sync_doc_json(self, clean = False):
         """Write the json for all bundles and the library"""
         from contexttimer import Timer
 
         dc = self.doc_cache
 
-        self.logger.info("Caching json to {}".format(self._doc_cache))
+        self.logger.info("Caching json to {}".format(dc.cache))
 
-        dc.put_library(self)
+        dc.put_library(self, force = clean)
 
         for f, m in self.manifests:
-            dc.put_manifest(m, f)
+            dc.put_manifest(m, f, force = clean)
 
         for vid in self.list():
 
@@ -1116,15 +1166,15 @@ class Library(object):
             try:
                 b = self.get(vid)
 
-                if not dc.get_bundle(vid):
+                if not dc.get_bundle(vid) or clean:
 
                     self.logger.info("Processing json for {}".format(vid))
 
-                    dc.put_bundle(b)
-                    dc.put_schema(b)
+                    dc.put_bundle(b, force = clean)
+                    dc.put_schema(b, force = clean)
 
                     for t in b.schema.tables:
-                        dc.put_table(t)
+                        dc.put_table(t, force = clean)
 
             except Exception as e:
                 self.logger.error("Error on {}: {}".format(vid, e))
@@ -1135,7 +1185,7 @@ class Library(object):
         """Return the documentation cache. """
         from ambrydoc.cache import  DocCache
 
-        return DocCache(self._doc_cache)
+        return DocCache(self._doc_cache if self._doc_cache else self.cache.subcache('_doc'))
 
 
     @property
@@ -1150,6 +1200,15 @@ Remotes:  {remotes}
 
     @property
     def dict(self):
+
+
+        for f,m in self.manifests:
+            print f.oid, f
+            for p in f.partitions:
+                print '  P', p
+
+
+
         return dict(name=str(self.name),
                     database=str(self.database.dsn),
                     cache=str(self.cache),
@@ -1246,14 +1305,3 @@ class AnalysisLibrary(Library):
     def _repr_html_(self):
         return self.info.replace('\n','<br/>')
 
-    def install_manifest(self, ref, base_dir=None):
-        from ..warehouse import install_manifest
-        import os
-        import warnings
-
-        warnings.filterwarnings('ignore')
-
-        if not base_dir:
-            base_dir = os.getcwd()
-
-        return install_manifest(self.l, ref, base_dir)

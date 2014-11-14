@@ -38,29 +38,21 @@ def generate_pdf_pages(fp):
     from pdfminer.pdfdocument import PDFDocument
     from pdfminer.pdfparser import PDFParser
     from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
-    from pdfminer.pdfdevice import PDFDevice, TagExtractor
+    from pdfminer.pdfdevice import PDFDevice
     from pdfminer.pdfpage import PDFPage
-    from pdfminer.converter import XMLConverter, HTMLConverter, TextConverter
+    from pdfminer.converter import  TextConverter
     from pdfminer.cmapdb import CMapDB
     from pdfminer.layout import LAParams
 
     import re
-
 
     debug = 0
     # input option
     password = ''
     pagenos = set()
     maxpages = 0
-    # output option
-    outfile = None
-    outtype = None
     imagewriter = None
     rotation = 0
-    layoutmode = 'normal'
-    codec = 'utf-8'
-
-    scale = 1
     caching = True
 
     laparams = LAParams()
@@ -81,7 +73,6 @@ def generate_pdf_pages(fp):
 
     device = TextConverter(rsrcmgr, outfp, codec='utf-8', laparams=laparams,
                                imagewriter=imagewriter)
-
 
     interpreter = PDFPageInterpreter(rsrcmgr, device)
     for page in PDFPage.get_pages(fp, pagenos,

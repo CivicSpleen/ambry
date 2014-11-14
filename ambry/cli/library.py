@@ -259,13 +259,7 @@ def library_remove(args, l, config):
     cache_keys = set()
     refs = set()
 
-    for name in args.terms:
-
-        ident = l.resolve(name, location=None)
-
-        if not ident:
-            warn("Found no references to term {}".format(name))
-            continue
+    def remove_by_ident(ident):
 
         try:
 
@@ -273,7 +267,7 @@ def library_remove(args, l, config):
                 cache_keys.add(ident.partition.cache_key)
                 refs.add(ident.partition.vid)
 
-            else: # The reference is to a bundle, so we have to delete everything
+            else:  # The reference is to a bundle, so we have to delete everything
                 cache_keys.add(ident.cache_key)
                 refs.add(ident.vid)
 
@@ -286,6 +280,30 @@ def library_remove(args, l, config):
 
         except NotFoundError:
             pass
+
+
+    for name in args.terms:
+
+        ident = l.resolve(name, location=None)
+
+        if ident:
+            remove_by_ident(ident)
+            continue
+
+        if name.startswith('s'):
+            l.remove_store(name)
+
+
+        elif name.startswith('m'):
+            l.remove_manifest(name)
+
+        else:
+            warn("Found no references to term {}".format(name))
+
+
+
+
+
 
 
     if args.library or args.all:
@@ -491,7 +509,7 @@ def library_sync(args, l, config):
 
     if (args.json or all):
         l.logger.info("==== Sync Cached JSON")
-        l.sync_doc_json()
+        l.sync_doc_json(clean=args.clean)
 
 def library_doc(args, l, rc):
         from ..text import Renderer

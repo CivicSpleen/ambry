@@ -6,8 +6,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 import h5py
-import os.path
-from numpy import * 
+from numpy import *
 
 class Hdf5File(h5py.File):
     
@@ -74,7 +73,7 @@ class Hdf5File(h5py.File):
     def get_geo(self, path):
         """Return an array an an associated analysis area"""
         import json
-        from ambry.geo.analysisarea import AnalysisArea
+        from old.analysisarea import AnalysisArea
 
         group, name = self.recursive_require_group(path)
 

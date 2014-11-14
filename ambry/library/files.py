@@ -319,7 +319,7 @@ class Files(object):
         f = self.new_file(commit=commit, merge=True, extant=extant,
             path=dsn,
             group=self.TYPE.STORE,
-            ref=ref if ref else str(TopNumber('s')) ,
+            ref=ref if ref else str(TopNumber.from_string(dsn,'s')) ,
             state=None,
             type_=type,
             data=dict(

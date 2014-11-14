@@ -1,14 +1,14 @@
 from __future__ import absolute_import
 from ..library import Library
 from ..library.database import LibraryDb
-from ..cache import new_cache, CacheInterface
+from ckcache import new_cache, Cache
 from ..database import new_database
 import os
 from ..util import Constant
 from ambry.util import init_log_rate
 from ..library.files import Files
 
-class NullCache(CacheInterface):
+class NullCache(Cache):
     def has(self, rel_path, md5=None, use_upstream=True):
         return False
 
@@ -129,6 +129,7 @@ class WarehouseInterface(object):
 
         self.logger =  Logger(logger, init_log_rate(logger.info, N=2000))
 
+
     def create(self):
         from datetime import datetime
 
@@ -136,6 +137,9 @@ class WarehouseInterface(object):
         self.wlibrary.database.create()
 
         self._meta_set('created', datetime.now().isoformat())
+
+
+
 
     def clean(self):
         self.database.clean()
@@ -209,7 +213,7 @@ class WarehouseInterface(object):
 
         lc =  self._meta_get('local_cache')
 
-        if not lc:
+        if not lc: # Get it from the sqlite database, if it isn't set.
             try:
                 path = self.database.path
 
@@ -235,6 +239,10 @@ class WarehouseInterface(object):
     def remote_cache(self, v):
         return self._meta_set('remote_cache', v)
 
+
+    @property
+    def cache(self):
+        return new_cache(self.local_cache)
 
     @property
     def manifests(self):
@@ -324,7 +332,7 @@ class WarehouseInterface(object):
 
         if p_orm and p_orm.installed == 'y':
             self.logger.info("Skipping {}; already installed".format(p_orm.vname))
-            return
+            return p_orm
 
         bundle, p = self._setup_install(p_vid)
 
@@ -367,6 +375,8 @@ class WarehouseInterface(object):
 
         self.library.database.mark_partition_installed(p_vid)
 
+        return p
+
     def install_partition(self, bundle, partition, prefix=None):
         '''Install the records for the partition, the tables referenced by the partition,
         and the bundle, if they aren't already installed'''
@@ -403,6 +413,12 @@ class WarehouseInterface(object):
         errors = []
 
         # Delete everything related to this manifest
+        # This is horrible, since I dont know how to get the file and partition links to cascade on delete.
+        mf,_ = self.library.manifest(manifest.uid)
+        if mf:
+            self.library.database.session.delete(mf.clear_links())
+            self.library.database.session.commit()
+
         (self.library.files.query.source_url(manifest.uid)).delete()
 
         # Update the manifest with bundle information, since it doesn't normally have access to a library
@@ -422,6 +438,10 @@ class WarehouseInterface(object):
         if (reset or not self.remote_cache) and manifest.remote:
             self.remote_cache = manifest.remote
 
+        # Manifest data
+        mf = self.wlibrary.files.install_manifest(manifest)
+
+
         ## First pass
         for line, section in manifest.sorted_sections:
 
@@ -440,10 +460,19 @@ class WarehouseInterface(object):
                         if pd['where'] and len(tables) == 1:
                             tables = [(pd['tables'][0], "WHERE (" + pd['where'] + ")")]
 
-                        self.install(pd['partition'], tables)
+                        p = self.install(pd['partition'], tables)
+
+                        if p:
+                            # Link the partition to the manifest. Have to re-fetch, because p is in the
+                            #external library, and the manifest is in the warehous elibrary
+                            mf.partitions.append(self.wlibrary.partition(p.vid))
+
 
                     except NotFoundError:
                         self.logger.error("Partition {} not found in external library".format(pd['partition']))
+
+
+                self.wlibrary.database.session.commit()
 
             elif tag == 'sql':
                 sql = section.content
@@ -485,9 +514,6 @@ class WarehouseInterface(object):
                 m = Manifest(section.content['path'])
                 self.install_manifest(m, force = force)
 
-        # Manifest data
-
-        self.wlibrary.files.install_manifest(manifest)
 
         self._meta_set(manifest.uid, datetime.now().isoformat())
 

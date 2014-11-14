@@ -5,11 +5,13 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 import ogr #@UnresolvedImport
-from numpy import * 
+from numpy import *
 from osgeo.gdalconst import * #@UnresolvedImport
+
 from ambry.geo import Point
 from util import create_poly
-from ambry.dbexceptions import ConfigurationError
+
+
 
 #ogr.UseExceptions()
 
@@ -108,8 +110,7 @@ def get_analysis_area(library, **kwargs):
     :rtype: An `AnalysisArea` object.
     
     """
-    from ambry.datasets.geo import US
-    import json
+    from old.datasets.geo import US
 
     state_code = kwargs.get('state', False)
     county_code = kwargs.get('county', False)
@@ -306,8 +307,7 @@ class AnalysisArea(object):
     def get_translator(self, source_srs=None):
         """Get a function that transforms coordinates from a source srs
         to the coordinates of this array """
-        import math
-        
+
         trans = self.get_coord_transform(source_srs)
 
         def _transformer(x,y):
@@ -458,15 +458,7 @@ class AnalysisArea(object):
     
     def get_rasterlayer(self, file_=None, data_type=GDT_Byte):
         """Return a GDAL layer that can be rasterized. """
-        
-        from ambry.datasets.geo import US
-        import ogr
-        import gdal
-        from osgeo.gdalconst import GDT_Byte
-        import numpy as np  
-        import numpy.ma as ma
-        
-    
+
         return  _RasterLayer(self, file_, data_type=data_type)
     
     

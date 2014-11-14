@@ -195,7 +195,7 @@ class SqliteDatabase(RelationalDatabase):
         if self.memory:
             return ':memory:'
         else:
-            return self.base_path+self.EXTENSION
+            return (self.base_path+self.EXTENSION).replace('//','/')
 
     @property
     def md5(self):

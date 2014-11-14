@@ -205,32 +205,6 @@ class Manifest(object):
         return acl
 
 
-    @property
-    def bundles(self):
-        """Metadata for bundles, each with the partitions that are installed here.
-
-        This extracts the bundle information that is in the partitions list, but it requires
-        that the add_bundle() method has been run first, because the manifest doesn't usually have access to
-        a library
-        """
-
-        bundles = {}
-
-        for p in self.partitions:
-
-            b_ident = p['bundle']
-
-            if not b_ident.vid in bundles:
-
-                bundles[b_ident.vid] = dict(
-                    partitions = [],
-                    ident=b_ident,
-                    metadata=p['metadata']
-                )
-
-            bundles[b_ident.vid]['partitions'].append(p)
-
-        return bundles
 
     @property
     def summary(self):
@@ -488,8 +462,9 @@ class Manifest(object):
                 ident = library.resolve(partition['partition'])
 
                 if not ident:
-                    raise ParseError("Partition reference not resolved to a bundle: '{}' in library {}"
-                                     .format(partition['partition'], library.database.dsn))
+                    raise ParseError("Partition reference not resolved to a bundle: '{}' in manifest '{}' "
+                                     " for library {}"
+                                     .format(partition['partition'], self.path, library.database.dsn))
 
                 if not ident.partition:
                     raise ParseError("Partition reference not resolved to a partition: '{}' ".format(partition['partition']))

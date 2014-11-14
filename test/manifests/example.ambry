@@ -3,6 +3,11 @@ TITLE: A Health Manifest
 This is a fake education file manifest
 
 UID: mQaiWWgy2G
+AUTHOR: Eric Busboom <eric@sandiegodata.org>
+
+DATABASE: sqlite:example_manifest.db
+REMOTE:  s3://warehouse.sandiegodata.org/test/example_manifest#compress
+
 
 PARTITIONS:
 
@@ -17,3 +22,5 @@ VIEW: health_mview
 
 SELECT *
 FROM "p00G002001_example"
+
+EXTRACT: health_view AS csv to health_view.csv

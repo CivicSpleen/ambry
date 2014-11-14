@@ -25,11 +25,16 @@ def warehouse_command(args, rc):
 
     if args.database:
 
-        try: # Its a name for the warehouse section of the config
-            config = rc.warehouse(args.database)
-        except ConfigurationError: # It is a database connection string.
-            config = database_config(args.database)
+        s =  l.store(args.database)
 
+        if s:
+            config = database_config(s.path)
+        else:
+            try: # Its a name for the warehouse section of the config, or a warehouse that is listed in the library
+                config = rc.warehouse(args.database)
+
+            except ConfigurationError: # It is a database connection string.
+                config = database_config(args.database)
 
     if not config and args.name:
 
@@ -37,20 +42,26 @@ def warehouse_command(args, rc):
         if f:
             config = database_config(f.path)
 
+    ###
+    ### This is the case when the warehouse does not exist, and
+    ### gets its configuration from a Manifest
+    ###
     if not config and args.subcommand == 'install':
         from ..warehouse.manifest import Manifest
         import os.path
 
         m = Manifest(args.term)
 
+        # If cache_path is absolute, base_dir will be just the cache_path
         base_dir = os.path.join(rc.filesystem('warehouse')['dir'], m.cache_path)
 
         config = database_config(m.database, base_dir=base_dir)
 
-    if not config and  args.subcommand != 'list':
+    if not config and  not args.subcommand in ['list']:
         raise ConfigurationError("Must set the name of the database somewhere. ")
 
     if config:
+
         w = new_warehouse(config, l, logger = global_logger)
 
         if not w.exists():
@@ -173,19 +184,21 @@ def warehouse_parser(cmd):
 
 def warehouse_info(args, w,config):
 
-
-
     prt("Warehouse Info")
     prt("Name:     {}",args.name)
+    prt("Title:    {}",w.title)
+    prt("Summary:  {}",w.summary)
     prt("Class:    {}",w.__class__)
     prt("Database: {}",w.database.dsn)
     prt("WLibrary: {}",w.wlibrary.database.dsn)
     prt("ELibrary: {}",w.elibrary.database.dsn)
+    prt("Local:    {}", w.local_cache)
+    prt("Remote:   {}", w.remote_cache)
 
 def warehouse_remove(args, w,config):
 
     #w.logger = Logger('Warehouse Remove',init_log_rate(prt,N=2000))
-    
+
     w.remove(args.term )
       
 def warehouse_drop(args, w,config):
@@ -335,7 +348,7 @@ def get_cache(w, args, rc):
     if config['type'] == 'file' and not os.path.exists(config['dir']):
         os.makedirs(config['dir'])
 
-    cache = new_cache(config, run_config=rc)
+    cache = new_cache(config)
 
     return cache
 
@@ -384,6 +397,9 @@ def warehouse_config(args, w, config):
 def warehouse_test(args, w, config):
     from ..dbexceptions import ConfigurationError
     from ..util import print_yaml
+
+
+    w.library.sync_doc_json()
 
 
 

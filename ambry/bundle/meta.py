@@ -68,6 +68,7 @@ class SourceTerm(DictTerm):
     description = ScalarTerm(store_none=False)
     dd_url = ScalarTerm(store_none=False) # Data Dictitionary URL
     file = ScalarTerm(store_none=False) # A name or regex to extract from a multi-file ZIP
+    segment = ScalarTerm(store_none=False)  # Specify a sub-component of the file, like a sheet in an exce workbook.
     comment = ScalarTerm(store_none=False)  # Just a comment
 
     def __nonzero__(self):

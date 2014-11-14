@@ -6,14 +6,14 @@ Created on Aug 31, 2012
 
 import unittest
 import os.path
-import logging 
+import logging
+
 import ambry.util
 from  bundles.testbundle.bundle import Bundle
 from ambry.run import  get_runconfig, RunConfig
 from test_base import  TestBase
-from ambry.library.query import QueryCommand
-from ambry.library  import new_library
 from ambry.util import rm_rf
+
 
 global_logger = ambry.util.get_logger(__name__)
 global_logger.setLevel(logging.DEBUG)
@@ -193,7 +193,6 @@ class Test(TestBase):
         l1.verify()
 
     def test_basic_prefix(self):
-        from ambry.cache.filesystem import FsCache, FsLimitedCache
 
         root = self.rc.group('filesystem').root
 
@@ -281,9 +280,6 @@ class Test(TestBase):
 
     def test_configed_caches(self):
         '''Basic test of put(), get() and has() for all cache types'''
-        from functools import partial
-        from ambry.run import  get_runconfig, RunConfig
-        from ambry.filesystem import Filesystem
         from ambry.cache import new_cache
         from ambry.util import md5_for_file
         from ambry.bundle import DbBundle
@@ -525,7 +521,6 @@ class Test(TestBase):
     def test_alt_cache(self):
         from ambry.cache import new_cache
         from ambry.cache.multi import AltReadCache
-        from ambry.bundle import DbBundle
 
         root = self.rc.group('filesystem').root
         print root
@@ -555,7 +550,7 @@ class Test(TestBase):
 
     def test_http_cache(self):
 
-        from ambry.cache.remote import HttpCache
+        from old.remote import HttpCache
 
         c = HttpCache('http://devtest.sandiego')
 

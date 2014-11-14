@@ -11,6 +11,9 @@ from util.typecheck import returns, accepts
 from util import Constant
 
 
+class NotObjectNumberError(ValueError):
+    pass
+
 
 class Name(object):
     '''The Name part of an identity ''' 
@@ -691,7 +694,7 @@ class ObjectNumber(object):
             on_str = cls.TYPE.DATASET + on_str[1:]
 
         if not type_ in  cls.NDS_LENGTH.keys():
-            raise ValueError("Unknown type character '{}' for '{}'".format(type_, on_str))
+            raise NotObjectNumberError("Unknown type character '{}' for '{}'".format(type_, on_str))
 
         ds_length = len(on_str)-cls.NDS_LENGTH[type_]
 
@@ -833,6 +836,33 @@ class TopNumber(ObjectNumber):
 
         self.dataset = dataset
         self.revision = revision
+
+    @classmethod
+    def from_hex(cls, h, space, assignment_class='self'):
+        """Produce a TopNumber, with a lenth to match the given assignment class, based on an input hex string.
+
+        This can be used to create TopNumbers from a hash of a string.
+        """
+
+        from math import log
+
+        #Use the ln(N)/ln(base) trick to find the right number of hext digits to  use
+
+        hex_digits = int(round(log(62**TopNumber.DLEN.DATASET_CLASSES[assignment_class]) / log(16),0))
+
+        i = int(h[:hex_digits],16)
+
+        return TopNumber(space, i, assignment_class=assignment_class)
+
+    @classmethod
+    def from_string(cls, s, space):
+        """Produce a TopNumber by hashing a string"""
+
+        import hashlib
+
+        hs = hashlib.sha1(s).hexdigest()
+
+        return cls.from_hex(hs, space)
 
     def _ds_str(self):
 

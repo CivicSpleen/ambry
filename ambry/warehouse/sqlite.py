@@ -157,7 +157,7 @@ class SpatialiteWarehouse(SqliteWarehouse):
             "-dsco SPATIALITE=yes"]
 
 
-    def install_material_view(self, name, sql, clean=False):
+    def install_material_view(self, name, sql, clean=False, data = None):
 
         super(SpatialiteWarehouse, self).install_material_view(name, sql, clean=clean, data = data)
 

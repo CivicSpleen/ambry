@@ -4,8 +4,6 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-import yaml
-import sys
 from ambry.dbexceptions import ConfigurationError
 
 
@@ -196,7 +194,7 @@ class Place(object):
     def aa(self, scale=None):
         """Return an analysis Area"""
         import json  
-        from ..geo.analysisarea import AnalysisArea
+        from ..old.analysisarea import AnalysisArea
         
         d = json.loads(self.row['aa'])
         

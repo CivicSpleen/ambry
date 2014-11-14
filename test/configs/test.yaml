@@ -11,7 +11,7 @@ database:
         username: data-builder
 
 filesystem:
-    root: '/tmp/ambry-clitest'
+    root: '/tmp/ambry-manifest-test'
     default: '{root}/library'
     downloads: '{root}/cache/downloads'
     extracts: '{root}/cache/extracts'

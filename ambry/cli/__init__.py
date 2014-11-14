@@ -274,8 +274,7 @@ def _print_bundle_list(idents, subset_names = None, prtf=prt,fields=[], show_par
                             show_partitions=show_partitions)
 
 def _print_info(l,ident, list_partitions=False):
-    from ..cache import RemoteMarker
-    from ..bundle import LibraryDbBundle # Get the bundle from the library
+
     from ..identity import LocationRef
 
     resolved_ident = l.resolve(ident.vid, None) # Re-resolve to get the URL or Locations
