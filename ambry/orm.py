@@ -226,7 +226,54 @@ class SavableMixin(object):
     
     def save(self):
         self.session.commit()
-        
+
+
+class LinkableMixin(object):
+    """A mixin for creating acessors to link between objects with references in the .dataproperty
+    Should probably be a descriptor, but I don't feel like fighting with it. """
+
+    # _get_link_array(self, name, clz, id_column):
+    # _append_link(self, name, object_id):
+    # _remove_link(self, name, object_id):
+
+    def _get_link_array(self, name, clz, id_column):
+        """
+        name: the name of the link, a key in the data property
+        clz: Sqlalchemy ORM class for the foreign object
+        id_column, the Sqlalchemy property, from the clz classs, that hpolds the stored id value for the object.
+        """
+        from sqlalchemy.orm import object_session
+
+        id_values = self.data.get(name, [])
+
+        if not id_values:
+            return []
+
+        return object_session(self).query(clz).filter(id_column.in_(id_values)).all()
+
+
+    def _append_link(self, name, object_id):
+        """
+        name: the name of the link, a key in the data property
+        o: the object being linked. If none, no back link is made
+        object_id: the object identitifer that is stored in the data property
+        """
+        if not name in self.data:
+            self.data[name] = []
+
+        if not object_id in self.data[name]:
+            self.data[name] = self.data[name] + [object_id]
+
+
+    def _remove_link(self, name, object_id):
+        """For linking manifests to stores"""
+        if not name in self.data:
+            return
+
+        if self.data[name] and object_id in self.data[name]:
+            self.data[name] = self.data[name].remove(object_id)
+
+
 
 class Dataset(Base):
     __tablename__ = 'datasets'
@@ -605,7 +652,7 @@ class Column(Base):
 event.listen(Column, 'before_insert', Column.before_insert)
 event.listen(Column, 'before_update', Column.before_update)
  
-class Table(Base):
+class Table(Base, LinkableMixin):
     __tablename__ ='tables'
 
     vid = SAColumn('t_vid',String(20), primary_key=True)
@@ -693,6 +740,11 @@ class Table(Base):
 
         return x
 
+    # For linking tables to manifests
+    @property
+    def linked_files(self): return self._get_link_array('files', File, File.oid)
+    def link_file(self, f): return self._append_link('files', f.oid)
+    def delink_file(self, f): return self._remove_link('files', f.oid)
 
     @property
     def info(self):
@@ -1110,22 +1162,8 @@ class Config(Base):
         return "<config: {},{},{} = {}>".format(self.d_vid, self.group, self.key, self.value)
 
 
-# Links partitions to the data store ( database, directory ) that holds the partition
-# Primarily for warehouses, databases and extracts.
-stored_partitions = SATable('stored_partitions', Base.metadata,
-                          SAColumn('p_vid', String(20), ForeignKey('partitions.p_vid'), primary_key=True),
-                          SAColumn('f_id', Integer, ForeignKey('files.f_id'), primary_key=True),
-                          UniqueConstraint('p_vid', 'f_id', name='u_stored_partitions'),
-)
 
-file_link = SATable('file_link', Base.metadata,
-                            SAColumn('fl_right_id', Integer, ForeignKey('files.f_id'), primary_key=True),
-                            SAColumn('fl_left_id', Integer, ForeignKey('files.f_id'), primary_key=True),
-                            UniqueConstraint('fl_right_id', 'fl_left_id', name='u_file_link')
-)
-
-
-class Partition(Base):
+class Partition(Base, LinkableMixin):
     __tablename__ = 'partitions'
 
     vid = SAColumn('p_vid',String(20), primary_key=True, nullable=False)
@@ -1278,6 +1316,12 @@ class Partition(Base):
 
         self.fqname = Identity._compose_fqname(self.vname,self.vid)
 
+    # For linking partitions to manifests
+    @property
+    def linked_files(self): return self._get_link_array('files', File, File.oid)
+    def link_file(self, f): return self._append_link('files', f.oid)
+    def delink_file(self, f): return self._remove_link('files', f.oid)
+
     @staticmethod
     def before_insert(mapper, conn, target):
         '''event.listen method for Sqlalchemy to set the sequence for this
@@ -1315,7 +1359,7 @@ event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
 
 
-class File(Base, SavableMixin):
+class File(Base, SavableMixin, LinkableMixin):
     __tablename__ = 'files'
 
     oid = SAColumn('f_id',Integer, primary_key=True, nullable=False)
@@ -1340,18 +1384,6 @@ class File(Base, SavableMixin):
         UniqueConstraint('f_ref', 'f_type', 'f_group', name='u_ref_path'),
     )
 
-    partitions = relationship('Partition',
-                              secondary=stored_partitions,
-                              primaryjoin = oid == stored_partitions.c.f_id,
-                              secondaryjoin = Partition.vid == stored_partitions.c.p_vid,
-                              backref='files')
-
-    right_files = relationship("File",
-                               secondary=file_link,
-                               primaryjoin= oid == file_link.c.fl_right_id,
-                               secondaryjoin= oid == file_link.c.fl_left_id,
-                               backref="left_files"
-    )
 
     def __init__(self,**kwargs):
         self.oid = kwargs.get("oid",None)
@@ -1395,17 +1427,21 @@ class File(Base, SavableMixin):
     def insertable_dict(self):
         return { ('f_'+k).strip('_'):v for k,v in self.dict.items()}
 
-    def clear_links(self):
-        """Clear out all of the links then delete this record
+    ## These partition and file acessors were originally implemented as many-to-many tables
+    ## and probably should still be, but this is easier to understand than dealing with Sqlalchemy cascaded
+    ## deletes on M-to-M secondary tables.
 
-        THis probably should be handled with a cascade, but  I don't understand how they work.
-        """
+    @property
+    def linked_partitions(self): return self._get_link_array('partitions', Partition, Partition.vid)
+    def link_partition(self, p): return self._append_link('partitions', p.vid)
+    def delink_partition(self, p): return self._remove_link('partitions', p.vid)
 
-        [self.partitions.remove(x) for x in self.partitions]
+    @property
+    def linked_files(self): return self._get_link_array('files', File, File.oid)
+    def link_file(self, f): return self._append_link('files', f.oid)
+    def delink_file(self, f): return self._remove_link('files', f.oid)
 
-        [self.right_files.remove(x) for x in self.right_files]
-
-        [self.left_files.remove(x) for x in self.left_files]
-
-        return self
-
+    @property
+    def linked_tables(self): return self._get_link_array('tables', Table, Table.vid)
+    def link_table(self, t): return self._append_link('tables', t.vid)
+    def delink_table(self, t): return self._remove_link('tables', t.vid)

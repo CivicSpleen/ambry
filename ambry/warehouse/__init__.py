@@ -332,13 +332,13 @@ class WarehouseInterface(object):
 
         if p_orm and p_orm.installed == 'y':
             self.logger.info("Skipping {}; already installed".format(p_orm.vname))
-            return p_orm
+            return None, p_orm
 
         bundle, p = self._setup_install(p_vid)
 
         if p.identity.format not in ('db', 'geo'):
             self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
-            return;
+            return None, None;
 
         all_tables = self.install_partition(bundle, p, prefix=prefix)
 
@@ -375,7 +375,7 @@ class WarehouseInterface(object):
 
         self.library.database.mark_partition_installed(p_vid)
 
-        return p
+        return tables, p
 
     def install_partition(self, bundle, partition, prefix=None):
         '''Install the records for the partition, the tables referenced by the partition,
@@ -412,13 +412,6 @@ class WarehouseInterface(object):
 
         errors = []
 
-        # Delete everything related to this manifest
-        # This is horrible, since I dont know how to get the file and partition links to cascade on delete.
-        mf,_ = self.library.manifest(manifest.uid)
-        if mf:
-            self.library.database.session.delete(mf.clear_links())
-            self.library.database.session.commit()
-
         (self.library.files.query.source_url(manifest.uid)).delete()
 
         # Update the manifest with bundle information, since it doesn't normally have access to a library
@@ -441,7 +434,6 @@ class WarehouseInterface(object):
         # Manifest data
         mf = self.wlibrary.files.install_manifest(manifest)
 
-
         ## First pass
         for line, section in manifest.sorted_sections:
 
@@ -460,17 +452,25 @@ class WarehouseInterface(object):
                         if pd['where'] and len(tables) == 1:
                             tables = [(pd['tables'][0], "WHERE (" + pd['where'] + ")")]
 
-                        p = self.install(pd['partition'], tables)
+                        tables, p = self.install(pd['partition'], tables)
 
                         if p:
                             # Link the partition to the manifest. Have to re-fetch, because p is in the
-                            #external library, and the manifest is in the warehous elibrary
-                            mf.partitions.append(self.wlibrary.partition(p.vid))
+                            #external library, and the manifest is in the warehouse elibrary
+                            p = self.wlibrary.partition(p.vid)
+                            mf.link_partition(p)
+                            p.link_file(mf)
+
+                            if tables:
+                                for table in tables:
+                                    b = self.wlibrary.bundle(p.identity.as_dataset().vid)
+                                    orm_t = b.schema.table(table)
+                                    mf.link_table(orm_t)
+
 
 
                     except NotFoundError:
                         self.logger.error("Partition {} not found in external library".format(pd['partition']))
-
 
                 self.wlibrary.database.session.commit()
 
@@ -513,7 +513,6 @@ class WarehouseInterface(object):
                 from .manifest import Manifest
                 m = Manifest(section.content['path'])
                 self.install_manifest(m, force = force)
-
 
         self._meta_set(manifest.uid, datetime.now().isoformat())
 

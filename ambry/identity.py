@@ -995,7 +995,12 @@ class PartitionNumber(ObjectNumber):
 
         if not self.revision and dataset.revision:
             self.revision = dataset.revision
-        
+
+    @property
+    def as_dataset(self):
+        """Unlike the .dataset property, this will include the revision"""
+        return self.dataset.rev(self.revision)
+
     def __str__(self):        
         return (ObjectNumber.TYPE.PARTITION+
                 self.dataset._ds_str()+

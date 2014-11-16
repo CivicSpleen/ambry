@@ -204,6 +204,10 @@ class Library(object):
         '''Return ambry.database.Database object'''
         return self._database
 
+
+    def commit(self):
+        self.database.commit()
+
     ##
     ## Storing
     ##
@@ -548,7 +552,6 @@ class Library(object):
         if not s:
             raise NotFoundError("Didn't find store for uid '{}' ".format(uid))
 
-        self.database.session.delete(s.clear_links())
         self.database.commit()
 
 
@@ -1117,30 +1120,30 @@ class Library(object):
 
             p = self.partition(remote_p.vid)
 
-            f.partitions.append(p)
-
-
-        s.merge(f)
-
-        s.commit()
-
-        s.expire_all()
+            f.link_partition(p)
+            p.link_file(f)
 
         ## Next, we can load the manifests.
 
         for f, m in w.manifests:
             m.path  = f.path
 
+
             self.files.install_manifest(m, warehouse=w)
 
-            for p in f.partitions:
-                f.partitions.append(self.partition(p.vid))
+            mf = self.manifest(m.uid)[0]
 
-            s.merge(f)
+            for p in f.linked_partitions:
+                p = self.partition(p.vid)
 
-            s.commit()
+                mf.link_partition(p)
+                p.link_file(mf)
 
+            # This is the cheaper way to copy links, but it only works when the links
+            # are one-directional.
+            mf.data['tables'] = f.data.get('tables', [])
 
+        s.commit()
 
 
     def sync_doc_json(self, clean = False):
@@ -1152,9 +1155,6 @@ class Library(object):
         self.logger.info("Caching json to {}".format(dc.cache))
 
         dc.put_library(self, force = clean)
-
-        for f, m in self.manifests:
-            dc.put_manifest(m, f, force = clean)
 
         for vid in self.list():
 
@@ -1180,6 +1180,30 @@ class Library(object):
                 self.logger.error("Error on {}: {}".format(vid, e))
                 raise
 
+        # Link from bundle and partitions to which manifests they are in.
+        in_manifest = {}
+
+        for f, m in self.manifests:
+            dc.put_manifest(m, f, force=clean)
+
+            md = dc.get_manifest(m.uid)
+
+            for pvid, bvid in md['partitions'].items():
+
+                if not pvid in in_manifest:
+                    in_manifest[pvid] = []
+
+                if not bvid in in_manifest:
+                    in_manifest[bvid] = []
+
+                in_manifest[pvid].append(m.uid)
+                in_manifest[bvid].append(m.uid)
+
+
+        dc.put('manifest_map.json', lambda: in_manifest, force = True)
+
+
+
     @property
     def doc_cache(self):
         """Return the documentation cache. """
@@ -1202,23 +1226,20 @@ Remotes:  {remotes}
     def dict(self):
 
 
-        for f,m in self.manifests:
-            print f.oid, f
-            for p in f.partitions:
-                print '  P', p
-
-
-
         return dict(name=str(self.name),
                     database=str(self.database.dsn),
                     cache=str(self.cache),
                     remotes=[str(r) for r in self.remotes] if self.remotes else [],
                     manifests={m.uid: dict(
                         title=m.title,
-                        summary=m.summary['text']) for f, m in self.manifests},
+                        partitions = [ p.vid for p in f.linked_partitions ],
+                        summary=m.summary['text'],
+                        stores=[s.ref for s in f.linked_files]) for f, m in self.manifests},
                     stores={f.ref: dict(
                         title=f.data['title'],
                         summary=f.data['summary'],
+                        dsn = f.path,
+                        manifests = [ m.ref for m in f.linked_files ],
                         local_cache=f.data['local_cache'],
                         remote_cache=f.data['remote_cache'],
                         class_type=f.type_) for f in self.stores},

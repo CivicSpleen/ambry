@@ -341,6 +341,18 @@ class Manifest(object):
 
         self.sections.update(sections)
 
+    def _extract_summary(self, t):
+        """Extract the first sentence of a possiblt Markdown text"""
+        from nltk import tokenize
+
+        test = tokenize.punkt.PunktSentenceTokenizer()
+
+        sentences = test.sentences_from_text(t)
+        if sentences:
+            return sentences[0].strip()
+
+        return None
+
     def _process_doc(self, section):
         import markdown
         from ..util import normalize_newlines
@@ -348,8 +360,13 @@ class Manifest(object):
 
         t = '\n'.join(section.lines)
 
+        summary = self._extract_summary(t)
+
         # Normal markdown documentation
-        return dict(text=t.strip(),html=markdown.markdown(t))
+        return dict(text=t.strip(),
+                    summary_text = summary,
+                    html=markdown.markdown(t),
+                    summary_html=markdown.markdown(summary))
 
     def _process_sql(self, section):
 
@@ -369,6 +386,7 @@ class Manifest(object):
 
         # Add table names from parsing the SQL, so we can build dependencies for views. Unfortunately,
         # it also add column names, which are removed when the template context is created.
+
         for s in sqlparse.parse('\n'.join(section.lines)):
             for tok in s.flatten():
                 if tok.ttype == sqlparse.tokens.Name:
@@ -391,12 +409,15 @@ class Manifest(object):
         tc_names = set() # table and column names
 
         for s in sqlparse.parse('\n'.join(section.lines)):
+
             for tok in s.flatten():
-                if tok.ttype == sqlparse.tokens.Name:
-                    tc_names.add(str(tok))
+
+                if tok.ttype in (sqlparse.tokens.Name, sqlparse.tokens.String.Symbol):
+                    tc_names.add(str(tok).strip('"'))
 
 
-        return dict(text=t,html=self.pygmentize_sql(t), name = section.args.strip(), tc_names = list(tc_names))
+        return dict(text=t,html=self.pygmentize_sql(t),
+                    name = section.args.strip(), tc_names = list(tc_names))
 
     def _process_extract(self, section):
 

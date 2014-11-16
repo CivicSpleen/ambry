@@ -1,6 +1,6 @@
 TITLE: A Health Manifest
 
-This is a fake education file manifest
+This is a fake education file manifest. Well, actually, a test manifest.
 
 UID: mQaiWWgy2G
 AUTHOR: Eric Busboom <eric@sandiegodata.org>
@@ -18,9 +18,20 @@ VIEW: health_view
 
 SELECT * FROM "pIjqPRbrGq001001_example"
 
+DOC:
+
+The __health_view__ is an  view that refers to an installed table by its full versioned name. This is a
+second sentence, to make the documentation longer, and to see if the code for extracting summaries works.
+
 VIEW: health_mview
 
 SELECT *
 FROM "p00G002001_example"
+
+
+DOC:
+
+The __health_mview__ is really a table, and it referrs to the unversioned table name.
+
 
 EXTRACT: health_view AS csv to health_view.csv
