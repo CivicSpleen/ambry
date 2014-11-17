@@ -371,11 +371,16 @@ class RunConfig(object):
 
         else:
 
-            return self._sub_strings(e, {
-                                         'database': lambda k,v: database_config(v),
+            e =  self._sub_strings(e, {
                                          'account': lambda k,v: self.account(v),
                                          'library': lambda k,v: self.database(v),
                                          }  )
+
+            if 'database' in e and isinstance(e['database'], basestring):
+                e.update( database_config(e['database']))
+
+        return e
+
 
     def database(self,name, missing_is_dsn = False):
         

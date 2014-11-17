@@ -305,7 +305,7 @@ class Files(object):
             source_url=None, )
 
     def install_data_store(self, dsn, type, ref = None,
-                           title = None, summary = None,
+                           name = None, title = None, summary = None,
                            local_cache = None, remote_cache = None,
                            commit=True):
         """A reference for a data store, such as a warehouse or a file store.
@@ -323,6 +323,7 @@ class Files(object):
             state=None,
             type_=type,
             data=dict(
+                name = name,
                 title = title,
                 summary = summary,
                 local_cache = local_cache,
@@ -332,7 +333,6 @@ class Files(object):
             source_url=None)
 
         return f
-
 
     def _process_source_content(self, path, source = None, content = None):
         """Install a file reference, possibly with binary content"""

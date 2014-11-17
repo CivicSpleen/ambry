@@ -5,7 +5,7 @@ This is a fake education file manifest. Well, actually, a test manifest.
 UID: mQaiWWgy2G
 AUTHOR: Eric Busboom <eric@sandiegodata.org>
 
-DATABASE: sqlite:example_manifest.db
+DATABASE: sqlite:////example_manifest.db
 REMOTE:  s3://warehouse.sandiegodata.org/test/example_manifest#compress
 
 

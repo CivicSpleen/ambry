@@ -441,16 +441,17 @@ class Manifest(object):
 
     def _process_include(self, section):
         import os.path
+
         path = section.args.strip()
 
-        if not self.path:
-            self.logger.warn("Manifest doesn't have a path, so can't resolve INCLUDE")
-            return
+        if not self.path and not os.path.isabs(path):
+            # Can't include, but let the caller deal with that.
+            return dict(path=path)
 
         if self.path.startswith('http'):
             raise NotImplementedError
         else:
-            if not os.path.isabs(path):
+            if not os.path.isabs(path) :
                 path = os.path.join(os.path.dirname(self.path), path)
 
         return dict(path = path )

@@ -113,19 +113,19 @@ class RelationalDatabase(DatabaseInterface):
         raise NotImplemented()
     
     def exists(self):
-        
+
         try:
             # contextual_connect to allow threadlocal connections
             conn = self.engine.contextual_connect()
             conn.close()
         except Exception as e:
             return False
-        
 
         if self.is_empty():
             return False
-        
-        
+
+
+
         return True
     
     def is_empty(self):

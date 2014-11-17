@@ -1,5 +1,7 @@
 
 
+import sys
+
 from . import main #@UnresolvedImport
 
-main()
+main(sys.argv)

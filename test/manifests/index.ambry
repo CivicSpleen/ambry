@@ -5,7 +5,7 @@ This is the example warehouse. The first doc section after the title is the summ
 UID: mKEkZAlayQ
 AUTHOR: Eric Busboom <eric@sandiegodata.org>
 
-DATABASE: sqlite:manifest_test.db
+DATABASE: sqlite:///manifest_test.db
 LOCAL: test_manifests
 REMOTE:  s3://warehouse.sandiegodata.org/test/test_manifests#compress
 

@@ -71,26 +71,30 @@ def new_warehouse(config, elibrary, logger=None):
 
     if service == 'sqlite':
         from .sqlite import SqliteWarehouse
-        return SqliteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+        w =  SqliteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
 
-    if service == 'spatialite':
+    elif service == 'spatialite':
 
         from .sqlite import SpatialiteWarehouse
 
-        return SpatialiteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+        w =  SpatialiteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
 
     elif service == 'postgres':
         from .postgres import PostgresWarehouse
 
-        return PostgresWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+        w =  PostgresWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
 
     elif service == 'postgis':
         from .postgis import PostgisWarehouse
 
-        return PostgisWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+        w =  PostgisWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
 
     else:
         raise Exception("Unknown warehouse type: {}".format(service))
+
+
+
+    return w
 
 
 class ResolutionError(Exception):
@@ -140,9 +144,9 @@ class WarehouseInterface(object):
 
 
 
-
     def clean(self):
         self.database.clean()
+        self.wlibrary.clean()
 
     def delete(self):
         self.database.enable_delete = True
@@ -151,7 +155,7 @@ class WarehouseInterface(object):
         self.wlibrary.database.drop()
 
     def exists(self):
-        self.database.exists()
+        return self.database.exists()
 
     @property
     def library(self):
@@ -173,7 +177,16 @@ class WarehouseInterface(object):
         except AttributeError:
             return None
 
-    configurable = ('title','about','local_cache','remote_cache')
+    configurable = ('uid','title','name', 'summary','local_cache','remote_cache')
+
+    @property
+    def uid(self):
+        """Title of the warehouse"""
+        return self._meta_get('uid')
+
+    @uid.setter
+    def uid(self, v):
+        return self._meta_set('uid', v)
 
     @property
     def title(self):
@@ -182,21 +195,18 @@ class WarehouseInterface(object):
 
     @title.setter
     def title(self, v):
+
         return  self._meta_set('title', v)
 
-    @property
-    def about(self):
-        """Short description of the warehouse"""
-        return self._meta_get('about')
 
     @property
     def summary(self): # Everything else names this property summary
         """Short description of the warehouse"""
-        return self.about
+        return self._meta_get('summary')
 
-    @about.setter
-    def about(self, v):
-        return self._meta_set('about', v)
+    @summary.setter
+    def summary(self, v):
+        return self._meta_set('summary', v)
 
     @property
     def name(self):
@@ -422,8 +432,8 @@ class WarehouseInterface(object):
         if reset or not self.title:
             self.title = manifest.title
 
-        if (reset or not self.about) and manifest.summary:
-            self.about = manifest.summary['text']
+        if (reset or not self.summary) and manifest.summary:
+            self.summary = manifest.summary['text']
 
         if (reset or not self._meta_get('local_cache')) and manifest.local:
             self.local_cache = manifest.cache_path
@@ -465,6 +475,7 @@ class WarehouseInterface(object):
                                 for table in tables:
                                     b = self.wlibrary.bundle(p.identity.as_dataset().vid)
                                     orm_t = b.schema.table(table)
+                                    print "HERE", mf, orm_t
                                     mf.link_table(orm_t)
 
 
@@ -785,14 +796,32 @@ class WarehouseInterface(object):
 def database_config(db, base_dir=''):
     import urlparse
     import os
+    from ..dbexceptions import ConfigurationError
+
 
     parts = urlparse.urlparse(db)
 
+    path = parts.path
+
+    if parts.scheme in ('sqlite', "spatialite"):
+        # Sqlalchemy expects 4 slashes for absolute paths, 3 for relative,
+        # which is hard to manage reliably. So, fixcommon problems.
+
+        if parts.netloc or path[0] != '/':
+            raise ConfigurationError('DSN Parse error. For Sqlite and Sptialite, the DSN should have 3 or 4 slashes')
+
+        path = path[1:]
+
+        if path[0] != '/':
+            path = os.path.join(base_dir, path)
+
+
     if parts.scheme == 'sqlite':
-        config = dict(service='sqlite', database=dict(dbname=os.path.join(base_dir,parts.path), driver='sqlite'))
+        config = dict(service='sqlite', database=dict(dbname=os.path.join(base_dir,path), driver='sqlite'))
 
     elif parts.scheme == 'spatialite':
-        config = dict(service='spatialite', database=dict(dbname=os.path.join(base_dir,parts.path), driver='spatialite'))
+
+        config = dict(service='spatialite', database=dict(dbname=os.path.join(base_dir,path), driver='spatialite'))
 
     elif parts.scheme == 'postgres':
         config = dict(service='postgres',
@@ -800,7 +829,7 @@ def database_config(db, base_dir=''):
                                     server=parts.hostname,
                                     username=parts.username,
                                     password=parts.password,
-                                    dbname=parts.path.strip('/')
+                                    dbname=path.strip('/')
                       ))
 
     elif parts.scheme == 'postgis':

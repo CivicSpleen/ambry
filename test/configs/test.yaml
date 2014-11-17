@@ -29,7 +29,17 @@ library:
             - '{root}/remote'
 
 warehouse:
-    default: 'sqlite:/tmp/ambry-clitest/warehouse.db'
+    health: 
+        database: 'sqlite:////tmp/health.db'
+        title: Health Warehouse
+        name: health
+        local_cache: /tmp/health_cache
+    education: 
+        database: 'sqlite:////tmp/education.db'
+        title: education warehouse
+        name: education
+        summary: This is a BS summary
+        local_cache: /tmp/ambry-whtest/health_cache
 
 services:
   dstk:

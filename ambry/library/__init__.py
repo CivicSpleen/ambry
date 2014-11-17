@@ -35,10 +35,12 @@ def _new_library(config):
 
     database = LibraryDb(**dict(config['database']))
 
+
     try:
         database.create()
     except OperationalError as e:
         from ..dbexceptions import DatabaseError
+
         raise DatabaseError('Failed to create {} : {}'.format(database.dsn, e.message))
 
     if 'upstream' in config:
@@ -542,6 +544,9 @@ class Library(object):
 
         f = self.files.query.group(self.files.TYPE.STORE).ref(uid).one_maybe
 
+        if not f:
+            f = self.files.query.group(self.files.TYPE.STORE).path(uid).one_maybe
+
         return f
 
     def remove_store(self, uid):
@@ -552,6 +557,7 @@ class Library(object):
         if not s:
             raise NotFoundError("Didn't find store for uid '{}' ".format(uid))
 
+        self.database.session.delete(s)
         self.database.commit()
 
 
@@ -1104,8 +1110,9 @@ class Library(object):
         from ambry.util.packages import qualified_name
 
         f = self.files.install_data_store(w.database.dsn, qualified_name(w),
+                                          name = w.name,
                                           title=w.title,
-                                          summary=w.about,
+                                          summary=w.summary,
                                           local_cache = w.local_cache,
                                           remote_cache = w.remote_cache
         )
@@ -1144,6 +1151,8 @@ class Library(object):
             mf.data['tables'] = f.data.get('tables', [])
 
         s.commit()
+
+        return f
 
 
     def sync_doc_json(self, clean = False):

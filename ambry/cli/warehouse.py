@@ -3,50 +3,39 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from . import prt,   _print_info, _print_bundle_list
+from . import prt,  err, fatal,  _print_info, _print_bundle_list
 
 # If the devel module exists, this is a development system.
 try: from ambry.support.devel import *
 except ImportError as e: from ambry.support.production import *
+from ..dbexceptions import ConfigurationError,  NotFoundError
 
 def warehouse_command(args, rc):
     from ambry.warehouse import new_warehouse
     from ..library import new_library
     from . import global_logger
     from ambry.warehouse import database_config
-    from ..dbexceptions import ConfigurationError
-
 
     l = new_library(rc.library(args.library_name))
+
+    w = None
 
     l.logger = global_logger
 
     config = None
 
-    if args.database:
 
+    if args.database :
+
+        # Check if the string is the uid of a database in the library.
         s =  l.store(args.database)
 
-        if s:
-            config = database_config(s.path)
-        else:
-            try: # Its a name for the warehouse section of the config, or a warehouse that is listed in the library
-                config = rc.warehouse(args.database)
+        if not s:
+            raise ConfigurationError("Could not identitfy warehouse for term '{}'".format(args.database))
 
-            except ConfigurationError: # It is a database connection string.
-                config = database_config(args.database)
+        config = database_config(s.path)
 
-    if not config and args.name:
-
-        f  = l.files.query.ref(args.name).group(l.files.TYPE.STORE).one_maybe
-        if f:
-            config = database_config(f.path)
-
-    ###
-    ### This is the case when the warehouse does not exist, and
-    ### gets its configuration from a Manifest
-    ###
-    if not config and args.subcommand == 'install':
+    elif args.subcommand == 'install':
         from ..warehouse.manifest import Manifest
         import os.path
 
@@ -55,32 +44,43 @@ def warehouse_command(args, rc):
         # If cache_path is absolute, base_dir will be just the cache_path
         base_dir = os.path.join(rc.filesystem('warehouse')['dir'], m.cache_path)
 
+        if not m.database:
+            raise ConfigurationError("The manifest does not specify a database")
+
         config = database_config(m.database, base_dir=base_dir)
+        config.update(title = m.title,
+                      summary = m.summary['summary_text'],
+                      local_cache = m.local,
+                      remote_cache = m.remote)
 
-    if not config and  not args.subcommand in ['list']:
-        raise ConfigurationError("Must set the name of the database somewhere. ")
+        w = _warehouse_new_from_dbc(config, l)
 
-    if config:
+    elif args.subcommand not in ['list','new', 'install']:
+        raise ConfigurationError(
+            "Must set the id, path or dsn of the database, either on the command line or in a manifest. ")
+
+    if not w and config:
 
         w = new_warehouse(config, l, logger = global_logger)
 
-        if not w.exists():
-            w.create()
+        if not w.exists() and not args.subcommand in ['clean','delete']:
+            raise ConfigurationError("Database {} must be created first".format(w.database.dsn))
 
-        if args.name:
-            store_warehouse(l,w,args.name)
+    if args.subcommand == 'new':
+        globals()['warehouse_' + args.subcommand](args, l, rc)
+
     else:
-        w = None
+        globals()['warehouse_'+args.subcommand](args, w,rc)
 
-    globals()['warehouse_'+args.subcommand](args, w,rc)
+def store_warehouse(l,w):
+    from ambry.util.packages import qualified_name
 
-def store_warehouse(l,w, name):
+    s = l.files.install_data_store(w.database.dsn, type = qualified_name(w),
+                               title=w.title, summary=w.summary,
+                               local_cache=w.local_cache, remote_cache=w.remote_cache)
 
-    w.name = name
+    return s.ref
 
-    if not l.files.query.ref(name).group(l.files.TYPE.STORE).one_maybe:
-        l.files.install_data_store(w.database.dsn, w.__class__.__name__, ref = name,
-                                   title = w.title, summary  = w.summary )
 
 def warehouse_parser(cmd):
    
@@ -88,8 +88,7 @@ def warehouse_parser(cmd):
     whr_p.set_defaults(command='warehouse')
     whp = whr_p.add_subparsers(title='warehouse commands', help='command help')
 
-    whr_p.add_argument('-d', '--database', help='Path or connection url for a database. ')
-    whr_p.add_argument('-n','--name',  help='Select a different name for the warehouse')
+    whr_p.add_argument('-d', '--database', help='Uid, Path or connection url for a database. ')
 
     whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
     whsp.set_defaults(subcommand='install')
@@ -107,7 +106,6 @@ def warehouse_parser(cmd):
     group.add_argument('-r', '--remote', dest='dest', action='store_const', const='remote')
     group.add_argument('-c', '--cache' )
     whsp.add_argument('-D', '--dir', default = '', help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
-
 
     whsp.add_argument('term', type=str,help='Name of bundle or partition')
 
@@ -128,20 +126,10 @@ def warehouse_parser(cmd):
     whsp.add_argument('-v', '--var', help="Name of the variable. One of'local','remote','title','about' ")
     whsp.add_argument('term', type=str, nargs = '?', help='Value of the variable')
 
-    whsp = whp.add_parser('doc', help='Build documentation')
-    whsp.set_defaults(subcommand='doc')
-    group = whsp.add_mutually_exclusive_group()
-    group.add_argument('-l', '--local', dest='dest',  action='store_const', const='local', default='local')
-    group.add_argument('-r', '--remote', dest='dest', action='store_const', const='remote')
-    group.add_argument('-c', '--cache' )
-    whsp.add_argument('-D', '--dir', default='',
-                      help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
-    whsp.add_argument('-F', '--force', default=False, action='store_true',
-                      help='Force re-creation of files that already exist')
 
     whsp = whp.add_parser('remove', help='Remove a bundle or partition from a warehouse')
     whsp.set_defaults(subcommand='remove')
-    whsp.add_argument('term', type=str,help='Name of bundle, partition, manifest or database')
+    whsp.add_argument('term', type=str, nargs='?', help='Name of bundle, partition, manifest or database')
 
     whsp = whp.add_parser('connect', help='Test connection to a warehouse')
     whsp.set_defaults(subcommand='connect')
@@ -149,15 +137,19 @@ def warehouse_parser(cmd):
     whsp = whp.add_parser('info', help='Configuration information')
     whsp.set_defaults(subcommand='info')   
  
-    whsp = whp.add_parser('drop', help='Drop the warehouse database')
-    whsp.set_defaults(subcommand='drop')   
- 
-    whsp = whp.add_parser('create', help='Create required tables')
-    whsp.set_defaults(subcommand='create')
+    whsp = whp.add_parser('clean', help='Remove all of the contents from the warehouse')
+    whsp.set_defaults(subcommand='clean')
 
-    whsp = whp.add_parser('index', help='Create an Index webpage for a warehouse')
-    whsp.set_defaults(subcommand='index')
-    whsp.add_argument('term', type=str, help="Cache's root URL must have a 'meta' subdirectory")
+    whsp = whp.add_parser('delete', help='Remove all of the contents from the and delete it')
+    whsp.set_defaults(subcommand='delete')
+
+    whsp = whp.add_parser('new', help='Create a new warehouse')
+    whsp.set_defaults(subcommand='new')
+    whsp.add_argument('-t', '--title',  help='Set the title for the database')
+    whsp.add_argument('-s', '--summary', help='Set the summary for the database')
+    whsp.add_argument('-l', '--local', help='Specify the local cache')
+    whsp.add_argument('-r', '--remote', help='Specify the local remote')
+    whsp.add_argument('term', type=str, nargs=1, help='The DSN of the database')
 
     whsp = whp.add_parser('users', help='Create and configure warehouse users')
     whsp.set_defaults(subcommand='users')  
@@ -165,7 +157,6 @@ def warehouse_parser(cmd):
     group.add_argument('-L', '--list', dest='action',  action='store_const', const='list')
     group.add_argument('-a', '--add' )
     group.add_argument('-d', '--delete')
-
     whsp.add_argument('-p', '--password')
 
        
@@ -185,7 +176,7 @@ def warehouse_parser(cmd):
 def warehouse_info(args, w,config):
 
     prt("Warehouse Info")
-    prt("Name:     {}",args.name)
+    prt("UID:    {}", w.uid)
     prt("Title:    {}",w.title)
     prt("Summary:  {}",w.summary)
     prt("Class:    {}",w.__class__)
@@ -201,22 +192,59 @@ def warehouse_remove(args, w,config):
 
     w.remove(args.term )
       
-def warehouse_drop(args, w,config):
+def warehouse_delete(args, w,config):
+
+
+    w.elibrary.remove_store(args.database)
 
     w.delete()
+
+
+def warehouse_clean(args, w, config):
+
+    w.clean()
+
  
-def warehouse_create(args, w,config):
-    
-    w.database.enable_delete = True
+def warehouse_new(args, l, config):
+
+    from ambry.warehouse import database_config
+
+
+    if isinstance(args, basestring):
+        term  = args
+    else:
+        term = args.term[0]
+
     try:
-        w.library.clean()
-        w.drop()
-    except:
-        pass # Can't clean or drop if doesn't exist
-    
+        dbc = database_config(term)
+    except ValueError: #Unknow schema, usually
+        dbc  = config.warehouse(term).to_dict()
+
+    w =  _warehouse_new_from_dbc(dbc,l)
+
+    prt("{}: created".format(w.uid))
+
+    return w
+
+def _warehouse_new_from_dbc(dbc, l):
+    from ambry.warehouse import new_warehouse
+    from . import global_logger
+
+    w = new_warehouse(dbc, l, logger=global_logger)
+
     w.create()
-    w.library.database.create()
-    
+
+    for c in w.configurable:
+        if c in dbc:
+            w._meta_set(c, dbc[c])
+
+    sf = l.sync_warehouse(w)
+
+    w.uid = sf.ref
+
+    return w
+
+
 def warehouse_users(args, w,config):
 
     if args.action == 'list' or ( not bool(args.delete) and not bool(args.add)):
@@ -251,8 +279,6 @@ def warehouse_list(args, w, config):
                 if s.data['remote_cache']:
                     print "{:10s} {:25s} remote = {}".format('', '', s.data['remote_cache'])
 
-
-
             return
 
         else:
@@ -262,7 +288,7 @@ def warehouse_list(args, w, config):
             l = new_library(config.library(args.library_name))
 
             for f, m in l.manifests:
-                print "{:10s} {:25s}| {}".format(m.uid, m.title, m.summary['text'])
+                print "{:10s} {:25s}| {}".format(m.uid, m.title, m.summary['summary_text'])
 
             return
 
@@ -308,8 +334,7 @@ def warehouse_install(args, w ,config):
     if args.dest or args.cache:
         warehouse_extract(args, w, config)
 
-    if args.doc:
-        warehouse_doc(args, w, config)
+
 
 def get_cache(w, args, rc):
     from ..dbexceptions import ConfigurationError
@@ -364,23 +389,7 @@ def warehouse_extract(args, w, config):
     for extract in extracts:
         print extract
 
-def warehouse_doc(args, w, config):
 
-    from ..text import Renderer
-    import os.path
-
-
-    cache = get_cache(w, args, config)
-
-    cache.prefix = os.path.join(cache.prefix, 'doc')
-
-    w.logger.info("Extracting to: {}".format(cache))
-
-    r = Renderer(cache, warehouse = w)
-
-    path, extracts = r.write_library_doc(force=args.force)
-
-    print path
 
 
 def warehouse_config(args, w, config):

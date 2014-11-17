@@ -377,15 +377,11 @@ def _print_bundle_info(bundle=None, ident=None):
 def main(argsv = None, ext_logger=None):
     import ambry._meta
     import os
-
-    ##
-    ## Do it again.
-    ##
+    import sys
 
     parser = argparse.ArgumentParser(prog='ambry',
                                      description='Ambry {}. Management interface for ambry, libraries and repositories. '.format(
-                                         ambry._meta.__version__),
-                                     prefix_chars='-+')
+                                         ambry._meta.__version__))
 
 
     parser.add_argument('-l', '--library', dest='library_name', default="default",
@@ -417,8 +413,7 @@ def main(argsv = None, ext_logger=None):
     bundle_parser(cmd)
     root_parser(cmd)
 
-    argsv = shlex.split(' '.join(argsv)) if argsv else None
-    args = parser.parse_args(argsv)
+    args = parser.parse_args()
 
 
     if args.single_config:
