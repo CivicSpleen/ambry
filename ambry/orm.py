@@ -39,26 +39,6 @@ BigIntegerType = BigIntegerType.with_variant(sqlite.INTEGER(), 'sqlite')
 
 Base = declarative_base()
 
-# Sould have things derived from this, once there are test cases for it.
-# Actually, this is a mixin.
-class Dictable(object):
-
-    def set_attributes(self, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
-    @property
-    def dict(self):
-        from sqlalchemy.orm.attributes import InstrumentedAttribute
-        import inspect
-
-
-        return dict(inspect.getmembers(self.__class__, lambda x: isinstance(x, InstrumentedAttribute)))
-
-
-    def __repr__(self):
-        return "<{}: {}>".format(type(self), self.dict)
-
 
 class JSONEncodedObj(TypeDecorator):
     "Represents an immutable structure as a json-encoded string."
@@ -102,6 +82,7 @@ class MutationDict(Mutable, dict):
     def __setitem__(self, key, value):
         "Detect dictionary set events and emit change events."
         dict.__setitem__(self, key, value)
+
         self.changed()
 
     def __delitem__(self, key):
@@ -264,7 +245,6 @@ class LinkableMixin(object):
         if not object_id in self.data[name]:
             self.data[name] = self.data[name] + [object_id]
 
-
     def _remove_link(self, name, object_id):
         """For linking manifests to stores"""
         if not name in self.data:
@@ -273,9 +253,43 @@ class LinkableMixin(object):
         if self.data[name] and object_id in self.data[name]:
             self.data[name] = self.data[name].remove(object_id)
 
+class DataPropertyMixin(object):
+    """A Mixin for appending a value into a list in the data field"""
 
 
-class Dataset(Base):
+
+    def _append_string_to_list(self, sub_prop, value):
+        """ """
+        if not sub_prop in self.data:
+            self.data[sub_prop] = []
+
+        if value and not value in self.data[sub_prop]:
+            self.data[sub_prop] = self.data[sub_prop] + [value]
+
+# Sould have things derived from this, once there are test cases for it.
+# Actually, this is a mixin.
+class DictableMixin(object):
+
+    def set_attributes(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    @property
+    def dict(self):
+        from sqlalchemy.orm.attributes import InstrumentedAttribute
+        import inspect
+
+        return dict(inspect.getmembers(self.__class__, lambda x: isinstance(x, InstrumentedAttribute)))
+
+
+    def __repr__(self):
+        return "<{}: {}>".format(type(self), self.dict)
+
+
+
+
+
+class Dataset(Base, LinkableMixin):
     __tablename__ = 'datasets'
 
     LOCATION = Constant()
@@ -370,7 +384,7 @@ class Dataset(Base):
        
     @property 
     def dict(self):
-        return {
+        d =  {
                 'id':self.id_, 
                 'vid':self.vid,
                 'name':self.name,
@@ -387,7 +401,25 @@ class Dataset(Base):
                 'revision':self.revision, 
                 'version':self.version, 
                 }
-        
+
+        for k in self.data:
+            assert k not in d
+            d[k] = self.data[k]
+
+        return d
+
+
+    # For linking partitions to manifests
+    @property
+    def linked_manifests(self): return self._get_link_array('manifests', File, File.ref)
+    def link_manifest(self, f): return self._append_link('manifests', f.ref)
+    def delink_manifest(self, f): return self._remove_link('manifests', f.ref)
+
+    @property
+    def linked_stores(self): return self._get_link_array('stores', File, File.ref)
+    def link_store(self, f): return self._append_link('stores', f.ref)
+    def delink_store(self, f): return self._remove_link('stores', f.ref)
+
 def _clean_flag( in_flag):
     
     if in_flag is None or in_flag == '0':
@@ -652,7 +684,7 @@ class Column(Base):
 event.listen(Column, 'before_insert', Column.before_insert)
 event.listen(Column, 'before_update', Column.before_update)
  
-class Table(Base, LinkableMixin):
+class Table(Base, LinkableMixin, DataPropertyMixin):
     __tablename__ ='tables'
 
     vid = SAColumn('t_vid',String(20), primary_key=True)
@@ -665,6 +697,7 @@ class Table(Base, LinkableMixin):
     description = SAColumn('t_description',Text)
     universe = SAColumn('t_universe',String(200))
     keywords = SAColumn('t_keywords',Text)
+    type = SAColumn('t_type', String(20))
     # Reference to a column that provides an example of whow this column should be used.
     proto_vid = SAColumn('t_proto_vid', String(20), index=True)
 
@@ -693,6 +726,7 @@ class Table(Base, LinkableMixin):
         self.description = kwargs.get("description",None)
         self.universe = kwargs.get("universe", None)
         self.keywords = kwargs.get("keywords",None)
+        self.type = kwargs.get("type", 'table')
         self.proto_vid = kwargs.get("proto_vid")
         self.data = kwargs.get("data",None) 
         
@@ -711,9 +745,15 @@ class Table(Base, LinkableMixin):
 
     @property
     def dict(self):
-        return {k:v for k,v in self.__dict__.items() if k in
+        d =  {k:v for k,v in self.__dict__.items() if k in
                 ['id_','vid', 'd_id', 'd_vid', 'sequence_id', 'name', 'altname', 'vname', 'description',
-                 'universe', 'keywords', 'installed', 'proto_vid', 'data']}
+                 'universe', 'keywords', 'installed', 'proto_vid', 'type']}
+
+        for k in self.data:
+            assert k not in d
+            d[k] = self.data[k]
+
+        return d
 
     @property
     def nonull_dict(self):
@@ -742,9 +782,9 @@ class Table(Base, LinkableMixin):
 
     # For linking tables to manifests
     @property
-    def linked_files(self): return self._get_link_array('files', File, File.oid)
-    def link_file(self, f): return self._append_link('files', f.oid)
-    def delink_file(self, f): return self._remove_link('files', f.oid)
+    def linked_files(self): return self._get_link_array('files', File, File.ref)
+    def link_file(self, f): return self._append_link('files', f.ref)
+    def delink_file(self, f): return self._remove_link('files', f.ref)
 
     @property
     def info(self):
@@ -1130,10 +1170,15 @@ Columns:
 
         return bdr
 
+
+    def add_installed_name(self, name):
+        self._append_string_to_list( 'installed_names', name)
+
+
     @property
-    def vid_enc(self):
-        '''vid, urlencoded'''
-        return self.vid.replace('/','|')
+    def linked_manifests(self): return self._get_link_array('manifests', File, File.ref)
+    def link_manifest(self, f): return self._append_link('manifests', f.ref)
+    def delink_manifest(self, f): return self._remove_link('manifests', f.ref)
 
 event.listen(Table, 'before_insert', Table.before_insert)
 event.listen(Table, 'before_update', Table.before_update)
@@ -1160,7 +1205,6 @@ class Config(Base):
 
     def __repr__(self):
         return "<config: {},{},{} = {}>".format(self.d_vid, self.group, self.key, self.value)
-
 
 
 class Partition(Base, LinkableMixin):
@@ -1283,8 +1327,9 @@ class Partition(Base, LinkableMixin):
                  'format': self.format if self.format else 'db'
                 }
 
-        if 'tables' in self.data:
-            d['tables'] = self.data['tables'] # Allows passing dict into bundle.partitions.new_partition
+        for k in self.data:
+            assert k not in d
+            d[k] = self.data[k]
 
 
         return d
@@ -1318,9 +1363,14 @@ class Partition(Base, LinkableMixin):
 
     # For linking partitions to manifests
     @property
-    def linked_files(self): return self._get_link_array('files', File, File.oid)
-    def link_file(self, f): return self._append_link('files', f.oid)
-    def delink_file(self, f): return self._remove_link('files', f.oid)
+    def linked_manifests(self): return self._get_link_array('manifests', File, File.ref)
+    def link_manifest(self, f): return self._append_link('manifests', f.ref)
+    def delink_manifest(self, f): return self._remove_link('manifests', f.ref)
+
+    @property
+    def linked_stores(self): return self._get_link_array('stores', File, File.ref)
+    def link_store(self, f): return self._append_link('stores', f.ref)
+    def delink_store(self, f): return self._remove_link('stores', f.ref)
 
     @staticmethod
     def before_insert(mapper, conn, target):
@@ -1406,22 +1456,34 @@ class File(Base, SavableMixin, LinkableMixin):
         return "<file: {}; {}>".format(self.path, self.state)
 
     def update(self, f):
-        """Copy anohter fiels properties into this one. """
+        """Copy another files properties into this one. """
 
         for k in self.dict.keys():
             if k in ['oid']:
                 continue
-            setattr(self, k, getattr(f, k))
+            try:
+                setattr(self, k, getattr(f, k))
+
+            except AttributeError:
+                # The dict() method copies data property values into the main dict,
+                # and these don't have associated class properties.
+                continue
 
         self.content = f.content
-
 
     @property
     def dict(self):
 
-        return  dict((col, getattr(self, col)) for col
+        d =   dict((col, getattr(self, col)) for col
                      in ['oid','path', 'ref',  'type_',  'source_url', 'process', 'state',
-                         'hash', 'modified', 'size', 'group', 'data', 'priority'])
+                         'hash', 'modified', 'size', 'group',  'priority'])
+
+        for k in self.data:
+            assert k not in d
+            d[k] = self.data[k]
+
+        return d
+
 
     @property
     def insertable_dict(self):
@@ -1437,11 +1499,22 @@ class File(Base, SavableMixin, LinkableMixin):
     def delink_partition(self, p): return self._remove_link('partitions', p.vid)
 
     @property
-    def linked_files(self): return self._get_link_array('files', File, File.oid)
-    def link_file(self, f): return self._append_link('files', f.oid)
-    def delink_file(self, f): return self._remove_link('files', f.oid)
-
-    @property
     def linked_tables(self): return self._get_link_array('tables', Table, Table.vid)
     def link_table(self, t): return self._append_link('tables', t.vid)
     def delink_table(self, t): return self._remove_link('tables', t.vid)
+
+    @property
+    def linked_manifests(self): return self._get_link_array('manifests', File, File.ref)
+    def link_manifest(self, f):
+        assert self.group != 'manifest'
+        return self._append_link('manifests', f.ref)
+    def delink_manifest(self, f): return self._remove_link('manifests', f.ref)
+
+    @property
+    def linked_stores(self): return self._get_link_array('stores', File, File.ref)
+    def link_store(self, f): return self._append_link('stores', f.ref)
+    def delink_store(self, f): return self._remove_link('stores', f.ref)
+
+
+
+

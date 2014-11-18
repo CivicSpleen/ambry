@@ -104,7 +104,7 @@ def root_list(args, l, st, rc):
     from ..cli import  _print_bundle_list
 
     if args.tables:
-        for table in l.tables():
+        for table in l.tables:
             print table.name, table.vid, table.dataset.identity.fqname
 
         return

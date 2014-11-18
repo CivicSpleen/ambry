@@ -409,8 +409,8 @@ class Files(object):
                 raise NotFoundError("No record for database with dsn: '{}'".format(warehouse.database.dsn))
 
 
-            f.link_file(whf)
-            whf.link_file(f)
+            f.link_store(whf)
+            whf.link_manifest(f)
 
             self.db.commit()
 

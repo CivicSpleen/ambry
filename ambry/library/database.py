@@ -428,8 +428,25 @@ class LibraryDb(object):
         except:
             return None
 
+    def get_config_group(self, group):
+
+        from ambry.orm import Config as SAConfig
+
+        s = self.session
+
+        try:
+
+            return s.query(SAConfig).filter(SAConfig.group == group,
+                                         SAConfig.d_vid == ROOT_CONFIG_NAME_V).all()
+
+        except:
+            return None
+
+
     def get_config_rows(self, d_vid):
-        """Return configuration in a form that can be used to reconstitute a Metadataobject """
+        """Return configuration in a form that can be used to reconstitute a Metadataobject
+        Returns all of the rows for a dataset. This is distinct from get_config_value, which returns the
+        value for the library. """
         from ambry.orm import Config as SAConfig
         from sqlalchemy import or_
 
@@ -793,24 +810,6 @@ class LibraryDb(object):
         s.merge(table)
         s.commit()
 
-    def mark_table_installed(self, table_or_vid, name=None):
-        """Mark a table record as installed"""
-
-        s = self.session
-        table = None
-
-        table = s.query(Table).filter(Table.vid == table_or_vid).one()
-
-        if not table:
-            table = s.query(Table).filter(Table.name == table.vid).one()
-
-        if not name:
-            name = table.name
-
-        table.installed = name
-
-        s.merge(table)
-        s.commit()
 
     def mark_partition_installed(self, p_vid):
         """Mark a table record as installed"""

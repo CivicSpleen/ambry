@@ -35,6 +35,7 @@ def warehouse_command(args, rc):
 
         config = database_config(s.path)
 
+
     elif args.subcommand == 'install':
         from ..warehouse.manifest import Manifest
         import os.path

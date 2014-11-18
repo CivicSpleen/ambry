@@ -151,7 +151,7 @@ class SqliteAttachmentMixin(object):
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
-    SCHEMA_VERSION = 20
+    SCHEMA_VERSION = 21
 
     _lock = None
 
@@ -724,6 +724,11 @@ def _on_connect_update_sqlite_schema(conn, con_record):
                 pass
 
 
+        if version < 21:
+            try:
+                conn.execute("ALTER TABLE tables ADD COLUMN t_type VARCHAR(20) DEFAULT 'table'; ")
+            except Exception as e:
+                pass
 
 
 

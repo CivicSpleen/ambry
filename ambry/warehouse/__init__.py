@@ -254,6 +254,30 @@ class WarehouseInterface(object):
     def cache(self):
         return new_cache(self.local_cache)
 
+
+    @property
+    def dict(self):
+        """Return information about the warehouse as a dictionary. """
+        from ..orm import Config as SAConfig
+        from ..library.database import ROOT_CONFIG_NAME_V
+
+        d =  {}
+
+        for c in self.library.database.get_config_group('warehouse'):
+            if c.key in self.configurable:
+                d[c.key] = c.value
+
+        d['tables'] =  { t.vid:t.dict for t in self.library.tables }
+
+        d['partitions'] = {p.vid: p.dict for p in self.library.partitions}
+
+        d['manifests'] = {m.uid: dict(mf.dict.items() + m.dict.items()) for mf,m in self.library.manifests}
+
+
+        return d
+
+
+
     @property
     def manifests(self):
         """Return the parsed manifests that have been installed"""
@@ -355,32 +379,39 @@ class WarehouseInterface(object):
         if not tables:
             tables = all_tables
 
-        for table_name in tables:
+        for source_table_name in tables:
 
-            if isinstance(table_name, (list, tuple)):
-                table_name, where = table_name
+            dest_table_name, alias = self.augmented_table_name(p.identity, source_table_name)
+
+
+            if isinstance(source_table_name, (list, tuple)):
+                source_table_name, where = source_table_name
             else:
                 where = None
 
             try:
                 if p.identity.format == 'db':
                     self.elibrary.get(p.vid) # ensure it is local
-                    itn = self.load_local(p, table_name, where)
+                    itn = self.load_local(p, source_table_name, dest_table_name, where)
                 else:
                     self.elibrary.get(p.vid)  # ensure it is local
-                    itn = self.load_ogr(p, table_name, where)
+                    itn = self.load_ogr(p, source_table_name, dest_table_name, where)
 
-                orm_table = p.get_table(table_name)
+                self.install_table_alias(dest_table_name, alias)
 
-                # Creating the table alias should be part of instal_partition, where the
-                # table is created, but
-                alias = p.identity.id_ + '_' + table_name
-                self.install_table_alias(self.augmented_table_name(p.identity, table_name), alias)
+                t_vid = p.get_table(source_table_name).vid
+                w_table = self.library.table(t_vid)
 
-                self.library.database.mark_table_installed(orm_table.vid, itn)
+                w_table.add_installed_name(dest_table_name)
+                w_table.add_installed_name(alias)
+
+                self.library.database.mark_table_installed(p.get_table(source_table_name).vid, itn)
+
+                assert self.augmented_table_name(p.identity, source_table_name)[0] == itn
+
 
             except OperationalError as e:
-                self.logger.error("Failed to install table '{}': {}".format(table_name,e))
+                self.logger.error("Failed to install table '{}': {}".format(source_table_name,e))
                 raise
 
         self.library.database.mark_partition_installed(p_vid)
@@ -466,19 +497,18 @@ class WarehouseInterface(object):
 
                         if p:
                             # Link the partition to the manifest. Have to re-fetch, because p is in the
-                            #external library, and the manifest is in the warehouse elibrary
+                            # external library, and the manifest is in the warehouse elibrary
                             p = self.wlibrary.partition(p.vid)
                             mf.link_partition(p)
-                            p.link_file(mf)
+                            p.link_manifest(mf)
 
                             if tables:
                                 for table in tables:
                                     b = self.wlibrary.bundle(p.identity.as_dataset().vid)
                                     orm_t = b.schema.table(table)
-                                    print "HERE", mf, orm_t
+
                                     mf.link_table(orm_t)
-
-
+                                    orm_t.link_manifest(mf)
 
                     except NotFoundError:
                         self.logger.error("Partition {} not found in external library".format(pd['partition']))
@@ -527,6 +557,8 @@ class WarehouseInterface(object):
 
         self._meta_set(manifest.uid, datetime.now().isoformat())
 
+
+
         if errors:
             self.logger.error("")
             self.logger.error("===== Install Errors =====")
@@ -546,12 +578,11 @@ class WarehouseInterface(object):
         raise NotImplementedError(type(self))
 
 
-
     def install_table_alias(self, table, alias):
-
+        """Install a view that allows referencing a table by another name """
         self.install_view(alias, "SELECT * FROM \"{}\" ".format(table))
 
-        self.install_table(alias, orig_name = table)
+        self.install_table(alias, orig_name = table, data=dict(type='alias'))
 
     def install_table(self, name, orig_name = None, data = None ):
 
@@ -588,10 +619,17 @@ class WarehouseInterface(object):
         if orig_name is not None:
             t.altname = str(orig_name)
 
+        if data and 'type' in data:
+            t.type = data['type']
+            del data['type']
+
         if t.data:
-            t.data.update(data if data else {})
+            d = dict(t.data.items())
+            d.update(data if data else {})
+            t.data = d
         else:
             t.data = data
+
 
         s.merge(t)
         s.commit()
@@ -612,7 +650,7 @@ class WarehouseInterface(object):
         facility of the target warehouse'''
         raise NotImplementedError()
 
-    def load_ogr(self, partition, table_name, where):
+    def load_ogr(self, partition, source_table_name, dest_table_name, where):
         '''Load geo data using the ogr2ogr program'''
         raise NotImplementedError()
 
@@ -763,7 +801,12 @@ class WarehouseInterface(object):
         if identity.grain:
             name = name + '_' + identity.grain
 
-        return name
+        alias = identity.id_.replace('/', '_') + '_' + table_name
+
+        if identity.grain:
+            alias = alias + '_' + identity.grain
+
+        return name, alias
 
     def _ogr_args(self, partition):
         '''Return a arguments for ogr2ogr to connect to the database'''

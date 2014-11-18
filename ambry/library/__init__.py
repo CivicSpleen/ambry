@@ -484,6 +484,7 @@ class Library(object):
 
         return bundle
 
+    @property
     def tables(self):
         """Return ORM records for all tables"""
         from ..orm import Table
@@ -516,6 +517,13 @@ class Library(object):
             except NoResultFound:
                 self.logger.error("No partition found: {} for {}".format(vid, self.database.dsn))
                 raise
+
+    def dataset(self, vid):
+        from ..orm import Dataset
+        from sqlalchemy.orm.exc import NoResultFound
+
+        return (self.database.session.query(Dataset).filter(Dataset.vid == vid).one())
+
 
 
     @property
@@ -1109,7 +1117,7 @@ class Library(object):
 
         from ambry.util.packages import qualified_name
 
-        f = self.files.install_data_store(w.database.dsn, qualified_name(w),
+        store = self.files.install_data_store(w.database.dsn, qualified_name(w),
                                           name = w.name,
                                           title=w.title,
                                           summary=w.summary,
@@ -1127,37 +1135,41 @@ class Library(object):
 
             p = self.partition(remote_p.vid)
 
-            f.link_partition(p)
-            p.link_file(f)
+            store.link_partition(p)
+            p.link_store(store)
+            p.dataset.link_store(store)
 
         ## Next, we can load the manifests.
 
-        for f, m in w.manifests:
-            m.path  = f.path
+        for remote_manifest, m in w.manifests:
+            m.path  = remote_manifest.path
 
+            local_manifest = self.files.install_manifest(m, warehouse=w)
 
-            self.files.install_manifest(m, warehouse=w)
-
-            mf = self.manifest(m.uid)[0]
-
-            for p in f.linked_partitions:
+            for p in remote_manifest.linked_partitions:
                 p = self.partition(p.vid)
 
-                mf.link_partition(p)
-                p.link_file(mf)
+                local_manifest.link_partition(p)
+                p.link_manifest(local_manifest)
+
+                p.dataset.link_manifest(local_manifest)
+
 
             # This is the cheaper way to copy links, but it only works when the links
             # are one-directional.
-            mf.data['tables'] = f.data.get('tables', [])
+            local_manifest.data['tables'] = remote_manifest.data.get('tables', [])
+
+            local_manifest.link_store(store)
+            store.link_manifest(local_manifest)
 
         s.commit()
 
-        return f
+        return store
 
 
     def sync_doc_json(self, clean = False):
         """Write the json for all bundles and the library"""
-        from contexttimer import Timer
+        from ..warehouse import new_warehouse, database_config
 
         dc = self.doc_cache
 
@@ -1189,28 +1201,15 @@ class Library(object):
                 self.logger.error("Error on {}: {}".format(vid, e))
                 raise
 
-        # Link from bundle and partitions to which manifests they are in.
-        in_manifest = {}
 
         for f, m in self.manifests:
             dc.put_manifest(m, f, force=clean)
 
-            md = dc.get_manifest(m.uid)
+        for w in self.stores:
 
-            for pvid, bvid in md['partitions'].items():
+            w = new_warehouse(database_config(w.path), self, logger=self.logger)
 
-                if not pvid in in_manifest:
-                    in_manifest[pvid] = []
-
-                if not bvid in in_manifest:
-                    in_manifest[bvid] = []
-
-                in_manifest[pvid].append(m.uid)
-                in_manifest[bvid].append(m.uid)
-
-
-        dc.put('manifest_map.json', lambda: in_manifest, force = True)
-
+            dc.put_store(w, force=clean)
 
 
     @property
@@ -1234,7 +1233,6 @@ Remotes:  {remotes}
     @property
     def dict(self):
 
-
         return dict(name=str(self.name),
                     database=str(self.database.dsn),
                     cache=str(self.cache),
@@ -1242,13 +1240,14 @@ Remotes:  {remotes}
                     manifests={m.uid: dict(
                         title=m.title,
                         partitions = [ p.vid for p in f.linked_partitions ],
+                        tables=[ t.vid for t in f.linked_tables],
                         summary=m.summary['text'],
-                        stores=[s.ref for s in f.linked_files]) for f, m in self.manifests},
+                        stores=[s.ref for s in f.linked_stores]) for f, m in self.manifests},
                     stores={f.ref: dict(
                         title=f.data['title'],
                         summary=f.data['summary'],
                         dsn = f.path,
-                        manifests = [ m.ref for m in f.linked_files ],
+                        manifests = [ m.ref for m in f.linked_manifests ],
                         local_cache=f.data['local_cache'],
                         remote_cache=f.data['remote_cache'],
                         class_type=f.type_) for f in self.stores},

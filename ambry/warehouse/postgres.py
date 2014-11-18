@@ -111,28 +111,9 @@ class PostgresWarehouse(RelationalWarehouse):
         return template.format(table=table, url=url)
 
 
-    def load_local(self, partition, table_name, data = None):
-        return self.load_insert(partition, table_name)
+    def load_local(self, partition, source_table_name, dest_table_name, where=None, data = None):
+        return self.load_insert(partition, source_table_name, dest_table_name, where=where, data = data)
 
-    def load_remote(self, partition, table_name, urls):
-
-        self.logger.log('install_partition_csv {}'.format(partition.identity.name))
-
-        pdb = partition.database
-
-        sqla_table, meta = self.create_table(partition.identity, table_name)
-
-
-        for url in urls:
-            self.logger.log('install_csv_url {}'.format(url))
-
-            cmd = self._copy_command(sqla_table, url)
-            self.logger.log('installing with command: {} '.format(cmd))
-            r = self.database.connection.execute(cmd)
-
-            #self.logger.log('installed_csv_url {}'.format(url))
-
-            r = self.database.connection.execute('commit')
 
 
     def install_view(self, name, sql, data=None):
@@ -141,6 +122,11 @@ class PostgresWarehouse(RelationalWarehouse):
 
         assert name
         assert sql
+
+        data = data if data else {}
+        data['type'] = 'view'
+
+        data['sql'] = sql
 
         sqls = ['DROP VIEW  IF EXISTS "{name}" CASCADE'.format(name=name),
         'CREATE VIEW "{name}" AS {sql}'.format(name=name, sql=sql)]
@@ -158,6 +144,9 @@ class PostgresWarehouse(RelationalWarehouse):
 
     def install_material_view(self, name, sql, clean=False, data=None):
         from pysqlite2.dbapi2 import OperationalError
+
+        data = data if data else {}
+
 
         self.logger.info('Installing materialized view {}'.format(name))
 
@@ -178,6 +167,8 @@ class PostgresWarehouse(RelationalWarehouse):
 
             self.logger.info('mview_exists {}'.format(name))
             # Ignore if it already exists.
+
+        data['sql'] = sql
 
         self.install_table(name, data=data)
 

@@ -31,7 +31,7 @@ class RelationalWarehouse(WarehouseInterface):
                                                     table_name,
                                                     d_vid=d_vid,
                                                     driver=self.database.driver,
-                                                    alt_name=self.augmented_table_name(identity, table_name),
+                                                    alt_name=self.augmented_table_name(identity, table_name)[0],
                                                     session=self.library.database.session)
         return meta, table
 
@@ -80,7 +80,7 @@ class RelationalWarehouse(WarehouseInterface):
 
         return r
 
-    def load_insert(self, partition, table_name):
+    def load_insert(self, partition, source_table_name, dest_table_name):
         from ..database.inserter import ValueInserter
         from sqlalchemy import Table, MetaData
 
@@ -97,13 +97,8 @@ class RelationalWarehouse(WarehouseInterface):
         else:
             cache_size = 50000
 
-        p_vid = partition.identity.vid
-        d_vid = partition.identity.as_dataset().vid
 
-        source_table_name = table_name
-        dest_table_name = self.augmented_table_name(partition.identity, table_name)
-
-        self.logger.info('populate_table {}'.format(table_name))
+        self.logger.info('populate_table {}'.format(source_table_name))
 
         dest_metadata = MetaData()
         dest_table = Table(dest_table_name, dest_metadata, autoload=True, autoload_with=self.database.engine)
@@ -153,7 +148,7 @@ class RelationalWarehouse(WarehouseInterface):
 
 
             for i, row in enumerate(partition.database.session.execute(select_statement)):
-                self.logger.progress('add_row', table_name, i)
+                self.logger.progress('add_row', source_table_name, i)
 
                 cache.append(dict(row))
 
@@ -176,22 +171,17 @@ class RelationalWarehouse(WarehouseInterface):
         return dest_table_name
 
 
-    def load_ogr(self, partition, table_name, where):
+    def load_ogr(self, partition, source_table_name, dest_table_name,  where):
         #
         # Use ogr2ogr to copy.
         #
         import shlex
         from sh import ogr2ogr
 
-        p_vid = partition.identity.vid
-        d_vid = partition.identity.as_dataset().vid
-
-        a_table_name = self.augmented_table_name(partition.identity, table_name)
-
         args = [
             "-t_srs EPSG:4326",
             "-nlt PROMOTE_TO_MULTI",
-            "-nln {}".format(a_table_name),
+            "-nln {}".format(dest_table_name),
             "-progress ",
             "-overwrite",
             "-skipfailures",
@@ -215,7 +205,7 @@ class RelationalWarehouse(WarehouseInterface):
 
         self.logger.log("Done loading with: ogr2ogr ")
 
-        return a_table_name
+        return dest_table_name
 
     def remove(self, name):
         from ..orm import Dataset
@@ -231,7 +221,7 @@ class RelationalWarehouse(WarehouseInterface):
             self.logger.info("Dropping tables in partition {}".format(p.identity.vname))
             for table_name in p.tables:  # Table name without the id prefix
 
-                table_name = self.augmented_table_name(p.identity, table_name)
+                table_name, alias = self.augmented_table_name(p.identity, table_name)
 
                 try:
                     self.database.drop_table(table_name)

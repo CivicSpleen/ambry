@@ -450,11 +450,15 @@ class DbBundleBase(Bundle):
 
         d = {}
 
-        #d['dataset'] = self.dataset.dict
         d['partitions'] = {p.vid: p.nonull_dict for p in self.partitions}
 
-
         d['tables'] = {t.vid: t.nonull_dict for t in self.schema.tables}
+
+        ds = self.library.dataset(self.identity.vid) # Linked_stores and linked_manifests is only in the library record
+
+        d['stores'] = { s.ref: s.dict for s in ds.linked_stores }
+        d['manifests'] = {m.ref: m.dict for m in ds.linked_manifests}
+
 
         # Convert the list of table names in the partition record to a dict, indexed by tvid.
         tables_by_name = { t.name: t.nonull_dict for t in self.schema.tables }

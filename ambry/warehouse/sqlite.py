@@ -26,24 +26,18 @@ class SqliteWarehouse(RelationalWarehouse):
             "-dsco SPATIALITE=no"]
 
 
-    def load_local(self, partition, table_name, where):
-        return self.load_attach(partition, table_name, where)
+    def load_local(self, partition, source_table_name, dest_table_name = None, where = None):
+        return self.load_attach(partition, source_table_name, dest_table_name, where)
 
-    def load_attach(self, partition, table_name, where = None):
+    def load_attach(self, partition, source_table_name, dest_table_name = None, where = None):
 
         self.logger.info('load_attach {}'.format(partition.identity.name))
-
-        p_vid = partition.identity.vid
-        d_vid = partition.identity.as_dataset().vid
-
-        source_table_name = table_name
-        dest_table_name =  self.augmented_table_name(partition.identity, table_name)
 
         copy_n = 100 if self.test else None
 
         with self.database.engine.begin() as conn:
             atch_name = self.database.attach(partition, conn=conn)
-            self.logger.info('load_attach {} in {}'.format(table_name, partition.database.path))
+            self.logger.info('load_attach {} in {}'.format(source_table_name, partition.database.path))
             self.database.copy_from_attached( table=(source_table_name, dest_table_name),
                                               on_conflict='REPLACE',
                                               name=atch_name, conn=conn, copy_n = copy_n, where = where)
@@ -53,38 +47,17 @@ class SqliteWarehouse(RelationalWarehouse):
         return dest_table_name
 
 
-    def load_remote(self, partition, table_name, urls):
-
-        import shlex
-        from sh import ambry_load_sqlite, ErrorReturnCode_1
-
-        self.logger.info('load_remote {} '.format(partition.identity.vname, table_name))
-
-        d_vid = partition.identity.as_dataset().vid
-
-        a_table_name = self.augmented_table_name(partition.identity, table_name)
-
-        for url in urls:
-
-            self.logger.info("Load Sqlite {} -> {}".format(url, self.database.path))
-
-            try:
-                ## Call the external program ambry-load-sqlite to load data into
-                ## sqlite
-                p = ambry_load_sqlite(url, self.database.path, a_table_name,
-                                      _err=self.logger.error, _out=self.logger.info )
-                p.wait()
-            except Exception as e:
-                self.logger.error("Failed to load: {} {}: {}".format(partition.identity.vname, table_name, e.message))
-
-        return a_table_name
-
     def install_view(self, name, sql, data = None):
 
         self.logger.info('Installing view {}'.format(name))
 
         assert name
         assert sql
+
+        data = data if data else {}
+        data['type'] = 'view'
+
+        data['sql'] = sql
 
         sql = """
         DROP VIEW  IF EXISTS {name};
@@ -103,6 +76,8 @@ class SqliteWarehouse(RelationalWarehouse):
         from pysqlite2.dbapi2 import  OperationalError
         self.logger.info('Installing materialized view {}'.format(name))
 
+        data = data if data else {}
+
         if clean:
             self.logger.info('mview_remove {}'.format(name))
             self.database.connection.connection.cursor().executescript("DROP TABLE IF EXISTS {}".format(name))
@@ -119,6 +94,9 @@ class SqliteWarehouse(RelationalWarehouse):
 
             self.logger.info('mview_exists {}'.format(name))
             # Ignore if it already exists.
+
+        data['sql'] = sql
+        data['type'] = 'mview'
 
         self.install_table(name, data = data)
 
