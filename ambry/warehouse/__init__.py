@@ -526,13 +526,26 @@ class WarehouseInterface(object):
                 self.create_index(c['name'], c['table'], c['columns'])
 
             elif tag == 'mview':
+
                 self.install_material_view(section.args, section.content['text'], clean= force,
-                                           data=dict(tc_names=section.content['tc_names']))
+                                           data=dict(
+                                               tc_names=section.content['tc_names'],
+                                               summary = section.doc.get('summary_text','') if section.doc else '',
+                                               doc=section.doc,
+                                               manifests = [manifest.uid],
+                                               sql_formatted = section.content['html']
+                                           ))
 
             elif tag == 'view':
                 try:
                     self.install_view(section.args, section.content['text'],
-                                      data = dict(tc_names = section.content['tc_names']))
+                                      data = dict(
+                                          tc_names = section.content['tc_names'],
+                                          summary=section.doc.get('summary_text','') if section.doc else '',
+                                          doc=section.doc,
+                                          manifests=[manifest.uid],
+                                          sql_formatted=section.content['html']
+                                      ))
                 except Exception as e:
                     errors.append((section, e))
                     self.logger.error("Failed to install view {}: {}".format(section.args, e))
@@ -622,6 +635,11 @@ class WarehouseInterface(object):
         if data and 'type' in data:
             t.type = data['type']
             del data['type']
+
+        if data and 'summary' in data and not t.description:
+            t.description = data['summary']
+            del data['summary']
+
 
         if t.data:
             d = dict(t.data.items())

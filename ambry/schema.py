@@ -1217,7 +1217,7 @@ class {name}(Base):
         s = {}
 
         for t in self.tables:
-            s[t.id_] = t.nonull_col_dict
+            s[t.vid] = t.nonull_col_dict
 
         return s
 

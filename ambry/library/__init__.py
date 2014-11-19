@@ -1170,6 +1170,7 @@ class Library(object):
     def sync_doc_json(self, clean = False):
         """Write the json for all bundles and the library"""
         from ..warehouse import new_warehouse, database_config
+        from sqlalchemy.exc import OperationalError
 
         dc = self.doc_cache
 
@@ -1205,11 +1206,15 @@ class Library(object):
         for f, m in self.manifests:
             dc.put_manifest(m, f, force=clean)
 
-        for w in self.stores:
+        for s in self.stores:
 
-            w = new_warehouse(database_config(w.path), self, logger=self.logger)
 
-            dc.put_store(w, force=clean)
+            w = new_warehouse(database_config(s.path), self, logger=self.logger)
+
+            try:
+                dc.put_store(w, force=clean)
+            except Exception  as e:
+                self.logger.error("Failed to document warehouse '{}': {}".format(s.path, e))
 
 
     @property
