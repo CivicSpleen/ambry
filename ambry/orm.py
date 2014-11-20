@@ -402,9 +402,10 @@ class Dataset(Base, LinkableMixin):
                 'version':self.version, 
                 }
 
-        for k in self.data:
-            assert k not in d
-            d[k] = self.data[k]
+        if self.data:
+            for k in self.data:
+                assert k not in d
+                d[k] = self.data[k]
 
         return d
 
@@ -1478,9 +1479,10 @@ class File(Base, SavableMixin, LinkableMixin):
                      in ['oid','path', 'ref',  'type_',  'source_url', 'process', 'state',
                          'hash', 'modified', 'size', 'group',  'priority'])
 
-        for k in self.data:
-            assert k not in d
-            d[k] = self.data[k]
+        if self.data:
+            for k in self.data:
+                assert k not in d
+                d[k] = self.data[k]
 
         return d
 

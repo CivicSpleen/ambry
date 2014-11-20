@@ -43,16 +43,13 @@ def warehouse_command(args, rc):
         m = Manifest(args.term)
 
         # If cache_path is absolute, base_dir will be just the cache_path
-        base_dir = os.path.join(rc.filesystem('warehouse')['dir'], m.cache_path)
+        base_dir = os.path.join(rc.filesystem('warehouse')['dir'], m.cache)
 
         if not m.database:
             raise ConfigurationError("The manifest does not specify a database")
 
         config = database_config(m.database, base_dir=base_dir)
-        config.update(title = m.title,
-                      summary = m.summary['summary_text'],
-                      local_cache = m.local,
-                      remote_cache = m.remote)
+        config.update(title = m.title,summary = m.summary['summary_text'],cache = m.cache)
 
         w = _warehouse_new_from_dbc(config, l)
 
@@ -77,8 +74,7 @@ def store_warehouse(l,w):
     from ambry.util.packages import qualified_name
 
     s = l.files.install_data_store(w.database.dsn, type = qualified_name(w),
-                               title=w.title, summary=w.summary,
-                               local_cache=w.local_cache, remote_cache=w.remote_cache)
+                               title=w.title, summary=w.summary,cache=w.cache_path)
 
     return s.ref
 
@@ -100,12 +96,11 @@ def warehouse_parser(cmd):
     whsp.add_argument('-F', '--force', default=False, action='store_true',
                       help='Force re-creation of files that already exist')
     whsp.add_argument('-K', '--doc', default=False, action='store_true', help='Also generate documentation')
+    whsp.add_argument('-c', '--cache', help='Specify the cache')
 
     # For extract, when called from install
     group = whsp.add_mutually_exclusive_group()
-    group.add_argument('-l', '--local', dest='dest',  action='store_const', const='local')
-    group.add_argument('-r', '--remote', dest='dest', action='store_const', const='remote')
-    group.add_argument('-c', '--cache' )
+
     whsp.add_argument('-D', '--dir', default = '', help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
 
     whsp.add_argument('term', type=str,help='Name of bundle or partition')
@@ -115,16 +110,14 @@ def warehouse_parser(cmd):
     whsp.add_argument('-f', '--files-only', default=False, action='store_true', help='Only extract the extract files')
     whsp.add_argument('-d', '--doc-only', default=False, action='store_true', help='Only extract the documentation files')
     group = whsp.add_mutually_exclusive_group()
-    group.add_argument('-l', '--local', dest='dest',  action='store_const', const='local', default='local')
-    group.add_argument('-r', '--remote', dest='dest', action='store_const', const='remote')
-    group.add_argument('-c', '--cache' )
+
     whsp.add_argument('-F', '--force', default=False, action='store_true',
                       help='Force re-creation of files that already exist')
     whsp.add_argument('-D', '--dir', default = '', help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
 
     whsp = whp.add_parser('config', help='Configure varibles')
     whsp.set_defaults(subcommand='config')
-    whsp.add_argument('-v', '--var', help="Name of the variable. One of'local','remote','title','about' ")
+    whsp.add_argument('-v', '--var', help="Name of the variable. One of'cache','title','about' ")
     whsp.add_argument('term', type=str, nargs = '?', help='Value of the variable')
 
 
@@ -148,8 +141,8 @@ def warehouse_parser(cmd):
     whsp.set_defaults(subcommand='new')
     whsp.add_argument('-t', '--title',  help='Set the title for the database')
     whsp.add_argument('-s', '--summary', help='Set the summary for the database')
-    whsp.add_argument('-l', '--local', help='Specify the local cache')
-    whsp.add_argument('-r', '--remote', help='Specify the local remote')
+    whsp.add_argument('-c', '--cache', help='Specify the cache')
+
     whsp.add_argument('term', type=str, nargs=1, help='The DSN of the database')
 
     whsp = whp.add_parser('users', help='Create and configure warehouse users')
@@ -184,8 +177,7 @@ def warehouse_info(args, w,config):
     prt("Database: {}",w.database.dsn)
     prt("WLibrary: {}",w.wlibrary.database.dsn)
     prt("ELibrary: {}",w.elibrary.database.dsn)
-    prt("Local:    {}", w.local_cache)
-    prt("Remote:   {}", w.remote_cache)
+    prt("Cache:    {}", w.cache)
 
 def warehouse_remove(args, w,config):
 
@@ -245,7 +237,6 @@ def _warehouse_new_from_dbc(dbc, l):
 
     return w
 
-
 def warehouse_users(args, w,config):
 
     if args.action == 'list' or ( not bool(args.delete) and not bool(args.add)):
@@ -259,39 +250,6 @@ def warehouse_users(args, w,config):
     #w.configure_default_users()
     
 def warehouse_list(args, w, config):    
-
-
-    if not w:
-        if args.databases:
-            # List all of the warehouses referenced in the library
-            from ..library import new_library
-
-            l = new_library(config.library(args.library_name))
-
-            for s in l.stores:
-                print "{:10s} {:25s} {}".format(s.ref, s.data['title'], s.data['summary'] )
-
-
-                print "{:10s} {:25s} dsn =    {}".format('','',s.path)
-
-                if s.data['local_cache']:
-                    print "{:10s} {:25s} local =  {}".format('', '', s.data['local_cache'])
-
-                if s.data['remote_cache']:
-                    print "{:10s} {:25s} remote = {}".format('', '', s.data['remote_cache'])
-
-            return
-
-        else:
-
-            # List all of the manifests referenced in the library
-            from ..library import new_library
-            l = new_library(config.library(args.library_name))
-
-            for f, m in l.manifests:
-                print "{:10s} {:25s}| {}".format(m.uid, m.title, m.summary['summary_text'])
-
-            return
 
 
     l = w.library
@@ -323,7 +281,7 @@ def warehouse_install(args, w ,config):
 
     w.install_manifest(m, reset = args.reset_config)
 
-    w.logger.info("Installed to {}".format(w.database.dsn))
+    w.logger.info("Installed to {}, {}".format(w.uid, w.database.dsn))
 
     l = w.elibrary
 
@@ -332,60 +290,16 @@ def warehouse_install(args, w ,config):
     if args.name_only:
         print w.database.dsn
 
-    if args.dest or args.cache:
+    if args.cache:
         warehouse_extract(args, w, config)
 
-
-
-def get_cache(w, args, rc):
-    from ..dbexceptions import ConfigurationError
-    from ambry.cache import new_cache, parse_cache_string
-    import os.path
-
-    if args.cache:
-        c_string = args.cache
-
-    elif args.dest == 'local':
-
-        c_string = w.local_cache
-
-        if not c_string:
-            raise ConfigurationError(
-                "For extracts, must set an extract location, either in the manifest or the warehouse")
-
-        # Join will return c_string if c_string is an absolute path
-        c_string = os.path.join(rc.filesystem('warehouse')['dir'], c_string).replace('//','/')
-
-    elif args.dest == 'remote':
-        c_string = w.remote_cache
-
-    else:
-        raise ConfigurationError("Must specify a cahce name, or local or remote. ")
-
-
-    config = parse_cache_string(c_string, root_dir=args.dir)
-
-    if not config:
-        raise ConfigurationError("Failed to parse cache spec: '{}'".format(c_string))
-
-    if args.dir and config['type'] == 'file' and not os.path.isabs(config['dir']):
-        config['dir'] = os.path.join(args.dir, config['dir'])
-
-    if config['type'] == 'file' and not os.path.exists(config['dir']):
-        os.makedirs(config['dir'])
-
-    cache = new_cache(config)
-
-    return cache
 
 def warehouse_extract(args, w, config):
 
 
-    cache = get_cache(w, args, config)
+    w.logger.info("Extracting to: {}".format(w.cache))
 
-    w.logger.info("Extracting to: {}".format(cache))
-
-    extracts = w.extract(cache, force=args.force)
+    extracts = w.extract(force=args.force)
 
     for extract in extracts:
         print extract

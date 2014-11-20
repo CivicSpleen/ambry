@@ -66,9 +66,7 @@ class SourceTree(object):
 
             # We want all of the file data, and the 'data' field, at the same level
             d = file_.dict
-            sub_dict = d['data']
-            del d['data']
-            d.update(sub_dict)
+
 
             datasets[ck].data = d
 

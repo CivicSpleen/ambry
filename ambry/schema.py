@@ -362,7 +362,7 @@ class Schema(object):
         if alt:
             return alt + '_' + n
         else:
-            return table.vid_enc + '_' + n
+            return str(table.vid) + '_' + n
 
 
     def get_table_meta(self, name_or_id, use_id=False, driver=None, alt_name=None):

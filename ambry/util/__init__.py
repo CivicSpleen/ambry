@@ -509,6 +509,7 @@ class AttrDict(OrderedDict):
         return  root
 
     def update_flat(self, val):
+
         if isinstance(val, AttrDict): val = val.flatten()
         for k,v in val:
             dst = self
@@ -533,7 +534,7 @@ class AttrDict(OrderedDict):
             dst[k[-1]] = v
 
 
-    def update_yaml(self, path): 
+    def update_yaml(self, path):
         self.update_flat(self.from_yaml(path))
 
     def clone(self):

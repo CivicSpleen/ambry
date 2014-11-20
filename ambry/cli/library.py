@@ -346,10 +346,12 @@ def library_remove(args, l, config):
 def library_info(args, l, config, list_all=False):    
 
     prt("Library Info")
-    prt("Name:     {}",args.library_name)
-    prt("Database: {}",l.database.dsn)
-    prt("Cache:    {}",l.cache)
-    prt("Remotes:  {}", ', '.join([ str(r) for r in l.remotes]) if l.remotes else '')
+    prt("Name:      {}",args.library_name)
+    prt("Database:  {}",l.database.dsn)
+    prt("Cache:     {}",l.cache)
+    prt("Doc Cache: {}", l.doc_cache.cache)
+    prt("Whs Cache: {}", l.warehouse_cache)
+    prt("Remotes:   {}", ', '.join([ str(r) for r in l.remotes]) if l.remotes else '')
 
     
 def library_push(args, l, config):

@@ -159,6 +159,7 @@ class Bundle(object):
     @property
     def dataset(self):
         """Return the dataset, the database object that holds the identity values like id, vid, vname, etc. """
+
         return self.get_dataset()
 
 
@@ -676,6 +677,7 @@ class BuildBundle(Bundle):
         """Return the dataset
         """
         from sqlalchemy.exc import OperationalError
+        from sqlalchemy.orm.exc import NoResultFound
         from ..dbexceptions import NotFoundError
 
         from ambry.orm import Dataset
@@ -683,10 +685,11 @@ class BuildBundle(Bundle):
         try:
             return self.database.session.query(Dataset).one()
 
-        except OperationalError:
+        except (OperationalError, NoResultFound) :
             raise NotFoundError(
                 "No dataset record found. Probably not a bundle (d): '{}'" .format(
                     self.path))
+
         except Exception as e:
             from ..util import get_logger
             # self.logger can get caught in a recursion loop

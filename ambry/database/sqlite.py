@@ -294,6 +294,11 @@ class SqliteDatabase(RelationalDatabase):
         
         from sqlalchemy import create_engine
 
+        dir_ = os.path.dirname(self.path)
+
+        if not os.path.exists(dir_):
+            os.makedirs(dir_)
+
         engine = create_engine(self.dsn, echo=False)
         connection = engine.connect()
         try:

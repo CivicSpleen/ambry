@@ -177,7 +177,7 @@ class Files(object):
         path = f.path
 
         if True:
-            if os.path.exists(path):
+            if path and os.path.exists(path):
                 stat = os.stat(path)
 
                 if not f.modified or stat.st_mtime > f.modified:
@@ -217,7 +217,7 @@ class Files(object):
 
         ident = bundle.identity
 
-        if self.query.group(cache.repo_id).type(Files.TYPE.BUNDLE).path(bundle.database.path).one_maybe:
+        if self.query.group(cache.repo_id).type(Files.TYPE.BUNDLE).ref(ident.vid).one_maybe:
             return False
 
         return self.new_file(
@@ -237,10 +237,12 @@ class Files(object):
 
         """
 
-        if self.query.group(cache.repo_id).type(Files.TYPE.PARTITION).path(partition.database.path).one_maybe:
+        ident = partition.identity
+
+        if self.query.group(cache.repo_id).type(Files.TYPE.PARTITION).ref(ident.vid).one_maybe:
             return False
 
-        ident = partition.identity
+
 
         return self.new_file(
             commit=commit,
@@ -306,8 +308,7 @@ class Files(object):
 
     def install_data_store(self, dsn, type, ref = None,
                            name = None, title = None, summary = None,
-                           local_cache = None, remote_cache = None,
-                           commit=True):
+                           cache = None, commit=True):
         """A reference for a data store, such as a warehouse or a file store.
         """
 
@@ -326,8 +327,7 @@ class Files(object):
                 name = name,
                 title = title,
                 summary = summary,
-                local_cache = local_cache,
-                remote_cache = remote_cache
+                cache = cache
 
             ),
             source_url=None)
@@ -344,6 +344,9 @@ class Files(object):
         hash = None
         size = None
         modified = None
+
+        if not path or not os.path.exists(path):
+            return {}
 
         if not source and os.path.exists(path):
             source = path
@@ -396,7 +399,7 @@ class Files(object):
                 summary=manifest.summary['text']
             ),
             source_url=manifest.uid,
-            **(self._process_source_content(manifest.path) if os.path.exists(manifest.path) else {})
+            **(self._process_source_content(manifest.path))
 
         )
 
@@ -421,7 +424,7 @@ class Files(object):
         """Create a references for an extract. The extract hasn't been extracted yet, so
         there is no content, hash, etc. """
 
-        f = self.query.ref(manifest.uid).group(self.TYPE.EXTRACT).one_maybe
+        f = self.query.ref(manifest.uid).type(self.TYPE.EXTRACT).one_maybe
 
         if f:
             return f
@@ -430,11 +433,11 @@ class Files(object):
             commit=commit,
             merge=True,
             path=path,
-            group=self.TYPE.EXTRACT,
-            ref=d['table'],
+            group=self.TYPE.MANIFEST,
+            ref=manifest.uid+':'+d['table'],
             format = d['format'],
             state=None,
-            type_=self.TYPE.MANIFEST,
+            type_=self.TYPE.EXTRACT,
             data=d,
             source_url=manifest.uid
         )

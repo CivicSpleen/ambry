@@ -45,9 +45,12 @@ class Test(TestBase):
     def setUp(self):
         import bundles.testbundle.bundle
         from ambry.run import RunConfig
+        import manifests, configs
 
         self.bundle_dir = os.path.dirname( bundles.testbundle.bundle.__file__)
-        self.rc = get_runconfig((os.path.join(self.bundle_dir,'warehouse-test-config.yaml'),
+        self.config_dir = os.path.dirname(configs.__file__)
+
+        self.rc = get_runconfig((os.path.join(self.config_dir, 'test.yaml'),
                                  os.path.join(self.bundle_dir,'bundle.yaml'),
                                  RunConfig.USER_ACCOUNTS))
 
@@ -55,59 +58,13 @@ class Test(TestBase):
 
         self.bundle = Bundle()    
 
-        print "Deleting: {}".format(self.rc.group('filesystem').root_dir)
-        ambry.util.rm_rf(self.rc.group('filesystem').root_dir)
+        #print "Deleting: {}".format(self.rc.group('filesystem').root)
+        #ambry.util.rm_rf(self.rc.group('filesystem').root)
 
-    m = """
-TITLE: A Test Manifest, For Testing
-UID: xxx-yyy-zzz
-ACCESS: public
+        self.m = os.path.join(os.path.dirname(manifests.__file__), 'test.ambry')
 
-DOC:
-This is the test documentation for a file *that is* just for testing.
-
-DATABASE: sqlite:///tmp/test/warehouse.db
-
-DOC:
-Here is more documentation about the directory:
-
-DIR: /tmp/warehouse
-
-DOC:
-We've got a while lot of partitions.
-
-PARTITIONS:
-sangis.org-business-sites-orig-businesses-geo-0.1.1
-table from sangis.org-business-sites-orig-businesses-geo-0.1.1
-table FROM sangis.org-business-sites-orig-businesses-geo-0.1.1
-table1, table2 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1
-table1, table2 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1 WHERE foo and bar and bas
-table1, table2 , table3,table4 FROM sangis.org-business-sites-orig-businesses-geo-0.1.1
-census.gov-acs-geo-p5ye2012-geofile-0.0.3
-census.gov-acs-p5ye2012-b02001-estimates-0.0.4
-
-MVIEW: mview1
-SELECT 'mview1'
-FROM foobar
-
-VIEW: view2
-SELECT 'view2'
-FROM foobar
-
-INDEX: name ON table column1, column1
-EXTRACT: foobar AS csv TO /bin/bar/bingo
-
-DOC:
-More Documentation About the following Extract.
-
-EXTRACT: fringo AS geojson TO /bin/bar/geojson
-
-DOC:
-## Foodoc
-Yet more documentation, about the Fringo extract.
-"""
-
-
+        with open(self.m) as f:
+            self.m_contents = f.read()
 
     def tearDown(self):
         pass
@@ -125,10 +82,6 @@ Yet more documentation, about the Fringo extract.
         config = self.rc.library(name)
 
         l = new_library(config, reset=True)
-
-        l.database.enable_delete = True
-        l.database.drop()
-        l.database.create()
 
         return l
 
@@ -151,7 +104,7 @@ Yet more documentation, about the Fringo extract.
         return w
 
     def get_fs_cache(self,name):
-        from ambry.cache.filesystem import FsCache
+        from ckcache.filesystem import FsCache
         import shutil
 
         #cache_dir = os.path.join(temp_file_name(), 'warehouse-test', name)
@@ -165,8 +118,7 @@ Yet more documentation, about the Fringo extract.
 
     def _test_local_install(self, name):
 
-        l = self.get_library('local')
-        l.clean()
+        l = self.get_library()
 
         l.put_bundle(self.bundle)
 
@@ -213,11 +165,8 @@ Yet more documentation, about the Fringo extract.
         w.install("source-dataset-subset-variation-tthree-0.0.1")
         w.install("source-dataset-subset-variation-geot1-geo-0.0.1")
 
-    def test_remote_sqlite_install(self):
-        self._test_remote_install('sqlite')
 
-    def test_remote_postgres_install(self):
-        self._test_remote_install('postgres1')
+
 
     def test_manifest(self):
         """Load the manifest and convert it to a string to check the round-trip"""
@@ -227,35 +176,14 @@ Yet more documentation, about the Fringo extract.
 
         m = Manifest(self.m,get_logger('TL') )
 
-        self.assertEqual(self.m.strip(), str(m).strip())
+        self.assertEqual(self.m_contents.strip(), str(m).strip())
 
-        mtext = """
-TITLE: A Test Manifest, For Testing
-UID: xxx-yyy-zzz
-ACCESS: public
-DIR: test_dir
 
-PARTITIONS:
-source-dataset-subset-variation-geot2-geo-0.0.1
-source-dataset-subset-variation-geot1-geo-0.0.1
-source-dataset-subset-variation-tthree-0.0.1
-source-dataset-subset-variation-tone-missing-0.0.1
-source-dataset-subset-variation-tone-0.0.1
-
-EXTRACT: diEGPXmDC8001_tone_missing AS csv TO tone_missing.csv
-
-This is documentation for tone_missing.csv
-
-EXTRACT: diegpxmdc8001_geot1 AS geojson TO geot1.geojson
-
-This is documentation for the geot1.geojson extract
-
-"""
-
-        m = Manifest(mtext, get_logger('TL'))
-
-        l = self.get_library('local')
+        l = self.get_library()
         l.put_bundle(self.bundle)
+
+        for k, ident in  l.list().items():
+            print ident
 
         w = self.get_warehouse(l, 'sqlite')
         print 'Installing to ', w.database.path
@@ -266,37 +194,26 @@ This is documentation for the geot1.geojson extract
 
         w.install_manifest(m)
 
-        extracts = w.extract(self.get_fs_cache('foobar'), force=True)
+        extracts = w.extract(force=True)
 
         print print_yaml(extracts)
 
     def test_extract(self):
 
-        l = self.get_library('local')
+        l = self.get_library()
         l.put_bundle(self.bundle)
         w = self.get_warehouse(l, 'sqlite', delete=False)
 
         print 'WAREHOUSE: ', w.database.dsn
 
-        cache = self.get_fs_cache('foobar')
-
         #cache = new_cache('s3://warehouse.sandiegodata.org/test', run_config = get_runconfig())
 
-        extracts = w.extract(cache, force = True)
+        extracts = w.extract(force = True)
 
         from ambry.util import print_yaml
         print_yaml(extracts)
 
-    def test_manifest_doc(self):
-        from ambry.util import get_logger
-        import logging
 
-        l  = get_logger('TL')
-        l.setLevel(logging.DEBUG)
-
-        m = Manifest(self.m, l, base_dir = '/tmp' )
-
-        print m.html_doc()
 
     def test_manifest_parser(self):
 
@@ -321,13 +238,13 @@ This is documentation for the geot1.geojson extract
         from ambry.util import get_logger
         from ambry.ipython.manifest import ManifestMagicsImpl
 
-        m = Manifest('', get_logger('TL'), base_dir='/tmp')
+        m = Manifest('', get_logger('TL'))
         mmi = ManifestMagicsImpl(m)
 
         m_head = """
 TITLE:  A Test Manifest, For Testing
 UID: b4303f85-7d07-471d-9bcb-6980ea1bbf18
-DESTINATION: spatialite:///tmp/census-race-ethnicity.db
+DATABASE: spatialite:///tmp/census-race-ethnicity.db
 DIR: /tmp/warehouse
         """
 
@@ -382,7 +299,7 @@ WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
         for t in  r[0].tokens:
             if isinstance(t, sqlparse.sql.IdentifierList):
                 for i in t.get_identifiers():
-                    print i, i.get_alias(),  type(i)
+                    print i,  type(i)
 
 
         #print sqlparse.format(sql, strip_comments = True, reindent = True)

@@ -28,10 +28,6 @@ def _new_library(config):
 
     cache = new_cache(config['filesystem'])
 
-    if 'documentation' in config:
-        doc_cache = new_cache(config['documentation'])
-    else:
-        doc_cache = cache.subcache('_doc')
 
     database = LibraryDb(**dict(config['database']))
 
@@ -68,9 +64,20 @@ def _new_library(config):
         host = None
         port = 80
 
+    if 'documentation' in config:
+        doc_cache = new_cache(config['documentation'])
+    else:
+        doc_cache = cache.subcache('_doc')
+
+    if 'warehouse' in config:
+        warehouse_cache = new_cache(config['warehouse'])
+    else:
+        warehouse_cache = cache.subcache('warehouse')
+
 
     l = Library(cache=cache,
                 doc_cache = doc_cache,
+                warehouse_cache = warehouse_cache,
                 database=database,
                 name = config['_name'] if '_name' in config else 'NONE',
                 remotes=remotes,
@@ -132,6 +139,7 @@ class Library(object):
                  source_dir = None,
                  require_upload=False,
                  doc_cache = None,
+                 warehouse_cache = None,
                  host=None, port=None, urlhost = None):
 
         '''Libraries are constructed on the root cache name for the library.
@@ -152,6 +160,7 @@ class Library(object):
         self.name = name
         self.cache = cache
         self._doc_cache = doc_cache
+        self._warehouse_cache = warehouse_cache
         self.source_dir = source_dir
 
         self._database = database
@@ -983,6 +992,7 @@ class Library(object):
                 except Exception as e:
                     self.logger.error("Failed to sync {}; {}".format(bundle.identity.vname, e))
 
+
                 bundle.close()
 
             except Exception as e:
@@ -1121,9 +1131,7 @@ class Library(object):
                                           name = w.name,
                                           title=w.title,
                                           summary=w.summary,
-                                          local_cache = w.local_cache,
-                                          remote_cache = w.remote_cache
-        )
+                                          cache = w.cache_path)
 
         s = self.database.session
 
@@ -1224,6 +1232,14 @@ class Library(object):
 
         return DocCache(self._doc_cache if self._doc_cache else self.cache.subcache('_doc'))
 
+    @property
+    def warehouse_cache(self):
+        """Cache for warehouse Sqlite databases and extracts"""
+
+        c =  self._warehouse_cache if self._warehouse_cache else self.cache.subcache('warehouse')
+
+        return c
+
 
     @property
     def info(self):
@@ -1253,8 +1269,7 @@ Remotes:  {remotes}
                         summary=f.data['summary'],
                         dsn = f.path,
                         manifests = [ m.ref for m in f.linked_manifests ],
-                        local_cache=f.data['local_cache'],
-                        remote_cache=f.data['remote_cache'],
+                        cache=f.data['cache'],
                         class_type=f.type_) for f in self.stores},
                     bundles={b.identity.vid: dict(
                         about=b.metadata.dict['about'],

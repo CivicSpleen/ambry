@@ -152,7 +152,7 @@ class ManifestMagicsImpl(object):
 
         self._manifest.sectionalize(cell.splitlines(), 0)
 
-        self._manifest.save()
+
 
         if args.install:
             return self._manifest.install()

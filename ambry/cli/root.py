@@ -30,6 +30,8 @@ def root_parser(cmd):
     sp.add_argument('-l', '--library', default=False, action="store_const", const = lr.LIBRARY, help='List only the library')
     sp.add_argument('-r', '--remote', default=False, action="store_const", const = lr.REMOTE, help='List only the remote')
     sp.add_argument('-s', '--source', default=False, action="store_const", const = lr.SOURCE, help='List only the source')
+    sp.add_argument('-w', '--warehouse', default=False, action="store_const", const='warehouse', help='List warehouses')
+    sp.add_argument('-c', '--collection', default=False, action="store_const", const='collection', help='List collections')
     sp.add_argument('term', nargs = '?', type=str, help='Name or ID of the bundle or partition')
 
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
@@ -102,6 +104,31 @@ def root_command(args, rc):
 
 def root_list(args, l, st, rc):
     from ..cli import  _print_bundle_list
+
+    ##
+    ## Listing warehouses and collections is different
+
+
+    if args.collection:
+
+        for f, m in l.manifests:
+            print "{:10s} {:25s}| {}".format(m.uid, m.title, m.summary['summary_text'])
+
+        return
+
+    if args.warehouse:
+
+        for s in l.stores:
+            print "{:10s} {:25s} {}".format(s.ref, s.data['title'], s.data['summary'])
+
+            print "{:10s} {:25s} dsn =    {}".format('', '', s.path)
+
+            if s.data.get('cache',None):
+                print "{:10s} {:25s} cache = {}".format('', '', s.data['cache'])
+
+        return
+    ##
+    ## The remainder are for listing bundles and partitions.
 
     if args.tables:
         for table in l.tables:

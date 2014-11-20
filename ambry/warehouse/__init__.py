@@ -57,8 +57,6 @@ def new_warehouse(config, elibrary, logger=None):
 
     database = new_database(db_config, class_='warehouse')
 
-    storage = new_cache(config['storage']) if 'storage' in config else None
-
     # If the warehouse specifies a seperate external library, use it, otherwise, use the
     # warehouse datbase for the library
     library_database = LibraryDb(**config['library']) if 'library' in config else  LibraryDb(**db_config)
@@ -69,30 +67,30 @@ def new_warehouse(config, elibrary, logger=None):
         database=library_database
     )
 
+    args = dict(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+
     if service == 'sqlite':
         from .sqlite import SqliteWarehouse
-        w =  SqliteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+        w = SqliteWarehouse(**args)
 
     elif service == 'spatialite':
 
         from .sqlite import SpatialiteWarehouse
 
-        w =  SpatialiteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+        w = SpatialiteWarehouse(**args )
 
     elif service == 'postgres':
         from .postgres import PostgresWarehouse
 
-        w =  PostgresWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+        w = PostgresWarehouse(**args )
 
     elif service == 'postgis':
         from .postgis import PostgisWarehouse
 
-        w =  PostgisWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+        w = PostgisWarehouse(**args )
 
     else:
         raise Exception("Unknown warehouse type: {}".format(service))
-
-
 
     return w
 
@@ -118,6 +116,7 @@ class WarehouseInterface(object):
                  wlibrary=None, # Warehouse library
                  elibrary=None, # external Library
                  logger=None,
+                 base_dir = None,
                  test=False):
 
         assert wlibrary is not None
@@ -141,8 +140,6 @@ class WarehouseInterface(object):
         self.wlibrary.database.create()
 
         self._meta_set('created', datetime.now().isoformat())
-
-
 
     def clean(self):
         self.database.clean()
@@ -177,7 +174,7 @@ class WarehouseInterface(object):
         except AttributeError:
             return None
 
-    configurable = ('uid','title','name', 'summary','local_cache','remote_cache')
+    configurable = ('uid','title','name', 'summary','cache_path')
 
     @property
     def uid(self):
@@ -218,41 +215,25 @@ class WarehouseInterface(object):
         return self._meta_set('name', v)
 
     @property
-    def local_cache(self):
+    def cache_path(self):
         """Cache name for local publications. Usually a filesystem path"""
 
-        lc =  self._meta_get('local_cache')
+        return self._meta_get('cache_path')
 
-        if not lc: # Get it from the sqlite database, if it isn't set.
-            try:
-                path = self.database.path
-
-                if os.path.exists(path):
-                    lc = os.path.dirname(path)
-
-            except AttributeError: # Non file database, like Postgress, has no path
-                return None
-
-        return lc
-
-
-    @local_cache.setter
-    def local_cache(self, v):
-        return self._meta_set('local_cache', v)
-
-    @property
-    def remote_cache(self):
-        """Cache name for remote publications. Usually S3"""
-        return self._meta_get('remote_cache')
-
-    @remote_cache.setter
-    def remote_cache(self, v):
-        return self._meta_set('remote_cache', v)
+    @cache_path.setter
+    def cache_path(self, v):
+        return self._meta_set('cache_path', v)
 
 
     @property
     def cache(self):
-        return new_cache(self.local_cache)
+
+        cp = self.cache_path
+
+        if not os.path.isabs(cp) and not '://' in cp:
+            cp = self.elibrary.warehouse_cache.path(cp, missing_ok = True)
+
+        return new_cache(cp)
 
 
     @property
@@ -466,11 +447,9 @@ class WarehouseInterface(object):
         if (reset or not self.summary) and manifest.summary:
             self.summary = manifest.summary['text']
 
-        if (reset or not self._meta_get('local_cache')) and manifest.local:
-            self.local_cache = manifest.cache_path
+        if (reset or not self._meta_get('cache_path')) and manifest.cache:
+            self.cache_path = manifest.cache
 
-        if (reset or not self.remote_cache) and manifest.remote:
-            self.remote_cache = manifest.remote
 
         # Manifest data
         mf = self.wlibrary.files.install_manifest(manifest)
@@ -709,27 +688,27 @@ class WarehouseInterface(object):
             return 'extracted={} rel={} abs={} data={}'.format(self.extracted, self.rel_path, self.abs_path, self.data)
 
 
-    def extract(self, cache, force=False):
+    def extract(self, force=False):
         """Generate the extracts and return a struture listing the extracted files. """
         from contextlib import closing
 
         from .extractors import new_extractor
 
         # Get the URL to the root. The public_utl arg only affects S3, and gives a URL without a signature.
-        root = cache.path('', missing_ok = True, public_url = True)
+        root = self.cache.path('', missing_ok = True, public_url = True)
 
         extracts = []
 
         # Generate the file etracts
 
-        for f in self.library.files.query.group('extract').all:
+        for f in self.library.files.query.group('manifest').type('extract').all:
 
             table = f.data['table']
             format = f.data['format']
 
-            ex = new_extractor(format, self, cache, force=force)
+            ex = new_extractor(format, self, self.cache, force=force)
 
-            extracts.append(WarehouseInterface.extract_entry(*ex.extract(table, cache, f.path)))
+            extracts.append(WarehouseInterface.extract_entry(*ex.extract(table, self.cache, f.path)))
 
 
         return extracts
@@ -902,7 +881,7 @@ def database_config(db, base_dir=''):
                                     dbname=parts.path.strip('/')
                       ))
     else:
-        raise ValueError("Unknown database connection scheme: {}".format(parts.scheme))
+        raise ValueError("Unknown database connection scheme for  {}".format(db))
 
     return config
 

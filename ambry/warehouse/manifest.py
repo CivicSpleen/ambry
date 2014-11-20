@@ -67,7 +67,7 @@ class ManifestSection(object):
 class Manifest(object):
 
     # These tags have only a single line; revert back to 'doc' afterward
-    singles = ['uid', 'title', 'extract', 'dir',  'database', 'local', 'remote', 'author', 'url', 'access', 'index', 'include']
+    singles = ['uid', 'title', 'extract', 'dir',  'database', 'cache',  'author', 'url', 'access', 'index', 'include']
     multi_line = ['partitions','view','mview','sql','doc']
 
     partitions = None
@@ -149,16 +149,8 @@ class Manifest(object):
         return self.single_line('database')
 
     @property
-    def publication(self):
-        return self.single_line('publication')
-
-    @property
-    def local(self):
-        return self.single_line('local')
-
-    @property
-    def remote(self):
-        return self.single_line('remote')
+    def cache(self):
+        return self.single_line('cache')
 
     @property
     def uid(self):
@@ -174,14 +166,7 @@ class Manifest(object):
 
         return uid
 
-    @property
-    def cache_path(self):
-        """The path component to use for sqlite databases, documentation and etracts"""
 
-        if self.local:
-            return self.local
-        else:
-            return self.uid
 
 
     @property
@@ -194,15 +179,6 @@ class Manifest(object):
         t = self.tagged_sections('title').pop()
 
         print t.doc
-
-    @property
-    def access(self):
-        acl =  self.single_line('access')
-
-        if not acl:
-            acl = 'public-read'
-
-        return acl
 
 
 
@@ -244,7 +220,7 @@ class Manifest(object):
         from ..dbexceptions import  ConfigurationError
 
         if tag not in self.singles and tag not in self.multi_line:
-            raise ConfigurationError("Unknown tag '{}' on line {}".format(tag, i))
+            raise ConfigurationError("Unknown tag '{}'  at {}:{}".format(tag, self.path, i))
 
         line_number = i + 1
         section = ManifestSection(self.path, tag=tag, linenumber=line_number, args=args)
@@ -290,8 +266,8 @@ class Manifest(object):
 
                 tag = rx.group(1).strip().lower()
 
-                # The '#' is a valid char in publication URLs
-                if tag == 'publication' and '#' in line_w_comments:
+                # The '#' is a valid char in cache URLs
+                if tag == 'cache' and '#' in line_w_comments:
                     rx = re.match(r'^(\w+):(.*)$', line_w_comments.strip())
 
                 args = rx.group(2).strip()
@@ -665,8 +641,7 @@ class Manifest(object):
             'title': self.title,
             'uid': self.uid,
             'summary': self.summary,
-            'url': None,
-            'access': self.access
+            'url': None
         }
 
     def __str__(self):

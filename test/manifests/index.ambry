@@ -6,8 +6,7 @@ UID: mKEkZAlayQ
 AUTHOR: Eric Busboom <eric@sandiegodata.org>
 
 DATABASE: sqlite:///manifest_test.db
-LOCAL: test_manifests
-REMOTE:  s3://warehouse.sandiegodata.org/test/test_manifests#compress
+CACHE: test_manifests
 
 INCLUDE: crime.ambry
 INCLUDE: education.ambry
