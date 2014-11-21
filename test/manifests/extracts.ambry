@@ -1,0 +1,41 @@
+TITLE: A Manifest for Testing Extracts
+
+Nothing by extract testing.
+
+UID: mIwAsstiqP
+
+DATABASE: sqlite:///extract_test.db
+CACHE: extract_test
+
+
+PARTITIONS:
+
+example.com-random-random1
+example.com-combined-combined
+
+VIEW: view1
+
+SELECT *
+FROM "pHSyDm4MNR001_random1"
+
+VIEW: view2
+
+SELECT * FROM "pIjqPRbrGq001_combined"
+
+
+MVIEW: mview1
+
+SELECT * FROM "view2"
+
+MVIEW: mview2
+
+SELECT * FROM "view2"
+
+MVIEW: mview3
+
+SELECT * FROM mview1
+JOIN mview1 ON mview1.id = mview2.id
+
+EXTRACT: mview3 AS csv TO mview3.csv
+
+EXTRACT: view1

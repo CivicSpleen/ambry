@@ -17,9 +17,9 @@ class Bundle(BuildBundle):
         import uuid
         import random
 
-        p = self.partitions.new_partition(table='example1')
+        p = self.partitions.new_partition(table='random1')
 
-        p.query('DELETE FROM example1')
+        p.query('DELETE FROM random1')
 
         lr = self.init_log_rate(100)
 

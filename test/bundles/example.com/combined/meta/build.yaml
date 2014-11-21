@@ -1,6 +1,6 @@
 build: {}
 dependencies:
-    random: example.com-random-example1
+    random: example.com-random-random1
     simple: example.com-simple-example
 extract: {}
 sources:

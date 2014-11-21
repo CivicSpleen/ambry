@@ -1,2 +1,4 @@
--   name: example.com-level3-example1
-    table: example1
+-   name: example.com-level3-level3_1
+    table: level3_1
+-   name: example.com-level3-level3_2
+    table: level3_2

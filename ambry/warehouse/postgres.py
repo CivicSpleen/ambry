@@ -115,19 +115,25 @@ class PostgresWarehouse(RelationalWarehouse):
         return self.load_insert(partition, source_table_name, dest_table_name, where=where, data = data)
 
 
-
     def install_view(self, name, sql, data=None):
-
-        self.logger.info('Installing view {}'.format(name))
+        import time
 
         assert name
         assert sql
+
+        t = self.orm_table_by_name(name)
+
+        if t and t.data.get('sql') == sql:
+            self.logger.info("Skipping view {}; SQL hasn't changed".format(name))
+        else:
+            self.logger.info('Installing view {}'.format(name))
+
 
         data = data if data else {}
         data['type'] = 'view'
 
         data['sql'] = sql
-
+        data['updated'] = time.time()
         sqls = ['DROP VIEW  IF EXISTS "{name}" CASCADE'.format(name=name),
         'CREATE VIEW "{name}" AS {sql}'.format(name=name, sql=sql)]
 
@@ -144,15 +150,16 @@ class PostgresWarehouse(RelationalWarehouse):
 
     def install_material_view(self, name, sql, clean=False, data=None):
         from pysqlite2.dbapi2 import OperationalError
+        import time
 
-        data = data if data else {}
+        drop, data = self._install_material_view(name, sql, clean=clean, data = data)
 
-
-        self.logger.info('Installing materialized view {}'.format(name))
-
-        if clean:
-            self.logger.info('mview_remove {}'.format(name))
+        if drop:
             self.database.connection.execute("DROP TABLE IF EXISTS {}".format(name))
+
+        if not data:
+            return False
+
 
         sql = """
         CREATE TABLE {name} AS {sql}
@@ -168,7 +175,6 @@ class PostgresWarehouse(RelationalWarehouse):
             self.logger.info('mview_exists {}'.format(name))
             # Ignore if it already exists.
 
-        data['sql'] = sql
 
         self.install_table(name, data=data)
 

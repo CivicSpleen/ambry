@@ -303,6 +303,11 @@ class WarehouseInterface(object):
 
         return self.library.database.session.query(Table).filter(Table.vid == vid).first()
 
+    def orm_table_by_name(self, name):
+        from ..orm import Table
+
+        return self.library.database.session.query(Table).filter(Table.name == name).first()
+
     def expand_table_deps(self):
         """Expand the information about table dependencies so that only leaf tables are included. """
 
@@ -333,6 +338,7 @@ class WarehouseInterface(object):
     ##
 
     def install(self, partition, tables=None, prefix=None):
+        """Install a partition and the talbes in the partition"""
         from ..orm import Partition
         from sqlalchemy.exc import OperationalError
 
@@ -434,7 +440,12 @@ class WarehouseInterface(object):
 
         errors = []
 
-        (self.library.files.query.source_url(manifest.uid)).delete()
+        # Mark all of the files associated with the manifest, so if they aren't in the manifest
+        # we can remove them.
+        # TODO Should also do this for tables.
+        for f in (self.library.files.query.type(self.library.files.TYPE.EXTRACT).source_url(manifest.uid)).all:
+            f.state = 'delatable'
+            self.library.files.merge(f)
 
         # Update the manifest with bundle information, since it doesn't normally have access to a library
         manifest.add_bundles(self.elibrary)
@@ -528,10 +539,10 @@ class WarehouseInterface(object):
                 except Exception as e:
                     errors.append((section, e))
                     self.logger.error("Failed to install view {}: {}".format(section.args, e))
+                    raise
 
 
             elif tag == 'extract':
-                import json
 
                 d = section.content
                 doc = manifest.doc_for(section)
@@ -549,7 +560,8 @@ class WarehouseInterface(object):
 
         self._meta_set(manifest.uid, datetime.now().isoformat())
 
-
+        # Delete all of the files ( extracts ) that were note in-installed
+        (self.library.files.query.type(self.library.files.TYPE.EXTRACT).state('delatable')).delete()
 
         if errors:
             self.logger.error("")
@@ -566,6 +578,64 @@ class WarehouseInterface(object):
     def install_material_view(self, name, sql, clean = False, data=None):
         raise NotImplementedError(type(self))
 
+
+    def _install_material_view(self, name, sql, clean=False, data=None):
+
+        import time
+
+        if not (clean or self.mview_needs_update(name, sql)):
+            self.logger.info('Skipping materialized view {}: update not required'.format(name))
+            return False, False
+        else:
+            self.logger.info('Installing materialized view {}'.format(name))
+
+            if not self.orm_table_by_name(name):
+                self.logger.info('mview_remove {}'.format(name))
+                drop = True
+            else:
+                drop = False
+
+
+        data = data if data else {}
+
+        data['sql'] = sql
+        data['type'] = 'mview'
+        data['updated'] = time.time()
+
+        return drop, data
+
+
+    def mview_needs_update(self, name, sql):
+        """Return True if an mview needs to be regnerated, because it's SQL changed,
+         or one of its predecessors was re-generated
+
+         NOTE. This probably only works property when the MVIEWS are listed in the manifest in an order
+         where dependent views are listed after depenencies.
+         """
+
+        t = self.orm_table_by_name(name)
+
+        if not t:
+            return True
+
+        if t.data.get('sql') != sql:
+            return True
+
+        update_time = int(t.data.get('updated', None))
+
+        if not update_time:
+            return True
+
+        if t:
+            for tc_name in t.data.get('tc_names'):
+                tc = self.orm_table_by_name(tc_name)
+
+                if (tc and tc.dict.get('updated',False)
+                    and ( int(tc.dict.get('updated')) > int(t.data.get('updated')))):
+                    return True
+
+        return  False
+
     def install_view(self, name, sql, data=None):
         raise NotImplementedError(type(self))
 
@@ -577,8 +647,8 @@ class WarehouseInterface(object):
         self.install_table(alias, orig_name = table, data=dict(type='alias'))
 
     def install_table(self, name, orig_name = None, data = None ):
+        """Install a view, mview or alias as a Table record. Real tables are copied """
 
-        """Install a view, mview or alias as a Table record. """
         from ..orm import Table, Config, Dataset
         from ..library.database import ROOT_CONFIG_NAME_V
         from sqlalchemy import func
@@ -627,6 +697,7 @@ class WarehouseInterface(object):
         else:
             t.data = data
 
+        t.installed = t.name
 
         s.merge(t)
         s.commit()
@@ -677,22 +748,14 @@ class WarehouseInterface(object):
 
         return b, p
 
-    class extract_entry(object):
-        def __init__(self, extracted, rel_path, abs_path, data=None):
-            self.extracted = extracted
-            self.rel_path = rel_path
-            self.abs_path = abs_path
-            self.data = data
-
-        def __str__(self):
-            return 'extracted={} rel={} abs={} data={}'.format(self.extracted, self.rel_path, self.abs_path, self.data)
-
 
     def extract(self, force=False):
         """Generate the extracts and return a struture listing the extracted files. """
         from contextlib import closing
 
         from .extractors import new_extractor
+        import time
+        from ..util import md5_for_file
 
         # Get the URL to the root. The public_utl arg only affects S3, and gives a URL without a signature.
         root = self.cache.path('', missing_ok = True, public_url = True)
@@ -703,12 +766,30 @@ class WarehouseInterface(object):
 
         for f in self.library.files.query.group('manifest').type('extract').all:
 
-            table = f.data['table']
-            format = f.data['format']
+            t = self.orm_table_by_name(f.data['table'])
 
-            ex = new_extractor(format, self, self.cache, force=force)
+            if (t and t.data.get('updated') and
+                f.modified and
+                int(t.data.get('updated')) > f.modified) or (not f.modified):
+                force = True
 
-            extracts.append(WarehouseInterface.extract_entry(*ex.extract(table, self.cache, f.path)))
+
+            ex = new_extractor(f.data.get('format'), self, self.cache, force=force)
+
+            e = ex.extract(f.data['table'], self.cache, f.path )
+
+            extracts.append(e)
+
+            if e.time:
+                f.modified = e.time
+
+                if os.path.exists(e.abs_path):
+                    f.hash = md5_for_file(e.abs_path)
+                    f.size = os.path.getsize(e.abs_path)
+
+
+                self.library.files.merge(f)
+
 
 
         return extracts

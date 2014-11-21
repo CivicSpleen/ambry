@@ -9,10 +9,23 @@ import ogr
 class ExtractError(Exception):
     pass
 
+class ExtractEntry(object):
+    def __init__(self, extracted, rel_path, abs_path, data=None):
+        self.extracted = extracted
+        self.rel_path = rel_path
+        self.abs_path = abs_path
+        self.data = data
+        self.time = None
+
+    def __str__(self):
+        return 'extracted={} rel={} abs={} data={}'.format(self.extracted, self.rel_path, self.abs_path, self.data)
+
+
 def new_extractor(format, warehouse, cache, force=False):
 
     ex_class = dict(
         csv=CsvExtractor,
+        json=JsonExtractor,
         shapefile=ShapeExtractor,
         geojson=GeoJsonExtractor,
         kml=KmlExtractor
@@ -31,21 +44,26 @@ class Extractor(object):
         self.database = self.warehouse.database
         self.cache = cache
         self.force = force
+        self.hash = None
 
     def mangle_path(self,rel_path):
         return rel_path
 
     def extract(self, table, cache, rel_path):
+        import time
+
+        e = ExtractEntry(False, rel_path, cache.path(self.mangle_path(rel_path), missing_ok = True), (table, self.__class__))
 
         if cache.has(self.mangle_path(rel_path)):
             if self.force:
                 cache.remove(self.mangle_path(rel_path), True)
             else:
-                return False, rel_path, cache.path(self.mangle_path(rel_path)), (table, self.__class__)
+                return e
 
         self._extract(table, cache, rel_path)
-
-        return True, rel_path, cache.path(self.mangle_path(rel_path)),(table, self.__class__)
+        e.time = time.time()
+        e.extracted = True
+        return e
 
 class CsvExtractor(Extractor):
 
@@ -71,6 +89,14 @@ class CsvExtractor(Extractor):
                 w.writerow(row)
 
         return True, cache.path(rel_path)
+
+class JsonExtractor(Extractor):
+
+    def __init__(self, warehouse, cache, force=False):
+        super(JsonExtractor, self).__init__(warehouse, cache, force=force)
+
+    def _extract(self, table, cache, rel_path):
+        raise NotImplementedError()
 
 class OgrExtractor(Extractor):
 

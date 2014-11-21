@@ -363,7 +363,8 @@ class Manifest(object):
         # Add table names from parsing the SQL, so we can build dependencies for views. Unfortunately,
         # it also add column names, which are removed when the template context is created.
 
-        for s in sqlparse.parse('\n'.join(section.lines)):
+        # The SQL parser doesn't like quotes, so remove them first
+        for s in sqlparse.parse('\n'.join(section.lines).replace('"','')):
             for tok in s.flatten():
                 if tok.ttype == sqlparse.tokens.Name:
                     tc_names.add(str(tok))
@@ -401,16 +402,25 @@ class Manifest(object):
 
         words = line.split()
 
-        if len(words) != 5:
-            raise ParseError('Extract line has wrong format; expected 5 words, got: {}'.format(line))
+        #if len(words) != 5:
+        #    raise ParseError('Extract line has wrong format; expected 5 words, got: {}'.format(line))
 
-        table, as_w, format, to_w, rpath = words
 
-        if not as_w.upper() == 'AS':
-            raise ParseError('Extract line malformed. Expected 3rd word to be \'as\' got: {}'.format(as_w))
+        table = words.pop(0)
 
-        if not to_w.upper() == 'TO':
-            raise ParseError('Extract line malformed. Expected 5th word to be \'to\' got: {}'.format(to_w))
+        format = 'csv'
+        rpath = None
+
+        for i, word in enumerate(words):
+            if word.upper() == 'AS':
+                format = words[i+1]
+
+            if word.upper() == 'TO':
+                rpath = words[i+1]
+
+
+        if not rpath:
+            rpath = "{}.{}".format(table, format)
 
 
         return dict(table=table, format=format, rpath=rpath, name=rpath)

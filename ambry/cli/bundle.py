@@ -44,7 +44,6 @@ def bundle_command(args, rc):
                 fatal("Ghost bundle {}; in library but not in source tree".format(ident.vname))
 
 
-
         elif args.bundle_dir == '-':
             # Run run for each line of input
             import sys

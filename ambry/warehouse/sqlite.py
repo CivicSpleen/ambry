@@ -49,15 +49,24 @@ class SqliteWarehouse(RelationalWarehouse):
 
     def install_view(self, name, sql, data = None):
 
-        self.logger.info('Installing view {}'.format(name))
+        import time
 
         assert name
         assert sql
+
+        t = self.orm_table_by_name(name)
+
+        if t and t.data.get('sql') == sql:
+            self.logger.info("Skipping view {}; SQL hasn't changed".format(name))
+            return
+        else:
+            self.logger.info('Installing view {}'.format(name))
 
         data = data if data else {}
         data['type'] = 'view'
 
         data['sql'] = sql
+        data['updated'] = time.time()
 
         sql = """
         DROP VIEW  IF EXISTS {name};
@@ -72,15 +81,18 @@ class SqliteWarehouse(RelationalWarehouse):
             raise
 
 
+
     def install_material_view(self, name, sql, clean=False, data = None):
         from pysqlite2.dbapi2 import  OperationalError
-        self.logger.info('Installing materialized view {}'.format(name))
 
-        data = data if data else {}
+        drop, data = self._install_material_view(name, sql, clean=clean, data = data)
 
-        if clean:
-            self.logger.info('mview_remove {}'.format(name))
-            self.database.connection.connection.cursor().executescript("DROP TABLE IF EXISTS {}".format(name))
+        if drop:
+            self.database.connection.execute("DROP TABLE IF EXISTS {}".format(name))
+
+
+        if not data:
+            return False
 
         sql = """
         CREATE TABLE {name} AS {sql}
@@ -95,10 +107,11 @@ class SqliteWarehouse(RelationalWarehouse):
             self.logger.info('mview_exists {}'.format(name))
             # Ignore if it already exists.
 
-        data['sql'] = sql
-        data['type'] = 'mview'
 
         self.install_table(name, data = data)
+
+        return True
+
 
     def run_sql(self, sql_text):
 
@@ -137,7 +150,10 @@ class SpatialiteWarehouse(SqliteWarehouse):
 
     def install_material_view(self, name, sql, clean=False, data = None):
 
-        super(SpatialiteWarehouse, self).install_material_view(name, sql, clean=clean, data = data)
+        if not super(SpatialiteWarehouse, self).install_material_view(name, sql, clean=clean, data = data):
+            return False
+
+        # Clean up the geometry
 
         ce = self.database.connection.execute
 
@@ -149,3 +165,6 @@ class SpatialiteWarehouse(SqliteWarehouse):
             cd = types[0][2]
 
             ce("SELECT RecoverGeometryColumn('{}', 'geometry', 4326, '{}', '{}');".format(name, t, cd))
+
+
+        return True

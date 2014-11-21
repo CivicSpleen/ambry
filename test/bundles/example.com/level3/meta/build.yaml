@@ -1,7 +1,7 @@
 build: {}
 dependencies:
-    combined: example.com-combined-example
-    random: example.com-random-example1
+    combined: example.com-combined-combined
+    random: example.com-random-random1
     simple: example.com-simple-example
 extract: {}
 views: {}

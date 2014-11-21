@@ -108,12 +108,9 @@ def library_parser(cmd):
     group.add_argument('-j', '--json',  default='csv', dest='format',  action='store_const', const='json')
     group.add_argument('-c', '--csv',  default='csv', dest='format',  action='store_const', const='csv')
 
-    sp = asp.add_parser('doc', help='Generate documentation')
+    sp = asp.add_parser('doc', help='Start the documentation server')
     sp.set_defaults(subcommand='doc')
-    sp.add_argument('-e', '--report-extracts', default=False, action="store_true", help="Print the paths of the files that were generated")
-    sp.add_argument('-f', '--force', default=False, action="store_true", help='Force re-generation of all documents')
-    sp.add_argument('-i', '--force-index', default=False, action="store_true", help='Force re-generation of the index documents')
-    sp.add_argument('-c', '--cache', help='URL of the destination cache. Defaults to library documentation cache')
+
 
     if IN_DEVELOPMENT:
         sp = asp.add_parser('test', help='Run development test code')
@@ -514,28 +511,35 @@ def library_sync(args, l, config):
         l.sync_doc_json(clean=args.clean)
 
 def library_doc(args, l, rc):
-        from ..text import Renderer
-        from ambry.cache import new_cache, parse_cache_string
 
-        if args.cache:
-            config = parse_cache_string(args.cache)
-            cache = new_cache(config, run_config=rc)
-        else:
-            cache = l.doc_cache
+    from ambrydoc import app, configure_application
+    import ambrydoc.views as views
+    import thread
+    import ambry
 
-        l.logger.info("Extracting to: {}".format(cache))
+    cache_dir = l.doc_cache.cache.path('',missing_ok=True)
 
-        r = Renderer(cache, library=l)
+    config = configure_application(dict(port = 5249, cache = cache_dir))
 
-        path, extracts = r.write_library_doc(force=args.force, force_index = args.force_index)
+    def open_browser():
+        import webbrowser
+        webbrowser.open("http://localhost:{}/".format(config['port']))
 
-        if args.report_extracts:
-            for e in extracts:
-                if e.extracted:
-                    print "Generated: ", e.abs_path
+    open_browser()
+
+    import logging
+    from logging import FileHandler
+
+    file_handler = FileHandler(os.path.join(cache_dir, "web.log"))
+    file_handler.setLevel(logging.WARNING)
+    app.logger.addHandler(file_handler)
+
+    print 'Serving documentation for cache: ', cache_dir
+
+    app.run(host=config['host'], port=int(config['port']), debug=False)
 
 
-        print "Index: ", path
+
 
 def library_unknown(args, l, config):
     fatal("Unknown subcommand")

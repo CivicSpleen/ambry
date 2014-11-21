@@ -17,21 +17,18 @@ class Bundle(BuildBundle):
         import uuid
         import random
 
-        p = self.partitions.new_partition(table='example1')
+        in_p = self.library.dep('random').partition
 
-        p.query('DELETE FROM example1')
+        lr = self.init_log_rate()
 
-        lr = self.init_log_rate(100)
+        for t in ("level3_1", "level3_2"):
+            p = self.partitions.new_partition(table = t)
 
-        with p.database.inserter() as ins:
-            for i in range(1000):
-                row = {}
-                row['uuid'] = str(uuid.uuid4())
-                row['int'] = random.randint(0,100)
-                row['float'] = random.random()*100
-
-                ins.insert(row)
-                lr()
+            with p.database.inserter() as ins:
+                for row in in_p.rows:
+                
+                    ins.insert(dict(row))
+                    lr()
 
         return True
 

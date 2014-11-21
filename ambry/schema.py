@@ -633,8 +633,9 @@ class Schema(object):
                     return warnings, errors 
    
                 try:
-
-                    t = self.add_table(row['table'], **row)
+                    table_row = dict(**row)
+                    del table_row['type'] # The field is really for columns, and means something different for tables
+                    t = self.add_table(row['table'], **table_row)
                 except Exception as e:
                     errors.append((None,None," Failed to add table: {}. Row={}. Exception={}".format(row['table'], row, e)))
                     return warnings, errors

@@ -6,7 +6,7 @@ UID: m5PJKUrX0U
 
 PARTITIONS:
 
-example.com-random-example1-0.0.2
+example.com-random-random1
 example.com-segmented-example-1
 
 VIEW: doubled_int
@@ -14,7 +14,7 @@ VIEW: doubled_int
 SELECT
     *,
     2*cast("int" AS INTEGER) as doubled
-FROM "pHSyDm4MNR001002_example1"
+FROM "pHSyDm4MNR001_random1"
 
 DOC:
 
@@ -37,4 +37,4 @@ SELECT
     quadrupled.*,
     ex.uuid as ex_uuid
 FROM quadrupled
-LEFT JOIN "p00G001001_example" as ex on ex.id = quadrupled.id
+LEFT JOIN "pIjqPRbrGq001_combined" as ex on ex.id = quadrupled.id

@@ -424,9 +424,14 @@ class Files(object):
         """Create a references for an extract. The extract hasn't been extracted yet, so
         there is no content, hash, etc. """
 
-        f = self.query.ref(manifest.uid).type(self.TYPE.EXTRACT).one_maybe
+
+        f = self.query.path(path).type(self.TYPE.EXTRACT).one_maybe
+
+
 
         if f:
+            f.state = 'installed' # This interacts with marking it 'deletable' in install_manifest
+            self.merge(f)
             return f
 
         return self.new_file(
@@ -434,10 +439,11 @@ class Files(object):
             merge=True,
             path=path,
             group=self.TYPE.MANIFEST,
-            ref=manifest.uid+':'+d['table'],
+            ref=path,
             format = d['format'],
-            state=None,
+            state='installed',
             type_=self.TYPE.EXTRACT,
             data=d,
+
             source_url=manifest.uid
         )

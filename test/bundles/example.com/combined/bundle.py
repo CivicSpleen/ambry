@@ -13,7 +13,7 @@ class Bundle(BuildBundle):
     def build(self):
         import csv
         
-        p = self.partitions.find_or_new(table='example')
+        p = self.partitions.find_or_new(table='combined')
 
         p.clean()
         
