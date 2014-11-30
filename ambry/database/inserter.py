@@ -237,6 +237,8 @@ class ValueInserter(ValueWriter):
 
         self.update_size = update_size
 
+        self.row_id = None
+
 
         if replace:
             self.statement = self.statement.prefix_with('OR REPLACE')
@@ -284,6 +286,14 @@ class ValueInserter(ValueWriter):
                     except UnicodeEncodeError:
                         # Unicode is a PITA
                         pass
+
+            if self.row_id is not None:
+                if d['id'] is None:
+                    d['id'] = self.row_id
+                    self.row_id += 1
+                else:
+                    self.row_id = max(self.row_id, d['id'] ) + 1
+
 
             self.cache.append(d)
          

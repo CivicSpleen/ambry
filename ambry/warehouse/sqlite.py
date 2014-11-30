@@ -63,7 +63,7 @@ class SqliteWarehouse(RelationalWarehouse):
             self.logger.info('Installing view {}'.format(name))
 
         data = data if data else {}
-        data['type'] = 'view'
+        data['type'] = data['type'] if 'type'  in data else 'view'
 
         data['sql'] = sql
         data['updated'] = time.time()

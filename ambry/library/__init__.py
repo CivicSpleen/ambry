@@ -501,6 +501,7 @@ class Library(object):
         return self.database.session.query(Table).all()
 
 
+
     def table(self, vid):
         from ..orm import Table
         from sqlalchemy.orm.exc import NoResultFound
@@ -513,6 +514,20 @@ class Library(object):
                 return (self.database.session.query(Table).filter(Table.id_ == vid).one())
             except NoResultFound:
                 raise NotFoundError("Did not find table ref {} in library {}".format(vid, self.database.dsn))
+
+    def derived_tables(self, proto_vid):
+        """Tables with the given proto_vid"""
+
+        from ..orm import Table
+        from sqlalchemy.orm.exc import NoResultFound
+        from ..dbexceptions import NotFoundError
+
+        try:
+            return (self.database.session.query(Table).filter(Table.proto_vid == proto_vid).all())
+        except NoResultFound:
+            raise NotFoundError("Did not find table with proto_vid {} in library {}"
+                                .format(proto_vid, self.database.dsn))
+
 
     def partition(self, vid):
         from ..orm import Partition
@@ -580,11 +595,11 @@ class Library(object):
 
     @property
     def manifests(self):
-        """Return all of the refistered data stores. """
+        """Return all of the registered manifests. """
         from ..warehouse.manifest import  Manifest
 
         return [(f, Manifest(f.content, logger=self.logger))
-                for f in self.files.query.group(self.files.TYPE.MANIFEST).all]
+                for f in self.files.query.type(self.files.TYPE.MANIFEST).all]
 
 
     def manifest(self, uid):
@@ -606,8 +621,10 @@ class Library(object):
         if not f:
             raise NotFoundError("Didn't find manifest for uid '{}' ".format(uid))
 
-        self.database.session.delete(f.clear_links())
+        self.database.session.delete(f)
         self.database.commit()
+
+
 
     @property
     def remotes(self):
@@ -1170,21 +1187,38 @@ class Library(object):
             local_manifest.link_store(store)
             store.link_manifest(local_manifest)
 
+        ##
+        ## Copy over extracts
+
+        for f in w.extracts:
+
+            self.files.install_extract(f.path, f.source_url, f.data)
+
+
+
+
+
         s.commit()
 
         return store
 
 
-    def sync_doc_json(self, clean = False):
-        """Write the json for all bundles and the library"""
+    def sync_doc_json(self, cache = None, clean = False):
+        """Write the JSON for all bundles and the library"""
         from ..warehouse import new_warehouse, database_config
         from sqlalchemy.exc import OperationalError
 
-        dc = self.doc_cache
+        dc = self.doc_cache if not cache else cache
 
         self.logger.info("Caching json to {}".format(dc.cache))
 
+        ##
+        ## The Library
+
         dc.put_library(self, force = clean)
+
+        ##
+        # Each of the bundles and schemas
 
         for vid in self.list():
 
@@ -1210,12 +1244,16 @@ class Library(object):
                 self.logger.error("Error on {}: {}".format(vid, e))
                 raise
 
+        ##
+        ## Manifests
 
         for f, m in self.manifests:
             dc.put_manifest(m, f, force=clean)
 
-        for s in self.stores:
+        ##
+        ## Stores
 
+        for s in self.stores:
 
             w = new_warehouse(database_config(s.path), self, logger=self.logger)
 
@@ -1223,6 +1261,7 @@ class Library(object):
                 dc.put_store(w, force=clean)
             except Exception  as e:
                 self.logger.error("Failed to document warehouse '{}': {}".format(s.path, e))
+                raise
 
 
     @property

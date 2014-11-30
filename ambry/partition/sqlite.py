@@ -164,7 +164,7 @@ class SqlitePartition(PartitionBase):
 
     def finalize(self):
 
-        if not self.is_finalized():
+        if not self.is_finalized:
             self.write_stats()
             self.write_file()
 
@@ -177,6 +177,7 @@ class SqlitePartition(PartitionBase):
         t = self.get_table()
 
         if not t:
+
             return
 
         if not t.primary_key:
@@ -184,16 +185,20 @@ class SqlitePartition(PartitionBase):
 
             raise ConfigurationError("Table {} does not have a primary key; can't compute states".format(t.name))
 
-        s = self.database.session
-        self.record.count = s.execute("SELECT COUNT(*) FROM {}".format(self.table.name)).scalar()
-        self.record.min_key = s.execute(
-            "SELECT MIN({}) FROM {}".format(t.primary_key.name, self.table.name)).scalar()
-        self.record.max_key = s.execute(
-            "SELECT MAX({}) FROM {}".format(t.primary_key.name, self.table.name)).scalar()
-        s.commit()
+        partition_s = self.database.session
 
-        with self.bundle.session as s:
-            s.merge(self.record)
+        self.record.count = partition_s.execute("SELECT COUNT(*) FROM {}".format(self.table.name)).scalar()
+        self.record.min_key = partition_s.execute(
+            "SELECT MIN({}) FROM {}".format(t.primary_key.name, self.table.name)).scalar()
+        self.record.max_key = partition_s.execute(
+            "SELECT MAX({}) FROM {}".format(t.primary_key.name, self.table.name)).scalar()
+
+        with self.bundle.session as bundle_s:
+
+            bundle_s.add(self.record)
+
+            bundle_s.commit()
+
 
         self.set_state(Partitions.STATE.FINALIZED)
 

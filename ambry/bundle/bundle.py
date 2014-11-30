@@ -1303,6 +1303,8 @@ class BuildBundle(Bundle):
         self.set_value('process', 'last', datetime.now().isoformat())
         self.set_build_state( 'built')
 
+        self.close()
+
         return True
 
     def post_build_finalize(self):
@@ -1333,6 +1335,7 @@ class BuildBundle(Bundle):
                         p.identity.name,
                         e.message))
                 raise
+
             p.close() # Or, will run out of files/connections and get operational error
 
     def post_build_write_partitions(self):

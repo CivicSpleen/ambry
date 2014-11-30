@@ -104,12 +104,13 @@ class WarehouseInterface(object):
 
     FILE_TYPE.MANIFEST = 'manifest'
     FILE_TYPE.HTML = 'text/html'
+    FILE_TYPE.EXTRACT = Files.TYPE.EXTRACT
 
     FILE_GROUP = Constant()
 
     FILE_GROUP.MANIFEST = Files.TYPE.MANIFEST
     FILE_GROUP.DOC = Files.TYPE.DOC
-    FILE_GROUP.EXTRACT = Files.TYPE.EXTRACT
+
 
     def __init__(self,
                  database,
@@ -131,6 +132,17 @@ class WarehouseInterface(object):
         logger = logger if logger else NullLogger()
 
         self.logger =  Logger(logger, init_log_rate(logger.info, N=2000))
+
+    def info(self, location, message=None):
+
+        if not message:
+            message = location
+            location = None
+
+        if location:
+            self.logger.info("{}:{} {}", location[0], location[1], message)
+        else:
+            self.logger.info(message)
 
 
     def create(self):
@@ -192,7 +204,6 @@ class WarehouseInterface(object):
 
     @title.setter
     def title(self, v):
-
         return  self._meta_set('title', v)
 
 
@@ -235,6 +246,14 @@ class WarehouseInterface(object):
 
         return new_cache(cp)
 
+    @property
+    def url(self):
+        """Url of the management application for the warehouse. """
+        return self._meta_get('url')
+
+    @name.setter
+    def url(self, v):
+        return self._meta_set('url', v)
 
     @property
     def dict(self):
@@ -248,16 +267,15 @@ class WarehouseInterface(object):
             if c.key in self.configurable:
                 d[c.key] = c.value
 
+        d['dsn'] = self.database.dsn
+
         d['tables'] =  { t.vid:t.dict for t in self.library.tables }
 
         d['partitions'] = {p.vid: p.dict for p in self.library.partitions}
 
         d['manifests'] = {m.uid: dict(mf.dict.items() + m.dict.items()) for mf,m in self.library.manifests}
 
-
         return d
-
-
 
     @property
     def manifests(self):
@@ -271,7 +289,6 @@ class WarehouseInterface(object):
             manifests.append((f, Manifest(f.content, logger=self.logger)))
 
         return manifests
-
 
     @property
     def bundles(self):
@@ -290,6 +307,16 @@ class WarehouseInterface(object):
             v.data.update(d)
 
         return l
+
+    @property
+    def extracts(self):
+        """Return an array of dicts of the extract files """
+
+        for f in self.library.files.query.group(self.FILE_GROUP.MANIFEST).type(self.FILE_TYPE.EXTRACT).all:
+            self.library.database.session.expunge(f)
+            f.source_url = self.uid
+            f.oid = None
+            yield f
 
     @property
     def tables(self):
@@ -327,6 +354,13 @@ class WarehouseInterface(object):
             deps[table_name] = [self.orm_table(tn) for tn in t_deps if tn in deps.keys()]
 
         return deps
+
+    @property
+    def partitions(self):
+        from ..orm import Partition
+
+        for p in self.library.database.session.query(Partition).all():
+            yield p
 
     def partition(self, vid):
         from ..orm import Partition
@@ -368,6 +402,8 @@ class WarehouseInterface(object):
 
         for source_table_name in tables:
 
+            #
+            # Compute the installation name, and an alial that does not have the version number
             dest_table_name, alias = self.augmented_table_name(p.identity, source_table_name)
 
 
@@ -377,6 +413,9 @@ class WarehouseInterface(object):
                 where = None
 
             try:
+                ##
+                ## Copy the data to the destination table
+
                 if p.identity.format == 'db':
                     self.elibrary.get(p.vid) # ensure it is local
                     itn = self.load_local(p, source_table_name, dest_table_name, where)
@@ -384,13 +423,17 @@ class WarehouseInterface(object):
                     self.elibrary.get(p.vid)  # ensure it is local
                     itn = self.load_ogr(p, source_table_name, dest_table_name, where)
 
-                self.install_table_alias(dest_table_name, alias)
 
                 t_vid = p.get_table(source_table_name).vid
                 w_table = self.library.table(t_vid)
 
-                w_table.add_installed_name(dest_table_name)
-                w_table.add_installed_name(alias)
+                # Create a table entry for the name of the table with the partition in it,
+                # and link it to the main table record.
+                self.install_table(dest_table_name, alt_name=alias,
+                                   data=dict(type='installed', proto_vid=w_table.vid))
+
+                # Link the table name and the alias
+                self.install_table_alias(w_table, dest_table_name, alias)
 
                 self.library.database.mark_table_installed(p.get_table(source_table_name).vid, itn)
 
@@ -403,7 +446,10 @@ class WarehouseInterface(object):
 
         self.library.database.mark_partition_installed(p_vid)
 
+
+
         return tables, p
+
 
     def install_partition(self, bundle, partition, prefix=None):
         '''Install the records for the partition, the tables referenced by the partition,
@@ -432,7 +478,7 @@ class WarehouseInterface(object):
 
         return tables
 
-    def install_manifest(self, manifest, force = None, reset=False):
+    def install_manifest(self, manifest, force = None, reset=False, level = 0):
         """Install the partitions and views specified in a manifest file """
         from ..dbexceptions import NotFoundError, ConfigurationError
         from datetime import datetime
@@ -551,12 +597,12 @@ class WarehouseInterface(object):
 
                 extract_path = os.path.join('extracts',  d['rpath'])
 
-                self.wlibrary.files.install_extract(extract_path, manifest, d)
+                self.wlibrary.files.install_extract(extract_path, manifest.uid, d)
 
             elif tag == 'include':
                 from .manifest import Manifest
                 m = Manifest(section.content['path'])
-                self.install_manifest(m, force = force)
+                self.install_manifest(m, force = force, level = level + 1)
 
         self._meta_set(manifest.uid, datetime.now().isoformat())
 
@@ -570,10 +616,52 @@ class WarehouseInterface(object):
                 self.logger.error("Failed to install view {}: at {}\n{}".format(section.args, section.file_line,  e))
                 self.logger.error('----------')
 
+        if level == 0:
+            self.post_install()
+
         if hasattr(self.database, 'path') and os.path.exists(self.database.path):
             return self.database.path
         else:
             return self.database.dsn
+
+    def post_install(self):
+        """
+        Perform operations after the manifest install, such as creating table views for
+        all of the installed tables.
+
+        """
+
+
+        for t in self.tables:
+            if  t.type == 'table' and t.installed: # Get the table definition that columns are linked to
+
+                ## Create table aliases for the vid of the tables.
+                installed_tables = [ it for it in self.library.derived_tables(t.vid) if it.type == 'installed' ]
+
+                if len(installed_tables) == 1:
+                    self.install_table_alias(t, installed_tables[0].name, t.vid)
+
+                else:
+
+                    sql = ' UNION '.join(' SELECT * FROM {} '.format(table.name)
+                                         for table in installed_tables )
+
+                    self.install_view(t.vid, sql)
+
+                self.install_table(t.vid, data=dict(type='alias', proto_vid=t.vid ))
+
+        s = self.library.database.session
+
+        for t in self.tables:
+            if  t.type == 'table' and t.installed:
+                print t.vid, t.name
+                for dt in sorted(self.library.derived_tables(t.vid), key=lambda x:x.name):
+                    print '    ', dt.name
+                    t.add_installed_name(dt.name)
+                    s.add(t)
+
+        s.commit()
+
 
     def install_material_view(self, name, sql, clean = False, data=None):
         raise NotImplementedError(type(self))
@@ -640,13 +728,11 @@ class WarehouseInterface(object):
         raise NotImplementedError(type(self))
 
 
-    def install_table_alias(self, table, alias):
+    def install_table_alias(self, table,  table_name, alias):
         """Install a view that allows referencing a table by another name """
-        self.install_view(alias, "SELECT * FROM \"{}\" ".format(table))
+        self.install_view(alias, "SELECT * FROM \"{}\" ".format(table_name), data = dict(type='alias',proto_vid=table.vid))
 
-        self.install_table(alias, orig_name = table, data=dict(type='alias'))
-
-    def install_table(self, name, orig_name = None, data = None ):
+    def install_table(self, name, alt_name = None, data = None ):
         """Install a view, mview or alias as a Table record. Real tables are copied """
 
         from ..orm import Table, Config, Dataset
@@ -678,16 +764,22 @@ class WarehouseInterface(object):
 
             t = Table(ds,name=name, sequence_id = seq, preserve_case = True)
 
-        if orig_name is not None:
-            t.altname = str(orig_name)
+        if alt_name is not None:
+            t.altname = str(alt_name)
 
         if data and 'type' in data:
             t.type = data['type']
             del data['type']
 
-        if data and 'summary' in data and not t.description:
-            t.description = data['summary']
+        if data and 'summary' in data:
+            if not t.description:
+                t.description = data['summary']
             del data['summary']
+
+        if data and 'proto_vid' in data:
+            if not t.proto_vid:
+                t.proto_vid = data['proto_vid']
+            del data['proto_vid']
 
 
         if t.data:
@@ -697,11 +789,10 @@ class WarehouseInterface(object):
         else:
             t.data = data
 
-        t.installed = t.name
+        t.installed = 'y'
 
         s.merge(t)
         s.commit()
-
 
 
     def run_sql(self, sql_text):
@@ -883,6 +974,8 @@ class WarehouseInterface(object):
 
         if identity.grain:
             alias = alias + '_' + identity.grain
+
+
 
         return name, alias
 

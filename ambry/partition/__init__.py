@@ -268,6 +268,7 @@ class PartitionBase(PartitionInterface):
         """Wrap up the creation of this partition"""
 
 
+    @property
     def is_finalized(self):
         """Return true if the partition has been finalized"""
         from ..partitions import Partitions

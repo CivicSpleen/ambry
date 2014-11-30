@@ -7,6 +7,8 @@ from  ambry.bundle import BuildBundle
 class Bundle(BuildBundle):
     ''' '''
  
+    records_per_segment = 5000
+ 
     def __init__(self,directory=None):
         
         super(Bundle, self).__init__(directory)
@@ -16,7 +18,6 @@ class Bundle(BuildBundle):
         import random
 
         
-        
         lr = self.init_log_rate(N=2000)
         
         for seg in range(1,4):
@@ -25,9 +26,12 @@ class Bundle(BuildBundle):
             p.clean()
             nd = p.table.null_dict
             
+            
             with p.database.inserter() as ins:
 
-                for i in range(5000):
+                ins.row_id = (seg-1) * self.records_per_segment
+
+                for i in range(self.records_per_segment):
                     row = dict(nd.items())
             
                     row['uuid'] = str(uuid.uuid4())

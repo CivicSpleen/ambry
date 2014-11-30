@@ -420,14 +420,11 @@ class Files(object):
         return f
 
 
-    def install_extract(self, path, manifest, d, commit=True):
+    def install_extract(self, path, source, d, commit=True):
         """Create a references for an extract. The extract hasn't been extracted yet, so
         there is no content, hash, etc. """
 
-
         f = self.query.path(path).type(self.TYPE.EXTRACT).one_maybe
-
-
 
         if f:
             f.state = 'installed' # This interacts with marking it 'deletable' in install_manifest
@@ -440,10 +437,9 @@ class Files(object):
             path=path,
             group=self.TYPE.MANIFEST,
             ref=path,
-            format = d['format'],
             state='installed',
             type_=self.TYPE.EXTRACT,
             data=d,
 
-            source_url=manifest.uid
+            source_url=source
         )

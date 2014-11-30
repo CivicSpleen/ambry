@@ -753,7 +753,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
                  'universe', 'keywords', 'installed', 'proto_vid', 'type']}
 
         for k in self.data:
-            assert k not in d
+            assert k not in d, "Value '{}' is a table field and should not be in data ".format(k)
             d[k] = self.data[k]
 
         return d
@@ -868,6 +868,9 @@ Columns:
         if target.id_ is None:
             dataset_id = ObjectNumber.parse(target.d_id)
             target.id_ = str(TableNumber(dataset_id, target.sequence_id))
+
+        assert 'proto_vid' not in target.data # Check that pro vaules are removed, from warehouse install_table()
+
 
     @staticmethod
     def mangle_name(name, preserve_case = False):
@@ -1327,7 +1330,10 @@ class Partition(Base, LinkableMixin):
                  'table': self.table.name if self.t_vid is not None else None,
                  'grain':self.grain,
                  'segment':self.segment,
-                 'format': self.format if self.format else 'db'
+                 'format': self.format if self.format else 'db',
+                 'count': self.count,
+                 'min_key': self.min_key,
+                 'max_key': self.max_key
                 }
 
         for k in self.data:
@@ -1407,10 +1413,8 @@ class Partition(Base, LinkableMixin):
             dataset = ObjectNumber.parse(target.d_id)
             target.id_ = str(PartitionNumber(dataset, target.sequence_id))
 
-
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
-
 
 class File(Base, SavableMixin, LinkableMixin):
     __tablename__ = 'files'
@@ -1518,6 +1522,8 @@ class File(Base, SavableMixin, LinkableMixin):
     def linked_stores(self): return self._get_link_array('stores', File, File.ref)
     def link_store(self, f): return self._append_link('stores', f.ref)
     def delink_store(self, f): return self._remove_link('stores', f.ref)
+
+
 
 
 

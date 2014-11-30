@@ -8,6 +8,7 @@ PARTITIONS:
 
 example.com-random-random1
 example.com-segmented-example-1
+example.com-combined-combined
 
 VIEW: doubled_int
 

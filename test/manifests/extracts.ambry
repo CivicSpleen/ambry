@@ -34,7 +34,7 @@ SELECT * FROM "view2"
 MVIEW: mview3
 
 SELECT * FROM mview1
-JOIN mview1 ON mview1.id = mview2.id
+JOIN mview2 ON mview1.id = mview2.id
 
 EXTRACT: mview3 AS csv TO mview3.csv
 

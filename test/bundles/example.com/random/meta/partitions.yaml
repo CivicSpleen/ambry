@@ -1,2 +1,11 @@
 -   name: example.com-random-random1
     table: random1
+-   grain: one
+    name: example.com-random-random2-one
+    table: random2
+-   grain: two
+    name: example.com-random-random2-two
+    table: random2
+-   grain: three
+    name: example.com-random-random2-three
+    table: random2

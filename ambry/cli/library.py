@@ -110,6 +110,10 @@ def library_parser(cmd):
 
     sp = asp.add_parser('doc', help='Start the documentation server')
     sp.set_defaults(subcommand='doc')
+    sp.add_argument('-r', '--reindex', default=False, action="store_true",
+                    help='Generate documentation files and index the full-text search')
+    sp.add_argument('-c', '--clean', default=False, action="store_true",
+                    help='When used with --reindex, delete the index and old files first. ')
 
 
     if IN_DEVELOPMENT:
@@ -534,11 +538,23 @@ def library_doc(args, l, rc):
     file_handler.setLevel(logging.WARNING)
     app.logger.addHandler(file_handler)
 
+    if args.reindex:
+
+        l.sync_doc_json(clean=args.clean)
+
+        from ambrydoc import fscache
+        from ambrydoc.search import Search
+        from ambrydoc.cache import DocCache
+
+        print 'Updating the search index'
+
+        s = Search(DocCache(fscache()))
+        s.index(reset=args.clean)
+
+
     print 'Serving documentation for cache: ', cache_dir
 
     app.run(host=config['host'], port=int(config['port']), debug=False)
-
-
 
 
 def library_unknown(args, l, config):

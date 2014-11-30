@@ -173,12 +173,6 @@ class Manifest(object):
     def title(self):
         return self.single_line('title')
 
-    @property
-    def summary(self):
-
-        t = self.tagged_sections('title').pop()
-
-        print t.doc
 
 
 
@@ -191,7 +185,12 @@ class Manifest(object):
             if section.tag == 'doc':
                 return section.content
 
-        return None
+        return {
+            'text' : None,
+            'html' : None,
+            'summary_text' : None,
+            'summary_html' : None
+        }
 
     def doc_for(self, section):
         """Return a doc section that referrs to a named section. """

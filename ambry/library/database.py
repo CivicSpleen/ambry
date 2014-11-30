@@ -805,7 +805,7 @@ class LibraryDb(object):
         if not name:
             name = table.name
 
-        table.installed = name
+        table.installed = 'y'
 
         s.merge(table)
         s.commit()
