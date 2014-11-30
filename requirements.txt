@@ -15,4 +15,5 @@ pygments
 jinja2
 address_parser
 pdfminer
+-e git+https://github.com/CivicKnowledge/ckcache.git#egg=ckache
 
