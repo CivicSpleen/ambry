@@ -139,9 +139,6 @@ class Bundle(object):
 
         return self._partitions
 
-
-
-
     @property
     def repository(self):
         """Return a repository object """
@@ -168,8 +165,6 @@ class Bundle(object):
 
         with self.session as s:
             return self.database.set_config_value(self.dataset.vid, group, key, value, session=s)
-
-
 
 
     def get_value(self, group, key, default=None):
@@ -1450,11 +1445,6 @@ class BuildBundle(Bundle):
 
         self._build_time = time()
 
-        self.update_copy_schema()
-
-        self.log('Copied schema')
-
-        self.update_copy_partitions()
 
         return True
 
@@ -1589,9 +1579,6 @@ class BuildBundle(Bundle):
 
         with self.session:
 
-            #library_name = self.run_args.get('library', 'default') if library_name is None else 'default'
-            #library_name = library_name if library_name else 'default'
-            #library = ambry.library.new_library(self.config.library(library_name), reset=True)
             library = self.library
 
             self.log("Install   {} to  library {}".format(self.identity.name,library.database.dsn))
@@ -1608,7 +1595,9 @@ class BuildBundle(Bundle):
 
                 self.log("Install   {}".format(partition.name))
                 dest = library.put_partition(self, partition)
-                self.log("Installed {}".format(dest[0]))
+                if dest[0]:
+                    self.log("Installed {}".format(dest[0]))
+
 
                 if delete:
                     os.remove(partition.database.path)

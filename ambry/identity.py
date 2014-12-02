@@ -930,8 +930,15 @@ class TableNumber(ObjectNumber):
         
         if not self.revision and dataset.revision:
             self.revision = dataset.revision
-        
-        
+
+
+
+
+    @property
+    def as_dataset(self):
+        """Unlike the .dataset property, this will include the revision"""
+        return self.dataset.rev(self.revision)
+
          
     def __str__(self):        
         return (ObjectNumber.TYPE.TABLE+
@@ -961,8 +968,17 @@ class ColumnNumber(ObjectNumber):
     def dataset(self):
         '''Return the dataset number for ths partition '''
         return self.table.dataset
-         
-         
+
+    @property
+    def as_dataset(self):
+        """Unlike the .dataset property, this will include the revision"""
+        return self.table.dataset.rev(self.revision)
+
+    @property
+    def as_table(self):
+        """Unlike the .dataset property, this will include the revision"""
+        return self.table.rev(self.revision)
+
          
     def __str__(self):        
         return (ObjectNumber.TYPE.COLUMN+

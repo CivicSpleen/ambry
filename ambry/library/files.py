@@ -117,7 +117,11 @@ class Files(object):
 
     def type(self, v):
         self._check_query()
-        self._query = self._query.filter(File.type_ == v)
+        if isinstance(v, basestring):
+            self._query = self._query.filter(File.type_ == v)
+        else:
+            self._query = self._query.filter(File.type_.in_(v))
+
         return self
 
     def group(self, v):

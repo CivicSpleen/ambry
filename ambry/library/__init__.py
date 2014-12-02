@@ -256,11 +256,14 @@ class Library(object):
 
         self.database.install_partition(bundle, partition, commit = commit)
 
+        if partition.ref:
+           return False, False
+
         installed = self.files.install_partition_file(partition, self.cache, commit = commit, state = 'new')
 
-        # Ref partitions use the file of an earlier version, so there is no find to install
-        if not partition.ref:
-            self.cache.put(partition.database.path, partition.identity.cache_key)
+        # Ref partitions use the file of an earlier version, so there is no FILE to install
+
+        self.cache.put(partition.database.path, partition.identity.cache_key)
 
         return self.cache.path(partition.identity.cache_key), installed
 
@@ -1212,20 +1215,22 @@ class Library(object):
 
         self.logger.info("Caching json to {}".format(dc.cache))
 
-        ##
-        ## The Library
-
-        dc.put_library(self, force = clean)
 
         ##
         # Each of the bundles and schemas
 
+        tables = dc.get_tables()
+
+        if not tables:
+            tables = {}
+
+        processed_bundles = 0
         for vid in self.list():
 
             ident = self.resolve(vid)
 
             if not ident:
-                continue  # resolve resolve does not return source bundles.
+                continue  #  resolve does not return source bundles.
 
             try:
                 b = self.get(vid)
@@ -1233,6 +1238,7 @@ class Library(object):
                 if not dc.get_bundle(vid) or clean:
 
                     self.logger.info("Processing json for {}".format(vid))
+                    processed_bundles += 1
 
                     dc.put_bundle(b, force = clean)
                     dc.put_schema(b, force = clean)
@@ -1240,14 +1246,20 @@ class Library(object):
                     for t in b.schema.tables:
                         dc.put_table(t, force = clean)
 
+                        tables[t.vid] = t.dict
+
             except Exception as e:
                 self.logger.error("Error on {}: {}".format(vid, e))
                 raise
+
+
+        dc.put_tables(tables)
 
         ##
         ## Manifests
 
         for f, m in self.manifests:
+
             dc.put_manifest(m, f, force=clean)
 
         ##
@@ -1262,6 +1274,13 @@ class Library(object):
             except Exception  as e:
                 self.logger.error("Failed to document warehouse '{}': {}".format(s.path, e))
                 raise
+
+        ##
+        ## The Library
+        ## The 'or True' part forces rebuilding the index, until we can do that on demand,
+        ## we properly check for updated bundles, but no manifests or stores.
+
+        dc.put_library(self, force=(clean or (processed_bundles > 0) or True))
 
 
     @property

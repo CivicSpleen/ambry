@@ -527,6 +527,9 @@ class Column(Base):
         return self.types[self.datatype][1]
  
     def python_cast(self,v):
+        """Cast a value to the type of the column. Primarily used to check that a value is valid; it will
+        throw an exception otherwise"""
+
         if self.type_is_time():
             import dateutil.parser
             dt = dateutil.parser.parse(v)
@@ -535,8 +538,11 @@ class Column(Base):
                 dt = dt.time()
             if not isinstance(dt, self.python_type):
                 raise TypeError('{} was parsed to {}, expected {}'.format(v, type(dt), self.python_type))
-               
+
+            return dt
         else:
+            # This isn't calling the python_type method -- it's getting a python type, then instantialting it,
+            # such as "int(v)"
             return self.python_type(v)
 
     @property
@@ -551,6 +557,7 @@ class Column(Base):
         except KeyError:
             print '!!!', self.datatype, self.types
             raise
+
     @classmethod
     def convert_numpy_type(cls,dtype):
         '''Convert a numpy dtype into a Column datatype. Only handles common types.
@@ -566,7 +573,6 @@ class Column(Base):
 
         }
 
-
         t =  m.get(dtype.name, None)
 
         if not t:
@@ -574,12 +580,26 @@ class Column(Base):
 
         return t
 
+    @classmethod
+    def convert_python_type(cls, py_type_in):
+
+        type_map = {
+            unicode : str
+        }
+
+        for col_type, (sla_type, py_type, sql_type) in cls.types.items():
+            if py_type == type_map.get(py_type_in, py_type_in):
+                return col_type
+
+        return None
+
+
     @property
     def foreign_key(self):
         return self.fk_vid
 
 
-        
+
     def __init__(self,table, **kwargs):
 
         self.sequence_id = kwargs.get("sequence_id",len(table.columns)+1) 
@@ -834,6 +854,17 @@ Columns:
                     **c.dict))
 
         return "<table>\n" + "\n".join(rows) + "\n</table>"
+
+
+    def vid_select(self):
+        """ Return a SQL fragment to translate the column names to vids. This allows the identity of the column
+        to propagate through views. """
+
+        cols = []
+
+        return ",".join( ["{} AS {}".format(c.name, c.vid) for c in self.columns] )
+
+
 
     @orm.reconstructor
     def init_on_load(self):

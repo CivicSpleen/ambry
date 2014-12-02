@@ -114,6 +114,8 @@ def library_parser(cmd):
                     help='Generate documentation files and index the full-text search')
     sp.add_argument('-c', '--clean', default=False, action="store_true",
                     help='When used with --reindex, delete the index and old files first. ')
+    sp.add_argument('-d', '--debug', default=False, action="store_true",
+                    help='Debug mode ')
 
 
     if IN_DEVELOPMENT:
@@ -410,7 +412,7 @@ def library_files(args, l, config):
 
     from ..identity import LocationRef
 
-    files_ = l.files.query.state(args.file_state).type(LocationRef.LOCATION.LIBRARY).all
+    files_ = l.files.query.state(args.file_state).type((LocationRef.LOCATION.LIBRARY,LocationRef.LOCATION.PARTITION)).all
 
     if len(files_):
         prt("-- Display {} files",args.file_state)
@@ -516,23 +518,19 @@ def library_sync(args, l, config):
 
 def library_doc(args, l, rc):
 
-    from ambrydoc import app, configure_application
+    from ambrydoc import app, configure_application, setup_logging
     import ambrydoc.views as views
-    import thread
-    import ambry
+
+    import random
+    import logging
+    from logging import FileHandler
+    import webbrowser
+
+    port = 45235 + random.randint(1, 5000)
 
     cache_dir = l.doc_cache.cache.path('',missing_ok=True)
 
-    config = configure_application(dict(port = 5249, cache = cache_dir))
-
-    def open_browser():
-        import webbrowser
-        webbrowser.open("http://localhost:{}/".format(config['port']))
-
-    open_browser()
-
-    import logging
-    from logging import FileHandler
+    config = configure_application(dict(port = port, cache = cache_dir))
 
     file_handler = FileHandler(os.path.join(cache_dir, "web.log"))
     file_handler.setLevel(logging.WARNING)
@@ -554,7 +552,20 @@ def library_doc(args, l, rc):
 
     print 'Serving documentation for cache: ', cache_dir
 
-    app.run(host=config['host'], port=int(config['port']), debug=False)
+    def run_app():
+        app.run(host=config['host'], port=int(config['port']), debug=args.debug)
+
+    #t1 = threading.Thread(target=run_app)
+    #t1.start()
+
+    webbrowser.open("http://localhost:{}/".format(config['port']))
+
+    #setup_logging()
+
+    run_app()
+
+    #t1.join()
+
 
 
 def library_unknown(args, l, config):

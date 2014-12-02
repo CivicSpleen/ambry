@@ -406,7 +406,6 @@ class WarehouseInterface(object):
             # Compute the installation name, and an alial that does not have the version number
             dest_table_name, alias = self.augmented_table_name(p.identity, source_table_name)
 
-
             if isinstance(source_table_name, (list, tuple)):
                 source_table_name, where = source_table_name
             else:
@@ -445,8 +444,6 @@ class WarehouseInterface(object):
                 raise
 
         self.library.database.mark_partition_installed(p_vid)
-
-
 
         return tables, p
 
@@ -629,7 +626,12 @@ class WarehouseInterface(object):
         Perform operations after the manifest install, such as creating table views for
         all of the installed tables.
 
+        For each table, it also installs a vid-based view, which replaces all of the column
+        names with their vid. This allows for tracing columns through views, linking
+        them back to their source
+
         """
+        from ..orm import Column
 
 
         for t in self.tables:
@@ -638,30 +640,47 @@ class WarehouseInterface(object):
                 ## Create table aliases for the vid of the tables.
                 installed_tables = [ it for it in self.library.derived_tables(t.vid) if it.type == 'installed' ]
 
+                # col_names = t.vid_select() # Get to this later ...
+
+                col_names = '*'
+
                 if len(installed_tables) == 1:
-                    self.install_table_alias(t, installed_tables[0].name, t.vid)
+                    sql = "SELECT {} FROM {} ".format(col_names, installed_tables[0].name)
 
                 else:
 
-                    sql = ' UNION '.join(' SELECT * FROM {} '.format(table.name)
+                    sql = "SELECT {} FROM ({}) ".format(
+                            col_names,
+                            ' UNION '.join(' SELECT * FROM {} '.format(table.name)
                                          for table in installed_tables )
+                    )
 
-                    self.install_view(t.vid, sql)
+
+
+                self.install_view(t.vid, sql)
 
                 self.install_table(t.vid, data=dict(type='alias', proto_vid=t.vid ))
+
+
 
         s = self.library.database.session
 
         for t in self.tables:
             if  t.type == 'table' and t.installed:
-                print t.vid, t.name
+
                 for dt in sorted(self.library.derived_tables(t.vid), key=lambda x:x.name):
-                    print '    ', dt.name
+
                     t.add_installed_name(dt.name)
                     s.add(t)
 
         s.commit()
 
+        for t in [ t for t in self.tables if t.type in ('view','mview') ]:
+
+            sql = "SELECT * FROM {} LIMIT 1".format(t.name)
+
+            for row in self.database.connection.execute(sql):
+                print [ (k,Column.convert_python_type(type(v))) for k,v in row.items()]
 
     def install_material_view(self, name, sql, clean = False, data=None):
         raise NotImplementedError(type(self))
@@ -974,7 +993,6 @@ class WarehouseInterface(object):
 
         if identity.grain:
             alias = alias + '_' + identity.grain
-
 
 
         return name, alias
