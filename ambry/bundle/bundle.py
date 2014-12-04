@@ -883,15 +883,19 @@ class BuildBundle(Bundle):
             raise ConfigurationError("No key in sources for '{}' ".format(name))
 
 
-
         if '.zip' in v.url:
-            if 'file' in v:
+            if 'file' in v and v['file']:
                 unzip = re.compile(v.file)
             else:
                 unzip = True
 
-            for fn in self.filesystem.download(name, unzip=unzip):
-                return  fn
+            r = self.filesystem.download(name, unzip=unzip)
+
+            if isinstance(r, basestring):
+                return r
+            else:
+                for fn in r:
+                    return  fn
 
         else:
             return self.filesystem.download(name)

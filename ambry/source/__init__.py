@@ -316,15 +316,23 @@ class SourceTree(object):
         return f.path
 
 
-    def bundle(self, path):
+    def bundle(self, path, buildbundle_ok = False):
         '''Return an  Bundle object, using the class defined in the bundle source'''
         if path[0] != '/':
             root = os.path.join(self.base_dir, path)
         else:
             root = path
 
-        bundle_class = load_bundle(root)
-        bundle = bundle_class(root)
+        try:
+            bundle_class = load_bundle(root)
+            bundle = bundle_class(root)
+        except:
+            if buildbundle_ok :
+                from  ..bundle import BuildBundle
+                bundle = BuildBundle(root)
+            else:
+                raise
+
         return bundle
 
 

@@ -34,7 +34,6 @@ def get_logger(name, file_name = None, stream = None, template=None, clear=False
     if clear:
         logger.handlers = []
 
-
     # To list all loggers: logging.Logger.manager.loggerDict
 
     if name not in logger_init:
@@ -989,8 +988,8 @@ def _log_rate(output_f,d, message=None):
         
         d[1] = time.time()
         
-        # If the print_rate was specified, adjuect the number of records to
-        # aaproximate that rate. 
+        # If the print_rate was specified, adjust the number of records to
+        # aproximate that rate.
         if d[5]:
             target_rate =  rate * d[5]
             d[3] = int((target_rate + d[3]) / 2)

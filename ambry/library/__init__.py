@@ -28,7 +28,6 @@ def _new_library(config):
 
     cache = new_cache(config['filesystem'])
 
-
     database = LibraryDb(**dict(config['database']))
 
 
@@ -108,7 +107,7 @@ def new_library(config, reset=False):
     if reset:
         libraries = {}
 
-    name = config['_name']
+    name = config.get('_name', None)
 
     if name is None:
         name = 'default'
@@ -1133,7 +1132,7 @@ class Library(object):
             pass
 
         try:
-            bundle = self.source.bundle(path)
+            bundle = self.source.bundle(path, buildbundle_ok = True)
 
             self.files.install_bundle_source(bundle, self.source, commit=True)
             bundle.close()
@@ -1215,7 +1214,6 @@ class Library(object):
 
         self.logger.info("Caching json to {}".format(dc.cache))
 
-
         ##
         # Each of the bundles and schemas
 
@@ -1242,16 +1240,18 @@ class Library(object):
 
                     dc.put_bundle(b, force = clean)
                     dc.put_schema(b, force = clean)
+                    dc.put_schemacsv(b, force=clean)
 
                     for t in b.schema.tables:
                         dc.put_table(t, force = clean)
 
                         tables[t.vid] = t.dict
 
+
+
             except Exception as e:
                 self.logger.error("Error on {}: {}".format(vid, e))
                 raise
-
 
         dc.put_tables(tables)
 
@@ -1275,7 +1275,6 @@ class Library(object):
                 self.logger.error("Failed to document warehouse '{}': {}".format(s.path, e))
                 raise
 
-        ##
         ## The Library
         ## The 'or True' part forces rebuilding the index, until we can do that on demand,
         ## we properly check for updated bundles, but no manifests or stores.

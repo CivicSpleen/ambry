@@ -967,7 +967,6 @@ class Schema(object):
                     if not col.description and table.description:
                         col.description = table.description
 
-
                 else:
                     for k in data_fields:
                         row['d_'+k]=col.data.get(k,None)
@@ -986,20 +985,20 @@ class Schema(object):
                     if col.proto_vid:
                         row['proto_vid'] = col.proto_vid
 
-
                 if first:
                     first = False
                     yield row.keys()
 
                 yield row
-  
              
     def as_csv(self, f = None):
         import unicodecsv as csv
         import sys
-        
+        from StringIO import StringIO
+
         if f is None:
-            f = sys.stdout
+
+            f = StringIO()
 
         g = self._dump_gen()
         
@@ -1022,6 +1021,8 @@ class Schema(object):
         
             last_table = row['table']
 
+        if isinstance(f, StringIO):
+            return f.getvalue()
              
     def as_struct(self):
 
@@ -1455,6 +1456,7 @@ class {name}(Base):
             # Convert lists to dicts
             if isinstance(row, dict):
                 key = v
+
                 i =  memo['name_index'][key]
                 v = row[key]
 
@@ -1587,7 +1589,7 @@ class {name}(Base):
             try:
                 memo = self.intuit(row, memo)
             except Exception as e:
-                self.bundle.error("Error updating row {} of {}: {}\n{}".format(i, table_name, e, row))
+                self.bundle.error("Error updating row {} of {}: {}\nrow = {}".format(i, table_name, e, row))
                 continue
 
             if logger:

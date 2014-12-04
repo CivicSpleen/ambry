@@ -764,8 +764,6 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
 
         self.init_on_load()
 
-
-
     @property
     def dict(self):
         d =  {k:v for k,v in self.__dict__.items() if k in
@@ -775,6 +773,12 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
         for k in self.data:
             assert k not in d, "Value '{}' is a table field and should not be in data ".format(k)
             d[k] = self.data[k]
+
+        d['is_geo'] = False
+
+        for c in self.columns:
+            if c in ('geometry', 'wkt', 'wkb', 'lat'):
+                d['is_geo'] = True
 
         return d
 

@@ -440,7 +440,10 @@ def bundle_run(args, b, st, rc):
         raise TypeError("Got object for name '{}', but it isn't a function".format(args.method))
 
 
-    return f(*args.args)
+    r =  f(*args.args)
+
+    print "RETURN: ", r
+
 
 def bundle_submit(args, b, st, rc):
 

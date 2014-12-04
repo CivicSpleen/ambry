@@ -186,7 +186,7 @@ class WarehouseInterface(object):
         except AttributeError:
             return None
 
-    configurable = ('uid','title','name', 'summary','cache_path')
+    configurable = ('uid','title','name', 'summary','cache_path', 'url')
 
     @property
     def uid(self):
@@ -251,8 +251,9 @@ class WarehouseInterface(object):
         """Url of the management application for the warehouse. """
         return self._meta_get('url')
 
-    @name.setter
+    @url.setter
     def url(self, v):
+
         return self._meta_set('url', v)
 
     @property
@@ -680,7 +681,8 @@ class WarehouseInterface(object):
             sql = "SELECT * FROM {} LIMIT 1".format(t.name)
 
             for row in self.database.connection.execute(sql):
-                print [ (k,Column.convert_python_type(type(v))) for k,v in row.items()]
+                pass
+                #print [ (k,Column.convert_python_type(type(v))) for k,v in row.items()]
 
     def install_material_view(self, name, sql, clean = False, data=None):
         raise NotImplementedError(type(self))
