@@ -970,7 +970,11 @@ class BuildBundle(Bundle):
 
     def progress(self, message):
         """print message to terminal, in place"""
-        print 'PRG: ', message
+        import sys
+
+        sys.stdout.write("\033[K{}\r".format(message))
+        sys.stdout.flush()
+
 
     def ptick(self, message):
         """Writes a tick to the stdout, without a space or newline"""
