@@ -15,6 +15,8 @@ Some of the important features of an Amby Warehouse include:
 - Users can download tables and views in a wide variety of file formats, including CSV, KML, JSON, GeoJSON and others. 
 - Warehouse tables can be exported to NoSQL databases like MongoDB. 
 
+This section references concepts that are described in detail in :ref:`Concepts <about_concepts>`
+
 Loading Data into a Warehouse
 *****************************
 
