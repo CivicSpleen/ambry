@@ -51,7 +51,8 @@ class SourceTree(object):
             try:
                 bundle = self.bundle(file_.path)
             except ImportError:
-                raise Exception("Failed to load bundle from {}".format(file_.path))
+                self.logger.info("Failed to load bundle from {}".format(file_.path))
+                continue
 
 
             if ck not in datasets:

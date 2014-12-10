@@ -35,3 +35,4 @@ example4,18,county,,,INTEGER,,County (FIPS),c00109005,cfY0NJscai0400i
 example4,19,countyns,,,INTEGER,,County (ANSI),c00109006,cfY0NJscai0400j
 example4,20,countycc,,,VARCHAR,,County class code,c00109007,cfY0NJscai0400k
 example4,21,countysc,,,INTEGER,,County Size Code,c00109008,cfY0NJscai0400l
+example4,33,areawater,,,REAL,,Water area in m^2,c0010400d,cfY0NJscai0400x

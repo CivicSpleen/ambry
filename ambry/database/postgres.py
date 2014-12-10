@@ -25,6 +25,10 @@ class PostgresDatabase(RelationalDatabase):
         return False  # signal didn't create
 
 
+    def clean(self):
+        self.drop()
+        self.create()
+
     def drop(self):
         """Uses DROP ... CASCADE to drop tables"""
 

@@ -80,7 +80,7 @@ class RelationalWarehouse(WarehouseInterface):
 
         return r
 
-    def load_insert(self, partition, source_table_name, dest_table_name):
+    def load_insert(self, partition, source_table_name, dest_table_name, where = None):
         from ..database.inserter import ValueInserter
         from sqlalchemy import Table, MetaData
 
@@ -113,9 +113,12 @@ class RelationalWarehouse(WarehouseInterface):
         if replace:
             insert_statement = insert_statement.prefix_with('OR REPLACE')
 
+        if where:
+            select_statement += " WHERE "+where
+
         cache = []
 
-        # Psycopg executemany function doesn't use the mulitle insert syntax of Postgres,
+        # Psycopg executemany function doesn't use the multiple insert syntax of Postgres,
         # so it is fantastically slow. So, we have to do it ourselves.
         # Using multiple row inserts is more than 100 times faster.
         import re
@@ -140,6 +143,7 @@ class RelationalWarehouse(WarehouseInterface):
                     mogd_values.append("("+vals)
 
                 sql = inst+" VALUES "+','.join(mogd_values)
+
 
                 cur.execute(sql)
 

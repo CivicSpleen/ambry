@@ -194,18 +194,21 @@ class Bundle(object):
                 self.set_value('rdep', key, ident.dict)
 
     def sub_template(self, t):
-        '''Substitute some betadata values into a format() template '''
+        '''Substitute some data values into a format() template '''
         d = {}
         for r in self.metadata.rows:
 
-            if r[0][0] in ('about', 'identity', 'names', 'config'):
+            if r[0][0] in ('about', 'identity', 'names', 'config', 'external_documentation'):
                 k = '_'.join([str(x) for x in r[0] if x])
                 d[k] = r[1]
 
         try:
+
             return t.format(**d)
         except KeyError as e:
+            import json
             self.error("Failed to substitute template in {}. Key Error: {}".format(self.identity, e))
+            self.error("Available keys are:\n {}".format(json.dumps(d, indent=4)))
             return t
 
     @property
@@ -618,10 +621,12 @@ class BuildBundle(Bundle):
     SCHEMA_FILE = 'schema.csv'
     SCHEMA_REVISED_FILE = 'schema-revised.csv'
     SCHEMA_OLD_FILE = 'schema-old.csv'
+    CODE_FILE = 'codes.csv'
 
     README_FILE = 'README.md'
     README_FILE_TEMPLATE = 'meta/README.md.template'
     DOC_FILE = 'meta/documentation.md'
+    DOC_HTML= 'meta/documentation.html'
 
     def __init__(self, bundle_dir=None):
         """
@@ -819,15 +824,17 @@ class BuildBundle(Bundle):
             except IOError:
                 return ''
 
-        self.rewrite_readme()
-
         # The main doc is subbed on the fly, but the README has to be a real
         # file, since it is displayed in github
+        self.rewrite_readme()
+
+        self.write_doc_html()
+
+
         md.documentation.readme = read_file(self.README_FILE)
         md.documentation.main = self.sub_template(read_file(self.DOC_FILE))
 
         md.write_to_dir(write_all=True)
-
 
         # Reload some of the values from bundle.yaml into the database
         # configuration
@@ -853,6 +860,25 @@ class BuildBundle(Bundle):
                 rmf = self.filesystem.path(self.README_FILE)
                 with open(self.filesystem.path(rmf),'w') as fo:
                     fo.write(self.sub_template(fi.read()))
+
+    def write_doc_html(self):
+        import markdown
+        import ambry.support as sdir
+
+        html_template_file =  os.path.join(os.path.dirname(sdir.__file__), 'documentation.html')
+
+        with open(html_template_file) as fo:
+            html_template = fo.read()
+
+        df = self.filesystem.path(self.DOC_FILE)
+        hdf = self.filesystem.path(self.DOC_HTML)
+
+        if os.path.exists(df):
+            with open(df) as dfo:
+
+                with open(self.filesystem.path(hdf), 'w') as hdfo:
+                    html = html_template.format(content=markdown.markdown(self.sub_template(dfo.read())))
+                    hdfo.write(html)
 
     def sources(self):
         """

@@ -374,8 +374,7 @@ class BundleFilesystem(Filesystem):
             # download that through the normal process.
             from cache import new_cache
 
-            s3cache = new_cache("s3://{}".format(parsed.netloc.strip('/')),
-                                run_config = self.bundle.config)
+            s3cache = new_cache("s3://{}".format(parsed.netloc.strip('/')))
 
             url = s3cache.path(urllib.unquote_plus(parsed.path.strip('/')))
             parsed = urlparse.urlparse(str(url))

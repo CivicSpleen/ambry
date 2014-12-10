@@ -4,6 +4,7 @@ dataset, partitions, configuration, tables and columns.
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
+__docformat__ = 'restructuredtext en'
 import datetime
 import sqlalchemy
 from sqlalchemy import orm
@@ -15,7 +16,7 @@ from sqlalchemy.types import TypeDecorator, TEXT, PickleType
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.exc import OperationalError
-from util import Constant
+from util import Constant, memoize
 from identity import LocationRef
 
 from sqlalchemy.sql import text
@@ -665,15 +666,53 @@ class Column(Base):
 
     @staticmethod
     def mangle_name(name):
+        """
+        Mangles a column name to a standard form, remoing illegal characters.
+
+        :param name:
+        :return:
+        """
         import re
         try:
             return re.sub('[^\w_]','_',name).lower()
         except TypeError:
             raise TypeError('Trying to mangle name with invalid type of: '+str(type(name)))
 
+    @property
+    @memoize
+    def codes(self):
+        return self._codes # Caches the query, I hope ...
+
+    def add_code(self, key, value, description=None, data = None):
+        """
+
+        :param key: The code value that appears in the datasets, either a string or an int
+        :param value: The string value the key is mapped to
+        :param description:  A more detailed description of the code
+        :param data: A data dict to add to the ORM record
+        :return: the code record
+        """
+        from  sqlalchemy.orm.session import Session
+
+        # Ignore codes we already have, but will not catch codes added earlier t this same
+        # object, since the code are cached
+        for cd in self.codes:
+            if cd.key == str(key):
+                return cd
+
+        cd = Code(c_vid = self.vid, t_vid = self.t_vid,
+                  key = str(key),
+                  ikey = key if isinstance(key, int) else None,
+                  value = value,
+                  description = description, data = data)
+
+        Session.object_session(self).add(cd)
+
+        return cd
+
     @staticmethod
     def before_insert(mapper, conn, target):
-        '''event.listen method for Sqlalchemy to set the seqience_id for this  
+        '''event.listen method for Sqlalchemy to set the seqience_id for this
         object and create an ObjectNumber value for the id_'''
         
         if target.sequence_id is None:
@@ -770,15 +809,18 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
                 ['id_','vid', 'd_id', 'd_vid', 'sequence_id', 'name', 'altname', 'vname', 'description',
                  'universe', 'keywords', 'installed', 'proto_vid', 'type']}
 
-        for k in self.data:
-            assert k not in d, "Value '{}' is a table field and should not be in data ".format(k)
-            d[k] = self.data[k]
+        if self.data:
+            for k in self.data:
+                assert k not in d, "Value '{}' is a table field and should not be in data ".format(k)
+                d[k] = self.data[k]
 
         d['is_geo'] = False
 
         for c in self.columns:
             if c in ('geometry', 'wkt', 'wkb', 'lat'):
                 d['is_geo'] = True
+
+
 
         return d
 
@@ -792,6 +834,8 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
         tdc = {}
         for c in self.columns:
             tdc[c.id_] = c.nonull_dict
+            tdc[c.id_]['codes'] = { cd.key:cd.dict for cd in c.codes}
+
 
         td = self.nonull_dict
         td['columns'] = tdc
@@ -931,7 +975,8 @@ Columns:
         from sqlalchemy.orm.exc import NoResultFound
 
         s = sqlalchemy.orm.session.Session.object_session(self)
-        
+
+
         name = Column.mangle_name(name)
 
         try:
@@ -1469,8 +1514,6 @@ class File(Base, SavableMixin, LinkableMixin):
 
     data = SAColumn('f_data',MutationDict.as_mutable(JSONEncodedObj))
 
-    content = SAColumn('f_content', Binary)
-
     __table_args__ = (
         UniqueConstraint('f_path', 'f_type', 'f_group', name='u_type_path'),
         UniqueConstraint('f_ref', 'f_type', 'f_group', name='u_ref_path'),
@@ -1500,18 +1543,19 @@ class File(Base, SavableMixin, LinkableMixin):
     def update(self, f):
         """Copy another files properties into this one. """
 
-        for k in self.dict.keys():
-            if k in ['oid']:
+        for p in self.__mapper__.attrs:
+
+            if p.key == 'oid':
                 continue
             try:
-                setattr(self, k, getattr(f, k))
+                setattr(self, p.key, getattr(f, p.key))
 
             except AttributeError:
                 # The dict() method copies data property values into the main dict,
                 # and these don't have associated class properties.
                 continue
 
-        self.content = f.content
+
 
     @property
     def dict(self):
@@ -1557,6 +1601,76 @@ class File(Base, SavableMixin, LinkableMixin):
     def linked_stores(self): return self._get_link_array('stores', File, File.ref)
     def link_store(self, f): return self._append_link('stores', f.ref)
     def delink_store(self, f): return self._remove_link('stores', f.ref)
+
+class Code(Base, SavableMixin, LinkableMixin):
+    """Code entries for variables"""
+    __tablename__ = 'codes'
+
+    oid = SAColumn('cd_id',Integer, primary_key=True, nullable=False)
+
+    t_vid = SAColumn('cd_t_vid', String(20), ForeignKey('tables.t_vid'), index=True)
+    table = relationship('Table', backref='codes', lazy='subquery')
+
+    c_vid = SAColumn('cd_c_vid', String(20), ForeignKey('columns.c_vid'), index=True)
+    column = relationship('Column', backref='_codes', lazy='subquery')
+
+    key = SAColumn('cd_skey', String(20), nullable=False, index=True) # String version of the key, the value in the dataset
+    ikey = SAColumn('cd_ikey', Integer, index=True) # Set only if the key is actually an integer
+
+    value = SAColumn('cd_value',Text, nullable=False) # The value the key maps to
+    description = SAColumn('f_description', Text, index=True)
+
+    data = SAColumn('co_data',MutationDict.as_mutable(JSONEncodedObj))
+
+    __table_args__ = (
+        UniqueConstraint('cd_c_vid', 'cd_skey', name='u_code_col_key'),
+    )
+
+    def __init__(self,**kwargs):
+
+        for p in self.__mapper__.attrs:
+            if p.key in kwargs:
+                setattr(self, p.key, kwargs[p.key])
+                del kwargs[p.key]
+
+        if self.data:
+            self.data.update(kwargs)
+
+    def __repr__(self):
+        return "<code: {}->{} >".format(self.key, self.value)
+
+    def update(self, f):
+        """Copy another files properties into this one. """
+
+        for p in self.__mapper__.attrs:
+
+            if p.key == 'oid':
+                continue
+            try:
+                setattr(self, p.key, getattr(f, p.key))
+
+            except AttributeError:
+                # The dict() method copies data property values into the main dict,
+                # and these don't have associated class properties.
+                continue
+
+    @property
+    def dict(self):
+
+        d = { p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in  ('data','column','table') }
+
+        if self.data:
+            for k in self.data:
+                assert k not in d
+                d[k] = self.data[k]
+
+        return d
+
+    @property
+    def insertable_dict(self):
+        return { ('cd_'+k).strip('_'):v for k,v in self.dict.items()}
+
+
 
 
 

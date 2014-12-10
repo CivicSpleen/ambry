@@ -62,6 +62,7 @@ def warehouse():
 
     base_dir = os.path.join(rc.filesystem('warehouse')['dir'], 'reset_server')
 
+    # db_url is a module variable.
     config = database_config(db_url, base_dir=base_dir)
 
     return new_warehouse(config, library, logger=get_logger(__name__))

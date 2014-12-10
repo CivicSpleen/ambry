@@ -151,7 +151,7 @@ class SqliteAttachmentMixin(object):
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
-    SCHEMA_VERSION = 21
+    SCHEMA_VERSION = 22
 
     _lock = None
 
@@ -665,9 +665,9 @@ def _on_connect_bundle(dbapi_con, con_record):
 
 def _on_connect_update_sqlite_schema(conn, con_record):
     '''Perform on-the-fly schema updates based on the user version'''
+    from sqlalchemy.exc import OperationalError
 
     version = conn.execute('PRAGMA user_version').fetchone()[0]
-
     if version:
         version = int(version)
 
@@ -735,7 +735,10 @@ def _on_connect_update_sqlite_schema(conn, con_record):
             except Exception as e:
                 pass
 
+        if version < 22:
+            from ..orm import Code
 
+            Code.__table__.create(bind=conn.engine)
 
     if version < SqliteDatabase.SCHEMA_VERSION:
         conn.execute('PRAGMA user_version = {}'.format(SqliteDatabase.SCHEMA_VERSION))

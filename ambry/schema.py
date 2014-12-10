@@ -210,8 +210,6 @@ class Schema(object):
         # Make sure that the columnumber is monotonically increasing
         # when it is specified, and is one more than the last one if not.
 
-
-
         if not table.name in self.max_col_id:
             if len(table.columns) == 0:
                 self.max_col_id[table.name] = 0
@@ -248,6 +246,7 @@ class Schema(object):
         c =  table.add_column(name, **kwargs)
 
         return c
+
 
     def remove_table(self, table_name):
         from orm import Table, Column
@@ -990,10 +989,11 @@ class Schema(object):
                     yield row.keys()
 
                 yield row
-             
+
+
+
     def as_csv(self, f = None):
         import unicodecsv as csv
-        import sys
         from StringIO import StringIO
 
         if f is None:
@@ -1107,9 +1107,7 @@ class Schema(object):
             #out += lines
 
         return out
-        
 
-                
     def as_orm(self):
         """Return a string that holds the schema represented as Sqlalchemy
         classess"""
@@ -1212,6 +1210,30 @@ class {name}(Base):
             
         with open(os.path.join(lib_dir,'orm.py'),'w') as f:
             f.write(self.as_orm())
+
+    def write_codes(self):
+
+        import unicodecsv as csv
+
+        header = ['table','column','key','value','description']
+
+        with open(self.bundle.filesystem.path('meta',self.bundle.CODE_FILE), 'w') as f:
+
+            w = csv.writer(f, encoding='utf-8')
+            w.writerow(header)
+            for t in self.tables:
+                for c in t.columns:
+                    for cd in c._codes:
+                        row = [
+                            t.name,
+                            c.name,
+                            cd.key,
+                            cd.value,
+                            cd.description
+                        ]
+
+                        w.writerow(row)
+
 
     @property
     def dict(self):
@@ -1633,53 +1655,3 @@ class {name}(Base):
 
             return self.update(table_name, itr(), header=header)
 
-
-
-    def add_code_table(self, source_table_name, source_column_name):
-        '''Add a table to the schema for codes. The codes are integers that are associated 
-        with strings, usually to indicate exceptional conditions in an integer field. '''
-        import json
-    
-        if self._code_table_cache == None:
-            self._code_table_cache = set()
-            
-            # Load the tables cache from data attached to 
-            # the tables in the schema. 
-            
-            for table in self.tables:
-                
-                try:
-                    self._code_table_cache.add(tuple(json.loads(table.data['code_key'])))
-                except KeyError:
-                    continue
-                except ValueError: # Json decode error
-                    continue
-            
-        
-        key = (source_table_name, source_column_name)
-        
-        if key in self._code_table_cache:
-            return
-        
-        self._code_table_cache.add(key)
-
-        
-        name = "{}_{}_codes".format(source_table_name, source_column_name)
-        
-        self.bundle.log("Adding code table: {}".format(name))
-        
-        with self.bundle.session as s:
-
-            # This has to come before the add_table, or the self.col_sequence values get screwed up
-            table = self.table(source_table_name)
-            self.add_column(table, source_column_name+'_code',
-                             datatype = 'varchar',
-                             description='Non-integer code value for column {}'.format(source_column_name))
-
-
-            t = self.add_table(name,
-                               data={'code_key':json.dumps([source_table_name, source_column_name])},
-                               description='Non-integer code value for column {}'.format(source_column_name))
-            self.add_column(t, 'id', datatype='integer', is_primary_key = True)
-            self.add_column(t, 'code', datatype='varchar', description='Value of code')
-            self.add_column(t, 'description', datatype='varchar', description='Code description')

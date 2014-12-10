@@ -218,7 +218,7 @@ def warehouse_new(args, l, config):
     try:
         dbc = database_config(term)
     except ValueError: #Unknow schema, usually
-        dbc  = config.warehouse(term).to_dict()
+        dbc  = config.warehouse(term)
 
     w =  _warehouse_new_from_dbc(dbc,l)
 

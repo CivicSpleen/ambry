@@ -1152,6 +1152,10 @@ class Library(object):
                                           summary=w.summary,
                                           cache = w.cache_path)
 
+        if not w.uid:
+            w.uid = store.ref
+
+
         s = self.database.session
 
         s.commit()
@@ -1196,11 +1200,8 @@ class Library(object):
 
             self.files.install_extract(f.path, f.source_url, f.data)
 
-
-
-
-
         s.commit()
+
 
         return store
 
@@ -1268,6 +1269,9 @@ class Library(object):
         for s in self.stores:
 
             w = new_warehouse(database_config(s.path), self, logger=self.logger)
+
+            if not w.uid:
+                raise Exception("No uid for "+str(s.ref))
 
             try:
                 dc.put_store(w, force=clean)

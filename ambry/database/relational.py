@@ -536,12 +536,12 @@ class RelationalBundleDatabaseMixin(object):
 
     def _create(self):
         """Create the database from the base SQL"""
-        from ambry.orm import  Dataset, Partition, Table, Column, File
+        from ambry.orm import  Dataset, Partition, Table, Column, File, Code
         from ..identity import Identity
         from sqlalchemy.orm import sessionmaker
 
 
-        tables = [ Dataset, Partition, Table, Column, File ]
+        tables = [ Dataset, Partition, Table, Column, File, Code ]
 
         for table in tables:
             table.__table__.create(bind=self.engine)

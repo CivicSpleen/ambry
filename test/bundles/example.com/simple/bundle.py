@@ -3,7 +3,6 @@
 
 from  ambry.bundle import BuildBundle
  
-
 class Bundle(BuildBundle):
     ''' '''
  
@@ -34,4 +33,21 @@ class Bundle(BuildBundle):
                 lr()
         
         return True
+        
+    def build_add_codes(self):
+        
+        code_key = 0
+        
+        for tn in ('example2', 'example3'):
+            t  = self.schema.table(tn)
+        
+            with self.session:
+                for c in t.columns:
+                    if c.datatype in (c.DATATYPE_INTEGER, c.DATATYPE_FLOAT) and c.name != 'id':
+                        code_key += 1
+                        cd = c.add_code(code_key, 'code val {}'.format(code_key))
+                        
+        
+            
+        
 

@@ -429,11 +429,12 @@ class WarehouseInterface(object):
 
                 # Create a table entry for the name of the table with the partition in it,
                 # and link it to the main table record.
+                proto_vid = w_table.vid
                 self.install_table(dest_table_name, alt_name=alias,
-                                   data=dict(type='installed', proto_vid=w_table.vid))
+                                   data=dict(type='installed', proto_vid=proto_vid))
 
                 # Link the table name and the alias
-                self.install_table_alias(w_table, dest_table_name, alias)
+                self.install_table_alias(dest_table_name, alias, proto_vid=proto_vid)
 
                 self.library.database.mark_table_installed(p.get_table(source_table_name).vid, itn)
 
@@ -635,7 +636,14 @@ class WarehouseInterface(object):
         from ..orm import Column
 
 
-        for t in self.tables:
+        # TODO, our use of sqlalchemy is wacked.
+        # Some of the install methods commit or flush the session, which invalidated the tables from self.tables,
+        # so we have to get just the vid, and look up the object in each iteration.
+
+        for t_vid in [ t.vid for t in self.tables]:
+
+            t= self.orm_table(t_vid)
+
             if  t.type == 'table' and t.installed: # Get the table definition that columns are linked to
 
                 ## Create table aliases for the vid of the tables.
@@ -658,9 +666,9 @@ class WarehouseInterface(object):
 
 
 
-                self.install_view(t.vid, sql)
+                self.install_view(t_vid, sql)
 
-                self.install_table(t.vid, data=dict(type='alias', proto_vid=t.vid ))
+                self.install_table(t_vid, data=dict(type='alias', proto_vid=t_vid ))
 
 
 
@@ -749,9 +757,10 @@ class WarehouseInterface(object):
         raise NotImplementedError(type(self))
 
 
-    def install_table_alias(self, table,  table_name, alias):
+    def install_table_alias(self, table_name, alias, proto_vid = None):
         """Install a view that allows referencing a table by another name """
-        self.install_view(alias, "SELECT * FROM \"{}\" ".format(table_name), data = dict(type='alias',proto_vid=table.vid))
+        self.install_view(alias, "SELECT * FROM \"{}\" ".format(table_name),
+                          data = dict(type='alias',proto_vid=proto_vid))
 
     def install_table(self, name, alt_name = None, data = None ):
         """Install a view, mview or alias as a Table record. Real tables are copied """
@@ -1037,7 +1046,12 @@ def database_config(db, base_dir=''):
 
     path = parts.path
 
-    if parts.scheme in ('sqlite', "spatialite"):
+    scheme = parts.scheme
+
+    if '+' in scheme:
+        scheme, _ = scheme.split('+',1)
+
+    if scheme in ('sqlite', "spatialite"):
         # Sqlalchemy expects 4 slashes for absolute paths, 3 for relative,
         # which is hard to manage reliably. So, fixcommon problems.
 
@@ -1050,14 +1064,14 @@ def database_config(db, base_dir=''):
             path = os.path.join(base_dir, path)
 
 
-    if parts.scheme == 'sqlite':
+    if scheme == 'sqlite':
         config = dict(service='sqlite', database=dict(dbname=os.path.join(base_dir,path), driver='sqlite'))
 
-    elif parts.scheme == 'spatialite':
+    elif scheme == 'spatialite':
 
         config = dict(service='spatialite', database=dict(dbname=os.path.join(base_dir,path), driver='spatialite'))
 
-    elif parts.scheme == 'postgres':
+    elif scheme == 'postgres' or scheme == 'postgresql':
         config = dict(service='postgres',
                       database=dict(driver='postgres',
                                     server=parts.hostname,
@@ -1066,7 +1080,7 @@ def database_config(db, base_dir=''):
                                     dbname=path.strip('/')
                       ))
 
-    elif parts.scheme == 'postgis':
+    elif scheme == 'postgis':
         config = dict(service='postgis',
                       database=dict(driver='postgis',
                                     server=parts.hostname,

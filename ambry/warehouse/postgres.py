@@ -111,8 +111,8 @@ class PostgresWarehouse(RelationalWarehouse):
         return template.format(table=table, url=url)
 
 
-    def load_local(self, partition, source_table_name, dest_table_name, where=None, data = None):
-        return self.load_insert(partition, source_table_name, dest_table_name, where=where, data = data)
+    def load_local(self, partition, source_table_name, dest_table_name, where=None):
+        return self.load_insert(partition, source_table_name, dest_table_name, where=where)
 
 
     def install_view(self, name, sql, data=None):

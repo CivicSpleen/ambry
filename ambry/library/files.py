@@ -158,6 +158,7 @@ class Files(object):
             f = extant
 
         if merge:
+
             self.merge(f, commit=commit)
 
         return f
@@ -199,6 +200,7 @@ class Files(object):
         # Sqlalchemy doesn't automatically rollback on exceptions, and you
         # can't re-try the commit until you roll back.
         try:
+
             s.add(f)
             if commit:
                 self.db.commit()
@@ -321,20 +323,24 @@ class Files(object):
 
         extant  = self.query.path(dsn).group(self.TYPE.STORE).one_maybe
 
-        f = self.new_file(commit=commit, merge=True, extant=extant,
-            path=dsn,
-            group=self.TYPE.STORE,
-            ref=ref if ref else str(TopNumber.from_string(dsn,'s')) ,
-            state=None,
-            type_=type,
-            data=dict(
-                name = name,
-                title = title,
-                summary = summary,
-                cache = cache
+        kw = dict(commit=commit, merge=True, extant=extant,
+                  path=dsn,
+                  group=self.TYPE.STORE,
+                  ref=ref if ref else str(TopNumber.from_string(dsn, 's')),
+                  state=None,
+                  type_=type,
+                  data=dict(
+                      name=name,
+                      title=title,
+                      summary=summary,
+                      cache=cache
 
-            ),
-            source_url=None)
+                  ),
+                  source_url=None)
+
+
+        f = self.new_file(**kw)
+
 
         return f
 
