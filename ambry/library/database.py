@@ -284,15 +284,22 @@ class LibraryDb(object):
 
 
     def drop(self):
-
+        from sqlalchemy.exc import NoSuchTableError
         if not self.enable_delete:
             raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
 
-        tables = [Config.__tablename__, Column.__tablename__, Partition.__tablename__,
+        library_tables = [Config.__tablename__, Column.__tablename__, Partition.__tablename__,
                   Table.__tablename__, File.__tablename__,  Dataset.__tablename__]
 
+
+        try:
+            db_tables = reversed(self.metadata.sorted_tables)
+        except NoSuchTableError:
+            # Deleted the tables out from under it, so we're done.
+            return
+
         for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
-            if table.name in  tables:
+            if table.name in  library_tables:
                 table.drop(self.engine, checkfirst=True)
 
         self.commit()

@@ -458,7 +458,6 @@ class DbBundleBase(Bundle):
         d['stores'] = { s.ref: s.dict for s in ds.linked_stores }
         d['manifests'] = {m.ref: m.dict for m in ds.linked_manifests}
 
-
         # Convert the list of table names in the partition record to a dict, indexed by tvid.
         tables_by_name = { t.name: t.nonull_dict for t in self.schema.tables }
 
@@ -484,6 +483,9 @@ class DbBundleBase(Bundle):
             d['meta']['documentation']['main'] = markdown.markdown(
                 self.sub_template(d['meta']['documentation']['main'] if d['meta']['documentation']['main'] else ''))
 
+        d['meta']['resolved_dependencies'] = self.get_value_group('rdep')
+
+        d['meta']['process'] = self.get_value_group('process')
 
         return d
 
