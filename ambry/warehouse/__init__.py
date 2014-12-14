@@ -261,6 +261,7 @@ class WarehouseInterface(object):
         """Return information about the warehouse as a dictionary. """
         from ..orm import Config as SAConfig
         from ..library.database import ROOT_CONFIG_NAME_V
+        from ambry.warehouse.manifest import Manifest
 
         d =  {}
 
@@ -274,7 +275,7 @@ class WarehouseInterface(object):
 
         d['partitions'] = {p.vid: p.dict for p in self.library.partitions}
 
-        d['manifests'] = {m.uid: dict(mf.dict.items() + m.dict.items()) for mf,m in self.library.manifests}
+        d['manifests'] = {mf.ref: dict(mf.dict.items() + Manifest(mf.content).dict.items()) for mf in self.library.manifests}
 
         return d
 
@@ -501,7 +502,7 @@ class WarehouseInterface(object):
             self.title = manifest.title
 
         if (reset or not self.summary) and manifest.summary:
-            self.summary = manifest.summary['text']
+            self.summary = manifest.summary['summary_text'] # Just the first sentence.
 
         if (reset or not self._meta_get('cache_path')) and manifest.cache:
             self.cache_path = manifest.cache
@@ -666,7 +667,7 @@ class WarehouseInterface(object):
 
 
 
-                self.install_view(t_vid, sql)
+                self.install_view(t_vid, sql, data=dict(type='alias', proto_vid=t_vid ))
 
                 self.install_table(t_vid, data=dict(type='alias', proto_vid=t_vid ))
 

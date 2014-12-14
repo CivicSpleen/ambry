@@ -600,9 +600,9 @@ class Library(object):
         """Return all of the registered manifests. """
         from ..warehouse.manifest import  Manifest
 
-        return [(f, Manifest(f.content, logger=self.logger))
-                for f in self.files.query.type(self.files.TYPE.MANIFEST).all]
+        # Construct manifest with Manifest(f.content, logger=self.logger)
 
+        return self.files.query.type(self.files.TYPE.MANIFEST).all
 
     def manifest(self, uid):
         """Return a tuple of a manifest file object and the manifest. . """
@@ -1145,6 +1145,7 @@ class Library(object):
         """Create a reference to the warehouse and link all of the partitions to it. """
 
         from ambry.util.packages import qualified_name
+        from ambry.warehouse.manifest import Manifest
 
         store = self.files.install_data_store(w.database.dsn, qualified_name(w),
                                           name = w.name,
@@ -1172,7 +1173,10 @@ class Library(object):
 
         ## Next, we can load the manifests.
 
-        for remote_manifest, m in w.manifests:
+        for remote_manifest in w.manifests:
+
+            m = Manifest(remote_manifest.content, self.logger)
+
             m.path  = remote_manifest.path
 
             local_manifest = self.files.install_manifest(m, warehouse=w)
@@ -1258,10 +1262,13 @@ class Library(object):
 
         ##
         ## Manifests
+        from ambry.warehouse.manifest import Manifest
 
-        for f, m in self.manifests:
+        for f in self.manifests:
 
-            dc.put_manifest(m, f, force=clean)
+            m = Manifest(f.content, logger=self.logger)
+
+            dc.put_manifest(m, f, force=True)
 
         ##
         ## Stores
@@ -1274,7 +1281,7 @@ class Library(object):
                 raise Exception("No uid for "+str(s.ref))
 
             try:
-                dc.put_store(w, force=clean)
+                dc.put_store(w, force=True)
             except Exception  as e:
                 self.logger.error("Failed to document warehouse '{}': {}".format(s.path, e))
                 raise
@@ -1324,7 +1331,7 @@ Remotes:  {remotes}
                         partitions = [ p.vid for p in f.linked_partitions ],
                         tables=[ t.vid for t in f.linked_tables],
                         summary=m.summary['text'],
-                        stores=[s.ref for s in f.linked_stores]) for f, m in self.manifests},
+                        stores=[s.ref for s in f.linked_stores]) for f in self.manifests},
                     stores={f.ref: dict(
                         title=f.data['title'],
                         summary=f.data['summary'],

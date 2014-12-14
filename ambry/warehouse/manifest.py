@@ -299,8 +299,12 @@ class Manifest(object):
             fn = '_process_{}'.format(section.tag)
             pf = getattr(self, fn, False)
 
-            if pf:
-                section.content = pf(section)
+            try:
+                if pf:
+                    section.content = pf(section)
+            except Exception as e:
+                self.logger.error("Failed to process section at line {} : {}: {} ".format(line, section, e))
+                del sections[line]
 
         # Link docs to previous sections, where appropriate
 
@@ -556,7 +560,11 @@ class Manifest(object):
     def extract_token(tp, tokens):
         '''Extract the first token of the named type. '''
 
-        i = [t[0] for t in tokens].index(tp)
+
+        try:
+            i = [t[0] for t in tokens].index(tp)
+        except ValueError:
+            return None, tokens
 
         return tokens[i], tokens[:i] + tokens[i + 1:]
 

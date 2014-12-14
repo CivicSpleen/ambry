@@ -315,13 +315,18 @@ def warehouse_extract(args, w, config):
 def warehouse_config(args, w, config):
     from ..dbexceptions import ConfigurationError
 
-    if not args.var in w.configurable:
-        raise ConfigurationError("Value {} is not configurable. Must be one of: {}".format(args.var, w.configurable))
+    if args.var:
+        if not args.var in w.configurable:
+            raise ConfigurationError("Value {} is not configurable. Must be one of: {}".format(args.var, w.configurable))
 
-    if args.term:
-        setattr(w, args.var, args.term)
+        if args.term:
+            setattr(w, args.var, args.term)
+        else:
+            print getattr(w, args.var)
 
-    print getattr(w, args.var)
+    else:
+        for e in w.library.database.get_config_group('warehouse'):
+            print e
 
 def warehouse_doc(args, w, config):
     import os

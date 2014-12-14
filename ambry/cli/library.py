@@ -22,10 +22,7 @@ def library_parser(cmd):
     lib_p.set_defaults(command='library')
 
     group = lib_p.add_mutually_exclusive_group()
-    group.add_argument('-s', '--server', default=False, dest='is_server', action='store_true',
-                       help='Select the server configuration')
-    group.add_argument('-c', '--client', default=False, dest='is_server', action='store_false',
-                       help='Select the client configuration')
+
 
     asp = lib_p.add_subparsers(title='library commands', help='command help')
 
@@ -33,15 +30,7 @@ def library_parser(cmd):
     sp.set_defaults(subcommand='push')
     sp.add_argument('-w','--watch',  default=False,action="store_true",  help='Check periodically for new files.')
     sp.add_argument('-f','--force',  default=False,action="store_true",  help='Push all files')
-    
-    sp = asp.add_parser('server', help='Run the library server')
-    sp.set_defaults(subcommand='server') 
-    sp.add_argument('-d','--daemonize', default=False, action="store_true",   help="Run as a daemon") 
-    sp.add_argument('-k','--kill', default=False, action="store_true",   help="With --daemonize, kill the running daemon process") 
-    sp.add_argument('-g','--group', default=None,   help="Set group for daemon operation") 
-    sp.add_argument('-u','--user', default=None,  help="Set user for daemon operation")  
-    sp.add_argument('-t','--test', default=False, action="store_true",   help="Run the test version of the server")   
-      
+
     sp = asp.add_parser('files', help='Print out files in the library')
     sp.set_defaults(subcommand='files')
     sp.add_argument('-a','--all',  default='all',action="store_const", const='all', dest='file_state',  help='Print all files')
@@ -116,6 +105,7 @@ def library_parser(cmd):
                     help='When used with --reindex, delete the index and old files first. ')
     sp.add_argument('-d', '--debug', default=False, action="store_true",
                     help='Debug mode ')
+    sp.add_argument('-p', '--port', help='Run on a sepecific port, rather than pick a random one')
 
 
     if IN_DEVELOPMENT:
@@ -224,22 +214,7 @@ def library_restore(args, l, config, *kwargs):
     prt("{}: Restoring", backup_file)
     l.clean(add_config_root=False)
     l.restore(backup_file)
-   
-def library_server(args, l, config):
-    from ..util import daemonize
 
-    from ambry.server.main import production_run, local_run
-
-    def run_server(args, config):
-        production_run(config.library(args.library_name))
-    
-    if args.daemonize:
-        daemonize(run_server, args,  config)
-    elif args.test:
-        local_run(config.library(args.library_name))
-    else:
-        production_run(config.library(args.library_name))
-        
 def library_drop(args, l, config):   
 
     prt("Drop tables")
@@ -526,7 +501,10 @@ def library_doc(args, l, rc):
     from logging import FileHandler
     import webbrowser
 
-    port = 45235 + random.randint(1, 5000)
+    if args.port:
+        port = args.port
+    else:
+        port = 45235 + random.randint(1, 5000)
 
     cache_dir = l.doc_cache.cache.path('',missing_ok=True)
 

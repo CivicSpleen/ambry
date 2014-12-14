@@ -1514,6 +1514,8 @@ class File(Base, SavableMixin, LinkableMixin):
 
     data = SAColumn('f_data',MutationDict.as_mutable(JSONEncodedObj))
 
+    content = SAColumn('f_content', Binary)
+
     __table_args__ = (
         UniqueConstraint('f_path', 'f_type', 'f_group', name='u_type_path'),
         UniqueConstraint('f_ref', 'f_type', 'f_group', name='u_ref_path'),

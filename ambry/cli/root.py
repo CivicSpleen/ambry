@@ -104,28 +104,43 @@ def root_command(args, rc):
 
 def root_list(args, l, st, rc):
     from ..cli import  _print_bundle_list
-
+    from ambry.warehouse.manifest import Manifest
+    from . import global_logger
     ##
     ## Listing warehouses and collections is different
 
 
     if args.collection:
 
-        for f, m in l.manifests:
-            print "{:10s} {:25s}| {}".format(m.uid, m.title, m.summary['summary_text'])
+        for f in l.manifests:
+
+            try:
+                m = Manifest(f.content)
+                print "{:10s} {:25s}| {}".format(m.uid, m.title, m.summary['summary_text'])
+            except Exception as e:
+                warn("Failed to parse manifest {}: {}".format(f.ref, e))
+                continue
+
+
 
         return
 
     if args.warehouse:
 
+        fields = ['title','summary','dsn','url','cache']
+
+        format = '{:5s}{:10s}{}'
+        def _get(s,f):
+            try:
+                return s.data[f] if f in s.data else getattr(s, f)
+            except AttributeError:
+                return ''
+
         for s in l.stores:
-            print "{:10s} {:25s} {}".format(s.ref, s.data['title'], s.data['summary'])
-
-            print "{:10s} {:25s} dsn =    {}".format('', '', s.path)
-
-            if s.data.get('cache',None):
-                print "{:10s} {:25s} cache = {}".format('', '', s.data['cache'])
-
+            print s.ref
+            for f in fields:
+                if _get(s,f):
+                    print format.format('',f,_get(s,f))
         return
     ##
     ## The remainder are for listing bundles and partitions.

@@ -1517,7 +1517,7 @@ class BuildBundle(Bundle):
                 else:
                     p.record.ref = pp.vid
 
-                self.log("Copied partition {} to {}".format(pp.identity, p.identity))
+                self.log("Referenced partition {} to {}".format(pp.identity, p.identity))
 
 
     def update_copy_schema(self):
@@ -1723,6 +1723,7 @@ class BuildBundle(Bundle):
                 os.makedirs(dir_)
 
             shutil.copy(b.partition.database.path, newp.database.path)
+            self.log('Copied {} to {}'.format(b.partition.database.path, newp.database.path))
 
 
 
