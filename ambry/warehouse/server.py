@@ -1,5 +1,8 @@
 """
 REST API for Warehouse servers, to download extracts and upload manifests.
+
+
+
 """
 
 from flask import Flask, current_app
@@ -9,13 +12,7 @@ import os
 
 app = Flask(__name__)
 
-db_url = os.getenv("AMBRY_WAREHOUSE", None)
-
-app_config = dict(
-    host = 'localhost',
-    port = '7978',
-    debug = True
-)
+_dsn = None # Global DSN to database.
 
 @app.route('/')
 def get_root():
@@ -74,7 +71,7 @@ def warehouse():
     base_dir = os.path.join(rc.filesystem('warehouse')['dir'], 'reset_server')
 
     # db_url is a module variable.
-    config = database_config(db_url, base_dir=base_dir)
+    config = database_config(_dsn, base_dir=base_dir)
 
     return new_warehouse(config, library, logger=get_logger(__name__))
 
@@ -82,16 +79,36 @@ def warehouse():
 def cache():
     return warehouse().cache.subcache('extracts')
 
-def run(url=None):
+def run(config):
 
-    if url:
-        global db_url
-        db_url = url
+    global _dsn # Global so warehouse() can get it it.
+
+    _dsn = config['dsn']
 
     print "Serving ", warehouse().database.dsn
 
     app.run(host=app_config['host'], port=int(app_config['port']), debug=app_config['debug'])
 
 if __name__ == "__main__":
+    import argparse
 
-    run()
+    app_config = dict(
+        host='localhost',
+        port='7978',
+        debug=True,
+        dsn = os.getenv("AMBRY_WAREHOUSE", None)
+    )
+
+    parser = argparse.ArgumentParser(prog='python -mambry.server.documentation',
+                                     description='Run an Ambry documentation server')
+
+    parser.add_argument('-H', '--host', help="Server host.")
+    parser.add_argument('-p', '--port', help="Server port")
+    parser.add_argument('-d', '--dsn',  help="URL to the database")
+    parser.add_argument('-D', '--debug', action='store_true', help="Set debugging mode")
+
+    args = parser.parse_args()
+
+    app_config.update( {k:v for k,v in vars(args).items() if v})
+
+    run(app_config)
