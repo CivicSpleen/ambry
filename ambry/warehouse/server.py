@@ -18,7 +18,7 @@ app_config = dict(
 )
 
 @app.route('/')
-def get_root(tid, ct):
+def get_root():
 
     w = warehouse()
 
