@@ -355,13 +355,22 @@ class Files(object):
         size = None
         modified = None
 
-        if not path or not os.path.exists(path):
-            return {}
+        if bool(path) and path.startswith('http'):
 
-        if not source and os.path.exists(path):
+            import requests
+
+            r = requests.get(path)
+
+            r.raise_for_status()
+
+            content = r.content
+
+        elif bool(path):
+
             source = path
 
         if source:
+
             try:
                 # Try source as file-like
                 content = source.read()
@@ -370,7 +379,8 @@ class Files(object):
                 size = len(content)
                 modified = int(time.time())
 
-            except (IOError, AttributeError): # Nope, try it as a filename.
+            except (IOError, AttributeError):  # Nope, try it as a filename.
+
                 with open(source) as sf:
                     content = sf.read()
 
@@ -384,10 +394,18 @@ class Files(object):
                 hash = md5_for_file(source)
 
         elif content:
-            content = content
+
+
             hash = hashlib.md5(content).hexdigest()
             size = len(content)
             modified = int(time.time())
+
+        else:
+            raise ValueError("Must provied an existing path, source or content. ")
+
+
+        if not content:
+            raise ValueError("Didn't get non-zero sized content from path , source or content")
 
         return dict(hash=hash, size=size, modified=modified, content=content)
 
