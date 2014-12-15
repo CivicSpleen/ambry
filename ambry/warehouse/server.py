@@ -17,6 +17,17 @@ app_config = dict(
     debug = True
 )
 
+@app.route('/')
+def get_root(tid, ct):
+
+    w = warehouse()
+
+    d = w.dict
+
+    del d['dsn']
+
+    return jsonify(d)
+
 @app.route('/extracts/<tid>.<ct>')
 def get_extract(tid, ct):
     """Return an extract for a table """
