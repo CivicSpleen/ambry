@@ -1175,7 +1175,11 @@ class Library(object):
 
         for remote_manifest in w.manifests:
 
-            m = Manifest(remote_manifest.content, self.logger)
+            try:
+                m = Manifest(remote_manifest.content, self.logger)
+            except Exception as e:
+                self.logger.error("Failed to construct manifest for id {}  ".format(remote_manifest.ref))
+                continue
 
             m.path  = remote_manifest.path
 

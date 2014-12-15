@@ -209,7 +209,6 @@ def warehouse_new(args, l, config):
 
     from ambry.warehouse import database_config
 
-
     if isinstance(args, basestring):
         term  = args
     else:
@@ -219,6 +218,14 @@ def warehouse_new(args, l, config):
         dbc = database_config(term)
     except ValueError: #Unknow schema, usually
         dbc  = config.warehouse(term)
+
+    data = {
+        'title' : args.title,
+        'summary' : args.summary,
+        'cache': args.cache
+    }
+
+    dbc.update({ k:v for k,v in data.items() if v })
 
     w =  _warehouse_new_from_dbc(dbc,l)
 

@@ -26,7 +26,7 @@ library:
         database: default
         filesystem: default
         remotes:
-            - '{root}/remote'
+          - http://s3.sandiegodata.org/library#compress
 
 
     client:

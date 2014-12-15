@@ -92,7 +92,7 @@ class RelationalWarehouse(WarehouseInterface):
             cache_size = 5000
 
         elif self.database.driver == 'postgres' or self.database.driver == 'postgis':
-            cache_size = 20000
+            cache_size = 5000
 
         else:
             cache_size = 50000

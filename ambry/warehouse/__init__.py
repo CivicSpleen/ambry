@@ -241,6 +241,9 @@ class WarehouseInterface(object):
 
         cp = self.cache_path
 
+        if not cp:
+            return None
+
         if not os.path.isabs(cp) and not '://' in cp:
             cp = self.elibrary.warehouse_cache.path(cp, missing_ok = True)
 
@@ -284,13 +287,8 @@ class WarehouseInterface(object):
         """Return the parsed manifests that have been installed"""
         from .manifest import Manifest
 
-        manifests = []
+        return self.library.files.query.type(self.FILE_TYPE.MANIFEST).group(self.FILE_GROUP.MANIFEST).all
 
-        for f in self.library.files.query.type(self.FILE_TYPE.MANIFEST).group(self.FILE_GROUP.MANIFEST).all:
-            index = self.library.files.query.type(self.FILE_TYPE.HTML).group(self.FILE_GROUP.MANIFEST).first
-            manifests.append((f, Manifest(f.content, logger=self.logger)))
-
-        return manifests
 
     @property
     def bundles(self):
