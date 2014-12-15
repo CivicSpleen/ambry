@@ -32,6 +32,7 @@ import json
 
 from sqlalchemy import BigInteger
 from sqlalchemy.dialects import postgresql, mysql, sqlite
+
 BigIntegerType = BigInteger()
 BigIntegerType = BigIntegerType.with_variant(postgresql.BIGINT(), 'postgresql')
 BigIntegerType = BigIntegerType.with_variant(mysql.BIGINT(), 'mysql')
@@ -41,6 +42,16 @@ BigIntegerType = BigIntegerType.with_variant(sqlite.INTEGER(), 'sqlite')
 Base = declarative_base()
 
 
+class JSONEncoder(json.JSONEncoder):
+    """A JSON encoder that turns unknown objets into a string representation of the type """
+    def default(self, o):
+        from ambry.identity import Identity
+
+        try:
+            return o.dict
+        except AttributeError:
+            return str(type(o))
+
 class JSONEncodedObj(TypeDecorator):
     "Represents an immutable structure as a json-encoded string."
 
@@ -48,7 +59,7 @@ class JSONEncodedObj(TypeDecorator):
 
     def process_bind_param(self, value, dialect):
         if value is not None:
-            value = json.dumps(value)
+            value = json.dumps(value, cls=JSONEncoder)
         else:
             value = '{}'
         return value
@@ -1576,7 +1587,8 @@ class File(Base, SavableMixin, LinkableMixin):
 
     @property
     def insertable_dict(self):
-        return { ('f_'+k).strip('_'):v for k,v in self.dict.items()}
+
+        return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs }
 
     ## These partition and file acessors were originally implemented as many-to-many tables
     ## and probably should still be, but this is easier to understand than dealing with Sqlalchemy cascaded

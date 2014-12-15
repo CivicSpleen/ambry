@@ -174,8 +174,6 @@ class Manifest(object):
         return self.single_line('title')
 
 
-
-
     @property
     def summary(self):
         """The first doc section"""

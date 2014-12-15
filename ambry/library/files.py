@@ -416,16 +416,14 @@ class Files(object):
 
         extant = self.query.ref(manifest.uid).group(self.TYPE.MANIFEST).one_maybe
 
+
         f = self.new_file(commit=commit, merge=True, extant = extant,
             path=manifest.path,
             group=self.TYPE.MANIFEST,
             ref=manifest.uid,
             state=None,
             type_=self.TYPE.MANIFEST,
-            data=dict(
-                title=manifest.title,
-                summary=manifest.summary['text']
-            ),
+            data=manifest.dict,
             source_url=manifest.uid,
             **(self._process_source_content(manifest.path))
 

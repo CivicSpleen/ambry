@@ -278,7 +278,7 @@ class WarehouseInterface(object):
 
         d['partitions'] = {p.vid: p.dict for p in self.library.partitions}
 
-        d['manifests'] = {mf.ref: dict(mf.dict.items() + Manifest(mf.content).dict.items()) for mf in self.library.manifests}
+        d['manifests'] = {mf.ref: mf.dict for mf in self.library.manifests}
 
         return d
 

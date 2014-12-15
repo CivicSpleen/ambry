@@ -594,7 +594,6 @@ class Library(object):
         self.database.session.delete(s)
         self.database.commit()
 
-
     @property
     def manifests(self):
         """Return all of the registered manifests. """
@@ -1145,7 +1144,6 @@ class Library(object):
         """Create a reference to the warehouse and link all of the partitions to it. """
 
         from ambry.util.packages import qualified_name
-        from ambry.warehouse.manifest import Manifest
 
         store = self.files.install_data_store(w.database.dsn, qualified_name(w),
                                           name = w.name,
@@ -1175,23 +1173,23 @@ class Library(object):
 
         for remote_manifest in w.manifests:
 
-            try:
-                m = Manifest(remote_manifest.content, self.logger)
-            except Exception as e:
-                self.logger.error("Failed to construct manifest for id {}  ".format(remote_manifest.ref))
-                continue
+            # Copy the file record. There really should be an easier way to do this.
 
-            m.path  = remote_manifest.path
+            local_manifest = self.files.new_file(commit=True, merge=True,
+                                                 extant=self.files.query.ref(remote_manifest.ref).group(
+                                                     self.files.TYPE.MANIFEST).one_maybe,
+                                                  **{ k:v for k,v in remote_manifest.insertable_dict.items()
+                                                     if k not in ('oid')})
 
-            local_manifest = self.files.install_manifest(m, warehouse=w)
-
-            for p in remote_manifest.linked_partitions:
+            for p  in remote_manifest.linked_partitions:
                 p = self.partition(p.vid)
 
                 local_manifest.link_partition(p)
                 p.link_manifest(local_manifest)
 
                 p.dataset.link_manifest(local_manifest)
+
+            local_manifest.link_store(store)
 
 
             # This is the cheaper way to copy links, but it only works when the links
@@ -1330,11 +1328,11 @@ Remotes:  {remotes}
                     database=str(self.database.dsn),
                     cache=str(self.cache),
                     remotes=[str(r) for r in self.remotes] if self.remotes else [],
-                    manifests={m.uid: dict(
-                        title=m.title,
+                    manifests={f.data['uid']: dict(
+                        title=f.data['title'],
                         partitions = [ p.vid for p in f.linked_partitions ],
                         tables=[ t.vid for t in f.linked_tables],
-                        summary=m.summary['text'],
+                        summary=f.data['summary']['summary_text'],
                         stores=[s.ref for s in f.linked_stores]) for f in self.manifests},
                     stores={f.ref: dict(
                         title=f.data['title'],
