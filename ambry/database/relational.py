@@ -42,9 +42,10 @@ def close_all_connections():
 class RelationalDatabase(DatabaseInterface):
     '''Represents a Sqlite database'''
 
+    # These DSNs can get munged bjust before connecting, so postgres -> postgresql+psycopg2
     DBCI = {
-            'postgis':'postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}', # Stored in the ambry module.
-            'postgres':'postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}', # Stored in the ambry module.
+            'postgis':'postgis://{user}:{password}@{server}{colon_port}/{name}', # Stored in the ambry module.
+            'postgres':'postgres://{user}:{password}@{server}{colon_port}/{name}', # Stored in the ambry module.
             'sqlite':'sqlite:///{name}',
             'spatialite':'sqlite:///{name}', # Only works if you properly install spatialite. 
             'mysql':'mysql://{user}:{password}@{server}{colon_port}/{name}'
@@ -87,6 +88,7 @@ class RelationalDatabase(DatabaseInterface):
         self._table_meta_cache = {}
 
         self.dsn_template = self.DBCI[self.driver]
+
         self.dsn = self.dsn_template.format(user=self.username, password=self.password, 
                     server=self.server, name=self.dbname, colon_port=self.colon_port)
 
@@ -199,6 +201,12 @@ class RelationalDatabase(DatabaseInterface):
 
     @property
     def engine(self):
+        """Modify the DSN just prior to creating the engine"""
+
+        return self.dsn
+
+    @property
+    def engine(self):
         '''return the SqlAlchemy engine for this database'''
         from sqlalchemy import create_engine
         import sqlite3
@@ -221,7 +229,7 @@ class RelationalDatabase(DatabaseInterface):
                 kwargs['connect_args'] = {'detect_types': sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES}
                 kwargs['native_datetime'] = True
 
-            self._engine = create_engine(path,  poolclass=NullPool, isolation_level='SERIALIZABLE', **kwargs)
+            self._engine = create_engine(self.munged_dsn,  poolclass=NullPool, isolation_level='SERIALIZABLE', **kwargs)
 
             self.Session = sessionmaker(bind=self._engine)
 

@@ -9,6 +9,10 @@ from relational import RelationalDatabase
 
 class PostgresDatabase(RelationalDatabase):
 
+    @property
+    def munged_dsn(self):
+        return self.dsn.replace('postgres:','postgresql+psycopg2:')
+
     def _create(self):
         """Create the database from the base SQL"""
         from ambry.orm import Config

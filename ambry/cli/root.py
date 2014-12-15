@@ -138,6 +138,7 @@ def root_list(args, l, st, rc):
 
         for s in l.stores:
             print s.ref
+            print format.format('', 'dsn', s.path)
             for f in fields:
                 if _get(s,f):
                     print format.format('',f,_get(s,f))

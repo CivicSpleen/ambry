@@ -7,4 +7,7 @@ from postgres import PostgresDatabase
              
 
 class PostgisDatabase(PostgresDatabase):
-    pass
+
+    @property
+    def munged_dsn(self):
+        return self.dsn.replace('postgis:','postgresql+psycopg2:')
