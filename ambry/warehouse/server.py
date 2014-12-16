@@ -10,13 +10,17 @@ Run with gunicorn:
 """
 
 from flask import Flask, current_app
-from flask import g, send_from_directory, request, jsonify
+from flask import g, send_from_directory, request, jsonify, abort
+from flask.ext.compress import Compress
 from ambry.util import memoize
 import os
 
 app = Flask(__name__)
+Compress(app)
 
 import logging
+
+print app.config['COMPRESS_MIMETYPES'].append('text/csv')
 
 
 stream_handler = logging.StreamHandler()
@@ -46,6 +50,10 @@ def get_extract(tid, ct):
 
     t = w.orm_table(tid)
 
+    if not t:
+        abort(404)
+
+
     e = new_extractor(ct, w, cache())
 
     ref = t.name if t.type in ('view','mview') else t.vid
@@ -67,7 +75,7 @@ def get_extractors(tid):
 
     return jsonify(results=get_extractors(t))
 
-@memoize
+
 def warehouse():
 
     from ambry.warehouse import new_warehouse, database_config
@@ -97,6 +105,7 @@ def run(config):
     _dsn = config['dsn']
 
     print "Serving ", warehouse().database.dsn
+    print "Cache:  ", str(cache())
 
     app.run(host=app_config['host'], port=int(app_config['port']), debug=app_config['debug'])
 
@@ -106,7 +115,7 @@ if __name__ == "__main__":
     app_config = dict(
         host='localhost',
         port='7978',
-        debug=True,
+        debug=False,
         dsn = None,
     )
 

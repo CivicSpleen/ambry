@@ -1222,9 +1222,13 @@ def parse_url_to_dict(url):
 
 def unparse_url_dict(d):
 
-    host_port = d['hostname']
 
-    if d['port']:
+    if 'hostname' in d and d['hostname']:
+        host_port = d['hostname']
+    else:
+        host_port = ''
+
+    if 'port' in d and d['port']:
         host_port+= ":" + str(d['port'])
 
     user_pass = ''
@@ -1243,6 +1247,17 @@ def unparse_url_dict(d):
         url += '?' + d['query']
 
     return url
+
+def filter_url(url, **kwargs):
+    """Alter a url by setting parameters set in parse_url_to_dict"""
+
+    d = parse_url_to_dict(url)
+
+    d.update(kwargs)
+
+    return unparse_url_dict({ k:v for k,v in d.items() if v })
+
+
 
 def normalize_newlines(string):
     """Convert \r\n or \r to \n"""

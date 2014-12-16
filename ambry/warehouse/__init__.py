@@ -266,13 +266,15 @@ class WarehouseInterface(object):
         from ..library.database import ROOT_CONFIG_NAME_V
         from ambry.warehouse.manifest import Manifest
 
+        from ambry.util import filter_url
+
         d =  {}
 
         for c in self.library.database.get_config_group('warehouse'):
             if c.key in self.configurable:
                 d[c.key] = c.value
 
-        d['dsn'] = self.database.dsn
+        d['dsn'] = filter_url(self.database.dsn, password=None) # remove the password
 
         d['tables'] =  { t.vid:t.dict for t in self.library.tables }
 

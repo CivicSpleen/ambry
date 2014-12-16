@@ -120,8 +120,8 @@ def warehouse_parser(cmd):
 
     whsp = whp.add_parser('config', help='Configure varibles')
     whsp.set_defaults(subcommand='config')
-    whsp.add_argument('-v', '--var', help="Name of the variable. One of'cache','title','about' ")
-    whsp.add_argument('term', type=str, nargs = '?', help='Value of the variable')
+
+    whsp.add_argument('term', type=str, nargs = '?', help='Var=Value')
 
 
     whsp = whp.add_parser('remove', help='Remove a bundle or partition from a warehouse')
@@ -322,14 +322,21 @@ def warehouse_extract(args, w, config):
 def warehouse_config(args, w, config):
     from ..dbexceptions import ConfigurationError
 
-    if args.var:
-        if not args.var in w.configurable:
+
+    if args.term:
+
+        parts = args.term.split('=',1)
+
+        var = parts.pop(0);
+        val = parts.pop(0) if parts else None
+
+        if not var in w.configurable:
             raise ConfigurationError("Value {} is not configurable. Must be one of: {}".format(args.var, w.configurable))
 
-        if args.term:
-            setattr(w, args.var, args.term)
+        if val:
+            setattr(w, var, val)
         else:
-            print getattr(w, args.var)
+            print getattr(w, var)
 
     else:
         for e in w.library.database.get_config_group('warehouse'):
