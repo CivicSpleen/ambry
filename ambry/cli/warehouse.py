@@ -301,11 +301,11 @@ def warehouse_install(args, w ,config):
 
     l.sync_warehouse(w)
 
+    l.doc_cache.put_store(w, force=True)
+
     if args.name_only:
         print w.database.dsn
 
-    if args.cache:
-        warehouse_extract(args, w, config)
 
 
 def warehouse_extract(args, w, config):

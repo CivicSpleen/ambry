@@ -53,7 +53,6 @@ def get_extract(tid, ct):
     if not t:
         abort(404)
 
-
     e = new_extractor(ct, w, cache())
 
     ref = t.name if t.type in ('view','mview') else t.vid

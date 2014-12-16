@@ -60,7 +60,7 @@ To run the automated installer, execute this line from a Terminal:
 
 .. code-block:: bash
 
-    $ sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/clarinova/ambry/master/support/install-osx.sh)"
+    $ sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install-osx.sh)"
 
 When it detects a missing packages that you have to install manually, the script will pause and open a web browser for you. If those external installs have any hickups, you may have to run the installer script more than once. 
 
@@ -82,7 +82,7 @@ For Ubuntu 13.04 through 14.04, use this script to install the dependencies and 
 
 .. code-block:: bash
 
-    $ sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/clarinova/ambry/master/support/install-ubuntu.sh)"
+    $ sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install-ubuntu.sh)"
 
 Follow up with :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
    
