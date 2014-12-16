@@ -115,14 +115,17 @@ class JsonExtractor(Extractor):
         row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table))
 
         # A template to ensure the JSON head and tail are properly formatted
-        head, tail  = json.dumps({ 'header': "This is the header", 'rows': [ [0] ]}).split('[0]')
+        head, mid, tail  = json.dumps({ 'header': [0], 'rows': [ [0] ]}).split('[0]')
 
         with self.cache.put_stream(rel_path) as stream:
 
             stream.write(head)
 
             for i, row in enumerate(row_gen):
-                if i != 0:
+                if i == 0:
+                    stream.write(json.dumps(row.keys()))
+                    stream.write(mid)
+                else:
                     stream.write(',\n')
 
                 stream.write(json.dumps(list(row)))
