@@ -53,7 +53,7 @@ class RelationalWarehouse(WarehouseInterface):
 
         from sqlalchemy.exc import OperationalError
 
-        sql = "CREATE INDEX {} ON {} ({})".format(name, table, ','.join(columns))
+        sql = 'CREATE INDEX {} ON "{}" ({})'.format(name, table, ','.join(columns))
 
         try:
             self.database.connection.execute(sql)
