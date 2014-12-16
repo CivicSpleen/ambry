@@ -155,7 +155,7 @@ class PostgresWarehouse(RelationalWarehouse):
         drop, data = self._install_material_view(name, sql, clean=clean, data = data)
 
         if drop:
-            self.database.connection.execute("DROP TABLE IF EXISTS {}".format(name))
+            self.database.connection.execute('DROP TABLE IF EXISTS "{}"'.format(name))
 
         if not data:
             return False

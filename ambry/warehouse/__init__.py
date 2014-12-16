@@ -655,13 +655,13 @@ class WarehouseInterface(object):
                 col_names = '*'
 
                 if len(installed_tables) == 1:
-                    sql = "SELECT {} FROM {} ".format(col_names, installed_tables[0].name)
+                    sql = 'SELECT {} FROM "{}" '.format(col_names, installed_tables[0].name)
 
                 else:
 
                     sql = "SELECT {} FROM ({}) ".format(
                             col_names,
-                            ' UNION '.join(' SELECT * FROM {} '.format(table.name)
+                            ' UNION '.join(' SELECT * FROM "{}" '.format(table.name)
                                          for table in installed_tables )
                     )
 
@@ -687,7 +687,7 @@ class WarehouseInterface(object):
 
         for t in [ t for t in self.tables if t.type in ('view','mview') ]:
 
-            sql = "SELECT * FROM {} LIMIT 1".format(t.name)
+            sql = 'SELECT * FROM "{}" LIMIT 1'.format(t.name)
 
             for row in self.database.connection.execute(sql):
                 pass

@@ -1,5 +1,6 @@
 PyYAML
 SQLAlchemy
+sh
 boto
 requests
 markdown
