@@ -19,7 +19,7 @@ stream_handler = logging.StreamHandler()
 stream_handler.setLevel(logging.INFO)
 app.logger.addHandler(stream_handler)
 
-_dsn = None # Global DSN to database.
+_dsn = os.getenv("AMBRY_WAREHOUSE", None)  # Global DSN to database.
 
 @app.route('/')
 def get_root():
@@ -103,7 +103,7 @@ if __name__ == "__main__":
         host='localhost',
         port='7978',
         debug=True,
-        dsn = os.getenv("AMBRY_WAREHOUSE", None)
+        dsn = None,
     )
 
     parser = argparse.ArgumentParser(prog='python -mambry.server.documentation',
