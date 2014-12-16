@@ -2,6 +2,10 @@
 REST API for Warehouse servers, to download extracts and upload manifests.
 
 
+Run with gunicorn:
+
+    gunicorn ambry.warehouse.server:app -b 104.236.53.117:80 \
+        -e AMBRY_WAREHOUSE=postgres://root:Jx8bf3HDkN5Fuz@aegea.do.cnshost.net/health_demo
 
 """
 

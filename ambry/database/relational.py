@@ -200,6 +200,10 @@ class RelationalDatabase(DatabaseInterface):
         table.drop(self.engine)
 
     @property
+    def munged_dsn(self):
+        return self.dsn
+
+    @property
     def engine(self):
         """Modify the DSN just prior to creating the engine"""
 

@@ -594,6 +594,17 @@ class Library(object):
         self.database.session.delete(s)
         self.database.commit()
 
+    def warehouse(self, uid):
+
+        from ambry.warehouse import new_warehouse, database_config
+
+        s = self.store(uid)
+
+        config = database_config(s.path)
+
+        return new_warehouse(config, self, logger=self.logger)
+
+
     @property
     def manifests(self):
         """Return all of the registered manifests. """
@@ -1148,6 +1159,7 @@ class Library(object):
         store = self.files.install_data_store(w.database.dsn, qualified_name(w),
                                           name = w.name,
                                           title=w.title,
+                                          url = w.url,
                                           summary=w.summary,
                                           cache = w.cache_path)
 
@@ -1210,6 +1222,14 @@ class Library(object):
 
 
         return store
+
+    def sync_warehouses(self):
+
+        for f in self.stores:
+            w = self.warehouse(f.path)
+            self.logger.info("Syncing {} dsn={}".format(f.ref, f.path))
+            self.sync_warehouse(w)
+
 
 
     def sync_doc_json(self, cache = None, clean = False):

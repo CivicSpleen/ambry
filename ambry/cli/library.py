@@ -60,6 +60,7 @@ def library_parser(cmd):
     sp.add_argument('-r', '--remote', default=False, action="store_true", help='Sync the remote')
     sp.add_argument('-s', '--source', default=False, action="store_true", help='Sync the source')
     sp.add_argument('-j', '--json', default=False, action="store_true", help='Cache JSON versions of library objects')
+    sp.add_argument('-w', '--warehouses', default=False, action="store_true", help='Re-synchronize warehouses')
 
 
     sp = asp.add_parser('info', help='Display information about the library')
@@ -473,7 +474,7 @@ def library_sync(args, l, config):
     '''Synchronize the remotes and the upstream to a local library
     database'''
 
-    all = args.all or not (args.library or args.remote or args.source or args.json )
+    all = args.all or not (args.library or args.remote or args.source or args.json or args.warehouses )
 
     if args.library or all:
         l.logger.info("==== Sync Library")
@@ -490,6 +491,10 @@ def library_sync(args, l, config):
     if (args.json or all):
         l.logger.info("==== Sync Cached JSON")
         l.sync_doc_json(clean=args.clean)
+
+    if (args.warehouses):
+        l.logger.info("==== Sync warehouses")
+        l.sync_warehouses()
 
 def library_doc(args, l, rc):
 

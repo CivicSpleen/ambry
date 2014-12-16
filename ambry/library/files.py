@@ -314,7 +314,7 @@ class Files(object):
 
     def install_data_store(self, dsn, type, ref = None,
                            name = None, title = None, summary = None,
-                           cache = None, commit=True):
+                           cache = None, url = None, commit=True):
         """A reference for a data store, such as a warehouse or a file store.
         """
 
@@ -333,7 +333,8 @@ class Files(object):
                       name=name,
                       title=title,
                       summary=summary,
-                      cache=cache
+                      cache=cache,
+                      url = url,
 
                   ),
                   source_url=None)
