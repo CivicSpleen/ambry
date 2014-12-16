@@ -12,6 +12,13 @@ import os
 
 app = Flask(__name__)
 
+import logging
+
+
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.INFO)
+app.logger.addHandler(stream_handler)
+
 _dsn = None # Global DSN to database.
 
 @app.route('/')
