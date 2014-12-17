@@ -85,6 +85,8 @@ class RelationalWarehouse(WarehouseInterface):
     def load_insert(self, partition, source_table_name, dest_table_name, where = None):
         from ..database.inserter import ValueInserter
         from sqlalchemy import Table, MetaData
+        from sqlalchemy.dialects.postgresql.base import BYTEA
+        import psycopg2
 
         replace = False
 
@@ -105,6 +107,7 @@ class RelationalWarehouse(WarehouseInterface):
         dest_metadata = MetaData()
         dest_table = Table(dest_table_name, dest_metadata, autoload=True, autoload_with=self.database.engine)
 
+
         insert_statement = dest_table.insert()
 
         source_metadata = MetaData()
@@ -118,12 +121,19 @@ class RelationalWarehouse(WarehouseInterface):
         if where:
             select_statement += " WHERE "+where
 
-        cache = []
+        binary_cols = []
+        for c in dest_table.columns:
+            if isinstance(c.type, BYTEA ):
+                binary_cols.append(c.name)
+
 
         # Psycopg executemany function doesn't use the multiple insert syntax of Postgres,
         # so it is fantastically slow. So, we have to do it ourselves.
         # Using multiple row inserts is more than 100 times faster.
         import re
+
+        # For Psycopg's mogrify(), we need %(var)s parameters, not :var
+        insert_statement = re.sub(r':([\w_-]+)', r'%(\1)s', str(insert_statement))
 
         conn = self.database.engine.raw_connection()
 
@@ -138,7 +148,7 @@ class RelationalWarehouse(WarehouseInterface):
                 for value in values:
 
                     mogd = cur.mogrify(insert_statement, value)
-                    # Hopefully, inluding the parens will make it unique enough to not
+                    # Hopefully, including the parens will make it unique enough to not
                     # cause problems. Using just 'VALUES' files when there is a column of the same name.
                     _, vals = mogd.split(") VALUES (", 1)
 
@@ -149,14 +159,17 @@ class RelationalWarehouse(WarehouseInterface):
 
                 cur.execute(sql)
 
-
-            insert_statement = re.sub(r':([\w_-]+)', r'%(\1)s', str(insert_statement))
-
+            cache = []
 
             for i, row in enumerate(partition.database.session.execute(select_statement)):
                 self.logger.progress('add_row', source_table_name, i)
 
-                cache.append(dict(row))
+                if binary_cols:
+                    # This is really horrible.
+                    cache.append({ k: psycopg2.Binary(v) if k in binary_cols else v for k,v in row.items() })
+
+                else:
+                    cache.append(dict(row))
 
                 if len(cache) >= cache_size:
                     self.logger.info('committing {} rows'.format(len(cache)))

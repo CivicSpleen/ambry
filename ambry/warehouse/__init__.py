@@ -154,6 +154,7 @@ class WarehouseInterface(object):
         self._meta_set('created', datetime.now().isoformat())
 
     def clean(self):
+
         self.database.clean()
         self.wlibrary.clean()
 
@@ -659,7 +660,7 @@ class WarehouseInterface(object):
 
                 else:
 
-                    sql = "SELECT {} FROM ({}) ".format(
+                    sql = "SELECT {} FROM ({}) as subquery ".format(
                             col_names,
                             ' UNION '.join(' SELECT * FROM "{}" '.format(table.name)
                                          for table in installed_tables )
