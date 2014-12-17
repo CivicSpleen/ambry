@@ -90,7 +90,7 @@ class RelationalWarehouse(WarehouseInterface):
 
         replace = False
 
-        self.logger.info('load_insert {}'.format(partition.identity.name))
+        self.logger.info('load_insert {}'.format(partition.identity.vname))
 
         if self.database.driver == 'mysql':
             cache_size = 5000

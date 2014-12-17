@@ -1051,7 +1051,6 @@ class Library(object):
 
             for cache_key in remote.list().keys():
 
-
                 if cache_key in all_keys:
                     continue
 
@@ -1096,8 +1095,9 @@ class Library(object):
 
                 try:
                     self.files.insert_collection()
-                except IntegrityError:
+                except IntegrityError as e:
                     b.close() # Just means we already have it installed
+                    raise
                     continue
 
                 if installed:
@@ -1107,6 +1107,7 @@ class Library(object):
                 self.database.commit()
                 self.database.close()
                 b.close()
+
 
     def sync_source(self, clean=False):
         '''Rebuild the database from the bundles that are already installed
@@ -1190,7 +1191,7 @@ class Library(object):
             local_manifest = self.files.new_file(commit=True, merge=True,
                                                  extant=self.files.query.ref(remote_manifest.ref).group(
                                                      self.files.TYPE.MANIFEST).one_maybe,
-                                                  **{ k:v for k,v in remote_manifest.insertable_dict.items()
+                                                  **{ k:v for k,v in remote_manifest.record_dict.items()
                                                      if k not in ('oid')})
 
             for p  in remote_manifest.linked_partitions:

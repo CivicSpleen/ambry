@@ -751,7 +751,6 @@ class LibraryDb(object):
         from sqlalchemy.orm.exc import NoResultFound
 
         if commit == 'collect':
-
             self._partition_collection.append(partition.record.insertable_dict)
             return
 

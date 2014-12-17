@@ -1584,11 +1584,16 @@ class File(Base, SavableMixin, LinkableMixin):
 
         return d
 
+    @property
+    def record_dict(self):
+        '''Like dict, but does not move data items into the top level'''
+        return { p.key: getattr(self, p.key) for p in self.__mapper__.attrs}
 
     @property
     def insertable_dict(self):
-
-        return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs }
+        """Like record_dict, but prefixes all of the keys with 'f_', so it can be used in inserts """
+        # .strip('_') is for type_
+        return {'f_'+p.key.strip('_'): getattr(self, p.key) for p in self.__mapper__.attrs }
 
     ## These partition and file acessors were originally implemented as many-to-many tables
     ## and probably should still be, but this is easier to understand than dealing with Sqlalchemy cascaded

@@ -158,7 +158,6 @@ class Files(object):
             f = extant
 
         if merge:
-
             self.merge(f, commit=commit)
 
         return f
@@ -282,6 +281,8 @@ class Files(object):
     def install_remote_partition(self, ident, upstream, metadata, commit=True):
         """Set a reference to a remote partition"""
 
+
+        assert bool(str(ident.cache_key)), "File path can't be null'"
 
         return self.new_file(
             commit = commit,
