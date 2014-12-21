@@ -495,6 +495,7 @@ def bundle_config(args, b, st, rc):
 
     elif args.subsubcommand == 'incver':
         from ..identity import Identity
+        from datetime import datetime
         identity = b.identity
 
         # Get the latest installed version of this dataset
@@ -519,6 +520,17 @@ def bundle_config(args, b, st, rc):
         identity = Identity.from_dict(identity.ident_dict)
 
         b.update_configuration(identity=identity)
+
+        # Create a new revision entry
+        md = b.metadata
+        md.load_all()
+        md.versions[identity.on.revision] = {
+            'description': raw_input("Revision Description: "),
+            'version': md.identity.version,
+            'date': datetime.now().isoformat()
+        }
+
+        md.write_to_dir()
 
         print identity.fqname
 

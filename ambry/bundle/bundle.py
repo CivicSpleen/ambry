@@ -811,11 +811,10 @@ class BuildBundle(Bundle):
             del md._term_values['partitions']
 
         # Ensure there is an entry for every revision, if only to nag the maintainer to fill it in.
-        for i in range(1, md.identity.revision+1):
-            md.versions[i]
-
-            if i == md.identity.revision:
-                md.versions[i].version = md.identity.version
+        #for i in range(1, md.identity.revision+1):
+        #    md.versions[i]
+        #    if i == md.identity.revision:
+        #        md.versions[i].version = md.identity.version
 
         ## Load the documentation
 

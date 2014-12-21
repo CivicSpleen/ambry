@@ -4,9 +4,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from ..dbexceptions import DependencyError
-from . import WarehouseInterface
+from . import Warehouse
 
-class RelationalWarehouse(WarehouseInterface):
+class RelationalWarehouse(Warehouse):
 
     ##
     ## Tables

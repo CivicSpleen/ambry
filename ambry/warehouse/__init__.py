@@ -98,7 +98,7 @@ def new_warehouse(config, elibrary, logger=None):
 class ResolutionError(Exception):
     pass
 
-class WarehouseInterface(object):
+class Warehouse(object):
 
     FILE_TYPE = Constant()
 
@@ -625,6 +625,8 @@ class WarehouseInterface(object):
         else:
             return self.database.dsn
 
+
+
     def post_install(self):
         """
         Perform operations after the manifest install, such as creating table views for
@@ -776,6 +778,7 @@ class WarehouseInterface(object):
 
         try:
             from sqlalchemy.orm import lazyload
+            # Search for the table by the table name
 
             q = (s.query(Table).filter(Table.d_vid == ROOT_CONFIG_NAME_V, Table.name == name )
                  .options(lazyload('columns')))
@@ -783,6 +786,7 @@ class WarehouseInterface(object):
             t = q.one()
 
         except NoResultFound:
+            # Search for the table by the vid
 
             ds = s.query(Dataset).filter(Dataset.vid == ROOT_CONFIG_NAME_V).one()
 
@@ -976,7 +980,6 @@ class WarehouseInterface(object):
 
         return pid
 
-
     def _partition_to_dataset_vid(self, partition):
         from ..partition import PartitionBase
         from ..identity import Identity
@@ -992,7 +995,6 @@ class WarehouseInterface(object):
 
         return did
 
-
     def augmented_table_name(self, identity, table_name):
         """Create a table name that is prefixed with the dataset number and the
         partition grain, if it has one"""
@@ -1006,7 +1008,6 @@ class WarehouseInterface(object):
 
         if identity.grain:
             alias = alias + '_' + identity.grain
-
 
         return name, alias
 
@@ -1029,14 +1030,11 @@ class WarehouseInterface(object):
 
         return sorted(idents, key = lambda x : x.fqname)
 
-
     def info(self):
         config = self.config.to_dict()
 
         if 'password' in config['database']: del config['database']['password']
         return config
-
-
 
 def database_config(db, base_dir=''):
     import urlparse

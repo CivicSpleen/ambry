@@ -322,7 +322,7 @@ def parse_date(name, v):
     elif isinstance(v, datetime.date):
         return v
     else:
-        raise CastingError(name, v, "Expected datetime.date or basestring, got {{}}".format(type(v)))
+        raise CastingError(name, v, "Expected datetime.date or basestring, got '{}'".format(type(v)))
 
 def parse_time(name, v):
     import dateutil.parser as dp
@@ -337,7 +337,7 @@ def parse_time(name, v):
     elif isinstance(v, datetime.time):
         return v
     else:
-        raise CastingError(name, v, "Expected datetime.time or basestring, got {{}}".format(type(v)))
+        raise CastingError(name, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
 
 def parse_datetime(name, v):
     import dateutil.parser as dp
@@ -354,7 +354,7 @@ def parse_datetime(name, v):
     elif isinstance(v, datetime.datetime):
         return v
     else:
-        raise CastingError(name, v, "Expected datetime.datetime or basestring, got {{}}".format(type(v)))
+        raise CastingError(name, v, "Expected datetime.datetime or basestring, got "+str(type(v)))
 
 class CasterTransformBuilder(object):
     
@@ -501,10 +501,10 @@ def {}(row):
 
             try:
                 return   f[1](d),{}
-            except CastingError:
+            except CastingError as e:
                 do = {}
                 cast_errors = {}
-                
+                print '!!!', e
                 for k,v in d.items():
                     try:
                         do[k] = f[2][k](v)

@@ -33,9 +33,18 @@ ogr_type_map = {
         Column.DATATYPE_DATETIME: ogr.OFTDateTime, 
         }
 
+# An invertable map -- values are unique. It really should have the keys and values reversed, but this is less work
+ogr_inv_type_map = {
+    Column.DATATYPE_VARCHAR: ogr.OFTString,
+    Column.DATATYPE_INTEGER: ogr.OFTInteger,
+    Column.DATATYPE_REAL: ogr.OFTReal,
+    Column.DATATYPE_DATE: ogr.OFTDate,
+    Column.DATATYPE_TIME: ogr.OFTTime,
+    Column.DATATYPE_TIMESTAMP: ogr.OFTDateTime,
+    Column.DATATYPE_DATETIME: ogr.OFTDateTime,
+}
 
 def copy_schema(schema, path, table_name=None, fmt='shapefile', logger = None):
-
 
     if path.startswith('http'):
         shape_url = path
@@ -46,7 +55,8 @@ def copy_schema(schema, path, table_name=None, fmt='shapefile', logger = None):
 
     ds = driver.Open(path, 0) # 0 means read-only. 1 means writeable.
 
-    type_map = {v:k for k,v in ogr_type_map.items()}
+    type_map = {v:k for k,v in ogr_inv_type_map.items() if k }
+
 
     if ds.GetLayerCount() > 1  and table_name:
         raise ValueError("Can't specify table_name for a file with multiple layers")

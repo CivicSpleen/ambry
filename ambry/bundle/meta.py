@@ -65,11 +65,17 @@ class Names(DictGroup):
 
 class SourceTerm(DictTerm):
     url = ScalarTerm()
+    title = ScalarTerm(store_none=False) # Title for use in table.
     description = ScalarTerm(store_none=False)
     dd_url = ScalarTerm(store_none=False) # Data Dictitionary URL
     file = ScalarTerm(store_none=False) # A name or regex to extract from a multi-file ZIP
-    segment = ScalarTerm(store_none=False)  # Specify a sub-component of the file, like a sheet in an exce workbook.
+    segment = ScalarTerm(store_none=False)  # Specify a sub-component of the file, like a sheet in an excel workbook.
     comment = ScalarTerm(store_none=False)  # Just a comment
+    time = ScalarTerm(store_none=False)  # Specify a time component, usually a year.
+    space = ScalarTerm(store_none=False)  # Specify a space component
+    grain = ScalarTerm(store_none=False)  # Specify a grain component
+    table = ScalarTerm(store_none=False)  # For auto imports, name of table to loat into.
+
 
     def __nonzero__(self):
         return bool(self.url or self.file or self.description or self.dd_url)
@@ -111,6 +117,7 @@ class ExtDoc(TypedDictGroup):
 class VersonTerm(DictTerm):
     """Version Description"""
     version = ScalarTerm()
+    date = ScalarTerm()
     description = ScalarTerm(store_none=False)
 
 class Versions(TypedDictGroup):

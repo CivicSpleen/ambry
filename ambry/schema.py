@@ -1566,7 +1566,7 @@ class {name}(Base):
 
         return memo
 
-    def _update_from_memo(self, table_name,  memo, logger=None):
+    def _update_from_memo(self, table_name,  memo, logger=None, description = None, data = None):
         '''Update a table schema using a memo from intuit()'''
         from datetime import datetime, time, date
         from sqlalchemy.orm.exc import NoResultFound
@@ -1582,7 +1582,7 @@ class {name}(Base):
             try:
                 table = self.table(table_name)
             except NoResultFound:
-                table = self.add_table(table_name)
+                table = self.add_table(table_name, description = description, data = data)
 
             for d in memo['fields']:
                 name = d['name']
@@ -1598,8 +1598,8 @@ class {name}(Base):
                                     size = fields[i]['length'] if fields[i]['prob-type'] == str else None,
                                     data=dict(header=name))
 
- 
-    def update(self, table_name, itr, n=None, header=None, logger=None):
+
+    def update(self, table_name, itr, n=None, header=None, logger=None, description = None, data = None):
         '''Update the schema from an iterator that returns rows. This
         will create a new table with rows that have datatype intuited from the values. '''
 
@@ -1628,7 +1628,7 @@ class {name}(Base):
                 memo['name_index'][name] = i
                 memo['fields'][i]['name'] = name
 
-        self._update_from_memo(table_name, memo)
+        self._update_from_memo(table_name, memo, description = description, data = data)
 
         with open(self.bundle.filesystem.path('meta',self.bundle.SCHEMA_FILE), 'w') as f:
             self.as_csv(f)        

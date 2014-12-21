@@ -50,16 +50,6 @@ class CsvBundle(BuildBundle):
 
             return ['id'] + r.next()
 
-
-    def meta_gen_schema(self, source):
-
-        self.schema.update(source,
-                            itr = self.gen_rows(source, as_dict = True),
-                            header = self.source_header(source),
-                            n = 2000,
-                            logger = self.init_log_rate(500))
-
-
     def meta(self):
 
         self.database.create()
@@ -67,14 +57,29 @@ class CsvBundle(BuildBundle):
         if not self.run_args.get('clean', None):
             self._prepare_load_schema()
 
-        for source in self.metadata.sources:
-            self.meta_gen_schema(source)
+        for source_name, source in self.metadata.sources.items():
+
+            table_name = source.table if source.table else  source_name
+
+            table_desc = source.description if source.description else "Table generated from {}".format(source.url)
+
+            data = {}
+
+            if source.time: data['time'] = source.time
+            if source.space: data['space'] = source.space
+            if source.grain: data['grain'] = source.grain
+
+            self.schema.update(table_name,
+                               description = table_desc,
+                               data = data,
+                               itr=self.gen_rows(source_name, as_dict=True),
+                               header=self.source_header(source_name),
+                               n=2000,
+                               logger=self.init_log_rate(500))
 
         return True
 
-
     def build(self):
-
 
         for source in self.metadata.sources:
 
@@ -92,13 +97,16 @@ class CsvBundle(BuildBundle):
                for _, row in self.gen_rows(source):
                    lr(str(p.identity.name))
 
-                   ins.insert(dict(zip(header, row)))
+                   d = dict(zip(header, row))
+
+                   ins.insert(d)
 
 
         return True
 
-
 class ExcelBuildBundle(CsvBundle):
+
+    workbook = None # So the derived classes can et to the workbook, esp for converting dates
 
     def __init__(self, bundle_dir=None):
         '''
@@ -121,9 +129,8 @@ class ExcelBuildBundle(CsvBundle):
 
         return values
 
-
     def get_wb_sheet(self, source):
-        from xlrd import open_workbook
+
 
         if not source:
             source = self.metadata.sources.keys()[0]
@@ -132,7 +139,6 @@ class ExcelBuildBundle(CsvBundle):
         sheet_num = 0 if not sheet_num else sheet_num
 
         return self.get_source(source), sheet_num
-
 
     def source_header(self, source):
         from xlrd import open_workbook
@@ -158,6 +164,8 @@ class ExcelBuildBundle(CsvBundle):
 
             wb = open_workbook(fn)
 
+            self.workbook = wb
+
             s = wb.sheets()[sheet_num]
 
             for i, row in enumerate(range(1,s.nrows)):
@@ -168,7 +176,6 @@ class ExcelBuildBundle(CsvBundle):
                     # It might seem inefficient to return the header every time, but it really adds only a
                     # fraction of a section for millions of rows.
                     yield header, [None] + self.srow_to_list(row, s)
-
 
 
 class GeoBuildBundle(BuildBundle):

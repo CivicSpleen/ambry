@@ -559,7 +559,9 @@ class BundleFilesystem(Filesystem):
         
         if not zip_file or not os.path.exists(zip_file):
             raise Exception("Failed to download: {} ".format(url))
-            
+
+        file_ = None
+
         for file_ in self.unzip_dir(zip_file, regex=re.compile('.*\.shp$')):
             pass # Should only be one
         

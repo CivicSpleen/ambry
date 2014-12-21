@@ -1,10 +1,1 @@
 "table","seq","column","is_pk","is_fk","type","size","description"
-"example1",1,"id",1,,"INTEGER",,
-"example1",2,"uuid",,,"VARCHAR",36,"A random UUID"
-"example1",3,"int",,,"INTEGER",3,"A random integer"
-"example1",4,"float",,,"REAL",,
-,,,,,,,
-"example2",1,"id",1,,"INTEGER",,
-"example2",2,"uuid2",,,"VARCHAR",,"A random UUID"
-"example2",3,"int2",,,"INTEGER",,"A random integer"
-"example2",4,"float",,,"REAL",,
