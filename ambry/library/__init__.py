@@ -505,30 +505,36 @@ class Library(object):
 
 
     def table(self, vid):
+
         from ..orm import Table
         from sqlalchemy.orm.exc import NoResultFound
         from ..dbexceptions import NotFoundError
+
 
         try:
             return (self.database.session.query(Table).filter(Table.vid == vid).one())
         except NoResultFound:
             try:
-                return (self.database.session.query(Table).filter(Table.id_ == vid).one())
+                return (self.database.session.query(Table).filter(Table.id_ == vid).order_by(Table.vid.desc()).first())
             except NoResultFound:
                 raise NotFoundError("Did not find table ref {} in library {}".format(vid, self.database.dsn))
+
 
     def derived_tables(self, proto_vid):
         """Tables with the given proto_vid"""
 
         from ..orm import Table
-        from sqlalchemy.orm.exc import NoResultFound
-        from ..dbexceptions import NotFoundError
+        from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
+        from ..dbexceptions import NotFoundError, MultipleFoundError
 
         try:
             return (self.database.session.query(Table).filter(Table.proto_vid == proto_vid).all())
         except NoResultFound:
             raise NotFoundError("Did not find table with proto_vid {} in library {}"
                                 .format(proto_vid, self.database.dsn))
+        except MultipleResultsFound:
+            raise MultipleFoundError("FOund multiple tables with proto_vid {} in library {}"
+                                     .format(proto_vid, self.database.dsn))
 
 
     def partition(self, vid):

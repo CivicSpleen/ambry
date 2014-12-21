@@ -7,6 +7,14 @@ class DstkGeocoder(object):
     submit_size = 100
 
     def __init__(self, url, address_gen):
+        """
+        Batch geocode addresses using DSTK
+
+        :param url: URL to a DTSK server
+        :param address_gen: A generator that yields tuples of (address, object), where address is an address string.
+            The address is geocoded, and the object is passed thorugh to the result.
+        :return:
+        """
         import dstk
         self.url = url
         self.gen = address_gen
@@ -14,8 +22,10 @@ class DstkGeocoder(object):
         self.dstk_client = dstk.DSTK(self.url)
 
     def geocode(self):
-        """A Generator that reads from the address generators and returns geocode results. """
+        """A Generator that reads from the address generators and returns geocode results.
 
+        The generator yields ( address, geocode_results, object)
+        """
 
         submit_set = []
         data_map = {}

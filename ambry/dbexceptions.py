@@ -36,7 +36,12 @@ class FilesystemError(BundleError):
 
 class NotFoundError(BundleError):
     '''Failed to find resource'''
-    
+
+
+class MultipleFoundError(BundleError):
+    '''Found multiple when only one was expected'''
+
+
 class DependencyError(Exception):
     """Required bundle dependencies not satisfied"""
 
