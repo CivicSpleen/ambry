@@ -80,3 +80,6 @@ class DatabaseError(BundleError):
 
 class DatabaseMissingError(DatabaseError):
     """A general database error """
+
+class GeoError(Exception):
+    """General error doing geographic processing"""

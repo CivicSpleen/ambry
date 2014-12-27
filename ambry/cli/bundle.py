@@ -134,9 +134,14 @@ def bundle_command(args, rc):
         raise
     finally:
         import lockfile
+        from sqlalchemy.exc import InvalidRequestError
         try:
             if b:
-                b.close()
+                try:
+                    b.close()
+                except InvalidRequestError:
+                    pass
+
         except lockfile.NotMyLock as e:
             warn("Got logging error: {}".format(str(e)))
 
@@ -512,6 +517,10 @@ def bundle_config(args, b, st, rc):
             prior_version = b.identity.on.revision
             b.close()
 
+        b.clean()
+        b.prepare()
+        b.close()
+
         # Now, update this version to be one more.
         ident = b.identity
 
@@ -535,6 +544,8 @@ def bundle_config(args, b, st, rc):
         print identity.fqname
 
 
+
+
     elif args.subsubcommand == 's3urls':
         return bundle_config_s3urls(args, b, st, rc)
 
@@ -544,7 +555,7 @@ def bundle_config(args, b, st, rc):
         from requests.exceptions import HTTPError
         from ..identity import DatasetNumber, Identity
 
-        nsconfig = rc.group('numbers')
+        nsconfig = rc.service('numbers')
 
         if args.key:
             nsconfig['key'] = args.key

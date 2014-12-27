@@ -27,16 +27,16 @@ class CsvBundle(BuildBundle):
 
         with open(fn) as f:
 
-            r = csv.reader(f)
-
-            header =  self.source_header(source)
-
             if as_dict:
+                r = csv.DictReader(f)
                 for row in r:
-                    yield dict(zip(header, [None] + row))
+                    row['id'] = None
+                    yield row
             else:
                 # It might seem inefficient to return the header every time, but it really adds only a
                 # fraction of a section for millions of rows.
+                r = csv.reader(f)
+                header = ['id'] + r.next()
                 for row in r:
                      yield header, [None] + row
 
@@ -69,12 +69,19 @@ class CsvBundle(BuildBundle):
             if source.space: data['space'] = source.space
             if source.grain: data['grain'] = source.grain
 
-            self.schema.update(table_name,
-                               description = table_desc,
-                               data = data,
-                               itr=self.gen_rows(source_name, as_dict=True),
-                               header=self.source_header(source_name),
-                               n=2000,
+            with self.session:
+                table = self.schema.add_table(table_name, description=table_desc, data = data)
+
+            header, row = self.gen_rows(source_name, as_dict=False).next()
+
+            def itr():
+                for header, row in self.gen_rows(source_name, as_dict=False):
+                    yield row
+
+            self.schema.update_from_iterator(table_name,
+                               header = header,
+                               iterator=itr(),
+                               max_n=1000,
                                logger=self.init_log_rate(500))
 
         return True

@@ -164,7 +164,7 @@ class SqlitePartition(PartitionBase):
 
     def finalize(self):
 
-        if not self.is_finalized:
+        if not self.is_finalized and self.database.exists():
             self.write_stats()
             self.write_file()
 

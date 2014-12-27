@@ -520,34 +520,7 @@ class DbBundle(DbBundleBase):
         """Return the dataset
         """
 
-        from sqlalchemy.exc import OperationalError
-        from ..dbexceptions import NotFoundError
-
-        from ambry.orm import Dataset
-
-        try:
-            ds = (self.database.session.query(Dataset).one())
-
-            if not ds:
-                raise NotFoundError(
-                    "No dataset record found. Probably not a bundle (a): '{}'".format(
-                        self.path))
-
-            return ds
-
-        except OperationalError:
-            raise NotFoundError(
-                "No dataset record found. Probably not a bundle (b): '{}'".format(
-                    self.path))
-        except Exception as e:
-            from ..util import get_logger
-            # self.logger can get caught in a recursion loop
-            logger = get_logger(__name__)
-            logger.error(
-                "Failed to get dataset: {}; {}".format(
-                    e.message,
-                    self.database.dsn))
-            raise
+        return self.database.get_dataset()
 
 
     @property
@@ -1128,11 +1101,7 @@ class BuildBundle(Bundle):
 
     def _prepare_load_schema(self):
 
-        sf = self.filesystem.path(
-            self.config.build.get(
-                'schema_file',
-                'meta/' +
-                self.SCHEMA_FILE))
+        sf = self.filesystem.path('meta',self.SCHEMA_FILE)
 
         if os.path.exists(sf):
             with open(sf, 'rbU') as f:
@@ -1152,12 +1121,16 @@ class BuildBundle(Bundle):
                                 message))
 
                 if errors:
-                    self.fatal("Schema load filed. Exiting")
+                    self.fatal("Schema load failed. Exiting")
         else:
             self.log("No schema file ('{}') not loading schema".format(sf))
 
+        cf = self.filesystem.path('meta',self.CODE_FILE)
 
-
+        if os.path.exists(cf):
+            self.log("Loading codes file: {}".format(cf))
+            with self.session:
+                self.schema.read_codes()
 
     def prepare(self):
         from ..dbexceptions import NotFoundError

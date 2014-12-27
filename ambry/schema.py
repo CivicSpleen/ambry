@@ -1235,6 +1235,30 @@ class {name}(Base):
                         w.writerow(row)
 
 
+    def read_codes(self):
+        """Read codes from a codes.csv file back into the schema"""
+        import csv
+
+        with open(self.bundle.filesystem.path('meta', self.bundle.CODE_FILE), 'r') as f:
+
+            r = csv.DictReader(f)
+            table = None
+            column = None
+            for row in r:
+
+                if not table or table.name != row['table']:
+                    table = self.table(row['table'])
+                    column = None
+
+                if not column or column.name != row['column']:
+                    column = table.column(row['column'])
+
+                column.add_code(row['key'], row['value'], row['description'])
+
+
+
+
+
     @property
     def dict(self):
         """Represent the entire schema as a dict, suitable for conversion to json"""
@@ -1339,234 +1363,8 @@ class {name}(Base):
     # Updating Schemas
     #
     #
-     
-    def reset_to_float(self, table_name):
-        '''Reset all of the values in the table, except for the primary key
-        to floats, in preparation for intuiting the schema ''' 
 
-    @staticmethod
-    def _maybe_datetime(v):
-        if not isinstance(v, basestring):
-            return False
-        
-        if len(v) > 22:
-            # Not exactly correct; ISO8601 allows fractional sections
-            # which could result in a longer string. 
-            return False
-        
-        if '-' not in v and ':' not in v:
-            return False
-        
-        for c in set(v): # Set of Unique characters
-            if not c.isdigit() and c not in 'T:-Z':
-                return False
-            
-        return True
-
-    @staticmethod
-    def _maybe_time(v):
-        if not isinstance(v, basestring):
-            return False
-        
-        if len(v) > 15:
-            return False
-        
-        if ':' not in v:
-            return False
-        
-        for c in set(v): # Set of Unique characters
-            if not c.isdigit() and c not in 'T:Z.':
-                return False
-            
-        return True
-            
-    @staticmethod
-    def _maybe_date(v):
-        if not isinstance(v, basestring):
-            return False
-        
-        if len(v) > 10:
-            # Not exactly correct; ISO8601 allows fractional sections
-            # which could result in a longer string. 
-            return False
-        
-        if '-' not in v:
-            return False
-        
-        for c in set(v): # Set of Unique characters
-            if not c.isdigit() and c not in '-':
-                return False
-            
-        return True
-    
-    def intuit(self, row, memo):
-        '''Accumulate information about a database row to determine the most likely datatype and length for each
-        field. 
-        
-        To use, run in the row loop:
-        
-            memo = bundle.schema.intuit_schema(row,memo)
-            
-        For row being either a dict or list of row values. 
-        
-        To finalize, call with row == None
-        
-        '''
-        from collections import defaultdict, OrderedDict
-        from sqlalchemy.engine import RowProxy
-        from datetime import datetime, date, time
-
-        if memo is None :
-            memo = {'fields' : None, 'name_index': {}}
-            
-            memo['fields'] = [{'name': None, 
-                               'min-type': int, 
-                               'prob-type': None, 
-                               'major-type': None, 
-                               'minor-type': None,
-                               'length': 0, 
-                               'maybe': {'date':0, 'datetime':0, 'time':0},
-                               'n' : 0,
-                               'counts': defaultdict(int)} for i in range(len(row))]
-            
-            if isinstance(row, dict) or isinstance(row, RowProxy):
-                for i,name in enumerate(row.keys()):
-                    memo['fields'][i]['name'] = name
-                    memo['name_index'][name] = i
-
-        if row is None:
-            
-            # Finalize the run by computing the major/minor ratio of types for each column 
-            for i in range(len(memo['fields'])):
-
-                col = memo['fields'][i]
-
-                if len(col['counts']):
-                    scounts = sorted(col['counts'].items(), key = lambda x: x[1], reverse = True)
-                    col['major-type'] = scounts.pop(0) if len(scounts) else None
-                    col['minor-type'] = scounts.pop(0) if len(scounts) else None
-                    
-                    if (bool(col['major-type']) and bool(col['major-type'][1]) and 
-                        bool(col['minor-type']) and bool(col['minor-type'][1])):
-                        col['mmr'] = float(col['minor-type'][1]) / float(col['major-type'][1])
-                    else:
-                        col['mmr'] = None
-
-
-                if float(col['maybe']['date'])/float(col['n']) > .90:
-                    import datetime
-                    col['prob-type'] = datetime.date
-
-                elif float(col['maybe']['time'])/float(col['n']) > .90:
-                    import datetime
-                    col['prob-type'] = datetime.time
-
-                elif float(col['maybe']['datetime'])/float(col['n']) > .90:
-                    import datetime
-                    col['prob-type'] = datetime.datetime
-
-                elif col['mmr'] is not None and col['mmr'] < .05:
-                    col['prob-type'] = col['major-type'][0]
-
-                else:
-                    col['prob-type'] = col['min-type']
-
-            return memo
-
-        for i, v in enumerate(row):
-            
-            # Convert lists to dicts
-            if isinstance(row, dict):
-                key = v
-
-                i =  memo['name_index'][key]
-                v = row[key]
-
-            if isinstance(v, basestring):
-                v = v.strip()
-           
-           
-            mfi = memo['fields'][i]
-           
-            mfi['n'] += 1
-           
-            # Keep track of the number of possibilities for each
-            # field. This is needed to identify fields that are mostly
-            # one type ( ie, Integer ) but which have occasional text codes.
-
-            if v is None:
-                mfi['counts'][None] += 1
-
-                continue
-
-            try:
-                if isinstance(v, (datetime)):
-                    mfi['counts'][datetime] += 1
-                    mfi['maybe']['datetime'] += 1
-                    continue
-
-                if isinstance(v, (date)):
-                    mfi['counts'][date] += 1
-                    mfi['maybe']['date'] += 1
-                    continue
-
-                if isinstance(v, (time)):
-                    mfi['counts'][time] += 1
-                    mfi['maybe']['time'] += 1
-                    continue
-
-                mfi['counts'][str] += 1
-                float(v)
-                mfi['counts'][float] += 1
-                mfi['counts'][str] -= 1
-                int(v)
-                mfi['counts'][float] -= 1
-                mfi['counts'][int] += 1            
-            except TypeError:
-                pass
-            except ValueError:
-                pass
-            
-            # What follows is the normal intuiting process.
-
-            if v is None or v == '-' or v == '':
-                continue
-            
-            elif mfi['min-type'] == str:
-                mfi['length'] = max(mfi['length'], len(unicode(v)))
-                mfi['maybe']['date'] += 1 if self._maybe_date(v) else 0
-                mfi['maybe']['time'] += 1 if self._maybe_time(v) else 0
-                mfi['maybe']['datetime'] += 1 if self._maybe_datetime(v) else 0
-                continue # No more conversions are possible.
-
-            mfi['length'] = max(mfi['length'], len(str(v))) 
-            
-            # Find the base type, the most specific type that will hold
-            # this data
-
-
-            if mfi['min-type'] is int:
-                try:
-                    int(v)      
-                    mfi['min-type'] = int
-
-                except (TypeError, ValueError): # Type error for when v is a datetime
-                    mfi['min-type'] = float
-
-                    
-            if mfi['min-type'] is float or isinstance(v, float):
-                try:
-                    float(v)
-                    mfi['min-type'] = float
-
-                except (TypeError, ValueError): # Type error for when v is a datetime
-                    mfi['min-type'] = str
-
-
-
-        return memo
-
-    def _update_from_memo(self, table_name,  memo, logger=None, description = None, data = None):
+    def _update_from_intuiter(self, table_name, intuiter, logger=None, description=None):
         '''Update a table schema using a memo from intuit()'''
         from datetime import datetime, time, date
         from sqlalchemy.orm.exc import NoResultFound
@@ -1574,66 +1372,39 @@ class {name}(Base):
         type_map = {int: 'integer', str: 'varchar', float: 'real',
                     datetime: 'datetime', date: 'date', time: 'time'}
 
-        index = memo['name_index'] if len(memo['name_index']) > 0 else None
-        fields = memo['fields']
 
         with self.bundle.session as s:
 
-            try:
-                table = self.table(table_name)
-            except NoResultFound:
-                table = self.add_table(table_name, description = description, data = data)
+            table = self.table(table_name)
 
-            for d in memo['fields']:
-                name = d['name']
+            for col in intuiter.columns:
+                name = col.name
 
                 if name == 'id':
                     self.add_column(table, 'id', datatype='integer', is_primary_key=True)
 
                 else:
-                    i = index[d['name']]
+
                     # add_column will update existing columns
-                    self.add_column(table, d['name'],
-                                    datatype = type_map[fields[i]['prob-type']],
-                                    size = fields[i]['length'] if fields[i]['prob-type'] == str else None,
-                                    data=dict(header=name))
+                    type_, has_codes = col.resolved_type()
+
+                    self.add_column(table, name,
+                                    datatype=type_map[type_],
+                                    size=col.length if type_ == str else None,
+                                    data = dict(has_codes=1) if has_codes else {})
+
+            with open(self.bundle.filesystem.path('meta', self.bundle.SCHEMA_FILE), 'w') as f:
+                self.as_csv(f)
 
 
-    def update(self, table_name, itr, n=None, header=None, logger=None, description = None, data = None):
-        '''Update the schema from an iterator that returns rows. This
-        will create a new table with rows that have datatype intuited from the values. '''
+    def update_from_iterator(self, table_name, iterator, header=None, max_n = None,logger = None):
+        from util.intuit import Intuiter
 
-        memo = None
+        intuit = Intuiter(header=header, logger = logger)
+        intuit.iterate(iterator, max_n=max_n)
 
-        i = 0
-        for row in itr:
-            i+= 1
-            try:
-                memo = self.intuit(row, memo)
-            except Exception as e:
-                self.bundle.error("Error updating row {} of {}: {}\nrow = {}".format(i, table_name, e, row))
-                continue
+        self._update_from_intuiter(table_name, intuit)
 
-            if logger:
-                logger("Schema update, row  {}".format(i))
-
-            if n and i > n:
-                break
-
-        memo = self.intuit(None, memo)
-
-        if header:
-            for i, name in enumerate(header):
-
-                memo['name_index'][name] = i
-                memo['fields'][i]['name'] = name
-
-        self._update_from_memo(table_name, memo, description = description, data = data)
-
-        with open(self.bundle.filesystem.path('meta',self.bundle.SCHEMA_FILE), 'w') as f:
-            self.as_csv(f)        
-
-        return memo
 
     def update_csv(self, table_name, file_name, n=500, logger=None):
         """Create a new table, or update an old one, from a CSV file. The CSV file must have a header. """
@@ -1643,15 +1414,7 @@ class {name}(Base):
 
         # Get just the header row, so we can se the correct order of columns
         with open(file_name) as f:
-            reader = csv.reader(f)
-            header = reader.next()
+            reader = csv.DictReader(f)
 
-            def itr():
-                for i, row in enumerate(reader):
-                    if i > n:
-                        break
-
-                    yield row
-
-            return self.update(table_name, itr(), header=header)
+            return self.update_from_iterator(table_name, reader,  max_n=n)
 

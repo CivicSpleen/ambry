@@ -678,9 +678,12 @@ def find_containment(containers, containeds, method = 'contains'):
 
     """
     from rtree import index
+    from rtree.core import RTreeError
     from shapely.geometry import Point, Polygon
     from shapely.wkt import loads
     from collections import Iterable
+    from ..dbexceptions import GeoError
+
 
     # Maybe this is only a performance improvement if the data is sorted in the generator ...
     def gen_index():
@@ -689,7 +692,11 @@ def find_containment(containers, containeds, method = 'contains'):
 
             yield (i, container_geometry.bounds, (container_obj, container_geometry))
 
-    idx = index.Index(gen_index())
+    try:
+        idx = index.Index(gen_index())
+    except RTreeError:
+        raise GeoError("Failed to create RTree Index. Check that the container generator produced valud output")
+
 
 
     # Find the point containment

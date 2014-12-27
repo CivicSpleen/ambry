@@ -22,3 +22,27 @@ class Test(TestBase):
 
         with cache.get_stream('d00l005/bundle.json') as s:
             print s.read()
+
+
+    def test_intuit(self):
+        import os, csv
+        from ambry.util.intuit import Intuiter
+
+        csvf = os.path.join(os.path.dirname(__file__), 'support', 'types.csv' )
+
+        intuit = Intuiter()
+
+        with open(csvf) as f:
+            intuit.iterate(csv.DictReader(f))
+
+        intuit.dump()
+
+        print '--------'
+
+
+        with open(csvf) as f:
+            r = csv.reader(f)
+            intuit = Intuiter(header = r.next())
+            intuit.iterate(r, max_n = 30)
+
+        intuit.dump()

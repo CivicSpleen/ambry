@@ -580,12 +580,45 @@ class RelationalBundleDatabaseMixin(object):
         session.add(ds)
         session.commit()
 
+    def get_dataset(self):
+        """Return the dataset
+        """
+
+        from sqlalchemy.exc import OperationalError
+        from ..dbexceptions import NotFoundError
+
+        from ambry.orm import Dataset
+
+        try:
+            ds = (self.session.query(Dataset).one())
+
+            if not ds:
+                raise NotFoundError("No dataset record found in '{}'".format(self.dsn))
+
+            return ds
+
+        except OperationalError:
+            raise NotFoundError("No dataset record found in '{}'".format(self.dsn))
+        except Exception as e:
+            from ..util import get_logger
+            # self.logger can get caught in a recursion loop
+            logger = get_logger(__name__)
+            logger.error( "Failed to get dataset: {}; {}".format(e.message,self.dsn))
+            raise
+
     def rewrite_dataset(self):
         from ..orm import Dataset
         # Now patch up the Dataset object
 
+        try:
+            ds = self.get_dataset()
 
-        ds = Dataset(**self.bundle.identity.dict)
+            for k,v in self.bundle.identity.dict.items():
+                setattr(ds,k,v)
+
+        except:
+            ds = Dataset(**self.bundle.identity.dict)
+
         ds.name = self.bundle.identity.sname
         ds.vname = self.bundle.identity.vname
         ds.fqname = self.bundle.identity.fqname
@@ -596,6 +629,7 @@ class RelationalBundleDatabaseMixin(object):
             ds.creator = 'n/a'
 
         self.session.merge(ds)
+        self.session.commit()
 
     def _post_create(self):
         from ..library.database import ROOT_CONFIG_NAME_V
