@@ -35,7 +35,9 @@ class SqliteWarehouse(RelationalWarehouse):
                                               on_conflict='REPLACE',
                                               name=atch_name, conn=conn, copy_n = copy_n, where = where)
 
+        # Geographic partitions need to be updates to be recognized
 
+        print '!!!', self.database
 
         if partition.is_geo:
 
