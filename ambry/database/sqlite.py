@@ -93,7 +93,7 @@ class SqliteAttachmentMixin(object):
     
     
     def copy_from_attached(self, table, columns=None, name=None, 
-                           on_conflict= 'ABORT', where=None, conn=None, copy_n = None):
+                           on_conflict= 'ABORT',   where=None, conn=None, copy_n = None):
 
         """ Copy from this database to an attached database
         
@@ -113,7 +113,7 @@ class SqliteAttachmentMixin(object):
             name = self._last_attach_name
         
         f = {'db':name, 'on_conflict': on_conflict, 'from_columns':'*', 'to_columns':''}
-        
+
         if isinstance(table,basestring):
             # Copy all fields between tables with the same name
             f['from_table']  = table
@@ -141,11 +141,17 @@ class SqliteAttachmentMixin(object):
         if copy_n:
             q += ' LIMIT {}'.format(copy_n)
 
+
         if conn:
             conn.execute(q)
         else:
             with self.engine.begin() as conn:
                 conn.execute(q)
+
+
+
+
+
 
 
 class SqliteDatabase(RelationalDatabase):
@@ -291,7 +297,7 @@ class SqliteDatabase(RelationalDatabase):
     def _create(self):
         """Need to ensure the database exists before calling for the connection, but the
         connection expects the database to exist first, so we create it here. """
-        
+
         from sqlalchemy import create_engine
 
         dir_ = os.path.dirname(self.path)

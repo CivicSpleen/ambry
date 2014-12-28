@@ -592,7 +592,7 @@ class LibraryDb(object):
 
 
 
-    def install_bundle(self, bundle, commit = True):
+    def install_bundle(self, bundle, commit = True, use_fq_names = False):
         '''Copy the schema and partitions lists into the library database
 
         '''
@@ -645,10 +645,14 @@ class LibraryDb(object):
 
                 d = column.insertable_dict
 
+                if use_fq_names:
+                    d['c_name'] = column.fq_name
+
                 columns.append(d)
 
         if tables:
             s.execute(Table.__table__.insert(), tables)
+
             s.execute(Column.__table__.insert(), columns)
 
         for config in bundle.database.session.query(Config).all():
@@ -717,7 +721,8 @@ class LibraryDb(object):
         return dataset
 
 
-    def install_partition_by_id(self, bundle,  p_id, install_bundle=True, install_tables = True, commit = True):
+    def install_partition_by_id(self, bundle,  p_id, install_bundle=True, install_tables = True,
+                                use_fq_names = False, commit = True):
         """Install a single partition and its tables. This is mostly
         used for installing into warehouses, where it isn't desirable to install
         the whole bundle
@@ -734,10 +739,12 @@ class LibraryDb(object):
         partition = bundle.partitions.get(p_id)
 
         return self.install_partition(bundle, partition,
-                                      install_bundle=install_bundle, install_tables=install_tables, commit=commit)
+                                      install_bundle=install_bundle, install_tables=install_tables,
+                                      use_fq_names = use_fq_names, commit=commit)
 
 
-    def install_partition(self, bundle, partition, install_bundle=True, install_tables=True, commit=True):
+    def install_partition(self, bundle, partition, install_bundle=True, install_tables=True,
+                          commit=True, use_fq_names=False):
         """Install a single partition and its tables. This is mostly
         used for installing into warehouses, where it isn't desirable to install
         the whole bundle
@@ -750,6 +757,21 @@ class LibraryDb(object):
         from ..identity import PartitionNameQuery
         from sqlalchemy.orm.exc import NoResultFound
 
+        s = self.session
+        s.merge(partition.record)
+
+        if use_fq_names:
+            for col in partition.table.columns:
+                col.name = col.fq_name
+                s.merge(col)
+
+        s.commit()
+
+
+        # This is not what I expected --- sqlite loads in all of the records linked to the
+        # partition, including the tables and columns, so none of the rest of the code is required.
+        return
+
         if commit == 'collect':
             self._partition_collection.append(partition.record.insertable_dict)
             return
@@ -761,24 +783,21 @@ class LibraryDb(object):
                 b = None
 
             if not b:
-                self.install_bundle(bundle)
+                self.install_bundle(bundle, use_fq_names = use_fq_names)
 
-        s = self.session
-
-        if install_tables:
+        if not install_tables:
             for table_name in partition.tables:
                 table = bundle.schema.table(table_name)
 
                 try:
                     s.query(Table).filter(Table.vid == table.vid).one()
                     # the library already has the table
+
                 except NoResultFound as e:
                     s.merge(table)
-
                     for column in table.columns:
-                        s.merge(column)
 
-        s.merge(partition.record)
+                        s.merge(column)
 
         if commit:
             try:
@@ -787,6 +806,7 @@ class LibraryDb(object):
                 self.logger.error("Failed to merge")
                 self.rollback()
                 raise e
+
 
     def insert_partition_collection(self):
 

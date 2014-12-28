@@ -5,18 +5,17 @@ This is a fake education file manifest. Well, actually, a test manifest.
 UID: mQaiWWgy2G
 AUTHOR: Eric Busboom <eric@sandiegodata.org>
 
-DATABASE: sqlite:////example_manifest.db
-REMOTE:  s3://warehouse.sandiegodata.org/test/example_manifest#compress
-
+DATABASE: sqlite:///example_manifest.db
+CACHE: example_manifest
 
 PARTITIONS:
 
 example.com-segmented-example-2
-example.com-combined-example
+example.com-combined-combined
 
 VIEW: health_view
 
-SELECT * FROM "pIjqPRbrGq001001_example"
+SELECT * FROM "pIjqPRbrGq001001_combined"
 
 DOC:
 

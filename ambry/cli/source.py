@@ -236,17 +236,6 @@ def source_new(args, l, st, rc):
     from ambry.bundle.meta import Top
     from ..dbexceptions import ConflictError
 
-    nsconfig = rc.service('numbers')
-
-    if args.key:
-        nsconfig['key'] = args.key
-
-    if args.dryrun:
-        prt("For dryrun, using self-generated id")
-        nsconfig['key'] = 'self'
-
-    ns = NumberServer(**nsconfig)
-
     d = vars(args)
     d['revision'] = 1
 
@@ -254,10 +243,20 @@ def source_new(args, l, st, rc):
     d['bspace'] = d.get('space', None)
 
     if args.dryrun or args.key  in ('rand','self'):
+
+        prt("Using self-generated id")
+
         d['id'] = str(DatasetNumber())
 
     else:
         try:
+
+            nsconfig = rc.service('numbers')
+            if args.key:
+                nsconfig['key'] = args.key
+
+            ns = NumberServer(**nsconfig)
+
             d['id'] = str(ns.next())
             prt("Got number from number server: {}".format(d['id']))
         except HTTPError as e:

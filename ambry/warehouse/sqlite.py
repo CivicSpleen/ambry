@@ -17,14 +17,6 @@ class SqliteWarehouse(RelationalWarehouse):
     ##
 
 
-    def _ogr_args(self, partition):
-
-        return [
-            "-f SQLite ",self.database.path,
-            "-gt 65536",
-            partition.database.path,
-            "-dsco SPATIALITE=no"]
-
 
     def load_local(self, partition, source_table_name, dest_table_name = None, where = None):
 
@@ -42,6 +34,19 @@ class SqliteWarehouse(RelationalWarehouse):
             self.database.copy_from_attached( table=(source_table_name, dest_table_name),
                                               on_conflict='REPLACE',
                                               name=atch_name, conn=conn, copy_n = copy_n, where = where)
+
+
+
+        if partition.is_geo:
+
+            from ..geo.util import recover_geometry
+
+            with self.database.engine.begin() as conn:
+                table = partition.get_table(source_table_name)
+
+                for column in table.columns:
+                    if column.type_is_geo():
+                        recover_geometry(conn, dest_table_name, column.fq_name, column.datatype )
 
         self.logger.info('done {}'.format(partition.identity.vname))
 
@@ -140,13 +145,6 @@ class SqliteWarehouse(RelationalWarehouse):
 
 class SpatialiteWarehouse(SqliteWarehouse):
 
-    def _ogr_args(self, partition):
-
-        return [
-            "-f SQLite ", self.database.path,
-            "-gt 65536",
-            partition.database.path,
-            "-dsco SPATIALITE=yes"]
 
 
     def install_material_view(self, name, sql, clean=False, data = None):

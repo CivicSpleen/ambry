@@ -5,11 +5,13 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from .sqlite import SqliteDatabase, SqliteAttachmentMixin #@UnresolvedImport
 from .relational import RelationalPartitionDatabaseMixin, RelationalDatabase #@UnresolvedImport
-from inserter import ValueInserter, ValueUpdater
+from inserter import ValueInserter
 
 class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttachmentMixin):
     '''a database for a partition file. Partition databases don't have a full schema
     and can load tables as they are referenced, by copying them from the prototype. '''
+
+    is_geo = False
 
     def __init__(self, bundle, partition, base_path, memory = False, **kwargs):
         '''''' 
@@ -43,10 +45,9 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
             raise QueryError("Error while executing {} in database {} ({}): {}".format(args, self.dsn, type(self), e.message))
         
 
-    def inserter(self, table_or_name=None,**kwargs):
+    def inserter(self, table_or_name=None, **kwargs):
 
         if not self.exists():
-
             raise Exception("Database doesn't exist yet: '{}'".format(self.dsn))
 
         if table_or_name is None and self.partition.table is not None:
@@ -57,6 +58,7 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
             table_name = table_or_name
             
             if not table_name in self.inspector.get_table_names():
+
                 t_meta, table = self.bundle.schema.get_table_meta(table_name) #@UnusedVariable
                 table.create(bind=self.engine)
                 
@@ -69,27 +71,6 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
             table = self.table(table_or_name.name)
 
         return ValueInserter(self, self.bundle, table ,  **kwargs)
-        
-    def updater(self, table_or_name=None,**kwargs):
-      
-        if table_or_name is None and self.partition.table is not None:
-            table_or_name = self.partition.table
-      
-        if isinstance(table_or_name, basestring):
-            table_name = table_or_name
-            if not table_name in self.inspector.get_table_names():
-                t_meta, table = self.bundle.schema.get_table_meta(table_name) #@UnusedVariable
-                table.create(bind=self.engine)
-                
-                if not table_name in self.inspector.get_table_names():
-                    raise Exception("Don't have table "+table_name)
-            table = self.table(table_name)
-            
-        else:
-            table = self.table(table_or_name.name)
-            
-        return ValueUpdater(self, self.bundle, table , **kwargs)
-
 
     def _on_create_connection(self, connection):
         '''Called from get_connection() to update the database'''
@@ -112,7 +93,6 @@ class PartitionDb(SqliteDatabase, RelationalPartitionDatabaseMixin, SqliteAttach
 
         '''Like the create() for the bundle, but this one also copies
         the dataset and makes and entry for the partition '''
-        
 
         self.require_path()
 

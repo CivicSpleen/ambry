@@ -126,8 +126,6 @@ class RelationalDatabase(DatabaseInterface):
         if self.is_empty():
             return False
 
-
-
         return True
     
     def is_empty(self):
@@ -415,6 +413,7 @@ class RelationalDatabase(DatabaseInterface):
     def table(self, table_name): 
         '''Get table metadata from the database''' 
         from sqlalchemy import Table
+        from ..orm import Geometry
         
         table = self._table_meta_cache.get(table_name, False)
         
@@ -423,6 +422,15 @@ class RelationalDatabase(DatabaseInterface):
         else:
             metadata = self.metadata
             table = Table(table_name, metadata, autoload=True)
+
+            for c in table.columns:
+
+                # HACK! Sqlalchemy seek spatialte GEOMETRY types
+                # as NUMERIC
+
+                if c.name == 'geometry':
+                    c.type = Geometry
+
             self._table_meta_cache[table_name] = table
             r =  table
 

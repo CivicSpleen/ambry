@@ -120,6 +120,8 @@ class PartitionBase(PartitionInterface):
 
     _db_class = None
 
+    is_geo = False
+
     def __init__(self, db, record, **kwargs):
 
         self.bundle = db

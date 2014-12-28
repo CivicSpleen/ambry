@@ -20,6 +20,7 @@ from util import Constant, memoize
 from identity import LocationRef
 
 from sqlalchemy.sql import text
+import sqlalchemy.types as types
 from ambry.identity import  DatasetNumber, ColumnNumber
 from ambry.identity import TableNumber, PartitionNumber, ObjectNumber
 
@@ -33,11 +34,33 @@ import json
 from sqlalchemy import BigInteger
 from sqlalchemy.dialects import postgresql, mysql, sqlite
 
+
 BigIntegerType = BigInteger()
 BigIntegerType = BigIntegerType.with_variant(postgresql.BIGINT(), 'postgresql')
 BigIntegerType = BigIntegerType.with_variant(mysql.BIGINT(), 'mysql')
 BigIntegerType = BigIntegerType.with_variant(sqlite.INTEGER(), 'sqlite')
 
+
+from sqlalchemy import func
+from sqlalchemy.types import UserDefinedType
+
+# Geometry type, to ensure that WKT text is properly inserted into
+# the database with the GeomFromText() function.
+# NOTE! This is paired with code in database.relational.RelationalDatabase.table() to convert NUMERIC
+# fields that have the name 'geometry' to GEOMETRY types. Sqlalchemy seek spatialte GEOMETRY types
+# as NUMERIC
+class Geometry(UserDefinedType):
+
+    DEFAULT_SRS = 4326
+
+    def get_col_spec(self):
+        return "GEOMETRY"
+
+    def bind_expression(self, bindvalue):
+        return func.ST_GeomFromText(bindvalue, self.DEFAULT_SRS, type_=self)
+
+    def column_expression(self, col):
+        return func.ST_AsText(col, type_=self)
 
 Base = declarative_base()
 
@@ -497,6 +520,7 @@ class Column(Base):
     DATATYPE_LINESTRING = 'linestring' # Spatalite, sqlite extensions for geo
     DATATYPE_POLYGON = 'polygon' # Spatalite, sqlite extensions for geo
     DATATYPE_MULTIPOLYGON = 'multipolygon' # Spatalite, sqlite extensions for geo
+    DATATYPE_GEOMETRY = 'geometry'  # Spatalite, sqlite extensions for geo
     DATATYPE_CHAR = 'char'
     DATATYPE_VARCHAR = 'varchar'
     DATATYPE_BLOB = 'blob'
@@ -516,16 +540,21 @@ class Column(Base):
         DATATYPE_TIME:(sqlalchemy.types.Time,datetime.time,'TIME'),
         DATATYPE_TIMESTAMP:(sqlalchemy.types.DateTime,datetime.datetime,'TIMESTAMP'),
         DATATYPE_DATETIME:(sqlalchemy.types.DateTime,datetime.datetime,'DATETIME'),
-        DATATYPE_POINT:(sqlalchemy.types.LargeBinary,buffer,'POINT'),
-        DATATYPE_LINESTRING:(sqlalchemy.types.LargeBinary,buffer,'LINESTRING'),
-        DATATYPE_POLYGON:(sqlalchemy.types.LargeBinary,buffer,'POLYGON'),
-        DATATYPE_MULTIPOLYGON:(sqlalchemy.types.LargeBinary,buffer,'MULTIPOLYGON'),
-        DATATYPE_BLOB:(sqlalchemy.types.LargeBinary,buffer,'BLOB')
+        DATATYPE_POINT:(Geometry, str,'POINT'),
+        DATATYPE_LINESTRING:(Geometry, str,'LINESTRING'),
+        DATATYPE_POLYGON:(Geometry, str,'POLYGON'),
+        DATATYPE_MULTIPOLYGON:(Geometry, str,'MULTIPOLYGON'),
+        DATATYPE_GEOMETRY: (Geometry, str, 'GEOMETRY'),
+        DATATYPE_BLOB:(sqlalchemy.types.LargeBinary, buffer,'BLOB')
         }
-
 
     def type_is_text(self):
         return self.datatype in (Column.DATATYPE_TEXT, Column.DATATYPE_CHAR, Column.DATATYPE_VARCHAR)
+
+    def type_is_geo(self):
+        return self.datatype in (Column.DATATYPE_POINT, Column.DATATYPE_LINESTRING, Column.DATATYPE_POLYGON,
+                                 Column.DATATYPE_MULTIPOLYGON, Column.DATATYPE_GEOMETRY)
+
 
     def type_is_time(self):
         return self.datatype in (Column.DATATYPE_TIME, Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE)
@@ -690,6 +719,15 @@ class Column(Base):
             raise TypeError('Trying to mangle name with invalid type of: '+str(type(name)))
 
     @property
+    def fq_name(self):
+        """Fully Qualified Name. A column Name with the column id as a prefix"""
+
+        if self.name.startswith(self.id_):
+            return self.name
+        else:
+            return "{}_{}".format(self.id_, self.name )
+
+    @property
     @memoize
     def codes(self):
         return self._codes # Caches the query, I hope ...
@@ -738,6 +776,7 @@ class Column(Base):
             target.sequence_id = max_id
         
         Column.before_update(mapper, conn, target)
+
 
     @staticmethod
     def before_update(mapper, conn, target):

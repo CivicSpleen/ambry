@@ -730,3 +730,14 @@ def find_containment(containers, containeds, method = 'contains'):
             if test:
                 yield (contained, contained_obj, container_geometry, container_obj)
 
+
+def recover_geometry(connection, table_name, column_name, geometry_type, srs=None):
+    from ..orm import Geometry
+
+    if not srs:
+        srs = Geometry.DEFAULT_SRS
+
+    connection.execute(
+        'UPDATE {} SET {} = SetSrid({}, {});'.format(table_name, column_name, column_name, srs))
+    connection.execute("SELECT RecoverGeometryColumn('{}', '{}', {}, '{}', 2);"
+               .format(table_name, column_name, srs, geometry_type))

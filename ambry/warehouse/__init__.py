@@ -236,7 +236,6 @@ class Warehouse(object):
     def cache_path(self, v):
         return self._meta_set('cache_path', v)
 
-
     @property
     def cache(self):
 
@@ -375,7 +374,7 @@ class Warehouse(object):
     ##
 
     def install(self, partition, tables=None, prefix=None):
-        """Install a partition and the talbes in the partition"""
+        """Install a partition and the tables in the partition"""
         from ..orm import Partition
         from sqlalchemy.exc import OperationalError
 
@@ -398,6 +397,7 @@ class Warehouse(object):
             self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
             return None, None;
 
+
         all_tables = self.install_partition(bundle, p, prefix=prefix)
 
         if not tables:
@@ -418,13 +418,8 @@ class Warehouse(object):
                 ##
                 ## Copy the data to the destination table
 
-                if p.identity.format == 'db':
-                    self.elibrary.get(p.vid) # ensure it is local
-                    itn = self.load_local(p, source_table_name, dest_table_name, where)
-                else:
-                    self.elibrary.get(p.vid)  # ensure it is local
-                    itn = self.load_ogr(p, source_table_name, dest_table_name, where)
-
+                self.elibrary.get(p.vid) # ensure it is local
+                itn = self.load_local(p, source_table_name, dest_table_name, where)
 
                 t_vid = p.get_table(source_table_name).vid
                 w_table = self.library.table(t_vid)
@@ -451,7 +446,6 @@ class Warehouse(object):
 
         return tables, p
 
-
     def install_partition(self, bundle, partition, prefix=None):
         '''Install the records for the partition, the tables referenced by the partition,
         and the bundle, if they aren't already installed'''
@@ -462,7 +456,7 @@ class Warehouse(object):
 
         pid = self._to_vid(partition)
 
-        ld.install_partition_by_id(bundle, pid)
+        ld.install_partition_by_id(bundle, pid, use_fq_names = True)
 
         p = bundle.partitions.get(pid) # just gets the record
 
@@ -845,9 +839,6 @@ class Warehouse(object):
         facility of the target warehouse'''
         raise NotImplementedError()
 
-    def load_ogr(self, partition, source_table_name, dest_table_name, where):
-        '''Load geo data using the ogr2ogr program'''
-        raise NotImplementedError()
 
     def _setup_install(self, ref):
         '''Perform local and remote resolutions to get the bundle, partition and links

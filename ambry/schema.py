@@ -372,7 +372,7 @@ class Schema(object):
 
     @classmethod
     def get_table_meta_from_db(self,db,  name_or_id,  use_id=False, 
-                               driver=None, d_vid = None, session=None, alt_name=None ):
+                               driver=None, d_vid = None, session=None, alt_name=None, use_fq_names = False ):
         '''
             use_id: prepend the id to the class name
         '''
@@ -380,7 +380,14 @@ class Schema(object):
         from sqlalchemy import MetaData, UniqueConstraint, Index, text
         from sqlalchemy import Column as SAColumn
         from sqlalchemy import Table as SATable
-        
+
+        if use_fq_names:
+            def col_name(c):
+                return c.fq_name
+        else:
+            def col_name(c):
+                return c.name
+
         metadata = MetaData()
         
         table = self.get_table_from_database(db, name_or_id, d_vid = d_vid, session=session)
@@ -414,19 +421,13 @@ class Schema(object):
                     int(column.default)
                     kwargs['server_default'] = text(str(column.default))
                 except:
-                    
-                    # Stop-gap for old ambry. This should be  ( and now is ) checkd in the
-                    # schema generation
-                    if  width and width < len(column.default):
-                        raise Exception("Width smaller than size of default for column: {}".format(column.name))
-                        
-                        
+
                     kwargs['server_default'] = column.default
           
           
             tt = self.translate_type(driver, table, column)
 
-            ac = SAColumn(column.name, 
+            ac = SAColumn(col_name(column),
                           tt, 
                           primary_key = ( column.is_primary_key == 1),
                           **kwargs
@@ -443,7 +444,7 @@ class Schema(object):
                 if not fk_table:
                     raise NotImplementedError("Need to lookup foreign key")
 
-                foreign_keys[column.name] = fk_table.id_
+                foreign_keys[col_name(column)] = fk_table.id_
            
             # assemble non unique indexes
             if column.indexes and column.indexes.strip():
@@ -484,7 +485,8 @@ class Schema(object):
         
         #for from_col, to_col in foreign_keys.items():
         #    at.append_constraint(ForeignKeyConstraint(from_col, to_col))
-        
+
+
         return metadata, at
  
     def generate_indexes(self, table):
@@ -712,9 +714,6 @@ class Schema(object):
 
         self.bundle.database.session.commit()
 
-            
-
-
         return warnings, errors
 
     def expand_prototypes(self):
@@ -738,15 +737,17 @@ class Schema(object):
                 for proto in t.proto_vid.split(','):
                     yield (t, proto.strip())
 
-
-
         for t, proto_vid in table_protos():
-
 
             try:
                 proto_table = l.table(proto_vid)
             except NotFoundError:
-                self.bundle.error("Can't expand prototype for table {}: missing prototype reference {}"
+                self.bundle.error("Can't expand prototype for table {}: missing prototype reference {} (a)"
+                                  .format(t.name, proto_vid))
+                continue
+
+            if not proto_table:
+                self.bundle.error("Can't expand prototype for table {}: missing prototype reference {} (b)"
                                   .format(t.name, proto_vid))
                 continue
 
