@@ -504,7 +504,7 @@ def {}(row):
             except CastingError as e:
                 do = {}
                 cast_errors = {}
-                print '!!!', e
+
                 for k,v in d.items():
                     try:
                         do[k] = f[2][k](v)

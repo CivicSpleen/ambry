@@ -456,7 +456,7 @@ class Warehouse(object):
 
         pid = self._to_vid(partition)
 
-        ld.install_partition_by_id(bundle, pid, use_fq_names = True)
+        ld.install_partition_by_id(bundle, pid)
 
         p = bundle.partitions.get(pid) # just gets the record
 

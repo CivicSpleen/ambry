@@ -380,8 +380,53 @@ def warehouse_test(args, w, config):
     from ..dbexceptions import ConfigurationError
     from ..util import print_yaml
 
+    from ambry.orm import Column
+    from collections import defaultdict
+    from ambry.identity import ObjectNumber, TableNumber, ColumnNumber
 
-    w.library.sync_doc_json()
+    fks = defaultdict(dict)
+
+    for c in w.library.database.session.query(Column).all():
+        if c.fk_vid:
+
+            on = ObjectNumber.parse(c.fk_vid)
+
+            if isinstance(on, TableNumber):
+                tn = on
+                cn = ColumnNumber(tn, 1)
+            else:
+                cn = on.rev(None)
+                tn = cn.as_table
+
+            fks[c.table.vid][c.id_] = (str(tn), str(cn))
+
+
+    for ft_vid, cols in fks.items():
+        ft = w.library.table(ft_vid)
+        ft_name = ft.data['installed_names'][1]
+        print ft.name
+        print " SELECT * FROM {}".format(ft_name)
+        for fc,(tt_vid,tc) in cols.items():
+
+            tt = w.library.table(tt_vid)
+
+            if not ft or not tt:
+                continue
+
+            fc_name = ft.column(fc).altname
+
+            tt_name = tt.data['installed_names'][1]
+            tc_name = tt.column(tc).altname
+
+
+            #print "   JOIN {}.{} TO {}.{}  ".format(ft.name, ft.column(fc).name, tt.name, tt.column(tc).name)
+            print '   JOIN "{}" ON "{}"."{}" = "{}"."{}"'.format(tt_name, ft_name,fc_name, tt_name, tc_name)
+
+
+
+
+
+
 
 
 

@@ -13,7 +13,7 @@ import ambry.util
 from ambry.util import temp_file_name
 from ambry.bundle import DbBundle
 from ..identity import LocationRef, Identity
-from ambry.orm import Column, Partition, Table, Dataset, Config, File, Base
+from ambry.orm import Column, Partition, Table, Dataset, Config, File, Base, Code
 
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
@@ -244,6 +244,7 @@ class LibraryDb(object):
         s.query(Partition).delete()
         s.query(Table).delete()
         s.query(Dataset).delete()
+        s.query(Code).delete()
 
         if add_config_root:
             self._add_config_root()
@@ -289,7 +290,7 @@ class LibraryDb(object):
             raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
 
         library_tables = [Config.__tablename__, Column.__tablename__, Partition.__tablename__,
-                  Table.__tablename__, File.__tablename__,  Dataset.__tablename__]
+                  Table.__tablename__, File.__tablename__,  Dataset.__tablename__, Code.__tablename__]
 
 
         try:
@@ -312,7 +313,7 @@ class LibraryDb(object):
 
     def create_tables(self):
 
-        tables = [ Dataset, Config, Table, Column, File, Partition]
+        tables = [ Dataset, Config, Table, Column, File, Partition, Code]
 
         self.drop()
 
@@ -645,9 +646,6 @@ class LibraryDb(object):
 
                 d = column.insertable_dict
 
-                if use_fq_names:
-                    d['c_name'] = column.fq_name
-
                 columns.append(d)
 
         if tables:
@@ -721,8 +719,7 @@ class LibraryDb(object):
         return dataset
 
 
-    def install_partition_by_id(self, bundle,  p_id, install_bundle=True, install_tables = True,
-                                use_fq_names = False, commit = True):
+    def install_partition_by_id(self, bundle,  p_id, install_bundle=True, install_tables = True, commit = True):
         """Install a single partition and its tables. This is mostly
         used for installing into warehouses, where it isn't desirable to install
         the whole bundle
@@ -738,13 +735,11 @@ class LibraryDb(object):
 
         partition = bundle.partitions.get(p_id)
 
-        return self.install_partition(bundle, partition,
-                                      install_bundle=install_bundle, install_tables=install_tables,
-                                      use_fq_names = use_fq_names, commit=commit)
+        return self.install_partition(bundle, partition, install_bundle=install_bundle,
+                                      install_tables=install_tables, commit=commit)
 
 
-    def install_partition(self, bundle, partition, install_bundle=True, install_tables=True,
-                          commit=True, use_fq_names=False):
+    def install_partition(self, bundle, partition, install_bundle=True, install_tables=True, commit=True):
         """Install a single partition and its tables. This is mostly
         used for installing into warehouses, where it isn't desirable to install
         the whole bundle
@@ -759,11 +754,6 @@ class LibraryDb(object):
 
         s = self.session
         s.merge(partition.record)
-
-        if use_fq_names:
-            for col in partition.table.columns:
-                col.name = col.fq_name
-                s.merge(col)
 
         s.commit()
 

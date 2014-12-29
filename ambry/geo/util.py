@@ -36,8 +36,8 @@ def extents(database, table_name, where=None, lat_col='_db_lat', lon_col='_db_lo
 
 #From http://danieljlewis.org/files/2010/06/Jenks.pdf
 #
-# !!!! Use pysal instead!
-# !!!! http://pysal.geodacenter.org/1.2/library/esda/mapclassify.html#pysal.esda.mapclassify.Natural_Breaks
+#  Use pysal instead!
+#  http://pysal.geodacenter.org/1.2/library/esda/mapclassify.html#pysal.esda.mapclassify.Natural_Breaks
 #
 # Or, a cleaner Python implementation: https://gist.github.com/drewda/1299198
 def jenks_breaks(dataList, numClass): 

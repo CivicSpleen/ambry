@@ -14,24 +14,36 @@ class Bundle(BuildBundle):
         import uuid
         import random
 
-        p = self.partitions.new_partition(table='example')
+        for table in ('example', 'example2','example3'):
+            
+            p = self.partitions.new_partition(table=table)
+            p.clean()
+            
+            with p.database.inserter() as ins:
+                for i in range(10000):
+                    row = dict()
+            
+                    row['uuid'] = str(uuid.uuid4())
+                    row['int'] = random.randint(0,100)
+                    row['float'] = random.random()*100
+                    row['year'] = random.randint(0,100)
+                    row['hu100'] = random.randint(0,100)
+                    row['pop100'] = random.randint(0,100)
+                
+                    ins.insert(row)
         
-        p.query('DELETE FROM example')
-        nd = p.table.null_dict
         
-        lr = self.init_log_rate(print_rate=5)
+        
+        p = self.partitions.new_partition(table='links')
+        p.clean()
         
         with p.database.inserter() as ins:
-            for i in range(100000):
-                row = dict(nd.items())
-            
-                row['uuid'] = str(uuid.uuid4())
-                row['int'] = random.randint(0,100)
-                row['float'] = random.random()*100
-        
+            for i in range(10000):
+                row = dict(example2_id = i, example3_id = i)
+                
                 ins.insert(row)
-                lr()
-        
+            
+
         return True
         
     def build_add_codes(self):

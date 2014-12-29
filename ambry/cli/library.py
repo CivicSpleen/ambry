@@ -550,51 +550,31 @@ def library_doc(args, l, rc):
     #t1.join()
 
 
-
 def library_unknown(args, l, config):
     fatal("Unknown subcommand")
     fatal(args)
 
 def library_test(args, l, config):
 
-    from ambry.cache import new_cache
-    import requests
-    from ambry.util.text import generate_pdf_pages
+    from ambry.orm import Column
+    from collections import defaultdict
+    from ambry.identity import ObjectNumber, TableNumber, ColumnNumber
 
-    cache = new_cache(config.filesystem('downloads')).subcache('ext_doc')
+    fks = defaultdict(dict)
 
-    for b in l.list_bundles():
+    for c in l.database.session.query(Column).all():
+        if c.fk_vid:
 
-        for k,v in b.metadata.external_documentation.items():
+            on = ObjectNumber.parse(c.fk_vid)
 
-            if not v.url.lower().endswith('.pdf'):
-                continue
+            if isinstance(on, TableNumber):
+                tn = on.rev(None)
+                cn = ColumnNumber(tn, 1)
+            else:
+                cn = on.rev(None)
+                tn = cn.as_table.rev(None)
 
+            fks[c.table.vid][c.vid] = (str(tn), str(cn))
 
-
-            continue
-
-            path = "{}/{}".format(b.identity.vid, k)
-
-            if not v.url.startswith('http'):
-
-                continue
-
-            r =  requests.get(v.url, stream=True)
-
-            cache.put(r.raw, path)
-
-            if v.url.lower().endswith('.pdf'):
-
-                print '------------'
-                print b.identity.vname, k, v.url, '-->', cache.path(path)
-                try:
-                    with cache.get_stream(path) as fp:
-
-                        with cache.put_stream( path+'.txt') as out:
-                            out.write(generate_pdf_pages(fp))
-
-                except Exception as e:
-                    print "Failed: ", e
-
-                print '-----------'
+    import pprint
+    pprint.pprint(dict(fks))

@@ -44,17 +44,17 @@ BigIntegerType = BigIntegerType.with_variant(sqlite.INTEGER(), 'sqlite')
 from sqlalchemy import func
 from sqlalchemy.types import UserDefinedType
 
-# Geometry type, to ensure that WKT text is properly inserted into
-# the database with the GeomFromText() function.
-# NOTE! This is paired with code in database.relational.RelationalDatabase.table() to convert NUMERIC
-# fields that have the name 'geometry' to GEOMETRY types. Sqlalchemy seek spatialte GEOMETRY types
-# as NUMERIC
 class Geometry(UserDefinedType):
+    """
+    Geometry type, to ensure that WKT text is properly inserted into
+    the database with the GeomFromText() function.
+    NOTE! This is paired with code in database.relational.RelationalDatabase.table() to convert NUMERIC
+    fields that have the name 'geometry' to GEOMETRY types. Sqlalchemy sees spatialte GEOMETRY types
+    as NUMERIC """
 
     DEFAULT_SRS = 4326
 
-    def get_col_spec(self):
-        return "GEOMETRY"
+    def get_col_spec(self): return "GEOMETRY"
 
     def bind_expression(self, bindvalue):
         return func.ST_GeomFromText(bindvalue, self.DEFAULT_SRS, type_=self)
@@ -62,6 +62,14 @@ class Geometry(UserDefinedType):
     def column_expression(self, col):
         return func.ST_AsText(col, type_=self)
 
+class SpatialiteGeometry(Geometry):
+    def get_col_spec(self): return "BLOB"
+
+
+GeometryType = Geometry()
+GeometryType = GeometryType.with_variant(SpatialiteGeometry(), 'spatialite')
+GeometryType = GeometryType.with_variant(Text(), 'sqlite')  # Just write the WKT through
+GeometryType = GeometryType.with_variant(Text(), 'postgresql')
 Base = declarative_base()
 
 
@@ -540,11 +548,11 @@ class Column(Base):
         DATATYPE_TIME:(sqlalchemy.types.Time,datetime.time,'TIME'),
         DATATYPE_TIMESTAMP:(sqlalchemy.types.DateTime,datetime.datetime,'TIMESTAMP'),
         DATATYPE_DATETIME:(sqlalchemy.types.DateTime,datetime.datetime,'DATETIME'),
-        DATATYPE_POINT:(Geometry, str,'POINT'),
-        DATATYPE_LINESTRING:(Geometry, str,'LINESTRING'),
-        DATATYPE_POLYGON:(Geometry, str,'POLYGON'),
-        DATATYPE_MULTIPOLYGON:(Geometry, str,'MULTIPOLYGON'),
-        DATATYPE_GEOMETRY: (Geometry, str, 'GEOMETRY'),
+        DATATYPE_POINT:(GeometryType, str,'POINT'),
+        DATATYPE_LINESTRING:(GeometryType, str,'LINESTRING'),
+        DATATYPE_POLYGON:(GeometryType, str,'POLYGON'),
+        DATATYPE_MULTIPOLYGON:(GeometryType, str,'MULTIPOLYGON'),
+        DATATYPE_GEOMETRY: (GeometryType, str, 'GEOMETRY'),
         DATATYPE_BLOB:(sqlalchemy.types.LargeBinary, buffer,'BLOB')
         }
 
@@ -596,7 +604,7 @@ class Column(Base):
         try:
             return self.types[self.datatype][2]
         except KeyError:
-            print '!!!', self.datatype, self.types
+
             raise
 
     @classmethod
@@ -639,13 +647,11 @@ class Column(Base):
     def foreign_key(self):
         return self.fk_vid
 
-
-
     def __init__(self,table, **kwargs):
 
         self.sequence_id = kwargs.get("sequence_id",len(table.columns)+1) 
         self.name = kwargs.get("name",None) 
-        self.altname = kwargs.get("altname",None) 
+
         self.is_primary_key = _clean_flag(kwargs.get("is_primary_key",False))
         self.datatype = kwargs.get("datatype",None) 
         self.size = kwargs.get("size",None) 
@@ -681,11 +687,9 @@ class Column(Base):
 
     @property
     def dict(self):
-        x = {k: v for k, v in self.__dict__.items()
-             if k in ['id_', 'vid', 't_vid','t_id',
-                      'sequence_id', 'name', 'altname', 'is_primary_key', 'datatype', 'size',
-                      'precision', 'start', 'width', 'sql', 'flags', 'description', 'keywords', 'measure',
-                      'units', 'universe', 'scale', 'proto_vid', 'fk_vid', 'data']}
+
+        x = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ( 'table')}
+
         if not x:
             raise Exception(self.__dict__)
 
@@ -722,10 +726,8 @@ class Column(Base):
     def fq_name(self):
         """Fully Qualified Name. A column Name with the column id as a prefix"""
 
-        if self.name.startswith(self.id_):
-            return self.name
-        else:
-            return "{}_{}".format(self.id_, self.name )
+        return self.alt_name
+
 
     @property
     @memoize
@@ -787,6 +789,7 @@ class Column(Base):
             table_on = ObjectNumber.parse(target.t_id)
             target.id_ = str(ColumnNumber(table_on, target.sequence_id))
 
+        target.altname = "{}_{}".format(target.id_, target.name)
 
     def __repr__(self):
         return "<column: {}, {}>".format(self.name, self.vid)
@@ -856,7 +859,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     @property
     def dict(self):
         d =  {k:v for k,v in self.__dict__.items() if k in
-                ['id_','vid', 'd_id', 'd_vid', 'sequence_id', 'name', 'altname', 'vname', 'description',
+                ['id_','vid', 'd_id', 'd_vid', 'sequence_id', 'name',  'altname', 'vname', 'description',
                  'universe', 'keywords', 'installed', 'proto_vid', 'type']}
 
         if self.data:

@@ -1,0 +1,14 @@
+TITLE: Install geographic files, but to a nongeo database
+
+Simple geographic file
+UID: mQaiWWgy2x
+AUTHOR: Eric Busboom <eric@sandiegodata.org>
+
+DATABASE: sqlite:///nongeo.db
+CACHE: nongeo
+
+PARTITIONS:
+
+example.com-geography-geometry-geo
+example.com-geography-municipal-geo
+

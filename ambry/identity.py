@@ -931,8 +931,10 @@ class TableNumber(ObjectNumber):
         if not self.revision and dataset.revision:
             self.revision = dataset.revision
 
-
-
+    @property
+    def as_table(self):
+        """Returns self, so TableNumber and Column number can be used interchangably"""
+        return self
 
     @property
     def as_dataset(self):

@@ -372,7 +372,7 @@ class Schema(object):
 
     @classmethod
     def get_table_meta_from_db(self,db,  name_or_id,  use_id=False, 
-                               driver=None, d_vid = None, session=None, alt_name=None, use_fq_names = False ):
+                               driver=None, d_vid = None, session=None, alt_name=None, use_fq_col_names = False ):
         '''
             use_id: prepend the id to the class name
         '''
@@ -380,10 +380,11 @@ class Schema(object):
         from sqlalchemy import MetaData, UniqueConstraint, Index, text
         from sqlalchemy import Column as SAColumn
         from sqlalchemy import Table as SATable
+        from sqlalchemy.orm.exc import NoResultFound
 
-        if use_fq_names:
+        if use_fq_col_names:
             def col_name(c):
-                return c.fq_name
+                return c.altname
         else:
             def col_name(c):
                 return c.name
@@ -435,16 +436,7 @@ class Schema(object):
 
             at.append_column(ac)
 
-            if column.foreign_key:
 
-                fk = column.foreign_key
-
-                fk_table = self.get_table_from_database(db, fk, d_vid = d_vid, session=session)
-
-                if not fk_table:
-                    raise NotImplementedError("Need to lookup foreign key")
-
-                foreign_keys[col_name(column)] = fk_table.id_
            
             # assemble non unique indexes
             if column.indexes and column.indexes.strip():
@@ -482,9 +474,6 @@ class Schema(object):
         # Add unique indexes   
         for index, columns in uindexes.items():
             Index(self.munge_index_name(table, index, alt=alt_name), unique = True ,*columns)
-        
-        #for from_col, to_col in foreign_keys.items():
-        #    at.append_constraint(ForeignKeyConstraint(from_col, to_col))
 
 
         return metadata, at

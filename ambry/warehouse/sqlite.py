@@ -37,9 +37,7 @@ class SqliteWarehouse(RelationalWarehouse):
 
         # Geographic partitions need to be updates to be recognized
 
-        print '!!!', self.database
-
-        if partition.is_geo:
+        if partition.is_geo and self.database.is_geo:
 
             from ..geo.util import recover_geometry
 

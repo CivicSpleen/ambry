@@ -31,7 +31,7 @@ class RelationalWarehouse(Warehouse):
                                                     table_name,
                                                     d_vid=d_vid,
                                                     driver=self.database.driver,
-                                                    use_fq_names = True,
+                                                    use_fq_col_names = True,
                                                     alt_name=self.augmented_table_name(identity, table_name)[0],
                                                     session=self.library.database.session)
         return meta, table
@@ -107,19 +107,21 @@ class RelationalWarehouse(Warehouse):
         dest_metadata = MetaData()
         dest_table = Table(dest_table_name, dest_metadata, autoload=True, autoload_with=self.database.engine)
 
-
         insert_statement = dest_table.insert()
 
         source_metadata = MetaData()
         source_table = Table(source_table_name, source_metadata, autoload=True, autoload_with=partition.database.engine)
 
-        select_statement = source_table.select()
-
         if replace:
             insert_statement = insert_statement.prefix_with('OR REPLACE')
 
+        cols = [ ' {} AS "{}" '.format(c[0].name if c[0].name != 'geometry' else 'AsText(geometry)',c[1].name )
+                for c in zip(source_table.columns, dest_table.columns) ]
+
+        select_statement = " SELECT {} FROM {} ".format(','.join(cols), source_table.name)
+
         if where:
-            select_statement += " WHERE "+where
+            select_statement += " WHERE " + where
 
         binary_cols = []
         for c in dest_table.columns:
@@ -147,7 +149,7 @@ class RelationalWarehouse(Warehouse):
 
                 for value in values:
 
-                    mogd = cur.mogrify(insert_statement, value)
+                    mogd = cur.mogrify(insert_statement, value )
                     # Hopefully, including the parens will make it unique enough to not
                     # cause problems. Using just 'VALUES' files when there is a column of the same name.
                     _, vals = mogd.split(") VALUES (", 1)
@@ -156,14 +158,15 @@ class RelationalWarehouse(Warehouse):
 
                 sql = inst+" VALUES "+','.join(mogd_values)
 
-
                 cur.execute(sql)
 
             cache = []
 
-            for i, row in enumerate(partition.database.session.execute(select_statement)):
-                self.logger.progress('add_row', source_table_name, i)
 
+
+            for i, row in enumerate(partition.database.session.execute(select_statement)):
+
+                self.logger.progress('add_row', source_table_name, i)
 
                 if binary_cols:
                     # This is really horrible. To insert a binary column property, it has to be run rhough

@@ -7,7 +7,10 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from .sqlite import SqliteDatabase, SqliteAttachmentMixin
 
+
+
 class SpatialiteDatabase(SqliteDatabase, SqliteAttachmentMixin):
+    is_geo = True
 
     def create(self):
 
