@@ -734,6 +734,9 @@ def find_containment(containers, containeds, method = 'contains'):
 def recover_geometry(connection, table_name, column_name, geometry_type, srs=None):
     from ..orm import Geometry
 
+    assert table_name
+    assert column_name
+
     if not srs:
         srs = Geometry.DEFAULT_SRS
 

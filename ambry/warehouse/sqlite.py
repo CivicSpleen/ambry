@@ -146,8 +146,15 @@ class SqliteWarehouse(RelationalWarehouse):
 class SpatialiteWarehouse(SqliteWarehouse):
 
 
-
     def install_material_view(self, name, sql, clean=False, data = None):
+        """
+        After installing thematerial view, look for geometry columns and add them to the spatial system
+        :param name:
+        :param sql:
+        :param clean:
+        :param data:
+        :return:
+        """
 
         if not super(SpatialiteWarehouse, self).install_material_view(name, sql, clean=clean, data = data):
             return False
@@ -156,14 +163,21 @@ class SpatialiteWarehouse(SqliteWarehouse):
 
         ce = self.database.connection.execute
 
-        if 'geometry' in [ row['name'].lower() for row in ce('PRAGMA table_info({})'.format(name)).fetchall()]:
-            types = ce('SELECT count(*) AS count, GeometryType(geometry) AS type,  CoordDimension(geometry) AS cd '
-                       'FROM {} GROUP BY type ORDER BY type desc;'.format(name)).fetchall()
+        for col in [ row['name'].lower() for row in ce('PRAGMA table_info({})'.format(name)).fetchall()]:
 
-            t = types[0][1]
-            cd = types[0][2]
+            if col.endswith('geometry'):
 
-            ce("SELECT RecoverGeometryColumn('{}', 'geometry', 4326, '{}', '{}');".format(name, t, cd))
+                types = ce('SELECT count(*) AS count, GeometryType({}) AS type,  CoordDimension({}) AS cd '
+                           'FROM {} GROUP BY type ORDER BY type desc;'.format(col, col,  name)).fetchall()
+
+                t = types[0][1]
+                cd = types[0][2]
+
+
+                #connection.execute(
+                #    'UPDATE {} SET {} = SetSrid({}, {});'.format(table_name, column_name, column_name, srs))
+
+                ce("SELECT RecoverGeometryColumn('{}', '{}', 4326, '{}', '{}');".format(name, col, t, cd))
 
 
         return True

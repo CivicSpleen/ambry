@@ -22,10 +22,9 @@ DOC:
 The __health_view__ is an  view that refers to an installed table by its full versioned name. This is a
 second sentence, to make the documentation longer, and to see if the code for extracting summaries works.
 
-VIEW: health_mview
+MVIEW: health_mview
 
-SELECT *
-FROM "p00G002001_example"
+SELECT * FROM "p00G002001_example"
 
 
 DOC:

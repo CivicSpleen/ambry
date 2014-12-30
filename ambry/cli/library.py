@@ -505,11 +505,12 @@ def library_doc(args, l, rc):
     import logging
     from logging import FileHandler
     import webbrowser
+    import socket
 
     if args.port:
         port = args.port
     else:
-        port = 45235 + random.randint(1, 5000)
+        port = 8081 # 45235 + random.randint(1, 5000)
 
     cache_dir = l.doc_cache.cache.path('',missing_ok=True)
 
@@ -535,17 +536,28 @@ def library_doc(args, l, rc):
 
     print 'Serving documentation for cache: ', cache_dir
 
-    def run_app():
-        app.run(host=config['host'], port=int(config['port']), debug=args.debug)
+    # Check for open port
+
+    while True:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind(('localhost', port))
+            sock.close()
+            break
+        except socket.error:
+            port += 1
+
+    def run_app(port):
+        app.run(host=config['host'], port=port, debug=args.debug)
 
     #t1 = threading.Thread(target=run_app)
     #t1.start()
 
-    webbrowser.open("http://localhost:{}/".format(config['port']))
+    webbrowser.open("http://localhost:{}/".format(port))
 
     #setup_logging()
 
-    run_app()
+    run_app(port)
 
     #t1.join()
 
@@ -556,73 +568,10 @@ def library_unknown(args, l, config):
 
 def library_test(args, l, config):
 
-    from ambry.orm import Column
-    from collections import defaultdict
-    from ambry.identity import ObjectNumber, TableNumber, ColumnNumber
-    from sqlalchemy.orm import lazyload
 
-    fks = defaultdict(dict)
-
-    def resolve(id_):
-        on = ObjectNumber.parse(id_)
-
-        if isinstance(on, TableNumber):
-            tn = on.rev(None)
-            cn = ColumnNumber(tn, 1)
-        else:
-            cn = on.rev(None)
-            tn = cn.as_table.rev(None)
-
-        return tn, cn
-
-    protos = {}
-
-    def proto_maps():
-        for row in l.database.session.execute(
-                "SELECT distinct c_id, c_proto_vid FROM columns where c_proto_vid IS NOT NULL "):
-
-            if row.c_proto_vid:
-                _, cn = resolve(row.c_proto_vid)
-
-                protos[row.c_id] = str(cn)
-
-            reverse = {}
-            forward = {}
-
-            for k, v in protos.items():
-                p = v
-                proto_set = set()
-
-                for i in range(10):  # prevent loops
-                    proto_set.add(p)
-                    if p in protos:
-                        p = protos[p]
-                    else:
-                        break
-
-                forward[k] = proto_set
-
-                for cn in proto_set:
-
-                    if not cn in reverse:
-                        reverse[cn] = set()
-
-                    reverse[cn].add(k)
+    print l.schema_as_csv()
 
 
-        return forward, reverse
-
-
-    f, r = proto_maps()
-
-    for row in l.database.session.execute("SELECT distinct * FROM columns where c_proto_vid IS NOT NULL"):
-
-        _, cn = resolve(row.c_proto_vid)
-
-        try:
-            print r[str(cn)]
-        except KeyError:
-            print '!!!', str(cn)
 
 
 

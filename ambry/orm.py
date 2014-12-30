@@ -633,7 +633,7 @@ class Column(Base):
         return t
 
     @classmethod
-    def convert_python_type(cls, py_type_in):
+    def convert_python_type(cls, py_type_in, name=None):
 
         type_map = {
             unicode : str
@@ -641,7 +641,10 @@ class Column(Base):
 
         for col_type, (sla_type, py_type, sql_type) in cls.types.items():
             if py_type == type_map.get(py_type_in, py_type_in):
-                return col_type
+                if col_type == 'blob' and name and name.endswith('geometry'):
+                    return cls.DATATYPE_GEOMETRY
+                else:
+                    return col_type
 
         return None
 
@@ -729,8 +732,10 @@ class Column(Base):
     @property
     def fq_name(self):
         """Fully Qualified Name. A column Name with the column id as a prefix"""
-
-        return self.alt_name
+        if self.altname:
+            return self.altname
+        else:
+            return "{}_{}".format(self.id_, self.name)
 
 
     @property
@@ -793,7 +798,7 @@ class Column(Base):
             table_on = ObjectNumber.parse(target.t_id)
             target.id_ = str(ColumnNumber(table_on, target.sequence_id))
 
-        target.altname = "{}_{}".format(target.id_, target.name)
+        target.altname = target.fq_name
 
     def __repr__(self):
         return "<column: {}, {}>".format(self.name, self.vid)
@@ -883,7 +888,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
 
     @property
     def nonull_dict(self):
-        return {k: v for k, v in self.dict.items() if v}
+        return {k: v for k, v in self.dict.items() if v }
 
     @property
     def nonull_col_dict(self):
@@ -1452,6 +1457,7 @@ class Partition(Base, LinkableMixin):
 
         d =  {
                  'id':self.id_,
+                 'sequence_id':self.sequence_id,
                  'vid':self.vid,
                  'name':self.name,
                  'vname':self.vname,

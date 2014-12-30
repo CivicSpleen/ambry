@@ -859,8 +859,9 @@ class Schema(object):
             for c in cols:
                 self.add_column(table, **c)
 
+    @staticmethod
     def _dump_gen(self, table_name=None):
-        """Yield schema row for use in exporting the schem to other
+        """Yield schema row for use in exporting the schema to other
         formats
 
         """
@@ -991,7 +992,7 @@ class Schema(object):
 
             f = StringIO()
 
-        g = self._dump_gen()
+        g = self._dump_gen(self)
         
         try:
             header = g.next()
@@ -1026,7 +1027,7 @@ class Schema(object):
         
         o = defaultdict(GrowingList)
         
-        g = self._dump_gen()
+        g = self._dump_gen(self)
         
         header = g.next()
     
@@ -1038,7 +1039,7 @@ class Schema(object):
     def as_text(self, table, pad = '    '):
         import textwrap
         
-        g = self._dump_gen(table_name=table)
+        g = self._dump_gen(self,table_name=table)
         
         header = g.next()
     
@@ -1245,9 +1246,6 @@ class {name}(Base):
                     column = table.column(row['column'])
 
                 column.add_code(row['key'], row['value'], row['description'])
-
-
-
 
 
     @property

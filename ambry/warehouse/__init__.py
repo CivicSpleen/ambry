@@ -276,7 +276,7 @@ class Warehouse(object):
 
         d['dsn'] = filter_url(self.database.dsn, password=None) # remove the password
 
-        d['tables'] =  { t.vid:t.dict for t in self.library.tables }
+        d['tables'] =  { t.vid:t.nonull_col_dict for t in self.library.tables }
 
         d['partitions'] = {p.vid: p.dict for p in self.library.partitions}
 
@@ -443,6 +443,7 @@ class Warehouse(object):
                 raise
 
         self.library.database.mark_partition_installed(p_vid)
+
 
         return tables, p
 
@@ -632,6 +633,7 @@ class Warehouse(object):
 
         """
         from ..orm import Column
+        from ..identity import ObjectNumber
 
 
         # TODO, our use of sqlalchemy is wacked.
@@ -682,11 +684,32 @@ class Warehouse(object):
 
         for t in [ t for t in self.tables if t.type in ('view','mview') ]:
 
+            self.database.connection.execute("DELETE FROM columns WHERE c_t_vid = ?", t.vid)
+
             sql = 'SELECT * FROM "{}" LIMIT 1'.format(t.name)
 
             for row in self.database.connection.execute(sql):
-                pass
-                #print [ (k,Column.convert_python_type(type(v))) for k,v in row.items()]
+                for i, (col_name,v) in enumerate(row.items(), 1):
+
+                    c_id, plain_name = col_name.split('_',1)
+                    cn = ObjectNumber.parse(c_id)
+
+                    orig_table = self.library.table(str(cn.as_table))
+                    orig_column = orig_table.column(c_id)
+
+                    orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)
+                    d = orig_column.dict
+                    d['sequence_id'] = i
+                    del d['t_vid']
+                    del d['t_id']
+                    del d['vid']
+                    del d['id_']
+                    d['derivedfrom'] = c_id
+
+                    t.add_column( **d)
+                    s.add(t)
+
+            s.commit()
 
     def install_material_view(self, name, sql, clean = False, data=None):
         raise NotImplementedError(type(self))
