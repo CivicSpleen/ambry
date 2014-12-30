@@ -25,6 +25,8 @@ class GeoPartition(SqlitePartition):
 
     _id_class = GeoPartitionIdentity
 
+    is_geo = True
+
     
     def __init__(self, bundle, record, **kwargs):
         super(GeoPartition, self).__init__(bundle, record)
@@ -72,26 +74,28 @@ class GeoPartition(SqlitePartition):
         to another"""
         import ogr, osr
         
-      
+
         srs2 = ogr.osr.SpatialReference()
         srs2.ImportFromEPSG(dest_srs) 
         transform = osr.CoordinateTransformation(self.get_srs(), srs2)
 
         return transform
 
-    def create(self, dest_srs=4326, source_srs=None):
+    def add_tables(self, tables):
+        """  Declare geometry columns to spatialite
+        :param tables:
+        :return:
+        """
 
-        from ambry.geo.sfschema import TableShapefile
+        super(GeoPartition,self).add_tables(tables)
 
-        if self.identity.table:
-            _db_class = _geo_db_class()
-            tsf = TableShapefile(self.bundle, _db_class.make_path(self), self.identity.table,
-                                 dest_srs = dest_srs, source_srs = source_srs )
+        for table_name in tables:
+            t = self.bundle.schema.table(table_name)
+            for c in t.columns:
+                if c.name == 'geometry':
+                    self.database.recover_geometry(t.name, c.name, c.datatype.upper())
 
 
-            tsf.close()
-
-            self.add_tables(self.data.get('tables',None))
 
     def convert(self, table_name, progress_f=None):
         """Convert a spatialite geopartition to a regular arg
@@ -210,75 +214,53 @@ class GeoPartition(SqlitePartition):
             print 'convert_dates HERE', self.database.dsn
             self.database.connection.execute( "UPDATE {} SET {}".format(table.name, ','.join(clauses)))
 
-    def load_shapefile(self, path, t_srs = '4326', s_srs = None,  **kwargs):
-        """Load a shape file into a partition as a spatialite database. 
-        
-        Will also create a schema entry for the table speficified in the 
-        table parameter of the  pid, using the fields from the table in the
-        shapefile
-        """
-        import subprocess
-        from ambry.dbexceptions import ConfigurationError
-        from ambry.geo.util import get_shapefile_geometry_types
-        import os
 
-        if t_srs:
-            t_srs_opt = '-t_srs EPSG:{}'.format(t_srs)
-        else:
-            t_srs_opt = ''
-        
+    def load_shapefile(self, path):
+        """
+        Load a shapefile into the partition. Loads the features and inserts them using an inserter.
+
+        :param path:
+        :return:
+        """
+
+        from osgeo import ogr, osr
+        from ..geo.sfschema import ogr_inv_type_map
+        from ..orm import Column, Geometry
+
         if path.startswith('http'):
             shape_url = path
             path = self.bundle.filesystem.download_shapefile(shape_url)
-        
-        try:
-            subprocess.check_output('ogr2ogr --help-general', shell=True)
-        except:
-            raise ConfigurationError('Did not find ogr2ogr on path. Install gdal/ogr')
-        
-        self.bundle.log("Checking types in file {}".format(path))
-        types, type = get_shapefile_geometry_types(path)
 
-        #ogr_create="ogr2ogr -explodecollections -skipfailures -f SQLite {output} -nlt  {type} -nln \"{table}\" {input}  -dsco SPATIALITE=yes"
+        driver = ogr.GetDriverByName("ESRI Shapefile")
 
-        # The  '-dim 2' forces 2.5D and 3D shapes to 2D
+        dataSource = driver.Open(path, 0)
 
-        ogr_create="ogr2ogr  -overwrite -progress -skipfailures -f SQLite {output} " \
-                   "-gt 65536 {t_srs} {s_srs_arg} -nlt  {type} " \
-                   "-nln \"{table}\" {input} -dim 2 -dsco SPATIALITE=yes"
+        layer = dataSource.GetLayer()
 
-        dir_ = os.path.dirname(self.database.path)
+        to_srs = ogr.osr.SpatialReference()
+        to_srs.ImportFromEPSG(Geometry.DEFAULT_SRS)
 
-        if not os.path.exists(dir_):
-            self.bundle.log("Make dir: "+dir_)
-            os.makedirs(dir_)
+        dfn = layer.GetLayerDefn()
 
-        if os.path.exists(self.database.path):
-            os.remove(self.database.path)
+        col_defs = []
 
-        cmd = ogr_create.format(input = path,
-                                output = self.database.path,
-                                table = self.table.name,
-                                type = type,
-                                t_srs = t_srs_opt,
-                                s_srs_arg = '-s_srs EPSG:'+str(s_srs) if s_srs else ''
-                                 )
+        for i in range(0, dfn.GetFieldCount()):
+            field = dfn.GetFieldDefn(i)
+            col_defs.append((Column.mangle_name(field.GetName()),
+                             Column.types[ogr_inv_type_map[field.GetType()]][1]))
 
-        self.database.close()
-        self.bundle.log("Running: "+ cmd)
-        output = subprocess.check_output(cmd, shell=True)
-        self.bundle.log("ogr2ogr: Done")
+        with self.inserter() as ins:
+            for feature in layer:
+                d = {}
+                for i in range(0, dfn.GetFieldCount()):
+                    name, type_ = col_defs[i]
+                    d[name] = type_(feature.GetFieldAsString(i))
 
+                g = feature.GetGeometryRef()
+                g.TransformTo(to_srs)
+                d['geometry'] = g.ExportToWkt()
 
-        #with self.bundle.session:
-        #    for row in self.database.connection.execute("pragma table_info('{}')".format(self.table.name)):
-        #        parts = row[2].lower().strip(')').split('(')
-        #        datatype = parts[0]
-        #        size = int(parts[1]) if len(parts) > 1 else None
-        #        self.bundle.schema.add_column(self.table,row[1],datatype = datatype, size=size,
-        #                                       is_primary_key=True if row[1].lower()=='ogc_fid' else False, commit = False)
-                
-        self.database.post_create()
+                ins.insert(d)
 
 
     def __repr__(self):

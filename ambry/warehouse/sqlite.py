@@ -17,14 +17,6 @@ class SqliteWarehouse(RelationalWarehouse):
     ##
 
 
-    def _ogr_args(self, partition):
-
-        return [
-            "-f SQLite ",self.database.path,
-            "-gt 65536",
-            partition.database.path,
-            "-dsco SPATIALITE=no"]
-
 
     def load_local(self, partition, source_table_name, dest_table_name = None, where = None):
 
@@ -42,6 +34,19 @@ class SqliteWarehouse(RelationalWarehouse):
             self.database.copy_from_attached( table=(source_table_name, dest_table_name),
                                               on_conflict='REPLACE',
                                               name=atch_name, conn=conn, copy_n = copy_n, where = where)
+
+        # Geographic partitions need to be updates to be recognized
+
+        if partition.is_geo and self.database.is_geo:
+
+            from ..geo.util import recover_geometry
+
+            with self.database.engine.begin() as conn:
+                table = partition.get_table(source_table_name)
+
+                for column in table.columns:
+                    if column.type_is_geo():
+                        recover_geometry(conn, dest_table_name, column.fq_name, column.datatype )
 
         self.logger.info('done {}'.format(partition.identity.vname))
 
@@ -140,16 +145,16 @@ class SqliteWarehouse(RelationalWarehouse):
 
 class SpatialiteWarehouse(SqliteWarehouse):
 
-    def _ogr_args(self, partition):
-
-        return [
-            "-f SQLite ", self.database.path,
-            "-gt 65536",
-            partition.database.path,
-            "-dsco SPATIALITE=yes"]
-
 
     def install_material_view(self, name, sql, clean=False, data = None):
+        """
+        After installing thematerial view, look for geometry columns and add them to the spatial system
+        :param name:
+        :param sql:
+        :param clean:
+        :param data:
+        :return:
+        """
 
         if not super(SpatialiteWarehouse, self).install_material_view(name, sql, clean=clean, data = data):
             return False
@@ -158,14 +163,21 @@ class SpatialiteWarehouse(SqliteWarehouse):
 
         ce = self.database.connection.execute
 
-        if 'geometry' in [ row['name'].lower() for row in ce('PRAGMA table_info({})'.format(name)).fetchall()]:
-            types = ce('SELECT count(*) AS count, GeometryType(geometry) AS type,  CoordDimension(geometry) AS cd '
-                       'FROM {} GROUP BY type ORDER BY type desc;'.format(name)).fetchall()
+        for col in [ row['name'].lower() for row in ce('PRAGMA table_info({})'.format(name)).fetchall()]:
 
-            t = types[0][1]
-            cd = types[0][2]
+            if col.endswith('geometry'):
 
-            ce("SELECT RecoverGeometryColumn('{}', 'geometry', 4326, '{}', '{}');".format(name, t, cd))
+                types = ce('SELECT count(*) AS count, GeometryType({}) AS type,  CoordDimension({}) AS cd '
+                           'FROM {} GROUP BY type ORDER BY type desc;'.format(col, col,  name)).fetchall()
+
+                t = types[0][1]
+                cd = types[0][2]
+
+
+                #connection.execute(
+                #    'UPDATE {} SET {} = SetSrid({}, {});'.format(table_name, column_name, column_name, srs))
+
+                ce("SELECT RecoverGeometryColumn('{}', '{}', 4326, '{}', '{}');".format(name, col, t, cd))
 
 
         return True

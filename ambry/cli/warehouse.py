@@ -380,8 +380,49 @@ def warehouse_test(args, w, config):
     from ..dbexceptions import ConfigurationError
     from ..util import print_yaml
 
+    from ambry.orm import Column
+    from collections import defaultdict
+    from ambry.identity import ObjectNumber, TableNumber, ColumnNumber
 
-    w.library.sync_doc_json()
+    fks = defaultdict(dict)
+
+    names = set()
+
+    for c in w.library.database.session.query(Column).all():
+        inst_name = c.table.data.get('installed_names',[None,None,None])[1]
+
+        names.add('"{}"."{}"'.format(inst_name, c.altname))
+
+    for n in names:
+        print n
+
+
+    for ft_vid, cols in fks.items():
+        ft = w.library.table(ft_vid)
+        ft_name = ft.data['installed_names'][0]
+        print ft.name
+        print " SELECT * FROM {}".format(ft_name)
+        for fc,(tt_vid,tc) in cols.items():
+
+            tt = w.library.table(tt_vid)
+
+            if not ft or not tt:
+                continue
+
+            fc_name = ft.column(fc).altname
+
+            tt_name = tt.data['installed_names'][1]
+            tc_name = tt.column(tc).altname
+
+
+            #print "   JOIN {}.{} TO {}.{}  ".format(ft.name, ft.column(fc).name, tt.name, tt.column(tc).name)
+            print '   JOIN "{}" ON "{}"."{}" = "{}"."{}"'.format(tt_name, ft_name,fc_name, tt_name, tc_name)
+
+
+
+
+
+
 
 
 

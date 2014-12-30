@@ -31,6 +31,7 @@ class RelationalWarehouse(Warehouse):
                                                     table_name,
                                                     d_vid=d_vid,
                                                     driver=self.database.driver,
+                                                    use_fq_col_names = True,
                                                     alt_name=self.augmented_table_name(identity, table_name)[0],
                                                     session=self.library.database.session)
         return meta, table
@@ -101,25 +102,26 @@ class RelationalWarehouse(Warehouse):
         else:
             cache_size = 50000
 
-
         self.logger.info('populate_table {}'.format(source_table_name))
 
         dest_metadata = MetaData()
         dest_table = Table(dest_table_name, dest_metadata, autoload=True, autoload_with=self.database.engine)
-
 
         insert_statement = dest_table.insert()
 
         source_metadata = MetaData()
         source_table = Table(source_table_name, source_metadata, autoload=True, autoload_with=partition.database.engine)
 
-        select_statement = source_table.select()
-
         if replace:
             insert_statement = insert_statement.prefix_with('OR REPLACE')
 
+        cols = [ ' {} AS "{}" '.format(c[0].name if c[0].name != 'geometry' else 'AsText(geometry)',c[1].name )
+                for c in zip(source_table.columns, dest_table.columns) ]
+
+        select_statement = " SELECT {} FROM {} ".format(','.join(cols), source_table.name)
+
         if where:
-            select_statement += " WHERE "+where
+            select_statement += " WHERE " + where
 
         binary_cols = []
         for c in dest_table.columns:
@@ -147,7 +149,7 @@ class RelationalWarehouse(Warehouse):
 
                 for value in values:
 
-                    mogd = cur.mogrify(insert_statement, value)
+                    mogd = cur.mogrify(insert_statement, value )
                     # Hopefully, including the parens will make it unique enough to not
                     # cause problems. Using just 'VALUES' files when there is a column of the same name.
                     _, vals = mogd.split(") VALUES (", 1)
@@ -156,16 +158,19 @@ class RelationalWarehouse(Warehouse):
 
                 sql = inst+" VALUES "+','.join(mogd_values)
 
-
                 cur.execute(sql)
 
             cache = []
 
+
+
             for i, row in enumerate(partition.database.session.execute(select_statement)):
+
                 self.logger.progress('add_row', source_table_name, i)
 
                 if binary_cols:
-                    # This is really horrible.
+                    # This is really horrible. To insert a binary column property, it has to be run rhough
+                    # function.
                     cache.append({ k: psycopg2.Binary(v) if k in binary_cols else v for k,v in row.items() })
 
                 else:
@@ -181,50 +186,12 @@ class RelationalWarehouse(Warehouse):
                 self.logger.info('committing {} rows'.format(len(cache)))
                 execute_many(insert_statement, cache)
 
-
         conn.commit()
-
 
         self.logger.info('done {}'.format(partition.identity.vname))
 
         return dest_table_name
 
-
-    def load_ogr(self, partition, source_table_name, dest_table_name,  where):
-        #
-        # Use ogr2ogr to copy.
-        #
-        import shlex
-        from sh import ogr2ogr
-
-        args = [
-            "-t_srs EPSG:4326",
-            "-nlt PROMOTE_TO_MULTI",
-            "-nln {}".format(dest_table_name),
-            "-progress ",
-            "-overwrite",
-            "-skipfailures",
-            "-lco GEOMETRY_NAME=geometry",
-            ] + self._ogr_args(partition)
-
-        def err_output(line):
-            self.logger.error(line)
-
-        self.logger.info("Loading with: ogr2ogr {}".format(' '.join(args)))
-
-        # Need to shlex it b/c the "PG:" part gets bungled otherwise.
-        pct_str = ''
-        for c in ogr2ogr(*shlex.split(' '.join(args)), _iter=True,  _out_bufsize=0, _err = err_output ):
-
-            if c.isdigit():
-                pct_str += c
-            elif pct_str:
-                self.logger.info("Loading with ogr2ogr: {}% done ".format(pct_str))
-                pct_str = ''
-
-        self.logger.log("Done loading with: ogr2ogr ")
-
-        return dest_table_name
 
     def remove(self, name):
         from ..orm import Dataset

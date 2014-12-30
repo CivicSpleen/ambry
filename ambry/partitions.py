@@ -587,55 +587,7 @@ class Partitions(object):
         
         return p
  
-         
-    def new_hdf_partition(self, clean=False, tables=None, data=None, **kwargs):
 
-        raise NotImplementedError("HDF is not working well")
-
-        p, found =  self._find_or_new(kwargs,format='hdf', data=data)
-        
-        if found:
-            raise ConflictError("Partition {} alread exists".format(p.name))
-
-        return p
-    
-    def find_or_new_hdf(self, clean = False,  tables=None, data=None, **kwargs):
-        '''Find a partition identified by pid, and if it does not exist, create it. 
-        
-        Args:
-            pid A partition Identity
-            tables String or array of tables to copy form the main partition
-        '''
-
-        p, _ =  self._find_or_new(kwargs, clean = False,  tables=tables, data=data, create=False, format='hdf')
-        
-        return p
-    
- 
-    def new_csv_partition(self, pid=None, data=None, **kwargs):
-
-
-        p, found =  self._find_or_new(kwargs,format='csv', data=data)
-        
-        if found:
-            raise ConflictError("Partition {} alread exists".format(p.name))
-
-        return p
-
-
-    def find_or_new_csv(self, clean = False, tables=None, data=None, **kwargs):
-        '''Find a partition identified by pid, and if it does not exist, create it. 
-        
-        Args:
-            pid A partition Identity
-            tables String or array of tables to copy form the main partition
-        '''
-
-        p, _ =  self._find_or_new(kwargs, clean = False,  tables=tables, data=data, format='csv')
-        
-        return p
-    
- 
     
     def new_geo_partition(self, clean=False, tables=None, data=None, shape_file=None,  **kwargs):
         from sqlalchemy.orm.exc import  NoResultFound
@@ -652,7 +604,7 @@ class Partitions(object):
             if shape_file:
                 p.database.close()
 
-                p.load_shapefile(shape_file, s_srs = kwargs.get('s_srs', None))
+                p.load_shapefile(shape_file)
 
         except ImportError:
             self.bundle.log("GDAL not installed; using non geo database")
@@ -680,7 +632,7 @@ class Partitions(object):
             import gdal
 
             p, _ = self._find_or_new(kwargs, clean=False, tables=None,
-                                     data=None, create=False, format='geo')
+                                     data=None, create=True, format='geo')
 
             if shape_file:
                 p.load_shapefile(shape_file)

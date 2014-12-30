@@ -5,28 +5,26 @@ This is a fake education file manifest. Well, actually, a test manifest.
 UID: mQaiWWgy2G
 AUTHOR: Eric Busboom <eric@sandiegodata.org>
 
-DATABASE: sqlite:////example_manifest.db
-REMOTE:  s3://warehouse.sandiegodata.org/test/example_manifest#compress
-
+DATABASE: sqlite:///example_manifest.db
+CACHE: example_manifest
 
 PARTITIONS:
 
 example.com-segmented-example-2
-example.com-combined-example
+example.com-combined-combined
 
 VIEW: health_view
 
-SELECT * FROM "pIjqPRbrGq001001_example"
+SELECT * FROM "pIjqPRbrGq001001_combined"
 
 DOC:
 
 The __health_view__ is an  view that refers to an installed table by its full versioned name. This is a
 second sentence, to make the documentation longer, and to see if the code for extracting summaries works.
 
-VIEW: health_mview
+MVIEW: health_mview
 
-SELECT *
-FROM "p00G002001_example"
+SELECT * FROM "p00G002001_example"
 
 
 DOC:

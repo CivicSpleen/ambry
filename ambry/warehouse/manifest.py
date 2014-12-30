@@ -150,7 +150,13 @@ class Manifest(object):
 
     @property
     def cache(self):
-        return self.single_line('cache')
+        cache =  self.single_line('cache')
+
+        if not cache:
+            cache = self.uid
+
+        return cache
+
 
     @property
     def uid(self):

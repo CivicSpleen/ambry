@@ -4,10 +4,13 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from postgres import PostgresDatabase
-             
+
+import dialects.postgis
 
 class PostgisDatabase(PostgresDatabase):
 
+    is_geo = True
+
     @property
     def munged_dsn(self):
-        return self.dsn.replace('postgis:','postgresql+psycopg2:')
+        return self.dsn.replace('postgis:','postgis:')

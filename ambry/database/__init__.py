@@ -67,6 +67,8 @@ def new_database(config, bundle=None, class_=None):
 
 class DatabaseInterface(object):
 
+    is_geo = False
+
     @property
     def name(self):  
         raise NotImplementedError() 

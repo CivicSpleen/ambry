@@ -223,7 +223,7 @@ class Intuiter(object):
         elif isinstance(row, list):
             for k, v in enumerate(row):
                 type_  = self._columns[k].test(v)
-                #print '!!!', k, self.header[k], v, type_
+
         else:
             raise TypeError("Row must be a list or a dict")
 

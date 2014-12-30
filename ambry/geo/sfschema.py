@@ -33,18 +33,21 @@ ogr_type_map = {
         Column.DATATYPE_DATETIME: ogr.OFTDateTime, 
         }
 
-# An invertable map -- values are unique. It really should have the keys and values reversed, but this is less work
+# An inverted map -- values are unique. It really should have the keys and values reversed, but this is less work
 ogr_inv_type_map = {
-    Column.DATATYPE_VARCHAR: ogr.OFTString,
-    Column.DATATYPE_INTEGER: ogr.OFTInteger,
-    Column.DATATYPE_REAL: ogr.OFTReal,
-    Column.DATATYPE_DATE: ogr.OFTDate,
-    Column.DATATYPE_TIME: ogr.OFTTime,
-    Column.DATATYPE_TIMESTAMP: ogr.OFTDateTime,
-    Column.DATATYPE_DATETIME: ogr.OFTDateTime,
+    ogr.OFTString: Column.DATATYPE_VARCHAR,
+    ogr.OFTInteger: Column.DATATYPE_INTEGER,
+    ogr.OFTReal: Column.DATATYPE_REAL,
+    ogr.OFTDate: Column.DATATYPE_DATE,
+    ogr.OFTTime: Column.DATATYPE_TIME,
+    ogr.OFTDateTime: Column.DATATYPE_DATETIME
 }
 
+
+
 def copy_schema(schema, path, table_name=None, fmt='shapefile', logger = None):
+
+    from util import get_shapefile_geometry_types
 
     if path.startswith('http'):
         shape_url = path
@@ -54,8 +57,6 @@ def copy_schema(schema, path, table_name=None, fmt='shapefile', logger = None):
     driver, options, _ = driver_by_name(fmt)
 
     ds = driver.Open(path, 0) # 0 means read-only. 1 means writeable.
-
-    type_map = {v:k for k,v in ogr_inv_type_map.items() if k }
 
 
     if ds.GetLayerCount() > 1  and table_name:
@@ -76,7 +77,9 @@ def copy_schema(schema, path, table_name=None, fmt='shapefile', logger = None):
         if logger:
             logger("Creating table in schema: {}".format(table_name))
 
-        schema.add_column(table, 'ogc_fid', datatype='integer', is_primary_key=True, sequence_id=1)
+        schema.add_column(table, 'id', datatype='integer', is_primary_key=True, sequence_id=1)
+
+
 
         dfn = layer.GetLayerDefn()
         for i in range(0, dfn.GetFieldCount()):
@@ -84,10 +87,19 @@ def copy_schema(schema, path, table_name=None, fmt='shapefile', logger = None):
 
             schema.add_column(table,
                             field.GetName(),
-                            datatype=type_map[field.GetType()],
+                            datatype=ogr_inv_type_map[field.GetType()],
                             width = field.GetWidth() if field.GetWidth() > 0 else None,
                             is_primary_key =  False,
                             sequence_id=len(table.columns) + 1)
+
+        _, type_ = get_shapefile_geometry_types(path)
+
+        schema.add_column(table,
+                          'geometry',
+                          datatype=type_,
+                          is_primary_key=False,
+                          sequence_id=len(table.columns) + 1)
+
 
 
 def driver_by_name(fmt):
@@ -144,7 +156,6 @@ class TableShapefile(object):
         self.path = path
         self.table_name = table
         self._table = None
-
 
         gdal.UseExceptions()
 
@@ -336,7 +347,6 @@ class TableShapefile(object):
     def add_feature(self, row, source_srs=None):
         import datetime
 
-
         gdal.UseExceptions()
 
         geometry = self.get_geometry(row)
@@ -353,7 +363,6 @@ class TableShapefile(object):
                 raise Exception("Failed to create layer {} in {}".format(self.name, self.path))
 
             self.load_schema(self.layer)
-
 
         feature = ogr.Feature(self.layer.GetLayerDefn())
 
@@ -384,9 +393,7 @@ class TableShapefile(object):
                             raise
 
         else:
-            for i,v in enumerate(row):
-                if i not in self.geo_col_pos:
-                    feature.SetField(i, row.get(v, c.python_type(c.default) if c.default else None) )
+            raise Exception("Can only handle dict rows")
 
         if self.transform:
             geometry.Transform(self.transform)

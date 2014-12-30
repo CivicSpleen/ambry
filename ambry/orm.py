@@ -20,6 +20,7 @@ from util import Constant, memoize
 from identity import LocationRef
 
 from sqlalchemy.sql import text
+import sqlalchemy.types as types
 from ambry.identity import  DatasetNumber, ColumnNumber
 from ambry.identity import TableNumber, PartitionNumber, ObjectNumber
 
@@ -33,12 +34,42 @@ import json
 from sqlalchemy import BigInteger
 from sqlalchemy.dialects import postgresql, mysql, sqlite
 
+
 BigIntegerType = BigInteger()
 BigIntegerType = BigIntegerType.with_variant(postgresql.BIGINT(), 'postgresql')
 BigIntegerType = BigIntegerType.with_variant(mysql.BIGINT(), 'mysql')
 BigIntegerType = BigIntegerType.with_variant(sqlite.INTEGER(), 'sqlite')
 
 
+from sqlalchemy import func
+from sqlalchemy.types import UserDefinedType
+
+class Geometry(UserDefinedType):
+    """
+    Geometry type, to ensure that WKT text is properly inserted into
+    the database with the GeomFromText() function.
+    NOTE! This is paired with code in database.relational.RelationalDatabase.table() to convert NUMERIC
+    fields that have the name 'geometry' to GEOMETRY types. Sqlalchemy sees spatialte GEOMETRY types
+    as NUMERIC """
+
+    DEFAULT_SRS = 4326
+
+    def get_col_spec(self): return "GEOMETRY"
+
+    def bind_expression(self, bindvalue):
+        return func.ST_GeomFromText(bindvalue, self.DEFAULT_SRS, type_=self)
+
+    def column_expression(self, col):
+        return func.ST_AsText(col, type_=self)
+
+class SpatialiteGeometry(Geometry):
+    def get_col_spec(self): return "BLOB"
+
+
+GeometryType = Geometry()
+GeometryType = GeometryType.with_variant(SpatialiteGeometry(), 'spatialite')
+GeometryType = GeometryType.with_variant(Text(), 'sqlite')  # Just write the WKT through
+GeometryType = GeometryType.with_variant(Text(), 'postgresql')
 Base = declarative_base()
 
 
@@ -470,6 +501,9 @@ class Column(Base):
     # Reference to a column that this column links to.
     fk_vid = SAColumn('c_fk_vid', String(20),  index=True)
 
+    # A column vid, or possibly an equation, describing how this column was created from other columns.
+    derivedfrom = SAColumn('c_derivedfrom', String(200))
+
     data = SAColumn('c_data',MutationDict.as_mutable(JSONEncodedObj))
 
     is_primary_key = SAColumn('c_is_primary_key',Boolean, default = False)
@@ -497,6 +531,7 @@ class Column(Base):
     DATATYPE_LINESTRING = 'linestring' # Spatalite, sqlite extensions for geo
     DATATYPE_POLYGON = 'polygon' # Spatalite, sqlite extensions for geo
     DATATYPE_MULTIPOLYGON = 'multipolygon' # Spatalite, sqlite extensions for geo
+    DATATYPE_GEOMETRY = 'geometry'  # Spatalite, sqlite extensions for geo
     DATATYPE_CHAR = 'char'
     DATATYPE_VARCHAR = 'varchar'
     DATATYPE_BLOB = 'blob'
@@ -516,16 +551,21 @@ class Column(Base):
         DATATYPE_TIME:(sqlalchemy.types.Time,datetime.time,'TIME'),
         DATATYPE_TIMESTAMP:(sqlalchemy.types.DateTime,datetime.datetime,'TIMESTAMP'),
         DATATYPE_DATETIME:(sqlalchemy.types.DateTime,datetime.datetime,'DATETIME'),
-        DATATYPE_POINT:(sqlalchemy.types.LargeBinary,buffer,'POINT'),
-        DATATYPE_LINESTRING:(sqlalchemy.types.LargeBinary,buffer,'LINESTRING'),
-        DATATYPE_POLYGON:(sqlalchemy.types.LargeBinary,buffer,'POLYGON'),
-        DATATYPE_MULTIPOLYGON:(sqlalchemy.types.LargeBinary,buffer,'MULTIPOLYGON'),
-        DATATYPE_BLOB:(sqlalchemy.types.LargeBinary,buffer,'BLOB')
+        DATATYPE_POINT:(GeometryType, str,'POINT'),
+        DATATYPE_LINESTRING:(GeometryType, str,'LINESTRING'),
+        DATATYPE_POLYGON:(GeometryType, str,'POLYGON'),
+        DATATYPE_MULTIPOLYGON:(GeometryType, str,'MULTIPOLYGON'),
+        DATATYPE_GEOMETRY: (GeometryType, str, 'GEOMETRY'),
+        DATATYPE_BLOB:(sqlalchemy.types.LargeBinary, buffer,'BLOB')
         }
-
 
     def type_is_text(self):
         return self.datatype in (Column.DATATYPE_TEXT, Column.DATATYPE_CHAR, Column.DATATYPE_VARCHAR)
+
+    def type_is_geo(self):
+        return self.datatype in (Column.DATATYPE_POINT, Column.DATATYPE_LINESTRING, Column.DATATYPE_POLYGON,
+                                 Column.DATATYPE_MULTIPOLYGON, Column.DATATYPE_GEOMETRY)
+
 
     def type_is_time(self):
         return self.datatype in (Column.DATATYPE_TIME, Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE)
@@ -567,7 +607,7 @@ class Column(Base):
         try:
             return self.types[self.datatype][2]
         except KeyError:
-            print '!!!', self.datatype, self.types
+
             raise
 
     @classmethod
@@ -593,7 +633,7 @@ class Column(Base):
         return t
 
     @classmethod
-    def convert_python_type(cls, py_type_in):
+    def convert_python_type(cls, py_type_in, name=None):
 
         type_map = {
             unicode : str
@@ -601,7 +641,10 @@ class Column(Base):
 
         for col_type, (sla_type, py_type, sql_type) in cls.types.items():
             if py_type == type_map.get(py_type_in, py_type_in):
-                return col_type
+                if col_type == 'blob' and name and name.endswith('geometry'):
+                    return cls.DATATYPE_GEOMETRY
+                else:
+                    return col_type
 
         return None
 
@@ -610,13 +653,11 @@ class Column(Base):
     def foreign_key(self):
         return self.fk_vid
 
-
-
     def __init__(self,table, **kwargs):
 
         self.sequence_id = kwargs.get("sequence_id",len(table.columns)+1) 
         self.name = kwargs.get("name",None) 
-        self.altname = kwargs.get("altname",None) 
+
         self.is_primary_key = _clean_flag(kwargs.get("is_primary_key",False))
         self.datatype = kwargs.get("datatype",None) 
         self.size = kwargs.get("size",None) 
@@ -633,6 +674,7 @@ class Column(Base):
         self.scale = kwargs.get("scale",None)
         self.fk_vid = kwargs.get("fk_vid", kwargs.get("foreign_key", None))
         self.proto_vid = kwargs.get("proto_vid",kwargs.get("proto",None))
+        self.derivedfrom = kwargs.get("derivedfrom", None)
         self.data = kwargs.get("data",None) 
 
         # the table_name attribute is not stored. It is only for
@@ -652,11 +694,9 @@ class Column(Base):
 
     @property
     def dict(self):
-        x = {k: v for k, v in self.__dict__.items()
-             if k in ['id_', 'vid', 't_vid','t_id',
-                      'sequence_id', 'name', 'altname', 'is_primary_key', 'datatype', 'size',
-                      'precision', 'start', 'width', 'sql', 'flags', 'description', 'keywords', 'measure',
-                      'units', 'universe', 'scale', 'proto_vid', 'fk_vid', 'data']}
+
+        x = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ( 'table')}
+
         if not x:
             raise Exception(self.__dict__)
 
@@ -688,6 +728,15 @@ class Column(Base):
             return re.sub('[^\w_]','_',name).lower()
         except TypeError:
             raise TypeError('Trying to mangle name with invalid type of: '+str(type(name)))
+
+    @property
+    def fq_name(self):
+        """Fully Qualified Name. A column Name with the column id as a prefix"""
+        if self.altname:
+            return self.altname
+        else:
+            return "{}_{}".format(self.id_, self.name)
+
 
     @property
     @memoize
@@ -739,6 +788,7 @@ class Column(Base):
         
         Column.before_update(mapper, conn, target)
 
+
     @staticmethod
     def before_update(mapper, conn, target):
         '''Set the column id number based on the table number and the 
@@ -748,6 +798,7 @@ class Column(Base):
             table_on = ObjectNumber.parse(target.t_id)
             target.id_ = str(ColumnNumber(table_on, target.sequence_id))
 
+        target.altname = target.fq_name
 
     def __repr__(self):
         return "<column: {}, {}>".format(self.name, self.vid)
@@ -817,7 +868,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     @property
     def dict(self):
         d =  {k:v for k,v in self.__dict__.items() if k in
-                ['id_','vid', 'd_id', 'd_vid', 'sequence_id', 'name', 'altname', 'vname', 'description',
+                ['id_','vid', 'd_id', 'd_vid', 'sequence_id', 'name',  'altname', 'vname', 'description',
                  'universe', 'keywords', 'installed', 'proto_vid', 'type']}
 
         if self.data:
@@ -837,7 +888,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
 
     @property
     def nonull_dict(self):
-        return {k: v for k, v in self.dict.items() if v}
+        return {k: v for k, v in self.dict.items() if v }
 
     @property
     def nonull_col_dict(self):
@@ -1406,6 +1457,7 @@ class Partition(Base, LinkableMixin):
 
         d =  {
                  'id':self.id_,
+                 'sequence_id':self.sequence_id,
                  'vid':self.vid,
                  'name':self.name,
                  'vname':self.vname,

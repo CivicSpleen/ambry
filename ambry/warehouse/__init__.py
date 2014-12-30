@@ -236,7 +236,6 @@ class Warehouse(object):
     def cache_path(self, v):
         return self._meta_set('cache_path', v)
 
-
     @property
     def cache(self):
 
@@ -277,7 +276,7 @@ class Warehouse(object):
 
         d['dsn'] = filter_url(self.database.dsn, password=None) # remove the password
 
-        d['tables'] =  { t.vid:t.dict for t in self.library.tables }
+        d['tables'] =  { t.vid:t.nonull_col_dict for t in self.library.tables }
 
         d['partitions'] = {p.vid: p.dict for p in self.library.partitions}
 
@@ -375,7 +374,7 @@ class Warehouse(object):
     ##
 
     def install(self, partition, tables=None, prefix=None):
-        """Install a partition and the talbes in the partition"""
+        """Install a partition and the tables in the partition"""
         from ..orm import Partition
         from sqlalchemy.exc import OperationalError
 
@@ -398,6 +397,7 @@ class Warehouse(object):
             self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
             return None, None;
 
+
         all_tables = self.install_partition(bundle, p, prefix=prefix)
 
         if not tables:
@@ -418,13 +418,8 @@ class Warehouse(object):
                 ##
                 ## Copy the data to the destination table
 
-                if p.identity.format == 'db':
-                    self.elibrary.get(p.vid) # ensure it is local
-                    itn = self.load_local(p, source_table_name, dest_table_name, where)
-                else:
-                    self.elibrary.get(p.vid)  # ensure it is local
-                    itn = self.load_ogr(p, source_table_name, dest_table_name, where)
-
+                self.elibrary.get(p.vid) # ensure it is local
+                itn = self.load_local(p, source_table_name, dest_table_name, where)
 
                 t_vid = p.get_table(source_table_name).vid
                 w_table = self.library.table(t_vid)
@@ -449,8 +444,8 @@ class Warehouse(object):
 
         self.library.database.mark_partition_installed(p_vid)
 
-        return tables, p
 
+        return tables, p
 
     def install_partition(self, bundle, partition, prefix=None):
         '''Install the records for the partition, the tables referenced by the partition,
@@ -638,6 +633,7 @@ class Warehouse(object):
 
         """
         from ..orm import Column
+        from ..identity import ObjectNumber
 
 
         # TODO, our use of sqlalchemy is wacked.
@@ -674,13 +670,11 @@ class Warehouse(object):
 
                 self.install_table(t_vid, data=dict(type='alias', proto_vid=t_vid ))
 
-
-
         s = self.library.database.session
 
         for t in self.tables:
             if  t.type == 'table' and t.installed:
-
+                # derived_tables checks the proto_id, used to link  aliases to base tables.
                 for dt in sorted(self.library.derived_tables(t.vid), key=lambda x:x.name):
 
                     t.add_installed_name(dt.name)
@@ -690,11 +684,32 @@ class Warehouse(object):
 
         for t in [ t for t in self.tables if t.type in ('view','mview') ]:
 
+            self.database.connection.execute("DELETE FROM columns WHERE c_t_vid = ?", t.vid)
+
             sql = 'SELECT * FROM "{}" LIMIT 1'.format(t.name)
 
             for row in self.database.connection.execute(sql):
-                pass
-                #print [ (k,Column.convert_python_type(type(v))) for k,v in row.items()]
+                for i, (col_name,v) in enumerate(row.items(), 1):
+
+                    c_id, plain_name = col_name.split('_',1)
+                    cn = ObjectNumber.parse(c_id)
+
+                    orig_table = self.library.table(str(cn.as_table))
+                    orig_column = orig_table.column(c_id)
+
+                    orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)
+                    d = orig_column.dict
+                    d['sequence_id'] = i
+                    del d['t_vid']
+                    del d['t_id']
+                    del d['vid']
+                    del d['id_']
+                    d['derivedfrom'] = c_id
+
+                    t.add_column( **d)
+                    s.add(t)
+
+            s.commit()
 
     def install_material_view(self, name, sql, clean = False, data=None):
         raise NotImplementedError(type(self))
@@ -845,9 +860,6 @@ class Warehouse(object):
         facility of the target warehouse'''
         raise NotImplementedError()
 
-    def load_ogr(self, partition, source_table_name, dest_table_name, where):
-        '''Load geo data using the ogr2ogr program'''
-        raise NotImplementedError()
 
     def _setup_install(self, ref):
         '''Perform local and remote resolutions to get the bundle, partition and links

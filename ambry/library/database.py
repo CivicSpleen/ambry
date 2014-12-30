@@ -13,7 +13,7 @@ import ambry.util
 from ambry.util import temp_file_name
 from ambry.bundle import DbBundle
 from ..identity import LocationRef, Identity
-from ambry.orm import Column, Partition, Table, Dataset, Config, File, Base
+from ambry.orm import Column, Partition, Table, Dataset, Config, File, Base, Code
 
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
@@ -244,6 +244,7 @@ class LibraryDb(object):
         s.query(Partition).delete()
         s.query(Table).delete()
         s.query(Dataset).delete()
+        s.query(Code).delete()
 
         if add_config_root:
             self._add_config_root()
@@ -289,7 +290,7 @@ class LibraryDb(object):
             raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
 
         library_tables = [Config.__tablename__, Column.__tablename__, Partition.__tablename__,
-                  Table.__tablename__, File.__tablename__,  Dataset.__tablename__]
+                  Table.__tablename__, File.__tablename__,  Dataset.__tablename__, Code.__tablename__]
 
 
         try:
@@ -312,7 +313,7 @@ class LibraryDb(object):
 
     def create_tables(self):
 
-        tables = [ Dataset, Config, Table, Column, File, Partition]
+        tables = [ Dataset, Config, Table, Column, File, Partition, Code]
 
         self.drop()
 
@@ -592,7 +593,7 @@ class LibraryDb(object):
 
 
 
-    def install_bundle(self, bundle, commit = True):
+    def install_bundle(self, bundle, commit = True, use_fq_names = False):
         '''Copy the schema and partitions lists into the library database
 
         '''
@@ -649,6 +650,7 @@ class LibraryDb(object):
 
         if tables:
             s.execute(Table.__table__.insert(), tables)
+
             s.execute(Column.__table__.insert(), columns)
 
         for config in bundle.database.session.query(Config).all():
@@ -733,8 +735,8 @@ class LibraryDb(object):
 
         partition = bundle.partitions.get(p_id)
 
-        return self.install_partition(bundle, partition,
-                                      install_bundle=install_bundle, install_tables=install_tables, commit=commit)
+        return self.install_partition(bundle, partition, install_bundle=install_bundle,
+                                      install_tables=install_tables, commit=commit)
 
 
     def install_partition(self, bundle, partition, install_bundle=True, install_tables=True, commit=True):
@@ -750,6 +752,16 @@ class LibraryDb(object):
         from ..identity import PartitionNameQuery
         from sqlalchemy.orm.exc import NoResultFound
 
+        s = self.session
+        s.merge(partition.record)
+
+        s.commit()
+
+
+        # This is not what I expected --- sqlite loads in all of the records linked to the
+        # partition, including the tables and columns, so none of the rest of the code is required.
+        return
+
         if commit == 'collect':
             self._partition_collection.append(partition.record.insertable_dict)
             return
@@ -761,24 +773,21 @@ class LibraryDb(object):
                 b = None
 
             if not b:
-                self.install_bundle(bundle)
+                self.install_bundle(bundle, use_fq_names = use_fq_names)
 
-        s = self.session
-
-        if install_tables:
+        if not install_tables:
             for table_name in partition.tables:
                 table = bundle.schema.table(table_name)
 
                 try:
                     s.query(Table).filter(Table.vid == table.vid).one()
                     # the library already has the table
+
                 except NoResultFound as e:
                     s.merge(table)
-
                     for column in table.columns:
-                        s.merge(column)
 
-        s.merge(partition.record)
+                        s.merge(column)
 
         if commit:
             try:
@@ -787,6 +796,7 @@ class LibraryDb(object):
                 self.logger.error("Failed to merge")
                 self.rollback()
                 raise e
+
 
     def insert_partition_collection(self):
 

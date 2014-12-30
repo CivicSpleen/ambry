@@ -111,13 +111,12 @@ class SqlitePartition(PartitionBase):
         self.database.create()
 
         self.add_tables(tables)
-        
-        
+
     def add_tables(self,tables):
 
         for t in tables:
             if not t in self.database.inspector.get_table_names():
-                t_meta, table = self.bundle.schema.get_table_meta(t) #@UnusedVariable
+                _, table = self.bundle.schema.get_table_meta(t)
                 table.create(bind=self.database.engine)       
 
     def create(self):

@@ -503,7 +503,6 @@ class Library(object):
         return self.database.session.query(Table).all()
 
 
-
     def table(self, vid):
 
         from ..orm import Table
@@ -532,9 +531,31 @@ class Library(object):
         except NoResultFound:
             raise NotFoundError("Did not find table with proto_vid {} in library {}"
                                 .format(proto_vid, self.database.dsn))
-        except MultipleResultsFound:
-            raise MultipleFoundError("FOund multiple tables with proto_vid {} in library {}"
-                                     .format(proto_vid, self.database.dsn))
+
+
+    def proto_tree(self, proto_vid):
+        """Create a list of ancestors for the given proto_vid, for columns"""
+        from identity import ObjectNumber, TableNumber, ColumnNumber
+        proto_cols = set()
+        lopp_n = 0
+
+        while True:
+            on = ObjectNumber.parse(proto_vid)
+
+            # Actually, it should always be a col number, but
+            # this can't hurt
+            if isinstance(on, TableNumber):
+                tn = on.rev(None)
+                cn = ColumnNumber(tn, 1)
+            else:
+                cn = on.rev(None)
+                tn = cn.as_table.rev(None)
+
+            proto_cols.add(str(cn))
+
+
+
+
 
 
     def partition(self, vid):
@@ -1037,10 +1058,12 @@ class Library(object):
 
         return bundles
 
-    def sync_remotes(self, remotes=None, clean = False):
+    def sync_remotes(self, remotes=None, clean = False, last_only=True):
         from ..orm import Dataset
         from sqlalchemy.exc import IntegrityError
         from ..dbexceptions import NotABundle
+        import re
+        from collections import defaultdict
 
         if clean:
             self.files.query.type(Dataset.LOCATION.REMOTE).delete()
@@ -1053,11 +1076,33 @@ class Library(object):
 
         for remote in remotes:
 
+            remote_list = remote.list().keys()
+
             all_keys = [ f.path for f  in self.files.query.type(Dataset.LOCATION.REMOTE).group(remote.repo_id).all ]
 
-            for cache_key in remote.list().keys():
+            last_keys = defaultdict(lambda : [0,''] )
+
+            use_only = None
+
+            if last_only:
+                use_only = []
+                for cache_key in remote_list:
+                    nv_key = re.sub(r'-\d+\.\d+\.\d+\.db', '', cache_key)  # Key without the version
+                    version = int(re.search(r'(\d+)\.db$', cache_key).group(1))
+
+                    if version > last_keys[nv_key][0]:
+                        last_keys[nv_key] = [version, cache_key]
+
+                for version, cache_key in last_keys.values():
+                    use_only.append(cache_key)
+
+            for cache_key in remote_list:
 
                 if cache_key in all_keys:
+                    continue
+
+                if use_only and cache_key not in use_only:
+                    self.logger.info("Skip old version: ({}".format(cache_key))
                     continue
 
                 if self.cache.has(cache_key):# This is just for reporting.
@@ -1338,6 +1383,38 @@ class Library(object):
         return c
 
 
+    def _gen_schema(self):
+        from ..schema import Schema
+
+        return Schema._dump_gen(self)
+
+    def schema_as_csv(self, f=None):
+        import unicodecsv as csv
+        from StringIO import StringIO
+
+        if f is None:
+            f = StringIO()
+
+        g = self._gen_schema()
+
+        header = g.next()
+
+        w = csv.DictWriter(f, header, encoding='utf-8')
+        w.writeheader()
+        last_table = None
+        for row in g:
+
+            # Blank row to seperate tables.
+            if last_table and row['table'] != last_table:
+                w.writerow({})
+
+            w.writerow(row)
+
+            last_table = row['table']
+
+        if isinstance(f, StringIO):
+            return f.getvalue()
+
     @property
     def info(self):
         return """
@@ -1363,7 +1440,7 @@ Remotes:  {remotes}
                         stores=[s.ref for s in f.linked_stores]) for f in self.manifests},
                     stores={f.ref: dict(
                         title=f.data['title'],
-                        summary=f.data['summary'],
+                        summary=f.data['summary'] if f.data['summary'] else '' ,
                         dsn = f.path,
                         manifests = [ m.ref for m in f.linked_manifests ],
                         cache=f.data['cache'],
@@ -1375,79 +1452,13 @@ Remotes:  {remotes}
                     ) for b in self.list_bundles()}
         )
 
-
-class AnalysisLibrary(Library):
-    '''A Library that redefines some of the methods to make them easier to use from ipython'''
-
-    def __init__(self, library):
-        self.l = library
-
-    def list(self,  fields=None):
-        '''List all of the datasets available in this library
-
-        :param fields: If set, is a list of fields to be displayed. Available fields are:
-            * deps. Number of dependencies in the bundle
-            * locations. A string that indicates where the bundle exists. ``S`` is source, ``L`` is the local library
-                and ``R`` is the remote library.
-            * vid. The id number, with a version suffix
-            * status. The build status string for the bundle.
-            * sname. The bundle's simple name
-            * vname. The simple name, with the semantic version number
-            * fqname. The bundle's fully qualified name
-            * source_path. If the bundle exists as source, the path to the source directory.
-
-        '''
-        from  ..identity import IdentitySet
-
-        l = self.l.list()
-
-
-        return IdentitySet(sorted(l.values(), key=lambda ident: ident.vname), fields=fields)
-
-    def about(self, ref):
-        '''Lookup a bundle or partition reference and display information about it.
-
-        This command will fetch the bundle from the remote, or instantiate it from source, so for bundles with
-        very large schemas ( Like the US Census or ACS ) it may take a while to execute.
-        '''
-
-        ident = None
-
-
-    def find(self, command_string = None, source=None, name=True, fields=None):
-        from ..identity import IdentitySet
-        from ..library.query import QueryCommand
-
-        idents = []
-
-        if not command_string:
-            if source:
-                command_string = "identity.source = {}".format(source)
-            elif name:
-                command_string = "identity.name like {}".format(name)
-
-        qc = QueryCommand.parse(command_string)
-
-        if len(qc.to_dict().items()) < 1:
-            raise ValueError("Malformed find command")
-
-        vids = set()
-        for entry in self.l.find(qc):
-            vids.add(entry['identity']['vid'])
-
-        for vid in vids:
-            ident = self.l.resolve(vid)
-            idents.append(ident)
-
-        return IdentitySet(idents, fields=fields)
-
-    def get(self, ref, force=False, cb=None):
-        return self.l.get( ref=ref, force=force, cb=cb)
-
     @property
-    def info(self):
-        return self.l.info
+    def schema_dict(self):
+        """Represent the entire schema as a dict, suitable for conversion to json"""
+        s = {}
 
-    def _repr_html_(self):
-        return self.info.replace('\n','<br/>')
+        for t in self.tables:
+            s[t.vid] = t.nonull_col_dict
+
+        return s
 

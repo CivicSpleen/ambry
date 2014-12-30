@@ -1,2 +1,8 @@
 -   name: example.com-simple-example
     table: example
+-   name: example.com-simple-example2
+    table: example2
+-   name: example.com-simple-example3
+    table: example3
+-   name: example.com-simple-links
+    table: links

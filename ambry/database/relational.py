@@ -6,7 +6,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from . import DatabaseInterface #@UnresolvedImport
 from .inserter import  ValueInserter
-import os 
+import os
 import logging
 from ambry.util import get_logger, memoize
 from ..database.inserter import SegmentedInserter, SegmentInserterFactory
@@ -16,6 +16,10 @@ import pdb
 
 global_logger = get_logger(__name__)
 #global_logger.setLevel(logging.DEBUG)
+
+from sqlalchemy.dialects import registry
+registry.register("spatialite", "ambry.database.dialects.spatialite", "SpatialiteDialect")
+registry.register("postgis", "ambry.database.dialects.postgis", "PostgisDialect")
 
 connections = dict()
 
@@ -42,30 +46,30 @@ def close_all_connections():
 class RelationalDatabase(DatabaseInterface):
     '''Represents a Sqlite database'''
 
-    # These DSNs can get munged bjust before connecting, so postgres -> postgresql+psycopg2
+    # These DSNs can get munged just before connecting, so postgres -> postgresql+psycopg2
+    # The munging isn't really used now, since we have trivial dialects for spatialite and postgis
     DBCI = {
             'postgis':'postgis://{user}:{password}@{server}{colon_port}/{name}', # Stored in the ambry module.
             'postgres':'postgres://{user}:{password}@{server}{colon_port}/{name}', # Stored in the ambry module.
             'sqlite':'sqlite:///{name}',
-            'spatialite':'sqlite:///{name}', # Only works if you properly install spatialite. 
-            'mysql':'mysql://{user}:{password}@{server}{colon_port}/{name}'
+            'spatialite':'spatialite:///{name}' # Only works if you properly install spatialite.
             }
-    
+
     dsn = None
 
     def __init__(self,  driver=None, server=None, dbname = None, username=None, password=None, port=None,  **kwargs):
 
         '''Initialize the a database object
-        
+
         Args:
             bundle. a Bundle object
-            
+
             base_path. Path to the database file. If None, uses the name of the
-            bundle, in the bundle build director. 
-            
+            bundle, in the bundle build director.
+
             post_create. A function called during the create() method. has
             signature post_create(database)
-       
+
         '''
         self.driver = driver
         self.server = server
@@ -79,7 +83,7 @@ class RelationalDatabase(DatabaseInterface):
             self.colon_port = ':'+str(port)
         else:
             self.colon_port = ''
-                
+
         self._engine = None
 
         self._connection = None
@@ -89,7 +93,7 @@ class RelationalDatabase(DatabaseInterface):
 
         self.dsn_template = self.DBCI[self.driver]
 
-        self.dsn = self.dsn_template.format(user=self.username, password=self.password, 
+        self.dsn = self.dsn_template.format(user=self.username, password=self.password,
                     server=self.server, name=self.dbname, colon_port=self.colon_port)
 
         self._session = None
@@ -100,20 +104,20 @@ class RelationalDatabase(DatabaseInterface):
 
     def log(self,message):
         global_logger.info(message)
-    
+
     def error(self, message):
         global_logger.error(message)
 
     def create(self):
 
         self._create()
-        
+
         return True
-    
+
     @property
     def version(self):
         raise NotImplemented()
-    
+
     def exists(self):
 
         try:
@@ -126,10 +130,8 @@ class RelationalDatabase(DatabaseInterface):
         if self.is_empty():
             return False
 
-
-
         return True
-    
+
     def is_empty(self):
 
         if not 'config' in self.inspector.get_table_names():
@@ -162,14 +164,14 @@ class RelationalDatabase(DatabaseInterface):
         from ..orm import Config
         from datetime import datetime
         from ..library.database import ROOT_CONFIG_NAME_V
-        
+
         if not 'config' in self.inspector.get_table_names():
             Config.__table__.create(bind=self.engine) #@UndefinedVariable
 
         session = self.session
         self.set_config_value(ROOT_CONFIG_NAME_V, 'process','dbcreated',
                               datetime.now().isoformat(), session=session )
-        
+
     def post_create(self):
         '''Call all implementations of _post_create in this object's class heirarchy'''
         import inspect
@@ -196,7 +198,7 @@ class RelationalDatabase(DatabaseInterface):
 
     def drop_table(self, table_name, use_id = False):
         table = self.table(table_name)
-        
+
         table.drop(self.engine)
 
     @property
@@ -234,6 +236,7 @@ class RelationalDatabase(DatabaseInterface):
                 kwargs['native_datetime'] = True
 
             self._engine = create_engine(self.munged_dsn,  poolclass=NullPool, isolation_level='SERIALIZABLE', **kwargs)
+
 
             self.Session = sessionmaker(bind=self._engine)
 
@@ -336,13 +339,13 @@ class RelationalDatabase(DatabaseInterface):
     @property
     def metadata(self):
         '''Return an SqlAlchemy MetaData object, bound to the engine'''
-        
-        from sqlalchemy import MetaData   
+
+        from sqlalchemy import MetaData
         meta = MetaData(bind=self.engine)
         meta.reflect(bind=self.engine)
-    
+
         return meta
-    
+
     @property
     def inspector(self):
         from sqlalchemy.engine.reflection import Inspector
@@ -352,12 +355,12 @@ class RelationalDatabase(DatabaseInterface):
         except:
             #pdb.set_trace()
             raise
-   
+
     def open(self):
         # Fetching the connection objects the database
-        # This isn't necessary for Sqlite databases. 
+        # This isn't necessary for Sqlite databases.
         return self.connection
-   
+
     def close(self):
 
         if self._session:
@@ -384,54 +387,64 @@ class RelationalDatabase(DatabaseInterface):
             self.connection.execute('DELETE FROM {} '.format(table))
         else:
             self.connection.execute('DELETE FROM {} '.format(table.name))
-            
+
         self.commit()
 
     def create_table(self, table_name=None, table_meta=None):
         '''Create a table that is defined in the table table
-        
+
         This method will issue the DDL to create a table that is defined
         in the meta data tables, of which the 'table' table ho;d information
         about tables.
-        
+
         Args:
             table_name. The name of the table to create
-        
+
         '''
-        
+
         if not table_name in self.inspector.get_table_names():
             if not table_meta:
                 table_meta, table = self.bundle.schema.get_table_meta(table_name) #@UnusedVariable
-                
+
             table_meta.create(bind=self.engine)
-            
+
             if not table_name in self.inspector.get_table_names():
                 raise Exception("Don't have table "+table_name)
-             
+
     def tables(self):
-        
+
         return self.metadata.sorted_tables
-                   
-    def table(self, table_name): 
-        '''Get table metadata from the database''' 
+
+    def table(self, table_name):
+        '''Get table metadata from the database'''
         from sqlalchemy import Table
-        
+        from ..orm import Geometry
+
         table = self._table_meta_cache.get(table_name, False)
-        
+
         if table is not False:
             r =  table
         else:
             metadata = self.metadata
             table = Table(table_name, metadata, autoload=True)
+
+            for c in table.columns:
+
+                # HACK! Sqlalchemy seek spatialte GEOMETRY types
+                # as NUMERIC
+
+                if c.name == 'geometry':
+                    c.type = Geometry
+
             self._table_meta_cache[table_name] = table
             r =  table
 
         return r
 
     def X_inserter(self,table_name, **kwargs):
-        '''Creates an inserter for a database, but which may not have an associated bundle, 
+        '''Creates an inserter for a database, but which may not have an associated bundle,
         as, for instance, a warehouse. '''
-        
+
         from sqlalchemy.schema import Table
 
         table = Table(table_name, self.metadata, autoload=True, autoload_with=self.engine)
@@ -440,16 +453,16 @@ class RelationalDatabase(DatabaseInterface):
 
 
     class csv_partition_factory(SegmentInserterFactory):
-       
+
         def __init__(self, bundle, db, table):
             self.db = db
             self.table = table
             self.bundle = bundle
-        
-        def next_inserter(self, seg): 
+
+        def next_inserter(self, seg):
             ident = self.db.partition.identity
             ident.segment = seg
-            
+
             if self.bundle.has_session:
                 p = self.db.bundle.partitions.find_or_new_csv(**ident.dict)
             else:
@@ -458,7 +471,7 @@ class RelationalDatabase(DatabaseInterface):
 
     def csvinserter(self, table_or_name=None,segment_rows=200000,  **kwargs):
         '''Return an inserter that writes to segmented CSV partitons'''
-        
+
         sif = self.csv_partition_factory(self.bundle, self, table_or_name)
 
         return SegmentedInserter(segment_size=segment_rows, segment_factory = sif,  **kwargs)
@@ -473,9 +486,9 @@ class RelationalDatabase(DatabaseInterface):
         if group == 'identity' and d_vid != ROOT_CONFIG_NAME_V:
             raise ValueError("Can't set identity group from this interface. Use the dataset")
 
-      
+
         key = key.strip('_')
-  
+
 
         session = self.session if not session else session
 
@@ -497,7 +510,7 @@ class RelationalDatabase(DatabaseInterface):
 
 
         key = key.strip('_')
-  
+
         return self.session.query(SAConfig).filter(SAConfig.group == group,
                                  SAConfig.key == key,
                                  SAConfig.d_vid == d_vid).first()
@@ -536,15 +549,15 @@ class RelationalDatabase(DatabaseInterface):
             rows.append(cr)
 
         return rows
-        
+
 
 class RelationalBundleDatabaseMixin(object):
-    
-    bundle = None
-    
-    def _init(self, bundle, **kwargs):   
 
-        self.bundle = bundle 
+    bundle = None
+
+    def _init(self, bundle, **kwargs):
+
+        self.bundle = bundle
 
     def _create(self):
         """Create the database from the base SQL"""
@@ -566,7 +579,7 @@ class RelationalBundleDatabaseMixin(object):
         ds = Dataset(**idd)
 
         ident = Identity.from_dict(idd)
-        
+
         ds.name = ident.sname
         ds.vname = ident.vname
         ds.fqname = ident.fqname
@@ -640,20 +653,20 @@ class RelationalBundleDatabaseMixin(object):
         self.set_config_value(ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid , session=self.session )
 
 class RelationalPartitionDatabaseMixin(object):
-    
+
     bundle = None
-    
-    def _init(self, bundle, partition, **kwargs):   
+
+    def _init(self, bundle, partition, **kwargs):
 
         self.partition = partition
-        self.bundle = bundle 
+        self.bundle = bundle
 
     def _post_create(self):
         from ..library.database import ROOT_CONFIG_NAME_V
 
         if not 'config' in self.inspector.get_table_names():
             Config.__table__.create(bind=self.engine) #@UndefinedVariable
-            
+
         self.set_config_value(self.bundle.identity.vid, 'info','type', 'partition' )
         self.set_config_value(ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname )
         self.set_config_value(ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid )

@@ -372,7 +372,7 @@ class Schema(object):
 
     @classmethod
     def get_table_meta_from_db(self,db,  name_or_id,  use_id=False, 
-                               driver=None, d_vid = None, session=None, alt_name=None ):
+                               driver=None, d_vid = None, session=None, alt_name=None, use_fq_col_names = False ):
         '''
             use_id: prepend the id to the class name
         '''
@@ -380,7 +380,15 @@ class Schema(object):
         from sqlalchemy import MetaData, UniqueConstraint, Index, text
         from sqlalchemy import Column as SAColumn
         from sqlalchemy import Table as SATable
-        
+        from sqlalchemy.orm.exc import NoResultFound
+
+        if use_fq_col_names:
+            def col_name(c):
+                return c.altname
+        else:
+            def col_name(c):
+                return c.name
+
         metadata = MetaData()
         
         table = self.get_table_from_database(db, name_or_id, d_vid = d_vid, session=session)
@@ -414,19 +422,13 @@ class Schema(object):
                     int(column.default)
                     kwargs['server_default'] = text(str(column.default))
                 except:
-                    
-                    # Stop-gap for old ambry. This should be  ( and now is ) checkd in the
-                    # schema generation
-                    if  width and width < len(column.default):
-                        raise Exception("Width smaller than size of default for column: {}".format(column.name))
-                        
-                        
+
                     kwargs['server_default'] = column.default
           
           
             tt = self.translate_type(driver, table, column)
 
-            ac = SAColumn(column.name, 
+            ac = SAColumn(col_name(column),
                           tt, 
                           primary_key = ( column.is_primary_key == 1),
                           **kwargs
@@ -434,16 +436,7 @@ class Schema(object):
 
             at.append_column(ac)
 
-            if column.foreign_key:
 
-                fk = column.foreign_key
-
-                fk_table = self.get_table_from_database(db, fk, d_vid = d_vid, session=session)
-
-                if not fk_table:
-                    raise NotImplementedError("Need to lookup foreign key")
-
-                foreign_keys[column.name] = fk_table.id_
            
             # assemble non unique indexes
             if column.indexes and column.indexes.strip():
@@ -481,10 +474,8 @@ class Schema(object):
         # Add unique indexes   
         for index, columns in uindexes.items():
             Index(self.munge_index_name(table, index, alt=alt_name), unique = True ,*columns)
-        
-        #for from_col, to_col in foreign_keys.items():
-        #    at.append_constraint(ForeignKeyConstraint(from_col, to_col))
-        
+
+
         return metadata, at
  
     def generate_indexes(self, table):
@@ -687,6 +678,7 @@ class Schema(object):
                                    description=description,
                                    datatype=datatype,
                                    proto_vid = row.get('proto_vid',None) if row.get('proto_vid',None) else None,
+                                   derivedfrom = row.get('derivedfrom',None) if row.get('derivedfrom',None) else None,
                                    unique_constraints = ','.join(uniques),
                                    indexes = ','.join(indexes),
                                    uindexes = ','.join(uindexes),
@@ -712,9 +704,6 @@ class Schema(object):
 
         self.bundle.database.session.commit()
 
-            
-
-
         return warnings, errors
 
     def expand_prototypes(self):
@@ -738,15 +727,17 @@ class Schema(object):
                 for proto in t.proto_vid.split(','):
                     yield (t, proto.strip())
 
-
-
         for t, proto_vid in table_protos():
-
 
             try:
                 proto_table = l.table(proto_vid)
             except NotFoundError:
-                self.bundle.error("Can't expand prototype for table {}: missing prototype reference {}"
+                self.bundle.error("Can't expand prototype for table {}: missing prototype reference {} (a)"
+                                  .format(t.name, proto_vid))
+                continue
+
+            if not proto_table:
+                self.bundle.error("Can't expand prototype for table {}: missing prototype reference {} (b)"
                                   .format(t.name, proto_vid))
                 continue
 
@@ -868,8 +859,9 @@ class Schema(object):
             for c in cols:
                 self.add_column(table, **c)
 
+    @staticmethod
     def _dump_gen(self, table_name=None):
-        """Yield schema row for use in exporting the schem to other
+        """Yield schema row for use in exporting the schema to other
         formats
 
         """
@@ -880,7 +872,7 @@ class Schema(object):
         # Sets the order of the fields
         all_opt_col_fields = ["size", "precision","scale", "default","start", "width",
                               "description","sql","flags","keywords",
-                              "measure","units","universe", 'proto_vid']
+                              "measure","units","universe", 'proto_vid', "derivedfrom"]
 
         # Collects what fields actually exist
         opt_col_fields_set = set()
@@ -1000,7 +992,7 @@ class Schema(object):
 
             f = StringIO()
 
-        g = self._dump_gen()
+        g = self._dump_gen(self)
         
         try:
             header = g.next()
@@ -1035,7 +1027,7 @@ class Schema(object):
         
         o = defaultdict(GrowingList)
         
-        g = self._dump_gen()
+        g = self._dump_gen(self)
         
         header = g.next()
     
@@ -1047,7 +1039,7 @@ class Schema(object):
     def as_text(self, table, pad = '    '):
         import textwrap
         
-        g = self._dump_gen(table_name=table)
+        g = self._dump_gen(self,table_name=table)
         
         header = g.next()
     
@@ -1254,9 +1246,6 @@ class {name}(Base):
                     column = table.column(row['column'])
 
                 column.add_code(row['key'], row['value'], row['description'])
-
-
-
 
 
     @property

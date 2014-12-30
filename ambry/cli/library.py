@@ -505,11 +505,12 @@ def library_doc(args, l, rc):
     import logging
     from logging import FileHandler
     import webbrowser
+    import socket
 
     if args.port:
         port = args.port
     else:
-        port = 45235 + random.randint(1, 5000)
+        port = 8081 # 45235 + random.randint(1, 5000)
 
     cache_dir = l.doc_cache.cache.path('',missing_ok=True)
 
@@ -535,20 +536,30 @@ def library_doc(args, l, rc):
 
     print 'Serving documentation for cache: ', cache_dir
 
-    def run_app():
-        app.run(host=config['host'], port=int(config['port']), debug=args.debug)
+    # Check for open port
+
+    while True:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind(('localhost', port))
+            sock.close()
+            break
+        except socket.error:
+            port += 1
+
+    def run_app(port):
+        app.run(host=config['host'], port=port, debug=args.debug)
 
     #t1 = threading.Thread(target=run_app)
     #t1.start()
 
-    webbrowser.open("http://localhost:{}/".format(config['port']))
+    webbrowser.open("http://localhost:{}/".format(port))
 
     #setup_logging()
 
-    run_app()
+    run_app(port)
 
     #t1.join()
-
 
 
 def library_unknown(args, l, config):
@@ -557,44 +568,10 @@ def library_unknown(args, l, config):
 
 def library_test(args, l, config):
 
-    from ambry.cache import new_cache
-    import requests
-    from ambry.util.text import generate_pdf_pages
 
-    cache = new_cache(config.filesystem('downloads')).subcache('ext_doc')
-
-    for b in l.list_bundles():
-
-        for k,v in b.metadata.external_documentation.items():
-
-            if not v.url.lower().endswith('.pdf'):
-                continue
+    print l.schema_as_csv()
 
 
 
-            continue
 
-            path = "{}/{}".format(b.identity.vid, k)
 
-            if not v.url.startswith('http'):
-
-                continue
-
-            r =  requests.get(v.url, stream=True)
-
-            cache.put(r.raw, path)
-
-            if v.url.lower().endswith('.pdf'):
-
-                print '------------'
-                print b.identity.vname, k, v.url, '-->', cache.path(path)
-                try:
-                    with cache.get_stream(path) as fp:
-
-                        with cache.put_stream( path+'.txt') as out:
-                            out.write(generate_pdf_pages(fp))
-
-                except Exception as e:
-                    print "Failed: ", e
-
-                print '-----------'

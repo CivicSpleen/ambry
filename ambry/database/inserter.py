@@ -24,17 +24,6 @@ class InserterInterface(object):
     def close(self): raise NotImplemented()
 
 
-class UpdaterInterface(object):
-    
-    def __enter__(self): raise NotImplemented()
-    
-    def __exit__(self, type_, value, traceback): raise NotImplemented()
-    
-    def update(self, row): raise NotImplemented()
-    
-    def close(self): raise NotImplemented()
-
-
 class SegmentInserterFactory(object):
     
     def next_inserter(self, segment): 
@@ -239,9 +228,9 @@ class ValueInserter(ValueWriter):
 
         self.row_id = None
 
-
         if replace:
             self.statement = self.statement.prefix_with('OR REPLACE')
+
 
     def insert(self, values):
         from sqlalchemy.engine.result import RowProxy
@@ -294,7 +283,6 @@ class ValueInserter(ValueWriter):
                 else:
                     self.row_id = max(self.row_id, d['id'] ) + 1
 
-
             self.cache.append(d)
          
             if len(self.cache) >= self.cache_size: 
@@ -341,67 +329,3 @@ class ValueInserter(ValueWriter):
    
         if self.cast_error_handler:
             self.cast_error_handler.finish()
-   
-   
-class ValueUpdater(ValueWriter, UpdaterInterface):
-    '''Updates arrays of values into  database table'''
-    def __init__(self,  db, bundle, table,  cache_size=50000, text_factory = None): 
-        
-        from sqlalchemy.sql.expression import bindparam, and_
-        super(ValueUpdater, self).__init__(db, bundle,  cache_size=50000, text_factory = text_factory)
-    
-        self.table = table
-        self.statement = self.table.update()
-     
-        wheres = []
-        for primary_key in table.primary_key:
-            wheres.append(primary_key == bindparam('_'+primary_key.name))
-            
-        if len(wheres) == 1:
-            self.statement = self.statement.where(wheres[0])
-        else:
-            self.statement = self.statement.where(and_(wheres))
-       
-        self.values = None
-       
-
-    def update(self, values):
-        from sqlalchemy.sql.expression import bindparam
-        
-        if not self.values:
-            names = values.keys()
-            
-            binds = {}
-            for col_name in names:
-                if not col_name.startswith("_"):
-                    raise ValueError("Columns names must start with _ for use in updater")
-                
-                column = self.table.c[col_name[1:]]
-                binds[column.name] = bindparam(col_name)
-                
-                self.statement = self.statement.values(**binds)
-       
-        try:
-            if isinstance(values, dict):
-                d = values
-            else:
-                d  = dict(zip(self.header, values))
-         
-            self.cache.append(d)
-         
-            if len(self.cache) >= self.cache_size:
-                
-                self.session.execute(self.statement, self.cache)
-                self.cache = []
-                
-        except (KeyboardInterrupt, SystemExit):
-            self.rollback()
-            self.cache = []
-            raise
-        except Exception as e:
-            self.bundle.error("Exception during ValueUpdater.insert: "+str(e))
-            self.rollback()
-            self.cache = []
-            raise e
-
-        return True    

@@ -36,8 +36,8 @@ def extents(database, table_name, where=None, lat_col='_db_lat', lon_col='_db_lo
 
 #From http://danieljlewis.org/files/2010/06/Jenks.pdf
 #
-# !!!! Use pysal instead!
-# !!!! http://pysal.geodacenter.org/1.2/library/esda/mapclassify.html#pysal.esda.mapclassify.Natural_Breaks
+#  Use pysal instead!
+#  http://pysal.geodacenter.org/1.2/library/esda/mapclassify.html#pysal.esda.mapclassify.Natural_Breaks
 #
 # Or, a cleaner Python implementation: https://gist.github.com/drewda/1299198
 def jenks_breaks(dataList, numClass): 
@@ -730,3 +730,17 @@ def find_containment(containers, containeds, method = 'contains'):
             if test:
                 yield (contained, contained_obj, container_geometry, container_obj)
 
+
+def recover_geometry(connection, table_name, column_name, geometry_type, srs=None):
+    from ..orm import Geometry
+
+    assert table_name
+    assert column_name
+
+    if not srs:
+        srs = Geometry.DEFAULT_SRS
+
+    connection.execute(
+        'UPDATE {} SET {} = SetSrid({}, {});'.format(table_name, column_name, column_name, srs))
+    connection.execute("SELECT RecoverGeometryColumn('{}', '{}', {}, '{}', 2);"
+               .format(table_name, column_name, srs, geometry_type))
