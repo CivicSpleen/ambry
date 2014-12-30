@@ -1,0 +1,16 @@
+table,seq,column,is_pk,is_fk,type,size,width,description,id
+geometry,1,id,1,,INTEGER,2,,,t461o4Mgqr01
+geometry,2,name,,,VARCHAR,14,20,,c461o4Mgqr01002
+geometry,3,code,,,VARCHAR,2,3,,c461o4Mgqr01003
+geometry,4,shape_area,,,REAL,,19,,c461o4Mgqr01004
+geometry,5,shape_len,,,REAL,,19,,c461o4Mgqr01005
+geometry,6,geometry,,,POLYGON,,,,c461o4Mgqr01006
+geometry,7,lat,,,REAL,,,,c461o4Mgqr01007
+geometry,8,lon,,,REAL,,,,c461o4Mgqr01008
+,,,,,,,,,
+municipal,1,id,1,,INTEGER,,,,t461o4Mgqr02
+municipal,2,name,,,VARCHAR,14,20,,c461o4Mgqr02002
+municipal,3,code,,,VARCHAR,2,3,,c461o4Mgqr02003
+municipal,4,shape_area,,,REAL,,19,,c461o4Mgqr02004
+municipal,5,shape_len,,,REAL,,19,,c461o4Mgqr02005
+municipal,6,geometry,,,POLYGON,,,,c461o4Mgqr02006
