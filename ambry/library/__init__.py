@@ -532,9 +532,31 @@ class Library(object):
         except NoResultFound:
             raise NotFoundError("Did not find table with proto_vid {} in library {}"
                                 .format(proto_vid, self.database.dsn))
-        except MultipleResultsFound:
-            raise MultipleFoundError("FOund multiple tables with proto_vid {} in library {}"
-                                     .format(proto_vid, self.database.dsn))
+
+
+    def proto_tree(self, proto_vid):
+        """Create a list of ancestors for the given proto_vid, for columns"""
+        from identity import ObjectNumber, TableNumber, ColumnNumber
+        proto_cols = set()
+        lopp_n = 0
+
+        while True:
+            on = ObjectNumber.parse(proto_vid)
+
+            # Actually, it should always be a col number, but
+            # this can't hurt
+            if isinstance(on, TableNumber):
+                tn = on.rev(None)
+                cn = ColumnNumber(tn, 1)
+            else:
+                cn = on.rev(None)
+                tn = cn.as_table.rev(None)
+
+            proto_cols.add(str(cn))
+
+
+
+
 
 
     def partition(self, vid):
@@ -1037,10 +1059,12 @@ class Library(object):
 
         return bundles
 
-    def sync_remotes(self, remotes=None, clean = False):
+    def sync_remotes(self, remotes=None, clean = False, last_only=True):
         from ..orm import Dataset
         from sqlalchemy.exc import IntegrityError
         from ..dbexceptions import NotABundle
+        import re
+        from collections import defaultdict
 
         if clean:
             self.files.query.type(Dataset.LOCATION.REMOTE).delete()
@@ -1053,11 +1077,33 @@ class Library(object):
 
         for remote in remotes:
 
+            remote_list = remote.list().keys()
+
             all_keys = [ f.path for f  in self.files.query.type(Dataset.LOCATION.REMOTE).group(remote.repo_id).all ]
 
-            for cache_key in remote.list().keys():
+            last_keys = defaultdict(lambda : [0,''] )
+
+            use_only = None
+
+            if last_only:
+                use_only = []
+                for cache_key in remote_list:
+                    nv_key = re.sub(r'-\d+\.\d+\.\d+\.db', '', cache_key)  # Key without the version
+                    version = int(re.search(r'(\d+)\.db$', cache_key).group(1))
+
+                    if version > last_keys[nv_key][0]:
+                        last_keys[nv_key] = [version, cache_key]
+
+                for version, cache_key in last_keys.values():
+                    use_only.append(cache_key)
+
+            for cache_key in remote_list:
 
                 if cache_key in all_keys:
+                    continue
+
+                if use_only and cache_key not in use_only:
+                    self.logger.info("Skip old version: ({}".format(cache_key))
                     continue
 
                 if self.cache.has(cache_key):# This is just for reporting.

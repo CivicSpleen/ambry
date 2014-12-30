@@ -1427,6 +1427,7 @@ class BuildBundle(Bundle):
             if self.build_main():
                 self.post_build()
                 self.log("---- Done Building ---")
+                self.log("Bundle DB at: {}".format(self.database.dsn))
                 r = True
             else:
                 self.log("---- Build exited with failure ---")

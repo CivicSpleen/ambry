@@ -386,24 +386,20 @@ def warehouse_test(args, w, config):
 
     fks = defaultdict(dict)
 
+    names = set()
+
     for c in w.library.database.session.query(Column).all():
-        if c.fk_vid:
+        inst_name = c.table.data.get('installed_names',[None,None,None])[1]
 
-            on = ObjectNumber.parse(c.fk_vid)
+        names.add('"{}"."{}"'.format(inst_name, c.altname))
 
-            if isinstance(on, TableNumber):
-                tn = on
-                cn = ColumnNumber(tn, 1)
-            else:
-                cn = on.rev(None)
-                tn = cn.as_table
-
-            fks[c.table.vid][c.id_] = (str(tn), str(cn))
+    for n in names:
+        print n
 
 
     for ft_vid, cols in fks.items():
         ft = w.library.table(ft_vid)
-        ft_name = ft.data['installed_names'][1]
+        ft_name = ft.data['installed_names'][0]
         print ft.name
         print " SELECT * FROM {}".format(ft_name)
         for fc,(tt_vid,tc) in cols.items():

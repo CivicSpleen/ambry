@@ -678,6 +678,7 @@ class Schema(object):
                                    description=description,
                                    datatype=datatype,
                                    proto_vid = row.get('proto_vid',None) if row.get('proto_vid',None) else None,
+                                   derivedfrom = row.get('derivedfrom',None) if row.get('derivedfrom',None) else None,
                                    unique_constraints = ','.join(uniques),
                                    indexes = ','.join(indexes),
                                    uindexes = ','.join(uindexes),
@@ -870,7 +871,7 @@ class Schema(object):
         # Sets the order of the fields
         all_opt_col_fields = ["size", "precision","scale", "default","start", "width",
                               "description","sql","flags","keywords",
-                              "measure","units","universe", 'proto_vid']
+                              "measure","units","universe", 'proto_vid', "derivedfrom"]
 
         # Collects what fields actually exist
         opt_col_fields_set = set()

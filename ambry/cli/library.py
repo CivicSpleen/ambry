@@ -559,22 +559,70 @@ def library_test(args, l, config):
     from ambry.orm import Column
     from collections import defaultdict
     from ambry.identity import ObjectNumber, TableNumber, ColumnNumber
+    from sqlalchemy.orm import lazyload
 
     fks = defaultdict(dict)
 
-    for c in l.database.session.query(Column).all():
-        if c.fk_vid:
+    def resolve(id_):
+        on = ObjectNumber.parse(id_)
 
-            on = ObjectNumber.parse(c.fk_vid)
+        if isinstance(on, TableNumber):
+            tn = on.rev(None)
+            cn = ColumnNumber(tn, 1)
+        else:
+            cn = on.rev(None)
+            tn = cn.as_table.rev(None)
 
-            if isinstance(on, TableNumber):
-                tn = on.rev(None)
-                cn = ColumnNumber(tn, 1)
-            else:
-                cn = on.rev(None)
-                tn = cn.as_table.rev(None)
+        return tn, cn
 
-            fks[c.table.vid][c.vid] = (str(tn), str(cn))
+    protos = {}
 
-    import pprint
-    pprint.pprint(dict(fks))
+    def proto_maps():
+        for row in l.database.session.execute(
+                "SELECT distinct c_id, c_proto_vid FROM columns where c_proto_vid IS NOT NULL "):
+
+            if row.c_proto_vid:
+                _, cn = resolve(row.c_proto_vid)
+
+                protos[row.c_id] = str(cn)
+
+            reverse = {}
+            forward = {}
+
+            for k, v in protos.items():
+                p = v
+                proto_set = set()
+
+                for i in range(10):  # prevent loops
+                    proto_set.add(p)
+                    if p in protos:
+                        p = protos[p]
+                    else:
+                        break
+
+                forward[k] = proto_set
+
+                for cn in proto_set:
+
+                    if not cn in reverse:
+                        reverse[cn] = set()
+
+                    reverse[cn].add(k)
+
+
+        return forward, reverse
+
+
+    f, r = proto_maps()
+
+    for row in l.database.session.execute("SELECT distinct * FROM columns where c_proto_vid IS NOT NULL"):
+
+        _, cn = resolve(row.c_proto_vid)
+
+        try:
+            print r[str(cn)]
+        except KeyError:
+            print '!!!', str(cn)
+
+
+

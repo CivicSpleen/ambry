@@ -668,13 +668,11 @@ class Warehouse(object):
 
                 self.install_table(t_vid, data=dict(type='alias', proto_vid=t_vid ))
 
-
-
         s = self.library.database.session
 
         for t in self.tables:
             if  t.type == 'table' and t.installed:
-
+                # derived_tables checks the proto_id, used to link  aliases to base tables.
                 for dt in sorted(self.library.derived_tables(t.vid), key=lambda x:x.name):
 
                     t.add_installed_name(dt.name)

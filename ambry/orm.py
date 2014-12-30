@@ -501,6 +501,9 @@ class Column(Base):
     # Reference to a column that this column links to.
     fk_vid = SAColumn('c_fk_vid', String(20),  index=True)
 
+    # A column vid, or possibly an equation, describing how this column was created from other columns.
+    derivedfrom = SAColumn('c_derivedfrom', String(200))
+
     data = SAColumn('c_data',MutationDict.as_mutable(JSONEncodedObj))
 
     is_primary_key = SAColumn('c_is_primary_key',Boolean, default = False)
@@ -668,6 +671,7 @@ class Column(Base):
         self.scale = kwargs.get("scale",None)
         self.fk_vid = kwargs.get("fk_vid", kwargs.get("foreign_key", None))
         self.proto_vid = kwargs.get("proto_vid",kwargs.get("proto",None))
+        self.derivedfrom = kwargs.get("derivedfrom", None)
         self.data = kwargs.get("data",None) 
 
         # the table_name attribute is not stored. It is only for
