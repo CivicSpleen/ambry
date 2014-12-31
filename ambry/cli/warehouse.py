@@ -322,7 +322,6 @@ def warehouse_extract(args, w, config):
 def warehouse_config(args, w, config):
     from ..dbexceptions import ConfigurationError
 
-
     if args.term:
 
         parts = args.term.split('=',1)

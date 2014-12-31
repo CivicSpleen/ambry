@@ -170,6 +170,10 @@ class Warehouse(object):
     def exists(self):
         return self.database.exists()
 
+    def close(self):
+        self.database.close()
+        self.library.close()
+
     @property
     def library(self):
         return self.wlibrary
@@ -261,6 +265,10 @@ class Warehouse(object):
     def url(self, v):
 
         return self._meta_set('url', v)
+
+    @property
+    def dsn(self):
+        return self.database.dsn
 
     @property
     def dict(self):
@@ -631,7 +639,13 @@ class Warehouse(object):
 
         s = self.library.database.session
 
-        self.database.connection.execute("DELETE FROM columns WHERE c_t_vid = ?", t.vid)
+        s.execute("DELETE FROM columns WHERE c_t_vid = :tid", {'tid':t.vid})
+        s.commit()
+
+        # Have to re-fetch the session, in order to get the "SET search_path" run again on postgres,
+        # which apparently gets clearedin the commit()
+        s = self.library.database.session
+        t = self.library.table(t.vid)
 
         sql = 'SELECT * FROM "{}" LIMIT 1'.format(t.name)
 
@@ -653,7 +667,6 @@ class Warehouse(object):
                 d['derivedfrom'] = c_id
 
                 t.add_column(**d)
-                s.add(t)
 
         s.commit()
 
@@ -714,6 +727,17 @@ class Warehouse(object):
                     s.add(t)
 
         s.commit()
+
+
+        # Update the library
+        self.logger.info('Updating doc cache')
+
+        dc = self.elibrary.doc_cache
+        has = dc.has_store(self)
+        dc.put_store(self, force=True)
+        if not has:
+            dc.put_library(self.elibrary, force=True)
+
 
 
 

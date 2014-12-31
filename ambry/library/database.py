@@ -94,7 +94,7 @@ class LibraryDb(object):
             # found. It looks like connections are losing the setting for the search path to the
             # library schema.
             # Disabling connection pooling solves the problem.
-            self._engine = create_engine(self.dsn,   poolclass=NullPool)
+            self._engine = create_engine(self.dsn,   poolclass=NullPool, echo = False)
 
             self._engine.pool._use_threadlocal = True  # Easier than constructing the pool
 
@@ -132,7 +132,9 @@ class LibraryDb(object):
             self._session = self.Session()
             # set the search path
 
-        if self.driver in ('postgres','postgis') and self._schema:
+
+        if self.driver in ('postgres','postgis')  and self._schema:
+            print '!!!!!', self._schema
             self._session.execute("SET search_path TO {}".format(self._schema))
 
         return self._session

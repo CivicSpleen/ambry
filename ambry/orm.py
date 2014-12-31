@@ -702,6 +702,9 @@ class Column(Base):
 
         x['schema_type'] = self.schema_type
 
+        if not x['altname']:
+            x['altname'] = self.fq_name
+
         return x
 
     @property
@@ -1095,8 +1098,11 @@ Columns:
     def column(self, name_or_id, default=None):
         from sqlalchemy.sql import or_
         import sqlalchemy.orm.session
+
         s = sqlalchemy.orm.session.Session.object_session(self)
-        
+
+        assert s, "Table doesn't have a DB session, so can't find a column"
+
         q = (s.query(Column)
                .filter(or_(Column.id_==name_or_id,Column.name==name_or_id))
                .filter(Column.t_id == self.id_)

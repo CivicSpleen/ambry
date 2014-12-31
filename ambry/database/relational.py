@@ -235,7 +235,8 @@ class RelationalDatabase(DatabaseInterface):
                 kwargs['connect_args'] = {'detect_types': sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES}
                 kwargs['native_datetime'] = True
 
-            self._engine = create_engine(self.munged_dsn,  poolclass=NullPool, isolation_level='SERIALIZABLE', **kwargs)
+            self._engine = create_engine(self.munged_dsn,  poolclass=NullPool,
+                                         isolation_level='SERIALIZABLE', **kwargs)
 
 
             self.Session = sessionmaker(bind=self._engine)

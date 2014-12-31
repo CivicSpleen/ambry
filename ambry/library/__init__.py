@@ -627,6 +627,10 @@ class Library(object):
 
         s = self.store(uid)
 
+        if not s:
+            from ..dbexceptions import NotFoundError
+            raise NotFoundError("Did not find warehouse for uid: '{}' ".format(uid))
+
         config = database_config(s.path)
 
         return new_warehouse(config, self, logger=self.logger)
@@ -1281,7 +1285,6 @@ class Library(object):
             w = self.warehouse(f.path)
             self.logger.info("Syncing {} dsn={}".format(f.ref, f.path))
             self.sync_warehouse(w)
-
 
 
     def sync_doc_json(self, cache = None, clean = False):
