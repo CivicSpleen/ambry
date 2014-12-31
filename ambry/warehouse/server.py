@@ -4,12 +4,12 @@ REST API for Warehouse servers, to download extracts and upload manifests.
 
 Run with gunicorn:
 
-    gunicorn ambry.warehouse.server:app -b 104.236.53.117:80 \
-        -e AMBRY_WAREHOUSE=postgres://root:Jx8bf3HDkN5Fuz@aegea.do.cnshost.net/health_demo
+    gunicorn ambry.warehouse.server:app -b 0.0.0.0:80
+
 
 """
 
-from flask import Flask, current_app
+from flask import Flask, current_app,url_for
 from flask import g, send_from_directory, request, jsonify, abort
 from flask.ext.compress import Compress
 from ambry.util import memoize
@@ -18,12 +18,13 @@ import os
 app = Flask(__name__)
 Compress(app)
 
+
+
 import logging
 
 stream_handler = logging.StreamHandler()
 stream_handler.setLevel(logging.INFO)
 app.logger.addHandler(stream_handler)
-
 
 @memoize
 def get_warehouse_data():
@@ -44,7 +45,7 @@ def get_warehouse_data():
     return d
 
 @app.route('/')
-def get_root():
+def root():
 
     return jsonify(get_warehouse_data())
 
@@ -101,8 +102,8 @@ def warehouse(uid):
     return w
 
 
-
-def init_warehouses(host, port):
+@app.before_first_request
+def init_warehouses():
 
     l = library()
 
@@ -110,7 +111,7 @@ def init_warehouses(host, port):
         s = l.store(sf.ref)
 
         w = l.warehouse(s.ref)
-        w.url = "http://{}:{}".format(host, port)
+        w.url = url_for('root', _external=True)
         print 'Registering', s.ref, w.dsn, w.url
         w.close()
         l.sync_warehouse(w)
@@ -136,12 +137,6 @@ def exit_handler():
 import atexit
 atexit.register(exit_handler)
 
-def run(config):
-
-    init_warehouses(app_config['host'], app_config['port'])
-
-    app.run(host=app_config['host'], port=int(app_config['port']), debug=app_config['debug'])
-
 if __name__ == "__main__":
     import argparse
 
@@ -157,11 +152,11 @@ if __name__ == "__main__":
 
     parser.add_argument('-H', '--host', help="Server host.")
     parser.add_argument('-p', '--port', help="Server port")
-    parser.add_argument('-d', '--dsn',  help="URL to the database")
+
     parser.add_argument('-D', '--debug', action='store_true', help="Set debugging mode")
 
     args = parser.parse_args()
 
     app_config.update( {k:v for k,v in vars(args).items() if v})
 
-    run(app_config)
+    app.run(host=app_config['host'], port=int(app_config['port']), debug=app_config['debug'])
