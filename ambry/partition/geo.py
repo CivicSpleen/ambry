@@ -224,8 +224,9 @@ class GeoPartition(SqlitePartition):
         """
 
         from osgeo import ogr, osr
-        from ..geo.sfschema import ogr_inv_type_map
+        from ..geo.sfschema import ogr_inv_type_map, mangle_name
         from ..orm import Column, Geometry
+        from ..geo.util import get_type_from_geometry
 
         if path.startswith('http'):
             shape_url = path
@@ -246,8 +247,17 @@ class GeoPartition(SqlitePartition):
 
         for i in range(0, dfn.GetFieldCount()):
             field = dfn.GetFieldDefn(i)
-            col_defs.append((Column.mangle_name(field.GetName()),
+
+            col_defs.append((Column.mangle_name(mangle_name(field.GetName())),
                              Column.types[ogr_inv_type_map[field.GetType()]][1]))
+
+        col_type = None
+        for c in self.table.columns:
+            if c.name == 'geometry':
+                col_type = c.datatype.upper()
+                break
+
+        assert col_type is not None
 
         with self.inserter() as ins:
             for feature in layer:
@@ -258,6 +268,15 @@ class GeoPartition(SqlitePartition):
 
                 g = feature.GetGeometryRef()
                 g.TransformTo(to_srs)
+
+                type_ = get_type_from_geometry(g)
+
+                if type_ != col_type:
+                    if type_ == 'POLYGON' and col_type == 'MULTIPOLYGON':
+                        g = ogr.ForceToMultiPolygon(g)
+                    else:
+                        raise Exception("Don't know how to handle this conversion case : {} -> {}".format(type_, col_type))
+
                 d['geometry'] = g.ExportToWkt()
 
                 ins.insert(d)

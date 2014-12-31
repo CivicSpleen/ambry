@@ -43,6 +43,12 @@ ogr_inv_type_map = {
     ogr.OFTDateTime: Column.DATATYPE_DATETIME
 }
 
+def mangle_name(name):
+
+    if name.lower() in ('id', 'geometry'):
+        name += '_orig'
+
+    return name
 
 
 def copy_schema(schema, path, table_name=None, fmt='shapefile', logger = None):
@@ -79,18 +85,19 @@ def copy_schema(schema, path, table_name=None, fmt='shapefile', logger = None):
 
         schema.add_column(table, 'id', datatype='integer', is_primary_key=True, sequence_id=1)
 
-
-
         dfn = layer.GetLayerDefn()
         for i in range(0, dfn.GetFieldCount()):
             field = dfn.GetFieldDefn(i)
 
+
+
+
             schema.add_column(table,
-                            field.GetName(),
+                            mangle_name(field.GetName()),
                             datatype=ogr_inv_type_map[field.GetType()],
                             width = field.GetWidth() if field.GetWidth() > 0 else None,
                             is_primary_key =  False,
-                            sequence_id=len(table.columns) + 1)
+                            sequence_id=i+2)
 
         _, type_ = get_shapefile_geometry_types(path)
 

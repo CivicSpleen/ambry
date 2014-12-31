@@ -81,7 +81,10 @@ class SqliteWarehouse(RelationalWarehouse):
 
         try:
             self.database.connection.connection.cursor().executescript(sql)
-            self.install_table(name, data = data)
+            t = self.install_table(name, data = data)
+
+            self.build_schema(t)
+
         except Exception as e:
             self.logger.error("Failed to install view: \n{}".format(sql))
             raise
@@ -114,7 +117,9 @@ class SqliteWarehouse(RelationalWarehouse):
             # Ignore if it already exists.
 
 
-        self.install_table(name, data = data)
+        t = self.install_table(name, data = data)
+
+        self.build_schema(t)
 
         return True
 

@@ -48,6 +48,9 @@ def new_warehouse(config, elibrary, logger=None):
 
     assert elibrary is not None
 
+    if isinstance(config, basestring):
+        config = database_config(config)
+
     service = config['service'] if 'service' in config else 'relational'
 
     if 'database' in config:
@@ -621,6 +624,39 @@ class Warehouse(object):
             return self.database.dsn
 
 
+    def build_schema(self, t):
+
+        from ..orm import Column
+        from ..identity import ObjectNumber
+
+        s = self.library.database.session
+
+        self.database.connection.execute("DELETE FROM columns WHERE c_t_vid = ?", t.vid)
+
+        sql = 'SELECT * FROM "{}" LIMIT 1'.format(t.name)
+
+        for row in self.database.connection.execute(sql):
+            for i, (col_name, v) in enumerate(row.items(), 1):
+                c_id, plain_name = col_name.split('_', 1)
+                cn = ObjectNumber.parse(c_id)
+
+                orig_table = self.library.table(str(cn.as_table))
+                orig_column = orig_table.column(c_id)
+
+                orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)
+                d = orig_column.dict
+                d['sequence_id'] = i
+                del d['t_vid']
+                del d['t_id']
+                del d['vid']
+                del d['id_']
+                d['derivedfrom'] = c_id
+
+                t.add_column(**d)
+                s.add(t)
+
+        s.commit()
+
 
     def post_install(self):
         """
@@ -632,8 +668,7 @@ class Warehouse(object):
         them back to their source
 
         """
-        from ..orm import Column
-        from ..identity import ObjectNumber
+
 
 
         # TODO, our use of sqlalchemy is wacked.
@@ -664,8 +699,6 @@ class Warehouse(object):
                                          for table in installed_tables )
                     )
 
-
-
                 self.install_view(t_vid, sql, data=dict(type='alias', proto_vid=t_vid ))
 
                 self.install_table(t_vid, data=dict(type='alias', proto_vid=t_vid ))
@@ -682,34 +715,7 @@ class Warehouse(object):
 
         s.commit()
 
-        for t in [ t for t in self.tables if t.type in ('view','mview') ]:
 
-            self.database.connection.execute("DELETE FROM columns WHERE c_t_vid = ?", t.vid)
-
-            sql = 'SELECT * FROM "{}" LIMIT 1'.format(t.name)
-
-            for row in self.database.connection.execute(sql):
-                for i, (col_name,v) in enumerate(row.items(), 1):
-
-                    c_id, plain_name = col_name.split('_',1)
-                    cn = ObjectNumber.parse(c_id)
-
-                    orig_table = self.library.table(str(cn.as_table))
-                    orig_column = orig_table.column(c_id)
-
-                    orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)
-                    d = orig_column.dict
-                    d['sequence_id'] = i
-                    del d['t_vid']
-                    del d['t_id']
-                    del d['vid']
-                    del d['id_']
-                    d['derivedfrom'] = c_id
-
-                    t.add_column( **d)
-                    s.add(t)
-
-            s.commit()
 
     def install_material_view(self, name, sql, clean = False, data=None):
         raise NotImplementedError(type(self))
@@ -845,6 +851,7 @@ class Warehouse(object):
         s.merge(t)
         s.commit()
 
+        return t
 
     def run_sql(self, sql_text):
         raise NotImplementedError(type(self))
@@ -1067,13 +1074,14 @@ def database_config(db, base_dir=''):
         # Sqlalchemy expects 4 slashes for absolute paths, 3 for relative,
         # which is hard to manage reliably. So, fixcommon problems.
 
-        if parts.netloc or path[0] != '/':
+        if parts.netloc or (path and path[0] != '/'):
             raise ConfigurationError('DSN Parse error. For Sqlite and Sptialite, the DSN should have 3 or 4 slashes')
 
-        path = path[1:]
+        if path:
+            path = path[1:]
 
-        if path[0] != '/':
-            path = os.path.join(base_dir, path)
+            if path[0] != '/':
+                path = os.path.join(base_dir, path)
 
 
     if scheme == 'sqlite':

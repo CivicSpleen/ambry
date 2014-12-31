@@ -141,7 +141,9 @@ class PostgresWarehouse(RelationalWarehouse):
             for sql in sqls:
                 self.database.connection.execute(sql)
 
-            self.install_table(name, data=data)
+            t = self.install_table(name, data=data)
+
+            self.build_schema(t)
 
 
         except Exception as e:
@@ -176,5 +178,6 @@ class PostgresWarehouse(RelationalWarehouse):
             # Ignore if it already exists.
 
 
-        self.install_table(name, data=data)
+        t = self.install_table(name, data=data)
 
+        self.build_schema(t)

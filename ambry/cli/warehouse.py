@@ -56,7 +56,7 @@ def warehouse_command(args, rc):
 
         w = _warehouse_new_from_dbc(config, l)
 
-    elif args.subcommand not in ['list','new', 'install']:
+    elif args.subcommand not in ['list','new', 'install', 'test']:
         raise ConfigurationError(
             "Must set the id, path or dsn of the database, either on the command line or in a manifest. ")
 
@@ -377,46 +377,21 @@ def warehouse_doc(args, w, config):
     app.run(host=config['host'], port=int(config['port']), debug=False)
 
 def warehouse_test(args, w, config):
-    from ..dbexceptions import ConfigurationError
-    from ..util import print_yaml
 
-    from ambry.orm import Column
-    from collections import defaultdict
-    from ambry.identity import ObjectNumber, TableNumber, ColumnNumber
+    from ambry.warehouse import database_config
+    from ambry.warehouse import new_warehouse
+    from . import global_logger
 
-    fks = defaultdict(dict)
+    config = database_config('sqlite://')
 
-    names = set()
+    l = new_library(rc.library(args.library_name))
 
-    for c in w.library.database.session.query(Column).all():
-        inst_name = c.table.data.get('installed_names',[None,None,None])[1]
-
-        names.add('"{}"."{}"'.format(inst_name, c.altname))
-
-    for n in names:
-        print n
+    w = new_warehouse(config, l, logger=global_logger)
 
 
-    for ft_vid, cols in fks.items():
-        ft = w.library.table(ft_vid)
-        ft_name = ft.data['installed_names'][0]
-        print ft.name
-        print " SELECT * FROM {}".format(ft_name)
-        for fc,(tt_vid,tc) in cols.items():
 
-            tt = w.library.table(tt_vid)
+    print config
 
-            if not ft or not tt:
-                continue
-
-            fc_name = ft.column(fc).altname
-
-            tt_name = tt.data['installed_names'][1]
-            tc_name = tt.column(tc).altname
-
-
-            #print "   JOIN {}.{} TO {}.{}  ".format(ft.name, ft.column(fc).name, tt.name, tt.column(tc).name)
-            print '   JOIN "{}" ON "{}"."{}" = "{}"."{}"'.format(tt_name, ft_name,fc_name, tt_name, tc_name)
 
 
 

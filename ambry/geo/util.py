@@ -440,30 +440,36 @@ def bound_clusters_in_raster( a, aa, shape_file_dir,
             envelopes.append({'id':id, 'env':bb.GetEnvelope(), 'area':bb.Area()})
             
 
-        return envelopes 
+        return envelopes
+
+geo_type_map = {'1': 'GEOMETRY',
+            '2': 'GEOMETRYCOLLECTION',
+            '3': 'POINT',
+            'Point': 'POINT',
+            '4': 'MULTIPOINT',
+            '5': 'POLYGON',
+            '6': 'MULTIPOLYGON',
+            '7': 'LINESTRING',
+            'Line String': 'LINESTRING',
+            '3D Line String': 'LINESTRING',
+            '8': 'MULTILINESTRING',
+            '3D Multi Line String': 'MULTILINESTRING',
+            'Multi Line String': 'MULTILINESTRING',
+            '3D Point': 'POINT',
+            '3D Multi Point': 'MULTIPOINT',
+            'Polygon': 'POLYGON',
+            '3D Polygon': 'POLYGON',
+            'Multi Polygon': 'MULTIPOLYGON',
+            '3D Multi Polygon': 'MULTIPOLYGON',
+}
+
+def get_type_from_geometry(geometry):
+
+   return  geo_type_map[ogr.GeometryTypeToName(geometry.GetGeometryType())]
 
 def get_shapefile_geometry_types(shape_file):
     
-        type_map = {'1':'GEOMETRY',
-                    '2':'GEOMETRYCOLLECTION',  
-                    '3':'POINT',
-                    'Point':'POINT',
-                    '4':'MULTIPOINT', 
-                    '5':'POLYGON', 
-                    '6':'MULTIPOLYGON', 
-                    '7':'LINESTRING', 
-                    'Line String':'LINESTRING', 
-                    '3D Line String':'LINESTRING', 
-                    '8':'MULTILINESTRING',
-                    '3D Multi Line String':'MULTILINESTRING',
-                    'Multi Line String':'MULTILINESTRING',
-                    '3D Point':'POINT',
-                    '3D Multi Point':'MULTIPOINT', 
-                    'Polygon':'POLYGON', 
-                    '3D Polygon':'POLYGON', 
-                    'Multi Polygon':'MULTIPOLYGON',
-                    '3D Multi Polygon':'MULTIPOLYGON', 
-        }
+
     
         shapes = ogr.Open(shape_file)
         layer = shapes.GetLayer(0)
@@ -483,7 +489,7 @@ def get_shapefile_geometry_types(shape_file):
             feature = layer.GetFeature(i)
             geometry = feature.geometry()
             if geometry:
-                types.add(type_map[ogr.GeometryTypeToName(geometry.GetGeometryType())])
+                types.add(geo_type_map[ogr.GeometryTypeToName(geometry.GetGeometryType())])
                 checked += 1
             else:
                 # This happens rarely, seems to be a problem with the source shapefiles.
