@@ -384,7 +384,7 @@ class Schema(object):
 
         if use_fq_col_names:
             def col_name(c):
-                return c.altname
+                return c.fq_name
         else:
             def col_name(c):
                 return c.name
@@ -413,7 +413,7 @@ class Schema(object):
         for column in table.columns:
             
             kwargs = {}
-        
+
             width = column.size if column.size else (column.width if column.width else None)
         
             if column.default is not None:

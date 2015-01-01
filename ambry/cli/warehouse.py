@@ -265,7 +265,6 @@ def warehouse_users(args, w,config):
     
 def warehouse_list(args, w, config):    
 
-
     l = w.library
 
     if not args.term:

@@ -595,7 +595,7 @@ class LibraryDb(object):
 
 
 
-    def install_bundle(self, bundle, commit = True, use_fq_names = False):
+    def install_bundle(self, bundle, commit = True):
         '''Copy the schema and partitions lists into the library database
 
         '''
@@ -751,7 +751,6 @@ class LibraryDb(object):
 
         """
         from ..dbexceptions import NotFoundError
-        from ..identity import PartitionNameQuery
         from sqlalchemy.orm.exc import NoResultFound
 
         s = self.session
@@ -775,7 +774,7 @@ class LibraryDb(object):
                 b = None
 
             if not b:
-                self.install_bundle(bundle, use_fq_names = use_fq_names)
+                self.install_bundle(bundle)
 
         if not install_tables:
             for table_name in partition.tables:

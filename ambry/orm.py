@@ -656,8 +656,8 @@ class Column(Base):
     def __init__(self,table, **kwargs):
 
         self.sequence_id = kwargs.get("sequence_id",len(table.columns)+1) 
-        self.name = kwargs.get("name",None) 
-
+        self.name = kwargs.get("name",None)
+        self.altname = kwargs.get("altname", None)
         self.is_primary_key = _clean_flag(kwargs.get("is_primary_key",False))
         self.datatype = kwargs.get("datatype",None) 
         self.size = kwargs.get("size",None) 
@@ -702,8 +702,6 @@ class Column(Base):
 
         x['schema_type'] = self.schema_type
 
-        if not x['altname']:
-            x['altname'] = self.fq_name
 
         return x
 
@@ -735,11 +733,7 @@ class Column(Base):
     @property
     def fq_name(self):
         """Fully Qualified Name. A column Name with the column id as a prefix"""
-        if self.altname:
-            return self.altname
-        else:
-            return "{}_{}".format(self.id_, self.name)
-
+        return "{}_{}".format(self.id_, self.name)
 
     @property
     @memoize
@@ -801,7 +795,6 @@ class Column(Base):
             table_on = ObjectNumber.parse(target.t_id)
             target.id_ = str(ColumnNumber(table_on, target.sequence_id))
 
-        target.altname = target.fq_name
 
     def __repr__(self):
         return "<column: {}, {}>".format(self.name, self.vid)

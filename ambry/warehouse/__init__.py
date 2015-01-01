@@ -348,25 +348,6 @@ class Warehouse(object):
 
         return self.library.database.session.query(Table).filter(Table.name == name).first()
 
-    def expand_table_deps(self):
-        """Expand the information about table dependencies so that only leaf tables are included. """
-
-        deps = {}
-
-        for t in self.tables:
-
-            deps[t.name] = [tn for tn in t.data.get('tc_names', []) if tn != t.name] + [t.altname]
-
-            if t.altname:
-                deps[t.altname] = [tn for tn in t.data.get('tc_names', []) if tn != t.altname]
-
-        # Get rid of column names, which get into the set because the sqlparser does not distiguish
-        # between column names and table names
-
-        for table_name, t_deps in deps.items():
-            deps[table_name] = [self.orm_table(tn) for tn in t_deps if tn in deps.keys()]
-
-        return deps
 
     @property
     def partitions(self):
@@ -417,7 +398,7 @@ class Warehouse(object):
         for source_table_name in tables:
 
             #
-            # Compute the installation name, and an alial that does not have the version number
+            # Compute the installation name, and an alias that does not have the version number
             dest_table_name, alias = self.augmented_table_name(p.identity, source_table_name)
 
             if isinstance(source_table_name, (list, tuple)):
@@ -448,6 +429,12 @@ class Warehouse(object):
 
                 assert self.augmented_table_name(p.identity, source_table_name)[0] == itn
 
+                # Set the altname of the column, which is the name the column is generallt know by
+                # in the warehouse. 
+
+                for c in w_table.columns:
+                    c.altname = c.fq_name
+
 
             except OperationalError as e:
                 self.logger.error("Failed to install table '{}': {}".format(source_table_name,e))
@@ -463,6 +450,7 @@ class Warehouse(object):
         and the bundle, if they aren't already installed'''
         from sqlalchemy.orm.exc import NoResultFound
         from sqlalchemy import inspect
+        from ..orm import Column
 
         ld = self.library.database
 
@@ -631,7 +619,6 @@ class Warehouse(object):
         else:
             return self.database.dsn
 
-
     def build_schema(self, t):
 
         from ..orm import Column
@@ -688,7 +675,6 @@ class Warehouse(object):
         """
 
 
-
         # TODO, our use of sqlalchemy is wacked.
         # Some of the install methods commit or flush the session, which invalidated the tables from self.tables,
         # so we have to get just the vid, and look up the object in each iteration.
@@ -735,14 +721,19 @@ class Warehouse(object):
 
 
         # Update the library
-        self.logger.info('Updating doc cache')
 
-        dc = self.elibrary.doc_cache
-        has = dc.has_store(self)
-        dc.put_store(self, force=True)
-        if not has:
-            dc.put_library(self.elibrary, force=True)
+        if self.uid:
+            dc = self.elibrary.doc_cache
 
+            self.logger.info('Updating doc cache {}'.format(dc.cache))
+
+            has = dc.has_store(self)
+            dc.put_store(self, force=True)
+            if not has:
+                dc.put_library(self.elibrary, force=True)
+        else:
+
+            self.logger.info('Warehouse does not have a uid, skipping doc cache update')
 
 
 

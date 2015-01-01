@@ -426,6 +426,9 @@ class Library(object):
 
         bundle = self._get_bundle_by_cache_key(dataset.cache_key)
 
+        if not bundle:
+            raise NotFoundError("Failed to get bundle from cache key: '{}'".format(dataset.cache_key) )
+
         try:
             if dataset.partition:
 

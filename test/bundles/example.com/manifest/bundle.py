@@ -21,6 +21,8 @@ class Bundle(BuildBundle):
 
         w = new_warehouse('sqlite:///{}'.format(wf), self.library, self.logger )
 
+        self.log("Installing manifest to {}".format(w.database.dsn))
+
         w.create()
 
         w.install_manifest(Manifest(self.filesystem.meta_path('manifest.ambry')))
@@ -29,5 +31,7 @@ class Bundle(BuildBundle):
         
         for row in w.database.connection.execute("SELECT * FROM example_combined"):
             print row
+
+        return True
         
 
