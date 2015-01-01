@@ -105,7 +105,7 @@ def warehouse(uid):
 
     return w
 
-#@app.before_first_request
+@app.before_first_request
 def init_warehouses():
     library().warehouse_url = url_for('root', _external=True)
 

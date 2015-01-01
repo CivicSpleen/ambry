@@ -582,7 +582,7 @@ def library_config(args, l, config):
             print getattr(l, var)
 
     else:
-        for e in l.library.database.get_config_group('library'):
+        for e in l.database.get_config_group('library'):
             print e
 
 def library_unknown(args, l, config):
