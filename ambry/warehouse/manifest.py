@@ -217,17 +217,20 @@ class Manifest(object):
     def css(self):
         return HtmlFormatter(style='manni').get_style_defs('.highlight')
 
-
     def make_item(self, sections, tag, i, args):
         """Creates a new entry in sections, which will later have lines appended to it. """
         from ..dbexceptions import  ConfigurationError
 
         if tag not in self.singles and tag not in self.multi_line:
-            raise ConfigurationError("Unknown tag '{}'  at {}:{}".format(tag, self.path, i))
+            # Capture Error. These don't get save to the sections array.
+            line_number = i + 1
+            section = ManifestSection(self.path, tag='error', linenumber=line_number, args=args)
+            self.logger.error("Unknown section tag: '{}' at line '{}' ".format(tag, line_number))
+        else:
+            line_number = i + 1
+            section = ManifestSection(self.path, tag=tag, linenumber=line_number, args=args)
+            sections[line_number] = section
 
-        line_number = i + 1
-        section = ManifestSection(self.path, tag=tag, linenumber=line_number, args=args)
-        sections[line_number] = section
         return line_number, section
 
     def sectionalize(self, data, first_line=0):

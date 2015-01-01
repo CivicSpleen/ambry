@@ -131,6 +131,9 @@ class Library(object):
     '''
 
 
+    # Names of exernally configurable values.
+    configurable = ('warehouse_url')
+
     def __init__(self, cache, database,
                  name=None, remotes=None,
                  source_dir = None,
@@ -150,6 +153,8 @@ class Library(object):
         sync: If true, put to remote synchronously. Defaults to False.
 
         '''
+
+
 
 
         assert database is not None
@@ -182,6 +187,9 @@ class Library(object):
 
         self.bundles = weakref.WeakValueDictionary()
 
+
+
+
     def clone(self):
 
         return self.__class__(self.cache, self.database.clone(),  self.require_upload,
@@ -212,9 +220,40 @@ class Library(object):
         '''Return ambry.database.Database object'''
         return self._database
 
-
     def commit(self):
         self.database.commit()
+
+    ## Configurables
+
+    def _meta_set(self, key, value):
+        from ..orm import Config
+
+        return self.database.set_config_value('library', key, value)
+
+    def _meta_get(self, key):
+        from ..orm import Config
+
+        try:
+            return self.database.get_config_value('library', key).value
+        except AttributeError:
+            return None
+
+    @property
+    def warehouse_url(self):
+        """URL to pass on to warehouses"""
+        return self._meta_get('warehouse_url')
+
+    @warehouse_url.setter
+    def warehouse_url(self, v):
+        r =  self._meta_set('warehouse_url', v)
+
+        for sf in self.stores:
+            s = self.store(sf.ref)
+            w = self.warehouse(s.ref)
+            self.logger.info("Setting URL for {}".format(s.path))
+            self.sync_warehouse(w)
+
+        return r
 
     ##
     ## Storing
@@ -1205,6 +1244,8 @@ class Library(object):
 
         from ambry.util.packages import qualified_name
 
+        w.url = self.warehouse_url
+
         store = self.files.install_data_store(w.database.dsn, qualified_name(w),
                                           name = w.name,
                                           title=w.title,
@@ -1268,6 +1309,7 @@ class Library(object):
 
         s.commit()
 
+        self.doc_cache.put_store(w, force=True)
 
         return store
 

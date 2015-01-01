@@ -18,9 +18,12 @@ import os
 app = Flask(__name__)
 Compress(app)
 
+with app.app_context():
+    init_warehouses()
 
 
 import logging
+
 
 stream_handler = logging.StreamHandler()
 stream_handler.setLevel(logging.INFO)
@@ -46,8 +49,12 @@ def get_warehouse_data():
 
 @app.route('/')
 def root():
-
     return jsonify(get_warehouse_data())
+
+@app.route('/init')
+def init():
+    # Just triggers an init
+    return ''
 
 
 @app.route('/warehouses/<wid>/extracts/<tid>.<ct>')
@@ -101,38 +108,13 @@ def warehouse(uid):
 
     return w
 
-
-@app.before_first_request
+#@app.before_first_request
 def init_warehouses():
-
-    l = library()
-
-    for sf in l.stores:
-        s = l.store(sf.ref)
-
-        w = l.warehouse(s.ref)
-        w.url = url_for('root', _external=True)
-        print 'Registering', s.ref, w.dsn, w.url
-        w.close()
-        l.sync_warehouse(w)
-
-
-@app.teardown_appcontext
-def shutdown_application(exception=None):
-    pass
-
+    library().warehouse_url = url_for('root', _external=True)
 
 def exit_handler():
     l = library()
-
-    for sf in l.stores:
-        s = l.store(sf.ref)
-
-        w = l.warehouse(s.ref)
-        w.url = None
-        print "Unregistering ", s.ref, w.dsn, w.url
-        w.close()
-        l.sync_warehouse(w)
+    l.warehouse_url = None
 
 import atexit
 atexit.register(exit_handler)
@@ -160,3 +142,5 @@ if __name__ == "__main__":
     app_config.update( {k:v for k,v in vars(args).items() if v})
 
     app.run(host=app_config['host'], port=int(app_config['port']), debug=app_config['debug'])
+
+

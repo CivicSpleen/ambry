@@ -21,9 +21,6 @@ def library_parser(cmd):
     lib_p = cmd.add_parser('library', help='Manage a library')
     lib_p.set_defaults(command='library')
 
-    group = lib_p.add_mutually_exclusive_group()
-
-
     asp = lib_p.add_subparsers(title='library commands', help='command help')
 
     sp = asp.add_parser('push', help='Push new library files')
@@ -38,16 +35,16 @@ def library_parser(cmd):
     sp.add_argument('-p','--pushed',  default=False,action="store_const", const='pushed', dest='file_state',  help='Print pushed files')
     sp.add_argument('-u','--pulled',  default=False,action="store_const", const='pulled', dest='file_state',  help='Print pulled files')
     sp.add_argument('-s','--synced',  default=False,action="store_const", const='synced', dest='file_state',  help='Print synced source packages')
-  
+
     sp = asp.add_parser('new', help='Create a new library')
     sp.set_defaults(subcommand='new')
-    
+
     sp = asp.add_parser('drop', help='Delete all of the tables in the library')
-    sp.set_defaults(subcommand='drop')    
-    
+    sp.set_defaults(subcommand='drop')
+
     sp = asp.add_parser('clean', help='Remove all entries from the library database')
     sp.set_defaults(subcommand='clean')
-    
+
     sp = asp.add_parser('purge', help='Remove all entries from the library database and delete all files')
     sp.set_defaults(subcommand='purge')
 
@@ -64,10 +61,10 @@ def library_parser(cmd):
 
 
     sp = asp.add_parser('info', help='Display information about the library')
-    sp.set_defaults(subcommand='info')   
+    sp.set_defaults(subcommand='info')
 
     sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
-    sp.set_defaults(subcommand='get')   
+    sp.set_defaults(subcommand='get')
     sp.add_argument('term', type=str,help='Query term')
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help='Also get all of the partitions. ')
     sp.add_argument('-f','--force',  default=False, action="store_true",  help='Force retrieving from the remote')
@@ -90,7 +87,7 @@ def library_parser(cmd):
 
 
     sp = asp.add_parser('schema', help='Dump the schema for a bundle')
-    sp.set_defaults(subcommand='schema')   
+    sp.set_defaults(subcommand='schema')
     sp.add_argument('term', type=str,help='Query term')
     sp.add_argument('-p','--pretty',  default=False, action="store_true",  help='pretty, formatted output')
     group = sp.add_mutually_exclusive_group()
@@ -108,6 +105,9 @@ def library_parser(cmd):
                     help='Debug mode ')
     sp.add_argument('-p', '--port', help='Run on a sepecific port, rather than pick a random one')
 
+    whsp = asp.add_parser('config', help='Configure varibles')
+    whsp.set_defaults(subcommand='config')
+    whsp.add_argument('term', type=str, nargs='?', help='Var=Value')
 
     if IN_DEVELOPMENT:
         sp = asp.add_parser('test', help='Run development test code')
@@ -561,17 +561,34 @@ def library_doc(args, l, rc):
 
     #t1.join()
 
+def library_config(args, l, config):
+    from ..dbexceptions import ConfigurationError
+
+    if args.term:
+
+        parts = args.term.split('=',1)
+
+        var = parts.pop(0);
+        val = parts.pop(0) if parts else None
+
+        if not var in l.configurable:
+            raise ConfigurationError("Value {} is not configurable. Must be one of: {}".format(args.var, l.configurable))
+
+        if val:
+            setattr(l, var, val)
+        elif not val and '=' in args.term:
+            setattr(l, var, None)
+        else:
+            print getattr(l, var)
+
+    else:
+        for e in l.library.database.get_config_group('library'):
+            print e
 
 def library_unknown(args, l, config):
     fatal("Unknown subcommand")
     fatal(args)
 
 def library_test(args, l, config):
-
-
     print l.schema_as_csv()
-
-
-
-
 

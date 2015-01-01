@@ -135,7 +135,6 @@ def warehouse_parser(cmd):
 
     whsp = whp.add_parser('config', help='Configure varibles')
     whsp.set_defaults(subcommand='config')
-
     whsp.add_argument('term', type=str, nargs = '?', help='Var=Value')
 
 
