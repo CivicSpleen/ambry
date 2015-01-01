@@ -4,7 +4,7 @@ REST API for Warehouse servers, to download extracts and upload manifests.
 
 Run with gunicorn:
 
-    gunicorn ambry.warehouse.server:app -b 0.0.0.0:80
+    gunicorn ambry.warehouse.server:app -b 0.0.0.0:81s
 
 
 """
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     parser.add_argument('-H', '--host', help="Server host.")
     parser.add_argument('-p', '--port', help="Server port")
 
-    parser.add_argument('-D', '--debug', action='store_true', help="Set debugging mode")
+    parser.add_argument('-d', '--debug', action='store_true', help="Set debugging mode")
 
     args = parser.parse_args()
 

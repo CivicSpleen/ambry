@@ -34,9 +34,10 @@ class RunConfig(object):
     ROOT_CONFIG = '/etc/ambry.yaml'
     USER_CONFIG = os.getenv(AMBRY_CONFIG_ENV_VAR) if os.getenv(AMBRY_CONFIG_ENV_VAR) else os.path.expanduser('~/.ambry.yaml')
     USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
-    DIR_CONFIG = os.path.join(os.getcwd(),'ambry.yaml')
-
-
+    try:
+        DIR_CONFIG = os.path.join(os.getcwd(),'ambry.yaml') # In webservers, there is no cwd
+    except OSError:
+        DIR_CONFIG = None
 
     config = None
     files = None
