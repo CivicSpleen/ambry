@@ -59,6 +59,7 @@ class SqliteWarehouse(RelationalWarehouse):
 
         assert name
         assert sql
+        from pysqlite2.dbapi2 import OperationalError
 
         t = self.orm_table_by_name(name)
 
@@ -87,6 +88,9 @@ class SqliteWarehouse(RelationalWarehouse):
 
         except Exception as e:
             self.logger.error("Failed to install view: \n{}".format(sql))
+            raise
+        except OperationalError:
+            self.logger.error("Failed to execute: {} ".format(sql))
             raise
 
 

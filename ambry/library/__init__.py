@@ -30,7 +30,6 @@ def _new_library(config):
 
     database = LibraryDb(**dict(config['database']))
 
-
     try:
         database.create()
     except OperationalError as e:
@@ -47,7 +46,6 @@ def _new_library(config):
 
     for i,remote in enumerate(remotes):
         remote.set_priority(i)
-
 
     source_dir = config.get('source', None)
 
@@ -68,10 +66,10 @@ def _new_library(config):
     else:
         doc_cache = cache.subcache('_doc')
 
-    if 'warehouse' in config:
-        warehouse_cache = new_cache(config['warehouse'])
+    if 'warehouses' in config:
+        warehouse_cache = new_cache(config['warehouses'])
     else:
-        warehouse_cache = cache.subcache('warehouse')
+        warehouse_cache = cache.subcache('warehouses')
 
 
     l = Library(cache=cache,
@@ -535,7 +533,6 @@ class Library(object):
             raise NotFoundError("Did not find table with proto_vid {} in library {}"
                                 .format(proto_vid, self.database.dsn))
 
-
     def proto_tree(self, proto_vid):
         """Create a list of ancestors for the given proto_vid, for columns"""
         from identity import ObjectNumber, TableNumber, ColumnNumber
@@ -556,11 +553,6 @@ class Library(object):
 
             proto_cols.add(str(cn))
 
-
-
-
-
-
     def partition(self, vid):
         from ..orm import Partition
         from sqlalchemy.orm.exc import NoResultFound
@@ -579,8 +571,6 @@ class Library(object):
         from sqlalchemy.orm.exc import NoResultFound
 
         return (self.database.session.query(Dataset).filter(Dataset.vid == vid).one())
-
-
 
     @property
     def partitions(self):
@@ -1219,8 +1209,7 @@ class Library(object):
                                           name = w.name,
                                           title=w.title,
                                           url = w.url,
-                                          summary=w.summary,
-                                          cache = w.cache_path)
+                                          summary=w.summary)
 
         if not w.uid:
             w.uid = store.ref
@@ -1384,10 +1373,7 @@ class Library(object):
     def warehouse_cache(self):
         """Cache for warehouse Sqlite databases and extracts"""
 
-        c =  self._warehouse_cache if self._warehouse_cache else self.cache.subcache('warehouse')
-
-        return c
-
+        return self._warehouse_cache
 
     def _gen_schema(self):
         from ..schema import Schema

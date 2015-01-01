@@ -67,7 +67,7 @@ class ManifestSection(object):
 class Manifest(object):
 
     # These tags have only a single line; revert back to 'doc' afterward
-    singles = ['uid', 'title', 'extract', 'dir',  'database', 'cache',  'author', 'url', 'access', 'index', 'include']
+    singles = ['uid', 'title', 'extract', 'dir',   'author', 'url', 'access', 'index', 'include', "GEO"]
     multi_line = ['partitions','view','mview','sql','doc']
 
     partitions = None
@@ -141,22 +141,20 @@ class Manifest(object):
 
         return None
 
+    def has_section(self, keyword):
+        for line, section in self.sections.items():
+            if section.tag == keyword:
+                return True
+
+        return False
+
     def count_sections(self,tag):
         return sum( section.tag == tag for section in self.sections.values())
 
     @property
-    def database(self):
-        return self.single_line('database')
-
-    @property
     def cache(self):
-        cache =  self.single_line('cache')
-
-        if not cache:
-            cache = self.uid
-
-        return cache
-
+        # The CACHE tag was removed
+        return self.uid
 
     @property
     def uid(self):
@@ -173,7 +171,9 @@ class Manifest(object):
         return uid
 
 
-
+    @property
+    def is_geo(self):
+        return self.single_line('geo')
 
     @property
     def title(self):

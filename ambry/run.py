@@ -358,6 +358,9 @@ class RunConfig(object):
         e['_name'] = name
         e['root'] = root_dir
 
+        if not 'warehouses' in e:
+            e['warehouses'] = self.filesystem('warehouses')
+
         return e
     
 
@@ -379,6 +382,7 @@ class RunConfig(object):
 
             if 'database' in e and isinstance(e['database'], basestring):
                 e.update( database_config(e['database']))
+
 
         return e
 

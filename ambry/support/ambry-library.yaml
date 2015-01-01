@@ -28,6 +28,7 @@ filesystem:
     analysis: '{root}/source/analysis'
     source: '{root}/source'
     notebooks: '{root}/notebooks'
+    warehouses: '{root}/warehouses'
 
 services:
     numbers:

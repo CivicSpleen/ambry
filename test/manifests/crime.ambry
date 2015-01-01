@@ -10,32 +10,4 @@ example.com-random-random1
 example.com-segmented-example-1
 example.com-combined-combined
 
-VIEW: doubled_int
-
-SELECT
-    *,
-    2*cast("int" AS INTEGER) as doubled
-FROM "pHSyDm4MNR001_random1"
-
-DOC:
-
-The `doubled_int` view just doubles the int.
-
-MVIEW: quadrupled
-
-SELECT
-    *,
-    2*doubled as quadrupled
-FROM doubled_int
-
-DOC:
-
-The `quadrupled` column of this table is twice the doubled int value.
-
-VIEW: combined
-
-SELECT
-    quadrupled.*,
-    ex.uuid as ex_uuid
-FROM quadrupled
-LEFT JOIN "pIjqPRbrGq001_combined" as ex on ex.id = quadrupled.id
+VIEW:

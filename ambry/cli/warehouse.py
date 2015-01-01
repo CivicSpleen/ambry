@@ -25,36 +25,51 @@ def warehouse_command(args, rc):
     config = None
 
 
-    if args.database :
+    #
+    # Special case for installing manifests, can get the database DSN from the manifest
 
-        # Check if the string is the uid of a database in the library.
-        s =  l.store(args.database)
-
-        if not s:
-            raise ConfigurationError("Could not identitfy warehouse for term '{}'".format(args.database))
-
-        config = database_config(s.path)
-
-
-    elif args.subcommand == 'install':
+    if not args.database and args.subcommand == 'install':
         from ..warehouse.manifest import Manifest
         import os.path
+        from ..library.files import make_data_store_uid
 
         m = Manifest(args.term)
 
-        # If cache_path is absolute, base_dir will be just the cache_path
-        base_dir = os.path.join(rc.filesystem('warehouse')['dir'], m.cache)
+        if m.is_geo:
+            dsnt = "spatalite:///{}.db"
+            type_ = "ambry.warehouse.sqlite.SpatialiteWarehouse"
+        else:
+            dsnt = "sqlite:///{}.db"
+            type_ = "ambry.warehouse.sqlite.SqliteWarehouse"
 
-        if not m.database:
-            raise ConfigurationError("The manifest does not specify a database")
+        dsn = dsnt.format(l.warehouse_cache.path(m.uid, missing_ok=True))
 
-        config = database_config(m.database, base_dir=base_dir)
+        s = l.files.install_data_store(dsn, type=type_, title = m.title, summary=m.summary['summary_text'])
 
-        config.update(title = m.title,
-                      summary = m.summary['summary_text'],
-                      cache = m.cache)
+        database_id = s.ref
 
-        w = _warehouse_new_from_dbc(config, l)
+        s = l.store(database_id)
+        config = database_config(s.path)
+
+        w = new_warehouse(config, l, logger=global_logger)
+
+        if not w.exists():
+            w.create()
+
+            w.uid = s.ref
+
+    else:
+        database_id = args.database
+
+    if  database_id:
+
+        # Check if the string is the uid of a database in the library.
+        s =  l.store(database_id)
+
+        if not s:
+            raise ConfigurationError("Could not identitfy warehouse for term '{}'".format(database_id))
+
+        config = database_config(s.path)
 
     elif args.subcommand not in ['list','new', 'install', 'test']:
         raise ConfigurationError(

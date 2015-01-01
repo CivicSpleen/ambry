@@ -119,6 +119,7 @@ class Warehouse(object):
                  database,
                  wlibrary=None, # Warehouse library
                  elibrary=None, # external Library
+                 cache=None,
                  logger=None,
                  base_dir = None,
                  test=False):
@@ -131,6 +132,8 @@ class Warehouse(object):
         self.wlibrary = wlibrary
         self.elibrary = elibrary
         self.test = test
+        self._cache = cache
+
 
         logger = logger if logger else NullLogger()
 
@@ -198,7 +201,7 @@ class Warehouse(object):
 
     @property
     def uid(self):
-        """Title of the warehouse"""
+        """UID of the warehouse"""
         return self._meta_get('uid')
 
     @uid.setter
@@ -233,28 +236,6 @@ class Warehouse(object):
     def name(self, v):
         return self._meta_set('name', v)
 
-    @property
-    def cache_path(self):
-        """Cache name for local publications. Usually a filesystem path"""
-
-        return self._meta_get('cache_path')
-
-    @cache_path.setter
-    def cache_path(self, v):
-        return self._meta_set('cache_path', v)
-
-    @property
-    def cache(self):
-
-        cp = self.cache_path
-
-        if not cp:
-            return None
-
-        if not os.path.isabs(cp) and not '://' in cp:
-            cp = self.elibrary.warehouse_cache.path(cp, missing_ok = True)
-
-        return new_cache(cp)
 
     @property
     def url(self):
@@ -269,6 +250,15 @@ class Warehouse(object):
     @property
     def dsn(self):
         return self.database.dsn
+
+    @property
+    def cache(self):
+
+        if self._cache:
+            return self._cache
+        else:
+            assert self.uid
+            return self.elibrary.warehouse_cache.subcache(self.uid)
 
     @property
     def dict(self):
@@ -427,6 +417,8 @@ class Warehouse(object):
                 self.library.database.mark_table_installed(p.get_table(source_table_name).vid, itn)
 
                 assert self.augmented_table_name(p.identity, source_table_name)[0] == itn
+
+                w_table.data['source_partition'] = p.identity.dict
 
                 # Set the altname of the column, which is the name the column is generallt know by
                 # in the warehouse.
@@ -637,19 +629,27 @@ class Warehouse(object):
 
         for row in self.database.connection.execute(sql):
             for i, (col_name, v) in enumerate(row.items(), 1):
-                c_id, plain_name = col_name.split('_', 1)
-                cn = ObjectNumber.parse(c_id)
 
-                orig_table = self.library.table(str(cn.as_table))
+                try:
+                    c_id, plain_name = col_name.split('_', 1)
+                    cn = ObjectNumber.parse(c_id)
 
-                if not orig_table:
-                    self.logger.error("UNable to find table '{}' while trying to create schema".format(str(cn.as_table)))
-                    continue
+                    orig_table = self.library.table(str(cn.as_table))
 
-                orig_column = orig_table.column(c_id)
+                    if not orig_table:
+                        self.logger.error("UNable to find table '{}' while trying to create schema".format(str(cn.as_table)))
+                        continue
 
-                orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)
-                d = orig_column.dict
+                    orig_column = orig_table.column(c_id)
+
+                    orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)
+                    d = orig_column.dict
+                except ValueError: # Coudn't split the col name, probl b/c the user added it in SQL
+                    d = dict(name = col_name)
+
+
+
+
                 d['sequence_id'] = i
                 del d['t_vid']
                 del d['t_id']
@@ -720,6 +720,8 @@ class Warehouse(object):
 
 
         # Update the library
+
+
 
         if self.uid:
             dc = self.elibrary.doc_cache

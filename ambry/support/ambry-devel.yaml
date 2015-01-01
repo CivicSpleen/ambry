@@ -20,7 +20,7 @@ filesystem:
     documentation: '{root}/cache/documentation'
     python: '{root}/cache/python'
     source: '{root}/source'
-    warehouse: '{root}/warehouse'
+    warehouses: '{root}/warehouses'
 
 services:
     numbers:

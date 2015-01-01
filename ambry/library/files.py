@@ -11,6 +11,12 @@ from ..util import Constant
 from ..identity import LocationRef
 import os
 
+
+def make_data_store_uid(dsn):
+    from ..identity import TopNumber
+
+    return str(TopNumber.from_string(dsn, 's'))
+
 class Files(object):
 
 
@@ -313,6 +319,8 @@ class Files(object):
             priority=None,
             source_url=None, )
 
+
+
     def install_data_store(self, dsn, type, ref = None,
                            name = None, title = None, summary = None,
                            cache = None, url = None, commit=True):
@@ -320,14 +328,14 @@ class Files(object):
         """
 
         import hashlib
-        from ..identity import TopNumber
+
 
         extant  = self.query.path(dsn).group(self.TYPE.STORE).one_maybe
 
         kw = dict(commit=commit, merge=True, extant=extant,
                   path=dsn,
                   group=self.TYPE.STORE,
-                  ref=ref if ref else str(TopNumber.from_string(dsn, 's')),
+                  ref=ref if ref else make_data_store_uid(dsn),
                   state=None,
                   type_=type,
                   data=dict(

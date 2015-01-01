@@ -19,7 +19,7 @@ filesystem:
     analysis: '{root}/source/analysis'
     build: '{root}/build'
     source: /Users/eric/proj/ambry/test/bundles/example.com
-    warehouse: '{root}/warehouse'
+    warehouses: '{root}/warehouses'
 
 library:
     default:
