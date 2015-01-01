@@ -655,6 +655,11 @@ class Warehouse(object):
                 cn = ObjectNumber.parse(c_id)
 
                 orig_table = self.library.table(str(cn.as_table))
+
+                if not orig_table:
+                    self.logger.error("UNable to find table '{}' while trying to create schema".format(str(cn.as_table)))
+                    continue
+
                 orig_column = orig_table.column(c_id)
 
                 orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)

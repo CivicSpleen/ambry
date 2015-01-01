@@ -788,7 +788,7 @@ class Column(Base):
                 max_id = 1
 
             target.sequence_id = max_id
-        
+
         Column.before_update(mapper, conn, target)
 
 

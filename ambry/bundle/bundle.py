@@ -1095,8 +1095,6 @@ class BuildBundle(Bundle):
         except Exception as e:
             raise
 
-
-
         return True
 
     def _prepare_load_schema(self):

@@ -748,5 +748,9 @@ def recover_geometry(connection, table_name, column_name, geometry_type, srs=Non
 
     connection.execute(
         'UPDATE {} SET {} = SetSrid({}, {});'.format(table_name, column_name, column_name, srs))
-    connection.execute("SELECT RecoverGeometryColumn('{}', '{}', {}, '{}', 2);"
-               .format(table_name, column_name, srs, geometry_type))
+
+    q = "SELECT RecoverGeometryColumn('{}', '{}', {}, '{}', 2);".format(table_name, column_name, srs, geometry_type)
+
+    print '!!!', q
+
+    connection.execute(q)

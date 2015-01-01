@@ -572,12 +572,7 @@ class Schema(object):
         from orm import Column
         import csv, re
         
-        # Not using this!! Because it failed to handle commas inside double quotes. 
-        try:
-            dlct = csv.Sniffer().sniff(file_.read(2024))
-        except:
-            dlct = None
-            
+
         file_.seek(0)
 
         if not progress_cb:
@@ -938,7 +933,7 @@ class Schema(object):
                 row['column'] = col.name
                 row['is_pk'] = 1 if col.is_primary_key else ''
                 row['is_fk'] = col.foreign_key if col.foreign_key else None
-                row['type'] = col.datatype.upper()   if col.datatype else None
+                row['type'] = col.datatype.upper() if col.datatype else None
 
 
                 for idx,s in indexes.items():
