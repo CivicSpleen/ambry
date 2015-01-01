@@ -407,7 +407,6 @@ class Warehouse(object):
                 where = None
 
             try:
-                ##
                 ## Copy the data to the destination table
 
                 self.elibrary.get(p.vid) # ensure it is local
@@ -430,7 +429,7 @@ class Warehouse(object):
                 assert self.augmented_table_name(p.identity, source_table_name)[0] == itn
 
                 # Set the altname of the column, which is the name the column is generallt know by
-                # in the warehouse. 
+                # in the warehouse.
 
                 for c in w_table.columns:
                     c.altname = c.fq_name
