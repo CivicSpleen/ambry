@@ -18,9 +18,6 @@ import os
 app = Flask(__name__)
 Compress(app)
 
-with app.app_context():
-    init_warehouses()
-
 
 import logging
 
