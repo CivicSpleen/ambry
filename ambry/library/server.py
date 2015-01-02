@@ -15,7 +15,7 @@ import sys
 from ambrydoc import app, configure_application, write_config, config_paths
 from ambrydoc import fscache
 
-app.register_blueprint(exracts_blueprint)
+app.register_blueprint(exracts_blueprint, url_prefix='/warehouses')
 
 if __name__ == "__main__":
 
