@@ -1038,6 +1038,7 @@ Columns:
         name = Column.mangle_name(name)
 
         try:
+
             row = self.column(name)
         except NoResultFound:
             row = None

@@ -28,7 +28,7 @@ def get_extract(wid, tid, ct):
 
     try:
 
-        path, attach_filename = warehouse(wid).extract_table(tid)
+        path, attach_filename = warehouse(wid).extract_table(tid, content_type = ct)
 
         return send_from_directory(directory=dirname(path),
                                    filename=basename(path),
@@ -37,11 +37,28 @@ def get_extract(wid, tid, ct):
     except NotFoundError:
         abort(404)
 
+@exracts_blueprint.route('/<wid>/sample/<tid>')
+def get_sample(wid, tid, ct):
+    """Return an extract for a table """
+
+    from os.path import basename, dirname
+    from ambry.dbexceptions import NotFoundError
+
+    try:
+
+        path, attach_filename = warehouse(wid).extract_table(tid, content_type =  'json')
+
+
+    except NotFoundError:
+        abort(404)
+
 @exracts_blueprint.route('/<wid>/extractors/<tid>')
 def get_extractors(wid, tid):
     from ambry.warehouse.extractors import get_extractors
 
     return jsonify(results=get_extractors(warehouse(wid).orm_table(tid)))
+
+
 
 def library():
     from ambry.library import new_library
@@ -83,8 +100,6 @@ if __name__ == "__main__":
     Compress(app)
 
     app.register_blueprint(exracts_blueprint)
-
-
 
     app.run(host=app_config['host'], port=int(app_config['port']), debug=app_config['debug'])
 

@@ -24,7 +24,6 @@ def warehouse_command(args, rc):
 
     config = None
 
-
     #
     # Special case for installing manifests, can get the database DSN from the manifest
 
@@ -36,7 +35,7 @@ def warehouse_command(args, rc):
         m = Manifest(args.term)
 
         if m.is_geo:
-            dsnt = "spatalite:///{}.db"
+            dsnt = "spatialite:///{}.db"
             type_ = "ambry.warehouse.sqlite.SpatialiteWarehouse"
         else:
             dsnt = "sqlite:///{}.db"
@@ -399,7 +398,6 @@ def warehouse_test(args, w, config):
     l = new_library(rc.library(args.library_name))
 
     w = new_warehouse(config, l, logger=global_logger)
-
 
 
     print config

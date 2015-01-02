@@ -67,7 +67,7 @@ class ManifestSection(object):
 class Manifest(object):
 
     # These tags have only a single line; revert back to 'doc' afterward
-    singles = ['uid', 'title', 'extract', 'dir',   'author', 'url', 'access', 'index', 'include', "GEO"]
+    singles = ['uid', 'title', 'extract', 'dir',   'author', 'url', 'access', 'index', 'include', "geo"]
     multi_line = ['partitions','view','mview','sql','doc']
 
     partitions = None
@@ -170,10 +170,9 @@ class Manifest(object):
 
         return uid
 
-
     @property
     def is_geo(self):
-        return self.single_line('geo')
+        return bool(self.single_line('geo'))
 
     @property
     def title(self):
