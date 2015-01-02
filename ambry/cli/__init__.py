@@ -319,6 +319,20 @@ def _print_info(l,ident, list_partitions=False):
             prt('B Build time: {}',
                 str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
 
+    else:
+
+        bundle =  l.get(d.vid)
+
+        process = bundle.get_value_group('process')
+        prt('B Partitions: {}', bundle.partitions.count)
+        prt('B Created   : {}', process.get('dbcreated', ''))
+        prt('B Prepared  : {}', process.get('prepared', ''))
+        prt('B Built     : {}', process.get('built', ''))
+        prt('B Build time: {}',
+            str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
+
+
+
     if ident.partitions:
 
         if len(ident.partitions) == 1 and not list_partitions:

@@ -722,7 +722,6 @@ class Warehouse(object):
         # Update the library
 
 
-
         if self.uid:
             dc = self.elibrary.doc_cache
 
@@ -916,7 +915,7 @@ class Warehouse(object):
         return b, p
 
 
-    def extract(self, force=False):
+    def extract_all(self, force=False):
         """Generate the extracts and return a struture listing the extracted files. """
         from contextlib import closing
 
@@ -958,8 +957,25 @@ class Warehouse(object):
                 self.library.files.merge(f)
 
 
-
         return extracts
+
+    def extract_table(self, tid, content_type='csv'):
+        from .extractors import new_extractor
+        from os.path import basename, dirname
+        from ..dbexceptions import NotFoundError
+
+        t = self.orm_table(tid)
+
+        if not t:
+            raise NotFoundError("Didn't get table for '{}' ".format(tid))
+
+        e = new_extractor(content_type, self, self.cache.subcache('extracts'))
+
+        ref = t.name if t.type in ('view', 'mview') else t.vid
+
+        ee = e.extract(ref, '{}.{}'.format(tid, content_type))
+
+        return ee.abs_path, "{}_{}.{}".format(t.vid, t.name, content_type)
 
     ##
     ## users

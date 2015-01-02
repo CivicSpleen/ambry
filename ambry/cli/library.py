@@ -500,8 +500,8 @@ def library_doc(args, l, rc):
 
     from ambrydoc import app, configure_application, setup_logging
     import ambrydoc.views as views
+    from ambry.warehouse.server import exracts_blueprint
 
-    import random
     import logging
     from logging import FileHandler
     import webbrowser
@@ -519,6 +519,8 @@ def library_doc(args, l, rc):
     file_handler = FileHandler(os.path.join(cache_dir, "web.log"))
     file_handler.setLevel(logging.WARNING)
     app.logger.addHandler(file_handler)
+
+    app.register_blueprint(exracts_blueprint,url_prefix='/warehouses')
 
     if args.reindex:
 
@@ -547,19 +549,9 @@ def library_doc(args, l, rc):
         except socket.error:
             port += 1
 
-    def run_app(port):
-        app.run(host=config['host'], port=port, debug=args.debug)
-
-    #t1 = threading.Thread(target=run_app)
-    #t1.start()
-
     webbrowser.open("http://localhost:{}/".format(port))
 
-    #setup_logging()
-
-    run_app(port)
-
-    #t1.join()
+    app.run(host=config['host'], port=port, debug=args.debug)
 
 def library_config(args, l, config):
     from ..dbexceptions import ConfigurationError

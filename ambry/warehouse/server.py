@@ -6,88 +6,43 @@ Run with gunicorn:
 
     gunicorn ambry.warehouse.server:app -b 0.0.0.0:81s
 
-
 """
 
 from flask import Flask, current_app,url_for
-from flask import g, send_from_directory, request, jsonify, abort
-from flask.ext.compress import Compress
-from ambry.util import memoize
-import os
+from flask import send_from_directory, request, jsonify, abort
 
-app = Flask(__name__)
-Compress(app)
+from flask import Blueprint
 
 
-import logging
+exracts_blueprint = Blueprint('extract_tables', __name__)
 
+@exracts_blueprint.route('/')
+def get_root():
+    return __name__
 
-stream_handler = logging.StreamHandler()
-stream_handler.setLevel(logging.INFO)
-app.logger.addHandler(stream_handler)
-
-@memoize
-def get_warehouse_data():
-
-    l = library()
-
-    d = {}
-
-    for sf in l.stores:
-        s = l.store(sf.ref)
-
-        w = l.warehouse(s.ref)
-
-        d[sf.ref] = w.dict
-
-        del d[sf.ref]['dsn']
-
-    return d
-
-@app.route('/')
-def root():
-    return jsonify(get_warehouse_data())
-
-@app.route('/init')
-def init():
-    # Just triggers an init
-    return ''
-
-
-@app.route('/warehouses/<wid>/extracts/<tid>.<ct>')
+@exracts_blueprint.route('/<wid>/extracts/<tid>.<ct>')
 def get_extract(wid, tid, ct):
     """Return an extract for a table """
-    from extractors import new_extractor
+
     from os.path import basename, dirname
+    from ambry.dbexceptions import NotFoundError
 
-    w = warehouse(wid)
+    try:
 
-    t = w.orm_table(tid)
+        path, attach_filename = warehouse(wid).extract_table(tid)
 
-    if not t:
+        return send_from_directory(directory=dirname(path),
+                                   filename=basename(path),
+                                   as_attachment = True,
+                                   attachment_filename=attach_filename)
+    except NotFoundError:
         abort(404)
 
-    e = new_extractor(ct, w, w.cache.subcache('extracts'))
-
-    ref = t.name if t.type in ('view','mview') else t.vid
-
-    ee = e.extract(ref,'{}.{}'.format(tid,ct))
-
-    return send_from_directory(directory=dirname(ee.abs_path),
-                               filename=basename(ee.abs_path),
-                               as_attachment = True,
-                               attachment_filename="{}_{}.{}".format(t.vid,t.name,ct))
-
-@app.route('/warehouses/<wid>/extractors/<tid>')
+@exracts_blueprint.route('/<wid>/extractors/<tid>')
 def get_extractors(wid, tid):
-    from extractors import get_extractors
+    from ambry.warehouse.extractors import get_extractors
 
-    w = warehouse(wid)
-
-    t = w.orm_table(tid)
-
-    return jsonify(results=get_extractors(t))
-
+    return jsonify(results=get_extractors(warehouse(wid).orm_table(tid)))
 
 def library():
     from ambry.library import new_library
@@ -99,25 +54,12 @@ def library():
     return library
 
 def warehouse(uid):
-    from werkzeug.exceptions import NotFound
+    return library().warehouse(uid)
 
-    w =  library().warehouse(uid)
-
-    return w
-
-@app.before_first_request
-def init_warehouses():
-    library().warehouse_url = url_for('root', _external=True)
-
-def exit_handler():
-    l = library()
-    l.warehouse_url = None
-
-import atexit
-atexit.register(exit_handler)
 
 if __name__ == "__main__":
     import argparse
+    from flask.ext.compress import Compress
 
     app_config = dict(
         host='localhost',
@@ -137,6 +79,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     app_config.update( {k:v for k,v in vars(args).items() if v})
+
+    app = Flask(__name__)
+    Compress(app)
+
+    app.register_blueprint(exracts_blueprint)
+
+
 
     app.run(host=app_config['host'], port=int(app_config['port']), debug=app_config['debug'])
 

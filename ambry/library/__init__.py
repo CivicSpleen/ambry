@@ -857,7 +857,7 @@ class Library(object):
 
         errors = {}
         for k, v in self.dependencies.items():
-            self.logger.debug('Download and check dependency: {}'.format(v))
+            self.logger.info('Download and check dependency: {}'.format(v))
             b = self.get(v, cb=Progressor().progress)
 
             if not b:
