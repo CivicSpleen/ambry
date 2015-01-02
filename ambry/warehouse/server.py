@@ -13,7 +13,6 @@ from flask import send_from_directory, request, jsonify, abort
 
 from flask import Blueprint
 
-
 exracts_blueprint = Blueprint('extract_tables', __name__)
 
 @exracts_blueprint.route('/')
