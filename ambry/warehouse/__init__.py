@@ -632,6 +632,7 @@ class Warehouse(object):
             if j == 0:
 
                 sample.append(row.keys())
+                sample.append(row.values())
 
                 for i, (col_name, v) in enumerate(row.items(), 1):
 
@@ -972,7 +973,10 @@ class Warehouse(object):
         from os.path import basename, dirname
         from ..dbexceptions import NotFoundError
 
-        t = self.orm_table(tid)
+        t = self.orm_table(tid) # For installed tables
+
+        if not t:
+            t = self.orm_table_by_name(tid)  # For views
 
         if not t:
             raise NotFoundError("Didn't get table for '{}' ".format(tid))

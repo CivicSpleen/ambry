@@ -30,6 +30,8 @@ def get_extract(wid, tid, ct):
 
         path, attach_filename = warehouse(wid).extract_table(tid, content_type = ct)
 
+
+
         return send_from_directory(directory=dirname(path),
                                    filename=basename(path),
                                    as_attachment = True,
