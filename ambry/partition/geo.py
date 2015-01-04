@@ -264,7 +264,11 @@ class GeoPartition(SqlitePartition):
                 d = {}
                 for i in range(0, dfn.GetFieldCount()):
                     name, type_ = col_defs[i]
-                    d[name] = type_(feature.GetFieldAsString(i))
+                    try:
+                        d[name] = feature.GetFieldAsString(i)
+                    except TypeError as e:
+                        self.bundle.logger.error("Type error for column '{}', type={}: {}".format(name, type_, e))
+                        raise
 
                 g = feature.GetGeometryRef()
                 g.TransformTo(to_srs)

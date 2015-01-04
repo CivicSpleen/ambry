@@ -751,6 +751,4 @@ def recover_geometry(connection, table_name, column_name, geometry_type, srs=Non
 
     q = "SELECT RecoverGeometryColumn('{}', '{}', {}, '{}', 2);".format(table_name, column_name, srs, geometry_type)
 
-    print '!!!', q
-
     connection.execute(q)
