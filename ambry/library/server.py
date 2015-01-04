@@ -6,7 +6,6 @@ Run with gunicorn:
 
 """
 
-
 from ambry.warehouse.server import exracts_blueprint
 import ambrydoc.views
 

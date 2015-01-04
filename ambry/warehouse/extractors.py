@@ -50,18 +50,33 @@ class Extractor(object):
     def mangle_path(self,rel_path):
         return rel_path
 
-    def extract(self, table,  rel_path):
+    def extract(self, table,  rel_path, update_time=None):
         import time
 
-        e = ExtractEntry(False, rel_path, self.cache.path(self.mangle_path(rel_path), missing_ok = True), (table, self.__class__))
+        e = ExtractEntry(False, rel_path, self.cache.path(self.mangle_path(rel_path), missing_ok = True),
+                         (table, self.__class__))
+
+        force = self.force
+
+        md = self.cache.metadata(self.mangle_path(rel_path))
+
+        # If the table was created after
+        if md and 'time' in md and update_time and int(md['time'])-int(update_time) < 0:
+
+            force = True
+
 
         if self.cache.has(self.mangle_path(rel_path)):
-            if self.force:
+            if force:
                 self.cache.remove(self.mangle_path(rel_path), True)
             else:
                 return e
 
-        self._extract(table,  rel_path)
+        md = {
+            'time' : time.time()
+        }
+
+        self._extract(table,  rel_path, md)
         e.time = time.time()
         e.extracted = True
         return e
@@ -77,7 +92,7 @@ class CsvExtractor(Extractor):
     def can_extract(cls,t):
         return True
 
-    def _extract(self, table, rel_path):
+    def _extract(self, table, rel_path, metadata):
 
         import unicodecsv
 
@@ -85,7 +100,7 @@ class CsvExtractor(Extractor):
 
         row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table))
 
-        with self.cache.put_stream(rel_path) as stream:
+        with self.cache.put_stream(rel_path, metadata = metadata) as stream:
             w = unicodecsv.writer(stream)
 
             for i,row in enumerate(row_gen):
@@ -107,7 +122,7 @@ class JsonExtractor(Extractor):
     def can_extract(cls,t):
         return True
 
-    def _extract(self, table,  rel_path):
+    def _extract(self, table,  rel_path, metadata):
         import json
 
         rel_path = self.mangle_path(rel_path)
@@ -117,7 +132,8 @@ class JsonExtractor(Extractor):
         # A template to ensure the JSON head and tail are properly formatted
         head, mid, tail  = json.dumps({ 'header': [0], 'rows': [ [0] ]}).split('[0]')
 
-        with self.cache.put_stream(rel_path) as stream:
+
+        with self.cache.put_stream(rel_path, metadata=metadata) as stream:
 
             stream.write(head)
 
@@ -327,7 +343,7 @@ class ShapeExtractor(OgrExtractor):
 
             zf.close()
 
-    def _extract(self, table,  rel_path):
+    def _extract(self, table,  rel_path, metadata):
 
         from ambry.util import temp_file_name
         from ambry.util.flo import copy_file_or_flo
@@ -344,7 +360,7 @@ class ShapeExtractor(OgrExtractor):
 
         self.zip_dir(table, shapefile_dir,  zf)
 
-        copy_file_or_flo(zf, self.cache.put_stream(rel_path))
+        copy_file_or_flo(zf, self.cache.put_stream(rel_path, metadata = metadata))
 
         shutil.rmtree(shapefile_dir)
         os.remove(zf)
@@ -362,7 +378,7 @@ class GeoJsonExtractor(OgrExtractor):
         from ambry.util import temp_file_name
         return temp_file_name()
 
-    def _extract(self, table,  rel_path):
+    def _extract(self, table,  rel_path, metadata):
         from ambry.util import temp_file_name
         from ambry.util.flo import copy_file_or_flo
         import os
@@ -373,7 +389,7 @@ class GeoJsonExtractor(OgrExtractor):
 
         self._extract_shapes(tf, table)
 
-        copy_file_or_flo(tf, self.cache.put_stream(rel_path))
+        copy_file_or_flo(tf, self.cache.put_stream(rel_path, metadata = metadata))
 
         os.remove(tf)
 
@@ -386,7 +402,7 @@ class KmlExtractor(OgrExtractor):
     driver_name = 'KML'
     max_name_len = 40
 
-    def _extract(self, table, rel_path):
+    def _extract(self, table, rel_path, metadata):
         import tempfile
         from ambry.util import temp_file_name
         from ambry.util.flo import copy_file_or_flo
@@ -398,7 +414,7 @@ class KmlExtractor(OgrExtractor):
 
         self._extract_shapes(tf, table)
 
-        copy_file_or_flo(tf, self.cache.put_stream(rel_path))
+        copy_file_or_flo(tf, self.cache.put_stream(rel_path, metadata=metadata))
 
         os.remove(tf)
 

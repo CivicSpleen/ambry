@@ -985,7 +985,7 @@ class Warehouse(object):
 
         ref = t.name if t.type in ('view', 'mview') else t.vid
 
-        ee = e.extract(ref, '{}.{}'.format(tid, content_type))
+        ee = e.extract(ref, '{}.{}'.format(tid, content_type), t.data.get('updated', None))
 
         return ee.abs_path, "{}_{}.{}".format(t.vid, t.name, content_type)
 

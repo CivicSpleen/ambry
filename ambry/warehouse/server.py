@@ -30,8 +30,6 @@ def get_extract(wid, tid, ct):
 
         path, attach_filename = warehouse(wid).extract_table(tid, content_type = ct)
 
-
-
         return send_from_directory(directory=dirname(path),
                                    filename=basename(path),
                                    as_attachment = True,
@@ -60,7 +58,15 @@ def get_extractors(wid, tid):
 
     return jsonify(results=get_extractors(warehouse(wid).orm_table(tid)))
 
-
+@exracts_blueprint.route('/download/<wid>.db')
+def get_download(wid):
+    from os.path import basename, dirname
+    w = warehouse(wid)
+    path = w.database.path
+    return send_from_directory(directory=dirname(path),
+                               filename=basename(path),
+                               as_attachment=True,
+                               attachment_filename="{}.db".format(wid))
 
 def library():
     from ambry.library import new_library
