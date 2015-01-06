@@ -292,7 +292,6 @@ class Warehouse(object):
 
         return self.library.files.query.type(self.FILE_TYPE.MANIFEST).group(self.FILE_GROUP.MANIFEST).all
 
-
     @property
     def bundles(self):
         """Metadata for bundles, each with the partitions that are installed here.
@@ -610,6 +609,31 @@ class Warehouse(object):
         else:
             return self.database.dsn
 
+    def build_sample(self, t):
+
+        if t.type == 'table':
+            name = t.data['installed_names'][0]
+        else:
+            name = t.name
+
+        sql = 'SELECT * FROM "{}" LIMIT 20'.format(name)
+        sample = []
+
+        for j, row in enumerate(self.database.connection.execute(sql)):
+            if j == 0:
+                sample.append(row.keys())
+                sample.append(row.values())
+            else:
+                sample.append(row.values())
+
+        t.data['sample'] = sample
+
+        v = self.database.connection.execute('SELECT count(*) FROM "{}"'.format(name)).fetchone()
+
+        t.data['count'] = int(v[0])
+
+
+
     def build_schema(self, t):
 
         from ..orm import Column
@@ -625,50 +649,74 @@ class Warehouse(object):
         s = self.library.database.session
         t = self.library.table(t.vid)
 
-        sql = 'SELECT * FROM "{}" LIMIT 100'.format(t.name)
-        sample = []
+        sql = 'SELECT * FROM "{}" LIMIT 1'.format(t.name)
 
-        for j, row in enumerate(self.database.connection.execute(sql)):
-            if j == 0:
+        row = self.database.connection.execute(sql).fetchone()
 
-                sample.append(row.keys())
-                sample.append(row.values())
+        for i, (col_name, v) in enumerate(row.items(), 1):
 
-                for i, (col_name, v) in enumerate(row.items(), 1):
+            try:
+                c_id, plain_name = col_name.split('_', 1)
+                cn = ObjectNumber.parse(c_id)
 
-                    try:
-                        c_id, plain_name = col_name.split('_', 1)
-                        cn = ObjectNumber.parse(c_id)
+                orig_table = self.library.table(str(cn.as_table))
 
-                        orig_table = self.library.table(str(cn.as_table))
+                if not orig_table:
+                    self.logger.error("UNable to find table '{}' while trying to create schema".format(str(cn.as_table)))
+                    continue
 
-                        if not orig_table:
-                            self.logger.error("UNable to find table '{}' while trying to create schema".format(str(cn.as_table)))
-                            continue
+                orig_column = orig_table.column(c_id)
 
-                        orig_column = orig_table.column(c_id)
-
-                        orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)
-                        d = orig_column.dict
-                    except ValueError: # Coudn't split the col name, probl b/c the user added it in SQL
-                        d = dict(name = col_name)
+                orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)
+                d = orig_column.dict
+            except ValueError: # Coudn't split the col name, probl b/c the user added it in SQL
+                d = dict(name = col_name)
 
 
-                    d['sequence_id'] = i
-                    del d['t_vid']
-                    del d['t_id']
-                    del d['vid']
-                    del d['id_']
-                    d['derivedfrom'] = c_id
+            d['sequence_id'] = i
+            del d['t_vid']
+            del d['t_id']
+            del d['vid']
+            del d['id_']
+            d['derivedfrom'] = c_id
 
-                    t.add_column(**d)
-            else:
-                sample.append(row.values())
-
-
-        t.data['sample'] = sample
+            t.add_column(**d)
 
         s.commit()
+
+
+    def install_union(self):
+        """Combine multiple partition tables of the same table type into a single table"""
+
+        # TODO, our use of sqlalchemy is wacked.
+        # Some of the install methods commit or flush the session, which invalidated the tables from self.tables,
+        # so we have to get just the vid, and look up the object in each iteration.
+
+        for t_vid in [t.vid for t in self.tables]:
+
+            t = self.orm_table(t_vid)
+
+            if t.type == 'table' and t.installed:  # Get the table definition that columns are linked to
+
+                ## Create table aliases for the vid of the tables.
+                installed_tables = [it for it in self.library.derived_tables(t.vid) if it.type == 'installed']
+
+                # col_names = t.vid_select() # Get to this later ...
+
+                col_names = '*'
+
+                if len(installed_tables) == 1:
+                    sql = 'SELECT {} FROM "{}" '.format(col_names, installed_tables[0].name)
+
+                else:
+
+                    sql = "SELECT {} FROM ({}) as subquery ".format(
+                        col_names,
+                        ' UNION '.join(' SELECT * FROM "{}" '.format(table.name)
+                                       for table in installed_tables)
+                    )
+
+                self.install_view(t_vid, sql, data=dict(type='alias', proto_vid=t_vid))
 
 
     def post_install(self):
@@ -682,38 +730,15 @@ class Warehouse(object):
 
         """
 
-
         # TODO, our use of sqlalchemy is wacked.
         # Some of the install methods commit or flush the session, which invalidated the tables from self.tables,
         # so we have to get just the vid, and look up the object in each iteration.
 
-        for t_vid in [ t.vid for t in self.tables]:
+        for t_vid in [t.vid for t in self.tables]:
+            t = self.orm_table(t_vid)
+            if t.type == 'table' and t.installed:  # Get the table definition that columns are linked to
+                self.install_table(t_vid, data=dict(type='alias', proto_vid=t_vid))
 
-            t= self.orm_table(t_vid)
-
-            if  t.type == 'table' and t.installed: # Get the table definition that columns are linked to
-
-                ## Create table aliases for the vid of the tables.
-                installed_tables = [ it for it in self.library.derived_tables(t.vid) if it.type == 'installed' ]
-
-                # col_names = t.vid_select() # Get to this later ...
-
-                col_names = '*'
-
-                if len(installed_tables) == 1:
-                    sql = 'SELECT {} FROM "{}" '.format(col_names, installed_tables[0].name)
-
-                else:
-
-                    sql = "SELECT {} FROM ({}) as subquery ".format(
-                            col_names,
-                            ' UNION '.join(' SELECT * FROM "{}" '.format(table.name)
-                                         for table in installed_tables )
-                    )
-
-                self.install_view(t_vid, sql, data=dict(type='alias', proto_vid=t_vid ))
-
-                self.install_table(t_vid, data=dict(type='alias', proto_vid=t_vid ))
 
         s = self.library.database.session
 
@@ -725,10 +750,13 @@ class Warehouse(object):
                     t.add_installed_name(dt.name)
                     s.add(t)
 
+            if (t.type == 'table' and t.installed) or t.type in ('view','mview'):
+                self.build_sample(t)
+                s.add(t)
+
         s.commit()
 
-
-        # Update the library
+        # Update the documentation files in the library
 
 
         if self.uid:

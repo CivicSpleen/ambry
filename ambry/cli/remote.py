@@ -112,14 +112,12 @@ def remote_find(args, l, config):
 
 def remote_fix(args, l, rc):
     from sqlalchemy.orm.exc import NoResultFound
+
     if args.stored_list:
         prt('Fix stored list on remotes')
 
     for remote in l.remotes:
         prt("  {}".format(remote.repo_id))
-
-        def cb(cum, _):
-            prt("Store list: {} {}".format(remote.repo_id, cum))
 
         remote.store_list()
 

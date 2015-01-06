@@ -383,6 +383,13 @@ def library_push(args, l, config):
                 else:
                     rate = 0
 
+    # Update the list file. This file is required for use with HTTP access, since you can't get
+    # a list otherwise.
+    for remote in l.remotes:
+        prt("  {}".format(remote.repo_id))
+
+        remote.store_list()
+
 
 def library_files(args, l, config):
 
