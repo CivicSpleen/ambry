@@ -751,8 +751,9 @@ class Warehouse(object):
                     s.add(t)
 
             if (t.type == 'table' and t.installed) or t.type in ('view','mview'):
-                self.build_sample(t)
-                s.add(t)
+                if not 'sample' in t.data:
+                    self.build_sample(t)
+                    s.add(t)
 
         s.commit()
 
@@ -800,6 +801,7 @@ class Warehouse(object):
         data['sql'] = sql
         data['type'] = 'mview'
         data['updated'] = time.time()
+
 
         return drop, data
 
