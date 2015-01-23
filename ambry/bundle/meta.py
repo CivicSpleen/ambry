@@ -74,7 +74,8 @@ class SourceTerm(DictTerm):
     time = ScalarTerm(store_none=False)  # Specify a time component, usually a year.
     space = ScalarTerm(store_none=False)  # Specify a space component
     grain = ScalarTerm(store_none=False)  # Specify a grain component
-    table = ScalarTerm(store_none=False)  # For auto imports, name of table to loat into.
+    table = ScalarTerm(store_none=False)  # For auto imports, name of table to load into.
+    conversion = ScalarTerm(store_none=False)  # An alternate URL or regular expression for a file in the source store
 
 
     def __nonzero__(self):

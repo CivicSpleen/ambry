@@ -133,7 +133,12 @@ class Column(object):
             self.type_counts[None] += 1
             return None
 
-        v = v.strip()
+        v = str(v)
+
+        try:
+            v = v.strip()
+        except AttributeError:
+            pass
 
         if v == '':
             self.type_counts[None] += 1
@@ -176,11 +181,15 @@ class Column(object):
 
 
     def resolved_type(self):
+        "Return the type for the columns, and a flag to indicate that the column has codes"
         import datetime
 
-        self.type_ratios = { test:float(self.type_counts[test]) / float(self.count) for test, testf in tests }
+        self.type_ratios = { test:float(self.type_counts[test]) / float(self.count) for test, testf in tests + [(None, None)] }
 
         if self.type_ratios[str] > .2:
+            return str, False
+
+        if self.type_ratios[None] > .7:
             return str, False
 
         if self.type_counts[datetime.datetime] > 0:
@@ -220,9 +229,14 @@ class Intuiter(object):
         if isinstance(row, dict):
             for k,v in row.items():
                 self._columns[k].test(v)
-        elif isinstance(row, list):
-            for k, v in enumerate(row):
-                type_  = self._columns[k].test(v)
+        elif isinstance(row, (list, tuple)):
+            if isinstance(row[0], (tuple, list)):
+                # The row is actually a tuple of (header, row)
+                for k, v in enumerate(row[1]):
+                    type_ = self._columns[k].test(v)
+            else:
+                for k, v in enumerate(row):
+                    type_  = self._columns[k].test(v)
 
         else:
             raise TypeError("Row must be a list or a dict")
@@ -230,6 +244,7 @@ class Intuiter(object):
     def iterate(self, itr, max_n = None):
 
         for n,row in enumerate(itr):
+
 
             if max_n and n > max_n:
                 return

@@ -489,6 +489,20 @@ class DbBundleBase(Bundle):
 
         return d
 
+    @property
+    def summary_dict(self):
+        """A reduced version of the dict
+
+        WARNING: This will only produces 'other_versions' if the bundle is produced from library.list_bundles
+        """
+
+        return dict(
+            about=self.metadata.dict['about'],
+            identity=self.identity.dict,
+            other_versions=[ov.dict for ov in self.identity.data.get('other_versions',[])]
+        )
+
+
 
 class DbBundle(DbBundleBase):
 
@@ -667,12 +681,6 @@ class BuildBundle(Bundle):
 
         except Exception as e:
             from ..util import get_logger
-            # self.logger can get caught in a recursion loop
-            #logger = get_logger(__name__)
-            #logger.error(
-            #    "Failed to get dataset: {}; {}".format(
-            #        e.message,
-            #        self.database.dsn))
             raise
 
     @property
@@ -733,6 +741,11 @@ class BuildBundle(Bundle):
             return global_run_config
 
         return  get_runconfig()
+
+    @property
+    def vid(self):
+        """Shortcut to the vid"""
+        return self.identity.vid
 
     @property
     def identity(self):
@@ -797,6 +810,7 @@ class BuildBundle(Bundle):
                     return f.read()
             except IOError:
                 return ''
+
 
         # The main doc is subbed on the fly, but the README has to be a real
         # file, since it is displayed in github
@@ -1097,7 +1111,7 @@ class BuildBundle(Bundle):
 
         return True
 
-    def _prepare_load_schema(self):
+    def _prepare_load_schema(self, fast = False):
 
         sf = self.filesystem.path('meta',self.SCHEMA_FILE)
 
@@ -1106,7 +1120,7 @@ class BuildBundle(Bundle):
                 self.log("Loading schema from file: {}".format(sf))
                 self.schema.clean()
                 with self.session:
-                    warnings, errors = self.schema.schema_from_file(f)
+                    warnings, errors = self.schema.schema_from_file(f, fast = fast)
 
                     self.schema.expand_prototypes()
 
@@ -1155,7 +1169,7 @@ class BuildBundle(Bundle):
             with self.session:
                 self.rebuild_schema()
         else:
-            self._prepare_load_schema()
+            self._prepare_load_schema(fast = self.run_args.get('fast', False))
 
 
         return True
@@ -1619,6 +1633,11 @@ class BuildBundle(Bundle):
         self.set_value('process','installed', datetime.now().isoformat())
         
         self.set_build_state( 'installed')
+
+        dbd = self.library.get(self.identity.vid)
+        self.library.sync_bundle_doc(dbd)
+
+
 
         return True
 

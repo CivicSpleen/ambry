@@ -74,6 +74,7 @@ class SqliteWarehouse(RelationalWarehouse):
 
         data['sql'] = sql
         data['updated'] = time.time()
+        data['sample'] = None
 
         sql = """
         DROP VIEW  IF EXISTS {name};

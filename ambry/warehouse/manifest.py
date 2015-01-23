@@ -67,7 +67,7 @@ class ManifestSection(object):
 class Manifest(object):
 
     # These tags have only a single line; revert back to 'doc' afterward
-    singles = ['uid', 'title', 'extract', 'dir',   'author', 'url', 'access', 'index', 'include', "geo"]
+    singles = ['uid', 'title',  'author', 'index', 'include', "geo"]
     multi_line = ['partitions','view','mview','sql','doc']
 
     partitions = None
@@ -506,6 +506,7 @@ class Manifest(object):
                 )
 
     def _process_index(self, section):
+
 
         line = section.args
 

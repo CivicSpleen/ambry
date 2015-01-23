@@ -134,6 +134,9 @@ class PostgresWarehouse(RelationalWarehouse):
 
         data['sql'] = sql
         data['updated'] = time.time()
+
+        data['sample'] = None
+
         sqls = ['DROP VIEW  IF EXISTS "{name}" CASCADE'.format(name=name),
         'CREATE VIEW "{name}" AS {sql}'.format(name=name, sql=sql)]
 

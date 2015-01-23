@@ -4,10 +4,48 @@
 
 from  ambry.bundle import BuildBundle
 
-class CsvBundle(BuildBundle):
+class LoaderBundle(BuildBundle):
+
+    def source_cache_key(self, fn):
+        return  "{}/{}/{}".format(self.identity.source, self.identity.name, fn)
+
+    def copy_sources(self):
+        """Copy all of the sources to the build directory. If there is asource_store cache, also copy the
+        file to the source store.
+
+
+        """
+        import shutil, os
+
+        data = self.filesystem.build_path('data')
+
+        cache = self.filesystem.source_store
+
+        if not os.path.exists(data):
+            os.makedirs(data)
+
+        for k, v in self.metadata.sources.items():
+            fn = self.filesystem.download(k)
+            print fn
+
+            base = os.path.basename(fn)
+            dest = os.path.join(data, base)
+
+            cache_key = self.source_cache_key(base)
+
+            shutil.copyfile(fn , dest)
+
+            if cache and not cache.has(cache_key):
+                self.log("Putting: {}".format(cache_key))
+                cache.put(fn, cache_key,  metadata=dict(vname=self.identity.vname))
+
+class CsvBundle(LoaderBundle):
     """A Bundle variant for loading CSV files"""
 
     def get_source(self, source):
+        """Get the source file. If the file does nto end in a CSV file, replace it with a CSV extension
+        and look in the source store cache """
+        import os
 
         if not source:
             source = self.metadata.sources.keys()[0]
@@ -17,6 +55,25 @@ class CsvBundle(BuildBundle):
         if fn.endswith('.zip'):
             fn = self.filesystem.unzip(fn)
 
+
+        if not fn.lower().endswith('.csv'):
+            cache = self.filesystem.source_store
+
+
+            if cache:
+                bare_fn, ext = os.path.splitext(os.path.basename(fn))
+
+                fn_ck = self.source_cache_key(bare_fn+".csv")
+
+                if cache.has(fn_ck):
+                    if not self.filesystem.download_cache.has(fn_ck):
+                        with cache.get_stream(fn_ck) as s:
+
+                            self.filesystem.download_cache.put(s, fn_ck )
+
+                    return self.filesystem.download_cache.path(fn_ck)
+
+
         return fn
 
     def gen_rows(self, source=None, as_dict=False):
@@ -24,6 +81,8 @@ class CsvBundle(BuildBundle):
         import csv
 
         fn = self.get_source(source)
+
+        self.log("Generating rows from {}".format(fn))
 
         with open(fn) as f:
 
@@ -37,7 +96,11 @@ class CsvBundle(BuildBundle):
                 # fraction of a section for millions of rows.
                 r = csv.reader(f)
                 header = ['id'] + r.next()
+
+                header = [ x if x else "column{}".format(i) for i, x in enumerate(header)]
+
                 for row in r:
+
                      yield header, [None] + row
 
     def source_header(self, source):
@@ -74,6 +137,8 @@ class CsvBundle(BuildBundle):
 
             header, row = self.gen_rows(source_name, as_dict=False).next()
 
+            header = [ x for x in header if x]
+
             def itr():
                 for header, row in self.gen_rows(source_name, as_dict=False):
                     yield row
@@ -83,6 +148,7 @@ class CsvBundle(BuildBundle):
                                iterator=itr(),
                                max_n=1000,
                                logger=self.init_log_rate(500))
+
 
         return True
 
@@ -162,6 +228,7 @@ class ExcelBuildBundle(CsvBundle):
     def gen_rows(self, source=None, as_dict=False):
         """Generate rows for a source file. The source value ust be specified in the sources config"""
         from xlrd import open_workbook
+        from xlrd.biffh import XLRDError
 
         fn, sheet_num = self.get_wb_sheet(source)
 
@@ -171,21 +238,23 @@ class ExcelBuildBundle(CsvBundle):
 
             wb = open_workbook(fn)
 
+            self.log("Generate rows for: "+fn)
+
             self.workbook = wb
 
             s = wb.sheets()[sheet_num]
 
-            for i, row in enumerate(range(1,s.nrows)):
+            for i in range(1,s.nrows):
 
                 if as_dict:
-                    yield dict(zip(header, [None] + self.srow_to_list(row, s)))
+                    yield dict(zip(header, [None] + self.srow_to_list(i, s)))
                 else:
                     # It might seem inefficient to return the header every time, but it really adds only a
                     # fraction of a section for millions of rows.
-                    yield header, [None] + self.srow_to_list(row, s)
+                    yield header, [None] + self.srow_to_list(i, s)
 
 
-class GeoBuildBundle(BuildBundle):
+class GeoBuildBundle(LoaderBundle):
     """A Bundle variant that loads zipped Shapefiles"""
     def __init__(self, bundle_dir=None):
         '''
@@ -225,7 +294,9 @@ class GeoBuildBundle(BuildBundle):
             else:
                 s_srs = None
 
-            p = self.partitions.new_geo_partition(table=table, shape_file=item.url, s_srs=s_srs)
+            lr = self.init_log_rate(print_rate=10)
+
+            p = self.partitions.new_geo_partition(table=table, shape_file=item.url, s_srs=s_srs, logger=lr)
             self.log("Loading table {}. Done".format(table))
 
         for p in self.partitions:

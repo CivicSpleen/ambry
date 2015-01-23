@@ -604,6 +604,7 @@ class RelationalBundleDatabaseMixin(object):
         from ambry.orm import Dataset
 
         try:
+
             ds = (self.session.query(Dataset).one())
 
             if not ds:

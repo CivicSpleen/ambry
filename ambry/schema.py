@@ -7,6 +7,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import Column
 from collections import OrderedDict, defaultdict
+from util import memoize
 
 def _clean_flag( in_flag):
     
@@ -55,8 +56,10 @@ class Schema(object):
         # build should be re-run
         self.new_code_tables = False
 
+
     @property
-    def dataset(self,):
+    @memoize
+    def dataset(self):
         '''Initialize the identity, creating a dataset record, 
         from the bundle.yaml file'''
         
@@ -99,9 +102,11 @@ class Schema(object):
         
         import sqlalchemy.orm.exc
         from sqlalchemy.sql import or_, and_
-        
+
         if not name_or_id:
             raise ValueError("Got an invalid argument: {}".format(name_or_id))
+
+        Table.mangle_name(name_or_id)
 
         try: 
             if d_vid:
@@ -109,7 +114,7 @@ class Schema(object):
                          and_(Table.d_vid ==  d_vid,   
                          or_(Table.vid==name_or_id,
                              Table.id_==name_or_id,
-                             Table.name==name_or_id))
+                             Table.name==Table.mangle_name(name_or_id)))
                         ).one())
                 
             else:
@@ -117,7 +122,7 @@ class Schema(object):
                 return (session.query(Table).filter(
                          or_(Table.vid==name_or_id,
                              Table.id_==name_or_id,
-                             Table.name==name_or_id)
+                             Table.name==Table.mangle_name(name_or_id))
                         ).one())
                 
         except sqlalchemy.orm.exc.NoResultFound as e:
@@ -143,7 +148,6 @@ class Schema(object):
 
         return None
 
-
     def add_table(self, name,  **kwargs):
         '''Add a table to the schema, or update it it already exists.
 
@@ -152,7 +156,8 @@ class Schema(object):
         from orm import Table
         from sqlalchemy.orm.exc import NoResultFound
         from identity import TableNumber, ObjectNumber
-           
+
+
         if not self.table_sequence:
             self.table_sequence = len(self.tables)+1
            
@@ -162,9 +167,12 @@ class Schema(object):
 
         col_data = { k.replace('d_','',1): v for k,v in kwargs.items() if k.startswith('d_') }
 
-        try:
-            row = self.table(name)
-        except NoResultFound as e:
+        if not kwargs.get('fast',False):
+            try:
+                row = self.table(name)
+            except NoResultFound as e:
+                row = None
+        else:
             row = None
 
         if row:
@@ -195,7 +203,6 @@ class Schema(object):
      
         self._seen_tables[name] = row
 
-
         if extant:
             self.bundle.database.session.merge(row)
         else:
@@ -211,6 +218,7 @@ class Schema(object):
         # when it is specified, and is one more than the last one if not.
 
         if not table.name in self.max_col_id:
+
             if len(table.columns) == 0:
                 self.max_col_id[table.name] = 0
             elif len(table.columns) == 1:
@@ -240,8 +248,6 @@ class Schema(object):
 
         self.max_col_id[table.name] = sequence_id
         kwargs['sequence_id'] = sequence_id
-
-
 
         c =  table.add_column(name, **kwargs)
 
@@ -559,19 +565,18 @@ class Schema(object):
         return bdr
 
 
-    def schema_from_file(self, file_, progress_cb=None):
+    def schema_from_file(self, file_, progress_cb=None, fast = False):
 
         if not progress_cb:
             progress_cb = self.bundle.init_log_rate(N=20)
 
-        return self._schema_from_file(file_, progress_cb)
+        return self._schema_from_file(file_, progress_cb, fast = fast)
 
         
-    def _schema_from_file(self, file_, progress_cb=None):
+    def _schema_from_file(self, file_, progress_cb=None, fast = False):
         '''Read a CSV file, in a particular format, to generate the schema'''
         from orm import Column
         import csv, re
-        
 
         file_.seek(0)
 
@@ -589,115 +594,115 @@ class Schema(object):
 
         errors = []
         warnings = []
-    
-        for row in reader:
 
-            line_no += 1
+        extant_tables = [ t.name for t in self.tables ]
 
-            if not row.get('column', False) and not row.get('table', False):
-                continue
-            
-            row = { k:str(v).decode('utf8', 'ignore').encode('ascii','ignore').strip()
-                    for k,v in row.items() }
+        with self.bundle.session:
+            for row in reader:
 
-            if  row['table'] and row['table'] != last_table:
-                new_table = True
-                last_table = row['table']
-            
-            if new_table and row['table']:
+                line_no += 1
 
-                self.bundle.database.session.commit()
+                if not row.get('column', False) and not row.get('table', False):
+                    continue
 
-                progress_cb("Add schema table: {}".format(row['table']))
-                
-                try: table =  self.table(row['table'])
-                except: table = None 
-                
-                if table:
-                    errors.append((table.name,None,"Table already exists"))
-                    return warnings, errors 
-   
-                try:
-                    table_row = dict(**row)
-                    del table_row['type'] # The field is really for columns, and means something different for tables
-                    t = self.add_table(row['table'], **table_row)
-                except Exception as e:
-                    errors.append((None,None," Failed to add table: {}. Row={}. Exception={}".format(row['table'], row, e)))
-                    return warnings, errors
-                
-                new_table = False
-              
-            # Ensure that the default doesnt get quotes if it is a number. 
-            if row.get('default', False):
-                try:
-                    default = int(row['default'])
-                except:
-                    default = row['default']
-            else:
-                default = None
-            
-            if not row.get('column', False):
-                raise ConfigurationError("Row error: no column on line {}".format(line_no))
-            if not row.get('table', False):
-                raise ConfigurationError("Row error: no table on line {}".format(line_no))
-            if not row.get('type', False):
-                raise ConfigurationError("Row error: no type on line {}".format(line_no))
+                row = { k:str(v).decode('utf8', 'ignore').encode('ascii','ignore').strip()
+                        for k,v in row.items() }
 
-            indexes = [ row['table']+'_'+c for c in row.keys() if (re.match('i\d+', c) and _clean_flag(row[c]))]  
-            uindexes = [ row['table']+'_'+c for c in row.keys() if (re.match('ui\d+', c) and _clean_flag(row[c]))]  
-            uniques = [ row['table']+'_'+c for c in row.keys() if (re.match('u\d+', c) and  _clean_flag(row[c]))]  
+                if  row['table'] and row['table'] != last_table:
+                    new_table = True
+                    last_table = row['table']
 
-            datatype = row['type'].strip().lower()
-         
-            width = _clean_int(row.get('width', None))
-            size = _clean_int(row.get('size',None))
-            start = _clean_int(row.get('start', None))
-            
-            if  width and width > 0:
-                illegal_value = '9' * width
-            else:
-                illegal_value = None
-            
-            data = { k.replace('d_','',1): v for k,v in row.items() if k.startswith('d_') }
-            
-            description = row.get('description','').strip().encode('utf-8')
+                if new_table and row['table']:
 
-            #progress_cb("Column: {}".format(row['column']))
+                    progress_cb("Add schema table: {}".format(row['table']))
 
+                    if row['table'] in extant_tables:
+                        errors.append((row['table'],None,"Table already exists"))
+                        return warnings, errors
+
+                    try:
+                        table_row = dict(**row)
+                        del table_row['type'] # The field is really for columns, and means something different for tables
+
+                        t = self.add_table(row['table'], fast = fast, **table_row)
+                    except Exception as e:
+                        errors.append((None,None," Failed to add table: {}. Row={}. Exception={}".format(row['table'], row, e)))
+                        return warnings, errors
+
+                    new_table = False
+
+                # Ensure that the default doesnt get quotes if it is a number.
+                if row.get('default', False):
+                    try:
+                        default = int(row['default'])
+                    except:
+                        default = row['default']
+                else:
+                    default = None
+
+                if not row.get('column', False):
+                    raise ConfigurationError("Row error: no column on line {}".format(line_no))
+                if not row.get('table', False):
+                    raise ConfigurationError("Row error: no table on line {}".format(line_no))
+                if not row.get('type', False):
+                    raise ConfigurationError("Row error: no type on line {}".format(line_no))
+
+                indexes = [ row['table']+'_'+c for c in row.keys() if (re.match('i\d+', c) and _clean_flag(row[c]))]
+                uindexes = [ row['table']+'_'+c for c in row.keys() if (re.match('ui\d+', c) and _clean_flag(row[c]))]
+                uniques = [ row['table']+'_'+c for c in row.keys() if (re.match('u\d+', c) and  _clean_flag(row[c]))]
+
+                datatype = row['type'].strip().lower()
+
+                width = _clean_int(row.get('width', None))
+                size = _clean_int(row.get('size',None))
+                start = _clean_int(row.get('start', None))
+
+                if  width and width > 0:
+                    illegal_value = '9' * width
+                else:
+                    illegal_value = None
+
+                data = { k.replace('d_','',1): v for k,v in row.items() if k.startswith('d_') }
+
+                description = row.get('description','').strip().encode('utf-8')
+
+                #progress_cb("Column: {}".format(row['column']))
 
 
-            col = self.add_column(t,row['column'],
-                                   sequence_id = row.get('seq',None),
-                                   is_primary_key= True if row.get('is_pk', False) else False,
-                                   fk_vid= row['is_fk'] if row.get('is_fk', False) else None,
-                                   description=description,
-                                   datatype=datatype,
-                                   proto_vid = row.get('proto_vid',None) if row.get('proto_vid',None) else None,
-                                   derivedfrom = row.get('derivedfrom',None) if row.get('derivedfrom',None) else None,
-                                   unique_constraints = ','.join(uniques),
-                                   indexes = ','.join(indexes),
-                                   uindexes = ','.join(uindexes),
-                                   default = default,
-                                   illegal_value = illegal_value,
-                                   size = size,
-                                   start = start,
-                                   width = width,
-                                   data=data,
-                                   sql=row.get('sql',None),
-                                   precision=int(row['precision']) if row.get('precision',False) else None,
-                                   scale=float(row['scale']) if row.get('scale',False) else None,
-                                   flags=row.get('flags',None),
-                                   keywords=row.get('keywords',None),
-                                   measure=row.get('measure',None),
-                                   units=row.get('units',None),
-                                   universe=row.get('universe',None),
-                                   commit = False
-                                   )
+                col = self.add_column(t,row['column'],
+                                       sequence_id = row.get('seq',None),
+                                       is_primary_key= True if row.get('is_pk', False) else False,
+                                       fk_vid= row['is_fk'] if row.get('is_fk', False) else None,
+                                       description=description,
+                                       datatype=datatype,
+                                       proto_vid = row.get('proto_vid',None) if row.get('proto_vid',None) else None,
+                                       derivedfrom = row.get('derivedfrom',None) if row.get('derivedfrom',None) else None,
+                                       unique_constraints = ','.join(uniques),
+                                       indexes = ','.join(indexes),
+                                       uindexes = ','.join(uindexes),
+                                       default = default,
+                                       illegal_value = illegal_value,
+                                       size = size,
+                                       start = start,
+                                       width = width,
+                                       data=data,
+                                       sql=row.get('sql',None),
+                                       precision=int(row['precision']) if row.get('precision',False) else None,
+                                       scale=float(row['scale']) if row.get('scale',False) else None,
+                                       flags=row.get('flags',None),
+                                       keywords=row.get('keywords',None),
+                                       measure=row.get('measure',None),
+                                       units=row.get('units',None),
+                                       universe=row.get('universe',None),
+                                       commit = False,
+                                       fast = fast # Don't check if the column exists
 
-            if col:
-                self.validate_column(t, col, warnings, errors)
+                                       )
 
-        self.bundle.database.session.commit()
+                if col:
+                    self.validate_column(t, col, warnings, errors)
+
+
 
         return warnings, errors
 
@@ -848,6 +853,7 @@ class Schema(object):
 
                 del d['t_vid']
                 del d['vid']
+                del d['sequence_id']
                 cols.append(d)
 
             table = self.add_table(out_table_name, data=in_table.data)
@@ -1352,10 +1358,14 @@ class {name}(Base):
         '''Update a table schema using a memo from intuit()'''
         from datetime import datetime, time, date
         from sqlalchemy.orm.exc import NoResultFound
+        import string
+        import re
 
         type_map = {int: 'integer', str: 'varchar', float: 'real',
                     datetime: 'datetime', date: 'date', time: 'time'}
 
+
+        ok_chars = string.digits + string.letters + string.punctuation + ' '
 
         with self.bundle.session as s:
 
@@ -1374,6 +1384,7 @@ class {name}(Base):
 
                     self.add_column(table, name,
                                     datatype=type_map[type_],
+                                    description= re.sub(r's\+',' ',''.join([x if x in ok_chars else ' ' for x in name ])),
                                     size=col.length if type_ == str else None,
                                     data = dict(has_codes=1) if has_codes else {})
 

@@ -726,7 +726,7 @@ class Column(Base):
         """
         import re
         try:
-            return re.sub('[^\w_]','_',name).lower()
+            return re.sub('_+','_',re.sub('[^\w_]','_',name).lower()).strip('_')
         except TypeError:
             raise TypeError('Trying to mangle name with invalid type of: '+str(type(name)))
 
@@ -1034,13 +1034,16 @@ Columns:
 
         s = sqlalchemy.orm.session.Session.object_session(self)
 
-
         name = Column.mangle_name(name)
 
-        try:
 
-            row = self.column(name)
-        except NoResultFound:
+        if not kwargs.get('fast', False):
+            try:
+
+                row = self.column(name)
+            except NoResultFound:
+                row = None
+        else:
             row = None
 
         if row:

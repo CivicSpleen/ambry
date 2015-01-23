@@ -79,7 +79,7 @@ class Filesystem(object):
         
         if not config:
             raise ConfigurationError('No filesystem cache by name of {}'.format(name))
-        
+
         return new_cache(config)
  
     @classmethod
@@ -179,16 +179,25 @@ class BundleFilesystem(Filesystem):
 
         return p
 
-    
 
     def build_path(self, *args):
-    
+        """Return a sub directory in the build area"""
         if len(args) > 0 and args[0] == self.BUILD_DIR:
             raise ValueError("Adding build to existing build path "+os.path.join(*args))
         
         args = (self.bundle.build_dir,) + args
         return self.path(*args)
 
+    @property
+    def source_store(self):
+        """Return the cache object for the store store, a location ( usually on the net ) where source
+        files that can't be downloaded from the source agency can be stored. """
+
+        return self.get_cache_by_name('source_store')
+
+    @property
+    def download_cache(self):
+        return self.get_cache_by_name('downloads')
 
     def meta_path(self, *args):
     
@@ -436,7 +445,7 @@ class BundleFilesystem(Filesystem):
                 else:
 
                     self.bundle.log("Downloading "+url)
-                    self.bundle.log("  --> "+file_path)
+                    self.bundle.log("  --> "+cache.path(file_path, missing_ok = True))
                     
                     resp = urllib2.urlopen(url)
                     headers = resp.info() #@UnusedVariable

@@ -589,7 +589,7 @@ class Partitions(object):
  
 
     
-    def new_geo_partition(self, clean=False, tables=None, data=None, shape_file=None,  **kwargs):
+    def new_geo_partition(self, clean=False, tables=None, data=None, shape_file=None,  logger=None, **kwargs):
         from sqlalchemy.orm.exc import  NoResultFound
 
 
@@ -604,7 +604,7 @@ class Partitions(object):
             if shape_file:
                 p.database.close()
 
-                p.load_shapefile(shape_file)
+                p.load_shapefile(shape_file, logger=logger)
 
         except ImportError:
             self.bundle.log("GDAL not installed; using non geo database")

@@ -492,7 +492,6 @@ class Warehouse(object):
         if (reset or not self._meta_get('cache_path')) and manifest.cache:
             self.cache_path = manifest.cache
 
-
         # Manifest data
         mf = self.wlibrary.files.install_manifest(manifest)
 
@@ -589,6 +588,7 @@ class Warehouse(object):
                 m = Manifest(section.content['path'])
                 self.install_manifest(m, force = force, level = level + 1)
 
+
         self._meta_set(manifest.uid, datetime.now().isoformat())
 
         # Delete all of the files ( extracts ) that were note in-installed
@@ -669,6 +669,9 @@ class Warehouse(object):
 
                 orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)
                 d = orig_column.dict
+
+                d['description']  = "{}; {}".format(orig_table.description, d['description'])
+
             except ValueError: # Coudn't split the col name, probl b/c the user added it in SQL
                 d = dict(name = col_name)
 
@@ -751,7 +754,8 @@ class Warehouse(object):
                     s.add(t)
 
             if (t.type == 'table' and t.installed) or t.type in ('view','mview'):
-                if not 'sample' in t.data:
+                if not 'sample' in t.data or not t.data['sample']:
+
                     self.build_sample(t)
                     s.add(t)
 

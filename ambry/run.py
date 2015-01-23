@@ -209,23 +209,28 @@ class RunConfig(object):
             else:
                 raise
 
+        fs = self.group('filesystem')
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
+
         # If the value is a string, rather than a dict, it is for a
         # FsCache. Re-write it to be the expected type.
 
         if isinstance(e, basestring):
-            e = dict(dir=e)
+            import urlparse
+            parts = urlparse.urlparse(e)
 
-
-        fs = self.group('filesystem') 
-        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
-
-
+            if not parts.scheme:
+                e = dict(dir=e)
+            else:
+                from ckcache import parse_cache_string
+                e = parse_cache_string(e, root_dir)
 
         e =  self._sub_strings(e, {
                                      'upstream': lambda k,v: self.filesystem(v),
                                      'account': lambda k,v: self.account(v),
                                      'dir' : lambda k,v: v.format(root=root_dir)
                                      }  )
+
 
         return e
 

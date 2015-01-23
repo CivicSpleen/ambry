@@ -572,25 +572,51 @@ class Library(object):
             raise NotFoundError("Did not find table with proto_vid {} in library {}"
                                 .format(proto_vid, self.database.dsn))
 
-    def proto_tree(self, proto_vid):
-        """Create a list of ancestors for the given proto_vid, for columns"""
-        from identity import ObjectNumber, TableNumber, ColumnNumber
-        proto_cols = set()
-        lopp_n = 0
+    @memoize
+    def _cached_protos(self):
+        return self.doc_cache.get_protos()
 
-        while True:
-            on = ObjectNumber.parse(proto_vid)
+    def resolve_protos(self,vid):
+        """Return a list of prototypes that are parents of the given column"""
 
-            # Actually, it should always be a col number, but
-            # this can't hurt
-            if isinstance(on, TableNumber):
-                tn = on.rev(None)
-                cn = ColumnNumber(tn, 1)
+        pd = self._cached_protos()
+
+
+        def resolve_proto(v, i=[]):
+
+            r = pd.get(v, False)
+
+            if r:
+                return resolve_proto(r, i + [v])
             else:
-                cn = on.rev(None)
-                tn = cn.as_table.rev(None)
+                return i + [v]
 
-            proto_cols.add(str(cn))
+        return resolve_proto(vid)[1:]
+
+    def find_table_links(self, vid):
+        from ..identity import ObjectNumber, TableNumber, ColumnNumber
+
+        on = ObjectNumber.parse(vid)
+
+        if isinstance(on, ColumnNumber):
+            cols = [vid]
+        elif isinstance(on, TableNumber):
+            cols = [c.vid for c in self.table(vid).columns]
+        else:
+            raise ValueError()
+
+
+        for col in cols:
+
+            for link_col in self.resolve_protos(col):
+
+                t_vid = str(ObjectNumber.parse(link_col).as_table)
+
+                print link_col, t_vid
+
+
+
+
 
     def partition(self, vid):
         from ..orm import Partition
@@ -1320,6 +1346,32 @@ class Library(object):
             self.logger.info("Syncing {} dsn={}".format(f.ref, f.path))
             self.sync_warehouse(w)
 
+    def sync_bundle_doc(self, b, cache=None, force=True):
+        """Write the JSON for a single bundle"""
+
+        dc = self.doc_cache if not cache else cache
+
+        dc.put_bundle(b, force=force)
+        dc.put_schema(b, force=force)
+        dc.put_schemacsv(b, force=force)
+
+        dc.update_library_bundle(b, self)
+
+        tables = {}
+        protos = {}
+        for t in b.schema.tables:
+            dc.put_table(t, force=force)
+
+            tables[t.vid] = t.dict
+
+            for c in t.columns:
+                if c.proto_vid:
+                    protos[c.vid] = c.proto_vid
+                    protos[c.id_] = c.proto_vid
+
+        dc.update_tables(tables)
+        dc.update_protos(protos)
+
 
     def sync_doc_json(self, cache = None, clean = False):
         """Write the JSON for all bundles and the library"""
@@ -1333,12 +1385,6 @@ class Library(object):
         ##
         # Each of the bundles and schemas
 
-        tables = dc.get_tables()
-
-        if not tables:
-            tables = {}
-
-        processed_bundles = 0
         for vid in self.list():
 
             ident = self.resolve(vid)
@@ -1352,26 +1398,14 @@ class Library(object):
                 if not dc.get_bundle(vid) or clean:
 
                     self.logger.info("Processing json for {}".format(vid))
-                    processed_bundles += 1
 
-                    dc.put_bundle(b, force = clean)
-                    dc.put_schema(b, force = clean)
-                    dc.put_schemacsv(b, force=clean)
-
-                    for t in b.schema.tables:
-                        dc.put_table(t, force = clean)
-
-                        tables[t.vid] = t.dict
-
-
+                    self.sync_bundle_doc(b, dc, force=clean)
 
             except Exception as e:
                 self.logger.error("Error on {}: {}".format(vid, e))
                 raise
 
-        dc.put_tables(tables)
 
-        ##
         ## Manifests
         from ambry.warehouse.manifest import Manifest
 
@@ -1397,11 +1431,7 @@ class Library(object):
                 self.logger.error("Failed to document warehouse '{}': {}".format(s.path, e))
                 raise
 
-        ## The Library
-        ## The 'or True' part forces rebuilding the index, until we can do that on demand,
-        ## we properly check for updated bundles, but no manifests or stores.
 
-        dc.put_library(self, force=(clean or (processed_bundles > 0) or True))
 
 
     @property
@@ -1479,11 +1509,8 @@ Remotes:  {remotes}
                         manifests = [ m.ref for m in f.linked_manifests ],
                         cache=f.data['cache'],
                         class_type=f.type_) for f in self.stores},
-                    bundles={b.identity.vid: dict(
-                        about=b.metadata.dict['about'],
-                        identity=b.identity.dict,
-                        other_versions=[ ov.dict for ov in b.identity.data['other_versions'] ]
-                    ) for b in self.list_bundles()}
+                    # This is the slow one, with about half in setting 'about'.
+                    bundles={b.identity.vid: b.summary_dict for b in self.list_bundles()}
         )
 
     @property

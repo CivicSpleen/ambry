@@ -589,5 +589,7 @@ def library_unknown(args, l, config):
     fatal(args)
 
 def library_test(args, l, config):
-    print l.schema_as_csv()
+    import time
+    from ambry.util import toposort
 
+    print l.find_table_links('t03b5F001')

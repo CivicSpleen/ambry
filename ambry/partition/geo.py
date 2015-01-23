@@ -215,7 +215,7 @@ class GeoPartition(SqlitePartition):
             self.database.connection.execute( "UPDATE {} SET {}".format(table.name, ','.join(clauses)))
 
 
-    def load_shapefile(self, path):
+    def load_shapefile(self, path, logger= None):
         """
         Load a shapefile into the partition. Loads the features and inserts them using an inserter.
 
@@ -284,6 +284,8 @@ class GeoPartition(SqlitePartition):
                 d['geometry'] = g.ExportToWkt()
 
                 ins.insert(d)
+
+                if logger: logger("Importing shapefile to '{}'".format(self.identity.name))
 
 
     def __repr__(self):

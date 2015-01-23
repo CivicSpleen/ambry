@@ -95,9 +95,7 @@ def bundle_command(args, rc):
           'prepare': ['clean'],
           'build' : ['clean', 'prepare'],
           'update' : ['clean', 'prepare'],
-          'install' : ['clean', 'prepare', 'build'],
-          'submit' : ['clean', 'prepare', 'build'],
-          'extract' : ['clean', 'prepare', 'build']
+          'install' : ['clean', 'prepare', 'build']
           }
 
     phases = []
@@ -167,31 +165,35 @@ def bundle_parser(cmd):
 
     asp = command_p.add_subparsers(title='Config subcommands', help='Subcommand for operations on a bundle file')
 
-    # Config/Rewrite Command
+
     sp = asp.add_parser('rewrite', help='Re-write the bundle file, updating the formatting')     
     sp.set_defaults(subsubcommand='rewrite')
 
-    # Config/Dump Command
+    #
     sp = asp.add_parser('dump', help='dump the configuration')     
     sp.set_defaults(subsubcommand='dump')
 
-    # Config/Schema Command
+    #
     sp = asp.add_parser('schema', help='Print the schema')     
     sp.set_defaults(subsubcommand='schema')
 
-    # Config/Incver Command
+    #
     sp = asp.add_parser('incver', help='Increment the version number')
     sp.set_defaults(subsubcommand='incver')
 
-    # Config/Incver Command
+    #
     sp = asp.add_parser('newnum', help='Get a new dataset number')
     sp.set_defaults(subsubcommand='newnum')
     sp.add_argument('-k', '--key', default=False, help="Set the number server key, or 'self' for self assignment ")
 
-    # Config/Incver Command
+    #
     sp = asp.add_parser('s3urls', help='Add all of the URLS below an S3 prefix as sources. ')
     sp.set_defaults(subsubcommand='s3urls')
     sp.add_argument('term', type=str, nargs=1, help='S3url with buckets and prefix')
+
+    #
+    sp = asp.add_parser('scrape', help='Scrape all of the links from the page references in external_documentation.download')
+    sp.set_defaults(subsubcommand='scrape')
 
     # Info command
     command_p = sub_cmd.add_parser('info', help='Print information about the bundle')
@@ -213,8 +215,10 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('meta', help='Build or install metadata')
     command_p.set_defaults(subcommand='meta')
     
-    command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')     
-                     
+    command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
+    command_p.add_argument('-f', '--fast', default=False, action="store_true",
+                           help='Load the schema faster by not checking for extant columns')
+
     #
     # Prepare Command
     #
@@ -223,7 +227,8 @@ def bundle_parser(cmd):
     
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     command_p.add_argument('-r','--rebuild', default=False,action="store_true", help='Rebuild the schema, but dont delete built files')
-    
+    command_p.add_argument('-f','--fast', default=False,action="store_true", help='Load the schema faster by not checking for extant columns')
+
     #
     # Build Command
     #
@@ -241,26 +246,7 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='update')
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
 
-    #
-    # Extract Command
-    #
-    command_p = sub_cmd.add_parser('extract', help='Extract data into CSV and TIFF files. ')
-    command_p.set_defaults(subcommand='extract')
-    command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
-    command_p.add_argument('-n','--name', default=None,action="store", help='Run only the named extract, and its dependencies')
-    command_p.add_argument('-f','--force', default=False,action="store_true", help='Ignore done_if clauses; force all extracts')
-    
-    
-    #
-    # Submit Command
-    #
-    command_p = sub_cmd.add_parser('submit', help='Submit extracts to the repository ')
-    command_p.set_defaults(subcommand='submit')
-    command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')   
-    command_p.add_argument('-r','--repo',  default=None, help='Name of the repository, defined in the config file')
-    command_p.add_argument('-n','--name', default=None,action="store", help='Run only the named extract, and its dependencies')
-    command_p.add_argument('-f','--force', default=False,action="store_true", help='Ignore done_if clauses; force all extracts')
-    
+
     #
     # Install Command
     #
@@ -450,28 +436,6 @@ def bundle_run(args, b, st, rc):
     print "RETURN: ", r
 
 
-def bundle_submit(args, b, st, rc):
-
-    if b.pre_submit():
-        b.log("---- Submit ---")
-        if b.submit():
-            b.post_submit()
-            b.log("---- Done Submitting ---")
-        else:
-            b.log("---- Submit exited with failure ---")
-    else:
-        b.log("---- Skipping Submit ---- ")
-
-def bundle_extract(args, b, st, rc):
-    if b.pre_extract():
-        b.log("---- Extract ---")
-        if b.extract():
-            b.post_extract()
-            b.log("---- Done Extracting ---")
-        else:
-            b.log("---- Extract exited with failure ---")
-    else:
-        b.log("---- Skipping Extract ---- ")
 
 def bundle_update(args, b, st, rc):
 
@@ -585,8 +549,74 @@ def bundle_config(args, b, st, rc):
 
         prt("New object number: {}".format(ident.id_))
 
+    elif args.subsubcommand == 'scrape':
+        return bundle_config_scrape(args, b, st, rc)
+
     else:
         err("Unknown subsubcommand for 'config' subcommand: {}".format(args))
+
+
+def bundle_config_scrape(args, b, st, rc):
+
+    from bs4 import BeautifulSoup
+    import urllib2, urlparse
+    import os
+
+    page_url = b.metadata.external_documentation.download.url
+
+    parts = list(urlparse.urlsplit(page_url))
+
+    parts[2] = ''
+    root_url = urlparse.urlunsplit(parts)
+
+    html_page = urllib2.urlopen(page_url)
+    soup = BeautifulSoup(html_page)
+
+    d = dict(external_documentation={}, sources = {} )
+
+    for link in soup.findAll('a'):
+        text = str(link.string)
+        url = link.get('href')
+
+        if 'javascript' in url:
+            continue;
+
+        if url.startswith('http'):
+            pass
+        elif url.startswith('/'):
+            url = os.path.join(root_url, url)
+        else:
+            url = os.path.join(page_url, url)
+
+        base = os.path.basename(url)
+
+        if '#' in base:
+            continue
+
+        try:
+            base, ext = base.split('.',1)
+        except ValueError:
+            ext = 'html'
+
+        if ext.lower() in ('zip', 'csv','xls','xlsx','txt'):
+            d['sources'][base] = dict(
+                url = url,
+                description = text
+            )
+        elif ext.lower() in ('pdf','html'):
+            d['sources'][base] = dict(
+                url=url,
+                description=text,
+                title=text
+            )
+        else:
+            pass
+
+
+    import yaml
+    print yaml.dump(d, default_flow_style=False)
+
+
 
 def bundle_config_s3urls(args, b, st, rc):
     from ..cache import new_cache, parse_cache_string
@@ -618,3 +648,5 @@ def bundle_config_s3urls(args, b, st, rc):
 
 def bundle_repopulate(args, b, st, rc):
     return b.repopulate()
+
+

@@ -293,7 +293,7 @@ def warehouse_list(args, w, config):
 def warehouse_install(args, w ,config):
     from ambry.warehouse.manifest import Manifest
 
-    m = Manifest(args.term)
+    m = Manifest(args.term, logger = w.logger)
 
     if args.clean:
         w.clean()
