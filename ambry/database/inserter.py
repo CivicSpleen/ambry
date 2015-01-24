@@ -86,12 +86,16 @@ class ValueWriter(InserterInterface):
 
         self.cache_size = cache_size
         self.statement = None
-        
+
+        self.build_state = None
+
         if text_factory:
             self.db.engine.raw_connection().connection.text_factory = text_factory
 
     def __enter__(self):
         from ..partitions import Partitions
+
+        self.build_state = Partitions.STATE.BUILDING
         self.db.partition.set_state(Partitions.STATE.BUILDING)
         return self
         
@@ -99,19 +103,26 @@ class ValueWriter(InserterInterface):
         from ..partitions import Partitions
         global_logger.debug("rollback {}".format(repr(self.session)))
         self.session.rollback()
+        self.build_state = Partitions.STATE.ERROR
         self.db.partition.set_state(Partitions.STATE.ERROR)
 
     def commit_end(self):
         from ..partitions import Partitions
         global_logger.debug("commit end {}".format(repr(self.session)))
         self.session.commit()
+        self.build_state = Partitions.STATE.BUILT
         self.db.partition.set_state(Partitions.STATE.BUILT)
 
     def commit_continue(self):
         from ..partitions import Partitions
         global_logger.debug("commit continue {}".format(repr(self.session)))
         self.session.commit()
-        self.db.partition.set_state(Partitions.STATE.BUILDING)
+
+        # We don't want this executing every committ since it is hard to make sure it happens
+        # in a bundle session, which can result in the database being locked, in MP runs. 
+        if self.build_state != Partitions.STATE.BUILDING:
+            self.build_state = Partitions.STATE.BUILDING
+            self.db.partition.set_state(Partitions.STATE.BUILDING)
 
     def close(self):
 

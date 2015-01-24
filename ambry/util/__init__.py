@@ -1143,7 +1143,7 @@ class Constant:
 
 
 class session_context(object):
-    """Provide a transactional scope around a series of Sqlalchemyoperations."""
+    """Provide a transactional scope around a series of Sqlalchemy operations."""
 
     def __init__(self, sessionmaker_class):
         self.sessionmaker_class = sessionmaker_class
@@ -1151,11 +1151,11 @@ class session_context(object):
 
     def __enter__(self):
         self.session = self.sessionmaker_class()
+
         return self.session
 
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-
 
         if exc_type is not None:
             # Got an exception
