@@ -1307,16 +1307,16 @@ class BuildBundle(Bundle):
 
             self._revise_schema()
 
-        self.schema.move_revised_schema()
+            self.schema.move_revised_schema()
 
-        self.post_build_finalize()
+            self.post_build_finalize()
 
-        self.post_build_write_partitions()
+            self.post_build_write_partitions()
 
-        self.post_build_write_config()
+            self.post_build_write_config()
 
-        self.set_value('process', 'last', datetime.now().isoformat())
-        self.set_build_state( 'built')
+            self.set_value('process', 'last', datetime.now().isoformat())
+            self.set_build_state( 'built')
 
         self.close()
 

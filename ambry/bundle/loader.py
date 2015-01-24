@@ -204,7 +204,6 @@ class ExcelBuildBundle(CsvBundle):
 
     def get_wb_sheet(self, source):
 
-
         if not source:
             source = self.metadata.sources.keys()[0]
 
@@ -228,7 +227,6 @@ class ExcelBuildBundle(CsvBundle):
     def gen_rows(self, source=None, as_dict=False):
         """Generate rows for a source file. The source value ust be specified in the sources config"""
         from xlrd import open_workbook
-        from xlrd.biffh import XLRDError
 
         fn, sheet_num = self.get_wb_sheet(source)
 
