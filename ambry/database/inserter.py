@@ -119,7 +119,7 @@ class ValueWriter(InserterInterface):
         self.session.commit()
 
         # We don't want this executing every committ since it is hard to make sure it happens
-        # in a bundle session, which can result in the database being locked, in MP runs. 
+        # in a bundle session, which can result in the database being locked, in MP runs.
         if self.build_state != Partitions.STATE.BUILDING:
             self.build_state = Partitions.STATE.BUILDING
             self.db.partition.set_state(Partitions.STATE.BUILDING)
