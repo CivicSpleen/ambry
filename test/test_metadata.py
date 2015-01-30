@@ -47,7 +47,6 @@ dependencies: {}
 documentation:
     main: null
     readme: null
-extract: {}
 identity:
     bspace: null
     btime: null
@@ -78,6 +77,7 @@ sources:
         url: http://yahoo.com
 versions:
     3:
+        date: null
         description: d3
         version: s3
 views: {}

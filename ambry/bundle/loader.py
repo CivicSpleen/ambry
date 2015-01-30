@@ -86,15 +86,18 @@ class CsvBundle(LoaderBundle):
 
         with open(fn) as f:
 
+            dialect = csv.Sniffer().sniff(f.read(2048))
+            f.seek(0)
+
             if as_dict:
-                r = csv.DictReader(f)
+                r = csv.DictReader(f, dialect)
                 for row in r:
                     row['id'] = None
                     yield row
             else:
                 # It might seem inefficient to return the header every time, but it really adds only a
                 # fraction of a section for millions of rows.
-                r = csv.reader(f)
+                r = csv.reader(f, dialect)
                 header = ['id'] + r.next()
 
                 header = [ x if x else "column{}".format(i) for i, x in enumerate(header)]
@@ -120,34 +123,33 @@ class CsvBundle(LoaderBundle):
         if not self.run_args.get('clean', None):
             self._prepare_load_schema()
 
-        for source_name, source in self.metadata.sources.items():
+        with self.session:
+            for source_name, source in self.metadata.sources.items():
 
-            table_name = source.table if source.table else  source_name
+                table_name = source.table if source.table else  source_name
 
-            table_desc = source.description if source.description else "Table generated from {}".format(source.url)
+                table_desc = source.description if source.description else "Table generated from {}".format(source.url)
 
-            data = {}
+                data = dict(source)
+                del data['description']
+                del data['url']
 
-            if source.time: data['time'] = source.time
-            if source.space: data['space'] = source.space
-            if source.grain: data['grain'] = source.grain
 
-            with self.session:
                 table = self.schema.add_table(table_name, description=table_desc, data = data)
 
-            header, row = self.gen_rows(source_name, as_dict=False).next()
+                header, row = self.gen_rows(source_name, as_dict=False).next()
 
-            header = [ x for x in header if x]
+                header = [ x for x in header if x]
 
-            def itr():
-                for header, row in self.gen_rows(source_name, as_dict=False):
-                    yield row
+                def itr():
+                    for header, row in self.gen_rows(source_name, as_dict=False):
+                        yield row
 
-            self.schema.update_from_iterator(table_name,
-                               header = header,
-                               iterator=itr(),
-                               max_n=1000,
-                               logger=self.init_log_rate(500))
+                self.schema.update_from_iterator(table_name,
+                                   header = header,
+                                   iterator=itr(),
+                                   max_n=1000,
+                                   logger=self.init_log_rate(500))
 
 
         return True

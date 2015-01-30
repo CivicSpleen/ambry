@@ -860,6 +860,8 @@ class Schema(object):
             for c in cols:
                 self.add_column(table, **c)
 
+            return table
+
     @staticmethod
     def _dump_gen(self, table_name=None):
         """Yield schema row for use in exporting the schema to other
@@ -876,8 +878,11 @@ class Schema(object):
                               "measure","units","universe", 'proto_vid', "derivedfrom"]
 
         # Collects what fields actually exist
-        opt_col_fields_set = set()
-        
+        opt_fields_set = set()
+
+        all_opt_table_fields = [ "keywords", "universe"]
+
+
         if table_name:
             tables = [ table for table in self.tables if table.name == table_name]
         else:
@@ -888,16 +893,22 @@ class Schema(object):
         for table in tables:
 
             if table.proto_vid:
-                opt_col_fields_set.add("proto_vid")
+                opt_fields_set.add("proto_vid")
+
+            for field in all_opt_table_fields:
+
+                v = getattr(table, field)
+                if v and field not in opt_fields_set:
+                    opt_fields_set.add(field)
 
             for col in table.columns:
 
                 if col.proto_vid:
-                    opt_col_fields_set.add("proto_vid")
+                    opt_fields_set.add("proto_vid")
 
                 for index_set in [col.indexes, col.uindexes, col.unique_constraints]:
                     if not index_set:
-                        continue # HACK. This probably shouldnot happen
+                        continue # HACK. This probably should not happen
 
                     for idx in index_set.split(','):
                         
@@ -910,8 +921,8 @@ class Schema(object):
                 for field in all_opt_col_fields:
 
                     v = getattr(col, field)
-                    if v and field not in opt_col_fields_set:
-                        opt_col_fields_set.add(field)
+                    if v and field not in opt_fields_set:
+                        opt_fields_set.add(field)
 
                 for k,v in col.data.items():
                     data_fields.add(k) 
@@ -924,7 +935,7 @@ class Schema(object):
         data_fields = sorted(data_fields)
 
         # Put back into same order as in all_opt_col_fields
-        opt_col_fields = [ field for field in all_opt_col_fields if field in opt_col_fields_set]
+        opt_col_fields = [ field for field in all_opt_col_fields if field in opt_fields_set]
 
         indexes = OrderedDict(sorted(indexes.items(), key=lambda t: t[0]))
 
@@ -972,6 +983,14 @@ class Schema(object):
                     row['id'] = table.id_
                     if table.proto_vid:
                         row['proto_vid'] = table.proto_vid
+
+                    for field in all_opt_table_fields:
+
+                        v = getattr(table, field)
+
+                        if v and field in opt_fields_set:
+                            row[field] = v
+
                 else:
                     row['id'] = col.id_
                     if col.proto_vid:
@@ -1384,7 +1403,9 @@ class {name}(Base):
 
                     self.add_column(table, name,
                                     datatype=type_map[type_],
-                                    description= re.sub(r's\+',' ',''.join([x if x in ok_chars else ' ' for x in name ])),
+                                    description= (re.sub(r's\+',' ',
+                                                         ''.join([x if x in ok_chars else ' ' for x in name ]))
+                                    ).strip(),
                                     size=col.length if type_ == str else None,
                                     data = dict(has_codes=1) if has_codes else {})
 

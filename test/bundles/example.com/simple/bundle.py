@@ -31,9 +31,7 @@ class Bundle(BuildBundle):
                     row['pop100'] = random.randint(0,100)
                 
                     ins.insert(row)
-        
-        
-        
+
         p = self.partitions.new_partition(table='links')
         p.clean()
         

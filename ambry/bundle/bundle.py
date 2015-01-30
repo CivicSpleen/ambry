@@ -493,7 +493,7 @@ class DbBundleBase(Bundle):
     def summary_dict(self):
         """A reduced version of the dict
 
-        WARNING: This will only produces 'other_versions' if the bundle is produced from library.list_bundles
+        WARNING: This will only produce 'other_versions' if the bundle is produced from library.list_bundles
         """
 
         return dict(
@@ -501,8 +501,6 @@ class DbBundleBase(Bundle):
             identity=self.identity.dict,
             other_versions=[ov.dict for ov in self.identity.data.get('other_versions',[])]
         )
-
-
 
 class DbBundle(DbBundleBase):
 

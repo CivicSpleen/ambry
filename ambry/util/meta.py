@@ -96,6 +96,7 @@ class Metadata(object):
         Unlike Terms, the Group class members are converted into object members, so the configuration data
         """
         import copy
+        from collections import OrderedDict
 
         self._members = {name: attr for name, attr in type(self).__dict__.items() if isinstance(attr, Group)}
 
@@ -251,6 +252,7 @@ class Metadata(object):
 
     def groups_by_file(self):
         """Returns a map of the files defined in groups, and the groups that define those files"""
+        from collections import OrderedDict
         d = {}
 
         for name, m in self._members.items():
@@ -263,6 +265,7 @@ class Metadata(object):
                 d[file_] = []
 
             d[file_].append(m)
+
 
         return d
 

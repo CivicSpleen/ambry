@@ -9,14 +9,16 @@ from ..util.meta import *
 class About(DictGroup):
 
     title = ScalarTerm()
-    license = ScalarTerm()
-    rights = ScalarTerm()
     subject = ScalarTerm()
     summary = ScalarTerm()
-
-    rights = ScalarTerm()
-    tags = ListTerm()
-    groups = ListTerm()
+    space = ScalarTerm()
+    time = ScalarTerm()
+    grain = ScalarTerm()
+    access = ScalarTerm(store_none=False) # Internal, Private, Controlled, Restrcted, Registered, Licensed, Public
+    license = ScalarTerm(store_none=False)
+    rights = ScalarTerm(store_none=False)
+    tags = ListTerm(store_none=False)
+    groups = ListTerm(store_none=False)
 
 class Documentation(DictGroup):
 
@@ -76,7 +78,7 @@ class SourceTerm(DictTerm):
     grain = ScalarTerm(store_none=False)  # Specify a grain component
     table = ScalarTerm(store_none=False)  # For auto imports, name of table to load into.
     conversion = ScalarTerm(store_none=False)  # An alternate URL or regular expression for a file in the source store
-
+    foreign_key = ScalarTerm(store_none=False)  # ID of the foreign key for the table.
 
     def __nonzero__(self):
         return bool(self.url or self.file or self.description or self.dd_url)
@@ -130,19 +132,17 @@ class Top(Metadata):
 
     _non_term_file = 'meta/build.yaml'
 
-
     about = About(file='bundle.yaml')
+    identity = Identity(file='bundle.yaml')
+    names = Names(file='bundle.yaml')
     contact_source = Contact(file='bundle.yaml')
     contact_bundle = Contact(file='bundle.yaml')
     sources = Sources(file='meta/build.yaml')
     dependencies = Dependencies(file='meta/build.yaml')
-    identity = Identity(file='bundle.yaml')
-    names = Names(file='bundle.yaml')
     build = Build(file='meta/build.yaml')
-    extract = Extract(file='meta/build.yaml')
     views = Views(file='meta/build.yaml')
     external_documentation = ExtDoc(file='bundle.yaml')
     documentation = Documentation(file='meta/doc.yaml')
     versions = Versions(file='bundle.yaml')
-    process = Process()
+    process = Process(file='bundle.yaml')
 

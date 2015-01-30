@@ -526,7 +526,9 @@ class BundleFilesystem(Filesystem):
         if isinstance(f, basestring):
             
             if not os.path.exists(f):
-                f = self.path(f) # Assume it is relative to the bundle filesystem
+                f = self.bundle.source(f)
+                if not f:
+                    f = self.path(f) # Assume it is relative to the bundle filesystem
             
             f = open(f,'rb')
             opened = True
