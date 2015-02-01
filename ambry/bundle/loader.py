@@ -43,7 +43,7 @@ class CsvBundle(LoaderBundle):
     """A Bundle variant for loading CSV files"""
 
     def get_source(self, source):
-        """Get the source file. If the file does nto end in a CSV file, replace it with a CSV extension
+        """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
         and look in the source store cache """
         import os
 
@@ -55,10 +55,10 @@ class CsvBundle(LoaderBundle):
         if fn.endswith('.zip'):
             fn = self.filesystem.unzip(fn)
 
-
+        # If the file we are given isn't actually a CSV file, we might have manually
+        # converted it to a CSV and put it in the source store.
         if not fn.lower().endswith('.csv'):
             cache = self.filesystem.source_store
-
 
             if cache:
                 bare_fn, ext = os.path.splitext(os.path.basename(fn))
@@ -86,7 +86,7 @@ class CsvBundle(LoaderBundle):
 
         with open(fn) as f:
 
-            dialect = csv.Sniffer().sniff(f.read(2048))
+            dialect = csv.Sniffer().sniff(f.read(5000))
             f.seek(0)
 
             if as_dict:

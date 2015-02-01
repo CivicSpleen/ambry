@@ -416,6 +416,7 @@ def bundle_install(args, b, st, rc):
     return True
 
 def bundle_run(args, b, st, rc):
+    import sys
 
     #
     # Run a method on the bundle. Can be used for testing and development.
@@ -430,6 +431,11 @@ def bundle_run(args, b, st, rc):
     if not callable(f):
         raise TypeError("Got object for name '{}', but it isn't a function".format(args.method))
 
+    # Install the python directory for Ambry builds so we can use bundle defined imports
+    python_dir = b.config.python_dir()
+
+    if python_dir and python_dir not in sys.path:
+        sys.path.append(python_dir)
 
     r =  f(*args.args)
 
