@@ -157,7 +157,7 @@ class SqliteAttachmentMixin(object):
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
-    SCHEMA_VERSION = 23
+    SCHEMA_VERSION = 25
 
     _lock = None
 
@@ -434,6 +434,29 @@ select 'Loading CSV file','{path}';
         return count, diff
 
 
+    def index_for_search(self, vid, topic, keywords):
+        """
+        Add a search document to the full-text search index.
+
+        :param vid: Versioned ID for the object. Should be a dataset, partition table or column
+        :param topic: A text document or description.
+        :param keywords: A list of keywords
+        :return:
+        """
+
+
+
+
+    def search(self, topic, keywords):
+        """
+
+        Search the full text search index.
+
+        :param topic:
+        :param keywords:
+        :return:
+        """
+
 class BundleLockContext(object):
     
     def __init__( self, bundle):
@@ -672,6 +695,8 @@ def _on_connect_update_sqlite_schema(conn, con_record):
     '''Perform on-the-fly schema updates based on the user version'''
     from sqlalchemy.exc import OperationalError
 
+
+
     version = conn.execute('PRAGMA user_version').fetchone()[0]
     if version:
         version = int(version)
@@ -718,7 +743,6 @@ def _on_connect_update_sqlite_schema(conn, con_record):
             except:
                 pass
 
-
         if version < 20:
 
             try:
@@ -728,8 +752,6 @@ def _on_connect_update_sqlite_schema(conn, con_record):
             except:
                 pass
 
-
-
         if version < 21:
             try:
                 conn.execute("ALTER TABLE tables ADD COLUMN t_type VARCHAR(20) DEFAULT 'table'; ")
@@ -738,7 +760,6 @@ def _on_connect_update_sqlite_schema(conn, con_record):
 
         if version < 22:
             from ..orm import Code
-
             Code.__table__.create(bind=conn.engine)
 
         if version < 23:
@@ -747,6 +768,19 @@ def _on_connect_update_sqlite_schema(conn, con_record):
                 conn.execute('ALTER TABLE columns ADD COLUMN c_derivedfrom VARCHAR(200)')
             except Exception as e:
                 pass
+
+        if version < 24:
+            from ..orm import SearchDoc
+
+            try:
+                SearchDoc.__table__.create(bind=conn.engine)
+            except Exception as e:
+                pass
+
+        if version < 25:
+            from ..orm import ColumnStat
+
+            ColumnStat.__table__.create(bind=conn.engine)
 
     if version < SqliteDatabase.SCHEMA_VERSION:
         conn.execute('PRAGMA user_version = {}'.format(SqliteDatabase.SCHEMA_VERSION))

@@ -56,16 +56,23 @@ class Schema(object):
         # build should be re-run
         self.new_code_tables = False
 
+        self._dataset = None
 
     @property
-    @memoize
     def dataset(self):
         '''Initialize the identity, creating a dataset record, 
         from the bundle.yaml file'''
-        
+        from sqlalchemy.orm.util import object_state
+
         from ambry.orm import Dataset
 
-        return (self.bundle.database.session.query(Dataset).one())
+        if self._dataset and object_state(self._dataset).detached:
+            self._dataset = None
+
+        if not self._dataset:
+            self._dataset =  (self.bundle.database.session.query(Dataset).one())
+
+        return self._dataset
 
     def clean(self):
         '''Delete all tables and columns. 
@@ -97,7 +104,7 @@ class Schema(object):
     @classmethod
     def get_table_from_database(cls, db, name_or_id, session=None, d_vid=None):
         '''Return the orm.Table record from the bundle schema '''
-
+        from dbexceptions import NotFoundError
         from ambry.orm import Table
         
         import sqlalchemy.orm.exc
@@ -126,15 +133,15 @@ class Schema(object):
                         ).one())
                 
         except sqlalchemy.orm.exc.NoResultFound as e:
-            raise sqlalchemy.orm.exc.NoResultFound("No table for name_or_id: '{}'".format(name_or_id))
+            raise NotFoundError("No table for name_or_id: '{}'".format(name_or_id))
 
     def table(self, name_or_id, session = None):
         '''Return an orm.Table object, from either the id or name. This is the cleaa method version
         of get_table_from_database'''
 
+
         if session is None:
             session = self.bundle.database.session
-
 
         return Schema.get_table_from_database(self.bundle.database, name_or_id,
                                               session = session,
@@ -148,14 +155,13 @@ class Schema(object):
 
         return None
 
-    def add_table(self, name,  **kwargs):
+    def add_table(self, name, add_id = False,  **kwargs):
         '''Add a table to the schema, or update it it already exists.
 
         If updating, will only update data.
         '''
         from orm import Table
-        from sqlalchemy.orm.exc import NoResultFound
-        from identity import TableNumber, ObjectNumber
+        from dbexceptions import NotFoundError
 
 
         if not self.table_sequence:
@@ -170,7 +176,7 @@ class Schema(object):
         if not kwargs.get('fast',False):
             try:
                 row = self.table(name)
-            except NoResultFound as e:
+            except NotFoundError as e:
                 row = None
         else:
             row = None
@@ -207,6 +213,9 @@ class Schema(object):
             self.bundle.database.session.merge(row)
         else:
             self.bundle.database.session.add(row)
+
+        if add_id:
+            self.add_column(row, 'id', datatype = 'integer', is_primary_key = True)
 
         return row
 
@@ -345,10 +354,7 @@ class Schema(object):
         if driver == 'sqlite' or driver != 'postgres' :
             if column.is_primary_key and column.datatype == Column.DATATYPE_INTEGER64:
                 column.datatype = Column.DATATYPE_INTEGER # Required to trigger autoincrement
-              
-              
-        #print driver, column.name, column.size, column.default
-                
+
         type_ =  Column.types[column.datatype][0]
 
 
@@ -626,7 +632,8 @@ class Schema(object):
 
                         t = self.add_table(row['table'], fast = fast, **table_row)
                     except Exception as e:
-                        errors.append((None,None," Failed to add table: {}. Row={}. Exception={}".format(row['table'], row, e)))
+                        errors.append((None,None," Failed to add table: {}. Row={}. Exception={}".format(row['table'],
+                                                                                                         dict(row), e)))
                         return warnings, errors
 
                     new_table = False
@@ -1229,6 +1236,8 @@ class {name}(Base):
 
         header = ['table','column','key','value','description']
 
+        count = 0
+
         with open(self.bundle.filesystem.path('meta',self.bundle.CODE_FILE), 'w') as f:
 
             w = csv.writer(f, encoding='utf-8')
@@ -1245,11 +1254,17 @@ class {name}(Base):
                         ]
 
                         w.writerow(row)
+                        count += 1
+
+        if not count:
+            import os
+            os.remove(self.bundle.filesystem.path('meta',self.bundle.CODE_FILE))
 
 
     def read_codes(self):
         """Read codes from a codes.csv file back into the schema"""
         import csv
+        from dbexceptions import NotFoundError
 
         with open(self.bundle.filesystem.path('meta', self.bundle.CODE_FILE), 'r') as f:
 
@@ -1258,14 +1273,17 @@ class {name}(Base):
             column = None
             for row in r:
 
-                if not table or table.name != row['table']:
-                    table = self.table(row['table'])
-                    column = None
+                try:
+                    if not table or table.name != row['table']:
+                        table = self.table(row['table'])
+                        column = None
 
-                if not column or column.name != row['column']:
-                    column = table.column(row['column'])
+                    if not column or column.name != row['column']:
+                        column = table.column(row['column'])
 
-                column.add_code(row['key'], row['value'], row['description'])
+                    column.add_code(row['key'], row['value'], row['description'])
+                except NotFoundError:
+                    self.bundle.error("Skipping code '{}' for non existent table '{}".format(row['key'],row['table']))
 
 
     @property
@@ -1373,8 +1391,18 @@ class {name}(Base):
     #
     #
 
-    def _update_from_intuiter(self, table_name, intuiter, logger=None, description=None):
-        '''Update a table schema using a memo from intuit()'''
+    def _update_from_intuiter(self, table_name, intuiter, logger=None,
+                              description=None, descriptions = None):
+        """
+        Update a table schema using a memo from intuit()
+
+        :param table_name:
+        :param intuiter:
+        :param logger:
+        :param description: Table description
+        :param descriptions:  Dict apping column names to column descriptions
+        :return:
+        """
         from datetime import datetime, time, date
         from sqlalchemy.orm.exc import NoResultFound
         import string
@@ -1382,7 +1410,6 @@ class {name}(Base):
 
         type_map = {int: 'integer', str: 'varchar', float: 'real',
                     datetime: 'datetime', date: 'date', time: 'time'}
-
 
         ok_chars = string.digits + string.letters + string.punctuation + ' '
 
@@ -1398,28 +1425,65 @@ class {name}(Base):
 
                 else:
 
-                    # add_column will update existing columns
                     type_, has_codes = col.resolved_type()
 
-                    self.add_column(table, name,
+
+                    if descriptions:
+                        try:
+                            description = descriptions[name]
+                        except KeyError:
+                            description = name
+                    else:
+                        description = name
+
+                    description = re.sub('[\r\n\s]+', ' ', description).strip() if description else ''
+
+                    # add_column will update existing columns
+                    orm_col = self.add_column(table, name,
                                     datatype=type_map[type_],
-                                    description= (re.sub(r's\+',' ',
-                                                         ''.join([x if x in ok_chars else ' ' for x in name ]))
-                                    ).strip(),
+                                    description=description,
                                     size=col.length if type_ == str else None,
                                     data = dict(has_codes=1) if has_codes else {})
 
-            with open(self.bundle.filesystem.path('meta', self.bundle.SCHEMA_FILE), 'w') as f:
-                self.as_csv(f)
+                    if has_codes:
+                        self.add_column(table, name+'_codes',datatype='varchar',
+                        description='Non-numeric codes extracted from the {} column'.format(name),
+                        derivedfrom=orm_col.id_)
 
 
-    def update_from_iterator(self, table_name, iterator, header=None, max_n = None,logger = None):
+
+        with open(self.bundle.filesystem.path('meta', self.bundle.SCHEMA_FILE), 'w') as f:
+            self.as_csv(f)
+
+    def update_from_iterator(self, table_name, iterator, header=None,
+                             max_n = None,logger = None):
+        """
+
+        :param table_name:
+        :param iterator:
+        :param header: If list, a list of columns names. If an OrderedDict, the keys are the column
+        names, and the values are column descriptions.
+        :param max_n:
+        :param logger:
+        :return:
+        """
         from util.intuit import Intuiter
+
+        from collections import OrderedDict
+
+        assert isinstance(header, (type(None), OrderedDict, list, tuple))
+
+        if header and isinstance(header, OrderedDict):
+            descriptions = header
+            header = header.keys()
+        else:
+            descriptions = None
+
 
         intuit = Intuiter(header=header, logger = logger)
         intuit.iterate(iterator, max_n=max_n)
 
-        self._update_from_intuiter(table_name, intuit)
+        self._update_from_intuiter(table_name, intuit, descriptions = descriptions)
 
 
     def update_csv(self, table_name, file_name, n=500, logger=None):

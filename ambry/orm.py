@@ -9,7 +9,7 @@ import datetime
 import sqlalchemy
 from sqlalchemy import orm
 from sqlalchemy import event
-from sqlalchemy import Column as SAColumn, Integer, BigInteger, Boolean, UniqueConstraint, ForeignKeyConstraint
+from sqlalchemy import Column as SAColumn, Integer, Float, BigInteger, Boolean, UniqueConstraint, ForeignKeyConstraint
 from sqlalchemy import Float as Real,  Text, String, ForeignKey, Binary, Table as SATable
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator, TEXT, PickleType
@@ -70,6 +70,7 @@ GeometryType = Geometry()
 GeometryType = GeometryType.with_variant(SpatialiteGeometry(), 'spatialite')
 GeometryType = GeometryType.with_variant(Text(), 'sqlite')  # Just write the WKT through
 GeometryType = GeometryType.with_variant(Text(), 'postgresql')
+
 Base = declarative_base()
 
 
@@ -299,8 +300,6 @@ class LinkableMixin(object):
 class DataPropertyMixin(object):
     """A Mixin for appending a value into a list in the data field"""
 
-
-
     def _append_string_to_list(self, sub_prop, value):
         """ """
         if not sub_prop in self.data:
@@ -514,8 +513,7 @@ class Column(Base):
     default = SAColumn('c_default',Text)
     illegal_value = SAColumn('c_illegal_value',Text)
 
-    __table_args__ = (UniqueConstraint('c_sequence_id', 'c_t_vid', name='_uc_columns_1'),
-                     )
+    __table_args__ = (UniqueConstraint('c_sequence_id', 'c_t_vid', name='_uc_columns_1'),)
 
     DATATYPE_TEXT = 'text'
     DATATYPE_INTEGER ='integer' 
@@ -535,7 +533,6 @@ class Column(Base):
     DATATYPE_CHAR = 'char'
     DATATYPE_VARCHAR = 'varchar'
     DATATYPE_BLOB = 'blob'
-
 
     types  = {
         # Sqlalchemy, Python, Sql,
@@ -559,13 +556,15 @@ class Column(Base):
         DATATYPE_BLOB:(sqlalchemy.types.LargeBinary, buffer,'BLOB')
         }
 
+    def type_is_int(self):
+        return self.datatype in (Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64)
+
     def type_is_text(self):
         return self.datatype in (Column.DATATYPE_TEXT, Column.DATATYPE_CHAR, Column.DATATYPE_VARCHAR)
 
     def type_is_geo(self):
         return self.datatype in (Column.DATATYPE_POINT, Column.DATATYPE_LINESTRING, Column.DATATYPE_POLYGON,
                                  Column.DATATYPE_MULTIPOLYGON, Column.DATATYPE_GEOMETRY)
-
 
     def type_is_time(self):
         return self.datatype in (Column.DATATYPE_TIME, Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE)
@@ -648,7 +647,6 @@ class Column(Base):
 
         return None
 
-
     @property
     def foreign_key(self):
         return self.fk_vid
@@ -691,11 +689,13 @@ class Column(Base):
         self.vid = str(con)
         self.id = str(con.rev(None))
 
-
     @property
     def dict(self):
-
-        x = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ( 'table')}
+        """
+        A dict that holds key/values for all of the properties in the object
+        :return:
+        """
+        x = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ( 'table', 'stats')}
 
         if not x:
             raise Exception(self.__dict__)
@@ -707,14 +707,21 @@ class Column(Base):
 
     @property
     def nonull_dict(self):
+        """
+        Like dict, but does not hold any null values
+        :return:
+        """
         return {k: v for k, v in self.dict.items() if v}
 
 
     @property
     def insertable_dict(self):
+        """Like dict, but properties have the table prefix, so it can be inserted into a row"""
         x =  {('c_' + k).strip('_'): v for k, v in self.dict.items()}
 
         return x
+
+
 
     @staticmethod
     def mangle_name(name):
@@ -738,6 +745,7 @@ class Column(Base):
     @property
     @memoize
     def codes(self):
+        # _codes is a backref from Codes
         return self._codes # Caches the query, I hope ...
 
     def add_code(self, key, value, description=None, data = None):
@@ -751,9 +759,10 @@ class Column(Base):
         """
         from  sqlalchemy.orm.session import Session
 
-        # Ignore codes we already have, but will not catch codes added earlier t this same
+        # Ignore codes we already have, but will not catch codes added earlier for this same
         # object, since the code are cached
-        for cd in self.codes:
+
+        for cd in self._codes:
             if cd.key == str(key):
                 return cd
 
@@ -850,6 +859,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
         
         self.d_id = dataset.id_
         self.d_vid = dataset.vid
+
         don = ObjectNumber.parse(dataset.vid)
         ton = TableNumber(don, self.sequence_id)
       
@@ -1030,18 +1040,16 @@ Columns:
         '''Add a column to the table, or update an existing one '''
 
         import sqlalchemy.orm.session
-        from sqlalchemy.orm.exc import NoResultFound
+        from dbexceptions import NotFoundError
 
         s = sqlalchemy.orm.session.Session.object_session(self)
 
         name = Column.mangle_name(name)
 
-
         if not kwargs.get('fast', False):
             try:
-
                 row = self.column(name)
-            except NoResultFound:
+            except NotFoundError:
                 row = None
         else:
             row = None
@@ -1053,9 +1061,12 @@ Columns:
             row = Column(self, name=name, **kwargs)
             extant = False
 
+        if kwargs.get('data', False):
+            row.data = dict(row.data.items() + kwargs['data'].items())
+
         for key, value in kwargs.items():
 
-            excludes = ['d_id','t_id','name', 'schema_type']
+            excludes = ['d_id','t_id','name', 'schema_type', 'data']
 
             if key == 'proto' and isinstance(value, basestring):  # Proto is the name of the object.
                 key = 'proto_vid'
@@ -1074,27 +1085,26 @@ Columns:
                     value = False
                     setattr(row, key, value)
 
-
-
         # If the id column has a description and the table does not, add it to the table.
         if row.name == 'id' and row.is_primary_key and not self.description:
             self.description = row.description
             s.merge(self)
 
         if extant:
-            s.merge(row)
+            row = s.merge(row)
         else:
             s.add(row)
-     
+
         if kwargs.get('commit', True):
             s.commit()
-
 
         return row
    
     def column(self, name_or_id, default=None):
         from sqlalchemy.sql import or_
         import sqlalchemy.orm.session
+        from sqlalchemy.orm.exc import NoResultFound
+        from dbexceptions import NotFoundError
 
         s = sqlalchemy.orm.session.Session.object_session(self)
 
@@ -1104,14 +1114,18 @@ Columns:
                .filter(or_(Column.id_==name_or_id,Column.name==name_or_id))
                .filter(Column.t_id == self.id_)
             )
-      
-        if not default is None:
-            try:
+
+        try:
+            if not default is None:
+                try:
+                    return  q.one()
+                except:
+                    return default
+            else:
                 return  q.one()
-            except:
-                return default
-        else:
-            return  q.one()
+        except NoResultFound:
+            raise NotFoundError("Failed to find column '{}' in table '{}' ".format(name_or_id,self.name))
+
     
     @property
     def primary_key(self):
@@ -1527,6 +1541,29 @@ class Partition(Base, LinkableMixin):
     def link_store(self, f): return self._append_link('stores', f.ref)
     def delink_store(self, f): return self._remove_link('stores', f.ref)
 
+
+    def add_stat(self, c_vid, stats):
+        """
+        Add a statistics records for a column of a table in the partition.
+
+        :param c_vid: The column vid.
+        :param stats:  A dict of stats values. See the code for which values are valid.
+        :return:
+        """
+
+        from  sqlalchemy.orm.session import Session
+
+        # Names that come from the Pandas describe() method
+        stat_map = {'25%': 'p25', '50%': 'p50', '75%': 'p75'}
+
+        stats = {stat_map.get(k, k):v for k,v in stats.items()}
+
+        cd = ColumnStat(p_vid = self.vid, c_vid=c_vid, **stats)
+
+        Session.object_session(self).add(cd)
+
+        return cd
+
     @staticmethod
     def before_insert(mapper, conn, target):
         '''event.listen method for Sqlalchemy to set the sequence for this
@@ -1745,9 +1782,52 @@ class Code(Base, SavableMixin, LinkableMixin):
         return { ('cd_'+k).strip('_'):v for k,v in self.dict.items()}
 
 
+class SearchDoc(Base):
+    """Documents for full text search"""
+    __tablename__ = 'searchdocs'
 
+    id = SAColumn('sd_id',Integer, primary_key=True, nullable=False)
 
+    vid = SAColumn('sd_vid', String(20), index=True, unique=True)
+    keywords = SAColumn('sd_keywords',Text)
+    text = SAColumn('sd_text', Text)
 
+class ColumnStat(Base, SavableMixin, LinkableMixin):
+    """
+    Table for per column, per partition stats
 
+    """
+    __tablename__ = 'colstats'
 
+    id = SAColumn('cs_id',Integer, primary_key=True, nullable=False)
 
+    p_vid = SAColumn('cs_p_vid', String(10), ForeignKey('partitions.p_vid'), nullable=False, index=True)
+    partition = relationship('Partition', backref='stats')
+
+    c_vid = SAColumn('cs_c_vid', String(12), ForeignKey('columns.c_vid'), nullable=False, index=True)
+    column = relationship('Column', backref='stats')
+
+    count = SAColumn('cs_count',BigIntegerType)
+    mean = SAColumn('cs_mean',Float)
+    std = SAColumn('cs_std',Float)
+    min = SAColumn('cs_min',BigIntegerType)
+    p25 = SAColumn('cs_p25',BigIntegerType)
+    p50 = SAColumn('cs_p50',BigIntegerType)
+    p75 = SAColumn('cs_p75',BigIntegerType)
+    max = SAColumn('cs_max',BigIntegerType)
+    nuniques = SAColumn('cs_nuniques',Integer)
+
+    uvalues = SAColumn('f_uvalues',MutationDict.as_mutable(JSONEncodedObj))
+    hist = SAColumn('f_hist', MutationDict.as_mutable(JSONEncodedObj))
+
+    __table_args__ = (
+        UniqueConstraint('cs_p_vid', 'cs_c_vid', name='u_cols_stats'),
+    )
+
+    def __init__(self, **kwargs):
+
+        for p in self.__mapper__.attrs:
+            if p.key in kwargs:
+
+                setattr(self, p.key, kwargs[p.key])
+                del kwargs[p.key]

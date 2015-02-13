@@ -890,6 +890,7 @@ class DictTerm(Term, collections.MutableMapping):
             self.__setitem__(k, v)
 
     def __getattr__(self, k):
+
         if k.startswith('_'):
             return object.__getattr__(self, k)
         else:

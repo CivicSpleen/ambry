@@ -14,7 +14,6 @@ from ..util import get_logger, clear_logger
 from ..dbexceptions import ConfigurationError, ProcessError
 from ..util import memoize
 
-
 class Bundle(object):
     """Represents a bundle, including all configuration
     and top level operations. """
@@ -912,6 +911,37 @@ class BuildBundle(Bundle):
         else:
             return self.filesystem.download(name)
 
+    def source_store_cache_key(self, fn):
+        return "{}/{}/{}".format(self.identity.source, self.identity.name, fn)
+
+    def cache_sources(self):
+        """Copy all of the sources to the build directory. If there is a source_store cache, also copy the
+        file to the source store.
+
+        """
+        import shutil, os
+
+        data = self.filesystem.build_path('data')
+
+        cache = self.filesystem.source_store
+
+        if not os.path.exists(data):
+            os.makedirs(data)
+
+        for k, v in self.metadata.sources.items():
+            fn = self.filesystem.download(k)
+            print fn
+
+            base = os.path.basename(fn)
+            dest = os.path.join(data, base)
+
+            cache_key = self.source_store_cache_key(base)
+
+            shutil.copyfile(fn, dest)
+
+            if cache and not cache.has(cache_key):
+                self.log("Putting: {}".format(cache_key))
+                cache.put(fn, cache_key, metadata=dict(vname=self.identity.vname))
 
     @property
     def dependencies(self):
@@ -1312,6 +1342,8 @@ class BuildBundle(Bundle):
             self.post_build_write_partitions()
 
             self.post_build_write_config()
+
+            self.schema.write_codes()
 
             self.set_value('process', 'last', datetime.now().isoformat())
             self.set_build_state( 'built')

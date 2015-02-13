@@ -112,5 +112,8 @@ class DatabaseInterface(object):
     def drop_table(self, table_name):
         raise NotImplementedError()
 
+    def index_for_search(self, vid, topic, keywords):
+        raise NotImplementedError()
 
-
+    def search(self, topic, keywords):
+        raise NotImplementedError()

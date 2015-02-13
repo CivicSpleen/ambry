@@ -154,11 +154,9 @@ class ValueWriter(InserterInterface):
                 return False
 
         self.close()
-           
-                
+
         return self
-        
- 
+
 class CodeCastErrorHandler(object):
     '''Used by the Value Inserter to handle errors in casting
     data types. This version will create code table entries
@@ -168,37 +166,45 @@ class CodeCastErrorHandler(object):
         from collections import defaultdict
         self.codes = defaultdict(set)
         self.inserter = inserter
-    
+
+    def code_col_name(self, col_name):
+        return col_name + '_codes'
+
     def cast_error (self, row,  cast_errors):
         '''For each cast error, save the key and value in a set, 
         for later conversion to a code partition '''
-        for k,v in cast_errors.items():
-            self.inserter.bundle.schema.add_code_table(self.inserter.table.name, k) # idempotent
-            self.codes[k].add(v)
-            
-    def finish(self):
-        '''For each of the code sets generated during casting errors, create
-        a new partition that holds all of the codes. '''
 
+        for k,v in cast_errors.items():
+            self.codes[k].add(v)
+
+            # This part will only put the value in the column if the code column has been
+            # created.
+            row[self.code_col_name(k)] = v
+            row[k] = None
+
+        return row
+
+    def finish(self):
+        '''Add all of the codes to the codes table'''
+        from ..dbexceptions import NotFoundError
         schema = self.inserter.bundle.schema
 
-        t = schema.add_table('column_codes') # Because every partition must have a table
-        schema.add_column(t, 'id', datatype='integer', is_primary_key=True)
-        schema.write_schema()
+        with self.inserter.bundle.session:
 
-        tables = {}
-        for col_name, codes in self.codes.items():
-            tables[col_name] =  self.inserter.table.name + '_' + col_name + '_codes'
+            # self.inserter.table is a sqlalchemy.sql.schema.Table, not an orm.Table
+            table = self.inserter.bundle.schema.table(self.inserter.table.name)
 
+            for col_name, codes in self.codes.items():
 
-        p = self.inserter.bundle.partitions.find_or_new(table='column_codes', tables=tables.values())
+                try:
+                    # Try with the code column, if it exists.
+                    col = table.column(self.code_col_name(col_name))
+                except NotFoundError:
+                    # Fall back to the source column
+                    col = table.column(col_name)
 
-        for col_name, codes in self.codes.items():
-            table = tables[col_name]
-            with p.inserter(table) as ins:
-                for code in codes:
-                    ins.insert({'code':code})
-
+                for i, code in enumerate(codes):
+                    col.add_code(i, code, code)
 
 class ValueInserter(ValueWriter):
     '''Inserts arrays of values into  database table'''
@@ -268,7 +274,7 @@ class ValueInserter(ValueWriter):
                     d = { k: d[k] if k in d and d[k] is not None else v for k,v in self.null_row.items() }
 
             else:
-                
+                raise DeprecationWarning("Inserting lists is no longer supported")
                 if self.caster:
                     d, cast_errors = self.caster(values)
                 else:
@@ -294,6 +300,9 @@ class ValueInserter(ValueWriter):
                 else:
                     self.row_id = max(self.row_id, d['id'] ) + 1
 
+            if cast_errors and self.cast_error_handler:
+                d = self.cast_error_handler.cast_error(d, cast_errors)
+
             self.cache.append(d)
          
             if len(self.cache) >= self.cache_size: 
@@ -301,9 +310,6 @@ class ValueInserter(ValueWriter):
                 self.cache = []
                 self.commit_continue()
 
-
-            if cast_errors and self.cast_error_handler:
-                self.cast_error_handler.cast_error(values,cast_errors )
 
             return cast_errors
 

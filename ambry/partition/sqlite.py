@@ -164,11 +164,74 @@ class SqlitePartition(PartitionBase):
     def finalize(self):
 
         if not self.is_finalized and self.database.exists():
-            self.write_stats()
+            self.write_basic_stats()
             self.write_file()
+            self.write_full_stats()
 
 
-    def write_stats(self):
+    def write_full_stats(self):
+        """
+
+        Write stats to the stats table.
+
+        Dataset Id
+        Column id
+        Table Id
+        Partition Id
+        Count
+        Mean, Std
+        Min, 25, 50 75, Max
+        # Uniques
+        JSON of top 50 Unique values
+        JSON of Histogram of 100 values, for Int and Real
+
+
+        :return:
+        """
+        import pandas as pd
+        import numpy as np
+        df = self.pandas
+
+        self.close()
+        self.bundle.close()
+
+        with self.bundle.session:
+            table = self.record.table
+            p = self.bundle.partitions.get(self.vid)
+
+            all_cols = [c.name for c in table.columns]
+
+            for row in df.describe().T.reset_index().to_dict(orient='records'):
+                col_name = row['index']
+                col = table.column(col_name)
+
+                row['nuniques'] = df[col_name].dropna().nunique()
+
+                h = np.histogram(df[col_name])
+
+                row['hist'] = dict(values=zip(h[1], h[0]))
+
+                del row['index']
+
+                p.add_stat(col.vid, row)
+
+                all_cols.remove(col_name)
+
+            for col_name in all_cols:
+                row = {}
+                col = table.column(col_name)
+
+                row['count'] = len(df[col_name])
+
+                row['nuniques'] = df[col_name].dropna().nunique()
+
+                if col.type_is_text() and float(row['nuniques']) < (row['count']/10) :
+                    row['uvalues'] = df[col_name].value_counts().sort(inplace=False, ascending=False)[:100].to_dict()
+
+                p.add_stat(col.vid, row)
+
+
+    def write_basic_stats(self):
         '''Record in the partition entry basic statistics for the partition's
         primary table'''
         from ..partitions import Partitions
@@ -243,7 +306,7 @@ class SqlitePartition(PartitionBase):
         self.table = self.get_table()
         
         if self.record_count:
-            self.write_stats()
+            self.write_basic_stats()
 
         if not rows_per_seg:
             rows_per_seg = self.optimal_rows_per_segment()
@@ -280,7 +343,7 @@ class SqlitePartition(PartitionBase):
             if i % rows_per_seg == 0:
                       
                 if p: # Don't do it on the first record. 
-                    p.write_stats(min_key, max_key, count)
+                    p.write_basic_stats(min_key, max_key, count)
                     count = 0
                     min_key = row[pk]
                     ins.close()
@@ -307,7 +370,7 @@ class SqlitePartition(PartitionBase):
 
         # make sure we get the last partition
         if p:
-            p.write_stats(min_key, max_key, count)
+            p.write_basic_stats(min_key, max_key, count)
             ins.close()
             _store_library(p)
 
@@ -341,14 +404,16 @@ class SqlitePartition(PartitionBase):
         for p in parts:
             self.bundle.log("Loading CSV partition: {}".format(p.identity.vname))
             self.database.load(p.database, table, logger=lr )
-        
 
     @property
     def rows(self):
         '''Run a select query to return all rows of the primary table. '''
 
-        pk = self.get_table().primary_key.name
-        return self.database.query("SELECT * FROM {} ORDER BY {} ".format(self.get_table().name,pk))
+        if True:
+            pk = self.get_table().primary_key.name
+            return self.database.query("SELECT * FROM {} ORDER BY {} ".format(self.get_table().name,pk))
+        else:
+            return self.database.query("SELECT * FROM {}".format(self.get_table().name))
 
     @property
     def pandas(self):
@@ -361,12 +426,10 @@ class SqlitePartition(PartitionBase):
         except NoSuchColumnError:
             return self.select("SELECT * FROM {}".format(self.get_table().name)).pandas
 
-
     def query(self,*args, **kwargs):
         """Convience function for self.database.query()"""
 
         return self.database.query(*args, **kwargs)
-
 
     def select(self,sql=None,*args, **kwargs):
         '''Run a query and return an object that allows the selected rows to be returned
@@ -374,8 +437,6 @@ class SqlitePartition(PartitionBase):
         from ..database.selector import RowSelector
 
         return RowSelector(self, sql,*args, **kwargs)
-
-
 
     def add_view(self, view_name):
         '''Add a view specified in the configuration in the views.<viewname> dict. '''

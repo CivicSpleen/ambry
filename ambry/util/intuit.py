@@ -9,7 +9,7 @@ import datetime
 
 def test_float(v):
 
-    if v and v[0] == '0': #Fixed-width integer codes are actually strings.
+    if v and v[0]  == '0' and len(v) > 1: #Fixed-width integer codes are actually strings.
         return 0
 
     try:
@@ -20,7 +20,7 @@ def test_float(v):
 
 def test_int(v):
 
-    if v and v[0] == '0': #Fixed-width integer codes are actually strings.
+    if v and v[0] == '0' and len(v) > 1: #Fixed-width integer codes are actually strings.
         return 0
 
     try:
@@ -154,6 +154,7 @@ class Column(object):
 
                 if test == str:
                     if v not in self.strings:
+
                         self.strings.append(v)
 
                     if (self.count < 1000 or self.date_successes != 0) and any(( c in '-/:T') for c in v):
@@ -184,7 +185,8 @@ class Column(object):
         "Return the type for the columns, and a flag to indicate that the column has codes"
         import datetime
 
-        self.type_ratios = { test:float(self.type_counts[test]) / float(self.count) for test, testf in tests + [(None, None)] }
+        self.type_ratios = { test:float(self.type_counts[test]) / float(self.count)
+                             for test, testf in tests + [(None, None)] }
 
         if self.type_ratios[str] > .2:
             return str, False
@@ -222,16 +224,18 @@ class Intuiter(object):
         self.logger = logger
 
     def add_row(self,row):
+        from collections import OrderedDict
 
         if self.logger:
             self.logger("Intuit Row")
+
 
         if isinstance(row, dict):
             for k,v in row.items():
                 self._columns[k].test(v)
         elif isinstance(row, (list, tuple)):
-            if isinstance(row[0], (tuple, list)):
-                # The row is actually a tuple of (header, row)
+            # The row is actually a tuple of (header, row)
+            if isinstance(row[0], (tuple, list, OrderedDict)):
                 for k, v in enumerate(row[1]):
                     type_ = self._columns[k].test(v)
             else:
@@ -249,7 +253,10 @@ class Intuiter(object):
             if max_n and n > max_n:
                 return
 
-            self.add_row(row)
+            try:
+                self.add_row(row)
+            except Exception as e:
+                print 'Failed to add row: {}: {}'.format(row, e)
 
 
     @property
@@ -258,7 +265,10 @@ class Intuiter(object):
         for k, v in self._columns.items():
 
             if self.header:
-                v.name = self.header[k]
+                try:
+                    v.name = self.header[k]
+                except IndexError:
+                    v.name = "Unknown{}".format(k)
             else:
                 v.name = k
 

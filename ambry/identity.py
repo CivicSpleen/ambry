@@ -427,7 +427,7 @@ class PartitionName(PartialPartitionName, Name):
         try:
             return os.path.join(*(self._local_parts()))
         except TypeError as e:
-            raise TypeError("Path failed for partition {}: {}".format(self.name, e.message))
+            raise TypeError("Path failed for partition {} : {}".format(self.name, e.message))
 
 
     def type_is_compatible(self, o):

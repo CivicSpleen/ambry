@@ -6,41 +6,52 @@ from  ambry.bundle import BuildBundle
 
 class LoaderBundle(BuildBundle):
 
-    def source_cache_key(self, fn):
-        return  "{}/{}/{}".format(self.identity.source, self.identity.name, fn)
-
-    def copy_sources(self):
-        """Copy all of the sources to the build directory. If there is asource_store cache, also copy the
-        file to the source store.
-
-
+    def mangle_column_name(self, n):
         """
-        import shutil, os
+        Override this method to change the way that column names from the source are altered to
+        become column names
+        :param n:
+        :return:
+        """
 
-        data = self.filesystem.build_path('data')
+        return n
 
-        cache = self.filesystem.source_store
+    @staticmethod
+    def int_caster(v):
+        """Remove commas from numbers and cast to int"""
 
-        if not os.path.exists(data):
-            os.makedirs(data)
+        try:
+            return int(v.replace(',', ''))
+        except AttributeError:
+            return v
 
-        for k, v in self.metadata.sources.items():
-            fn = self.filesystem.download(k)
-            print fn
+    @staticmethod
+    def real_caster(v):
+        """Remove commas from numbers and cast to float"""
 
-            base = os.path.basename(fn)
-            dest = os.path.join(data, base)
-
-            cache_key = self.source_cache_key(base)
-
-            shutil.copyfile(fn , dest)
-
-            if cache and not cache.has(cache_key):
-                self.log("Putting: {}".format(cache_key))
-                cache.put(fn, cache_key,  metadata=dict(vname=self.identity.vname))
+        try:
+            return float(v.replace(',', ''))
+        except AttributeError:
+            return v
 
 class CsvBundle(LoaderBundle):
     """A Bundle variant for loading CSV files"""
+
+    delimiter = None
+
+    def get_csv_reader(self, f, as_dict = False, sniff = False):
+        import csv
+
+        if sniff:
+            dialect = csv.Sniffer().sniff(f.read(5000))
+            f.seek(0)
+        else:
+            dialect = None
+
+        if as_dict:
+            return csv.DictReader(f, delimiter = self.delimiter, dialect=dialect)
+        else:
+            return csv.reader(f, delimiter=self.delimiter, dialect=dialect)
 
     def get_source(self, source):
         """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
@@ -63,7 +74,7 @@ class CsvBundle(LoaderBundle):
             if cache:
                 bare_fn, ext = os.path.splitext(os.path.basename(fn))
 
-                fn_ck = self.source_cache_key(bare_fn+".csv")
+                fn_ck = self.source_store_cache_key(bare_fn+".csv")
 
                 if cache.has(fn_ck):
                     if not self.filesystem.download_cache.has(fn_ck):
@@ -73,11 +84,18 @@ class CsvBundle(LoaderBundle):
 
                     return self.filesystem.download_cache.path(fn_ck)
 
-
         return fn
 
-    def gen_rows(self, source=None, as_dict=False):
-        """Generate rows for a source file. The source value ust be specified in the sources config"""
+    def gen_rows(self, source, as_dict=False, prefix_headers = ['id']):
+        """
+        Generate rows for a source file. The source value ust be specified in the sources config
+
+        :param source:
+        :param as_dict:
+        :param prefix_headers: Number of None entries to put i nthe first of the row. For leaving space
+        for columns that are added to the schema that are not in the original dataset.
+        :return:
+        """
         import csv
 
         fn = self.get_source(source)
@@ -86,35 +104,51 @@ class CsvBundle(LoaderBundle):
 
         with open(fn) as f:
 
-            dialect = csv.Sniffer().sniff(f.read(5000))
-            f.seek(0)
+            r = self.get_csv_reader(f, as_dict=as_dict)
 
             if as_dict:
-                r = csv.DictReader(f, dialect)
+
                 for row in r:
                     row['id'] = None
                     yield row
             else:
                 # It might seem inefficient to return the header every time, but it really adds only a
                 # fraction of a section for millions of rows.
-                r = csv.reader(f, dialect)
-                header = ['id'] + r.next()
+
+                header = prefix_headers + r.next()
 
                 header = [ x if x else "column{}".format(i) for i, x in enumerate(header)]
 
                 for row in r:
 
-                     yield header, [None] + row
+                     yield header, [None]*len(prefix_headers) + row
 
-    def source_header(self, source):
-        import csv
 
-        fn = self.get_source(source)
+    def make_table_for_source(self, source_name):
 
-        with open(fn) as f:
-            r = csv.reader(f)
+        source = self.metadata.sources[source_name]
 
-            return ['id'] + r.next()
+        table_name = source.table if source.table else source_name
+
+        table_desc = source.description if source.description else "Table generated from {}".format(source.url)
+
+        data = dict(source)
+        del data['description']
+        del data['url']
+
+        table = self.schema.add_table(table_name, description=table_desc, data=data)
+
+        return table
+
+    def mangle_header(self, header):
+        """Call mangle_column_name on each item in the header to produce a final header"""
+        from collections import OrderedDict
+
+        if isinstance(header, OrderedDict):
+            return OrderedDict([(self.mangle_column_name(x), v) for x,v in header.items() if x])
+        else:
+            return OrderedDict([ (self.mangle_column_name(x),x) for x in header if x] )
+
 
     def meta(self):
 
@@ -126,50 +160,46 @@ class CsvBundle(LoaderBundle):
         with self.session:
             for source_name, source in self.metadata.sources.items():
 
-                table_name = source.table if source.table else  source_name
-
-                table_desc = source.description if source.description else "Table generated from {}".format(source.url)
-
-                data = dict(source)
-                del data['description']
-                del data['url']
-
-
-                table = self.schema.add_table(table_name, description=table_desc, data = data)
+                table = self.make_table_for_source(source_name)
 
                 header, row = self.gen_rows(source_name, as_dict=False).next()
 
-                header = [ x for x in header if x]
-
-                def itr():
-                    for header, row in self.gen_rows(source_name, as_dict=False):
-                        yield row
-
-                self.schema.update_from_iterator(table_name,
-                                   header = header,
-                                   iterator=itr(),
+                self.schema.update_from_iterator(table.name,
+                                   header = self.mangle_header(header),
+                                   iterator=self.gen_rows(source_name, as_dict=False),
                                    max_n=1000,
                                    logger=self.init_log_rate(500))
-
 
         return True
 
     def build(self):
 
-        for source in self.metadata.sources:
+        for source_name, source in self.metadata.sources.items():
 
-            p = self.partitions.find_or_new(table=source)
 
-            p.clean()
 
-            self.log("Loading source '{}' into partition '{}'".format(source, p.identity.name))
+            # This ugliness is b/c get() doesn't take a 'default' arg.
+            try:
+                table = source['table']
+
+                if not table:
+                    table = source_name
+
+            except:
+                table = source_name
+
+            assert bool(table)
+
+            p = self.partitions.find_or_new(table=table)
+
+            self.log("Loading source '{}' into partition '{}'".format(source_name, p.identity.name))
 
             lr = self.init_log_rate(print_rate = 5)
 
             header = [c.name for c in p.table.columns]
 
             with p.inserter() as ins:
-               for _, row in self.gen_rows(source):
+               for _, row in self.gen_rows(source_name):
                    lr(str(p.identity.name))
 
                    d = dict(zip(header, row))
@@ -204,41 +234,46 @@ class ExcelBuildBundle(CsvBundle):
 
         return values
 
-    def get_wb_sheet(self, source):
+    def get_wb_sheet(self, source, segment = None):
 
         if not source:
             source = self.metadata.sources.keys()[0]
 
-        sheet_num = self.metadata.sources.get(source).segment
-        sheet_num = 0 if not sheet_num else sheet_num
+        if segment:
+            sheet_num = segment
+        else:
+            sheet_num = self.metadata.sources.get(source).segment
+            sheet_num = 0 if not sheet_num else sheet_num
 
         return self.get_source(source), sheet_num
 
-    def source_header(self, source):
+    def source_header(self, source, segment = None):
         from xlrd import open_workbook
 
-        fn, sheet_num = self.get_wb_sheet(source)
+        fn, sheet_num = self.get_wb_sheet(source, segment)
 
         with open(fn) as f:
             wb = open_workbook(fn)
 
             s = wb.sheets()[sheet_num]
 
-            return ['id'] + self.srow_to_list(0, s)
+            return self.srow_to_list(0, s)
 
-    def gen_rows(self, source=None, as_dict=False):
+    def gen_rows(self, source=None, as_dict=False, segment = None, prefix_headers = ['id']):
         """Generate rows for a source file. The source value ust be specified in the sources config"""
         from xlrd import open_workbook
 
-        fn, sheet_num = self.get_wb_sheet(source)
+        fn, sheet_num = self.get_wb_sheet(source, segment)
 
-        header = self.source_header(source) if as_dict else None
+        self.log("Generate rows for: {}, sheet = {}".format(fn, sheet_num))
+
+        header = self.source_header(source, segment) # if as_dict else None
+
+        header = prefix_headers + header
 
         with open(fn) as f:
 
             wb = open_workbook(fn)
-
-            self.log("Generate rows for: "+fn)
 
             self.workbook = wb
 
@@ -247,12 +282,37 @@ class ExcelBuildBundle(CsvBundle):
             for i in range(1,s.nrows):
 
                 if as_dict:
-                    yield dict(zip(header, [None] + self.srow_to_list(i, s)))
+                    yield dict(zip(header, [None]*len(prefix_headers)  + self.srow_to_list(i, s)))
                 else:
                     # It might seem inefficient to return the header every time, but it really adds only a
                     # fraction of a section for millions of rows.
-                    yield header, [None] + self.srow_to_list(i, s)
+                    yield header, [None]*len(prefix_headers)  + self.srow_to_list(i, s)
 
+class TsvBuildBundle(CsvBundle):
+
+    delimiter = '\t'
+
+    def __init__(self, bundle_dir=None):
+        '''
+        '''
+
+        super(TsvBuildBundle, self).__init__(bundle_dir)
+
+
+    def get_source(self, source):
+        """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
+        and look in the source store cache """
+        import os
+
+        if not source:
+            source = self.metadata.sources.keys()[0]
+
+        fn = self.filesystem.download(source)
+
+        if fn.endswith('.zip'):
+            fn = self.filesystem.unzip(fn)
+
+        return fn
 
 class GeoBuildBundle(LoaderBundle):
     """A Bundle variant that loads zipped Shapefiles"""

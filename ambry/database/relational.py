@@ -442,42 +442,6 @@ class RelationalDatabase(DatabaseInterface):
 
         return r
 
-    def X_inserter(self,table_name, **kwargs):
-        '''Creates an inserter for a database, but which may not have an associated bundle,
-        as, for instance, a warehouse. '''
-
-        from sqlalchemy.schema import Table
-
-        table = Table(table_name, self.metadata, autoload=True, autoload_with=self.engine)
-
-        return ValueInserter(self,None, table , **kwargs)
-
-
-    class csv_partition_factory(SegmentInserterFactory):
-
-        def __init__(self, bundle, db, table):
-            self.db = db
-            self.table = table
-            self.bundle = bundle
-
-        def next_inserter(self, seg):
-            ident = self.db.partition.identity
-            ident.segment = seg
-
-            if self.bundle.has_session:
-                p = self.db.bundle.partitions.find_or_new_csv(**ident.dict)
-            else:
-                p = self.db.bundle.partitions.find_or_new_csv(**ident.dict)
-            return p.inserter(self.table)
-
-    def csvinserter(self, table_or_name=None,segment_rows=200000,  **kwargs):
-        '''Return an inserter that writes to segmented CSV partitons'''
-
-        sif = self.csv_partition_factory(self.bundle, self, table_or_name)
-
-        return SegmentedInserter(segment_size=segment_rows, segment_factory = sif,  **kwargs)
-
-
 
     def set_config_value(self, d_vid, group, key, value, session=None):
         from ambry.orm import Config as SAConfig
@@ -562,12 +526,12 @@ class RelationalBundleDatabaseMixin(object):
 
     def _create(self):
         """Create the database from the base SQL"""
-        from ambry.orm import  Dataset, Partition, Table, Column, File, Code
+        from ambry.orm import  Dataset, Partition, Table, Column, File, Code, ColumnStat
         from ..identity import Identity
         from sqlalchemy.orm import sessionmaker
 
 
-        tables = [ Dataset, Partition, Table, Column, File, Code ]
+        tables = [ Dataset, Partition, Table, Column, File, Code, ColumnStat ]
 
         for table in tables:
             table.__table__.create(bind=self.engine)

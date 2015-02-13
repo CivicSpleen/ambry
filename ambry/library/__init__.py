@@ -26,6 +26,8 @@ def _new_library(config):
     from database import LibraryDb
     from sqlalchemy.exc import OperationalError
 
+
+
     cache = new_cache(config['filesystem'])
 
     database = LibraryDb(**dict(config['database']))
@@ -89,7 +91,7 @@ def _new_library(config):
     return l
 
 
-def new_library(config, reset=False):
+def new_library(config=None, reset=False):
     """Return a new :class:`~ambry.library.Library`, constructed from a configuration
 
     :param config: a :class:`~ambry.run.RunConfig` object
@@ -101,6 +103,11 @@ def new_library(config, reset=False):
     """
 
     global libraries
+
+    if config is None:
+        from ..run import get_runconfig
+
+        config = get_runconfig().library('default')
 
     if reset:
         libraries = {}

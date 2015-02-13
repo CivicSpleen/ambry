@@ -1,12 +1,16 @@
 about:
+    access: null
+    grain: null
     groups:
     - Examples
     license: other-open
     rights: null
+    space: null
     subject: null
     summary: This is a short summary of the data bundle.
     tags:
     - example
+    time: null
     title: Simple Example Bundle
 contact_bundle:
     creator:

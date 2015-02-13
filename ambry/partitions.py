@@ -648,6 +648,23 @@ class Partitions(object):
 
         return p
 
+    def find_or_new_hdf(self, clean=False, tables=None, data=None, create=False, **kwargs):
+        """
+        :param clean:
+        :param tables:
+        :param data:
+        :param create:
+        :param kwargs:
+        :return:
+        """
+
+        raise NotImplementedError()
+
+        p, _ = self._find_or_new(kwargs, clean=False, tables=None,
+                                 data=None, create=True, format='hdf')
+
+        return p
+
     def new_memory_partition(self, tables=None, data=None, **kwargs):
         '''Find a partition identified by pid, and if it does not exist, create it.
 

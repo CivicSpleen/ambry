@@ -46,3 +46,26 @@ class PostgresDatabase(RelationalDatabase):
 
                 self.connection.execute(sql)
 
+    def index_for_search(self, vid, topic, keywords):
+        """
+        Add a search document to the full-text search index.
+
+        :param vid: Versioned ID for the object. Should be a dataset, partition table or column
+        :param topic: A text document or description.
+        :param keywords: A list of keywords
+        :return:
+        """
+
+        # See http://blog.lostpropertyhq.com/postgres-full-text-search-is-good-enough/
+        # We probably want to create materialized view.
+
+
+    def search(self, topic, keywords):
+        """
+
+        Search the full text search index.
+
+        :param topic:
+        :param keywords:
+        :return"""
+

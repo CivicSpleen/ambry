@@ -194,6 +194,7 @@ def bundle_parser(cmd):
     #
     sp = asp.add_parser('scrape', help='Scrape all of the links from the page references in external_documentation.download')
     sp.set_defaults(subsubcommand='scrape')
+    sp.add_argument('-r', '--regex', default=False, help="Select entries where the UR matches the regular expression")
 
     # Info command
     command_p = sub_cmd.add_parser('info', help='Print information about the bundle')
@@ -610,7 +611,7 @@ def bundle_config_scrape(args, b, st, rc):
                 description = text
             )
         elif ext.lower() in ('pdf','html'):
-            d['sources'][base] = dict(
+            d['external_documentation'][base] = dict(
                 url=url,
                 description=text,
                 title=text

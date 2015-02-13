@@ -653,39 +653,40 @@ class Warehouse(object):
 
         row = self.database.connection.execute(sql).fetchone()
 
-        for i, (col_name, v) in enumerate(row.items(), 1):
+        if row:
+            for i, (col_name, v) in enumerate(row.items(), 1):
 
-            try:
-                c_id, plain_name = col_name.split('_', 1)
-                cn = ObjectNumber.parse(c_id)
+                try:
+                    c_id, plain_name = col_name.split('_', 1)
+                    cn = ObjectNumber.parse(c_id)
 
-                orig_table = self.library.table(str(cn.as_table))
+                    orig_table = self.library.table(str(cn.as_table))
 
-                if not orig_table:
-                    self.logger.error("UNable to find table '{}' while trying to create schema".format(str(cn.as_table)))
-                    continue
+                    if not orig_table:
+                        self.logger.error("UNable to find table '{}' while trying to create schema".format(str(cn.as_table)))
+                        continue
 
-                orig_column = orig_table.column(c_id)
+                    orig_column = orig_table.column(c_id)
 
-                orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)
-                d = orig_column.dict
+                    orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)
+                    d = orig_column.dict
 
-                d['description']  = "{}; {}".format(orig_table.description, d['description'])
+                    d['description']  = "{}; {}".format(orig_table.description, d['description'])
 
-            except ValueError: # Coudn't split the col name, probl b/c the user added it in SQL
-                d = dict(name = col_name)
+                except ValueError: # Coudn't split the col name, probl b/c the user added it in SQL
+                    d = dict(name = col_name)
 
 
-            d['sequence_id'] = i
-            del d['t_vid']
-            del d['t_id']
-            del d['vid']
-            del d['id_']
-            d['derivedfrom'] = c_id
+                d['sequence_id'] = i
+                del d['t_vid']
+                del d['t_id']
+                del d['vid']
+                del d['id_']
+                d['derivedfrom'] = c_id
 
-            t.add_column(**d)
+                t.add_column(**d)
 
-        s.commit()
+            s.commit()
 
 
     def install_union(self):
