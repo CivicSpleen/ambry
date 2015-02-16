@@ -1168,7 +1168,7 @@ Columns:
             
             for col in  self.columns:
                 
-                size = col.width if col.width else col.size
+                size = col.width
                 
                 if not size:
                     continue
