@@ -176,8 +176,6 @@ class CsvBundle(LoaderBundle):
 
         for source_name, source in self.metadata.sources.items():
 
-
-
             # This ugliness is b/c get() doesn't take a 'default' arg.
             try:
                 table = source['table']

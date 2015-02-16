@@ -262,7 +262,6 @@ class ValueInserter(ValueWriter):
 
             if isinstance(values, dict):
 
-
                 if self.caster:
                     d, cast_errors = self.caster(values)
 
@@ -275,15 +274,7 @@ class ValueInserter(ValueWriter):
 
             else:
                 raise DeprecationWarning("Inserting lists is no longer supported")
-                if self.caster:
-                    d, cast_errors = self.caster(values)
-                else:
-                    d = values
 
-                d  = dict(zip(self.header, d))
-                
-                if self.skip_none:
-                    d = { k: d[k] if k in d and d[k] is not None else v for k,v in self.null_row.items() }
                 
             if self.update_size:
                 for i,col_name in enumerate(self.sizable_fields):
@@ -301,7 +292,9 @@ class ValueInserter(ValueWriter):
                     self.row_id = max(self.row_id, d['id'] ) + 1
 
             if cast_errors and self.cast_error_handler:
+
                 d = self.cast_error_handler.cast_error(d, cast_errors)
+                cast_errors = None
 
             self.cache.append(d)
          

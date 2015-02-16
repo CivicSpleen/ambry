@@ -502,13 +502,15 @@ def {}(row):
             try:
                 return   f[1](d),{}
             except CastingError as e:
+
                 do = {}
                 cast_errors = {}
 
                 for k,v in d.items():
                     try:
                         do[k] = f[2][k](v)
-                    except CastingError: 
+                    except CastingError:
+
                         do[k+'_code'] = v
                         cast_errors[k] = v
                         do[k] = None
@@ -523,15 +525,9 @@ def {}(row):
         
         f = self.compile()
 
-        if isinstance(row, dict):
+        if isinstance(row, (dict, RowProxy)):
             return self._call_dict(f,row, codify_cast_errors)
 
-        elif isinstance(row, (list,tuple)):
-            raise CasterError("Casters are not implemented for lists and tuples, use zip() to create a dict: dict(zip(headers,row))")
-            return f[0](row) 
-          
-        elif isinstance(row, RowProxy):
-            return self._call_dict(f,row. codify_cast_errors)
         else:
             raise Exception("Unknown row type: {} ".format(type(row)))
         

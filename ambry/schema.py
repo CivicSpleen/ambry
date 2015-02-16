@@ -537,8 +537,6 @@ class Schema(object):
 
         from ambry.transform import CasterTransformBuilder
 
-        # The session isn't needed in
-        #with self.bundle.session as s:
 
         table = self.table(table_name)
 
@@ -554,6 +552,7 @@ class Schema(object):
                     try:
                         t = getattr(self.bundle,c.data['caster'] )
                         bdr.add_type(t)
+
                         break
                     except AttributeError:
                         continue
