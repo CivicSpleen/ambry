@@ -192,6 +192,9 @@ class SqlitePartition(PartitionBase):
         import numpy as np
         df = self.pandas
 
+        if df is None:
+            return # Usually b/c there are no records in the table.
+
         self.close()
         self.bundle.close()
 
@@ -425,6 +428,9 @@ class SqlitePartition(PartitionBase):
             return self.select("SELECT * FROM {}".format(self.get_table().name),index_col=pk).pandas
         except NoSuchColumnError:
             return self.select("SELECT * FROM {}".format(self.get_table().name)).pandas
+        except StopIteration:
+            return None # No records, so no dataframe.
+            #raise Exception("Select failed: {}".format("SELECT * FROM {}".format(self.get_table().name)))
 
     def query(self,*args, **kwargs):
         """Convience function for self.database.query()"""

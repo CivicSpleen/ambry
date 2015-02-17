@@ -1103,8 +1103,8 @@ Columns:
     def column(self, name_or_id, default=None):
         from sqlalchemy.sql import or_
         import sqlalchemy.orm.session
-        from sqlalchemy.orm.exc import NoResultFound
-        from dbexceptions import NotFoundError
+        from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
+        from dbexceptions import NotFoundError,MultipleFoundError
 
         s = sqlalchemy.orm.session.Session.object_session(self)
 
@@ -1122,7 +1122,11 @@ Columns:
                 except:
                     return default
             else:
-                return  q.one()
+                try:
+                    return  q.one()
+                except MultipleResultsFound:
+                    raise MultipleFoundError("Got more than one result for query for column: '{}' ".format(name_or_id))
+
         except NoResultFound:
             raise NotFoundError("Failed to find column '{}' in table '{}' ".format(name_or_id,self.name))
 
