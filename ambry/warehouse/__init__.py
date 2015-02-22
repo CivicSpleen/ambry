@@ -678,11 +678,14 @@ class Warehouse(object):
 
 
                 d['sequence_id'] = i
-                del d['t_vid']
-                del d['t_id']
-                del d['vid']
-                del d['id_']
                 d['derivedfrom'] = c_id
+                try:
+                    del d['t_vid']
+                    del d['t_id']
+                    del d['vid']
+                    del d['id_']
+                except KeyError:
+                    pass # Unsplit names ( cols added in SQL ) don't have any of the keys
 
                 t.add_column(**d)
 

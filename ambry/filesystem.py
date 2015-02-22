@@ -377,8 +377,11 @@ class BundleFilesystem(Filesystem):
             url = source_entry.url
             parsed = urlparse.urlparse(str(url))
 
+        if parsed.scheme == 'file':
+            return parsed.path
 
-        if parsed.scheme  == 's3':
+
+        elif parsed.scheme  == 's3':
             # To keep the rest of the code simple, we'll use the S# cache to generate a signed URL, then
             # download that through the normal process.
             from cache import new_cache

@@ -1447,6 +1447,7 @@ class {name}(Base):
                     if has_codes:
                         self.add_column(table, name+'_codes',datatype='varchar',
                         description='Non-numeric codes extracted from the {} column'.format(name),
+                        data = {'is_code' : 1},
                         derivedfrom=orm_col.id_)
 
 

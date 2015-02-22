@@ -48,10 +48,12 @@ class CsvBundle(LoaderBundle):
         else:
             dialect = None
 
+        delimiter= self.delimiter if self.delimiter else ','
+
         if as_dict:
-            return csv.DictReader(f, delimiter = self.delimiter, dialect=dialect)
+            return csv.DictReader(f, delimiter = delimiter, dialect=dialect)
         else:
-            return csv.reader(f, delimiter=self.delimiter, dialect=dialect)
+            return csv.reader(f, delimiter = delimiter, dialect=dialect)
 
     def get_source(self, source):
         """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
@@ -211,6 +213,8 @@ class ExcelBuildBundle(CsvBundle):
 
     workbook = None # So the derived classes can et to the workbook, esp for converting dates
 
+    decode = False # Set to an encoding from which to decode all strings.
+
     def __init__(self, bundle_dir=None):
         '''
         '''
@@ -228,7 +232,13 @@ class ExcelBuildBundle(CsvBundle):
         values = []
 
         for col in range(s.ncols):
-            values.append(s.cell(row_num, col).value)
+            if self.decode:
+                v = s.cell(row_num, col).value
+                if isinstance(v, basestring):
+                    v = self.decode(v)
+                values.append(v)
+            else:
+                values.append(s.cell(row_num, col).value)
 
         return values
 
@@ -257,7 +267,7 @@ class ExcelBuildBundle(CsvBundle):
 
             return self.srow_to_list(0, s)
 
-    def gen_rows(self, source=None, as_dict=False, segment = None, prefix_headers = ['id']):
+    def gen_rows(self, source=None, as_dict=False, segment = None,   prefix_headers = ['id']):
         """Generate rows for a source file. The source value ust be specified in the sources config"""
         from xlrd import open_workbook
 
@@ -279,12 +289,14 @@ class ExcelBuildBundle(CsvBundle):
 
             for i in range(1,s.nrows):
 
+                row = self.srow_to_list(i, s)
+
                 if as_dict:
-                    yield dict(zip(header, [None]*len(prefix_headers)  + self.srow_to_list(i, s)))
+                    yield dict(zip(header, [None]*len(prefix_headers)  + row))
                 else:
                     # It might seem inefficient to return the header every time, but it really adds only a
                     # fraction of a section for millions of rows.
-                    yield header, [None]*len(prefix_headers)  + self.srow_to_list(i, s)
+                    yield header, [None]*len(prefix_headers)  + row
 
 class TsvBuildBundle(CsvBundle):
 

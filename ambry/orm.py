@@ -1112,7 +1112,7 @@ Columns:
 
         q = (s.query(Column)
                .filter(or_(Column.id_==name_or_id,Column.name==name_or_id))
-               .filter(Column.t_id == self.id_)
+               .filter(Column.t_vid == self.vid)
             )
 
         try:
@@ -1125,7 +1125,8 @@ Columns:
                 try:
                     return  q.one()
                 except MultipleResultsFound:
-                    raise MultipleFoundError("Got more than one result for query for column: '{}' ".format(name_or_id))
+                    raise MultipleFoundError(("Got more than one result for query for column: '{}' "
+                                             " In table {} ({})").format(name_or_id, self.vid, self.name))
 
         except NoResultFound:
             raise NotFoundError("Failed to find column '{}' in table '{}' ".format(name_or_id,self.name))
@@ -1568,6 +1569,22 @@ class Partition(Base, LinkableMixin):
 
         return cd
 
+    @property
+    def stats(self):
+        class Bunch(object):
+            def __init__(self, o):
+                self.__dict__.update(o)
+
+            def __str__(self):
+                return str(self.__dict__)
+
+            def __repr__(self):
+                return str(self.__dict__)
+
+        cols = { s.column.name:Bunch(s.dict) for s in self._stats }
+
+        return Bunch(cols)
+
     @staticmethod
     def before_insert(mapper, conn, target):
         '''event.listen method for Sqlalchemy to set the sequence for this
@@ -1806,7 +1823,7 @@ class ColumnStat(Base, SavableMixin, LinkableMixin):
     id = SAColumn('cs_id',Integer, primary_key=True, nullable=False)
 
     p_vid = SAColumn('cs_p_vid', String(10), ForeignKey('partitions.p_vid'), nullable=False, index=True)
-    partition = relationship('Partition', backref='stats')
+    partition = relationship('Partition', backref='_stats')
 
     c_vid = SAColumn('cs_c_vid', String(12), ForeignKey('columns.c_vid'), nullable=False, index=True)
     column = relationship('Column', backref='stats')
@@ -1835,3 +1852,9 @@ class ColumnStat(Base, SavableMixin, LinkableMixin):
 
                 setattr(self, p.key, kwargs[p.key])
                 del kwargs[p.key]
+
+    @property
+    def dict(self):
+
+        return {p.key: getattr(self, p.key)
+                for p in self.__mapper__.attrs if p.key not in ('data', 'column', 'table')}

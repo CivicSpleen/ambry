@@ -100,5 +100,13 @@ class Bundle(BuildBundle):
 
         return True
 
+    def test(self):
+
+        p = self.partitions.all.pop(0)
+        s = p.stats
+
+        assert s.color.count == 10000
+        assert s.color.nuniques == 5
+
 
 

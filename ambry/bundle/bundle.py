@@ -1345,6 +1345,21 @@ class BuildBundle(Bundle):
 
             self.schema.write_codes()
 
+            f = getattr(self, 'test', False)
+
+            if f:
+                try:
+                    f()
+                except AssertionError as e:
+                    import traceback, sys
+
+                    _, _, tb = sys.exc_info()
+                    traceback.print_tb(tb)  # Fixed format
+                    tb_info = traceback.extract_tb(tb)
+                    filename, line, func, text = tb_info[-1]
+                    self.error("Test case failed on line {} : {}".format(line, text))
+                    return False
+
             self.set_value('process', 'last', datetime.now().isoformat())
             self.set_build_state( 'built')
 
