@@ -362,11 +362,11 @@ def bundle_info(args, b, st, rc):
         if args.stats:
             for p in b.partitions.all:
                 b.log("--- Stats for {}: ".format(p.identity))
-
+                b.log("{:20.20s} {:>7s} {:>7s} {:s}".format("Col name", "Count", 'Uniq', 'Sample Values'))
                 for col_name, s in p.stats.__dict__.items():
 
-                    b.log("{:20.20s} {:7d} {:s}".format(col_name, s.count, ','.join(s.uvalues.keys()[:5])))
-                     
+                    b.log("{:20.20s} {:7d} {:7d} {:s}".format(col_name, s.count, s.nuniques, ','.join(s.uvalues.keys()[:5])))
+
 
 
 
