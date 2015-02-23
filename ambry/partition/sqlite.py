@@ -190,6 +190,7 @@ class SqlitePartition(PartitionBase):
         """
         import pandas as pd
         import numpy as np
+        import json
         df = self.pandas
 
         if df is None:
@@ -228,7 +229,7 @@ class SqlitePartition(PartitionBase):
 
                 row['nuniques'] = df[col_name].dropna().nunique()
 
-                if col.type_is_text() and float(row['nuniques']) < (row['count']/10) :
+                if col.type_is_text() :
                     row['uvalues'] = df[col_name].value_counts().sort(inplace=False, ascending=False)[:100].to_dict()
 
                 p.add_stat(col.vid, row)
@@ -263,7 +264,6 @@ class SqlitePartition(PartitionBase):
             bundle_s.add(self.record)
 
             bundle_s.commit()
-
 
         self.set_state(Partitions.STATE.FINALIZED)
 
@@ -301,112 +301,6 @@ class SqlitePartition(PartitionBase):
                 s.commit()
 
 
-    def csvize(self, logger=None, store_library=False, write_header=False, rows_per_seg=None):
-        '''Convert this partition to CSV files that are linked to the partition'''
-
-        raise DeprecationWarning()
-
-        self.table = self.get_table()
-        
-        if self.record_count:
-            self.write_basic_stats()
-
-        if not rows_per_seg:
-            rows_per_seg = self.optimal_rows_per_segment()
-  
-        
-        if logger:
-            logger.always("Csvize: {} rows per segment".format(rows_per_seg))
-        
-        ins  =  None
-        p = None
-        seg = 0
-        ident = None
-        count = 0
-        min_key = max_key = None
-
-        pk = self.table.primary_key.name
-
-        def _store_library(p):
-            if store_library:
-                if logger:
-                    logger.always("Storing {} to Library".format(p.identity.name), now=True)
-                    
-                dst, _,_ = self.bundle.library.put(p)
-                p.database.delete()
-                
-                if logger:
-                    logger.always("Stored at {}".format(dst), now=True)            
-
-        for i,row in enumerate(self.rows):
-
-            if not min_key:
-                min_key = row[pk]
-
-            if i % rows_per_seg == 0:
-                      
-                if p: # Don't do it on the first record. 
-                    p.write_basic_stats(min_key, max_key, count)
-                    count = 0
-                    min_key = row[pk]
-                    ins.close()
-
-                    _store_library(p)
-
-                seg += 1
-                ident = self.identity
-                ident.segment = seg
-
-                p = self.bundle.partitions.find_or_new_csv(**vars(ident.name.as_partialname()))
-
-                ins = p.inserter( write_header=write_header)
-
-                if logger:
-                    logger.always("New CSV Segment: {}".format(p.identity.name), now=True)
-                
-            count += 1
-            ins.insert(dict(row))
-            max_key = row[pk]
-       
-            if logger:
-                logger("CSVing for {}".format(ident.name))
-
-        # make sure we get the last partition
-        if p:
-            p.write_basic_stats(min_key, max_key, count)
-            ins.close()
-            _store_library(p)
-
-    def get_csv_parts(self):
-        from ..identity import PartitionNameQuery
-        ident = self.identity.clone()   
-        ident.format = 'csv'
-        ident.segment = PartitionNameQuery.ANY
-
-        raise DeprecationWarning()
-
-        return self.bundle.partitions.find_all(PartitionNameQuery(id_=ident))
-
-    def load_csv(self, table=None, parts=None):
-        '''Loads the database from a collection of CSV files that have the same identity, 
-        except for a format of 'csv' and possible segments. '''
-
-        raise DeprecationWarning()
-
-        if not parts:
-            parts = self.get_csv_parts()
-
-        
-        self.clean()
-      
-        lr = self.bundle.init_log_rate(100000)
-      
-        if table is None:
-            table = self.table
-      
-        for p in parts:
-            self.bundle.log("Loading CSV partition: {}".format(p.identity.vname))
-            self.database.load(p.database, table, logger=lr )
 
     @property
     def rows(self):

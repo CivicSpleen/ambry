@@ -203,6 +203,7 @@ def bundle_parser(cmd):
     command_p.add_argument('-s','--schema',  default=False,action="store_true",
                            help='Dump the schema as a CSV. The bundle must have been prepared')
     command_p.add_argument('-d', '--dep', default=False, help='Report information about a dependency')
+    command_p.add_argument('-S', '--stats',default=False,action="store_true",  help='Also report column stats')
 
     #
     # Clean Command
@@ -292,6 +293,7 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='pull', command_group='source')
 
 def bundle_info(args, b, st, rc):
+    import json
     from ..dbexceptions import DatabaseMissingError
 
     if args.dep:
@@ -356,6 +358,16 @@ def bundle_info(args, b, st, rc):
             b.log("---- Dependencies ---")
             for k, v in deps:
                 b.log("{}: {}".format(k, v))
+
+        if args.stats:
+            for p in b.partitions.all:
+                b.log("--- Stats for {}: ".format(p.identity))
+
+                for col_name, s in p.stats.__dict__.items():
+
+                    b.log("{:20.20s} {:7d} {:s}".format(col_name, s.count, ','.join(s.uvalues.keys()[:5])))
+                     
+
 
 
 def bundle_clean(args, b, st, rc):
