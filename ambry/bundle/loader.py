@@ -5,6 +5,7 @@
 from  ambry.bundle import BuildBundle
 
 class LoaderBundle(BuildBundle):
+    prefix_headers = ['id']
 
     def mangle_column_name(self, n):
         """
@@ -38,6 +39,7 @@ class CsvBundle(LoaderBundle):
     """A Bundle variant for loading CSV files"""
 
     delimiter = None
+
 
     def get_csv_reader(self, f, as_dict = False, sniff = False):
         import csv
@@ -88,7 +90,7 @@ class CsvBundle(LoaderBundle):
 
         return fn
 
-    def gen_rows(self, source, as_dict=False, prefix_headers = ['id']):
+    def gen_rows(self, source, as_dict=False, prefix_headers = None):
         """
         Generate rows for a source file. The source value ust be specified in the sources config
 
@@ -99,6 +101,9 @@ class CsvBundle(LoaderBundle):
         :return:
         """
         import csv
+
+        if prefix_headers is None:
+            prefix_headers = self.prefix_headers
 
         fn = self.get_source(source)
 
@@ -121,9 +126,12 @@ class CsvBundle(LoaderBundle):
 
                 header = [ x if x else "column{}".format(i) for i, x in enumerate(header)]
 
-                for row in r:
+                for i, row in enumerate(r):
 
-                     yield header, [None]*len(prefix_headers) + row
+                    yield header, [None]*len(prefix_headers) + row
+
+                    if self.run_args.test and i > 5000:
+                        break
 
 
     def make_table_for_source(self, source_name):
@@ -162,6 +170,9 @@ class CsvBundle(LoaderBundle):
         with self.session:
             for source_name, source in self.metadata.sources.items():
 
+                if source.is_loadable is False:
+                    continue
+
                 table = self.make_table_for_source(source_name)
 
                 header, row = self.gen_rows(source_name, as_dict=False).next()
@@ -174,38 +185,56 @@ class CsvBundle(LoaderBundle):
 
         return True
 
+    def build_create_partition(self, source_name):
+        """Create or find a partition based on the source"""
+        # This ugliness is b/c get() doesn't take a 'default' arg.
+
+        source = self.metadata.sources[source_name]
+
+        try:
+            table = source['table']
+
+            if not table:
+                table = source_name
+
+        except:
+            table = source_name
+
+        assert bool(table)
+
+        return self.partitions.find_or_new(table=table)
+
+
     def build(self):
 
         for source_name, source in self.metadata.sources.items():
 
-            # This ugliness is b/c get() doesn't take a 'default' arg.
-            try:
-                table = source['table']
+            if source.is_loadable is False:
+                continue
 
-                if not table:
-                    table = source_name
 
-            except:
-                table = source_name
-
-            assert bool(table)
-
-            p = self.partitions.find_or_new(table=table)
+            p = self.build_create_partition(source_name)
 
             self.log("Loading source '{}' into partition '{}'".format(source_name, p.identity.name))
 
             lr = self.init_log_rate(print_rate = 5)
 
+            columns = [c.name for c in p.table.columns ]
             header = [c.name for c in p.table.columns]
 
+
+            mod_row = getattr(self, 'build_modify_row', False)
+
             with p.inserter() as ins:
-               for _, row in self.gen_rows(source_name):
-                   lr(str(p.identity.name))
+                for _, row in self.gen_rows(source_name):
+                    lr(str(p.identity.name))
 
-                   d = dict(zip(header, row))
+                    d = dict(zip(header, row))
 
-                   ins.insert(d)
+                    if mod_row:
+                        mod_row(p, source, d)
 
+                    ins.insert(d)
 
         return True
 
@@ -267,9 +296,12 @@ class ExcelBuildBundle(CsvBundle):
 
             return self.srow_to_list(0, s)
 
-    def gen_rows(self, source=None, as_dict=False, segment = None,   prefix_headers = ['id']):
+    def gen_rows(self, source=None, as_dict=False, segment = None,   prefix_headers = None ):
         """Generate rows for a source file. The source value ust be specified in the sources config"""
         from xlrd import open_workbook
+
+        if prefix_headers is None:
+            prefix_headers = self.prefix_headers
 
         fn, sheet_num = self.get_wb_sheet(source, segment)
 

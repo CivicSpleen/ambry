@@ -320,6 +320,18 @@ def source_new(args, l, st, rc):
         'description': 'Web page that links to the source files.'
     }
 
+    b.metadata.external_documentation.dataset = {
+        'url': 'http://example.com',
+        'title': "Dataset Page",
+        'description': 'Main webpage for the dataset.'
+    }
+
+    b.metadata.external_documentation.documentation = {
+        'url': 'http://example.com',
+        'title': "Main Documentation",
+        'description': 'The primary documentation file'
+    }
+
     b.update_configuration()
 
     p = lambda x : os.path.join(os.path.dirname(__file__),'..','support',x)
@@ -369,11 +381,9 @@ def source_build(args, l, st, rc):
     if not dir_:
         dir_ = rc.sourcerepo.dir
         
-    
-        
+
     def build(bundle_dir):
         from ambry.library import new_library
-
 
 
         # Import the bundle file from the directory

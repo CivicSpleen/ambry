@@ -73,6 +73,7 @@ class SourceTerm(DictTerm):
     file = ScalarTerm(store_none=False) # A name or regex to extract from a multi-file ZIP
     segment = ScalarTerm(store_none=False)  # Specify a sub-component of the file, like a sheet in an excel workbook.
     comment = ScalarTerm(store_none=False)  # Just a comment
+    is_loadable = ScalarTerm(store_none=False)  # If false, ignore in auto-loading
     time = ScalarTerm(store_none=False)  # Specify a time component, usually a year.
     space = ScalarTerm(store_none=False)  # Specify a space component
     grain = ScalarTerm(store_none=False)  # Specify a grain component

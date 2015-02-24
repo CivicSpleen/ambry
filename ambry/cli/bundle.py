@@ -336,10 +336,15 @@ def bundle_info(args, b, st, rc):
 
             b.log("Parts: {}".format(b.partitions.count))
 
-            if b.partitions.count < 5 and b.partitions.count > 0:
-                b.log("---- Partitions ---")
-                for partition in b.partitions:
-                    b.log("    "+partition.identity.sname)
+            b.log("---- Partitions ---")
+            for i, partition in enumerate(b.partitions):
+                b.log("    "+partition.identity.sname)
+
+                if i > 10:
+                    b.log("    ... and {} more".format(b.partitions.count - 10))
+                    break
+
+
 
         deps = None
         if b.metadata.dependencies:
