@@ -109,7 +109,7 @@ class CsvBundle(LoaderBundle):
 
         self.log("Generating rows from {}".format(fn))
 
-        with open(fn) as f:
+        with open(fn,'rU') as f:
 
             r = self.get_csv_reader(f, as_dict=as_dict)
 
@@ -159,6 +159,23 @@ class CsvBundle(LoaderBundle):
         else:
             return OrderedDict([ (self.mangle_column_name(x),x) for x in header if x] )
 
+    def meta_for_source(self, source_name):
+
+        with self.session:
+            source = self.metadata.sources[source_name]
+
+            if source.is_loadable is False:
+                return
+
+            table = self.make_table_for_source(source_name)
+
+            header, row = self.gen_rows(source_name, as_dict=False).next()
+
+            self.schema.update_from_iterator(table.name,
+                                             header=self.mangle_header(header),
+                                             iterator=self.gen_rows(source_name, as_dict=False),
+                                             max_n=1000,
+                                             logger=self.init_log_rate(500))
 
     def meta(self):
 
@@ -167,21 +184,10 @@ class CsvBundle(LoaderBundle):
         if not self.run_args.get('clean', None):
             self._prepare_load_schema()
 
-        with self.session:
-            for source_name, source in self.metadata.sources.items():
+        for source_name, source in self.metadata.sources.items():
+            self.meta_for_source(source_name)
 
-                if source.is_loadable is False:
-                    continue
 
-                table = self.make_table_for_source(source_name)
-
-                header, row = self.gen_rows(source_name, as_dict=False).next()
-
-                self.schema.update_from_iterator(table.name,
-                                   header = self.mangle_header(header),
-                                   iterator=self.gen_rows(source_name, as_dict=False),
-                                   max_n=1000,
-                                   logger=self.init_log_rate(500))
 
         return True
 
@@ -205,37 +211,39 @@ class CsvBundle(LoaderBundle):
         return self.partitions.find_or_new(table=table)
 
 
+    def build_from_source(self, source_name):
+
+        source = self.metadata.sources[source_name]
+
+        if source.is_loadable is False:
+            return
+
+        p = self.build_create_partition(source_name)
+
+        self.log("Loading source '{}' into partition '{}'".format(source_name, p.identity.name))
+
+        lr = self.init_log_rate(print_rate=5)
+
+        header = [c.name for c in p.table.columns]
+
+        mod_row = getattr(self, 'build_modify_row', False)
+
+        with p.inserter() as ins:
+            for _, row in self.gen_rows(source_name):
+                lr(str(p.identity.name))
+
+                d = dict(zip(header, row))
+
+                if mod_row:
+                    mod_row(p, source, d)
+
+                ins.insert(d)
+
+
+
     def build(self):
-
-        for source_name, source in self.metadata.sources.items():
-
-            if source.is_loadable is False:
-                continue
-
-
-            p = self.build_create_partition(source_name)
-
-            self.log("Loading source '{}' into partition '{}'".format(source_name, p.identity.name))
-
-            lr = self.init_log_rate(print_rate = 5)
-
-            columns = [c.name for c in p.table.columns ]
-            header = [c.name for c in p.table.columns]
-
-
-            mod_row = getattr(self, 'build_modify_row', False)
-
-            with p.inserter() as ins:
-                for _, row in self.gen_rows(source_name):
-                    lr(str(p.identity.name))
-
-                    d = dict(zip(header, row))
-
-                    if mod_row:
-                        mod_row(p, source, d)
-
-                    ins.insert(d)
-
+        for source_name in self.metadata.sources:
+            self.build_from_source(source_name)
         return True
 
 class ExcelBuildBundle(CsvBundle):

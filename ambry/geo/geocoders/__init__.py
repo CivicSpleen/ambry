@@ -6,7 +6,7 @@ class DstkGeocoder(object):
     """A Batch geocoder interface for the DataScienceToolkit server"""
     submit_size = 100
 
-    def __init__(self, url, address_gen):
+    def __init__(self, options, address_gen):
         """
         Batch geocode addresses using DSTK
 
@@ -16,10 +16,14 @@ class DstkGeocoder(object):
         :return:
         """
         import dstk
-        self.url = url
+
+        if isinstance(options, basestring):
+            options = { 'apiBase': options } # Single string, not an options dict
+
+
         self.gen = address_gen
 
-        self.dstk_client = dstk.DSTK(self.url)
+        self.dstk_client = dstk.DSTK(options)
 
     def geocode(self):
         """A Generator that reads from the address generators and returns geocode results.
