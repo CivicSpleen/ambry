@@ -766,7 +766,10 @@ class Warehouse(object):
                     self.build_sample(t)
                     s.add(t)
 
+
         s.commit()
+
+        self.install_union()
 
         # Update the documentation files in the library
 
