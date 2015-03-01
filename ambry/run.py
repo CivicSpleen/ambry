@@ -29,10 +29,15 @@ class RunConfig(object):
     earlier ones. 
     '''
 
+    AMBRY_CONFIG_ENV_VAR = 'AMBRY_CONFIG'  # Name of the evironmental var for the config file.
+
     ROOT_CONFIG = '/etc/ambry.yaml'
-    USER_CONFIG = os.path.expanduser('~/.ambry.yaml')
+    USER_CONFIG = os.getenv(AMBRY_CONFIG_ENV_VAR) if os.getenv(AMBRY_CONFIG_ENV_VAR) else os.path.expanduser('~/.ambry.yaml')
     USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
-    DIR_CONFIG = os.path.join(os.getcwd(),'ambry.yaml')
+    try:
+        DIR_CONFIG = os.path.join(os.getcwd(),'ambry.yaml') # In webservers, there is no cwd
+    except OSError:
+        DIR_CONFIG = None
 
     config = None
     files = None
@@ -103,7 +108,11 @@ class RunConfig(object):
 
     def group(self, name):
         '''return a dict for a group of configuration items.'''
-        
+
+        if not name in self.config:
+            raise ConfigurationError( ("No group '{}' in configuration.\n" +
+                                     "Config has: {}\nLoaded: {}").format(name, self.config.keys(), self.loaded))
+
         return self.config.get(name,{})
 
     def group_item(self, group, name):
@@ -111,7 +120,7 @@ class RunConfig(object):
         from dbexceptions import ConfigurationError
         
         g = self.group(group)
-        
+
         if not name in g:
             raise ConfigurationError(("Could not find name '{}' in group '{}'. \n"+
                                       "Config has: {}\nLoaded: {}").format(name, group, g.keys(), self.loaded))
@@ -126,11 +135,10 @@ class RunConfig(object):
 
         for path, subdicts, values in walk_dict(e):
             for k,v in values:
-                
-                if v is None:
 
-                    raise Exception('Got None value: {} {} {} {} '.format(path, subdicts, k, v))
-                
+                if v is None:
+                    continue
+
                 path_parts = path.split('/')
                 path_parts.pop()
                 path_parts.pop(0)
@@ -190,20 +198,32 @@ class RunConfig(object):
             return stream
         
 
-    def filesystem(self,name):
-        e =  self.group_item('filesystem', name) 
+    def filesystem(self,name, missing_is_dir=False):
+
+        try:
+            e =  self.group_item('filesystem', name)
+        except ConfigurationError:
+
+            if missing_is_dir:
+                e = dict(dir=name)
+            else:
+                raise
+
+        fs = self.group('filesystem')
+        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
 
         # If the value is a string, rather than a dict, it is for a
         # FsCache. Re-write it to be the expected type.
 
         if isinstance(e, basestring):
-            e = dict(dir=e)
+            import urlparse
+            parts = urlparse.urlparse(e)
 
-
-        fs = self.group('filesystem') 
-        root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
-
-
+            if not parts.scheme:
+                e = dict(dir=e)
+            else:
+                from ckcache import parse_cache_string
+                e = parse_cache_string(e, root_dir)
 
         e =  self._sub_strings(e, {
                                      'upstream': lambda k,v: self.filesystem(v),
@@ -211,11 +231,12 @@ class RunConfig(object):
                                      'dir' : lambda k,v: v.format(root=root_dir)
                                      }  )
 
+
         return e
 
 
     def service(self, name):
-
+        """For configuring the client side of services"""
         from util import parse_url_to_dict, unparse_url_dict
 
 
@@ -231,15 +252,46 @@ class RunConfig(object):
         if e.get('url', False):
             e.update(parse_url_to_dict(e['url']))
 
+        hn = e.get('hostname',e.get('host', None))
+
         try:
-            account = self.account(e['hostname'])
+            account = self.account(hn)
             e['account'] = account
             e['password'] = account.get('password', e['password'])
             e['username'] = account.get('username', e['username'])
         except ConfigurationError:
-            e['account'] = 'No account found'
+            e['account'] = None
+
+        e['hostname'] = e['host'] = hn
+
 
         e['url'] = unparse_url_dict(e)
+
+
+        return e
+
+    def servers(self, name, default = None):
+        """For configuring the server side of services"""
+        from util import parse_url_to_dict, unparse_url_dict
+
+        try:
+            e = self.group_item('servers', name)
+        except ConfigurationError:
+            if not default:
+                raise
+            e = default
+
+        # If the value is a string, rather than a dict, it is for a
+        # FsCache. Re-write it to be the expected type.
+
+        try:
+            account = self.account(e['host'])
+            e['account'] = account
+            e['password'] = account.get('password', e['password'])
+            e['username'] = account.get('username', e['username'])
+        except ConfigurationError:
+            e['account'] = None
+
 
         return e
 
@@ -273,7 +325,6 @@ class RunConfig(object):
 
             r.append(parse_cache_string(remote, root_dir))
 
-
         return r
 
 
@@ -294,11 +345,9 @@ class RunConfig(object):
             e['source'] = fs.get('source',None)
 
 
-
         e =  self._sub_strings(e, {
-                                     'filesystem': lambda k,v: self.filesystem(v),
-                                     'database': lambda k,v: self.database(v),
-                                     'upstream': lambda k,v: self.filesystem(v),
+                                     'filesystem': lambda k,v: self.filesystem(v, missing_is_dir=True),
+                                     'database': lambda k,v: self.database(v, missing_is_dsn=True),
                                      'account': lambda k, v: self.account(v),
                                      'remotes': lambda k, v: self.remotes(v),
                                      'cdn': lambda k,v: self.account(v),
@@ -314,24 +363,65 @@ class RunConfig(object):
         e['_name'] = name
         e['root'] = root_dir
 
+        if not 'warehouses' in e:
+            e['warehouses'] = self.filesystem('warehouses')
+
         return e
     
 
-    
     def warehouse(self,name):
-        e =  self.group_item('warehouse', name) 
+        from warehouse import database_config
 
-        return self._sub_strings(e, {
-                                     'database': lambda k,v: self.database(v),
-                                     'account': lambda k,v: self.account(v),
-                                     'library': lambda k,v: self.database(v),
-                                     }  )
-    def database(self,name):
+        e =  self.group_item('warehouse', name)
+
+        # The warehouse can be specified as a single database string.
+        if isinstance(e, basestring):
+            return database_config(e)
+
+        else:
+
+            e =  self._sub_strings(e, {
+                                         'account': lambda k,v: self.account(v),
+                                         'library': lambda k,v: self.database(v),
+                                         }  )
+
+            if 'database' in e and isinstance(e['database'], basestring):
+                e.update( database_config(e['database']))
+
+
+        return e
+
+
+    def database(self,name, missing_is_dsn = False):
         
         fs = self.group('filesystem') 
         root_dir = fs['root'] if 'root' in fs  else  '/tmp/norootdir'
-        
-        e = self.group_item('database', name) 
+
+        try:
+            e = self.group_item('database', name)
+        except ConfigurationError:
+            if missing_is_dsn:
+                e = name.format(root=root_dir.rstrip('/'))
+            else:
+                raise
+
+
+        # If the value is a string rather than a dict, it is a DSN string
+
+        if isinstance(e, basestring):
+            from util import parse_url_to_dict
+            d = parse_url_to_dict(e)
+
+            e = dict(
+                server=d['hostname'],
+                dbname = d['path'].rstrip('/'),
+                driver = d['scheme'],
+                password = d.get('password', None),
+                username = d.get('username',None)
+            )
+
+            if e['server'] and not e['password']:
+                e['account']  = "{driver}://{username}@{server}/{dbname}".format(**e)
 
         e =  self._sub_strings(e, {'dbname' : lambda k,v: v.format(root=root_dir),
                                    'account': lambda k,v: self.account(v),}  )
@@ -343,9 +433,11 @@ class RunConfig(object):
             if 'password' in account:
                 e['user'] = account['user']
                 e['password'] = account['password']
-                
-        e = e.to_dict()
 
+        try:
+            e = e.to_dict()
+        except AttributeError:
+            pass # Already a dict b/c converted from string
         return e
 
 
@@ -410,6 +502,9 @@ def mp_run(mp_run_args):
         b.log("MP Run: pid={} {}{} ".format(os.getpid(),method.__name__, args))
 
         try:
+            # This close is really important; the child process can't be allowed to use the database
+            # connection created by the parent; you get horrible breakages in random places.
+            b.close()
             method(*args)
         except:
             b.close()

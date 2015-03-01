@@ -11,6 +11,12 @@ from ..util import Constant
 from ..identity import LocationRef
 import os
 
+
+def make_data_store_uid(dsn):
+    from ..identity import TopNumber
+
+    return str(TopNumber.from_string(dsn, 's'))
+
 class Files(object):
 
 
@@ -22,6 +28,11 @@ class Files(object):
     TYPE.UPSTREAM = LocationRef.LOCATION.UPSTREAM
     TYPE.REMOTE = LocationRef.LOCATION.REMOTE
     TYPE.REMOTEPARTITION = LocationRef.LOCATION.REMOTEPARTITION
+
+    TYPE.MANIFEST = 'manifest'
+    TYPE.DOC = 'doc'
+    TYPE.EXTRACT = 'extract'
+    TYPE.STORE = 'store'
 
 
     def __init__(self, db, query=None):
@@ -112,7 +123,11 @@ class Files(object):
 
     def type(self, v):
         self._check_query()
-        self._query = self._query.filter(File.type_ == v)
+        if isinstance(v, basestring):
+            self._query = self._query.filter(File.type_ == v)
+        else:
+            self._query = self._query.filter(File.type_.in_(v))
+
         return self
 
     def group(self, v):
@@ -136,18 +151,23 @@ class Files(object):
                                          File.type_ == self.TYPE.PARTITION))
         return self
 
-    def new_file(self, merge=False, commit = True, **kwargs):
+    def new_file(self, merge=False, commit = True, extant = None, **kwargs):
         """
         If merge is 'collect', the files will be added to the collection, for later
         insertion.
         """
 
+        f = File(**kwargs)
+
+        if extant:
+            extant.update(f)
+            f = extant
+
         if merge:
-            f = File(**kwargs)
             self.merge(f, commit=commit)
-            return f
-        else:
-            return File(**kwargs)
+
+        return f
+
 
     def insert_collection(self):
 
@@ -159,7 +179,7 @@ class Files(object):
         self._collection = []
 
     def merge(self, f, commit = True):
-        '''If commit is 'collect' add the files to the collectoin for later insertion. '''
+        '''If commit is 'collect' add the files to the collection for later insertion. '''
         from sqlalchemy.exc import IntegrityError
 
         s = self.db.session
@@ -167,7 +187,7 @@ class Files(object):
         path = f.path
 
         if True:
-            if os.path.exists(path):
+            if path and os.path.exists(path):
                 stat = os.stat(path)
 
                 if not f.modified or stat.st_mtime > f.modified:
@@ -185,11 +205,13 @@ class Files(object):
         # Sqlalchemy doesn't automatically rollback on exceptions, and you
         # can't re-try the commit until you roll back.
         try:
+
             s.add(f)
             if commit:
                 self.db.commit()
 
         except IntegrityError as e:
+
             s.rollback()
 
             s.merge(f)
@@ -197,8 +219,7 @@ class Files(object):
                 self.db.commit()
             except IntegrityError as e:
                 s.rollback()
-                pass
-
+                raise
 
         self.db._mark_update()
 
@@ -207,7 +228,7 @@ class Files(object):
 
         ident = bundle.identity
 
-        if self.query.group(cache.repo_id).type(Files.TYPE.BUNDLE).path(bundle.database.path).one_maybe:
+        if self.query.group(cache.repo_id).type(Files.TYPE.BUNDLE).ref(ident.vid).one_maybe:
             return False
 
         return self.new_file(
@@ -227,10 +248,12 @@ class Files(object):
 
         """
 
-        if self.query.group(cache.repo_id).type(Files.TYPE.PARTITION).path(partition.database.path).one_maybe:
+        ident = partition.identity
+
+        if self.query.group(cache.repo_id).type(Files.TYPE.PARTITION).ref(ident.vid).one_maybe:
             return False
 
-        ident = partition.identity
+
 
         return self.new_file(
             commit=commit,
@@ -265,6 +288,8 @@ class Files(object):
         """Set a reference to a remote partition"""
 
 
+        assert bool(str(ident.cache_key)), "File path can't be null'"
+
         return self.new_file(
             commit = commit,
             merge=True,
@@ -287,10 +312,170 @@ class Files(object):
             path=bundle.bundle_dir,
             group=source.base_dir,
             ref=bundle.identity.vid,
-            state='installed',
+            state=bundle.build_state,
             type_=Files.TYPE.SOURCE,
             data=None,
             hash=None,
             priority=None,
             source_url=None, )
 
+
+
+    def install_data_store(self, dsn, type, ref = None,
+                           name = None, title = None, summary = None,
+                           cache = None, url = None, commit=True):
+        """A reference for a data store, such as a warehouse or a file store.
+        """
+
+        import hashlib
+
+
+        extant  = self.query.path(dsn).group(self.TYPE.STORE).one_maybe
+
+        kw = dict(commit=commit, merge=True, extant=extant,
+                  path=dsn,
+                  group=self.TYPE.STORE,
+                  ref=ref if ref else make_data_store_uid(dsn),
+                  state=None,
+                  type_=type,
+                  data=dict(
+                      name=name,
+                      title=title,
+                      summary=summary,
+                      cache=cache,
+                      url = url,
+
+                  ),
+                  source_url=None)
+
+
+        f = self.new_file(**kw)
+
+
+        return f
+
+    def _process_source_content(self, path, source = None, content = None):
+        """Install a file reference, possibly with binary content"""
+        import os
+        from ..util import md5_for_file
+        import hashlib
+        import time
+
+        hash = None
+        size = None
+        modified = None
+
+        if bool(path) and path.startswith('http'):
+
+            import requests
+
+            r = requests.get(path)
+
+            r.raise_for_status()
+
+            content = r.content
+
+        elif bool(path):
+
+            source = path
+
+        if source:
+
+            try:
+                # Try source as file-like
+                content = source.read()
+
+                hash = hashlib.md5(content).hexdigest()
+                size = len(content)
+                modified = int(time.time())
+
+            except (IOError, AttributeError):  # Nope, try it as a filename.
+
+                with open(source) as sf:
+                    content = sf.read()
+
+                stat = os.stat(source)
+
+                if not modified or stat.st_mtime > modified:
+                    modified = int(stat.st_mtime)
+
+                size = stat.st_size
+
+                hash = md5_for_file(source)
+
+        elif content:
+
+
+            hash = hashlib.md5(content).hexdigest()
+            size = len(content)
+            modified = int(time.time())
+
+        else:
+            raise ValueError("Must provied an existing path, source or content. ")
+
+
+        if not content:
+            raise ValueError("Didn't get non-zero sized content from path , source or content")
+
+        return dict(hash=hash, size=size, modified=modified, content=content)
+
+
+    def install_manifest(self, manifest, warehouse = None, commit=True):
+        """Store a references to, and content for, a manifest
+        """
+
+        extant = self.query.ref(manifest.uid).group(self.TYPE.MANIFEST).one_maybe
+
+
+        f = self.new_file(commit=commit, merge=True, extant = extant,
+            path=manifest.path,
+            group=self.TYPE.MANIFEST,
+            ref=manifest.uid,
+            state=None,
+            type_=self.TYPE.MANIFEST,
+            data=manifest.dict,
+            source_url=manifest.uid,
+            **(self._process_source_content(manifest.path))
+
+        )
+
+        if warehouse:
+
+            whf = self.query.path(warehouse.database.dsn).group(self.TYPE.STORE).one_maybe
+
+            if not whf:
+                from ..dbexceptions import NotFoundError
+                raise NotFoundError("No record for database with dsn: '{}'".format(warehouse.database.dsn))
+
+
+            f.link_store(whf)
+            whf.link_manifest(f)
+
+            self.db.commit()
+
+        return f
+
+
+    def install_extract(self, path, source, d, commit=True):
+        """Create a references for an extract. The extract hasn't been extracted yet, so
+        there is no content, hash, etc. """
+
+        f = self.query.path(path).type(self.TYPE.EXTRACT).one_maybe
+
+        if f:
+            f.state = 'installed' # This interacts with marking it 'deletable' in install_manifest
+            self.merge(f)
+            return f
+
+        return self.new_file(
+            commit=commit,
+            merge=True,
+            path=path,
+            group=self.TYPE.MANIFEST,
+            ref=path,
+            state='installed',
+            type_=self.TYPE.EXTRACT,
+            data=d,
+
+            source_url=source
+        )

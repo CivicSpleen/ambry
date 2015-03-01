@@ -1,0 +1,7 @@
+build: {}
+dependencies: {}
+sources:
+    example:
+        description: description
+        url: http://example.com
+views: {}

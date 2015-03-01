@@ -710,6 +710,13 @@ def get_dataset_file(did, library):
 @get('/datasets/<did>/<typ:re:schema\\.?.*>')
 @CaptureException
 def get_dataset_schema(did, typ, library):
+    """
+
+    :param did:
+    :param typ:
+    :param library:
+    :return:
+    """
     from ambry.cache import RemoteMarker
 
     ct = _get_ct(typ)
@@ -966,7 +973,6 @@ def test_run(config):
     from bottle import run, debug #@UnresolvedImport
 
     debug()
-
 
     lf = lambda: new_library(config, True)
 

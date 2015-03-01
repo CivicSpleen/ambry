@@ -353,6 +353,7 @@ class Resolver(object):
                 out[d.vid] = d.identity
 
             # Locations in the identity are set in add_file
+
             if f:
 
                 if not p:
@@ -363,7 +364,7 @@ class Resolver(object):
                     # Also need to set the location in the dataset, or the location
                     # filtering may fail later.
                     lrc = LocationRef.LOCATION
-                    d_f_type = {lrc.REMOTEPARTITION: lrc.REMOTE,lrc.PARTITION: lrc.LIBRARY}.get(f.type_, None)
+                    d_f_type = {lrc.REMOTEPARTITION: lrc.REMOTE, lrc.PARTITION: lrc.LIBRARY}.get(f.type_, None)
                     out[d.vid].locations.set(d_f_type)
 
             if p:
@@ -413,11 +414,7 @@ class Resolver(object):
         returns:
             A list of identities, either Identity, for datasets, or PartitionIdentity
             for partitions.
-
-
         '''
-
-
 
         def like_or_eq(c,v):
 

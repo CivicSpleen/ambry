@@ -1,0 +1,23 @@
+table,seq,column,is_pk,is_fk,type,size,description,id
+example,1,id,1,,INTEGER,,A Pretty Good Table,tfY0NJscai01
+example,2,uuid,,,VARCHAR,36,A random UUID,cfY0NJscai01002
+example,3,int,,,INTEGER,3,A random integer,cfY0NJscai01003
+example,4,float,,,REAL,,,cfY0NJscai01004
+,,,,,,,,
+example2,1,id,1,,INTEGER,,Another Table,tfY0NJscai02
+example2,2,uuid2,,,VARCHAR,,A random UUID,cfY0NJscai02002
+example2,3,int2,,,INTEGER,,A random integer,cfY0NJscai02003
+example2,4,example_id,,tfY0NJscai01,INTEGER,,A Foreign Key link,cfY0NJscai02004
+example2,5,float,,,REAL,,,cfY0NJscai02005
+example2,8,example1_id,,c4y30WDM9f01002,INTEGER,,A Foreign Key link,cfY0NJscai02008
+,,,,,,,,
+example3,1,id,1,,INTEGER,,Another Table,tfY0NJscai03
+example3,2,int_squared,,,VARCHAR,,A random UUID,cfY0NJscai03002
+example3,3,int_float,,,REAL,,A random integer,cfY0NJscai03003
+,,,,,,,,
+links,1,id,1,,INTEGER,,Links to Other tables,tfY0NJscai04
+links,2,example2_id,,tfY0NJscai02,INTEGER,4,,cfY0NJscai04002
+links,3,example3_id,,tfY0NJscai03,INTEGER,4,,cfY0NJscai04003
+,,,,,,,,
+example4,1,id,,,INTEGER,,,cfY0NJscai05001
+example4,2,int_5,,,INTEGER,,Five times the int,cfY0NJscai05002

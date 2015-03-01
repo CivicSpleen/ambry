@@ -27,11 +27,6 @@ warehouse:
     default:
       database: postgres_warehouse
 
-    redshift:
-      service: redshift
-      database: redshift
-      library: redshift_library
-
     postgres1:
         service: postgres
         database:
@@ -41,24 +36,10 @@ warehouse:
             username: test
             password: test
 
-    mysql:
-      service: relational
-      database: mysql_warehouse
-      library: mysql_library
-
-    sqlite:
-      service: sqlite
-      database: sqlite_warehouse
-      xlibrary: sqlite_library
-
-    spatialite:
-      service: spatialite
-      database: spatialite_warehouse
-      xlibrary: sqlite_library
-
+    sqlite: 'sqlite:////tmp/sqlite_warehouse'
+    spatialite: 'spatialite:////tmp/spatialite_warehouse'
 
 database:
-  
 
     library:
         dbname: '/tmp/warehouse/library.db'

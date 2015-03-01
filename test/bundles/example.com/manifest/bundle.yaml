@@ -1,0 +1,43 @@
+about:
+    groups: []
+    license: null
+    rights: null
+    subject: null
+    summary: A Bundle built from a manifest
+    tags: []
+    title: Manifest Bundle
+contact_bundle:
+    creator:
+        email: eric@sandiegodata.org
+        name: Eric Busboom
+        url: http://www.sandiegodata.org
+    maintainer:
+        email: eric@sandiegodata.org
+        name: Eric Busboom
+        url: http://www.sandiegodata.org
+contact_source:
+    creator: {}
+    maintainer: {}
+external_documentation:
+    download:
+        description: Web page that links to the source files.
+        source: null
+        title: Download Page
+        url: http://example.com
+identity:
+    bspace: null
+    btime: null
+    dataset: manifest
+    id: dkGdktxhH4
+    revision: 1
+    source: example.com
+    subset: null
+    type: null
+    variation: null
+    version: 0.0.1
+names:
+    fqname: example.com-manifest-0.0.1~dkGdktxhH4001
+    name: example.com-manifest
+    vid: dkGdktxhH4001
+    vname: example.com-manifest-0.0.1
+process: {}

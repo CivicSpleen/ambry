@@ -4,8 +4,11 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from ..cli import prt, warn, fatal, _find, _print_bundle_list, _print_bundle_entry
-
 from ..identity import LocationRef
+
+# If the devel module exists, this is a development system.
+try: from ambry.support.devel import *
+except ImportError as e: from ambry.support.production import *
 
 default_locations = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.REMOTE ]
 
@@ -22,10 +25,13 @@ def root_parser(cmd):
     sp.add_argument('-F', '--fields', type=str,
                     help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
+    sp.add_argument('-t', '--tables', default=False, action="store_true", help="Show tables")
     sp.add_argument('-a', '--all', default=False, action="store_true", help='List everything')
     sp.add_argument('-l', '--library', default=False, action="store_const", const = lr.LIBRARY, help='List only the library')
     sp.add_argument('-r', '--remote', default=False, action="store_const", const = lr.REMOTE, help='List only the remote')
     sp.add_argument('-s', '--source', default=False, action="store_const", const = lr.SOURCE, help='List only the source')
+    sp.add_argument('-w', '--warehouse', default=False, action="store_const", const='warehouse', help='List warehouses')
+    sp.add_argument('-c', '--collection', default=False, action="store_const", const='collection', help='List collections')
     sp.add_argument('term', nargs = '?', type=str, help='Name or ID of the bundle or partition')
 
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
@@ -97,8 +103,60 @@ def root_command(args, rc):
 
 
 def root_list(args, l, st, rc):
-    from ..cli import load_bundle, _print_bundle_list
-    from ..orm import Dataset
+    from ..cli import  _print_bundle_list
+    from ambry.warehouse.manifest import Manifest
+    from . import global_logger
+    ##
+    ## Listing warehouses and collections is different
+
+    if args.collection:
+
+        for f in l.manifests:
+
+            try:
+                m = Manifest(f.content)
+                print "{:10s} {:25s}| {}".format(m.uid, m.title, m.summary['summary_text'])
+            except Exception as e:
+                warn("Failed to parse manifest {}: {}".format(f.ref, e))
+                continue
+
+
+
+        return
+
+    if args.warehouse:
+
+        if args.plain:
+            fields = []
+        else:
+            fields = ['title','dsn','summary','url','cache']
+
+        format = '{:5s}{:10s}{}'
+        def _get(s,f):
+
+            if f == 'dsn':
+                f = 'path'
+
+            try:
+                return s.data[f] if f in s.data else getattr(s, f)
+            except AttributeError:
+                return ''
+
+        for s in l.stores:
+            print s.ref
+
+            for f in fields:
+                if _get(s,f):
+                    print format.format('',f,_get(s,f))
+        return
+    ##
+    ## The remainder are for listing bundles and partitions.
+
+    if args.tables:
+        for table in l.tables:
+            print table.name, table.vid, table.dataset.identity.fqname
+
+        return
 
     if args.plain:
         fields = ['vid']
@@ -109,6 +167,10 @@ def root_list(args, l, st, rc):
     else:
         fields = ['locations',  'vid',  'vname']
 
+        if args.source:
+            fields += ['status']
+
+
     locations = filter(bool, [args.library, args.remote, args.source])
 
     key = lambda ident : ident.vname
@@ -116,7 +178,7 @@ def root_list(args, l, st, rc):
     if 'pcount' in fields:
         with_partitions = True
     else:
-        with_partitions = False
+        with_partitions = args.partitions
 
     idents = sorted(l.list(with_partitions=with_partitions).values(), key=key)
 
@@ -132,8 +194,7 @@ def root_list(args, l, st, rc):
                        show_partitions=args.partitions)
 
 def root_info(args, l, st, rc):
-    from ..cli import load_bundle, _print_info
-    from ..orm import Dataset
+    from ..cli import  _print_info
     from ..dbexceptions import NotFoundError
     import ambry
 
@@ -143,7 +204,7 @@ def root_info(args, l, st, rc):
         locations = default_locations
 
     if not args.term:
-        print "Version:  {}".format(ambry._meta.__version__)
+        print "Version:  {}, {}".format(ambry._meta.__version__, 'production' if IN_PRODUCTION else 'development')
         print "Root dir: {}".format(rc.filesystem('root')['dir'])
 
         if l.source:
@@ -167,16 +228,12 @@ def root_info(args, l, st, rc):
                 ident.add_partition(p.identity)
 
     except NotFoundError:
-
+        #fatal("Could not find bundle file for '{}'".format(ident.path))
         pass
-
 
     _print_info(l, ident, list_partitions=args.partitions)
 
 def root_meta(args, l, st, rc):
-    from ..cli import load_bundle, _print_info
-    from ..orm import Dataset
-    import ambry
 
     ident = l.resolve(args.term)
 
@@ -237,8 +294,6 @@ def root_meta(args, l, st, rc):
 def root_find(args, l, st, rc):
     from ..source.repository.git import GitRepository
     from ..library.files import Files
-    from ..identity import Identity
-    from ..bundle.bundle import BuildBundle
 
     if args.plain:
         fields = ['vid']
@@ -307,10 +362,7 @@ def root_find(args, l, st, rc):
                     _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=fields)
 
 def root_doc(args, l, st, rc):
-    from ambry.cache import new_cache
     import webbrowser
-    from ..identity import LocationRef
-    from ambry.text import BundleDoc, Renderer
 
     try:
         ident = l.resolve(args.term)

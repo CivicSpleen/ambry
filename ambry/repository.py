@@ -4,7 +4,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 from ambry.dbexceptions import ConfigurationError
-import petl.fluent as petlf
+
 
 class Repository(object):
     '''Interface to the CKAN data repository, for uploading bundle records and 
@@ -13,9 +13,7 @@ class Repository(object):
 
     def __init__(self, bundle, repo_name='default'):
         '''Create a new repository interface
-        '''  
-        import ambry.client.ckan
-        import time, datetime
+        '''
 
         self.bundle = bundle 
         self.extracts = self.bundle.config.group('extracts')
@@ -58,7 +56,6 @@ class Repository(object):
    
     def _validate_for_expr(self, astr,debug=False):
         """Check that an expression is save to evaluate"""
-        import os
         import ast
         try: tree=ast.parse(astr)
         except SyntaxError: raise ValueError(
@@ -94,7 +91,6 @@ class Repository(object):
         return True
 
     def _do_extract(self, extract_data, force=False):
-        import os # For the eval @UnusedImport
 
         done_if = extract_data.get('done_if',False)
  
@@ -117,8 +113,7 @@ class Repository(object):
         
     def _do_function_extract(self, extract_data):
         '''Run a function on the build that produces a file to upload'''
-        import os.path
-        
+
         f_name = extract_data['function']
         
         f = getattr(self.bundle, f_name)
@@ -129,7 +124,6 @@ class Repository(object):
 
     def _do_copy_file(self, extract_data):
         '''Run a function on the build that produces a file to upload'''
-        import os.path
         import pkgutil
 
         f_name = extract_data['file']
@@ -381,7 +375,7 @@ class Repository(object):
         import datetime
         
         if data.get('aa', False):
-            from ambry.geo.analysisarea import get_analysis_area
+            from old.analysisarea import get_analysis_area
 
             aa = get_analysis_area(self.bundle.library, **data['aa'])    
         
@@ -438,7 +432,6 @@ class Repository(object):
         dependencies. 
     
          """
-        import collections
         from ambry.util import toposort
 
         
@@ -494,7 +487,7 @@ class Repository(object):
                 self.bundle.error("Extract group {} should have either a function or a partition".format(key))
               
     def store_document(self, package, config):
-        import re, string
+        import re
 
         id =  re.sub('[\W_]+', '-',config['title'])
         
@@ -557,8 +550,7 @@ class Repository(object):
     def submit(self,  root=None, force=False, repo=None): 
         """Create a dataset for the bundle, then add a resource for each of the
         extracts listed in the bundle.yaml file"""
-        import ambry.util as du
-        
+
         if repo:
             self.repo_name = repo
             self.set_api()

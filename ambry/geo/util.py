@@ -36,8 +36,8 @@ def extents(database, table_name, where=None, lat_col='_db_lat', lon_col='_db_lo
 
 #From http://danieljlewis.org/files/2010/06/Jenks.pdf
 #
-# !!!! Use pysal instead!
-# !!!! http://pysal.geodacenter.org/1.2/library/esda/mapclassify.html#pysal.esda.mapclassify.Natural_Breaks
+#  Use pysal instead!
+#  http://pysal.geodacenter.org/1.2/library/esda/mapclassify.html#pysal.esda.mapclassify.Natural_Breaks
 #
 # Or, a cleaner Python implementation: https://gist.github.com/drewda/1299198
 def jenks_breaks(dataList, numClass): 
@@ -440,30 +440,36 @@ def bound_clusters_in_raster( a, aa, shape_file_dir,
             envelopes.append({'id':id, 'env':bb.GetEnvelope(), 'area':bb.Area()})
             
 
-        return envelopes 
+        return envelopes
+
+geo_type_map = {'1': 'GEOMETRY',
+            '2': 'GEOMETRYCOLLECTION',
+            '3': 'POINT',
+            'Point': 'POINT',
+            '4': 'MULTIPOINT',
+            '5': 'POLYGON',
+            '6': 'MULTIPOLYGON',
+            '7': 'LINESTRING',
+            'Line String': 'LINESTRING',
+            '3D Line String': 'LINESTRING',
+            '8': 'MULTILINESTRING',
+            '3D Multi Line String': 'MULTILINESTRING',
+            'Multi Line String': 'MULTILINESTRING',
+            '3D Point': 'POINT',
+            '3D Multi Point': 'MULTIPOINT',
+            'Polygon': 'POLYGON',
+            '3D Polygon': 'POLYGON',
+            'Multi Polygon': 'MULTIPOLYGON',
+            '3D Multi Polygon': 'MULTIPOLYGON',
+}
+
+def get_type_from_geometry(geometry):
+
+   return  geo_type_map[ogr.GeometryTypeToName(geometry.GetGeometryType())]
 
 def get_shapefile_geometry_types(shape_file):
     
-        type_map = {'1':'GEOMETRY',
-                    '2':'GEOMETRYCOLLECTION',  
-                    '3':'POINT',
-                    'Point':'POINT',
-                    '4':'MULTIPOINT', 
-                    '5':'POLYGON', 
-                    '6':'MULTIPOLYGON', 
-                    '7':'LINESTRING', 
-                    'Line String':'LINESTRING', 
-                    '3D Line String':'LINESTRING', 
-                    '8':'MULTILINESTRING',
-                    '3D Multi Line String':'MULTILINESTRING',
-                    'Multi Line String':'MULTILINESTRING',
-                    '3D Point':'POINT',
-                    '3D Multi Point':'MULTIPOINT', 
-                    'Polygon':'POLYGON', 
-                    '3D Polygon':'POLYGON', 
-                    'Multi Polygon':'MULTIPOLYGON',
-                    '3D Multi Polygon':'MULTIPOLYGON', 
-        }
+
     
         shapes = ogr.Open(shape_file)
         layer = shapes.GetLayer(0)
@@ -483,7 +489,7 @@ def get_shapefile_geometry_types(shape_file):
             feature = layer.GetFeature(i)
             geometry = feature.geometry()
             if geometry:
-                types.add(type_map[ogr.GeometryTypeToName(geometry.GetGeometryType())])
+                types.add(geo_type_map[ogr.GeometryTypeToName(geometry.GetGeometryType())])
                 checked += 1
             else:
                 # This happens rarely, seems to be a problem with the source shapefiles.
@@ -648,3 +654,101 @@ def find_geo_containment(containers, containeds, sink, method = 'contains'):
                 sink.send( (contained, contained_obj, container_geometry, container_obj) )
 
     sink.close()
+
+def find_containment(containers, containeds, method = 'contains'):
+    """Generator version of find_geo_containment, yielding for each point that is contained in a geometry.
+
+    `containers` is an iterable that holds  -- or an generator that yields -- the geometry of the containing objects  :
+
+            ( id, poly_WKT,  poly_obj)
+
+    `Id` must be an integer that is unique for the polygon. `Poly_obj` can be any object to return to the callback.
+    `WKT` is the polygon in WKT format.
+
+    `containeds` holds or yields  the contained gemoetries. :
+
+            ( coord, contained_obj )
+
+    `Coords` is a tuple of floats and `contained_obj` is any object.
+
+    If coords is two floats, they are the X and Y for a point. If it is four, they are the  (minx, miny, maxx, maxy) for the
+    bounding box of a geometry.
+
+
+    For each point that is contained in a polygon, the routine yields:
+
+        coord_geometry, contained_obj, WKT_geometry, poly_obj
+
+    Where coord_geometry is a Shapely gepmetry constructed by the contained coords, and WKT_geometry is a shapely object
+    constructed from the container WKT.
+
+    """
+    from rtree import index
+    from rtree.core import RTreeError
+    from shapely.geometry import Point, Polygon
+    from shapely.wkt import loads
+    from collections import Iterable
+    from ..dbexceptions import GeoError
+
+
+    # Maybe this is only a performance improvement if the data is sorted in the generator ...
+    def gen_index():
+        for i, wkt, container_obj in containers:
+            container_geometry = loads(wkt)
+
+            yield (i, container_geometry.bounds, (container_obj, container_geometry))
+
+    try:
+        idx = index.Index(gen_index())
+    except RTreeError:
+        raise GeoError("Failed to create RTree Index. Check that the container generator produced valud output")
+
+
+
+    # Find the point containment
+    for contained_coords, contained_obj in containeds:
+
+        locations = idx.intersection(contained_coords, objects=True)
+
+        if len(contained_coords) == 2:
+            contained = Point(contained_coords)
+        elif len(contained_coords) == 4 and not isinstance(contained_coords[0], Iterable):
+            # Assume it is bounding box coords. If the elements were iterables ( x,y points ) it
+            # could be something else.
+            # bounding boxes are: (minx, miny, maxx, maxy)
+            (minx, miny, maxx, maxy) = contained_coords
+            shape = (
+                (minx, miny),
+                (minx, maxy),
+                (maxx, maxy),
+                (maxx, miny)
+            )
+            contained = Polygon(shape)
+
+        for r in locations:
+            container_obj, container_geometry = r.object
+
+            if method == 'contains':
+                test = container_geometry.contains(contained)
+            elif method == 'intersects':
+                test = container_geometry.intersects(contained)
+
+            if test:
+                yield (contained, contained_obj, container_geometry, container_obj)
+
+
+def recover_geometry(connection, table_name, column_name, geometry_type, srs=None):
+    from ..orm import Geometry
+
+    assert table_name
+    assert column_name
+
+    if not srs:
+        srs = Geometry.DEFAULT_SRS
+
+    connection.execute(
+        'UPDATE {} SET {} = SetSrid({}, {});'.format(table_name, column_name, column_name, srs))
+
+    q = "SELECT RecoverGeometryColumn('{}', '{}', {}, '{}', 2);".format(table_name, column_name, srs, geometry_type)
+
+    connection.execute(q)

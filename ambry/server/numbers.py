@@ -55,8 +55,9 @@ import ambry.util
 global_logger = ambry.util.get_logger(__name__)
 global_logger.setLevel(logging.DEBUG)
 
-# Alternative number spaces, mostly for manifests
-NUMBER_SPACES = ('m','x')
+# Alternative number spaces, mostly for manifests and databases
+# The main number space for datasets is 'd'
+NUMBER_SPACES = ('m','x','b')
 
 def capture_return_exception(e):
     
@@ -366,7 +367,6 @@ def get_echo_term(name, redis):
         return d
 
 
-
 @get('/echo/<term>')
 def get_echo_term(term, redis):
     '''Test function to see if the server is working '''
@@ -392,14 +392,18 @@ def _run(host, port, redis, unregistered_key,  reloader=False, **kwargs):
 if __name__ == '__main__':
     import argparse
     from ambry.run import  get_runconfig
+    from ..util import print_yaml
+    import uuid
     rc = get_runconfig()
 
-    group = rc.group('numbers')
+    d = rc.servers('numbers',{'host' : 'localhost', 'port': 8080, 'unregistered_key': str(uuid.uuid4()) })
 
-    d = group.get('server',{'host' : 'localhost', 'port': 8080, 'unregistered_key': 'fe78d179-8e61-4cc5-ba7b-263d8d3602b9'})
+    try:
+        d = d.to_dict()
+    except:
+        pass
 
     d['redis'] = d.get('redis',{'host':'localhost','port': 6379})
-
 
     parser = argparse.ArgumentParser(prog='python -mambry.server.numbers',
                                      description='Run an Ambry numbers server')
@@ -425,12 +429,10 @@ if __name__ == '__main__':
     if args.redis_host:
         d['redis']['host'] = args.redis_host
 
-
-
     if args.unregistered_key:
         d['unregistered_key'] = args.unregistered_key
 
-    print d
+    print_yaml(d)
 
     _run(**d)
     

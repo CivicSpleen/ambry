@@ -1,7 +1,5 @@
 import os
-
 from sqlalchemy.orm import object_session
-
 from ..util import lru_cache
 
 
@@ -115,63 +113,14 @@ def new_identity(d, bundle=None):
 
 
 class PartitionInterface(object):
-
-    @property
-    def name(self):
-        raise NotImplementedError()
-
-    def _path_parts(self):
-        raise NotImplementedError()
-
-    @property
-    def path(self):
-        """Return a pathname for the partition, relative to the containing
-        directory of the bundle. """
-        raise NotImplementedError()
-
-    def sub_dir(self, *args):
-        """Return a subdirectory relative to the partition path"""
-        raise NotImplementedError()
-
-    @property
-    def database(self):
-        raise NotImplementedError()
-
-    def close(self):
-
-        if self._database:
-            self._database.close()
-
-    def unset_database(self):
-        """Removes the database record from the object"""
-        raise NotImplementedError()
-
-    @property
-    def tables(self):
-        raise NotImplementedError()
-
-    def create(self):
-        raise NotImplementedError()
-
-    def delete(self):
-        raise NotImplementedError()
-
-    def inserter(self, table_or_name=None, **kwargs):
-        raise NotImplementedError()
-
-    def updater(self, table_or_name=None, **kwargs):
-        raise NotImplementedError()
-
-    def write_stats(self, min_key=None, max_key=None, count=None):
-        raise NotImplementedError()
-
-    def finalize(self):
-        """Wrap up the creation of this partition"""
+    pass #legacy
 
 
 class PartitionBase(PartitionInterface):
 
     _db_class = None
+
+    is_geo = False
 
     def __init__(self, db, record, **kwargs):
 
@@ -198,9 +147,17 @@ class PartitionBase(PartitionInterface):
     def init(cls, record):
         record.format = cls.FORMAT
 
+    def close(self):
+
+        if self._database:
+            self._database.close()
+
     @property
     def name(self):
         return self.identity.name
+
+    def has(self):
+        return self.bundle.library.has(self.identity.vid)
 
     def get(self):
         """Fetch this partition from the library or remote if it does not exist"""
@@ -312,6 +269,14 @@ class PartitionBase(PartitionInterface):
     def finalize(self):
         """Wrap up the creation of this partition"""
 
+
+    @property
+    def is_finalized(self):
+        """Return true if the partition has been finalized"""
+        from ..partitions import Partitions
+
+        return self.get_state() == Partitions.STATE.FINALIZED
+
     def set_state(self, state):
         '''Set a build state value in the database'''
         from ..orm import Partition as OrmPartition
@@ -322,6 +287,14 @@ class PartitionBase(PartitionInterface):
             r.state = state
 
             s.merge(r)
+
+    def get_state(self):
+        from ..orm import Partition as OrmPartition
+
+        with self.bundle.session as s:
+            r = s.query(OrmPartition).filter(OrmPartition.id_ == str(self.identity.id_)).one()
+
+            return r.state
 
 
     def set_value(self, group, key, value):

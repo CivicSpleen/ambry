@@ -85,9 +85,7 @@ class Bundle(BuildBundle):
 
         self.log("=== Build missing")
         self.build_with_missing()
-        
-        self.log("=== Build csvsegments")
-        self.build_csvsegments()
+
 
         #self.log("=== Build csv")
         #self.build_csv()
@@ -95,20 +93,6 @@ class Bundle(BuildBundle):
         return True
 
 
-    def build_csvsegments(self):
-        
-        p = self.partitions.find_or_new_db(table="tone", grain=None)
-
-        pi = p.identity
-        print pi.dict
-        print pi.name
-        print pi.fqname
-        print pi.path
-
-        with p.database.csvinserter(segment_rows=100) as ins:
-            for i in range(1000):
-                ins.insert((None,"str"+str(i),i,i))
-        
     def build_with_missing(self):
         
         p = self.partitions.find_or_new_db(table="tone", grain='missing')

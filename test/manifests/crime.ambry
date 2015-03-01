@@ -2,10 +2,12 @@ TITLE: A Crime Manifest
 
 This is a fake crime file manifest
 
-UID: 2b117486-f3b3-4eb3-98b6-0af1d12bba3d
+UID: m5PJKUrX0U
 
 PARTITIONS:
 
-example.com-random-example1-0.0.2
-example.com-segmented-orig-example-1
+example.com-random-random1
+example.com-segmented-example-1
+example.com-combined-combined
 
+VIEW:

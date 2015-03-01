@@ -4,12 +4,13 @@ Created on Jan 17, 2013
 @author: eric
 """
 import unittest
+
+from osgeo.gdalconst import GDT_Float32
+
 from  testbundle.bundle import Bundle
 from ambry.identity import * #@UnusedWildImport
 from test_base import  TestBase
-from osgeo.gdalconst import GDT_Float32
 
-import ogr
 
 class Test(TestBase):
  
@@ -26,7 +27,6 @@ class Test(TestBase):
 
     def test_geo_schema(self):
 
-        from osgeo import ogr
         import support
         import os.path
         from ambry.geo.sfschema import copy_schema
@@ -45,7 +45,7 @@ class Test(TestBase):
         print self.bundle.schema.as_csv()
 
     def x_test_basic(self):
-        from ambry.geo.analysisarea import get_analysis_area,  draw_edges
+        from old.analysisarea import get_analysis_area
         from ambry.geo import Point
         from ambry.geo.kernel import GaussianKernel
              
@@ -67,7 +67,7 @@ class Test(TestBase):
 
     def test_sfschema(self):
         from ambry.geo.sfschema import TableShapefile
-        from ambry.geo.analysisarea import get_analysis_area
+        from old.analysisarea import get_analysis_area
         _, communities = self.bundle.library.dep('communities')
         
         csrs = communities.get_srs()
@@ -119,8 +119,6 @@ class Test(TestBase):
 
 
     def demo2(self):
-        import ambry
-        import ambry.library as dl
         import ambry.geo as dg
         import numpy as np
         from matplotlib import pyplot as plt
@@ -149,7 +147,6 @@ class Test(TestBase):
       
       
     def demo3(self):
-        import ambry
         import ambry.library as dl
         import ambry.geo as dg
         from matplotlib import pyplot as plt

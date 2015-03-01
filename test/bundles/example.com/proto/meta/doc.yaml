@@ -1,0 +1,13 @@
+documentation:
+    main: '
+
+        # A Bundle that just provides prototype columns for other bundles.
+
+
+        None
+
+        '
+    readme: '# A Bundle that just provides prototype columns for other bundles.
+
+
+        None'

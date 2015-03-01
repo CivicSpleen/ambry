@@ -9,21 +9,35 @@ import ogr
 class ExtractError(Exception):
     pass
 
+class ExtractEntry(object):
+    def __init__(self, extracted, rel_path, abs_path, data=None):
+        self.extracted = extracted
+        self.rel_path = rel_path
+        self.abs_path = abs_path
+        self.data = data
+        self.time = None
+
+    def __str__(self):
+        return 'extracted={} rel={} abs={} data={}'.format(self.extracted, self.rel_path, self.abs_path, self.data)
+
+
 def new_extractor(format, warehouse, cache, force=False):
 
-    ex_class = dict(
-        csv=CsvExtractor,
-        shapefile=ShapeExtractor,
-        geojson=GeoJsonExtractor,
-        kml=KmlExtractor
-    ).get(format, False)
+    ex_class = extractors.get(format.lower(), False)
 
     if not ex_class:
         raise ValueError("Unknown format: {} ".format(format))
 
     return ex_class(warehouse, cache, force=force)
 
+def get_extractors(t):
+
+    return [ format for format,ex in extractors.items()  if ex.can_extract(t) ]
+
+
 class Extractor(object):
+
+    is_geo = False
 
     def __init__(self, warehouse, cache, force=False):
 
@@ -31,29 +45,54 @@ class Extractor(object):
         self.database = self.warehouse.database
         self.cache = cache
         self.force = force
+        self.hash = None
 
     def mangle_path(self,rel_path):
         return rel_path
 
-    def extract(self, table, cache, rel_path):
+    def extract(self, table,  rel_path, update_time=None):
+        import time
 
-        if cache.has(self.mangle_path(rel_path)):
-            if self.force:
-                cache.remove(self.mangle_path(rel_path), True)
+        e = ExtractEntry(False, rel_path, self.cache.path(self.mangle_path(rel_path), missing_ok = True),
+                         (table, self.__class__))
+
+        force = self.force
+
+        md = self.cache.metadata(self.mangle_path(rel_path))
+
+        # If the table was created after
+        if md and 'time' in md and update_time and int(md['time'])-int(update_time) < 0:
+
+            force = True
+
+
+        if self.cache.has(self.mangle_path(rel_path)):
+            if force:
+                self.cache.remove(self.mangle_path(rel_path), True)
             else:
-                return False, rel_path, cache.path(self.mangle_path(rel_path)), (table, self.__class__)
+                return e
 
-        self._extract(table, cache, rel_path)
+        md = {
+            'time' : time.time()
+        }
 
-        return True, rel_path, cache.path(self.mangle_path(rel_path)),(table, self.__class__)
+        self._extract(table,  rel_path, md)
+        e.time = time.time()
+        e.extracted = True
+        return e
 
 class CsvExtractor(Extractor):
+
+    mime = 'text/csv'
 
     def __init__(self, warehouse, cache, force=False):
         super(CsvExtractor, self).__init__(warehouse, cache, force=force)
 
+    @classmethod
+    def can_extract(cls,t):
+        return True
 
-    def _extract(self, table, cache, rel_path):
+    def _extract(self, table, rel_path, metadata):
 
         import unicodecsv
 
@@ -61,19 +100,61 @@ class CsvExtractor(Extractor):
 
         row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table))
 
-        w = unicodecsv.writer(cache.put_stream(rel_path))
+        with self.cache.put_stream(rel_path, metadata = metadata) as stream:
+            w = unicodecsv.writer(stream)
 
-        for i,row in enumerate(row_gen):
-            if i == 0:
-                w.writerow(row.keys())
+            for i,row in enumerate(row_gen):
+                if i == 0:
+                    w.writerow(row.keys())
 
-            w.writerow(row)
+                w.writerow(row)
 
-        return True, cache.path(rel_path)
+        return True, self.cache.path(rel_path)
+
+class JsonExtractor(Extractor):
+
+    mime = 'application/json'
+
+    def __init__(self, warehouse, cache, force=False):
+        super(JsonExtractor, self).__init__(warehouse, cache, force=force)
+
+    @classmethod
+    def can_extract(cls,t):
+        return True
+
+    def _extract(self, table,  rel_path, metadata):
+        import json
+
+        rel_path = self.mangle_path(rel_path)
+
+        row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table))
+
+        # A template to ensure the JSON head and tail are properly formatted
+        head, mid, tail  = json.dumps({ 'header': [0], 'rows': [ [0] ]}).split('[0]')
+
+
+        with self.cache.put_stream(rel_path, metadata=metadata) as stream:
+
+            stream.write(head)
+
+            for i, row in enumerate(row_gen):
+                if i == 0:
+                    stream.write(json.dumps(row.keys()))
+                    stream.write(mid)
+                else:
+                    stream.write(',\n')
+
+                stream.write(json.dumps(list(row)))
+
+            stream.write(tail)
+
+        return True, self.cache.path(rel_path)
 
 class OgrExtractor(Extractor):
 
     epsg = 4326
+
+    is_geo = True
 
     def __init__(self, warehouse, cache, force=False):
 
@@ -118,9 +199,20 @@ class OgrExtractor(Extractor):
     def ogr_type_map(self, v):
         return self._ogr_type_map[v.split('(',1)[0]] # Sometimes 'VARCHAR', sometimes 'VARCHAR(10)'
 
+    @classmethod
+    def can_extract(cls,t):
+
+        for c in t.columns:
+            if c.name == 'geometry':
+                return True
+
+        return False
+
+
     def create_schema(self, database, table, layer):
         ce = database.connection.execute
 
+        # TODO! pragma only works in sqlite
         for row in ce('PRAGMA table_info({})'.format(table)).fetchall():
 
             if row['name'].lower() in ('geometry', 'wkt','wkb'):
@@ -146,7 +238,8 @@ class OgrExtractor(Extractor):
         ds = driver.CreateDataSource(abs_dest)
 
         if  ds is None:
-            raise ExtractError("Failed to create data source for driver '{}' at dest '{}'".format(self.driver_name, abs_dest))
+            raise ExtractError("Failed to create data source for driver '{}' at dest '{}'"
+                               .format(self.driver_name, abs_dest))
 
         srs = ogr.osr.SpatialReference()
         srs.ImportFromEPSG(self.epsg)
@@ -184,6 +277,7 @@ class OgrExtractor(Extractor):
 
         self.create_schema(self.database, table, layer)
 
+        ## TODO AsTest, etc, will have to change to ST_AsText for Postgis
         q = "SELECT *, AsText(Transform(geometry, {} )) AS _wkt FROM {}".format(self.epsg, table)
 
         for i,row in enumerate(self.database.connection.execute(q)):
@@ -193,6 +287,7 @@ class OgrExtractor(Extractor):
             for name, value in row.items():
                 if name.lower() in ('geometry', 'wkt', 'wkb', '_wkt'):
                     continue
+
                 if value:
                     try:
                         if isinstance(value, unicode):
@@ -221,6 +316,9 @@ class OgrExtractor(Extractor):
         return True, abs_dest
 
 class ShapeExtractor(OgrExtractor):
+
+    mime = 'application/zip'
+
     driver_name = 'Esri Shapefile'
     max_name_len = 8 # For ESRI SHapefiles
 
@@ -245,7 +343,7 @@ class ShapeExtractor(OgrExtractor):
 
             zf.close()
 
-    def _extract(self, table, cache, rel_path):
+    def _extract(self, table,  rel_path, metadata):
 
         from ambry.util import temp_file_name
         from ambry.util.flo import copy_file_or_flo
@@ -262,14 +360,17 @@ class ShapeExtractor(OgrExtractor):
 
         self.zip_dir(table, shapefile_dir,  zf)
 
-        copy_file_or_flo(zf, cache.put_stream(rel_path))
+        copy_file_or_flo(zf, self.cache.put_stream(rel_path, metadata = metadata))
 
         shutil.rmtree(shapefile_dir)
         os.remove(zf)
 
-        return cache.path(rel_path)
+        return self.cache.path(rel_path)
 
 class GeoJsonExtractor(OgrExtractor):
+
+    mime = 'application/json'
+
     driver_name = 'GeoJSON'
     max_name_len = 40
 
@@ -277,7 +378,7 @@ class GeoJsonExtractor(OgrExtractor):
         from ambry.util import temp_file_name
         return temp_file_name()
 
-    def _extract(self, table, cache, rel_path):
+    def _extract(self, table,  rel_path, metadata):
         from ambry.util import temp_file_name
         from ambry.util.flo import copy_file_or_flo
         import os
@@ -288,17 +389,20 @@ class GeoJsonExtractor(OgrExtractor):
 
         self._extract_shapes(tf, table)
 
-        copy_file_or_flo(tf, cache.put_stream(rel_path))
+        copy_file_or_flo(tf, self.cache.put_stream(rel_path, metadata = metadata))
 
         os.remove(tf)
 
-        return cache.path(rel_path)
+        return self.cache.path(rel_path)
 
 class KmlExtractor(OgrExtractor):
+
+    mime = 'application/vnd.google-earth.kml+xml'
+
     driver_name = 'KML'
     max_name_len = 40
 
-    def _extract(self, table, cache, rel_path):
+    def _extract(self, table, rel_path, metadata):
         import tempfile
         from ambry.util import temp_file_name
         from ambry.util.flo import copy_file_or_flo
@@ -310,8 +414,24 @@ class KmlExtractor(OgrExtractor):
 
         self._extract_shapes(tf, table)
 
-        copy_file_or_flo(tf, cache.put_stream(rel_path))
+        copy_file_or_flo(tf, self.cache.put_stream(rel_path, metadata=metadata))
 
         os.remove(tf)
 
-        return cache.path(rel_path)
+        return self.cache.path(rel_path)
+
+
+extractors = dict(
+    csv=CsvExtractor,
+    json=JsonExtractor,
+    shapefile=ShapeExtractor,
+    geojson=GeoJsonExtractor,
+    kml=KmlExtractor
+)
+
+def geo_extractors():
+    return [ f for f,e in extractors if e.is_geo ]
+
+def table_extractors():
+    return [ f for f,e in extractors if not e.is_geo ]
+

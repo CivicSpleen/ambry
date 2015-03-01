@@ -1,0 +1,6 @@
+-   format: geo
+    name: example.com-geography-municipal-geo
+    table: municipal
+-   format: geo
+    name: example.com-geography-geometry-geo
+    table: geometry

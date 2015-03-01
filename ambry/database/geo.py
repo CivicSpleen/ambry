@@ -2,84 +2,42 @@
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
-   
-from inserter import InserterInterface, UpdaterInterface
+
+from inserter import InserterInterface
 from .partition import PartitionDb
 from ..partition.geo import GeoPartitionName
+from sqlalchemy.types import LargeBinary, BINARY
 
 
 
-class FeatureInserter(InserterInterface):
-    
-    def __init__(self, partition, table, dest_srs=4326, source_srs=None, layer_name = None):
-        from ..geo.sfschema import TableShapefile
 
-        self.partition = partition
-        self.bundle = partition.bundle
-        self.table = table
-
-        self.sf = TableShapefile(self.bundle, partition.database.path, table, dest_srs, source_srs, name=layer_name)
-
-    def __enter__(self):
-        from ..partitions import Partitions
-        self.partition.set_state(Partitions.STATE.BUILDING)
-        return self
-    
-    def __exit__(self, type_, value, traceback):
-        from ..partitions import Partitions
-        
-        if type_ is not None:
-            self.bundle.error("Got Exception: "+str(value))
-            self.partition.set_state(Partitions.STATE.ERROR)
-            return False
-
-        self.partition.set_state(Partitions.STATE.BUILT)
-        self.close()
-
-        self.partition.create_indexes()
-
-        return self
-    
-    def insert(self, row, source_srs=None):
-        from sqlalchemy.engine.result import RowProxy
-        
-        if isinstance(row, RowProxy):
-            row  = dict(row)
-
-        return self.sf.add_feature( row, source_srs)
-
-    def close(self):
-        self.sf.close()
-
-        self.partition.convert_dates(self.table)
-    
-    @property
-    def extents(self, where=None):
-        '''Return the bounding box for the dataset. The partition must specify 
-        a table
-        
-        '''
-        raise NotImplemented()
-        #import ..geo.util
-        #return ..geo.util.extents(self.database,self.table.name, where=where)
-   
-    
 class GeoDb(PartitionDb):
 
     EXTENSION = GeoPartitionName.PATH_EXTENSION
 
     MIN_NUMBER_OF_TABLES = 5 # Used in is_empty
-    
+
+    is_geo = True
+
     def __init__(self, bundle, partition, base_path, **kwargs):
-        ''''''    
+        ''''''
 
-        kwargs['driver'] = 'spatialite' 
+        kwargs['driver'] = 'spatialite'
 
-        super(GeoDb, self).__init__(bundle, partition, base_path, **kwargs)  
+        super(GeoDb, self).__init__(bundle, partition, base_path, **kwargs)
 
     @classmethod
     def make_path(cls, container):
         return container.path + cls.EXTENSION
+
+    def _post_create(self):
+        self.connection.execute("SELECT InitSpatialMetaData();")
+
+    def recover_geometry(self, table_name, column_name, geometry_type, srs = None):
+        from  ..geo.util import recover_geometry
+
+        recover_geometry(self.connection, table_name, column_name, geometry_type, srs = srs)
+
 
     # In GeoDBs, create() is useless. The database creation happens in the TableShapefile
     # constructor, called from the inserter. After that is run, the _post_create method is called
@@ -96,22 +54,6 @@ class GeoDb(PartitionDb):
 
         event.listen(self._engine, 'connect', _on_connect_geo)
 
-    def inserter(self,  table = None, dest_srs=4326, source_srs=None, layer_name=None):
-        
-        if table is None and self.partition.identity.table:
-            table = self.partition.identity.table
-
-        prior_exist = self.exists()
-
-        fi =  FeatureInserter(self.partition,  table, dest_srs, source_srs, layer_name = layer_name)
-
-        if not prior_exist and self.exists():
-            self.post_create()
-
-        self.close() #FeatureInserter needs database to be closed to avoid locks.
-
-        return fi
-
 
 class SpatialiteWarehouseDatabase(GeoDb):
     pass
@@ -121,6 +63,8 @@ def _on_connect_geo(dbapi_con, con_record):
     '''ISSUE some Sqlite pragmas when the connection is created'''
     from ..util import RedirectStdStreams
     from sqlite import _on_connect_bundle as ocb
+    from ..dbexceptions import DatabaseError
+    from pysqlite2.dbapi2 import OperationalError
 
     ocb(dbapi_con, con_record)
 
@@ -134,21 +78,43 @@ def _on_connect_geo(dbapi_con, con_record):
     dbapi_con.execute('PRAGMA journal_mode = WAL')
     dbapi_con.execute('PRAGMA synchronous = OFF')
 
-    try:
-        dbapi_con.execute('select spatialite_version()')
-        return
-    except:
+    def load_extension():
         try:
-            dbapi_con.enable_load_extension(True)
-        except AttributeError as e:
-            raise
+            dbapi_con.execute('select spatialite_version()')
+            return
+        except:
+            try:
+                dbapi_con.enable_load_extension(True)
+            except AttributeError as e:
+                raise
 
 
-    try:
-        with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it.
-            dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so')")
-    except:
-        with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it.
-            dbapi_con.execute("select load_extension('/usr/lib/libspatialite.so.3')")
+        # This is so wrong, but I don't know what's right.
+        # ( My code has become a Country song. )
+
+        libs = [
+            "select load_extension('/usr/lib/x86_64-linux-gnu/libspatialite')",
+            "select load_extension('/usr/lib/libspatialite.so')",
+            "select load_extension('/usr/lib/libspatialite.so.3')",
+            "select load_extension('/usr/lib/x86_64-linux-gnu/libspatialite.so.5')",
+
+        ]
+
+
+        for l in libs:
+            try:
+                with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it.
+                    dbapi_con.execute(l)
+
+                return
+            except OperationalError:
+                continue
+
+
+        raise DatabaseError("Could not load the spatialite extension. Tried: {}".format(libs))
+
+    load_extension()
+
+
 
 

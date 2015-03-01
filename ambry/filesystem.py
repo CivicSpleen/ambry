@@ -79,7 +79,7 @@ class Filesystem(object):
         
         if not config:
             raise ConfigurationError('No filesystem cache by name of {}'.format(name))
-        
+
         return new_cache(config)
  
     @classmethod
@@ -114,9 +114,7 @@ class BundleFilesystem(Filesystem):
             self.root_directory = root_directory
         else:
             self.root_directory = Filesystem.find_root_dir()
- 
-        if not os.path.exists(self.path(BundleFilesystem.BUILD_DIR)):
-            os.makedirs(self.path(BundleFilesystem.BUILD_DIR),0755)
+
  
     @staticmethod
     def find_root_dir(testFile='bundle.yaml', start_dir =  None):
@@ -181,16 +179,25 @@ class BundleFilesystem(Filesystem):
 
         return p
 
-    
 
     def build_path(self, *args):
-    
+        """Return a sub directory in the build area"""
         if len(args) > 0 and args[0] == self.BUILD_DIR:
             raise ValueError("Adding build to existing build path "+os.path.join(*args))
         
         args = (self.bundle.build_dir,) + args
         return self.path(*args)
 
+    @property
+    def source_store(self):
+        """Return the cache object for the store store, a location ( usually on the net ) where source
+        files that can't be downloaded from the source agency can be stored. """
+
+        return self.get_cache_by_name('source_store')
+
+    @property
+    def download_cache(self):
+        return self.get_cache_by_name('downloads')
 
     def meta_path(self, *args):
     
@@ -225,14 +232,23 @@ class BundleFilesystem(Filesystem):
         extract and cache it. '''
         name = name.replace('..','')
         
-        if name[0] == '/':
+        if name.startswith('/'):
             name = name[1:]
-        
-        base = os.path.basename(path)
-        
-        rel_path = (urllib.quote_plus(base.replace('/','_'),'_')+'/'+
-                    urllib.quote_plus(name.replace('/','_'),'_') )
-     
+
+        if name.endswith('/'): # Its a ZIP file directory
+            return None
+
+        # If the file is comming from the download cache, be sure to use the entire
+        # cache path, so files are always unique.
+        download_cache = self.get_cache_by_name('downloads')
+
+        if path.startswith(download_cache.cache_dir):
+            base = path.replace(download_cache.cache_dir, '').lstrip('/')
+        else:
+            base = urllib.quote_plus(os.path.basename(path).replace('/', '_'), '_')
+
+        rel_path = os.path.join(base,urllib.quote_plus(name.replace('/', '_'), '_'))
+
         # Check if it is already in the cache
         cached_file = cache.get(rel_path)
         
@@ -245,7 +261,8 @@ class BundleFilesystem(Filesystem):
         if not os.path.exists(tmp_abs_path):
             zf.extract(name,tmpdir )
             
-        # Store it in the cache.           
+        # Store it in the cache.
+
         abs_path = cache.put(tmp_abs_path, rel_path)
         
         # There have been zip files that have been truncated, but I don't know
@@ -256,7 +273,7 @@ class BundleFilesystem(Filesystem):
 
         return abs_path
  
-    def unzip(self,path, regex=None):
+    def unzip(self, path, regex=None):
         '''Context manager to extract a single file from a zip archive, and delete
         it when finished'''
         import tempfile, uuid
@@ -318,7 +335,13 @@ class BundleFilesystem(Filesystem):
                     if '__MACOSX' in name: # Noidea about this, but it seems useless.
                         continue
 
-                    abs_path = self._get_unzip_file(cache, tmpdir, zf, path, name)  
+                    abs_path = self._get_unzip_file(cache, tmpdir, zf, path, name)
+
+                    if not abs_path:
+                        continue
+
+
+
                     if regex and regex.match(name) or not regex:
                         yield abs_path
         except Exception as e:
@@ -329,7 +352,7 @@ class BundleFilesystem(Filesystem):
             self.rm_rf(tmpdir)
     
         
-    def download(self,url, test_f=None):
+    def download(self,url, test_f=None, unzip=False):
         '''Context manager to download a file, return it for us, 
         and delete it when done.
 
@@ -354,14 +377,16 @@ class BundleFilesystem(Filesystem):
             url = source_entry.url
             parsed = urlparse.urlparse(str(url))
 
+        if parsed.scheme == 'file':
+            return parsed.path
 
-        if parsed.scheme  == 's3':
+
+        elif parsed.scheme  == 's3':
             # To keep the rest of the code simple, we'll use the S# cache to generate a signed URL, then
             # download that through the normal process.
             from cache import new_cache
 
-            s3cache = new_cache("s3://{}".format(parsed.netloc.strip('/')),
-                                run_config = self.bundle.config)
+            s3cache = new_cache("s3://{}".format(parsed.netloc.strip('/')))
 
             url = s3cache.path(urllib.unquote_plus(parsed.path.strip('/')))
             parsed = urlparse.urlparse(str(url))
@@ -370,9 +395,9 @@ class BundleFilesystem(Filesystem):
             use_hash = True
 
         #file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
-        file_path = os.path.join(parsed.netloc,parsed.path)
+        file_path = os.path.join(parsed.netloc,parsed.path.strip('/'))
 
-        if use_hash and  parsed.query: # S3 has time in the query, so it nevery caches
+        if use_hash and  parsed.query: # S3 has time in the query, so it never caches
             import hashlib
 
             hash = hashlib.sha224(parsed.query).hexdigest()
@@ -423,7 +448,7 @@ class BundleFilesystem(Filesystem):
                 else:
 
                     self.bundle.log("Downloading "+url)
-                    self.bundle.log("  --> "+file_path)
+                    self.bundle.log("  --> "+cache.path(file_path, missing_ok = True))
                     
                     resp = urllib2.urlopen(url)
                     headers = resp.info() #@UnusedVariable
@@ -477,7 +502,18 @@ class BundleFilesystem(Filesystem):
         if excpt:
             raise excpt
 
-        return out_file
+        if unzip:
+
+            if isinstance(unzip, bool):
+                return self.unzip(out_file)
+            elif unzip == 'dir':
+                return self.unzip_dir(out_file)
+            else:
+                return self.unzip_dir(out_file, regex=unzip)
+
+
+        else:
+            return out_file
 
     def read_csv(self, f, key = None):
         """Read a CSV into a dictionary of dicts or list of dicts
@@ -493,7 +529,9 @@ class BundleFilesystem(Filesystem):
         if isinstance(f, basestring):
             
             if not os.path.exists(f):
-                f = self.path(f) # Assume it is relative to the bundle filesystem
+                f = self.bundle.source(f)
+                if not f:
+                    f = self.path(f) # Assume it is relative to the bundle filesystem
             
             f = open(f,'rb')
             opened = True
@@ -535,7 +573,9 @@ class BundleFilesystem(Filesystem):
         
         if not zip_file or not os.path.exists(zip_file):
             raise Exception("Failed to download: {} ".format(url))
-            
+
+        file_ = None
+
         for file_ in self.unzip_dir(zip_file, regex=re.compile('.*\.shp$')):
             pass # Should only be one
         

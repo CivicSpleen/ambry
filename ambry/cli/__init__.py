@@ -38,7 +38,15 @@ def fatal(template, *args, **kwargs):
     import sys
     global global_logger
 
-    global_logger.critical(template.format(*args, **kwargs))
+    try:
+        global_logger.critical(template.format(*args, **kwargs))
+    except KeyError:
+        # When the error string is a template
+        
+        global_logger.critical(template.replace('{','{{').replace('}','}}').format(*args, **kwargs))
+
+
+
     sys.exit(1)
 
 def warn(template, *args, **kwargs):
@@ -220,7 +228,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
                                     if 'order' in ident.data else {'major':-1,'minor':-1})),
         ('locations','{:6s}',  '{:6s}',       lambda ident: ident.locations),
         ('pcount', '{:5s}', '{:5s}', lambda ident: str(len(ident.partitions)) if ident.partitions else ''),
-        ('vid',      '{:15s}', '{:20s}',      lambda ident: ident.vid),
+        ('vid',      '{:18s}', '{:20s}',      lambda ident: ident.vid),
         ('time', '{:20s}', '{:20s}',          lambda ident: datetime.fromtimestamp(ident.data['time']).isoformat() if 'time' in ident.data else ''),
         ('status',   '{:20s}', '{:20s}',      lambda ident: ident.bundle_state if ident.bundle_state else ''),
         ('vname',    '{:40s}', '    {:40s}',  lambda ident: ident.vname),
@@ -236,7 +244,6 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
     p_format = ""
     extractors = []
 
-
     for e in all_fields:
         e = dict(zip(record_entry_names, e)) # Just to make the following code easier to read
 
@@ -247,7 +254,6 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields = []):
         p_format += e['p_format']
 
         extractors.append(e['extractor'])
-
 
     prtf(d_format, *[ f(ident) for f in extractors ] )
 
@@ -268,8 +274,7 @@ def _print_bundle_list(idents, subset_names = None, prtf=prt,fields=[], show_par
                             show_partitions=show_partitions)
 
 def _print_info(l,ident, list_partitions=False):
-    from ..cache import RemoteMarker
-    from ..bundle import LibraryDbBundle # Get the bundle from the library
+
     from ..identity import LocationRef
 
     resolved_ident = l.resolve(ident.vid, None) # Re-resolve to get the URL or Locations
@@ -284,8 +289,9 @@ def _print_info(l,ident, list_partitions=False):
     prt("D Vname     : {}", d.vname)
     prt("D Fqname    : {}", d.fqname)
     prt("D Locations : {}",str(resolved_ident.locations))
+    prt("P Is Local  : {}", (l.cache.has(d.cache_key) is not False) if d else '')
     prt("D Rel Path  : {}",d.cache_key)
-    prt("D Abs Path  : {}",l.cache.path(d.cache_key) if l.cache.has(d.cache_key) else '')
+    prt("D Abs Path  : {}",l.cache.path(d.cache_key, missing_ok = True)  )
     if d.url:
         prt("D Web Path  : {}",d)
 
@@ -313,6 +319,20 @@ def _print_info(l,ident, list_partitions=False):
             prt('B Build time: {}',
                 str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
 
+    else:
+
+        bundle =  l.get(d.vid)
+
+        process = bundle.get_value_group('process')
+        prt('B Partitions: {}', bundle.partitions.count)
+        prt('B Created   : {}', process.get('dbcreated', ''))
+        prt('B Prepared  : {}', process.get('prepared', ''))
+        prt('B Built     : {}', process.get('built', ''))
+        prt('B Build time: {}',
+            str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
+
+
+
     if ident.partitions:
 
         if len(ident.partitions) == 1 and not list_partitions:
@@ -329,7 +349,7 @@ def _print_info(l,ident, list_partitions=False):
             prt("P Partition : {}; {}",p.vid, p.vname)
             prt("P Is Local  : {}",(l.cache.has(p.cache_key) is not False) if p else '')
             prt("P Rel Path  : {}",p.cache_key)
-            prt("P Abs Path  : {}",l.cache.path(p.cache_key) if l.cache.has(p.cache_key) else '' )
+            prt("P Abs Path  : {}",l.cache.path(p.cache_key, missing_ok = True)  )
 
             if resolved_ident.url:
                 prt("P Web Path  : {}",resolved_ident.url)
@@ -371,20 +391,16 @@ def _print_bundle_info(bundle=None, ident=None):
 def main(argsv = None, ext_logger=None):
     import ambry._meta
     import os
-
-    ##
-    ## Do it again.
-    ##
+    import sys
 
     parser = argparse.ArgumentParser(prog='ambry',
                                      description='Ambry {}. Management interface for ambry, libraries and repositories. '.format(
-                                         ambry._meta.__version__),
-                                     prefix_chars='-+')
+                                         ambry._meta.__version__))
 
 
     parser.add_argument('-l', '--library', dest='library_name', default="default",
                         help="Name of library, from the library secton of the config")
-    parser.add_argument('-c', '--config', default=os.getenv(AMBRY_CONFIG_ENV_VAR), action='append', help="Path to a run config file")
+    parser.add_argument('-c', '--config', default=os.getenv(AMBRY_CONFIG_ENV_VAR), action='append', help="Path to a run config file. Alternatively, set the AMBRY_CONFIG env var")
     parser.add_argument('--single-config', default=False, action="store_true", help="Load only the config file specified")
     parser.add_argument('-E', '--exceptions', default=False, action="store_true",help="Show full exception trace on all exceptions")
 
@@ -411,8 +427,7 @@ def main(argsv = None, ext_logger=None):
     bundle_parser(cmd)
     root_parser(cmd)
 
-    argsv = shlex.split(' '.join(argsv)) if argsv else None
-    args = parser.parse_args(argsv)
+    args = parser.parse_args()
 
 
     if args.single_config:
@@ -457,6 +472,7 @@ def main(argsv = None, ext_logger=None):
     else:
         try:
             rc = get_runconfig(rc_path)
+
         except ConfigurationError:
             fatal("Could not find configuration file at {}\nRun 'ambry config install; to create one ",rc_path)
 

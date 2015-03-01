@@ -44,7 +44,9 @@ contact_source:
         name: Source maintainer
         url: http://clarinova.com
 dependencies: {}
-extract: {}
+documentation:
+    main: null
+    readme: null
 identity:
     bspace: null
     btime: null
@@ -65,6 +67,7 @@ nonterm:
     a: 1
     b: 2
     c: 3
+process: {}
 sources:
     google:
         description: The Google Homepage
@@ -74,8 +77,10 @@ sources:
         url: http://yahoo.com
 versions:
     3:
+        date: null
         description: d3
         version: s3
+views: {}
             """
 
     def tearDown(self):
@@ -222,7 +227,7 @@ versions:
         self.assertIn(('contact_bundle', 'creator', 'bingo'), top.errors)
 
         self.assertIn('creator', top.contact_bundle.keys())
-        self.assertIn('url', dict(top.contact_bundle.creator))
+        self.assertNotIn('url', dict(top.contact_bundle.creator))
         self.assertEqual('Email',top.contact_bundle.creator.email)
 
         self.assertIn('name', top.partitions[0])

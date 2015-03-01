@@ -1,11 +1,25 @@
 TITLE: A Health Manifest
 
-This is a fake education file manifest
+This is a fake Health file manifest. It can only be installed when referenced from another
+manifest that sets a database, or with a databse explicitly set/
 
-UID: bdcff528-2216-4ec3-a3da-40a8fb439882
+UID: mQaiWWgy2G
 
 PARTITIONS:
 
-example.com-segmented-orig-example-2
-example.com-combined-example
+example.com-segmented-example-2
+example.com-combined-combined
+
+VIEW: health_view
+
+SELECT * FROM "pIjqPRbrGq001_combined"
+
+VIEW: health_mview
+
+SELECT *
+FROM "p00G001_example"
+
+EXTRACT: health_mview AS csv TO health_mview.csv
+
+
 

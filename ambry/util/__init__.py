@@ -4,7 +4,6 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-
 from __future__ import print_function
 import collections
 import functools
@@ -21,14 +20,11 @@ from flo import * # Legacy; should convert clients to direct import
 
 logger_init = set()
 
-
 def get_logger(name, file_name = None, stream = None, template=None, clear=False, propagate = False):
     """Get a logger by name
 
     if file_name is specified, and the dirname() of the file_name exists, it will
     write to that file. If the dirname dies not exist, it will silently ignre it. """
-
-
 
     logger = logging.getLogger(name)
 
@@ -37,7 +33,6 @@ def get_logger(name, file_name = None, stream = None, template=None, clear=False
 
     if clear:
         logger.handlers = []
-
 
     # To list all loggers: logging.Logger.manager.loggerDict
 
@@ -168,7 +163,33 @@ def memoize(obj):
         return cache[key]
 
     return memoizer
-        
+
+
+def expiring_memoize(obj):
+    """Like memoize, but forgets after 10 seconds. """
+    from collections import defaultdict
+
+    cache = obj.cache = {}
+    last_access = obj.last_access = defaultdict(int)
+
+    @functools.wraps(obj)
+    def memoizer(*args, **kwargs):
+        import time
+
+        key = str(args) + str(kwargs)
+
+        if last_access[key] and last_access[key] + 10 < time.time():
+            if key in cache:
+                del cache[key]
+
+        last_access[key] = time.time()
+
+        if key not in cache:
+            cache[key] = obj(*args, **kwargs)
+        return cache[key]
+
+    return memoizer
+
 class Counter(dict):
     'Mapping where default values are zero'
     def __missing__(self, key):
@@ -513,6 +534,7 @@ class AttrDict(OrderedDict):
         return  root
 
     def update_flat(self, val):
+
         if isinstance(val, AttrDict): val = val.flatten()
         for k,v in val:
             dst = self
@@ -537,7 +559,7 @@ class AttrDict(OrderedDict):
             dst[k[-1]] = v
 
 
-    def update_yaml(self, path): 
+    def update_yaml(self, path):
         self.update_flat(self.from_yaml(path))
 
     def clone(self):
@@ -987,15 +1009,13 @@ def _log_rate(output_f,d, message=None):
         d[6].append(int( d[3]/(time.time()-d[1])))
         rate = sum(d[6])/len(d[6])
 
-
-
         # Prints the processing rate in 1,000 records per sec.
         output_f(message+': '+str(rate)+'/s '+str(d[0]/1000)+"K ") 
         
         d[1] = time.time()
         
-        # If the print_rate was specified, adjuect the number of records to
-        # aaproximate that rate. 
+        # If the print_rate was specified, adjust the number of records to
+        # aproximate that rate.
         if d[5]:
             target_rate =  rate * d[5]
             d[3] = int((target_rate + d[3]) / 2)
@@ -1149,7 +1169,7 @@ class Constant:
 
 
 class session_context(object):
-    """Provide a transactional scope around a series of Sqlalchemyoperations."""
+    """Provide a transactional scope around a series of Sqlalchemy operations."""
 
     def __init__(self, sessionmaker_class):
         self.sessionmaker_class = sessionmaker_class
@@ -1157,11 +1177,11 @@ class session_context(object):
 
     def __enter__(self):
         self.session = self.sessionmaker_class()
+
         return self.session
 
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-
 
         if exc_type is not None:
             # Got an exception
@@ -1228,27 +1248,42 @@ def parse_url_to_dict(url):
 
 def unparse_url_dict(d):
 
-    host_port = d['hostname']
 
-    if d['port']:
+    if 'hostname' in d and d['hostname']:
+        host_port = d['hostname']
+    else:
+        host_port = ''
+
+    if 'port' in d and d['port']:
         host_port+= ":" + str(d['port'])
 
     user_pass = ''
-    if d['username']:
+    if 'username' in d and d['username']:
         user_pass += d['username']
 
-    if d['password']:
+    if 'password' in d and d['password']:
         user_pass += ':' + d['password']
 
     if user_pass:
         host_port = user_pass + '@' + host_port
 
-    url = "{}://{}/{}".format(d['scheme'], host_port, d['path'].lstrip('/'))
+    url = "{}://{}/{}".format(d.get('scheme','http'), host_port, d.get('path','').lstrip('/'))
 
-    if d['query']:
+    if 'query' in d and d['query']:
         url += '?' + d['query']
 
     return url
+
+def filter_url(url, **kwargs):
+    """Alter a url by setting parameters set in parse_url_to_dict"""
+
+    d = parse_url_to_dict(url)
+
+    d.update(kwargs)
+
+    return unparse_url_dict({ k:v for k,v in d.items() if v })
+
+
 
 def normalize_newlines(string):
     """Convert \r\n or \r to \n"""

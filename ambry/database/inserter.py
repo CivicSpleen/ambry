@@ -24,17 +24,6 @@ class InserterInterface(object):
     def close(self): raise NotImplemented()
 
 
-class UpdaterInterface(object):
-    
-    def __enter__(self): raise NotImplemented()
-    
-    def __exit__(self, type_, value, traceback): raise NotImplemented()
-    
-    def update(self, row): raise NotImplemented()
-    
-    def close(self): raise NotImplemented()
-
-
 class SegmentInserterFactory(object):
     
     def next_inserter(self, segment): 
@@ -97,12 +86,16 @@ class ValueWriter(InserterInterface):
 
         self.cache_size = cache_size
         self.statement = None
-        
+
+        self.build_state = None
+
         if text_factory:
             self.db.engine.raw_connection().connection.text_factory = text_factory
 
     def __enter__(self):
         from ..partitions import Partitions
+
+        self.build_state = Partitions.STATE.BUILDING
         self.db.partition.set_state(Partitions.STATE.BUILDING)
         return self
         
@@ -110,19 +103,26 @@ class ValueWriter(InserterInterface):
         from ..partitions import Partitions
         global_logger.debug("rollback {}".format(repr(self.session)))
         self.session.rollback()
+        self.build_state = Partitions.STATE.ERROR
         self.db.partition.set_state(Partitions.STATE.ERROR)
 
     def commit_end(self):
         from ..partitions import Partitions
         global_logger.debug("commit end {}".format(repr(self.session)))
         self.session.commit()
+        self.build_state = Partitions.STATE.BUILT
         self.db.partition.set_state(Partitions.STATE.BUILT)
 
     def commit_continue(self):
         from ..partitions import Partitions
         global_logger.debug("commit continue {}".format(repr(self.session)))
         self.session.commit()
-        self.db.partition.set_state(Partitions.STATE.BUILDING)
+
+        # We don't want this executing every committ since it is hard to make sure it happens
+        # in a bundle session, which can result in the database being locked, in MP runs.
+        if self.build_state != Partitions.STATE.BUILDING:
+            self.build_state = Partitions.STATE.BUILDING
+            self.db.partition.set_state(Partitions.STATE.BUILDING)
 
     def close(self):
 
@@ -154,11 +154,9 @@ class ValueWriter(InserterInterface):
                 return False
 
         self.close()
-           
-                
+
         return self
-        
- 
+
 class CodeCastErrorHandler(object):
     '''Used by the Value Inserter to handle errors in casting
     data types. This version will create code table entries
@@ -168,37 +166,45 @@ class CodeCastErrorHandler(object):
         from collections import defaultdict
         self.codes = defaultdict(set)
         self.inserter = inserter
-    
+
+    def code_col_name(self, col_name):
+        return col_name + '_codes'
+
     def cast_error (self, row,  cast_errors):
         '''For each cast error, save the key and value in a set, 
         for later conversion to a code partition '''
-        for k,v in cast_errors.items():
-            self.inserter.bundle.schema.add_code_table(self.inserter.table.name, k) # idempotent
-            self.codes[k].add(v)
-            
-    def finish(self):
-        '''For each of the code sets generated during casting errors, create
-        a new partition that holds all of the codes. '''
 
+        for k,v in cast_errors.items():
+            self.codes[k].add(v)
+
+            # This part will only put the value in the column if the code column has been
+            # created.
+            row[self.code_col_name(k)] = v
+            row[k] = None
+
+        return row
+
+    def finish(self):
+        '''Add all of the codes to the codes table'''
+        from ..dbexceptions import NotFoundError
         schema = self.inserter.bundle.schema
 
-        t = schema.add_table('column_codes') # Because every partition must have a table
-        schema.add_column(t, 'id', datatype='integer', is_primary_key=True)
-        schema.write_schema()
+        with self.inserter.bundle.session:
 
-        tables = {}
-        for col_name, codes in self.codes.items():
-            tables[col_name] =  self.inserter.table.name + '_' + col_name + '_codes'
+            # self.inserter.table is a sqlalchemy.sql.schema.Table, not an orm.Table
+            table = self.inserter.bundle.schema.table(self.inserter.table.name)
 
+            for col_name, codes in self.codes.items():
 
-        p = self.inserter.bundle.partitions.find_or_new(table='column_codes', tables=tables.values())
+                try:
+                    # Try with the code column, if it exists.
+                    col = table.column(self.code_col_name(col_name))
+                except NotFoundError:
+                    # Fall back to the source column
+                    col = table.column(col_name)
 
-        for col_name, codes in self.codes.items():
-            table = tables[col_name]
-            with p.inserter(table) as ins:
-                for code in codes:
-                    ins.insert({'code':code})
-
+                for i, code in enumerate(codes):
+                    col.add_code(i, code, code)
 
 class ValueInserter(ValueWriter):
     '''Inserts arrays of values into  database table'''
@@ -237,9 +243,11 @@ class ValueInserter(ValueWriter):
 
         self.update_size = update_size
 
+        self.row_id = None
 
         if replace:
             self.statement = self.statement.prefix_with('OR REPLACE')
+
 
     def insert(self, values):
         from sqlalchemy.engine.result import RowProxy
@@ -254,7 +262,6 @@ class ValueInserter(ValueWriter):
 
             if isinstance(values, dict):
 
-
                 if self.caster:
                     d, cast_errors = self.caster(values)
 
@@ -266,16 +273,8 @@ class ValueInserter(ValueWriter):
                     d = { k: d[k] if k in d and d[k] is not None else v for k,v in self.null_row.items() }
 
             else:
-                
-                if self.caster:
-                    d, cast_errors = self.caster(values)
-                else:
-                    d = values
+                raise DeprecationWarning("Inserting lists is no longer supported")
 
-                d  = dict(zip(self.header, d))
-                
-                if self.skip_none:
-                    d = { k: d[k] if k in d and d[k] is not None else v for k,v in self.null_row.items() }
                 
             if self.update_size:
                 for i,col_name in enumerate(self.sizable_fields):
@@ -285,6 +284,18 @@ class ValueInserter(ValueWriter):
                         # Unicode is a PITA
                         pass
 
+            if self.row_id is not None:
+                if d['id'] is None:
+                    d['id'] = self.row_id
+                    self.row_id += 1
+                else:
+                    self.row_id = max(self.row_id, d['id'] ) + 1
+
+            if cast_errors and self.cast_error_handler:
+
+                d = self.cast_error_handler.cast_error(d, cast_errors)
+                cast_errors = None
+
             self.cache.append(d)
          
             if len(self.cache) >= self.cache_size: 
@@ -292,9 +303,6 @@ class ValueInserter(ValueWriter):
                 self.cache = []
                 self.commit_continue()
 
-
-            if cast_errors and self.cast_error_handler:
-                self.cast_error_handler.cast_error(values,cast_errors )
 
             return cast_errors
 
@@ -331,67 +339,3 @@ class ValueInserter(ValueWriter):
    
         if self.cast_error_handler:
             self.cast_error_handler.finish()
-   
-   
-class ValueUpdater(ValueWriter, UpdaterInterface):
-    '''Updates arrays of values into  database table'''
-    def __init__(self,  db, bundle, table,  cache_size=50000, text_factory = None): 
-        
-        from sqlalchemy.sql.expression import bindparam, and_
-        super(ValueUpdater, self).__init__(db, bundle,  cache_size=50000, text_factory = text_factory)
-    
-        self.table = table
-        self.statement = self.table.update()
-     
-        wheres = []
-        for primary_key in table.primary_key:
-            wheres.append(primary_key == bindparam('_'+primary_key.name))
-            
-        if len(wheres) == 1:
-            self.statement = self.statement.where(wheres[0])
-        else:
-            self.statement = self.statement.where(and_(wheres))
-       
-        self.values = None
-       
-
-    def update(self, values):
-        from sqlalchemy.sql.expression import bindparam
-        
-        if not self.values:
-            names = values.keys()
-            
-            binds = {}
-            for col_name in names:
-                if not col_name.startswith("_"):
-                    raise ValueError("Columns names must start with _ for use in updater")
-                
-                column = self.table.c[col_name[1:]]
-                binds[column.name] = bindparam(col_name)
-                
-                self.statement = self.statement.values(**binds)
-       
-        try:
-            if isinstance(values, dict):
-                d = values
-            else:
-                d  = dict(zip(self.header, values))
-         
-            self.cache.append(d)
-         
-            if len(self.cache) >= self.cache_size:
-                
-                self.session.execute(self.statement, self.cache)
-                self.cache = []
-                
-        except (KeyboardInterrupt, SystemExit):
-            self.rollback()
-            self.cache = []
-            raise
-        except Exception as e:
-            self.bundle.error("Exception during ValueUpdater.insert: "+str(e))
-            self.rollback()
-            self.cache = []
-            raise e
-
-        return True    

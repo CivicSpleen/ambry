@@ -1,5 +1,7 @@
 
 
-from . import main #@UnresolvedImport
+import sys
 
-main()
+from ambry.cli import main #@UnresolvedImport
+
+main(sys.argv)

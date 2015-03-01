@@ -1,4 +1,5 @@
-# Normally, the '{root}' bit is substuted in RunConfig, but for testing
+# Configuration for the CLI unit test
+# Normally, the '{root}' bit is substituted in RunConfig, but for testing
 # these are substituted when the file is copied into the test directory
 database:
     default:
@@ -19,6 +20,7 @@ library:
         remotes:
             - '{root}/remote'
         source: '{root}/source'
+
 numbers:
     host: numbers.ambry.io
     key: fe78d179-8e61-4cc5-ba7b-263d8d3602b9

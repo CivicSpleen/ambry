@@ -1,15 +1,19 @@
 about:
+    access: null
+    grain: null
     groups:
     - group1
     - group2
     license: other-open
     rights: null
+    space: null
     subject: null
     summary: This bundle can run in multiprocessor mode, building many partitions
         simultaneously.
     tags:
     - tag1
     - tag2
+    time: null
     title: A Test of Concurency
 contact_bundle:
     creator:
@@ -54,5 +58,6 @@ names:
 process: {}
 versions:
     1:
+        date: null
         description: null
         version: 0.0.1

@@ -4,9 +4,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from ..dbexceptions import DependencyError
-from . import WarehouseInterface
+from . import Warehouse
 
-class RelationalWarehouse(WarehouseInterface):
+class RelationalWarehouse(Warehouse):
 
     ##
     ## Tables
@@ -31,7 +31,8 @@ class RelationalWarehouse(WarehouseInterface):
                                                     table_name,
                                                     d_vid=d_vid,
                                                     driver=self.database.driver,
-                                                    alt_name=self.augmented_table_name(identity, table_name),
+                                                    use_fq_col_names = True,
+                                                    alt_name=self.augmented_table_name(identity, table_name)[0],
                                                     session=self.library.database.session)
         return meta, table
 
@@ -47,20 +48,25 @@ class RelationalWarehouse(WarehouseInterface):
         else:
             self.logger.info('table_exists {}'.format(table.name))
 
+        t = self.library.table(table.name)
+
+
         return table, meta
 
     def create_index(self, name, table, columns):
 
-        from sqlalchemy.exc import OperationalError
+        from sqlalchemy.exc import OperationalError, ProgrammingError
 
-        sql = "CREATE INDEX {} ON {} ({})".format(name, table, ','.join(columns))
+        sql = 'CREATE INDEX {} ON "{}" ({})'.format(name, table, ','.join(columns))
 
         try:
             self.database.connection.execute(sql)
             self.logger.info('create_index {}'.format(name))
-        except OperationalError as e:
+        except (OperationalError, ProgrammingError) as e:
+
             if 'exists' not in str(e).lower():
                 raise
+
             self.logger.info('index_exists {}'.format(name))
             # Ignore if it already exists.
 
@@ -80,28 +86,26 @@ class RelationalWarehouse(WarehouseInterface):
 
         return r
 
-    def load_insert(self, partition, table_name):
+    def load_insert(self, partition, source_table_name, dest_table_name, where = None):
         from ..database.inserter import ValueInserter
         from sqlalchemy import Table, MetaData
+        from sqlalchemy.dialects.postgresql.base import BYTEA
+        import psycopg2
 
         replace = False
 
-        self.logger.info('load_insert {}'.format(partition.identity.name))
+        self.logger.info('load_insert {}'.format(partition.identity.vname))
 
         if self.database.driver == 'mysql':
             cache_size = 5000
-        elif self.database.driver == 'postgres':
-            cache_size = 20000
+
+        elif self.database.driver == 'postgres' or self.database.driver == 'postgis':
+            cache_size = 5000
+
         else:
             cache_size = 50000
 
-        p_vid = partition.identity.vid
-        d_vid = partition.identity.as_dataset().vid
-
-        source_table_name = table_name
-        dest_table_name = self.augmented_table_name(partition.identity, table_name)
-
-        self.logger.info('populate_table {}'.format(table_name))
+        self.logger.info('populate_table {}'.format(source_table_name))
 
         dest_metadata = MetaData()
         dest_table = Table(dest_table_name, dest_metadata, autoload=True, autoload_with=self.database.engine)
@@ -111,75 +115,86 @@ class RelationalWarehouse(WarehouseInterface):
         source_metadata = MetaData()
         source_table = Table(source_table_name, source_metadata, autoload=True, autoload_with=partition.database.engine)
 
-        select_statement = source_table.select()
-
         if replace:
             insert_statement = insert_statement.prefix_with('OR REPLACE')
 
-        cache = []
+        cols = [ ' {} AS "{}" '.format(c[0].name if c[0].name != 'geometry' else 'AsText(geometry)',c[1].name )
+                for c in zip(source_table.columns, dest_table.columns) ]
 
-        with self.database.engine.begin() as conn:
+        select_statement = " SELECT {} FROM {} ".format(','.join(cols), source_table.name)
+
+        if where:
+            select_statement += " WHERE " + where
+
+        binary_cols = []
+        for c in dest_table.columns:
+            if isinstance(c.type, BYTEA ):
+                binary_cols.append(c.name)
+
+
+        # Psycopg executemany function doesn't use the multiple insert syntax of Postgres,
+        # so it is fantastically slow. So, we have to do it ourselves.
+        # Using multiple row inserts is more than 100 times faster.
+        import re
+
+        # For Psycopg's mogrify(), we need %(var)s parameters, not :var
+        insert_statement = re.sub(r':([\w_-]+)', r'%(\1)s', str(insert_statement))
+
+        conn = self.database.engine.raw_connection()
+
+        with conn.cursor() as cur:
+
+            def execute_many(insert_statement, values):
+
+                mogd_values = []
+
+                inst, vals = insert_statement.split("VALUES")
+
+                for value in values:
+
+                    mogd = cur.mogrify(insert_statement, value )
+                    # Hopefully, including the parens will make it unique enough to not
+                    # cause problems. Using just 'VALUES' files when there is a column of the same name.
+                    _, vals = mogd.split(") VALUES (", 1)
+
+                    mogd_values.append("("+vals)
+
+                sql = inst+" VALUES "+','.join(mogd_values)
+
+                cur.execute(sql)
+
+            cache = []
+
+
+
             for i, row in enumerate(partition.database.session.execute(select_statement)):
-                self.logger.progress('add_row', table_name, i)
 
-                cache.append(row)
+                self.logger.progress('add_row', source_table_name, i)
 
-                if len(cache) > cache_size:
-                    conn.execute(insert_statement, cache)
+                if binary_cols:
+                    # This is really horrible. To insert a binary column property, it has to be run rhough
+                    # function.
+                    cache.append({ k: psycopg2.Binary(v) if k in binary_cols else v for k,v in row.items() })
+
+                else:
+                    cache.append(dict(row))
+
+                if len(cache) >= cache_size:
+                    self.logger.info('committing {} rows'.format(len(cache)))
+                    execute_many(insert_statement, cache)
                     cache = []
 
+
             if len(cache):
-                conn.execute(insert_statement, cache)
+                self.logger.info('committing {} rows'.format(len(cache)))
+                execute_many(insert_statement, cache)
+
+        conn.commit()
 
         self.logger.info('done {}'.format(partition.identity.vname))
 
         return dest_table_name
 
-
-    def load_ogr(self, partition, table_name, where):
-        #
-        # Use ogr2ogr to copy.
-        #
-        import shlex
-        from sh import ogr2ogr
-
-        p_vid = partition.identity.vid
-        d_vid = partition.identity.as_dataset().vid
-
-        a_table_name = self.augmented_table_name(partition.identity, table_name)
-
-        args = [
-            "-t_srs EPSG:4326",
-            "-nlt PROMOTE_TO_MULTI",
-            "-nln {}".format(a_table_name),
-            "-progress ",
-            "-overwrite",
-            "-skipfailures",
-            ] + self._ogr_args(partition)
-
-        def err_output(line):
-            self.logger.error(line)
-
-        global count
-        count = 0
-
-
-        def out_output(c):
-            global count
-            count += 1
-            if count % 10 == 0:
-                pct = (int(count / 10) - 1) * 20
-                if pct <= 100:
-                    self.logger.info("Loading {}%".format(pct))
-
-
-        self.logger.info("Loading with: ogr2ogr {}".format(' '.join(args)))
-
-        # Need to shlex it b/c the "PG:" part gets bungled otherwise.
-        p = ogr2ogr(*shlex.split(' '.join(args)), _err=err_output, _out=out_output, _iter=True, _out_bufsize=0)
-        p.wait()
-
-        return a_table_name
 
     def remove(self, name):
         from ..orm import Dataset
@@ -195,7 +210,7 @@ class RelationalWarehouse(WarehouseInterface):
             self.logger.info("Dropping tables in partition {}".format(p.identity.vname))
             for table_name in p.tables:  # Table name without the id prefix
 
-                table_name = self.augmented_table_name(p.identity, table_name)
+                table_name, alias = self.augmented_table_name(p.identity, table_name)
 
                 try:
                     self.database.drop_table(table_name)
@@ -227,45 +242,4 @@ class RelationalWarehouse(WarehouseInterface):
         e = self.database.connection.execute
 
         e(sql_text)
-
-
-    def install_file(self, path, ref, content = None, source = None, type = None, group = None, source_url = None,  data = None):
-        """Install a file reference, possibly with binary content"""
-        import os
-        from ..util import md5_for_file
-        import hashlib
-        import time
-
-        files = self.library.files
-
-        f  = files.new_file(path=path, ref = ref, type_=type, group=group, data=data, source_url = source_url)
-
-        if source:
-            try:
-                f.content = source.read()
-
-                f.hash = hashlib.md5(f.content).hexdigest()
-                f.size = len(f.content)
-                f.modified = int(time.time())
-
-            except IOError:
-                with open(source) as sf:
-                    f.content = sf.read()
-
-                stat = os.stat(path)
-
-                if not f.modified or stat.st_mtime > f.modified:
-                    f.modified = int(stat.st_mtime)
-
-                f.size = stat.st_size
-
-                f.hash = md5_for_file(source)
-
-        elif content:
-            f.content = content
-            f.hash = hashlib.md5(f.content).hexdigest()
-            f.size = len(f.content)
-            f.modified = int(time.time())
-
-        files.merge(f)
 

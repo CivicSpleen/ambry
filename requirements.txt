@@ -1,5 +1,6 @@
 PyYAML
 SQLAlchemy
+sh
 boto
 requests
 markdown
@@ -14,3 +15,9 @@ sqlparse
 pygments
 jinja2
 address_parser
+pdfminer
+nltk
+flask
+flask-compress
+-e git+https://github.com/CivicKnowledge/ckcache.git#egg=ckcache
+

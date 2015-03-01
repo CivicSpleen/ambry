@@ -11,6 +11,9 @@ from util.typecheck import returns, accepts
 from util import Constant
 
 
+class NotObjectNumberError(ValueError):
+    pass
+
 
 class Name(object):
     '''The Name part of an identity ''' 
@@ -155,17 +158,12 @@ class Name(object):
 
         return self.clear_dict(d) 
 
-
-
-
     @property
     def name(self):
         '''String version of the name, excluding the version, and
         excluding the format, if the format is 'db' '''
         
         d = self._dict(with_name=False)
-
-
 
         return self.NAME_PART_SEP.join([ str(d[k]) for (k,_,_) in self.name_parts
                          if k and d.get(k,False)
@@ -429,7 +427,7 @@ class PartitionName(PartialPartitionName, Name):
         try:
             return os.path.join(*(self._local_parts()))
         except TypeError as e:
-            raise TypeError("Path failed for partition {}: {}".format(self.name, e.message))
+            raise TypeError("Path failed for partition {} : {}".format(self.name, e.message))
 
 
     def type_is_compatible(self, o):
@@ -696,7 +694,7 @@ class ObjectNumber(object):
             on_str = cls.TYPE.DATASET + on_str[1:]
 
         if not type_ in  cls.NDS_LENGTH.keys():
-            raise ValueError("Unknown type character '{}' for '{}'".format(type_, on_str))
+            raise NotObjectNumberError("Unknown type character '{}' for '{}'".format(type_, on_str))
 
         ds_length = len(on_str)-cls.NDS_LENGTH[type_]
 
@@ -839,6 +837,33 @@ class TopNumber(ObjectNumber):
         self.dataset = dataset
         self.revision = revision
 
+    @classmethod
+    def from_hex(cls, h, space, assignment_class='self'):
+        """Produce a TopNumber, with a lenth to match the given assignment class, based on an input hex string.
+
+        This can be used to create TopNumbers from a hash of a string.
+        """
+
+        from math import log
+
+        #Use the ln(N)/ln(base) trick to find the right number of hext digits to  use
+
+        hex_digits = int(round(log(62**TopNumber.DLEN.DATASET_CLASSES[assignment_class]) / log(16),0))
+
+        i = int(h[:hex_digits],16)
+
+        return TopNumber(space, i, assignment_class=assignment_class)
+
+    @classmethod
+    def from_string(cls, s, space):
+        """Produce a TopNumber by hashing a string"""
+
+        import hashlib
+
+        hs = hashlib.sha1(s).hexdigest()
+
+        return cls.from_hex(hs, space)
+
     def _ds_str(self):
 
         ds_len = self.DLEN.DATASET_CLASSES[self.assignment_class]
@@ -905,8 +930,17 @@ class TableNumber(ObjectNumber):
         
         if not self.revision and dataset.revision:
             self.revision = dataset.revision
-        
-        
+
+    @property
+    def as_table(self):
+        """Returns self, so TableNumber and Column number can be used interchangably"""
+        return self
+
+    @property
+    def as_dataset(self):
+        """Unlike the .dataset property, this will include the revision"""
+        return self.dataset.rev(self.revision)
+
          
     def __str__(self):        
         return (ObjectNumber.TYPE.TABLE+
@@ -936,8 +970,17 @@ class ColumnNumber(ObjectNumber):
     def dataset(self):
         '''Return the dataset number for ths partition '''
         return self.table.dataset
-         
-         
+
+    @property
+    def as_dataset(self):
+        """Unlike the .dataset property, this will include the revision"""
+        return self.table.dataset.rev(self.revision)
+
+    @property
+    def as_table(self):
+        """Unlike the .dataset property, this will include the revision"""
+        return self.table.rev(self.revision)
+
          
     def __str__(self):        
         return (ObjectNumber.TYPE.COLUMN+
@@ -970,7 +1013,12 @@ class PartitionNumber(ObjectNumber):
 
         if not self.revision and dataset.revision:
             self.revision = dataset.revision
-        
+
+    @property
+    def as_dataset(self):
+        """Unlike the .dataset property, this will include the revision"""
+        return self.dataset.rev(self.revision)
+
     def __str__(self):        
         return (ObjectNumber.TYPE.PARTITION+
                 self.dataset._ds_str()+

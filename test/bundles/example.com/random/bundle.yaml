@@ -1,14 +1,18 @@
 about:
+    access: null
+    grain: null
     groups:
     - group1
     - group2
     license: other-open
     rights: null
+    space: null
     subject: null
     summary: This is a simple file of random data.
     tags:
     - tag1
     - tag2
+    time: null
     title: Random Data
 contact_bundle:
     creator:
@@ -53,8 +57,10 @@ names:
 process: {}
 versions:
     1:
+        date: null
         description: null
         version: null
     2:
+        date: null
         description: null
         version: 0.0.2

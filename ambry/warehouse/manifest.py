@@ -20,12 +20,20 @@ class null_logger(object):
         pass
 
 
+    def warn(self, w):
+        pass
+
+
+    def info(self, w):
+        pass
+
 class ParseError(Exception):
     pass
 
 class ManifestSection(object):
 
-    def __init__(self, tag, linenumber, args):
+    def __init__(self, path, tag, linenumber, args):
+        self.path = path
         self.linenumber = linenumber
         self.args = args
         self.tag = tag
@@ -33,6 +41,10 @@ class ManifestSection(object):
         self.lines = []
         self.content = None
         self.doc = None
+
+    @property
+    def file_line(self):
+        return "{}:{}".format(self.path, self.linenumber)
 
     @property
     def name(self):
@@ -52,12 +64,14 @@ class ManifestSection(object):
     def __str__(self):
         return "Section: tag={} line={} args={} content={} doc={}".format(self.tag, self.linenumber, self.args, self.content, self.doc)
 
-
 class Manifest(object):
 
     # These tags have only a single line; revert back to 'doc' afterward
-    singles = ['uid', 'title', 'extract', 'dir',  'database', 'local', 'remote', 'author', 'url', 'access', 'index', 'include']
+    singles = ['uid', 'title',  'author', 'index', 'include', "geo"]
     multi_line = ['partitions','view','mview','sql','doc']
+
+    partitions = None
+
 
     def __init__(self, file_or_data, logger=None):
 
@@ -128,26 +142,20 @@ class Manifest(object):
 
         return None
 
+    def has_section(self, keyword):
+        for line, section in self.sections.items():
+            if section.tag == keyword:
+                return True
+
+        return False
+
     def count_sections(self,tag):
         return sum( section.tag == tag for section in self.sections.values())
 
-
     @property
-    def database(self):
-        return self.single_line('database')
-
-    @property
-    def publication(self):
-        return self.single_line('publication')
-
-    @property
-    def local(self):
-        return self.single_line('local')
-
-    @property
-    def remote(self):
-        return self.single_line('remote')
-
+    def cache(self):
+        # The CACHE tag was removed
+        return self.uid
 
     @property
     def uid(self):
@@ -156,60 +164,21 @@ class Manifest(object):
         uid =  self.single_line('uid')
 
         if not uid:
-            import uuid
+            from ..identity import TopNumber
+            tn = TopNumber('m')
             raise ConfigurationError(
-                "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(uuid.uuid4()))
+                "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(str(tn)))
 
         return uid
+
+    @property
+    def is_geo(self):
+        return bool(self.single_line('geo'))
 
     @property
     def title(self):
         return self.single_line('title')
 
-    @property
-    def summary(self):
-
-        t = self.tagged_sections('title').pop()
-
-        print t.doc
-
-
-    @property
-    def access(self):
-        acl =  self.single_line('access')
-
-        if not acl:
-            acl = 'public-read'
-
-        return acl
-
-
-    @property
-    def bundles(self):
-        """Metadata for bundles, each with the partitions that are installed here.
-
-        This extracts the bundle information that is in the partitions list, but it requires
-        that the add_bundle() method has been run first, because the manifest doesn't usually ahve access to
-        a library
-        """
-
-        bundles = {}
-
-        for p in self.partitions:
-
-            b_ident = p['bundle']
-
-            if not b_ident.vid in bundles:
-
-                bundles[b_ident.vid] = dict(
-                    partitions = [],
-                    ident=b_ident,
-                    metadata=p['metadata']
-                )
-
-            bundles[b_ident.vid]['partitions'].append(p)
-
-        return bundles
 
     @property
     def summary(self):
@@ -220,7 +189,12 @@ class Manifest(object):
             if section.tag == 'doc':
                 return section.content
 
-        return None
+        return {
+            'text' : None,
+            'html' : None,
+            'summary_text' : None,
+            'summary_html' : None
+        }
 
     def doc_for(self, section):
         """Return a doc section that referrs to a named section. """
@@ -243,17 +217,20 @@ class Manifest(object):
     def css(self):
         return HtmlFormatter(style='manni').get_style_defs('.highlight')
 
-
     def make_item(self, sections, tag, i, args):
         """Creates a new entry in sections, which will later have lines appended to it. """
         from ..dbexceptions import  ConfigurationError
 
         if tag not in self.singles and tag not in self.multi_line:
-            raise ConfigurationError("Unknown tag '{}' on line {}".format(tag, i))
+            # Capture Error. These don't get save to the sections array.
+            line_number = i + 1
+            section = ManifestSection(self.path, tag='error', linenumber=line_number, args=args)
+            self.logger.error("Unknown section tag: '{}' at line '{}' ".format(tag, line_number))
+        else:
+            line_number = i + 1
+            section = ManifestSection(self.path, tag=tag, linenumber=line_number, args=args)
+            sections[line_number] = section
 
-        line_number = i + 1
-        section = ManifestSection(tag=tag, linenumber=line_number, args=args)
-        sections[line_number] = section
         return line_number, section
 
     def sectionalize(self, data, first_line=0):
@@ -295,8 +272,8 @@ class Manifest(object):
 
                 tag = rx.group(1).strip().lower()
 
-                # The '#' is a valid char in publication URLs
-                if tag == 'publication' and '#' in line_w_comments:
+                # The '#' is a valid char in cache URLs
+                if tag == 'cache' and '#' in line_w_comments:
                     rx = re.match(r'^(\w+):(.*)$', line_w_comments.strip())
 
                 args = rx.group(2).strip()
@@ -329,8 +306,12 @@ class Manifest(object):
             fn = '_process_{}'.format(section.tag)
             pf = getattr(self, fn, False)
 
-            if pf:
-                section.content = pf(section)
+            try:
+                if pf:
+                    section.content = pf(section)
+            except Exception as e:
+                self.logger.error("Failed to process section at line {} : {}: {} ".format(line, section, e))
+                del sections[line]
 
         # Link docs to previous sections, where appropriate
 
@@ -342,10 +323,21 @@ class Manifest(object):
                 section.content['ref'] = previous_section.name
                 previous_section.doc = section.content
 
-            else:
-                previous_section = section
+            previous_section = section
 
         self.sections.update(sections)
+
+    def _extract_summary(self, t):
+        """Extract the first sentence of a possiblt Markdown text"""
+        from nltk import tokenize
+
+        test = tokenize.punkt.PunktSentenceTokenizer()
+
+        sentences = test.sentences_from_text(t)
+        if sentences:
+            return sentences[0].strip()
+
+        return None
 
     def _process_doc(self, section):
         import markdown
@@ -354,24 +346,65 @@ class Manifest(object):
 
         t = '\n'.join(section.lines)
 
+        summary = self._extract_summary(t)
+
         # Normal markdown documentation
-        return dict(text=t.strip(),html=markdown.markdown(t))
+        return dict(text=t.strip(),
+                    summary_text = summary,
+                    html=markdown.markdown(t),
+                    summary_html=markdown.markdown(summary))
 
     def _process_sql(self, section):
 
-        return sqlparse.format(''.join(section.lines), reindent=True, keyword_case='upper')
+        return sqlparse.format('\n'.join(section.lines), reindent=True, keyword_case='upper')
 
     def _process_mview(self, section):
 
-        t = sqlparse.format(''.join(section.lines), reindent=True, keyword_case='upper')
+        if not section.args.strip():
+            raise ParseError('No name specified for view at {}'.format(section.file_line))
 
-        return dict(text=t,html=self.pygmentize_sql(t), name = section.args.strip())
+        t = sqlparse.format('\n'.join(section.lines), reindent=True, keyword_case='upper')
+
+        if not t.strip():
+            raise ParseError('No sql specified for view at {}'.format(section.file_line))
+
+        tc_names = set()  # table and column names
+
+        # Add table names from parsing the SQL, so we can build dependencies for views. Unfortunately,
+        # it also add column names, which are removed when the template context is created.
+
+        # The SQL parser doesn't like quotes, so remove them first
+        for s in sqlparse.parse('\n'.join(section.lines).replace('"','')):
+            for tok in s.flatten():
+                if tok.ttype == sqlparse.tokens.Name:
+                    tc_names.add(str(tok))
+
+
+        return dict(text=t,html=self.pygmentize_sql(t), name = section.args.strip(), tc_names = list(tc_names))
 
     def _process_view(self, section):
+        import sqlparse.tokens
 
-        t = sqlparse.format(''.join(section.lines), reindent=True, keyword_case='upper')
+        if not section.args.strip():
+            raise ParseError('No name specified for view at {}'.format(section.file_line))
 
-        return dict(text=t,html=self.pygmentize_sql(t), name = section.args.strip())
+        t = sqlparse.format('\n'.join(section.lines), reindent=True, keyword_case='upper')
+
+        if not t.strip():
+            raise ParseError('No sql specified for view at {}'.format(section.file_line))
+
+        tc_names = set() # table and column names
+
+        for s in sqlparse.parse('\n'.join(section.lines)):
+
+            for tok in s.flatten():
+
+                if tok.ttype in (sqlparse.tokens.Name, sqlparse.tokens.String.Symbol):
+                    tc_names.add(str(tok).strip('"'))
+
+
+        return dict(text=t,html=self.pygmentize_sql(t),
+                    name = section.args.strip(), tc_names = list(tc_names))
 
     def _process_extract(self, section):
 
@@ -379,40 +412,47 @@ class Manifest(object):
 
         words = line.split()
 
-        if len(words) != 5:
-            raise ParseError('Extract line has wrong format; expected 5 words, got: {}'.format(line))
+        #if len(words) != 5:
+        #    raise ParseError('Extract line has wrong format; expected 5 words, got: {}'.format(line))
 
-        table, as_w, format, to_w, rpath = words
 
-        if not as_w.upper() == 'AS':
-            raise ParseError('Extract line malformed. Expected 3rd word to be \'as\' got: {}'.format(as_w))
+        table = words.pop(0)
 
-        if not to_w.upper() == 'TO':
-            raise ParseError('Extract line malformed. Expected 5th word to be \'to\' got: {}'.format(to_w))
+        format = 'csv'
+        rpath = None
+
+        for i, word in enumerate(words):
+            if word.upper() == 'AS':
+                format = words[i+1]
+
+            if word.upper() == 'TO':
+                rpath = words[i+1]
+
+
+        if not rpath:
+            rpath = "{}.{}".format(table, format)
 
 
         return dict(table=table, format=format, rpath=rpath, name=rpath)
 
     def _process_include(self, section):
         import os.path
+
         path = section.args.strip()
 
-        if not self.path:
-            self.logger.warn("Manifest doesn't have a path, so can't resolve INCLUDE")
-            return
+        if not self.path and not os.path.isabs(path):
+            # Can't include, but let the caller deal with that.
+            return dict(path=path)
 
         if self.path.startswith('http'):
             raise NotImplementedError
         else:
-            if not os.path.isabs(path):
+            if not os.path.isabs(path) :
                 path = os.path.join(os.path.dirname(self.path), path)
 
         return dict(path = path )
 
     def _process_partitions(self, section):
-
-        def row(cell, *args):
-            return "<tr>{}</tr>\n".format(''.join([ "<{}>{}</{}>".format(cell,v,cell) for v in args]))
 
         partitions = []
 
@@ -440,8 +480,9 @@ class Manifest(object):
                 ident = library.resolve(partition['partition'])
 
                 if not ident:
-                    raise ParseError("Partition reference not resolved to a bundle: '{}' in library {}"
-                                     .format(partition['partition'], library.database.dsn))
+                    raise ParseError("Partition reference not resolved to a bundle: '{}' in manifest '{}' "
+                                     " for library {}"
+                                     .format(partition['partition'], self.path, library.database.dsn))
 
                 if not ident.partition:
                     raise ParseError("Partition reference not resolved to a partition: '{}' ".format(partition['partition']))
@@ -452,6 +493,11 @@ class Manifest(object):
                 partition['metadata'] = b.metadata
                 partition['ident'] = ident.partition
 
+                p = b.partitions.get(ident.partition.vid)
+
+                # The 'tables' key is used for tables specified on the partitions line in the manifest.
+                partition['table_vids'] = [ b.schema.table(t).vid for t in  p.tables]
+
                 ident = ident.partition
                 partition['config'] = dict(
                     time=ident.time if ident.time else '',
@@ -461,6 +507,7 @@ class Manifest(object):
                 )
 
     def _process_index(self, section):
+
 
         line = section.args
 
@@ -521,7 +568,11 @@ class Manifest(object):
     def extract_token(tp, tokens):
         '''Extract the first token of the named type. '''
 
-        i = [t[0] for t in tokens].index(tp)
+
+        try:
+            i = [t[0] for t in tokens].index(tp)
+        except ValueError:
+            return None, tokens
 
         return tokens[i], tokens[:i] + tokens[i + 1:]
 
@@ -601,13 +652,12 @@ class Manifest(object):
         except Exception as e:
             raise ParseError("Failed to parse {} : {}".format(line, e))
 
-    def html_doc(self):
-        from ..text import ManifestDoc
-        import os
+    @property
+    def dict(self):
+        m = self.meta
+        m['sections'] =  [ s.__dict__ for l, s in self.sorted_sections ]
 
-        md = ManifestDoc(self)
-
-        return md.render()
+        return m
 
     @property
     def meta(self):
@@ -616,8 +666,7 @@ class Manifest(object):
             'title': self.title,
             'uid': self.uid,
             'summary': self.summary,
-            'url': None,
-            'access': self.access
+            'url': None
         }
 
     def __str__(self):

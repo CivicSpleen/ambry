@@ -10,6 +10,6 @@ A quick guide to using Ambry
 
     install
     configuration
-    creating
+    creating/index
     phases
     tips

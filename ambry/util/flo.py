@@ -36,7 +36,10 @@ def copy_file_or_flo(input_, output, buffer_size=64*1024, cb=None):
     """ Copy a file name or file-like-object to another
     file name or file-like object"""
     import shutil 
-    
+
+    assert bool(input_)
+    assert bool(output)
+
     input_opened = False
     output_opened = False
 
@@ -183,14 +186,23 @@ class MetadataFlo(object):
     def tell(self):
         return self.o.tell()
   
-    def read(self,size=0):
-        return self.o.read(size)
+    def read(self,size=None):
+        if size:
+            return self.o.read(size)
+        else:
+            return self.o.read()
 
-    def readline(self,size=0):
-        return self.o.readline(size)
+    def readline(self,size=None):
+        if size:
+            return self.o.readline(size)
+        else:
+            return self.o.readline()
     
-    def readlines(self,size=0):
-        return self.o.readlines(size)
+    def readlines(self,size=None):
+        if size:
+            return self.o.readlines(size)
+        else:
+            return self.o.readlines()
     
     def write(self, d):
         self.o.write(d)

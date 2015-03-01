@@ -36,7 +36,12 @@ class FilesystemError(BundleError):
 
 class NotFoundError(BundleError):
     '''Failed to find resource'''
-    
+
+
+class MultipleFoundError(BundleError):
+    '''Found multiple when only one was expected'''
+
+
 class DependencyError(Exception):
     """Required bundle dependencies not satisfied"""
 
@@ -75,3 +80,6 @@ class DatabaseError(BundleError):
 
 class DatabaseMissingError(DatabaseError):
     """A general database error """
+
+class GeoError(Exception):
+    """General error doing geographic processing"""

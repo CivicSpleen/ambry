@@ -5,13 +5,14 @@ Created on Jun 30, 2012
 '''
 import unittest
 import os.path
+import logging
+
 from  bundles.testbundle.bundle import Bundle
 from ambry.run import  get_runconfig, RunConfig
 from ambry.library.query import QueryCommand
-import logging
 import ambry.util
-
 from test_base import  TestBase
+
 
 global_logger = ambry.util.get_logger(__name__)
 global_logger.setLevel(logging.DEBUG)
@@ -159,7 +160,6 @@ class Test(TestBase):
     def test_simple_install(self):
 
         from ambry.util import temp_file_name
-        import pprint
         import os
         
         l = self.get_library()
@@ -310,7 +310,6 @@ class Test(TestBase):
     def test_library_push(self):
         '''Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent'''
-        from ambry.bundle import DbBundle
 
         l = self.get_library('local-remoted')
 
@@ -390,7 +389,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
     def test_s3_push(self):
         '''Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent'''
-        from ambry.cache.remote import  HttpCache
 
         root = self.rc.group('filesystem').root
 
@@ -464,7 +462,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
 
     def test_versions(self):
-        import bundles.testbundle.bundle
         from ambry.run import get_runconfig
         from ambry.library.query import Resolver
         import shutil

@@ -13,7 +13,7 @@ import ambry.util
 from ambry.util import temp_file_name
 from ambry.bundle import DbBundle
 from ..identity import LocationRef, Identity
-from ambry.orm import Column, Partition, Table, Dataset, Config, File
+from ambry.orm import Column, Partition, Table, Dataset, Config, File, Base, Code
 
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
@@ -94,7 +94,7 @@ class LibraryDb(object):
             # found. It looks like connections are losing the setting for the search path to the
             # library schema.
             # Disabling connection pooling solves the problem.
-            self._engine = create_engine(self.dsn,   poolclass=NullPool)
+            self._engine = create_engine(self.dsn,   poolclass=NullPool, echo = False)
 
             self._engine.pool._use_threadlocal = True  # Easier than constructing the pool
 
@@ -132,7 +132,9 @@ class LibraryDb(object):
             self._session = self.Session()
             # set the search path
 
-        if self.driver in ('postgres','postgis') and self._schema:
+
+        if self.driver in ('postgres','postgis')  and self._schema:
+
             self._session.execute("SET search_path TO {}".format(self._schema))
 
         return self._session
@@ -244,6 +246,7 @@ class LibraryDb(object):
         s.query(Partition).delete()
         s.query(Table).delete()
         s.query(Dataset).delete()
+        s.query(Code).delete()
 
         if add_config_root:
             self._add_config_root()
@@ -284,20 +287,25 @@ class LibraryDb(object):
 
 
     def drop(self):
-
+        from sqlalchemy.exc import NoSuchTableError
         if not self.enable_delete:
             raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
 
-        tables = [Config.__tablename__, Column.__tablename__, Partition.__tablename__,
-                  Table.__tablename__, File.__tablename__,  Dataset.__tablename__]
+        library_tables = [Config.__tablename__, Column.__tablename__, Partition.__tablename__,
+                  Table.__tablename__, File.__tablename__,  Dataset.__tablename__, Code.__tablename__]
+
+
+        try:
+            db_tables = reversed(self.metadata.sorted_tables)
+        except NoSuchTableError:
+            # Deleted the tables out from under it, so we're done.
+            return
 
         for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
-            if table.name in  tables:
+            if table.name in  library_tables:
                 table.drop(self.engine, checkfirst=True)
 
         self.commit()
-
-
 
     def __del__(self):
         pass # print  'closing LibraryDb'
@@ -306,19 +314,26 @@ class LibraryDb(object):
         return self.__class__(self.driver, self.server, self.dbname, self.username, self.password)
 
     def create_tables(self):
+        from sqlalchemy.exc import OperationalError
+        tables = [ Dataset, Config, Table, Column, File, Partition, Code]
 
 
-        tables = [ Dataset, Config, Table, Column, File, Partition]
-
-        self.drop()
+        try:
+            self.drop()
+        except OperationalError:
+            pass
 
         orig_schemas = {}
 
         for table in tables:
-            it = table.__table__
+            try:
+                it = table.__table__
+            except AttributeError: # stored_partitions, file_link are already tables.
+                it = table
 
             # These schema shenanigans are almost certainly wrong.
-            # But they are expedient
+            # But they are expedient. For Postgres, it puts the library
+            # tables in the Library schema.
             if self._schema:
                 orig_schemas[it] = it.schema
                 it.schema = self._schema
@@ -333,6 +348,7 @@ class LibraryDb(object):
 
             for it, orig_schema in orig_schemas.items():
                 it.schema = orig_schema
+
 
     def _add_config_root(self):
         from sqlalchemy.orm.exc import NoResultFound
@@ -407,6 +423,7 @@ class LibraryDb(object):
 
         o.value = value
         s.merge(o)
+
         self.commit()
 
     def get_config_value(self, group, key):
@@ -425,8 +442,25 @@ class LibraryDb(object):
         except:
             return None
 
+    def get_config_group(self, group):
+
+        from ambry.orm import Config as SAConfig
+
+        s = self.session
+
+        try:
+
+            return s.query(SAConfig).filter(SAConfig.group == group,
+                                         SAConfig.d_vid == ROOT_CONFIG_NAME_V).all()
+
+        except:
+            return None
+
+
     def get_config_rows(self, d_vid):
-        """Return configuration in a form that can be used to reconstitute a Metadataobject """
+        """Return configuration in a form that can be used to reconstitute a Metadataobject
+        Returns all of the rows for a dataset. This is distinct from get_config_value, which returns the
+        value for the library. """
         from ambry.orm import Config as SAConfig
         from sqlalchemy import or_
 
@@ -513,7 +547,6 @@ class LibraryDb(object):
         ds.creator = 'N/A'
         ds.data = data
 
-
         try:
             self.session.merge(ds)
             self.commit()
@@ -571,7 +604,9 @@ class LibraryDb(object):
 
         '''
         from ambry.bundle import Bundle
+        from sqlalchemy.orm.exc import NoResultFound
         from ..dbexceptions import ConflictError, NotFoundError
+        from sqlalchemy import update, or_
 
         if not isinstance(bundle, Bundle):
             raise ValueError("Can only install a  Bundle object. Got a {}".format(type(bundle)))
@@ -608,15 +643,24 @@ class LibraryDb(object):
         tables = []
         columns = []
 
+        foreign_keys = [] # Link these after the tables and columns are created
+
         for table in dataset.tables:
             tables.append(table.insertable_dict)
 
             for column in table.columns:
-                columns.append(column.insertable_dict)
+
+                d = column.insertable_dict
+
+                columns.append(d)
 
         if tables:
             s.execute(Table.__table__.insert(), tables)
+
             s.execute(Column.__table__.insert(), columns)
+
+        for config in bundle.database.session.query(Config).all():
+            s.merge(config)
 
         if commit:
             try:
@@ -625,6 +669,9 @@ class LibraryDb(object):
                 self.logger.error("Failed to merge into {}".format(self.dsn))
                 self.rollback()
                 raise e
+
+
+
 
     def install_dataset(self, bundle):
         """Install only the most basic parts of the bundle, excluding the
@@ -637,6 +684,7 @@ class LibraryDb(object):
 
         from sqlalchemy.exc import OperationalError
         from ..dbexceptions import NotABundle
+
 
 
         # There should be only one dataset record in the
@@ -693,8 +741,8 @@ class LibraryDb(object):
 
         partition = bundle.partitions.get(p_id)
 
-        return self.install_partition(bundle, partition,
-                                      install_bundle=install_bundle, install_tables=install_tables, commit=commit)
+        return self.install_partition(bundle, partition, install_bundle=install_bundle,
+                                      install_tables=install_tables, commit=commit)
 
 
     def install_partition(self, bundle, partition, install_bundle=True, install_tables=True, commit=True):
@@ -707,11 +755,19 @@ class LibraryDb(object):
 
         """
         from ..dbexceptions import NotFoundError
-        from ..identity import PartitionNameQuery
         from sqlalchemy.orm.exc import NoResultFound
 
-        if commit == 'collect':
+        s = self.session
+        s.merge(partition.record)
 
+        s.commit()
+
+
+        # This is not what I expected --- sqlite loads in all of the records linked to the
+        # partition, including the tables and columns, so none of the rest of the code is required.
+        return
+
+        if commit == 'collect':
             self._partition_collection.append(partition.record.insertable_dict)
             return
 
@@ -724,22 +780,19 @@ class LibraryDb(object):
             if not b:
                 self.install_bundle(bundle)
 
-        s = self.session
-
-        if install_tables:
+        if not install_tables:
             for table_name in partition.tables:
                 table = bundle.schema.table(table_name)
 
                 try:
                     s.query(Table).filter(Table.vid == table.vid).one()
                     # the library already has the table
+
                 except NoResultFound as e:
                     s.merge(table)
-
                     for column in table.columns:
-                        s.merge(column)
 
-        s.merge(partition.record)
+                        s.merge(column)
 
         if commit:
             try:
@@ -748,6 +801,7 @@ class LibraryDb(object):
                 self.logger.error("Failed to merge")
                 self.rollback()
                 raise e
+
 
     def insert_partition_collection(self):
 
@@ -772,29 +826,11 @@ class LibraryDb(object):
         if not name:
             name = table.name
 
-        table.installed = name
+        table.installed = 'y'
 
         s.merge(table)
         s.commit()
 
-    def mark_table_installed(self, table_or_vid, name=None):
-        """Mark a table record as installed"""
-
-        s = self.session
-        table = None
-
-        table = s.query(Table).filter(Table.vid == table_or_vid).one()
-
-        if not table:
-            table = s.query(Table).filter(Table.name == table.vid).one()
-
-        if not name:
-            name = table.name
-
-        table.installed = name
-
-        s.merge(table)
-        s.commit()
 
     def mark_partition_installed(self, p_vid):
         """Mark a table record as installed"""
@@ -865,6 +901,7 @@ class LibraryDb(object):
         s = self.session
 
         s.query(Partition).filter(Partition.t_vid  == p_vid).delete()
+
 
         self.commit()
 

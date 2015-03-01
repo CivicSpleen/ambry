@@ -1,13 +1,14 @@
 from __future__ import absolute_import
 from ..library import Library
 from ..library.database import LibraryDb
-from ..cache import new_cache, CacheInterface
+from ckcache import new_cache, Cache
 from ..database import new_database
 import os
 from ..util import Constant
 from ambry.util import init_log_rate
+from ..library.files import Files
 
-class NullCache(CacheInterface):
+class NullCache(Cache):
     def has(self, rel_path, md5=None, use_upstream=True):
         return False
 
@@ -47,6 +48,9 @@ def new_warehouse(config, elibrary, logger=None):
 
     assert elibrary is not None
 
+    if isinstance(config, basestring):
+        config = database_config(config)
+
     service = config['service'] if 'service' in config else 'relational'
 
     if 'database' in config:
@@ -56,8 +60,8 @@ def new_warehouse(config, elibrary, logger=None):
 
     database = new_database(db_config, class_='warehouse')
 
-    storage = new_cache(config['storage']) if 'storage' in config else None
-
+    # If the warehouse specifies a seperate external library, use it, otherwise, use the
+    # warehouse datbase for the library
     library_database = LibraryDb(**config['library']) if 'library' in config else  LibraryDb(**db_config)
 
     # This library instance is only for the warehouse database.
@@ -66,51 +70,58 @@ def new_warehouse(config, elibrary, logger=None):
         database=library_database
     )
 
+    args = dict(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+
     if service == 'sqlite':
         from .sqlite import SqliteWarehouse
-        return SqliteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+        w = SqliteWarehouse(**args)
 
-    if service == 'spatialite':
+    elif service == 'spatialite':
 
         from .sqlite import SpatialiteWarehouse
 
-        return SpatialiteWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+        w = SpatialiteWarehouse(**args )
 
     elif service == 'postgres':
         from .postgres import PostgresWarehouse
 
-        return PostgresWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+        w = PostgresWarehouse(**args )
 
     elif service == 'postgis':
         from .postgis import PostgisWarehouse
 
-        return PostgisWarehouse(database=database, wlibrary=wlibrary, elibrary=elibrary, logger = logger )
+        w = PostgisWarehouse(**args )
 
     else:
         raise Exception("Unknown warehouse type: {}".format(service))
+
+    return w
 
 
 class ResolutionError(Exception):
     pass
 
-class WarehouseInterface(object):
+class Warehouse(object):
 
     FILE_TYPE = Constant()
 
     FILE_TYPE.MANIFEST = 'manifest'
     FILE_TYPE.HTML = 'text/html'
+    FILE_TYPE.EXTRACT = Files.TYPE.EXTRACT
 
     FILE_GROUP = Constant()
 
-    FILE_GROUP.MANIFEST = 'manifest'
-    FILE_GROUP.DOC = 'doc'
-    FILE_GROUP.EXTRACT = 'extract'
+    FILE_GROUP.MANIFEST = Files.TYPE.MANIFEST
+    FILE_GROUP.DOC = Files.TYPE.DOC
+
 
     def __init__(self,
                  database,
                  wlibrary=None, # Warehouse library
                  elibrary=None, # external Library
+                 cache=None,
                  logger=None,
+                 base_dir = None,
                  test=False):
 
         assert wlibrary is not None
@@ -121,10 +132,24 @@ class WarehouseInterface(object):
         self.wlibrary = wlibrary
         self.elibrary = elibrary
         self.test = test
+        self._cache = cache
+
 
         logger = logger if logger else NullLogger()
 
         self.logger =  Logger(logger, init_log_rate(logger.info, N=2000))
+
+    def info(self, location, message=None):
+
+        if not message:
+            message = location
+            location = None
+
+        if location:
+            self.logger.info("{}:{} {}", location[0], location[1], message)
+        else:
+            self.logger.info(message)
+
 
     def create(self):
         from datetime import datetime
@@ -134,18 +159,26 @@ class WarehouseInterface(object):
 
         self._meta_set('created', datetime.now().isoformat())
 
-
     def clean(self):
+
         self.database.clean()
+        self.wlibrary.clean()
 
     def delete(self):
         self.database.enable_delete = True
         self.database.drop()
+
+        self.database.delete()
         self.wlibrary.database.enable_delete = True
         self.wlibrary.database.drop()
+        #self.wlibrary.database.delete()
 
     def exists(self):
-        self.database.exists()
+        return self.database.exists()
+
+    def close(self):
+        self.database.close()
+        self.library.close()
 
     @property
     def library(self):
@@ -167,7 +200,16 @@ class WarehouseInterface(object):
         except AttributeError:
             return None
 
-    configurable = ('title','about','local_cache','remote_cache')
+    configurable = ('uid','title','name', 'summary','cache_path', 'url')
+
+    @property
+    def uid(self):
+        """UID of the warehouse"""
+        return self._meta_get('uid')
+
+    @uid.setter
+    def uid(self, v):
+        return self._meta_set('uid', v)
 
     @property
     def title(self):
@@ -178,53 +220,80 @@ class WarehouseInterface(object):
     def title(self, v):
         return  self._meta_set('title', v)
 
+
     @property
-    def about(self):
+    def summary(self): # Everything else names this property summary
         """Short description of the warehouse"""
-        return self._meta_get('about')
+        return self._meta_get('summary')
 
-    @about.setter
-    def about(self, v):
-        return self._meta_set('about', v)
-
-    @property
-    def local_cache(self):
-        """Cache name for local publications. Usually a filesystem path"""
-        lc =  self._meta_get('local_cache')
-
-        if not lc and os.path.exists(self.database.path):
-            lc = os.path.dirname(self.database.path)
-
-        return lc
-
-
-    @local_cache.setter
-    def local_cache(self, v):
-        return self._meta_set('local_cache', v)
+    @summary.setter
+    def summary(self, v):
+        return self._meta_set('summary', v)
 
     @property
-    def remote_cache(self):
-        """Cache name for remote publications. Usually S3"""
-        return self._meta_get('remote_cache')
+    def name(self):
+        """name of the warehouse"""
+        return self._meta_get('name')
 
-    @remote_cache.setter
-    def remote_cache(self, v):
-        return self._meta_set('remote_cache', v)
+    @name.setter
+    def name(self, v):
+        return self._meta_set('name', v)
 
+
+    @property
+    def url(self):
+        """Url of the management application for the warehouse. """
+        return self._meta_get('url')
+
+    @url.setter
+    def url(self, v):
+
+        return self._meta_set('url', v)
+
+    @property
+    def dsn(self):
+        return self.database.dsn
+
+    @property
+    def cache(self):
+
+        if self._cache:
+            return self._cache
+        else:
+            assert self.uid
+            return self.elibrary.warehouse_cache.subcache(self.uid)
+
+    @property
+    def dict(self):
+        """Return information about the warehouse as a dictionary. """
+        from ..orm import Config as SAConfig
+        from ..library.database import ROOT_CONFIG_NAME_V
+        from ambry.warehouse.manifest import Manifest
+
+        from ambry.util import filter_url
+
+        d =  {}
+
+        for c in self.library.database.get_config_group('warehouse'):
+            if c.key in self.configurable:
+                d[c.key] = c.value
+
+        d['dsn'] = filter_url(self.database.dsn, password=None) # remove the password
+
+        d['tables'] =  { t.vid:t.nonull_col_dict for t in self.library.tables }
+
+        d['partitions'] = {p.vid: p.dict for p in self.library.partitions}
+
+        d['manifests'] = {mf.ref: mf.dict for mf in self.library.manifests}
+
+        return d
 
     @property
     def manifests(self):
         """Return the parsed manifests that have been installed"""
         from .manifest import Manifest
 
-        manifests = []
-
-        for f in self.library.files.query.type(self.FILE_TYPE.MANIFEST).group(self.FILE_GROUP.MANIFEST).all:
-            index = self.library.files.query.type(self.FILE_TYPE.HTML).group(self.FILE_GROUP.MANIFEST).first
-            manifests.append((f, Manifest(f.content, logger=self.logger)))
-
-        return manifests
-
+        return self.library.files.query.type(self.FILE_TYPE.MANIFEST).group(self.FILE_GROUP.MANIFEST).all
 
     @property
     def bundles(self):
@@ -245,17 +314,39 @@ class WarehouseInterface(object):
         return l
 
     @property
+    def extracts(self):
+        """Return an array of dicts of the extract files """
+
+        for f in self.library.files.query.group(self.FILE_GROUP.MANIFEST).type(self.FILE_TYPE.EXTRACT).all:
+            self.library.database.session.expunge(f)
+            f.source_url = self.uid
+            f.oid = None
+            yield f
+
+    @property
     def tables(self):
         from ..orm import Table
 
         for table in self.library.database.session.query(Table).all():
             yield table
 
-
     def orm_table(self, vid):
         from ..orm import Table
 
         return self.library.database.session.query(Table).filter(Table.vid == vid).first()
+
+    def orm_table_by_name(self, name):
+        from ..orm import Table
+
+        return self.library.database.session.query(Table).filter(Table.name == name).first()
+
+
+    @property
+    def partitions(self):
+        from ..orm import Partition
+
+        for p in self.library.database.session.query(Partition).all():
+            yield p
 
     def partition(self, vid):
         from ..orm import Partition
@@ -267,7 +358,9 @@ class WarehouseInterface(object):
     ##
 
     def install(self, partition, tables=None, prefix=None):
+        """Install a partition and the tables in the partition"""
         from ..orm import Partition
+        from sqlalchemy.exc import OperationalError
 
         results = dict(
             tables = {},
@@ -280,49 +373,77 @@ class WarehouseInterface(object):
 
         if p_orm and p_orm.installed == 'y':
             self.logger.info("Skipping {}; already installed".format(p_orm.vname))
-            return
+            return None, p_orm
 
         bundle, p = self._setup_install(p_vid)
 
         if p.identity.format not in ('db', 'geo'):
             self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
-            return;
+            return None, None;
+
 
         all_tables = self.install_partition(bundle, p, prefix=prefix)
 
         if not tables:
             tables = all_tables
 
-        for table_name in tables:
+        for source_table_name in tables:
 
-            if isinstance(table_name, (list, tuple)):
-                table_name, where = table_name
+            #
+            # Compute the installation name, and an alias that does not have the version number
+            dest_table_name, alias = self.augmented_table_name(p.identity, source_table_name)
+
+            if isinstance(source_table_name, (list, tuple)):
+                source_table_name, where = source_table_name
             else:
                 where = None
 
             try:
-                if p.identity.format == 'db':
-                    self.elibrary.get(p.vid) # ensure it is local
-                    itn = self.load_local(p, table_name, where)
-                else:
-                    self.elibrary.get(p.vid)  # ensure it is local
-                    itn = self.load_ogr(p, table_name, where)
+                ## Copy the data to the destination table
 
-                orm_table = p.get_table(table_name)
+                self.elibrary.get(p.vid) # ensure it is local
+                itn = self.load_local(p, source_table_name, dest_table_name, where)
+
+                t_vid = p.get_table(source_table_name).vid
+                w_table = self.library.table(t_vid)
+
+                # Create a table entry for the name of the table with the partition in it,
+                # and link it to the main table record.
+                proto_vid = w_table.vid
+                self.install_table(dest_table_name, alt_name=alias,
+                                   data=dict(type='installed', proto_vid=proto_vid))
+
+                # Link the table name and the alias
+                self.install_table_alias(dest_table_name, alias, proto_vid=proto_vid)
+
+                self.library.database.mark_table_installed(p.get_table(source_table_name).vid, itn)
+
+                assert self.augmented_table_name(p.identity, source_table_name)[0] == itn
+
+                w_table.data['source_partition'] = p.identity.dict
+
+                # Set the altname of the column, which is the name the column is generallt know by
+                # in the warehouse.
+
+                for c in w_table.columns:
+                    c.altname = c.fq_name
 
 
-                self.library.database.mark_table_installed(orm_table.vid, itn)
-
-            except Exception as e:
-                self.logger.error("Failed to install table '{}': {}".format(table_name,e))
+            except OperationalError as e:
+                self.logger.error("Failed to install table '{}': {}".format(source_table_name,e))
+                raise
 
         self.library.database.mark_partition_installed(p_vid)
+
+
+        return tables, p
 
     def install_partition(self, bundle, partition, prefix=None):
         '''Install the records for the partition, the tables referenced by the partition,
         and the bundle, if they aren't already installed'''
         from sqlalchemy.orm.exc import NoResultFound
         from sqlalchemy import inspect
+        from ..orm import Column
 
         ld = self.library.database
 
@@ -343,20 +464,22 @@ class WarehouseInterface(object):
         for table_name in tables:
             table, meta = self.create_table(p, table_name)
 
-            alias = p.identity.as_dataset().id_ + '_' + table_name
-
-            self.install_table_alias(table, alias)
-
         return tables
 
-    def install_manifest(self, manifest, force = None, reset=False):
+    def install_manifest(self, manifest, force = None, reset=False, level = 0):
         """Install the partitions and views specified in a manifest file """
         from ..dbexceptions import NotFoundError, ConfigurationError
         from datetime import datetime
         import os
 
-        # Delete everything related to this manifest
-        (self.library.files.query.source_url(manifest.uid)).delete()
+        errors = []
+
+        # Mark all of the files associated with the manifest, so if they aren't in the manifest
+        # we can remove them.
+        # TODO Should also do this for tables.
+        for f in (self.library.files.query.type(self.library.files.TYPE.EXTRACT).source_url(manifest.uid)).all:
+            f.state = 'deleteable'
+            self.library.files.merge(f)
 
         # Update the manifest with bundle information, since it doesn't normally have access to a library
         manifest.add_bundles(self.elibrary)
@@ -366,14 +489,14 @@ class WarehouseInterface(object):
         if reset or not self.title:
             self.title = manifest.title
 
-        if (reset or not self.about) and manifest.summary:
-            self.about = manifest.summary['html']
+        if (reset or not self.summary) and manifest.summary:
+            self.summary = manifest.summary['summary_text'] # Just the first sentence.
 
-        if (reset or not self.local_cache) and manifest.local:
-            self.local_cache = manifest.local
+        if (reset or not self._meta_get('cache_path')) and manifest.cache:
+            self.cache_path = manifest.cache
 
-        if (reset or not self.remote_cache) and manifest.remote:
-            self.remote_cache = manifest.remote
+        # Manifest data
+        mf = self.wlibrary.files.install_manifest(manifest)
 
         ## First pass
         for line, section in manifest.sorted_sections:
@@ -381,21 +504,39 @@ class WarehouseInterface(object):
             tag = section.tag
 
             if tag in ('partitions', 'sql', 'index', 'mview', 'view'):
-                self.logger.info("== Processing manifest section {} at line {}".format(section.tag, section.linenumber))
+                self.logger.info("== Processing manifest '{}' section '{}' at line {}"
+                                 .format(manifest.path, section.tag, section.linenumber))
 
             if tag == 'partitions':
                 for pd in section.content['partitions']:
                     try:
 
-                        tables = pd['tables']
+                        tables = pd['tables'] # Tables that were specified on the parittion line; install only these
 
-                        if pd['where'] and len(pd['tables']) == 1:
+                        if pd['where'] and len(tables) == 1:
                             tables = [(pd['tables'][0], "WHERE (" + pd['where'] + ")")]
 
-                        self.install(pd['partition'], tables)
+                        tables, p = self.install(pd['partition'], tables)
+
+                        if p:
+                            # Link the partition to the manifest. Have to re-fetch, because p is in the
+                            # external library, and the manifest is in the warehouse elibrary
+                            p = self.wlibrary.partition(p.vid)
+                            mf.link_partition(p)
+                            p.link_manifest(mf)
+
+                            if tables:
+                                for table in tables:
+                                    b = self.wlibrary.bundle(p.identity.as_dataset().vid)
+                                    orm_t = b.schema.table(table)
+
+                                    mf.link_table(orm_t)
+                                    orm_t.link_manifest(mf)
 
                     except NotFoundError:
                         self.logger.error("Partition {} not found in external library".format(pd['partition']))
+
+                self.wlibrary.database.session.commit()
 
             elif tag == 'sql':
                 sql = section.content
@@ -408,48 +549,382 @@ class WarehouseInterface(object):
                 self.create_index(c['name'], c['table'], c['columns'])
 
             elif tag == 'mview':
-                self.install_material_view(section.args, section.content['text'], clean= force)
+
+                self.install_material_view(section.args, section.content['text'], clean= force,
+                                           data=dict(
+                                               tc_names=section.content['tc_names'],
+                                               summary = section.doc.get('summary_text','') if section.doc else '',
+                                               doc=section.doc,
+                                               manifests = [manifest.uid],
+                                               sql_formatted = section.content['html']
+                                           ))
 
             elif tag == 'view':
-                self.install_view(section.args, section.content['text'])
+                try:
+                    self.install_view(section.args, section.content['text'],
+                                      data = dict(
+                                          tc_names = section.content['tc_names'],
+                                          summary=section.doc.get('summary_text','') if section.doc else '',
+                                          doc=section.doc,
+                                          manifests=[manifest.uid],
+                                          sql_formatted=section.content['html']
+                                      ))
+                except Exception as e:
+                    errors.append((section, e))
+                    self.logger.error("Failed to install view {}: {}".format(section.args, e))
+                    raise
+
 
             elif tag == 'extract':
-                import json
 
                 d = section.content
                 doc = manifest.doc_for(section)
                 if doc:
                     d['doc'] = doc.content['html']
 
-                self.install_file(path=os.path.join('extracts', manifest.uid, d['rpath']), ref=d['table'],
-                                  type=d['format'], group='extract', source_url = manifest.uid, data=d)
+                extract_path = os.path.join('extracts',  d['rpath'])
+
+                self.wlibrary.files.install_extract(extract_path, manifest.uid, d)
 
             elif tag == 'include':
                 from .manifest import Manifest
                 m = Manifest(section.content['path'])
-                self.install_manifest(m, force = force)
+                self.install_manifest(m, force = force, level = level + 1)
 
-        # Manifest data
-
-        self.install_file(path=manifest.path, ref=manifest.uid,
-                          type=self.FILE_TYPE.MANIFEST, group=self.FILE_GROUP.MANIFEST, source_url = manifest.uid,
-                          content=str(manifest))
 
         self._meta_set(manifest.uid, datetime.now().isoformat())
 
-        if os.path.exists(self.database.path):
+        # Delete all of the files ( extracts ) that were note in-installed
+        (self.library.files.query.type(self.library.files.TYPE.EXTRACT).state('delatable')).delete()
+
+        if errors:
+            self.logger.error("")
+            self.logger.error("===== Install Errors =====")
+            for section, e  in errors:
+                self.logger.error("Failed to install view {}: at {}\n{}".format(section.args, section.file_line,  e))
+                self.logger.error('----------')
+
+        if level == 0:
+            self.post_install()
+
+        if hasattr(self.database, 'path') and os.path.exists(self.database.path):
             return self.database.path
         else:
             return self.database.dsn
 
-    def install_view(self, name, sql):
+    def build_sample(self, t):
+
+        if t.type == 'table':
+            name = t.data['installed_names'][0]
+        else:
+            name = t.name
+
+        sql = 'SELECT * FROM "{}" LIMIT 20'.format(name)
+        sample = []
+
+        for j, row in enumerate(self.database.connection.execute(sql)):
+            if j == 0:
+                sample.append(row.keys())
+                sample.append(row.values())
+            else:
+                sample.append(row.values())
+
+        t.data['sample'] = sample
+
+        v = self.database.connection.execute('SELECT count(*) FROM "{}"'.format(name)).fetchone()
+
+        t.data['count'] = int(v[0])
+
+
+
+    def build_schema(self, t):
+
+        from ..orm import Column
+        from ..identity import ObjectNumber
+
+        s = self.library.database.session
+
+        s.execute("DELETE FROM columns WHERE c_t_vid = :tid", {'tid':t.vid})
+        s.commit()
+
+        # Have to re-fetch the session, in order to get the "SET search_path" run again on postgres,
+        # which apparently gets clearedin the commit()
+        s = self.library.database.session
+        t = self.library.table(t.vid)
+
+        sql = 'SELECT * FROM "{}" LIMIT 1'.format(t.name)
+
+        row = self.database.connection.execute(sql).fetchone()
+
+        if row:
+            for i, (col_name, v) in enumerate(row.items(), 1):
+
+                try:
+                    c_id, plain_name = col_name.split('_', 1)
+                    cn = ObjectNumber.parse(c_id)
+
+                    orig_table = self.library.table(str(cn.as_table))
+
+                    if not orig_table:
+                        self.logger.error("Unable to find table '{}' while trying to create schema".format(str(cn.as_table)))
+                        continue
+
+                    orig_column = orig_table.column(c_id)
+
+                    orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)
+                    d = orig_column.dict
+
+                    d['description']  = "{}; {}".format(orig_table.description, d['description'])
+
+                except ValueError: # Coudn't split the col name, probl b/c the user added it in SQL
+                    d = dict(name = col_name)
+
+
+                d['sequence_id'] = i
+                d['derivedfrom'] = c_id
+                try:
+                    del d['t_vid']
+                    del d['t_id']
+                    del d['vid']
+                    del d['id_']
+                except KeyError:
+                    pass # Unsplit names ( cols added in SQL ) don't have any of the keys
+
+                t.add_column(**d)
+
+            s.commit()
+
+
+    def install_union(self):
+        """Combine multiple partition tables of the same table type into a single table"""
+
+        # TODO, our use of sqlalchemy is wacked.
+        # Some of the install methods commit or flush the session, which invalidated the tables from self.tables,
+        # so we have to get just the vid, and look up the object in each iteration.
+
+        for t_vid in [t.vid for t in self.tables]:
+
+            t = self.orm_table(t_vid)
+
+            if t.type == 'table' and t.installed:  # Get the table definition that columns are linked to
+
+                ## Create table aliases for the vid of the tables.
+                installed_tables = [it for it in self.library.derived_tables(t.vid) if it.type == 'installed']
+
+                # col_names = t.vid_select() # Get to this later ...
+
+                col_names = '*'
+
+                if len(installed_tables) == 1:
+                    sql = 'SELECT {} FROM "{}" '.format(col_names, installed_tables[0].name)
+
+                else:
+
+                    sql = "SELECT {} FROM ({}) as subquery ".format(
+                        col_names,
+                        ' UNION '.join(' SELECT * FROM "{}" '.format(table.name)
+                                       for table in installed_tables)
+                    )
+
+                self.install_view(t_vid, sql, data=dict(type='alias', proto_vid=t_vid))
+
+
+    def post_install(self):
+        """
+        Perform operations after the manifest install, such as creating table views for
+        all of the installed tables.
+
+        For each table, it also installs a vid-based view, which replaces all of the column
+        names with their vid. This allows for tracing columns through views, linking
+        them back to their source
+
+        """
+
+        # TODO, our use of sqlalchemy is wacked.
+        # Some of the install methods commit or flush the session, which invalidated the tables from self.tables,
+        # so we have to get just the vid, and look up the object in each iteration.
+
+        for t_vid in [t.vid for t in self.tables]:
+            t = self.orm_table(t_vid)
+            if t.type == 'table' and t.installed:  # Get the table definition that columns are linked to
+                self.install_table(t_vid, data=dict(type='alias', proto_vid=t_vid))
+
+
+        s = self.library.database.session
+
+        for t in self.tables:
+            if  t.type == 'table' and t.installed:
+                # derived_tables checks the proto_id, used to link  aliases to base tables.
+                for dt in sorted(self.library.derived_tables(t.vid), key=lambda x:x.name):
+
+                    t.add_installed_name(dt.name)
+                    s.add(t)
+
+            if (t.type == 'table' and t.installed) or t.type in ('view','mview'):
+                if not 'sample' in t.data or not t.data['sample']:
+
+                    self.build_sample(t)
+                    s.add(t)
+
+
+        s.commit()
+
+        self.install_union()
+
+        # Update the documentation files in the library
+
+
+        if self.uid:
+            dc = self.elibrary.doc_cache
+
+            self.logger.info('Updating doc cache {}'.format(dc.cache))
+
+            has = dc.has_store(self)
+            dc.put_store(self, force=True)
+            if not has:
+                dc.put_library(self.elibrary, force=True)
+        else:
+
+            self.logger.info('Warehouse does not have a uid, skipping doc cache update')
+
+
+
+    def install_material_view(self, name, sql, clean = False, data=None):
         raise NotImplementedError(type(self))
 
-    def install_table_alias(self, table, alias):
-        self.install_view(alias, "SELECT * FROM {}".format(table))
 
-    def install_file(self, path,  ref, content=None, source=None, type=None, group=None, source_url= None, data=None):
+    def _install_material_view(self, name, sql, clean=False, data=None):
+
+        import time
+
+        if not (clean or self.mview_needs_update(name, sql)):
+            self.logger.info('Skipping materialized view {}: update not required'.format(name))
+            return False, False
+        else:
+            self.logger.info('Installing materialized view {}'.format(name))
+
+            if not self.orm_table_by_name(name):
+                self.logger.info('mview_remove {}'.format(name))
+                drop = True
+            else:
+                drop = False
+
+
+        data = data if data else {}
+
+        data['sql'] = sql
+        data['type'] = 'mview'
+        data['updated'] = time.time()
+
+
+        return drop, data
+
+
+    def mview_needs_update(self, name, sql):
+        """Return True if an mview needs to be regnerated, because it's SQL changed,
+         or one of its predecessors was re-generated
+
+         NOTE. This probably only works property when the MVIEWS are listed in the manifest in an order
+         where dependent views are listed after depenencies.
+         """
+
+        t = self.orm_table_by_name(name)
+
+        if not t:
+            return True
+
+        if t.data.get('sql') != sql:
+            return True
+
+        update_time = int(t.data.get('updated', None))
+
+        if not update_time:
+            return True
+
+        if t:
+            for tc_name in t.data.get('tc_names'):
+                tc = self.orm_table_by_name(tc_name)
+
+                if (tc and tc.dict.get('updated',False)
+                    and ( int(tc.dict.get('updated')) > int(t.data.get('updated')))):
+                    return True
+
+        return  False
+
+    def install_view(self, name, sql, data=None):
         raise NotImplementedError(type(self))
+
+
+    def install_table_alias(self, table_name, alias, proto_vid = None):
+        """Install a view that allows referencing a table by another name """
+        self.install_view(alias, "SELECT * FROM \"{}\" ".format(table_name),
+                          data = dict(type='alias',proto_vid=proto_vid))
+
+    def install_table(self, name, alt_name = None, data = None ):
+        """Install a view, mview or alias as a Table record. Real tables are copied """
+
+        from ..orm import Table, Config, Dataset
+        from ..library.database import ROOT_CONFIG_NAME_V
+        from sqlalchemy import func
+        from sqlalchemy.orm.exc import NoResultFound
+
+        s = self.library.database.session
+
+        try:
+            from sqlalchemy.orm import lazyload
+            # Search for the table by the table name
+
+            q = (s.query(Table).filter(Table.d_vid == ROOT_CONFIG_NAME_V, Table.name == name )
+                 .options(lazyload('columns')))
+
+            t = q.one()
+
+        except NoResultFound:
+            # Search for the table by the vid
+
+            ds = s.query(Dataset).filter(Dataset.vid == ROOT_CONFIG_NAME_V).one()
+
+            q = ( s.query(func.max(Table.sequence_id)) .filter(Table.d_vid == ROOT_CONFIG_NAME_V))
+
+            seq = q.one()[0]
+
+            seq = 0 if not seq else seq
+
+            seq += 1
+
+            t = Table(ds,name=name, sequence_id = seq, preserve_case = True)
+
+        if alt_name is not None:
+            t.altname = str(alt_name)
+
+        if data and 'type' in data:
+            t.type = data['type']
+            del data['type']
+
+        if data and 'summary' in data:
+            if not t.description:
+                t.description = data['summary']
+            del data['summary']
+
+        if data and 'proto_vid' in data:
+            if not t.proto_vid:
+                t.proto_vid = data['proto_vid']
+            del data['proto_vid']
+
+
+        if t.data:
+            d = dict(t.data.items())
+            d.update(data if data else {})
+            t.data = d
+        else:
+            t.data = data
+
+        t.installed = 'y'
+
+        s.merge(t)
+        s.commit()
+
+        return t
 
     def run_sql(self, sql_text):
         raise NotImplementedError(type(self))
@@ -465,9 +940,6 @@ class WarehouseInterface(object):
         facility of the target warehouse'''
         raise NotImplementedError()
 
-    def load_ogr(self, partition, table_name, where):
-        '''Load geo data using the ogr2ogr program'''
-        raise NotImplementedError()
 
     def _setup_install(self, ref):
         '''Perform local and remote resolutions to get the bundle, partition and links
@@ -495,41 +967,71 @@ class WarehouseInterface(object):
 
         return b, p
 
-    class extract_entry(object):
-        def __init__(self, extracted, rel_path, abs_path, data=None):
-            self.extracted = extracted
-            self.rel_path = rel_path
-            self.abs_path = abs_path
-            self.data = data
 
-        def __str__(self):
-            return 'extracted={} rel={} abs={} data={}'.format(self.extracted, self.rel_path, self.abs_path, self.data)
-
-
-    def extract(self, cache, force=False):
+    def extract_all(self, force=False):
         """Generate the extracts and return a struture listing the extracted files. """
         from contextlib import closing
 
         from .extractors import new_extractor
+        import time
+        from ..util import md5_for_file
 
         # Get the URL to the root. The public_utl arg only affects S3, and gives a URL without a signature.
-        root = cache.path('', missing_ok = True, public_url = True)
+        root = self.cache.path('', missing_ok = True, public_url = True)
 
         extracts = []
 
         # Generate the file etracts
 
-        for f in self.library.files.query.group('extract').all:
+        for f in self.library.files.query.group('manifest').type('extract').all:
 
-            table = f.data['table']
-            format = f.data['format']
+            t = self.orm_table_by_name(f.data['table'])
 
-            ex = new_extractor(format, self, cache, force=force)
+            if (t and t.data.get('updated') and
+                f.modified and
+                int(t.data.get('updated')) > f.modified) or (not f.modified):
+                force = True
 
-            extracts.append(WarehouseInterface.extract_entry(*ex.extract(table, cache, f.path)))
+
+            ex = new_extractor(f.data.get('format'), self, self.cache, force=force)
+
+            e = ex.extract(f.data['table'], self.cache, f.path )
+
+            extracts.append(e)
+
+            if e.time:
+                f.modified = e.time
+
+                if os.path.exists(e.abs_path):
+                    f.hash = md5_for_file(e.abs_path)
+                    f.size = os.path.getsize(e.abs_path)
+
+
+                self.library.files.merge(f)
 
 
         return extracts
+
+    def extract_table(self, tid, content_type='csv'):
+        from .extractors import new_extractor
+        from os.path import basename, dirname
+        from ..dbexceptions import NotFoundError
+
+        t = self.orm_table(tid) # For installed tables
+
+        if not t:
+            t = self.orm_table_by_name(tid)  # For views
+
+        if not t:
+            raise NotFoundError("Didn't get table for '{}' ".format(tid))
+
+        e = new_extractor(content_type, self, self.cache.subcache('extracts'))
+
+        ref = t.name if t.type in ('view', 'mview') else t.vid
+
+        ee = e.extract(ref, '{}.{}'.format(tid, content_type), t.data.get('updated', None))
+
+        return ee.abs_path, "{}_{}.{}".format(t.vid, t.name, content_type)
 
     ##
     ## users
@@ -590,7 +1092,6 @@ class WarehouseInterface(object):
 
         return pid
 
-
     def _partition_to_dataset_vid(self, partition):
         from ..partition import PartitionBase
         from ..identity import Identity
@@ -606,17 +1107,21 @@ class WarehouseInterface(object):
 
         return did
 
-
     def augmented_table_name(self, identity, table_name):
         """Create a table name that is prefixed with the dataset number and the
         partition grain, if it has one"""
 
-        name = identity.as_dataset().vid.replace('/', '_') + '_' + table_name
+        name = identity.vid.replace('/', '_') + '_' + table_name
 
         if identity.grain:
             name = name + '_' + identity.grain
 
-        return name
+        alias = identity.id_.replace('/', '_') + '_' + table_name
+
+        if identity.grain:
+            alias = alias + '_' + identity.grain
+
+        return name, alias
 
     def _ogr_args(self, partition):
         '''Return a arguments for ogr2ogr to connect to the database'''
@@ -637,36 +1142,58 @@ class WarehouseInterface(object):
 
         return sorted(idents, key = lambda x : x.fqname)
 
-
     def info(self):
         config = self.config.to_dict()
 
         if 'password' in config['database']: del config['database']['password']
         return config
 
-
 def database_config(db, base_dir=''):
     import urlparse
     import os
+    from ..dbexceptions import ConfigurationError
+
 
     parts = urlparse.urlparse(db)
 
-    if parts.scheme == 'sqlite':
-        config = dict(service='sqlite', database=dict(dbname=os.path.join(base_dir,parts.path), driver='sqlite'))
+    path = parts.path
 
-    elif parts.scheme == 'spatialite':
-        config = dict(service='spatialite', database=dict(dbname=os.path.join(base_dir,parts.path), driver='spatialite'))
+    scheme = parts.scheme
 
-    elif parts.scheme == 'postgres':
+    if '+' in scheme:
+        scheme, _ = scheme.split('+',1)
+
+    if scheme in ('sqlite', "spatialite"):
+        # Sqlalchemy expects 4 slashes for absolute paths, 3 for relative,
+        # which is hard to manage reliably. So, fixcommon problems.
+
+        if parts.netloc or (path and path[0] != '/'):
+            raise ConfigurationError('DSN Parse error. For Sqlite and Sptialite, the DSN should have 3 or 4 slashes')
+
+        if path:
+            path = path[1:]
+
+            if path[0] != '/':
+                path = os.path.join(base_dir, path)
+
+
+    if scheme == 'sqlite':
+        config = dict(service='sqlite', database=dict(dbname=os.path.join(base_dir,path), driver='sqlite'))
+
+    elif scheme == 'spatialite':
+
+        config = dict(service='spatialite', database=dict(dbname=os.path.join(base_dir,path), driver='spatialite'))
+
+    elif scheme == 'postgres' or scheme == 'postgresql':
         config = dict(service='postgres',
                       database=dict(driver='postgres',
                                     server=parts.hostname,
                                     username=parts.username,
                                     password=parts.password,
-                                    dbname=parts.path.strip('/')
+                                    dbname=path.strip('/')
                       ))
 
-    elif parts.scheme == 'postgis':
+    elif scheme == 'postgis':
         config = dict(service='postgis',
                       database=dict(driver='postgis',
                                     server=parts.hostname,
@@ -675,7 +1202,7 @@ def database_config(db, base_dir=''):
                                     dbname=parts.path.strip('/')
                       ))
     else:
-        raise ValueError("Unknown database connection scheme: {}".format(parts.scheme))
+        raise ValueError("Unknown database connection scheme for  {}".format(db))
 
     return config
 

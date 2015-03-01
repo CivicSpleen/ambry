@@ -4,15 +4,14 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-
 from ..cli import prt, fatal, warn, _find, _print_find, _print_bundle_entry
-
 from ..cli import  load_bundle, _print_bundle_list
-from ..source import SourceTree
-
 import os
-import yaml
 import shutil
+
+# If the devel module exists, this is a development system.
+try: from ambry.support.devel import *
+except ImportError as e: from ambry.support.production import *
 
 def source_command(args, rc):
     from ..library import new_library
@@ -112,13 +111,18 @@ def source_parser(cmd):
     sp.add_argument('-k', '--key', help='Number server key')
     sp.add_argument('-s', '--set',  help='Set the number in the bundle in the specified directory')
 
+    if IN_DEVELOPMENT:
+        sp = asp.add_parser('test', help='Run some deveopment test code. ')
+        sp.set_defaults(subcommand='test')
+
+
 def source_info(args, l, st, rc):
     from . import _print_bundle_info
 
     if not args.terms:
-        prt("Source dir: {}", rc.sourcerepo.dir)
-        for repo in  rc.sourcerepo.list:
-            prt("Repo      : {}", repo.ident)
+        prt("Source dir: {}", st.base_dir)
+        return
+
     if args.terms[0] == '-':
         # Read terms from stdin, one per line.
         import sys
@@ -232,17 +236,6 @@ def source_new(args, l, st, rc):
     from ambry.bundle.meta import Top
     from ..dbexceptions import ConflictError
 
-    nsconfig = rc.group('numbers')
-
-    if args.key:
-        nsconfig['key'] = args.key
-
-    if args.dryrun:
-        prt("For dryrun, using self-generated id")
-        nsconfig['key'] = 'self'
-
-    ns = NumberServer(**nsconfig)
-
     d = vars(args)
     d['revision'] = 1
 
@@ -250,10 +243,20 @@ def source_new(args, l, st, rc):
     d['bspace'] = d.get('space', None)
 
     if args.dryrun or args.key  in ('rand','self'):
+
+        prt("Using self-generated id")
+
         d['id'] = str(DatasetNumber())
 
     else:
         try:
+
+            nsconfig = rc.service('numbers')
+            if args.key:
+                nsconfig['key'] = args.key
+
+            ns = NumberServer(**nsconfig)
+
             d['id'] = str(ns.next())
             prt("Got number from number server: {}".format(d['id']))
         except HTTPError as e:
@@ -311,11 +314,22 @@ def source_new(args, l, st, rc):
 
     b.metadata.sources.example = { 'url': 'http://example.com', 'description': 'description'}
 
-    b.metadata.external_documentation.example = {
+    b.metadata.external_documentation.download = {
         'url': 'http://example.com',
-        'title': "title",
-        'description': 'description',
-        'source': 'source'
+        'title': "Download Page",
+        'description': 'Web page that links to the source files.'
+    }
+
+    b.metadata.external_documentation.dataset = {
+        'url': 'http://example.com',
+        'title': "Dataset Page",
+        'description': 'Main webpage for the dataset.'
+    }
+
+    b.metadata.external_documentation.documentation = {
+        'url': 'http://example.com',
+        'title': "Main Documentation",
+        'description': 'The primary documentation file'
     }
 
     b.update_configuration()
@@ -367,11 +381,9 @@ def source_build(args, l, st, rc):
     if not dir_:
         dir_ = rc.sourcerepo.dir
         
-    
-        
+
     def build(bundle_dir):
         from ambry.library import new_library
-
 
 
         # Import the bundle file from the directory
@@ -701,6 +713,7 @@ def source_buildable(args, l, st, rc):
             bundle.library.check_dependencies()
 
             if not bundle.is_built and not bundle.is_installed:
+
                 buildable.append(v)
 
         except DependencyError:
@@ -713,3 +726,24 @@ def source_buildable(args, l, st, rc):
         sys.exit(1)
 
     _print_bundle_list(buildable,  fields=fields, sort=False)
+
+
+def source_test(args, l, st, rc):
+    """Development text code"""
+
+    from ambry.dbexceptions import DependencyError
+
+    from sqlalchemy.orm.attributes import InstrumentedAttribute
+    import inspect
+
+    for e in l.list():
+        b = l.get(e)
+
+        print b
+
+        d =  b.get_dataset()
+
+        for k,v  in inspect.getmembers(d.__class__, lambda x: isinstance(x, InstrumentedAttribute)):
+            print k, type(v)
+
+        break

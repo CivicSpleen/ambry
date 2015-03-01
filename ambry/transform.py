@@ -322,7 +322,7 @@ def parse_date(name, v):
     elif isinstance(v, datetime.date):
         return v
     else:
-        raise CastingError(name, v, "Expected datetime.date or basestring, got {{}}".format(type(v)))
+        raise CastingError(name, v, "Expected datetime.date or basestring, got '{}'".format(type(v)))
 
 def parse_time(name, v):
     import dateutil.parser as dp
@@ -337,7 +337,7 @@ def parse_time(name, v):
     elif isinstance(v, datetime.time):
         return v
     else:
-        raise CastingError(name, v, "Expected datetime.time or basestring, got {{}}".format(type(v)))
+        raise CastingError(name, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
 
 def parse_datetime(name, v):
     import dateutil.parser as dp
@@ -354,7 +354,7 @@ def parse_datetime(name, v):
     elif isinstance(v, datetime.datetime):
         return v
     else:
-        raise CastingError(name, v, "Expected datetime.datetime or basestring, got {{}}".format(type(v)))
+        raise CastingError(name, v, "Expected datetime.datetime or basestring, got "+str(type(v)))
 
 class CasterTransformBuilder(object):
     
@@ -501,14 +501,16 @@ def {}(row):
 
             try:
                 return   f[1](d),{}
-            except CastingError:
+            except CastingError as e:
+
                 do = {}
                 cast_errors = {}
-                
+
                 for k,v in d.items():
                     try:
                         do[k] = f[2][k](v)
-                    except CastingError: 
+                    except CastingError:
+
                         do[k+'_code'] = v
                         cast_errors[k] = v
                         do[k] = None
@@ -523,15 +525,9 @@ def {}(row):
         
         f = self.compile()
 
-        if isinstance(row, dict):
+        if isinstance(row, (dict, RowProxy)):
             return self._call_dict(f,row, codify_cast_errors)
 
-        elif isinstance(row, (list,tuple)):
-            raise CasterError("Casters are not implemented for lists and tuples, use zip() to create a dict: dict(zip(headers,row))")
-            return f[0](row) 
-          
-        elif isinstance(row, RowProxy):
-            return self._call_dict(f,row. codify_cast_errors)
         else:
             raise Exception("Unknown row type: {} ".format(type(row)))
         

@@ -111,13 +111,12 @@ class SqlitePartition(PartitionBase):
         self.database.create()
 
         self.add_tables(tables)
-        
-        
+
     def add_tables(self,tables):
 
         for t in tables:
             if not t in self.database.inspector.get_table_names():
-                t_meta, table = self.bundle.schema.get_table_meta(t) #@UnusedVariable
+                _, table = self.bundle.schema.get_table_meta(t)
                 table.create(bind=self.database.engine)       
 
     def create(self):
@@ -163,8 +162,111 @@ class SqlitePartition(PartitionBase):
         return rows_per_seg
 
     def finalize(self):
-        self.write_stats()
-        self.write_file()
+
+        if not self.is_finalized and self.database.exists():
+            self.write_basic_stats()
+            self.write_file()
+            self.write_full_stats()
+
+
+    def write_full_stats(self):
+        """
+
+        Write stats to the stats table.
+
+        Dataset Id
+        Column id
+        Table Id
+        Partition Id
+        Count
+        Mean, Std
+        Min, 25, 50 75, Max
+        # Uniques
+        JSON of top 50 Unique values
+        JSON of Histogram of 100 values, for Int and Real
+
+
+        :return:
+        """
+        import pandas as pd
+        import numpy as np
+        import json
+        df = self.pandas
+
+        if df is None:
+            return # Usually b/c there are no records in the table.
+
+        self.close()
+        self.bundle.close()
+
+        with self.bundle.session:
+            table = self.record.table
+            p = self.bundle.partitions.get(self.vid)
+
+            all_cols = [c.name for c in table.columns]
+
+            for row in df.describe().T.reset_index().to_dict(orient='records'):
+                col_name = row['index']
+                col = table.column(col_name)
+
+                row['nuniques'] = df[col_name].dropna().nunique()
+
+                h = np.histogram(df[col_name])
+
+                row['hist'] = dict(values=zip(h[1], h[0]))
+
+                del row['index']
+
+                p.add_stat(col.vid, row)
+
+                all_cols.remove(col_name)
+
+            for col_name in all_cols:
+                row = {}
+                col = table.column(col_name)
+
+                row['count'] = len(df[col_name])
+
+                row['nuniques'] = df[col_name].dropna().nunique()
+
+                if col.type_is_text() :
+                    row['uvalues'] = df[col_name].value_counts().sort(inplace=False, ascending=False)[:100].to_dict()
+
+                p.add_stat(col.vid, row)
+
+
+    def write_basic_stats(self):
+        '''Record in the partition entry basic statistics for the partition's
+        primary table'''
+        from ..partitions import Partitions
+
+        t = self.get_table()
+
+        if not t:
+
+            return
+
+        if not t.primary_key:
+            from ..dbexceptions import ConfigurationError
+
+            raise ConfigurationError("Table {} does not have a primary key; can't compute states".format(t.name))
+
+        partition_s = self.database.session
+
+        self.record.count = partition_s.execute("SELECT COUNT(*) FROM {}".format(self.table.name)).scalar()
+        self.record.min_key = partition_s.execute(
+            "SELECT MIN({}) FROM {}".format(t.primary_key.name, self.table.name)).scalar()
+        self.record.max_key = partition_s.execute(
+            "SELECT MAX({}) FROM {}".format(t.primary_key.name, self.table.name)).scalar()
+
+        with self.bundle.session as bundle_s:
+
+            bundle_s.add(self.record)
+
+            bundle_s.commit()
+
+        self.set_state(Partitions.STATE.FINALIZED)
+
 
     def write_file(self):
         """Create a file entry in the bundle for the partition, storing the md5 checksum and size. """
@@ -177,8 +279,6 @@ class SqlitePartition(PartitionBase):
         self.database.close()
 
         statinfo = os.stat(self.database.path)
-
-
 
         f = File(path=self.identity.cache_key,
                  group='partition',
@@ -202,116 +302,15 @@ class SqlitePartition(PartitionBase):
 
 
 
-
-
-    def csvize(self, logger=None, store_library=False, write_header=False, rows_per_seg=None):
-        '''Convert this partition to CSV files that are linked to the partition'''
-        
-        self.table = self.get_table()
-        
-        if self.record_count:
-            self.write_stats()
-
-        if not rows_per_seg:
-            rows_per_seg = self.optimal_rows_per_segment()
-  
-        
-        if logger:
-            logger.always("Csvize: {} rows per segment".format(rows_per_seg))
-        
-        ins  =  None
-        p = None
-        seg = 0
-        ident = None
-        count = 0
-        min_key = max_key = None
-
-        pk = self.table.primary_key.name
-
-        def _store_library(p):
-            if store_library:
-                if logger:
-                    logger.always("Storing {} to Library".format(p.identity.name), now=True)
-                    
-                dst, _,_ = self.bundle.library.put(p)
-                p.database.delete()
-                
-                if logger:
-                    logger.always("Stored at {}".format(dst), now=True)            
-
-        for i,row in enumerate(self.rows):
-
-            if not min_key:
-                min_key = row[pk]
-
-            if i % rows_per_seg == 0:
-                      
-                if p: # Don't do it on the first record. 
-                    p.write_stats(min_key, max_key, count)
-                    count = 0
-                    min_key = row[pk]
-                    ins.close()
-
-                    _store_library(p)
-
-                seg += 1
-                ident = self.identity
-                ident.segment = seg
-
-                p = self.bundle.partitions.find_or_new_csv(**vars(ident.name.as_partialname()))
-
-                ins = p.inserter( write_header=write_header)
-
-                if logger:
-                    logger.always("New CSV Segment: {}".format(p.identity.name), now=True)
-                
-            count += 1
-            ins.insert(dict(row))
-            max_key = row[pk]
-       
-            if logger:
-                logger("CSVing for {}".format(ident.name))
-
-        # make sure we get the last partition
-        if p:
-            p.write_stats(min_key, max_key, count)
-            ins.close()
-            _store_library(p)
-
-    def get_csv_parts(self):
-        from ..identity import PartitionNameQuery
-        ident = self.identity.clone()   
-        ident.format = 'csv'
-        ident.segment = PartitionNameQuery.ANY
-
-        return self.bundle.partitions.find_all(PartitionNameQuery(id_=ident))
-
-    def load_csv(self, table=None, parts=None):
-        '''Loads the database from a collection of CSV files that have the same identity, 
-        except for a format of 'csv' and possible segments. '''
-
-        if not parts:
-            parts = self.get_csv_parts()
-
-        
-        self.clean()
-      
-        lr = self.bundle.init_log_rate(100000)
-      
-        if table is None:
-            table = self.table
-      
-        for p in parts:
-            self.bundle.log("Loading CSV partition: {}".format(p.identity.vname))
-            self.database.load(p.database, table, logger=lr )
-        
-
     @property
     def rows(self):
         '''Run a select query to return all rows of the primary table. '''
 
-        pk = self.get_table().primary_key.name
-        return self.database.query("SELECT * FROM {} ORDER BY {} ".format(self.get_table().name,pk))
+        if True:
+            pk = self.get_table().primary_key.name
+            return self.database.query("SELECT * FROM {} ORDER BY {} ".format(self.get_table().name,pk))
+        else:
+            return self.database.query("SELECT * FROM {}".format(self.get_table().name))
 
     @property
     def pandas(self):
@@ -323,13 +322,14 @@ class SqlitePartition(PartitionBase):
             return self.select("SELECT * FROM {}".format(self.get_table().name),index_col=pk).pandas
         except NoSuchColumnError:
             return self.select("SELECT * FROM {}".format(self.get_table().name)).pandas
-
+        except StopIteration:
+            return None # No records, so no dataframe.
+            #raise Exception("Select failed: {}".format("SELECT * FROM {}".format(self.get_table().name)))
 
     def query(self,*args, **kwargs):
         """Convience function for self.database.query()"""
 
         return self.database.query(*args, **kwargs)
-
 
     def select(self,sql=None,*args, **kwargs):
         '''Run a query and return an object that allows the selected rows to be returned
@@ -337,28 +337,6 @@ class SqlitePartition(PartitionBase):
         from ..database.selector import RowSelector
 
         return RowSelector(self, sql,*args, **kwargs)
-
-
-    def write_stats(self):
-        '''Record in the partition entry basic statistics for the partition's
-        primary table'''
-        t = self.get_table()
-        
-        if not t:
-            return
-
-        if not t.primary_key:
-            from ..dbexceptions import ConfigurationError
-            raise ConfigurationError("Table {} does not have a primary key; can't compute states".format(t.name))
-        
-        s = self.database.session
-        self.record.count = s.execute("SELECT COUNT(*) FROM {}".format(self.table.name)).scalar()
-        self.record.min_key = s.execute("SELECT MIN({}) FROM {}".format(t.primary_key.name,self.table.name)).scalar()
-        self.record.max_key = s.execute("SELECT MAX({}) FROM {}".format(t.primary_key.name,self.table.name)).scalar()
-        s.commit()
-        
-        with self.bundle.session as s:
-            s.merge(self.record)
 
     def add_view(self, view_name):
         '''Add a view specified in the configuration in the views.<viewname> dict. '''

@@ -6,28 +6,27 @@ of the bundles that have been installed into it.
 # Revised BSD License, included in this distribution as LICENSE.txt
 
 import os.path
-
-from ambry.util import temp_file_name
 from ambry.dbexceptions import ConfigurationError, NotFoundError, DependencyError
-from ambry.bundle import DbBundle
 
 # Setup a default logger. The logger is re-assigned by the
 # bundle when the bundle instantiates the logger.
 import logging
 
-from ambry.orm import Dataset, Config
+from ambry.orm import Dataset
 from ..identity import LocationRef, Identity
 from ..util import memoize, get_logger
 import weakref
 from files import Files
-import collections
+from ckcache import NullCache
+
 libraries = {}
 
 def _new_library(config):
-    import copy
-    from ..cache import new_cache, RemoteMarker
+    from ..cache import new_cache
     from database import LibraryDb
     from sqlalchemy.exc import OperationalError
+
+
 
     cache = new_cache(config['filesystem'])
 
@@ -37,6 +36,7 @@ def _new_library(config):
         database.create()
     except OperationalError as e:
         from ..dbexceptions import DatabaseError
+
         raise DatabaseError('Failed to create {} : {}'.format(database.dsn, e.message))
 
     if 'upstream' in config:
@@ -48,7 +48,6 @@ def _new_library(config):
 
     for i,remote in enumerate(remotes):
         remote.set_priority(i)
-
 
     source_dir = config.get('source', None)
 
@@ -64,8 +63,20 @@ def _new_library(config):
         host = None
         port = 80
 
+    if 'documentation' in config:
+        doc_cache = new_cache(config['documentation'])
+    else:
+        doc_cache = cache.subcache('_doc')
+
+    if 'warehouses' in config:
+        warehouse_cache = new_cache(config['warehouses'])
+    else:
+        warehouse_cache = cache.subcache('warehouses')
+
 
     l = Library(cache=cache,
+                doc_cache = doc_cache,
+                warehouse_cache = warehouse_cache,
                 database=database,
                 name = config['_name'] if '_name' in config else 'NONE',
                 remotes=remotes,
@@ -80,7 +91,7 @@ def _new_library(config):
     return l
 
 
-def new_library(config, reset=False):
+def new_library(config=None, reset=False):
     """Return a new :class:`~ambry.library.Library`, constructed from a configuration
 
     :param config: a :class:`~ambry.run.RunConfig` object
@@ -93,10 +104,15 @@ def new_library(config, reset=False):
 
     global libraries
 
+    if config is None:
+        from ..run import get_runconfig
+
+        config = get_runconfig().library('default')
+
     if reset:
         libraries = {}
 
-    name = config['_name']
+    name = config.get('_name', None)
 
     if name is None:
         name = 'default'
@@ -116,19 +132,23 @@ def clear_libraries():
     libraries = {}
 
 
-
 class Library(object):
     '''
 
     '''
 
 
+    # Names of exernally configurable values.
+    configurable = ('warehouse_url')
+
     def __init__(self, cache, database,
                  name=None, remotes=None,
                  source_dir = None,
                  require_upload=False,
                  doc_cache = None,
+                 warehouse_cache = None,
                  host=None, port=None, urlhost = None):
+
         '''Libraries are constructed on the root cache name for the library.
         If the cache does not exist, it will be created.
 
@@ -141,15 +161,19 @@ class Library(object):
 
         '''
 
+
+
+
         assert database is not None
 
         self.name = name
         self.cache = cache
         self._doc_cache = doc_cache
+        self._warehouse_cache = warehouse_cache
         self.source_dir = source_dir
 
         self._database = database
-        self.bundle = None # Set externally in bundle.library()
+        self._bundle = None # Set externally in bundle.library()
         self.host = host
         self.port = port
         self.urlhost = urlhost if urlhost else ( '{}:{}'.format(self.host,self.port) if self.port else self.host)
@@ -203,6 +227,41 @@ class Library(object):
         '''Return ambry.database.Database object'''
         return self._database
 
+    def commit(self):
+        self.database.commit()
+
+    ## Configurables
+
+    def _meta_set(self, key, value):
+        from ..orm import Config
+
+        return self.database.set_config_value('library', key, value)
+
+    def _meta_get(self, key):
+        from ..orm import Config
+
+        try:
+            return self.database.get_config_value('library', key).value
+        except AttributeError:
+            return None
+
+    @property
+    def warehouse_url(self):
+        """URL to pass on to warehouses"""
+        return self._meta_get('warehouse_url')
+
+    @warehouse_url.setter
+    def warehouse_url(self, v):
+        r =  self._meta_set('warehouse_url', v)
+
+        for sf in self.stores:
+            s = self.store(sf.ref)
+            w = self.warehouse(s.ref)
+            self.logger.info("Setting URL for {}".format(s.path))
+            self.sync_warehouse(w)
+
+        return r
+
     ##
     ## Storing
     ##
@@ -240,7 +299,12 @@ class Library(object):
 
         self.database.install_partition(bundle, partition, commit = commit)
 
+        if partition.ref:
+           return False, False
+
         installed = self.files.install_partition_file(partition, self.cache, commit = commit, state = 'new')
+
+        # Ref partitions use the file of an earlier version, so there is no FILE to install
 
         self.cache.put(partition.database.path, partition.identity.cache_key)
 
@@ -255,21 +319,6 @@ class Library(object):
 
         self.cache.remove(bundle.identity.cache_key, propagate=True)
 
-    @property
-    def doc_cache(self):
-        """Return the cache for documentation"""
-
-        if self._doc_cache is None:
-            doc_cache = self.cache.clone()
-
-            assert doc_cache
-
-            doc_cache.prefix = '_doc'
-
-            return doc_cache
-
-        else:
-            return self._doc_cache
 
     ##
     ## Retreiving
@@ -279,7 +328,6 @@ class Library(object):
         '''Lists all of the datasets in the partition, optionally with
         metadata. Does not include partitions. This returns a dictionary
         in  a form that is similar to the remote and source lists. '''
-        import socket
 
         if datasets is None:
             datasets = {}
@@ -288,8 +336,9 @@ class Library(object):
 
         return datasets
 
-    def list_bundles(self, last_version_only = True, key = None):
-        """Like list(), but returns bundles instead of a dict with identities. key is a parameter to sorted(self.list())"""
+    def list_bundles(self, last_version_only = True, locations = [LocationRef.LOCATION.LIBRARY], key = None):
+        """Like list(), but returns bundles instead of a dict with identities.
+        key is a parameter to sorted(self.list())"""
         from ..dbexceptions import NotFoundError
         from ..bundle import LibraryDbBundle
 
@@ -313,6 +362,9 @@ class Library(object):
             current = None
 
             for ident in sorted(self.list().values(), cmp = rev_cmp ):
+
+                if locations and not ident.locations.has(locations):
+                    continue
 
                 if not current or ident.id_ != current.identity.id_:
 
@@ -345,7 +397,7 @@ class Library(object):
                 key = lambda ident: ident.vname
 
             for ident in sorted(self.list().values(), key = key ):
-                b =  self.get(ident.vid)
+                b =  LibraryDbBundle(self.database, ident.vid)
                 yield b
                 b.close()
 
@@ -359,15 +411,15 @@ class Library(object):
     def remote_stack(self):
         """Return a MultiCache that has all of the remotes as upstreams"""
 
-        from ..cache.multi import MultiCache
+        from ckcache.multi import MultiCache
 
         return MultiCache(self.remotes)
 
 
     def _get_bundle_by_cache_key(self, cache_key, cb=None):
-        from ..cache.multi import AltReadCache
+        from ckcache.multi import AltReadCache
         from sqlite3 import DatabaseError
-        from sqlalchemy.exc import OperationalError, IntegrityError
+        from sqlalchemy.exc import OperationalError
 
         # The AltReadCache will get from the remote stack if the path is not found in the cache.
         arc = AltReadCache(self.cache, self.remote_stack)
@@ -393,25 +445,33 @@ class Library(object):
         return bundle
 
 
+    def has(self, ref, location = 'default'):
+        dataset = self.resolve(ref, location=location)
+
+        if dataset.partition:
+            return self.cache.has(dataset.partition.cache_key)
+        else:
+            return self.cache.has(dataset.cache_key)
+
     def get(self, ref, force=False, cb=None, location = 'default'):
         '''Get a bundle, given an id string or a name '''
-        from sqlite3 import DatabaseError
-        from sqlalchemy.exc import OperationalError, IntegrityError
-        from sqlalchemy.orm.exc import NoResultFound
-        from ..dbexceptions import NotFoundError
+        from sqlalchemy.exc import IntegrityError
         from .files import  Files
-        from ..orm import Dataset
-        from ..cache.multi import AltReadCache
+        from ckcache.multi import AltReadCache
+        from ..dbexceptions import NotFoundError
 
         # Get a reference to the dataset, partition and relative path
         # from the local database.
 
-        dataset = self.resolve(ref, location=location)
+        dataset = self.resolve(ref,  location=location)
 
         if not dataset:
-            raise NotFoundError("Failed to resolve reference '{}'".format(ref))
+            raise NotFoundError("Failed to resolve reference '{}' in library '{}' ".format(ref, self.database.dsn))
 
         bundle = self._get_bundle_by_cache_key(dataset.cache_key)
+
+        if not bundle:
+            raise NotFoundError("Failed to get bundle from cache key: '{}'".format(dataset.cache_key) )
 
         try:
             if dataset.partition:
@@ -420,7 +480,7 @@ class Library(object):
 
 
                 if not partition:
-                    from ..dbexceptions import NotFoundError
+
                     raise NotFoundError('Failed to get partition {} from bundle at {} '
                                         .format(dataset.partition.fqname, dataset.cache_key))
 
@@ -428,11 +488,40 @@ class Library(object):
 
                 # If the partition has a reference, get that instead. This will load it into the local file
                 if partition.ref:
-                    ref_partition = self.resolve(partition.ref)
-                else:
-                    ref_partition = partition
 
-                abs_path = arc.get(partition.identity.cache_key, cb=cb)
+                    ref_ident = self.resolve(partition.ref)
+
+                    if not ref_ident:
+                        raise NotFoundError("Reference '{}' refers to another partition, '{}', which does not exist"
+                                            .format(ref, partition.ref))
+
+                    ref_partition_ident = ref_ident.partition
+
+                    if self.cache.has(ref_partition_ident.cache_key):
+                        # The referenced partition already exists, so it should be copied to the
+                        # refferent path
+                        delete = False
+
+                    else:
+                        # The referenced partition does not exist, so it should be moved to the
+                        # refferent path
+                        # BUT, moving is not really supported by the caches, so we will copy then
+                        # delete.
+
+                        delete = True
+
+                    ref_abs_path = arc.get(ref_partition_ident.cache_key, cb=cb)
+
+                    abs_path = self.cache.put(ref_abs_path, partition.cache_key)
+
+                    if delete:
+                        os.remove(ref_abs_path)
+
+
+                else:
+
+                    abs_path = arc.get(partition.identity.cache_key, cb=cb)
+
 
                 if not abs_path or not os.path.exists(abs_path):
                     raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.cache_key))
@@ -451,8 +540,220 @@ class Library(object):
             if bundle:
                 bundle.close()
 
-
         return bundle
+
+    @property
+    def tables(self):
+        """Return ORM records for all tables"""
+        from ..orm import Table
+
+        return self.database.session.query(Table).all()
+
+
+    def table(self, vid):
+
+        from ..orm import Table
+        from sqlalchemy.orm.exc import NoResultFound
+        from ..dbexceptions import NotFoundError
+
+
+        try:
+            return (self.database.session.query(Table).filter(Table.vid == vid).one())
+        except NoResultFound:
+            try:
+                return (self.database.session.query(Table).filter(Table.id_ == vid).order_by(Table.vid.desc()).first())
+            except NoResultFound:
+                raise NotFoundError("Did not find table ref {} in library {}".format(vid, self.database.dsn))
+
+
+    def derived_tables(self, proto_vid):
+        """Tables with the given proto_vid"""
+
+        from ..orm import Table
+        from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
+        from ..dbexceptions import NotFoundError, MultipleFoundError
+
+        try:
+            return (self.database.session.query(Table).filter(Table.proto_vid == proto_vid).all())
+        except NoResultFound:
+            raise NotFoundError("Did not find table with proto_vid {} in library {}"
+                                .format(proto_vid, self.database.dsn))
+
+    @memoize
+    def _cached_protos(self):
+        return self.doc_cache.get_protos()
+
+    def resolve_protos(self,vid):
+        """Return a list of prototypes that are parents of the given column"""
+
+        pd = self._cached_protos()
+
+
+        def resolve_proto(v, i=[]):
+
+            r = pd.get(v, False)
+
+            if r:
+                return resolve_proto(r, i + [v])
+            else:
+                return i + [v]
+
+        return resolve_proto(vid)[1:]
+
+    def find_table_links(self, vid):
+        from ..identity import ObjectNumber, TableNumber, ColumnNumber
+
+        on = ObjectNumber.parse(vid)
+
+        if isinstance(on, ColumnNumber):
+            cols = [vid]
+        elif isinstance(on, TableNumber):
+            cols = [c.vid for c in self.table(vid).columns]
+        else:
+            raise ValueError()
+
+
+        for col in cols:
+
+            for link_col in self.resolve_protos(col):
+
+                t_vid = str(ObjectNumber.parse(link_col).as_table)
+
+                print link_col, t_vid
+
+
+
+
+
+    def partition(self, vid):
+        from ..orm import Partition
+        from sqlalchemy.orm.exc import NoResultFound
+
+        try:
+            return (self.database.session.query(Partition).filter(Partition.vid == vid).one())
+        except NoResultFound:
+            try:
+                return (self.database.session.query(Partition).filter(Partition.id_ == vid).one())
+            except NoResultFound:
+                self.logger.error("No partition found: {} for {}".format(vid, self.database.dsn))
+                raise
+
+    def dataset(self, vid):
+        from ..orm import Dataset
+        from sqlalchemy.orm.exc import NoResultFound
+
+        return (self.database.session.query(Dataset).filter(Dataset.vid == vid).one())
+
+    @property
+    def partitions(self):
+        from ..orm import Partition
+
+        return (self.database.session.query(Partition).all())
+
+
+    def bundle(self, vid):
+        """Returns a LibraryDbBundle for the given vid"""
+        from ..bundle import LibraryDbBundle
+
+        b = LibraryDbBundle(self.database, vid)
+
+        return b
+
+    @property
+    def stores(self):
+        """Return all of the refistered data stores. """
+
+        return self.files.query.group(self.files.TYPE.STORE).all
+
+    def store(self, uid):
+        """Return a tuple of a manifest file object and the manifest. . """
+
+        f = self.files.query.group(self.files.TYPE.STORE).ref(uid).one_maybe
+
+        if not f:
+            f = self.files.query.group(self.files.TYPE.STORE).path(uid).one_maybe
+
+        return f
+
+    def remove_store(self, uid):
+        from ..dbexceptions import NotFoundError
+
+        try:
+            w = self.warehouse(uid)
+            w.delete()
+        except NotFoundError:
+            self.logger.error("Didn't find warehouse for uid: {}".format(uid))
+
+        s = self.store(uid)
+
+
+        if s:
+            self.doc_cache.remove_store(s.ref)
+
+            self.database.session.delete(s)
+            self.database.commit()
+        else:
+            self.doc_cache.remove_store(uid)
+            self.logger.error("Didn't find store for uid '{}' ".format(uid))
+
+
+
+    def warehouse(self, uid):
+
+        from ambry.warehouse import new_warehouse, database_config
+
+        s = self.store(uid)
+
+        if not s:
+            from ..dbexceptions import NotFoundError
+            raise NotFoundError("Did not find warehouse for uid: '{}' ".format(uid))
+
+        config = database_config(s.path)
+
+        return new_warehouse(config, self, logger=self.logger)
+
+
+    @property
+    def manifests(self):
+        """Return all of the registered manifests. """
+        from ..warehouse.manifest import  Manifest
+
+        # Construct manifest with Manifest(f.content, logger=self.logger)
+
+        return self.files.query.type(self.files.TYPE.MANIFEST).all
+
+    def manifest(self, uid):
+        """Return a tuple of a manifest file object and the manifest. . """
+
+        from ..warehouse.manifest import Manifest
+
+        f = self.files.query.group(self.files.TYPE.MANIFEST).ref(uid).one_maybe
+
+        if not f:
+            return None, None
+
+        return f, Manifest(f.content)
+
+    def remove_manifest(self, uid):
+
+        f,m = self.manifest(uid)
+
+        if not f:
+            raise NotFoundError("Didn't find manifest for uid '{}' ".format(uid))
+
+        self.database.session.delete(f)
+        self.database.commit()
+
+
+
+    @property
+    def remotes(self):
+
+        if not self._remotes:
+            return None
+
+        return self._remotes
+
 
     ##
     ## Finding
@@ -469,18 +770,23 @@ class Library(object):
         return self.database.resolver
 
     def resolve(self, ref, location = 'default'):
-        from ..identity import LocationRef
+        from ..identity import LocationRef, NotObjectNumberError
+
 
         # If the location is not explicitly defined, set it to everything but source
         if location is 'default':
-            location = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.PARTITION, LocationRef.LOCATION.REMOTE ]
+            location = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.PARTITION,
+                        LocationRef.LOCATION.REMOTE ]
 
         if isinstance(ref, Identity):
             ref = ref.vid
 
         resolver = self.resolver
 
-        ip, ident = resolver.resolve_ref_one(ref, location)
+        try:
+            ip, ident = resolver.resolve_ref_one(ref, location)
+        except NotObjectNumberError:
+            ip, ident = None, None
 
         try:
             if ident and self.source:
@@ -564,14 +870,13 @@ class Library(object):
         self._dependencies = None
 
     def _get_dependencies(self):
-        from ..orm import Dataset
 
-        if not self.bundle:
+        if not self._bundle:
             raise ConfigurationError("Can't use the dep() method for a library that is not attached to a bundle");
 
         errors = 0
 
-        deps = self.bundle.metadata.dependencies
+        deps = self._bundle.metadata.dependencies
 
         if not deps:
             return {}
@@ -597,7 +902,7 @@ class Library(object):
 
         errors = {}
         for k, v in self.dependencies.items():
-            self.logger.debug('Download and check dependency: {}'.format(v))
+            self.logger.info('Download and check dependency: {}'.format(v))
             b = self.get(v, cb=Progressor().progress)
 
             if not b:
@@ -824,6 +1129,7 @@ class Library(object):
                 except Exception as e:
                     self.logger.error("Failed to sync {}; {}".format(bundle.identity.vname, e))
 
+
                 bundle.close()
 
             except Exception as e:
@@ -833,10 +1139,12 @@ class Library(object):
 
         return bundles
 
-    def sync_remotes(self, remotes=None, clean = False):
+    def sync_remotes(self, remotes=None, clean = False, last_only=True):
         from ..orm import Dataset
         from sqlalchemy.exc import IntegrityError
         from ..dbexceptions import NotABundle
+        import re
+        from collections import defaultdict
 
         if clean:
             self.files.query.type(Dataset.LOCATION.REMOTE).delete()
@@ -849,12 +1157,33 @@ class Library(object):
 
         for remote in remotes:
 
+            remote_list = remote.list().keys()
+
             all_keys = [ f.path for f  in self.files.query.type(Dataset.LOCATION.REMOTE).group(remote.repo_id).all ]
 
-            for cache_key in remote.list().keys():
+            last_keys = defaultdict(lambda : [0,''] )
 
+            use_only = None
+
+            if last_only:
+                use_only = []
+                for cache_key in remote_list:
+                    nv_key = re.sub(r'-\d+\.\d+\.\d+\.db', '', cache_key)  # Key without the version
+                    version = int(re.search(r'(\d+)\.db$', cache_key).group(1))
+
+                    if version > last_keys[nv_key][0]:
+                        last_keys[nv_key] = [version, cache_key]
+
+                for version, cache_key in last_keys.values():
+                    use_only.append(cache_key)
+
+            for cache_key in remote_list:
 
                 if cache_key in all_keys:
+                    continue
+
+                if use_only and cache_key not in use_only:
+                    self.logger.info("Skip old version: ({}".format(cache_key))
                     continue
 
                 if self.cache.has(cache_key):# This is just for reporting.
@@ -898,8 +1227,9 @@ class Library(object):
 
                 try:
                     self.files.insert_collection()
-                except IntegrityError:
+                except IntegrityError as e:
                     b.close() # Just means we already have it installed
+                    raise
                     continue
 
                 if installed:
@@ -909,7 +1239,6 @@ class Library(object):
                 self.database.commit()
                 self.database.close()
                 b.close()
-
 
 
     def sync_source(self, clean=False):
@@ -946,7 +1275,7 @@ class Library(object):
             pass
 
         try:
-            bundle = self.source.bundle(path)
+            bundle = self.source.bundle(path, buildbundle_ok = True)
 
             self.files.install_bundle_source(bundle, self.source, commit=True)
             bundle.close()
@@ -955,15 +1284,221 @@ class Library(object):
             self.database.rollback()
             pass
 
+    def sync_warehouse(self, w):
+        """Create a reference to the warehouse and link all of the partitions to it. """
+
+        from ambry.util.packages import qualified_name
+
+        w.url = self.warehouse_url
+
+        store = self.files.install_data_store(w.database.dsn, qualified_name(w),
+                                          name = w.name,
+                                          title=w.title,
+                                          url = w.url,
+                                          summary=w.summary)
+
+        if not w.uid:
+            w.uid = store.ref
+
+
+        s = self.database.session
+
+        s.commit()
+
+        ## First, load in the partitions.
+
+        for remote_p in w.library.partitions:
+
+            p = self.partition(remote_p.vid)
+
+            store.link_partition(p)
+            p.link_store(store)
+            p.dataset.link_store(store)
+
+        ## Next, we can load the manifests.
+
+        for remote_manifest in w.manifests:
+
+            # Copy the file record. There really should be an easier way to do this.
+
+            local_manifest = self.files.new_file(commit=True, merge=True,
+                                                 extant=self.files.query.ref(remote_manifest.ref).group(
+                                                     self.files.TYPE.MANIFEST).one_maybe,
+                                                  **{ k:v for k,v in remote_manifest.record_dict.items()
+                                                     if k not in ('oid')})
+
+            for p  in remote_manifest.linked_partitions:
+                p = self.partition(p.vid)
+
+                local_manifest.link_partition(p)
+                p.link_manifest(local_manifest)
+
+                p.dataset.link_manifest(local_manifest)
+
+            local_manifest.link_store(store)
+
+            # This is the cheaper way to copy links, but it only works when the links
+            # are one-directional.
+            local_manifest.data['tables'] = remote_manifest.data.get('tables', [])
+
+            local_manifest.link_store(store)
+            store.link_manifest(local_manifest)
+
+        ##
+        ## Copy over extracts
+
+        for f in w.extracts:
+
+            self.files.install_extract(f.path, f.source_url, f.data)
+
+        s.commit()
+
+        self.doc_cache.put_store(w, force=True)
+
+        return store
+
+    def sync_warehouses(self):
+
+        for f in self.stores:
+            w = self.warehouse(f.path)
+            self.logger.info("Syncing {} dsn={}".format(f.ref, f.path))
+            self.sync_warehouse(w)
+
+    def sync_bundle_doc(self, b, cache=None, force=True):
+        """Write the JSON for a single bundle"""
+
+        dc = self.doc_cache if not cache else cache
+
+        dc.put_bundle(b, force=force)
+        dc.put_schema(b, force=force)
+        dc.put_schemacsv(b, force=force)
+
+        dc.update_library_bundle(b, self)
+
+        tables = {}
+        protos = {}
+        for t in b.schema.tables:
+            dc.put_table(t, force=force)
+
+            tables[t.vid] = t.dict
+
+            for c in t.columns:
+                if c.proto_vid:
+                    protos[c.vid] = c.proto_vid
+                    protos[c.id_] = c.proto_vid
+
+        dc.update_tables(tables)
+        dc.update_protos(protos)
+
+
+    def sync_doc_json(self, cache = None, clean = False):
+        """Write the JSON for all bundles and the library"""
+        from ..warehouse import new_warehouse, database_config
+        from sqlalchemy.exc import OperationalError
+
+        dc = self.doc_cache if not cache else cache
+
+        self.logger.info("Caching json to {}".format(dc.cache))
+
+        ##
+        # Each of the bundles and schemas
+        # The library index is updated incrementally from doc_cache.update_library_bundle
+
+        for vid in self.list():
+
+            ident = self.resolve(vid)
+
+            if not ident:
+                continue  #  resolve does not return source bundles.
+
+            try:
+                b = self.get(vid)
+
+                if not dc.get_bundle(vid) or clean:
+
+                    self.logger.info("Processing json for {}".format(vid))
+
+                    self.sync_bundle_doc(b, dc, force=clean)
+
+            except Exception as e:
+                self.logger.error("Error on {}: {}".format(vid, e))
+                raise
+
+
+        ## Manifests
+        from ambry.warehouse.manifest import Manifest
+
+        for f in self.manifests:
+
+            m = Manifest(f.content, logger=self.logger)
+
+            dc.put_manifest(m, f, force=True)
+
+        ##
+        ## Stores
+
+        for s in self.stores:
+
+            w = new_warehouse(database_config(s.path), self, logger=self.logger)
+
+            if not w.uid:
+                raise Exception("No uid for "+str(s.ref))
+
+            try:
+                dc.put_store(w, force=True)
+            except Exception  as e:
+                self.logger.error("Failed to document warehouse '{}': {}".format(s.path, e))
+                raise
+
+
+
 
     @property
-    def remotes(self):
-        from ..cache import new_cache
+    def doc_cache(self):
+        """Return the documentation cache. """
+        try:
+            from ambrydoc.cache import  DocCache
 
-        if not self._remotes:
+            return DocCache(self._doc_cache if self._doc_cache else self.cache.subcache('_doc'))
+        except ImportError:
             return None
+    @property
+    def warehouse_cache(self):
+        """Cache for warehouse Sqlite databases and extracts"""
 
-        return self._remotes
+        return self._warehouse_cache
+
+    def _gen_schema(self):
+        from ..schema import Schema
+
+        return Schema._dump_gen(self)
+
+    def schema_as_csv(self, f=None):
+        import unicodecsv as csv
+        from StringIO import StringIO
+
+        if f is None:
+            f = StringIO()
+
+        g = self._gen_schema()
+
+        header = g.next()
+
+        w = csv.DictWriter(f, header, encoding='utf-8')
+        w.writeheader()
+        last_table = None
+        for row in g:
+
+            # Blank row to seperate tables.
+            if last_table and row['table'] != last_table:
+                w.writerow({})
+
+            w.writerow(row)
+
+            last_table = row['table']
+
+        if isinstance(f, StringIO):
+            return f.getvalue()
 
     @property
     def info(self):
@@ -977,95 +1512,35 @@ Remotes:  {remotes}
 
     @property
     def dict(self):
+
         return dict(name=str(self.name),
                     database=str(self.database.dsn),
                     cache=str(self.cache),
-                    remotes=[ str(r) for r in self.remotes]) if self.remotes else []
-
-
-class AnalysisLibrary(Library):
-    '''A Library that redefines some of the methods to make them easier to use from ipython'''
-
-    def __init__(self, library):
-        self.l = library
-
-    def list(self,  fields=None):
-        '''List all of the datasets available in this library
-
-        :param fields: If set, is a list of fields to be displayed. Available fields are:
-            * deps. Number of dependencies in the bundle
-            * locations. A string that indicates where the bundle exists. ``S`` is source, ``L`` is the local library
-                and ``R`` is the remote library.
-            * vid. The id number, with a version suffix
-            * status. The build status string for the bundle.
-            * sname. The bundle's simple name
-            * vname. The simple name, with the semantic version number
-            * fqname. The bundle's fully qualified name
-            * source_path. If the bundle exists as source, the path to the source directory.
-
-        '''
-        from  ..identity import IdentitySet
-
-        l = self.l.list()
-
-
-        return IdentitySet(sorted(l.values(), key=lambda ident: ident.vname), fields=fields)
-
-    def about(self, ref):
-        '''Lookup a bundle or partition reference and display information about it.
-
-        This command will fetch the bundle from the remote, or instantiate it from source, so for bundles with
-        very large schemas ( Like the US Census or ACS ) it may take a while to execute.
-        '''
-
-        ident = None
-
-
-    def find(self, command_string = None, source=None, name=True, fields=None):
-        from ..identity import IdentitySet
-        from ..library.query import QueryCommand
-
-        idents = []
-
-        if not command_string:
-            if source:
-                command_string = "identity.source = {}".format(source)
-            elif name:
-                command_string = "identity.name like {}".format(name)
-
-        qc = QueryCommand.parse(command_string)
-
-        if len(qc.to_dict().items()) < 1:
-            raise ValueError("Malformed find command")
-
-        vids = set()
-        for entry in self.l.find(qc):
-            vids.add(entry['identity']['vid'])
-
-        for vid in vids:
-            ident = self.l.resolve(vid)
-            idents.append(ident)
-
-        return IdentitySet(idents, fields=fields)
-
-    def get(self, ref, force=False, cb=None):
-        return self.l.get( ref=ref, force=force, cb=cb)
+                    remotes=[str(r) for r in self.remotes] if self.remotes else [],
+                    manifests={f.data['uid']: dict(
+                        title=f.data['title'],
+                        partitions = [ p.vid for p in f.linked_partitions ],
+                        tables=[ t.vid for t in f.linked_tables],
+                        summary=f.data['summary']['summary_text'],
+                        stores=[s.ref for s in f.linked_stores]) for f in self.manifests},
+                    stores={f.ref: dict(
+                        title=f.data['title'],
+                        summary=f.data['summary'] if f.data['summary'] else '' ,
+                        dsn = f.path,
+                        manifests = [ m.ref for m in f.linked_manifests ],
+                        cache=f.data['cache'],
+                        class_type=f.type_) for f in self.stores},
+                    # This is the slow one, with about half in setting 'about'.
+                    bundles={b.identity.vid: b.summary_dict for b in self.list_bundles()}
+        )
 
     @property
-    def info(self):
-        return self.l.info
+    def schema_dict(self):
+        """Represent the entire schema as a dict, suitable for conversion to json"""
+        s = {}
 
-    def _repr_html_(self):
-        return self.info.replace('\n','<br/>')
+        for t in self.tables:
+            s[t.vid] = t.nonull_col_dict
 
-    def install_manifest(self, ref, base_dir=None):
-        from ..warehouse import install_manifest
-        import os
-        import warnings
+        return s
 
-        warnings.filterwarnings('ignore')
-
-        if not base_dir:
-            base_dir = os.getcwd()
-
-        return install_manifest(self.l, ref, base_dir)

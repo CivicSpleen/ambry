@@ -17,93 +17,100 @@ class SqliteWarehouse(RelationalWarehouse):
     ##
 
 
-    def _ogr_args(self, partition):
 
-        return [
-            "-f SQLite ",self.database.path,
-            "-gt 65536",
-            partition.database.path,
-            "-dsco SPATIALITE=no"]
+    def load_local(self, partition, source_table_name, dest_table_name = None, where = None):
 
+        return self.load_attach(partition, source_table_name, dest_table_name, where)
 
-    def load_local(self, partition, table_name, where):
-        return self.load_attach(partition, table_name, where)
-
-    def load_attach(self, partition, table_name, where = None):
+    def load_attach(self, partition, source_table_name, dest_table_name = None, where = None):
 
         self.logger.info('load_attach {}'.format(partition.identity.name))
-
-        p_vid = partition.identity.vid
-        d_vid = partition.identity.as_dataset().vid
-
-        source_table_name = table_name
-        dest_table_name =  self.augmented_table_name(partition.identity, table_name)
 
         copy_n = 100 if self.test else None
 
         with self.database.engine.begin() as conn:
             atch_name = self.database.attach(partition, conn=conn)
-            self.logger.info('load_attach {} in {}'.format(table_name, partition.database.path))
+            self.logger.info('load_attach {} in {}'.format(source_table_name, partition.database.path))
             self.database.copy_from_attached( table=(source_table_name, dest_table_name),
                                               on_conflict='REPLACE',
                                               name=atch_name, conn=conn, copy_n = copy_n, where = where)
+
+        # Geographic partitions need to be updates to be recognized
+
+        if partition.is_geo and self.database.is_geo:
+
+            from ..geo.util import recover_geometry
+
+            with self.database.engine.begin() as conn:
+                table = partition.get_table(source_table_name)
+
+                for column in table.columns:
+                    if column.type_is_geo():
+                        recover_geometry(conn, dest_table_name, column.fq_name, column.datatype )
 
         self.logger.info('done {}'.format(partition.identity.vname))
 
         return dest_table_name
 
 
-    def load_remote(self, partition, table_name, urls):
+    def install_view(self, name, sql, data = None):
 
-        import shlex
-        from sh import ambry_load_sqlite, ErrorReturnCode_1
+        import time
 
-        self.logger.info('load_remote {} '.format(partition.identity.vname, table_name))
+        assert name
+        assert sql
+        from pysqlite2.dbapi2 import OperationalError
 
-        d_vid = partition.identity.as_dataset().vid
+        t = self.orm_table_by_name(name)
 
-        a_table_name = self.augmented_table_name(partition.identity, table_name)
+        if t and t.data.get('sql') == sql:
+            self.logger.info("Skipping view {}; SQL hasn't changed".format(name))
+            return
+        else:
+            self.logger.info('Installing view {}'.format(name))
 
-        for url in urls:
+        data = data if data else {}
+        data['type'] = data['type'] if 'type'  in data else 'view'
 
-            self.logger.info("Load Sqlite {} -> {}".format(url, self.database.path))
-
-            try:
-                ## Call the external program ambry-load-sqlite to load data into
-                ## sqlite
-                p = ambry_load_sqlite(url, self.database.path, a_table_name,
-                                      _err=self.logger.error, _out=self.logger.info )
-                p.wait()
-            except Exception as e:
-                self.logger.error("Failed to load: {} {}: {}".format(partition.identity.vname, table_name, e.message))
-
-        return a_table_name
-
-    def install_view(self, name, sql):
-
-        self.logger.info('Installing view {}'.format(name))
+        data['sql'] = sql
+        data['updated'] = time.time()
+        data['sample'] = None
 
         sql = """
         DROP VIEW  IF EXISTS {name};
         CREATE VIEW {name} AS {sql}
         """.format(name=name, sql=sql)
 
-        self.database.connection.connection.cursor().executescript(sql)
+        try:
+            self.database.connection.connection.cursor().executescript(sql)
+            t = self.install_table(name, data = data)
+
+            self.build_schema(t)
+
+        except Exception as e:
+            self.logger.error("Failed to install view: \n{}".format(sql))
+            raise
+        except OperationalError:
+            self.logger.error("Failed to execute: {} ".format(sql))
+            raise
 
 
 
-    def install_material_view(self, name, sql, clean=False):
+    def install_material_view(self, name, sql, clean=False, data = None):
         from pysqlite2.dbapi2 import  OperationalError
-        self.logger.info('Installing materialized view {}'.format(name))
 
-        if clean:
-            self.logger.info('mview_remove {}'.format(name))
-            self.database.connection.connection.cursor().executescript("DROP TABLE IF EXISTS {}".format(name))
+        drop, data = self._install_material_view(name, sql, clean=clean, data = data)
+
+        if drop:
+            self.database.connection.execute("DROP TABLE IF EXISTS {}".format(name))
+
+
+        if not data:
+            return False
 
         sql = """
         CREATE TABLE {name} AS {sql}
         """.format(name=name, sql=sql)
-
 
         try:
             self.database.connection.connection.cursor().executescript(sql)
@@ -113,6 +120,14 @@ class SqliteWarehouse(RelationalWarehouse):
 
             self.logger.info('mview_exists {}'.format(name))
             # Ignore if it already exists.
+
+
+        t = self.install_table(name, data = data)
+
+        self.build_schema(t)
+
+        return True
+
 
     def run_sql(self, sql_text):
 
@@ -140,26 +155,39 @@ class SqliteWarehouse(RelationalWarehouse):
 
 class SpatialiteWarehouse(SqliteWarehouse):
 
-    def _ogr_args(self, partition):
 
-        return [
-            "-f SQLite ", self.database.path,
-            "-gt 65536",
-            partition.database.path,
-            "-dsco SPATIALITE=yes"]
+    def install_material_view(self, name, sql, clean=False, data = None):
+        """
+        After installing thematerial view, look for geometry columns and add them to the spatial system
+        :param name:
+        :param sql:
+        :param clean:
+        :param data:
+        :return:
+        """
 
+        if not super(SpatialiteWarehouse, self).install_material_view(name, sql, clean=clean, data = data):
+            return False
 
-    def install_material_view(self, name, sql, clean=False):
-
-        super(SpatialiteWarehouse, self).install_material_view(name, sql, clean=clean)
+        # Clean up the geometry
 
         ce = self.database.connection.execute
 
-        if 'geometry' in [ row['name'].lower() for row in ce('PRAGMA table_info({})'.format(name)).fetchall()]:
-            types = ce('SELECT count(*) AS count, GeometryType(geometry) AS type,  CoordDimension(geometry) AS cd '
-                       'FROM {} GROUP BY type ORDER BY type desc;'.format(name)).fetchall()
+        for col in [ row['name'].lower() for row in ce('PRAGMA table_info({})'.format(name)).fetchall()]:
 
-            t = types[0][1]
-            cd = types[0][2]
+            if col.endswith('geometry'):
 
-            ce("SELECT RecoverGeometryColumn('{}', 'geometry', 4326, '{}', '{}');".format(name, t, cd))
+                types = ce('SELECT count(*) AS count, GeometryType({}) AS type,  CoordDimension({}) AS cd '
+                           'FROM {} GROUP BY type ORDER BY type desc;'.format(col, col,  name)).fetchall()
+
+                t = types[0][1]
+                cd = types[0][2]
+
+
+                #connection.execute(
+                #    'UPDATE {} SET {} = SetSrid({}, {});'.format(table_name, column_name, column_name, srs))
+
+                ce("SELECT RecoverGeometryColumn('{}', '{}', 4326, '{}', '{}');".format(name, col, t, cd))
+
+
+        return True

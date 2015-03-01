@@ -3,10 +3,13 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..cli import prt, fatal, warn, err, _print_info #@UnresolvedImport
-
 import os
+from ..cli import prt, fatal, warn,  _print_info #@UnresolvedImport
 from ambry.util import Progressor
+
+# If the devel module exists, this is a development system.
+try: from ambry.support.devel import *
+except ImportError as e: from ambry.support.production import *
 
 def library_parser(cmd):
 
@@ -18,27 +21,13 @@ def library_parser(cmd):
     lib_p = cmd.add_parser('library', help='Manage a library')
     lib_p.set_defaults(command='library')
 
-    group = lib_p.add_mutually_exclusive_group()
-    group.add_argument('-s', '--server', default=False, dest='is_server', action='store_true',
-                       help='Select the server configuration')
-    group.add_argument('-c', '--client', default=False, dest='is_server', action='store_false',
-                       help='Select the client configuration')
-
     asp = lib_p.add_subparsers(title='library commands', help='command help')
 
     sp = asp.add_parser('push', help='Push new library files')
     sp.set_defaults(subcommand='push')
     sp.add_argument('-w','--watch',  default=False,action="store_true",  help='Check periodically for new files.')
     sp.add_argument('-f','--force',  default=False,action="store_true",  help='Push all files')
-    
-    sp = asp.add_parser('server', help='Run the library server')
-    sp.set_defaults(subcommand='server') 
-    sp.add_argument('-d','--daemonize', default=False, action="store_true",   help="Run as a daemon") 
-    sp.add_argument('-k','--kill', default=False, action="store_true",   help="With --daemonize, kill the running daemon process") 
-    sp.add_argument('-g','--group', default=None,   help="Set group for daemon operation") 
-    sp.add_argument('-u','--user', default=None,  help="Set user for daemon operation")  
-    sp.add_argument('-t','--test', default=False, action="store_true",   help="Run the test version of the server")   
-      
+
     sp = asp.add_parser('files', help='Print out files in the library')
     sp.set_defaults(subcommand='files')
     sp.add_argument('-a','--all',  default='all',action="store_const", const='all', dest='file_state',  help='Print all files')
@@ -46,16 +35,16 @@ def library_parser(cmd):
     sp.add_argument('-p','--pushed',  default=False,action="store_const", const='pushed', dest='file_state',  help='Print pushed files')
     sp.add_argument('-u','--pulled',  default=False,action="store_const", const='pulled', dest='file_state',  help='Print pulled files')
     sp.add_argument('-s','--synced',  default=False,action="store_const", const='synced', dest='file_state',  help='Print synced source packages')
-  
+
     sp = asp.add_parser('new', help='Create a new library')
     sp.set_defaults(subcommand='new')
-    
+
     sp = asp.add_parser('drop', help='Delete all of the tables in the library')
-    sp.set_defaults(subcommand='drop')    
-    
+    sp.set_defaults(subcommand='drop')
+
     sp = asp.add_parser('clean', help='Remove all entries from the library database')
     sp.set_defaults(subcommand='clean')
-    
+
     sp = asp.add_parser('purge', help='Remove all entries from the library database and delete all files')
     sp.set_defaults(subcommand='purge')
 
@@ -64,16 +53,18 @@ def library_parser(cmd):
     sp.add_argument('-C', '--clean', default=False, action="store_true", help='Clean before syncing. Will clean only the locations that are also synced')
 
     sp.add_argument('-a', '--all', default=False, action="store_true", help='Sync everything')
-    sp.add_argument('-l', '--library', default=False, action="store_true", help='Sync only the library')
-    sp.add_argument('-r', '--remote', default=False, action="store_true", help='Sync only the remote')
-    sp.add_argument('-s', '--source', default=False, action="store_true", help='Sync only the source')
+    sp.add_argument('-l', '--library', default=False, action="store_true", help='Sync the library')
+    sp.add_argument('-r', '--remote', default=False, action="store_true", help='Sync the remote')
+    sp.add_argument('-s', '--source', default=False, action="store_true", help='Sync the source')
+    sp.add_argument('-j', '--json', default=False, action="store_true", help='Cache JSON versions of library objects')
+    sp.add_argument('-w', '--warehouses', default=False, action="store_true", help='Re-synchronize warehouses')
 
 
     sp = asp.add_parser('info', help='Display information about the library')
-    sp.set_defaults(subcommand='info')   
+    sp.set_defaults(subcommand='info')
 
     sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
-    sp.set_defaults(subcommand='get')   
+    sp.set_defaults(subcommand='get')
     sp.add_argument('term', type=str,help='Query term')
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help='Also get all of the partitions. ')
     sp.add_argument('-f','--force',  default=False, action="store_true",  help='Force retrieving from the remote')
@@ -96,7 +87,7 @@ def library_parser(cmd):
 
 
     sp = asp.add_parser('schema', help='Dump the schema for a bundle')
-    sp.set_defaults(subcommand='schema')   
+    sp.set_defaults(subcommand='schema')
     sp.add_argument('term', type=str,help='Query term')
     sp.add_argument('-p','--pretty',  default=False, action="store_true",  help='pretty, formatted output')
     group = sp.add_mutually_exclusive_group()
@@ -104,8 +95,25 @@ def library_parser(cmd):
     group.add_argument('-j', '--json',  default='csv', dest='format',  action='store_const', const='json')
     group.add_argument('-c', '--csv',  default='csv', dest='format',  action='store_const', const='csv')
 
-    sp = asp.add_parser('doc', help='Generate documentation')
+    sp = asp.add_parser('doc', help='Start the documentation server')
     sp.set_defaults(subcommand='doc')
+    sp.add_argument('-r', '--reindex', default=False, action="store_true",
+                    help='Generate documentation files and index the full-text search')
+    sp.add_argument('-c', '--clean', default=False, action="store_true",
+                    help='When used with --reindex, delete the index and old files first. ')
+    sp.add_argument('-d', '--debug', default=False, action="store_true",
+                    help='Debug mode ')
+    sp.add_argument('-p', '--port', help='Run on a sepecific port, rather than pick a random one')
+
+    whsp = asp.add_parser('config', help='Configure varibles')
+    whsp.set_defaults(subcommand='config')
+    whsp.add_argument('term', type=str, nargs='?', help='Var=Value')
+
+    if IN_DEVELOPMENT:
+        sp = asp.add_parser('test', help='Run development test code')
+        sp.set_defaults(subcommand='test')
+        sp.add_argument('terms', type=str, nargs=argparse.REMAINDER,
+                        help='Name or ID of the bundle or partition to remove')
 
 
 def library_command(args, rc):
@@ -207,22 +215,7 @@ def library_restore(args, l, config, *kwargs):
     prt("{}: Restoring", backup_file)
     l.clean(add_config_root=False)
     l.restore(backup_file)
-   
-def library_server(args, l, config):
-    from ..util import daemonize
 
-    from ambry.server.main import production_run, local_run
-
-    def run_server(args, config):
-        production_run(config.library(args.library_name))
-    
-    if args.daemonize:
-        daemonize(run_server, args,  config)
-    elif args.test:
-        local_run(config.library(args.library_name))
-    else:
-        production_run(config.library(args.library_name))
-        
 def library_drop(args, l, config):   
 
     prt("Drop tables")
@@ -238,8 +231,6 @@ def library_purge(args, l, config):
 
     prt("Purge library")
     l.purge()
-      
-
 
 def library_remove(args, l, config):
     from ..dbexceptions import NotFoundError
@@ -247,13 +238,7 @@ def library_remove(args, l, config):
     cache_keys = set()
     refs = set()
 
-    for name in args.terms:
-
-        ident = l.resolve(name, location=None)
-
-        if not ident:
-            warn("Found no references to term {}".format(name))
-            continue
+    def remove_by_ident(ident):
 
         try:
 
@@ -261,7 +246,7 @@ def library_remove(args, l, config):
                 cache_keys.add(ident.partition.cache_key)
                 refs.add(ident.partition.vid)
 
-            else: # The reference is to a bundle, so we have to delete everything
+            else:  # The reference is to a bundle, so we have to delete everything
                 cache_keys.add(ident.cache_key)
                 refs.add(ident.vid)
 
@@ -274,6 +259,30 @@ def library_remove(args, l, config):
 
         except NotFoundError:
             pass
+
+
+    for name in args.terms:
+
+        ident = l.resolve(name, location=None)
+
+        if ident:
+            remove_by_ident(ident)
+            continue
+
+        if name.startswith('s'):
+            l.remove_store(name)
+
+
+        elif name.startswith('m'):
+            l.remove_manifest(name)
+
+        else:
+            warn("Found no references to term {}".format(name))
+
+
+
+
+
 
 
     if args.library or args.all:
@@ -316,10 +325,12 @@ def library_remove(args, l, config):
 def library_info(args, l, config, list_all=False):    
 
     prt("Library Info")
-    prt("Name:     {}",args.library_name)
-    prt("Database: {}",l.database.dsn)
-    prt("Cache:    {}",l.cache)
-    prt("Remotes:  {}", ', '.join([ str(r) for r in l.remotes]) if l.remotes else '')
+    prt("Name:      {}",args.library_name)
+    prt("Database:  {}",l.database.dsn)
+    prt("Cache:     {}",l.cache)
+    prt("Doc Cache: {}", l.doc_cache.cache)
+    prt("Whs Cache: {}", l.warehouse_cache)
+    prt("Remotes:   {}", ', '.join([ str(r) for r in l.remotes]) if l.remotes else '')
 
     
 def library_push(args, l, config):
@@ -372,14 +383,24 @@ def library_push(args, l, config):
                 else:
                     rate = 0
 
+    # Update the list file. This file is required for use with HTTP access, since you can't get
+    # a list otherwise.
+    for remote in l.remotes:
+        prt("  {}".format(remote.repo_id))
+
+        remote.store_list()
+
 
 def library_files(args, l, config):
 
-    files_ = l.files.query.state(args.file_state).all
+    from ..identity import LocationRef
+
+    files_ = l.files.query.state(args.file_state).type((LocationRef.LOCATION.LIBRARY,LocationRef.LOCATION.PARTITION)).all
+
     if len(files_):
         prt("-- Display {} files",args.file_state)
         for f in files_:
-            prt("{0:11s} {1:4s} {2}",f.ref,f.state,f.path)
+            prt("{0:14s} {1:4s} {2:6s} {3:20s} {4}",f.ref,f.state,f.type_, f.group, f.path)
 
 
 def library_schema(args, l, config):
@@ -418,7 +439,6 @@ def library_get(args, l, config):
 
     if not ident:
         fatal("Could not resolve term {} ", args.term)
-
 
     # This will fetch the data, but the return values aren't quite right
     prt("get: {}".format(ident.vname))
@@ -461,7 +481,7 @@ def library_sync(args, l, config):
     '''Synchronize the remotes and the upstream to a local library
     database'''
 
-    all = args.all or not (args.library or args.remote or args.source )
+    all = args.all or not (args.library or args.remote or args.source or args.json or args.warehouses )
 
     if args.library or all:
         l.logger.info("==== Sync Library")
@@ -475,43 +495,101 @@ def library_sync(args, l, config):
         l.logger.info("==== Sync Source")
         l.sync_source(clean=args.clean)
 
+    if (args.json or all):
+        l.logger.info("==== Sync Cached JSON")
+        l.sync_doc_json(clean=args.clean)
 
-def x_library_doc(args, l, config):
+    if (args.warehouses):
+        l.logger.info("==== Sync warehouses")
+        l.sync_warehouses()
 
-    cache = l.doc_cache
+def library_doc(args, l, rc):
 
-    for ident in l.list().values():
+    from ambrydoc import app, configure_application, setup_logging
+    import ambrydoc.views as views
+    from ambry.warehouse.server import exracts_blueprint
 
-        b = l.get(ident.vid)
+    import logging
+    from logging import FileHandler
+    import webbrowser
+    import socket
 
-        if not b:
-            continue
+    if args.port:
+        port = args.port
+    else:
+        port = 8081 # 45235 + random.randint(1, 5000)
 
+    cache_dir = l.doc_cache.cache.path('',missing_ok=True)
+
+    config = configure_application(dict(port = port, cache = cache_dir))
+
+    file_handler = FileHandler(os.path.join(cache_dir, "web.log"))
+    file_handler.setLevel(logging.WARNING)
+    app.logger.addHandler(file_handler)
+
+    app.register_blueprint(exracts_blueprint,url_prefix='/warehouses')
+
+    if args.reindex:
+
+        l.sync_doc_json(clean=args.clean)
+
+        from ambrydoc import fscache
+        from ambrydoc.search import Search
+        from ambrydoc.cache import DocCache
+
+        print 'Updating the search index'
+
+        s = Search(DocCache(fscache()))
+        s.index(reset=args.clean)
+
+
+    print 'Serving documentation for cache: ', cache_dir
+
+    # Check for open port
+
+    while True:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            pass
-            #path, extracts = b.write_doc(l.doc_cache, library=l)
-            #prt("Wrote {}",path)
-        except:
-            err("Failed to write doc for: {}", ident.fqname)
+            sock.bind(('localhost', port))
+            sock.close()
+            break
+        except socket.error:
+            port += 1
 
-    path, extracts = l.write_doc_toc()
+    webbrowser.open("http://localhost:{}/".format(port))
 
-    print path
+    app.run(host=config['host'], port=port, debug=args.debug)
 
+def library_config(args, l, config):
+    from ..dbexceptions import ConfigurationError
 
-def library_doc(args, l, config):
-        from ..text import Renderer
+    if args.term:
 
-        cache = l.doc_cache
+        parts = args.term.split('=',1)
 
-        l.logger.info("Extracting to: {}".format(cache))
+        var = parts.pop(0);
+        val = parts.pop(0) if parts else None
 
-        r = Renderer(cache, library=l)
+        if not var in l.configurable:
+            raise ConfigurationError("Value {} is not configurable. Must be one of: {}".format(args.var, l.configurable))
 
-        path, extracts = r.write_library_doc()
+        if val:
+            setattr(l, var, val)
+        elif not val and '=' in args.term:
+            setattr(l, var, None)
+        else:
+            print getattr(l, var)
 
-        print path
+    else:
+        for e in l.database.get_config_group('library'):
+            print e
 
 def library_unknown(args, l, config):
     fatal("Unknown subcommand")
     fatal(args)
+
+def library_test(args, l, config):
+    import time
+    from ambry.util import toposort
+
+    print l.find_table_links('t03b5F001')
