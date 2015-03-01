@@ -314,11 +314,15 @@ class LibraryDb(object):
         return self.__class__(self.driver, self.server, self.dbname, self.username, self.password)
 
     def create_tables(self):
-
+        from sqlalchemy.exc import OperationalError
         tables = [ Dataset, Config, Table, Column, File, Partition, Code]
 
-        self.drop()
 
+        try:
+            self.drop()
+        except OperationalError:
+            pass
+        
         orig_schemas = {}
 
         for table in tables:
