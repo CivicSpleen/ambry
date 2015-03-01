@@ -163,7 +163,33 @@ def memoize(obj):
         return cache[key]
 
     return memoizer
-        
+
+
+def expiring_memoize(obj):
+    """Like memoize, but forgets after 10 seconds. """
+    from collections import defaultdict
+
+    cache = obj.cache = {}
+    last_access = obj.last_access = defaultdict(int)
+
+    @functools.wraps(obj)
+    def memoizer(*args, **kwargs):
+        import time
+
+        key = str(args) + str(kwargs)
+
+        if last_access[key] and last_access[key] + 10 < time.time():
+            if key in cache:
+                del cache[key]
+
+        last_access[key] = time.time()
+
+        if key not in cache:
+            cache[key] = obj(*args, **kwargs)
+        return cache[key]
+
+    return memoizer
+
 class Counter(dict):
     'Mapping where default values are zero'
     def __missing__(self, key):

@@ -343,9 +343,21 @@ class SqliteDatabase(RelationalDatabase):
 
     def delete(self):
 
+
         if os.path.exists(self.path):
-            os.remove(self.path)
+
             self.unlock()
+
+            files = [
+                self.path,
+                self.path +"-wal",
+                self.path +"-shm",
+                self.path +"-journal"]
+
+            for f in files:
+                if os.path.exists(f):
+                    os.remove(f)
+
 
     def add_view(self, name, sql):
 
