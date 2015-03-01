@@ -93,10 +93,11 @@ def _on_connect_geo(dbapi_con, con_record):
         # ( My code has become a Country song. )
 
         libs = [
+            "select load_extension('/usr/lib/x86_64-linux-gnu/libspatialite')",
             "select load_extension('/usr/lib/libspatialite.so')",
             "select load_extension('/usr/lib/libspatialite.so.3')",
             "select load_extension('/usr/lib/x86_64-linux-gnu/libspatialite.so.5')",
-            "select load_extension('/usr/lib/x86_64-linux-gnu/libspatialite')",
+
         ]
 
 
