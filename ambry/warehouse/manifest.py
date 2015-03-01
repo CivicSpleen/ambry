@@ -72,6 +72,7 @@ class Manifest(object):
 
     partitions = None
 
+
     def __init__(self, file_or_data, logger=None):
 
         from ..dbexceptions import ConfigurationError

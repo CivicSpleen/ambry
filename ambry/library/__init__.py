@@ -678,18 +678,24 @@ class Library(object):
     def remove_store(self, uid):
         from ..dbexceptions import NotFoundError
 
-        w = self.warehouse(uid)
-        w.delete()
+        try:
+            w = self.warehouse(uid)
+            w.delete()
+        except NotFoundError:
+            self.logger.error("Didn't find warehouse for uid: {}".format(uid))
 
         s = self.store(uid)
 
-        if not s:
-            raise NotFoundError("Didn't find store for uid '{}' ".format(uid))
 
-        self.doc_cache.remove_store(s.ref)
+        if s:
+            self.doc_cache.remove_store(s.ref)
 
-        self.database.session.delete(s)
-        self.database.commit()
+            self.database.session.delete(s)
+            self.database.commit()
+        else:
+            self.doc_cache.remove_store(uid)
+            self.logger.error("Didn't find store for uid '{}' ".format(uid))
+
 
 
     def warehouse(self, uid):

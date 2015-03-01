@@ -109,7 +109,6 @@ def root_list(args, l, st, rc):
     ##
     ## Listing warehouses and collections is different
 
-
     if args.collection:
 
         for f in l.manifests:
@@ -127,10 +126,17 @@ def root_list(args, l, st, rc):
 
     if args.warehouse:
 
-        fields = ['title','summary','dsn','url','cache']
+        if args.plain:
+            fields = []
+        else:
+            fields = ['title','dsn','summary','url','cache']
 
         format = '{:5s}{:10s}{}'
         def _get(s,f):
+
+            if f == 'dsn':
+                f = 'path'
+
             try:
                 return s.data[f] if f in s.data else getattr(s, f)
             except AttributeError:
@@ -138,7 +144,7 @@ def root_list(args, l, st, rc):
 
         for s in l.stores:
             print s.ref
-            print format.format('', 'dsn', s.path)
+
             for f in fields:
                 if _get(s,f):
                     print format.format('',f,_get(s,f))

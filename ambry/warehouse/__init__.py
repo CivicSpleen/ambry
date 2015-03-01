@@ -478,7 +478,7 @@ class Warehouse(object):
         # we can remove them.
         # TODO Should also do this for tables.
         for f in (self.library.files.query.type(self.library.files.TYPE.EXTRACT).source_url(manifest.uid)).all:
-            f.state = 'delatable'
+            f.state = 'deleteable'
             self.library.files.merge(f)
 
         # Update the manifest with bundle information, since it doesn't normally have access to a library

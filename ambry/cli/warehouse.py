@@ -318,6 +318,8 @@ def warehouse_install(args, w ,config):
     if args.name_only:
         print w.database.dsn
 
+    w.close()
+
 
 
 def warehouse_extract(args, w, config):
