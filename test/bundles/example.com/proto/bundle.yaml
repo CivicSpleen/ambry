@@ -1,10 +1,14 @@
 about:
+    access: null
+    grain: null
     groups: []
     license: null
     rights: null
+    space: null
     subject: null
     summary: null
     tags: []
+    time: null
     title: A Bundle that just provides prototype columns for other bundles.
 contact_bundle:
     creator:

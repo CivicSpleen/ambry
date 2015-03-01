@@ -1,10 +1,14 @@
 about:
+    access: null
+    grain: null
     groups: []
     license: null
     rights: null
+    space: null
     subject: null
     summary: Test of importing shapefiles and copying them with inserters.
     tags: []
+    time: null
     title: Geographic test.
 contact_bundle:
     creator:

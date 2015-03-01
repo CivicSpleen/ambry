@@ -167,8 +167,11 @@ class Warehouse(object):
     def delete(self):
         self.database.enable_delete = True
         self.database.drop()
+
+        self.database.delete()
         self.wlibrary.database.enable_delete = True
         self.wlibrary.database.drop()
+        #self.wlibrary.database.delete()
 
     def exists(self):
         return self.database.exists()

@@ -2,11 +2,9 @@ TITLE: A Health Manifest
 
 This is a fake education file manifest. Well, actually, a test manifest.
 
-UID: mQaiWWgy2G
+UID: mQaiWWgy2F
 AUTHOR: Eric Busboom <eric@sandiegodata.org>
 
-DATABASE: sqlite:///example_manifest.db
-CACHE: example_manifest
 
 PARTITIONS:
 

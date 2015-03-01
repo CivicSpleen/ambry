@@ -678,13 +678,19 @@ class Library(object):
     def remove_store(self, uid):
         from ..dbexceptions import NotFoundError
 
+        w = self.warehouse(uid)
+        w.delete()
+
         s = self.store(uid)
 
         if not s:
             raise NotFoundError("Didn't find store for uid '{}' ".format(uid))
 
+        self.doc_cache.remove_store(s.ref)
+
         self.database.session.delete(s)
         self.database.commit()
+
 
     def warehouse(self, uid):
 
@@ -1325,7 +1331,6 @@ class Library(object):
 
             local_manifest.link_store(store)
 
-
             # This is the cheaper way to copy links, but it only works when the links
             # are one-directional.
             local_manifest.data['tables'] = remote_manifest.data.get('tables', [])
@@ -1391,6 +1396,7 @@ class Library(object):
 
         ##
         # Each of the bundles and schemas
+        # The library index is updated incrementally from doc_cache.update_library_bundle
 
         for vid in self.list():
 

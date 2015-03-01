@@ -150,10 +150,6 @@ class SqliteAttachmentMixin(object):
 
 
 
-
-
-
-
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
@@ -344,6 +340,12 @@ class SqliteDatabase(RelationalDatabase):
             os.remove(self.path)
         self.unlock()
 
+
+    def delete(self):
+
+        if os.path.exists(self.path):
+            os.remove(self.path)
+            self.unlock()
 
     def add_view(self, name, sql):
 
@@ -579,9 +581,6 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin,SqliteDatabase):
 
             self.post_create()
 
-    def delete(self):
-        os.remove(self.path)
-        self.unlock()
 
 
     @property

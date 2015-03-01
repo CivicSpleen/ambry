@@ -1,10 +1,14 @@
 about:
+    access: null
+    grain: null
     groups: []
     license: null
     rights: null
+    space: null
     subject: null
     summary: This example uses two other bundles as dependencies and has a few sources
     tags: []
+    time: null
     title: An Example That Uses Other Bundles
 contact_bundle:
     creator:
