@@ -322,7 +322,7 @@ class LibraryDb(object):
             self.drop()
         except OperationalError:
             pass
-        
+
         orig_schemas = {}
 
         for table in tables:
