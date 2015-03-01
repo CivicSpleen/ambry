@@ -40,7 +40,7 @@ pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 ###
 
 if [ ! -z "$is_dev" ]; then
-    pip install -e "git+https://github.com/clarinova/ambry.git#egg=ambry"
+    pip install -e "git+https://github.com/CivicKnowledge/ambry.git@develop#egg=ambry"
 else
     pip install ambry
 fi
