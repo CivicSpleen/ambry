@@ -1444,10 +1444,12 @@ class Library(object):
     @property
     def doc_cache(self):
         """Return the documentation cache. """
-        from ambrydoc.cache import  DocCache
+        try:
+            from ambrydoc.cache import  DocCache
 
-        return DocCache(self._doc_cache if self._doc_cache else self.cache.subcache('_doc'))
-
+            return DocCache(self._doc_cache if self._doc_cache else self.cache.subcache('_doc'))
+        except ImportError:
+            return None
     @property
     def warehouse_cache(self):
         """Cache for warehouse Sqlite databases and extracts"""
