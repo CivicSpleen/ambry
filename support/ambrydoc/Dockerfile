@@ -24,7 +24,7 @@ RUN dpkg-reconfigure locales
 RUN pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
 RUN pip install git+https://github.com/CivicKnowledge/ckcache.git
-RUN pip install git+https://github.com/CivicKnowledge/ambrydoc.git
+RUN pip install git+https://github.com/CivicKnowledge/ambrydoc.git #refresh1
 RUN pip install git+https://github.com/civicknowledge/ambry.git #refresh1
 
 VOLUME /ambry
