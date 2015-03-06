@@ -139,6 +139,8 @@ class SqlitePartition(PartitionBase):
         for table in self.data.get('tables',[]):
             try: self.database.query("DELETE FROM {}".format(table))
             except: pass
+
+        return self
         
 
     def optimal_rows_per_segment(self, size = 100*1024*1024, max=200000):
