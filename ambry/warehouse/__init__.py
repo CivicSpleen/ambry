@@ -690,6 +690,9 @@ class Warehouse(object):
                 except KeyError:
                     pass # Unsplit names ( cols added in SQL ) don't have any of the keys
 
+                if not 'datatype' in d:
+                    d['datatype'] = Column.convert_python_type(type(v), col_name)
+
                 t.add_column(**d)
 
             s.commit()

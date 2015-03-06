@@ -601,6 +601,7 @@ class Column(Base):
 
         if not self.datatype:
             from dbexceptions import ConfigurationError
+            raise Exception("Column '{}' has no datatype".format(self.name))
             raise ConfigurationError("Column '{}' has no datatype".format(self.name))
 
         try:

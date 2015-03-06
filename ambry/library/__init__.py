@@ -1461,6 +1461,7 @@ class Library(object):
 
             return DocCache(self._doc_cache if self._doc_cache else self.cache.subcache('_doc'))
         except ImportError:
+            raise
             return None
     @property
     def warehouse_cache(self):

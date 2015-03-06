@@ -11,16 +11,20 @@ class Test(TestBase):
     def setUp(self):
         self.yaml_config = """
 about:
+    access: null
+    grain: null
     groups:
     - Group 1
     - Group 2
     license: license
     rights: rights
+    space: null
     subject: subject
     summary: summary
     tags:
     - Tag1
     - Tag 2
+    time: null
     title: title
 build:
     baz: bingo
@@ -495,6 +499,13 @@ about:
         print t.about.html()
 
 
+    def test_list(self):
+        from ambry.bundle.meta import Top
+        import yaml
+
+        t = Top(yaml.load(self.yaml_config))
+        for x in  t.about.groups:
+            print x
 
 
 def suite():

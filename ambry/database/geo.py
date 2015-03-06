@@ -39,9 +39,6 @@ class GeoDb(PartitionDb):
         recover_geometry(self.connection, table_name, column_name, geometry_type, srs = srs)
 
 
-    # In GeoDBs, create() is useless. The database creation happens in the TableShapefile
-    # constructor, called from the inserter. After that is run, the _post_create method is called
-    # def create(self):
 
     def _on_create_connection(self, connection):
         '''Called from get_connection() to update the database'''

@@ -599,8 +599,19 @@ def bundle_config_scrape(args, b, st, rc):
     d = dict(external_documentation={}, sources = {} )
 
     for link in soup.findAll('a'):
-        text = str(link.string)
+
+
+        if not link:
+            continue;
+
+        if link.string:
+            text = str(link.string.encode('ascii','ignore'))
+        else:
+            text = 'None'
         url = link.get('href')
+
+        if not url:
+            continue
 
         if 'javascript' in url:
             continue;

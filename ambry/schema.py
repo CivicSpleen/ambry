@@ -1445,10 +1445,12 @@ class {name}(Base):
                                     data = dict(has_codes=1) if has_codes else {})
 
                     if has_codes:
-                        self.add_column(table, name+'_codes',datatype='varchar',
-                        description='Non-numeric codes extracted from the {} column'.format(name),
-                        data = {'is_code' : 1},
-                        derivedfrom=orm_col.id_)
+                        if False:
+                            # This mostly just muchs up loading files be altering the header.
+                            self.add_column(table, name+'_codes',datatype='varchar',
+                            description='Non-numeric codes extracted from the {} column'.format(name),
+                            data = {'is_code' : 1},
+                            derivedfrom=orm_col.id_)
 
 
 

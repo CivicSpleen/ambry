@@ -737,7 +737,7 @@ def find_containment(containers, containeds, method = 'contains'):
                 yield (contained, contained_obj, container_geometry, container_obj)
 
 
-def recover_geometry(connection, table_name, column_name, geometry_type, srs=None):
+def recover_geometry(connection, table_name, column_name, geometry_type=None, srs=None):
     from ..orm import Geometry
 
     assert table_name
@@ -745,6 +745,11 @@ def recover_geometry(connection, table_name, column_name, geometry_type, srs=Non
 
     if not srs:
         srs = Geometry.DEFAULT_SRS
+
+    if geometry_type is None or geometry_type.lower() == 'blob':
+        # If the geometry type isn't defined, us the type of the first record.
+        row = connection.execute('SELECT GeometryType({}) FROM {} LIMIT 1'.format(column_name, table_name)).fetchone()
+        geometry_type = row[0]
 
     connection.execute(
         'UPDATE {} SET {} = SetSrid({}, {});'.format(table_name, column_name, column_name, srs))

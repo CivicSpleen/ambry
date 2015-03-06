@@ -524,18 +524,22 @@ class BundleFilesystem(Filesystem):
         
         """
         import os.path
-        
+
         opened = False
         if isinstance(f, basestring):
-            
-            if not os.path.exists(f):
-                f = self.bundle.source(f)
-                if not f:
-                    f = self.path(f) # Assume it is relative to the bundle filesystem
-            
+            if not f.endswith('.csv'):# Maybe the name of a source
+                if f in self.bundle.metadata.sources:
+                    f = self.bundle.source(f)
+            elif not os.path.abspath(f):
+                f = self.filesystem.path(f)
+
             f = open(f,'rb')
             opened = True
-        
+
+        else:
+            opened = False
+            # f is already an open file
+
         import csv
         
         reader  = csv.DictReader(f)
@@ -546,6 +550,8 @@ class BundleFilesystem(Filesystem):
             if isinstance(key, (list,tuple)):
                 def make_key(row):
                     return tuple([ str(row[i].strip()) if row[i].strip() else None for i in key])
+            elif callable(key):
+                pass
             else:
                 def make_key(row):
                     return row[key]
@@ -556,6 +562,9 @@ class BundleFilesystem(Filesystem):
                      
             if key is None:
                 out.append(row)
+            elif callable(key):
+                k, v = key(row)
+                out[k] = v
             else:
                 out[make_key(row)] = row
         

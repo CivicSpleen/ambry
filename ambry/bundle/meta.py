@@ -65,6 +65,13 @@ class Names(DictGroup):
     vname = ScalarTerm()
 
 
+class RowSpecDictTerm(DictTerm):
+
+    data_start_line = ScalarTerm()
+    data_end_line = ScalarTerm()
+    header_lines = ListTerm()
+    header_comment_lines = ListTerm()
+
 class SourceTerm(DictTerm):
     url = ScalarTerm()
     title = ScalarTerm(store_none=False) # Title for use in table.
@@ -80,6 +87,7 @@ class SourceTerm(DictTerm):
     table = ScalarTerm(store_none=False)  # For auto imports, name of table to load into.
     conversion = ScalarTerm(store_none=False)  # An alternate URL or regular expression for a file in the source store
     foreign_key = ScalarTerm(store_none=False)  # ID of the foreign key for the table.
+    row_spec = RowSpecDictTerm(store_none=False) # Spec for non data rows. 'start' for first line of data, 'header' for sclar/list of header lines
 
     def __nonzero__(self):
         return bool(self.url or self.file or self.description or self.dd_url)

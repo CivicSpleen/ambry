@@ -45,7 +45,7 @@ class SqliteWarehouse(RelationalWarehouse):
                 table = partition.get_table(source_table_name)
 
                 for column in table.columns:
-                    if column.type_is_geo():
+                    if column.type_is_geo() or column.name.endswith('geometry'):
                         recover_geometry(conn, dest_table_name, column.fq_name, column.datatype )
 
         self.logger.info('done {}'.format(partition.identity.vname))

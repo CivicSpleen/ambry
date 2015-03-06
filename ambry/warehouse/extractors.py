@@ -166,8 +166,29 @@ class OgrExtractor(Extractor):
         """Return the name of the most common geometry type and the coordinate dimensions"""
         ce = database.connection.execute
 
-        types = ce('SELECT count(*) AS count, GeometryType(geometry) AS type,  CoordDimension(geometry) AS cd '
-                   'FROM {} GROUP BY type ORDER BY type desc;'.format(table)).fetchall()
+
+        # Only deal with the first geometry column per table. Unfortunately, the table is often
+        # actually a view, so you can't use it to look up the geometry column in the
+        # 'geometry_columns' table. Instead, we'll have to get al of the geometry columns, and see
+        # which ones we have in out table.
+        q = "SElECT f_geometry_column FROM geometry_columns " .format(table)
+        geo_cols = [ row['f_geometry_column'] for row in ce(q).fetchall()]
+
+        all_cols = ce("SELECT * FROM {} LIMIT 1".format(table)).fetchone().keys()
+
+        geo_col = None
+        for col in all_cols:
+            if col in geo_cols:
+                geo_col = col
+                break
+
+        if not geo_col:
+            print all_cols
+            print geo_cols
+
+        types = ce('SELECT count(*) AS count, GeometryType({geo}) AS type,  CoordDimension({geo}) AS cd '
+                   'FROM {table} GROUP BY type ORDER BY type desc;'
+                   .format(geo=geo_col, table=table)).fetchall()
 
         t = types[0][1]
         cd = types[0][2]
@@ -175,7 +196,7 @@ class OgrExtractor(Extractor):
         if not t:
             raise ExtractError("No geometries in {}".format(table))
 
-        return t, cd
+        return t, cd, geo_col
 
     geo_map = {
         'POLYGON': ogr.wkbPolygon,
@@ -220,7 +241,10 @@ class OgrExtractor(Extractor):
 
             name = self.mangle_name(str(row['name']))
 
-            fdfn = ogr.FieldDefn(name, self.ogr_type_map(row['type']))
+            try:
+                fdfn = ogr.FieldDefn(name, self.ogr_type_map(row['type']))
+            except KeyError:
+                continue
 
             print "CREATE", name, self.ogr_type_map(row['type'])
 
@@ -252,6 +276,9 @@ class OgrExtractor(Extractor):
 
     def mangle_name(self, name):
 
+        if '_' in name:
+            _, name = name.split('_', 1)
+
         if len(name) <= self.max_name_len:
             return name
 
@@ -264,28 +291,28 @@ class OgrExtractor(Extractor):
                 self.mangled_names[name] = mname
                 return mname
 
-        raise Exception("Ran out of names")
+        raise Exception("Ran out of names {} is still in {}".format(name, self.mangled_names.values() ))
 
     def _extract_shapes(self, abs_dest, table):
 
         import ogr
         import os
 
-        t, cd = self.geometry_type(self.database, table)
+        t, cd, geo_col = self.geometry_type(self.database, table)
 
         ds, layer = self.new_layer(abs_dest, table, t)
 
         self.create_schema(self.database, table, layer)
 
         ## TODO AsTest, etc, will have to change to ST_AsText for Postgis
-        q = "SELECT *, AsText(Transform(geometry, {} )) AS _wkt FROM {}".format(self.epsg, table)
+        q = "SELECT *, AsText(Transform({}, {} )) AS _wkt FROM {}".format(geo_col,self.epsg, table)
 
         for i,row in enumerate(self.database.connection.execute(q)):
 
             feature = ogr.Feature(layer.GetLayerDefn())
 
             for name, value in row.items():
-                if name.lower() in ('geometry', 'wkt', 'wkb', '_wkt'):
+                if name.lower() in (geo_col, 'geometry', 'wkt', 'wkb', '_wkt'):
                     continue
 
                 if value:
@@ -299,6 +326,10 @@ class OgrExtractor(Extractor):
                     except Exception as e:
                         print 'Failed for {}={} ({})'.format(name, value, type(value))
                         raise
+                    except NotImplementedError as e:
+                        print e
+                        raise
+
 
             geometry = ogr.CreateGeometryFromWkt(row['_wkt'])
 

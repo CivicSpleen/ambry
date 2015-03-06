@@ -35,11 +35,20 @@ class LoaderBundle(BuildBundle):
         except AttributeError:
             return v
 
+    @staticmethod
+    def test_type(type_, v):
+
+        try:
+            type_(v)
+            return True
+        except:
+            return False
+
 class CsvBundle(LoaderBundle):
     """A Bundle variant for loading CSV files"""
 
     delimiter = None
-
+    col_map = None  # If set, maps column headers
 
     def get_csv_reader(self, f, as_dict = False, sniff = False):
         import csv
@@ -122,7 +131,12 @@ class CsvBundle(LoaderBundle):
                 # It might seem inefficient to return the header every time, but it really adds only a
                 # fraction of a section for millions of rows.
 
-                header = prefix_headers + r.next()
+                header = r.next()
+
+                if self.col_map:
+                    header = [self.col_map.get(col, col) for col in header]
+
+                header = prefix_headers + header
 
                 header = [ x if x else "column{}".format(i) for i, x in enumerate(header)]
 
@@ -171,6 +185,9 @@ class CsvBundle(LoaderBundle):
 
             header, row = self.gen_rows(source_name, as_dict=False).next()
 
+            if self.col_map:
+                header = [self.col_map.get(col, col) for col in header]
+
             self.schema.update_from_iterator(table.name,
                                              header=self.mangle_header(header),
                                              iterator=self.gen_rows(source_name, as_dict=False),
@@ -211,6 +228,10 @@ class CsvBundle(LoaderBundle):
         return self.partitions.find_or_new(table=table)
 
 
+    def build_modify_row(self, p, source, row):
+        """Called for every roow to allow subclasses to modify rows. """
+        pass
+
     def build_from_source(self, source_name):
 
         source = self.metadata.sources[source_name]
@@ -226,19 +247,15 @@ class CsvBundle(LoaderBundle):
 
         header = [c.name for c in p.table.columns]
 
-        mod_row = getattr(self, 'build_modify_row', False)
-
         with p.inserter() as ins:
             for _, row in self.gen_rows(source_name):
                 lr(str(p.identity.name))
 
                 d = dict(zip(header, row))
 
-                if mod_row:
-                    mod_row(p, source, d)
+                self.build_modify_row(p, source, d)
 
                 ins.insert(d)
-
 
 
     def build(self):
@@ -251,6 +268,8 @@ class ExcelBuildBundle(CsvBundle):
     workbook = None # So the derived classes can et to the workbook, esp for converting dates
 
     decode = False # Set to an encoding from which to decode all strings.
+
+    col_map = None # If set, maps column headers
 
     def __init__(self, bundle_dir=None):
         '''
@@ -279,6 +298,59 @@ class ExcelBuildBundle(CsvBundle):
 
         return values
 
+    def intuit_row_spec(self, source_name, is_data_line, is_header_line, is_header_comment_line):
+        """Classify the rows of an excel file as header, comment and start of data
+        The resulting dict should be assigned into the source.row_spec
+
+            lf = dict(
+                is_data_line = lambda row:self.test_type(int, row[5])
+                is_header_comment_line = lambda row: len(filter(bool, row)) > 0 and len(filter(bool, row)) <= 3,
+                is_header_line = lambda row: len(filter(bool, row)) > 3
+            )
+
+            self.metadata.sources[source_name].row_spec = self.intuit_row_spec(source_name, **lf)
+
+        """
+
+
+        from xlrd import open_workbook
+
+        fn, sheet_num = self.get_wb_sheet(source_name)
+
+        wb = open_workbook(fn)
+        s = wb.sheets()[sheet_num]
+
+        data_start_line = None
+        data_end_line = None
+        header_lines = [3, 4]
+
+        header = []
+        header_comments = []
+
+        for i in range(0, s.nrows):
+            row = self.srow_to_list(i, s)
+
+            if not data_start_line:
+
+                if is_data_line(row):
+                    data_start_line = i
+
+                elif is_header_comment_line(row):
+                    header_comments.append(i)
+                elif is_header_line(row):
+                    header.append(i)
+
+            elif data_start_line and not data_end_line:
+                if not is_data_line(row):
+                    data_end_line = i
+
+        return dict(
+            data_start_line=data_start_line,
+            data_end_line=data_end_line,
+            header_comment_liness=header_comments,
+            header_lines=header
+        )
+
     def get_wb_sheet(self, source, segment = None):
 
         if not source:
@@ -304,20 +376,38 @@ class ExcelBuildBundle(CsvBundle):
 
             return self.srow_to_list(0, s)
 
+
+
     def gen_rows(self, source=None, as_dict=False, segment = None,   prefix_headers = None ):
         """Generate rows for a source file. The source value ust be specified in the sources config"""
         from xlrd import open_workbook
+
 
         if prefix_headers is None:
             prefix_headers = self.prefix_headers
 
         fn, sheet_num = self.get_wb_sheet(source, segment)
 
+        row_spec = self.metadata.sources[source].row_spec
+
+
+        if row_spec is not None:
+            data_start_line = row_spec.data_start_line
+            data_end_line = row_spec.data_end_line
+
+            header_lines = list(row_spec.header_lines)
+            header_comment_lines = list(row_spec.header_comment_lines)
+
+        else:
+            data_start_line = 1
+            data_end_line = None
+            header_lines = [0]
+            header_comment_lines = []
+
         self.log("Generate rows for: {}, sheet = {}".format(fn, sheet_num))
 
-        header = self.source_header(source, segment) # if as_dict else None
-
-        header = prefix_headers + header
+        headers = []
+        header_comments = []
 
         with open(fn) as f:
 
@@ -330,6 +420,48 @@ class ExcelBuildBundle(CsvBundle):
             for i in range(1,s.nrows):
 
                 row = self.srow_to_list(i, s)
+
+                if i < data_start_line:
+                    if i in header_lines:
+                        headers.append([str(unicode(x).encode('ascii','ignore')) for x in row])
+                    if i in header_comment_lines:
+                        header_comments.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
+
+                    continue
+
+                if i == data_start_line:
+                    # All of the header line are before this, so it is safe to construct the header.
+
+                    if len(headers) > 1:
+
+                        # If there are gaps in the values in the first header line, extend them forward
+                        hl1 = []
+                        last = None
+                        for x in headers[0]:
+                            if not x:
+                                x = last
+                            else:
+                                last = x
+
+                            hl1.append(x)
+
+                        headers[0] = hl1
+
+                        header = [' '.join(col_val if col_val else '' for col_val in col_set) for col_set in zip(*headers)]
+                    elif len(headers) > 0:
+                        header = headers.pop()
+                    else:
+                        header = []
+
+                    if self.col_map:
+                        header = [ self.col_map.get(col,col) for col in header]
+
+
+                    header = prefix_headers + header
+
+                    self.header_comment = [' '.join(x) for x in zip(*header_comments)]
+
+                    continue
 
                 if as_dict:
                     yield dict(zip(header, [None]*len(prefix_headers)  + row))

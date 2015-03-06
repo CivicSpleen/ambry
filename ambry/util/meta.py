@@ -479,6 +479,8 @@ class DictGroup(Group, collections.MutableMapping):
             return self.__setitem__(k, v)
 
     def __getattr__(self, k):
+
+
         if k.startswith('_'):
             object.__getattribute__(self, k)
         else:
@@ -493,6 +495,7 @@ class DictGroup(Group, collections.MutableMapping):
 
 
     def __setitem__(self, key, value):
+
         if not key in self._members:
             raise AttributeError("No such term in {}: {}. Has: {}"
                                  .format(self._key, key, [key for key in self._members.keys()]))
@@ -590,21 +593,6 @@ class TypedDictGroup(DictGroup):
         o = self.get_term_instance(key)
         o.set(value)
 
-    def html(self):
-        out = ''
-
-        for k,v in self.items():
-            ti = self.get_term_instance(k)
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
-
-        return ("""
-<h2 class="{cls}">{title}</h2>
-<table class="{cls}">
-{out}</table>
-"""
-                .format(title=self._key.title(),
-                        cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
-                        out=out))
 
 class VarDictGroup(DictGroup):
     """A Dict group that doesnt' use terms to enforce a structure.
@@ -686,7 +674,7 @@ class ListGroup(Group, collections.MutableSequence):
         self.__setitem__(index, value)
 
     def ensure_index(self,index):
-
+        """Ensure the index is in the list by possibly expanding the array"""
         if index >= len(self._term_values):
             o = self.get_term_instance(index)
 
@@ -785,6 +773,7 @@ class Term(object):
         instance._term_values[self._key] = v
 
     def __get__(self, instance, owner):
+
         if self._key is None:
             raise Exception(self._key)
         else:
@@ -870,6 +859,18 @@ class DictTerm(Term, collections.MutableMapping):
 
         return o
 
+    def ensure_index(self, index):
+        """Ensure the index is in the dict"""
+
+        # This sometimes will put a term at to high of a level, not sure what it is really for.
+        return
+
+        if not index in self._parent._term_values:
+            raise Exception()
+            print 'ENSURING', self._key, index
+            self._parent._term_values[index] = None
+
+
     @property
     def _term_values(self):
         # This only works after being instantiated in __get__, which sets
@@ -892,7 +893,7 @@ class DictTerm(Term, collections.MutableMapping):
     def __getattr__(self, k):
 
         if k.startswith('_'):
-            return object.__getattr__(self, k)
+            return object.__getattribute__(self, k)
         else:
             return self.__getitem__(k)
 
@@ -999,10 +1000,12 @@ class ListTerm(Term):
         instance._term_values[self._key] = list(v)
 
     def set(self, v):
+
         self.__set__(self._parent, v)
 
     def get(self):
         return self
+
 
     def null_entry(self):
         return []
@@ -1010,3 +1013,27 @@ class ListTerm(Term):
     def is_empty(self):
         return all([v is None for v in self])
 
+    @property
+    def _term_values(self):
+        # This only works after being instantiated in __get__, which sets
+        # _parent
+
+
+        if not self._key in self._parent._term_values:
+            self._parent._term_values[self._key] = []
+
+        tv = self._parent._term_values[self._key]
+
+        assert tv is not None
+
+        return tv
+
+    def __getitem__(self, key):
+        return self._term_values[key]
+
+    def __setitem__(self, key, value):
+
+        self._term_values[key] = value
+
+    def __iter__(self):
+        return iter(self._term_values)
