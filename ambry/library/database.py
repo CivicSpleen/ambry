@@ -442,7 +442,7 @@ class LibraryDb(object):
         except:
             return None
 
-    def get_config_group(self, group):
+    def get_config_group(self, group, d_vid=ROOT_CONFIG_NAME_V):
 
         from ambry.orm import Config as SAConfig
 
@@ -451,10 +451,12 @@ class LibraryDb(object):
         try:
 
             return s.query(SAConfig).filter(SAConfig.group == group,
-                                         SAConfig.d_vid == ROOT_CONFIG_NAME_V).all()
+                                         SAConfig.d_vid == d_vid).all()
 
         except:
             return None
+
+
 
 
     def get_config_rows(self, d_vid):

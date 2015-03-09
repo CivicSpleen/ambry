@@ -635,8 +635,6 @@ class Warehouse(object):
 
         t.data['count'] = int(v[0])
 
-
-
     def build_schema(self, t):
 
         from ..orm import Column
@@ -689,6 +687,9 @@ class Warehouse(object):
                     del d['id_']
                 except KeyError:
                     pass # Unsplit names ( cols added in SQL ) don't have any of the keys
+
+                if d['altname']:
+                    d['name'], d['altname'] = d['altname'], d['name']
 
                 if not 'datatype' in d:
                     d['datatype'] = Column.convert_python_type(type(v), col_name)

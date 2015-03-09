@@ -481,7 +481,7 @@ class RelationalDatabase(DatabaseInterface):
                                  SAConfig.d_vid == d_vid).first()
 
 
-    def get_config_value_group(self, d_vid, group):
+    def get_config_group(self, d_vid, group):
         from ambry.orm import Config as SAConfig
 
         d = {}

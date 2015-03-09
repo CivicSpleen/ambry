@@ -1,13 +1,17 @@
 about:
+    access: null
+    grain: null
     groups: []
     license: other-open
     rights: url of rights document
+    space: null
     subject: What the data is about
     summary: An example bundle
     tags:
     - one
     - two
     - three
+    time: null
     title: This is the Title
 contact_bundle:
     creator:

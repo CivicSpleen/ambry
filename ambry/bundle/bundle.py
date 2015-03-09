@@ -176,7 +176,7 @@ class Bundle(object):
             return v
 
     def get_value_group(self, group):
-        return self.database.get_config_value_group(self.dataset.vid, group)
+        return self.database.get_config_group(group, d_vid=self.dataset.vid)
 
 
     def _dep_cb(self, library, key, name, resolved_bundle):
@@ -447,9 +447,14 @@ class DbBundleBase(Bundle):
         import markdown
 
         d = {}
+        metadata = self.metadata.dict
+        d['identity'] = metadata['identity']
+        d['identity'].update(metadata['names'])
+        del metadata['names']
+        del metadata['identity']
+        d['meta'] = metadata
 
         d['partitions'] = {p.vid: p.nonull_dict for p in self.partitions}
-
         d['tables'] = {t.vid: t.nonull_dict for t in self.schema.tables}
 
         ds = self.library.dataset(self.identity.vid) # Linked_stores and linked_manifests is only in the library record
@@ -462,14 +467,6 @@ class DbBundleBase(Bundle):
 
         for pvid, p in d['partitions'].items():
             p['table_vids'] = [ tables_by_name[t]['vid']  for t in p['tables']]
-
-        metadata = self.metadata.dict
-
-        d['identity'] = metadata['identity']
-        d['identity'].update(metadata['names'])
-        del metadata['names']
-        del metadata['identity']
-        d['meta'] = metadata
 
         d['counts'] = dict(
             tables=len(self.schema.tables),

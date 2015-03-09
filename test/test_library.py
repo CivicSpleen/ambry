@@ -841,13 +841,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         print l.files.query.path('path3').first
 
-    def test_ilibrary(self):
-
-        import ambry
-
-        l = ambry.ilibrary()
-        print l.find(name="clarinova.com")
-
 
     def test_adhoc(self):
         from ambry.library import new_library
@@ -857,6 +850,25 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         l = new_library(config, reset=True)
 
         print l.resolve('211sandiego.org-calls-p1ye2014-orig-calls')
+
+    def test_jdoc(self):
+        from ambry.library import new_library
+        from ambry.library.doccache import DocCache
+
+        config = get_runconfig().library('default')
+
+        l = new_library(config, reset=True)
+
+        print type(l._doc_cache)
+
+        dc = DocCache(l)
+
+        for d_vid, d in  dc.bundle_index().items():
+            print d_vid, d
+            print dc.bundle(d_vid)
+
+
+
 
 def suite():
     suite = unittest.TestSuite()

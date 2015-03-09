@@ -26,8 +26,6 @@ def _new_library(config):
     from database import LibraryDb
     from sqlalchemy.exc import OperationalError
 
-
-
     cache = new_cache(config['filesystem'])
 
     database = LibraryDb(**dict(config['database']))
@@ -73,7 +71,6 @@ def _new_library(config):
     else:
         warehouse_cache = cache.subcache('warehouses')
 
-
     l = Library(cache=cache,
                 doc_cache = doc_cache,
                 warehouse_cache = warehouse_cache,
@@ -84,9 +81,7 @@ def _new_library(config):
                 source_dir = source_dir,
                 host = host,
                 port = port,
-                urlhost=config.get('urlhost', None)
-
-    )
+                urlhost=config.get('urlhost', None))
 
     return l
 
@@ -288,8 +283,6 @@ class Library(object):
             for partition in bundle.partitions:
                 self.put_partition(bundle, partition, commit = commit)
 
-
-        ## Install the documentation
 
         return self.cache.path(ident.cache_key), installed
 
@@ -622,8 +615,24 @@ class Library(object):
                 print link_col, t_vid
 
 
+    def dataset(self, vid):
+        from ..orm import Dataset
+        from sqlalchemy.orm.exc import NoResultFound
 
+        return (self.database.session.query(Dataset).filter(Dataset.vid == vid).one())
 
+    def datasets(self):
+        from ..orm import Dataset
+
+        return (self.database.session.query(Dataset).all())
+
+    def bundle(self, vid):
+        """Returns a LibraryDbBundle for the given vid"""
+        from ..bundle import LibraryDbBundle
+
+        b = LibraryDbBundle(self.database, vid)
+        b._library = self
+        return b
 
     def partition(self, vid):
         from ..orm import Partition
@@ -638,26 +647,12 @@ class Library(object):
                 self.logger.error("No partition found: {} for {}".format(vid, self.database.dsn))
                 raise
 
-    def dataset(self, vid):
-        from ..orm import Dataset
-        from sqlalchemy.orm.exc import NoResultFound
-
-        return (self.database.session.query(Dataset).filter(Dataset.vid == vid).one())
-
     @property
     def partitions(self):
         from ..orm import Partition
 
         return (self.database.session.query(Partition).all())
 
-
-    def bundle(self, vid):
-        """Returns a LibraryDbBundle for the given vid"""
-        from ..bundle import LibraryDbBundle
-
-        b = LibraryDbBundle(self.database, vid)
-
-        return b
 
     @property
     def stores(self):
@@ -1372,7 +1367,6 @@ class Library(object):
         dc.put_bundle(b, force=force)
         dc.put_schema(b, force=force)
         dc.put_schemacsv(b, force=force)
-
         dc.update_library_bundle(b, self)
 
         tables = {}
@@ -1389,7 +1383,6 @@ class Library(object):
 
         dc.update_tables(tables)
         dc.update_protos(protos)
-
 
     def sync_doc_json(self, cache = None, clean = False):
         """Write the JSON for all bundles and the library"""
@@ -1449,9 +1442,6 @@ class Library(object):
             except Exception  as e:
                 self.logger.error("Failed to document warehouse '{}': {}".format(s.path, e))
                 raise
-
-
-
 
     @property
     def doc_cache(self):
