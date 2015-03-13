@@ -695,7 +695,7 @@ def _on_connect_bundle(dbapi_con, con_record):
         dbapi_con.execute('PRAGMA temp_store = MEMORY')
         dbapi_con.execute('PRAGMA cache_size = 50000')
         dbapi_con.execute('PRAGMA foreign_keys = OFF')
-    except:
+    except Exception as e:
         global_logger.error("Exception in {} ".format(dbapi_con))
         raise
 

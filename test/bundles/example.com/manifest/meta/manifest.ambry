@@ -8,5 +8,5 @@ example.com-combined-combined
 VIEW: example_combined
 
 SELECT  * 
-FROM pIjqPRbrGq001_combined 
-JOIN p00G002_example ON pIjqPRbrGq001_combined.cIjqPRbrGq01001_id = p00G002_example.c00G01001_id
+FROM pIjqPRbrGq001001_combined 
+JOIN p00G002001_example ON pIjqPRbrGq001001_combined.cIjqPRbrGq01001_id = p00G002001_example.c00G01001_id

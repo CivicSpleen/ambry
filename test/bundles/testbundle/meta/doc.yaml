@@ -38,22 +38,7 @@ documentation:
         \ for a list all of the codes. \n\nAsr\\_zone Codes\n===============\n\nThe\
         \ integer values in the asr\\_zone field are taken directly from the [SANGIS\
         \ parcel data](http://rdw.sandag.org/file_store/Parcel/Parcels.pdf). These\
-        \ values are: \n\n\t\u2554\u2550\u2550\u2550\u2550\u2566\u2550\u2550\u2550\
-        \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\
-        \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\
-        \u2550\u2550\u2550\u2550\u2557\n\t\u2551 -1 \u2551 Unset                 \
-        \          \u2551\n\t\u2551  0 \u2551 Unzoned                         \u2551\
-        \n\t\u2551  1 \u2551 Single family residential (R-1) \u2551\n\t\u2551  2 \u2551\
-        \ Minor multiple (R-2)            \u2551\n\t\u2551  3 \u2551 Restricted multiple\
-        \ (R-3)       \u2551\n\t\u2551  4 \u2551 Multiple residential (R-4)      \u2551\
-        \n\t\u2551  5 \u2551 Restricted commercial           \u2551\n\t\u2551  6 \u2551\
-        \ Commercial                      \u2551\n\t\u2551  7 \u2551 Industrial (M\
-        \ zone)             \u2551\n\t\u2551  8 \u2551 Agricultural              \
-        \      \u2551\n\t\u2551  9 \u2551 Special and/or misc.            \u2551\n\
-        \t\u255A\u2550\u2550\u2550\u2550\u2569\u2550\u2550\u2550\u2550\u2550\u2550\
-        \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\
-        \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\
-        \u2550\u255D\t\t\t\t\n\n\n\nAddresses and Geocoding\n=======================\n\
+        \ values are: \n\n\n\n\nAddresses and Geocoding\n=======================\n\
         SANDAG returns the position of incidents as a block address, and occasionally\
         \ as an intersection. Block addresses are the original address of the incident,\
         \ with the last two digits set to '00'. \n\nBefore geocoding, all of the original\

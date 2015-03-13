@@ -55,19 +55,6 @@ Asr\_zone Codes
 
 The integer values in the asr\_zone field are taken directly from the [SANGIS parcel data](http://rdw.sandag.org/file_store/Parcel/Parcels.pdf). These values are: 
 
-	╔════╦═════════════════════════════════╗
-	║ -1 ║ Unset                           ║
-	║  0 ║ Unzoned                         ║
-	║  1 ║ Single family residential (R-1) ║
-	║  2 ║ Minor multiple (R-2)            ║
-	║  3 ║ Restricted multiple (R-3)       ║
-	║  4 ║ Multiple residential (R-4)      ║
-	║  5 ║ Restricted commercial           ║
-	║  6 ║ Commercial                      ║
-	║  7 ║ Industrial (M zone)             ║
-	║  8 ║ Agricultural                    ║
-	║  9 ║ Special and/or misc.            ║
-	╚════╩═════════════════════════════════╝				
 
 
 

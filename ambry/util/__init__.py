@@ -1297,4 +1297,9 @@ def print_yaml(o):
 
     print (yaml.dump(o, default_flow_style=False, indent=4, encoding='utf-8'))
 
-
+# There is probably another function in Ambry that does this, but I can't remember where.
+def qualified_class_name(o):
+    module = o.__class__.__module__
+    if module is None or module == str.__class__.__module__:
+        return o.__class__.__name__
+    return module + '.' + o.__class__.__name__

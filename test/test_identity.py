@@ -531,9 +531,6 @@ class Test(TestBase):
         p = bp.find_or_new_geo(time = 't2', space='s1')
         self.assertEquals('source-dataset-subset-variation-t2-s1-geo-0.0.1~piEGPXmDC8003001', p.identity.fqname)
 
-        p = bp.find_or_new_csv(time = 't2', space='s1')
-        self.assertEquals('source-dataset-subset-variation-t2-s1-csv-0.0.1~piEGPXmDC8004001', p.identity.fqname)
-
 
         # Ok! Build!
 

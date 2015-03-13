@@ -173,7 +173,7 @@ class Partitions(object):
         from sqlalchemy import or_
 
         if isinstance(id_, PartitionIdentity):
-            id_ = id_.identity.id_
+            id_ = id_.id_
 
 
         s = self.bundle.database.session

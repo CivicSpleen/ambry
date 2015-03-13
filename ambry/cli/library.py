@@ -260,7 +260,6 @@ def library_remove(args, l, config):
         except NotFoundError:
             pass
 
-
     for name in args.terms:
 
         ident = l.resolve(name, location=None)
@@ -268,6 +267,7 @@ def library_remove(args, l, config):
         if ident:
             remove_by_ident(ident)
             continue
+
 
         if name.startswith('s'):
             l.remove_store(name)
@@ -531,8 +531,6 @@ def library_doc(args, l, rc):
 
     if args.reindex:
 
-        l.sync_doc_json(clean=args.clean)
-
         from ambrydoc import fscache
         from ambrydoc.search import Search
         from ambrydoc.cache import DocCache
@@ -592,4 +590,4 @@ def library_test(args, l, config):
     import time
     from ambry.util import toposort
 
-    print l.find_table_links('t03b5F001')
+

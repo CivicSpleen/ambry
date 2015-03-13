@@ -588,6 +588,12 @@ def bundle_config_scrape(args, b, st, rc):
 
     page_url = b.metadata.external_documentation.download.url
 
+    if not page_url:
+        page_url = b.metadata.external_documentation.dataset.url
+
+    if not page_url:
+        fatal("Didn't get URL in either the external_documentation.download nor external_documentation.dataset config ")
+
     parts = list(urlparse.urlsplit(page_url))
 
     parts[2] = ''
@@ -608,6 +614,7 @@ def bundle_config_scrape(args, b, st, rc):
             text = str(link.string.encode('ascii','ignore'))
         else:
             text = 'None'
+
         url = link.get('href')
 
         if not url:
@@ -615,6 +622,8 @@ def bundle_config_scrape(args, b, st, rc):
 
         if 'javascript' in url:
             continue;
+
+        orig_url = url
 
         if url.startswith('http'):
             pass
@@ -629,22 +638,24 @@ def bundle_config_scrape(args, b, st, rc):
             continue
 
         try:
-            base, ext = base.split('.',1)
+            fn, ext = base.split('.',1)
         except ValueError:
+            fn = base
             ext = 'html'
 
-        if ext.lower() in ('zip', 'csv','xls','xlsx','txt'):
-            d['sources'][base] = dict(
+        if ext.lower() in ('zip', 'csv','xls','xlsx','xlsm', 'txt'): # xlsm is a bug that adss 'm' to the end of the url. No idea.
+            d['sources'][fn] = dict(
                 url = url,
                 description = text
             )
         elif ext.lower() in ('pdf','html'):
-            d['external_documentation'][base] = dict(
+            d['external_documentation'][fn] = dict(
                 url=url,
                 description=text,
                 title=text
             )
         else:
+
             pass
 
 

@@ -30,43 +30,30 @@ def warehouse_command(args, rc):
     if not args.database and args.subcommand == 'install':
         from ..warehouse.manifest import Manifest
         import os.path
-        from ..library.files import make_data_store_uid
 
         m = Manifest(args.term)
 
-        if m.is_geo:
-            dsnt = "spatialite:///{}.db"
-            type_ = "ambry.warehouse.sqlite.SpatialiteWarehouse"
-        else:
-            dsnt = "sqlite:///{}.db"
-            type_ = "ambry.warehouse.sqlite.SqliteWarehouse"
+        dsnt = "spatialite:///{}.db"  if m.is_geo else "sqlite:///{}.db"
 
-        dsn = dsnt.format(l.warehouse_cache.path(m.uid, missing_ok=True))
+        name = args.name if args.name else m.uid
 
-        s = l.files.install_data_store(dsn, type=type_, title = m.title, summary=m.summary['summary_text'])
+        dsn = dsnt.format(l.warehouse_cache.path(name, missing_ok=True))
 
-        database_id = s.ref
-
-        s = l.store(database_id)
-        config = database_config(s.path)
+        config = database_config(dsn)
 
         w = new_warehouse(config, l, logger=global_logger)
 
         if not w.exists():
             w.create()
 
-            w.uid = s.ref
-
-    else:
-        database_id = args.database
-
-    if  database_id:
+        database_uid = w.uid
+    elif args.database:
 
         # Check if the string is the uid of a database in the library.
-        s =  l.store(database_id)
+        s =  l.store(args.database)
 
         if not s:
-            raise ConfigurationError("Could not identitfy warehouse for term '{}'".format(database_id))
+            raise ConfigurationError("Could not identitfy warehouse for term '{}'".format(args.database))
 
         config = database_config(s.path)
 
@@ -87,14 +74,6 @@ def warehouse_command(args, rc):
     else:
         globals()['warehouse_'+args.subcommand](args, w,rc)
 
-def store_warehouse(l,w):
-    from ambry.util.packages import qualified_name
-
-    s = l.files.install_data_store(w.database.dsn, type = qualified_name(w),
-                               title=w.title, summary=w.summary,cache=w.cache_path)
-
-    return s.ref
-
 
 def warehouse_parser(cmd):
    
@@ -106,14 +85,8 @@ def warehouse_parser(cmd):
 
     whsp = whp.add_parser('install', help='Install a bundle or partition to a warehouse')
     whsp.set_defaults(subcommand='install')
-    whsp.add_argument('-C', '--clean', default=False, action='store_true', help='Remove all data from the database before installing')
-    whsp.add_argument('-n', '--name-only', default=False, action='store_true', help='The only output will be the DSN of the warehouse')
-    whsp.add_argument('-R', '--reset-config', default=False, action='store_true',
-                      help='Reset all of the values, like title and about, that come from the manifest'),
-    whsp.add_argument('-F', '--force', default=False, action='store_true',
-                      help='Force re-creation of files that already exist')
-    whsp.add_argument('-K', '--doc', default=False, action='store_true', help='Also generate documentation')
-    whsp.add_argument('-c', '--cache', help='Specify the cache')
+    whsp.add_argument('-n', '--name',  help='Set the name of the database')
+    whsp.add_argument('-c', '--clean', default=False, action='store_true', help='Recreate the database before installation')
 
     # For extract, when called from install
     group = whsp.add_mutually_exclusive_group()
@@ -296,31 +269,20 @@ def warehouse_install(args, w ,config):
     m = Manifest(args.term, logger = w.logger)
 
     if args.clean:
+        w.logger.info("Cleaning before installation")
+        raise Exception()
         w.clean()
         w.create()
 
-    if args.name_only:
-        from ambry.warehouse import NullLogger
-        w.logger = NullLogger()
-
     w.logger.info("Installing to {}".format(w.database.dsn))
 
-    w.install_manifest(m, reset = args.reset_config)
+    w.install_manifest(m)
 
     w.logger.info("Installed to {}, {}".format(w.uid, w.database.dsn))
 
-    l = w.elibrary
-
-    l.sync_warehouse(w)
-
-    l.doc_cache.put_store(w, force=True)
-
-    if args.name_only:
-        print w.database.dsn
+    w.elibrary.sync_warehouse(w)
 
     w.close()
-
-
 
 def warehouse_extract(args, w, config):
 
@@ -391,18 +353,22 @@ def warehouse_doc(args, w, config):
 
 def warehouse_test(args, w, config):
 
-    from ambry.warehouse import database_config
-    from ambry.warehouse import new_warehouse
-    from . import global_logger
+    from ambry.bundle import LibraryDbBundle
 
-    config = database_config('sqlite://')
+    print w.dsn
+    print w.library.database.dsn
 
-    l = new_library(rc.library(args.library_name))
+    b  = w.bundle
 
-    w = new_warehouse(config, l, logger=global_logger)
+    t = b.schema.add_table('test_table')
+    t.add_column('test_column', datatype='integer')
+
+    for t in b.schema.tables:
+        print '----', t.name
+        for c in t.columns:
+            print '    ', c.name
 
 
-    print config
 
 
 

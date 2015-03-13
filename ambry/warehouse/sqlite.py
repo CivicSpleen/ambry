@@ -52,7 +52,6 @@ class SqliteWarehouse(RelationalWarehouse):
 
         return dest_table_name
 
-
     def install_view(self, name, sql, data = None):
 
         import time
@@ -67,6 +66,7 @@ class SqliteWarehouse(RelationalWarehouse):
             self.logger.info("Skipping view {}; SQL hasn't changed".format(name))
             return
         else:
+
             self.logger.info('Installing view {}'.format(name))
 
         data = data if data else {}
@@ -93,7 +93,6 @@ class SqliteWarehouse(RelationalWarehouse):
         except OperationalError:
             self.logger.error("Failed to execute: {} ".format(sql))
             raise
-
 
 
     def install_material_view(self, name, sql, clean=False, data = None):

@@ -12,10 +12,7 @@ from ..identity import LocationRef
 import os
 
 
-def make_data_store_uid(dsn):
-    from ..identity import TopNumber
 
-    return str(TopNumber.from_string(dsn, 's'))
 
 class Files(object):
 
@@ -321,23 +318,20 @@ class Files(object):
 
 
 
-    def install_data_store(self, dsn, type, ref = None,
+    def install_data_store(self, w,
                            name = None, title = None, summary = None,
                            cache = None, url = None, commit=True):
         """A reference for a data store, such as a warehouse or a file store.
         """
 
-        import hashlib
-
-
-        extant  = self.query.path(dsn).group(self.TYPE.STORE).one_maybe
+        extant  = self.query.path(w.dsn).group(self.TYPE.STORE).one_maybe
 
         kw = dict(commit=commit, merge=True, extant=extant,
-                  path=dsn,
+                  path=w.dsn,
                   group=self.TYPE.STORE,
-                  ref=ref if ref else make_data_store_uid(dsn),
+                  ref=w.uid,
                   state=None,
-                  type_=type,
+                  type_=w.database_class,
                   data=dict(
                       name=name,
                       title=title,
@@ -347,7 +341,6 @@ class Files(object):
 
                   ),
                   source_url=None)
-
 
         f = self.new_file(**kw)
 

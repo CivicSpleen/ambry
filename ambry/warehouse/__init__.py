@@ -4,9 +4,10 @@ from ..library.database import LibraryDb
 from ckcache import new_cache, Cache
 from ..database import new_database
 import os
-from ..util import Constant
+from ..util import Constant, memoize
 from ambry.util import init_log_rate
 from ..library.files import Files
+from ..identity import TopNumber
 
 class NullCache(Cache):
     def has(self, rel_path, md5=None, use_upstream=True):
@@ -114,7 +115,6 @@ class Warehouse(object):
     FILE_GROUP.MANIFEST = Files.TYPE.MANIFEST
     FILE_GROUP.DOC = Files.TYPE.DOC
 
-
     def __init__(self,
                  database,
                  wlibrary=None, # Warehouse library
@@ -123,6 +123,7 @@ class Warehouse(object):
                  logger=None,
                  base_dir = None,
                  test=False):
+        from ..util import qualified_class_name
 
         assert wlibrary is not None
         assert elibrary is not None
@@ -135,9 +136,12 @@ class Warehouse(object):
         self._cache = cache
 
 
+
         logger = logger if logger else NullLogger()
 
         self.logger =  Logger(logger, init_log_rate(logger.info, N=2000))
+
+        self.database_class = qualified_class_name(self.database)
 
     def info(self, location, message=None):
 
@@ -150,12 +154,34 @@ class Warehouse(object):
         else:
             self.logger.info(message)
 
-
     def create(self):
         from datetime import datetime
+        from ..orm import Dataset
+        from sqlalchemy.orm.exc import NoResultFound
 
         self.database.create()
         self.wlibrary.database.create()
+
+        # Create the uid from the DSN.
+        self._meta_set('uid', str(TopNumber.from_string(self.database.dsn, 'd')))
+
+        # Create the dataset record for the database. This will be the dataset for tables and
+        # partitions created in the database.
+        s = self.database.session
+        try:
+            ds = s.query(Dataset).filter(Dataset.id_ == self.vid).order_by(Dataset.revision.desc()).one()
+        except NoResultFound:
+            from ..identity import Identity
+
+            ident = Identity.from_dict(dict(id=self.vid, revision=1, source='ambry', dataset=self.vid))
+
+            ds = Dataset(data=dict(dsn=self.dsn), creator='ambry', fqname=ident.fqname, **ident.dict)
+
+            s.add(ds)
+
+            s.commit()
+
+            self.wlibrary.files.install_data_store(self)
 
         self._meta_set('created', datetime.now().isoformat())
 
@@ -184,6 +210,21 @@ class Warehouse(object):
     def library(self):
         return self.wlibrary
 
+    @property
+    def bundle(self):
+        """Return a LibraryBundle based on the library, and the dataset specified by the warehouse uid.
+        This bundle holds the partition and table definitions for data created though SQL in the warehouse"""
+        from ..bundle import LibraryDbBundle
+        from ..identity import ObjectNumber
+
+        # If the uid doesn't have a version, its because we haven't implemened versioning yet.
+        on = ObjectNumber.parse(self.uid)
+
+        if on.revision is None:
+            on.revision = 1
+
+        return LibraryDbBundle(self.library.database, str(on))
+
     ##
     ## Metadata
     ##
@@ -191,6 +232,12 @@ class Warehouse(object):
     def _meta_set(self, key, value):
         from ..orm import Config
         return self.library.database.set_config_value('warehouse', key, value)
+
+        # Also write to the file, since when the warehouse is installed in a library,
+        # it's the file that is used for storing information about the title, summary, etc.
+        f = self.wlibrary.store(self.uid)
+        f['data']['key'] = value
+        self.wlibrary.commit()
 
     def _meta_get(self, key):
         from ..orm import Config
@@ -203,13 +250,23 @@ class Warehouse(object):
     configurable = ('uid','title','name', 'summary','cache_path', 'url')
 
     @property
+    @memoize
     def uid(self):
         """UID of the warehouse"""
         return self._meta_get('uid')
 
-    @uid.setter
-    def uid(self, v):
-        return self._meta_set('uid', v)
+    @property
+    @memoize
+    def vid(self):
+        """The versioned id of the warehouse"""
+        from ..identity import ObjectNumber
+
+        # Until we support versioning warehouses
+        on = ObjectNumber.parse(self.uid)
+        if on.revision is None:
+            on.revision = 1
+
+        return str(on)
 
     @property
     def title(self):
@@ -219,7 +276,6 @@ class Warehouse(object):
     @title.setter
     def title(self, v):
         return  self._meta_set('title', v)
-
 
     @property
     def summary(self): # Everything else names this property summary
@@ -266,17 +322,16 @@ class Warehouse(object):
     @property
     def dict(self):
         """Return information about the warehouse as a dictionary. """
-        from ..orm import Config as SAConfig
-        from ..library.database import ROOT_CONFIG_NAME_V
+
         from ambry.warehouse.manifest import Manifest
 
         from ambry.util import filter_url
 
         d =  {}
 
-        for c in self.library.database.get_config_group('warehouse'):
-            if c.key in self.configurable:
-                d[c.key] = c.value
+        for k, v in self.library.database.get_config_group('warehouse').items():
+            if k in self.configurable:
+                d[k] = v
 
         d['dsn'] = filter_url(self.database.dsn, password=None) # remove the password
 
@@ -357,39 +412,236 @@ class Warehouse(object):
     ## Installation
     ##
 
-    def install(self, partition, tables=None, prefix=None):
-        """Install a partition and the tables in the partition"""
+    def digest_manifest(self, manifest, force=None):
+        """Digest manifest into a list of commands for the installer"""
         from ..orm import Partition
+
+        commands = []
+
+        commands.append(('about', manifest.title, manifest.summary['summary_text']))
+
+        ## First pass
+        for line, section in manifest.sorted_sections:
+
+            tag = section.tag
+
+            if tag in ('partitions', 'sql', 'index', 'mview', 'view'):
+                self.logger.info("== Processing manifest '{}' section '{}' at line {}"
+                                 .format(manifest.path, section.tag, section.linenumber))
+
+            if tag == 'partitions':
+                for pd in section.content['partitions']:
+
+                    tables = pd['tables']  # Tables that were specified on the parittion line; install only these
+
+                    p_vid = self._to_vid(pd['partition'])
+
+                    p_orm = self.wlibrary.database.session.query(Partition).filter(Partition.vid == p_vid).first()
+
+                    if p_orm and p_orm.installed == 'y':
+                        self.logger.info("Skipping {}; already installed".format(p_orm.vname))
+                        continue
+                    else:
+                        dataset = self.elibrary.resolve(p_vid)
+
+                        if not dataset:
+                            raise ResolutionError("Library does not have object for reference: {}".format(pd['partition']))
+
+                        ident = dataset.partition
+
+                        if not ident:
+                            raise ResolutionError(
+                                "Ref resolves to a bundle, not a partition. Can only install partitions: {}".format(
+                                    p_orm))
+
+                        if ident.format not in ('db', 'geo'):
+                            self.logger.warn(
+                                "Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
+                            continue
+
+                        commands.append(('install', dataset, tables, pd['where']))
+
+
+            elif tag == 'sql':
+                sql = section.content
+
+                if self.database.driver in sql:
+                    commands.append(('sql',sql[self.database.driver]))
+
+
+            elif tag == 'index':
+                c = section.content
+                commands.append(('index',c['name'], c['table'], c['columns']))
+
+            elif tag == 'mview' or tag =='view':
+                commands.append((tag, section.args, section.content['text'],  dict(
+                    tc_names=section.content['tc_names'],
+                    summary=section.doc.get('summary_text', '') if section.doc else '',
+                    doc=section.doc,
+                    manifests=[manifest.uid],
+                    sql_formatted=section.content['html']
+                ), force))
+
+            elif tag == 'extract':
+
+                d = section.content
+                doc = manifest.doc_for(section)
+                if doc:
+                    d['doc'] = doc.content['html']
+
+                extract_path = os.path.join('extracts', d['rpath'])
+
+                # self.wlibrary.files.install_extract()
+                commands.append(('extract',extract_path, manifest.uid, d))
+
+
+            elif tag == 'include':
+                from .manifest import Manifest
+
+                m = Manifest(section.content['path'])
+                for command in self.install_manifest(m, force=force):
+                    commands.append(command)
+
+        return commands
+
+    def execute_commands(self, commands):
+        """Execute a set of installation commands, which are usually from a digested manifest"""
+        from ..dbexceptions import NotFoundError, ConfigurationError
+
+        installed_partitions = []
+        installed_tables = []
+
+        ## First pass
+        for command_set in commands:
+
+            command_set = list(command_set)
+            command = command_set.pop(0)
+
+            if command == 'install':
+
+                dataset, tables, where = command_set
+
+                if where and len(tables) == 1:
+                    tables = [(tables[0], "WHERE (" + where + ")")]
+
+                try:
+                    tables, p = self.install_partition(dataset.partition.vid, tables)
+                except NotFoundError as e:
+                    self.logger.error("Failed to install partition {}: {}".format(dataset.partition, e))
+                    continue
+
+                installed_tables += tables
+                installed_partitions.append(p)
+            elif command == 'about':
+
+                title, summary = command_set
+
+                if title and not self.title:
+                    self.title = title
+
+                if summary and not self.summary:
+                    self.summary = summary
+
+            elif command == 'sql':
+                sql, = command_set
+                self.run_sql(sql)
+
+            elif command == 'index':
+                name, table, columns = command_set
+                self.create_index(name, table, columns)
+
+            elif command == 'mview':
+                name, sql, data, force = command_set
+                self.install_material_view(name, sql, force, data);
+
+            elif command == 'view':
+                name, sql, data, force = command_set
+                self.install_view(name, sql, data)
+
+            elif command == 'extract':
+                extract_path, m_uid, d = command_set
+                self.wlibrary.files.install_extract(extract_path, m_uid, d)
+
+        return installed_partitions, installed_tables
+
+    def install_manifest(self, manifest, force = None, reset=False):
+        """Install the partitions and views specified in a manifest file """
+
+        from datetime import datetime
+        import os
+
+        errors = []
+
+        # Mark all of the files associated with the manifest, so if they aren't in the manifest
+        # we can remove them.
+        # TODO Should also do this for tables.
+        for f in (self.library.files.query.type(self.library.files.TYPE.EXTRACT).source_url(manifest.uid)).all:
+            f.state = 'deleteable'
+            self.library.files.merge(f)
+
+        # Update the manifest with bundle information, since it doesn't normally have access to a library
+        manifest.add_bundles(self.elibrary)
+
+        # Manifest data
+        mf = self.wlibrary.files.install_manifest(manifest)
+
+        commands = self.digest_manifest(manifest, force)
+
+        partitions, tables = self.execute_commands(commands)
+
+        # Link the partition to the manifest. Have to re-fetch, because p is in the
+        # external library, and the manifest is in the warehouse elibrary
+
+        for p in partitions:
+            mf.link_partition(p)
+            p.link_manifest(mf)
+
+        for table in tables:
+            orm_t = self.orm_table_by_name(table)
+
+            mf.link_table(orm_t)
+            orm_t.link_manifest(mf)
+
+        self.database.session.commit()
+
+        # Delete all of the files ( extracts ) that were not installed
+        (self.library.files.query.type(self.library.files.TYPE.EXTRACT).state('deleteable')).delete()
+
+        # Record the installtion time of the manifest.
+        self._meta_set(manifest.uid, datetime.now().isoformat())
+
+        self.post_install()
+
+        return self.database.dsn
+
+    def install_partition(self, p_vid, tables=None, prefix=None):
+        """Install a partition and the tables in the partition"""
+
         from sqlalchemy.exc import OperationalError
+        from sqlalchemy import inspect
 
-        results = dict(
-            tables = {},
-            partitions = {}
-        )
+        dataset = self.elibrary.resolve(p_vid)
+        b = self.elibrary.get(dataset)
+        p = b.partitions.get(dataset.partition) # This one gets the ref from the bundle
 
-        p_vid = self._to_vid(partition)
+        self.elibrary.get(dataset.partition) # This one downloads the database.
 
-        p_orm = self.wlibrary.database.session.query(Partition).filter(Partition.vid == p_vid).first()
+        self.library.database.install_partition(b, p)
 
-        if p_orm and p_orm.installed == 'y':
-            self.logger.info("Skipping {}; already installed".format(p_orm.vname))
-            return None, p_orm
+        installed_tables = []
 
-        bundle, p = self._setup_install(p_vid)
-
-        if p.identity.format not in ('db', 'geo'):
-            self.logger.warn("Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
-            return None, None;
+        tables_in_partition = inspect(p.database.engine).get_table_names()
 
 
-        all_tables = self.install_partition(bundle, p, prefix=prefix)
+        for source_table_name in p.tables:
+            if not source_table_name in tables_in_partition:
+                continue
+            try:
+                table, meta = self.create_table(p, source_table_name)
+            except Exception as e:
+                print e
+                raise
 
-        if not tables:
-            tables = all_tables
-
-        for source_table_name in tables:
-
-            #
             # Compute the installation name, and an alias that does not have the version number
             dest_table_name, alias = self.augmented_table_name(p.identity, source_table_name)
 
@@ -401,7 +653,7 @@ class Warehouse(object):
             try:
                 ## Copy the data to the destination table
 
-                self.elibrary.get(p.vid) # ensure it is local
+                self.elibrary.get(p.vid)  # ensure it is local
                 itn = self.load_local(p, source_table_name, dest_table_name, where)
 
                 t_vid = p.get_table(source_table_name).vid
@@ -428,189 +680,15 @@ class Warehouse(object):
                 for c in w_table.columns:
                     c.altname = c.fq_name
 
+                installed_tables.append(w_table.name)
 
             except OperationalError as e:
-                self.logger.error("Failed to install table '{}': {}".format(source_table_name,e))
+                self.logger.error("Failed to install table '{}': {}".format(source_table_name, e))
                 raise
 
         self.library.database.mark_partition_installed(p_vid)
 
-
-        return tables, p
-
-    def install_partition(self, bundle, partition, prefix=None):
-        '''Install the records for the partition, the tables referenced by the partition,
-        and the bundle, if they aren't already installed'''
-        from sqlalchemy.orm.exc import NoResultFound
-        from sqlalchemy import inspect
-        from ..orm import Column
-
-        ld = self.library.database
-
-        pid = self._to_vid(partition)
-
-        ld.install_partition_by_id(bundle, pid)
-
-        p = bundle.partitions.get(pid) # just gets the record
-
-        p = self.elibrary.get(p.vid, cb=self.logger.copy).partition # Gets the database file.
-
-        inspector = inspect(p.database.engine)
-
-        all_tables = [ t.name for t in bundle.schema.tables ]
-
-        tables = [ t for t in inspector.get_table_names() if t != 'config' and t in all_tables ]
-
-        for table_name in tables:
-            table, meta = self.create_table(p, table_name)
-
-        return tables
-
-    def install_manifest(self, manifest, force = None, reset=False, level = 0):
-        """Install the partitions and views specified in a manifest file """
-        from ..dbexceptions import NotFoundError, ConfigurationError
-        from datetime import datetime
-        import os
-
-        errors = []
-
-        # Mark all of the files associated with the manifest, so if they aren't in the manifest
-        # we can remove them.
-        # TODO Should also do this for tables.
-        for f in (self.library.files.query.type(self.library.files.TYPE.EXTRACT).source_url(manifest.uid)).all:
-            f.state = 'deleteable'
-            self.library.files.merge(f)
-
-        # Update the manifest with bundle information, since it doesn't normally have access to a library
-        manifest.add_bundles(self.elibrary)
-
-        # If the manifest doesn't have a title or description, get it fro the manifest.
-
-        if reset or not self.title:
-            self.title = manifest.title
-
-        if (reset or not self.summary) and manifest.summary:
-            self.summary = manifest.summary['summary_text'] # Just the first sentence.
-
-        if (reset or not self._meta_get('cache_path')) and manifest.cache:
-            self.cache_path = manifest.cache
-
-        # Manifest data
-        mf = self.wlibrary.files.install_manifest(manifest)
-
-        ## First pass
-        for line, section in manifest.sorted_sections:
-
-            tag = section.tag
-
-            if tag in ('partitions', 'sql', 'index', 'mview', 'view'):
-                self.logger.info("== Processing manifest '{}' section '{}' at line {}"
-                                 .format(manifest.path, section.tag, section.linenumber))
-
-            if tag == 'partitions':
-                for pd in section.content['partitions']:
-                    try:
-
-                        tables = pd['tables'] # Tables that were specified on the parittion line; install only these
-
-                        if pd['where'] and len(tables) == 1:
-                            tables = [(pd['tables'][0], "WHERE (" + pd['where'] + ")")]
-
-                        tables, p = self.install(pd['partition'], tables)
-
-                        if p:
-                            # Link the partition to the manifest. Have to re-fetch, because p is in the
-                            # external library, and the manifest is in the warehouse elibrary
-                            p = self.wlibrary.partition(p.vid)
-                            mf.link_partition(p)
-                            p.link_manifest(mf)
-
-                            if tables:
-                                for table in tables:
-                                    b = self.wlibrary.bundle(p.identity.as_dataset().vid)
-                                    orm_t = b.schema.table(table)
-
-                                    mf.link_table(orm_t)
-                                    orm_t.link_manifest(mf)
-
-                    except NotFoundError:
-                        self.logger.error("Partition {} not found in external library".format(pd['partition']))
-
-                self.wlibrary.database.session.commit()
-
-            elif tag == 'sql':
-                sql = section.content
-
-                if self.database.driver in sql:
-                    self.run_sql(sql[self.database.driver])
-
-            elif tag == 'index':
-                c = section.content
-                self.create_index(c['name'], c['table'], c['columns'])
-
-            elif tag == 'mview':
-
-                self.install_material_view(section.args, section.content['text'], clean= force,
-                                           data=dict(
-                                               tc_names=section.content['tc_names'],
-                                               summary = section.doc.get('summary_text','') if section.doc else '',
-                                               doc=section.doc,
-                                               manifests = [manifest.uid],
-                                               sql_formatted = section.content['html']
-                                           ))
-
-            elif tag == 'view':
-                try:
-                    self.install_view(section.args, section.content['text'],
-                                      data = dict(
-                                          tc_names = section.content['tc_names'],
-                                          summary=section.doc.get('summary_text','') if section.doc else '',
-                                          doc=section.doc,
-                                          manifests=[manifest.uid],
-                                          sql_formatted=section.content['html']
-                                      ))
-                except Exception as e:
-                    errors.append((section, e))
-                    self.logger.error("Failed to install view {}: {}".format(section.args, e))
-                    raise
-
-
-            elif tag == 'extract':
-
-                d = section.content
-                doc = manifest.doc_for(section)
-                if doc:
-                    d['doc'] = doc.content['html']
-
-                extract_path = os.path.join('extracts',  d['rpath'])
-
-                self.wlibrary.files.install_extract(extract_path, manifest.uid, d)
-
-            elif tag == 'include':
-                from .manifest import Manifest
-                m = Manifest(section.content['path'])
-                self.install_manifest(m, force = force, level = level + 1)
-
-
-        self._meta_set(manifest.uid, datetime.now().isoformat())
-
-        # Delete all of the files ( extracts ) that were note in-installed
-        (self.library.files.query.type(self.library.files.TYPE.EXTRACT).state('delatable')).delete()
-
-        if errors:
-            self.logger.error("")
-            self.logger.error("===== Install Errors =====")
-            for section, e  in errors:
-                self.logger.error("Failed to install view {}: at {}\n{}".format(section.args, section.file_line,  e))
-                self.logger.error('----------')
-
-        if level == 0:
-            self.post_install()
-
-        if hasattr(self.database, 'path') and os.path.exists(self.database.path):
-            return self.database.path
-        else:
-            return self.database.dsn
+        return installed_tables, p
 
     def build_sample(self, t):
 
@@ -698,7 +776,6 @@ class Warehouse(object):
 
             s.commit()
 
-
     def install_union(self):
         """Combine multiple partition tables of the same table type into a single table"""
 
@@ -731,7 +808,6 @@ class Warehouse(object):
                     )
 
                 self.install_view(t_vid, sql, data=dict(type='alias', proto_vid=t_vid))
-
 
     def post_install(self):
         """
@@ -770,32 +846,14 @@ class Warehouse(object):
                     self.build_sample(t)
                     s.add(t)
 
-
         s.commit()
 
         self.install_union()
 
         # Update the documentation files in the library
 
-
-        if self.uid:
-            dc = self.elibrary.doc_cache
-
-            self.logger.info('Updating doc cache {}'.format(dc.cache))
-
-            has = dc.has_store(self)
-            dc.put_store(self, force=True)
-            if not has:
-                dc.put_library(self.elibrary, force=True)
-        else:
-
-            self.logger.info('Warehouse does not have a uid, skipping doc cache update')
-
-
-
     def install_material_view(self, name, sql, clean = False, data=None):
         raise NotImplementedError(type(self))
-
 
     def _install_material_view(self, name, sql, clean=False, data=None):
 
@@ -822,7 +880,6 @@ class Warehouse(object):
 
 
         return drop, data
-
 
     def mview_needs_update(self, name, sql):
         """Return True if an mview needs to be regnerated, because it's SQL changed,
@@ -858,7 +915,6 @@ class Warehouse(object):
     def install_view(self, name, sql, data=None):
         raise NotImplementedError(type(self))
 
-
     def install_table_alias(self, table_name, alias, proto_vid = None):
         """Install a view that allows referencing a table by another name """
         self.install_view(alias, "SELECT * FROM \"{}\" ".format(table_name),
@@ -868,7 +924,7 @@ class Warehouse(object):
         """Install a view, mview or alias as a Table record. Real tables are copied """
 
         from ..orm import Table, Config, Dataset
-        from ..library.database import ROOT_CONFIG_NAME_V
+
         from sqlalchemy import func
         from sqlalchemy.orm.exc import NoResultFound
 
@@ -878,7 +934,7 @@ class Warehouse(object):
             from sqlalchemy.orm import lazyload
             # Search for the table by the table name
 
-            q = (s.query(Table).filter(Table.d_vid == ROOT_CONFIG_NAME_V, Table.name == name )
+            q = (s.query(Table).filter(Table.d_vid == self.vid, Table.name == name )
                  .options(lazyload('columns')))
 
             t = q.one()
@@ -886,9 +942,9 @@ class Warehouse(object):
         except NoResultFound:
             # Search for the table by the vid
 
-            ds = s.query(Dataset).filter(Dataset.vid == ROOT_CONFIG_NAME_V).one()
+            ds = s.query(Dataset).filter(Dataset.vid == self.vid).one() # Get the Warehouse dataset.
 
-            q = ( s.query(func.max(Table.sequence_id)) .filter(Table.d_vid == ROOT_CONFIG_NAME_V))
+            q = ( s.query(func.max(Table.sequence_id)) .filter(Table.d_vid == self.vid))
 
             seq = q.one()[0]
 
@@ -933,7 +989,6 @@ class Warehouse(object):
     def run_sql(self, sql_text):
         raise NotImplementedError(type(self))
 
-
     def load_local(self, partition, table_name, where):
         '''Load data using a network connection to the warehouse and
         INSERT commands'''
@@ -945,117 +1000,14 @@ class Warehouse(object):
         raise NotImplementedError()
 
 
-    def _setup_install(self, ref):
-        '''Perform local and remote resolutions to get the bundle, partition and links
-        to CSV parts in the remote REST itnerface '''
-        from ..identity import Identity
-
-        if isinstance(ref, Identity):
-            ref = ref.vid
-
-        dataset = self.elibrary.resolve(ref)
-
-        if not dataset:
-            raise ResolutionError("Library does not have object for reference: {}".format(ref))
-
-        ident = dataset.partition
-
-        if not ident:
-            raise ResolutionError(
-                "Ref resolves to a bundle, not a partition. Can only install partitions: {}".format(ref))
-
-        # Get just the bundle. We'll install the partition from CSV directly from the
-        # library
-        b = self.elibrary.get(dataset)
-        p = b.partitions.get(ident.id_)
-
-        return b, p
-
-
-    def extract_all(self, force=False):
-        """Generate the extracts and return a struture listing the extracted files. """
-        from contextlib import closing
-
-        from .extractors import new_extractor
-        import time
-        from ..util import md5_for_file
-
-        # Get the URL to the root. The public_utl arg only affects S3, and gives a URL without a signature.
-        root = self.cache.path('', missing_ok = True, public_url = True)
-
-        extracts = []
-
-        # Generate the file etracts
-
-        for f in self.library.files.query.group('manifest').type('extract').all:
-
-            t = self.orm_table_by_name(f.data['table'])
-
-            if (t and t.data.get('updated') and
-                f.modified and
-                int(t.data.get('updated')) > f.modified) or (not f.modified):
-                force = True
-
-
-            ex = new_extractor(f.data.get('format'), self, self.cache, force=force)
-
-            e = ex.extract(f.data['table'], self.cache, f.path )
-
-            extracts.append(e)
-
-            if e.time:
-                f.modified = e.time
-
-                if os.path.exists(e.abs_path):
-                    f.hash = md5_for_file(e.abs_path)
-                    f.size = os.path.getsize(e.abs_path)
-
-
-                self.library.files.merge(f)
-
-
-        return extracts
-
-    def extract_table(self, tid, content_type='csv'):
-        from .extractors import new_extractor
-        from os.path import basename, dirname
-        from ..dbexceptions import NotFoundError
-
-        t = self.orm_table(tid) # For installed tables
-
-        if not t:
-            t = self.orm_table_by_name(tid)  # For views
-
-        if not t:
-            raise NotFoundError("Didn't get table for '{}' ".format(tid))
-
-        e = new_extractor(content_type, self, self.cache.subcache('extracts'))
-
-        ref = t.name if t.type in ('view', 'mview') else t.vid
-
-        ee = e.extract(ref, '{}.{}'.format(tid, content_type), t.data.get('updated', None))
-
-        return ee.abs_path, "{}_{}.{}".format(t.vid, t.name, content_type)
-
     ##
     ## users
     ##
-
-    def drop_user(self, u):
-        pass # Sqlite database don't have users.
-
-    def create_user(self, u):
-        pass # Sqlite databases don't have users.
-
-    def users(self):
-        return {} # Sqlite databases don't have users.
-
 
     def get(self, name_or_id):
         """Return true if the warehouse already has the referenced bundle or partition"""
 
         return self.library.resolve(name_or_id)
-
 
     def has(self, ref):
         r = self.library.resolve(ref)

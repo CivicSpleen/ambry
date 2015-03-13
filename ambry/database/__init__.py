@@ -19,7 +19,6 @@ def new_database(config, bundle=None, class_=None):
 
     k = (service,class_)
 
-
     if k == ('sqlite',None):
         from .sqlite import SqliteBundleDatabase
         return SqliteBundleDatabase(bundle=bundle, **config)
@@ -98,7 +97,7 @@ class DatabaseInterface(object):
         raise NotImplementedError() 
 
     def commit(self):
-        raise NotImplementedError() 
+        raise NotImplementedError(type(self))
   
     def tables(self):
         raise NotImplementedError()  

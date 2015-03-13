@@ -73,7 +73,7 @@ class Filesystem(object):
 
     def get_cache_by_name(self, name):
         from dbexceptions import ConfigurationError
-        from cache import new_cache
+        from ckcache import new_cache
         
         config = self.config.filesystem(name)
         

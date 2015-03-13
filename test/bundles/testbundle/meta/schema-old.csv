@@ -1,7 +1,7 @@
 table,seq,column,is_pk,is_fk,type,i1,ui1,size,scale,default,width,units,d_data_one,d_hash,d_make_partition,d_mandatory,description,id
 tone,1,id,1,,INTEGER,,,,100000.0,,,km,one,,1,,,tiEGPXmDC801
 tone,2,text,,,VARCHAR,1,,20,,DEFAULT,,,two,1,,1,,ciEGPXmDC801002
-tone,3,integer,,,INTEGER,,1,3,,-1,,,three,1,,,,ciEGPXmDC801003
+tone,3,integer,,,INTEGER,,1,,,-1,,,three,1,,,,ciEGPXmDC801003
 tone,4,float,,,REAL,,1,,,3.14,,,four,,,,,ciEGPXmDC801004
 tone,5,extra,,,TEXT,,1,,,,,,extra,,,,,ciEGPXmDC801005
 tone,6,extra2,,,VARCHAR,,1,20,,DEFAULT,,,extra,,,,,ciEGPXmDC801006
@@ -13,7 +13,7 @@ ttwo,4,float,,,REAL,,1,,,3.14,,,four,1,,,,ciEGPXmDC802004
 ,,,,,,,,,,,,,,,,,,
 tthree,1,id,1,,INTEGER,,,,,,,,one,,1,,,tiEGPXmDC803
 tthree,2,text,,,VARCHAR,1,,20,,DEFAULT,,,two,1,,,,ciEGPXmDC803002
-tthree,3,integer,,,INTEGER,,,3,,-1,,,three,,,,,ciEGPXmDC803003
+tthree,3,integer,,,INTEGER,,,,,-1,,,three,,,,,ciEGPXmDC803003
 tthree,4,float,,,REAL,,,,,2.14,,,four,0,,0,,ciEGPXmDC803004
 tthree,5,date,,,DATE,,,,,1990-01-01,,,,,,,,ciEGPXmDC803005
 tthree,6,datetime,,,DATETIME,,,,,1990-01-01,,,,,,,,ciEGPXmDC803006

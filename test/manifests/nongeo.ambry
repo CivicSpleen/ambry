@@ -4,8 +4,6 @@ Simple geographic file
 UID: mQaiWWgy2x
 AUTHOR: Eric Busboom <eric@sandiegodata.org>
 
-DATABASE: sqlite:///nongeo.db
-CACHE: nongeo
 
 PARTITIONS:
 

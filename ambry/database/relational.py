@@ -465,14 +465,11 @@ class RelationalDatabase(DatabaseInterface):
         except NoResultFound:
             o = SAConfig(group=group, key=key, d_vid=d_vid, value=value)
 
-
         session.merge(o)
         session.commit()
 
-
     def get_config_value(self, d_vid, group, key):
         from ambry.orm import Config as SAConfig
-
 
         key = key.strip('_')
 
@@ -480,8 +477,7 @@ class RelationalDatabase(DatabaseInterface):
                                  SAConfig.key == key,
                                  SAConfig.d_vid == d_vid).first()
 
-
-    def get_config_group(self, d_vid, group):
+    def get_config_group(self, group, d_vid):
         from ambry.orm import Config as SAConfig
 
         d = {}

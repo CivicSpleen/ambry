@@ -48,9 +48,6 @@ class RelationalWarehouse(Warehouse):
         else:
             self.logger.info('table_exists {}'.format(table.name))
 
-        t = self.library.table(table.name)
-
-
         return table, meta
 
     def create_index(self, name, table, columns):

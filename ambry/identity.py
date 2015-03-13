@@ -839,7 +839,7 @@ class TopNumber(ObjectNumber):
 
     @classmethod
     def from_hex(cls, h, space, assignment_class='self'):
-        """Produce a TopNumber, with a lenth to match the given assignment class, based on an input hex string.
+        """Produce a TopNumber, with a length to match the given assignment class, based on an input hex string.
 
         This can be used to create TopNumbers from a hash of a string.
         """

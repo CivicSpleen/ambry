@@ -308,7 +308,7 @@ class RunConfig(object):
 
 
     def remotes(self, remotes):
-        from cache import parse_cache_string
+        from ckcache import parse_cache_string
         # Re-format the string remotes from strings to dicts.
 
         r = []

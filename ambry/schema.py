@@ -70,7 +70,7 @@ class Schema(object):
             self._dataset = None
 
         if not self._dataset:
-            self._dataset =  (self.bundle.database.session.query(Dataset).one())
+            self._dataset =  (self.bundle.get_dataset())
 
         return self._dataset
 

@@ -329,8 +329,6 @@ class DictableMixin(object):
 
 
 
-
-
 class Dataset(Base, LinkableMixin):
     __tablename__ = 'datasets'
 
@@ -367,8 +365,6 @@ class Dataset(Base, LinkableMixin):
 
     partitions = relationship("Partition", backref='dataset', cascade="all, delete-orphan",
                                passive_updates=False)
-
-
 
     #__table_args__ = (
     #    UniqueConstraint('d_vid', 'd_location', name='u_vid_location'),
@@ -1372,7 +1368,11 @@ class Config(Base):
         self.group = kwargs.get("group",None) 
         self.key = kwargs.get("key",None) 
         self.value = kwargs.get("value",None)
-        self.source = kwargs.get("source",None) 
+        self.source = kwargs.get("source",None)
+
+    @property
+    def dict(self):
+        return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs }
 
     def __repr__(self):
         return "<config: {},{},{} = {}>".format(self.d_vid, self.group, self.key, self.value)

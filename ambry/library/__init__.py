@@ -22,7 +22,7 @@ from ckcache import NullCache
 libraries = {}
 
 def _new_library(config):
-    from ..cache import new_cache
+    from ckcache import new_cache
     from database import LibraryDb
     from sqlalchemy.exc import OperationalError
 
@@ -155,9 +155,6 @@ class Library(object):
         sync: If true, put to remote synchronously. Defaults to False.
 
         '''
-
-
-
 
         assert database is not None
 
@@ -554,7 +551,8 @@ class Library(object):
             return (self.database.session.query(Table).filter(Table.vid == vid).one())
         except NoResultFound:
             try:
-                return (self.database.session.query(Table).filter(Table.id_ == vid).order_by(Table.vid.desc()).first())
+                return (self.database.session.query(Table)
+                        .filter(Table.id_ == vid).order_by(Table.vid.desc()).one())
             except NoResultFound:
                 raise NotFoundError("Did not find table ref {} in library {}".format(vid, self.database.dsn))
 
@@ -572,47 +570,6 @@ class Library(object):
             raise NotFoundError("Did not find table with proto_vid {} in library {}"
                                 .format(proto_vid, self.database.dsn))
 
-    @memoize
-    def _cached_protos(self):
-        return self.doc_cache.get_protos()
-
-    def resolve_protos(self,vid):
-        """Return a list of prototypes that are parents of the given column"""
-
-        pd = self._cached_protos()
-
-
-        def resolve_proto(v, i=[]):
-
-            r = pd.get(v, False)
-
-            if r:
-                return resolve_proto(r, i + [v])
-            else:
-                return i + [v]
-
-        return resolve_proto(vid)[1:]
-
-    def find_table_links(self, vid):
-        from ..identity import ObjectNumber, TableNumber, ColumnNumber
-
-        on = ObjectNumber.parse(vid)
-
-        if isinstance(on, ColumnNumber):
-            cols = [vid]
-        elif isinstance(on, TableNumber):
-            cols = [c.vid for c in self.table(vid).columns]
-        else:
-            raise ValueError()
-
-
-        for col in cols:
-
-            for link_col in self.resolve_protos(col):
-
-                t_vid = str(ObjectNumber.parse(link_col).as_table)
-
-                print link_col, t_vid
 
 
     def dataset(self, vid):
@@ -681,16 +638,9 @@ class Library(object):
 
         s = self.store(uid)
 
-
         if s:
-            self.doc_cache.remove_store(s.ref)
-
             self.database.session.delete(s)
             self.database.commit()
-        else:
-            self.doc_cache.remove_store(uid)
-            self.logger.error("Didn't find store for uid '{}' ".format(uid))
-
 
 
     def warehouse(self, uid):
@@ -1286,14 +1236,11 @@ class Library(object):
 
         w.url = self.warehouse_url
 
-        store = self.files.install_data_store(w.database.dsn, qualified_name(w),
+        store = self.files.install_data_store(w,
                                           name = w.name,
                                           title=w.title,
                                           url = w.url,
                                           summary=w.summary)
-
-        if not w.uid:
-            w.uid = store.ref
 
 
         s = self.database.session
@@ -1348,7 +1295,6 @@ class Library(object):
 
         s.commit()
 
-        self.doc_cache.put_store(w, force=True)
 
         return store
 
@@ -1359,97 +1305,15 @@ class Library(object):
             self.logger.info("Syncing {} dsn={}".format(f.ref, f.path))
             self.sync_warehouse(w)
 
-    def sync_bundle_doc(self, b, cache=None, force=True):
-        """Write the JSON for a single bundle"""
 
-        dc = self.doc_cache if not cache else cache
-
-        dc.put_bundle(b, force=force)
-        dc.put_schema(b, force=force)
-        dc.put_schemacsv(b, force=force)
-        dc.update_library_bundle(b, self)
-
-        tables = {}
-        protos = {}
-        for t in b.schema.tables:
-            dc.put_table(t, force=force)
-
-            tables[t.vid] = t.dict
-
-            for c in t.columns:
-                if c.proto_vid:
-                    protos[c.vid] = c.proto_vid
-                    protos[c.id_] = c.proto_vid
-
-        dc.update_tables(tables)
-        dc.update_protos(protos)
-
-    def sync_doc_json(self, cache = None, clean = False):
-        """Write the JSON for all bundles and the library"""
-        from ..warehouse import new_warehouse, database_config
-        from sqlalchemy.exc import OperationalError
-
-        dc = self.doc_cache if not cache else cache
-
-        self.logger.info("Caching json to {}".format(dc.cache))
-
-        ##
-        # Each of the bundles and schemas
-        # The library index is updated incrementally from doc_cache.update_library_bundle
-
-        for vid in self.list():
-
-            ident = self.resolve(vid)
-
-            if not ident:
-                continue  #  resolve does not return source bundles.
-
-            try:
-                b = self.get(vid)
-
-                if not dc.get_bundle(vid) or clean:
-
-                    self.logger.info("Processing json for {}".format(vid))
-
-                    self.sync_bundle_doc(b, dc, force=clean)
-
-            except Exception as e:
-                self.logger.error("Error on {}: {}".format(vid, e))
-                raise
-
-
-        ## Manifests
-        from ambry.warehouse.manifest import Manifest
-
-        for f in self.manifests:
-
-            m = Manifest(f.content, logger=self.logger)
-
-            dc.put_manifest(m, f, force=True)
-
-        ##
-        ## Stores
-
-        for s in self.stores:
-
-            w = new_warehouse(database_config(s.path), self, logger=self.logger)
-
-            if not w.uid:
-                raise Exception("No uid for "+str(s.ref))
-
-            try:
-                dc.put_store(w, force=True)
-            except Exception  as e:
-                self.logger.error("Failed to document warehouse '{}': {}".format(s.path, e))
-                raise
 
     @property
     def doc_cache(self):
         """Return the documentation cache. """
-        try:
-            from ambrydoc.cache import  DocCache
+        from ambry.library.doccache import DocCache
 
-            return DocCache(self._doc_cache if self._doc_cache else self.cache.subcache('_doc'))
+        try:
+            return DocCache(self)
         except ImportError:
             raise
             return None
@@ -1524,6 +1388,13 @@ Remotes:  {remotes}
                     # This is the slow one, with about half in setting 'about'.
                     bundles={b.identity.vid: b.summary_dict for b in self.list_bundles()}
         )
+
+    @property
+    def summary_dict(self):
+
+        return dict(name=str(self.name),
+                    database=str(self.database.dsn),
+                    cache=str(self.cache))
 
     @property
     def schema_dict(self):

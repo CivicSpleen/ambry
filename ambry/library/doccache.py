@@ -4,32 +4,36 @@
 # Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
 
-from ..util import memoize, expiring_memoize
-import functools
-
-
-def memoize_vid(self, obj):
-    @functools.wraps(obj)
-    def memoizer(vid):
-        if vid not in self.obj_cache:
-            self.obj_cache[vid] = obj(vid)
-        return self.obj_cache[vid]
-
-    return memoizer
-
 class DocCache(object):
 
     all_bundles = None
 
-    obj_cache = None
+    _cache = None
 
-    def __init__(self, library):
+    def __init__(self, library, cache = None):
         self.library = library
 
-        self.all_bundles = {}
+        if self.library._doc_cache:
+            from ckcache.dictionary import DictCache
+            self._cache = DictCache(self.library._doc_cache)
+        else:
+            self._cache = {}
 
-        self.obj_cache = None
+    def cache(self, f, *args, **kwargs):
+        """Cache the return value of a method. Normally, we'd use @memoize, but
+        we want this to run in the context of the object. """
 
+        if '_key' in kwargs:
+            key = kwargs['_key']
+            del kwargs['_key']
+        else:
+            key = (str(args) if args else '') + (str(kwargs) if kwargs else '')
+
+        assert bool(key)
+
+        if key not in self._cache:
+            self._cache[key] = f(*args, **kwargs)
+        return self._cache[key]
 
     def library_info(self):
         pass
@@ -38,14 +42,25 @@ class DocCache(object):
     ## Index, low-information lists of all items in a category.
     ##
 
+
+    def library_info(self):
+        return self.cache(lambda: self.library.summary_dict, _key='library_info')
+
     def bundle_index(self):
-        return { d.vid : d.dict for d in self.library.datasets() }
+        return self.cache(lambda: { d.vid : d.dict for d in self.library.datasets() }, _key='bundle_index')
 
     def collection_index(self):
         pass
 
     def warehouse_index(self):
-        pass
+        return self.cache(lambda: {f.ref: dict(
+            title=f.data['title'],
+            summary=f.data['summary'] if f.data['summary'] else '',
+            dsn=f.path,
+            manifests=[m.ref for m in f.linked_manifests],
+            cache=f.data['cache'],
+            class_type=f.type_) for f in self.library.stores}, _key = 'warehouse_index')
+
 
     def table_index(self):
         pass
@@ -56,29 +71,51 @@ class DocCache(object):
 
 
     def dataset(self, vid):
-        return self.library.dataset(vid).dict
+        return self.cache(lambda vid: self.library.dataset(vid).dict, vid)
 
     def bundle(self, vid):
-        return self.library.bundle(vid).dict
+        return self.cache(lambda vid: self.library.bundle(vid).dict, vid)
 
     def bundle_schema(self, vid):
         pass
 
     def partition(self, vid):
-        return self.library.partition(vid).dict
+        return self.cache(lambda vid: self.library.partition(vid).dict, vid)
 
     def table(self, vid):
-        return self.library.table(vid).dict
+        return self.cache(lambda vid: self.library.table(vid).dict, vid)
 
     def table_schema(self, vid):
         pass
 
+
     def warehouse(self, vid):
-        return self.library.warehouse(vid).dict
+        return self.cache(lambda vid: self.library.warehouse(vid).dict, vid)
 
     def manifest(self, vid):
-        return self.library.manifest(vid).dict
 
+        def f(vid):
+            f, m =  self.library.manifest(vid)
+            return m.dict
+
+        self.cache(f, vid)
+
+    def table_version_map(self):
+        """Map unversioned table ids to vids. """
+
+        def f():
+            tm = {}
+
+            for  t in self.library.tables:
+
+                if not t.id_ in tm:
+                    tm[t.id_] = [t.vid]
+                else:
+                    tm[t.id_].append(t.vid)
+
+            return tm
+
+        return self.cache(f,_key = 'table_version_map')
 
     ##
     ## Manifests
@@ -159,11 +196,4 @@ class DocCache(object):
 
         d['views'] = views
 
-
         return self.put(self.manifest_relpath(m.uid),  d)
-
-
-
-
-
-

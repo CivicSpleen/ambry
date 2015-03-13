@@ -449,12 +449,13 @@ class LibraryDb(object):
         s = self.session
 
         try:
-
-            return s.query(SAConfig).filter(SAConfig.group == group,
-                                         SAConfig.d_vid == d_vid).all()
+            d = {}
+            for row in  s.query(SAConfig).filter(SAConfig.group == group,SAConfig.d_vid == d_vid).all():
+                d[row.key] = row.value
+            return d
 
         except:
-            return None
+            return {}
 
 
 
@@ -688,7 +689,6 @@ class LibraryDb(object):
         from ..dbexceptions import NotABundle
 
 
-
         # There should be only one dataset record in the
         # bundle
         db = bundle.database
@@ -760,49 +760,14 @@ class LibraryDb(object):
         from sqlalchemy.orm.exc import NoResultFound
 
         s = self.session
+        s.merge(bundle.get_dataset())
         s.merge(partition.record)
 
         s.commit()
 
+        # Sqlalchemy loads in all of the records linked to the
+        # partition, including the tables and columns.
 
-        # This is not what I expected --- sqlite loads in all of the records linked to the
-        # partition, including the tables and columns, so none of the rest of the code is required.
-        return
-
-        if commit == 'collect':
-            self._partition_collection.append(partition.record.insertable_dict)
-            return
-
-        if install_bundle:
-            try:
-                b = self.get(bundle.identity.vid)
-            except NotFoundError:
-                b = None
-
-            if not b:
-                self.install_bundle(bundle)
-
-        if not install_tables:
-            for table_name in partition.tables:
-                table = bundle.schema.table(table_name)
-
-                try:
-                    s.query(Table).filter(Table.vid == table.vid).one()
-                    # the library already has the table
-
-                except NoResultFound as e:
-                    s.merge(table)
-                    for column in table.columns:
-
-                        s.merge(column)
-
-        if commit:
-            try:
-                self.commit()
-            except IntegrityError as e:
-                self.logger.error("Failed to merge")
-                self.rollback()
-                raise e
 
 
     def insert_partition_collection(self):

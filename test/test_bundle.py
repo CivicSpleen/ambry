@@ -270,39 +270,18 @@ class Test(TestBase):
 
         p = self.bundle.partitions.new_db_partition(time=10, space=10, data={'pid':'pid1'})
 
-        p = self.bundle.partitions.new_csv_partition(time=20, space=20, data={'pid':'pid2'})
-        self.assertIsInstance(p, CsvPartition )
-        p = self.bundle.partitions.find_or_new_csv(time=20, space=20)
-        self.assertIsInstance(p, CsvPartition)
 
-        #p = self.bundle.partitions.new_hdf_partition(space=30, data={'pid':'pid3'})
-        #self.assertIsInstance(p, HdfPartition)
-        #p = self.bundle.partitions.find_or_new_hdf(space=30)
-        #self.assertIsInstance(p, HdfPartition)
 
         with self.assertRaises(ConflictError):
             self.bundle.partitions.new_db_partition(time=10, space=10, data={'pid':'pid1'})
 
-        with self.assertRaises(ConflictError):
-            self.bundle.partitions.new_csv_partition(time=20, space=20, data={'pid':'pid21'})
 
-        #with self.assertRaises(ConflictError):
-        #    self.bundle.partitions.new_hdf_partition(space=30, data={'pid':'pid31'})
-
-
-        self.assertEqual(2, len(self.bundle.partitions.all))
+        self.assertEqual(1, len(self.bundle.partitions.all))
 
         p = self.bundle.partitions.find_or_new(time=10, space=10)
         p.database.create() # Find will go to the library if the database doesn't exist.
-        self.assertEqual(2, len(self.bundle.partitions.all))
+        self.assertEqual(1, len(self.bundle.partitions.all))
         self.assertEquals('pid1',p.data['pid'] )
-      
-        p = self.bundle.partitions.find_or_new_csv(time=20, space=20)
-        p.database.create()  
-        self.assertEquals('pid2',p.data['pid'] ) 
-
-        #p = self.bundle.partitions.find_or_new_hdf(space=30)
-        #self.assertEquals('pid3',p.data['pid'] )
 
         p = self.bundle.partitions.find(PartitionNameQuery(time=10, space=10))
         self.assertEquals('pid1',p.data['pid'] )
@@ -310,16 +289,6 @@ class Test(TestBase):
         p = self.bundle.partitions.find(time=10, space=10)
         self.assertEquals('pid1', p.data['pid'])
 
-        p = self.bundle.partitions.find(PartitionNameQuery(time=20, space=20))
-        self.assertEquals('pid2',p.data['pid'] )
-
-        p = self.bundle.partitions.find(time=20, space=20)
-        self.assertEquals('pid2',p.data['pid'] )
-
-        # This is the HDF partition
-        # pnq3 = PartitionNameQuery(space=30)
-        # p = self.bundle.partitions.find(pnq3)
-        # self.assertEquals('pid3',p.data['pid'] )
 
         pnq3 = PartitionNameQuery(space=10)
 

@@ -176,6 +176,7 @@ class Bundle(object):
             return v
 
     def get_value_group(self, group):
+
         return self.database.get_config_group(group, d_vid=self.dataset.vid)
 
 
@@ -300,23 +301,11 @@ class Bundle(object):
         process = self.get_value_group('process')
 
         return OrderedDict(
-            created=process.get(
-                'dbcreated',
-                ''),
-            prepared=process.get(
-                'prepared',
-                ''),
-            built=process.get(
-                'built',
-                ''),
-            build_time=str(
-                round(
-                    float(
-                        process['buildtime']),
-                    2)) +
-            's' if process.get(
-                'buildtime',
-                False) else '')
+            created=process.get('dbcreated',''),
+            prepared=process.get( 'prepared',''),
+            built=process.get('built' ''),
+            build_time=str( round( float( process['buildtime']),2)) +
+                       's' if process.get( 'buildtime', False) else '')
 
     def _info(self, identity=None):
         """Return a nested, ordered dict  of information about the bundle. """
@@ -418,7 +407,7 @@ class DbBundleBase(Bundle):
         d = super(DbBundleBase, self)._info(identity)
 
         d['source'] = OrderedDict(
-            db=self.database.path
+            db=self.database.dsn
         )
 
         d['source'].update(self._build_info())
@@ -479,9 +468,9 @@ class DbBundleBase(Bundle):
             d['meta']['documentation']['main'] = markdown.markdown(
                 self.sub_template(d['meta']['documentation']['main'] if d['meta']['documentation']['main'] else ''))
 
-        d['meta']['resolved_dependencies'] = self.get_value_group('rdep')
+        d['meta']['resolved_dependencies'] =  self.get_value_group('rdep')
 
-        d['meta']['process'] = self.get_value_group('process')
+        d['meta']['process'] =  self.get_value_group('process')
 
         return d
 
@@ -1673,12 +1662,7 @@ class BuildBundle(Bundle):
     def post_install(self):
         from datetime import datetime
         self.set_value('process','installed', datetime.now().isoformat())
-        
         self.set_build_state( 'installed')
-
-        dbd = self.library.get(self.identity.vid)
-        self.library.sync_bundle_doc(dbd)
-
 
 
         return True

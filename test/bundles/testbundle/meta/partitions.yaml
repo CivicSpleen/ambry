@@ -9,5 +9,3 @@
 -   grain: missing
     name: source-dataset-subset-variation-tone-missing
     table: tone
--   name: source-dataset-subset-variation-tone
-    table: tone

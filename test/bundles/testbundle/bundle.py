@@ -80,18 +80,10 @@ class Bundle(BuildBundle):
         self.log("=== Build db, using an inserter")
         self.build_db_inserter()
 
-        self.log("=== Update")
-        self.build_db_updater()
-
         self.log("=== Build missing")
         self.build_with_missing()
 
-
-        #self.log("=== Build csv")
-        #self.build_csv()
-
         return True
-
 
     def build_with_missing(self):
         
@@ -126,23 +118,7 @@ class Bundle(BuildBundle):
                 yield row
 
 
-        # Reset all of the columns to float data type so the intuition process can
-        # run completely 
-        self.schema.reset_to_float('coding')
 
-        # Iterate through the records and intuit the types of the columns, 
-        # then update the schema. 
-        memo = self.schema.update('coding', yield_rows(),
-                logger=self.init_log_rate(3000,'Update table schema'))
-
-        lr = self.init_log_rate(3000)
-
-        with p.inserter(cast_error_handler=CodeCastErrorHandler) as ins:
-            
-            for row in yield_rows():
-
-                ins.insert(row)
-                lr()
 
     def build_db_inserter(self):  
         
@@ -178,14 +154,6 @@ class Bundle(BuildBundle):
                 ins.insert(cast_row)
                 lr()
         
-
-    def build_db_updater(self):
-
-        p = self.partitions.find(table='tthree')
-
-        with p.updater('tthree') as upd:
-            for row in p.query("SELECT * FROM tthree"):
-                upd.update({'_id': row['id'], '_float': row['float']*2})
 
 
     def build_geo(self):

@@ -1,10 +1,14 @@
 about:
+    access: null
+    grain: null
     groups: []
     license: null
     rights: null
+    space: null
     subject: null
     summary: A Bundle built from a manifest
     tags: []
+    time: null
     title: Manifest Bundle
 contact_bundle:
     creator:

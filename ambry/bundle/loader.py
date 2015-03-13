@@ -390,21 +390,22 @@ class ExcelBuildBundle(CsvBundle):
 
         row_spec = self.metadata.sources[source].row_spec
 
+        data_start_line = 1
+        data_end_line = None
+        header_lines = [0]
+        header_comment_lines = []
 
-        if row_spec is not None:
-            data_start_line = row_spec.data_start_line
-            data_end_line = row_spec.data_end_line
+        try:
+            if row_spec is not None:
+                data_start_line = row_spec.data_start_line
+                data_end_line = row_spec.data_end_line
 
-            header_lines = list(row_spec.header_lines)
-            header_comment_lines = list(row_spec.header_comment_lines)
+                header_lines = list(row_spec.header_lines)
+                header_comment_lines = list(row_spec.header_comment_lines)
+        except KeyError:
+            pass # row_spec impl isn't really complete, can't check for when it isn't specified in config
 
-        else:
-            data_start_line = 1
-            data_end_line = None
-            header_lines = [0]
-            header_comment_lines = []
-
-        self.log("Generate rows for: {}, sheet = {}".format(fn, sheet_num))
+        self.log("Generate rows for: {}, sheet = {}, headers={}, data_start = {}".format(fn, sheet_num, header_lines, data_start_line))
 
         headers = []
         header_comments = []
@@ -417,7 +418,7 @@ class ExcelBuildBundle(CsvBundle):
 
             s = wb.sheets()[sheet_num]
 
-            for i in range(1,s.nrows):
+            for i in range(0,s.nrows):
 
                 row = self.srow_to_list(i, s)
 
