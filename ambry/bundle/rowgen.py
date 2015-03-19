@@ -21,7 +21,6 @@ class RowGenerator(object):
 
     put_row = None # A row that was put back to be iterated over again.
 
-    sample_rows  = None # The first 100  rows, set and used in intuit_row_spec
 
     def __init__(self, file, data_start_line = None, header_lines = None, header_comment_lines = None,
                  prefix_headers = None, segment = 0, delimiter = ','):
@@ -47,16 +46,14 @@ class RowGenerator(object):
         """Generate all rows from the underlying source, with no consideration for wether the row is data, header
         or comment """
         if self._raw_row_gen is None:
-
-
             self._raw_row_gen = self._yield_rows()
             self.line_number = 0
 
         return self._raw_row_gen
 
-
     def reset(self):
         self._raw_row_gen = None
+        self.line_number = 0
 
     def mangle_column_name(self, i, n):
         """
@@ -69,16 +66,20 @@ class RowGenerator(object):
         if not n:
             return 'column{}'.format(i)
 
-        return n
+        return n.strip()
 
-    def _get_header(self):
-        """Open the file and read the rows for the header and header comments"""
+    def get_header(self):
+        """Open the file and read the rows for the header and header comments. It leaves the iterator
+        positioned on the first data row. """
 
         if self.header:
             return self.header
 
         headers = []
         header_comments = []
+
+        self.reset()
+        row = None
 
         while self.line_number < self.data_start_line:
 
@@ -90,6 +91,7 @@ class RowGenerator(object):
 
             if self.line_number in self.header_comment_lines:
                 header_comments.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
+
 
         self.put_row = row
 
@@ -119,15 +121,16 @@ class RowGenerator(object):
             else:
                 header = []
 
-            if self.column_map:
-                header = [ self.column_map.get(col,col) for col in header]
 
             self.header = [ self.mangle_column_name(i,x) for i,x in enumerate(self.prefix_headers + header) ]
 
+            if self.column_map:
+                header = [ self.column_map.get(col,col) for col in header]
+
             self.header_comment = [' '.join(x) for x in zip(*header_comments)]
 
-        return self.header
 
+        return self.header
 
 
     def is_data_line(self, i,row):
@@ -158,12 +161,6 @@ class RowGenerator(object):
         header = []
         header_comments = []
 
-        self.reset()
-        self.sample_rows = []
-        for row in self.raw_row_gen:
-            if self.line_number > 100:
-                break
-            self.sample_rows.append(row)
 
         self.reset()
         for row in self.raw_row_gen:
@@ -184,12 +181,10 @@ class RowGenerator(object):
                 if not self.is_data_line(i, row):
                     data_end_line = i
 
-        self.reset()
 
-
-        self.data_start_line=data_start_line,
-        self.data_end_line=data_end_line,
-        self.header_comment_lines=header_comments,
+        self.data_start_line=data_start_line
+        self.data_end_line=data_end_line
+        self.header_comment_lines=header_comments
         self.header_lines=header
 
         return dict(
@@ -199,11 +194,11 @@ class RowGenerator(object):
             header_lines=header
         )
 
-
     def __iter__(self):
         """Generate rows for a source file. The source value must be specified in the sources config"""
 
-        self._get_header()
+
+        self.get_header()
 
         pre = [None]*len(self.prefix_headers)
 
@@ -214,6 +209,7 @@ class RowGenerator(object):
                 self.put_row = None
 
             yield  pre + row
+
 
 class DelimitedRowGenerator(RowGenerator):
 
