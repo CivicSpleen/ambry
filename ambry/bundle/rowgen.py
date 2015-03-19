@@ -23,14 +23,13 @@ class RowGenerator(object):
 
 
     def __init__(self, file, data_start_line = None, header_lines = None, header_comment_lines = None,
-                 prefix_headers = None, segment = 0, delimiter = ','):
+                 prefix_headers = None):
         """
 
         """
 
         self.file_name = file
-        self.segment = segment
-        self.delimiter = delimiter
+
         if data_start_line: self.data_start_line = data_start_line
         if header_lines: self.header_lines = header_lines
         if header_comment_lines: self.header_comment_lines = header_comment_lines
@@ -132,6 +131,10 @@ class RowGenerator(object):
 
         return self.header
 
+    def decode(self,v):
+        """Decode a string into unicode"""
+        return v
+
 
     def is_data_line(self, i,row):
         """Return true if a line is a data row"""
@@ -213,6 +216,17 @@ class RowGenerator(object):
 
 class DelimitedRowGenerator(RowGenerator):
 
+
+    delimiter = None
+
+    def __init__(self, file, data_start_line=None, header_lines=None, header_comment_lines=None, prefix_headers=None,
+                 segment=0, delimiter = ','):
+
+        super(DelimitedRowGenerator, self).__init__(file, data_start_line, header_lines, header_comment_lines,
+                                                    prefix_headers, segment)
+
+        self.delimiter = delimiter
+
     def get_csv_reader(self, f, sniff = False):
         import csv
 
@@ -236,11 +250,16 @@ class DelimitedRowGenerator(RowGenerator):
 
 class ExcelRowGenerator(RowGenerator):
 
-    def __iter__(self):
 
-        """Generate rows for a source file. The source value ust be specified in the sources config"""
-        from xlrd import open_workbook
 
+
+    def __init__(self, file, data_start_line=None, header_lines=None,
+                 header_comment_lines=None, prefix_headers=None, segment = 0):
+
+        super(ExcelRowGenerator, self).__init__(file, data_start_line, header_lines, header_comment_lines,
+                                                prefix_headers)
+
+        self.segment = segment
 
     def _yield_rows(self):
         from xlrd import open_workbook

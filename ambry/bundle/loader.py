@@ -34,6 +34,58 @@ class LoaderBundle(BuildBundle):
         except:
             return False
 
+    def build_create_partition(self, source_name):
+        """Create or find a partition based on the source"""
+        # This ugliness is b/c get() doesn't take a 'default' arg.
+
+        source = self.metadata.sources[source_name]
+
+        try:
+            table = source['table']
+
+            if not table:
+                table = source_name
+
+        except:
+            table = source_name
+
+        assert bool(table)
+
+        return self.partitions.find_or_new(table=table)
+
+
+
+    def build_from_source(self, source_name):
+
+        source = self.metadata.sources[source_name]
+
+        if source.is_loadable is False:
+            return
+
+        p = self.build_create_partition(source_name)
+
+        self.log("Loading source '{}' into partition '{}'".format(source_name, p.identity.name))
+
+        lr = self.init_log_rate(print_rate=5)
+
+        header = [c.name for c in p.table.columns]
+
+        row_gen = self.row_gen_class()
+
+        with p.inserter() as ins:
+            for _, row in self.gen_rows(source_name):
+                lr(str(p.identity.name))
+
+                d = dict(zip(header, row))
+
+                self.build_modify_row(p, source, d)
+
+                ins.insert(d)
+
+    def build(self):
+        for source_name in self.metadata.sources:
+            self.build_from_source(source_name)
+        return True
 
 
 class CsvBundle(LoaderBundle):
@@ -75,7 +127,6 @@ class CsvBundle(LoaderBundle):
                     return self.filesystem.download_cache.path(fn_ck)
 
         return fn
-
 
 
     def make_table_for_source(self, source_name):
@@ -130,80 +181,9 @@ class CsvBundle(LoaderBundle):
 
         return True
 
-    def build_create_partition(self, source_name):
-        """Create or find a partition based on the source"""
-        # This ugliness is b/c get() doesn't take a 'default' arg.
 
-        source = self.metadata.sources[source_name]
-
-        try:
-            table = source['table']
-
-            if not table:
-                table = source_name
-
-        except:
-            table = source_name
-
-        assert bool(table)
-
-        return self.partitions.find_or_new(table=table)
-
-
-
-    def build_from_source(self, source_name):
-
-        source = self.metadata.sources[source_name]
-
-        if source.is_loadable is False:
-            return
-
-        p = self.build_create_partition(source_name)
-
-        self.log("Loading source '{}' into partition '{}'".format(source_name, p.identity.name))
-
-        lr = self.init_log_rate(print_rate=5)
-
-        header = [c.name for c in p.table.columns]
-
-        with p.inserter() as ins:
-            for _, row in self.gen_rows(source_name):
-                lr(str(p.identity.name))
-
-                d = dict(zip(header, row))
-
-                self.build_modify_row(p, source, d)
-
-                ins.insert(d)
-
-    def build(self):
-        for source_name in self.metadata.sources:
-            self.build_from_source(source_name)
-        return True
 
 class ExcelBuildBundle(CsvBundle):
-
-    workbook = None # So the derived classes can et to the workbook, esp for converting dates
-
-    decode = False # Set to an encoding from which to decode all strings.
-
-    col_map = None # If set, maps column headers
-
-    def __init__(self, bundle_dir=None):
-        '''
-        '''
-
-        super(ExcelBuildBundle, self).__init__(bundle_dir)
-
-        if not self.metadata.build.requirements or not 'xlrd' in self.metadata.build.requirements:
-            self.metadata.load_all()
-            self.metadata.build.requirements.xlrd = 'xlrd'
-            self.update_configuration()
-
-
-
-
-
 
 
 

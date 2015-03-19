@@ -1,4 +1,4 @@
-from bundles.testbundle.bundle import Bundle
+
 from test_base import  TestBase
 from ambry.bundle.rowgen import DelimitedRowGenerator
 
