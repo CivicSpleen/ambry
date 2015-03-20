@@ -9,8 +9,8 @@ import datetime
 import sqlalchemy
 from sqlalchemy import orm
 from sqlalchemy import event
-from sqlalchemy import Column as SAColumn, Integer, Float, BigInteger, Boolean, UniqueConstraint, ForeignKeyConstraint
-from sqlalchemy import Float as Real,  Text, String, ForeignKey, Binary, Table as SATable
+from sqlalchemy import Column as SAColumn, Integer, Float,  Boolean, UniqueConstraint
+from sqlalchemy import Float as Real,  Text, String, ForeignKey, Binary, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator, TEXT, PickleType
 from sqlalchemy.ext.declarative import declarative_base
@@ -1814,6 +1814,8 @@ class SearchDoc(Base):
     keywords = SAColumn('sd_keywords',Text)
     text = SAColumn('sd_text', Text)
 
+lom_enums = "nom ord int ratio".split()
+
 class ColumnStat(Base, SavableMixin, LinkableMixin):
     """
     Table for per column, per partition stats
@@ -1828,7 +1830,7 @@ class ColumnStat(Base, SavableMixin, LinkableMixin):
 
     c_vid = SAColumn('cs_c_vid', String(12), ForeignKey('columns.c_vid'), nullable=False, index=True)
     column = relationship('Column', backref='stats')
-
+    lom = SAColumn('cs_lom',Enum(*lom_enums))
     count = SAColumn('cs_count',BigIntegerType)
     mean = SAColumn('cs_mean',Float)
     std = SAColumn('cs_std',Float)

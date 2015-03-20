@@ -9,7 +9,7 @@ class RowGenerator(object):
     file_name = None
 
     generator = None
-    column_map = None
+
     prefix_headers = ['id']
     header = None
     data_start_line = 1
@@ -20,7 +20,6 @@ class RowGenerator(object):
     line_number = None
 
     put_row = None # A row that was put back to be iterated over again.
-
 
     def __init__(self, file, data_start_line = None, header_lines = None, header_comment_lines = None,
                  prefix_headers = None):
@@ -39,7 +38,6 @@ class RowGenerator(object):
 
         self.put_row = None
 
-
     @property
     def raw_row_gen(self):
         """Generate all rows from the underlying source, with no consideration for wether the row is data, header
@@ -54,18 +52,6 @@ class RowGenerator(object):
         self._raw_row_gen = None
         self.line_number = 0
 
-    def mangle_column_name(self, i, n):
-        """
-        Override this method to change the way that column names from the source are altered to
-        become column names
-        :param n:
-        :return:
-        """
-
-        if not n:
-            return 'column{}'.format(i)
-
-        return n.strip()
 
     def get_header(self):
         """Open the file and read the rows for the header and header comments. It leaves the iterator
@@ -90,7 +76,6 @@ class RowGenerator(object):
 
             if self.line_number in self.header_comment_lines:
                 header_comments.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
-
 
         self.put_row = row
 
@@ -120,11 +105,7 @@ class RowGenerator(object):
             else:
                 header = []
 
-
-            self.header = [ self.mangle_column_name(i,x) for i,x in enumerate(self.prefix_headers + header) ]
-
-            if self.column_map:
-                header = [ self.column_map.get(col,col) for col in header]
+            self.header =  self.prefix_headers + header
 
             self.header_comment = [' '.join(x) for x in zip(*header_comments)]
 
@@ -220,10 +201,10 @@ class DelimitedRowGenerator(RowGenerator):
     delimiter = None
 
     def __init__(self, file, data_start_line=None, header_lines=None, header_comment_lines=None, prefix_headers=None,
-                 segment=0, delimiter = ','):
+                 delimiter = ','):
 
         super(DelimitedRowGenerator, self).__init__(file, data_start_line, header_lines, header_comment_lines,
-                                                    prefix_headers, segment)
+                                                    prefix_headers)
 
         self.delimiter = delimiter
 
@@ -250,9 +231,6 @@ class DelimitedRowGenerator(RowGenerator):
 
 class ExcelRowGenerator(RowGenerator):
 
-
-
-
     def __init__(self, file, data_start_line=None, header_lines=None,
                  header_comment_lines=None, prefix_headers=None, segment = 0):
 
@@ -268,7 +246,7 @@ class ExcelRowGenerator(RowGenerator):
 
         self.workbook = wb
 
-        s = wb.sheets()[self.segment]
+        s = wb.sheets()[self.segment if self.segment else 0]
 
         for i in range(0,s.nrows):
             yield self.srow_to_list(i, s)

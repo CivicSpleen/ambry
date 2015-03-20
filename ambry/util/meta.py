@@ -352,7 +352,6 @@ class Metadata(object):
 
                 self.dump(stream=f, map_view = MapView(keys = keys))
 
-
 class Group(object):
     """A  group of terms"""
 
@@ -439,7 +438,6 @@ class Group(object):
     def _repr_html_(self):
         """Adapts html() to IPython"""
         return self.html()
-
 
 class DictGroup(Group, collections.MutableMapping):
     """A group that holds key/value pairs"""
@@ -593,7 +591,6 @@ class TypedDictGroup(DictGroup):
         o = self.get_term_instance(key)
         o.set(value)
 
-
 class VarDictGroup(DictGroup):
     """A Dict group that doesnt' use terms to enforce a structure.
     """
@@ -619,7 +616,6 @@ class VarDictGroup(DictGroup):
 
     def __setitem__(self, key, value):
         self._term_values[key] = value
-
 
 class ListGroup(Group, collections.MutableSequence):
     """A group that holds a list of DictTerms"""
@@ -905,6 +901,7 @@ class DictTerm(Term, collections.MutableMapping):
         o = self.get_term_instance(key)
 
         v =  o.get()
+
         return v
 
     def __setitem__(self, key, value):
@@ -934,9 +931,18 @@ class DictTerm(Term, collections.MutableMapping):
         """ """
         # Instantiate a copy of this group, assign a specific Metadata instance
         # and return it.
-        import copy
 
-        return self._new_instance(instance)
+        v =  self._new_instance(instance)
+
+        return v
+
+    @property
+    def dict(self):
+
+        if not self._key in self._parent._term_values:
+            return None
+
+        return self._term_values.to_dict()
 
     def html(self):
             out = ''
@@ -953,12 +959,10 @@ class DictTerm(Term, collections.MutableMapping):
                             cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
                             out=out))
 
-
     def set(self, d):
 
         for k, v in d.items():
             self.set_row(k,v)
-
 
     def set_row(self, k, v):
 
@@ -985,7 +989,6 @@ class DictTerm(Term, collections.MutableMapping):
 
     def is_empty(self):
         return all( [v is None for v in self._term_values.values()])
-
 
 class ListTerm(Term):
     """A Term that is always a list.

@@ -5,7 +5,13 @@
 from  ambry.bundle import BuildBundle
 
 class LoaderBundle(BuildBundle):
+
     prefix_headers = ['id']
+
+    row_gen_ext_map = {
+        'xlsm': 'xls',
+        'xlsx': 'xls'
+    }
 
     @staticmethod
     def int_caster(v):
@@ -34,6 +40,21 @@ class LoaderBundle(BuildBundle):
         except:
             return False
 
+    def mangle_column_name(self, i, n):
+        """
+        Override this method to change the way that column names from the source are altered to
+        become column names
+        :param i: column number
+        :param n: original column name
+        :return:
+        """
+        from ambry.orm import Column
+
+        if not n:
+            return 'column{}'.format(i)
+
+        return Column.mangle_name(n.strip())
+
     def build_create_partition(self, source_name):
         """Create or find a partition based on the source"""
         # This ugliness is b/c get() doesn't take a 'default' arg.
@@ -53,7 +74,70 @@ class LoaderBundle(BuildBundle):
 
         return self.partitions.find_or_new(table=table)
 
+    def row_gen_for_source(self, source_name):
+        from os.path import dirname, split, splitext
 
+        source = self.metadata.sources[source_name]
+
+        fn = self.filesystem.download(source_name)
+
+        base_dir, file_name  = split(fn)
+        file_base, ext = splitext(file_name)
+
+        if ext.startswith('.'):
+            ext = ext[1:]
+
+        ext = self.row_gen_ext_map.get(ext,ext)
+
+        if source.row_spec.dict:
+            rs = source.row_spec.dict
+        else:
+            rs = {}
+
+        rs['segment'] = source.segment
+        rs['prefix_headers'] = self.prefix_headers
+        if ext == 'csv':
+            from rowgen import DelimitedRowGenerator
+            return DelimitedRowGenerator(fn, **rs)
+        elif ext  == 'xls':
+            from rowgen import ExcelRowGenerator
+            return ExcelRowGenerator(fn, **rs)
+        else:
+            raise Exception("Unknown ext: {}".format(ext))
+
+    def meta_for_source(self, source_name):
+
+        with self.session:
+
+            source = self.metadata.sources[source_name]
+
+            if source.is_loadable is False:
+                return
+
+            table = self.make_table_for_source(source_name)
+
+            header, row = self.gen_rows(source_name, as_dict=False).next()
+
+            if self.col_map:
+                header = [self.col_map.get(col, col) for col in header]
+
+            self.schema.update_from_iterator(table.name,
+                                             header=self.mangle_header(header),
+                                             iterator=self.gen_rows(source_name, as_dict=False),
+                                             max_n=1000,
+                                             logger=self.init_log_rate(500))
+
+    def meta(self):
+
+        self.database.create()
+
+        if not self.run_args.get('clean', None):
+            self._prepare_load_schema()
+
+        for source_name, source in self.metadata.sources.items():
+            self.meta_for_source(source_name)
+
+        return True
 
     def build_from_source(self, source_name):
 
@@ -68,17 +152,26 @@ class LoaderBundle(BuildBundle):
 
         lr = self.init_log_rate(print_rate=5)
 
-        header = [c.name for c in p.table.columns]
+        columns = [c.name for c in p.table.columns]
 
-        row_gen = self.row_gen_class()
+        row_gen =  self.row_gen_for_source(source_name)
+
+        header = [ self.mangle_column_name(i,n) for i,n in enumerate(row_gen.get_header())]
+
+        for col in header:
+            if col not in columns:
+                self.error("Header column {} not in table {} for source {}".format(col, p.table.name, source_name))
 
         with p.inserter() as ins:
-            for _, row in self.gen_rows(source_name):
+            for row in row_gen:
+
+                assert len(row) == len(header), '{} != {}'
+
                 lr(str(p.identity.name))
 
                 d = dict(zip(header, row))
 
-                self.build_modify_row(p, source, d)
+                self.build_modify_row(row_gen, p, source, d)
 
                 ins.insert(d)
 
@@ -87,13 +180,11 @@ class LoaderBundle(BuildBundle):
             self.build_from_source(source_name)
         return True
 
-
 class CsvBundle(LoaderBundle):
     """A Bundle variant for loading CSV files"""
 
     delimiter = None
     col_map = None  # If set, maps column headers
-
 
     def get_source(self, source):
         """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
@@ -145,47 +236,8 @@ class CsvBundle(LoaderBundle):
 
         return table
 
-
-    def meta_for_source(self, source_name):
-
-        with self.session:
-            source = self.metadata.sources[source_name]
-
-            if source.is_loadable is False:
-                return
-
-            table = self.make_table_for_source(source_name)
-
-            header, row = self.gen_rows(source_name, as_dict=False).next()
-
-            if self.col_map:
-                header = [self.col_map.get(col, col) for col in header]
-
-            self.schema.update_from_iterator(table.name,
-                                             header=self.mangle_header(header),
-                                             iterator=self.gen_rows(source_name, as_dict=False),
-                                             max_n=1000,
-                                             logger=self.init_log_rate(500))
-
-    def meta(self):
-
-        self.database.create()
-
-        if not self.run_args.get('clean', None):
-            self._prepare_load_schema()
-
-        for source_name, source in self.metadata.sources.items():
-            self.meta_for_source(source_name)
-
-
-
-        return True
-
-
-
 class ExcelBuildBundle(CsvBundle):
-
-
+    pass
 
 class TsvBuildBundle(CsvBundle):
 

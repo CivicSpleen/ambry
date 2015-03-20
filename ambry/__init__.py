@@ -10,10 +10,10 @@ bundles, and a process for acquiring, processing and managing data. The goal of
 a data bundle is for data analysts to be able to run few simple commands to find
 a dataset and load it into a relational database.
 
-Visit Visit http://ambry.io for more information.
+Visit  http://ambry.io for more information.
 
 
-Copyright (c) 2014 Clarinova. This file is licensed under the terms of the
+Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
@@ -21,7 +21,6 @@ from _meta import *
 
 from ambry.util import memoize
 import ambry.library as _l
-from ambry.bundle import new_analysis_bundle
 
 @memoize
 def config():
@@ -36,7 +35,3 @@ def library(name='default'):
     return _l.new_library(config().library(name))
 
 
-def ilibrary(name='default'):
-    '''Return the default Analysislibrary for this installation, which is like the Library returned by
-    library(), but configured for use in IPython'''
-    return _l.AnalysisLibrary(library())

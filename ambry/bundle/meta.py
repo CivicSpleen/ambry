@@ -88,6 +88,7 @@ class SourceTerm(DictTerm):
     conversion = ScalarTerm(store_none=False)  # An alternate URL or regular expression for a file in the source store
     foreign_key = ScalarTerm(store_none=False)  # ID of the foreign key for the table.
     row_spec = RowSpecDictTerm(store_none=False) # Spec for non data rows. 'start' for first line of data, 'header' for sclar/list of header lines
+    row_data = DictTerm(store_none=False)  # A dict of values that are added to every row of the table.
 
     def __nonzero__(self):
         return bool(self.url or self.file or self.description or self.dd_url)

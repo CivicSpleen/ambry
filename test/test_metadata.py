@@ -507,6 +507,29 @@ about:
         for x in  t.about.groups:
             print x
 
+    def test_row_spec(self):
+        from ambry.bundle.meta import Top
+        import yaml
+
+        x = """
+sources:
+    google:
+        description: The Google Homepage
+        url: http://google.com
+        row_spec:
+            data_start_line: 4
+            header_lines: [1,2]
+    yahoo:
+        description: The Yahoo Homepage
+        url: http://yahoo.com
+    """
+
+        t = Top(yaml.load(x))
+
+        print t.sources.google.row_spec.dict
+        print t.sources.yahoo.row_spec.dict
+
+
 
 def suite():
     suite = unittest.TestSuite()

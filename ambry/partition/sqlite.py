@@ -170,7 +170,6 @@ class SqlitePartition(PartitionBase):
             self.write_file()
             self.write_full_stats()
 
-
     def write_full_stats(self):
         """
 
@@ -187,12 +186,13 @@ class SqlitePartition(PartitionBase):
         JSON of top 50 Unique values
         JSON of Histogram of 100 values, for Int and Real
 
-
         :return:
         """
         import pandas as pd
         import numpy as np
         import json
+
+
         df = self.pandas
 
         if df is None:
