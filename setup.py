@@ -1,16 +1,12 @@
 #!/usr/bin/env python
 
-#from distribute_setup import use_setuptools
-#use_setuptools()
 
 from setuptools import setup, find_packages
-
-
 import sys, re, os.path
+from pip.req import parse_requirements
 
 # Avoiding import so we don't execute ambry.__init__.py, which has imports
 # that aren't installed until after installation.
-
 
 __version__ = None # "Declare", actually set in the execfile
 __author__ = None
@@ -39,11 +35,12 @@ def read_requirements(file_name):
             yield line
 
 
-def parse_requirements(file_name):
+def x_parse_requirements(file_name):
     requirements = []
     for line in read_requirements(file_name):
 
         if re.match(r'\s*-e\s+', line):  # '-e' is the pip option for 'editable'
+
             requirements.append(re.sub(r'\s*-e\s+.*#egg=(.*)$', r'\1', line))
 
         elif re.match(r'\s*-f\s+', line): # '-f' is the pip option for 'install a file HTML list of links'
@@ -56,9 +53,13 @@ def parse_requirements(file_name):
     if 'linux' in sys.platform:
         requirements.append('pysqlite')
 
-    return reversed(requirements) # Appending reverses the lines
+    return requirements
+
+
 
 def parse_dependency_links(file_name):
+    """Create dependency links -- URLs -- that are associated with the names in the requirements list"""
+
     dependency_links = []
 
     for line in read_requirements(file_name):
@@ -118,7 +119,7 @@ setup(name = "ambry",
           'Topic :: Utilities'
           ],
       #zip_safe=False,
-      install_requires = parse_requirements('requirements.txt'),
+      install_requires = [x for x in reversed([str(x.req) for x in parse_requirements('requirements.txt')])],
       dependency_links = parse_dependency_links('requirements.txt'),
       extras_require = {"pgsql": ["psycopg2"], "geo": ["sh", "gdal"], "server": ["paste", "bottle"]}
       )

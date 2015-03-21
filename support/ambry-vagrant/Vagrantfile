@@ -34,7 +34,8 @@ echo "--- Installing Ambry"
 apt-get update
 locale-gen en_US.UTF-8
 
-apt-get install -y git \
+apt-get update &&  apt-get install -y \
+git \
 gcc \
 g++ \
 python-pip \
@@ -56,10 +57,10 @@ python-scipy
 pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
 cd /usr/src/ambry/ # Better exist -- it is the shared dir
-pip install -r requirements.txt
-python setup.py develop
+#pip install -r requirements.txt
+#python setup.py develop
 
-su - vagrant ambry config install # Installs a development config
+#su - vagrant ambry config install # Installs a development config
 
 SCRIPT
 

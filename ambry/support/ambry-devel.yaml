@@ -4,7 +4,7 @@ library:
         filesystem: '{root}/library'
         database: 'sqlite://{root}/library.db'
         remotes:
-        - 'http://s3.sandiegodata.org/library#compress'
+        - 'http://s3.sandiegodata.org/library'
 
     server:
         port: 7979

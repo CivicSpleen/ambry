@@ -1,3 +1,5 @@
+#
+# docker build -t civick/ambry
 
 FROM ubuntu:14.04
 
@@ -27,8 +29,8 @@ RUN pip install git+https://github.com/CivicKnowledge/ckcache.git
 RUN pip install git+https://github.com/CivicKnowledge/ambrydoc.git #refresh3
 RUN pip install git+https://github.com/civicknowledge/ambry.git #refresh1
 
-VOLUME /ambry
-RUN mkdir -p /ambry/source
+VOLUME /var/ambry
+RUN mkdir -p /var/ambry/source
 
 ADD ambry.yaml /etc/ambry.yaml
 
