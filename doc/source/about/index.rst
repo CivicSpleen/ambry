@@ -1,6 +1,6 @@
 .. _about:
 
-Design and Requirements
+About Ambry
 =======================
 
 An overview of the motivations, requirements and design of Ambry

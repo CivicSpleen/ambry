@@ -384,7 +384,7 @@ class BundleFilesystem(Filesystem):
         elif parsed.scheme  == 's3':
             # To keep the rest of the code simple, we'll use the S# cache to generate a signed URL, then
             # download that through the normal process.
-            from cache import new_cache
+            from ckcache import new_cache
 
             s3cache = new_cache("s3://{}".format(parsed.netloc.strip('/')))
 

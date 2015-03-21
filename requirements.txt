@@ -1,5 +1,5 @@
 PyYAML
-SQLAlchemy
+sqlalchemy
 sh
 boto
 requests
@@ -20,4 +20,6 @@ nltk
 flask
 flask-compress
 -e git+https://github.com/CivicKnowledge/ckcache.git#egg=ckcache
+-e git+https://github.com/CivicKnowledge/geoid.git#egg=geoid
+
 

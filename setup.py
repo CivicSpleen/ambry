@@ -39,7 +39,6 @@ def read_requirements(file_name):
             yield line
 
 
-
 def parse_requirements(file_name):
     requirements = []
     for line in read_requirements(file_name):
@@ -47,7 +46,7 @@ def parse_requirements(file_name):
         if re.match(r'\s*-e\s+', line):  # '-e' is the pip option for 'editable'
             requirements.append(re.sub(r'\s*-e\s+.*#egg=(.*)$', r'\1', line))
 
-        elif re.match(r'\s*-f\s+', line): # '-e' is the pip option for 'install a file HTML list of links'
+        elif re.match(r'\s*-f\s+', line): # '-f' is the pip option for 'install a file HTML list of links'
             pass
 
         else:
@@ -57,7 +56,7 @@ def parse_requirements(file_name):
     if 'linux' in sys.platform:
         requirements.append('pysqlite')
 
-    return requirements
+    return reversed(requirements) # Appending reverses the lines
 
 def parse_dependency_links(file_name):
     dependency_links = []

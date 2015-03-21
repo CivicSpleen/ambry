@@ -7,7 +7,6 @@
 # Revised BSD License, included in this distribution as LICENSE.txt
 
 
-
 import os
 from ..identity import Identity
 from ..orm import Dataset
@@ -19,7 +18,6 @@ def load_bundle(bundle_dir):
     mod = import_file(rp)
 
     return mod.Bundle
-
 
 class SourceTree(object):
 
@@ -45,6 +43,8 @@ class SourceTree(object):
             #ident = Identity.from_dict(file_.data['identity'])
 
             ident = self.library.resolve(file_.ref, location=None)
+
+            assert ident is not None, file_.ref
 
             ck = getattr(ident, key)
 

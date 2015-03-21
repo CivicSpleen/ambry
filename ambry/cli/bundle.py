@@ -229,8 +229,9 @@ def bundle_parser(cmd):
     
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     command_p.add_argument('-r','--rebuild', default=False,action="store_true", help='Rebuild the schema, but dont delete built files')
-    command_p.add_argument('-f','--fast', default=False,action="store_true", help='Load the schema faster by not checking for extant columns')
-
+    command_p.add_argument('-F','--fast', default=False,action="store_true", help='Load the schema faster by not checking for extant columns')
+    command_p.add_argument('-f', '--force', default=False, action="store_true",
+                           help='Force build. ( --clean is usually preferred ) ')
     #
     # Build Command
     #

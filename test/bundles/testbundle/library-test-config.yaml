@@ -50,7 +50,8 @@ database:
         dbname: '{root}/library.db'
         driver: sqlite  
 
-filesystem:  
+filesystem:
+  warehouses: '{root}/warehouses'
   root: /tmp/library-test
 
   default:

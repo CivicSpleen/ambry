@@ -102,10 +102,9 @@ To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/instal
 
 .. code-block:: bash
 
-    $ git clone https://github.com/clarinova/ambry.git
+    $ git clone https://github.com/CivicKnowledge/ambry.git
     
-Or, download a Zip archive from: https://github.com/clarinova/ambry/archive/master.zip
-
+Or, download a Zip archive from: https://github.com/CivicKnowledge/ambry/archive/master.zip
 
 After unpacking the source, change directory to the vagrant directory, :file:`support/ambry-vagrant` and run :command:`vagrant up`
 

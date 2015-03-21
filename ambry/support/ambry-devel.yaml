@@ -14,7 +14,7 @@ library:
 
 
 filesystem:
-    root: /ambry
+    root: /var/ambry
     downloads: '{root}/cache/downloads'
     extracts: '{root}/cache/extracts'
     documentation: '{root}/cache/documentation'

@@ -89,20 +89,18 @@ def root_parser(cmd):
 
     sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Query commands to find packages with. ')
 
-
 def root_command(args, rc):
     from ..library import new_library
     from . import global_logger
+    from ..dbexceptions import ConfigurationError
 
     l = new_library(rc.library(args.library_name))
     l.logger = global_logger
 
-    st = l.source
 
-    globals()['root_' + args.subcommand](args, l, st, rc)
+    globals()['root_' + args.subcommand](args, l,  rc)
 
-
-def root_list(args, l, st, rc):
+def root_list(args, l, rc):
     from ..cli import  _print_bundle_list
     from ambry.warehouse.manifest import Manifest
     from . import global_logger
@@ -193,9 +191,9 @@ def root_list(args, l, st, rc):
                        fields=fields,
                        show_partitions=args.partitions)
 
-def root_info(args, l, st, rc):
+def root_info(args, l, rc):
     from ..cli import  _print_info
-    from ..dbexceptions import NotFoundError
+    from ..dbexceptions import NotFoundError, ConfigurationError
     import ambry
 
     locations = filter(bool, [args.library, args.remote, args.source])
@@ -207,8 +205,11 @@ def root_info(args, l, st, rc):
         print "Version:  {}, {}".format(ambry._meta.__version__, 'production' if IN_PRODUCTION else 'development')
         print "Root dir: {}".format(rc.filesystem('root')['dir'])
 
-        if l.source:
-            print "Source :  {}".format(l.source.base_dir)
+        try:
+            if l.source:
+                print "Source :  {}".format(l.source.base_dir)
+        except ConfigurationError:
+            print "Source :  No source directory"
 
         print "Configs:  {}".format(rc.dict['loaded'])
 
@@ -233,7 +234,7 @@ def root_info(args, l, st, rc):
 
     _print_info(l, ident, list_partitions=args.partitions)
 
-def root_meta(args, l, st, rc):
+def root_meta(args, l, rc):
 
     ident = l.resolve(args.term)
 
@@ -290,8 +291,7 @@ def root_meta(args, l, st, rc):
             else:
                 print o.dump()
 
-
-def root_find(args, l, st, rc):
+def root_find(args, l, rc):
     from ..source.repository.git import GitRepository
     from ..library.files import Files
 
@@ -361,7 +361,7 @@ def root_find(args, l, st, rc):
                 else:
                     _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=fields)
 
-def root_doc(args, l, st, rc):
+def root_doc(args, l, rc):
     import webbrowser
 
     try:

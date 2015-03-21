@@ -4,5 +4,5 @@ extract: {}
 sources:
     municipal:
         description: null
-        url: http://rdw.sandag.org/file_store/Jurisdiction/Municipal_Boundaries.zip
+        url: http://ds.civicknowledge.org/sangis.org/Community/Neighborhoods_SD.zip
 views: {}

@@ -8,8 +8,6 @@ locale-gen en_US.UTF-8
 
 packages="git gcc g++ python-pip python-dev sqlite3  libpq-dev
 libgdal-dev gdal-bin python-gdal python-numpy python-scipy "
-#libhdf5-serial-dev libhdf5-dev hdf5-tools h5utils  python-h5py \
-# "
 
 let "ver = $(lsb_release -r -s | tr -d '.')"
 
@@ -18,8 +16,6 @@ if (( $ver >= 1404 )); then
 else
     packages="$packages libsqlite3-dev libspatialite5 libspatialite-dev spatialite-bin libspatialindex-dev"
 fi
-
-
 
 
 for pkg in $packages; do

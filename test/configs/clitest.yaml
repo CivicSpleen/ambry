@@ -13,13 +13,16 @@ filesystem:
     python: '{root}/cache/python'
     analysis: '{root}/source/analysis'
     build: '{root}/build'
+    warehouses: '{root}/warehouses'
+    source: '{source}'
+
 library:
     default:
         database: default
         filesystem: default
         remotes:
             - '{root}/remote'
-        source: '{root}/source'
+
 
 numbers:
     host: numbers.ambry.io
