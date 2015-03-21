@@ -1,5 +1,5 @@
 #
-# docker build -t civick/ambry
+# docker build -t civick/ambry .
 
 FROM ubuntu:14.04
 
@@ -26,8 +26,9 @@ RUN dpkg-reconfigure locales
 RUN pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
 RUN pip install git+https://github.com/CivicKnowledge/ckcache.git
+RUN pip install git+https://github.com/CivicKnowledge/geoid.git
+RUN pip install git+https://github.com/CivicKnowledge/ambry.git
 RUN pip install git+https://github.com/CivicKnowledge/ambrydoc.git #refresh3
-RUN pip install git+https://github.com/civicknowledge/ambry.git #refresh1
 
 VOLUME /var/ambry
 RUN mkdir -p /var/ambry/source
