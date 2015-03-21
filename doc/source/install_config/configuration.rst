@@ -56,17 +56,16 @@ After installation, the main configuration file, either ``/etc/ambry.yaml`` or `
             filesystem: '{root}/library'
             database: 'sqlite://{root}/library.db'
             remotes:
-            - 'http://s3.sandiegodata.org/library#compress'
+            - 'http://s3.sandiegodata.org/library'
 
-            
     filesystem:
-        root: /home/eric/ambry
-        documentation: '{root}/cache/documentation'
+        root: /var/ambry
         downloads: '{root}/cache/downloads'
         extracts: '{root}/cache/extracts'
+        documentation: '{root}/cache/documentation'
         python: '{root}/cache/python'
         source: '{root}/source'
-        warehouse: '{root}/warehouse'
+        warehouses: '{root}/warehouses'
 
     services:
         numbers:

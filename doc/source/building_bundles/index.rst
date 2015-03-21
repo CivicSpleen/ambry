@@ -1,22 +1,19 @@
-.. _tutorial_creating:
+.. _tutorial:
 
-Creating Bundles
-================
+Tutorial
+===============
+
+A quick guide to using Ambry
 
 .. toctree::
-    :hidden:
-    
-    document
-    firststeps
-    partitions
-    schema
-    skeleton
+    :maxdepth: 3
 
+    bundle_structure
 
 Overview
 ********
 
-1. :ref:`Create a skeleton source bundle <creating_skeleton>`. 
+1. :ref:`Create a skeleton source bundle <skeleton>`. 
 2. :ref:`Document the bundle <creating_document>`.
 3. :ref:`Create the schema and codes <creating_schema>`.
 4. :ref:`Plan for partitions <creating_partitions>`.

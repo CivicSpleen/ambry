@@ -6,13 +6,6 @@ library:
         remotes:
         - 'http://s3.sandiegodata.org/library'
 
-    server:
-        port: 7979
-        host: localhost
-        filesystem: '{root}/library'
-        database: 'sqlite://{root}/library.db'
-
-
 filesystem:
     root: /var/ambry
     downloads: '{root}/cache/downloads'

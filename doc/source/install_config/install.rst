@@ -10,7 +10,7 @@ Ambry is a complex package that has dependencies on a lot of other code, some of
 * `Linux, Ubuntu`_
 * `Windows`_
 * `Vagrant`_
-
+* `Docker`_
 
 
 ********
@@ -91,14 +91,13 @@ Follow up with :ref:`install-post-install` to create your configuration files an
 Windows
 *************
 
-For Windows, you can probably use the "Easy Way" installation: install Anaconda first, then Ambry. If that doesn't work, try Vagrant. 
-
+For Windows, you can probably use the "Easy Way" installation: install Anaconda first, then Ambry. If that doesn't work, try Vagrant or Docker. 
 
 *************
 Vagrant
 *************
 
-To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/installation/index.html>`_, then get the source code. 
+To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/installation/index.html>`_, then get the source code. The Vagrant build will 
 
 .. code-block:: bash
 
@@ -122,7 +121,17 @@ When the build is done, ssh to the box.
     $ vagrant ssh 
 
 Then, follow the instrictions at :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
+  
+
+*************
+Docker
+*************
    
+A Dockerfile for a basic docker image is available in: :file:`support/ambry-docker`. To build it, run:
+
+.. code-block:: bash
+
+    $ docker build -t ambry .
 
 .. _install-post-install:
 
@@ -130,15 +139,7 @@ Then, follow the instrictions at :ref:`install-post-install` to create your conf
 Post Install
 *************
   
-After installing Ambry and its dependencies, you need to install a configuration file. 
-
-.. code-block:: bash
-
-    $ ambry config install 
-
- If you run this as a non-root user, it will create `~/.ambry.yaml` to store your configuration and `~/ambry` to store data and packages. If you run it as root, it will create the configuration as `/etc/ambry` and put the data store at `/ambry/`
- 
-Then, check that it worked with:
+After installing Ambry and its dependencies, you can check that the installation worked correctly with:
    
 .. code-block:: bash
     

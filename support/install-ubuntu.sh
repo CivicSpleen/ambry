@@ -41,6 +41,4 @@ else
     pip install ambry
 fi
 
-#ambry config install # Installs a development config
-#cd $(ambry config value filesystem.source)
-#[ ! -e clarinova-public ] && git clone https://github.com/clarinova/ambry-bundles-public.git clarinova-public
+ambry config install # Installs a development config
