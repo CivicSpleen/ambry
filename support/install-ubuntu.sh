@@ -6,7 +6,7 @@ echo "--- Installing Ambry"
 apt-get update
 locale-gen en_US.UTF-8
 
-packages="git gcc g++ python-pip python-dev sqlite3  libpq-dev
+packages="git gcc g++  python-dev sqlite3  libpq-dev
 libgdal-dev gdal-bin python-gdal python-numpy python-scipy "
 
 let "ver = $(lsb_release -r -s | tr -d '.')"

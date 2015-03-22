@@ -19,7 +19,7 @@ pdfminer
 nltk
 flask
 flask-compress
--e git+https://github.com/CivicKnowledge/ckcache.git#egg=ckcache
--e git+https://github.com/CivicKnowledge/geoid.git#egg=geoid
+ckcache
+geoid
 
 

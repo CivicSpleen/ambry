@@ -35,43 +35,6 @@ def read_requirements(file_name):
             yield line
 
 
-def x_parse_requirements(file_name):
-    requirements = []
-    for line in read_requirements(file_name):
-
-        if re.match(r'\s*-e\s+', line):  # '-e' is the pip option for 'editable'
-
-            requirements.append(re.sub(r'\s*-e\s+.*#egg=(.*)$', r'\1', line))
-
-        elif re.match(r'\s*-f\s+', line): # '-f' is the pip option for 'install a file HTML list of links'
-            pass
-
-        else:
-            requirements.append(line)
-
-
-    if 'linux' in sys.platform:
-        requirements.append('pysqlite')
-
-    return requirements
-
-
-
-def parse_dependency_links(file_name):
-    """Create dependency links -- URLs -- that are associated with the names in the requirements list"""
-
-    dependency_links = []
-
-    for line in read_requirements(file_name):
-        if re.match(r'\s*-[ef]\s+', line):
-            dependency_links.append(re.sub(r'\s*-[ef]\s+', '', line))
-
-
-    if 'linux' in sys.platform:
-        dependency_links.append('git+https://github.com/clarinova/pysqlite.git#egg=pysqlite')
-
-    return dependency_links
-
 def find_package_data():
     """Return package_data, because setuptools is too stupid to handle nested directories """
     #
@@ -101,7 +64,7 @@ d = dict(
     long_description=readme(),
     author=__author__,
     author_email=__email__,
-    url="https://github.com/clarinova/ambry",
+    url="https://github.com/CivicKnowledge/ambry",
     packages=find_packages(),
     scripts=['scripts/bambry', 'scripts/bambry.bat',
              'scripts/ambry', 'scripts/ambry.bat',
@@ -121,7 +84,6 @@ d = dict(
     ],
     # zip_safe=False,
     install_requires=[x for x in reversed([str(x.req) for x in parse_requirements('requirements.txt')])],
-    dependency_links=parse_dependency_links('requirements.txt'),
     extras_require={"pgsql": ["psycopg2"], "geo": ["sh", "gdal"], "server": ["paste", "bottle"]}
 )
 
