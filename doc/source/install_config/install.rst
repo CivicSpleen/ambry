@@ -84,6 +84,14 @@ For Ubuntu 13.04 through 14.04, use this script to install the dependencies and 
 
     $ sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install-ubuntu.sh)"
 
+If you've created a fresh Ubuntu install, you'll probably also have to update and install curl: 
+
+.. code-block:: bash
+
+    $ apt-get update && apt-get install -y curl && \
+    sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install-ubuntu.sh)"
+
+
 Follow up with :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
    
 
@@ -105,7 +113,7 @@ After unpacking the source, change directory to the vagrant directory, :file:`su
 
 .. code-block:: bash
 
-    $ wget https://github.com/clarinova/ambry/archive/master.zip
+    $ wget https://github.com/CivicKnowledge/ambry/archive/master.zip
     $ unzip master.zip
     $ cd ambry-master/support/ambry-vagrant/
     $ vagrant up
