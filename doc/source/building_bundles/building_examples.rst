@@ -4,9 +4,9 @@
 Building Example Bundles
 ========================
 
-The :file:`test` directory has a set up example directories that are a good place to start for understanding how to build your own bundles. 
+The :file:`test` directory has a set of example bundles that are a good place to start for understanding how to build your own bundles. 
 
-First, :command:`cd test/bundles/example.com` to see a list of the bundle directories that are available. We'll start with the `simple` directory.
+First, :command:`cd test/bundles/example.com` to see a list of the bundle directories that are available. We'll start with the ``simple`` directory.
 
 All of the operations you can perform on the bundle are managed by the :command:`ambry` command, but it requires akward syntax to reference the bundle in the current directory, so we'll use the convenience command :command:`bambry`. :command:`bambry info` will give you some basic information about the bundle: 
 
@@ -21,7 +21,7 @@ All of the operations you can perform on the bundle are managed by the :command:
     
 This information shows the names and number of the bundle, and the path to where the bundle database will be created. 
 
-To build the bundle, use the :command:`bambry build` command. Use the `--clean` flag to ensure a complete rebuild.: 
+To build the bundle, use the :command:`bambry build` command. Use the ``--clean`` flag to ensure a complete rebuild.: 
 
 .. code-block:: bash
 
@@ -72,10 +72,10 @@ The Build Process Phases
 
 Building a bundle involves a series of stages:
 
-# The optional **meta** phase, which is normally only run once to create the schema and extract variable and value codess from external documentation. 
-# The **prepare** phase, to load the schema and create an empty bundle database.
-# The **build** phase, which creates partitions and loads them with data. 
-# The **install** phase, which installs the partitions into the library. 
+- The optional **meta** phase, which is normally only run once to create the schema and extract variable and value codess from external documentation. 
+- The **prepare** phase, to load the schema and create an empty bundle database.
+- The **build** phase, which creates partitions and loads them with data. 
+- The **install** phase, which installs the partitions into the library. 
 
 Each of these phases has a pre, main and post sub-phases, although it is very rare for bundle developers to alter the pre and post sub phases. 
 

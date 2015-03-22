@@ -39,39 +39,37 @@ Change into the directory for the bundle :file:`simple-orig` and you will these 
 
 The two most important files are the bundle files. 
 
-* :file:`bundle.py`: Bundle code.
-* :file:`bundle.yaml` Main bundle configuration. 
-* :file:`README.md` A README file, primarily for github. Generated from :file:`meta/README.md.template`
+- :file:`bundle.py`: Bundle code.
+- :file:`bundle.yaml` Main bundle configuration. 
+- :file:`README.md` A README file, primarily for github. Generated from :file:`meta/README.md.template`
         
 The meta directory holds a variety of metadata and documentation files. A small number of them are build configuration:
 
-* :file:`meta/build.yaml`: Build specific configuration. Can be empty for very simple bundles. 
-* :file:`meta/schema.csv`: A CSV specification for all tables and columns. 
+- :file:`meta/build.yaml`: Build specific configuration. Can be empty for very simple bundles. 
+- :file:`meta/schema.csv`: A CSV specification for all tables and columns. 
 
 There is one documentation file, and one template for building the README
 
-* :file:`meta/documentation.md`: Detailed documentation, usually changes and errors discovered while creating the bundle. 
-* :file:`meta/README.md.template`
+- :file:`meta/documentation.md`: Detailed documentation, usually changes and errors discovered while creating the bundle. 
+- :file:`meta/README.md.template`
 
 THe remaining files are generated during the build, to make introspecting the source bundle easier. 
 
-* :file:`meta/doc.yaml`: A YAML version of the documentation.md file. 
-* :file:`meta/partitions.yaml`: A list of all of the partitions created during the build. 
-
+- :file:`meta/doc.yaml`: A YAML version of the documentation.md file. 
+- :file:`meta/partitions.yaml`: A list of all of the partitions created during the build. 
 
 Bundle.yaml
 ***********
 
 The :file:`bundle.yaml` file is the main configuration for a bundle. It defines the identiy of the bundle, references external documentation and names the creators.  The file will typicall have these sections: 
 
- * about
- * contact_bundle
- * contact_source
- * external_documentation
- * identity
- * names
- * version
- 
+- about
+- contact_bundle
+- contact_source
+- external_documentation
+- identity
+- names
+- version
  
 About section
 -------------
@@ -113,11 +111,3 @@ Contact_bundle and contact_source
              email: null
              name: null
              url: null
- 
- 
- 
- 
-
-
-
-
