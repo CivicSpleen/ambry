@@ -11,13 +11,4 @@ A quick guide to using Ambry
     building_examples
     bundle_structure
 
-Overview
-********
 
-1. :ref:`Create a skeleton source bundle <skeleton>`. 
-2. :ref:`Document the bundle <creating_document>`.
-3. :ref:`Create the schema and codes <creating_schema>`.
-4. :ref:`Plan for partitions <creating_partitions>`.
-5. Create the build routine
-6. Build and test
-7. Install
