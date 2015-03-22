@@ -1,7 +1,7 @@
 .. _tutorial:
 
 Building Bundles
-===============
+================
 
 A quick guide to using Ambry
 
@@ -10,5 +10,6 @@ A quick guide to using Ambry
 
     building_examples
     bundle_structure
+    creating
 
 

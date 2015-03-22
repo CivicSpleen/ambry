@@ -81,7 +81,7 @@ Each of these phases has a pre, main and post sub-phases, although it is very ra
 
 This example bundle does not have a meta phase, so we will discuss only the prepare and build phases. 
 
-The **prepare* phase is run by executing the :command::`bambry prepare` command, but it is also run before the build phase if it hasn't been run first. In fact, running :command:`bambry build --clean` will actually run the clean, prepare then build phases, in that order. 
+The **prepare** phase is run by executing the :command::`bambry prepare` command, but it is also run before the build phase if it hasn't been run first. In fact, running :command:`bambry build --clean` will actually run the clean, prepare then build phases, in that order. 
 
 The major function of the prepare phase is to load the schema. The :file:`meta/schama.csv` is parsed, tables and columns are created in the bundle database. You can test this by running :command:`bambry prepare` and then display the tables or columns from the bundle database. 
 
