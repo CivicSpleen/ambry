@@ -94,32 +94,39 @@ def find_package_data():
 
     return {"ambry": l }
 
-setup(name = "ambry",
-      version = __version__,
-      description = "Data packaging and distribution framework",
-      long_description = readme(),
-      author = __author__,
-      author_email = __email__,
-      url = "https://github.com/clarinova/ambry",
-      packages = find_packages(), 
-      scripts=['scripts/bambry', 'scripts/bambry.bat',
-               'scripts/ambry', 'scripts/ambry.bat',
-               'scripts/xambry',
-               'scripts/ambry-load-sqlite', 'scripts/ambry_build_all'],
-      package_data = find_package_data(),
-      license = "",
-      platforms = "Posix; MacOS X; Linux",
-      classifiers=[
-          'Development Status :: 3 - Alpha',
-          'Environment :: Other Environment',
-          'Intended Audience :: Developers',
-          'Operating System :: OS Independent',
-          'Programming Language :: Python',
-          'Programming Language :: Python :: 2.7',
-          'Topic :: Utilities'
-          ],
-      #zip_safe=False,
-      install_requires = [x for x in reversed([str(x.req) for x in parse_requirements('requirements.txt')])],
-      dependency_links = parse_dependency_links('requirements.txt'),
-      extras_require = {"pgsql": ["psycopg2"], "geo": ["sh", "gdal"], "server": ["paste", "bottle"]}
-      )
+d = dict(
+    name="ambry",
+    version=__version__,
+    description="Data packaging and distribution framework",
+    long_description=readme(),
+    author=__author__,
+    author_email=__email__,
+    url="https://github.com/clarinova/ambry",
+    packages=find_packages(),
+    scripts=['scripts/bambry', 'scripts/bambry.bat',
+             'scripts/ambry', 'scripts/ambry.bat',
+             'scripts/xambry',
+             'scripts/ambry-load-sqlite', 'scripts/ambry_build_all'],
+    package_data=find_package_data(),
+    license="",
+    platforms="Posix; MacOS X; Linux",
+    classifiers=[
+        'Development Status :: 3 - Alpha',
+        'Environment :: Other Environment',
+        'Intended Audience :: Developers',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 2.7',
+        'Topic :: Utilities'
+    ],
+    # zip_safe=False,
+    install_requires=[x for x in reversed([str(x.req) for x in parse_requirements('requirements.txt')])],
+    dependency_links=parse_dependency_links('requirements.txt'),
+    extras_require={"pgsql": ["psycopg2"], "geo": ["sh", "gdal"], "server": ["paste", "bottle"]}
+)
+
+print "Setup with:"
+import pprint
+pprint.pprint(d)
+
+setup(**d)
