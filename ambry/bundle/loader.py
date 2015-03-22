@@ -139,6 +139,9 @@ class LoaderBundle(BuildBundle):
 
         return True
 
+    def build_modify_row(self, row_gen, p, source, d):
+        pass
+
     def build_from_source(self, source_name):
 
         source = self.metadata.sources[source_name]

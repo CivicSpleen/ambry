@@ -842,19 +842,36 @@ class Library(object):
 
         return out
 
-    def check_dependencies(self, throw=True):
+    def check_dependencies(self, throw=True, download=True):
         from ..util import Progressor
 
         errors = {}
         for k, v in self.dependencies.items():
-            self.logger.info('Download and check dependency: {}'.format(v))
-            b = self.get(v, cb=Progressor().progress)
 
-            if not b:
-                if throw:
-                    raise NotFoundError("Dependency check failed for key={}, id={}. Failed to get bundle or partition".format(k, v))
-                else:
-                    errors[k] = v
+            if download:
+                self.logger.info('Download and check dependency: {}'.format(v))
+
+                b = self.get(v, cb=Progressor().progress)
+
+                if not b:
+                    if throw:
+                        raise NotFoundError("Dependency check failed for key={}, id={}. Failed to get bundle or partition".format(k, v))
+                    else:
+                        errors[k] = v
+
+            else:
+                self.logger.info('Check dependency: {}'.format(v))
+
+                dataset = self.resolve(v)
+
+                if not dataset:
+                    if throw:
+                        raise NotFoundError("Dependency check failed for key={}, id={}. Failed to get bundle or partition".format(k, v))
+                    else:
+                        errors[k] = v
+
+
+        return errors
 
     @property
     @memoize
