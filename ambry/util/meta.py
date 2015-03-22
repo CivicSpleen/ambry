@@ -240,7 +240,6 @@ class Metadata(object):
         else:
             self._errors[(group, term, sub_term)]  =  value
 
-
     def dump(self, stream = None, map_view = None, keys = None):
 
         if map_view is None and keys is not None:
@@ -248,7 +247,6 @@ class Metadata(object):
             map_view = MapView(keys = keys )
 
         return self._term_values.dump(stream, map_view = map_view)
-
 
     def groups_by_file(self):
         """Returns a map of the files defined in groups, and the groups that define those files"""
@@ -297,7 +295,6 @@ class Metadata(object):
                 for g in groups: # Each file causes multiple groups to load.
                     self.mark_loaded(g._key)
 
-
             except IOError:
                 raise
 
@@ -314,10 +311,8 @@ class Metadata(object):
                         for g in groups:  # Each file causes multiple groups to load.
                             self.mark_loaded(g._key)
 
-
     def load_group(self, group):
         self.load_from_dir(self._path, group)
-
 
     def write_to_dir(self, path=None, write_all=False):
         import os

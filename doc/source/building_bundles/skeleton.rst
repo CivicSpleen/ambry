@@ -1,4 +1,4 @@
-.. _creating_skeleton:
+.. _skeleton:
 
 =====================
 Creating a New Bundle

@@ -45,7 +45,7 @@ class Bundle(BuildBundle):
         return True
         
     def build_add_codes(self):
-        
+        raise Exception()
         code_key = 0
         
         for tn in ('example2', 'example3'):

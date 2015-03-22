@@ -1,13 +1,14 @@
 .. _tutorial:
 
-Tutorial
+Building Bundles
 ===============
 
 A quick guide to using Ambry
 
 .. toctree::
-    :maxdepth: 3
+    :maxdepth: 1
 
+    building_examples
     bundle_structure
 
 Overview
