@@ -14,7 +14,6 @@ RUN apt-get update && apt-get install -y \
     libgdal-dev gdal-bin python-gdal python-numpy python-scipy  \
     libsqlite3-dev libspatialite5 libspatialite-dev spatialite-bin libspatialindex-dev
 
-
 ENV LANGUAGE en_US.UTF-8
 ENV LANG en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
@@ -25,8 +24,6 @@ RUN dpkg-reconfigure locales
 # Spatialite services.
 RUN pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
-RUN pip install git+https://github.com/CivicKnowledge/ckcache.git
-RUN pip install git+https://github.com/CivicKnowledge/geoid.git
 RUN pip install git+https://github.com/CivicKnowledge/ambry.git
 RUN pip install git+https://github.com/CivicKnowledge/ambrydoc.git
 
