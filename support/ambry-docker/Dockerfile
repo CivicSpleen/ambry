@@ -33,6 +33,5 @@ RUN pip install git+https://github.com/CivicKnowledge/ambrydoc.git #refresh3
 VOLUME /var/ambry
 RUN mkdir -p /var/ambry/source
 RUN ambry config install
-#ADD ambry.yaml /etc/ambry.yaml
 
 RUN ambry library sync -r

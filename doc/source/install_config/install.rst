@@ -97,13 +97,9 @@ For Windows, you can probably use the "Easy Way" installation: install Anaconda 
 Vagrant
 *************
 
-To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/installation/index.html>`_, then get the source code. The Vagrant build will 
+To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/installation/index.html>`_, then get the source code. The Vagrant environment is inside the source distribution, and share's the host's source directory, so the Vagrant installation is a good way to develop on Windows while running in Ubuntu. 
 
-.. code-block:: bash
-
-    $ git clone https://github.com/CivicKnowledge/ambry.git
-    
-Or, download a Zip archive from: https://github.com/CivicKnowledge/ambry/archive/master.zip
+First, clone the source from github, https://github.com/CivicKnowledge/ambry.git or, download a Zip archive from: https://github.com/CivicKnowledge/ambry/archive/master.zip
 
 After unpacking the source, change directory to the vagrant directory, :file:`support/ambry-vagrant` and run :command:`vagrant up`
 
@@ -132,6 +128,12 @@ A Dockerfile for a basic docker image is available in: :file:`support/ambry-dock
 .. code-block:: bash
 
     $ docker build -t ambry .
+
+When that is finished, you can run the image with:
+
+.. code-block:: bash
+
+    $ docker run -i -t ambry bin/bash
 
 .. _install-post-install:
 
