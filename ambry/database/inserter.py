@@ -265,6 +265,7 @@ class ValueInserter(ValueWriter):
                 if self.caster:
                     d, cast_errors = self.caster(values)
 
+
                 else:
                     d = dict((k.lower().replace(' ','_'), v) for k,v in values.items())
 
@@ -295,6 +296,9 @@ class ValueInserter(ValueWriter):
 
                 d = self.cast_error_handler.cast_error(d, cast_errors)
                 cast_errors = None
+
+
+
 
             self.cache.append(d)
          

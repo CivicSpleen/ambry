@@ -26,13 +26,11 @@ class SqlitePartition(PartitionBase):
         super(SqlitePartition, self).__init__(bundle, record)
         self.memory  = memory
 
-
     @property
     def database(self):
         if self._database is None:
             self._database = PartitionDb(self.bundle, self, base_path=self.path, memory=self.memory)          
         return self._database
-
 
     def detach(self, name=None):
         return self.database.detach(name)
@@ -53,8 +51,7 @@ class SqlitePartition(PartitionBase):
 
         for sql in self.bundle.schema.generate_indexes(table):
             self.database.connection.execute(sql)
-              
-              
+
     def drop_indexes(self, table=None):
 
         if not self.database.exists():
@@ -81,10 +78,7 @@ class SqlitePartition(PartitionBase):
                 print 'Drop',index_name
 
                 self.database.connection.execute("DROP INDEX {}".format(index_name))
-    
-    
 
-    
     def create_with_tables(self, tables=None, clean=False):
         '''Create, or re-create,  the partition, possibly copying tables
         from the main bundle
@@ -132,7 +126,6 @@ class SqlitePartition(PartitionBase):
         # cause the sqlite driver to return with 'unable to open database' error
         self.close()
 
-
     def clean(self):
         '''Delete all of the records in the tables declared for this oartition'''
         
@@ -141,7 +134,6 @@ class SqlitePartition(PartitionBase):
             except: pass
 
         return self
-        
 
     def optimal_rows_per_segment(self, size = 100*1024*1024, max=200000):
         '''Calculate how many rows to put into a CSV segment for a target number
@@ -236,7 +228,6 @@ class SqlitePartition(PartitionBase):
 
                 p.add_stat(col.vid, row)
 
-
     def write_basic_stats(self):
         '''Record in the partition entry basic statistics for the partition's
         primary table'''
@@ -268,7 +259,6 @@ class SqlitePartition(PartitionBase):
             bundle_s.commit()
 
         self.set_state(Partitions.STATE.FINALIZED)
-
 
     def write_file(self):
         """Create a file entry in the bundle for the partition, storing the md5 checksum and size. """
@@ -302,8 +292,6 @@ class SqlitePartition(PartitionBase):
                 s.merge(f)
                 s.commit()
 
-
-
     @property
     def rows(self):
         '''Run a select query to return all rows of the primary table. '''
@@ -327,6 +315,22 @@ class SqlitePartition(PartitionBase):
         except StopIteration:
             return None # No records, so no dataframe.
             #raise Exception("Select failed: {}".format("SELECT * FROM {}".format(self.get_table().name)))
+
+    @property
+    def dict(self):
+
+        table = self.table
+
+        d = dict(
+            stats={s.column.name: s.dict for s in self._stats},
+            **self.record.dict
+        )
+
+        del d['table']
+        d['table'] = table.nonull_col_dict,
+
+        return d
+
 
     def query(self,*args, **kwargs):
         """Convience function for self.database.query()"""

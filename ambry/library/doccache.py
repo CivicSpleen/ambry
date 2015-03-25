@@ -19,6 +19,8 @@ class DocCache(object):
         else:
             self._cache = {}
 
+        self.ignore_cache = False # if True, assume the next quest to cache the key does not exist
+
     def cache(self, f, *args, **kwargs):
         """Cache the return value of a method. Normally, we'd use @memoize, but
         we want this to run in the context of the object. """
@@ -27,12 +29,21 @@ class DocCache(object):
             key = kwargs['_key']
             del kwargs['_key']
         else:
-            key = (str(args) if args else '') + (str(kwargs) if kwargs else '')
+            key = ''
+            if args:
+                key += '_'.join(str(arg) for arg in  args)
+
+            if kwargs:
+                key += '_'.join(str(arg) for arg in kwargs.values() )
+
+
+        key = key[0] + '/' + key[1:4] +'/' + key
 
         assert bool(key)
 
-        if key not in self._cache:
+        if key not in self._cache or self.ignore_cache:
             self._cache[key] = f(*args, **kwargs)
+
         return self._cache[key]
 
     def library_info(self):
@@ -47,7 +58,7 @@ class DocCache(object):
         return self.cache(lambda: self.library.summary_dict, _key='library_info')
 
     def bundle_index(self):
-        return self.cache(lambda: { d.vid : d.dict for d in self.library.datasets() }, _key='bundle_index')
+        return self.cache(lambda: self.library.versioned_datasets() , _key='bundle_index')
 
     def collection_index(self):
         pass
@@ -80,10 +91,11 @@ class DocCache(object):
         pass
 
     def partition(self, vid):
+
         return self.cache(lambda vid: self.library.partition(vid).dict, vid)
 
     def table(self, vid):
-        return self.cache(lambda vid: self.library.table(vid).dict, vid)
+        return self.cache(lambda vid: self.library.table(vid).nonull_col_dict, vid)
 
     def table_schema(self, vid):
         pass

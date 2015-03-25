@@ -368,13 +368,10 @@ def bundle_info(args, b, st, rc):
         if args.stats:
             for p in b.partitions.all:
                 b.log("--- Stats for {}: ".format(p.identity))
-                b.log("{:20.20s} {:>7s} {:>7s} {:s}".format("Col name", "Count", 'Uniq', 'Sample Values'))
+                b.log("{:20.20s} {:>7s} {:>7s} {:>8s} {:s}".format("Col name", "Count", 'Uniq', 'Mean', 'Sample Values'))
                 for col_name, s in p.stats.__dict__.items():
 
-                    b.log("{:20.20s} {:7d} {:7d} {:s}".format(col_name, s.count, s.nuniques, ','.join(s.uvalues.keys()[:5])))
-
-
-
+                    b.log("{:20.20s} {:7d} {:7d} {:7.2e} {:s}".format(col_name, s.count, s.nuniques, s.mean, ','.join(s.uvalues.keys()[:5])))
 
 def bundle_clean(args, b, st, rc):
     b.log("---- Cleaning ---")
@@ -382,7 +379,6 @@ def bundle_clean(args, b, st, rc):
     #b.clean(clean_meta=('meta' in phases))
     b.database.enable_delete = True
     b.clean()
-
 
 
 def bundle_meta(args, b, st, rc):
@@ -532,9 +528,6 @@ def bundle_config(args, b, st, rc):
 
         print identity.fqname
 
-
-
-
     elif args.subsubcommand == 's3urls':
         return bundle_config_s3urls(args, b, st, rc)
 
@@ -607,7 +600,6 @@ def bundle_config_scrape(args, b, st, rc):
 
     for link in soup.findAll('a'):
 
-
         if not link:
             continue;
 
@@ -662,7 +654,6 @@ def bundle_config_scrape(args, b, st, rc):
 
     import yaml
     print yaml.dump(d, default_flow_style=False)
-
 
 
 def bundle_config_s3urls(args, b, st, rc):

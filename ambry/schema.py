@@ -1390,7 +1390,7 @@ class {name}(Base):
     #
     #
 
-    def _update_from_intuiter(self, table_name, intuiter, logger=None,
+    def update_from_intuiter(self, table_name, intuiter, logger=None,
                               description=None, descriptions = None):
         """
         Update a table schema using a memo from intuit()
@@ -1485,7 +1485,7 @@ class {name}(Base):
         intuit = Intuiter(header=header, logger = logger)
         intuit.iterate(iterator, max_n=max_n)
 
-        self._update_from_intuiter(table_name, intuit, descriptions = descriptions)
+        self.update_from_intuiter(table_name, intuit, descriptions = descriptions)
 
 
     def update_csv(self, table_name, file_name, n=500, logger=None):

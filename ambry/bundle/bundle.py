@@ -916,7 +916,6 @@ class BuildBundle(Bundle):
 
         for k, v in self.metadata.sources.items():
             fn = self.filesystem.download(k)
-            print fn
 
             base = os.path.basename(fn)
             dest = os.path.join(data, base)

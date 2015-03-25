@@ -868,6 +868,17 @@ source/dataset-subset-variation-0.0.1/tthree.db:
             print dc.bundle(d_vid)
 
 
+    def test_search(self):
+
+        l = self.get_library()
+
+        print l.search
+
+        for ds in l.datasets():
+            print ds.vid
+
+
+
 
 
 def suite():

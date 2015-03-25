@@ -583,6 +583,25 @@ class Library(object):
 
         return (self.database.session.query(Dataset).all())
 
+    def versioned_datasets(self):
+        """Like datasets(), but returns a dict structure, and only the most recent version, with other versions
+        under the 'otehr_version' key """
+        from ..orm import Dataset
+
+        datasets = {}
+
+        for ds in (self.database.session.query(Dataset).order_by(Dataset.revision.desc()).all()):
+
+            if ds.id_ not in datasets:
+                datasets[ds.id_] = ds.dict
+                datasets[ds.id_]['other_versions'] = {}
+
+            else:
+                datasets[ds.id_]['other_versions'][ds.vid] = ds.dict
+
+        return datasets
+
+
     def bundle(self, vid):
         """Returns a LibraryDbBundle for the given vid"""
         from ..bundle import LibraryDbBundle
@@ -594,6 +613,7 @@ class Library(object):
     def partition(self, vid):
         from ..orm import Partition
         from sqlalchemy.orm.exc import NoResultFound
+        from ..dbexceptions import NotFoundError
 
         try:
             return (self.database.session.query(Partition).filter(Partition.vid == vid).one())
@@ -602,7 +622,7 @@ class Library(object):
                 return (self.database.session.query(Partition).filter(Partition.id_ == vid).one())
             except NoResultFound:
                 self.logger.error("No partition found: {} for {}".format(vid, self.database.dsn))
-                raise
+                raise NotFoundError("No partition in library for vid : {} ".format(vid))
 
     @property
     def partitions(self):
@@ -1169,6 +1189,7 @@ class Library(object):
                 except Exception as e:
                     self.logger.error("Failed to put bundle {}: {}".format(cache_key, e))
                     b.close()
+                    raise
                     continue
 
                 try:
@@ -1323,7 +1344,6 @@ class Library(object):
             self.sync_warehouse(w)
 
 
-
     @property
     def doc_cache(self):
         """Return the documentation cache. """
@@ -1334,11 +1354,20 @@ class Library(object):
         except ImportError:
             raise
             return None
+
+
     @property
     def warehouse_cache(self):
         """Cache for warehouse Sqlite databases and extracts"""
 
         return self._warehouse_cache
+
+    @property
+    def search(self):
+        from search import Search
+
+        return Search(self)
+
 
     def _gen_schema(self):
         from ..schema import Schema

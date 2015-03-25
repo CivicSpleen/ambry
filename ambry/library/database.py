@@ -13,7 +13,7 @@ import ambry.util
 from ambry.util import temp_file_name
 from ambry.bundle import DbBundle
 from ..identity import LocationRef, Identity
-from ambry.orm import Column, Partition, Table, Dataset, Config, File, Base, Code
+from ambry.orm import Column, Partition, Table, Dataset, Config, File, Base, Code, ColumnStat
 
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
@@ -241,6 +241,7 @@ class LibraryDb(object):
 
 
         s.query(Config).delete()
+        s.query(ColumnStat).delete()
         s.query(File).delete()
         s.query(Column).delete()
         s.query(Partition).delete()
@@ -291,7 +292,7 @@ class LibraryDb(object):
         if not self.enable_delete:
             raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
 
-        library_tables = [Config.__tablename__, Column.__tablename__, Partition.__tablename__,
+        library_tables = [Config.__tablename__, ColumnStat.__tablename__,Column.__tablename__, Partition.__tablename__,
                   Table.__tablename__, File.__tablename__,  Dataset.__tablename__, Code.__tablename__]
 
 
@@ -303,7 +304,7 @@ class LibraryDb(object):
 
         for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
             if table.name in  library_tables:
-                table.drop(self.engine, checkfirst=True)
+                 table.drop(self.engine, checkfirst=True)
 
         self.commit()
 
@@ -315,7 +316,7 @@ class LibraryDb(object):
 
     def create_tables(self):
         from sqlalchemy.exc import OperationalError
-        tables = [ Dataset, Config, Table, Column, File, Partition, Code]
+        tables = [ Dataset, Config, Table, Column, File, Partition, Code, ColumnStat]
 
 
         try:
@@ -705,6 +706,9 @@ class LibraryDb(object):
 
         dataset.location = Dataset.LOCATION.LIBRARY
 
+        dataset.data['title'] = bundle.metadata.about.title
+        dataset.data['summary'] = bundle.metadata.about.summary
+
         s.merge(dataset)
 
         for config in bdbs.query(Config).all():
@@ -756,17 +760,18 @@ class LibraryDb(object):
         in this case, tables and column will not be installed.
 
         """
-        from ..dbexceptions import NotFoundError
-        from sqlalchemy.orm.exc import NoResultFound
 
         s = self.session
         s.merge(bundle.get_dataset())
         s.merge(partition.record)
 
+        for cs in partition.record._stats:
+            s.merge(cs)
+
         s.commit()
 
         # Sqlalchemy loads in all of the records linked to the
-        # partition, including the tables and columns.
+        # partition, including the tables and columns. But not column stats
 
 
 
@@ -842,14 +847,19 @@ class LibraryDb(object):
 
     def remove_dataset(self, vid):
         '''Remove all references to a Dataset'''
-        from ..orm import Dataset
+        from ..orm import Dataset, ColumnStat
 
         dataset = (self.session.query(Dataset).filter(Dataset.vid == vid).one())
+
+        # Total hack to avoid having to figure out cascades between partitions and colstats
+        pvid_pre = 'p'+str(dataset.vid[1:-3])+'%'+dataset.vid[-3:]
+        self.session.query(ColumnStat).filter(ColumnStat.p_vid.like(pvid_pre)).delete(synchronize_session=False)
 
         # Can't use delete() on the query -- bulk delete queries do not
         # trigger in-python cascades!
         self.session.delete(dataset)
 
+        self.session.commit()
 
     def remove_partition(self, partition):
         from ..bundle import LibraryDbBundle
@@ -867,14 +877,19 @@ class LibraryDb(object):
 
         s = self.session
 
+        # TODO: Probably need to manually delete colstats.
+
         s.query(Partition).filter(Partition.t_vid  == p_vid).delete()
 
 
         self.commit()
 
     def remove_partition_record(self, vid):
+        from ..orm import ColumnStat
 
         s = self.session
+
+        # TODO: Probably need to manually delete colstats.
 
         s.query(Partition).filter(Partition.vid == vid).delete()
 

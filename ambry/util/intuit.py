@@ -9,8 +9,8 @@ import datetime
 
 def test_float(v):
 
-    if v and v[0]  == '0' and len(v) > 1: #Fixed-width integer codes are actually strings.
-        return 0
+    #if v and v[0]  == '0' and len(v) > 1: #Fixed-width integer codes are actually strings.
+    #    return 0
 
     try:
         float(v)
@@ -20,11 +20,11 @@ def test_float(v):
 
 def test_int(v):
 
-    if v and v[0] == '0' and len(v) > 1: #Fixed-width integer codes are actually strings.
-        return 0
+    #if v and v[0] == '0' and len(v) > 1: #Fixed-width integer codes are actually strings.
+    #    return 0
 
     try:
-        if float(v) == int(v):
+        if float(v) == int(float(v)):
             return 1
         else:
             return 0
@@ -218,59 +218,35 @@ class Intuiter(object):
     header = None
     counts = None
 
-    def __init__(self, header = None, logger = None):
-        self.header = header
-        self._columns = defaultdict(Column)
-        self.logger = logger
-
-    def add_row(self,row):
+    def __init__(self):
         from collections import OrderedDict
+        self._columns = OrderedDict()
 
-        if self.logger:
-            self.logger("Intuit Row")
+    def iterate(self, row_gen, max_n = None):
 
+        header = row_gen.get_header()
 
-        if isinstance(row, dict):
-            for k,v in row.items():
-                self._columns[k].test(v)
-        elif isinstance(row, (list, tuple)):
-            # The row is actually a tuple of (header, row)
-            if isinstance(row[0], (tuple, list, OrderedDict)):
-                for k, v in enumerate(row[1]):
-                    type_ = self._columns[k].test(v)
-            else:
-                for k, v in enumerate(row):
-                    type_  = self._columns[k].test(v)
-
-        else:
-            raise TypeError("Row must be a list or a dict")
-
-    def iterate(self, itr, max_n = None):
-
-        for n,row in enumerate(itr):
-
+        for n,row in enumerate(row_gen):
 
             if max_n and n > max_n:
                 return
 
             try:
-                self.add_row(row)
+                for col, value in zip(header, row):
+                    if not col in self._columns:
+                        self._columns[col] = Column()
+
+                    self._columns[col].test(value)
+
             except Exception as e:
                 print 'Failed to add row: {}: {}'.format(row, e)
-
 
     @property
     def columns(self):
 
         for k, v in self._columns.items():
 
-            if self.header:
-                try:
-                    v.name = self.header[k]
-                except IndexError:
-                    v.name = "Unknown{}".format(k)
-            else:
-                v.name = k
+            v.name = k
 
             yield v
 
@@ -278,4 +254,21 @@ class Intuiter(object):
 
         for v in self.columns:
 
-            print v.name, v.resolved_type()
+            rt = v.resolved_type()
+
+            d = dict(
+                name = v.name,
+                length=v.length,
+                resolved_type=rt[0],
+                has_codes=rt[1],
+                count=v.count,
+                ints=v.type_counts.get(int,None),
+                floats=v.type_counts.get(float, None),
+                strs=v.type_counts.get(str, None),
+                nones=v.type_counts.get(None, None),
+                datetimes=v.type_counts.get(datetime.datetime, None),
+                dates = v.type_counts.get(datetime.date, None),
+                times = v.type_counts.get(datetime.time, None),
+            )
+
+            yield d

@@ -55,6 +55,9 @@ class LoaderBundle(BuildBundle):
 
         return Column.mangle_name(n.strip())
 
+    def mangle_header(self, header):
+        return [ self.mangle_column_name(i,n) for i,n in enumerate(header)]
+
     def build_create_partition(self, source_name):
         """Create or find a partition based on the source"""
         # This ugliness is b/c get() doesn't take a 'default' arg.
@@ -96,6 +99,9 @@ class LoaderBundle(BuildBundle):
 
         rs['segment'] = source.segment
         rs['prefix_headers'] = self.prefix_headers
+
+        rs['header_mangler'] = lambda header: self.mangle_header(header)
+
         if ext == 'csv':
             from rowgen import DelimitedRowGenerator
             return DelimitedRowGenerator(fn, **rs)
@@ -105,41 +111,83 @@ class LoaderBundle(BuildBundle):
         else:
             raise Exception("Unknown ext: {}".format(ext))
 
-    def meta_for_source(self, source_name):
 
-        with self.session:
+    def make_table_for_source(self, source_name):
 
-            source = self.metadata.sources[source_name]
+        source = self.metadata.sources[source_name]
 
-            if source.is_loadable is False:
-                return
+        table_name = source.table if source.table else source_name
 
-            table = self.make_table_for_source(source_name)
+        table_desc = source.description if source.description else "Table generated from {}".format(source.url)
 
-            header, row = self.gen_rows(source_name, as_dict=False).next()
+        data = dict(source)
+        if 'description' in data: del data['description']
+        del data['url']
 
-            if self.col_map:
-                header = [self.col_map.get(col, col) for col in header]
+        table = self.schema.add_table(table_name, description=table_desc, data=data)
 
-            self.schema.update_from_iterator(table.name,
-                                             header=self.mangle_header(header),
-                                             iterator=self.gen_rows(source_name, as_dict=False),
-                                             max_n=1000,
-                                             logger=self.init_log_rate(500))
+        return table
+
 
     def meta(self):
+        from collections import defaultdict
+        from ..util.intuit import Intuiter
 
         self.database.create()
 
         if not self.run_args.get('clean', None):
             self._prepare_load_schema()
 
+        tables = defaultdict(set)
+
+        # Collect all of the sources for each table, while also creating the tables
         for source_name, source in self.metadata.sources.items():
-            self.meta_for_source(source_name)
+
+            if source.is_loadable is False:
+                return
+
+            table = self.make_table_for_source(source_name)
+            tables[table.name].add(source_name)
+
+        intuiters = defaultdict(Intuiter)
+
+        for table_name, sources in  tables.items():
+
+            intuiter = intuiters[table_name]
+
+            iterables = []
+            for source_name in sources:
+                self.log("Intuiting {}".format(source_name))
+                iterables.append(self.row_gen_for_source(source_name))
+
+                rg = self.row_gen_for_source(source_name)
+
+                intuiter.iterate(rg, 2000)
+
+            self.schema.update_from_intuiter(table_name, intuiter)
+
+            with open(self.filesystem.build_path('{}-intuit-report.csv'.format(table_name)),'w') as f:
+                import csv
+                w = csv.DictWriter(f, ("name length resolved_type has_codes count ints "
+                                       "floats strs nones datetimes dates times".split()))
+                w.writeheader()
+                for d in intuiter.dump():
+                    w.writerow(d)
+
+
 
         return True
 
-    def build_modify_row(self, row_gen, p, source, d):
+    def build_modify_row(self, row_gen, p, source, row):
+        """
+        Modify a row just before being inserted into the partition
+
+        :param row_gen: Row generator that created the row
+        :param p: Partition the row will be inserted into
+        :param source: Source record of the original data
+        :param row: A dict of the row
+        :return:
+        """
         pass
 
     def build_from_source(self, source_name):
@@ -159,7 +207,7 @@ class LoaderBundle(BuildBundle):
 
         row_gen =  self.row_gen_for_source(source_name)
 
-        header = [ self.mangle_column_name(i,n) for i,n in enumerate(row_gen.get_header())]
+        header = row_gen.get_header()
 
         for col in header:
             if col not in columns:
@@ -176,7 +224,11 @@ class LoaderBundle(BuildBundle):
 
                 self.build_modify_row(row_gen, p, source, d)
 
-                ins.insert(d)
+                errors = ins.insert(d)
+
+                if errors:
+                    self.error("Casting error for {}: {}".format(source_name,errors))
+
 
     def build(self):
         for source_name in self.metadata.sources:
@@ -185,9 +237,6 @@ class LoaderBundle(BuildBundle):
 
 class CsvBundle(LoaderBundle):
     """A Bundle variant for loading CSV files"""
-
-    delimiter = None
-    col_map = None  # If set, maps column headers
 
     def get_source(self, source):
         """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
@@ -210,34 +259,16 @@ class CsvBundle(LoaderBundle):
             if cache:
                 bare_fn, ext = os.path.splitext(os.path.basename(fn))
 
-                fn_ck = self.source_store_cache_key(bare_fn+".csv")
+                fn_ck = self.source_store_cache_key(bare_fn + ".csv")
 
                 if cache.has(fn_ck):
                     if not self.filesystem.download_cache.has(fn_ck):
                         with cache.get_stream(fn_ck) as s:
-
-                            self.filesystem.download_cache.put(s, fn_ck )
+                            self.filesystem.download_cache.put(s, fn_ck)
 
                     return self.filesystem.download_cache.path(fn_ck)
 
         return fn
-
-
-    def make_table_for_source(self, source_name):
-
-        source = self.metadata.sources[source_name]
-
-        table_name = source.table if source.table else source_name
-
-        table_desc = source.description if source.description else "Table generated from {}".format(source.url)
-
-        data = dict(source)
-        del data['description']
-        del data['url']
-
-        table = self.schema.add_table(table_name, description=table_desc, data=data)
-
-        return table
 
 class ExcelBuildBundle(CsvBundle):
     pass

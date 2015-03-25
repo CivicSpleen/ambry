@@ -17,9 +17,6 @@ import os
 
 import sphinx_bootstrap_theme
 
-
-
-
 def get_version(source=os.path.abspath('../../ambry/_meta.py')):
     from ast import literal_eval
     with open(source) as f:
@@ -194,7 +191,6 @@ html_theme_options = {
     # Choose Bootstrap version.
     # Values: "3" (default) or "2" (in quotes)
     'bootstrap_version': "3",
-    
 
     
 }

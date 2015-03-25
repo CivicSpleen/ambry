@@ -2,64 +2,30 @@
 
 """
 
-from whoosh.fields import SchemaClass, TEXT, KEYWORD, ID, STORED, DATETIME
+from whoosh.fields import SchemaClass, TEXT, KEYWORD, ID, STORED, DATETIME, NGRAMWORDS
 import os
-
-class BundleSchema(SchemaClass):
-
-    vid = ID(stored=True, unique=True) # bundle VID
-
-    title = TEXT(stored=True)
-    summary = TEXT(stored=True)
-    documentation = TEXT
-
-    topic = KEYWORD # Groups, keywords and tags, probably.
-    source = KEYWORD # fragments of sources
-
-
-class PartitionSchema(SchemaClass):
-
-    vid = ID(stored=True, unique=True) # vid of partition.
-
-    grain = KEYWORD   # Index table ids, from foreign key values.
-    geo_bound = KEYWORD # Geoids, from geoid fields state, county, place, school district, metro
-    time_bound = KEYWORD # list of years or other iso dates, from year or date coumns.
-    variables = KEYWORD # list of cannonical variables, or variable keywords. From schema.
-    categoricals = KEYWORD # Categorical values? From codes or categorical values.
 
 
 class DatasetSchema(SchemaClass):
+
     vid = ID(stored=True, unique=True) # Bundle versioned id
     id = ID(stored=True, unique=False) # Unversioned id
 
-    title = TEXT(stored=True, field_boost=2.0)
-    summary = TEXT(stored=True, field_boost=2.0)
-    source = KEYWORD(field_boost=2.0) # Source ( domain ) of the
+    title = NGRAMWORDS(stored=True)
+    summary = NGRAMWORDS(stored=True)
+    source = NGRAMWORDS(stored=True) # Source ( domain ) of the
+    name = TEXT
 
     doc = TEXT # Generated document for the core of the topic search
 
-    @classmethod
-    def make_doc(cls, d):
-        """Create a Dict for loading into the DataSet schema.
-        """
-        doc = """
-        Title
-        Summary
-        Internal Documentation
-        Source agency
-
-        Full Data dictionary, including table and column ids
-
-        """
-
-
 class PartitionSchema(SchemaClass):
+
     vid = ID(stored=True, unique=True) # Partition versioned id
     id = ID(stored=True, unique=False) # Unversioned id
 
     bvid = ID(stored=True, unique=True)  # Bundle versioned id
 
-    title = TEXT(stored=True, field_boost=2.0) # Title of the table
+    title = TEXT(stored=True) # Title of the main table
 
     doc = TEXT # Generated document for the core of the topic search
 
@@ -68,26 +34,28 @@ class PartitionSchema(SchemaClass):
     years = KEYWORD # Each year the dataset covers as a seperate entry
     detail = KEYWORD # age, rage, income and other common variable
 
-    @classmethod
-    def make_doc(cls, d):
-        doc = ""
-
 search_fields = ['identity','title','summary','keywords', 'groups','text','time','space','grain']
-
 
 
 class Search(object):
 
     index_name = 'search_index'
 
-    def __init__(self, doc_cache):
+    def __init__(self, library):
 
-        self.doc_cache = doc_cache
-        self.cache = self.doc_cache.cache
+        self.library = library
+
+        self.cache = self.library._doc_cache
 
         self.index_dir = self.cache.path(self.index_name, propagate = False, missing_ok=True) # Return root directory
 
-        self._ix = None
+        self._dataset_index = None
+        self._partition_index = None
+
+        self._dataset_writer = None
+        self._partition_writer = None
+
+        self.all_datasets = set([x for x in self.datasets])
 
     def reset(self):
 
@@ -95,88 +63,185 @@ class Search(object):
             from shutil import rmtree
             rmtree(self.index_dir)
 
-        self._ix = None
+        self._dataset_index = None
 
+    def commit(self):
 
+        if self._dataset_writer:
+            self._dataset_writer.commit()
+            self._dataset_writer = None
+
+        if self._partition_writer:
+            self._partition_writer.commit()
+            self._partition_writer = None
 
     @property
-    def ix(self):
+    def dataset_index(self):
         from whoosh.index import create_in, open_dir
 
-        if not self._ix:
+        if not self._dataset_index:
 
             if not os.path.exists(self.index_dir):
                 os.makedirs(self.index_dir)
-                self._ix = create_in(self.index_dir, AmbrySchema)
+                self._dataset_index = create_in(self.index_dir, DatasetSchema)
 
             else:
-                self._ix = open_dir(self.index_dir)
+                self._dataset_index = open_dir(self.index_dir)
 
+        return self._dataset_index
 
-        return self._ix
+    @property
+    def dataset_writer(self):
+        if not self._dataset_writer:
+            self._dataset_writer = self.dataset_index.writer()
+        return self._dataset_writer
 
-    def index(self, reset=False):
+    def index_dataset(self, bundle ):
 
-        if reset:
-            self.reset()
+        if bundle.identity.vid in self.all_datasets:
+            return
 
-        writer = self.ix.writer()
-
-        self.index_library(writer)
-
-        self.index_tables(writer)
-
-        self.index_databases(writer)
-
-        writer.commit()
-
-    def index_library(self, writer):
-
-        l = self.doc_cache.get_library()
-
-        for k, v in l['bundles'].items():
-
-            b = self.doc_cache.get_bundle(k)
-
-            if not b:
-                print 'No bundle!', k
-                continue
-
-            try:
-                a = b['meta'].get('about', {})
-            except:
-                continue
-
-            keywords = a.get('keywords', []) + [ str(x) for x in b['identity'].values() if x ]
-
-            def identity_parts(ident):
-                parts = [ str(v) for v in ident.values() if v]
-
-                # Add variations of the source, so that 'sandag' will match 'sandag.org'
-                source_parts = ident['source'].split('.')
-                prefixes = []
-                while len(source_parts) >= 1:
-                    prefixes.append(source_parts.pop(0))
-
-                    parts.append('.'.join(source_parts))
-                    parts.append('.'.join(prefixes))
-
-                return u' '.join(parts)
-
-            d = dict(
-                type=u'bundle',
-                vid=b['identity']['vid'],
-                d_vid=b['identity']['vid'],
-                fqname = b['identity']['fqname'],
-                identity=identity_parts(b['identity']),
-                title=a.get('title', u'') or u'',
-                summary=a.get('summary', u'') or u'',
-                keywords=u' '.join(keywords),
-                groups=u' '.join(x for x in a.get('groups', []) if x) or u'',
-                text=b['meta'].get('documentation', {}).get('main', u'') or u''
+        self.dataset_writer.add_document(
+            vid=unicode(bundle.identity.vid),
+            id=unicode(bundle.identity.id_),
+            name=unicode(bundle.identity.name),
+            title=unicode(bundle.metadata.about.title),
+            summary=unicode(bundle.metadata.about.summary),
+            source=unicode(bundle.identity.source),
+            doc=unicode(
+                bundle.metadata.documentation.main
             )
+        )
 
-            writer.add_document(**d)
+        self.all_datasets.add(bundle.identity.vid )
+
+    def index_datasets(self):
+
+        ds_vids = [ds.vid for ds in self.library.datasets()]
+
+        for vid in ds_vids:
+
+            if vid in self.all_datasets:
+                continue
+
+            bundle = self.library.bundle(vid)
+
+            self.index_dataset(bundle)
+
+            bundle.close()
+
+        self.commit()
+
+    @property
+    def datasets(self):
+
+        for x in self.dataset_index.searcher().documents():
+            yield x['vid']
+
+    def search_datasets(self, search_phrase):
+        from whoosh.qparser import QueryParser
+
+        from whoosh.qparser import QueryParser
+
+        parser = QueryParser("title", schema = self.dataset_index.schema)
+
+        query =  parser.parse(search_phrase)
+
+        with self.dataset_index.searcher() as searcher:
+
+            results = searcher.search(query, limit=None)
+
+            for hit in results:
+                vid = hit.get('vid', False)
+                if vid:
+                    yield vid
+
+    ##############
+
+
+    @property
+    def partition_index(self):
+        from whoosh.index import create_in, open_dir
+
+        if not self._partition_index:
+
+            if not os.path.exists(self.index_dir):
+                os.makedirs(self.index_dir)
+                self._partition_index = create_in(self.index_dir, PartitionSchema)
+
+            else:
+                self._partition_index = open_dir(self.index_dir)
+
+        return self._partition_index
+
+    @property
+    def partition_writer(self):
+        if not self._partition_writer:
+            self._partition_writer = self.partition_index.writer()
+        return self._partition_writer
+
+    def index_partition(self, bundle):
+
+        if bundle.indentity.vid in self.all_datsets:
+            return
+
+        self.partition_writer.add_document(
+            vid=unicode(bundle.identity.vid),
+            id=unicode(bundle.identity.id_),
+            title=unicode(bundle.metadata.about.title),
+            summary=unicode(bundle.metadata.about.summary),
+            source=unicode(bundle.identity.source),
+            doc=unicode(
+                bundle.metadata.documentation.main
+            )
+        )
+
+        self.all_partitions.add(bundle.indentity.vid)
+
+    def index_partitions(self):
+
+        ds_vids = [ds.vid for ds in self.library.partitions()]
+
+        for vid in ds_vids:
+
+            if vid in self.all_partitions:
+                continue
+
+            bundle = self.library.bundle(vid)
+
+            self.index_partition(bundle)
+
+            bundle.close()
+
+        self.commit()
+
+    @property
+    def partitions(self):
+
+        for x in self.partition_index.searcher().documents():
+            yield x['vid']
+
+    def search_partitions(self, search_phrase):
+        from whoosh.qparser import QueryParser
+
+        from whoosh.qparser import QueryParser
+
+        parser = QueryParser("title", schema=self.partition_index.schema)
+
+        query = parser.parse(search_phrase)
+
+        with self.partition_index.searcher() as searcher:
+
+            results = searcher.search(query, limit=None)
+
+            for hit in results:
+                vid = hit.get('vid', False)
+                if vid:
+                    yield vid
+
+
+    ###########
+
 
     def index_tables(self, writer):
         import json
@@ -305,8 +370,3 @@ class Search(object):
 
             return bundles, stores
 
-
-    def dump(self):
-
-        for x in self.ix.searcher().documents():
-            print x

@@ -515,13 +515,13 @@ def library_doc(args, l, rc):
     import socket
 
     if args.port:
-        port = args.port
+        port = int(args.port)
     else:
         port = 8081 # 45235 + random.randint(1, 5000)
 
-    cache_dir = l.doc_cache.cache.path('',missing_ok=True)
+    cache_dir = l._doc_cache.path('',missing_ok=True)
 
-    config = configure_application(dict(port = port, cache = cache_dir))
+    config = configure_application(dict(port = port))
 
     file_handler = FileHandler(os.path.join(cache_dir, "web.log"))
     file_handler.setLevel(logging.WARNING)
@@ -540,23 +540,34 @@ def library_doc(args, l, rc):
         s = Search(DocCache(fscache()))
         s.index(reset=args.clean)
 
-
     print 'Serving documentation for cache: ', cache_dir
 
     # Check for open port
 
-    while True:
+    tries = 5
+
+    while tries:
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            sock.bind(('localhost', port))
+            sock.bind(('localhost', int(port)))
             sock.close()
             break
         except socket.error:
-            port += 1
+            # If the port was not specified, increment to find an open one.
+            # If if was, try a few times then give up.
+            if not args.port:
+                port += 1
+            else:
+                import time
+                time.sleep(1)
+
+            tries -= 1
+
 
     webbrowser.open("http://localhost:{}/".format(port))
 
-    app.run(host=config['host'], port=port, debug=args.debug)
+    app.run(host=config['host'], port=int(port), debug=args.debug)
 
 def library_config(args, l, config):
     from ..dbexceptions import ConfigurationError
@@ -587,7 +598,23 @@ def library_unknown(args, l, config):
     fatal(args)
 
 def library_test(args, l, config):
-    import time
-    from ambry.util import toposort
 
+
+    print l.search
+
+    #l.search.reset()
+    l.search.index_datasets()
+    #print [x for x in l.search.datasets]
+
+    for vid in  l.search.search_datasets("id:d02k"):
+        b = l.bundle(vid)
+        print vid, b.metadata.about.title
+
+        for p in b.partitions.all:
+            print p.identity.name
+
+            print p.dict
+
+
+    return False
 

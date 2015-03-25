@@ -148,12 +148,10 @@ class SqliteAttachmentMixin(object):
             with self.engine.begin() as conn:
                 conn.execute(q)
 
-
-
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
-    SCHEMA_VERSION = 25
+    SCHEMA_VERSION = 27
 
     _lock = None
 
@@ -792,6 +790,13 @@ def _on_connect_update_sqlite_schema(conn, con_record):
             from ..orm import ColumnStat
 
             ColumnStat.__table__.create(bind=conn.engine)
+
+        if version < 27:
+
+            try:
+                conn.execute('ALTER TABLE colstats ADD COLUMN cs_lom VARCHAR(6)')
+            except Exception as e:
+                pass
 
     if version < SqliteDatabase.SCHEMA_VERSION:
         conn.execute('PRAGMA user_version = {}'.format(SqliteDatabase.SCHEMA_VERSION))

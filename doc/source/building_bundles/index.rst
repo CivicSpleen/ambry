@@ -11,5 +11,6 @@ A quick guide to using Ambry
     building_examples
     bundle_structure
     creating
+    bundle_configuration
 
 
