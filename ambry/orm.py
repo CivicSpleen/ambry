@@ -1826,7 +1826,7 @@ class ColumnStat(Base, SavableMixin, LinkableMixin):
     c_vid = SAColumn('cs_c_vid', String(12), ForeignKey('columns.c_vid'), nullable=False, index=True)
     column = relationship('Column', backref='stats')
 
-    lom = SAColumn('cs_lom',Enum(*lom_enums, name='LomEnum'))
+    lom = SAColumn('cs_lom',String(12))
     count = SAColumn('cs_count',BigIntegerType)
     mean = SAColumn('cs_mean',Float)
     std = SAColumn('cs_std',Float)
