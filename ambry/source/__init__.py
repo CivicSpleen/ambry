@@ -50,8 +50,11 @@ class SourceTree(object):
 
             try:
                 bundle = self.bundle(file_.path)
-            except ImportError:
-                self.logger.info("Failed to load bundle from {}".format(file_.path))
+            except ImportError as e:
+                self.logger.info("Failed to load bundle from {}: {}".format(file_.path,e))
+                continue
+            except Exception as e:
+                self.logger.info("Failed to load bundle from {}: {}".format(file_.path,e))
                 continue
 
 

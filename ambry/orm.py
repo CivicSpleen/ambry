@@ -669,7 +669,8 @@ class Column(Base):
         self.table_name = kwargs.get("table_name",None) 
 
         if not self.name:
-            raise ValueError('Column must have a name. Got: {}'.format(kwargs))
+            self.name = 'column'+str(self.sequence_id)
+            #raise ValueError('Column must have a name. Got: {}'.format(kwargs))
 
         self.t_id = table.id_
         self.t_vid = table.vid

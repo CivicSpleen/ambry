@@ -132,6 +132,7 @@ class LoaderBundle(BuildBundle):
     def meta(self):
         from collections import defaultdict
         from ..util.intuit import Intuiter
+        import urllib2
 
         self.database.create()
 
@@ -157,6 +158,13 @@ class LoaderBundle(BuildBundle):
 
             iterables = []
             for source_name in sources:
+
+                try:
+                    fn = self.filesystem.download(source_name)
+                except urllib2.HTTPError:
+                    self.error("Failed to download url for source: {}".format(source_name))
+                    continue
+
                 self.log("Intuiting {}".format(source_name))
                 iterables.append(self.row_gen_for_source(source_name))
 

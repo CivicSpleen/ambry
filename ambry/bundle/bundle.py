@@ -202,6 +202,8 @@ class Bundle(object):
                 k = '_'.join([str(x) for x in r[0] if x])
                 d[k] = r[1]
 
+
+
         try:
 
             return t.format(**d)
@@ -1666,45 +1668,7 @@ class BuildBundle(Bundle):
 
         return True
 
-    # Submit the package to the repository
 
-    def pre_submit(self):
-        with self.session:
-            self.update_configuration()
-        return True
-
-    # Submit the package to the repository
-    def submit(self):
-
-        self.repository.submit(
-            root=self.run_args.get('name'),
-            force=self.run_args.get('force'),
-            repo=self.run_args.get('repo'))
-        return True
-
-    def post_submit(self):
-        from datetime import datetime
-        self.set_value('process','submitted', datetime.now().isoformat())
-
-        return True
-
-    # Submit the package to the repository
-
-    def pre_extract(self):
-        return True
-
-    # Submit the package to the repository
-    def extract(self):
-        self.repository.extract(
-            root=self.run_args.get('name'),
-            force=self.run_args.get('force'))
-        return True
-
-    def post_extract(self):
-        from datetime import datetime
-        self.set_value('process','extracted',datetime.now().isoformat())
-
-        return True
 
     def repopulate(self):
         """Pull bundle files from the library back into the working directory"""

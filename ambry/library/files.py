@@ -11,11 +11,7 @@ from ..util import Constant
 from ..identity import LocationRef
 import os
 
-
-
-
 class Files(object):
-
 
     TYPE = Constant()
     TYPE.BUNDLE = LocationRef.LOCATION.LIBRARY
