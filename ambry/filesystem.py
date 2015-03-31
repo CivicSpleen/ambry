@@ -530,8 +530,9 @@ class BundleFilesystem(Filesystem):
             if not f.endswith('.csv'):# Maybe the name of a source
                 if f in self.bundle.metadata.sources:
                     f = self.bundle.source(f)
-            elif not os.path.abspath(f):
-                f = self.filesystem.path(f)
+
+            if not os.path.isabs(f):
+                f = self.bundle.filesystem.path(f)
 
             f = open(f,'rb')
             opened = True
