@@ -4,11 +4,29 @@
 # Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
 
+from collections import deque
+
+
+class Times(object):
+    """Records time entries for access to the cache."""
+
+    def __init__(self, **kwargs):
+        self.start_time = 0
+        self.end_time = 0
+        self.time = 0
+        self.count = 0
+        self.key = None
+        self.from_cache = None
+        self.__dict__.update(kwargs)
+
+    def __str__(self):
+        return str(self.__dict__)
+
+    def __repr__(self):
+        return str(self.__dict__)
+
+
 class DocCache(object):
-
-    all_bundles = None
-
-    _cache = None
 
     def __init__(self, library, cache = None):
         self.library = library
@@ -19,11 +37,11 @@ class DocCache(object):
         else:
             self._cache = {}
 
+        self.all_bundles = None
+        self.times = deque([], maxlen=10000)
         self.ignore_cache = False # if True, assume the next quest to cache the key does not exist
 
-    def cache(self, f, *args, **kwargs):
-        """Cache the return value of a method. Normally, we'd use @memoize, but
-        we want this to run in the context of the object. """
+    def _munge_key(self,  *args, **kwargs):
 
         if '_key' in kwargs:
             key = kwargs['_key']
@@ -31,20 +49,78 @@ class DocCache(object):
         else:
             key = ''
             if args:
-                key += '_'.join(str(arg) for arg in  args)
+                key += '_'.join(str(arg) for arg in args)
 
             if kwargs:
-                key += '_'.join(str(arg) for arg in kwargs.values() )
-
-
-        key = key[0] + '/' + key[1:4] +'/' + key
+                key += '_'.join(str(arg) for arg in kwargs.values())
 
         assert bool(key)
 
-        if key not in self._cache or self.ignore_cache:
+        key = key[0] + '/' + key[1:4] + '/' + key
+
+        return key, args, kwargs
+
+    def cache(self, f,  *args, **kwargs):
+        """Cache the return value of a method. Normally, we'd use @memoize, but
+        we want this to run in the context of the object. """
+        import time
+
+        start = time.time()
+
+        key, args, kwargs = self._munge_key(*args, **kwargs)
+
+        if key not in self._cache or kwargs.get('force') or self.ignore_cache:
             self._cache[key] = f(*args, **kwargs)
+            from_cache = False
+        else:
+            from_cache = True
+
+        end = time.time()
+
+
+        self.times.append(Times(start_time=start, end_time=end, key = key, from_cache = from_cache,
+                                count = 1, time = end - start))
 
         return self._cache[key]
+
+    def clean(self):
+
+        try:
+            self._cache.clean()
+        except AttributeError:
+            assert isinstance(self._cache, dict)
+            self._cache = {}
+
+
+    def remove(self,  *args, **kwargs):
+
+        key, args, kwargs = self._munge_key(*args, **kwargs)
+
+        if key in self._cache:
+            del self._cache[key]
+            print 'REMOVING', key
+        else:
+            print "NO ", key
+
+
+    def compiled_times(self):
+        """Compile all of the time entried from cache calls to one per key"""
+        from collections import defaultdict
+
+        times = defaultdict(Times)
+
+        for t in self.times:
+            print t.__dict__
+            k = t.key+'_'+('cached' if t.from_cache else 'func')
+            ct = times[k]
+            ct.key = k
+
+            ct.time += t.time
+            ct.count += t.count
+
+
+        return sorted(times.values(),key=lambda x : x.time, reverse = True)
+
 
     def library_info(self):
         pass
@@ -99,7 +175,6 @@ class DocCache(object):
 
     def table_schema(self, vid):
         pass
-
 
     def warehouse(self, vid):
         return self.cache(lambda vid: self.library.warehouse(vid).dict, vid)

@@ -4,18 +4,17 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from ..dbexceptions import DependencyError
-from relational import RelationalWarehouse
+from . import Warehouse
 from ..library.database import LibraryDb
 from . import ResolutionError
 
 
-class SqliteWarehouse(RelationalWarehouse):
+class SqliteWarehouse(Warehouse):
 
 
     ##
     ## Datasets and Bundles
     ##
-
 
 
     def load_local(self, partition, source_table_name, dest_table_name = None, where = None):
@@ -52,104 +51,12 @@ class SqliteWarehouse(RelationalWarehouse):
 
         return dest_table_name
 
-    def install_view(self, name, sql, data = None):
-
-        import time
-
-        assert name
-        assert sql
-        from pysqlite2.dbapi2 import OperationalError
-
-        t = self.orm_table_by_name(name)
-
-        if t and t.data.get('sql') == sql:
-            self.logger.info("Skipping view {}; SQL hasn't changed".format(name))
-            return
-        else:
-
-            self.logger.info('Installing view {}'.format(name))
-
-        data = data if data else {}
-        data['type'] = data['type'] if 'type'  in data else 'view'
-
-        data['sql'] = sql
-        data['updated'] = time.time()
-        data['sample'] = None
-
-        sql = """
-        DROP VIEW  IF EXISTS {name};
-        CREATE VIEW {name} AS {sql}
-        """.format(name=name, sql=sql)
-
-        try:
-            self.database.connection.connection.cursor().executescript(sql)
-            t = self.install_table(name, data = data)
-
-            self.build_schema(t)
-
-        except Exception as e:
-            self.logger.error("Failed to install view: \n{}".format(sql))
-            raise
-        except OperationalError:
-            self.logger.error("Failed to execute: {} ".format(sql))
-            raise
-
-
-    def install_material_view(self, name, sql, clean=False, data = None):
-        from pysqlite2.dbapi2 import  OperationalError
-
-        drop, data = self._install_material_view(name, sql, clean=clean, data = data)
-
-        if drop:
-            self.database.connection.execute("DROP TABLE IF EXISTS {}".format(name))
-
-
-        if not data:
-            return False
-
-        sql = """
-        CREATE TABLE {name} AS {sql}
-        """.format(name=name, sql=sql)
-
-        try:
-            self.database.connection.connection.cursor().executescript(sql)
-        except OperationalError as e:
-            if 'exists' not in str(e).lower():
-                raise
-
-            self.logger.info('mview_exists {}'.format(name))
-            # Ignore if it already exists.
-
-
-        t = self.install_table(name, data = data)
-
-        self.build_schema(t)
-
-        return True
-
-
     def run_sql(self, sql_text):
 
         self.logger.info('Running SQL')
 
         self.database.connection.executescript(sql_text)
 
-    def installed_table(self, name):
-        """Return schema information for tables and views """
-
-        ce = self.database.connection.execute
-
-        out = []
-        for row in ce('PRAGMA table_info({})'.format(name)).fetchall():
-             out.append(
-                dict(
-                    name = row['name'],
-                    type = row['type'] if row['type'] else 'TEXT',
-
-                 ),
-             )
-
-        return out
 
 
 class SpatialiteWarehouse(SqliteWarehouse):

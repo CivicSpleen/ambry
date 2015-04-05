@@ -1209,6 +1209,7 @@ class Identity(object):
                 raise TypeError("Failed to make identity from \n{}\n: {}".format(d, e.message))
 
         elif isinstance(on, PartitionNumber):
+
             ident =  PartitionIdentity.from_dict(d)
         else:
             raise TypeError("Can't make identity from {}; object number is wrong type: {}".format(d, type(on)))
@@ -1569,6 +1570,7 @@ class PartitionIdentity(Identity):
         :param d:
         :return:
         '''
+
 
         from partition import identity_class_from_format_name
 

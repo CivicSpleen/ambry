@@ -1462,6 +1462,7 @@ class Partition(Base, LinkableMixin):
             'table': self.table.name if self.t_vid is not None else None,
             'grain': self.grain,
             'segment': self.segment,
+            'format': self.format if self.format else 'db'
         }
 
         return PartitionIdentity.from_dict(dict(ds.dict.items() + d.items()))
@@ -1503,11 +1504,18 @@ class Partition(Base, LinkableMixin):
 
         d['colstats'] = {s.column.id_: s.dict for s in self._stats}
 
+
         return d
 
     @property
     def nonull_dict(self):
-        return {k: v for k, v in self.dict.items() if v}
+        d =  {k: v for k, v in self.dict.items() if v}
+
+        d['format'] = self.format if self.format else 'db'
+        d['table'] = self.table.name if self.t_vid is not None else None
+
+        return d
+
 
     @property
     def insertable_dict(self):

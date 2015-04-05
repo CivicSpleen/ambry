@@ -5,7 +5,6 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from postgres import PostgresWarehouse #@UnresolvedImport
 
-
 class PostgisWarehouse(PostgresWarehouse):
     
 

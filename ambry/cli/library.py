@@ -546,26 +546,31 @@ def library_doc(args, l, rc):
 
     tries = 5
 
-    while tries:
+    if args.port:
+        port = args.port
+    else:
+        while tries:
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            sock.bind(('localhost', int(port)))
-            sock.close()
-            break
-        except socket.error:
-            # If the port was not specified, increment to find an open one.
-            # If if was, try a few times then give up.
-            if not args.port:
-                port += 1
-            else:
-                import time
-                time.sleep(1)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                sock.bind(('localhost', int(port)))
+                sock.close()
+                break
+            except socket.error:
+                # If the port was not specified, increment to find an open one.
+                # If if was, try a few times then give up.
+                if not args.port:
+                    port += 1
+                else:
+                    import time
+                    time.sleep(1)
 
-            tries -= 1
+                tries -= 1
 
 
-    webbrowser.open("http://localhost:{}/".format(port))
+    if not args.debug:
+        # Don't open the browser on debugging, or it will re-open on every application reload
+        webbrowser.open("http://localhost:{}/".format(port))
 
     app.run(host=config['host'], port=int(port), debug=args.debug)
 

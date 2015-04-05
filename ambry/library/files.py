@@ -216,6 +216,9 @@ class Files(object):
 
         self.db._mark_update()
 
+
+
+
     def install_bundle_file(self, bundle, cache, commit=True, state='installed'):
         """Mark a bundle file as having been installed in the library"""
 

@@ -528,7 +528,7 @@ class LibraryDb(object):
 
         return d
 
-    def _mark_update(self):
+    def _mark_update(self, o=None, vid=None):
 
         import datetime
 
