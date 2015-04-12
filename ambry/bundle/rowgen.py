@@ -1,5 +1,8 @@
 """
 
+The RowGenerator reads a file and yields rows, handling simple headers in CSV files, and complex
+headers with receeding comments in Excel files.
+
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
@@ -23,6 +26,8 @@ class RowGenerator(object):
 
     put_row = None # A row that was put back to be iterated over again.
 
+
+
     def __init__(self, file, data_start_line = None, data_end_line = None,
                  header_lines = None, header_comment_lines = None, prefix_headers = None,
                  header_mangler = None):
@@ -38,6 +43,8 @@ class RowGenerator(object):
         if header_comment_lines: self.header_comment_lines = header_comment_lines
         if prefix_headers: self.prefix_headers = prefix_headers
         if header_mangler: self.header_mangler = header_mangler
+
+        assert (isinstance(self.prefix_headers, list) or self.prefix_headers is None)
 
         self._raw_row_gen = None
 
@@ -182,12 +189,13 @@ class DelimitedRowGenerator(RowGenerator):
 
     delimiter = None
 
-    def __init__(self, file, data_start_line=None, header_lines=None,
+    def __init__(self, file, data_start_line=None, data_end_line = None, header_lines=None,
                  header_comment_lines=None, prefix_headers=None,
                  header_mangler=None, delimiter = ','):
 
-        super(DelimitedRowGenerator, self).__init__(file, data_start_line, header_lines, header_comment_lines,
-                                                    prefix_headers, header_mangler)
+        super(DelimitedRowGenerator, self).__init__(file, data_start_line=data_start_line, data_end_line=data_end_line,
+                                                    header_lines=header_lines, header_comment_lines=header_comment_lines,
+                                                    prefix_headers=prefix_headers, header_mangler=header_mangler)
 
         self.delimiter = delimiter
 

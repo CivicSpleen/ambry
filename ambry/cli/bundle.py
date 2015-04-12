@@ -203,7 +203,8 @@ def bundle_parser(cmd):
     command_p.add_argument('-s','--schema',  default=False,action="store_true",
                            help='Dump the schema as a CSV. The bundle must have been prepared')
     command_p.add_argument('-d', '--dep', default=False, help='Report information about a dependency')
-    command_p.add_argument('-S', '--stats',default=False,action="store_true",  help='Also report column stats')
+    command_p.add_argument('-S', '--stats',default=False,action="store_true",  help='Also report column stats for partitions')
+    command_p.add_argument('-P', '--partitions', default=False, action="store_true", help='Also report partition details')
 
     #
     # Clean Command
@@ -297,6 +298,8 @@ def bundle_info(args, b, st, rc):
     import json
     from ..dbexceptions import DatabaseMissingError
 
+    indent = "    "
+
     if args.dep:
         #
         # Get the dependency and then re-run to display it.
@@ -339,7 +342,7 @@ def bundle_info(args, b, st, rc):
 
             b.log("---- Partitions ---")
             for i, partition in enumerate(b.partitions):
-                b.log("    "+partition.identity.sname)
+                b.log(indent+partition.identity.sname)
 
                 if i > 10:
                     b.log("    ... and {} more".format(b.partitions.count - 10))
@@ -365,13 +368,28 @@ def bundle_info(args, b, st, rc):
             for k, v in deps:
                 b.log("{}: {}".format(k, v))
 
-        if args.stats:
+        if args.stats or args.partitions:
             for p in b.partitions.all:
-                b.log("--- Stats for {}: ".format(p.identity))
-                b.log("{:20.20s} {:>7s} {:>7s} {:>8s} {:s}".format("Col name", "Count", 'Uniq', 'Mean', 'Sample Values'))
-                for col_name, s in p.stats.__dict__.items():
+                b.log("--- Partition {}: ".format(p.identity))
+                if args.partitions:
+                    d = p.record.data
+                    def bl(k,v):
+                        b.log(indent+"{:7s}: {}".format(k,p.record.data.get(v,'')))
 
-                    b.log("{:20.20s} {:7d} {:7d} {:7.2e} {:s}".format(col_name, s.count, s.nuniques, s.mean, ','.join(s.uvalues.keys()[:5])))
+                    b.log(indent+"Details: ".format(p.identity))
+                    bl('g cov','geo_coverage')
+                    bl('g grain', 'geo_grain')
+                    bl('t cov', 'time_coverage')
+                if args.stats:
+                    b.log(indent+"Stats: ")
+                    b.log(indent+"{:20.20s} {:>7s} {:>7s} {:>10s} {:s}"
+                          .format("Col name", "Count", 'Uniq', 'Mean', 'Sample Values'))
+                    for col_name, s in p.stats.__dict__.items():
+
+                        b.log(indent+"{:20.20s} {:7d} {:7d} {:10.2e} {:s}".
+                              format(col_name, s.count, s.nuniques, s.mean if s.mean else float('nan'), ','.join(s.uvalues.keys()[:5])))
+
+
 
 def bundle_clean(args, b, st, rc):
     b.log("---- Cleaning ---")

@@ -45,8 +45,6 @@ def fatal(template, *args, **kwargs):
         
         global_logger.critical(template.replace('{','{{').replace('}','}}').format(*args, **kwargs))
 
-
-
     sys.exit(1)
 
 def warn(template, *args, **kwargs):
@@ -350,6 +348,9 @@ def _print_info(l,ident, list_partitions=False):
             prt("P Is Local  : {}",(l.cache.has(p.cache_key) is not False) if p else '')
             prt("P Rel Path  : {}",p.cache_key)
             prt("P Abs Path  : {}",l.cache.path(p.cache_key, missing_ok = True)  )
+            prt("P G Cover   : {}", p.data.get('geo_coverage',''))
+            prt("P G Grain   : {}", p.data.get('geo_grain',''))
+            prt("P T Cover   : {}", p.data.get('time_coverage',''))
 
             if resolved_ident.url:
                 prt("P Web Path  : {}",resolved_ident.url)

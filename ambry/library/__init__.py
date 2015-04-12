@@ -537,9 +537,18 @@ class Library(object):
     @property
     def tables(self):
         """Return ORM records for all tables"""
+
         from ..orm import Table
 
         return self.database.session.query(Table).all()
+
+    @property
+    def tables_no_columns(self):
+        """Return ORM records for all tables"""
+        from sqlalchemy.orm import lazyload
+        from ..orm import Table
+
+        return self.database.session.query(Table).options(lazyload('columns')).all()
 
 
     def table(self, vid):
@@ -578,7 +587,20 @@ class Library(object):
         from ..orm import Dataset
         from sqlalchemy.orm.exc import NoResultFound
 
-        return (self.database.session.query(Dataset).filter(Dataset.vid == vid).one())
+        try:
+            return (self.database.session.query(Dataset).filter(Dataset.vid == vid).one())
+        except NoResultFound:
+            try:
+                ds =  self.database.session.query(Dataset).filter(Dataset.id_ == vid).order_by(Dataset.revision.desc()).first()
+
+                if ds is None:
+                    raise NoResultFound
+                else:
+                    return ds
+
+            except NoResultFound:
+                from ..dbexceptions import NotFoundError
+                raise NotFoundError("Failed to find dataset for ref '{}' ".format(vid))
 
     def datasets(self):
         from ..orm import Dataset
@@ -1127,7 +1149,7 @@ class Library(object):
 
         return bundles
 
-    def sync_remotes(self, remotes=None, clean = False, last_only=True):
+    def sync_remotes(self, remotes=None, clean = False, last_only=True, vids=None):
         from ..orm import Dataset
         from sqlalchemy.exc import IntegrityError
         from ..dbexceptions import NotABundle
@@ -1183,6 +1205,11 @@ class Library(object):
 
                 if not b:
                     self.logger.error("Failed to fetch bundle for {} ".format(cache_key))
+                    continue
+
+                vid =  str(b.identity.vid)
+
+                if vids and vid not in vids:
                     continue
 
                 try:

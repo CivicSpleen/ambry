@@ -58,6 +58,7 @@ def library_parser(cmd):
     sp.add_argument('-s', '--source', default=False, action="store_true", help='Sync the source')
     sp.add_argument('-j', '--json', default=False, action="store_true", help='Cache JSON versions of library objects')
     sp.add_argument('-w', '--warehouses', default=False, action="store_true", help='Re-synchronize warehouses')
+    sp.add_argument('-F', '--bundle-list', help='File of bundle VIDs. Sync only VIDs listed in this file')
 
 
     sp = asp.add_parser('info', help='Display information about the library')
@@ -69,6 +70,14 @@ def library_parser(cmd):
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help='Also get all of the partitions. ')
     sp.add_argument('-f','--force',  default=False, action="store_true",  help='Force retrieving from the remote')
 
+    sp = asp.add_parser('search',help='Search the full-text index')
+    sp.set_defaults(subcommand='search')
+    sp.add_argument('term', type=str, nargs=argparse.REMAINDER, help='Query term')
+    sp.add_argument('-d', '--datasets', default=False, action="store_true", help='Search only the dataset index')
+    sp.add_argument('-i', '--identifiers', default=False, action="store_true", help='Search only the identifiers index')
+    sp.add_argument('-p', '--partitions', default=False, action="store_true", help='Search only the partitions index')
+    sp.add_argument('-R', '--reindex', default=False, action="store_true",
+                    help='Generate documentation files and index the full-text search')
 
     sp = asp.add_parser('open',
                         help='Open a bundle or partition file with sqlite3')
@@ -97,8 +106,7 @@ def library_parser(cmd):
 
     sp = asp.add_parser('doc', help='Start the documentation server')
     sp.set_defaults(subcommand='doc')
-    sp.add_argument('-r', '--reindex', default=False, action="store_true",
-                    help='Generate documentation files and index the full-text search')
+
     sp.add_argument('-c', '--clean', default=False, action="store_true",
                     help='When used with --reindex, delete the index and old files first. ')
     sp.add_argument('-d', '--debug', default=False, action="store_true",
@@ -169,52 +177,7 @@ def library_backup(args, l, config):
 
         
     prt("{}: Backup complete", dest_dir)
-        
-def library_restore(args, l, config, *kwargs):
 
-    if args.dir:
-      
-        if args.file:
-            # Get the last file that fits the pattern, sorted alpha, with a date inserted
-          
-            import fnmatch
-            
-            date = '*' # Sub where the date will be  
-            parts = args.file.split('.')
-            if len(parts) >= 2:
-                pattern = '.'.join(parts[:-1]+[date]+parts[-1:])
-            else:
-                import tempfile
-                tfn = tempfile.NamedTemporaryFile(delete=False)
-                tfn.close()
-    
-                backup_file = tfn.name+".db"
-                pattern = backup_file + '.' + date
-                
-            files = sorted([ f for f in os.listdir(args.dir) if fnmatch.fnmatch(f,pattern) ])
-    
-        else:
-            # Get the last file, by date. 
-            files = sorted([ f for f in os.listdir(args.dir) ], 
-                           key=lambda x: os.stat(os.path.join(args.dir,x))[8])
-    
-    
-        backup_file = os.path.join(args.dir,files.pop())
-        
-    elif args.file:
-        backup_file = args.file
-    
-    
-    # Backup before restoring. 
-    
-    args = type('Args', (object,),{'file':'/tmp/before-restore.db','cache': True, 
-                                   'date': True, 'is_server': args.is_server, 'name':args.library_name, 
-                                   'subcommand': 'backup'})
-    library_backup(args, l, config)
-    
-    prt("{}: Restoring", backup_file)
-    l.clean(add_config_root=False)
-    l.restore(backup_file)
 
 def library_drop(args, l, config):   
 
@@ -477,11 +440,98 @@ def library_open(args, l, config):
 
         os.execlp('sqlite3', 'sqlite3', abs_path)
 
+def library_search(args, l, config):
+    # This will fetch the data, but the return values aren't quite right
+
+    term = ' '.join(args.term)
+
+    if args.reindex:
+
+        print 'Updating the identifier'
+
+        #sources = ['census.gov-index-counties', 'census.gov-index-places', 'census.gov-index-states']
+        sources = ['census.gov-index-counties',  'census.gov-index-states']
+
+        records = []
+
+        def make_record(identifier, type, name):
+            return dict(
+                identifier=identifier,
+                type=type,
+                name=name
+            )
+
+        for s in sources:
+            p = l.get(s).partition
+            type = p.table.name
+
+            for row in p.rows:
+
+                if 'name' in row:
+                    name = row.name
+                    if type == 'states':
+                        name += " State"
+
+                    records.append(make_record(row.gvid, type, name))
+
+                if 'stusab' in row:
+                    records.append(make_record(row.gvid, type, row.stusab.upper))
+
+        s = l.search
+
+        l.search.index_identifiers(records)
+
+        print "Reindexing docs"
+        l.search.index_datasets()
+
+        return
+
+
+    print "search for ", term
+
+    if args.identifiers:
+        for score, gvid, name in l.search.search_identifiers(term):
+            print "{:2.2f} {:9s} {}".format(score, gvid, name)
+
+    elif args.datasets:
+        for x in l.search.search_datasets(term):
+            ds = l.dataset(x)
+            print x, ds.name, ds.data.get('title')
+
+    elif args.partitions:
+        from ..identity import ObjectNumber
+        from collections import defaultdict
+
+        bundles = defaultdict(set)
+
+        for x in l.search.search_partitions(term):
+            bvid = ObjectNumber.parse(x).as_dataset
+
+            bundles[str(bvid)].add(x)
+
+        for bvid, pvids in bundles.items():
+
+            ds = l.dataset(str(bvid))
+
+            print ds.vid, ds.name, len(pvids), ds.data.get('title')
+
+
 def library_sync(args, l, config):
     '''Synchronize the remotes and the upstream to a local library
     database'''
 
     all = args.all or not (args.library or args.remote or args.source or args.json or args.warehouses )
+
+    vids=None
+
+    if args.bundle_list:
+        with open(args.bundle_list) as f:
+            vids  = set()
+            for line in f:
+                if line[0] != '#':
+                    vid,_ = line.split(None,1)
+                    vids.add(vid)
+
 
     if args.library or all:
         l.logger.info("==== Sync Library")
@@ -489,7 +539,7 @@ def library_sync(args, l, config):
 
     if args.remote or all:
         l.logger.info("==== Sync Remotes")
-        l.sync_remotes(clean=args.clean)
+        l.sync_remotes(clean=args.clean, vids=vids)
 
     if (args.source or all) and l.source:
         l.logger.info("==== Sync Source")
@@ -529,16 +579,6 @@ def library_doc(args, l, rc):
 
     app.register_blueprint(exracts_blueprint,url_prefix='/warehouses')
 
-    if args.reindex:
-
-        from ambrydoc import fscache
-        from ambrydoc.search import Search
-        from ambrydoc.cache import DocCache
-
-        print 'Updating the search index'
-
-        s = Search(DocCache(fscache()))
-        s.index(reset=args.clean)
 
     print 'Serving documentation for cache: ', cache_dir
 
@@ -566,7 +606,6 @@ def library_doc(args, l, rc):
                     time.sleep(1)
 
                 tries -= 1
-
 
     if not args.debug:
         # Don't open the browser on debugging, or it will re-open on every application reload
@@ -603,23 +642,15 @@ def library_unknown(args, l, config):
     fatal(args)
 
 def library_test(args, l, config):
+    import time
 
+    term = 'Alabama city New Hope'
 
-    print l.search
+    for t in range(len(term)):
 
-    #l.search.reset()
-    l.search.index_datasets()
-    #print [x for x in l.search.datasets]
+        for i, (score, gvid, name) in enumerate(l.search.search_identifiers(term[:t])):
 
-    for vid in  l.search.search_datasets("id:d02k"):
-        b = l.bundle(vid)
-        print vid, b.metadata.about.title
+            if i == 0:
+                print chr(27) + "[2J" + chr(27) + "[H"
 
-        for p in b.partitions.all:
-            print p.identity.name
-
-            print p.dict
-
-
-    return False
-
+            print score, gvid, name

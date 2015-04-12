@@ -172,11 +172,13 @@ class Test(TestBase):
         # Now it should show up in the list.
         self.assertIn('LS     dHSyDm4MNR002     example.com-random-0.0.2', c('list'))
 
+        c('library push')
+
         # Can't rebuild an installed library.
         with self.assertRaises(CalledProcessError):
             c('bundle -d dHSyDm4MNR002 prepare --clean ')
 
-        c('library push')
+
 
     def test_library(self):
 

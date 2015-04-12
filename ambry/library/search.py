@@ -2,44 +2,39 @@
 
 """
 
-from whoosh.fields import SchemaClass, TEXT, KEYWORD, ID, STORED, DATETIME, NGRAMWORDS
+from whoosh.fields import SchemaClass, TEXT, KEYWORD, ID, STORED, DATETIME, NGRAMWORDS, NGRAM
 import os
+from ambry.util import memoize
 
 
 class DatasetSchema(SchemaClass):
 
     vid = ID(stored=True, unique=True) # Bundle versioned id
-    id = ID(stored=True, unique=False) # Unversioned id
-
     title = NGRAMWORDS(stored=True)
-    summary = NGRAMWORDS(stored=True)
-    source = NGRAMWORDS(stored=True) # Source ( domain ) of the
-    name = TEXT
-
+    source = NGRAMWORDS()  # Source ( domain ) of the
     doc = TEXT # Generated document for the core of the topic search
 
 class PartitionSchema(SchemaClass):
 
     vid = ID(stored=True, unique=True) # Partition versioned id
-    id = ID(stored=True, unique=False) # Unversioned id
+    bvid = ID(stored=True, unique=True)  # Partition versioned id
 
-    bvid = ID(stored=True, unique=True)  # Bundle versioned id
-
-    title = TEXT(stored=True) # Title of the main table
+    title = TEXT(stored=True)  # Title of the main table
+    names = NGRAMWORDS()
 
     doc = TEXT # Generated document for the core of the topic search
+    coverage = TEXT  # Lists of coverage identifiers, ISO time values and GVIDs
+    values = TEXT  # List of uvalues from the stats for each column
+    schema = TEXT  # List of uvalues from the stats for each column
 
-    geo_coverage = ID(stored=True)
-    grain = ID # vid of table or column for geo area or entity
-    years = KEYWORD # Each year the dataset covers as a seperate entry
-    detail = KEYWORD # age, rage, income and other common variable
+class IdentifierSchema(SchemaClass):
+    """Schema that maps well-known names to ID values, such as county names, summary level names, etc. """
 
-search_fields = ['identity','title','summary','keywords', 'groups','text','time','space','grain']
-
+    identifier = ID(stored=True) # Partition versioned id
+    type=ID() #
+    name = NGRAM(phrase=True, stored=True, minsize=2, maxsize=8)
 
 class Search(object):
-
-    index_name = 'search_index'
 
     def __init__(self, library):
 
@@ -47,23 +42,43 @@ class Search(object):
 
         self.cache = self.library._doc_cache
 
-        self.index_dir = self.cache.path(self.index_name, propagate = False, missing_ok=True) # Return root directory
+        self.d_index_dir = self.cache.path('search/dataset', propagate = False, missing_ok=True) # Return root directory
+        self.p_index_dir = self.cache.path('search/partition', propagate=False, missing_ok=True)  # Return root directory
+        self.i_index_dir = self.cache.path('search/identifiers', propagate=False, missing_ok=True)  # Return root directory
 
         self._dataset_index = None
         self._partition_index = None
+        self._identifier_index = None
 
         self._dataset_writer = None
         self._partition_writer = None
 
-        self.all_datasets = set([x for x in self.datasets])
 
     def reset(self):
+        from shutil import rmtree
 
-        if os.path.exists(self.index_dir):
-            from shutil import rmtree
-            rmtree(self.index_dir)
+        if os.path.exists(self.d_index_dir):
+            rmtree(self.d_index_dir)
 
         self._dataset_index = None
+
+        if os.path.exists(self.p_index_dir):
+            rmtree(self.p_index_dir)
+
+        self._partition_index = None
+
+    def get_or_new_index(self, schema, dir):
+
+        from whoosh.index import create_in, open_dir
+
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+            index = create_in(dir, schema)
+
+        else:
+            index = open_dir(dir)
+
+        return index
 
     def commit(self):
 
@@ -75,18 +90,13 @@ class Search(object):
             self._partition_writer.commit()
             self._partition_writer = None
 
+
     @property
     def dataset_index(self):
         from whoosh.index import create_in, open_dir
 
         if not self._dataset_index:
-
-            if not os.path.exists(self.index_dir):
-                os.makedirs(self.index_dir)
-                self._dataset_index = create_in(self.index_dir, DatasetSchema)
-
-            else:
-                self._dataset_index = open_dir(self.index_dir)
+            self._dataset_index =  self.get_or_new_index(DatasetSchema, self.d_index_dir)
 
         return self._dataset_index
 
@@ -96,21 +106,31 @@ class Search(object):
             self._dataset_writer = self.dataset_index.writer()
         return self._dataset_writer
 
+
+    @property
+    @memoize
+    def all_datasets(self):
+        return set([x for x in self.datasets])
+
+
     def index_dataset(self, bundle ):
 
         if bundle.identity.vid in self.all_datasets:
             return
 
+        doc = u'\n'.join([ unicode(x) for x in [bundle.metadata.about.title,
+                bundle.metadata.about.summary,
+                bundle.identity.id_, bundle.identity.vid,
+                bundle.identity.source,
+                bundle.identity.name, bundle.identity.vname,
+                bundle.metadata.documentation.main]])
+
         self.dataset_writer.add_document(
             vid=unicode(bundle.identity.vid),
-            id=unicode(bundle.identity.id_),
-            name=unicode(bundle.identity.name),
-            title=unicode(bundle.metadata.about.title),
-            summary=unicode(bundle.metadata.about.summary),
+            title=unicode(bundle.identity.name)+u' '+unicode(bundle.metadata.about.title),
             source=unicode(bundle.identity.source),
-            doc=unicode(
-                bundle.metadata.documentation.main
-            )
+            doc=unicode(doc),
+
         )
 
         self.all_datasets.add(bundle.identity.vid )
@@ -128,6 +148,9 @@ class Search(object):
 
             self.index_dataset(bundle)
 
+            for p in bundle.partitions:
+                self.index_partition(p)
+
             bundle.close()
 
         self.commit()
@@ -138,39 +161,111 @@ class Search(object):
         for x in self.dataset_index.searcher().documents():
             yield x['vid']
 
-    def search_datasets(self, search_phrase):
+    def search_datasets(self, search_phrase, limit = None):
+        """Search for just the datasets"""
         from whoosh.qparser import QueryParser
 
         from whoosh.qparser import QueryParser
 
-        parser = QueryParser("title", schema = self.dataset_index.schema)
+        parser = QueryParser("doc", schema = self.dataset_index.schema)
 
         query =  parser.parse(search_phrase)
 
         with self.dataset_index.searcher() as searcher:
 
-            results = searcher.search(query, limit=None)
+            results = searcher.search(query, limit=limit)
 
             for hit in results:
                 vid = hit.get('vid', False)
                 if vid:
                     yield vid
 
-    ##############
+    def search_bundles(self, search, limit=None):
+        """
 
+        Search for datasets and partitions using a structured search object
+
+        :param search: a dict, with values for each of the search components.
+        :param limit:
+        :return:
+        """
+        from ..identity import ObjectNumber
+        from collections import defaultdict
+
+        bvid_term = with_term = grain_term = years_term = in_term = ''
+        if search.get('in', False):
+            place_vids = self.search_identifiers(search['in'])
+
+            if place_vids:
+                in_term = "coverage:({})".format(' OR '.join(x[1] for x in place_vids))
+
+        if search.get('by', False):
+            grain_term = "coverage:"+search.get('by','').strip()
+
+        # The wackiness with the converts to int and str, and adding ' ', is because there
+        # can't be a space between the 'TO' and the brackets in the time range when one end is open
+        try:
+            from_year = str(int(search.get('from', False)))+' '
+        except ValueError:
+            from_year = ''
+
+        try:
+            to_year = ' '+str(int(search.get('to', False)))
+        except ValueError:
+            to_year = ''
+
+        if from_year or to_year:
+            years_term = "coverage:[{}TO{}]".format(from_year, to_year)
+
+        if search.get('with', False):
+            with_term = 'schema:({})'.format(search.get('with', False))
+
+
+        if search.get('about', False):
+            # list(...) : the return from search_datasets is a generator, so it can only be read once.
+            bvids =  list(self.search_datasets(search['about']))
+            print search['about'], list(bvids)
+        else:
+            bvids = []
+
+        p_term = ' AND '.join(x for x in [in_term, years_term, grain_term, with_term] if bool(x))
+
+        if bool(p_term):
+            if bvids:
+                p_term += " AND bvid:({})".format(' OR '.join(bvids))
+            else:
+                # In case the about term didn't generate any hits for the bundle.
+                p_term += " AND doc:({})".format(search['about'])
+        else:
+            if not bvids:
+                p_term = "doc:({})".format(search['about'])
+
+
+        if p_term:
+            pvids = list(self.search_partitions(p_term))
+
+            if pvids:
+                bp_set = defaultdict(set)
+                for p in pvids:
+                    bvid = str(ObjectNumber.parse(p).as_dataset)
+                    bp_set[bvid].add(p)
+
+                rtrn = {b: list(p) for b, p in bp_set.items()}
+            else:
+                rtrn = {}
+
+        else:
+
+            rtrn = { b:[] for b in bvids }
+
+        return (search['about'], p_term), rtrn
 
     @property
     def partition_index(self):
         from whoosh.index import create_in, open_dir
 
         if not self._partition_index:
-
-            if not os.path.exists(self.index_dir):
-                os.makedirs(self.index_dir)
-                self._partition_index = create_in(self.index_dir, PartitionSchema)
-
-            else:
-                self._partition_index = open_dir(self.index_dir)
+            self._partition_index = self.get_or_new_index(PartitionSchema, self.p_index_dir)
 
         return self._partition_index
 
@@ -180,40 +275,38 @@ class Search(object):
             self._partition_writer = self.partition_index.writer()
         return self._partition_writer
 
-    def index_partition(self, bundle):
+    def index_partition(self, p):
 
-        if bundle.indentity.vid in self.all_datsets:
+        if p.identity.vid in self.all_partitions:
             return
 
-        self.partition_writer.add_document(
-            vid=unicode(bundle.identity.vid),
-            id=unicode(bundle.identity.id_),
-            title=unicode(bundle.metadata.about.title),
-            summary=unicode(bundle.metadata.about.summary),
-            source=unicode(bundle.identity.source),
-            doc=unicode(
-                bundle.metadata.documentation.main
-            )
+        schema = '\n'.join("{} {} {} {} {}".format(c.id_, c.vid, c.name, c.altname, c.description) for c in p.table.columns)
+
+        values = ''
+
+        for col_name, stats in p.stats.items():
+            if stats.uvalues:
+                values += ' '.join(stats.uvalues) + '\n'
+
+        coverage = (
+            '\n'.join(p.data.get('geo_coverage', [])) + '\n' +
+            '\n'.join(p.data.get('geo_grain', [])) + '\n' +
+            '\n'.join(str(x) for x in p.data.get('time_coverage', []))
         )
 
-        self.all_partitions.add(bundle.indentity.vid)
+        self.partition_writer.add_document(
+            vid=unicode(p.identity.vid),
+            bvid=unicode(p.identity.as_dataset().vid),
+            names=u' '.join([unicode(p.identity.vid), unicode(p.identity.id_),
+                             unicode(p.identity.name), unicode(p.identity.vname)]),
+            title=unicode(p.table.description),
+            schema=unicode(schema),
+            coverage=unicode(coverage),
+            values=unicode(values),
+            doc = unicode(coverage+'\n'+values+'\n'+schema)
+        )
 
-    def index_partitions(self):
-
-        ds_vids = [ds.vid for ds in self.library.partitions()]
-
-        for vid in ds_vids:
-
-            if vid in self.all_partitions:
-                continue
-
-            bundle = self.library.bundle(vid)
-
-            self.index_partition(bundle)
-
-            bundle.close()
-
-        self.commit()
+        self.all_partitions.add(p.identity.vid)
 
     @property
     def partitions(self):
@@ -221,18 +314,23 @@ class Search(object):
         for x in self.partition_index.searcher().documents():
             yield x['vid']
 
-    def search_partitions(self, search_phrase):
+    @property
+    @memoize
+    def all_partitions(self):
+        return set([x for x in self.partitions])
+
+    def search_partitions(self, search_phrase, limit=None):
         from whoosh.qparser import QueryParser
 
         from whoosh.qparser import QueryParser
 
-        parser = QueryParser("title", schema=self.partition_index.schema)
+        parser = QueryParser("doc", schema=self.partition_index.schema)
 
         query = parser.parse(search_phrase)
 
         with self.partition_index.searcher() as searcher:
 
-            results = searcher.search(query, limit=None)
+            results = searcher.search(query, limit=limit)
 
             for hit in results:
                 vid = hit.get('vid', False)
@@ -240,133 +338,85 @@ class Search(object):
                     yield vid
 
 
-    ###########
+    @property
+    def identifier_index(self):
+        from whoosh.index import create_in, open_dir
 
+        if not self._identifier_index:
+            self._identifier_index = self.get_or_new_index(IdentifierSchema, self.i_index_dir)
 
-    def index_tables(self, writer):
-        import json
+        return self._identifier_index
 
-        l = self.doc_cache.get_library()
+    def index_identifiers(self, identifiers):
 
-        for i, (k, b) in enumerate(l['bundles'].items()):
-            s = self.doc_cache.get_schema(k)
+        index = self.identifier_index
 
-            for t_vid, t in s.items():
+        writer = index.writer()
 
-                columns = u''
-                keywords  = [t['vid'], t['id_']]
-                for c_vid, c in t['columns'].items():
+        all_names = set([ x['name'] for x in index.searcher().documents() ])
 
-                    columns += u'{} {}\n'.format(c['name'], c.get('description',''))
+        for i in identifiers:
 
-                    keywords.append(c.get('altname',u''))
-                    keywords.append(c['id_'])
-                    keywords.append(c['vid'])
-                    if c['name'].startswith(c['id_']):
-                        vid, bare_name = c['name'].split('_',1)
-                        keywords.append(bare_name)
-                    else:
-                        keywords.append(c['name'])
+            # Could use **i, but expanding it provides a  check on contents of i
+            if i['name'] not in all_names:
 
-                d = dict(
-                    vid=t_vid,
-                    d_vid=b['identity']['vid'],
-                    fqname=t['name'],
-                    type=u'table',
-                    title=t['name'],
-                    summary=unicode(t.get('description','')),
-                    keywords=keywords,
-                    text=columns
+                writer.add_document(
+                    identifier = unicode(i['identifier']),
+                    type=unicode(i['type']),
+                    name=unicode(i['name']),
                 )
 
-                writer.add_document(**d)
+        writer.commit()
 
-    def index_databases(self, writer):
+    def search_identifiers(self, search_phrase, limit=10):
 
-        l = self.doc_cache.get_library()
+        from whoosh.qparser import QueryParser
+        from whoosh import scoring
 
-        for i, (k, b) in enumerate(l['stores'].items()):
-            names = set()
+        parser = QueryParser("name", schema=self.identifier_index.schema)
 
-            s = self.doc_cache.get_store(k)
+        query = parser.parse(search_phrase)
 
-            for tvid, table in s['tables'].items():
+        class PosSizeWeighting(scoring.WeightingModel):
 
-                names.add(table['id_'])
-                names.add(table['vid'])
-                names.add(table['name'])
-                names.add(table.get('altname',u''))
+            def __init__(self):
+                pass
 
-                if 'installed_names' in table:
-                    names.update(set(table['installed_names']))
+            def scorer(self, searcher, fieldname, text, qf=1):
+                return self.PosSizeScorer(searcher, fieldname, text, qf=qf)
 
+            class PosSizeScorer(scoring.BaseScorer):
+                def __init__(self, searcher, fieldname, text, qf=1):
 
-            d = dict(
-                vid=s['uid'],
-                d_vid=None,
-                fqname=s['dsn'],
-                type=u'store',
-                title=s['title'],
-                summary=s['summary'] if s['summary'] else u'',
-                keywords=u' '.join(name for name in names if name)
-            )
+                    self.searcher = searcher
+                    self.fieldname = fieldname
+                    self.text = text
+                    self.qf = qf
+                    self.bmf25 = scoring.BM25F()
 
-            try:
-                writer.add_document(**d)
-            except:
-                print d
-                raise
+                def max_quality(self):
+                    return 40
 
 
-    def search(self, term):
+                def score(self, matcher):
+                    poses = matcher.value_as("positions")
+                    return ( 2.0 / (poses[0] + 1) +
+                             1.0 / ( len(self.text) / 4 + 1 ) +
+                             self.bmf25.scorer(searcher, self.fieldname, self.text).score(matcher) )
 
-        from whoosh.qparser import QueryParser, MultifieldParser
 
-        with self.ix.searcher() as searcher:
+        with self.identifier_index.searcher(weighting=PosSizeWeighting()) as searcher:
 
-            qp = MultifieldParser(search_fields, self.ix.schema)
-
-            query = qp.parse(term)
-
-            results = searcher.search(query, limit=None)
-
-            bundles = {}
-            stores = {}
+            results = searcher.search(query, limit=10)
 
             for hit in results:
-                if hit.get('d_vid', False):
-                    d_vid = hit['d_vid']
+                vid = hit.get('identifier', False)
+                name = hit.get('name', False)
+                if vid:
+                    yield hit.score, vid, name
 
-                    d = dict(score = hit.score,**hit.fields())
+    @property
+    def identifiers(self):
 
-                    if d_vid not in bundles:
-                        bundles[d_vid] = dict(score = 0, bundle = None, tables = [])
-
-                    bundles[d_vid]['score'] += hit.score
-
-                    if hit['type'] == 'bundle':
-                        bundles[d_vid]['bundle'] = d
-                    elif hit['type'] == 'table':
-                        bundles[d_vid]['tables'].append(d)
-
-                elif hit['type'] == 'store':
-                    stores[hit['vid']] = dict(**hit.fields())
-
-
-            # When there are a bunch of tables returned, but not the bundle, we need to re-create the bundle.
-            for vid, e in bundles.items():
-
-                if not e['bundle']:
-                    cb = self.doc_cache.get_bundle(vid)
-                    about = cb ['meta']['about']
-                    e['bundle'] = dict(
-                        title = about.get('title'),
-                        summary = about.get('summary'),
-                        fqname = cb['identity']['fqname'],
-                        vname = cb['identity']['vname'],
-                        source=cb['identity']['source'],
-                        vid = cb['identity']['vid'])
-
-
-            return bundles, stores
-
+        for x in self.partition_index.searcher().documents():
+            yield x['vid'], x['name']

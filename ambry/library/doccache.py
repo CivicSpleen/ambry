@@ -98,9 +98,7 @@ class DocCache(object):
 
         if key in self._cache:
             del self._cache[key]
-            print 'REMOVING', key
-        else:
-            print "NO ", key
+
 
 
     def compiled_times(self):
@@ -193,7 +191,7 @@ class DocCache(object):
         def f():
             tm = {}
 
-            for  t in self.library.tables:
+            for  t in self.library.tables_no_columns: # The no_columns version is a lot faster.
 
                 if not t.id_ in tm:
                     tm[t.id_] = [t.vid]

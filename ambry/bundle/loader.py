@@ -87,29 +87,38 @@ class LoaderBundle(BuildBundle):
         base_dir, file_name  = split(fn)
         file_base, ext = splitext(file_name)
 
-        if ext.startswith('.'):
-            ext = ext[1:]
+        if source.filetype:
+            ext = source.filetype
+        else:
+            if ext.startswith('.'):
+                ext = ext[1:]
 
-        ext = self.row_gen_ext_map.get(ext,ext)
+            ext = self.row_gen_ext_map.get(ext,ext)
 
         if source.row_spec.dict:
             rs = source.row_spec.dict
         else:
             rs = {}
 
-        rs['segment'] = source.segment
+        if source.segment:
+            rs['segment'] = source.segment
+
+        assert isinstance(self.prefix_headers, list)
+
         rs['prefix_headers'] = self.prefix_headers
 
         rs['header_mangler'] = lambda header: self.mangle_header(header)
 
         if ext == 'csv':
             from rowgen import DelimitedRowGenerator
+
             return DelimitedRowGenerator(fn, **rs)
         elif ext  == 'xls':
             from rowgen import ExcelRowGenerator
             return ExcelRowGenerator(fn, **rs)
         else:
-            raise Exception("Unknown ext: {}".format(ext))
+            raise Exception("Unknown source file extension: '{}' for file '{}' from source {} "
+                            .format(ext,  file_name, source_name))
 
 
     def make_table_for_source(self, source_name):

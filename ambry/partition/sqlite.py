@@ -135,32 +135,15 @@ class SqlitePartition(PartitionBase):
 
         return self
 
-    def optimal_rows_per_segment(self, size = 100*1024*1024, max=200000):
-        '''Calculate how many rows to put into a CSV segment for a target number
-        of bytes per file'''
-        
-        BYTES_PER_CELL = 3.8 # Bytes per num_row * num_col, experimental
-        
-        # Shoot for about 250M uncompressed, which should compress to about 25M
-
-        table  = self.get_table()
-        rows_per_seg = (size / (len(table.columns) * BYTES_PER_CELL) ) 
-        
-        # Round up to nearest 100K
-        
-        rows_per_seg = round(rows_per_seg/100000+1) * 100000
-        
-        if rows_per_seg > max:
-            return max
-        
-        return rows_per_seg
-
     def finalize(self):
 
         if not self.is_finalized and self.database.exists():
             self.write_basic_stats()
             self.write_file()
             self.write_full_stats()
+            self.compile_geo_coverage()
+            self.compile_time_coverage()
+            self.build_sample()
 
     def write_full_stats(self):
         """
@@ -224,9 +207,12 @@ class SqlitePartition(PartitionBase):
                 row['nuniques'] = df[col_name].dropna().nunique()
 
                 if col.type_is_text() :
+
                     row['uvalues'] = df[col_name].value_counts().sort(inplace=False, ascending=False)[:100].to_dict()
 
                 p.add_stat(col.vid, row)
+
+
 
     def write_basic_stats(self):
         '''Record in the partition entry basic statistics for the partition's
@@ -242,7 +228,7 @@ class SqlitePartition(PartitionBase):
         if not t.primary_key:
             from ..dbexceptions import ConfigurationError
 
-            raise ConfigurationError("Table {} does not have a primary key; can't compute states".format(t.name))
+            raise ConfigurationError("Table {} does not have a primary key; can't compute stats".format(t.name))
 
         partition_s = self.database.session
 
@@ -259,6 +245,86 @@ class SqlitePartition(PartitionBase):
             bundle_s.commit()
 
         self.set_state(Partitions.STATE.FINALIZED)
+
+    def compile_geo_coverage(self):
+        """Compile GVIDs for the geographic coverage and grain of the partition"""
+
+        from geoid import civick
+        from geoid.util import simplify
+
+        p_s = self.database.session
+
+        geo_cols = []
+        table_name = self.table.name
+        for c in self.table.columns:
+            if 'gvid' in c.name:
+                geo_cols.append(c.name)
+
+        geoids = set()
+
+        for gc in geo_cols:
+            for row in p_s.execute("SELECT DISTINCT {} FROM {}".format(gc, table_name)):
+                gvid = civick.GVid.parse(row[0])
+                if gvid:
+                    geoids.add(gvid)
+
+        coverage, grain =  simplify(geoids)
+
+        # The first simplification may produce a a set that can be simplified again
+        coverage, _ = simplify(coverage)
+
+        self.record.data['geo_coverage'] = sorted([ str(x) for x in coverage ])
+        self.record.data['geo_grain'] = sorted([str(x) for x in grain])
+
+        s = self.bundle.database.session
+        s.merge(self.record)
+        s.commit()
+
+    def compile_time_coverage(self):
+
+        date_cols = []
+        years = set()
+        table_name = self.table.name
+        for c in self.table.columns:
+            if 'year' in c.name:
+                date_cols.append(c.name)
+
+        p_s = self.database.session
+
+        for dc in date_cols:
+
+            for row in p_s.execute("SELECT DISTINCT {} FROM {}".format(dc, table_name)):
+                years.add(row[0])
+
+        self.record.data['time_coverage'] = sorted(list(years))
+
+        s = self.bundle.database.session
+        s.merge(self.record)
+        s.commit()
+
+    def build_sample(self):
+
+        name = self.table.name
+
+        count = int(self.database.connection.execute('SELECT count(*) FROM "{}"'.format(name)).fetchone()[0])
+
+        skip = count / 20
+
+        if count > 100:
+            sql = 'SELECT * FROM "{}" WHERE id % {} = 0 LIMIT 20'.format(name, skip)
+        else:
+            sql = 'SELECT * FROM "{}" LIMIT 20'.format(name)
+
+        sample = []
+
+        for j, row in enumerate(self.database.connection.execute(sql)):
+            sample.append(row.values())
+
+        self.record.data['sample'] = sample
+
+        s = self.bundle.database.session
+        s.merge(self.record)
+        s.commit()
 
     def write_file(self):
         """Create a file entry in the bundle for the partition, storing the md5 checksum and size. """

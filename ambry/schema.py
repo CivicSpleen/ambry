@@ -723,6 +723,7 @@ class Schema(object):
 
         l = self.bundle.library
 
+
         def table_protos():
 
             for t in q.all():
@@ -772,11 +773,8 @@ class Schema(object):
                     del d['name']
                     del d['sequence_id']
 
-                    # Use a revision in the id if the table id has one
-                    if t_on.revision:
-                        d['proto_vid'] = c.vid
-                    else:
-                        d['proto_vid'] = c.id_
+                    # Protovids never have the version -- they arent really vids
+                    d['proto_vid'] = c.id_
 
                     self.add_column(t, name, **d)
 

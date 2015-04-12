@@ -554,6 +554,9 @@ class Column(Base):
         return self.datatype in (Column.DATATYPE_POINT, Column.DATATYPE_LINESTRING, Column.DATATYPE_POLYGON,
                                  Column.DATATYPE_MULTIPOLYGON, Column.DATATYPE_GEOMETRY)
 
+    def type_is_gvid(self):
+        return 'gvid' in self.name
+
     def type_is_time(self):
         return self.datatype in (Column.DATATYPE_TIME, Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE)
 
@@ -1585,11 +1588,12 @@ class Partition(Base, LinkableMixin):
             def __repr__(self):
                 return str(self.__dict__)
 
+            def items(self):
+                return self.__dict__.items()
+
         cols = { s.column.name:Bunch(s.dict) for s in self._stats }
 
         return Bunch(cols)
-
-
 
     @staticmethod
     def before_insert(mapper, conn, target):

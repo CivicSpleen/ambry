@@ -23,7 +23,6 @@ class Test(TestBase):
         import bundles.testbundle.bundle
 
 
-
         self.bundle_dir = os.path.dirname(bundles.testbundle.bundle.__file__)
         self.rc = get_runconfig((os.path.join(self.bundle_dir,'library-test-config.yaml'),
                                  os.path.join(self.bundle_dir,'bundle.yaml'),
@@ -529,11 +528,9 @@ source/dataset-subset-variation-0.0.1/tthree.db:
             for p_vid, p in d.partitions.items():
                 datasets[d.vid]['partitions'][p_vid] = p.dict
 
-
         with open(self.bundle.filesystem.path('meta','version_datasets.json'),'w') as f:
             import json
             f.write(json.dumps(datasets))
-
 
         r = Resolver(db.session)
 
@@ -545,7 +542,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         for row in results:
             print row
-
 
         #os.remove(f)
 
@@ -563,7 +559,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         db.create()
 
         l.put_bundle(self.bundle)
-
 
         r = Resolver(db.session)
 
@@ -648,7 +643,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         print library.cache
         print library.cache.last_upstream()  
 
-
     def test_compression_cache(self):
         '''Test a two-level cache where the upstream compresses files '''
         from ambry.cache.filesystem import  FsCache,FsCompressionCache
@@ -661,8 +655,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         os.makedirs(l2_repo_dir)
         
         testfile = self.new_rand_file(os.path.join(root,'testfile'))
-
-
 
         # Create a cache with an upstream wrapped in compression
         l3 = FsCache(l2_repo_dir)
@@ -692,10 +684,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         print l.info
 
         l.purge()
-         
 
-    
-    
         l.put_bundle(self.bundle) # Install the partition references in the library.
 
         b = l.get(self.bundle.identity)
@@ -867,17 +856,25 @@ source/dataset-subset-variation-0.0.1/tthree.db:
             print d_vid, d
             print dc.bundle(d_vid)
 
-
     def test_search(self):
+        from ambry.library import new_library
 
-        l = self.get_library()
+        config = get_runconfig().library('default')
+
+        l = new_library(config, reset=True)
 
         print l.search
 
-        for ds in l.datasets():
-            print ds.vid
+        #for ds in l.datasets():  print ds.vid
 
+        l.search.index_datasets()
 
+        for r in  l.search.search_datasets("title:zip"):
+            ds = l.dataset(r)
+            print r, ds.vname, ds.data.get('title')
+
+        for r in l.search.search_partitions("doc:0E06"):
+            print r
 
 
 
