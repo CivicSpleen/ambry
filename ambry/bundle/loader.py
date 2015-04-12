@@ -43,7 +43,8 @@ class LoaderBundle(BuildBundle):
     def mangle_column_name(self, i, n):
         """
         Override this method to change the way that column names from the source are altered to
-        become column names
+        become column names in the schema
+
         :param i: column number
         :param n: original column name
         :return:
@@ -228,7 +229,7 @@ class LoaderBundle(BuildBundle):
 
         for col in header:
             if col not in columns:
-                self.error("Header column {} not in table {} for source {}".format(col, p.table.name, source_name))
+                self.error("Header column '{}' not in table {} for source {}".format(col, p.table.name, source_name))
 
         with p.inserter() as ins:
             for row in row_gen:

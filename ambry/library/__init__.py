@@ -1150,6 +1150,7 @@ class Library(object):
         return bundles
 
     def sync_remotes(self, remotes=None, clean = False, last_only=True, vids=None):
+        """Sync the local library with all of the remotes, create static JSON, and  build the full-text search index"""
         from ..orm import Dataset
         from sqlalchemy.exc import IntegrityError
         from ..dbexceptions import NotABundle
@@ -1231,15 +1232,18 @@ class Library(object):
                     b.close() # Just means we already have it installed
                     continue
 
+                self.search.index_dataset(bundle)
 
                 for p in b.partitions:
-                    if  installed:
+                    if installed:
                         self.database.install_partition(b, p, commit='collect')
 
                     if self.files.install_remote_partition(p.identity, remote, {}, commit = 'collect'):
                         self.logger.info("    + {}".format(p.identity.name))
                     else:
                         self.logger.info("    = {}".format(p.identity.name))
+
+                    self.search.index_partition(p)
 
                 try:
                     self.files.insert_collection()

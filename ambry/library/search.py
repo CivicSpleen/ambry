@@ -67,6 +67,7 @@ class Search(object):
 
         self._partition_index = None
 
+
     def get_or_new_index(self, schema, dir):
 
         from whoosh.index import create_in, open_dir

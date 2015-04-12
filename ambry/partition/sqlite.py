@@ -135,9 +135,9 @@ class SqlitePartition(PartitionBase):
 
         return self
 
-    def finalize(self):
+    def finalize(self, force = False):
 
-        if not self.is_finalized and self.database.exists():
+        if force or (not self.is_finalized and self.database.exists()):
             self.write_basic_stats()
             self.write_file()
             self.write_full_stats()
@@ -270,10 +270,11 @@ class SqlitePartition(PartitionBase):
 
         coverage, grain =  simplify(geoids)
 
-        # The first simplification may produce a a set that can be simplified again
+        # The first simplification may produce a set that can be simplified again
         coverage, _ = simplify(coverage)
 
-        self.record.data['geo_coverage'] = sorted([ str(x) for x in coverage ])
+        # For geo_coverage, only includes the higher level summary levels,  counties, states, places and urban areas
+        self.record.data['geo_coverage'] = sorted([ str(x) for x in coverage if x.sl in (40,50,60,160,400) ])
         self.record.data['geo_grain'] = sorted([str(x) for x in grain])
 
         s = self.bundle.database.session
