@@ -138,6 +138,18 @@ class LoaderBundle(BuildBundle):
 
         return table
 
+    def meta_set_row_specs(self, row_intuitier_class):
+
+        for source_name in self.metadata.sources:
+            source = self.metadata.sources.get(source_name)
+
+            rg = self.row_gen_for_source(source_name)
+
+            ri = row_intuitier_class(rg).intuit()
+
+            source.row_spec = ri
+
+        self.metadata.write_to_dir()
 
     def meta(self):
         from collections import defaultdict
@@ -233,7 +245,6 @@ class LoaderBundle(BuildBundle):
 
         with p.inserter() as ins:
             for row in row_gen:
-
                 assert len(row) == len(header), '{} != {}'
 
                 lr(str(p.identity.name))

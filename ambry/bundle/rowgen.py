@@ -297,7 +297,6 @@ class RowSpecIntuiter(object):
             is_header_comment_line(i,row)
         """
 
-
         self.row_gen.reset()
         for row in self.row_gen.raw_row_gen:
 
