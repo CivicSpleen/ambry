@@ -87,8 +87,4 @@ d = dict(
     extras_require={"pgsql": ["psycopg2"], "geo": ["sh", "gdal"], "server": ["paste", "bottle"]}
 )
 
-print "Setup with:"
-import pprint
-pprint.pprint(d)
-
 setup(**d)
