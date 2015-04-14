@@ -688,7 +688,7 @@ class Column(Base):
         A dict that holds key/values for all of the properties in the object
         :return:
         """
-        x = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ( 'table', 'stats')}
+        x = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ( 'table', 'stats', '_codes')}
 
         if not x:
             raise Exception(self.__dict__)
@@ -704,7 +704,7 @@ class Column(Base):
         Like dict, but does not hold any null values
         :return:
         """
-        return {k: v for k, v in self.dict.items() if v}
+        return {k: v for k, v in self.dict.items() if v and k != '_codes'}
 
 
     @property
@@ -868,7 +868,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     def dict(self):
         d =  {k:v for k,v in self.__dict__.items() if k in
                 ['id_','vid', 'd_id', 'd_vid', 'sequence_id', 'name',  'altname', 'vname', 'description',
-                 'universe', 'keywords', 'installed', 'proto_vid', 'type']}
+                 'universe', 'keywords', 'installed', 'proto_vid', 'type', '_codes']}
 
         if self.data:
             for k in self.data:
@@ -886,7 +886,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
 
     @property
     def nonull_dict(self):
-        return {k: v for k, v in self.dict.items() if v }
+        return {k: v for k, v in self.dict.items() if v and k not in '_codes'}
 
     @property
     def nonull_col_dict(self):
@@ -899,6 +899,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
 
         td = self.nonull_dict
         td['columns'] = tdc
+
 
         return td
 
@@ -1472,6 +1473,7 @@ class Partition(Base, LinkableMixin):
 
     @property
     def dict(self):
+        from geoid.civick import GVid
 
         d =  {
                  'id':self.id_,
@@ -1505,10 +1507,35 @@ class Partition(Base, LinkableMixin):
 
         d['dataset'] = self.dataset.dict
 
-        d['colstats'] = {s.column.id_: s.dict for s in self._stats}
+        d['colstats'] =  {s.column.id_: s.dict for s in self._stats}
 
+        if 'geo_grain' in d:
+            d['geo_grain'] = {
+                'vids': d['geo_grain'],
+                'names': []
+            }
+
+            for gvid_str in d['geo_grain']['vids']:
+                gvid = GVid.parse(gvid_str)
+                d['geo_grain']['names'].append(gvid.level.title())
+
+
+        if 'geo_coverage' in d:
+            d['geo_coverage'] = {
+                'vids': d['geo_coverage'],
+                'names': []
+            }
+
+        if 'time_coverage' in d:
+            d['time_coverage'] = {
+                'years': d['time_coverage'],
+                'min': min(int(x) for x in d['time_coverage']),
+                'max': max(int(x) for x in d['time_coverage'])
+
+            }
 
         return d
+
 
     @property
     def nonull_dict(self):

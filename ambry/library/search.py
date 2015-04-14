@@ -192,13 +192,35 @@ class Search(object):
         """
         from ..identity import ObjectNumber
         from collections import defaultdict
+        from geoid.civick import GVid
 
-        bvid_term = with_term = grain_term = years_term = in_term = ''
+
+        bvid_term = about_term = source_term = with_term = grain_term = years_term = in_term = ''
+
+        if search.get('source', False):
+            source_term = "source:" + search.get('source', '').strip()
+
+        if search.get('about', False):
+            about_term = "doc:({})".format(search.get('about', '').strip())
+
+        d_term = ' AND '.join(x for x in [source_term, about_term] if bool(x))
+
+        # This is the doc terms we'll move to the partition search if the partition search returns nothing
+        # but only if the about term was the only one specified.
+        dt_p_term = about_term if not source_term else None
+
         if search.get('in', False):
-            place_vids = self.search_identifiers(search['in'])
+            place_vids = list(x[1] for x in self.search_identifiers(search['in'])) # COnvert generator to list
 
             if place_vids:
-                in_term = "coverage:({})".format(' OR '.join(x[1] for x in place_vids))
+
+                # Add the 'all region' gvids for the higher level
+
+                all_set = set(str(GVid.parse(x).allval()) for x in place_vids)
+
+                place_vids += list(all_set)
+
+                in_term = "coverage:({})".format(' OR '.join(place_vids))
 
         if search.get('by', False):
             grain_term = "coverage:"+search.get('by','').strip()
@@ -222,24 +244,25 @@ class Search(object):
             with_term = 'schema:({})'.format(search.get('with', False))
 
 
-        if search.get('about', False):
+        if bool(d_term):
             # list(...) : the return from search_datasets is a generator, so it can only be read once.
-            bvids =  list(self.search_datasets(search['about']))
-            print search['about'], list(bvids)
+            bvids =  list(self.search_datasets(d_term))
+
         else:
             bvids = []
 
         p_term = ' AND '.join(x for x in [in_term, years_term, grain_term, with_term] if bool(x))
 
+
         if bool(p_term):
             if bvids:
                 p_term += " AND bvid:({})".format(' OR '.join(bvids))
-            else:
+            elif dt_p_term:
                 # In case the about term didn't generate any hits for the bundle.
-                p_term += " AND doc:({})".format(search['about'])
+                p_term += " AND {}".format(dt_p_term)
         else:
-            if not bvids:
-                p_term = "doc:({})".format(search['about'])
+            if not bvids and dt_p_term:
+                p_term = dt_p_term
 
 
         if p_term:
@@ -259,7 +282,7 @@ class Search(object):
 
             rtrn = { b:[] for b in bvids }
 
-        return (search['about'], p_term), rtrn
+        return (d_term, p_term), rtrn
 
     @property
     def partition_index(self):
@@ -419,5 +442,20 @@ class Search(object):
     @property
     def identifiers(self):
 
-        for x in self.partition_index.searcher().documents():
-            yield x['vid'], x['name']
+        for x in self.identifier_index.searcher().documents():
+            yield x
+
+    @property
+    @memoize
+    def all_identifiers(self):
+        return { x['identifier']:x['name'] for x in self.identifiers }
+
+    @property
+    @memoize
+    def identifier_map(self):
+        m = {}
+        for x in self.identifiers:
+            if len(x['name']) > 2: # Exclude state abbreviations
+                m[x['identifier']] = x['name']
+
+        return m

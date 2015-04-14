@@ -73,6 +73,7 @@ def library_parser(cmd):
     sp = asp.add_parser('search',help='Search the full-text index')
     sp.set_defaults(subcommand='search')
     sp.add_argument('term', type=str, nargs=argparse.REMAINDER, help='Query term')
+    sp.add_argument('-l', '--list', default=False, action="store_true", help='List documents instead of search')
     sp.add_argument('-d', '--datasets', default=False, action="store_true", help='Search only the dataset index')
     sp.add_argument('-i', '--identifiers', default=False, action="store_true", help='Search only the identifiers index')
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help='Search only the partitions index')
@@ -475,7 +476,7 @@ def library_search(args, l, config):
                     records.append(make_record(row.gvid, type, name))
 
                 if 'stusab' in row:
-                    records.append(make_record(row.gvid, type, row.stusab.upper))
+                    records.append(make_record(row.gvid, type, row.stusab.upper()))
 
         s = l.search
 
@@ -487,33 +488,53 @@ def library_search(args, l, config):
         return
 
 
-    print "search for ", term
-
     if args.identifiers:
-        for score, gvid, name in l.search.search_identifiers(term):
-            print "{:2.2f} {:9s} {}".format(score, gvid, name)
+
+        if args.list:
+            for x in l.search.identifiers:
+                print x
+
+        else:
+            for score, gvid, name in l.search.search_identifiers(term):
+                print "{:2.2f} {:9s} {}".format(score, gvid, name)
 
     elif args.datasets:
-        for x in l.search.search_datasets(term):
-            ds = l.dataset(x)
-            print x, ds.name, ds.data.get('title')
+        if args.list:
+            for x in l.search.datasets:
+                ds = l.dataset(x)
+                print x, ds.name, ds.data.get('title')
+
+        else:
+
+            print "search for ", term
+
+            for x in l.search.search_datasets(term):
+                ds = l.dataset(x)
+                print x, ds.name, ds.data.get('title')
 
     elif args.partitions:
-        from ..identity import ObjectNumber
-        from collections import defaultdict
 
-        bundles = defaultdict(set)
+        if args.list:
+            for x in l.search.partitions:
+                p = l.partition(x)
+                print p.vid, p.vname
+        else:
 
-        for x in l.search.search_partitions(term):
-            bvid = ObjectNumber.parse(x).as_dataset
+            from ..identity import ObjectNumber
+            from collections import defaultdict
 
-            bundles[str(bvid)].add(x)
+            bundles = defaultdict(set)
 
-        for bvid, pvids in bundles.items():
+            for x in l.search.search_partitions(term):
+                bvid = ObjectNumber.parse(x).as_dataset
 
-            ds = l.dataset(str(bvid))
+                bundles[str(bvid)].add(x)
 
-            print ds.vid, ds.name, len(pvids), ds.data.get('title')
+            for bvid, pvids in bundles.items():
+
+                ds = l.dataset(str(bvid))
+
+                print ds.vid, ds.name, len(pvids), ds.data.get('title')
 
 
 def library_sync(args, l, config):

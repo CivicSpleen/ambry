@@ -113,8 +113,8 @@ class Partitions(object):
             for op in q.all():
                 try:
                     partitions.append(self.partition(op))
-                except KeyError: # Unknown partition type, usually 'hdf'
-                    continue
+                except KeyError as e: # Unknown partition type, usually 'hdf'
+                    raise
 
             return partitions
         except sqlalchemy.exc.OperationalError:

@@ -29,6 +29,8 @@ class Times(object):
 class DocCache(object):
 
     def __init__(self, library, cache = None):
+        import platform
+
         self.library = library
 
         if self.library._doc_cache:
@@ -41,7 +43,12 @@ class DocCache(object):
         self.times = deque([], maxlen=10000)
         self.ignore_cache = False # if True, assume the next quest to cache the key does not exist
 
+        # Some OS X file systems are case insensitive, causing aliasing with gvid keys
+        self.prefix_upper =  platform.system() == 'Darwin'
+
     def _munge_key(self,  *args, **kwargs):
+
+        import string
 
         if '_key' in kwargs:
             key = kwargs['_key']
@@ -55,6 +62,10 @@ class DocCache(object):
                 key += '_'.join(str(arg) for arg in kwargs.values())
 
         assert bool(key)
+
+        # Prefix uppercase letters to avoid aliasing on case-insensitive OS X file systems
+        if self.prefix_upper:
+            key = ''.join('_'+x if x in string.ascii_uppercase else x for x in key)
 
         key = key[0] + '/' + key[1:4] + '/' + key
 
@@ -134,18 +145,6 @@ class DocCache(object):
     def bundle_index(self):
         return self.cache(lambda: self.library.versioned_datasets() , _key='bundle_index')
 
-    def collection_index(self):
-        pass
-
-    def warehouse_index(self):
-        return self.cache(lambda: {f.ref: dict(
-            title=f.data['title'],
-            summary=f.data['summary'] if f.data['summary'] else '',
-            dsn=f.path,
-            manifests=[m.ref for m in f.linked_manifests],
-            cache=f.data['cache'],
-            class_type=f.type_) for f in self.library.stores}, _key = 'warehouse_index')
-
 
     def table_index(self):
         pass
@@ -156,7 +155,9 @@ class DocCache(object):
 
 
     def dataset(self, vid):
-        return self.cache(lambda vid: self.library.dataset(vid).dict, vid)
+        # Add a 'd' to the datasets, since they are just the dataset record and must
+        # be distinguished from the full output with the same vid in bundle()
+        return self.cache(lambda vid: self.library.dataset(vid).dict, vid, _key='d'+vid)
 
     def bundle(self, vid):
         return self.cache(lambda vid: self.library.bundle(vid).dict, vid)

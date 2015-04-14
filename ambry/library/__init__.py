@@ -561,9 +561,10 @@ class Library(object):
         try:
             return (self.database.session.query(Table).filter(Table.vid == vid).one())
         except NoResultFound:
+            # Ths vid is actually an id, so we take the latest one
             try:
                 return (self.database.session.query(Table)
-                        .filter(Table.id_ == vid).order_by(Table.vid.desc()).one())
+                        .filter(Table.id_ == vid).order_by(Table.vid.desc()).first())
             except NoResultFound:
                 raise NotFoundError("Did not find table ref {} in library {}".format(vid, self.database.dsn))
 
@@ -646,6 +647,13 @@ class Library(object):
             except NoResultFound:
                 self.logger.error("No partition found: {} for {}".format(vid, self.database.dsn))
                 raise NotFoundError("No partition in library for vid : {} ".format(vid))
+
+
+    def dataset_partitions(self, vid):
+        """Return all partition records for a dataset vid"""
+        from ..orm import Partition
+
+        return (self.database.session.query(Partition).filter(Partition.d_vid == vid).all())
 
     @property
     def partitions(self):
@@ -1232,7 +1240,7 @@ class Library(object):
                     b.close() # Just means we already have it installed
                     continue
 
-                self.search.index_dataset(bundle)
+                self.search.index_dataset(b)
 
                 for p in b.partitions:
                     if installed:
@@ -1259,6 +1267,8 @@ class Library(object):
                 self.database.commit()
                 self.database.close()
                 b.close()
+
+            self.search.commit()
 
     def sync_source(self, clean=False):
         '''Rebuild the database from the bundles that are already installed
