@@ -113,7 +113,7 @@ class DocCache(object):
 
 
     def compiled_times(self):
-        """Compile all of the time entried from cache calls to one per key"""
+        """Compile all of the time entries from cache calls to one per key"""
         from collections import defaultdict
 
         times = defaultdict(Times)
