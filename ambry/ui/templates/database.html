@@ -1,0 +1,71 @@
+{% extends "layout.html" %}
+
+
+{% block title %}{{l.title}}{% endblock %}
+{% block head %}
+    {{ super() }}
+{% endblock %}
+{% block masthead %}
+    <h1 class="title">{{l.title}}</h1>
+    <p>{{l.summary}}</p>
+    <p>{{l.database}}</p>
+{% endblock %}
+
+{% block body %}
+
+<div >
+    <div class = "row">
+        <div class="col-md-12">
+            {% if warehouses -%}
+            <div>
+                <h2>Databases</h2>
+                <p>Databases that use data from this library. </p>
+                <div>
+                {% for ref,s in warehouses.items() -%}
+                    <div>
+                        <h4><a href="{{store_path(ref)}}">{{s.title}}</a><small> {{s.summary if s.summary else ''}}</small></h4>
+                        <p>{{s.dsn}}</p>
+                    </div>
+                {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+        </div>
+    </div>
+    <div class = "row">
+        <div class="col-md-12">
+
+            {% if False and l.manifests-%}
+            <div>
+                <h2>Collections</h2>
+                <p>Collections of data bundles around a specific topic.</p>
+                <div>
+                {% for uid, m in l.manifests.items() -%}
+                    {% if m.partitions|length > 0 -%}
+                    <div>
+                        <h3><a href="{{manifest_path(uid)}}">{{m.title}}</a></h3>
+                        <p>{{m.summary}}</p>
+                    </div>
+
+                    {% endif %}
+                {% endfor %}
+                </div>
+            </div>
+            {% endif -%}
+
+        </div>
+    </div>
+
+
+
+</div>
+
+
+{% endblock %}
+
+{% block tailjs %}
+    {{ super() }}
+    <script>
+    $('.toc_title').tooltip()
+    </script>
+{% endblock %}

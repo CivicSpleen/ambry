@@ -1,0 +1,30 @@
+<!-- Manifests  -->
+{# m is a Manifest object. md is the dict version of the manifest, from the JSON cache
+#}
+{% extends "layout.html" %}
+{% block title %}{{m.title}}{% endblock %}
+{% block head %}
+    {{ super() }}
+{% endblock %}
+{% block masthead %}
+    <h1 class="title">{{m.title}}</h1>
+    {% if m.uid -%}<p class="uid">Collection <a href="{{manifest_path(m.uid)}}">{{m.uid}}</a></p>{% endif %}
+    <p>{{m.summary.html if m.summary and m.summary.html  else ''}}</p>
+{% endblock %}
+
+{% block body %}
+<div class="ambry-manifest">
+
+    {% include 'manifest/databases.html' -%}
+
+    {% include 'manifest/partitions.html' -%}
+
+    {% include 'manifest/views.html' -%}
+
+    {% include 'manifest/tables.html' -%}
+
+</div>
+
+{% endblock %}
+
+

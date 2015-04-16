@@ -274,7 +274,7 @@ class SqlitePartition(PartitionBase):
         coverage, _ = simplify(coverage)
 
         # For geo_coverage, only includes the higher level summary levels,  counties, states, places and urban areas
-        self.record.data['geo_coverage'] = sorted([ str(x) for x in coverage if x.sl in (40,50,60,160,400) ])
+        self.record.data['geo_coverage'] = sorted([ str(x) for x in coverage if bool(x) and x.sl in (40,50,60,160,400) ])
         self.record.data['geo_grain'] = sorted([str(x) for x in grain])
 
         s = self.bundle.database.session

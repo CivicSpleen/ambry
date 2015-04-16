@@ -576,19 +576,15 @@ def library_sync(args, l, config):
 
 def library_doc(args, l, rc):
 
-    from ambrydoc import app, configure_application, setup_logging
-    import ambrydoc.views as views
-    from ambry.warehouse.server import exracts_blueprint
+    from ambry.ui import app, configure_application, setup_logging
+    import ambry.ui.views as views
 
     import logging
     from logging import FileHandler
     import webbrowser
     import socket
 
-    if args.port:
-        port = int(args.port)
-    else:
-        port = 8081 # 45235 + random.randint(1, 5000)
+    port = args.port if args.port else 8085
 
     cache_dir = l._doc_cache.path('',missing_ok=True)
 
@@ -598,35 +594,8 @@ def library_doc(args, l, rc):
     file_handler.setLevel(logging.WARNING)
     app.logger.addHandler(file_handler)
 
-    app.register_blueprint(exracts_blueprint,url_prefix='/warehouses')
-
-
     print 'Serving documentation for cache: ', cache_dir
 
-    # Check for open port
-
-    tries = 5
-
-    if args.port:
-        port = args.port
-    else:
-        while tries:
-
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                sock.bind(('localhost', int(port)))
-                sock.close()
-                break
-            except socket.error:
-                # If the port was not specified, increment to find an open one.
-                # If if was, try a few times then give up.
-                if not args.port:
-                    port += 1
-                else:
-                    import time
-                    time.sleep(1)
-
-                tries -= 1
 
     if not args.debug:
         # Don't open the browser on debugging, or it will re-open on every application reload

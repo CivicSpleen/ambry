@@ -1,0 +1,20 @@
+<!-- Databases -->
+{% if manifest_file_ref and manifest_file_ref.left_files -%}
+<h2 >Databases <small> that host this collection.</small></h2>
+<div>
+    <table class="table table-hover table-condensed" >
+        <tr>
+            <th>Id</th>
+            <th>Title</th>
+            <th>Summary</th>
+        </tr>
+        {% for s in manifest_file_ref.left_files -%}
+            <tr>
+                <td><a href="#">{{s.ref}}</a></td>
+                <td>{{s.data.title}}</td>
+                <td>{{s.data.summary}}</td>
+            </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif -%}

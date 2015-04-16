@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+{% block title %}Datasets{% endblock %}
+{% block head %}
+    {{ super() }}
+{% endblock %}
+{% block masthead %}
+    <h1 class="title">Datasets</h1>
+{% endblock %}
+
+{% block body %}
+
+
+<div>
+    <table class="table table-hover table-condensed" >
+    <tr>
+        <th>#</th>
+        <th>VID</th>
+        <th>Source</th>
+        <th>Dataset</th>
+        <th>Name</th>
+        <th>Versions</th>
+        <th>Title</th>
+    </tr>
+    {% for vid, b in bundles.items() -%}
+        <tr class="bundle_toc">
+            <td class="toc_n">{{loop.index}}</td>
+            <td class="toc_vid"><a href="{{bundle_path(b)}}">{{b.vid}}</a></td>
+            <td class="toc_source">{{b.source}}</td>
+            <td class="toc_dataset">{{b.dataset}}</td>
+            <td class="toc_name">{{b.name}}</td>
+            <td class="toc_version">
+                <ul  class="list-inline">
+                    <li><a href="{{bundle_path(b)}}">{{b.version}}</a></li>
+                    {% if b.other_versions -%}
+                    {% for id_, vb in b.other_versions.items() -%}
+                    <li><a href="{{bundle_path(v)}}">{{vb.version}}</a></li>
+                    {% endfor %}
+                    {% endif -%}
+                </ul>
+            </td>
+
+            <td class="toc_title" data-toggle="tooltip" data-placement="left"
+                title="{{(b.summary or '')|truncate(length=600)}}">
+                {{b.title or ''}}</td>
+            </td>
+        </tr>
+    {% endfor %}
+    </table>
+</div>
+
+
+{% endblock %}
+
+{% block tailjs %}
+    {{ super() }}
+    <script>
+    $('.toc_title').tooltip()
+    </script>
+{% endblock %}

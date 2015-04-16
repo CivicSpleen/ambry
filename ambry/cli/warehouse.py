@@ -317,39 +317,6 @@ def warehouse_config(args, w, config):
         for e in w.library.database.get_config_group('warehouse'):
             print e
 
-def warehouse_doc(args, w, config):
-    import os
-    from ambrydoc import app, configure_application
-    from ambrydoc.cache import DocCache
-
-    cache = w.cache.subcache('doc')
-
-    w.library.sync_doc_json(clean=args.clean, cache = DocCache(cache))
-
-    cache_dir = cache.path('',missing_ok=True)
-
-    import random
-
-    port = 45235 + random.randint(1,5000)
-
-    config = configure_application(dict(port = port, cache = cache_dir))
-
-    def open_browser():
-        import webbrowser
-        webbrowser.open("http://localhost:{}/".format(config['port']))
-
-    open_browser()
-
-    import logging
-    from logging import FileHandler
-
-    file_handler = FileHandler(os.path.join(cache_dir, "web.log"))
-    file_handler.setLevel(logging.WARNING)
-    app.logger.addHandler(file_handler)
-
-    print 'Serving documentation for cache: ', cache_dir
-
-    app.run(host=config['host'], port=int(config['port']), debug=False)
 
 def warehouse_test(args, w, config):
 

@@ -1529,8 +1529,9 @@ class Partition(Base, LinkableMixin):
         if 'time_coverage' in d:
             d['time_coverage'] = {
                 'years': d['time_coverage'],
-                'min': min(int(x) for x in d['time_coverage']),
-                'max': max(int(x) for x in d['time_coverage'])
+                'min': min(int(x) for x in d['time_coverage']) if d['time_coverage'] else None,
+                'max': max(int(x) for x in d['time_coverage']) if d['time_coverage'] else None,
+
 
             }
 

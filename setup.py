@@ -43,7 +43,7 @@ def find_package_data():
     l = list()
 
     import os
-    for start in ("ambry/support", "ambry/geo/support"):
+    for start in ("ambry/support", "ambry/geo/support", "ambry/ui/templates"):
         for root, dirs, files in os.walk(start):
 
             for f in files:

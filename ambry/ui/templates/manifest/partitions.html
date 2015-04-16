@@ -1,0 +1,24 @@
+<!-- Partitions  -->
+<div>
+{% for line, section in m.tagged_sections('partitions') -%}
+    <h2 class="{{section.tag}}" id="ambrm_{{section.line_number}}">Bundles and Partitions</h2>
+    <div>
+        <table class="table table-striped table-bordered table-condensed">
+            <tr>
+                <th>Bundle</th>
+                <th>Partition</th>
+                <th>Bundle Title</th>
+            </tr>
+            {% for vid,b in md.bundles.items() -%}
+                {% for p_vid in b.installed_partitions -%}
+                <tr>
+                    <td><a href="{{bundle_path(b.identity.vid)}}">{{b.identity.vid}}</a></td>
+                    <td>{{b.partitions.get(p_vid).name}}</td>
+                    <td>{{b.meta.about.title}}</td>
+                </tr>
+                {% endfor -%}
+            {% endfor -%}
+        </table>
+    </div>
+{% endfor %}
+</div>

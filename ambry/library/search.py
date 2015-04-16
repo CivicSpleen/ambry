@@ -195,6 +195,11 @@ class Search(object):
         from geoid.civick import GVid
 
 
+        if search.get('all', False):
+
+            search = SearchTermParser().parse(search['all'])
+
+
         bvid_term = about_term = source_term = with_term = grain_term = years_term = in_term = ''
 
         if search.get('source', False):
@@ -227,17 +232,26 @@ class Search(object):
 
         # The wackiness with the converts to int and str, and adding ' ', is because there
         # can't be a space between the 'TO' and the brackets in the time range when one end is open
-        try:
-            from_year = str(int(search.get('from', False)))+' '
-        except ValueError:
+
+        if search.get('from', False):
+            try:
+                from_year = str(int(search.get('from', False)))+' '
+            except ValueError:
+                pass
+        else:
             from_year = ''
 
-        try:
-            to_year = ' '+str(int(search.get('to', False)))
-        except ValueError:
+        if search.get('to', False):
+            try:
+                to_year = ' '+str(int(search.get('to', False)))
+            except ValueError:
+                pass
+        else:
             to_year = ''
 
-        if from_year or to_year:
+        if bool(from_year) or bool(to_year):
+
+            print '!!!', search , from_year
             years_term = "coverage:[{}TO{}]".format(from_year, to_year)
 
         if search.get('with', False):
@@ -282,7 +296,7 @@ class Search(object):
 
             rtrn = { b:[] for b in bvids }
 
-        return (d_term, p_term), rtrn
+        return (d_term, p_term, search), rtrn
 
     @property
     def partition_index(self):
@@ -421,13 +435,11 @@ class Search(object):
                 def max_quality(self):
                     return 40
 
-
                 def score(self, matcher):
                     poses = matcher.value_as("positions")
                     return ( 2.0 / (poses[0] + 1) +
                              1.0 / ( len(self.text) / 4 + 1 ) +
                              self.bmf25.scorer(searcher, self.fieldname, self.text).score(matcher) )
-
 
         with self.identifier_index.searcher(weighting=PosSizeWeighting()) as searcher:
 
@@ -459,3 +471,139 @@ class Search(object):
                 m[x['identifier']] = x['name']
 
         return m
+
+
+
+
+class SearchTermParser(object):
+
+    TERM = 0
+    QUOTEDTERM = 1
+    LOGIC = 2
+    MARKER = 3
+    YEAR = 4
+
+    types = {
+        TERM: 'TERM',
+        QUOTEDTERM: 'TERM',
+        LOGIC: 'LOGIC',
+        MARKER: 'MARKER',
+        YEAR: 'YEAR'
+    }
+
+    marker_terms = {
+        'in': ('coverage', 'grain'),
+        'by': ('grain'),
+        'with': 'with',
+        'from': ('year', 'source'),
+        'to': ('year'),
+        'with': ('source'),
+        'source': ('source')}
+
+    by_terms = 'state county zip zcta tract block blockgroup place city cbsa msa'.split()
+
+    @staticmethod
+    def s_quotedterm(scanner, token):
+        return (SearchTermParser.QUOTEDTERM, token.lower().strip())
+
+    @staticmethod
+    def s_term(scanner, token):
+        return (SearchTermParser.TERM, token.lower().strip())
+
+    @staticmethod
+    def s_domainname(scanner, token):
+        return (SearchTermParser.TERM, token.lower().strip())
+
+    @staticmethod
+    def s_markerterm(scanner, token):
+        return (SearchTermParser.MARKER, token.lower().strip())
+
+
+    @staticmethod
+    def s_year(scanner, token):
+        return (SearchTermParser.YEAR, int(token.lower().strip()))
+
+
+    def __init__(self):
+        from nltk.stem.lancaster import LancasterStemmer  # I have no idea which one to pick
+        import re
+
+        mt = '|'.join( [ r"\b"+x.upper()+r"\b" for x in self.marker_terms.keys()])
+
+        self.scanner = re.Scanner([
+            (r"\s+", None),
+            (r"['\"](.*?)['\"]", self.s_quotedterm),
+            (mt.lower(), self.s_markerterm),
+            (mt, self.s_markerterm),
+            (r"19[789]\d|20[012]\d", self.s_year), # From 1970 to 2029
+            (r"(?:[\w\-\.?])+", self.s_domainname),
+            (r".+?\b", self.s_term),
+        ])
+
+        self.stemmer = LancasterStemmer()
+
+        self.by_terms = [ self.stem(x) for x in self.by_terms]
+
+
+    def scan(self, s):
+        s = ' '.join(s.splitlines()) # make a single line
+        return self.scanner.scan(s)[0] # Returns one item per line, but we only have one line
+
+    def stem(self, w):
+        return self.stemmer.stem(w)
+
+    def parse(self,s):
+
+        toks = self.scan(s)
+
+        # Assume the first term is ABOUT, if it is not marked with a marker.
+        if toks[0][0] == self.TERM or toks[0][0] == self.QUOTEDTERM:
+            toks = [(self.MARKER, 'about')] + toks
+
+        # Group the terms by their marker.
+        last_marker = None
+        bymarker = []
+        for t in toks:
+            if t[0] == self.MARKER:
+
+                bymarker.append((t[1],[]))
+            else:
+                bymarker[-1][1].append(t)
+
+        # Convert some of the markers based on their contents
+        comps = []
+        for t in bymarker:
+            t = list(t)
+            if t[0] == 'in' and len(t[1]) == 1 and isinstance(t[1][0][1], basestring) and self.stem(t[1][0][1]) in self.by_terms:
+                t[0] = 'by'
+
+            # If the from term isn't an integer, then it is really a source.
+            if t[0] == 'from' and len(t[1]) == 1 and t[1][0][0] != self.YEAR :
+                t[0] = 'source'
+
+            comps.append(t)
+
+        # Join all of the terms into single marker groups
+        groups = { marker: [] for marker, _ in comps }
+
+        for marker, terms  in comps:
+            groups[marker] +=   [ term for marker, term in terms ]
+
+        for marker, terms in groups.items():
+
+            if len(terms) > 1:
+                if marker in ('in'):
+                    groups[marker] = ' '.join(terms)
+                else:
+                    groups[marker] = ' OR '.join(terms)
+            elif len(terms) == 1:
+                groups[marker] = terms[0]
+            else:
+                print "!!!!", marker, terms
+
+
+
+        return groups
+
+
+

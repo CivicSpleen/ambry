@@ -877,6 +877,13 @@ source/dataset-subset-variation-0.0.1/tthree.db:
             print r
 
 
+    def test_search_parse(self):
+
+        from ambry.library.search import SearchTermParser
+
+        stp = SearchTermParser()
+
+        print stp.parse('source mother')
 
 def suite():
     suite = unittest.TestSuite()
