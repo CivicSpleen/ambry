@@ -610,7 +610,7 @@ class Library(object):
 
     def versioned_datasets(self):
         """Like datasets(), but returns a dict structure, and only the most recent version, with other versions
-        under the 'otehr_version' key """
+        under the 'other_version' key """
         from ..orm import Dataset
 
         datasets = {}

@@ -145,6 +145,24 @@ class SqlitePartition(PartitionBase):
             self.compile_time_coverage()
             self.build_sample()
 
+    def guess_lom(self, col, stats):
+        """
+        Guess the level of measurement for the column: Nominal, Ordinal, Interval, Ratio
+
+
+        :param col:
+        :param stats:
+        :return:
+        """
+
+        if col.name == 'id' and ( col.is_primary_key or col.fk_vid):
+            return 'key'
+
+        if col.type_is_text:
+            return 'nom'
+
+
+
     def write_full_stats(self):
         """
 
@@ -184,6 +202,10 @@ class SqlitePartition(PartitionBase):
 
             for row in df.describe().T.reset_index().to_dict(orient='records'):
                 col_name = row['index']
+
+                if col_name == 'id':
+                    continue
+
                 col = table.column(col_name)
 
                 row['nuniques'] = df[col_name].dropna().nunique()
@@ -252,6 +274,7 @@ class SqlitePartition(PartitionBase):
         from geoid import civick
         from geoid.util import simplify
 
+
         p_s = self.database.session
 
         geo_cols = []
@@ -268,6 +291,41 @@ class SqlitePartition(PartitionBase):
                 if gvid:
                     geoids.add(gvid)
 
+        # If there is source data ( from the sources metadata in the build set in the loader in build_create_partition)
+        # then use the time and space values as additional geo and time information.
+
+        extra_spaces = []
+
+        if 'source_data' in self.record.data:
+            for source_name, source in self.record.data['source_data'].items():
+                if 'space' in source:
+                    extra_spaces.append( (source_name, source['space']))
+
+        if self.bundle.metadata.about.space: # Also from the bundle metadata
+            extra_spaces.append(('about', self.bundle.metadata.about.space))
+
+        for source_name, space in extra_spaces:
+                try:
+                    g = civick.GVid.parse(space)
+                except KeyError:
+
+                    places = list(self.bundle.library.search.search_identifiers(space))
+
+
+                    if not places:
+                        from ..dbexceptions import BuildError
+                        raise BuildError(("Failed to find space identifier '{}' in full text identifier search"
+                                         " for partition '{}' and source name '{}'")
+                                         .format(space, str(self.identity), source_name))
+
+                    score, gvid, name = places[0]
+
+                    self.bundle.log("Resolving space '{}' from source '{}' to {}/{}".
+                                    format(space, source_name, name, gvid))
+
+                    geoids.add(civick.GVid.parse(gvid))
+
+
         coverage, grain =  simplify(geoids)
 
         # The first simplification may produce a set that can be simplified again
@@ -276,6 +334,11 @@ class SqlitePartition(PartitionBase):
         # For geo_coverage, only includes the higher level summary levels,  counties, states, places and urban areas
         self.record.data['geo_coverage'] = sorted([ str(x) for x in coverage if bool(x) and x.sl in (40,50,60,160,400) ])
         self.record.data['geo_grain'] = sorted([str(x) for x in grain])
+
+
+
+        # Now add the geo and time coverage specified in the table. These values for space and time usually are specified
+        # in the sources metadata, and are copied into the
 
         s = self.bundle.database.session
         s.merge(self.record)
@@ -296,6 +359,16 @@ class SqlitePartition(PartitionBase):
 
             for row in p_s.execute("SELECT DISTINCT {} FROM {}".format(dc, table_name)):
                 years.add(row[0])
+
+        # If there was a time value in the source that this partition was created from, then
+        # add it to the years.
+        if 'source_data' in self.record.data:
+            for source_name, source in self.record.data['source_data'].items():
+                if 'time' in source:
+                    years.add(source['time'])
+
+        if self.bundle.metadata.about.time:
+            years.add(self.bundle.metadata.about.time)
 
         self.record.data['time_coverage'] = sorted(list(years))
 

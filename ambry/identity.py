@@ -14,6 +14,9 @@ from util import Constant
 class NotObjectNumberError(ValueError):
     pass
 
+class Base62DecodeError(ValueError):
+    pass
+
 
 class Name(object):
     '''The Name part of an identity ''' 
@@ -699,47 +702,52 @@ class ObjectNumber(object):
         ds_length = len(on_str)-cls.NDS_LENGTH[type_]
 
         if not ds_length in cls.DATASET_LENGTHS:
-            raise ValueError("Dataset string '{}' has an unfamiliar length: {}".format(on_str, ds_length))
+            raise NotObjectNumberError("Dataset string '{}' has an unfamiliar length: {}".format(on_str, ds_length))
 
         ds_lengths = cls.DATASET_LENGTHS[ds_length]
         
         assignment_class = ds_lengths[2]
-        
-        dataset = int(ObjectNumber.base62_decode(on_str[0:ds_lengths[0]]))
-        
-        if ds_lengths[1]: 
-            i = len(on_str)-ds_lengths[1]
-            revision = int(ObjectNumber.base62_decode(on_str[i:]))
-            on_str = on_str[0:i] # remove the revision
-        else:
-            revision = None
-            
-        on_str = on_str[ds_lengths[0]:]
-      
-        if type_ == cls.TYPE.DATASET:
-            return DatasetNumber(dataset, revision=revision, assignment_class=assignment_class)
-        
-        elif type_ == cls.TYPE.TABLE:   
-            table = int(ObjectNumber.base62_decode(on_str))
-            return TableNumber(DatasetNumber(dataset, assignment_class=assignment_class), 
-                               table, revision=revision)
-        
-        elif type_ == cls.TYPE.PARTITION:
-            partition = int(ObjectNumber.base62_decode(on_str))
-            return PartitionNumber(DatasetNumber(dataset, assignment_class=assignment_class), 
-                                   partition, revision=revision)   
-                   
-        elif type_ == cls.TYPE.COLUMN:     
-            table = int(ObjectNumber.base62_decode(on_str[0:cls.DLEN.TABLE]))
-            column = int(ObjectNumber.base62_decode(on_str[cls.DLEN.TABLE:]))
 
-            return ColumnNumber(TableNumber(
-                                DatasetNumber(dataset, assignment_class=assignment_class), table), 
-                                column, revision=revision)
-        
-        else:
-            raise ValueError('Unknow type character: '+on_str[0]+ ' in '+str(on_str))
-       
+
+        try:
+            dataset = int(ObjectNumber.base62_decode(on_str[0:ds_lengths[0]]))
+
+            if ds_lengths[1]:
+                i = len(on_str) - ds_lengths[1]
+                revision = int(ObjectNumber.base62_decode(on_str[i:]))
+                on_str = on_str[0:i]  # remove the revision
+            else:
+                revision = None
+
+            on_str = on_str[ds_lengths[0]:]
+
+            if type_ == cls.TYPE.DATASET:
+                return DatasetNumber(dataset, revision=revision, assignment_class=assignment_class)
+
+            elif type_ == cls.TYPE.TABLE:
+                table = int(ObjectNumber.base62_decode(on_str))
+                return TableNumber(DatasetNumber(dataset, assignment_class=assignment_class),
+                                   table, revision=revision)
+
+            elif type_ == cls.TYPE.PARTITION:
+                partition = int(ObjectNumber.base62_decode(on_str))
+                return PartitionNumber(DatasetNumber(dataset, assignment_class=assignment_class),
+                                       partition, revision=revision)
+
+            elif type_ == cls.TYPE.COLUMN:
+                table = int(ObjectNumber.base62_decode(on_str[0:cls.DLEN.TABLE]))
+                column = int(ObjectNumber.base62_decode(on_str[cls.DLEN.TABLE:]))
+
+                return ColumnNumber(TableNumber(
+                                    DatasetNumber(dataset, assignment_class=assignment_class), table),
+                                    column, revision=revision)
+
+            else:
+                raise NotObjectNumberError('Unknown type character: '+on_str[0]+ ' in '+str(on_str))
+        except Base62DecodeError as e:
+            raise NotObjectNumberError("Unknown character:  "+str(e))
+
+
 
     @classmethod
     def base62_encode(cls, num):
@@ -782,7 +790,10 @@ class ObjectNumber(object):
         idx = 0
         for char in string:
             power = (strlen - (idx + 1))
-            num += alphabet.index(char) * (base ** power)
+            try:
+                num += alphabet.index(char) * (base ** power)
+            except ValueError:
+                raise Base62DecodeError("Failed to decode char: '{}'".format(char))
             idx += 1
     
         return num

@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..cli import prt, warn, fatal, _find, _print_bundle_list, _print_bundle_entry
+from ..cli import prt, warn, fatal
 from ..identity import LocationRef
 
 # If the devel module exists, this is a development system.
@@ -59,33 +59,6 @@ def root_parser(cmd):
     group.add_argument('-j', '--json', default=False, action='store_true', help='Output json')
     group.add_argument('-r', '--rows', default=False, action='store_true', help='Output key/value pair rows')
 
-
-    sp = cmd.add_parser('find', prefix_chars='-+',
-                        help='Search for the argument as a bundle or partition name or id')
-    sp.set_defaults(command='root')
-    sp.set_defaults(subcommand='find')
-
-    sp.add_argument('-P', '--plain', default=False, action='store_true',
-                    help='Plain output; just print the bundle path, with no logging decorations')
-    sp.add_argument('-F', '--fields', type=str,
-                    help="Specify fields to use. One of: 'locations', 'vid', 'status', 'name'")
-    group = sp.add_mutually_exclusive_group()
-    group.add_argument('+s', '--source', default=False, action='store_true',
-                       help='Find source bundle (Source is downloaded, not just referenced)')
-    group.add_argument('-s', '--not-source', default=False, action='store_true',
-                       help='Find source bundle that is referenced but not downloaded')
-    group.add_argument('+b', '--built', default=False, action='store_true',
-                       help='Find bundles that have been built')
-    group.add_argument('-b', '--not-built', default=False, action='store_true',
-                       help='Find bundles that have not been built')
-    group.add_argument('-c', '--commit', default=False, action='store_true',
-                       help='Find bundles that need to be committed')
-    group.add_argument('-p', '--push', default=False, action='store_true',
-                       help='Find bundles that need to be pushed')
-    group.add_argument('-i', '--init', default=False, action='store_true',
-                       help='Find bundles that need to be initialized')
-    group.add_argument('-a', '--all', default=False, action='store_true',
-                       help='List all bundles, from root or sub dir')
 
     sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Query commands to find packages with. ')
 
@@ -291,75 +264,6 @@ def root_meta(args, l, rc):
             else:
                 print o.dump()
 
-def root_find(args, l, rc):
-    from ..source.repository.git import GitRepository
-    from ..library.files import Files
-
-    if args.plain:
-        fields = ['vid']
-
-    elif  args.fields:
-        fields = args.fields.split(',')
-
-    else:
-        fields = []
-
-    key = lambda ident: ident.vname
-
-    if args.terms:
-
-        show_partitions = any(['partition' in term for term in args.terms])
-
-        identities = sorted(_find(args, l, rc).values(), key=key)
-
-        _print_bundle_list(identities,fields=fields, show_partitions=show_partitions)
-
-    else:
-
-        idents =sorted(l.list(key='fqname').values(), key=key)
-
-        s = l.source
-
-        for ident in idents:
-            try:
-                bundle = s.resolve_build_bundle(ident.vid)
-            except Exception as e:
-                warn("Failed to load for {}: {}".format(ident, e.message))
-
-            if bundle:
-                repo = GitRepository(None, bundle.bundle_dir)
-                try:
-                    repo.bundle_dir = bundle.bundle_dir
-                except Exception as e:
-                    warn("Failed to instantiate for {}: {}".format(ident, e.message))
-                    continue
-            else:
-                repo = None
-
-            show = [False]
-
-            def toggle(show, cond):
-                if not show[0] and cond:
-                    show[:] = [True]
-
-            toggle(show, args.all)
-
-            toggle(show, args.commit and repo and repo.needs_commit())
-            toggle(show, args.push and repo and repo.needs_push())
-            toggle(show, args.init_descriptor and repo and repo.needs_init())
-
-            toggle(show, args.source and ident.locations.is_in(Files.TYPE.SOURCE) )
-            toggle(show, args.not_source and not ident.locations.is_in(Files.TYPE.SOURCE))
-
-            toggle(show, args.built and bundle and bundle.is_built)
-            toggle(show, args.not_built and bundle and not bundle.is_built)
-
-            if show[0]:
-
-                if args.plain:
-                    prt('{}'.format(ident.fqname))
-                else:
-                    _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=fields)
 
 def root_doc(args, l, rc):
     import webbrowser

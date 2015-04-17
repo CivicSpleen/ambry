@@ -386,8 +386,12 @@ def bundle_info(args, b, st, rc):
                           .format("Col name", "Count", 'Uniq', 'Mean', 'Sample Values'))
                     for col_name, s in p.stats.__dict__.items():
 
-                        b.log(indent+"{:20.20s} {:7d} {:7d} {:10.2e} {:s}".
-                              format(col_name, s.count, s.nuniques, s.mean if s.mean else float('nan'), ','.join(s.uvalues.keys()[:5])))
+                        b.log(indent+"{:20.20s} {:7s} {:7s} {:10s} {:s}".
+                              format(col_name,
+                                     str(s.count) if s.count else '',
+                                     str(s.nuniques) if s.nuniques else '',
+                                     '{:10.2e}'.format(s.mean) if s.mean else '',
+                                     ','.join(s.uvalues.keys()[:5])))
 
 
 

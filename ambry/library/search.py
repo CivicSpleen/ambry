@@ -300,7 +300,6 @@ class Search(object):
 
     @property
     def partition_index(self):
-        from whoosh.index import create_in, open_dir
 
         if not self._partition_index:
             self._partition_index = self.get_or_new_index(PartitionSchema, self.p_index_dir)
@@ -443,7 +442,7 @@ class Search(object):
 
         with self.identifier_index.searcher(weighting=PosSizeWeighting()) as searcher:
 
-            results = searcher.search(query, limit=10)
+            results = searcher.search(query, limit=limit)
 
             for hit in results:
                 vid = hit.get('identifier', False)

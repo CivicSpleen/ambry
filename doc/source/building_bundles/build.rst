@@ -1,7 +1,7 @@
 .. _recipes_build_toplevel:
 
 =============
-Bulding
+Building
 =============
 
 Inserting List data

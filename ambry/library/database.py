@@ -889,8 +889,9 @@ class LibraryDb(object):
 
         s = self.session
 
-        # TODO: Probably need to manually delete colstats.
+        # FIXME: The Columstat delete should be cascaded, but I really don't understand cascading.
 
+        s.query(ColumnStat).filter(ColumnStat.p_vid == vid).delete()
         s.query(Partition).filter(Partition.vid == vid).delete()
 
         self.commit()

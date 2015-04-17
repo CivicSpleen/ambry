@@ -60,8 +60,11 @@ class LoaderBundle(BuildBundle):
         return [ self.mangle_column_name(i,n) for i,n in enumerate(header)]
 
     def build_create_partition(self, source_name):
-        """Create or find a partition based on the source"""
-        # This ugliness is b/c get() doesn't take a 'default' arg.
+        """Create or find a partition based on the source
+
+        Will also load the source metadata into the partition, as a dict, under the key name of the source name.
+        """
+
 
         source = self.metadata.sources[source_name]
 
@@ -76,7 +79,16 @@ class LoaderBundle(BuildBundle):
 
         assert bool(table)
 
-        return self.partitions.find_or_new(table=table)
+        p =  self.partitions.find_or_new(table=table)
+
+        with self.session:
+            if not 'source_data' in p.record.data:
+                p.record.data['source_data'] = {}
+
+            p.record.data['source_data'][source_name] = source.dict
+
+        return p
+
 
     def row_gen_for_source(self, source_name):
         from os.path import dirname, split, splitext
@@ -130,11 +142,8 @@ class LoaderBundle(BuildBundle):
 
         table_desc = source.description if source.description else "Table generated from {}".format(source.url)
 
-        data = dict(source)
-        if 'description' in data: del data['description']
-        del data['url']
 
-        table = self.schema.add_table(table_name, description=table_desc, data=data)
+        table = self.schema.add_table(table_name, description=table_desc)
 
         return table
 
@@ -229,7 +238,7 @@ class LoaderBundle(BuildBundle):
 
         p = self.build_create_partition(source_name)
 
-        self.log("Loading source '{}' into partition '{}'".format(source_name, p.identity.name))
+        self.log("Loading source '{}' into partition '{}'".format(source_name, str(p.identity.name)))
 
         lr = self.init_log_rate(print_rate=5)
 

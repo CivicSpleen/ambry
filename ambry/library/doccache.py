@@ -67,7 +67,13 @@ class DocCache(object):
         if self.prefix_upper:
             key = ''.join('_'+x if x in string.ascii_uppercase else x for x in key)
 
-        key = key[0] + '/' + key[1:4] + '/' + key
+        if '_key_prefix' in kwargs:
+            pk = kwargs['_key_prefix'] + '/' +key[0] + '/' + key[1]
+            del kwargs['_key_prefix']
+        else:
+            pk = key[0] + '/' + key[1]
+
+        key = pk + '/' + key
 
         return key, args, kwargs
 
@@ -143,6 +149,7 @@ class DocCache(object):
         return self.cache(lambda: self.library.summary_dict, _key='library_info')
 
     def bundle_index(self):
+
         return self.cache(lambda: self.library.versioned_datasets() , _key='bundle_index')
 
 
@@ -157,7 +164,12 @@ class DocCache(object):
     def dataset(self, vid):
         # Add a 'd' to the datasets, since they are just the dataset record and must
         # be distinguished from the full output with the same vid in bundle()
-        return self.cache(lambda vid: self.library.dataset(vid).dict, vid, _key='d'+vid)
+        return self.cache(lambda vid: self.library.dataset(vid).dict, vid, _key_prefix='ds')
+
+    def bundle_summary(self, vid):
+        return self.cache(lambda vid: self.library.bundle(vid).summary_dict, vid, _key_prefix='bs')
+
+
 
     def bundle(self, vid):
         return self.cache(lambda vid: self.library.bundle(vid).dict, vid)

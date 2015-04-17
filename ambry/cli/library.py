@@ -455,30 +455,13 @@ def library_search(args, l, config):
 
         records = []
 
-        def make_record(identifier, type, name):
-            return dict(
-                identifier=identifier,
-                type=type,
-                name=name
-            )
+        source = 'civicknowledge.com-terms-geoterms'
 
-        for s in sources:
-            p = l.get(s).partition
-            type = p.table.name
+        p = l.get(source).partition
+        type = p.table.name
 
-            for row in p.rows:
-
-                if 'name' in row:
-                    name = row.name
-                    if type == 'states':
-                        name += " State"
-
-                    records.append(make_record(row.gvid, type, name))
-
-                if 'stusab' in row:
-                    records.append(make_record(row.gvid, type, row.stusab.upper()))
-
-        s = l.search
+        for row in p.rows:
+            records.append(dict(identifier=row['gvid'],type=row['type'],name=row['name']))
 
         l.search.index_identifiers(records)
 
@@ -487,7 +470,6 @@ def library_search(args, l, config):
 
         return
 
-
     if args.identifiers:
 
         if args.list:
@@ -495,8 +477,8 @@ def library_search(args, l, config):
                 print x
 
         else:
-            for score, gvid, name in l.search.search_identifiers(term):
-                print "{:2.2f} {:9s} {}".format(score, gvid, name)
+            for score, gvid, name in l.search.search_identifiers(term, limit = 30):
+                print "{:6.2f} {:9s} {}".format(score, gvid, name)
 
     elif args.datasets:
         if args.list:

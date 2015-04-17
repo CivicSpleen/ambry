@@ -484,7 +484,7 @@ class DbBundleBase(Bundle):
         """
 
         return dict(
-            about=self.metadata.dict['about'],
+            meta=self.metadata.dict,
             identity=self.identity.dict,
             other_versions=[ov.dict for ov in self.identity.data.get('other_versions',[])]
         )
@@ -1137,7 +1137,10 @@ class BuildBundle(Bundle):
                 with self.session:
                     warnings, errors = self.schema.schema_from_file(f, fast = fast)
 
-                    self.schema.expand_prototypes()
+                    self.schema.expand_table_prototypes()
+
+                with self.session:
+                    self.schema.expand_column_prototypes()
 
                 for title, s, f in (("Errors", errors, self.error), ("Warnings", warnings, self.warn)):
                     if s:

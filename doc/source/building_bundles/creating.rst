@@ -4,6 +4,8 @@
 Creating a New Bundle
 =====================
 
+How to create a new bundle. 
+
 .. important::
 
     First, you will need to properly :ref:`configure your Ambry installation <configuration>`. In particular, you will need to set your email and name in the ``.ambry-accounts.yaml`` file.
@@ -66,7 +68,16 @@ When it is done, you will have a bundle database in the ``build`` subdirectory.
     Creating a bundle source package will register the bundle with the library, so you can run ``ambry list`` to
     find the location of the bundle. But this also means that if you try to re-create the source bundle with the
     same name, you'll get a conflict. Instead, you'll have to delete the reference from the library first, using
-    ```ambry library remove -s <ref>``, where ``<ref>`` is the id number of name of the bundle.
+    ``ambry library remove -s <ref>``, where ``<ref>`` is the id number of name of the bundle.
+
+Selecting a Variation
+*********************
+
+There are a few special types of bundles that you can designate with the ``variation`` field:
+
+* ``index`` specifies that the bundle is an index, a complete list of the geographies or entites in a set, used to attach other bundles to
+* ``cross`` specifies that the bundle is a crosswalk, which connects other datasets, usually two other indexes. 
+
 
 Now, you've got a new bundle, and you've verified that it can build. The next step is to :ref:`update the configuration and code. <configure_bundle>`
 

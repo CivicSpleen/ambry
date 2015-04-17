@@ -12,5 +12,6 @@ A quick guide to using Ambry
     bundle_structure
     creating
     bundle_configuration
+    build_schema
 
 

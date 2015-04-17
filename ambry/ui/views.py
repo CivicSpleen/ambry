@@ -69,6 +69,10 @@ def bundle_search():
 def get_bundle(vid, ct):
     return renderer(content_type=ct).bundle(vid)
 
+@app.route('/bundles/summary/<vid>.<ct>')
+def get_bundle_summary(vid, ct):
+    return renderer(content_type=ct).bundle_summary(vid)
+
 @app.route('/bundles/<vid>/schema.<ct>')
 def get_schema(vid, ct):
 
@@ -79,7 +83,6 @@ def get_schema(vid, ct):
 
 @app.route('/bundles.<ct>')
 def get_bundles(ct):
-
     return renderer(content_type=ct).bundles_index()
 
 @app.route('/tables.<ct>')

@@ -340,7 +340,9 @@ class Renderer(object):
         """Render the bundle Table of Contents for a library"""
         template = self.env.get_template('toc/bundles.html')
 
-        return self.render(template, bundles = self.doc_cache.bundle_index(), **self.cc())
+        bundles = self.doc_cache.bundle_index()
+
+        return self.render(template, bundles = bundles, **self.cc())
 
     def tables_index(self):
 
@@ -362,6 +364,16 @@ class Renderer(object):
 
 
         return self.render(template, b = b , **self.cc())
+
+    def bundle_summary(self, vid):
+        """Render documentation for a single bundle """
+
+        template = self.env.get_template('bundle/index.html')
+
+        b = self.doc_cache.bundle_summary(vid)
+
+
+        return self.render(template, b=b, **self.cc())
 
     def schemacsv(self, vid):
         """Render documentation for a single bundle """

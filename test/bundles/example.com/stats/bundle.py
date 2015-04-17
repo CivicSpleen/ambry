@@ -71,6 +71,8 @@ class Bundle(BuildBundle):
 
             header, row = self.gen_rows(as_dict=False).next()
 
+
+
             self.schema.update_from_iterator(table_name,
                                              header=header,
                                              iterator=self.gen_rows(as_dict=False),
