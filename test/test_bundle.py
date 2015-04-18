@@ -19,14 +19,6 @@ class Test(TestBase):
         self.bundle = Bundle()    
         self.bundle_dir = self.bundle.bundle_dir
 
-    def save_bundle(self):
-        pass
-        
-    def restore_bundle(self):
-        pass 
-
-
-
     def test_db_bundle(self):
         
         from ambry.bundle import BuildBundle, DbBundle
@@ -384,18 +376,6 @@ class Test(TestBase):
         self.assertEquals('filesystem3', l['filesystem']['upstream']['upstream']['_name'])
         self.assertEquals('devtest.sandiegodata.org', l['filesystem']['upstream']['upstream']['account']['_name'])
 
-    def x_test_build_bundle_hdf(self):
-
-        bundle = Bundle()
-        bundle.clean()
-        bundle = Bundle()
-        bundle.exit_on_fatal = False
-        bundle.pre_prepare()
-        bundle.prepare()
-        bundle.post_prepare()
-        bundle.pre_build()
-        bundle.build_hdf()
-        bundle.post_build()
 
     def test_build_bundle(self):  
         import shutil
@@ -521,19 +501,7 @@ class Test(TestBase):
 
         b.set_value('test', 'uuid', uv2)
 
-    def x_test_templates(self):
 
-        from ambry.util.text import compile_tempate
-
-        print compile_tempate(self.bundle, None, None)
-
-        md = self.bundle.metadata
-
-        #print md.errors
-
-        #print yaml.dump(md.dict, default_flow_style=False, indent=4, encoding='utf-8')
-
-        self.bundle.update_configuration()
 
 
 

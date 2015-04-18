@@ -22,7 +22,7 @@ library:
 
     http-remoted:
       remotes:
-        - 'http://devtest.sandiegodata.org/s3-remote#compress'
+        - 'http://devtest.sandiegodata.org/s3-remote' # No #compress, since on reads compression is handled auto
       filesystem: default
       database: default
 

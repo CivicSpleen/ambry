@@ -769,13 +769,17 @@ def _on_connect_update_sqlite_schema(conn, con_record):
 
         if version < 22:
             from ..orm import Code
-            Code.__table__.create(bind=conn.engine)
+
+            try:
+                Code.__table__.create(bind=conn.engine)
+            except Exception as e:
+                pass
 
         if version < 23:
 
             try:
                 conn.execute('ALTER TABLE columns ADD COLUMN c_derivedfrom VARCHAR(200)')
-            except Exception as e:
+            except OperationalError as e:
                 pass
 
         if version < 24:
@@ -783,20 +787,24 @@ def _on_connect_update_sqlite_schema(conn, con_record):
 
             try:
                 SearchDoc.__table__.create(bind=conn.engine)
-            except Exception as e:
+            except OperationalError as e:
                 pass
 
         if version < 25:
             from ..orm import ColumnStat
 
-            ColumnStat.__table__.create(bind=conn.engine)
+            try:
+                ColumnStat.__table__.create(bind=conn.engine)
+            except OperationalError as e:
+                pass
 
         if version < 27:
 
             try:
                 conn.execute('ALTER TABLE colstats ADD COLUMN cs_lom VARCHAR(6)')
-            except Exception as e:
+            except OperationalError as e:
                 pass
+
 
     if version < SqliteDatabase.SCHEMA_VERSION:
         conn.execute('PRAGMA user_version = {}'.format(SqliteDatabase.SCHEMA_VERSION))

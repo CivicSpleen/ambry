@@ -1863,10 +1863,11 @@ class ColumnStat(Base, SavableMixin, LinkableMixin):
 
     id = SAColumn('cs_id',Integer, primary_key=True, nullable=False)
 
-    p_vid = SAColumn('cs_p_vid', String(10), ForeignKey('partitions.p_vid'), nullable=False, index=True)
+    p_vid = SAColumn('cs_p_vid', String(20), ForeignKey('partitions.p_vid'), nullable=False, index=True)
     partition = relationship('Partition', backref='_stats')
 
-    c_vid = SAColumn('cs_c_vid', String(12), ForeignKey('columns.c_vid'), nullable=False, index=True)
+    # This really should be Nullable=False, but I can't get cascading deletes to work.
+    c_vid = SAColumn('cs_c_vid', String(20), ForeignKey('columns.c_vid'), nullable=False, index=True)
     column = relationship('Column', backref='stats')
 
     lom = SAColumn('cs_lom',String(12))

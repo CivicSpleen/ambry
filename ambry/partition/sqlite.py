@@ -304,6 +304,12 @@ class SqlitePartition(PartitionBase):
         if self.bundle.metadata.about.space: # Also from the bundle metadata
             extra_spaces.append(('about', self.bundle.metadata.about.space))
 
+        if self.bundle.identity.bspace:  # And from the bundle name
+            extra_spaces.append(('bname', self.bundle.identity.bspace))
+
+        if self.identity.space:  # And from the partition name
+            extra_spaces.append(('pname', self.identity.space))
+
         for source_name, space in extra_spaces:
                 try:
                     g = civick.GVid.parse(space)

@@ -58,6 +58,9 @@ class RowGenerator(object):
         if header_comment_lines: self.header_comment_lines = header_comment_lines
         if prefix_headers: self.prefix_headers = prefix_headers
 
+    def _yield_rows(self):
+        raise NotImplementedError
+
     @property
     def raw_row_gen(self):
         """Generate all rows from the underlying source, with no consideration for wether the row is data, header
@@ -182,6 +185,8 @@ class RowGenerator(object):
                 self.put_row = None
 
             yield  pre + row
+
+
 
 
 class DelimitedRowGenerator(RowGenerator):
