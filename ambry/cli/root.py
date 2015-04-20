@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..cli import prt, warn, fatal, _find, _print_bundle_list, _print_bundle_entry
+from ..cli import prt, warn, fatal
 from ..identity import LocationRef
 
 # If the devel module exists, this is a development system.
@@ -43,11 +43,6 @@ def root_parser(cmd):
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
     sp.add_argument('term',  type=str, nargs = '?', help='Name or ID of the bundle or partition')
 
-    sp = cmd.add_parser('doc', help='Open a browser displaying documentation')
-    sp.set_defaults(command='root')
-    sp.set_defaults(subcommand='doc')
-    sp.add_argument('-f', '--force', default=False, action="store_true", help='Force generating files that already exist')
-    sp.add_argument('term',  type=str, nargs = '?', help='Name or ID of the bundle or partition')
 
     sp = cmd.add_parser('meta', help='Dump the metadata for a bundle')
     sp.set_defaults(command='root')
@@ -58,51 +53,42 @@ def root_parser(cmd):
     group.add_argument('-y', '--yaml', default=False, action='store_true', help='Output yaml')
     group.add_argument('-j', '--json', default=False, action='store_true', help='Output json')
     group.add_argument('-r', '--rows', default=False, action='store_true', help='Output key/value pair rows')
-
-
-    sp = cmd.add_parser('find', prefix_chars='-+',
-                        help='Search for the argument as a bundle or partition name or id')
-    sp.set_defaults(command='root')
-    sp.set_defaults(subcommand='find')
-
-    sp.add_argument('-P', '--plain', default=False, action='store_true',
-                    help='Plain output; just print the bundle path, with no logging decorations')
-    sp.add_argument('-F', '--fields', type=str,
-                    help="Specify fields to use. One of: 'locations', 'vid', 'status', 'name'")
-    group = sp.add_mutually_exclusive_group()
-    group.add_argument('+s', '--source', default=False, action='store_true',
-                       help='Find source bundle (Source is downloaded, not just referenced)')
-    group.add_argument('-s', '--not-source', default=False, action='store_true',
-                       help='Find source bundle that is referenced but not downloaded')
-    group.add_argument('+b', '--built', default=False, action='store_true',
-                       help='Find bundles that have been built')
-    group.add_argument('-b', '--not-built', default=False, action='store_true',
-                       help='Find bundles that have not been built')
-    group.add_argument('-c', '--commit', default=False, action='store_true',
-                       help='Find bundles that need to be committed')
-    group.add_argument('-p', '--push', default=False, action='store_true',
-                       help='Find bundles that need to be pushed')
-    group.add_argument('-i', '--init', default=False, action='store_true',
-                       help='Find bundles that need to be initialized')
-    group.add_argument('-a', '--all', default=False, action='store_true',
-                       help='List all bundles, from root or sub dir')
-
     sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Query commands to find packages with. ')
+
+    sp = cmd.add_parser('doc', help='Start the documentation server')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='doc')
+
+    sp.add_argument('-c', '--clean', default=False, action="store_true",
+                    help='When used with --reindex, delete the index and old files first. ')
+    sp.add_argument('-d', '--debug', default=False, action="store_true",
+                    help='Debug mode ')
+    sp.add_argument('-p', '--port', help='Run on a sepecific port, rather than pick a random one')
+
+    sp = cmd.add_parser('search',help='Search the full-text index')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='search')
+    sp.add_argument('term', type=str, nargs=argparse.REMAINDER, help='Query term')
+    sp.add_argument('-l', '--list', default=False, action="store_true", help='List documents instead of search')
+    sp.add_argument('-d', '--datasets', default=False, action="store_true", help='Search only the dataset index')
+    sp.add_argument('-i', '--identifiers', default=False, action="store_true", help='Search only the identifiers index')
+    sp.add_argument('-p', '--partitions', default=False, action="store_true", help='Search only the partitions index')
+    sp.add_argument('-R', '--reindex', default=False, action="store_true",
+                    help='Generate documentation files and index the full-text search')
 
 
 def root_command(args, rc):
     from ..library import new_library
     from . import global_logger
+    from ..dbexceptions import ConfigurationError
 
     l = new_library(rc.library(args.library_name))
     l.logger = global_logger
 
-    st = l.source
 
-    globals()['root_' + args.subcommand](args, l, st, rc)
+    globals()['root_' + args.subcommand](args, l,  rc)
 
-
-def root_list(args, l, st, rc):
+def root_list(args, l, rc):
     from ..cli import  _print_bundle_list
     from ambry.warehouse.manifest import Manifest
     from . import global_logger
@@ -193,9 +179,9 @@ def root_list(args, l, st, rc):
                        fields=fields,
                        show_partitions=args.partitions)
 
-def root_info(args, l, st, rc):
+def root_info(args, l, rc):
     from ..cli import  _print_info
-    from ..dbexceptions import NotFoundError
+    from ..dbexceptions import NotFoundError, ConfigurationError
     import ambry
 
     locations = filter(bool, [args.library, args.remote, args.source])
@@ -207,8 +193,11 @@ def root_info(args, l, st, rc):
         print "Version:  {}, {}".format(ambry._meta.__version__, 'production' if IN_PRODUCTION else 'development')
         print "Root dir: {}".format(rc.filesystem('root')['dir'])
 
-        if l.source:
-            print "Source :  {}".format(l.source.base_dir)
+        try:
+            if l.source:
+                print "Source :  {}".format(l.source.base_dir)
+        except ConfigurationError:
+            print "Source :  No source directory"
 
         print "Configs:  {}".format(rc.dict['loaded'])
 
@@ -233,7 +222,7 @@ def root_info(args, l, st, rc):
 
     _print_info(l, ident, list_partitions=args.partitions)
 
-def root_meta(args, l, st, rc):
+def root_meta(args, l, rc):
 
     ident = l.resolve(args.term)
 
@@ -291,107 +280,111 @@ def root_meta(args, l, st, rc):
                 print o.dump()
 
 
-def root_find(args, l, st, rc):
-    from ..source.repository.git import GitRepository
-    from ..library.files import Files
 
-    if args.plain:
-        fields = ['vid']
+def root_search(args, l, config):
+    # This will fetch the data, but the return values aren't quite right
 
-    elif  args.fields:
-        fields = args.fields.split(',')
+    term = ' '.join(args.term)
 
-    else:
-        fields = []
+    if args.reindex:
 
-    key = lambda ident: ident.vname
+        print 'Updating the identifier'
 
-    if args.terms:
+        #sources = ['census.gov-index-counties', 'census.gov-index-places', 'census.gov-index-states']
+        sources = ['census.gov-index-counties',  'census.gov-index-states']
 
-        show_partitions = any(['partition' in term for term in args.terms])
+        records = []
 
-        identities = sorted(_find(args, l, rc).values(), key=key)
+        source = 'civicknowledge.com-terms-geoterms'
 
-        _print_bundle_list(identities,fields=fields, show_partitions=show_partitions)
+        p = l.get(source).partition
+        type = p.table.name
 
-    else:
+        for row in p.rows:
+            records.append(dict(identifier=row['gvid'],type=row['type'],name=row['name']))
 
-        idents =sorted(l.list(key='fqname').values(), key=key)
+        l.search.index_identifiers(records)
 
-        s = l.source
+        print "Reindexing docs"
+        l.search.index_datasets()
 
-        for ident in idents:
-            try:
-                bundle = s.resolve_build_bundle(ident.vid)
-            except Exception as e:
-                warn("Failed to load for {}: {}".format(ident, e.message))
+        return
 
-            if bundle:
-                repo = GitRepository(None, bundle.bundle_dir)
-                try:
-                    repo.bundle_dir = bundle.bundle_dir
-                except Exception as e:
-                    warn("Failed to instantiate for {}: {}".format(ident, e.message))
-                    continue
-            else:
-                repo = None
+    if args.identifiers:
 
-            show = [False]
+        if args.list:
+            for x in l.search.identifiers:
+                print x
 
-            def toggle(show, cond):
-                if not show[0] and cond:
-                    show[:] = [True]
+        else:
+            for score, gvid, name in l.search.search_identifiers(term, limit = 30):
+                print "{:6.2f} {:9s} {}".format(score, gvid, name)
 
-            toggle(show, args.all)
+    elif args.datasets or not ( args.identifiers or args.partitions):
 
-            toggle(show, args.commit and repo and repo.needs_commit())
-            toggle(show, args.push and repo and repo.needs_push())
-            toggle(show, args.init_descriptor and repo and repo.needs_init())
+        if args.list:
 
-            toggle(show, args.source and ident.locations.is_in(Files.TYPE.SOURCE) )
-            toggle(show, args.not_source and not ident.locations.is_in(Files.TYPE.SOURCE))
+            for x in l.search.datasets:
+                ds = l.dataset(x)
+                print x, ds.name, ds.data.get('title')
 
-            toggle(show, args.built and bundle and bundle.is_built)
-            toggle(show, args.not_built and bundle and not bundle.is_built)
+        else:
 
-            if show[0]:
+            print "search for ", term
 
-                if args.plain:
-                    prt('{}'.format(ident.fqname))
-                else:
-                    _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=fields)
+            for x in l.search.search_datasets(term):
+                ds = l.dataset(x)
+                print x, ds.name, ds.data.get('title')
 
-def root_doc(args, l, st, rc):
+    elif args.partitions:
+
+        if args.list:
+            for x in l.search.partitions:
+                p = l.partition(x)
+                print p.vid, p.vname
+        else:
+
+            from ..identity import ObjectNumber
+            from collections import defaultdict
+
+            bundles = defaultdict(set)
+
+            for x in l.search.search_partitions(term):
+                bvid = ObjectNumber.parse(x).as_dataset
+
+                bundles[str(bvid)].add(x)
+
+            for bvid, pvids in bundles.items():
+
+                ds = l.dataset(str(bvid))
+
+                print ds.vid, ds.name, len(pvids), ds.data.get('title')
+
+def root_doc(args, l, rc):
+
+    from ambry.ui import app, configure_application, setup_logging
+    import ambry.ui.views as views
+    import os
+
+    import logging
+    from logging import FileHandler
     import webbrowser
 
-    try:
-        ident = l.resolve(args.term)
-    except ValueError:
-        fatal("Can't parse ref: {} ".format(args.term))
+    port = args.port if args.port else 8085
 
-    if not ident:
-        fatal("Failed to find record for: {}", args.term)
-        return
+    cache_dir = l._doc_cache.path('',missing_ok=True)
 
+    config = configure_application(dict(port = port))
 
-    b = l.get(ident.partition.vid if ident.partition else ident.vid)
+    file_handler = FileHandler(os.path.join(cache_dir, "web.log"))
+    file_handler.setLevel(logging.WARNING)
+    app.logger.addHandler(file_handler)
 
-    if not b:
-        fatal("Failed to get bundle for: {}", args.term)
-        return
+    print 'Serving documentation for cache: ', cache_dir
 
 
-    if b.partition:
+    if not args.debug:
+        # Don't open the browser on debugging, or it will re-open on every application reload
+        webbrowser.open("http://localhost:{}/".format(port))
 
-        raise NotImplementedError()
-        path = None
-        #ck = b.partition.identity + '.html'
-        #doc = BundleDoc(root_dir).render(p=p)
-
-    else:
-        path, extracts = b.write_doc(l.doc_cache, library = l)
-
-
-    prt("Opening file: {} ".format(path))
-
-    webbrowser.open_new("file://"+path)
+    app.run(host=config['host'], port=int(port), debug=args.debug)

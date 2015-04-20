@@ -3,7 +3,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..cli import prt, fatal, _find, _print_bundle_list, _print_bundle_entry
+from ..cli import prt,  _print_bundle_entry
 import argparse
 
 def remote_parser(cmd):
@@ -107,8 +107,7 @@ def remote_list(args, l, rc, return_meta=False):
                 prt("{:10s} {:50s} {:s}",'[ERROR]','',id_)  
 
 
-def remote_find(args, l, config):
-    return _find(args, l, config, True)
+
 
 def remote_fix(args, l, rc):
     from sqlalchemy.orm.exc import NoResultFound

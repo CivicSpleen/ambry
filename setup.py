@@ -1,16 +1,12 @@
 #!/usr/bin/env python
 
-#from distribute_setup import use_setuptools
-#use_setuptools()
 
 from setuptools import setup, find_packages
-
-
 import sys, re, os.path
+from pip.req import parse_requirements
 
 # Avoiding import so we don't execute ambry.__init__.py, which has imports
 # that aren't installed until after installation.
-
 
 __version__ = None # "Declare", actually set in the execfile
 __author__ = None
@@ -39,39 +35,6 @@ def read_requirements(file_name):
             yield line
 
 
-
-def parse_requirements(file_name):
-    requirements = []
-    for line in read_requirements(file_name):
-
-        if re.match(r'\s*-e\s+', line):  # '-e' is the pip option for 'editable'
-            requirements.append(re.sub(r'\s*-e\s+.*#egg=(.*)$', r'\1', line))
-
-        elif re.match(r'\s*-f\s+', line): # '-e' is the pip option for 'install a file HTML list of links'
-            pass
-
-        else:
-            requirements.append(line)
-
-
-    if 'linux' in sys.platform:
-        requirements.append('pysqlite')
-
-    return requirements
-
-def parse_dependency_links(file_name):
-    dependency_links = []
-
-    for line in read_requirements(file_name):
-        if re.match(r'\s*-[ef]\s+', line):
-            dependency_links.append(re.sub(r'\s*-[ef]\s+', '', line))
-
-
-    if 'linux' in sys.platform:
-        dependency_links.append('git+https://github.com/clarinova/pysqlite.git#egg=pysqlite')
-
-    return dependency_links
-
 def find_package_data():
     """Return package_data, because setuptools is too stupid to handle nested directories """
     #
@@ -80,7 +43,7 @@ def find_package_data():
     l = list()
 
     import os
-    for start in ("ambry/support", "ambry/geo/support"):
+    for start in ("ambry/support", "ambry/geo/support", "ambry/ui/templates"):
         for root, dirs, files in os.walk(start):
 
             for f in files:
@@ -94,32 +57,34 @@ def find_package_data():
 
     return {"ambry": l }
 
-setup(name = "ambry",
-      version = __version__,
-      description = "Data packaging and distribution framework",
-      long_description = readme(),
-      author = __author__,
-      author_email = __email__,
-      url = "https://github.com/clarinova/ambry",
-      packages = find_packages(), 
-      scripts=['scripts/bambry', 'scripts/bambry.bat',
-               'scripts/ambry', 'scripts/ambry.bat',
-               'scripts/xambry',
-               'scripts/ambry-load-sqlite', 'scripts/ambry_build_all'],
-      package_data = find_package_data(),
-      license = "",
-      platforms = "Posix; MacOS X; Linux",
-      classifiers=[
-          'Development Status :: 3 - Alpha',
-          'Environment :: Other Environment',
-          'Intended Audience :: Developers',
-          'Operating System :: OS Independent',
-          'Programming Language :: Python',
-          'Programming Language :: Python :: 2.7',
-          'Topic :: Utilities'
-          ],
-      #zip_safe=False,
-      install_requires = parse_requirements('requirements.txt'),
-      dependency_links = parse_dependency_links('requirements.txt'),
-      extras_require = {"pgsql": ["psycopg2"], "geo": ["sh", "gdal"], "server": ["paste", "bottle"]}
-      )
+d = dict(
+    name="ambry",
+    version=__version__,
+    description="Data packaging and distribution framework",
+    long_description=readme(),
+    author=__author__,
+    author_email=__email__,
+    url="https://github.com/CivicKnowledge/ambry",
+    packages=find_packages(),
+    scripts=['scripts/bambry', 'scripts/bambry.bat',
+             'scripts/ambry', 'scripts/ambry.bat',
+             'scripts/xambry',
+             'scripts/ambry-load-sqlite', 'scripts/ambry_build_all'],
+    package_data=find_package_data(),
+    license="",
+    platforms="Posix; MacOS X; Linux",
+    classifiers=[
+        'Development Status :: 3 - Alpha',
+        'Environment :: Other Environment',
+        'Intended Audience :: Developers',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 2.7',
+        'Topic :: Utilities'
+    ],
+    # zip_safe=False,
+    install_requires=[x for x in reversed([str(x.req) for x in parse_requirements('requirements.txt')])],
+    extras_require={"pgsql": ["psycopg2"], "geo": ["sh", "gdal"], "server": ["paste", "bottle"]}
+)
+
+setup(**d)

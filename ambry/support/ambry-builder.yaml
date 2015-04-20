@@ -18,7 +18,7 @@ database:
         driver: sqlite
 
 filesystem:
-    root: /data
+    root: /var/ambry
     default: '{root}/library'
     downloads: '{root}/cache/downloads'
     extracts: '{root}/cache/extracts'

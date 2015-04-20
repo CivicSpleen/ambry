@@ -13,7 +13,7 @@ import ambry.util
 from ambry.util import temp_file_name
 from ambry.bundle import DbBundle
 from ..identity import LocationRef, Identity
-from ambry.orm import Column, Partition, Table, Dataset, Config, File, Base, Code
+from ambry.orm import Column, Partition, Table, Dataset, Config, File, Base, Code, ColumnStat
 
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
@@ -241,6 +241,7 @@ class LibraryDb(object):
 
 
         s.query(Config).delete()
+        s.query(ColumnStat).delete()
         s.query(File).delete()
         s.query(Column).delete()
         s.query(Partition).delete()
@@ -291,7 +292,7 @@ class LibraryDb(object):
         if not self.enable_delete:
             raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
 
-        library_tables = [Config.__tablename__, Column.__tablename__, Partition.__tablename__,
+        library_tables = [Config.__tablename__, ColumnStat.__tablename__,Column.__tablename__, Partition.__tablename__,
                   Table.__tablename__, File.__tablename__,  Dataset.__tablename__, Code.__tablename__]
 
 
@@ -303,7 +304,7 @@ class LibraryDb(object):
 
         for table in reversed(self.metadata.sorted_tables): # sorted by foreign key dependency
             if table.name in  library_tables:
-                table.drop(self.engine, checkfirst=True)
+                 table.drop(self.engine, checkfirst=True)
 
         self.commit()
 
@@ -315,7 +316,7 @@ class LibraryDb(object):
 
     def create_tables(self):
         from sqlalchemy.exc import OperationalError
-        tables = [ Dataset, Config, Table, Column, File, Partition, Code]
+        tables = [ Dataset, Config, Table, Column, File, Partition, Code, ColumnStat]
 
 
         try:
@@ -527,7 +528,7 @@ class LibraryDb(object):
 
         return d
 
-    def _mark_update(self):
+    def _mark_update(self, o=None, vid=None):
 
         import datetime
 
@@ -682,11 +683,12 @@ class LibraryDb(object):
 
         This will delete all of the tables and partitions associated with the
         bundle, if they already exist, so callers should check that the dataset does not
-        already exist if before installing again.
+        already exist  before installing again.
         """
 
         from sqlalchemy.exc import OperationalError
         from ..dbexceptions import NotABundle
+        from sqlalchemy import or_
 
 
         # There should be only one dataset record in the
@@ -705,15 +707,24 @@ class LibraryDb(object):
 
         dataset.location = Dataset.LOCATION.LIBRARY
 
+        dataset.data['title'] = bundle.metadata.about.title
+        dataset.data['summary'] = bundle.metadata.about.summary
+
         s.merge(dataset)
 
         for config in bdbs.query(Config).all():
             s.merge(config)
 
+
+        self.delete_dataset_colstats(dataset.vid)
+
         s.query(Partition).filter(Partition.d_vid == dataset.vid).delete()
 
         for table in dataset.tables:
+
             s.query(Column).filter(Column.t_vid == table.vid).delete()
+
+        s.commit()
 
         s.query(Table).filter(Table.d_vid == dataset.vid).delete()
 
@@ -756,17 +767,18 @@ class LibraryDb(object):
         in this case, tables and column will not be installed.
 
         """
-        from ..dbexceptions import NotFoundError
-        from sqlalchemy.orm.exc import NoResultFound
 
         s = self.session
         s.merge(bundle.get_dataset())
         s.merge(partition.record)
 
+        for cs in partition.record._stats:
+            s.merge(cs)
+
         s.commit()
 
         # Sqlalchemy loads in all of the records linked to the
-        # partition, including the tables and columns.
+        # partition, including the tables and columns. But not column stats
 
 
 
@@ -834,22 +846,43 @@ class LibraryDb(object):
 
         dataset = (self.session.query(Dataset).filter(Dataset.vid==dataset.identity.vid).one())
 
+        self.delete_dataset_colstats(dataset.vid)
+
         # Can't use delete() on the query -- bulk delete queries do not
         # trigger in-python cascades!
         self.session.delete(dataset)
 
         self.commit()
 
+    def delete_dataset_colstats(self, dvid):
+        """ Total hack to deal with not being able to get delete cascades to work for
+        colstats
+
+        :param vid: dataset vid
+        :return:
+        """
+        s = self.session
+
+        part_query = s.query(Partition.vid).filter(Partition.d_vid == dvid)
+
+        s.query(ColumnStat).filter(ColumnStat.p_vid.in_(part_query.subquery())).delete(synchronize_session='fetch')
+
+
+
     def remove_dataset(self, vid):
         '''Remove all references to a Dataset'''
-        from ..orm import Dataset
+        from ..orm import Dataset, ColumnStat
 
         dataset = (self.session.query(Dataset).filter(Dataset.vid == vid).one())
+
+        # Total hack to avoid having to figure out cascades between partitions and colstats
+        self.delete_dataset_colstats(dataset.vid)
 
         # Can't use delete() on the query -- bulk delete queries do not
         # trigger in-python cascades!
         self.session.delete(dataset)
 
+        self.session.commit()
 
     def remove_partition(self, partition):
         from ..bundle import LibraryDbBundle
@@ -867,18 +900,23 @@ class LibraryDb(object):
 
         s = self.session
 
+        # TODO: Probably need to manually delete colstats.
+
         s.query(Partition).filter(Partition.t_vid  == p_vid).delete()
 
 
         self.commit()
 
     def remove_partition_record(self, vid):
+        from ..orm import ColumnStat
 
         s = self.session
 
+        # FIXME: The Columstat delete should be cascaded, but I really don't understand cascading.
+        s.query(ColumnStat).filter(ColumnStat.p_vid == vid).delete()
         s.query(Partition).filter(Partition.vid == vid).delete()
 
-        self.commit()
+        s.commit()
 
     ##
     ## Get objects by reference, or resolve a reference
@@ -1226,52 +1264,6 @@ class LibraryDb(object):
                 dst.session.execute(table.insert(), row)
 
         dst.session.commit()
-
-
-    def dump(self, path):
-        '''Copy the database to a new Sqlite file, as a backup. '''
-        import datetime
-
-        dst = LibraryDb(driver='sqlite', dbname=path)
-
-        dst.create()
-
-        self.set_config_value('activity','dump', datetime.datetime.utcnow().isoformat())
-
-        self._copy_db(self, dst)
-
-    def needs_dump(self):
-        '''Return true if the last dump date is after the last change date, and
-        the last change date is more than 10s in the past'''
-        import datetime
-        from dateutil  import parser
-
-        configs = self.config_values
-
-        td = datetime.timedelta(seconds=10)
-
-        changed =  parser.parse(configs.get(('activity','change'),datetime.datetime.fromtimestamp(0).isoformat()))
-        dumped = parser.parse(configs.get(('activity','dump'),datetime.datetime.fromtimestamp(0).isoformat()))
-        dumped_past = dumped + td
-        now = datetime.datetime.utcnow()
-
-
-        if ( changed > dumped and now > dumped_past):
-            return True
-        else:
-            return False
-
-    def restore(self, path):
-        '''Restore a sqlite database dump'''
-        import datetime
-
-        self.create()
-
-        src = LibraryDb(driver='sqlite', dbname=path)
-
-        self._copy_db(src, self)
-
-        self.set_config_value('activity','restore', datetime.datetime.utcnow().isoformat())
 
 
 

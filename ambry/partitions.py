@@ -113,33 +113,14 @@ class Partitions(object):
             for op in q.all():
                 try:
                     partitions.append(self.partition(op))
-                except KeyError: # Unknown partition type, usually 'hdf'
-                    continue
+                except KeyError as e: # Unknown partition type, usually 'hdf'
+                    raise
 
             return partitions
         except sqlalchemy.exc.OperationalError:
             raise
             return []
-            
-    @property 
-    def all_nocsv(self): #@ReservedAssignment
-        '''Return an iterator of all partitions, excluding CSV format partitions'''
-        from ambry.orm import Partition as OrmPartition
-        import sqlalchemy.exc
 
-        try:
-            ds = self.bundle.dataset
-            
-            q = (self.bundle.database.session.query(OrmPartition)
-                                    .filter(OrmPartition.d_vid == ds.vid)
-                                    .filter(OrmPartition.format != 'csv')
-                                    .order_by(OrmPartition.vid.asc())
-                                    .order_by(OrmPartition.segment.asc()))
-
-            return [self.partition(op) for op in q.all()]
-        except sqlalchemy.exc.OperationalError:
-            raise
-            return []        
 
     def __iter__(self):
         return iter(self.all)

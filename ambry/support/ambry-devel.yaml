@@ -4,17 +4,10 @@ library:
         filesystem: '{root}/library'
         database: 'sqlite://{root}/library.db'
         remotes:
-        - 'http://s3.sandiegodata.org/library#compress'
-
-    server:
-        port: 7979
-        host: localhost
-        filesystem: '{root}/library'
-        database: 'sqlite://{root}/library.db'
-
+        - 'http://s3.sandiegodata.org/library'
 
 filesystem:
-    root: /ambry
+    root: /var/ambry
     downloads: '{root}/cache/downloads'
     extracts: '{root}/cache/extracts'
     documentation: '{root}/cache/documentation'

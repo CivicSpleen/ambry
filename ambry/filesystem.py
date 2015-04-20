@@ -374,7 +374,12 @@ class BundleFilesystem(Filesystem):
         if ( not parsed.scheme and url in self.bundle.metadata.sources):
 
             source_entry = self.bundle.metadata.sources.get(url)
-            url = source_entry.url
+
+            # If a conversion exists, load it, otherwize, get the original URL
+            if source_entry.conversion:
+                url = source_entry.conversion
+            else:
+                url = source_entry.url
             parsed = urlparse.urlparse(str(url))
 
         if parsed.scheme == 'file':
@@ -384,7 +389,7 @@ class BundleFilesystem(Filesystem):
         elif parsed.scheme  == 's3':
             # To keep the rest of the code simple, we'll use the S# cache to generate a signed URL, then
             # download that through the normal process.
-            from cache import new_cache
+            from ckcache import new_cache
 
             s3cache = new_cache("s3://{}".format(parsed.netloc.strip('/')))
 

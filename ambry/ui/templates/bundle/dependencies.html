@@ -1,0 +1,25 @@
+<!-- Sources -->
+{% if b.meta.dependencies and b.meta.dependencies.items() -%}
+<div class = 'ck-dependencies'>
+    <h2>Dependencies</h2>
+    <table id="dependencies-table" class="table table_condensed no_border">
+        <tr>
+            <th>Key</th>
+            <th>As Declared</th>
+            <th>As Resolved</th>
+        </tr>
+    {% for k,e in b.meta.dependencies.items() %}
+        <tr>
+        <td>{{k}}</td>
+        <td>{{e}}</td>
+        <td>{%if k in b.meta.resolved_dependencies%}
+            {% if not b.meta.resolved_dependencies[k].vid.startswith('d') %}
+            <a href="{{partition_path(b.meta.resolved_dependencies[k].vid)}}">
+                {{b.meta.resolved_dependencies[k].vname}}</a>
+            {%endif%}{% endif%}</td>
+        </tr>
+    {% endfor -%}
+    </table>
+
+</div>
+{% endif -%}

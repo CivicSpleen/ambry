@@ -712,10 +712,10 @@ class Schema(object):
 
         return warnings, errors
 
-    def expand_prototypes(self):
+    def expand_table_prototypes(self):
         """Look for tables that have prototypes, get the original table, and expand the
         local definition to include all of the prototypes's columns"""
-        from orm import Table, Column
+        from orm import Table
         from dbexceptions import NotFoundError
         from identity import ObjectNumber
 
@@ -772,14 +772,58 @@ class Schema(object):
                     del d['name']
                     del d['sequence_id']
 
-                    # Use a revision in the id if the table id has one
-                    if t_on.revision:
-                        d['proto_vid'] = c.vid
-                    else:
-                        d['proto_vid'] = c.id_
+                    # Protovids never have the version -- they arent really vids
+                    d['proto_vid'] = c.id_
 
                     self.add_column(t, name, **d)
 
+    def expand_column_prototypes(self):
+        from orm import Column
+        from identity import ObjectNumber, NotObjectNumberError
+
+        q = (self.bundle.database.session.query(Column).filter(Column.proto_vid != None))
+
+        pt_map = None
+
+        for c in q.all():
+
+            try:
+                on = ObjectNumber.parse(c.proto_vid)
+
+                # Its all good.
+
+            except NotObjectNumberError:
+                if not pt_map:
+                    p = self.bundle.library.get('civicknowledge.com-proto-proto_terms').partition
+
+                    pt_map = { row['name'] : dict(row) for row in p.rows }
+
+                pt_row = pt_map[c.proto_vid]
+
+                c.data['orig_proto_vid'] = c.proto_vid
+                c.proto_vid = pt_row['obj_number']
+
+                if pt_row['index_partition']:
+                    ip = self.bundle.library.get(pt_row['index_partition']).partition
+
+
+                    for ipc in ip.table.columns:
+
+                        if ipc.proto_vid == c.proto_vid:
+                            c.fk_vid = ipc.id_
+                            c.data['index'] = "{}:{}".format(str(ip.identity.vname),ipc.name)
+                            self.bundle.log("expand_column_prototype: {} {} -> {}.{}".format(
+                                            c.table.name, c.name,
+                                            str(ip.identity.vname),ipc.name))
+
+
+    def process_proto_vid(self, pvid):
+        """Lookup protovids to ensure they are sensible, and convert names to the proto_vid"""
+        from identity import ObjectNumber
+
+        on = ObjectNumber.parse(pvid)
+
+        print pvid, on
 
     def extract_schema(self, db):
         '''Extract an Ambry schema from a database and create it in this bundle '''
@@ -955,7 +999,8 @@ class Schema(object):
                 row['seq'] = col.sequence_id
                 row['column'] = col.name
                 row['is_pk'] = 1 if col.is_primary_key else ''
-                row['is_fk'] = col.foreign_key if col.foreign_key else None
+                row['is_fk'] = col.fk_vid if col.fk_vid else None
+                row['id'] = None
                 row['type'] = col.datatype.upper() if col.datatype else None
 
 
@@ -1390,7 +1435,7 @@ class {name}(Base):
     #
     #
 
-    def _update_from_intuiter(self, table_name, intuiter, logger=None,
+    def update_from_intuiter(self, table_name, intuiter, logger=None,
                               description=None, descriptions = None):
         """
         Update a table schema using a memo from intuit()
@@ -1403,7 +1448,6 @@ class {name}(Base):
         :return:
         """
         from datetime import datetime, time, date
-        from sqlalchemy.orm.exc import NoResultFound
         import string
         import re
 
@@ -1485,18 +1529,5 @@ class {name}(Base):
         intuit = Intuiter(header=header, logger = logger)
         intuit.iterate(iterator, max_n=max_n)
 
-        self._update_from_intuiter(table_name, intuit, descriptions = descriptions)
-
-
-    def update_csv(self, table_name, file_name, n=500, logger=None):
-        """Create a new table, or update an old one, from a CSV file. The CSV file must have a header. """
-        from collections import OrderedDict
-
-        import csv
-
-        # Get just the header row, so we can se the correct order of columns
-        with open(file_name) as f:
-            reader = csv.DictReader(f)
-
-            return self.update_from_iterator(table_name, reader,  max_n=n)
+        self.update_from_intuiter(table_name, intuit, descriptions = descriptions)
 

@@ -13,7 +13,6 @@ class NullCache(Cache):
     def has(self, rel_path, md5=None, use_upstream=True):
         return False
 
-
 class NullLogger(object):
     def __init__(self):
         pass
@@ -36,14 +35,12 @@ class NullLogger(object):
     def warn(self, message):
         pass
 
-
 class WLibrary(Library):
     """Extends the Library class to remove the Location parameter on identity resolution"""
 
     def resolve(self, ref, location=None):
 
         return super(WLibrary, self).resolve(ref, location=location)
-
 
 def new_warehouse(config, elibrary, logger=None):
 
@@ -98,7 +95,6 @@ def new_warehouse(config, elibrary, logger=None):
 
     return w
 
-
 class ResolutionError(Exception):
     pass
 
@@ -114,6 +110,10 @@ class Warehouse(object):
 
     FILE_GROUP.MANIFEST = Files.TYPE.MANIFEST
     FILE_GROUP.DOC = Files.TYPE.DOC
+
+    ## Override these in dialect specific subclasses.
+    drop_view_sql = 'DROP VIEW  IF EXISTS "{name}"'
+    create_view_sql = 'CREATE VIEW "{name}" AS {sql}'
 
     def __init__(self,
                  database,
@@ -378,6 +378,41 @@ class Warehouse(object):
             f.oid = None
             yield f
 
+    def table_meta(self, identity, table_name):
+        '''Get the metadata directly from the database. This requires that
+        table_name be the same as the table as it is in stalled in the database'''
+        from ..schema import Schema
+
+        assert identity.is_partition
+
+        p_vid = self._to_vid(identity)
+        d_vid = self._partition_to_dataset_vid(identity)
+
+        meta, table = Schema.get_table_meta_from_db(self.library.database,
+                                                    table_name,
+                                                    d_vid=d_vid,
+                                                    driver=self.database.driver,
+                                                    use_fq_col_names=True,
+                                                    alt_name=self.augmented_table_name(identity, table_name)[0],
+                                                    session=self.library.database.session)
+        return meta, table
+
+    def table(self, table_name):
+        '''Get table metadata from the database'''
+        from sqlalchemy import Table
+
+        table = self._table_meta_cache.get(table_name, False)
+
+        if table is not False:
+            r = table
+        else:
+            metadata = self.metadata  # FIXME Will probably fail ..
+            table = Table(table_name, metadata, autoload=True)
+            self._table_meta_cache[table_name] = table
+            r = table
+
+        return r
+
     @property
     def tables(self):
         from ..orm import Table
@@ -394,7 +429,6 @@ class Warehouse(object):
         from ..orm import Table
 
         return self.library.database.session.query(Table).filter(Table.name == name).first()
-
 
     @property
     def partitions(self):
@@ -456,7 +490,7 @@ class Warehouse(object):
 
                         if ident.format not in ('db', 'geo'):
                             self.logger.warn(
-                                "Skipping {}; uninstallable format: {}".format(p.identity.vname, p.identity.format))
+                                "Skipping {}; uninstallable format: {}".format(ident.vname, ident.format))
                             continue
 
                         commands.append(('install', dataset, tables, pd['where']))
@@ -555,7 +589,9 @@ class Warehouse(object):
                 self.install_material_view(name, sql, force, data);
 
             elif command == 'view':
+
                 name, sql, data, force = command_set
+
                 self.install_view(name, sql, data)
 
             elif command == 'extract':
@@ -766,7 +802,7 @@ class Warehouse(object):
                 except KeyError:
                     pass # Unsplit names ( cols added in SQL ) don't have any of the keys
 
-                if d['altname']:
+                if d.get('altname', False):
                     d['name'], d['altname'] = d['altname'], d['name']
 
                 if not 'datatype' in d:
@@ -829,7 +865,6 @@ class Warehouse(object):
             if t.type == 'table' and t.installed:  # Get the table definition that columns are linked to
                 self.install_table(t_vid, data=dict(type='alias', proto_vid=t_vid))
 
-
         s = self.library.database.session
 
         for t in self.tables:
@@ -852,10 +887,8 @@ class Warehouse(object):
 
         # Update the documentation files in the library
 
-    def install_material_view(self, name, sql, clean = False, data=None):
-        raise NotImplementedError(type(self))
-
-    def _install_material_view(self, name, sql, clean=False, data=None):
+    def install_material_view(self, name, sql, clean=False, data=None):
+        from pysqlite2.dbapi2 import OperationalError
 
         import time
 
@@ -871,15 +904,33 @@ class Warehouse(object):
             else:
                 drop = False
 
-
         data = data if data else {}
 
         data['sql'] = sql
         data['type'] = 'mview'
         data['updated'] = time.time()
 
+        if drop:
+            self.database.connection.execute('DROP TABLE IF EXISTS "{}"'.format(name))
 
-        return drop, data
+        if not data:
+            return False
+
+        sql = """CREATE TABLE {name} AS {sql}""".format(name=name, sql=sql)
+
+        try:
+            self.database.connection.execute(sql)
+
+        except OperationalError as e:
+            if 'exists' not in str(e).lower():
+                raise
+
+            self.logger.info('mview_exists {}'.format(name))
+            # Ignore if it already exists.
+
+        t = self.install_table(name, data=data)
+
+        self.build_schema(t)
 
     def mview_needs_update(self, name, sql):
         """Return True if an mview needs to be regnerated, because it's SQL changed,
@@ -913,7 +964,53 @@ class Warehouse(object):
         return  False
 
     def install_view(self, name, sql, data=None):
-        raise NotImplementedError(type(self))
+        import time
+
+        assert name
+        assert sql
+        from sqlalchemy.exc import OperationalError
+
+        t = self.orm_table_by_name(name)
+
+        if t and t.data.get('sql') == sql:
+            self.logger.info("Skipping view {}; SQL hasn't changed".format(name))
+            return
+        else:
+            self.logger.info('Installing view {}'.format(name))
+
+        data = data if data else {}
+
+        data = data if data else {}
+        data['type'] = data['type'] if 'type'  in data else 'view'
+
+
+        data['sql'] = sql
+        data['updated'] = time.time()
+
+        data['sample'] = None
+
+        sqls = [self.drop_view_sql.format(name=name), self.create_view_sql.format(name=name, sql=sql)]
+
+        try:
+            for sql in sqls:
+                self.database.connection.execute(sql) # Creates the table in the database
+
+            t = self.install_table(name, data=data) # Creates the table library record
+
+            self.build_schema(t)
+
+
+        except Exception as e:
+
+            self.logger.error("Failed to install view: \n{}".format(sql))
+
+            raise
+
+        except OperationalError:
+
+            self.logger.error("Failed to execute: {} ".format(sql))
+
+            raise
 
     def install_table_alias(self, table_name, alias, proto_vid = None):
         """Install a view that allows referencing a table by another name """
@@ -932,14 +1029,15 @@ class Warehouse(object):
 
         try:
             from sqlalchemy.orm import lazyload
-            # Search for the table by the table name
 
             q = (s.query(Table).filter(Table.d_vid == self.vid, Table.name == name )
                  .options(lazyload('columns')))
 
             t = q.one()
 
+
         except NoResultFound:
+            # Create a new table, attached to to the warehouse dataset
             # Search for the table by the vid
 
             ds = s.query(Dataset).filter(Dataset.vid == self.vid).one() # Get the Warehouse dataset.
@@ -954,6 +1052,8 @@ class Warehouse(object):
 
             t = Table(ds,name=name, sequence_id = seq, preserve_case = True)
 
+        assert bool(t)
+
         if alt_name is not None:
             t.altname = str(alt_name)
 
@@ -961,9 +1061,11 @@ class Warehouse(object):
             t.type = data['type']
             del data['type']
 
+
         if data and 'summary' in data:
-            if not t.description:
-                t.description = data['summary']
+
+            t.description = data['summary']
+
             del data['summary']
 
         if data and 'proto_vid' in data:
@@ -979,6 +1081,10 @@ class Warehouse(object):
         else:
             t.data = data
 
+        if data and 'doc' in data:
+            t.data.doc = data['doc']
+
+
         t.installed = 'y'
 
         s.merge(t)
@@ -986,19 +1092,158 @@ class Warehouse(object):
 
         return t
 
+
+    def load_local(self, partition, source_table_name, dest_table_name, where=None):
+        return self.load_insert(partition, source_table_name, dest_table_name, where=where)
+
+    def load_insert(self, partition, source_table_name, dest_table_name, where=None):
+        from ..database.inserter import ValueInserter
+        from sqlalchemy import Table, MetaData
+        from sqlalchemy.dialects.postgresql.base import BYTEA
+        import psycopg2
+
+        replace = False
+
+        self.logger.info('load_insert {}'.format(partition.identity.vname))
+
+        if self.database.driver == 'mysql':
+            cache_size = 5000
+
+        elif self.database.driver == 'postgres' or self.database.driver == 'postgis':
+            cache_size = 5000
+
+        else:
+            cache_size = 50000
+
+        self.logger.info('populate_table {}'.format(source_table_name))
+
+        dest_metadata = MetaData()
+        dest_table = Table(dest_table_name, dest_metadata, autoload=True, autoload_with=self.database.engine)
+
+        insert_statement = dest_table.insert()
+
+        source_metadata = MetaData()
+        source_table = Table(source_table_name, source_metadata, autoload=True, autoload_with=partition.database.engine)
+
+        if replace:
+            insert_statement = insert_statement.prefix_with('OR REPLACE')
+
+        cols = [' {} AS "{}" '.format(c[0].name if c[0].name != 'geometry' else 'AsText(geometry)', c[1].name)
+                for c in zip(source_table.columns, dest_table.columns)]
+
+        select_statement = " SELECT {} FROM {} ".format(','.join(cols), source_table.name)
+
+        if where:
+            select_statement += " WHERE " + where
+
+        binary_cols = []
+        for c in dest_table.columns:
+            if isinstance(c.type, BYTEA):
+                binary_cols.append(c.name)
+
+
+        # Psycopg executemany function doesn't use the multiple insert syntax of Postgres,
+        # so it is fantastically slow. So, we have to do it ourselves.
+        # Using multiple row inserts is more than 100 times faster.
+        import re
+
+        # For Psycopg's mogrify(), we need %(var)s parameters, not :var
+        insert_statement = re.sub(r':([\w_-]+)', r'%(\1)s', str(insert_statement))
+
+        conn = self.database.engine.raw_connection()
+
+        with conn.cursor() as cur:
+
+            def execute_many(insert_statement, values):
+
+                mogd_values = []
+
+                inst, vals = insert_statement.split("VALUES")
+
+                for value in values:
+                    mogd = cur.mogrify(insert_statement, value)
+                    # Hopefully, including the parens will make it unique enough to not
+                    # cause problems. Using just 'VALUES' files when there is a column of the same name.
+                    _, vals = mogd.split(") VALUES (", 1)
+
+                    mogd_values.append("(" + vals)
+
+                sql = inst + " VALUES " + ','.join(mogd_values)
+
+                cur.execute(sql)
+
+            cache = []
+
+            for i, row in enumerate(partition.database.session.execute(select_statement)):
+
+                self.logger.progress('add_row', source_table_name, i)
+
+                if binary_cols:
+                    # This is really horrible. To insert a binary column property, it has to be run rhough
+                    # function.
+                    cache.append({k: psycopg2.Binary(v) if k in binary_cols else v for k, v in row.items()})
+
+                else:
+                    cache.append(dict(row))
+
+                if len(cache) >= cache_size:
+                    self.logger.info('committing {} rows'.format(len(cache)))
+                    execute_many(insert_statement, cache)
+                    cache = []
+
+            if len(cache):
+                self.logger.info('committing {} rows'.format(len(cache)))
+                execute_many(insert_statement, cache)
+
+        conn.commit()
+
+        self.logger.info('done {}'.format(partition.identity.vname))
+
+        return dest_table_name
+
+    def remove(self, name):
+        from ..orm import Dataset
+        from ..bundle import LibraryDbBundle
+        from ..identity import PartitionNameQuery
+        from sqlalchemy.exc import NoSuchTableError, ProgrammingError
+
+        dataset = self.wlibrary.resolve(name)
+
+        if dataset.partition:
+            b = LibraryDbBundle(self.library.database, dataset.vid)
+            p = b.partitions.find(id_=dataset.partition.vid)
+            self.logger.info("Dropping tables in partition {}".format(p.identity.vname))
+            for table_name in p.tables:  # Table name without the id prefix
+
+                table_name, alias = self.augmented_table_name(p.identity, table_name)
+
+                try:
+                    self.database.drop_table(table_name)
+                    self.logger.info("Dropped table: {}".format(table_name))
+
+                except NoSuchTableError:
+                    self.logger.info("Table does not exist (a): {}".format(table_name))
+
+                except ProgrammingError:
+                    self.logger.info("Table does not exist (b): {}".format(table_name))
+
+            self.library.database.remove_partition(dataset.partition)
+
+
+        elif dataset:
+
+            b = LibraryDbBundle(self.library.database, dataset.vid)
+            for p in b.partitions:
+                self.remove(p.identity.vname)
+
+            self.logger.info('Removing bundle {}'.format(dataset.vname))
+            self.library.database.remove_bundle(b)
+        else:
+            self.logger.error("Failed to find partition or bundle by name '{}'".format(name))
+
     def run_sql(self, sql_text):
-        raise NotImplementedError(type(self))
 
-    def load_local(self, partition, table_name, where):
-        '''Load data using a network connection to the warehouse and
-        INSERT commands'''
-        raise NotImplementedError()
-
-    def load_remote(self, partition, table_name, urls):
-        '''Load data by streaming from the remote REST interface to a bulk load
-        facility of the target warehouse'''
-        raise NotImplementedError()
-
+        self.database.connection.execute(sql_text)
 
     ##
     ## users
@@ -1018,10 +1263,40 @@ class Warehouse(object):
             return False
 
     def has_table(self, table_name):
-        raise NotImplementedError()
+        return table_name in self.database.inspector.get_table_names()
 
     def create_table(self, partition, table_name):
-        raise NotImplementedError()
+        '''Create the table in the warehouse, using an augmented table name '''
+        from ..schema import Schema
+
+        meta, table = self.table_meta(partition.identity, table_name)
+
+        if not self.has_table(table.name):
+            table.create(bind=self.database.engine)
+            self.logger.info('create_table {}'.format(table.name))
+        else:
+            self.logger.info('table_exists {}'.format(table.name))
+
+        return table, meta
+
+
+        def create_index(self, name, table, columns):
+
+            from sqlalchemy.exc import OperationalError, ProgrammingError
+
+            sql = 'CREATE INDEX {} ON "{}" ({})'.format(name, table, ','.join(columns))
+
+            try:
+                self.database.connection.execute(sql)
+                self.logger.info('create_index {}'.format(name))
+            except (OperationalError, ProgrammingError) as e:
+
+                if 'exists' not in str(e).lower():
+                    raise
+
+                self.logger.info('index_exists {}'.format(name))
+                # Ignore if it already exists.
+
 
     def _to_vid(self, partition):
         from ..partition import PartitionBase
@@ -1103,6 +1378,73 @@ class Warehouse(object):
 
         if 'password' in config['database']: del config['database']['password']
         return config
+
+    ##
+    ## Extracts
+    ###
+
+    def extract_all(self, force=False):
+        """Generate the extracts and return a struture listing the extracted files. """
+        from contextlib import closing
+
+        from .extractors import new_extractor
+        import time
+        from ..util import md5_for_file
+
+        # Get the URL to the root. The public_utl arg only affects S3, and gives a URL without a signature.
+        root = self.cache.path('', missing_ok=True, public_url=True)
+
+        extracts = []
+
+        # Generate the file etracts
+
+        for f in self.library.files.query.group('manifest').type('extract').all:
+
+            t = self.orm_table_by_name(f.data['table'])
+
+            if (t and t.data.get('updated') and
+                    f.modified and
+                        int(t.data.get('updated')) > f.modified) or (not f.modified):
+                force = True
+
+            ex = new_extractor(f.data.get('format'), self, self.cache, force=force)
+
+            e = ex.extract(f.data['table'], self.cache, f.path)
+
+            extracts.append(e)
+
+            if e.time:
+                f.modified = e.time
+
+                if os.path.exists(e.abs_path):
+                    f.hash = md5_for_file(e.abs_path)
+                    f.size = os.path.getsize(e.abs_path)
+
+                self.library.files.merge(f)
+
+        return extracts
+
+    def extract_table(self, tid, content_type='csv'):
+        from .extractors import new_extractor
+        from os.path import basename, dirname
+        from ..dbexceptions import NotFoundError
+
+        t = self.orm_table(tid)  # For installed tables
+
+        if not t:
+            t = self.orm_table_by_name(tid)  # For views
+
+        if not t:
+            raise NotFoundError("Didn't get table for '{}' ".format(tid))
+
+        e = new_extractor(content_type, self, self.cache.subcache('extracts'))
+
+        ref = t.name if t.type in ('view', 'mview') else t.vid
+
+        ee = e.extract(ref, '{}.{}'.format(tid, content_type), t.data.get('updated', None))
+
+        return ee.abs_path, "{}_{}.{}".format(t.vid, t.name, content_type)
+
 
 def database_config(db, base_dir=''):
     import urlparse

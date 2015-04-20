@@ -1,10 +1,10 @@
-table,seq,column,is_pk,is_fk,type,i1,i2,i3,size,description,id
-random1,1,id,1,,INTEGER,,,,,,tHSyDm4MNR01
-random1,2,uuid,,,VARCHAR,1,,,36,A random UUID,cHSyDm4MNR01002
-random1,3,int,,,INTEGER,1,1,,3,A random integer,cHSyDm4MNR01003
-random1,4,float,,,REAL,1,1,1,,,cHSyDm4MNR01004
+table,seq,column,is_pk,is_fk,id,type,i1,i2,i3,size,description
+random1,1,id,1,,tHSyDm4MNR01,INTEGER,,,,,
+random1,2,uuid,,,cHSyDm4MNR01002,VARCHAR,1,,,36,A random UUID
+random1,3,int,,,cHSyDm4MNR01003,INTEGER,1,1,,3,A random integer
+random1,4,float,,,cHSyDm4MNR01004,REAL,1,1,1,,
 ,,,,,,,,,,,
-random2,1,id,1,,INTEGER,,,,,,tHSyDm4MNR02
-random2,2,uuid2,,,VARCHAR,1,,,36,A random UUID,cHSyDm4MNR02002
-random2,3,int2,,,INTEGER,1,1,,3,A random integer,cHSyDm4MNR02003
-random2,4,float2,,,REAL,1,1,1,,,cHSyDm4MNR02004
+random2,1,id,1,,tHSyDm4MNR02,INTEGER,,,,,
+random2,2,uuid2,,,cHSyDm4MNR02002,VARCHAR,1,,,36,A random UUID
+random2,3,int2,,,cHSyDm4MNR02003,INTEGER,1,1,,3,A random integer
+random2,4,float2,,,cHSyDm4MNR02004,REAL,1,1,1,,

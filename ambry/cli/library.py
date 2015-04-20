@@ -58,6 +58,7 @@ def library_parser(cmd):
     sp.add_argument('-s', '--source', default=False, action="store_true", help='Sync the source')
     sp.add_argument('-j', '--json', default=False, action="store_true", help='Cache JSON versions of library objects')
     sp.add_argument('-w', '--warehouses', default=False, action="store_true", help='Re-synchronize warehouses')
+    sp.add_argument('-F', '--bundle-list', help='File of bundle VIDs. Sync only VIDs listed in this file')
 
 
     sp = asp.add_parser('info', help='Display information about the library')
@@ -68,6 +69,7 @@ def library_parser(cmd):
     sp.add_argument('term', type=str,help='Query term')
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help='Also get all of the partitions. ')
     sp.add_argument('-f','--force',  default=False, action="store_true",  help='Force retrieving from the remote')
+
 
 
     sp = asp.add_parser('open',
@@ -95,15 +97,6 @@ def library_parser(cmd):
     group.add_argument('-j', '--json',  default='csv', dest='format',  action='store_const', const='json')
     group.add_argument('-c', '--csv',  default='csv', dest='format',  action='store_const', const='csv')
 
-    sp = asp.add_parser('doc', help='Start the documentation server')
-    sp.set_defaults(subcommand='doc')
-    sp.add_argument('-r', '--reindex', default=False, action="store_true",
-                    help='Generate documentation files and index the full-text search')
-    sp.add_argument('-c', '--clean', default=False, action="store_true",
-                    help='When used with --reindex, delete the index and old files first. ')
-    sp.add_argument('-d', '--debug', default=False, action="store_true",
-                    help='Debug mode ')
-    sp.add_argument('-p', '--port', help='Run on a sepecific port, rather than pick a random one')
 
     whsp = asp.add_parser('config', help='Configure varibles')
     whsp.set_defaults(subcommand='config')
@@ -169,52 +162,7 @@ def library_backup(args, l, config):
 
         
     prt("{}: Backup complete", dest_dir)
-        
-def library_restore(args, l, config, *kwargs):
 
-    if args.dir:
-      
-        if args.file:
-            # Get the last file that fits the pattern, sorted alpha, with a date inserted
-          
-            import fnmatch
-            
-            date = '*' # Sub where the date will be  
-            parts = args.file.split('.')
-            if len(parts) >= 2:
-                pattern = '.'.join(parts[:-1]+[date]+parts[-1:])
-            else:
-                import tempfile
-                tfn = tempfile.NamedTemporaryFile(delete=False)
-                tfn.close()
-    
-                backup_file = tfn.name+".db"
-                pattern = backup_file + '.' + date
-                
-            files = sorted([ f for f in os.listdir(args.dir) if fnmatch.fnmatch(f,pattern) ])
-    
-        else:
-            # Get the last file, by date. 
-            files = sorted([ f for f in os.listdir(args.dir) ], 
-                           key=lambda x: os.stat(os.path.join(args.dir,x))[8])
-    
-    
-        backup_file = os.path.join(args.dir,files.pop())
-        
-    elif args.file:
-        backup_file = args.file
-    
-    
-    # Backup before restoring. 
-    
-    args = type('Args', (object,),{'file':'/tmp/before-restore.db','cache': True, 
-                                   'date': True, 'is_server': args.is_server, 'name':args.library_name, 
-                                   'subcommand': 'backup'})
-    library_backup(args, l, config)
-    
-    prt("{}: Restoring", backup_file)
-    l.clean(add_config_root=False)
-    l.restore(backup_file)
 
 def library_drop(args, l, config):   
 
@@ -483,13 +431,24 @@ def library_sync(args, l, config):
 
     all = args.all or not (args.library or args.remote or args.source or args.json or args.warehouses )
 
+    vids=None
+
+    if args.bundle_list:
+        with open(args.bundle_list) as f:
+            vids  = set()
+            for line in f:
+                if line[0] != '#':
+                    vid,_ = line.split(None,1)
+                    vids.add(vid)
+
+
     if args.library or all:
         l.logger.info("==== Sync Library")
         l.sync_library(clean=args.clean)
 
     if args.remote or all:
         l.logger.info("==== Sync Remotes")
-        l.sync_remotes(clean=args.clean)
+        l.sync_remotes(clean=args.clean, vids=vids)
 
     if (args.source or all) and l.source:
         l.logger.info("==== Sync Source")
@@ -503,60 +462,6 @@ def library_sync(args, l, config):
         l.logger.info("==== Sync warehouses")
         l.sync_warehouses()
 
-def library_doc(args, l, rc):
-
-    from ambrydoc import app, configure_application, setup_logging
-    import ambrydoc.views as views
-    from ambry.warehouse.server import exracts_blueprint
-
-    import logging
-    from logging import FileHandler
-    import webbrowser
-    import socket
-
-    if args.port:
-        port = args.port
-    else:
-        port = 8081 # 45235 + random.randint(1, 5000)
-
-    cache_dir = l.doc_cache.cache.path('',missing_ok=True)
-
-    config = configure_application(dict(port = port, cache = cache_dir))
-
-    file_handler = FileHandler(os.path.join(cache_dir, "web.log"))
-    file_handler.setLevel(logging.WARNING)
-    app.logger.addHandler(file_handler)
-
-    app.register_blueprint(exracts_blueprint,url_prefix='/warehouses')
-
-    if args.reindex:
-
-        from ambrydoc import fscache
-        from ambrydoc.search import Search
-        from ambrydoc.cache import DocCache
-
-        print 'Updating the search index'
-
-        s = Search(DocCache(fscache()))
-        s.index(reset=args.clean)
-
-
-    print 'Serving documentation for cache: ', cache_dir
-
-    # Check for open port
-
-    while True:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            sock.bind(('localhost', port))
-            sock.close()
-            break
-        except socket.error:
-            port += 1
-
-    webbrowser.open("http://localhost:{}/".format(port))
-
-    app.run(host=config['host'], port=port, debug=args.debug)
 
 def library_config(args, l, config):
     from ..dbexceptions import ConfigurationError
@@ -588,6 +493,14 @@ def library_unknown(args, l, config):
 
 def library_test(args, l, config):
     import time
-    from ambry.util import toposort
 
+    term = 'Alabama city New Hope'
 
+    for t in range(len(term)):
+
+        for i, (score, gvid, name) in enumerate(l.search.search_identifiers(term[:t])):
+
+            if i == 0:
+                print chr(27) + "[2J" + chr(27) + "[H"
+
+            print score, gvid, name

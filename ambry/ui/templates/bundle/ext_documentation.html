@@ -1,0 +1,13 @@
+<!-- Documentation -->
+
+{% if b.meta.external_documentation and b.meta.external_documentation.items() -%}
+    <div class = 'ck-extdoc '>
+        <h2>External Documentation</h2>
+        <dl class="dl-horizontal">
+        {% for k,e in b.meta.external_documentation.items() %}
+            <dt><a href="{{e.url}}" target="{{e.title}}">{{e.title}}</a></dt>
+            <dd>{{e.description}}</dd>
+        {% endfor -%}
+        </dl>
+    </div>
+{% endif -%}

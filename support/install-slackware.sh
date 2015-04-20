@@ -64,13 +64,11 @@ sbopkg -B -i pysetuptools -i pip -i proj -i geos -i gdal
 echo "--- Install the databundles package from github"
 # Download the data bundles with pip so the code gets installed.
 
-pip install -r https://raw.github.com/clarinova/databundles/master/requirements.txt
+pip install -r https://raw.github.com/CivicKnowledge/databundles/master/requirements.txt
 
 pip install ambry
 
 ambry config install # Installs a development config
 
 cd $(ambry config value filesystem.source)
-
-[ ! -e clarinova-public ] && git clone https://github.com/clarinova/ambry-bundles-public.git clarinova-public
 

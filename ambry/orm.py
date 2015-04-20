@@ -34,12 +34,10 @@ import json
 from sqlalchemy import BigInteger
 from sqlalchemy.dialects import postgresql, mysql, sqlite
 
-
 BigIntegerType = BigInteger()
 BigIntegerType = BigIntegerType.with_variant(postgresql.BIGINT(), 'postgresql')
 BigIntegerType = BigIntegerType.with_variant(mysql.BIGINT(), 'mysql')
 BigIntegerType = BigIntegerType.with_variant(sqlite.INTEGER(), 'sqlite')
-
 
 from sqlalchemy import func
 from sqlalchemy.types import UserDefinedType
@@ -65,14 +63,12 @@ class Geometry(UserDefinedType):
 class SpatialiteGeometry(Geometry):
     def get_col_spec(self): return "BLOB"
 
-
 GeometryType = Geometry()
 GeometryType = GeometryType.with_variant(SpatialiteGeometry(), 'spatialite')
 GeometryType = GeometryType.with_variant(Text(), 'sqlite')  # Just write the WKT through
 GeometryType = GeometryType.with_variant(Text(), 'postgresql')
 
 Base = declarative_base()
-
 
 class JSONEncoder(json.JSONEncoder):
     """A JSON encoder that turns unknown objets into a string representation of the type """
@@ -245,13 +241,11 @@ def JSONAlchemy(sqltype):
         impl = sqltype
         
     return MutationObj.as_mutable(_JSONEncodedObj)
-        
 
 class SavableMixin(object):
     
     def save(self):
         self.session.commit()
-
 
 class LinkableMixin(object):
     """A mixin for creating acessors to link between objects with references in the .dataproperty
@@ -326,8 +320,6 @@ class DictableMixin(object):
 
     def __repr__(self):
         return "<{}: {}>".format(type(self), self.dict)
-
-
 
 class Dataset(Base, LinkableMixin):
     __tablename__ = 'datasets'
@@ -562,6 +554,9 @@ class Column(Base):
         return self.datatype in (Column.DATATYPE_POINT, Column.DATATYPE_LINESTRING, Column.DATATYPE_POLYGON,
                                  Column.DATATYPE_MULTIPOLYGON, Column.DATATYPE_GEOMETRY)
 
+    def type_is_gvid(self):
+        return 'gvid' in self.name
+
     def type_is_time(self):
         return self.datatype in (Column.DATATYPE_TIME, Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE)
 
@@ -677,7 +672,8 @@ class Column(Base):
         self.table_name = kwargs.get("table_name",None) 
 
         if not self.name:
-            raise ValueError('Column must have a name. Got: {}'.format(kwargs))
+            self.name = 'column'+str(self.sequence_id)
+            #raise ValueError('Column must have a name. Got: {}'.format(kwargs))
 
         self.t_id = table.id_
         self.t_vid = table.vid
@@ -692,7 +688,7 @@ class Column(Base):
         A dict that holds key/values for all of the properties in the object
         :return:
         """
-        x = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ( 'table', 'stats')}
+        x = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ( 'table', 'stats', '_codes')}
 
         if not x:
             raise Exception(self.__dict__)
@@ -708,7 +704,7 @@ class Column(Base):
         Like dict, but does not hold any null values
         :return:
         """
-        return {k: v for k, v in self.dict.items() if v}
+        return {k: v for k, v in self.dict.items() if v and k != '_codes'}
 
 
     @property
@@ -872,7 +868,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     def dict(self):
         d =  {k:v for k,v in self.__dict__.items() if k in
                 ['id_','vid', 'd_id', 'd_vid', 'sequence_id', 'name',  'altname', 'vname', 'description',
-                 'universe', 'keywords', 'installed', 'proto_vid', 'type']}
+                 'universe', 'keywords', 'installed', 'proto_vid', 'type', '_codes']}
 
         if self.data:
             for k in self.data:
@@ -886,12 +882,11 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
                 d['is_geo'] = True
 
 
-
         return d
 
     @property
     def nonull_dict(self):
-        return {k: v for k, v in self.dict.items() if v }
+        return {k: v for k, v in self.dict.items() if v and k not in '_codes'}
 
     @property
     def nonull_col_dict(self):
@@ -904,6 +899,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
 
         td = self.nonull_dict
         td['columns'] = tdc
+
 
         return td
 
@@ -968,16 +964,13 @@ Columns:
 
         return "<table>\n" + "\n".join(rows) + "\n</table>"
 
-
     def vid_select(self):
         """ Return a SQL fragment to translate the column names to vids. This allows the identity of the column
         to propagate through views. """
 
         cols = []
-
+        raise DeprecationWarning()
         return ",".join( ["{} AS {}".format(c.name, c.vid) for c in self.columns] )
-
-
 
     @orm.reconstructor
     def init_on_load(self):
@@ -1128,7 +1121,6 @@ Columns:
         except NoResultFound:
             raise NotFoundError("Failed to find column '{}' in table '{}' ".format(name_or_id,self.name))
 
-    
     @property
     def primary_key(self):
         for c in self.columns:
@@ -1197,7 +1189,6 @@ Columns:
         )
 
 
-
     @property
     def null_row(self):
         if self._null_row is None:
@@ -1240,8 +1231,6 @@ Columns:
         '''
 
         return [ c.name for c in self.columns ]
-
-
 
     def _get_validator(self, and_join=True):
         '''Return a lambda function that, when given a row to this table, 
@@ -1377,7 +1366,6 @@ class Config(Base):
     def __repr__(self):
         return "<config: {},{},{} = {}>".format(self.d_vid, self.group, self.key, self.value)
 
-
 class Partition(Base, LinkableMixin):
     __tablename__ = 'partitions'
 
@@ -1413,10 +1401,6 @@ class Partition(Base, LinkableMixin):
     )
 
     table = relationship('Table', backref='partitions', lazy='subquery')
-
-    # Already have a 'partitions' replationship on Dataset
-    #dataset = relationship('Dataset', backref='partitions')
-
 
     def __init__(self, dataset, **kwargs):
 
@@ -1471,12 +1455,25 @@ class Partition(Base, LinkableMixin):
         else:
             ds = self.dataset
 
-        d = dict(ds.dict.items() + self.dict.items())
+        d = {
+            'id': self.id_,
+            'vid': self.vid,
+            'name': self.name,
+            'vname': self.vname,
+            'ref': self.ref,
+            'space': self.space,
+            'time': self.time,
+            'table': self.table.name if self.t_vid is not None else None,
+            'grain': self.grain,
+            'segment': self.segment,
+            'format': self.format if self.format else 'db'
+        }
 
-        return PartitionIdentity.from_dict(d)
+        return PartitionIdentity.from_dict(dict(ds.dict.items() + d.items()))
 
     @property
     def dict(self):
+        from geoid.civick import GVid
 
         d =  {
                  'id':self.id_,
@@ -1494,6 +1491,7 @@ class Partition(Base, LinkableMixin):
                  'space':self.space,
                  'time':self.time,
                  'table': self.table.name if self.t_vid is not None else None,
+                 'table_vid':  self.t_vid,
                  'grain':self.grain,
                  'segment':self.segment,
                  'format': self.format if self.format else 'db',
@@ -1507,11 +1505,52 @@ class Partition(Base, LinkableMixin):
             d[k] = self.data[k]
 
 
+        d['dataset'] = self.dataset.dict
+
+        d['colstats'] =  {s.column.id_: s.dict for s in self._stats}
+
+        if 'geo_grain' in d:
+            d['geo_grain'] = {
+                'vids': d['geo_grain'],
+                'names': []
+            }
+
+            for gvid_str in d['geo_grain']['vids']:
+                gvid = GVid.parse(gvid_str)
+                d['geo_grain']['names'].append(gvid.level.title())
+
+
+        if 'geo_coverage' in d:
+            d['geo_coverage'] = {
+                'vids': d['geo_coverage'],
+                'names': []
+            }
+
+        if 'time_coverage' in d:
+            from util.datestimes import expand_to_years
+
+            all_years = expand_to_years(d['time_coverage'])
+
+            d['time_coverage'] = {
+                'years': d['time_coverage'],
+                'min': min(all_years) if all_years else None,
+                'max': max(all_years) if all_years else None,
+
+
+            }
+
         return d
+
 
     @property
     def nonull_dict(self):
-        return {k: v for k, v in self.dict.items() if v}
+        d =  {k: v for k, v in self.dict.items() if v}
+
+        d['format'] = self.format if self.format else 'db'
+        d['table'] = self.table.name if self.t_vid is not None else None
+
+        return d
+
 
     @property
     def insertable_dict(self):
@@ -1547,7 +1586,6 @@ class Partition(Base, LinkableMixin):
     def link_store(self, f): return self._append_link('stores', f.ref)
     def delink_store(self, f): return self._remove_link('stores', f.ref)
 
-
     def add_stat(self, c_vid, stats):
         """
         Add a statistics records for a column of a table in the partition.
@@ -1581,6 +1619,9 @@ class Partition(Base, LinkableMixin):
 
             def __repr__(self):
                 return str(self.__dict__)
+
+            def items(self):
+                return self.__dict__.items()
 
         cols = { s.column.name:Bunch(s.dict) for s in self._stats }
 
@@ -1803,7 +1844,6 @@ class Code(Base, SavableMixin, LinkableMixin):
     def insertable_dict(self):
         return { ('cd_'+k).strip('_'):v for k,v in self.dict.items()}
 
-
 class SearchDoc(Base):
     """Documents for full text search"""
     __tablename__ = 'searchdocs'
@@ -1825,12 +1865,14 @@ class ColumnStat(Base, SavableMixin, LinkableMixin):
 
     id = SAColumn('cs_id',Integer, primary_key=True, nullable=False)
 
-    p_vid = SAColumn('cs_p_vid', String(10), ForeignKey('partitions.p_vid'), nullable=False, index=True)
+    p_vid = SAColumn('cs_p_vid', String(20), ForeignKey('partitions.p_vid'), nullable=False, index=True)
     partition = relationship('Partition', backref='_stats')
 
-    c_vid = SAColumn('cs_c_vid', String(12), ForeignKey('columns.c_vid'), nullable=False, index=True)
+    # This really should be Nullable=False, but I can't get cascading deletes to work.
+    c_vid = SAColumn('cs_c_vid', String(20), ForeignKey('columns.c_vid'), nullable=False, index=True)
     column = relationship('Column', backref='stats')
-    lom = SAColumn('cs_lom',Enum(*lom_enums))
+
+    lom = SAColumn('cs_lom',String(12))
     count = SAColumn('cs_count',BigIntegerType)
     mean = SAColumn('cs_mean',Float)
     std = SAColumn('cs_std',Float)
@@ -1860,4 +1902,4 @@ class ColumnStat(Base, SavableMixin, LinkableMixin):
     def dict(self):
 
         return {p.key: getattr(self, p.key)
-                for p in self.__mapper__.attrs if p.key not in ('data', 'column', 'table')}
+                for p in self.__mapper__.attrs if p.key not in ('data', 'column', 'table', 'partition')}

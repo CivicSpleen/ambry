@@ -78,7 +78,7 @@ class TestBase(unittest.TestCase):
                 bundle.post_prepare()
 
                 if str(bundle.identity.name.version) != '0.0.1':
-                    raise Exception("Can only save bundle if version is 0.0.1")
+                    raise Exception("Can only save bundle if version is 0.0.1. This one is version: {} ".format(bundle.identity.name.version))
 
 
                 bundle.pre_build()

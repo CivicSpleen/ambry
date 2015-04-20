@@ -25,6 +25,12 @@ class Documentation(DictGroup):
     readme = ScalarTerm()
     main = ScalarTerm()
 
+class Coverage(DictGroup):
+
+    geo = ListTerm()
+    grain = ListTerm()
+    time = ListTerm()
+
 class ContactTerm(DictTerm):
 
     name = ScalarTerm(store_none=False)
@@ -78,6 +84,7 @@ class SourceTerm(DictTerm):
     description = ScalarTerm(store_none=False)
     dd_url = ScalarTerm(store_none=False) # Data Dictitionary URL
     file = ScalarTerm(store_none=False) # A name or regex to extract from a multi-file ZIP
+    filetype = ScalarTerm(store_none=False) # For the LoaderBundle, use this file type ( file extensino ) rather than from the url
     segment = ScalarTerm(store_none=False)  # Specify a sub-component of the file, like a sheet in an excel workbook.
     comment = ScalarTerm(store_none=False)  # Just a comment
     is_loadable = ScalarTerm(store_none=False)  # If false, ignore in auto-loading
@@ -147,12 +154,40 @@ class Top(Metadata):
     names = Names(file='bundle.yaml')
     contact_source = Contact(file='bundle.yaml')
     contact_bundle = Contact(file='bundle.yaml')
+    versions = Versions(file='bundle.yaml')
+    process = Process(file='bundle.yaml')
+    external_documentation = ExtDoc(file='bundle.yaml')
+
     sources = Sources(file='meta/build.yaml')
     dependencies = Dependencies(file='meta/build.yaml')
     build = Build(file='meta/build.yaml')
     views = Views(file='meta/build.yaml')
-    external_documentation = ExtDoc(file='bundle.yaml')
+
     documentation = Documentation(file='meta/doc.yaml')
-    versions = Versions(file='bundle.yaml')
-    process = Process(file='bundle.yaml')
+
+    coverage = Coverage(file='meta/coverage.yaml')
+
+# This is a new version of the metadata structure, with
+# the sections in different places.
+class NewTop(Metadata):
+
+    _non_term_file = 'meta/build.yaml'
+
+    identity = Identity(file='identity.yaml')
+    names = Names(file='identity.yaml')
+    versions = Versions(file='identity.yaml')
+    process = Process(file='identity.yaml')
+
+    about = About(file='bundle.yaml')
+    contact_source = Contact(file='bundle.yaml')
+    contact_bundle = Contact(file='bundle.yaml')
+    external_documentation = ExtDoc(file='bundle.yaml')
+    dependencies = Dependencies(file='bundle.yaml')
+    sources = Sources(file='bundle.yaml')
+
+    build = Build(file='meta/build.yaml')
+
+    documentation = Documentation(file='meta/doc.yaml')
+
+
 

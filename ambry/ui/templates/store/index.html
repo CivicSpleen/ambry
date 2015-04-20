@@ -1,0 +1,87 @@
+{% from 'macros.html' import modal, modal_button, exampledata %}
+{% extends "layout.html" %}
+{% block title %}Database: {{s.title}}{% endblock %}
+{% block head %}
+    {{ super() }}
+{% endblock %}
+
+{% block masthead %}
+    <h1 class="title">Warehouse: {{s.title}}</h1>
+    <p>UID: {{s.uid}}
+        <br/>DSN: {%if s.url and ( s.dsn.startswith('spatialite') or s.dsn.startswith('sqlite') ) %}
+        <a href="{{db_download_url(s.url,s.uid)}}">{{s.dsn}}</a>
+        {% else %}{{s.dsn}}{%endif%}
+        {% if s.url -%}<br/>URL: {{s.url}} {%endif%}</p>
+    {% if s.summary -%}<p>{{s.summary}}</p>{% endif -%}
+{% endblock %}
+
+{% block body %}
+
+
+<div class="col-md-12">
+    <h2>Tables</h2>
+    <table  class="table table-hover table-condensed" >
+        <tr>
+            <th>id</th>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Installed Names</th>
+            <th>Extracts</th>
+        </tr>
+    {% for t in s.tables.values()|selectattr('type','equalto','table')|sort(attribute='source_partition')-%}
+        {% if t.installed -%}
+            <tr>
+            <td><a href="{{store_table_path(s.uid, t.vid)}}">{{t.vid}}</a></td>
+            <td>{{t.name}}</td>
+            <td><strong>{%if t.source_partition -%}
+            <a href="{{bundle_path(t.d_vid)}}">{{t.source_partition.vname}}</a></p>
+            {% endif -%}</strong>{{t.description if t.description  else ''}}</td>
+            <td><ul>{% for n in t.installed_names -%}
+                <li>{{n}}</li>
+                {% endfor -%}</ul>
+            </td>
+
+            <td>
+                {% for format in extractors(t) -%}
+                <button type="button">
+                <a href="{{extract_url(s.uid,  t.vid, format)}}">{{format}}</a>
+                </button>
+                {% endfor -%}
+            </td>
+            </tr>
+        {% endif -%}
+    {% endfor %}
+    </table>
+</div>
+
+<div class="col-md-12">
+    <h2>Views and MViews</h2>
+    <table  class="table table-hover table-condensed" >
+        <tr>
+            <th>id</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+
+            {% if s.url -%}<th>Extracts</th>{% endif -%}
+        </tr>
+    {% for t in s.tables.values()|selectattr('type','isin',['view', 'mview']) -%}
+        <tr>
+        <td><a href="{{store_table_path(s.uid,t.vid)}}">{{t.vid}}</a></td>
+        <td>{{t.name}}</td>
+        <td>{{t.type}}</td>
+        <td>{{t.description if t.description  else ''}}</td>
+
+        <td>
+            {% for format in extractors(t) -%}
+            <button type="button">
+            <a href="{{extract_url(s.uid, t.name, format)}}">{{format}}</a>
+            </button>
+            {% endfor -%}
+        </td>
+        </tr>
+    {% endfor %}
+    </table>
+</div>
+
+{% endblock %}

@@ -22,4 +22,3 @@ except ImportError as e:
 from kernel import *
 from util import *
 from array import *
-from colormap import *

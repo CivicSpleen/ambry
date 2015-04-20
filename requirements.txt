@@ -1,5 +1,5 @@
 PyYAML
-SQLAlchemy
+sqlalchemy
 sh
 boto
 requests
@@ -19,5 +19,8 @@ pdfminer
 nltk
 flask
 flask-compress
--e git+https://github.com/CivicKnowledge/ckcache.git#egg=ckcache
+ckcache
+geoid
+isodate
+
 

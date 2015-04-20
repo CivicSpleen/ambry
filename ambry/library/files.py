@@ -11,11 +11,7 @@ from ..util import Constant
 from ..identity import LocationRef
 import os
 
-
-
-
 class Files(object):
-
 
     TYPE = Constant()
     TYPE.BUNDLE = LocationRef.LOCATION.LIBRARY
@@ -219,6 +215,9 @@ class Files(object):
                 raise
 
         self.db._mark_update()
+
+
+
 
     def install_bundle_file(self, bundle, cache, commit=True, state='installed'):
         """Mark a bundle file as having been installed in the library"""

@@ -23,7 +23,6 @@ class Test(TestBase):
         import bundles.testbundle.bundle
 
 
-
         self.bundle_dir = os.path.dirname(bundles.testbundle.bundle.__file__)
         self.rc = get_runconfig((os.path.join(self.bundle_dir,'library-test-config.yaml'),
                                  os.path.join(self.bundle_dir,'bundle.yaml'),
@@ -161,7 +160,8 @@ class Test(TestBase):
 
         from ambry.util import temp_file_name
         import os
-        
+        from ambry.dbexceptions import NotFoundError
+
         l = self.get_library()
         print "Library: ", l.database.dsn
      
@@ -171,8 +171,8 @@ class Test(TestBase):
         self.assertTrue(r is not False)
         self.assertEquals(self.bundle.identity.sname, r.identity.sname)
 
-        r = l.get('dibberish')
-        self.assertFalse(r)
+        with self.assertRaises(NotFoundError):
+            r = l.get('gibberish')
 
         for partition in self.bundle.partitions:
             print "Install and check: ", partition.identity.vname
@@ -191,36 +191,15 @@ class Test(TestBase):
             self.assertEquals(partition.identity.sname, r.partition.identity.sname)
             self.assertEquals(self.bundle.identity.sname, r.identity.sname)
 
-        self.assertTrue(l.database.needs_dump())
-
-        backup_file = temp_file_name()+".db"
-        
-        l.database.dump(backup_file)
-        
-        #l.database.close()
-        os.remove(l.database.dbname)
-        l.database.create()
-
-        r = l.get(self.bundle.identity.sname)
-    
-        self.assertTrue(not r)
-        
-        l.database.restore(backup_file)
         
         r = l.get(self.bundle.identity.sname)
         self.assertTrue(r is not False)
         self.assertEquals(self.bundle.identity.sname, r.identity.sname)
 
-        os.remove(backup_file)
-
         # An extra change so the following tests work
         l.put_bundle(self.bundle)
         
-        self.assertFalse(l.database.needs_dump())
 
-        import time; time.sleep(10)
-
-        self.assertTrue(l.database.needs_dump())
       
 
     def test_library_install(self):
@@ -274,9 +253,7 @@ class Test(TestBase):
 
         self.assertEquals('source-dataset-subset-variation',r[0]['identity']['name'])
     
-        r = l.find(QueryCommand().table(name='tone').partition(format='db', grain=None))
 
-        self.assertEquals('source-dataset-subset-variation-tone',r[0]['partition']['name'])
         
         r = l.find(QueryCommand().table(name='tthree').partition(format='db', segment=None))
         self.assertEquals('source-dataset-subset-variation-tthree',r[0]['partition']['name'])
@@ -301,7 +278,7 @@ class Test(TestBase):
         l.put_bundle(self.bundle)
     
         r = l.find(QueryCommand().table(name='tone').partition(any=True))
-        self.assertEquals(2, len(r))
+        self.assertEquals(1, len(r))
        
         ds_names = [ds.sname for ds in l.list().values()]
         self.assertIn('source-dataset-subset-variation', ds_names)
@@ -323,7 +300,7 @@ class Test(TestBase):
         self.assertTrue(r is not False)
         self.assertEquals(r.identity.id_, r.identity.id_)
 
-        self.assertEquals(6, len(l.files.query.state('new').all))
+        self.assertEquals(5, len(l.files.query.state('new').all))
 
         for remote in l.remotes:
             remote.clean()
@@ -343,11 +320,9 @@ class Test(TestBase):
 """source/dataset-subset-variation-0.0.1.db:
   caches: [/tmp/library-test/remote-cache-1]
 source/dataset-subset-variation-0.0.1/geot1.geodb:
-  caches: [/tmp/library-test/remote-cache-2]
+  caches: [/tmp/library-test/remote-cache-3]
 source/dataset-subset-variation-0.0.1/geot2.geodb:
-  caches: [/tmp/library-test/remote-cache-3]
-source/dataset-subset-variation-0.0.1/tone.db:
-  caches: [/tmp/library-test/remote-cache-3]
+  caches: [/tmp/library-test/remote-cache-2]
 source/dataset-subset-variation-0.0.1/tone/missing.db:
   caches: [/tmp/library-test/remote-cache-2]
 source/dataset-subset-variation-0.0.1/tthree.db:
@@ -436,9 +411,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         l = self.get_library('http-remoted')
 
-
         r = l.remotes[0]
-
 
         self.assertFalse(r.has('foobar'))
         self.assertTrue(r.has(self.bundle.identity.cache_key))
@@ -529,11 +502,9 @@ source/dataset-subset-variation-0.0.1/tthree.db:
             for p_vid, p in d.partitions.items():
                 datasets[d.vid]['partitions'][p_vid] = p.dict
 
-
         with open(self.bundle.filesystem.path('meta','version_datasets.json'),'w') as f:
             import json
             f.write(json.dumps(datasets))
-
 
         r = Resolver(db.session)
 
@@ -545,7 +516,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         for row in results:
             print row
-
 
         #os.remove(f)
 
@@ -563,7 +533,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         db.create()
 
         l.put_bundle(self.bundle)
-
 
         r = Resolver(db.session)
 
@@ -648,10 +617,9 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         print library.cache
         print library.cache.last_upstream()  
 
-
     def test_compression_cache(self):
         '''Test a two-level cache where the upstream compresses files '''
-        from ambry.cache.filesystem import  FsCache,FsCompressionCache
+        from ckcache.filesystem import  FsCache,FsCompressionCache
          
         root = self.rc.group('filesystem').root
       
@@ -661,8 +629,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         os.makedirs(l2_repo_dir)
         
         testfile = self.new_rand_file(os.path.join(root,'testfile'))
-
-
 
         # Create a cache with an upstream wrapped in compression
         l3 = FsCache(l2_repo_dir)
@@ -692,10 +658,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         print l.info
 
         l.purge()
-         
 
-    
-    
         l.put_bundle(self.bundle) # Install the partition references in the library.
 
         b = l.get(self.bundle.identity)
@@ -748,7 +711,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         #ambry.util.get_logger('ambry.filesystem').setLevel(logging.DEBUG)
         # Set up the test directory and make some test files. 
-        from ambry.cache import new_cache
+        from ckcache import new_cache
         
         root = self.rc.group('filesystem').root
         os.makedirs(root)
@@ -851,24 +814,36 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         print l.resolve('211sandiego.org-calls-p1ye2014-orig-calls')
 
-    def test_jdoc(self):
+
+
+    def test_search(self):
         from ambry.library import new_library
-        from ambry.library.doccache import DocCache
 
         config = get_runconfig().library('default')
 
         l = new_library(config, reset=True)
 
-        print type(l._doc_cache)
+        print l.search
 
-        dc = DocCache(l)
+        #for ds in l.datasets():  print ds.vid
 
-        for d_vid, d in  dc.bundle_index().items():
-            print d_vid, d
-            print dc.bundle(d_vid)
+        l.search.index_datasets()
+
+        for r in  l.search.search_datasets("title:zip"):
+            ds = l.dataset(r)
+            print r, ds.vname, ds.data.get('title')
+
+        for r in l.search.search_partitions("doc:0E06"):
+            print r
 
 
+    def test_search_parse(self):
 
+        from ambry.library.search import SearchTermParser
+
+        stp = SearchTermParser()
+
+        print stp.parse('source mother')
 
 def suite():
     suite = unittest.TestSuite()

@@ -203,7 +203,10 @@ def bundle_parser(cmd):
     command_p.add_argument('-s','--schema',  default=False,action="store_true",
                            help='Dump the schema as a CSV. The bundle must have been prepared')
     command_p.add_argument('-d', '--dep', default=False, help='Report information about a dependency')
-    command_p.add_argument('-S', '--stats',default=False,action="store_true",  help='Also report column stats')
+    command_p.add_argument('-S', '--stats',default=False,action="store_true",  help='Also report column stats for partitions')
+    command_p.add_argument('-P', '--partitions', default=False, action="store_true", help='Also report partition details')
+    command_p.add_argument('-c', '--coverage', default=False, action="store_true",
+                           help='Also report time and space coverage')
 
     #
     # Clean Command
@@ -229,8 +232,9 @@ def bundle_parser(cmd):
     
     command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
     command_p.add_argument('-r','--rebuild', default=False,action="store_true", help='Rebuild the schema, but dont delete built files')
-    command_p.add_argument('-f','--fast', default=False,action="store_true", help='Load the schema faster by not checking for extant columns')
-
+    command_p.add_argument('-F','--fast', default=False,action="store_true", help='Load the schema faster by not checking for extant columns')
+    command_p.add_argument('-f', '--force', default=False, action="store_true",
+                           help='Force build. ( --clean is usually preferred ) ')
     #
     # Build Command
     #
@@ -296,6 +300,8 @@ def bundle_info(args, b, st, rc):
     import json
     from ..dbexceptions import DatabaseMissingError
 
+    indent = "    "
+
     if args.dep:
         #
         # Get the dependency and then re-run to display it.
@@ -312,11 +318,20 @@ def bundle_info(args, b, st, rc):
     elif args.schema:
         b.schema.as_csv()
     else:
+
+
+
         b.log("----Info: ".format(b.identity.sname))
         b.log("VID  : "+b.identity.vid)
         b.log("Name : "+b.identity.sname)
         b.log("VName: "+b.identity.vname)
         b.log("DB   : " + b.database.path)
+
+        if args.coverage:
+            from ambry.util.datestimes import compress_years
+            b.log('Geo cov   : ' + str(list(b.metadata.coverage.geo)))
+            b.log('Grain cov : ' + str(list(b.metadata.coverage.grain)))
+            b.log('Time cov  : ' + compress_years(b.metadata.coverage.time))
 
         if b.database.exists():
 
@@ -334,16 +349,16 @@ def bundle_info(args, b, st, rc):
             if process.get('buildtime', False):
                 b.log('Build time: ' + str(round(float(process['buildtime']), 2)) + 's')
 
+
             b.log("Parts: {}".format(b.partitions.count))
 
             b.log("---- Partitions ---")
             for i, partition in enumerate(b.partitions):
-                b.log("    "+partition.identity.sname)
+                b.log(indent+partition.identity.sname)
 
                 if i > 10:
                     b.log("    ... and {} more".format(b.partitions.count - 10))
                     break
-
 
 
         deps = None
@@ -364,14 +379,30 @@ def bundle_info(args, b, st, rc):
             for k, v in deps:
                 b.log("{}: {}".format(k, v))
 
-        if args.stats:
+        if args.stats or args.partitions:
             for p in b.partitions.all:
-                b.log("--- Stats for {}: ".format(p.identity))
-                b.log("{:20.20s} {:>7s} {:>7s} {:s}".format("Col name", "Count", 'Uniq', 'Sample Values'))
-                for col_name, s in p.stats.__dict__.items():
+                b.log("--- Partition {}: ".format(p.identity))
+                if args.partitions:
+                    d = p.record.data
+                    def bl(k,v):
+                        b.log(indent+"{:7s}: {}".format(k,p.record.data.get(v,'')))
 
-                    b.log("{:20.20s} {:7d} {:7d} {:s}".format(col_name, s.count, s.nuniques, ','.join(s.uvalues.keys()[:5])))
+                    b.log(indent+"Details: ".format(p.identity))
+                    bl('g cov','geo_coverage')
+                    bl('g grain', 'geo_grain')
+                    bl('t cov', 'time_coverage')
+                if args.stats:
+                    b.log(indent+"Stats: ")
+                    b.log(indent+"{:20.20s} {:>7s} {:>7s} {:>10s} {:s}"
+                          .format("Col name", "Count", 'Uniq', 'Mean', 'Sample Values'))
+                    for col_name, s in p.stats.__dict__.items():
 
+                        b.log(indent+"{:20.20s} {:7s} {:7s} {:10s} {:s}".
+                              format(col_name,
+                                     str(s.count) if s.count else '',
+                                     str(s.nuniques) if s.nuniques else '',
+                                     '{:10.2e}'.format(s.mean) if s.mean else '',
+                                     ','.join(s.uvalues.keys()[:5])))
 
 
 
@@ -381,7 +412,6 @@ def bundle_clean(args, b, st, rc):
     #b.clean(clean_meta=('meta' in phases))
     b.database.enable_delete = True
     b.clean()
-
 
 
 def bundle_meta(args, b, st, rc):
@@ -531,9 +561,6 @@ def bundle_config(args, b, st, rc):
 
         print identity.fqname
 
-
-
-
     elif args.subsubcommand == 's3urls':
         return bundle_config_s3urls(args, b, st, rc)
 
@@ -606,7 +633,6 @@ def bundle_config_scrape(args, b, st, rc):
 
     for link in soup.findAll('a'):
 
-
         if not link:
             continue;
 
@@ -661,7 +687,6 @@ def bundle_config_scrape(args, b, st, rc):
 
     import yaml
     print yaml.dump(d, default_flow_style=False)
-
 
 
 def bundle_config_s3urls(args, b, st, rc):

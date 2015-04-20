@@ -26,13 +26,11 @@ class SqlitePartition(PartitionBase):
         super(SqlitePartition, self).__init__(bundle, record)
         self.memory  = memory
 
-
     @property
     def database(self):
         if self._database is None:
             self._database = PartitionDb(self.bundle, self, base_path=self.path, memory=self.memory)          
         return self._database
-
 
     def detach(self, name=None):
         return self.database.detach(name)
@@ -53,8 +51,7 @@ class SqlitePartition(PartitionBase):
 
         for sql in self.bundle.schema.generate_indexes(table):
             self.database.connection.execute(sql)
-              
-              
+
     def drop_indexes(self, table=None):
 
         if not self.database.exists():
@@ -81,10 +78,7 @@ class SqlitePartition(PartitionBase):
                 print 'Drop',index_name
 
                 self.database.connection.execute("DROP INDEX {}".format(index_name))
-    
-    
 
-    
     def create_with_tables(self, tables=None, clean=False):
         '''Create, or re-create,  the partition, possibly copying tables
         from the main bundle
@@ -132,7 +126,6 @@ class SqlitePartition(PartitionBase):
         # cause the sqlite driver to return with 'unable to open database' error
         self.close()
 
-
     def clean(self):
         '''Delete all of the records in the tables declared for this oartition'''
         
@@ -141,34 +134,34 @@ class SqlitePartition(PartitionBase):
             except: pass
 
         return self
-        
 
-    def optimal_rows_per_segment(self, size = 100*1024*1024, max=200000):
-        '''Calculate how many rows to put into a CSV segment for a target number
-        of bytes per file'''
-        
-        BYTES_PER_CELL = 3.8 # Bytes per num_row * num_col, experimental
-        
-        # Shoot for about 250M uncompressed, which should compress to about 25M
+    def finalize(self, force = False):
 
-        table  = self.get_table()
-        rows_per_seg = (size / (len(table.columns) * BYTES_PER_CELL) ) 
-        
-        # Round up to nearest 100K
-        
-        rows_per_seg = round(rows_per_seg/100000+1) * 100000
-        
-        if rows_per_seg > max:
-            return max
-        
-        return rows_per_seg
-
-    def finalize(self):
-
-        if not self.is_finalized and self.database.exists():
+        if force or (not self.is_finalized and self.database.exists()):
             self.write_basic_stats()
             self.write_file()
             self.write_full_stats()
+            self.compile_geo_coverage()
+            self.compile_time_coverage()
+            self.build_sample()
+
+    def guess_lom(self, col, stats):
+        """
+        Guess the level of measurement for the column: Nominal, Ordinal, Interval, Ratio
+
+
+        :param col:
+        :param stats:
+        :return:
+        """
+
+        if col.name == 'id' and ( col.is_primary_key or col.fk_vid):
+            return 'key'
+
+        if col.type_is_text:
+            return 'nom'
+
+
 
     def write_full_stats(self):
         """
@@ -209,6 +202,10 @@ class SqlitePartition(PartitionBase):
 
             for row in df.describe().T.reset_index().to_dict(orient='records'):
                 col_name = row['index']
+
+                if col_name == 'id':
+                    continue
+
                 col = table.column(col_name)
 
                 row['nuniques'] = df[col_name].dropna().nunique()
@@ -232,9 +229,11 @@ class SqlitePartition(PartitionBase):
                 row['nuniques'] = df[col_name].dropna().nunique()
 
                 if col.type_is_text() :
+
                     row['uvalues'] = df[col_name].value_counts().sort(inplace=False, ascending=False)[:100].to_dict()
 
                 p.add_stat(col.vid, row)
+
 
 
     def write_basic_stats(self):
@@ -251,7 +250,7 @@ class SqlitePartition(PartitionBase):
         if not t.primary_key:
             from ..dbexceptions import ConfigurationError
 
-            raise ConfigurationError("Table {} does not have a primary key; can't compute states".format(t.name))
+            raise ConfigurationError("Table {} does not have a primary key; can't compute stats".format(t.name))
 
         partition_s = self.database.session
 
@@ -269,6 +268,144 @@ class SqlitePartition(PartitionBase):
 
         self.set_state(Partitions.STATE.FINALIZED)
 
+    def compile_geo_coverage(self):
+        """Compile GVIDs for the geographic coverage and grain of the partition"""
+
+        from geoid import civick
+        from geoid.util import simplify
+
+
+        p_s = self.database.session
+
+        geo_cols = []
+        table_name = self.table.name
+        for c in self.table.columns:
+            if 'gvid' in c.name:
+                geo_cols.append(c.name)
+
+        geoids = set()
+
+        for gc in geo_cols:
+            for row in p_s.execute("SELECT DISTINCT {} FROM {}".format(gc, table_name)):
+                gvid = civick.GVid.parse(row[0])
+                if gvid:
+                    geoids.add(gvid)
+
+        # If there is source data ( from the sources metadata in the build set in the loader in build_create_partition)
+        # then use the time and space values as additional geo and time information.
+
+        extra_spaces = []
+
+        if 'source_data' in self.record.data:
+            for source_name, source in self.record.data['source_data'].items():
+                if 'space' in source:
+                    extra_spaces.append( (source_name, source['space']))
+
+
+
+        if self.identity.space:  # And from the partition name
+            extra_spaces.append(('pname', self.identity.space))
+
+        for source_name, space in extra_spaces:
+                try:
+                    g = civick.GVid.parse(space)
+                except KeyError:
+
+                    places = list(self.bundle.library.search.search_identifiers(space))
+
+
+                    if not places:
+                        from ..dbexceptions import BuildError
+                        raise BuildError(("Failed to find space identifier '{}' in full text identifier search"
+                                         " for partition '{}' and source name '{}'")
+                                         .format(space, str(self.identity), source_name))
+
+                    score, gvid, name = places[0]
+
+                    self.bundle.log("Resolving space '{}' from source '{}' to {}/{}".
+                                    format(space, source_name, name, gvid))
+
+                    geoids.add(civick.GVid.parse(gvid))
+
+
+        coverage, grain =  simplify(geoids)
+
+        # The first simplification may produce a set that can be simplified again
+        coverage, _ = simplify(coverage)
+
+        # For geo_coverage, only includes the higher level summary levels,  counties, states, places and urban areas
+        self.record.data['geo_coverage'] = sorted([ str(x) for x in coverage if bool(x) and x.sl in (40,50,60,160,400) ])
+        self.record.data['geo_grain'] = sorted([str(x) for x in grain])
+
+
+
+        # Now add the geo and time coverage specified in the table. These values for space and time usually are specified
+        # in the sources metadata, and are copied into the
+
+        s = self.bundle.database.session
+        s.merge(self.record)
+        s.commit()
+
+    def compile_time_coverage(self):
+        from ambry.util.datestimes import expand_to_years
+
+        date_cols = []
+        years = set()
+        table_name = self.table.name
+        for c in self.table.columns:
+            if 'year' in c.name:
+                date_cols.append(c.name)
+
+        p_s = self.database.session
+
+        ## From the table
+        for dc in date_cols:
+            for row in p_s.execute("SELECT DISTINCT {} FROM {}".format(dc, table_name)):
+                years.add(row[0])
+
+        ## From the source
+        # If there was a time value in the source that this partition was created from, then
+        # add it to the years.
+        if 'source_data' in self.record.data:
+            for source_name, source in self.record.data['source_data'].items():
+                if 'time' in source:
+                    for year in expand_to_years(source['time']):
+                        years.add(year)
+
+        ## From the partition name
+        if self.identity.name.time:
+            for year in expand_to_years(self.identity.name.time):
+                years.add(year)
+
+        self.record.data['time_coverage'] = list(years)
+
+        s = self.bundle.database.session
+        s.merge(self.record)
+        s.commit()
+
+    def build_sample(self):
+
+        name = self.table.name
+
+        count = int(self.database.connection.execute('SELECT count(*) FROM "{}"'.format(name)).fetchone()[0])
+
+        skip = count / 20
+
+        if count > 100:
+            sql = 'SELECT * FROM "{}" WHERE id % {} = 0 LIMIT 20'.format(name, skip)
+        else:
+            sql = 'SELECT * FROM "{}" LIMIT 20'.format(name)
+
+        sample = []
+
+        for j, row in enumerate(self.database.connection.execute(sql)):
+            sample.append(row.values())
+
+        self.record.data['sample'] = sample
+
+        s = self.bundle.database.session
+        s.merge(self.record)
+        s.commit()
 
     def write_file(self):
         """Create a file entry in the bundle for the partition, storing the md5 checksum and size. """
@@ -302,8 +439,6 @@ class SqlitePartition(PartitionBase):
                 s.merge(f)
                 s.commit()
 
-
-
     @property
     def rows(self):
         '''Run a select query to return all rows of the primary table. '''
@@ -327,6 +462,22 @@ class SqlitePartition(PartitionBase):
         except StopIteration:
             return None # No records, so no dataframe.
             #raise Exception("Select failed: {}".format("SELECT * FROM {}".format(self.get_table().name)))
+
+    @property
+    def dict(self):
+
+        table = self.table
+
+        d = dict(
+            stats={s.column.name: s.dict for s in self._stats},
+            **self.record.dict
+        )
+
+        del d['table']
+        d['table'] = table.nonull_col_dict,
+
+        return d
+
 
     def query(self,*args, **kwargs):
         """Convience function for self.database.query()"""

@@ -1,7 +1,11 @@
 """
-Created on Aug 31, 2012
 
-@author: eric
+For developing these tests, you can run in the same environment as these tests by setting the AMBRY_CONFIG
+env variable:
+
+    export AMBRY_CONFIG=
+
+
 """
 import unittest
 from bundles.testbundle.bundle import Bundle
@@ -12,9 +16,6 @@ from ambry.util import memoize
 class Test(TestBase):
 
     test_dir = None
-
-    # Source code for the example bundles
-    example_git_url = 'https://github.com/sdrdl/example-bundles.git'
 
     def setUp(self):
         import os
@@ -75,9 +76,6 @@ class Test(TestBase):
 
         self.library = self.get_library()
 
-        os.makedirs(self.library.source_dir)
-
-
     def get_library(self, name = 'default'):
         """Clear out the database before the test run"""
         from ambry.library import new_library
@@ -129,12 +127,6 @@ class Test(TestBase):
 
         return s
 
-    def checkout_source(self):
-
-        from sh import git
-
-        git.clone(self.example_git_url, self.library.source_dir)
-
     def assertInFile(self, s, fn):
 
         with open(fn) as f:
@@ -143,21 +135,16 @@ class Test(TestBase):
 
     def test_basic(self):
 
-
         c = self.cmd
 
         self.assertIn('sqlite:////tmp/test_cli/library.db', c('library', 'info'))
-        self.assertIn('Cache:    FsCache: dir=/tmp/test_cli/library upstream=(None)', c('library', 'info'))
+        self.assertIn('Database:  sqlite:////tmp/test_cli/library.db', c('library', 'info'))
 
-        self.checkout_source()
-
-    def test_sync(self):
+    def test_sync_build(self):
         import os
         from subprocess import CalledProcessError
 
         self.reset()
-
-        self.checkout_source()
 
         c = self.cmd
 
@@ -169,36 +156,29 @@ class Test(TestBase):
 
         c('library sync -s')
 
-        # Check that we have the example bundles, but not eh built library
-        self.assertIn('S    d00H003',c('list'))
+        # Check that we have the example bundles, but not the built library
+        self.assertIn('S     dIjqPRbrGq001',c('list'))
         self.assertNotIn('LS    d00H003', c('list'))
-        self.assertIn('example.com-altdb-orig-0.1.1', c('list'))
+        self.assertIn('example.com-simple-0.1.3', c('list'))
         self.assertIn('example.com-random-0.0.2', c('list'))
 
-        # Build the library
-        c('bundle -d d00H003 build --clean ')
+        buildable = [ x.strip() for x in c('source buildable -Fvid').splitlines() ]
 
-        self.assertTrue(os.path.exists(os.path.join(self.test_dir, 'build/example.com/simple-orig-0.1.3.db')))
+        for vid in buildable:
 
-        self.assertInFile('Done Building', os.path.join(self.test_dir, 'build/example.com/simple-orig-0.1.3.log'))
+            c('bundle -d {} build --clean --install '.format(vid))
 
-        # And install it.
-        c('bundle -d d00H003 install')
 
         # Now it should show up in the list.
-        self.assertIn('LS    d00H003', c('list'))
+        self.assertIn('LS     dHSyDm4MNR002     example.com-random-0.0.2', c('list'))
+
+        c('library push')
 
         # Can't rebuild an installed library.
         with self.assertRaises(CalledProcessError):
-            c('bundle -d d00H003 prepare --clean ')
+            c('bundle -d dHSyDm4MNR002 prepare --clean ')
 
-        # Get all of the other bundles
-        vids = [ y.strip()
-                 for y in c('list -Fvid').strip().replace('test_cli INFO ','').split('\n') if y.strip() != 'd00H003']
 
-        for vid in vids:
-            c('bundle -d {} build --clean '.format(vid))
-            c('bundle -d {} install '.format(vid))
 
     def test_library(self):
 

@@ -1,0 +1,18 @@
+{% extends "layout.html" %}
+{% block title %}Sources{% endblock %}
+{% block head %}
+    {{ super() }}
+{% endblock %}
+{% block masthead %}
+    <h1 class="title">Sources</h1>
+{% endblock %}
+
+{% block body %}
+
+<ul>
+{% for source_id, source in sources.items() %}
+    <li>{{source.bundles|length}} {{source_id}}</li>
+{% endfor %}
+</ul>
+
+{% endblock %}

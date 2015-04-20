@@ -1,0 +1,24 @@
+build: {}
+dependencies: {}
+sources:
+    random1:
+        description: 1990 Random Data
+        space: Tulare
+        time: 1990
+        url: http://devtest.sandiegodata.org.s3.amazonaws.com/test-sources/random.csv
+    random2:
+        description: 1991 Random Data
+        space: Modoc
+        time: 1991
+        url: http://devtest.sandiegodata.org.s3.amazonaws.com/test-sources/random.csv
+    random3:
+        description: 1992 Random Data
+        space: Yolo County
+        time: 1992
+        url: http://devtest.sandiegodata.org.s3.amazonaws.com/test-sources/random.csv
+    random4:
+        description: 1993 Random Data
+        space: Alabama
+        time: 1993
+        url: http://devtest.sandiegodata.org.s3.amazonaws.com/test-sources/random.csv
+views: {}

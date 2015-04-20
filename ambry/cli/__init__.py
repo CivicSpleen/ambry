@@ -45,8 +45,6 @@ def fatal(template, *args, **kwargs):
         
         global_logger.critical(template.replace('{','{{').replace('}','}}').format(*args, **kwargs))
 
-
-
     sys.exit(1)
 
 def warn(template, *args, **kwargs):
@@ -63,136 +61,6 @@ def load_bundle(bundle_dir):
     mod = import_file(rp)
   
     return mod.Bundle
-
-def _find(args, l, config):
-    from ..library.query import QueryCommand
-    from ..identity import Identity
-    from ..library.files import Files
-
-    try:
-        in_terms = args.terms
-    except:
-        in_terms = args.term
-
-    terms = []
-    for t in in_terms:
-        if ' ' in t or '%' in t:
-            terms.append("'{}'".format(t))
-        else:
-            terms.append(t)
-
-    qc = QueryCommand.parse(' '.join(terms))
-
-    identities = {}
-
-    for entry in l.find(qc):
-
-        ident = l.resolve(entry['identity']['vid'], None)
-
-
-        if ident.locations.is_in(Files.TYPE.SOURCE):
-            f = l.files.query.type(Files.TYPE.SOURCE).ref(ident.vid).one_maybe
-
-            if f:
-                ident.bundle_state = f.state
-                ident.data['time'] = f.modified
-
-        if ident.vid in identities:
-            ident = identities[ident.vid]
-        else:
-            identities[ident.vid] = ident
-
-        if "partition" in entry:
-            pi = Identity.from_dict(entry['partition'])
-            ident.add_partition(pi)
-            tc_add_to = pi
-        else:
-            tc_add_to = ident
-
-        if 'table' in entry:
-            tc_add_to.data['table'] = entry['table']
-
-        if 'column' in entry:
-            tc_add_to.data['column'] = entry['column']
-
-
-    return identities
-
-def _print_find(identities, prtf=prt):
-
-    try: first = identities[0]
-    except: first = None
-
-    if not first:
-        return
-
-    t = ['{id:<14s}','{vname:20s}']
-    header = {'id': 'ID', 'vname' : 'Versioned Name'}
-
-    multi = False
-    if 'column' in first:
-        multi = True
-        t.append('{column:12s}')
-        header['column'] = 'Column'
-
-    if 'table' in first:
-        multi = True
-        t.append('{table:12s}')
-        header['table'] = 'table'
-
-    if 'partition' in first:
-        multi = True
-        t.append('{partition:50s}')
-        header['partition'] = 'partition'
-
-    ts = ' '.join(t)
-
-    dashes = { k:'-'*len(v) for k,v in header.items() }
-
-    prt(ts, **header) # Print the header
-    prt(ts, **dashes) # print the dashes below the header
-
-    last_rec = None
-    first_rec_line = True
-    for r in identities:
-
-        if not last_rec or last_rec['id'] != r['identity']['vid']:
-            rec = {'id': r['identity']['vid'], 'vname':r['identity']['vname']}
-            last_rec = rec
-            first_rec_line = True
-        else:
-            rec = {'id':'', 'vname':''}
-
-        if 'column' in r:
-            rec['column'] = ''
-
-        if 'table' in r:
-            rec['table'] = ''
-
-        if 'partition' in r:
-            rec['partition'] = ''
-
-        if multi and first_rec_line:
-            prt(ts, **rec)
-            rec = {'id':'', 'vname':''}
-            first_rec_line = False
-
-        if 'column' in r:
-            rec['id'] = r['column']['vid']
-            rec['column'] = r['column']['name']
-
-        if 'table' in r:
-            rec['id'] = r['table']['vid']
-            rec['table'] = r['table']['name']
-
-        if 'partition' in r:
-            rec['id'] = r['partition']['vid']
-            rec['partition'] = r['partition']['vname']
-
-
-        prt(ts, **rec)
-
-    return
 
 def _source_list(dir_):
     lst = {}
@@ -350,9 +218,14 @@ def _print_info(l,ident, list_partitions=False):
             prt("P Is Local  : {}",(l.cache.has(p.cache_key) is not False) if p else '')
             prt("P Rel Path  : {}",p.cache_key)
             prt("P Abs Path  : {}",l.cache.path(p.cache_key, missing_ok = True)  )
+            prt("P G Cover   : {}", p.data.get('geo_coverage',''))
+            prt("P G Grain   : {}", p.data.get('geo_grain',''))
+            prt("P T Cover   : {}", p.data.get('time_coverage',''))
 
             if resolved_ident.url:
                 prt("P Web Path  : {}",resolved_ident.url)
+
+
 
         elif list_partitions:
             prt("D Partitions: {}", len(ident.partitions))

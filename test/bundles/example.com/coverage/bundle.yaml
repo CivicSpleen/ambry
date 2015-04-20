@@ -1,0 +1,57 @@
+about:
+    access: null
+    grain: null
+    groups: []
+    license: null
+    rights: null
+    space: San Diego County
+    subject: null
+    summary: null
+    tags: []
+    time: P2Ye1980
+    title: Test of geo and time coverage
+contact_bundle:
+    creator:
+        email: eric@sandiegodata.org
+        name: Eric Busboom
+        url: http://www.sandiegodata.org
+    maintainer:
+        email: eric@sandiegodata.org
+        name: Eric Busboom
+        url: http://www.sandiegodata.org
+contact_source:
+    creator: {}
+    maintainer: {}
+external_documentation:
+    dataset:
+        description: Main webpage for the dataset.
+        source: null
+        title: Dataset Page
+        url: http://example.com
+    documentation:
+        description: The primary documentation file
+        source: null
+        title: Main Documentation
+        url: http://example.com
+    download:
+        description: Web page that links to the source files.
+        source: null
+        title: Download Page
+        url: http://example.com
+identity:
+    bspace: null
+    btime: null
+    dataset: coverage
+    id: ds76uxGOHk
+    revision: 1
+    source: example.com
+    subset: null
+    type: null
+    variation: null
+    version: 0.0.1
+names:
+    fqname: example.com-coverage-0.0.1~ds76uxGOHk001
+    name: example.com-coverage
+    vid: ds76uxGOHk001
+    vname: example.com-coverage-0.0.1
+process: {}

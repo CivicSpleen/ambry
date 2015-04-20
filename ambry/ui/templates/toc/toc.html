@@ -1,0 +1,61 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN">
+<html lang="en">
+<head>
+    <title>Data Warehouse: {{w.title}}</title>
+    <link href="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet">
+
+    <style media="screen" type="text/css">
+{{embed_css}}
+    </style>
+</head>
+<body>
+
+<div class="col-md-12">
+
+    <header class="masthead">
+        <div class="container">
+            <div class="row">
+
+                <div class="col-md-12">
+                  <h1 class="title">Warehouse TOC: {{w.title}}</h1>
+                  <p>{{w.about}}</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                <h1>Manifests</h1>
+                <div class="ambry-manifest">
+                <ul>
+                {% for e in toc -%}
+                  <li><a href="{{e.rel_path}}">{{e.rel_path}}</a></li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
+<script src="http://code.jquery.com/jquery-migrate-1.2.1.min.js"></script>
+<script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+<script src="http://assets.s3.clarinova.com/js/toc.min.js"></script>
+<script>
+$('#toc').toc({ // seehttp://projects.jga.me/toc/
+    'selectors': 'h1,h2' //elements to use as headings
+});
+$('#toc ul').addClass('nav nav-stacked')
+
+$('#sidebar').affix({
+      offset: {
+        top: $('header').height()
+      }
+});
+
+</script>
+</body>
+</html>

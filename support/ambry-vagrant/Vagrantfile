@@ -9,13 +9,13 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.hostname = 'ambry-dev'
 
   # Every Vagrant virtual environment requires a box to build off of.
-  config.vm.box = "saucy64"
+  config.vm.box = "ubuntu/trusty64"
 
   # The url from where the 'config.vm.box' box will be fetched if it
   # doesn't already exist on the user's system.
-  config.vm.box_url = "http://opscode-vm-bento.s3.amazonaws.com/vagrant/virtualbox/opscode_ubuntu-13.10_chef-provisionerless.box"
+  #config.vm.box_url = "http://opscode-vm-bento.s3.amazonaws.com/vagrant/virtualbox/opscode_ubuntu-13.10_chef-provisionerless.box"
 
-  config.vm.synced_folder "../../", "/ambry/src/ambry", type: 'nfs'
+  config.vm.synced_folder "../../", "/usr/src/ambry"
 
   config.vm.network "private_network", type: "dhcp"
 
@@ -34,32 +34,33 @@ echo "--- Installing Ambry"
 apt-get update
 locale-gen en_US.UTF-8
 
-packages=" git gcc g++ python-pip python-dev sqlite3  libpq-dev
-libsqlite3-dev libspatialite3 libspatialite-dev spatialite-bin libspatialindex-dev
-libgdal-dev gdal-bin python-gdal python-numpy python-scipy "
-#libhdf5-serial-dev libhdf5-dev hdf5-tools h5utils  python-h5py \
-# "
+apt-get update &&  apt-get install -y \
+git \
+gcc \
+g++ \
+python-pip \
+python-dev \
+sqlite3 \
+libpq-dev \
+libsqlite3-dev \
+libspatialite5 \
+libspatialite-dev \
+spatialite-bin \
+libspatialindex-dev \
+libgdal-dev \
+gdal-bin \
+python-gdal \
+python-numpy \
+python-scipy
 
-for pkg in $packages; do
-    echo "INSTALLING: $pkg"
-    apt-get install -y $pkg
-    if [ $? != 0 ]; then
-        echo "ERROR: Failed to install $pkg"
-        exit $?
-    fi
-done
-
+# IIRC, this is required to allow loading the spatialite extension.
 pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
-cd /ambry/source
-
-[ ! -e clarinova-public ] && git clone https://github.com/clarinova/ambry-bundles-public.git clarinova-public
-[ ! -e sdrdl ] && git clone https://github.com/sdrdl/sdrdl-ambry-bundles.git sdrdl
-
-cd /ambry/src/ambry # Better exist -- it is the shared dir
+cd /usr/src/ambry/ # Better exist -- it is the shared dir
+#pip install -r requirements.txt
 python setup.py develop
 
-ambry config install # Installs a development config
+su - vagrant ambry config install # Installs a development config
 
 SCRIPT
 

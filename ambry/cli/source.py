@@ -4,7 +4,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-from ..cli import prt, fatal, warn, _find, _print_find, _print_bundle_entry
+from ..cli import prt, fatal, warn
 from ..cli import  load_bundle, _print_bundle_list
 import os
 import shutil
@@ -710,13 +710,14 @@ def source_buildable(args, l, st, rc):
 
         try:
             bundle = st.resolve_bundle(vid)
-            bundle.library.check_dependencies()
+            bundle.library.check_dependencies(download=False)
 
             if not bundle.is_built and not bundle.is_installed:
 
                 buildable.append(v)
 
-        except DependencyError:
+        except DependencyError as e:
+
             pass
         finally:
             bundle.close()

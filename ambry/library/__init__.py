@@ -17,7 +17,7 @@ from ..identity import LocationRef, Identity
 from ..util import memoize, get_logger
 import weakref
 from files import Files
-from ckcache import NullCache
+from sqlalchemy import event
 
 libraries = {}
 
@@ -186,7 +186,7 @@ class Library(object):
 
         self.bundles = weakref.WeakValueDictionary()
 
-
+        self._search = None
 
 
     def clone(self):
@@ -265,9 +265,12 @@ class Library(object):
 
         try:
             self.database.install_bundle(bundle, commit = commit)
+
             installed = True
         except ConflictError:
             installed = False
+
+        self.search.index_dataset(bundle, force = True)
 
         self.files.install_bundle_file(bundle, self.cache, commit=commit, state = 'new')
 
@@ -279,10 +282,14 @@ class Library(object):
         if install_partitions:
             for partition in bundle.partitions:
                 self.put_partition(bundle, partition, commit = commit)
+                self.search.index_partition(partition, force = True)
 
+        self.mark_updated(vid=ident.vid)
+
+
+        self.search.commit()
 
         return self.cache.path(ident.cache_key), installed
-
 
     def put_partition(self, bundle, partition, commit = True):
         """Install the record and file reference for the partition """
@@ -306,6 +313,8 @@ class Library(object):
         it from the library database'''
 
         self.database.remove_bundle(bundle)
+
+        self.mark_updated(vid=bundle.identity.vid)
 
         self.cache.remove(bundle.identity.cache_key, propagate=True)
 
@@ -535,9 +544,18 @@ class Library(object):
     @property
     def tables(self):
         """Return ORM records for all tables"""
+
         from ..orm import Table
 
         return self.database.session.query(Table).all()
+
+    @property
+    def tables_no_columns(self):
+        """Return ORM records for all tables"""
+        from sqlalchemy.orm import lazyload
+        from ..orm import Table
+
+        return self.database.session.query(Table).options(lazyload('columns')).all()
 
 
     def table(self, vid):
@@ -550,9 +568,10 @@ class Library(object):
         try:
             return (self.database.session.query(Table).filter(Table.vid == vid).one())
         except NoResultFound:
+            # Ths vid is actually an id, so we take the latest one
             try:
                 return (self.database.session.query(Table)
-                        .filter(Table.id_ == vid).order_by(Table.vid.desc()).one())
+                        .filter(Table.id_ == vid).order_by(Table.vid.desc()).first())
             except NoResultFound:
                 raise NotFoundError("Did not find table ref {} in library {}".format(vid, self.database.dsn))
 
@@ -576,12 +595,43 @@ class Library(object):
         from ..orm import Dataset
         from sqlalchemy.orm.exc import NoResultFound
 
-        return (self.database.session.query(Dataset).filter(Dataset.vid == vid).one())
+        try:
+            return (self.database.session.query(Dataset).filter(Dataset.vid == vid).one())
+        except NoResultFound:
+            try:
+                ds =  self.database.session.query(Dataset).filter(Dataset.id_ == vid).order_by(Dataset.revision.desc()).first()
+
+                if ds is None:
+                    raise NoResultFound
+                else:
+                    return ds
+
+            except NoResultFound:
+                from ..dbexceptions import NotFoundError
+                raise NotFoundError("Failed to find dataset for ref '{}' ".format(vid))
 
     def datasets(self):
         from ..orm import Dataset
 
         return (self.database.session.query(Dataset).all())
+
+    def versioned_datasets(self):
+        """Like datasets(), but returns a dict structure, and only the most recent version, with other versions
+        under the 'other_version' key """
+        from ..orm import Dataset
+
+        datasets = {}
+
+        for ds in (self.database.session.query(Dataset).order_by(Dataset.revision.desc()).all()):
+
+            if ds.id_ not in datasets:
+                datasets[ds.id_] = ds.dict
+                datasets[ds.id_]['other_versions'] = {}
+
+            else:
+                datasets[ds.id_]['other_versions'][ds.vid] = ds.dict
+
+        return datasets
 
     def bundle(self, vid):
         """Returns a LibraryDbBundle for the given vid"""
@@ -594,6 +644,7 @@ class Library(object):
     def partition(self, vid):
         from ..orm import Partition
         from sqlalchemy.orm.exc import NoResultFound
+        from ..dbexceptions import NotFoundError
 
         try:
             return (self.database.session.query(Partition).filter(Partition.vid == vid).one())
@@ -602,7 +653,14 @@ class Library(object):
                 return (self.database.session.query(Partition).filter(Partition.id_ == vid).one())
             except NoResultFound:
                 self.logger.error("No partition found: {} for {}".format(vid, self.database.dsn))
-                raise
+                raise NotFoundError("No partition in library for vid : {} ".format(vid))
+
+
+    def dataset_partitions(self, vid):
+        """Return all partition records for a dataset vid"""
+        from ..orm import Partition
+
+        return (self.database.session.query(Partition).filter(Partition.d_vid == vid).all())
 
     @property
     def partitions(self):
@@ -639,6 +697,7 @@ class Library(object):
         s = self.store(uid)
 
         if s:
+            self.mark_updated(vid=s.ref)
             self.database.session.delete(s)
             self.database.commit()
 
@@ -656,7 +715,6 @@ class Library(object):
         config = database_config(s.path)
 
         return new_warehouse(config, self, logger=self.logger)
-
 
     @property
     def manifests(self):
@@ -686,9 +744,10 @@ class Library(object):
         if not f:
             raise NotFoundError("Didn't find manifest for uid '{}' ".format(uid))
 
+        self.mark_updated(vid=f.ref)
+
         self.database.session.delete(f)
         self.database.commit()
-
 
 
     @property
@@ -698,7 +757,6 @@ class Library(object):
             return None
 
         return self._remotes
-
 
     ##
     ## Finding
@@ -842,19 +900,36 @@ class Library(object):
 
         return out
 
-    def check_dependencies(self, throw=True):
+    def check_dependencies(self, throw=True, download=True):
         from ..util import Progressor
 
         errors = {}
         for k, v in self.dependencies.items():
-            self.logger.info('Download and check dependency: {}'.format(v))
-            b = self.get(v, cb=Progressor().progress)
 
-            if not b:
-                if throw:
-                    raise NotFoundError("Dependency check failed for key={}, id={}. Failed to get bundle or partition".format(k, v))
-                else:
-                    errors[k] = v
+            if download:
+                self.logger.info('Download and check dependency: {}'.format(v))
+
+                b = self.get(v, cb=Progressor().progress)
+
+                if not b:
+                    if throw:
+                        raise NotFoundError("Dependency check failed for key={}, id={}. Failed to get bundle or partition".format(k, v))
+                    else:
+                        errors[k] = v
+
+            else:
+                self.logger.info('Check dependency: {}'.format(v))
+
+                dataset = self.resolve(v)
+
+                if not dataset:
+                    if throw:
+                        raise NotFoundError("Dependency check failed for key={}, id={}. Failed to get bundle or partition".format(k, v))
+                    else:
+                        errors[k] = v
+
+
+        return errors
 
     @property
     @memoize
@@ -971,6 +1046,11 @@ class Library(object):
     # Synchronize
     #
 
+    def mark_updated(self, o=None, vid=None):
+        """Mark an object as recently updated, for instance to clear the doc_cache"""
+
+        self.doc_cache.remove(vid)
+
     def sync_library(self, clean = False):
         '''Rebuild the database from the bundles that are already installed
         in the repository cache'''
@@ -1084,7 +1164,8 @@ class Library(object):
 
         return bundles
 
-    def sync_remotes(self, remotes=None, clean = False, last_only=True):
+    def sync_remotes(self, remotes=None, clean = False, last_only=True, vids=None):
+        """Sync the local library with all of the remotes, create static JSON, and  build the full-text search index"""
         from ..orm import Dataset
         from sqlalchemy.exc import IntegrityError
         from ..dbexceptions import NotABundle
@@ -1142,6 +1223,11 @@ class Library(object):
                     self.logger.error("Failed to fetch bundle for {} ".format(cache_key))
                     continue
 
+                vid =  str(b.identity.vid)
+
+                if vids and vid not in vids:
+                    continue
+
                 try:
                     path, installed = self.put_bundle(b, install_partitions=False, commit=True)
 
@@ -1152,6 +1238,7 @@ class Library(object):
                 except Exception as e:
                     self.logger.error("Failed to put bundle {}: {}".format(cache_key, e))
                     b.close()
+                    raise
                     continue
 
                 try:
@@ -1160,15 +1247,16 @@ class Library(object):
                     b.close() # Just means we already have it installed
                     continue
 
-
                 for p in b.partitions:
-                    if  installed:
+                    if installed:
                         self.database.install_partition(b, p, commit='collect')
 
                     if self.files.install_remote_partition(p.identity, remote, {}, commit = 'collect'):
                         self.logger.info("    + {}".format(p.identity.name))
                     else:
                         self.logger.info("    = {}".format(p.identity.name))
+
+
 
                 try:
                     self.files.insert_collection()
@@ -1185,6 +1273,7 @@ class Library(object):
                 self.database.close()
                 b.close()
 
+            self.search.commit()
 
     def sync_source(self, clean=False):
         '''Rebuild the database from the bundles that are already installed
@@ -1205,7 +1294,6 @@ class Library(object):
                 self.logger.error("Failed to sync: bundle_path={} : {} ".format(ident.bundle_path, e.message))
 
         self.database.commit()
-
 
     def sync_source_dir(self, ident, path):
         from ..dbexceptions import ConflictError
@@ -1241,6 +1329,8 @@ class Library(object):
                                           title=w.title,
                                           url = w.url,
                                           summary=w.summary)
+
+
 
 
         s = self.database.session
@@ -1286,14 +1376,10 @@ class Library(object):
             local_manifest.link_store(store)
             store.link_manifest(local_manifest)
 
-        ##
-        ## Copy over extracts
-
-        for f in w.extracts:
-
-            self.files.install_extract(f.path, f.source_url, f.data)
 
         s.commit()
+
+        self.mark_updated(vid=w.uid)
 
 
         return store
@@ -1305,8 +1391,6 @@ class Library(object):
             self.logger.info("Syncing {} dsn={}".format(f.ref, f.path))
             self.sync_warehouse(w)
 
-
-
     @property
     def doc_cache(self):
         """Return the documentation cache. """
@@ -1317,11 +1401,22 @@ class Library(object):
         except ImportError:
             raise
             return None
+
     @property
     def warehouse_cache(self):
         """Cache for warehouse Sqlite databases and extracts"""
 
         return self._warehouse_cache
+
+    @property
+    def search(self):
+        from search import Search
+
+        if not self._search:
+            self._search = Search(self)
+
+        return self._search
+
 
     def _gen_schema(self):
         from ..schema import Schema

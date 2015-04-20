@@ -4,13 +4,33 @@
 # Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
 
+from collections import deque
+
+
+class Times(object):
+    """Records time entries for access to the cache."""
+
+    def __init__(self, **kwargs):
+        self.start_time = 0
+        self.end_time = 0
+        self.time = 0
+        self.count = 0
+        self.key = None
+        self.from_cache = None
+        self.__dict__.update(kwargs)
+
+    def __str__(self):
+        return str(self.__dict__)
+
+    def __repr__(self):
+        return str(self.__dict__)
+
+
 class DocCache(object):
 
-    all_bundles = None
-
-    _cache = None
-
     def __init__(self, library, cache = None):
+        import platform
+
         self.library = library
 
         if self.library._doc_cache:
@@ -19,21 +39,103 @@ class DocCache(object):
         else:
             self._cache = {}
 
-    def cache(self, f, *args, **kwargs):
-        """Cache the return value of a method. Normally, we'd use @memoize, but
-        we want this to run in the context of the object. """
+        self.all_bundles = None
+        self.times = deque([], maxlen=10000)
+        self.ignore_cache = False # if True, assume the next quest to cache the key does not exist
+
+        # Some OS X file systems are case insensitive, causing aliasing with gvid keys
+        self.prefix_upper =  platform.system() == 'Darwin'
+
+    def _munge_key(self,  *args, **kwargs):
+
+        import string
 
         if '_key' in kwargs:
             key = kwargs['_key']
             del kwargs['_key']
         else:
-            key = (str(args) if args else '') + (str(kwargs) if kwargs else '')
+            key = ''
+            if args:
+                key += '_'.join(str(arg) for arg in args)
+
+            if kwargs:
+                key += '_'.join(str(arg) for arg in kwargs.values())
 
         assert bool(key)
 
-        if key not in self._cache:
+        # Prefix uppercase letters to avoid aliasing on case-insensitive OS X file systems
+        if self.prefix_upper:
+            key = ''.join('_'+x if x in string.ascii_uppercase else x for x in key)
+
+        if '_key_prefix' in kwargs:
+            pk = kwargs['_key_prefix'] + '/' +key[0] + '/' + key[1]
+            del kwargs['_key_prefix']
+        else:
+            pk = key[0] + '/' + key[1]
+
+        key = pk + '/' + key
+
+        return key, args, kwargs
+
+    def cache(self, f,  *args, **kwargs):
+        """Cache the return value of a method. Normally, we'd use @memoize, but
+        we want this to run in the context of the object. """
+        import time
+
+        start = time.time()
+
+        key, args, kwargs = self._munge_key(*args, **kwargs)
+
+        if key not in self._cache or kwargs.get('force') or self.ignore_cache:
             self._cache[key] = f(*args, **kwargs)
+            from_cache = False
+        else:
+            from_cache = True
+
+        end = time.time()
+
+
+        self.times.append(Times(start_time=start, end_time=end, key = key, from_cache = from_cache,
+                                count = 1, time = end - start))
+
         return self._cache[key]
+
+    def clean(self):
+
+        try:
+            self._cache.clean()
+        except AttributeError:
+            assert isinstance(self._cache, dict)
+            self._cache = {}
+
+
+    def remove(self,  *args, **kwargs):
+
+        key, args, kwargs = self._munge_key(*args, **kwargs)
+
+        if key in self._cache:
+            del self._cache[key]
+
+
+
+    def compiled_times(self):
+        """Compile all of the time entries from cache calls to one per key"""
+        from collections import defaultdict
+
+        times = defaultdict(Times)
+
+        for t in self.times:
+            print t.__dict__
+            k = t.key+'_'+('cached' if t.from_cache else 'func')
+            ct = times[k]
+            ct.key = k
+
+            ct.time += t.time
+            ct.count += t.count
+
+
+        return sorted(times.values(),key=lambda x : x.time, reverse = True)
+
 
     def library_info(self):
         pass
@@ -47,19 +149,8 @@ class DocCache(object):
         return self.cache(lambda: self.library.summary_dict, _key='library_info')
 
     def bundle_index(self):
-        return self.cache(lambda: { d.vid : d.dict for d in self.library.datasets() }, _key='bundle_index')
 
-    def collection_index(self):
-        pass
-
-    def warehouse_index(self):
-        return self.cache(lambda: {f.ref: dict(
-            title=f.data['title'],
-            summary=f.data['summary'] if f.data['summary'] else '',
-            dsn=f.path,
-            manifests=[m.ref for m in f.linked_manifests],
-            cache=f.data['cache'],
-            class_type=f.type_) for f in self.library.stores}, _key = 'warehouse_index')
+        return self.cache(lambda: self.library.versioned_datasets() , _key='bundle_index')
 
 
     def table_index(self):
@@ -71,7 +162,14 @@ class DocCache(object):
 
 
     def dataset(self, vid):
-        return self.cache(lambda vid: self.library.dataset(vid).dict, vid)
+        # Add a 'd' to the datasets, since they are just the dataset record and must
+        # be distinguished from the full output with the same vid in bundle()
+        return self.cache(lambda vid: self.library.dataset(vid).dict, vid, _key_prefix='ds')
+
+    def bundle_summary(self, vid):
+        return self.cache(lambda vid: self.library.bundle(vid).summary_dict, vid, _key_prefix='bs')
+
+
 
     def bundle(self, vid):
         return self.cache(lambda vid: self.library.bundle(vid).dict, vid)
@@ -80,14 +178,14 @@ class DocCache(object):
         pass
 
     def partition(self, vid):
+
         return self.cache(lambda vid: self.library.partition(vid).dict, vid)
 
     def table(self, vid):
-        return self.cache(lambda vid: self.library.table(vid).dict, vid)
+        return self.cache(lambda vid: self.library.table(vid).nonull_col_dict, vid)
 
     def table_schema(self, vid):
         pass
-
 
     def warehouse(self, vid):
         return self.cache(lambda vid: self.library.warehouse(vid).dict, vid)
@@ -106,7 +204,7 @@ class DocCache(object):
         def f():
             tm = {}
 
-            for  t in self.library.tables:
+            for  t in self.library.tables_no_columns: # The no_columns version is a lot faster.
 
                 if not t.id_ in tm:
                     tm[t.id_] = [t.vid]
