@@ -1,7 +1,9 @@
 
-"""
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 from __future__ import absolute_import
@@ -17,7 +19,7 @@ from .inserter import InserterInterface
 
 class ValueInserter(InserterInterface):
 
-    '''Inserts arrays of values into  database table'''
+    """Inserts arrays of values into  database table."""
 
     def __init__(
             self,
@@ -159,7 +161,7 @@ class ValueInserter(InserterInterface):
 
     @property
     def linewriter(self):
-        '''Like writer, but does not write a header. '''
+        """Like writer, but does not write a header."""
         if self._writer is None:
             import csv
             self.close()
@@ -198,7 +200,7 @@ class CsvDb(DatabaseInterface):
     EXTENSION = '.csv'
 
     def __init__(self, bundle, partition, base_path, **kwargs):
-        ''''''
+        """"""
 
         self.bundle = bundle
         self.partition = partition

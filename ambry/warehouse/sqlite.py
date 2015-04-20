@@ -1,6 +1,8 @@
-"""
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 from ..dbexceptions import DependencyError
@@ -86,13 +88,15 @@ class SqliteWarehouse(Warehouse):
 class SpatialiteWarehouse(SqliteWarehouse):
 
     def install_material_view(self, name, sql, clean=False, data=None):
-        """
-        After installing thematerial view, look for geometry columns and add them to the spatial system
+        """After installing thematerial view, look for geometry columns and add
+        them to the spatial system.
+
         :param name:
         :param sql:
         :param clean:
         :param data:
         :return:
+
         """
 
         if not super(SpatialiteWarehouse, self).install_material_view(name, sql, clean=clean, data=data):

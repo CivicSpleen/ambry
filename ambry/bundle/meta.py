@@ -1,7 +1,8 @@
-"""Metadata objects for a bundle
+"""Metadata objects for a bundle.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 from ..util.meta import *
@@ -51,14 +52,14 @@ class ContactTerm(DictTerm):
 
 class Contact(DictGroup):
 
-    """ """
+    """"""
     creator = ContactTerm()
     maintainer = ContactTerm()
 
 
 class Identity(DictGroup):
 
-    """ """
+    """"""
     dataset = ScalarTerm()
     id = ScalarTerm()
     revision = ScalarTerm()
@@ -73,7 +74,7 @@ class Identity(DictGroup):
 
 class Names(DictGroup):
 
-    """Names that are generated from the identity"""
+    """Names that are generated from the identity."""
 
     fqname = ScalarTerm()
     name = ScalarTerm()
@@ -129,33 +130,37 @@ class SourceTerm(DictTerm):
 
 class Sources(TypedDictGroup):
 
-    """References to source URLS"""
+    """References to source URLS."""
     _proto = SourceTerm()
 
 
 class Dependencies(VarDictGroup):
 
-    """Bundle dependencies"""
+    """Bundle dependencies."""
 
 
 class Build(VarDictGroup):
 
-    """Build parameters"""
+    """Build parameters."""
 
 
 class Extract(VarDictGroup):
 
-    """Extract parameters"""
+    """Extract parameters."""
 
 
 class Views(VarDictGroup):
 
-    """Extract parameters"""
+    """Extract parameters."""
 
 
 class Process(VarDictGroup):
 
-    """Process data. Build times, etc."""
+    """Process data.
+
+    Build times, etc.
+
+    """
 
 
 class ExtDocTerm(DictTerm):
@@ -167,13 +172,13 @@ class ExtDocTerm(DictTerm):
 
 class ExtDoc(TypedDictGroup):
 
-    """External Documentation"""
+    """External Documentation."""
     _proto = ExtDocTerm()  # Reusing
 
 
 class VersonTerm(DictTerm):
 
-    """Version Description"""
+    """Version Description."""
     version = ScalarTerm()
     date = ScalarTerm()
     description = ScalarTerm(store_none=False)
@@ -181,7 +186,7 @@ class VersonTerm(DictTerm):
 
 class Versions(TypedDictGroup):
 
-    """Names that are generated from the identity"""
+    """Names that are generated from the identity."""
     _proto = VersonTerm()
 
 

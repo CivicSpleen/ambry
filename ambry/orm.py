@@ -45,12 +45,15 @@ from sqlalchemy.types import UserDefinedType
 
 class Geometry(UserDefinedType):
 
+    """Geometry type, to ensure that WKT text is properly inserted into the
+    database with the GeomFromText() function.
+
+    NOTE! This is paired with code in
+    database.relational.RelationalDatabase.table() to convert NUMERIC
+    fields that have the name 'geometry' to GEOMETRY types. Sqlalchemy
+    sees spatialte GEOMETRY types as NUMERIC
+
     """
-    Geometry type, to ensure that WKT text is properly inserted into
-    the database with the GeomFromText() function.
-    NOTE! This is paired with code in database.relational.RelationalDatabase.table() to convert NUMERIC
-    fields that have the name 'geometry' to GEOMETRY types. Sqlalchemy sees spatialte GEOMETRY types
-    as NUMERIC """
 
     DEFAULT_SRS = 4326
 
@@ -81,7 +84,8 @@ Base = declarative_base()
 
 class JSONEncoder(json.JSONEncoder):
 
-    """A JSON encoder that turns unknown objets into a string representation of the type """
+    """A JSON encoder that turns unknown objets into a string representation of
+    the type."""
 
     def default(self, o):
         from ambry.identity import Identity
@@ -124,7 +128,7 @@ class MutationDict(Mutable, dict):
 
     @classmethod
     def coerce(cls, key, value):  # @ReservedAssignment
-        "Convert plain dictionaries to MutationDict."
+        """Convert plain dictionaries to MutationDict."""
 
         if not isinstance(value, MutationDict):
             if isinstance(value, dict):
@@ -136,13 +140,13 @@ class MutationDict(Mutable, dict):
             return value
 
     def __setitem__(self, key, value):
-        "Detect dictionary set events and emit change events."
+        """Detect dictionary set events and emit change events."""
         dict.__setitem__(self, key, value)
 
         self.changed()
 
     def __delitem__(self, key):
-        "Detect dictionary del events and emit change events."
+        """Detect dictionary del events and emit change events."""
 
         dict.__delitem__(self, key)
         self.changed()
@@ -233,7 +237,7 @@ class MutationList(MutationObj, list):
 
     @classmethod
     def coerce(cls, key, value):
-        """Convert plain list to MutationList"""
+        """Convert plain list to MutationList."""
         self = MutationList((MutationObj.coerce(key, v) for v in value))
         self._key = key
         return self
@@ -283,12 +287,13 @@ class MutationList(MutationObj, list):
 
 
 def JSONAlchemy(sqltype):
-    """A type to encode/decode JSON on the fly
+    """A type to encode/decode JSON on the fly.
 
     sqltype is the string type for the underlying DB column.
 
     You can use it like:
     Column(JSONAlchemy(Text(600)))
+
     """
     class _JSONEncodedObj(JSONEncodedObj):
         impl = sqltype
@@ -304,8 +309,9 @@ class SavableMixin(object):
 
 class LinkableMixin(object):
 
-    """A mixin for creating acessors to link between objects with references in the .dataproperty
-    Should probably be a descriptor, but I don't feel like fighting with it. """
+    """A mixin for creating acessors to link between objects with references in
+    the .dataproperty Should probably be a descriptor, but I don't feel like
+    fighting with it."""
 
     # _get_link_array(self, name, clz, id_column):
     # _append_link(self, name, object_id):
@@ -340,7 +346,7 @@ class LinkableMixin(object):
             self.data[name] = self.data[name] + [object_id]
 
     def _remove_link(self, name, object_id):
-        """For linking manifests to stores"""
+        """For linking manifests to stores."""
         if not name in self.data:
             return
 
@@ -350,10 +356,10 @@ class LinkableMixin(object):
 
 class DataPropertyMixin(object):
 
-    """A Mixin for appending a value into a list in the data field"""
+    """A Mixin for appending a value into a list in the data field."""
 
     def _append_string_to_list(self, sub_prop, value):
-        """ """
+        """"""
         if not sub_prop in self.data:
             self.data[sub_prop] = []
 
@@ -690,8 +696,12 @@ class Column(Base):
         return self.types[self.datatype][1]
 
     def python_cast(self, v):
-        """Cast a value to the type of the column. Primarily used to check that a value is valid; it will
-        throw an exception otherwise"""
+        """Cast a value to the type of the column.
+
+        Primarily used to check that a value is valid; it will throw an
+        exception otherwise
+
+        """
 
         if self.type_is_time():
             import dateutil.parser
@@ -730,9 +740,12 @@ class Column(Base):
 
     @classmethod
     def convert_numpy_type(cls, dtype):
-        '''Convert a numpy dtype into a Column datatype. Only handles common types.
+        """Convert a numpy dtype into a Column datatype. Only handles common
+        types.
 
-        Implemented as a function to decouple from numpy'''
+        Implemented as a function to decouple from numpy
+
+        """
 
         import numpy as np
 
@@ -813,9 +826,11 @@ class Column(Base):
 
     @property
     def dict(self):
-        """
-        A dict that holds key/values for all of the properties in the object
+        """A dict that holds key/values for all of the properties in the
+        object.
+
         :return:
+
         """
         x = {
             p.key: getattr(
@@ -834,26 +849,29 @@ class Column(Base):
 
     @property
     def nonull_dict(self):
-        """
-        Like dict, but does not hold any null values
+        """Like dict, but does not hold any null values.
+
         :return:
+
         """
         return {k: v for k, v in self.dict.items() if v and k != '_codes'}
 
     @property
     def insertable_dict(self):
-        """Like dict, but properties have the table prefix, so it can be inserted into a row"""
+        """Like dict, but properties have the table prefix, so it can be
+        inserted into a row."""
         x = {('c_' + k).strip('_'): v for k, v in self.dict.items()}
 
         return x
 
     @staticmethod
     def mangle_name(name):
-        """
-        Mangles a column name to a standard form, remoing illegal characters.
+        """Mangles a column name to a standard form, remoing illegal
+        characters.
 
         :param name:
         :return:
+
         """
         import re
         try:
@@ -870,7 +888,11 @@ class Column(Base):
 
     @property
     def fq_name(self):
-        """Fully Qualified Name. A column Name with the column id as a prefix"""
+        """Fully Qualified Name.
+
+        A column Name with the column id as a prefix
+
+        """
         return "{}_{}".format(self.id_, self.name)
 
     @property
@@ -909,8 +931,8 @@ class Column(Base):
 
     @staticmethod
     def before_insert(mapper, conn, target):
-        '''event.listen method for Sqlalchemy to set the seqience_id for this
-        object and create an ObjectNumber value for the id_'''
+        """event.listen method for Sqlalchemy to set the seqience_id for this
+        object and create an ObjectNumber value for the id_"""
 
         if target.sequence_id is None:
             # In case this happens in multi-process mode
@@ -929,8 +951,8 @@ class Column(Base):
 
     @staticmethod
     def before_update(mapper, conn, target):
-        '''Set the column id number based on the table number and the
-        sequence id for the column'''
+        """Set the column id number based on the table number and the sequence
+        id for the column."""
 
         if target.id_ is None:
             table_on = ObjectNumber.parse(target.t_id)
@@ -1103,7 +1125,7 @@ Columns:
         return x
 
     def _repr_html_(self):
-        '''IPython display'''
+        """IPython display."""
 
         t1 = """
         <table>
@@ -1116,7 +1138,7 @@ Columns:
         return t1 + self.html_table()
 
     def html_table(self):
-        ''''''
+        """"""
 
         rows = []
         rows.append(
@@ -1128,8 +1150,12 @@ Columns:
         return "<table>\n" + "\n".join(rows) + "\n</table>"
 
     def vid_select(self):
-        """ Return a SQL fragment to translate the column names to vids. This allows the identity of the column
-        to propagate through views. """
+        """Return a SQL fragment to translate the column names to vids.
+
+        This allows the identity of the column to propagate through
+        views.
+
+        """
 
         cols = []
         raise DeprecationWarning()
@@ -1145,8 +1171,8 @@ Columns:
 
     @staticmethod
     def before_insert(mapper, conn, target):
-        '''event.listen method for Sqlalchemy to set the seqience_id for this
-        object and create an ObjectNumber value for the id_'''
+        """event.listen method for Sqlalchemy to set the seqience_id for this
+        object and create an ObjectNumber value for the id_"""
         if target.sequence_id is None:
             sql = text(
                 '''SELECT max(t_sequence_id)+1 FROM tables WHERE t_d_id = :did''')
@@ -1162,8 +1188,8 @@ Columns:
 
     @staticmethod
     def before_update(mapper, conn, target):
-        '''Set the Table ID based on the dataset number and the sequence number
-        for the table '''
+        """Set the Table ID based on the dataset number and the sequence number
+        for the table."""
         if isinstance(target, Column):
             raise TypeError('Got a column instead of a table')
 
@@ -1192,7 +1218,7 @@ Columns:
         return TableNumber(self.d_id, self.sequence_id)
 
     def add_column(self, name, **kwargs):
-        '''Add a column to the table, or update an existing one '''
+        """Add a column to the table, or update an existing one."""
 
         import sqlalchemy.orm.session
         from dbexceptions import NotFoundError
@@ -1304,8 +1330,8 @@ Columns:
         return None
 
     def get_fixed_regex(self):
-        '''Using the size values for the columns for the table, construct a
-        regular expression to  parsing a fixed width file.'''
+        """Using the size values for the columns for the table, construct a
+        regular expression to  parsing a fixed width file."""
         import re
 
         pos = 0
@@ -1327,8 +1353,8 @@ Columns:
         return header, re.compile(regex), regex
 
     def get_fixed_unpack(self):
-        '''Using the size values for the columns for the table, construct a
-        regular expression to  parsing a fixed width file.'''
+        """Using the size values for the columns for the table, construct a
+        regular expression to  parsing a fixed width file."""
         from functools import partial
         import struct
         unpack_str = ''
@@ -1351,9 +1377,12 @@ Columns:
         return partial(struct.unpack, unpack_str), header, unpack_str, length
 
     def get_fixed_colspec(self):
-        """Return the column specification suitable for use in  the Panads read_fwf function
+        """Return the column specification suitable for use in  the Panads
+        read_fwf function.
 
-        This will ignore any columns that don't have one or both of the start and width values
+        This will ignore any columns that don't have one or both of the
+        start and width values
+
         """
 
         # Warning! Assuming th start values are sorted. Really should check.
@@ -1397,18 +1426,18 @@ Columns:
 
     @property
     def header(self):
-        '''Return an array of column names in the same order as the column definitions, to be used zip with
-        a row when reading a CSV file
+        """Return an array of column names in the same order as the column
+        definitions, to be used zip with a row when reading a CSV file.
 
         >> row = dict(zip(table.header, row))
 
-        '''
+        """
 
         return [c.name for c in self.columns]
 
     def _get_validator(self, and_join=True):
-        '''Return a lambda function that, when given a row to this table,
-        returns true or false to indicate the validitity of the row
+        """Return a lambda function that, when given a row to this table,
+        returns true or false to indicate the validitity of the row.
 
         :param and_join: If true, join multiple column validators with AND, other
         wise, OR
@@ -1416,8 +1445,7 @@ Columns:
 
         :rtype: a `LibraryDb` object
 
-
-        '''
+        """
 
         f = prior = lambda row: True
         first = True
@@ -1459,7 +1487,7 @@ Columns:
         return self._and_validator(values)
 
     def _get_hasher(self):
-        '''Return a  function to generate a hash for the row'''
+        """Return a  function to generate a hash for the row."""
         import hashlib
 
         # Try making the hash set from the columns marked 'hash'
@@ -1488,7 +1516,7 @@ Columns:
         return hasher
 
     def row_hash(self, values):
-        '''Calculate a hash from a database row'''
+        """Calculate a hash from a database row."""
 
         if self._row_hasher is None:
             self._row_hasher = self._get_hasher()
@@ -1497,8 +1525,8 @@ Columns:
 
     @property
     def caster(self):
-        '''Returns a function that takes a row that can be indexed by positions which returns a new
-        row with all of the values cast to schema types. '''
+        """Returns a function that takes a row that can be indexed by positions
+        which returns a new row with all of the values cast to schema types."""
         from ambry.transform import CasterTransformBuilder
 
         bdr = CasterTransformBuilder()
@@ -1657,7 +1685,7 @@ class Partition(Base, LinkableMixin):
 
     @property
     def identity(self):
-        '''Return this partition information as a PartitionId'''
+        """Return this partition information as a PartitionId."""
         from sqlalchemy.orm import object_session
         from identity import PartitionIdentity
 
@@ -1806,12 +1834,12 @@ class Partition(Base, LinkableMixin):
         return self._remove_link('stores', f.ref)
 
     def add_stat(self, c_vid, stats):
-        """
-        Add a statistics records for a column of a table in the partition.
+        """Add a statistics records for a column of a table in the partition.
 
         :param c_vid: The column vid.
         :param stats:  A dict of stats values. See the code for which values are valid.
         :return:
+
         """
 
         from sqlalchemy.orm.session import Session
@@ -1849,8 +1877,8 @@ class Partition(Base, LinkableMixin):
 
     @staticmethod
     def before_insert(mapper, conn, target):
-        '''event.listen method for Sqlalchemy to set the sequence for this
-        object and create an ObjectNumber value for the id_'''
+        """event.listen method for Sqlalchemy to set the sequence for this
+        object and create an ObjectNumber value for the id_"""
         from identity import Identity
 
         if target.sequence_id is None:
@@ -1874,8 +1902,8 @@ class Partition(Base, LinkableMixin):
 
     @staticmethod
     def before_update(mapper, conn, target):
-        '''Set the column id number based on the table number and the
-        sequence id for the column'''
+        """Set the column id number based on the table number and the sequence
+        id for the column."""
         if not target.id_:
             dataset = ObjectNumber.parse(target.d_id)
             target.id_ = str(PartitionNumber(dataset, target.sequence_id))
@@ -1930,7 +1958,7 @@ class File(Base, SavableMixin, LinkableMixin):
         return "<file: {}; {}>".format(self.path, self.state)
 
     def update(self, f):
-        """Copy another files properties into this one. """
+        """Copy another files properties into this one."""
 
         for p in self.__mapper__.attrs:
 
@@ -1974,12 +2002,13 @@ class File(Base, SavableMixin, LinkableMixin):
 
     @property
     def record_dict(self):
-        '''Like dict, but does not move data items into the top level'''
+        """Like dict, but does not move data items into the top level."""
         return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs}
 
     @property
     def insertable_dict(self):
-        """Like record_dict, but prefixes all of the keys with 'f_', so it can be used in inserts """
+        """Like record_dict, but prefixes all of the keys with 'f_', so it can
+        be used in inserts."""
         # .strip('_') is for type_
         return {
             'f_' +
@@ -2035,7 +2064,7 @@ class File(Base, SavableMixin, LinkableMixin):
 
 class Code(Base, SavableMixin, LinkableMixin):
 
-    """Code entries for variables"""
+    """Code entries for variables."""
     __tablename__ = 'codes'
 
     oid = SAColumn('cd_id', Integer, primary_key=True, nullable=False)
@@ -2090,7 +2119,7 @@ class Code(Base, SavableMixin, LinkableMixin):
         return "<code: {}->{} >".format(self.key, self.value)
 
     def update(self, f):
-        """Copy another files properties into this one. """
+        """Copy another files properties into this one."""
 
         for p in self.__mapper__.attrs:
 
@@ -2129,7 +2158,7 @@ class Code(Base, SavableMixin, LinkableMixin):
 
 class SearchDoc(Base):
 
-    """Documents for full text search"""
+    """Documents for full text search."""
     __tablename__ = 'searchdocs'
 
     id = SAColumn('sd_id', Integer, primary_key=True, nullable=False)
@@ -2143,10 +2172,7 @@ lom_enums = "nom ord int ratio".split()
 
 class ColumnStat(Base, SavableMixin, LinkableMixin):
 
-    """
-    Table for per column, per partition stats
-
-    """
+    """Table for per column, per partition stats."""
     __tablename__ = 'colstats'
 
     id = SAColumn('cs_id', Integer, primary_key=True, nullable=False)

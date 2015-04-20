@@ -1,12 +1,16 @@
-"""A Library is a local collection of bundles. It holds a database for the configuration
-of the bundles that have been installed into it.
+"""A Library is a local collection of bundles.
+
+It holds a database for the configuration of the bundles that have been
+installed into it.
+
 """
 
 # Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
 
 import os.path
-from ambry.dbexceptions import ConfigurationError, NotFoundError, DependencyError
+from ambry.dbexceptions import ConfigurationError, NotFoundError
+from ambry.dbexceptions import DependencyError
 
 # Setup a default logger. The logger is re-assigned by the
 # bundle when the bundle instantiates the logger.
@@ -17,7 +21,6 @@ from ..identity import LocationRef, Identity
 from ..util import memoize, get_logger
 import weakref
 from files import Files
-from sqlalchemy import event
 
 libraries = {}
 
@@ -86,13 +89,14 @@ def _new_library(config):
 
 
 def new_library(config=None, reset=False):
-    """Return a new :class:`~ambry.library.Library`, constructed from a configuration
+    """Return a new :class:`~ambry.library.Library`,
+    constructed from a configuration
 
     :param config: a :class:`~ambry.run.RunConfig` object
     :rtype:  :class:`~ambry.library.Library`
 
-    If ``config`` is None, the function will constuct a new :class:`~ambry.run.RunConfig` with a default
-    constructor.
+    If ``config`` is None, the function will constuct a new
+    :class:`~ambry.run.RunConfig` with a default constructor.
 
     """
 
@@ -129,9 +133,7 @@ def clear_libraries():
 
 class Library(object):
 
-    '''
-
-    '''
+    """"""
 
     # Names of exernally configurable values.
     configurable = ('warehouse_url')
@@ -143,7 +145,7 @@ class Library(object):
                  doc_cache=None,
                  warehouse_cache=None,
                  host=None, port=None, urlhost=None):
-        '''Libraries are constructed on the root cache name for the library.
+        """Libraries are constructed on the root cache name for the library.
         If the cache does not exist, it will be created.
 
         Args:
@@ -153,7 +155,7 @@ class Library(object):
         remote: URL of a remote library, for fallback for get and put.
         sync: If true, put to remote synchronously. Defaults to False.
 
-        '''
+        """
 
         assert database is not None
 
@@ -221,7 +223,7 @@ class Library(object):
 
     @property
     def database(self):
-        '''Return ambry.database.Database object'''
+        """Return ambry.database.Database object."""
         return self._database
 
     def commit(self):
@@ -244,7 +246,7 @@ class Library(object):
 
     @property
     def warehouse_url(self):
-        """URL to pass on to warehouses"""
+        """URL to pass on to warehouses."""
         return self._meta_get('warehouse_url')
 
     @warehouse_url.setter
@@ -269,8 +271,12 @@ class Library(object):
             logger=None,
             install_partitions=True,
             commit=True):
-        """Install the records for the dataset, tables, columns and possibly partitions. Does not
-        install file references """
+        """Install the records for the dataset, tables, columns and possibly
+        partitions.
+
+        Does not install file references
+
+        """
         from ..dbexceptions import ConflictError
 
         try:
@@ -305,7 +311,7 @@ class Library(object):
         return self.cache.path(ident.cache_key), installed
 
     def put_partition(self, bundle, partition, commit=True):
-        """Install the record and file reference for the partition """
+        """Install the record and file reference for the partition."""
 
         self.database.install_partition(bundle, partition, commit=commit)
 
@@ -326,8 +332,8 @@ class Library(object):
         return self.cache.path(partition.identity.cache_key), installed
 
     def remove(self, bundle):
-        '''Remove a bundle from the library, and delete the configuration for
-        it from the library database'''
+        """Remove a bundle from the library, and delete the configuration for
+        it from the library database."""
 
         self.database.remove_bundle(bundle)
 
@@ -340,9 +346,13 @@ class Library(object):
     ##
 
     def list(self, datasets=None, with_partitions=False):
-        '''Lists all of the datasets in the partition, optionally with
-        metadata. Does not include partitions. This returns a dictionary
-        in  a form that is similar to the remote and source lists. '''
+        """Lists all of the datasets in the partition, optionally with
+        metadata.
+
+        Does not include partitions. This returns a dictionary in  a
+        form that is similar to the remote and source lists.
+
+        """
 
         if datasets is None:
             datasets = {}
@@ -351,14 +361,13 @@ class Library(object):
 
         return datasets
 
-    def list_bundles(
-            self,
-            last_version_only=True,
-            locations=[
-                LocationRef.LOCATION.LIBRARY],
-            key=None):
+    def list_bundles( self, last_version_only=True,
+            locations=[ LocationRef.LOCATION.LIBRARY],key=None):
         """Like list(), but returns bundles instead of a dict with identities.
-        key is a parameter to sorted(self.list())"""
+
+        key is a parameter to sorted(self.list())
+
+        """
         from ..dbexceptions import NotFoundError
         from ..bundle import LibraryDbBundle
 
@@ -399,8 +408,8 @@ class Library(object):
                         current.identity.data['other_versions'] = set()
                     except NotFoundError:
 
-                        # This happens frequently in warehosues, where only one version of the
-                        # dataset is installed.
+                        # This happens frequently in warehosues, where
+                        # only one version of the dataset is installed.
                         pass
                 else:
 
@@ -421,13 +430,13 @@ class Library(object):
                 b.close()
 
     def path(self, rel_path):
-        """Return the cache path for a cache key"""
+        """Return the cache path for a cache key."""
 
         return self.cache.path(rel_path)
 
     @property
     def remote_stack(self):
-        """Return a MultiCache that has all of the remotes as upstreams"""
+        """Return a MultiCache that has all of the remotes as upstreams."""
 
         from ckcache.multi import MultiCache
 
@@ -480,7 +489,7 @@ class Library(object):
             return self.cache.has(dataset.cache_key)
 
     def get(self, ref, force=False, cb=None, location='default'):
-        '''Get a bundle, given an id string or a name '''
+        """Get a bundle, given an id string or a name."""
         from sqlalchemy.exc import IntegrityError
         from .files import Files
         from ckcache.multi import AltReadCache
@@ -512,9 +521,9 @@ class Library(object):
                 if not partition:
 
                     raise NotFoundError(
-                        'Failed to get partition {} from bundle at {} ' .format(
-                            dataset.partition.fqname,
-                            dataset.cache_key))
+                        'Failed to get partition {} from bundle at {} '
+                                .format(dataset.partition.fqname,
+                                        dataset.cache_key))
 
                 arc = AltReadCache(self.cache, self.remote_stack)
 
@@ -526,22 +535,22 @@ class Library(object):
 
                     if not ref_ident:
                         raise NotFoundError(
-                            "Reference '{}' refers to another partition, '{}', which does not exist" .format(
-                                ref,
-                                partition.ref))
+                            "Reference '{}' refers to another partition, "
+                            "'{}', which does not exist" .format(
+                                ref, partition.ref))
 
                     ref_partition_ident = ref_ident.partition
 
                     if self.cache.has(ref_partition_ident.cache_key):
-                        # The referenced partition already exists, so it should be copied to the
-                        # refferent path
+                        # The referenced partition already exists, so it
+                        # should be copied to the refferent path
                         delete = False
 
                     else:
-                        # The referenced partition does not exist, so it should be moved to the
-                        # refferent path
-                        # BUT, moving is not really supported by the caches, so we will copy then
-                        # delete.
+                        # The referenced partition does not exist, so it
+                        # should be moved to the refferent path. BUT, moving
+                        # is not really supported by the caches, so we will
+                        # copy then delete.
 
                         delete = True
 
@@ -588,7 +597,7 @@ class Library(object):
 
     @property
     def tables(self):
-        """Return ORM records for all tables"""
+        """Return ORM records for all tables."""
 
         from ..orm import Table
 
@@ -596,7 +605,7 @@ class Library(object):
 
     @property
     def tables_no_columns(self):
-        """Return ORM records for all tables"""
+        """Return ORM records for all tables."""
         from sqlalchemy.orm import lazyload
         from ..orm import Table
 
@@ -627,7 +636,7 @@ class Library(object):
                         self.database.dsn))
 
     def derived_tables(self, proto_vid):
-        """Tables with the given proto_vid"""
+        """Tables with the given proto_vid."""
 
         from ..orm import Table
         from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
@@ -673,13 +682,14 @@ class Library(object):
         return (self.database.session.query(Dataset).all())
 
     def versioned_datasets(self):
-        """Like datasets(), but returns a dict structure, and only the most recent version, with other versions
-        under the 'other_version' key """
+        """Like datasets(), but returns a dict structure, and only the most
+        recent version, with other versions under the 'other_version' key."""
         from ..orm import Dataset
 
         datasets = {}
 
-        for ds in (self.database.session.query(Dataset).order_by(Dataset.revision.desc()).all()):
+        for ds in (self.database.session.query(Dataset)
+                           .order_by(Dataset.revision.desc()).all()):
 
             if ds.id_ not in datasets:
                 datasets[ds.id_] = ds.dict
@@ -691,7 +701,7 @@ class Library(object):
         return datasets
 
     def bundle(self, vid):
-        """Returns a LibraryDbBundle for the given vid"""
+        """Returns a LibraryDbBundle for the given vid."""
         from ..bundle import LibraryDbBundle
 
         b = LibraryDbBundle(self.database, vid)
@@ -721,7 +731,7 @@ class Library(object):
                     "No partition in library for vid : {} ".format(vid))
 
     def dataset_partitions(self, vid):
-        """Return all partition records for a dataset vid"""
+        """Return all partition records for a dataset vid."""
         from ..orm import Partition
 
         return (
@@ -736,7 +746,7 @@ class Library(object):
 
     @property
     def stores(self):
-        """Return all of the refistered data stores. """
+        """Return all of the refistered data stores."""
 
         return self.files.query.group(self.files.TYPE.STORE).all
 
@@ -784,7 +794,7 @@ class Library(object):
 
     @property
     def manifests(self):
-        """Return all of the registered manifests. """
+        """Return all of the registered manifests."""
         from ..warehouse.manifest import Manifest
 
         # Construct manifest with Manifest(f.content, logger=self.logger)
@@ -867,7 +877,8 @@ class Library(object):
         return ident
 
     def locate(self, ref):
-        """Return list of files for a reference, indicating where a file for a partition or dataset is located"""
+        """Return list of files for a reference, indicating where a file for a
+        partition or dataset is located."""
 
         if isinstance(ref, Identity):
             ident = ref
@@ -887,7 +898,8 @@ class Library(object):
         return ident, None
 
     def locate_one(self, ref):
-        """Like locate, but return only the highest priority result, or None if non exists"""
+        """Like locate, but return only the highest priority result,
+        or None if non exists."""
 
         f = self.locate(ref)
 
@@ -901,8 +913,8 @@ class Library(object):
     ##
 
     def dep(self, name):
-        """"Bundle version of get(), which uses a key in the
-        bundles configuration group 'dependencies' to resolve to a name"""
+        """"Bundle version of get(), which uses a key in the bundles
+        configuration group 'dependencies' to resolve to a name."""
         from ..dbexceptions import DependencyError
 
         from sqlalchemy.orm.exc import NoResultFound
@@ -943,7 +955,8 @@ class Library(object):
 
         if not self._bundle:
             raise ConfigurationError(
-                "Can't use the dep() method for a library that is not attached to a bundle")
+                "Can't use the dep() method for a library that is not "
+                "attached to a bundle")
 
         errors = 0
 
@@ -980,7 +993,8 @@ class Library(object):
                 if not b:
                     if throw:
                         raise NotFoundError(
-                            "Dependency check failed for key={}, id={}. Failed to get bundle or partition".format(
+                            "Dependency check failed for key={}, id={}. "
+                            "Failed to get bundle or partition".format(
                                 k,
                                 v))
                     else:
@@ -994,7 +1008,8 @@ class Library(object):
                 if not dataset:
                     if throw:
                         raise NotFoundError(
-                            "Dependency check failed for key={}, id={}. Failed to get bundle or partition".format(
+                            "Dependency check failed for key={}, id={}. "
+                            "Failed to get bundle or partition".format(
                                 k,
                                 v))
                     else:
@@ -1010,7 +1025,8 @@ class Library(object):
 
     @property
     def source(self):
-        '''Return a SourceTree object, based on the source_repo configuration'''
+        """Return a SourceTree object, based on the source_repo
+        configuration."""
         from ..source import SourceTree
 
         if not self.source_dir:
@@ -1020,8 +1036,8 @@ class Library(object):
 
     @property
     def new_files(self):
-        '''Generator that returns files that should be pushed to the remote
-        library'''
+        """Generator that returns files that should be pushed to the remote
+        library."""
 
         new_files = self.files.query.installed.state('new').all
 
@@ -1029,10 +1045,11 @@ class Library(object):
             yield nf
 
     def push(self, ref=None, cb=None, upstream=None):
-        """Push any files marked 'new' to the upstream
+        """Push any files marked 'new' to the upstream.
 
         Args:
-            file_: If set, push a single file, obtailed from new_files. If not, push all files.
+            file_: If set, push a single file, obtailed from new_files.
+            If not, push all files.
 
         """
         import time
@@ -1110,8 +1127,8 @@ class Library(object):
         self.database.clean(add_config_root=add_config_root)
 
     def purge(self):
-        """Remove all records from the library database, then delete all
-        files from the cache"""
+        """Remove all records from the library database, then delete all files
+        from the cache."""
         self.clean()
         self.cache.clean()
 
@@ -1120,13 +1137,14 @@ class Library(object):
     #
 
     def mark_updated(self, o=None, vid=None):
-        """Mark an object as recently updated, for instance to clear the doc_cache"""
+        """Mark an object as recently updated, for instance to clear the
+        doc_cache."""
 
         self.doc_cache.remove(vid)
 
     def sync_library(self, clean=False):
-        '''Rebuild the database from the bundles that are already installed
-        in the repository cache'''
+        """Rebuild the database from the bundles that are already installed in
+        the repository cache."""
 
         from ..orm import Dataset
         from .files import Files
@@ -1141,11 +1159,13 @@ class Library(object):
 
         bundles = []
 
-        self.logger.info("Rebuilding from dir {}".format(self.cache.cache_dir))
+        self.logger.info("Rebuilding from dir {}"
+                         .format(self.cache.cache_dir))
 
         for r, d, f in os.walk(self.cache.cache_dir, topdown=True):
 
-            # Exclude all of the directories which have the same basename as a database file. These
+            # Exclude all of the directories which have the same basename
+            # as a database file. These
             # hold only partitions.
             d[:] = [dr for dr in d if dr + ".db" not in f]
 
@@ -1181,7 +1201,9 @@ class Library(object):
 
                         # The path check above is wrong sometime when there are
                         # symlinks
-                        if self.files.query.type(Files.TYPE.BUNDLE).ref(bident.vid).one_maybe and self.get(bident.vid):
+                        if ( self.files.query.type(Files.TYPE.BUNDLE)
+                                     .ref(bident.vid).one_maybe
+                             and self.get(bident.vid)):
                             continue
 
                         if b.identity.is_bundle:
@@ -1268,7 +1290,8 @@ class Library(object):
             clean=False,
             last_only=True,
             vids=None):
-        """Sync the local library with all of the remotes, create static JSON, and  build the full-text search index"""
+        """Sync the local library with all of the remotes, create static
+        JSON, and  build the full-text search index"""
         from ..orm import Dataset
         from sqlalchemy.exc import IntegrityError
         from ..dbexceptions import NotABundle
@@ -1318,12 +1341,13 @@ class Library(object):
                     continue
 
                 if use_only and cache_key not in use_only:
-                    self.logger.info("Skip old version: ({}".format(cache_key))
+                    self.logger.info("Skip old version: ({}"
+                                     .format(cache_key))
                     continue
 
                 if self.cache.has(cache_key):  # This is just for reporting.
-                    self.logger.info("Remote {} has: {}".format(remote.repo_id,
-                                                                cache_key))
+                    self.logger.info("Remote {} has: {}"
+                                     .format(remote.repo_id, cache_key))
                 else:
                     self.logger.info(
                         "Remote {} sync: {}".format(
@@ -1348,7 +1372,8 @@ class Library(object):
 
                 except NotABundle:
                     self.logger.error(
-                        "Cache key {} exists, but isn't a valid bundle".format(cache_key))
+                        "Cache key {} exists, but isn't a valid bundle"
+                        .format(cache_key))
                     b.close()
                     continue
                 except Exception as e:
@@ -1374,7 +1399,8 @@ class Library(object):
                     if installed:
                         self.database.install_partition(b, p, commit='collect')
 
-                    if self.files.install_remote_partition(p.identity, remote, {}, commit='collect'):
+                    if ( self.files.install_remote_partition(
+                            p.identity, remote, {}, commit='collect')):
                         self.logger.info("    + {}".format(p.identity.name))
                     else:
                         self.logger.info("    = {}".format(p.identity.name))
@@ -1396,8 +1422,8 @@ class Library(object):
             self.search.commit()
 
     def sync_source(self, clean=False):
-        '''Rebuild the database from the bundles that are already installed
-        in the repository cache'''
+        """Rebuild the database from the bundles that are already
+        installed in the repository cache."""
 
         if clean:
             self.files.query.type(Dataset.LOCATION.SOURCE).delete()
@@ -1440,7 +1466,8 @@ class Library(object):
             pass
 
     def sync_warehouse(self, w):
-        """Create a reference to the warehouse and link all of the partitions to it. """
+        """Create a reference to the warehouse and link all of the partitions
+        to it."""
 
         from ambry.util.packages import qualified_name
 
@@ -1474,10 +1501,13 @@ class Library(object):
             # this.
 
             local_manifest = self.files.new_file(
-                commit=True, merge=True, extant=self.files.query.ref(
-                    remote_manifest.ref).group(
-                    self.files.TYPE.MANIFEST).one_maybe, **{
-                    k: v for k, v in remote_manifest.record_dict.items() if k not in ('oid')})
+                commit=True, merge=True,
+                extant=self.files.query.ref(remote_manifest.ref).group(
+                    self.files.TYPE.MANIFEST).one_maybe,
+                **{
+                    k: v for k, v in remote_manifest.record_dict.items()
+                            if k not in ('oid')
+                })
 
             for p in remote_manifest.linked_partitions:
                 p = self.partition(p.vid)
@@ -1489,8 +1519,8 @@ class Library(object):
 
             local_manifest.link_store(store)
 
-            # This is the cheaper way to copy links, but it only works when the links
-            # are one-directional.
+            # This is the cheaper way to copy links, but it only works
+            # when the links are one-directional.
             local_manifest.data[
                 'tables'] = remote_manifest.data.get('tables', [])
 
@@ -1512,7 +1542,7 @@ class Library(object):
 
     @property
     def doc_cache(self):
-        """Return the documentation cache. """
+        """Return the documentation cache."""
         from ambry.library.doccache import DocCache
 
         try:
@@ -1523,7 +1553,7 @@ class Library(object):
 
     @property
     def warehouse_cache(self):
-        """Cache for warehouse Sqlite databases and extracts"""
+        """Cache for warehouse Sqlite databases and extracts."""
 
         return self._warehouse_cache
 
@@ -1578,7 +1608,8 @@ Remotes:  {remotes}
         """.format(name=self.name,
                    database=self.database.dsn,
                    cache=self.cache,
-                   remotes='\n          '.join([str(x) for x in self.remotes]) if self.remotes else '')
+                   remotes='\n          '.join([str(x) for x in self.remotes])
+                                                if self.remotes else '')
 
     @property
     def dict(self):
@@ -1586,13 +1617,15 @@ Remotes:  {remotes}
         return dict(name=str(self.name),
                     database=str(self.database.dsn),
                     cache=str(self.cache),
-                    remotes=[str(r) for r in self.remotes] if self.remotes else [],
+                    remotes=[str(r) for r in self.remotes]
+                             if self.remotes else [],
                     manifests={f.data['uid']: dict(
                         title=f.data['title'],
                         partitions=[p.vid for p in f.linked_partitions],
                         tables=[t.vid for t in f.linked_tables],
                         summary=f.data['summary']['summary_text'],
-                        stores=[s.ref for s in f.linked_stores]) for f in self.manifests},
+                        stores=[s.ref for s in f.linked_stores])
+                                for f in self.manifests},
                     stores={f.ref: dict(
                         title=f.data['title'],
                         summary=f.data['summary'] if f.data['summary'] else '',
@@ -1601,7 +1634,8 @@ Remotes:  {remotes}
                         cache=f.data['cache'],
                         class_type=f.type_) for f in self.stores},
                     # This is the slow one, with about half in setting 'about'.
-                    bundles={b.identity.vid: b.summary_dict for b in self.list_bundles()}
+                    bundles={b.identity.vid: b.summary_dict
+                             for b in self.list_bundles()}
                     )
 
     @property
@@ -1613,7 +1647,8 @@ Remotes:  {remotes}
 
     @property
     def schema_dict(self):
-        """Represent the entire schema as a dict, suitable for conversion to json"""
+        """Represent the entire schema as a dict, suitable for conversion to
+        json."""
         s = {}
 
         for t in self.tables:

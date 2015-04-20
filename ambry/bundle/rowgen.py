@@ -1,10 +1,10 @@
-"""
+"""The RowGenerator reads a file and yields rows, handling simple headers in
+CSV files, and complex headers with receeding comments in Excel files.
 
-The RowGenerator reads a file and yields rows, handling simple headers in CSV files, and complex
-headers with receeding comments in Excel files.
+Copyright (c) 2015 Civic Knowledge. This file is licensed under the
+terms of the Revised BSD License, included in this distribution as
+LICENSE.txt
 
-Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 
@@ -36,9 +36,7 @@ class RowGenerator(object):
             header_comment_lines=None,
             prefix_headers=None,
             header_mangler=None):
-        """
-
-        """
+        """"""
 
         self.file_name = file
 
@@ -86,8 +84,8 @@ class RowGenerator(object):
 
     @property
     def raw_row_gen(self):
-        """Generate all rows from the underlying source, with no consideration for wether the row is data, header
-        or comment """
+        """Generate all rows from the underlying source, with no consideration
+        for wether the row is data, header or comment."""
         if self._raw_row_gen is None:
             self._raw_row_gen = self._yield_rows()
             self.line_number = 0
@@ -99,8 +97,11 @@ class RowGenerator(object):
         self.line_number = 0
 
     def get_header(self):
-        """Open the file and read the rows for the header and header comments. It leaves the iterator
-        positioned on the first data row. """
+        """Open the file and read the rows for the header and header comments.
+
+        It leaves the iterator positioned on the first data row.
+
+        """
 
         if self.header:
             return self.header
@@ -194,11 +195,15 @@ class RowGenerator(object):
         return self.footer
 
     def decode(self, v):
-        """Decode a string into unicode"""
+        """Decode a string into unicode."""
         return v
 
     def __iter__(self):
-        """Generate rows for a source file. The source value must be specified in the sources config"""
+        """Generate rows for a source file.
+
+        The source value must be specified in the sources config
+
+        """
 
         self.get_header()
 
@@ -307,7 +312,7 @@ class ExcelRowGenerator(RowGenerator):
             yield self.srow_to_list(i, s)
 
     def srow_to_list(self, row_num, s):
-        """Convert a sheet row to a list"""
+        """Convert a sheet row to a list."""
 
         values = []
 
@@ -339,7 +344,7 @@ class RowSpecIntuiter(object):
         self.header_comments = []
 
     def is_data_line(self, i, row):
-        """Return true if a line is a data row"""
+        """Return true if a line is a data row."""
         return i >= 1
 
     def is_header_line(self, i, row):
@@ -347,16 +352,18 @@ class RowSpecIntuiter(object):
         return i == 0
 
     def is_header_comment_line(self, i, row):
-        """Return true if a line is a header comment"""
+        """Return true if a line is a header comment."""
         return False
 
     def intuit(self):
-        """Classify the rows of an excel file as header, comment and start of data
+        """Classify the rows of an excel file as header, comment and start of
+        data.
 
         Relies on definitions of methods of:
             is_data_line(i,row)
             is_header_line(i,row)
             is_header_comment_line(i,row)
+
         """
 
         self.row_gen.reset()

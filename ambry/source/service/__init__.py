@@ -1,8 +1,10 @@
-"""A Source service is a specific source code control service, like BitBiucket, GitHub, etc
-There is a special object for these because they have different interfaces for creating origin repositories
+"""A Source service is a specific source code control service, like BitBiucket,
+GitHub, etc There is a special object for these because they have different
+interfaces for creating origin repositories.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 
@@ -24,11 +26,11 @@ class ServiceException(Exception):
 class ServiceInterface(object):
 
     def create_repository(self):
-        '''Create a new upstream repository'''
+        """Create a new upstream repository."""
         raise NotImplemented()
 
     def ident(self):
-        '''Return an identifier for this service'''
+        """Return an identifier for this service."""
 
 
 class GitServiceMarker(object):

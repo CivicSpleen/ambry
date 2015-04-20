@@ -1,8 +1,8 @@
-'''
-Created on Sep 26, 2013
+"""Created on Sep 26, 2013.
 
 @author: eric
-'''
+
+"""
 
 from . import ServiceInterface, GitServiceMarker  # @UnresolvedImport
 
@@ -27,7 +27,7 @@ class GitHubService(ServiceInterface, GitServiceMarker):
         self.auth = (self.user, self.password)
 
     def get(self, url):
-        '''Constructs a request, using auth is the user is set '''
+        """Constructs a request, using auth is the user is set."""
         import requests
         import json
 
@@ -52,7 +52,7 @@ class GitHubService(ServiceInterface, GitServiceMarker):
             return True
 
     def create(self, name):
-        '''Create a new upstream repository'''
+        """Create a new upstream repository."""
         import requests
         import json
 
@@ -65,7 +65,7 @@ class GitHubService(ServiceInterface, GitServiceMarker):
             return r.json()
 
     def delete(self, name):
-        '''Delete the upstream repository'''
+        """Delete the upstream repository."""
         import requests
         import json
 
@@ -125,7 +125,7 @@ class GitHubService(ServiceInterface, GitServiceMarker):
 
     @property
     def ident(self):
-        '''Return an identifier for this service'''
+        """Return an identifier for this service."""
         from urlparse import urlparse, urlunparse
         parts = list(urlparse(self.ident_url)[:])  # convert to normal tuple
 

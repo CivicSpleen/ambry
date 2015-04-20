@@ -1,8 +1,9 @@
-"""Main script for the databaundles package, providing support for creating
-new bundles
+"""Main script for the databaundles package, providing support for creating new
+bundles.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 from __future__ import print_function
 import os.path
@@ -157,7 +158,7 @@ def _print_bundle_list(
         fields=[],
         show_partitions=False,
         sort=True):
-    '''Create a nice display of a list of source packages'''
+    """Create a nice display of a list of source packages."""
     from collections import defaultdict
 
     if sort:

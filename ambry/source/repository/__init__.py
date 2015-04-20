@@ -1,7 +1,8 @@
-"""Source repositories
+"""Source repositories.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 
@@ -33,14 +34,14 @@ class RepositoryException(Exception):
 class RepositoryInterface(object):
 
     def ident(self):
-        '''Return an identifier for this service'''
+        """Return an identifier for this service."""
 
     def initialize(self):
-        '''Initialize the repository, both load and the upstream'''
+        """Initialize the repository, both load and the upstream."""
         raise NotImplemented()
 
     def is_initialized(self):
-        '''Return true if this repository has already been initialized'''
+        """Return true if this repository has already been initialized."""
 
     def create_upstream(self):
         raise NotImplemented()
@@ -52,19 +53,19 @@ class RepositoryInterface(object):
         raise NotImplemented()
 
     def clone(self, library, name):
-        '''Locate the source for the named bundle from the library and retrieve the
-        source '''
+        """Locate the source for the named bundle from the library and retrieve
+        the source."""
         raise NotImplemented()
 
     def push(self):
-        '''Push any changes to the repository to the origin server'''
+        """Push any changes to the repository to the origin server."""
         raise NotImplemented()
 
     def register(self, library):
-        '''Register the source location with the library, and the library
-        upstream'''
+        """Register the source location with the library, and the library
+        upstream."""
         raise NotImplemented()
 
     def ignore(self, path):
-        '''Ignore a file'''
+        """Ignore a file."""
         raise NotImplemented()

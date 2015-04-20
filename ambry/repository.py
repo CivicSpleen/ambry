@@ -1,20 +1,24 @@
-"""Interface to the CKAN data repository, for uploading bundle records and data extracts.
+"""Interface to the CKAN data repository, for uploading bundle records and data
+extracts.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 from ambry.dbexceptions import ConfigurationError
 
 
 class Repository(object):
 
-    '''Interface to the CKAN data repository, for uploading bundle records and
-    data extracts. classdocs
-    '''
+    """Interface to the CKAN data repository, for uploading bundle records and
+    data extracts.
+
+    classdocs
+
+    """
 
     def __init__(self, bundle, repo_name='default'):
-        '''Create a new repository interface
-        '''
+        """Create a new repository interface."""
 
         self.bundle = bundle
         self.extracts = self.bundle.config.group('extracts')
@@ -56,7 +60,7 @@ class Repository(object):
         return self.remote
 
     def _validate_for_expr(self, astr, debug=False):
-        """Check that an expression is save to evaluate"""
+        """Check that an expression is save to evaluate."""
         import ast
         try:
             tree = ast.parse(astr)
@@ -123,7 +127,7 @@ class Repository(object):
         return file_
 
     def _do_function_extract(self, extract_data):
-        '''Run a function on the build that produces a file to upload'''
+        """Run a function on the build that produces a file to upload."""
 
         f_name = extract_data['function']
 
@@ -134,7 +138,7 @@ class Repository(object):
         return file_
 
     def _do_copy_file(self, extract_data):
-        '''Run a function on the build that produces a file to upload'''
+        """Run a function on the build that produces a file to upload."""
         import pkgutil
 
         f_name = extract_data['file']
@@ -171,7 +175,7 @@ class Repository(object):
             return self.bundle.filesystem.path(f_name)
 
     def _do_query_extract(self, extract_data):
-        """Extract a CSV file and  upload it to CKAN"""
+        """Extract a CSV file and  upload it to CKAN."""
         import tempfile
         import uuid
         import os
@@ -304,8 +308,8 @@ class Repository(object):
         return r
 
     def _make_partition_dict(self, p):
-        '''Return a dict that includes the fields from the extract expanded for
-        the values of each and the partition'''
+        """Return a dict that includes the fields from the extract expanded for
+        the values of each and the partition."""
 
         qd = {
             'p_id': p.identity.id_,
@@ -333,8 +337,8 @@ class Repository(object):
         return qd
 
     def _expand_each(self, each):
-        '''Generate a set of dicts from the cross product of each of the
-        arrays of 'each' group'''
+        """Generate a set of dicts from the cross product of each of the arrays
+        of 'each' group."""
 
         # Normalize the each group, particular for the case where there is only
         # one dimension
@@ -367,7 +371,7 @@ class Repository(object):
         return out
 
     def _expand_partitions(self, partition_name='any', for_=None):
-        '''Generate a list of partitions to apply the extract process to. '''
+        """Generate a list of partitions to apply the extract process to."""
 
         if partition_name == 'bundle':
             partitions = [self.bundle]
@@ -439,7 +443,7 @@ class Repository(object):
 
     def dep_tree(self, root):
         """Return the tree of dependencies rooted in the given node name,
-        excluding all other nodes"""
+        excluding all other nodes."""
 
         graph = {}
         for key, extract in self.extracts.items():
@@ -456,7 +460,7 @@ class Repository(object):
 
     def generate_extracts(self, root=None):
         """Generate dicts that have the data for an extract, along with the
-        partition, query, title and description
+        partition, query, title and description.
 
         :param root: The name of an extract group to use as the root of
         the dependency tree
@@ -466,7 +470,7 @@ class Repository(object):
         and the only extracts performed will be the named extracts and any of its
         dependencies.
 
-         """
+        """
         from ambry.util import toposort
 
         ext_config = self.extracts
@@ -582,7 +586,7 @@ class Repository(object):
 
     def submit(self, root=None, force=False, repo=None):
         """Create a dataset for the bundle, then add a resource for each of the
-        extracts listed in the bundle.yaml file"""
+        extracts listed in the bundle.yaml file."""
 
         if repo:
             self.repo_name = repo

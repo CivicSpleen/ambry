@@ -1,8 +1,9 @@
 """Access objects for the file system within a bundle and for filesystem caches
 used by the download processes and the library.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 import os
@@ -47,7 +48,7 @@ class DownloadFailedError(Exception):
 
 class FileRef(File):
 
-    '''Extends the File orm class with awareness of the filsystem'''
+    """Extends the File orm class with awareness of the filsystem."""
 
     def __init__(self, bundle):
 
@@ -89,7 +90,7 @@ class Filesystem(object):
 
     @classmethod
     def find_f(cls, config, key, value):
-        '''Find a filesystem entry where the key `key` equals `value`'''
+        """Find a filesystem entry where the key `key` equals `value`"""
 
     @classmethod
     def rm_rf(cls, d):
@@ -122,7 +123,7 @@ class BundleFilesystem(Filesystem):
 
     @staticmethod
     def find_root_dir(testFile='bundle.yaml', start_dir=None):
-        '''Find the parent directory that contains the bundle.yaml file '''
+        """Find the parent directory that contains the bundle.yaml file."""
         import sys
 
         if start_dir is not None:
@@ -142,7 +143,7 @@ class BundleFilesystem(Filesystem):
 
     @property
     def root_dir(self):
-        '''Returns the root directory of the bundle '''
+        """Returns the root directory of the bundle."""
         return self.root_directory
 
     def ref(self, rel_path):
@@ -159,8 +160,8 @@ class BundleFilesystem(Filesystem):
             raise e
 
     def path(self, *args):
-        '''Resolve a path that is relative to the bundle root into an
-        absoulte path'''
+        """Resolve a path that is relative to the bundle root into an absoulte
+        path."""
 
         if len(args) == 0:
             raise ValueError("must supply at least one argument")
@@ -187,7 +188,7 @@ class BundleFilesystem(Filesystem):
         return p
 
     def build_path(self, *args):
-        """Return a sub directory in the build area"""
+        """Return a sub directory in the build area."""
         if len(args) > 0 and args[0] == self.BUILD_DIR:
             raise ValueError(
                 "Adding build to existing build path " +
@@ -200,8 +201,9 @@ class BundleFilesystem(Filesystem):
 
     @property
     def source_store(self):
-        """Return the cache object for the store store, a location ( usually on the net ) where source
-        files that can't be downloaded from the source agency can be stored. """
+        """Return the cache object for the store store, a location ( usually on
+        the net ) where source files that can't be downloaded from the source
+        agency can be stored."""
 
         return self.get_cache_by_name('source_store')
 
@@ -222,8 +224,8 @@ class BundleFilesystem(Filesystem):
         return self.path(*args)
 
     def directory(self, rel_path):
-        '''Resolve a path that is relative to the bundle root into
-        an absoulte path'''
+        """Resolve a path that is relative to the bundle root into an absoulte
+        path."""
         abs_path = self.path(rel_path)
         if(not os.path.isdir(abs_path)):
             os.makedirs(abs_path)
@@ -231,7 +233,7 @@ class BundleFilesystem(Filesystem):
 
     @staticmethod
     def file_hash(path):
-        '''Compute hash of a file in chunks'''
+        """Compute hash of a file in chunks."""
         import hashlib
         md5 = hashlib.md5()
         with open(path, 'rb') as f:
@@ -240,8 +242,8 @@ class BundleFilesystem(Filesystem):
         return md5.hexdigest()
 
     def _get_unzip_file(self, cache, tmpdir, zf, path, name):
-        '''Look for a member of a zip file in the cache, and if it doesn't next exist,
-        extract and cache it. '''
+        """Look for a member of a zip file in the cache, and if it doesn't next
+        exist, extract and cache it."""
         name = name.replace('..', '')
 
         if name.startswith('/'):
@@ -296,8 +298,8 @@ class BundleFilesystem(Filesystem):
         return abs_path
 
     def unzip(self, path, regex=None):
-        '''Context manager to extract a single file from a zip archive, and delete
-        it when finished'''
+        """Context manager to extract a single file from a zip archive, and
+        delete it when finished."""
         import tempfile
         import uuid
 
@@ -347,9 +349,13 @@ class BundleFilesystem(Filesystem):
         return None
 
     def unzip_dir(self, path, regex=None):
-        '''Generator that yields the files from a zip file.
-        Yield all the files in the zip, unless a regex is specified, in which case it yields only
-        files with names that match the pattern.'''
+        """Generator that yields the files from a zip file.
+
+        Yield all the files in the zip, unless a regex is specified, in
+        which case it yields only files with names that match the
+        pattern.
+
+        """
         import tempfile
         import uuid
 
@@ -393,15 +399,16 @@ class BundleFilesystem(Filesystem):
             self.rm_rf(tmpdir)
 
     def download(self, url, test_f=None, unzip=False):
-        '''Context manager to download a file, return it for us,
-        and delete it when done.
+        """Context manager to download a file, return it for us, and delete it
+        when done.
 
         url may also be a key for the sources metadata
 
 
         Will store the downloaded file into the cache defined
         by filesystem.download
-        '''
+
+        """
 
         import tempfile
         import urlparse
@@ -584,7 +591,7 @@ class BundleFilesystem(Filesystem):
             return out_file
 
     def read_csv(self, f, key=None):
-        """Read a CSV into a dictionary of dicts or list of dicts
+        """Read a CSV into a dictionary of dicts or list of dicts.
 
         Args:
             f a string or file object ( a FLO with read() )
@@ -644,7 +651,7 @@ class BundleFilesystem(Filesystem):
         return out
 
     def download_shapefile(self, url):
-        """Downloads a shapefile, unzips it, and returns the .shp file path"""
+        """Downloads a shapefile, unzips it, and returns the .shp file path."""
         import os
         import re
 
@@ -704,7 +711,7 @@ class BundleFilesystem(Filesystem):
                 encoding='utf-8')
 
     def get_url(self, source_url, create=False):
-        '''Return a database record for a file'''
+        """Return a database record for a file."""
 
         import sqlalchemy.orm.exc
 
@@ -734,7 +741,7 @@ class BundleFilesystem(Filesystem):
         return self.filerec(rel_path, True)
 
     def filerec(self, rel_path, create=False):
-        '''Return a database record for a file'''
+        """Return a database record for a file."""
 
         import sqlalchemy.orm.exc
 
@@ -780,17 +787,17 @@ SEEK_END = getattr(io, 'SEEK_END', 2)
 
 class FileChunkIO(io.FileIO):
 
-    """
-    A class that allows you reading only a chunk of a file.
-    """
+    """A class that allows you reading only a chunk of a file."""
 
     def __init__(self, name, mode='r', closefd=True, offset=0, bytes_=None,
                  *args, **kwargs):
-        """
-        Open a file chunk. The mode can only be 'r' for reading. Offset
-        is the amount of bytes_ that the chunks starts after the real file's
-        first byte. Bytes defines the amount of bytes_ the chunk has, which you
-        can set to None to include the last byte of the real file.
+        """Open a file chunk.
+
+        The mode can only be 'r' for reading. Offset is the amount of
+        bytes_ that the chunks starts after the real file's first byte.
+        Bytes defines the amount of bytes_ the chunk has, which you can
+        set to None to include the last byte of the real file.
+
         """
         if not mode.startswith('r'):
             raise ValueError("Mode string must begin with 'r'")
@@ -802,9 +809,7 @@ class FileChunkIO(io.FileIO):
         self.seek(0)
 
     def seek(self, offset, whence=SEEK_SET):
-        """
-        Move to a new chunk position.
-        """
+        """Move to a new chunk position."""
         if whence == SEEK_SET:
             super(FileChunkIO, self).seek(self.offset + offset)
         elif whence == SEEK_CUR:
@@ -813,15 +818,11 @@ class FileChunkIO(io.FileIO):
             self.seek(self.bytes + offset)
 
     def tell(self):
-        """
-        Current file position.
-        """
+        """Current file position."""
         return super(FileChunkIO, self).tell() - self.offset
 
     def read(self, n=-1):
-        """
-        Read and return at most n bytes.
-        """
+        """Read and return at most n bytes."""
         if n >= 0:
             max_n = self.bytes - self.tell()
             n = min([n, max_n])
@@ -830,15 +831,11 @@ class FileChunkIO(io.FileIO):
             return self.readall()
 
     def readall(self):
-        """
-        Read all data from the chunk.
-        """
+        """Read all data from the chunk."""
         return self.read(self.bytes - self.tell())
 
     def readinto(self, b):
-        """
-        Same as RawIOBase.readinto().
-        """
+        """Same as RawIOBase.readinto()."""
         data = self.read(len(b))
         n = len(data)
         try:

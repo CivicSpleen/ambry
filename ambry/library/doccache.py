@@ -1,5 +1,4 @@
-"""
-"""
+""""""
 
 # Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
@@ -84,8 +83,12 @@ class DocCache(object):
         return key, args, kwargs
 
     def cache(self, f, *args, **kwargs):
-        """Cache the return value of a method. Normally, we'd use @memoize, but
-        we want this to run in the context of the object. """
+        """Cache the return value of a method.
+
+        Normally, we'd use @memoize, but
+        we want this to run in the context of the object.
+
+        """
         import time
 
         start = time.time()
@@ -128,7 +131,7 @@ class DocCache(object):
             del self._cache[key]
 
     def compiled_times(self):
-        """Compile all of the time entries from cache calls to one per key"""
+        """Compile all of the time entries from cache calls to one per key."""
         from collections import defaultdict
 
         times = defaultdict(Times)
@@ -213,7 +216,7 @@ class DocCache(object):
         self.cache(f, vid)
 
     def table_version_map(self):
-        """Map unversioned table ids to vids. """
+        """Map unversioned table ids to vids."""
 
         def f():
             tm = {}
@@ -237,8 +240,12 @@ class DocCache(object):
         return self.path(self.templates['manifest'], uid=self.resolve_vid(uid))
 
     def put_manifest(self, m, f):
-        """WARNING! This method must be run after all of the bundles are already cached, or at least
-        the bundles used in this manifest"""
+        """WARNING!
+
+        This method must be run after all of the bundles are already
+        cached, or at least the bundles used in this manifest
+
+        """
 
         from ambry.identity import ObjectNumber
 

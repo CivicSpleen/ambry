@@ -1,7 +1,8 @@
 """Runtime configuration logic for running a bundle build.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 import os.path
@@ -17,7 +18,7 @@ def get_runconfig(path=None):
 
 class RunConfig(object):
 
-    '''Runtime configuration object
+    """Runtime configuration object.
 
     The RunConfig object will search for a ambry.yaml file in multiple locations,
     including::
@@ -30,7 +31,8 @@ class RunConfig(object):
     It will start from the first directory, and for each one, try to load the file
     and copy the values into an accumulator, with later values overwritting
     earlier ones.
-    '''
+
+    """
 
     # Name of the evironmental var for the config file.
     AMBRY_CONFIG_ENV_VAR = 'AMBRY_CONFIG'
@@ -50,13 +52,13 @@ class RunConfig(object):
     files = None
 
     def __init__(self, path=None):
-        '''Create a new RunConfig object
+        """Create a new RunConfig object.
 
         Arguments
         path -- If present, a yaml file to load last, overwriting earlier values.
           If it is an array, load only the files in the array.
 
-        '''
+        """
 
         config = AttrDict()
         config['loaded'] = []
@@ -113,7 +115,7 @@ class RunConfig(object):
         return self.config.get(k, default)
 
     def group(self, name):
-        '''return a dict for a group of configuration items.'''
+        """return a dict for a group of configuration items."""
 
         if not name in self.config:
             raise ConfigurationError(
@@ -143,8 +145,11 @@ class RunConfig(object):
         return copy.deepcopy(g[name])
 
     def _yield_string(self, e):
-        '''Recursively descend a data structure to find string values.
-         This will locate values that should be expanded by reference. '''
+        """Recursively descend a data structure to find string values.
+
+        This will locate values that should be expanded by reference.
+
+        """
         from util import walk_dict
 
         for path, subdicts, values in walk_dict(e):
@@ -175,7 +180,7 @@ class RunConfig(object):
                 yield k, v, setter
 
     def _sub_strings(self, e, subs):
-        '''Substitute keys in the dict e with functions defined in subs'''
+        """Substitute keys in the dict e with functions defined in subs."""
 
         iters = 0
         while (iters < 100):
@@ -245,7 +250,7 @@ class RunConfig(object):
         return e
 
     def service(self, name):
-        """For configuring the client side of services"""
+        """For configuring the client side of services."""
         from util import parse_url_to_dict, unparse_url_dict
 
         e = self.group_item('services', name)
@@ -276,7 +281,7 @@ class RunConfig(object):
         return e
 
     def servers(self, name, default=None):
-        """For configuring the server side of services"""
+        """For configuring the server side of services."""
         from util import parse_url_to_dict, unparse_url_dict
 
         try:
@@ -522,7 +527,7 @@ def mp_run(mp_run_args):
 
 
 def import_file(filename):
-    ''' '''
+    """"""
     import imp
     (path, name) = os.path.split(filename)
     (name, _) = os.path.splitext(name)
@@ -536,8 +541,9 @@ def import_file(filename):
     return imp.load_module(modname, file_, filename, data)
 
 if __name__ == '__main__':
-    '''When bambry is run, this routine will load the bundle module from a file
-    wire it into the namespace and run it with the arguments passed into bambry. '''
+    """When bambry is run, this routine will load the bundle module from a file
+    wire it into the namespace and run it with the arguments passed into
+    bambry."""
     import sys
     args = list(sys.argv)
 

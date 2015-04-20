@@ -1,8 +1,9 @@
 """Identity objects for constructing names for bundles and partitions, and
 Object Numbers for datasets, columns, partitions and tables.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 import os.path
@@ -21,7 +22,7 @@ class Base62DecodeError(ValueError):
 
 class Name(object):
 
-    '''The Name part of an identity '''
+    """The Name part of an identity."""
 
     PATH_EXTENSION = '.db'
     NAME_PART_SEP = '-'
@@ -143,11 +144,19 @@ class Name(object):
 
     @property
     def dict(self):
-        '''Returns the identity as a dict. values that are empty are removed'''
+        """Returns the identity as a dict.
+
+        values that are empty are removed
+
+        """
         return self._dict(with_name=True)
 
     def _dict(self, with_name=True):
-        '''Returns the identity as a dict. values that are empty are removed'''
+        """Returns the identity as a dict.
+
+        values that are empty are removed
+
+        """
 
         d = dict([(k, getattr(self, k)) for k, _, _ in self.name_parts])
 
@@ -162,8 +171,8 @@ class Name(object):
 
     @property
     def name(self):
-        '''String version of the name, excluding the version, and
-        excluding the format, if the format is 'db' '''
+        """String version of the name, excluding the version, and excluding the
+        format, if the format is 'db'."""
 
         d = self._dict(with_name=False)
 
@@ -207,7 +216,11 @@ class Name(object):
 
     @property
     def path(self):
-        '''The path of the bundle source. Includes the revision. '''
+        """The path of the bundle source.
+
+        Includes the revision.
+
+        """
 
         # Need to do this to ensure the function produces the
         # bundle path when called from subclasses
@@ -222,8 +235,11 @@ class Name(object):
 
     @property
     def source_path(self):
-        '''The name in a form suitable for use in a filesystem.
-        Excludes the revision'''
+        """The name in a form suitable for use in a filesystem.
+
+        Excludes the revision
+
+        """
         # Need to do this to ensure the function produces the
         # bundle path when called from subclasses
         names = [k for k, _, _ in self._name_parts]
@@ -259,7 +275,7 @@ class Name(object):
         return self.__class__(**self.dict)
 
     def ver(self, revision):
-        '''Clone and change the version'''
+        """Clone and change the version."""
 
         c = self.clone()
 
@@ -317,7 +333,7 @@ class Name(object):
         self.version = str(v)
 
     def as_partition(self, **kwargs):
-        '''Return a PartitionName based on this name'''
+        """Return a PartitionName based on this name."""
 
         from .partition import name_class_from_format_name
 
@@ -336,8 +352,7 @@ class Name(object):
 
 class PartialPartitionName(Name):
 
-    '''For specifying a PartitionName within the context of a bundle.
-    '''
+    """For specifying a PartitionName within the context of a bundle."""
 
     time = None
     space = None
@@ -355,8 +370,7 @@ class PartialPartitionName(Name):
         ('segment', None, True)]
 
     def promote(self, name):
-        '''Promote to a PartitionName by combining with
-        a bundle Name'''
+        """Promote to a PartitionName by combining with a bundle Name."""
         from partition import name_class_from_format_name
 
         cls = name_class_from_format_name(self.format)
@@ -370,7 +384,7 @@ class PartialPartitionName(Name):
 
 class PartitionName(PartialPartitionName, Name):
 
-    '''A Partition Name'''
+    """A Partition Name."""
 
     _name_parts = (Name._name_parts[0:-1] +
                    PartialPartitionName._name_parts +
@@ -415,7 +429,11 @@ class PartitionName(PartialPartitionName, Name):
 
     @property
     def path(self):
-        '''The path of the partition source. Includes the revision. '''
+        """The path of the partition source.
+
+        Includes the revision.
+
+        """
 
         try:
             parts = ([super(PartitionName, self).path] + self._local_parts())
@@ -433,8 +451,11 @@ class PartitionName(PartialPartitionName, Name):
 
     @property
     def sub_path(self):
-        '''The path of the partition source, excluding the bundle path parts.
-         Includes the revision. '''
+        """The path of the partition source, excluding the bundle path parts.
+
+        Includes the revision.
+
+        """
 
         try:
             return os.path.join(*(self._local_parts()))
@@ -467,7 +488,8 @@ class PartitionName(PartialPartitionName, Name):
 
     @property
     def partital_dict(self, with_name=True):
-        '''Returns the name as a dict, but with only the items that are particular to a PartitionName'''
+        """Returns the name as a dict, but with only the items that are
+        particular to a PartitionName."""
 
         d = self._dict(with_name=False)
 
@@ -500,20 +522,25 @@ class PartialMixin(object):
             return d
 
     def _dict(self, with_name=True):
-        '''Returns the identity as a dict. values that are empty are removed'''
+        """Returns the identity as a dict.
+
+        values that are empty are removed
+
+        """
 
         d = dict([(k, getattr(self, k)) for k, _, _ in self.name_parts])
 
         return self.clear_dict(d)
 
     def with_none(self):
-        '''Convert the NameQuery.NONE to None. This is needed because on the
+        """Convert the NameQuery.NONE to None. This is needed because on the
         kwargs list, a None value means the field is not specified, which
         equates to ANY. The _find_orm() routine, however, is easier to write if
-        the NONE value is actually None
+        the NONE value is actually None.
 
         Returns a clone of the origin, with NONE converted to None
-        '''
+
+        """
 
         n = self.clone()
 
@@ -540,14 +567,15 @@ class PartialMixin(object):
 
 class NameQuery(PartialMixin, Name):
 
-    '''A partition name used for finding and searching.
-    does not have an expectation of having all parts completely
-    defined, and can't be used to generate a string
+    """A partition name used for finding and searching. does not have an
+    expectation of having all parts completely defined, and can't be used to
+    generate a string.
 
     When a partial name is returned as a dict, parts that were not
     specified in the constructor have a value of '<any.', and parts that
     were specified as None have a value of '<none>'
-    '''
+
+    """
 
     NONE = PartialMixin.NONE
     ANY = PartialMixin.ANY
@@ -559,16 +587,18 @@ class NameQuery(PartialMixin, Name):
     fqname = None
 
     def clean(self):
-        '''
-        Null operation, since NameQueries should not be cleaned.
+        """Null operation, since NameQueries should not be cleaned.
+
         :return:
-        '''
+
+        """
 
         pass
 
     @property
     def name_parts(self):
-        '''Works with PartialNameMixin.clear_dict to set NONE and ANY values'''
+        """Works with PartialNameMixin.clear_dict to set NONE and ANY
+        values."""
 
         default = PartialMixin.ANY
 
@@ -584,9 +614,12 @@ class NameQuery(PartialMixin, Name):
 
 class PartitionNameQuery(PartialMixin, PartitionName):
 
-    '''A partition name used for finding and searching.
-    does not have an expectation of having all parts completely
-    defined, and can't be used to generate a string '''
+    """A partition name used for finding and searching.
+
+    does not have an expectation of having all parts completely defined,
+    and can't be used to generate a string
+
+    """
 
     # These are valid values for a name query
     name = None
@@ -594,16 +627,18 @@ class PartitionNameQuery(PartialMixin, PartitionName):
     fqname = None
 
     def clean(self):
-        '''
-        Null operation, since NameQueries should not be cleaned.
+        """Null operation, since NameQueries should not be cleaned.
+
         :return:
-        '''
+
+        """
 
         pass
 
     @property
     def name_parts(self):
-        '''Works with PartialNameMixin.clear_dict to set NONE and ANY values'''
+        """Works with PartialNameMixin.clear_dict to set NONE and ANY
+        values."""
 
         default = PartialMixin.ANY
 
@@ -617,10 +652,8 @@ class PartitionNameQuery(PartialMixin, PartitionName):
 
 class ObjectNumber(object):
 
-    '''
-    Static class for holding constants and static methods related
-    to object numbers
-    '''
+    """Static class for holding constants and static methods related to object
+    numbers."""
 
     # When a name is resolved to an ObjectNumber, orig can
     # be set to the input value, which can be important, for instance,
@@ -689,7 +722,7 @@ class ObjectNumber(object):
 
     @classmethod
     def parse(cls, on_str):  # @ReservedAssignment
-        '''Parse a string into one of the object number classes. '''
+        """Parse a string into one of the object number classes."""
 
         if on_str is None:
             return None
@@ -792,11 +825,12 @@ class ObjectNumber(object):
 
     @classmethod
     def base62_encode(cls, num):
-        """Encode a number in Base X
+        """Encode a number in Base X.
 
         `num`: The number to encode
         `alphabet`: The alphabet to use for encoding
         Stolen from: http://stackoverflow.com/a/1119769/1144479
+
         """
 
         alphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -814,12 +848,13 @@ class ObjectNumber(object):
 
     @classmethod
     def base62_decode(cls, string):
-        """Decode a Base X encoded string into the number
+        """Decode a Base X encoded string into the number.
 
         Arguments:
         - `string`: The encoded string
         - `alphabet`: The alphabet to use for encoding
         Stolen from: http://stackoverflow.com/a/1119769/1144479
+
         """
 
         alphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -841,7 +876,7 @@ class ObjectNumber(object):
         return num
 
     def rev(self, i):
-        '''Return a clone with a different revision'''
+        """Return a clone with a different revision."""
         from copy import copy
         on = copy(self)
         on.revision = i
@@ -865,7 +900,11 @@ class ObjectNumber(object):
 
 class TopNumber(ObjectNumber):
 
-    '''A general top level number, with a given number space. Just like a DatasetNumber, with without the 'd' '''
+    """A general top level number, with a given number space.
+
+    Just like a DatasetNumber, with without the 'd'
+
+    """
 
     def __init__(
             self,
@@ -873,9 +912,7 @@ class TopNumber(ObjectNumber):
             dataset=None,
             revision=None,
             assignment_class='self'):
-        '''
-        Constructor
-        '''
+        """Constructor."""
 
         if len(space) > 1:
             raise ValueError("Number space must be a single letter")
@@ -899,9 +936,11 @@ class TopNumber(ObjectNumber):
 
     @classmethod
     def from_hex(cls, h, space, assignment_class='self'):
-        """Produce a TopNumber, with a length to match the given assignment class, based on an input hex string.
+        """Produce a TopNumber, with a length to match the given assignment
+        class, based on an input hex string.
 
         This can be used to create TopNumbers from a hash of a string.
+
         """
 
         from math import log
@@ -918,7 +957,7 @@ class TopNumber(ObjectNumber):
 
     @classmethod
     def from_string(cls, s, space):
-        """Produce a TopNumber by hashing a string"""
+        """Produce a TopNumber by hashing a string."""
 
         import hashlib
 
@@ -942,12 +981,10 @@ class TopNumber(ObjectNumber):
 
 class DatasetNumber(ObjectNumber):
 
-    '''An identifier for a dataset'''
+    """An identifier for a dataset."""
 
     def __init__(self, dataset=None, revision=None, assignment_class='self'):
-        '''
-        Constructor
-        '''
+        """Constructor."""
 
         self.assignment_class = assignment_class
 
@@ -971,7 +1008,7 @@ class DatasetNumber(ObjectNumber):
         return (ObjectNumber.base62_encode(self.dataset).rjust(ds_len, '0'))
 
     def as_partition(self, partition_number=0):
-        '''Return a new PartitionNumber based on this DatasetNumber'''
+        """Return a new PartitionNumber based on this DatasetNumber."""
         return PartitionNumber(self, partition_number)
 
     def __str__(self):
@@ -982,7 +1019,7 @@ class DatasetNumber(ObjectNumber):
 
 class TableNumber(ObjectNumber):
 
-    '''An identifier for a table'''
+    """An identifier for a table."""
 
     def __init__(self, dataset, table, revision=None):
         if not isinstance(dataset, DatasetNumber):
@@ -1000,12 +1037,13 @@ class TableNumber(ObjectNumber):
 
     @property
     def as_table(self):
-        """Returns self, so TableNumber and Column number can be used interchangably"""
+        """Returns self, so TableNumber and Column number can be used
+        interchangably."""
         return self
 
     @property
     def as_dataset(self):
-        """Unlike the .dataset property, this will include the revision"""
+        """Unlike the .dataset property, this will include the revision."""
         return self.dataset.rev(self.revision)
 
     def __str__(self):
@@ -1022,7 +1060,7 @@ class TableNumber(ObjectNumber):
 
 class ColumnNumber(ObjectNumber):
 
-    '''An identifier for a column'''
+    """An identifier for a column."""
 
     def __init__(self, table, column, revision=None):
         if not isinstance(table, TableNumber):
@@ -1046,17 +1084,17 @@ class ColumnNumber(ObjectNumber):
 
     @property
     def dataset(self):
-        '''Return the dataset number for ths partition '''
+        """Return the dataset number for ths partition."""
         return self.table.dataset
 
     @property
     def as_dataset(self):
-        """Unlike the .dataset property, this will include the revision"""
+        """Unlike the .dataset property, this will include the revision."""
         return self.table.dataset.rev(self.revision)
 
     @property
     def as_table(self):
-        """Unlike the .dataset property, this will include the revision"""
+        """Unlike the .dataset property, this will include the revision."""
         return self.table.rev(self.revision)
 
     def __str__(self):
@@ -1077,7 +1115,7 @@ class ColumnNumber(ObjectNumber):
 
 class PartitionNumber(ObjectNumber):
 
-    '''An identifier for a partition'''
+    """An identifier for a partition."""
 
     def __init__(self, dataset, partition, revision=None):
         '''
@@ -1105,7 +1143,7 @@ class PartitionNumber(ObjectNumber):
 
     @property
     def as_dataset(self):
-        """Unlike the .dataset property, this will include the revision"""
+        """Unlike the .dataset property, this will include the revision."""
         return self.dataset.rev(self.revision)
 
     def __str__(self):
@@ -1219,10 +1257,14 @@ class Locations(object):
 
 class Identity(object):
 
-    '''Identities represent the defining set of information about a
-    bundle or a partition. Only the vid is actually required to
-    uniquely identify a bundle or partition, but the identity is also
-    used for generating unique names and for finding bundles and partitions. '''
+    """Identities represent the defining set of information about a bundle or a
+    partition.
+
+    Only the vid is actually required to uniquely identify a bundle or
+    partition, but the identity is also used for generating unique names
+    and for finding bundles and partitions.
+
+    """
 
     is_bundle = True
     is_partition = False
@@ -1337,7 +1379,8 @@ class Identity(object):
 
     @classmethod
     def classify(cls, o):
-        """Break an Identity name into parts, or describe the type of other forms.
+        """Break an Identity name into parts, or describe the type of other
+        forms.
 
         Break a name or object number into parts and classify them. Returns a named tuple
         that indicates which parts of input string are name components, object number and
@@ -1346,6 +1389,7 @@ class Identity(object):
         Also can handle Name, Identity and ObjectNumbers
 
         :param o: Input object to split
+
         """
         from collections import namedtuple
 
@@ -1430,7 +1474,7 @@ class Identity(object):
         return ip
 
     def to_meta(self, md5=None, file=None):
-        '''Return a dictionary of metadata, for use in the Remote api'''
+        """Return a dictionary of metadata, for use in the Remote api."""
         import json
         import os
         from collections import OrderedDict
@@ -1480,44 +1524,51 @@ class Identity(object):
 
     @property
     def on(self):
-        '''Return the object number obect'''
+        """Return the object number obect."""
         return self._on
 
     @property
     def id_(self):
-        '''String version of the object number, without a revision'''
+        """String version of the object number, without a revision."""
 
         return str(self._on.rev(None))
 
     @property
     def vid(self):
-        '''String version of the object number'''
+        """String version of the object number."""
         return str(self._on)
 
     @property
     def name(self):
-        """The name object"""
+        """The name object."""
         return self._name
 
     @property
     def sname(self):
-        """The name of the bundle, as a string, excluding the revision"""
+        """The name of the bundle, as a string, excluding the revision."""
         return str(self._name)
 
     @property
     def vname(self):
-        ''' '''
+        """"""
         return self._name.vname  # Obsoleted by __getattr__??
 
     @property
     def fqname(self):
-        """The fully qualified name, the versioned name and the
-        vid. This is the same as str(self)"""
+        """The fully qualified name, the versioned name and the vid.
+
+        This is the same as str(self)
+
+        """
         return str(self)
 
     @property
     def path(self):
-        '''The path of the bundle source. Includes the revision. '''
+        """The path of the bundle source.
+
+        Includes the revision.
+
+        """
 
         self.is_valid()
 
@@ -1525,7 +1576,11 @@ class Identity(object):
 
     @property
     def source_path(self):
-        '''The path of the bundle source. Includes the revision. '''
+        """The path of the bundle source.
+
+        Includes the revision.
+
+        """
 
         self.is_valid()
         return self._name.source_path
@@ -1560,7 +1615,8 @@ class Identity(object):
 
     @property
     def names_dict(self):
-        '''A dictionary with only the generated names, name, vname and fqname'''
+        """A dictionary with only the generated names, name, vname and
+        fqname."""
 
         d = {
             k: v for k,
@@ -1575,8 +1631,8 @@ class Identity(object):
 
     @property
     def ident_dict(self):
-        '''A dictionary with only the items required to specify the identy, excluding the
-        generated names, name, vname and fqname'''
+        """A dictionary with only the items required to specify the identy,
+        excluding the generated names, name, vname and fqname."""
 
         return {
             k: v for k,
@@ -1592,10 +1648,12 @@ class Identity(object):
         return vname + Identity.OBJECT_NUMBER_SEP + vid
 
     def as_partition(self, partition=0, **kwargs):
-        '''Return a new PartitionIdentity based on this Identity
+        """Return a new PartitionIdentity based on this Identity.
+
         :param partition: Integer partition number for PartitionObjectNumber
         :param kwargs:
-        '''
+
+        """
 
         from partition import identity_class_from_format_name
 
@@ -1616,7 +1674,7 @@ class Identity(object):
         return ic(name, on)
 
     def add_partition(self, p):
-        '''Add a partition identity as a child of a dataset identity'''
+        """Add a partition identity as a child of a dataset identity."""
 
         if not self.partitions:
             self.partitions = {}
@@ -1624,7 +1682,7 @@ class Identity(object):
         self.partitions[p.vid] = p
 
     def add_file(self, f):
-        '''Add a partition identity as a child of a dataset identity'''
+        """Add a partition identity as a child of a dataset identity."""
 
         if not self.files:
             self.files = set()
@@ -1635,8 +1693,8 @@ class Identity(object):
 
     @property
     def partition(self):
-        '''Convenience function for accessing the first partition in the partitions list,
-        when there is only one'''
+        """Convenience function for accessing the first partition in the
+        partitions list, when there is only one."""
 
         if not self.partitions:
             return None
@@ -1651,7 +1709,7 @@ class Identity(object):
         return self._compose_fqname(self._name.vname, self.vid)
 
     def _info(self):
-        '''Returns an OrderedDict of information, for human display '''
+        """Returns an OrderedDict of information, for human display."""
         from collections import OrderedDict
 
         d = OrderedDict()
@@ -1668,7 +1726,7 @@ class Identity(object):
 
 class PartitionIdentity(Identity):
 
-    '''Subclass of Identity for partitions'''
+    """Subclass of Identity for partitions."""
 
     is_bundle = False
     is_partition = True
@@ -1684,12 +1742,13 @@ class PartitionIdentity(Identity):
 
     @classmethod
     def from_dict(cls, d):
-        ''' Like Identity.from_dict, but will cast the class type based on the format.
-        i.e. if the format is hdf, return an HdfPartitionIdentity
+        """Like Identity.from_dict, but will cast the class type based on the
+        format. i.e. if the format is hdf, return an HdfPartitionIdentity.
 
         :param d:
         :return:
-        '''
+
+        """
 
         from partition import identity_class_from_format_name
 
@@ -1730,7 +1789,8 @@ class PartitionIdentity(Identity):
         return self._name.table
 
     def as_dataset(self):
-        """Convert this identity to the identity of the corresponding dataset. """
+        """Convert this identity to the identity of the corresponding
+        dataset."""
 
         on = self.on.dataset
 
@@ -1746,7 +1806,7 @@ class PartitionIdentity(Identity):
 
     @property
     def sub_path(self):
-        '''The portion of the path excluding the bundle path '''
+        """The portion of the path excluding the bundle path."""
         self.is_valid()
         return self._name.sub_path
 
@@ -1832,8 +1892,8 @@ class NumberServer(object):
         return ObjectNumber.parse(d['number'])
 
     def sleep(self):
-        '''Wait for the sleep time of the last response, to
-         avoid being rate limited. '''
+        """Wait for the sleep time of the last response, to avoid being rate
+        limited."""
 
         import time
 
@@ -1843,7 +1903,7 @@ class NumberServer(object):
 
 class IdentitySet(object):
 
-    '''A set of Identity Objects, with methods to display them. '''
+    """A set of Identity Objects, with methods to display them."""
 
     def __init__(self, idents, show_partitions=False, fields=None):
 

@@ -1,6 +1,4 @@
-"""
-Class for handling manifest files.
-"""
+"""Class for handling manifest files."""
 
 # Copyright (c) 2014 Clarinova. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
@@ -188,7 +186,7 @@ class Manifest(object):
 
     @property
     def summary(self):
-        """The first doc section"""
+        """The first doc section."""
 
         for line, section in self.sorted_sections:
 
@@ -203,7 +201,7 @@ class Manifest(object):
         }
 
     def doc_for(self, section):
-        """Return a doc section that referrs to a named section. """
+        """Return a doc section that referrs to a named section."""
 
         if not section.name:
             return None
@@ -223,7 +221,8 @@ class Manifest(object):
         return HtmlFormatter(style='manni').get_style_defs('.highlight')
 
     def make_item(self, sections, tag, i, args):
-        """Creates a new entry in sections, which will later have lines appended to it. """
+        """Creates a new entry in sections, which will later have lines
+        appended to it."""
         from ..dbexceptions import ConfigurationError
 
         if tag not in self.singles and tag not in self.multi_line:
@@ -250,7 +249,7 @@ class Manifest(object):
         return line_number, section
 
     def sectionalize(self, data, first_line=0):
-        """Break the file into sections"""
+        """Break the file into sections."""
 
         import re
 
@@ -356,7 +355,7 @@ class Manifest(object):
         self.sections.update(sections)
 
     def _extract_summary(self, t):
-        """Extract the first sentence of a possiblt Markdown text"""
+        """Extract the first sentence of a possiblt Markdown text."""
         from nltk import tokenize
 
         test = tokenize.punkt.PunktSentenceTokenizer()
@@ -522,7 +521,7 @@ class Manifest(object):
         return dict(partitions=partitions)
 
     def add_bundles(self, library):
-        """Add bundle information when a Library is available"""
+        """Add bundle information when a Library is available."""
         from ..bundle import LibraryDbBundle
         for line, partitions in self.tagged_sections('partitions'):
 
@@ -585,7 +584,7 @@ class Manifest(object):
         pass
 
     def documentation_for(self, name):
-        """Return documentation for a table"""
+        """Return documentation for a table."""
 
         for line, section in self.sorted_sections:
 
@@ -622,7 +621,7 @@ class Manifest(object):
 
     @staticmethod
     def extract_token(tp, tokens):
-        '''Extract the first token of the named type. '''
+        """Extract the first token of the named type."""
 
         try:
             i = [t[0] for t in tokens].index(tp)
@@ -633,7 +632,7 @@ class Manifest(object):
 
     @staticmethod
     def extract_next(tp1, tp2, tokens):
-        '''Extract the token after the named token type. '''
+        """Extract the token after the named token type."""
 
         try:
             i = [t[0] for t in tokens].index(tp1)
@@ -652,7 +651,8 @@ class Manifest(object):
 
     @staticmethod
     def coalesce_list(tp, tokens):
-        '''Extract the token types, and all after it that are seperated with SEP '''
+        """Extract the token types, and all after it that are seperated with
+        SEP."""
 
         t, tokens = Manifest.extract_token(tp, tokens)
 

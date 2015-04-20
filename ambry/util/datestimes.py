@@ -1,13 +1,14 @@
-"""Utilities for dealing with time"""
+"""Utilities for dealing with time."""
 
 
 def expand_to_years(dates):
-    """
-    Expand a single string or integer date, or an iterable, into a set of years. Parses strings to date times or durations,
-    and extracts the year, but passes integers though if they are four digits.
+    """Expand a single string or integer date, or an iterable, into a set of
+    years. Parses strings to date times or durations, and extracts the year,
+    but passes integers though if they are four digits.
 
     :param dates: A string, integer or iterable producing strings or ints
     :return: an array of integer years
+
     """
     import isodate
     import datetime
@@ -74,8 +75,8 @@ def expand_to_years(dates):
 
 
 def compress_years(dates):
-    """Given a set of values that can be input for expand_to_years, expand and then
-    return as a simple string in the form start/end"""
+    """Given a set of values that can be input for expand_to_years, expand and
+    then return as a simple string in the form start/end."""
 
     years = expand_to_years(dates)
 

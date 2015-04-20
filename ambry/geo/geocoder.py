@@ -1,6 +1,4 @@
-"""
-Functions for geocoding using Ambry data.
-"""
+"""Functions for geocoding using Ambry data."""
 
 
 class Geocoder(object):
@@ -43,11 +41,12 @@ class Geocoder(object):
 
     def geocode(self, number, name, direction=None,
                 suffix=None, city=None, state=None, zip=None):
-        '''Return a record from the geocoder table.
+        """Return a record from the geocoder table.
 
         This function expects a partition, p, that holds a table named 'gecoder',
         of the same structure as used in clarinova.com-geocode-casnd
-        '''
+
+        """
 
         direction = direction.upper() if direction else '-'
         suffix = suffix.title() if suffix else '-'

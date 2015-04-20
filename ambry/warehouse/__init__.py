@@ -42,7 +42,8 @@ class NullLogger(object):
 
 class WLibrary(Library):
 
-    """Extends the Library class to remove the Location parameter on identity resolution"""
+    """Extends the Library class to remove the Location parameter on identity
+    resolution."""
 
     def resolve(self, ref, location=None):
 
@@ -240,8 +241,13 @@ class Warehouse(object):
 
     @property
     def bundle(self):
-        """Return a LibraryBundle based on the library, and the dataset specified by the warehouse uid.
-        This bundle holds the partition and table definitions for data created though SQL in the warehouse"""
+        """Return a LibraryBundle based on the library, and the dataset
+        specified by the warehouse uid.
+
+        This bundle holds the partition and table definitions for data
+        created though SQL in the warehouse
+
+        """
         from ..bundle import LibraryDbBundle
         from ..identity import ObjectNumber
 
@@ -284,13 +290,13 @@ class Warehouse(object):
     @property
     @memoize
     def uid(self):
-        """UID of the warehouse"""
+        """UID of the warehouse."""
         return self._meta_get('uid')
 
     @property
     @memoize
     def vid(self):
-        """The versioned id of the warehouse"""
+        """The versioned id of the warehouse."""
         from ..identity import ObjectNumber
 
         # Until we support versioning warehouses
@@ -302,7 +308,7 @@ class Warehouse(object):
 
     @property
     def title(self):
-        """Title of the warehouse"""
+        """Title of the warehouse."""
         return self._meta_get('title')
 
     @title.setter
@@ -311,7 +317,7 @@ class Warehouse(object):
 
     @property
     def summary(self):  # Everything else names this property summary
-        """Short description of the warehouse"""
+        """Short description of the warehouse."""
         return self._meta_get('summary')
 
     @summary.setter
@@ -320,7 +326,7 @@ class Warehouse(object):
 
     @property
     def name(self):
-        """name of the warehouse"""
+        """name of the warehouse."""
         return self._meta_get('name')
 
     @name.setter
@@ -329,7 +335,7 @@ class Warehouse(object):
 
     @property
     def url(self):
-        """Url of the management application for the warehouse. """
+        """Url of the management application for the warehouse."""
         return self._meta_get('url')
 
     @url.setter
@@ -352,7 +358,7 @@ class Warehouse(object):
 
     @property
     def dict(self):
-        """Return information about the warehouse as a dictionary. """
+        """Return information about the warehouse as a dictionary."""
 
         from ambry.warehouse.manifest import Manifest
 
@@ -378,7 +384,7 @@ class Warehouse(object):
 
     @property
     def manifests(self):
-        """Return the parsed manifests that have been installed"""
+        """Return the parsed manifests that have been installed."""
         from .manifest import Manifest
 
         return self.library.files.query.type(
@@ -387,11 +393,14 @@ class Warehouse(object):
 
     @property
     def bundles(self):
-        """Metadata for bundles, each with the partitions that are installed here.
+        """Metadata for bundles, each with the partitions that are installed
+        here.
 
-        This extracts the bundle information that is in the partitions list, but it requires
-        that the add_bundle() method has been run first, because the manifest doesn't usually have access to
-        a library
+        This extracts the bundle information that is in the partitions
+        list, but it requires that the add_bundle() method has been run
+        first, because the manifest doesn't usually have access to a
+        library
+
         """
 
         l = self.library.list(with_partitions=True)
@@ -410,7 +419,7 @@ class Warehouse(object):
 
     @property
     def extracts(self):
-        """Return an array of dicts of the extract files """
+        """Return an array of dicts of the extract files."""
 
         for f in self.library.files.query.group(self.FILE_GROUP.MANIFEST).type(self.FILE_TYPE.EXTRACT).all:
             self.library.database.session.expunge(f)
@@ -419,8 +428,12 @@ class Warehouse(object):
             yield f
 
     def table_meta(self, identity, table_name):
-        '''Get the metadata directly from the database. This requires that
-        table_name be the same as the table as it is in stalled in the database'''
+        """Get the metadata directly from the database.
+
+        This requires that table_name be the same as the table as it is
+        in stalled in the database
+
+        """
         from ..schema import Schema
 
         assert identity.is_partition
@@ -438,7 +451,7 @@ class Warehouse(object):
         return meta, table
 
     def table(self, table_name):
-        '''Get table metadata from the database'''
+        """Get table metadata from the database."""
         from sqlalchemy import Table
 
         table = self._table_meta_cache.get(table_name, False)
@@ -490,7 +503,7 @@ class Warehouse(object):
     ##
 
     def digest_manifest(self, manifest, force=None):
-        """Digest manifest into a list of commands for the installer"""
+        """Digest manifest into a list of commands for the installer."""
         from ..orm import Partition
 
         commands = []
@@ -602,7 +615,8 @@ class Warehouse(object):
         return commands
 
     def execute_commands(self, commands):
-        """Execute a set of installation commands, which are usually from a digested manifest"""
+        """Execute a set of installation commands, which are usually from a
+        digested manifest."""
         from ..dbexceptions import NotFoundError, ConfigurationError
 
         installed_partitions = []
@@ -668,7 +682,7 @@ class Warehouse(object):
         return installed_partitions, installed_tables
 
     def install_manifest(self, manifest, force=None, reset=False):
-        """Install the partitions and views specified in a manifest file """
+        """Install the partitions and views specified in a manifest file."""
 
         from datetime import datetime
         import os
@@ -720,7 +734,7 @@ class Warehouse(object):
         return self.database.dsn
 
     def install_partition(self, p_vid, tables=None, prefix=None):
-        """Install a partition and the tables in the partition"""
+        """Install a partition and the tables in the partition."""
 
         from sqlalchemy.exc import OperationalError
         from sqlalchemy import inspect
@@ -914,7 +928,8 @@ class Warehouse(object):
             s.commit()
 
     def install_union(self):
-        """Combine multiple partition tables of the same table type into a single table"""
+        """Combine multiple partition tables of the same table type into a
+        single table."""
 
         # TODO, our use of sqlalchemy is wacked.
         # Some of the install methods commit or flush the session, which invalidated the tables from self.tables,
@@ -958,9 +973,8 @@ class Warehouse(object):
                         proto_vid=t_vid))
 
     def post_install(self):
-        """
-        Perform operations after the manifest install, such as creating table views for
-        all of the installed tables.
+        """Perform operations after the manifest install, such as creating
+        table views for all of the installed tables.
 
         For each table, it also installs a vid-based view, which replaces all of the column
         names with their vid. This allows for tracing columns through views, linking
@@ -1139,12 +1153,16 @@ class Warehouse(object):
             raise
 
     def install_table_alias(self, table_name, alias, proto_vid=None):
-        """Install a view that allows referencing a table by another name """
+        """Install a view that allows referencing a table by another name."""
         self.install_view(alias, "SELECT * FROM \"{}\" ".format(table_name),
                           data=dict(type='alias', proto_vid=proto_vid))
 
     def install_table(self, name, alt_name=None, data=None):
-        """Install a view, mview or alias as a Table record. Real tables are copied """
+        """Install a view, mview or alias as a Table record.
+
+        Real tables are copied
+
+        """
 
         from ..orm import Table, Config, Dataset
 
@@ -1416,7 +1434,8 @@ class Warehouse(object):
     ##
 
     def get(self, name_or_id):
-        """Return true if the warehouse already has the referenced bundle or partition"""
+        """Return true if the warehouse already has the referenced bundle or
+        partition."""
 
         return self.library.resolve(name_or_id)
 
@@ -1432,7 +1451,7 @@ class Warehouse(object):
         return table_name in self.database.inspector.get_table_names()
 
     def create_table(self, partition, table_name):
-        '''Create the table in the warehouse, using an augmented table name '''
+        """Create the table in the warehouse, using an augmented table name."""
         from ..schema import Schema
 
         meta, table = self.table_meta(partition.identity, table_name)
@@ -1509,7 +1528,7 @@ class Warehouse(object):
 
     def augmented_table_name(self, identity, table_name):
         """Create a table name that is prefixed with the dataset number and the
-        partition grain, if it has one"""
+        partition grain, if it has one."""
 
         name = identity.vid.replace('/', '_') + '_' + table_name
 
@@ -1524,7 +1543,7 @@ class Warehouse(object):
         return name, alias
 
     def _ogr_args(self, partition):
-        '''Return a arguments for ogr2ogr to connect to the database'''
+        """Return a arguments for ogr2ogr to connect to the database."""
         raise NotImplementedError()
 
     def list(self):
@@ -1555,7 +1574,8 @@ class Warehouse(object):
     ###
 
     def extract_all(self, force=False):
-        """Generate the extracts and return a struture listing the extracted files. """
+        """Generate the extracts and return a struture listing the extracted
+        files."""
         from contextlib import closing
 
         from .extractors import new_extractor

@@ -1,7 +1,9 @@
 
-"""
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 from . import DatabaseInterface  # @UnresolvedImport
@@ -32,7 +34,7 @@ connections = dict()
 
 
 def close_connections_at_exit():
-    '''Close any connections that have not already been closed '''
+    """Close any connections that have not already been closed."""
 
     for id_, (conn_ref, dsn, where) in connections.items():
         conn = conn_ref()
@@ -60,7 +62,7 @@ def close_all_connections():
 
 class RelationalDatabase(DatabaseInterface):
 
-    '''Represents a Sqlite database'''
+    """Represents a Sqlite database."""
 
     # These DSNs can get munged just before connecting, so postgres -> postgresql+psycopg2
     # The munging isn't really used now, since we have trivial dialects for
@@ -83,7 +85,7 @@ class RelationalDatabase(DatabaseInterface):
             password=None,
             port=None,
             **kwargs):
-        '''Initialize the a database object
+        """Initialize the a database object.
 
         Args:
             bundle. a Bundle object
@@ -94,7 +96,7 @@ class RelationalDatabase(DatabaseInterface):
             post_create. A function called during the create() method. has
             signature post_create(database)
 
-        '''
+        """
         self.driver = driver
         self.server = server
         self.dbname = dbname
@@ -166,7 +168,7 @@ class RelationalDatabase(DatabaseInterface):
             return False
 
     def _create(self):
-        """Create the database from the base SQL"""
+        """Create the database from the base SQL."""
         from ambry.orm import Config
 
         if not self.exists():
@@ -199,7 +201,8 @@ class RelationalDatabase(DatabaseInterface):
                               datetime.now().isoformat(), session=session)
 
     def post_create(self):
-        '''Call all implementations of _post_create in this object's class heirarchy'''
+        """Call all implementations of _post_create in this object's class
+        heirarchy."""
         import inspect
 
         for cls in inspect.getmro(self.__class__):
@@ -234,13 +237,13 @@ class RelationalDatabase(DatabaseInterface):
 
     @property
     def engine(self):
-        """Modify the DSN just prior to creating the engine"""
+        """Modify the DSN just prior to creating the engine."""
 
         return self.dsn
 
     @property
     def engine(self):
-        '''return the SqlAlchemy engine for this database'''
+        """return the SqlAlchemy engine for this database."""
         from sqlalchemy import create_engine
         import sqlite3
         from sqlalchemy.pool import NullPool
@@ -283,7 +286,7 @@ class RelationalDatabase(DatabaseInterface):
 
     @property
     def connection(self):
-        '''Return an SqlAlchemy connection'''
+        """Return an SqlAlchemy connection."""
 
         return self.get_connection()
 
@@ -291,7 +294,11 @@ class RelationalDatabase(DatabaseInterface):
         return id(self._connection)
 
     def get_connection(self, check_exists=True):
-        '''Return an SqlAlchemy connection. check_exists is ignored'''
+        """Return an SqlAlchemy connection.
+
+        check_exists is ignored
+
+        """
         import traceback
 
         if not self._connection:
@@ -340,7 +347,7 @@ class RelationalDatabase(DatabaseInterface):
         connection.close()
 
     def require_path(self):
-        '''Used in engine but only implemented for sqlite'''
+        """Used in engine but only implemented for sqlite."""
         pass
 
     def _on_create_connection(self, connection):
@@ -377,7 +384,7 @@ class RelationalDatabase(DatabaseInterface):
 
     @property
     def metadata(self):
-        '''Return an SqlAlchemy MetaData object, bound to the engine'''
+        """Return an SqlAlchemy MetaData object, bound to the engine."""
 
         from sqlalchemy import MetaData
         meta = MetaData(bind=self.engine)
@@ -429,7 +436,7 @@ class RelationalDatabase(DatabaseInterface):
         self.commit()
 
     def create_table(self, table_name=None, table_meta=None):
-        '''Create a table that is defined in the table table
+        """Create a table that is defined in the table table.
 
         This method will issue the DDL to create a table that is defined
         in the meta data tables, of which the 'table' table ho;d information
@@ -438,7 +445,7 @@ class RelationalDatabase(DatabaseInterface):
         Args:
             table_name. The name of the table to create
 
-        '''
+        """
 
         if not table_name in self.inspector.get_table_names():
             if not table_meta:
@@ -455,7 +462,7 @@ class RelationalDatabase(DatabaseInterface):
         return self.metadata.sorted_tables
 
     def table(self, table_name):
-        '''Get table metadata from the database'''
+        """Get table metadata from the database."""
         from sqlalchemy import Table
         from ..orm import Geometry
 
@@ -558,7 +565,7 @@ class RelationalBundleDatabaseMixin(object):
         self.bundle = bundle
 
     def _create(self):
-        """Create the database from the base SQL"""
+        """Create the database from the base SQL."""
         from ambry.orm import Dataset, Partition, Table, Column, File, Code, ColumnStat
         from ..identity import Identity
         from sqlalchemy.orm import sessionmaker
@@ -591,8 +598,7 @@ class RelationalBundleDatabaseMixin(object):
         session.commit()
 
     def get_dataset(self):
-        """Return the dataset
-        """
+        """Return the dataset."""
 
         from sqlalchemy.exc import OperationalError
         from ..dbexceptions import NotFoundError

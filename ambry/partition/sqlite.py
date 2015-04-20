@@ -1,5 +1,8 @@
-"""Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 from . import PartitionBase
@@ -18,8 +21,8 @@ class SqlitePartitionIdentity(PartitionIdentity):
 
 class SqlitePartition(PartitionBase):
 
-    '''Represents a bundle partition, part of the bundle data broken out in
-    time, space, or by table. '''
+    """Represents a bundle partition, part of the bundle data broken out in
+    time, space, or by table."""
 
     _id_class = SqlitePartitionIdentity
     _db_class = PartitionDb
@@ -136,7 +139,8 @@ class SqlitePartition(PartitionBase):
         self.close()
 
     def clean(self):
-        '''Delete all of the records in the tables declared for this oartition'''
+        """Delete all of the records in the tables declared for this
+        oartition."""
 
         for table in self.data.get('tables', []):
             try:
@@ -173,9 +177,7 @@ class SqlitePartition(PartitionBase):
             return 'nom'
 
     def write_full_stats(self):
-        """
-
-        Write stats to the stats table.
+        """Write stats to the stats table.
 
         Dataset Id
         Column id
@@ -189,6 +191,7 @@ class SqlitePartition(PartitionBase):
         JSON of Histogram of 100 values, for Int and Real
 
         :return:
+
         """
         import pandas as pd
         import numpy as np
@@ -246,8 +249,8 @@ class SqlitePartition(PartitionBase):
                 p.add_stat(col.vid, row)
 
     def write_basic_stats(self):
-        '''Record in the partition entry basic statistics for the partition's
-        primary table'''
+        """Record in the partition entry basic statistics for the partition's
+        primary table."""
         from ..partitions import Partitions
 
         t = self.get_table()
@@ -285,7 +288,8 @@ class SqlitePartition(PartitionBase):
         self.set_state(Partitions.STATE.FINALIZED)
 
     def compile_geo_coverage(self):
-        """Compile GVIDs for the geographic coverage and grain of the partition"""
+        """Compile GVIDs for the geographic coverage and grain of the
+        partition."""
 
         from geoid import civick
         from geoid.util import simplify
@@ -428,7 +432,8 @@ class SqlitePartition(PartitionBase):
         s.commit()
 
     def write_file(self):
-        """Create a file entry in the bundle for the partition, storing the md5 checksum and size. """
+        """Create a file entry in the bundle for the partition, storing the md5
+        checksum and size."""
 
         import os
         from ..orm import File
@@ -461,7 +466,7 @@ class SqlitePartition(PartitionBase):
 
     @property
     def rows(self):
-        '''Run a select query to return all rows of the primary table. '''
+        """Run a select query to return all rows of the primary table."""
 
         if True:
             pk = self.get_table().primary_key.name
@@ -508,14 +513,15 @@ class SqlitePartition(PartitionBase):
         return self.database.query(*args, **kwargs)
 
     def select(self, sql=None, *args, **kwargs):
-        '''Run a query and return an object that allows the selected rows to be returned
-        as a data object in numpy, pandas, petl or other forms'''
+        """Run a query and return an object that allows the selected rows to be
+        returned as a data object in numpy, pandas, petl or other forms."""
         from ..database.selector import RowSelector
 
         return RowSelector(self, sql, *args, **kwargs)
 
     def add_view(self, view_name):
-        '''Add a view specified in the configuration in the views.<viewname> dict. '''
+        """Add a view specified in the configuration in the views.<viewname>
+        dict."""
         from ..dbexceptions import ConfigurationError
 
         vd = self.bundle.metadata.views.get(view_name, None)

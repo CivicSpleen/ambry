@@ -1,7 +1,9 @@
 
-"""
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 
@@ -29,7 +31,7 @@ class SpatialiteDatabase(SqliteDatabase, SqliteAttachmentMixin):
         self.create()
 
     def _on_create_connection(self, connection):
-        '''Called from get_connection() to update the database'''
+        """Called from get_connection() to update the database."""
         super(SpatialiteDatabase, self)._on_create_connection(connection)
 
     def _on_create_engine(self, engine):

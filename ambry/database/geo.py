@@ -1,6 +1,8 @@
-"""
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 from inserter import InserterInterface
@@ -18,7 +20,7 @@ class GeoDb(PartitionDb):
     is_geo = True
 
     def __init__(self, bundle, partition, base_path, **kwargs):
-        ''''''
+        """"""
 
         kwargs['driver'] = 'spatialite'
 
@@ -47,7 +49,7 @@ class GeoDb(PartitionDb):
             srs=srs)
 
     def _on_create_connection(self, connection):
-        '''Called from get_connection() to update the database'''
+        """Called from get_connection() to update the database."""
         super(GeoDb, self)._on_create_connection(connection)
 
     def _on_create_engine(self, engine):
@@ -63,7 +65,7 @@ class SpatialiteWarehouseDatabase(GeoDb):
 
 
 def _on_connect_geo(dbapi_con, con_record):
-    '''ISSUE some Sqlite pragmas when the connection is created'''
+    """ISSUE some Sqlite pragmas when the connection is created."""
     from ..util import RedirectStdStreams
     from sqlite import _on_connect_bundle as ocb
     from ..dbexceptions import DatabaseError

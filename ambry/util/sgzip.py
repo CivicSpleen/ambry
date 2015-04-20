@@ -1,8 +1,7 @@
 
-"""
-A patched version of the standard gzip.py that handles reading from
-and uncompressing gzip streams that have nothing but a read() method,
-such as httplib message bodies.
+"""A patched version of the standard gzip.py that handles reading from and
+uncompressing gzip streams that have nothing but a read() method, such as
+httplib message bodies.
 
 Functions that read and write gzipped files.
 
@@ -51,9 +50,7 @@ def open(filename, mode="rb", compresslevel=9):
 class GzipFile(io.BufferedIOBase):
 
     """The GzipFile class simulates most of the methods of a file object with
-    the exception of the readinto() and truncate() methods.
-
-    """
+    the exception of the readinto() and truncate() methods."""
 
     myfileobj = None
     max_read_chunk = 10 * 1024 * 1024   # 10Mb
@@ -182,9 +179,8 @@ class GzipFile(io.BufferedIOBase):
         return '<gzip ' + s[1:-1] + ' ' + hex(id(self)) + '>'
 
     def _check_closed(self):
-        """Raises a ValueError if the underlying file object has been closed.
-
-        """
+        """Raises a ValueError if the underlying file object has been
+        closed."""
         if self.closed:
             raise ValueError('I/O operation on closed file.')
 
@@ -484,12 +480,13 @@ class GzipFile(io.BufferedIOBase):
 
         This will raise AttributeError if the underlying file object
         doesn't support fileno().
+
         """
         return self.fileobj.fileno()
 
     def rewind(self):
-        '''Return the uncompressed stream file position indicator to the
-        beginning of the file'''
+        """Return the uncompressed stream file position indicator to the
+        beginning of the file."""
         if self.mode != READ:
             raise IOError("Can't rewind in write mode")
         self.fileobj.seek(0)
@@ -577,8 +574,8 @@ if __name__ == '__main__':
 
     class flo(object):
 
-        '''A File Like Object that has only a read method, to test
-        operations with simplistic HTTP request bodies. '''
+        """A File Like Object that has only a read method, to test operations
+        with simplistic HTTP request bodies."""
 
         def __init__(self, inner):
             self.f = inner

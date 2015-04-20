@@ -1,5 +1,4 @@
-"""Dedicated interface to the Files table of the library.
-"""
+"""Dedicated interface to the Files table of the library."""
 
 # Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
@@ -38,24 +37,24 @@ class Files(object):
 
     @property
     def all(self):
-        '''Return all records that match the internal query'''
+        """Return all records that match the internal query."""
         return self._query.all()
 
     @property
     def first(self):
-        '''Return the first record that matched the internal query'''
+        """Return the first record that matched the internal query."""
         return self._query.first()
 
     @property
     def one(self):
-        '''Return the first record that matched the internal query,
-        with the expectation that there is only one'''
+        """Return the first record that matched the internal query, with the
+        expectation that there is only one."""
         return self._query.one()
 
     @property
     def one_maybe(self):
-        '''Return the first record that matched the internal query,
-        with the expectation that there is only one'''
+        """Return the first record that matched the internal query, with the
+        expectation that there is only one."""
         from sqlalchemy.orm.exc import NoResultFound
 
         try:
@@ -64,21 +63,21 @@ class Files(object):
             return None
 
     def order(self, c):
-        '''Return the first record that matched the internal query,
-        with the expectation that there is only one'''
+        """Return the first record that matched the internal query, with the
+        expectation that there is only one."""
         self._query = self._query.order_by(c)
 
         return self
 
     def delete(self):
-        '''Delete all of the records in the query'''
+        """Delete all of the records in the query."""
 
         if self._query.count() > 0:
             self._query.delete()
             self.db.commit()
 
     def update(self, d):
-        '''Delete all of the records in the query'''
+        """Delete all of the records in the query."""
 
         self._query.update(d)
 
@@ -141,10 +140,8 @@ class Files(object):
         return self
 
     def new_file(self, merge=False, commit=True, extant=None, **kwargs):
-        """
-        If merge is 'collect', the files will be added to the collection, for later
-        insertion.
-        """
+        """If merge is 'collect', the files will be added to the collection,
+        for later insertion."""
 
         f = File(**kwargs)
 
@@ -167,7 +164,8 @@ class Files(object):
         self._collection = []
 
     def merge(self, f, commit=True):
-        '''If commit is 'collect' add the files to the collection for later insertion. '''
+        """If commit is 'collect' add the files to the collection for later
+        insertion."""
         from sqlalchemy.exc import IntegrityError
 
         s = self.db.session
@@ -217,7 +215,7 @@ class Files(object):
             cache,
             commit=True,
             state='installed'):
-        """Mark a bundle file as having been installed in the library"""
+        """Mark a bundle file as having been installed in the library."""
 
         ident = bundle.identity
 
@@ -241,9 +239,7 @@ class Files(object):
             cache,
             commit=True,
             state='installed'):
-        """Mark a partition file as having been installed in the library
-
-        """
+        """Mark a partition file as having been installed in the library."""
 
         ident = partition.identity
 
@@ -262,7 +258,7 @@ class Files(object):
             source_url=None)
 
     def install_remote_bundle(self, ident, upstream, metadata, commit=True):
-        """Set a reference to a remote bundle"""
+        """Set a reference to a remote bundle."""
 
         return self.new_file(
             commit=commit,
@@ -278,7 +274,7 @@ class Files(object):
             source_url=upstream.repo_id)
 
     def install_remote_partition(self, ident, upstream, metadata, commit=True):
-        """Set a reference to a remote partition"""
+        """Set a reference to a remote partition."""
 
         assert bool(str(ident.cache_key)), "File path can't be null'"
 
@@ -296,7 +292,7 @@ class Files(object):
             source_url=upstream.repo_id, )
 
     def install_bundle_source(self, bundle, source, commit=True):
-        """Set a reference a bundle source"""
+        """Set a reference a bundle source."""
 
         return self.new_file(
             commit=commit,
@@ -314,8 +310,8 @@ class Files(object):
     def install_data_store(self, w,
                            name=None, title=None, summary=None,
                            cache=None, url=None, commit=True):
-        """A reference for a data store, such as a warehouse or a file store.
-        """
+        """A reference for a data store, such as a warehouse or a file
+        store."""
 
         extant = self.query.path(w.dsn).group(self.TYPE.STORE).one_maybe
 
@@ -340,7 +336,7 @@ class Files(object):
         return f
 
     def _process_source_content(self, path, source=None, content=None):
-        """Install a file reference, possibly with binary content"""
+        """Install a file reference, possibly with binary content."""
         import os
         from ..util import md5_for_file
         import hashlib
@@ -405,8 +401,7 @@ class Files(object):
         return dict(hash=hash, size=size, modified=modified, content=content)
 
     def install_manifest(self, manifest, warehouse=None, commit=True):
-        """Store a references to, and content for, a manifest
-        """
+        """Store a references to, and content for, a manifest."""
 
         extant = self.query.ref(
             manifest.uid).group(
@@ -444,8 +439,12 @@ class Files(object):
         return f
 
     def install_extract(self, path, source, d, commit=True):
-        """Create a references for an extract. The extract hasn't been extracted yet, so
-        there is no content, hash, etc. """
+        """Create a references for an extract.
+
+        The extract hasn't been extracted yet, so there is no content,
+        hash, etc.
+
+        """
 
         f = self.query.path(path).type(self.TYPE.EXTRACT).one_maybe
 

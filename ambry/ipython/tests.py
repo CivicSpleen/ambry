@@ -1,4 +1,4 @@
-"""Test of how libraries interact with IPYthon"""
+"""Test of how libraries interact with IPYthon."""
 
 
 def test_logging():

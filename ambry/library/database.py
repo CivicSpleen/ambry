@@ -1,5 +1,8 @@
-"""A Library is a local collection of bundles. It holds a database for the configuration
-of the bundles that have been installed into it.
+"""A Library is a local collection of bundles.
+
+It holds a database for the configuration of the bundles that have been
+installed into it.
+
 """
 
 # Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
@@ -25,7 +28,8 @@ ROOT_CONFIG_NAME_V = 'd000001'
 
 class LibraryDb(object):
 
-    '''Represents the Sqlite database that holds metadata for all installed bundles'''
+    """Represents the Sqlite database that holds metadata for all installed
+    bundles."""
 
     # Database connection information
     Dbci = namedtuple('Dbc', 'dsn_template sql')
@@ -83,7 +87,7 @@ class LibraryDb(object):
 
     @property
     def engine(self):
-        '''return the SqlAlchemy engine for this database'''
+        """return the SqlAlchemy engine for this database."""
         from sqlalchemy import create_engine
         from ..database.sqlite import _on_connect_update_sqlite_schema
         from sqlalchemy.pool import AssertionPool
@@ -117,7 +121,7 @@ class LibraryDb(object):
 
     @property
     def connection(self):
-        '''Return an SqlAlchemy connection'''
+        """Return an SqlAlchemy connection."""
         if not self._connection:
             self._connection = self.engine.connect()
 
@@ -128,7 +132,7 @@ class LibraryDb(object):
 
     @property
     def session(self):
-        '''Return a SqlAlchemy session'''
+        """Return a SqlAlchemy session."""
         from sqlalchemy.orm import sessionmaker
 
         if not self.Session:
@@ -179,7 +183,7 @@ class LibraryDb(object):
 
     @property
     def metadata(self):
-        '''Return an SqlAlchemy MetaData object, bound to the engine'''
+        """Return an SqlAlchemy MetaData object, bound to the engine."""
 
         from sqlalchemy import MetaData
 
@@ -253,7 +257,7 @@ class LibraryDb(object):
         self.commit()
 
     def create(self):
-        """Create the database from the base SQL"""
+        """Create the database from the base SQL."""
 
         if not self.exists():
 
@@ -269,7 +273,7 @@ class LibraryDb(object):
         return False
 
     def _create_path(self):
-        """Create the path to hold the database, if one wwas specified"""
+        """Create the path to hold the database, if one wwas specified."""
 
         if self.driver == 'sqlite':
 
@@ -395,7 +399,7 @@ class LibraryDb(object):
             self.commit()
 
     def _clean_config_root(self):
-        '''Hack need to clean up some installed databases'''
+        """Hack need to clean up some installed databases."""
 
         ds = self.session.query(Dataset).filter(
             Dataset.id_ == ROOT_CONFIG_NAME).one()
@@ -428,7 +432,7 @@ class LibraryDb(object):
     ##
 
     def set_config_value(self, group, key, value):
-        '''Set a configuration value in the database'''
+        """Set a configuration value in the database."""
         from ambry.orm import Config as SAConfig
         from sqlalchemy.exc import IntegrityError, ProgrammingError
         from sqlalchemy.orm.exc import NoResultFound
@@ -486,9 +490,13 @@ class LibraryDb(object):
             return {}
 
     def get_config_rows(self, d_vid):
-        """Return configuration in a form that can be used to reconstitute a Metadataobject
-        Returns all of the rows for a dataset. This is distinct from get_config_value, which returns the
-        value for the library. """
+        """Return configuration in a form that can be used to reconstitute a
+        Metadataobject Returns all of the rows for a dataset.
+
+        This is distinct from get_config_value, which returns the value
+        for the library.
+
+        """
         from ambry.orm import Config as SAConfig
         from sqlalchemy import or_
 
@@ -527,7 +535,7 @@ class LibraryDb(object):
             return None
 
     def get_bundle_values(self, dvid, group):
-        """Get an entire group of bundle values"""
+        """Get an entire group of bundle values."""
 
         from ambry.orm import Config as SAConfig
 
@@ -568,7 +576,11 @@ class LibraryDb(object):
     ##
 
     def install_dataset_identity(self, identity, data={}, overwrite=True):
-        '''Create the record for the dataset. Does not add an File objects'''
+        """Create the record for the dataset.
+
+        Does not add an File objects
+
+        """
         from sqlalchemy.exc import IntegrityError
         from ..dbexceptions import ConflictError
 
@@ -601,7 +613,11 @@ class LibraryDb(object):
                         ds.dict))
 
     def install_partition_identity(self, identity, data={}, overwrite=True):
-        '''Create the record for the dataset. Does not add an File objects'''
+        """Create the record for the dataset.
+
+        Does not add an File objects
+
+        """
         from sqlalchemy.exc import IntegrityError
         from ..dbexceptions import ConflictError
 
@@ -636,9 +652,7 @@ class LibraryDb(object):
                     p.dict))
 
     def install_bundle(self, bundle, commit=True):
-        '''Copy the schema and partitions lists into the library database
-
-        '''
+        """Copy the schema and partitions lists into the library database."""
         from ambry.bundle import Bundle
         from sqlalchemy.orm.exc import NoResultFound
         from ..dbexceptions import ConflictError, NotFoundError
@@ -713,9 +727,11 @@ class LibraryDb(object):
         """Install only the most basic parts of the bundle, excluding the
         partitions and tables. Use install_bundle to install everything.
 
-        This will delete all of the tables and partitions associated with the
-        bundle, if they already exist, so callers should check that the dataset does not
-        already exist  before installing again.
+        This will delete all of the tables and partitions associated
+        with the bundle, if they already exist, so callers should check
+        that the dataset does not already exist  before installing
+        again.
+
         """
 
         from sqlalchemy.exc import OperationalError
@@ -777,9 +793,9 @@ class LibraryDb(object):
             install_bundle=True,
             install_tables=True,
             commit=True):
-        """Install a single partition and its tables. This is mostly
-        used for installing into warehouses, where it isn't desirable to install
-        the whole bundle
+        """Install a single partition and its tables. This is mostly used for
+        installing into warehouses, where it isn't desirable to install the
+        whole bundle.
 
         if commit = 'collect', the partitions are collected and inserted with insert_partition_collection,
         in this case, tables and column will not be installed.
@@ -806,9 +822,9 @@ class LibraryDb(object):
             install_bundle=True,
             install_tables=True,
             commit=True):
-        """Install a single partition and its tables. This is mostly
-        used for installing into warehouses, where it isn't desirable to install
-        the whole bundle
+        """Install a single partition and its tables. This is mostly used for
+        installing into warehouses, where it isn't desirable to install the
+        whole bundle.
 
         if commit = 'collect', the partitions are collected and inserted with insert_partition_collection,
         in this case, tables and column will not be installed.
@@ -839,7 +855,7 @@ class LibraryDb(object):
         self._partition_collection = []
 
     def mark_table_installed(self, table_or_vid, name=None):
-        """Mark a table record as installed"""
+        """Mark a table record as installed."""
 
         s = self.session
         table = None
@@ -858,7 +874,7 @@ class LibraryDb(object):
         s.commit()
 
     def mark_partition_installed(self, p_vid):
-        """Mark a table record as installed"""
+        """Mark a table record as installed."""
 
         s = self.session
         table = None
@@ -871,7 +887,7 @@ class LibraryDb(object):
         s.commit()
 
     def remove_bundle(self, bundle):
-        '''remove a bundle from the database'''
+        """remove a bundle from the database."""
         from ..orm import Dataset
         from ..bundle import LibraryDbBundle
 
@@ -904,11 +920,12 @@ class LibraryDb(object):
         self.commit()
 
     def delete_dataset_colstats(self, dvid):
-        """ Total hack to deal with not being able to get delete cascades to work for
-        colstats
+        """Total hack to deal with not being able to get delete cascades to
+        work for colstats.
 
         :param vid: dataset vid
         :return:
+
         """
         s = self.session
 
@@ -920,7 +937,7 @@ class LibraryDb(object):
             synchronize_session='fetch')
 
     def remove_dataset(self, vid):
-        '''Remove all references to a Dataset'''
+        """Remove all references to a Dataset."""
         from ..orm import Dataset, ColumnStat
 
         dataset = (
@@ -976,7 +993,11 @@ class LibraryDb(object):
     ##
 
     def get(self, vid):
-        '''Get an identity by a vid. For partitions, returns a nested Identity'''
+        """Get an identity by a vid.
+
+        For partitions, returns a nested Identity
+
+        """
         from ..identity import ObjectNumber, DatasetNumber, PartitionNumber
         from ..orm import Dataset, Partition
         from sqlalchemy.orm.exc import NoResultFound
@@ -1094,7 +1115,7 @@ class LibraryDb(object):
         return all
 
     def datasets(self, key='vid'):
-        '''List only the dataset records'''
+        """List only the dataset records."""
 
         from ..orm import Dataset
 
@@ -1115,7 +1136,7 @@ class LibraryDb(object):
         return Resolver(self.session)
 
     def find(self, query_command):
-        '''Find a bundle or partition record by a QueryCommand or Identity
+        """Find a bundle or partition record by a QueryCommand or Identity.
 
         Args:
             query_command. QueryCommand or Identity
@@ -1124,7 +1145,7 @@ class LibraryDb(object):
             A list of identities, either Identity, for datasets, or PartitionIdentity
             for partitions.
 
-        '''
+        """
 
         def like_or_eq(c, v):
 
@@ -1328,7 +1349,7 @@ class LibraryDb(object):
 
 
 def _pragma_on_connect(dbapi_con, con_record):
-    '''ISSUE some Sqlite pragmas when the connection is created'''
+    """ISSUE some Sqlite pragmas when the connection is created."""
 
     #dbapi_con.execute('PRAGMA foreign_keys = ON;')
     # Not clear that there is a performance improvement.

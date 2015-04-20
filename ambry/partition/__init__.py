@@ -5,9 +5,13 @@ from ..util import lru_cache
 
 @lru_cache()
 def partition_classes():
-    """Return a holder object that has lists of the known partition types mapped to other keys
+    """Return a holder object that has lists of the known partition types
+    mapped to other keys.
 
-    Used for getting a partition class based on simple name, format, extension, etc. """
+    Used for getting a partition class based on simple name, format,
+    extension, etc.
+
+    """
 
     from geo import GeoPartitionName, GeoPartitionName, GeoPartition, GeoPartitionIdentity
     #from hdf import HdfPartitionName, HdfPartition, HdfPartitionIdentity
@@ -160,7 +164,8 @@ class PartitionBase(PartitionInterface):
         return self.bundle.library.has(self.identity.vid)
 
     def get(self):
-        """Fetch this partition from the library or remote if it does not exist"""
+        """Fetch this partition from the library or remote if it does not
+        exist."""
         return self.bundle.library.get(self.identity.vid).partition
 
     @property
@@ -180,13 +185,13 @@ class PartitionBase(PartitionInterface):
     @property
     def path(self):
         """Return a pathname for the partition, relative to the containing
-        directory of the bundle. """
+        directory of the bundle."""
 
         return self.bundle.sub_dir(
             self.identity.sub_path)  # +self._db_class.EXTENSION
 
     def sub_dir(self, *args):
-        """Return a subdirectory relative to the partition path"""
+        """Return a subdirectory relative to the partition path."""
         return os.path.join(self.path, *args)
 
     @property
@@ -202,9 +207,8 @@ class PartitionBase(PartitionInterface):
         return [self.get_table(t) for t in self.tables]
 
     def get_table(self, table_spec=None):
-        """Return the orm table for this partition, or None if
-        no table is specified.
-        """
+        """Return the orm table for this partition, or None if no table is
+        specified."""
 
         if not table_spec:
             table_spec = self.identity.table
@@ -235,7 +239,7 @@ class PartitionBase(PartitionInterface):
                         self._record)))
 
     def unset_database(self):
-        """Removes the database record from the object"""
+        """Removes the database record from the object."""
         self._database = None
 
     def inserter(self, table_or_name=None, **kwargs):
@@ -271,17 +275,17 @@ class PartitionBase(PartitionInterface):
             raise
 
     def finalize(self):
-        """Wrap up the creation of this partition"""
+        """Wrap up the creation of this partition."""
 
     @property
     def is_finalized(self):
-        """Return true if the partition has been finalized"""
+        """Return true if the partition has been finalized."""
         from ..partitions import Partitions
 
         return self.get_state() == Partitions.STATE.FINALIZED
 
     def set_state(self, state):
-        '''Set a build state value in the database'''
+        """Set a build state value in the database."""
         from ..orm import Partition as OrmPartition
 
         with self.bundle.session as s:
@@ -338,7 +342,7 @@ class PartitionBase(PartitionInterface):
 
     @property
     def info(self):
-        """Returns a human readable string of useful information"""
+        """Returns a human readable string of useful information."""
 
         return ("------ Partition: {name} ------\n".format(name=self.identity.sname) +
                 "\n".join(['{:10s}: {}'.format(k, v) for k, v in self.identity.dict.items()]) +
@@ -347,5 +351,5 @@ class PartitionBase(PartitionInterface):
                 '{:10s}: {}\n'.format('tables', ','.join(self.tables)))
 
     def _repr_html_(self):
-        """IPython display"""
+        """IPython display."""
         return "<p>" + self.info.replace("\n", "<br/>\n") + "</p>"

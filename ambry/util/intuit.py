@@ -1,6 +1,4 @@
-"""
-Intuit data types for rows of values
-"""
+"""Intuit data types for rows of values."""
 __author__ = 'eric'
 
 
@@ -42,7 +40,7 @@ def test_string(v):
 
 
 def test_datetime(v):
-    """Test for ISO datetime"""
+    """Test for ISO datetime."""
     if not isinstance(v, basestring):
         return 0
 
@@ -187,7 +185,8 @@ class Column(object):
                 return type_
 
     def resolved_type(self):
-        "Return the type for the columns, and a flag to indicate that the column has codes"
+        """Return the type for the columns, and a flag to indicate that the
+        column has codes."""
         import datetime
 
         self.type_ratios = {test: float(
@@ -221,7 +220,7 @@ class Column(object):
 
 class Intuiter(object):
 
-    """Determine the types of rows in a table """
+    """Determine the types of rows in a table."""
     header = None
     counts = None
 

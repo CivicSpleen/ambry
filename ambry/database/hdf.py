@@ -1,7 +1,9 @@
 
-"""
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 from ..partitions import Partitions
@@ -13,7 +15,7 @@ from ..orm import Column
 
 class ValueInserter(InserterInterface):
 
-    '''Inserts arrays of values into  database table'''
+    """Inserts arrays of values into  database table."""
 
     def __init__(
             self,
@@ -106,7 +108,7 @@ class HdfDb(DatabaseInterface):
     }
 
     def __init__(self, bundle, partition, base_path, **kwargs):
-        ''''''
+        """"""
 
         self.bundle = bundle
         self.partition = partition

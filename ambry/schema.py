@@ -34,8 +34,7 @@ def _clean_int(i):
 
 class Schema(object):
 
-    """Represents the table and column definitions for a bundle
-    """
+    """Represents the table and column definitions for a bundle."""
 
     def __init__(self, bundle):
         from bundle import Bundle
@@ -65,8 +64,8 @@ class Schema(object):
 
     @property
     def dataset(self):
-        '''Initialize the identity, creating a dataset record,
-        from the bundle.yaml file'''
+        """Initialize the identity, creating a dataset record, from the
+        bundle.yaml file."""
         from sqlalchemy.orm.util import object_state
 
         from ambry.orm import Dataset
@@ -80,9 +79,12 @@ class Schema(object):
         return self._dataset
 
     def clean(self):
-        '''Delete all tables and columns.
-        WARNING! This will also delete partitions, since partitions can depend on tables
-        '''
+        """Delete all tables and columns.
+
+        WARNING! This will also delete partitions, since partitions can
+        depend on tables
+
+        """
 
         from ambry.orm import Table, Column, Partition
 
@@ -97,7 +99,7 @@ class Schema(object):
 
     @property
     def tables(self):
-        '''Return a list of tables for this bundle'''
+        """Return a list of tables for this bundle."""
         from ambry.orm import Table
 
         from ambry.orm import Table
@@ -110,7 +112,7 @@ class Schema(object):
 
     @classmethod
     def get_table_from_database(cls, db, name_or_id, session=None, d_vid=None):
-        '''Return the orm.Table record from the bundle schema '''
+        """Return the orm.Table record from the bundle schema."""
         from dbexceptions import NotFoundError
         from ambry.orm import Table
 
@@ -144,8 +146,11 @@ class Schema(object):
                 "No table for name_or_id: '{}'".format(name_or_id))
 
     def table(self, name_or_id, session=None):
-        '''Return an orm.Table object, from either the id or name. This is the cleaa method version
-        of get_table_from_database'''
+        """Return an orm.Table object, from either the id or name.
+
+        This is the cleaa method version of get_table_from_database
+
+        """
 
         if session is None:
             session = self.bundle.database.session
@@ -163,10 +168,11 @@ class Schema(object):
         return None
 
     def add_table(self, name, add_id=False, **kwargs):
-        '''Add a table to the schema, or update it it already exists.
+        """Add a table to the schema, or update it it already exists.
 
         If updating, will only update data.
-        '''
+
+        """
         from orm import Table
         from dbexceptions import NotFoundError
 
@@ -233,7 +239,7 @@ class Schema(object):
         return row
 
     def add_column(self, table, name, **kwargs):
-        '''Add a column to the schema'''
+        """Add a column to the schema."""
         from dbexceptions import ConfigurationError
 
         # Make sure that the columnumber is monotonically increasing
@@ -307,7 +313,7 @@ class Schema(object):
 
     @property
     def columns(self):
-        '''Return a list of tables for this bundle'''
+        """Return a list of tables for this bundle."""
         from ambry.orm import Column
         return (self.bundle.database.session.query(Column).all())
 
@@ -363,7 +369,8 @@ class Schema(object):
 
     @classmethod
     def translate_type(cls, driver, table, column):
-        '''Translate types for particular driver, and perform some validity checks'''
+        """Translate types for particular driver, and perform some validity
+        checks."""
         # Creates a lot of unnecessary objects, but speed is not important
         # here.
 
@@ -427,7 +434,7 @@ class Schema(object):
             use_id=False,
             driver=None,
             alt_name=None):
-        '''Method version of get_table_meta_from_db'''
+        """Method version of get_table_meta_from_db."""
         return self.get_table_meta_from_db(
             self.bundle.database,
             name_or_id,
@@ -570,7 +577,11 @@ class Schema(object):
         return metadata, at
 
     def generate_indexes(self, table):
-        """Used for adding indexes to geo partitions. Generates index CREATE commands"""
+        """Used for adding indexes to geo partitions.
+
+        Generates index CREATE commands
+
+        """
 
         indexes = {}
         uindexes = {}
@@ -601,7 +612,7 @@ class Schema(object):
                                                                             ','.join([c.name for c in cols]))
 
     def create_tables(self):
-        '''Create the defined tables as database tables.'''
+        """Create the defined tables as database tables."""
         with self.bundle.session:
             for t in self.tables:
                 if not t.name in self.bundle.database.inspector.get_table_names():
@@ -610,8 +621,12 @@ class Schema(object):
                     table.create(bind=self.bundle.database.engine)
 
     def caster(self, table_name):
-        '''Return a caster for a table. This is like orm.Table.caster, but it will use special caster types
-        defined in the schema'''
+        """Return a caster for a table.
+
+        This is like orm.Table.caster, but it will use special caster
+        types defined in the schema
+
+        """
 
         from ambry.transform import CasterTransformBuilder
 
@@ -657,7 +672,7 @@ class Schema(object):
         return self._schema_from_file(file_, progress_cb, fast=fast)
 
     def _schema_from_file(self, file_, progress_cb=None, fast=False):
-        '''Read a CSV file, in a particular format, to generate the schema'''
+        """Read a CSV file, in a particular format, to generate the schema."""
         from orm import Column
         import csv
         import re
@@ -836,8 +851,9 @@ class Schema(object):
         return warnings, errors
 
     def expand_table_prototypes(self):
-        """Look for tables that have prototypes, get the original table, and expand the
-        local definition to include all of the prototypes's columns"""
+        """Look for tables that have prototypes, get the original table, and
+        expand the local definition to include all of the prototypes's
+        columns."""
         from orm import Table
         from dbexceptions import NotFoundError
         from identity import ObjectNumber
@@ -952,7 +968,8 @@ class Schema(object):
                                         ip.identity.vname), ipc.name))
 
     def process_proto_vid(self, pvid):
-        """Lookup protovids to ensure they are sensible, and convert names to the proto_vid"""
+        """Lookup protovids to ensure they are sensible, and convert names to
+        the proto_vid."""
         from identity import ObjectNumber
 
         on = ObjectNumber.parse(pvid)
@@ -960,7 +977,8 @@ class Schema(object):
         print pvid, on
 
     def extract_schema(self, db):
-        '''Extract an Ambry schema from a database and create it in this bundle '''
+        """Extract an Ambry schema from a database and create it in this
+        bundle."""
 
         for table_name in db.inspector.get_table_names():
             self.bundle.log("Extracting: {}".format(table_name))
@@ -990,12 +1008,12 @@ class Schema(object):
                                 is_primary_key=c['primary_key'] != 0)
 
     def write_schema(self):
-        '''Write the schema back to the schema file'''
+        """Write the schema back to the schema file."""
         with open(self.bundle.filesystem.path('meta', self.bundle.SCHEMA_FILE), 'w') as f:
             self.as_csv(f)
 
     def move_revised_schema(self):
-        """Move the revised schema file into place, saving the old one"""
+        """Move the revised schema file into place, saving the old one."""
         import filecmp
         import shutil
         import os
@@ -1023,9 +1041,7 @@ class Schema(object):
                 pass
 
     def copy_table(self, in_table, out_table_name=None):
-        '''Copy a table schema into this schema
-
-        '''
+        """Copy a table schema into this schema."""
 
         if not out_table_name:
             out_table_name = in_table.name
@@ -1050,9 +1066,7 @@ class Schema(object):
     @staticmethod
     def _dump_gen(self, table_name=None):
         """Yield schema row for use in exporting the schema to other
-        formats
-
-        """
+        formats."""
 
         # Collect indexes
         indexes = {}
@@ -1326,7 +1340,7 @@ class Schema(object):
 
     def as_orm(self):
         """Return a string that holds the schema represented as Sqlalchemy
-        classess"""
+        classess."""
 
         def write_file():
             return """
@@ -1419,8 +1433,8 @@ class {name}(Base):
         return out
 
     def write_orm(self):
-        """Writes the ORM file to the lib directory, which is automatically added to the
-        import path by the Bundle"""
+        """Writes the ORM file to the lib directory, which is automatically
+        added to the import path by the Bundle."""
         import os
 
         lib_dir = self.bundle.filesystem.path('lib')
@@ -1464,7 +1478,7 @@ class {name}(Base):
                     self.bundle.CODE_FILE))
 
     def read_codes(self):
-        """Read codes from a codes.csv file back into the schema"""
+        """Read codes from a codes.csv file back into the schema."""
         import csv
         from dbexceptions import NotFoundError
 
@@ -1495,7 +1509,8 @@ class {name}(Base):
 
     @property
     def dict(self):
-        """Represent the entire schema as a dict, suitable for conversion to json"""
+        """Represent the entire schema as a dict, suitable for conversion to
+        json."""
         s = {}
 
         for t in self.tables:
@@ -1514,7 +1529,7 @@ class {name}(Base):
         return out
 
     def add_views(self):
-        """Add views defined in the configuration"""
+        """Add views defined in the configuration."""
 
         for p in self.bundle.partitions:
 
@@ -1542,7 +1557,8 @@ class {name}(Base):
                 p.database.connection.execute(sql)
 
     def update_lengths(self, table_name, lengths):
-        '''Update the sizes of the columns in table with a dict mapping column names to length'''
+        """Update the sizes of the columns in table with a dict mapping column
+        names to length."""
 
         with self.bundle.session as s:
 
@@ -1619,8 +1635,7 @@ class {name}(Base):
 
     def update_from_intuiter(self, table_name, intuiter, logger=None,
                              description=None, descriptions=None):
-        """
-        Update a table schema using a memo from intuit()
+        """Update a table schema using a memo from intuit()
 
         :param table_name:
         :param intuiter:
@@ -1628,6 +1643,7 @@ class {name}(Base):
         :param description: Table description
         :param descriptions:  Dict apping column names to column descriptions
         :return:
+
         """
         from datetime import datetime, time, date
         import string

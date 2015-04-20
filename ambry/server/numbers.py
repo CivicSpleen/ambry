@@ -1,7 +1,5 @@
-"""
-
-Server application for assigning dataset numbers. Requires a redis instance for
-data storage.
+"""Server application for assigning dataset numbers. Requires a redis instance
+for data storage.
 
 Run with: python -mambry.server.numbers
 
@@ -37,6 +35,7 @@ It returns a JSON dict, with the 'number' key mapping to the number.
 
 Copyright (c) 2014 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 
@@ -115,7 +114,7 @@ class RedisPlugin(object):
 
 
 def _CaptureException(f, *args, **kwargs):
-    '''Decorator implementation for capturing exceptions '''
+    """Decorator implementation for capturing exceptions."""
 
     try:
         r = f(*args, **kwargs)
@@ -130,16 +129,16 @@ def _CaptureException(f, *args, **kwargs):
 
 
 def CaptureException(f, *args, **kwargs):
-    '''Decorator to capture exceptions and convert them
-    to a dict that can be returned as JSON '''
+    """Decorator to capture exceptions and convert them to a dict that can be
+    returned as JSON."""
 
     return decorator(_CaptureException, f)  # Preserves signature
 
 
 class AllJSONPlugin(object):
 
-    '''A copy of the bottle JSONPlugin, but this one tries to convert
-    all objects to json '''
+    """A copy of the bottle JSONPlugin, but this one tries to convert all
+    objects to json."""
 
     from json import dumps as json_dumps
 
@@ -202,10 +201,10 @@ def get_root(redis):
 
 
 def request_delay(nxt, delay, delay_factor):
-    """
-    Calculate how long this client should be delayed before next
-    request.
+    """Calculate how long this client should be delayed before next request.
+
     :rtype : object
+
     """
 
     import time
@@ -351,7 +350,7 @@ def get_next_space(redis, assignment_class=None, space=''):
 
 @get('/find/<name>')
 def get_echo_term(name, redis):
-    '''Return an existing number for a bundle name, or return a new one. '''
+    """Return an existing number for a bundle name, or return a new one."""
 
     nk = 'name:' + name
 
@@ -386,7 +385,7 @@ def get_echo_term(name, redis):
 
 @get('/echo/<term>')
 def get_echo_term(term, redis):
-    '''Test function to see if the server is working '''
+    """Test function to see if the server is working."""
 
     return [term]
 

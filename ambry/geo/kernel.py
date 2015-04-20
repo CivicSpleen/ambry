@@ -1,7 +1,8 @@
 """Kernels are arrays used in 2D colvolution on analysis area arrays.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 import numpy as np
@@ -36,7 +37,8 @@ class Kernel(object):
         self._dindices = None
 
     def limit(self):
-        '''Make the matrix spot sort of round, by masking values in the corners'''
+        """Make the matrix spot sort of round, by masking values in the
+        corners."""
 
         # Get the max value for the edge of the enclosed circle.
         # This assumes that there is a radial gradient.
@@ -47,7 +49,7 @@ class Kernel(object):
                 self.matrix[y_m][x_m] = 0
 
     def round(self):
-        '''Make the matrix spot sort of round, using a radius'''
+        """Make the matrix spot sort of round, using a radius."""
         import math
         # Get the max value for the edge of the enclosed circle.
         # This assumes that there is a radial gradient.
@@ -61,8 +63,8 @@ class Kernel(object):
         self.matrix /= self.matrix.max()
 
     def invert(self):
-        ''''Invert the values, so the cells closer to the center
-        have the higher values. '''
+        """'Invert the values, so the cells closer to the center have the
+        higher values."""
         #range = self.matrix.max() - self.matrix.min()
 
         self.matrix = self.matrix.max() - self.matrix
@@ -153,7 +155,8 @@ class Kernel(object):
 
     @property
     def dindices(self):
-        '''Return the indices of the matrix, sorted by distance from the center'''
+        """Return the indices of the matrix, sorted by distance from the
+        center."""
         import math
 
         if self._dindices is None:
@@ -169,7 +172,7 @@ class Kernel(object):
         return self._dindices
 
     def diterate(self, a, point):
-        '''Iterate over the distances from the point in the array a'''
+        """Iterate over the distances from the point in the array a."""
 
         for i in self.dindices:
             x = point[0] + i[1] - self.center
@@ -192,6 +195,7 @@ class Kernel(object):
         :type point: Point
         :param v: External value to be passed into the function
         :type v: any
+
         """
 
         if v:
@@ -215,8 +219,12 @@ class Kernel(object):
                         a.shape)))
 
     def iterate(self, a, indices=None):
-        '''Iterate over kernel sized arrays of the input array. If indices are specified, use them to iterate
-        over some of the cells, rather than all of them. '''
+        """Iterate over kernel sized arrays of the input array.
+
+        If indices are specified, use them to iterate over some of the
+        cells, rather than all of them.
+
+        """
         from ..geo import Point
         if indices is None:
             it = np.nditer(a, flags=['multi_index'])
@@ -250,7 +258,7 @@ class Kernel(object):
 
 class ConstantKernel(Kernel):
 
-    """A Kernel for a constant value"""
+    """A Kernel for a constant value."""
 
     def __init__(self, size=1, value=None):
 
@@ -281,11 +289,12 @@ class GaussianKernel(Kernel):
 
     @staticmethod
     def makeGaussian(size, fwhm=3):
-        """ Make a square gaussian kernel.
+        """Make a square gaussian kernel.
 
         size is the length of a side of the square
         fwhm is full-width-half-maximum, which
         can be thought of as an effective radius.
+
         """
 
         x = np.arange(0, size, 1, np.float32)
@@ -303,7 +312,7 @@ class GaussianKernel(Kernel):
 
 class DistanceKernel(Kernel):
 
-    ''' Each cell is the distance, in cell widths, from the center '''
+    """Each cell is the distance, in cell widths, from the center."""
 
     def __init__(self, size):
 
@@ -325,7 +334,7 @@ class DistanceKernel(Kernel):
 
 class MostCommonKernel(ConstantKernel):
 
-    """Applies the most common value in the kernel area"""
+    """Applies the most common value in the kernel area."""
 
     def __init__(self, size=1):
         super(MostCommonKernel, self).__init__(size, 1)
@@ -344,6 +353,7 @@ class MostCommonKernel(ConstantKernel):
         :type point: Point
         :param v: External value to be passed into the function
         :type v: any
+
         """
 
         if v:
@@ -368,8 +378,7 @@ class MostCommonKernel(ConstantKernel):
 
 class ArrayKernel(Kernel):
 
-    '''Convert an arbitary ( hopefully small ) numpy array
-    into a kernel'''
+    """Convert an arbitary ( hopefully small ) numpy array into a kernel."""
 
     def __init__(self, a, const=None):
 

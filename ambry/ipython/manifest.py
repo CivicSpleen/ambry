@@ -1,6 +1,8 @@
-"""Manifest Magics for creating a manifest file asssociated with an IPython notebook.
+"""Manifest Magics for creating a manifest file asssociated with an IPython
+notebook.
 
-Each of the magics creates an entry in a manifest file in memory, which is executed to build the warehouse.
+Each of the magics creates an entry in a manifest file in memory, which
+is executed to build the warehouse.
 
 """
 
@@ -134,7 +136,7 @@ class ManifestMagicsImpl(object):
             install_db=install_db)
 
     def tag_lineno(self, tag, args, cell=None):
-        """Return a cached line number for single line tags"""
+        """Return a cached line number for single line tags."""
 
         start_line = dict(
             partitions=20,
@@ -169,7 +171,10 @@ class ManifestMagicsImpl(object):
 
     def manifest(self, line, cell):
         """Cell magic for all of the opening lines, TITLE, UID, ACCESS, etc.
-        Line number is always 0"""
+
+        Line number is always 0
+
+        """
 
         # TBD: Parse the line to set manifest parameters
 
@@ -184,12 +189,12 @@ class ManifestMagicsImpl(object):
             return self._manifest.install()
 
     def partitions(self, line, cell):
-        """Partitions all start at line 20"""
+        """Partitions all start at line 20."""
         self._manifest.sectionalize(['PARTITIONS: {}'.format(
             line)] + cell.splitlines(), first_line=self.tag_lineno('partitions', line))
 
     def extract(self, line):
-        """Single extract line"""
+        """Single extract line."""
         self._manifest.sectionalize(
             ['EXTRACT: {}'.format(line)], first_line=self.tag_lineno('extract', line))
 
@@ -208,7 +213,7 @@ class ManifestMagicsImpl(object):
 @magics_class
 class ManifestMagics(Magics):
 
-    """Magics for creating Ambry manifests within an ipython notebook"""
+    """Magics for creating Ambry manifests within an ipython notebook."""
 
     def __init__(self, shell):
         # You must call the parent constructor
@@ -218,7 +223,10 @@ class ManifestMagics(Magics):
     @cell_magic
     def manifest(self, line, cell):
         """Cell magic for all of the opening lines, TITLE, UID, ACCESS, etc.
-        Line number is always 0"""
+
+        Line number is always 0
+
+        """
 
         r = self.impl.manifest(line, cell)
 
@@ -228,12 +236,12 @@ class ManifestMagics(Magics):
 
     @cell_magic
     def partitions(self, line, cell):
-        """Partitions all start at line 20"""
+        """Partitions all start at line 20."""
         self.impl.partitions(line, cell)
 
     @line_magic
     def extract(self, line):
-        """Single extract line"""
+        """Single extract line."""
         self.impl.extract(line)
 
     @cell_magic

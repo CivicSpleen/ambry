@@ -1,9 +1,10 @@
-"""Production settings
+"""Production settings.
 
 This file can be copied to devel.py and altered to configure settings for development.
 
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 

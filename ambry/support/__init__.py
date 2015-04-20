@@ -1,6 +1,6 @@
 
 def default_bundle_config():
-    '''Return the default bundle config file as an AttrDict'''
+    """Return the default bundle config file as an AttrDict."""
 
     import os
     from ambry.util import AttrDict

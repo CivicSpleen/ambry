@@ -1,24 +1,28 @@
 
-"""
-Copyright (c) 2014 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2014 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 from ambry import library as _lf
 
 
 def library(name='default'):
-    '''Return the default Analysislibrary for this installation, which is like the Library returned by
-    library(), but configured for use in IPython'''
+    """Return the default Analysislibrary for this installation, which is like
+    the Library returned by library(), but configured for use in IPython."""
     from ambry.library import AnalysisLibrary
 
     return AnalysisLibrary(_lf())
 
 
 def get_ipython_notebook_path():
-    """Return the path to the current notebook file
+    """Return the path to the current notebook file.
 
-    This is a horrible hack, but there doesn't seem to be another way to do it.
+    This is a horrible hack, but there doesn't seem to be another way to
+    do it.
+
     """
 
     # Partly from: http://stackoverflow.com/a/13055551/1144479
@@ -49,8 +53,9 @@ def get_ipython_notebook_path():
 def get_ipython_server_info():
     """Return the notebook server info as a dict, using an egregious hack.
 
-    This will be correct only if there is only one IPython notebook instance running for each
-    get_ipython().starting_dir
+    This will be correct only if there is only one IPython notebook
+    instance running for each get_ipython().starting_dir
+
     """
 
     import json

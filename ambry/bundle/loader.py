@@ -1,5 +1,5 @@
-""" Bundle variants that directly load files with little additional processing.
-"""
+"""Bundle variants that directly load files with little additional
+processing."""
 
 
 from ambry.bundle import BuildBundle
@@ -16,7 +16,7 @@ class LoaderBundle(BuildBundle):
 
     @staticmethod
     def int_caster(v):
-        """Remove commas from numbers and cast to int"""
+        """Remove commas from numbers and cast to int."""
 
         try:
             return int(v.replace(',', ''))
@@ -25,7 +25,7 @@ class LoaderBundle(BuildBundle):
 
     @staticmethod
     def real_caster(v):
-        """Remove commas from numbers and cast to float"""
+        """Remove commas from numbers and cast to float."""
 
         try:
             return float(v.replace(',', ''))
@@ -42,13 +42,13 @@ class LoaderBundle(BuildBundle):
             return False
 
     def mangle_column_name(self, i, n):
-        """
-        Override this method to change the way that column names from the source are altered to
-        become column names in the schema
+        """Override this method to change the way that column names from the
+        source are altered to become column names in the schema.
 
         :param i: column number
         :param n: original column name
         :return:
+
         """
         from ambry.orm import Column
 
@@ -61,9 +61,11 @@ class LoaderBundle(BuildBundle):
         return [self.mangle_column_name(i, n) for i, n in enumerate(header)]
 
     def build_create_partition(self, source_name):
-        """Create or find a partition based on the source
+        """Create or find a partition based on the source.
 
-        Will also load the source metadata into the partition, as a dict, under the key name of the source name.
+        Will also load the source metadata into the partition, as a
+        dict, under the key name of the source name.
+
         """
 
         source = self.metadata.sources[source_name]
@@ -90,7 +92,7 @@ class LoaderBundle(BuildBundle):
         return p
 
     def get_source(self, source):
-        """Check for saved source"""
+        """Check for saved source."""
         import os
 
         # If the file we are given isn't actually a CSV file, we might have manually
@@ -243,14 +245,14 @@ class LoaderBundle(BuildBundle):
         return True
 
     def build_modify_row(self, row_gen, p, source, row):
-        """
-        Modify a row just before being inserted into the partition
+        """Modify a row just before being inserted into the partition.
 
         :param row_gen: Row generator that created the row
         :param p: Partition the row will be inserted into
         :param source: Source record of the original data
         :param row: A dict of the row
         :return:
+
         """
         pass
 
@@ -307,7 +309,7 @@ class LoaderBundle(BuildBundle):
 
 class CsvBundle(LoaderBundle):
 
-    """A Bundle variant for loading CSV files"""
+    """A Bundle variant for loading CSV files."""
 
     pass
 
@@ -321,14 +323,17 @@ class TsvBuildBundle(CsvBundle):
     delimiter = '\t'
 
     def __init__(self, bundle_dir=None):
-        '''
-        '''
+        """"""
 
         super(TsvBuildBundle, self).__init__(bundle_dir)
 
     def get_source(self, source):
-        """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
-        and look in the source store cache """
+        """Get the source file.
+
+        If the file does not end in a CSV file, replace it with a CSV
+        extension and look in the source store cache
+
+        """
         import os
 
         if not source:
@@ -344,11 +349,10 @@ class TsvBuildBundle(CsvBundle):
 
 class GeoBuildBundle(LoaderBundle):
 
-    """A Bundle variant that loads zipped Shapefiles"""
+    """A Bundle variant that loads zipped Shapefiles."""
 
     def __init__(self, bundle_dir=None):
-        '''
-        '''
+        """"""
 
         super(GeoBuildBundle, self).__init__(bundle_dir)
 

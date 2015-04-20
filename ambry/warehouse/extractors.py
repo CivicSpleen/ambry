@@ -1,7 +1,8 @@
 """Classes for converting warehouse databases to other formats.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 import ogr
@@ -181,7 +182,8 @@ class OgrExtractor(Extractor):
         self.mangled_names = {}
 
     def geometry_type(self, database, table):
-        """Return the name of the most common geometry type and the coordinate dimensions"""
+        """Return the name of the most common geometry type and the coordinate
+        dimensions."""
         ce = database.connection.execute
 
         # Only deal with the first geometry column per table. Unfortunately, the table is often
@@ -392,9 +394,7 @@ class ShapeExtractor(OgrExtractor):
         return rel_path
 
     def zip_dir(self, layer_name, source_dir, dest_path):
-        """
-        layer_name The name of the top level directory in
-        """
+        """layer_name The name of the top level directory in."""
         import zipfile
         import os
 

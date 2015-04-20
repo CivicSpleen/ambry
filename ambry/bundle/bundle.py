@@ -1,8 +1,9 @@
 """The Bundle object is the root object for a bundle, which includes acessors
-for partitions, schema, and the filesystem
+for partitions, schema, and the filesystem.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 import logging
@@ -17,8 +18,8 @@ from ..util import memoize
 
 class Bundle(object):
 
-    """Represents a bundle, including all configuration
-    and top level operations. """
+    """Represents a bundle, including all configuration and top level
+    operations."""
 
     _logger = None
     log_level = logging.INFO
@@ -33,8 +34,7 @@ class Bundle(object):
     _library_name = 'default'
 
     def __init__(self, logger=None):
-        """
-        """
+        """"""
 
         # This bit of wackiness allows the var(self.run_args) code
         # to work when there have been no artgs parsed.
@@ -52,7 +52,8 @@ class Bundle(object):
             pass
 
     def close(self):
-        """Close the bundle database and all partition databases, committing and closing any sessions and connections"""
+        """Close the bundle database and all partition databases, committing
+        and closing any sessions and connections."""
         from ..dbexceptions import NotFoundError, DatabaseMissingError
         self.partitions.close()
 
@@ -78,7 +79,7 @@ class Bundle(object):
 
     @property
     def logger(self):
-        """The bundle logger"""
+        """The bundle logger."""
         import sys
         if not self._logger:
 
@@ -124,7 +125,7 @@ class Bundle(object):
 
     @property
     def database(self):
-        """The database object for the bundle"""
+        """The database object for the bundle."""
         from ..dbexceptions import DatabaseMissingError
 
         if self._database is None:
@@ -134,7 +135,8 @@ class Bundle(object):
 
     @property
     def schema(self):
-        """The Schema object, which access all of the tables and columns in the bundle"""
+        """The Schema object, which access all of the tables and columns in the
+        bundle."""
         if self._schema is None:
             self._schema = Schema(self)
 
@@ -142,7 +144,7 @@ class Bundle(object):
 
     @property
     def partitions(self):
-        """The Partitions object, for creating and accessing partitions"""
+        """The Partitions object, for creating and accessing partitions."""
         if self._partitions is None:
             self._partitions = Partitions(self)
 
@@ -150,7 +152,7 @@ class Bundle(object):
 
     @property
     def repository(self):
-        """Return a repository object """
+        """Return a repository object."""
         from ..repository import Repository  # @UnresolvedImport
 
         if not self._repository:
@@ -164,7 +166,8 @@ class Bundle(object):
 
     @property
     def dataset(self):
-        """Return the dataset, the database object that holds the identity values like id, vid, vname, etc. """
+        """Return the dataset, the database object that holds the identity
+        values like id, vid, vname, etc."""
 
         return self.get_dataset()
 
@@ -180,7 +183,8 @@ class Bundle(object):
                 session=s)
 
     def get_value(self, group, key, default=None):
-        """Get a config value using the current bundle's configuration group"""
+        """Get a config value using the current bundle's configuration
+        group."""
         v = self.database.get_config_value(self.dataset.vid, group, key)
 
         if v is None and default is not None:
@@ -194,7 +198,10 @@ class Bundle(object):
 
     def _dep_cb(self, library, key, name, resolved_bundle):
         """A callback that is called when the library resolves a dependency.
-        It stores the resolved dependency into the bundle database"""
+
+        It stores the resolved dependency into the bundle database
+
+        """
 
         if resolved_bundle.partition:
             ident = resolved_bundle.partition.identity
@@ -206,7 +213,7 @@ class Bundle(object):
                 self.set_value('rdep', key, ident.dict)
 
     def sub_template(self, t):
-        '''Substitute some data values into a format() template '''
+        """Substitute some data values into a format() template."""
         d = {}
         for r in self.metadata.rows:
 
@@ -232,8 +239,8 @@ class Bundle(object):
 
     @property
     def library(self):
-        """Return the library set for the bundle, or
-        local library from get_library() if one was not set. """
+        """Return the library set for the bundle, or local library from
+        get_library() if one was not set."""
 
         from ..library import new_library
 
@@ -264,8 +271,8 @@ class Bundle(object):
 
     @property
     def path(self):
-        """Return the base path for the bundle, usually the path to the
-        bundle database, but withouth the database extension."""
+        """Return the base path for the bundle, usually the path to the bundle
+        database, but withouth the database extension."""
         raise NotImplementedError("Abstract")
 
     def sub_dir(self, *args):
@@ -275,7 +282,7 @@ class Bundle(object):
 
         :param args: Zero or more path elements that will be concatenated and suffixed to the root path
 
-         """
+        """
         return os.path.join(self.path, *args)
 
     def query(self, *args, **kwargs):
@@ -283,27 +290,30 @@ class Bundle(object):
         return self.database.query(*args, **kwargs)
 
     def log(self, message, **kwargs):
-        """Log the messsage"""
+        """Log the messsage."""
         self.logger.info(message)
 
     def error(self, message):
-        """Log an error messsage
+        """Log an error messsage.
 
         :param message:  Log message.
+
         """
         self.logger.error(message)
 
     def warn(self, message):
-        """Log an error messsage
+        """Log an error messsage.
 
         :param message:  Log message.
+
         """
         self.logger.warn(message)
 
     def fatal(self, message):
-        """Log a fatal messsage and exit
+        """Log a fatal messsage and exit.
 
         :param message:  Log message.
+
         """
         import sys
         self.logger.fatal(message)
@@ -327,7 +337,7 @@ class Bundle(object):
             's' if process.get('buildtime', False) else '')
 
     def _info(self, identity=None):
-        """Return a nested, ordered dict  of information about the bundle. """
+        """Return a nested, ordered dict  of information about the bundle."""
         from collections import OrderedDict
         d = OrderedDict()
 
@@ -338,7 +348,7 @@ class Bundle(object):
 
     @property
     def info(self):
-        """Display useful information about the bundle"""
+        """Display useful information about the bundle."""
 
         out = []
 
@@ -366,7 +376,7 @@ class Bundle(object):
         return '\n'.join(out)
 
     def _repr_html_(self):
-        """Called by ipython to display HTML"""
+        """Called by ipython to display HTML."""
         out = []
 
         for k, v in self._info().items():
@@ -386,8 +396,12 @@ class Bundle(object):
 
 class DbBundleBase(Bundle):
 
-    """Base class for DbBundle and LibraryDbBundle. A better design would for one to derive fro the other; this is
-    temporary solution"""
+    """Base class for DbBundle and LibraryDbBundle.
+
+    A better design would for one to derive fro the other; this is
+    temporary solution
+
+    """
 
     @property
     def path(self):
@@ -397,7 +411,7 @@ class DbBundleBase(Bundle):
         raise NotImplementedError()
 
     def sub_path(self, *args):
-        """For constructing paths to partitions"""
+        """For constructing paths to partitions."""
         raise NotImplementedError()
 
     @property
@@ -420,7 +434,7 @@ class DbBundleBase(Bundle):
         return t
 
     def _info(self, identity=None):
-        """Return a nested, ordered dict  of information about the bundle. """
+        """Return a nested, ordered dict  of information about the bundle."""
         from collections import OrderedDict
 
         d = super(DbBundleBase, self)._info(identity)
@@ -437,7 +451,7 @@ class DbBundleBase(Bundle):
 
     @property
     def identity(self):
-        """Return an identity object. """
+        """Return an identity object."""
         from ..identity import Identity, LocationRef
 
         if not self._identity:
@@ -448,8 +462,8 @@ class DbBundleBase(Bundle):
 
     @property
     def dict(self):
-        """Return most important information, excluding the complete schema, as a dict, suitable for conversion
-        to json """
+        """Return most important information, excluding the complete schema, as
+        a dict, suitable for conversion to json."""
 
         import json
         import markdown
@@ -499,9 +513,10 @@ class DbBundleBase(Bundle):
 
     @property
     def summary_dict(self):
-        """A reduced version of the dict
+        """A reduced version of the dict.
 
         WARNING: This will only produce 'other_versions' if the bundle is produced from library.list_bundles
+
         """
 
         return dict(
@@ -539,8 +554,7 @@ class DbBundle(DbBundleBase):
         self.partition = None
 
     def get_dataset(self):
-        """Return the dataset
-        """
+        """Return the dataset."""
 
         return self.database.get_dataset()
 
@@ -550,13 +564,13 @@ class DbBundle(DbBundleBase):
         return base
 
     def sub_path(self, *args):
-        """For constructing paths to partitions"""
+        """For constructing paths to partitions."""
         return os.path.join(self.path, *args)
 
 
 class LibraryDbBundle(DbBundleBase):
 
-    """A database bundle that is built in place from the data in a library """
+    """A database bundle that is built in place from the data in a library."""
 
     def __init__(self, database, dataset_id, logger=None):
         """Initialize a db and all of its sub-components.
@@ -573,8 +587,7 @@ class LibraryDbBundle(DbBundleBase):
         self.partition = None
 
     def get_dataset(self):
-        """Return the dataset
-        """
+        """Return the dataset."""
         from sqlalchemy.orm.exc import NoResultFound
         from sqlalchemy.exc import OperationalError
         from ..dbexceptions import NotFoundError
@@ -610,8 +623,11 @@ class LibraryDbBundle(DbBundleBase):
 
 class BuildBundle(Bundle):
 
-    """A bundle class for building bundle files. Uses the bundle.yaml file for
-    identity configuration """
+    """A bundle class for building bundle files.
+
+    Uses the bundle.yaml file for identity configuration
+
+    """
 
     META_COMPLETE_MARKER = '.meta_complete'
     SCHEMA_FILE = 'schema.csv'
@@ -625,8 +641,7 @@ class BuildBundle(Bundle):
     DOC_HTML = 'meta/documentation.html'
 
     def __init__(self, bundle_dir=None):
-        """
-        """
+        """"""
         from ..database.sqlite import BundleLockContext
         import os
 
@@ -669,8 +684,7 @@ class BuildBundle(Bundle):
         self._bundle_lock_context = BundleLockContext(self)
 
     def get_dataset(self):
-        """Return the dataset
-        """
+        """Return the dataset."""
         from sqlalchemy.exc import OperationalError
         from sqlalchemy.orm.exc import NoResultFound
         from ..dbexceptions import NotFoundError
@@ -707,7 +721,7 @@ class BuildBundle(Bundle):
         return self.path + '.db'
 
     def sub_path(self, *args):
-        """For constructing paths to partitions"""
+        """For constructing paths to partitions."""
 
         return os.path.join(self.build_dir, self.identity.path, *args)
 
@@ -748,12 +762,12 @@ class BuildBundle(Bundle):
 
     @property
     def vid(self):
-        """Shortcut to the vid"""
+        """Shortcut to the vid."""
         return self.identity.vid
 
     @property
     def identity(self):
-        """Return an identity object. """
+        """Return an identity object."""
         from ..identity import Identity, Name, ObjectNumber, LocationRef
 
         if not self._identity:
@@ -878,16 +892,18 @@ class BuildBundle(Bundle):
                     hdfo.write(html)
 
     def sources(self):
-        """
-        Iterate over the sources. If the file is a zip file, unzip it, and if 'file' is specified,
+        """Iterate over the sources.
+
+        If the file is a zip file, unzip it, and if 'file' is specified,
         extract  first file that matches the 'file' regex.
+
         """
 
         for name in self.metadata.sources:
             yield (str(name), self.source(name))
 
     def source(self, name):
-        """Return a source file path, downloaded and unzipped"""
+        """Return a source file path, downloaded and unzipped."""
 
         import re
 
@@ -928,8 +944,10 @@ class BuildBundle(Bundle):
         return "{}/{}/{}".format(self.identity.source, self.identity.name, fn)
 
     def cache_sources(self):
-        """Copy all of the sources to the build directory. If there is a source_store cache, also copy the
-        file to the source store.
+        """Copy all of the sources to the build directory.
+
+        If there is a source_store cache, also copy the file to the
+        source store.
 
         """
         import shutil
@@ -965,7 +983,7 @@ class BuildBundle(Bundle):
         return self.config.build.get('dependencies')
 
     def clean(self, clean_meta=False, force_delete=False):
-        """Remove all files generated by the build process"""
+        """Remove all files generated by the build process."""
         from ..util import rm_rf
 
         self.close()
@@ -1024,14 +1042,14 @@ class BuildBundle(Bundle):
                 os.remove(self.database.path)
 
     def progress(self, message):
-        """print message to terminal, in place"""
+        """print message to terminal, in place."""
         import sys
 
         sys.stdout.write("\033[K{}\r".format(message))
         sys.stdout.flush()
 
     def ptick(self, message):
-        """Writes a tick to the stdout, without a space or newline"""
+        """Writes a tick to the stdout, without a space or newline."""
         import sys
         sys.stdout.write(message)
         sys.stdout.flush()
@@ -1081,7 +1099,8 @@ class BuildBundle(Bundle):
     # Prepare is run before building, part of the devel process.
 
     def load_requirements(self):
-        """If there are python library requirements set, append the python dir to the path"""
+        """If there are python library requirements set, append the python dir
+        to the path."""
 
         import sys
 
@@ -1232,9 +1251,10 @@ class BuildBundle(Bundle):
                 self.partitions.new_db_partition(p)
 
     def _revise_schema(self):
-        """Write the schema from the database back to a file. If the schema template exists, overwrite the
-        main schema file. If it does not exist, use the revised file
+        """Write the schema from the database back to a file.
 
+        If the schema template exists, overwrite the main schema file.
+        If it does not exist, use the revised file
 
         """
 
@@ -1251,7 +1271,7 @@ class BuildBundle(Bundle):
             self.schema.as_csv(f)
 
     def post_prepare(self):
-        """Set a marker in the database that it is already prepared. """
+        """Set a marker in the database that it is already prepared."""
         from datetime import datetime
         from ..library.database import ROOT_CONFIG_NAME_V
 
@@ -1285,12 +1305,12 @@ class BuildBundle(Bundle):
                 and self.get_value('process', 'prepared', False))
 
     def prepare_main(self):
-        """This is the methods that is actually called in do_prepare; it dispatches to
-        developer created prepare() methods"""
+        """This is the methods that is actually called in do_prepare; it
+        dispatches to developer created prepare() methods."""
         return self.prepare()
 
     def do_prepare(self):
-        """This method runs pre_, main and post_ prepare methods. """
+        """This method runs pre_, main and post_ prepare methods."""
 
         if self.pre_prepare():
             self.log("---- Preparing ----")
@@ -1340,8 +1360,9 @@ class BuildBundle(Bundle):
         return False
 
     def post_build(self):
-        """After the build, update the configuration with the time required for the build,
-        then save the schema back to the tables, if it was revised during the build.  """
+        """After the build, update the configuration with the time required for
+        the build, then save the schema back to the tables, if it was revised
+        during the build."""
         from datetime import datetime
         from time import time
         import shutil
@@ -1394,7 +1415,7 @@ class BuildBundle(Bundle):
         return True
 
     def post_build_time_coverage(self):
-        """Collect all of the time coverage for the bundle"""
+        """Collect all of the time coverage for the bundle."""
         from ambry.util.datestimes import expand_to_years
 
         years = set()
@@ -1420,7 +1441,7 @@ class BuildBundle(Bundle):
         self.metadata.write_to_dir()
 
     def post_build_geo_coverage(self):
-        """Collect all of the geocoverage for the bundle"""
+        """Collect all of the geocoverage for the bundle."""
         from ..dbexceptions import BuildError
         from geoid.civick import GVid
         from geoid import NotASummaryName
@@ -1459,7 +1480,7 @@ class BuildBundle(Bundle):
                     grains.add(grain)
 
         def conv_grain(g):
-            """Some grain are expressed as summary level names, not gvids"""
+            """Some grain are expressed as summary level names, not gvids."""
             try:
                 c = GVid.get_class(g)
                 return str(c().summarize())
@@ -1504,7 +1525,7 @@ class BuildBundle(Bundle):
             p.close()
 
     def post_build_write_partitions(self):
-        """Write a list of partitions to the meta directory"""
+        """Write a list of partitions to the meta directory."""
         import yaml
 
         if self.database.exists():
@@ -1525,7 +1546,7 @@ class BuildBundle(Bundle):
                 encoding='utf-8')
 
     def post_build_write_config(self):
-        '''Write  the config into the database'''
+        """Write  the config into the database."""
         exclude_keys = ('names', 'identity')
 
         self.metadata.load_all()
@@ -1541,7 +1562,7 @@ class BuildBundle(Bundle):
 
     @property
     def is_built(self):
-        """Return True is the bundle has been built"""
+        """Return True is the bundle has been built."""
 
         if not self.database.exists():
             return False
@@ -1552,7 +1573,7 @@ class BuildBundle(Bundle):
 
     @property
     def is_installed(self):
-        """Return True if the bundle is installed"""
+        """Return True if the bundle is installed."""
 
         r = self.library.resolve(self.identity.vid)
 
@@ -1579,8 +1600,8 @@ class BuildBundle(Bundle):
             self.library.source.set_bundle_state(self.identity, state)
 
     def build_main(self):
-        """This is the methods that is actually called in do_build; it dispatches to
-        developer created prepare() methods"""
+        """This is the methods that is actually called in do_build; it
+        dispatches to developer created prepare() methods."""
         self.set_build_state('building')
         return self.build()
 
@@ -1624,8 +1645,8 @@ class BuildBundle(Bundle):
         return True
 
     def update_main(self):
-        """This is the methods that is actually called in do_update; it dispatches to
-        developer created update() methods"""
+        """This is the methods that is actually called in do_update; it
+        dispatches to developer created update() methods."""
         return self.update()
 
     def update(self):
@@ -1637,7 +1658,8 @@ class BuildBundle(Bundle):
         return True
 
     def update_copy_partitions(self):
-        """Create partition references for all of the partitions from the previous version of the bundle"""
+        """Create partition references for all of the partitions from the
+        previous version of the bundle."""
 
         prior_ident = self.library.resolve(self.identity.name)
         prior = self.library.get(prior_ident.vname)
@@ -1664,7 +1686,7 @@ class BuildBundle(Bundle):
                         p.identity))
 
     def update_copy_schema(self):
-        """Copy the schema from a previous version, updating the vids"""
+        """Copy the schema from a previous version, updating the vids."""
         from ..orm import Table, Column
         from sqlalchemy.exc import IntegrityError
 
@@ -1745,7 +1767,7 @@ class BuildBundle(Bundle):
         return True
 
     def install(self, library_name=None, delete=False, force=True):
-        """Install the bundle and all partitions in the default library"""
+        """Install the bundle and all partitions in the default library."""
 
         import ambry.library
 
@@ -1797,7 +1819,8 @@ class BuildBundle(Bundle):
         return True
 
     def repopulate(self):
-        """Pull bundle files from the library back into the working directory"""
+        """Pull bundle files from the library back into the working
+        directory."""
         import shutil
 
         self.log('---- Repopulate ----')
@@ -1878,7 +1901,7 @@ class BuildBundle(Bundle):
                         self.run_args), method.__name__, args) for args in arg_sets])
 
     def _info(self, identity=None):
-        """Return a nested, ordered dict  of information about the bundle. """
+        """Return a nested, ordered dict  of information about the bundle."""
         from collections import OrderedDict
 
         d = super(BuildBundle, self)._info(identity)

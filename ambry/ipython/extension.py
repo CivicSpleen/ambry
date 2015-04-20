@@ -14,7 +14,7 @@ class MyMagics(Magics):
 
     @line_magic
     def lmagic(self, line):
-        "my line magic"
+        """my line magic."""
         print line
         print("Full access to the main IPython object:", self.shell)
         print(
@@ -28,12 +28,12 @@ class MyMagics(Magics):
 
     @cell_magic
     def cmagic(self, line, cell):
-        "my cell magic"
+        """my cell magic."""
         return line, cell
 
     @line_cell_magic
     def lcmagic(self, line, cell=None):
-        "Magic that works both as %lcmagic and as %%lcmagic"
+        """Magic that works both as %lcmagic and as %%lcmagic."""
         if cell is None:
             print("Called as line magic")
             return line
@@ -62,7 +62,7 @@ ip.register_magics(MyMagics)
 @magics_class
 class StatefulMagics(Magics):
 
-    "Magics that hold additional state"
+    """Magics that hold additional state."""
 
     def __init__(self, shell, data):
         # You must call the parent constructor

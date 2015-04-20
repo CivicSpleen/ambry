@@ -1,7 +1,8 @@
 """Access classess and identity for partitions.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 import os
@@ -15,10 +16,11 @@ from util import Constant
 
 class Partitions(object):
 
-    '''Continer and manager for the set of partitions.
+    """Continer and manager for the set of partitions.
 
     This object is always accessed from Bundle.partitions""
-    '''
+
+    """
 
     STATE = Constant()
     STATE.NEW = 'new'
@@ -35,15 +37,15 @@ class Partitions(object):
         self._partitions = {}
 
     def partition(self, arg, **kwargs):
-        '''Get a local partition object from either a Partion ORM object, or
-        a partition name
+        """Get a local partition object from either a Partion ORM object, or a
+        partition name.
 
         :param arg:
         :param kwargs:
         Arguments:
         arg    -- a orm.Partition or Partition object.
 
-        '''
+        """
 
         from ambry.orm import Partition as OrmPartition
         from ambry.identity import PartitionNumber
@@ -99,9 +101,11 @@ class Partitions(object):
 
     @property
     def all(self):  # @ReservedAssignment
-        '''Return an iterator of all partitions
+        """Return an iterator of all partitions.
+
         :type self: object
-        '''
+
+        """
         from ambry.orm import Partition as OrmPartition
         from sqlalchemy.orm import joinedload_all
         import sqlalchemy.exc
@@ -137,7 +141,7 @@ class Partitions(object):
         self._partitions = {}
 
     def get(self, id_):
-        '''Get a partition by the id number
+        """Get a partition by the id number.
 
         Arguments:
             id_ -- a partition id value
@@ -152,7 +156,7 @@ class Partitions(object):
         Because this method works on the bundle, it the id_ ( without version information )
         is equivalent to the vid ( with version information )
 
-        '''
+        """
         from ambry.orm import Partition as OrmPartition
         from sqlalchemy import or_
 
@@ -189,7 +193,7 @@ class Partitions(object):
         return orm_partition
 
     def find_table(self, table_name):
-        '''Return the first partition that has the given table name'''
+        """Return the first partition that has the given table name."""
 
         for partition in self.all:
             if partition.table and partition.table.name == table_name:
@@ -198,9 +202,11 @@ class Partitions(object):
         return None
 
     def find_id(self, id_):
-        '''Find a partition from an id or vid
+        """Find a partition from an id or vid.
+
         :param id_:
-        '''
+
+        """
 
         from ambry.orm import Partition as OrmPartition
         from sqlalchemy import or_
@@ -214,8 +220,11 @@ class Partitions(object):
         return q.first()
 
     def find(self, pnq=None, use_library=False, **kwargs):
-        '''Return a Partition object from the database based on a PartitionId.
-        The object returned is immutable; changes are not persisted'''
+        """Return a Partition object from the database based on a PartitionId.
+
+        The object returned is immutable; changes are not persisted
+
+        """
         import sqlalchemy.orm.exc
 
         if pnq is None:
@@ -264,8 +273,11 @@ class Partitions(object):
             return None
 
     def find_all(self, pnq=None, **kwargs):
-        '''Return a Partition object from the database based on a PartitionId.
-        The object returned is immutable; changes are not persisted'''
+        """Return a Partition object from the database based on a PartitionId.
+
+        The object returned is immutable; changes are not persisted
+
+        """
         from identity import Identity
         from sqlalchemy.orm.exc import NoResultFound
 
@@ -284,8 +296,11 @@ class Partitions(object):
         return [self.partition(op) for op in ops]
 
     def _find_orm(self, pnq):
-        '''Return a Partition object from the database based on a PartitionId.
-        An ORM object is returned, so changes can be persisted. '''
+        """Return a Partition object from the database based on a PartitionId.
+
+        An ORM object is returned, so changes can be persisted.
+
+        """
         import sqlalchemy.orm.exc
         from ambry.orm import Partition as OrmPartition, Table
         from sqlalchemy.orm import joinedload_all, joinedload
@@ -349,8 +364,8 @@ class Partitions(object):
         return q
 
     def _new_orm_partition(self, pname, tables=None, data=None, memory=False):
-        '''Create a new ORM Partrition object, or return one if
-        it already exists '''
+        """Create a new ORM Partrition object, or return one if it already
+        exists."""
         from ambry.orm import Partition as OrmPartition, Table
         from sqlalchemy.exc import IntegrityError
 
@@ -462,7 +477,7 @@ class Partitions(object):
             data=None,
             clean=False,
             create=True):
-        '''Creates a new OrmPartition record'''
+        """Creates a new OrmPartition record."""
 
         assert isinstance(
             ppn, PartialPartitionName), "Expected PartialPartitionName, got {}".format(
@@ -504,11 +519,8 @@ class Partitions(object):
             tables=None,
             data=None,
             create=True):
-        '''
-
-        Returns True if the partition was found, not created, False if it
-        was created
-        '''
+        """Returns True if the partition was found, not created, False if it
+        was created."""
 
         pnq = PartitionNameQuery(**kwargs)
 
@@ -577,10 +589,11 @@ class Partitions(object):
             data=None,
             load=True,
             **kwargs):
-        '''Create a new db partition from a pandas data frame.
+        """Create a new db partition from a pandas data frame.
 
         If the table does not exist, it will be created
-        '''
+
+        """
         import pandas as pd
         import numpy as np
         from orm import Column
@@ -626,7 +639,8 @@ class Partitions(object):
         return p
 
     def find_or_new_db(self, clean=False, tables=None, data=None, **kwargs):
-        '''Find a partition identified by pid, and if it does not exist, create it.
+        """Find a partition identified by pid, and if it does not exist, create
+        it.
 
         Args:
             pid A partition Identity
@@ -634,7 +648,8 @@ class Partitions(object):
             data. add a data field to the partition in the database
             clean. Clean the database when it is created
             kwargs. time,space,gran, etc; parameters to name the partition
-        '''
+
+        """
 
         p, _ = self._find_or_new(
             kwargs, clean=False, tables=tables, data=data, format='db')
@@ -684,12 +699,14 @@ class Partitions(object):
 
     def find_or_new_geo(self, clean=False, tables=None, data=None,
                         create=False, shape_file=None, **kwargs):
-        '''Find a partition identified by pid, and if it does not exist, create it.
+        """Find a partition identified by pid, and if it does not exist, create
+        it.
 
         Args:
             pid A partition Identity
             tables String or array of tables to copy form the main partition
-        '''
+
+        """
 
         try:
             import gdal
@@ -737,12 +754,14 @@ class Partitions(object):
         return p
 
     def new_memory_partition(self, tables=None, data=None, **kwargs):
-        '''Find a partition identified by pid, and if it does not exist, create it.
+        """Find a partition identified by pid, and if it does not exist, create
+        it.
 
         Args:
             pid A partition Identity
             tables String or array of tables to copy form the main partition
-        '''
+
+        """
 
         from partition.sqlite import SqlitePartition
         from partition import partition_classes

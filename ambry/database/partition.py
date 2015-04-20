@@ -1,6 +1,8 @@
-"""
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 from .sqlite import SqliteDatabase, SqliteAttachmentMixin  # @UnresolvedImport
@@ -14,13 +16,17 @@ class PartitionDb(
         RelationalPartitionDatabaseMixin,
         SqliteAttachmentMixin):
 
-    '''a database for a partition file. Partition databases don't have a full schema
-    and can load tables as they are referenced, by copying them from the prototype. '''
+    """a database for a partition file.
+
+    Partition databases don't have a full schema and can load tables as
+    they are referenced, by copying them from the prototype.
+
+    """
 
     is_geo = False
 
     def __init__(self, bundle, partition, base_path, memory=False, **kwargs):
-        ''''''
+        """"""
 
         RelationalPartitionDatabaseMixin._init(self, bundle, partition)
         self.memory = memory
@@ -90,7 +96,7 @@ class PartitionDb(
         return ValueInserter(self, self.bundle, table, **kwargs)
 
     def _on_create_connection(self, connection):
-        '''Called from get_connection() to update the database'''
+        """Called from get_connection() to update the database."""
         super(PartitionDb, self)._on_create_connection(connection)
 
         _on_connect_partition(connection, None)
@@ -119,7 +125,7 @@ class PartitionDb(
 
 
 def _on_connect_partition(dbapi_con, con_record):
-    '''ISSUE some Sqlite pragmas when the connection is created'''
+    """ISSUE some Sqlite pragmas when the connection is created."""
     from sqlite import _on_connect_bundle as ocb
 
     dbapi_con.execute('PRAGMA page_size = 8192')

@@ -1,8 +1,7 @@
-"""
-Documentation, file and login server for Ambry warehouses
-
+"""Documentation, file and login server for Ambry warehouses.
 
 Copyright 2014, Civic Knowledge. All Rights Reserved
+
 """
 
 import os
@@ -68,7 +67,7 @@ def memoize(obj):
 
 
 def expiring_memoize(obj):
-    """Like memoize, but forgets after 10 seconds. """
+    """Like memoize, but forgets after 10 seconds."""
     from collections import defaultdict
     cache = obj.cache = {}
     last_access = obj.last_access = defaultdict(int)

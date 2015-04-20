@@ -1,6 +1,8 @@
-"""
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 import os
@@ -604,8 +606,7 @@ def library_open(args, l, config):
 
 
 def library_sync(args, l, config):
-    '''Synchronize the remotes and the upstream to a local library
-    database'''
+    """Synchronize the remotes and the upstream to a local library database."""
 
     all = args.all or not (
         args.library or args.remote or args.source or args.json or args.warehouses)

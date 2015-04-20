@@ -1,4 +1,4 @@
-""" Debugging code. Allows breaking to an interpreter with a signal.
+"""Debugging code. Allows breaking to an interpreter with a signal.
 
 To use, just call the listen() function at some point when your program starts up
 (You could even stick it in site.py to have all python programs use it),
@@ -6,7 +6,7 @@ To use, just call the listen() function at some point when your program starts u
 
     os.kill(pid, signal.SIGUSR1)
 
- """
+"""
 
 # from:
 # http://stackoverflow.com/questions/132058/showing-the-stack-trace-from-a-running-python-application
@@ -17,8 +17,8 @@ import signal
 
 
 def debug_break(sig, frame):
-    """Interrupt running process, and provide a python prompt for
-    interactive debugging."""
+    """Interrupt running process, and provide a python prompt for interactive
+    debugging."""
     d = {'_frame': frame}         # Allow access to frame object.
     d.update(frame.f_globals)  # Unless shadowed by global
     d.update(frame.f_locals)

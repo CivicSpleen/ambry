@@ -1,8 +1,9 @@
-"""Support functions for transforming rows read from input files before
-writing to databases.
+"""Support functions for transforming rows read from input files before writing
+to databases.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 import textwrap
 
@@ -23,7 +24,7 @@ class CastingError(TypeError):
 
 
 def coerce_int(v):
-    '''Convert to an int, or return if isn't an int'''
+    """Convert to an int, or return if isn't an int."""
     try:
         return int(v)
     except:
@@ -31,7 +32,7 @@ def coerce_int(v):
 
 
 def coerce_int_except(v, msg):
-    """Convert to an int, throw an exception if it isn't"""
+    """Convert to an int, throw an exception if it isn't."""
 
     try:
         return int(v)
@@ -40,7 +41,7 @@ def coerce_int_except(v, msg):
 
 
 def coerce_float(v):
-    '''Convert to an float, or return if isn't an int'''
+    """Convert to an float, or return if isn't an int."""
     try:
         return float(v)
     except:
@@ -48,7 +49,7 @@ def coerce_float(v):
 
 
 def coerce_float_except(v, msg):
-    '''Convert to an float, throw an exception if it isn't'''
+    """Convert to an float, throw an exception if it isn't."""
     try:
         return float(v)
     except:
@@ -57,13 +58,10 @@ def coerce_float_except(v, msg):
 
 class PassthroughTransform(object):
 
-    '''
-    Pasthorugh the value unaltered
-    '''
+    """Pasthorugh the value unaltered."""
 
     def __init__(self, column, useIndex=False):
-        """
-        """
+        """"""
                 # Extract the value from a position in the row
         if useIndex:
             f = lambda row, column=column: row[column.sequence_id - 1]
@@ -78,15 +76,17 @@ class PassthroughTransform(object):
 
 class BasicTransform(object):
 
-    '''
-    A Callable class that will take a row and return a value, cleaned according to
-    the classes cleaning rules.
-    '''
+    """A Callable class that will take a row and return a value, cleaned
+    according to the classes cleaning rules."""
 
     @staticmethod
     def basic_defaults(v, column, default, f):
-        '''Basic defaults method, using only the column default and illegal_value
-        parameters. WIll also convert blanks and None to the default '''
+        """Basic defaults method, using only the column default and
+        illegal_value parameters.
+
+        WIll also convert blanks and None to the default
+
+        """
         if v is None:
             return default
         elif v == '':
@@ -97,9 +97,7 @@ class BasicTransform(object):
             return f(v)
 
     def __init__(self, column, useIndex=False):
-        """
-
-        """
+        """"""
         self.column = column
 
         # for numbers try to coerce to an integer. We'd have to use a helper func
@@ -152,15 +150,17 @@ class BasicTransform(object):
 
 class CensusTransform(BasicTransform):
 
-    '''
-    Transformation that condsiders the special codes that the Census data may
-    have in integer fields.
-    '''
+    """Transformation that condsiders the special codes that the Census data
+    may have in integer fields."""
 
     @staticmethod
     def census_defaults(v, column, default, f):
-        '''Basic defaults method, using only the column default and illegal_value
-        parameters. WIll also convert blanks and None to the default '''
+        """Basic defaults method, using only the column default and
+        illegal_value parameters.
+
+        WIll also convert blanks and None to the default
+
+        """
         if v is None:
             return default
         elif v == '':
@@ -175,9 +175,8 @@ class CensusTransform(BasicTransform):
             return f(v)
 
     def __init__(self, column, useIndex=False):
-        """
-        A Transform that is designed for the US Census, converting codes that
-        apear in Integer fields. The geography data dictionary in
+        """A Transform that is designed for the US Census, converting codes
+        that apear in Integer fields. The geography data dictionary in.
 
             http://www.census.gov/prod/cen2000/doc/sf1.pdf
 
@@ -200,7 +199,6 @@ class CensusTransform(BasicTransform):
         Args:
             column an orm.Column
             useIndex if True, access the column value in the row by index, not name
-
 
         """
         self.column = column
@@ -269,8 +267,7 @@ class CensusTransform(BasicTransform):
 
 class Int(int):
 
-    '''An Integer
-    '''
+    """An Integer."""
 
     def __init__(self, v):
         int.__init__(self, v)
@@ -291,9 +288,7 @@ class NonNegativeInt(int):
 
 class NaturalInt(int):
 
-    ''' An Integer that is > 0
-
-    '''
+    """An Integer that is > 0."""
 
     def __init__(self, v):
         int.__init__(self, v)
@@ -313,7 +308,7 @@ def is_nothing(v):
 
 
 def parse_int(name, v, type_=int):
-    '''Parse as an integer, or a subclass of Int'''
+    """Parse as an integer, or a subclass of Int."""
     try:
         if is_nothing(v):
             return None
@@ -591,10 +586,13 @@ def {}(row):
         return self._compiled
 
     def _call_dict(self, f, row, codify_cast_errors):
-        '''Call the caster to cast all of the values in a row.
+        """Call the caster to cast all of the values in a row.
+
         If there are casting errors, through an exception, unless
-        codify_cast_errors, in which case move the value with the casting
-        error to a field that is suffixed with '_code' '''
+        codify_cast_errors, in which case move the value with the
+        casting error to a field that is suffixed with '_code'
+
+        """
 
         for k, v in self.custom_types.items():
             globals()[k] = v

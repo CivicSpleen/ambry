@@ -1,6 +1,7 @@
-"""
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
 
 """
 
@@ -266,7 +267,7 @@ def source_info(args, l, st, rc):
 
 
 def source_list(args, l, st, rc, names=None):
-    '''List all of the source packages'''
+    """List all of the source packages."""
     from collections import defaultdict
     import ambry.library as library
 
@@ -281,7 +282,8 @@ def source_list(args, l, st, rc, names=None):
 
 
 def source_get(args, l, st, rc):
-    '''Clone one or more registered source packages ( via sync ) into the source directory '''
+    """Clone one or more registered source packages ( via sync ) into the
+    source directory."""
     import ambry.library as library
     from ..dbexceptions import ConflictError
     from ..orm import Dataset
@@ -339,7 +341,8 @@ def source_number(args, l, st, rc):
 
 
 def source_new(args, l, st, rc):
-    '''Clone one or more registered source packages ( via sync ) into the source directory '''
+    """Clone one or more registered source packages ( via sync ) into the
+    source directory."""
     from ..source.repository import new_repository
     from ..identity import DatasetNumber, Identity
     from ..identity import NumberServer
@@ -478,8 +481,12 @@ def source_new(args, l, st, rc):
 
 
 def source_build(args, l, st, rc):
-    '''Build a single bundle, or a set of bundles in a directory. The build process
-    will build all dependencies for each bundle before buildng the bundle. '''
+    """Build a single bundle, or a set of bundles in a directory.
+
+    The build process will build all dependencies for each bundle before
+    buildng the bundle.
+
+    """
 
     from ambry.identity import Identity
     from ..source.repository import new_repository
@@ -708,7 +715,7 @@ def source_init(args, l, st, rc):
 
 
 def source_deps(args, l, st, rc):
-    """Produce a list of dependencies for all of the source bundles"""
+    """Produce a list of dependencies for all of the source bundles."""
     from ..dbexceptions import NotFoundError
     from ..orm import Dataset
     from ..identity import LocationRef
@@ -843,7 +850,7 @@ def source_buildable(args, l, st, rc):
 
 
 def source_test(args, l, st, rc):
-    """Development text code"""
+    """Development text code."""
 
     from ambry.dbexceptions import DependencyError
 

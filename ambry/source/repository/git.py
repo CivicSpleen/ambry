@@ -1,7 +1,8 @@
-"""git repository service
+"""git repository service.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 from . import RepositoryInterface, RepositoryException  # @UnresolvedImport
@@ -20,7 +21,7 @@ global_logger.setLevel(logging.FATAL)
 
 class GitShellService(object):
 
-    '''Interact with GIT services using the shell commands'''
+    """Interact with GIT services using the shell commands."""
 
     def __init__(self, dir_):
         import os
@@ -171,7 +172,7 @@ class GitShellService(object):
         return _rcv
 
     def push(self, username="Noone", password="None"):
-        '''Push to  remote'''
+        """Push to  remote."""
 
         def line_proc(line, stdin):
 
@@ -206,7 +207,7 @@ class GitShellService(object):
         return True
 
     def pull(self, username="Noone", password="None"):
-        '''pull to  remote'''
+        """pull to  remote."""
 
         def line_proc(line, stdin):
 
@@ -248,9 +249,7 @@ class GitShellService(object):
 
 class GitRepository(RepositoryInterface):
 
-    '''
-    classdocs
-    '''
+    """classdocs."""
 
     SUFFIX = '-ambry'
 
@@ -275,7 +274,7 @@ class GitRepository(RepositoryInterface):
 
     @property
     def ident(self):
-        '''Return an identifier for this service'''
+        """Return an identifier for this service."""
         return self.service.ident
 
     def init_remote(self):
@@ -301,12 +300,12 @@ class GitRepository(RepositoryInterface):
 
     @property
     def dir(self):
-        '''The directory of ... '''
+        """The directory of ..."""
         return self.dir_
 
     @property
     def dependencies(self):
-        '''Return a set of dependencies for the source packages'''
+        """Return a set of dependencies for the source packages."""
         from collections import defaultdict
         import os
         from ambry.identity import Identity
@@ -405,13 +404,13 @@ class GitRepository(RepositoryInterface):
     # ----
 
     def source_path(self, ident):
-        '''Return the absolute directory for a bundle based on its identity'''
+        """Return the absolute directory for a bundle based on its identity."""
         import os
 
         return os.path.join(self.dir, ident.source_path)
 
     def init(self):
-        '''Initialize the repository, both load and the upstream'''
+        """Initialize the repository, both load and the upstream."""
         import os
 
         self.impl.deinit()
@@ -443,7 +442,7 @@ class GitRepository(RepositoryInterface):
         self.impl.deinit()
 
     def is_initialized(self):
-        '''Return true if this repository has already been initialized'''
+        """Return true if this repository has already been initialized."""
 
     @property
     def name(self):
@@ -453,7 +452,7 @@ class GitRepository(RepositoryInterface):
         raise NotImplemented()
 
     def add(self, path):
-        '''Add a file to the repository'''
+        """Add a file to the repository."""
         return self.impl.add(path)
 
     def commit(self, message):
@@ -473,8 +472,8 @@ class GitRepository(RepositoryInterface):
         return self.impl.needs_init()
 
     def clone(self, url, path):
-        '''Locate the source for the named bundle from the library and retrieve the
-        source '''
+        """Locate the source for the named bundle from the library and retrieve
+        the source."""
         import os
 
         d = os.path.join(self.dir, path)
@@ -486,26 +485,26 @@ class GitRepository(RepositoryInterface):
         return d
 
     def push(self, username="Noone", password="None"):
-        '''Push any changes to the repository to the origin server'''
+        """Push any changes to the repository to the origin server."""
         self.bundle.log("Push to remote: {}".format(self.name))
         return self.impl.push(username=username, password=password)
 
     def pull(self, username="Noone", password="None"):
-        '''Pull any changes to the repository from the origin server'''
+        """Pull any changes to the repository from the origin server."""
         self.bundle.log("Pull from remote: {}".format(self.name))
         return self.impl.pull(username=username, password=password)
 
     def register(self, library):
-        '''Register the source location with the library, and the library
-        upstream'''
+        """Register the source location with the library, and the library
+        upstream."""
         raise NotImplemented()
 
     def ignore(self, path):
-        '''Ignore a file'''
+        """Ignore a file."""
         raise NotImplemented()
 
     def bundle_deps(self, name, reverse=False):
-        '''Dependencies for a particular bundle'''
+        """Dependencies for a particular bundle."""
         from ambry.identity import Identity
 
         ident = Identity.parse_name(name)
@@ -560,7 +559,7 @@ class GitRepository(RepositoryInterface):
 
     @property
     def topo_deps(self):
-        '''Return the dependencies in topologically sorted groups '''
+        """Return the dependencies in topologically sorted groups."""
 
     def __str__(self):
         return "<GitRepository: account={}, dir={}".format(

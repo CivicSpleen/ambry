@@ -1,6 +1,4 @@
-"""
-
-"""
+""""""
 
 from whoosh.fields import SchemaClass, TEXT, KEYWORD, ID, STORED, DATETIME, NGRAMWORDS, NGRAM
 import os
@@ -195,7 +193,7 @@ class Search(object):
             yield x['vid']
 
     def search_datasets(self, search_phrase, limit=None):
-        """Search for just the datasets"""
+        """Search for just the datasets."""
         from whoosh.qparser import QueryParser
 
         from whoosh.qparser import QueryParser
@@ -214,13 +212,12 @@ class Search(object):
                     yield vid
 
     def search_bundles(self, search, limit=None):
-        """
-
-        Search for datasets and partitions using a structured search object
+        """Search for datasets and partitions using a structured search object.
 
         :param search: a dict, with values for each of the search components.
         :param limit:
         :return:
+
         """
         from ..identity import ObjectNumber
         from collections import defaultdict

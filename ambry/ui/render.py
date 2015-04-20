@@ -1,6 +1,4 @@
-"""
-Support for creating web pages and text representations of schemas.
-"""
+"""Support for creating web pages and text representations of schemas."""
 
 import os
 from flask.json import JSONEncoder as FlaskJSONEncoder
@@ -26,8 +24,12 @@ if not 'isin' in jinja2.tests.TESTS:
 
 
 def pretty_time(s):
-    """Pretty print time in seconds. From:
-    http://stackoverflow.com/a/24542445/1144479"""
+    """Pretty print time in seconds.
+
+    From:
+    http://stackoverflow.com/a/24542445/1144479
+
+    """
 
     intervals = (
         ('weeks', 604800),  # 60 * 60 * 24 * 7
@@ -101,7 +103,7 @@ def proto_vid_path(pvid):
 
 
 def deref_tc_ref(ref):
-    """Given a column or table, vid or id, return the object"""
+    """Given a column or table, vid or id, return the object."""
     from ambry.identity import ObjectNumber
 
     on = ObjectNumber.parse(ref)
@@ -137,7 +139,7 @@ def deref_tc_ref(ref):
 
 
 def tc_obj(ref):
-    """Return an object for a table or column"""
+    """Return an object for a table or column."""
     from . import renderer
 
     b, t, c = deref_tc_ref(ref)
@@ -262,7 +264,7 @@ class Renderer(object):
         # Monkey patch to get the equalto test
 
     def maybe_render(self, rel_path, render_lambda, metadata={}, force=False):
-        """Check if a file exists and maybe render it"""
+        """Check if a file exists and maybe render it."""
 
         if rel_path[0] == '/':
             rel_path = rel_path[1:]
@@ -300,7 +302,7 @@ class Renderer(object):
                     self.cache.path(rel_path)))
 
     def cc(self):
-        """return common context values"""
+        """return common context values."""
         from functools import wraps
 
         # Add a prefix to the URLs when the HTML is generated for the local
@@ -346,11 +348,11 @@ class Renderer(object):
             return template.render(*args, **kwargs)
 
     def compiled_times(self):
-        """Compile all of the time entried from cache calls to one per key"""
+        """Compile all of the time entried from cache calls to one per key."""
         return self.doc_cache.compiled_times()
 
     def clean(self):
-        '''Clean up the extracts on failures. '''
+        """Clean up the extracts on failures."""
         for e in self.extracts:
             if e.completed == False and os.path.exists(e.abs_path):
                 os.remove(e.abs_path)
@@ -370,7 +372,7 @@ class Renderer(object):
             **self.cc())
 
     def bundles_index(self):
-        """Render the bundle Table of Contents for a library"""
+        """Render the bundle Table of Contents for a library."""
         template = self.env.get_template('toc/bundles.html')
 
         bundles = self.doc_cache.bundle_index()
@@ -386,7 +388,7 @@ class Renderer(object):
         return self.render(template, tables=tables, **self.cc())
 
     def bundle(self, vid):
-        """Render documentation for a single bundle """
+        """Render documentation for a single bundle."""
 
         template = self.env.get_template('bundle/index.html')
 
@@ -401,7 +403,7 @@ class Renderer(object):
         return self.render(template, b=b, **self.cc())
 
     def bundle_summary(self, vid):
-        """Render documentation for a single bundle """
+        """Render documentation for a single bundle."""
 
         template = self.env.get_template('bundle/index.html')
 
@@ -410,7 +412,7 @@ class Renderer(object):
         return self.render(template, b=b, **self.cc())
 
     def schemacsv(self, vid):
-        """Render documentation for a single bundle """
+        """Render documentation for a single bundle."""
         from flask import make_response
 
         response = make_response(self.doc_cache.get_schemacsv(vid))
@@ -421,7 +423,7 @@ class Renderer(object):
         return response
 
     def schema(self, vid):
-        """Render documentation for a single bundle """
+        """Render documentation for a single bundle."""
         from csv import reader
         from StringIO import StringIO
         import json
@@ -517,7 +519,7 @@ class Renderer(object):
         return self.render(template, app_config=app_config, **self.cc())
 
     def manifest(self, muid):
-        """F is the file object associated with the manifest"""
+        """F is the file object associated with the manifest."""
         from ambry.warehouse.manifest import Manifest
         from ambry.identity import ObjectNumber
 
@@ -532,7 +534,7 @@ class Renderer(object):
                            **self.cc())
 
     def collections_index(self):
-        """Collections/Warehouses"""
+        """Collections/Warehouses."""
         template = self.env.get_template('toc/collections.html')
 
         collections = {f.ref: dict(
@@ -563,7 +565,7 @@ class Renderer(object):
         return os.path.join(os.path.dirname(tdir.__file__), 'js')
 
     def place_search(self, term):
-        """Incremental search, search as you type"""
+        """Incremental search, search as you type."""
 
         results = []
         for score, gvid, name in self.library.search.search_identifiers(term):
@@ -578,7 +580,7 @@ class Renderer(object):
             mimetype='application/json')
 
     def bundle_search(self, terms):
-        """Incremental search, search as you type"""
+        """Incremental search, search as you type."""
 
         from geoid.civick import GVid
 

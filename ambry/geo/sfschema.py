@@ -1,6 +1,4 @@
-'''
-Create an OGR shapefile from a schema
-'''
+"""Create an OGR shapefile from a schema."""
 import ogr
 import osr
 import gdal
@@ -242,7 +240,8 @@ class TableShapefile(object):
 
     @property
     def table(self):
-        """Fetch the table from the schema if it is null or has its database sessino expired"""
+        """Fetch the table from the schema if it is null or has its database
+        sessino expired."""
         from sqlalchemy.orm import object_session
 
         if not self._table or not object_session(self._table):
@@ -288,7 +287,7 @@ class TableShapefile(object):
         return typ, geo_col_names, geo_col_pos
 
     def load_schema(self, layer):
-        """Create fields definitions in the layer"""
+        """Create fields definitions in the layer."""
         for c in self.table.columns:
 
             if c.name.lower() in ('wkt', 'wkb', 'geometry'):
@@ -315,8 +314,12 @@ class TableShapefile(object):
             layer.CreateField(fdfn)
 
     def geo_vals(self, row):
-        """Return the geometry fields from a row. Returnes a two item tuple,
-        with (x,y) for a point, or (Geometry,non) for blob, wbk or wkt geometry"""
+        """Return the geometry fields from a row.
+
+        Returnes a two item tuple, with (x,y) for a point, or
+        (Geometry,non) for blob, wbk or wkt geometry
+
+        """
 
         if not self.geo_col_names[0]:
             raise ConfigurationError(

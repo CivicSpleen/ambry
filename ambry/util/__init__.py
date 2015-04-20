@@ -1,7 +1,8 @@
 """Misc support code.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 from __future__ import print_function
@@ -29,10 +30,13 @@ def get_logger(
         template=None,
         clear=False,
         propagate=False):
-    """Get a logger by name
+    """Get a logger by name.
 
-    if file_name is specified, and the dirname() of the file_name exists, it will
-    write to that file. If the dirname dies not exist, it will silently ignre it. """
+    if file_name is specified, and the dirname() of the file_name
+    exists, it will write to that file. If the dirname dies not exist,
+    it will silently ignre it.
+
+    """
 
     logger = logging.getLogger(name)
 
@@ -86,7 +90,7 @@ def clear_logger(name):
 
 
 def rm_rf(d):
-    """Recursively delete a directory"""
+    """Recursively delete a directory."""
 
     if not os.path.exists(d):
         return
@@ -100,14 +104,15 @@ def rm_rf(d):
 
 
 def bundle_file_type(path_or_file):
-    '''Return a determination if the file is a sqlite file or a gzip file
+    """Return a determination if the file is a sqlite file or a gzip file.
 
     Args
         :param path: a string pathname to the file or stream to test
         :type path: a `str` object or file object
 
         :rtype: 'gzip' or 'sqlite' or None
-    '''
+
+    """
 
     import struct
 
@@ -178,7 +183,7 @@ def memoize(obj):
 
 
 def expiring_memoize(obj):
-    """Like memoize, but forgets after 10 seconds. """
+    """Like memoize, but forgets after 10 seconds."""
     from collections import defaultdict
 
     cache = obj.cache = {}
@@ -205,7 +210,7 @@ def expiring_memoize(obj):
 
 class Counter(dict):
 
-    'Mapping where default values are zero'
+    """Mapping where default values are zero."""
 
     def __missing__(self, key):
         return 0
@@ -357,8 +362,8 @@ def lfu_cache(maxsize=100):
 
 
 def patch_file_open():
-    ''' A Monkey patch to log opening and closing of files, which is useful for debugging
-    file descriptor exhaustion'''
+    """A Monkey patch to log opening and closing of files, which is useful for
+    debugging file descriptor exhaustion."""
     import __builtin__
     import traceback
     openfiles = set()
@@ -677,7 +682,7 @@ class AttrDict(OrderedDict):
 
 class MapView(collections.MutableMapping):
 
-    """A group that holds key/value pairs"""
+    """A group that holds key/value pairs."""
 
     _inner = None
     _keys = None
@@ -755,7 +760,7 @@ def lowercase_dict(d):
 
 
 def configure_logging(cfg, custom_level=None):
-    '''Don't know what this is for .... '''
+    """Don't know what this is for ...."""
     import itertools as it
     import operator as op
 
@@ -774,11 +779,11 @@ def configure_logging(cfg, custom_level=None):
 
 
 def toposort(data):
-    """Dependencies are expressed as a dictionary whose keys are items
-and whose values are a set of dependent items. Output is a list of
-sets in topological order. The first set consists of items with no
-dependences, each subsequent set consists of items that depend upon
-items in the preceeding sets.
+    """Dependencies are expressed as a dictionary whose keys are items and
+    whose values are a set of dependent items. Output is a list of sets in
+    topological order. The first set consists of items with no dependences,
+    each subsequent set consists of items that depend upon items in the
+    preceeding sets.
 
 >>> print '\\n'.join(repr(sorted(x)) for x in toposort2({
 ...     2: set([11]),
@@ -791,7 +796,7 @@ items in the preceeding sets.
 [8, 11]
 [2, 9, 10]
 
-"""
+    """
 
     from functools import reduce
 
@@ -836,7 +841,8 @@ def zip_dir(dir, file_):
 
 
 def md5_for_file(f, block_size=2 ** 20):
-    """Generate an MD5 has for a possibly large file by breaking it into chunks"""
+    """Generate an MD5 has for a possibly large file by breaking it into
+    chunks."""
     import hashlib
 
     md5 = hashlib.md5()
@@ -860,27 +866,26 @@ def md5_for_file(f, block_size=2 ** 20):
 
 
 def rd(v, n=100.0):
-    """Round down, to the nearest even 100"""
+    """Round down, to the nearest even 100."""
     import math
     n = float(n)
     return math.floor(v / n) * int(n)
 
 
 def ru(v, n=100.0):
-    """Round up, to the nearest even 100"""
+    """Round up, to the nearest even 100."""
     import math
     n = float(n)
     return math.ceil(v / n) * int(n)
 
 
 def make_acro(past, prefix, s):
-    """Create a three letter acronym from the input string s
+    """Create a three letter acronym from the input string s.
 
     Args:
         past: A set object, for storing acronyms that have already been created
         prefix: A prefix added to the acronym before storing in the set
         s: The string to create the acronym from.
-
 
     """
 
@@ -955,7 +960,7 @@ def make_acro(past, prefix, s):
 
 
 def temp_file_name():
-    '''Create a path to a file in the temp directory'''
+    """Create a path to a file in the temp directory."""
 
     import platform
 
@@ -1003,8 +1008,7 @@ def zipdir(basedir, archivename):
 
 
 def walk_dict(d):
-    '''
-    Walk a tree (nested dicts).
+    """Walk a tree (nested dicts).
 
     For each 'path', or dict, in the tree, returns a 3-tuple containing:
     (path, sub-dicts, values)
@@ -1013,7 +1017,8 @@ def walk_dict(d):
     * path is the path to the dict
     * sub-dicts is a tuple of (key,dict) pairs for each sub-dict in this dict
     * values is a tuple of (key,value) pairs for each (non-dict) item in this dict
-    '''
+
+    """
     # nested dict keys
     nested_keys = tuple(k for k in d.keys() if isinstance(d[k], dict))
     # key/value pairs for non-dicts
@@ -1032,11 +1037,11 @@ def walk_dict(d):
 
 def init_log_rate(output_f, N=None, message='', print_rate=None):
     """Initialze the log_rate function. Returnas a partial function to call for
-    each event
+    each event.
 
-    If N is not specified but print_rate is specified, the initial N is set to 100,
-    and after the first message, the N value is adjusted to emit print_rate messages
-    per second
+    If N is not specified but print_rate is specified, the initial N is
+    set to 100, and after the first message, the N value is adjusted to
+    emit print_rate messages per second
 
     """
     from collections import deque
@@ -1071,6 +1076,7 @@ def _log_rate(output_f, d, message=None):
     """Log a message for the Nth time the method is called.
 
     d is the object returned from init_log_rate
+
     """
 
     import time
@@ -1102,7 +1108,7 @@ def _log_rate(output_f, d, message=None):
 
 
 def daemonize(f, args, rc, prog_name='ambry'):
-    '''Run a process as a daemon'''
+    """Run a process as a daemon."""
     # import daemon #@UnresolvedImport
     import lockfile  # @UnresolvedImport
     # import setproctitle #@UnresolvedImport
@@ -1188,11 +1194,11 @@ def _print(*args):
 
 class Progressor(object):
 
-    '''Progress reporter suitable for calling in Library.get()
+    """Progress reporter suitable for calling in Library.get()
 
     Example:  r = l.get(args.term, cb=Progressor().progress)
 
-    '''
+    """
 
     start = None
     last = None
@@ -1246,7 +1252,7 @@ def enum(*sequential, **named):
 
 class Constant:
 
-    '''Organizes constants in a class'''
+    """Organizes constants in a class."""
     class ConstError(TypeError):
         pass
 
@@ -1258,7 +1264,8 @@ class Constant:
 
 class session_context(object):
 
-    """Provide a transactional scope around a series of Sqlalchemy operations."""
+    """Provide a transactional scope around a series of Sqlalchemy
+    operations."""
 
     def __init__(self, sessionmaker_class):
         self.sessionmaker_class = sessionmaker_class
@@ -1291,14 +1298,13 @@ class session_context(object):
 
 
 def count_open_fds():
-    '''
-    return the number of open file descriptors for current process
+    """return the number of open file descriptors for current process.
 
     .. warning: will only work on UNIX-like os-es.
 
     http://stackoverflow.com/a/7142094
 
-    '''
+    """
     import subprocess
     import os
 
@@ -1315,8 +1321,12 @@ def count_open_fds():
 
 
 def parse_url_to_dict(url):
-    """Parse a url and returna dict with keys for all of the parts. The urlparse function() returns a wacky combination of
-    a namedtuple with properties. """
+    """Parse a url and returna dict with keys for all of the parts.
+
+    The urlparse function() returns a wacky combination of a namedtuple
+    with properties.
+
+    """
 
     from urlparse import urlparse
 
@@ -1366,7 +1376,7 @@ def unparse_url_dict(d):
 
 
 def filter_url(url, **kwargs):
-    """Alter a url by setting parameters set in parse_url_to_dict"""
+    """Alter a url by setting parameters set in parse_url_to_dict."""
 
     d = parse_url_to_dict(url)
 
@@ -1376,13 +1386,13 @@ def filter_url(url, **kwargs):
 
 
 def normalize_newlines(string):
-    """Convert \r\n or \r to \n"""
+    """Convert \r\n or \r to \n."""
     import re
     return re.sub(r'(\r\n|\r|\n)', '\n', string)
 
 
 def print_yaml(o):
-    """Pretty print an object as YAML"""
+    """Pretty print an object as YAML."""
     import yaml
     from ..orm import MutationList, MutationDict
 

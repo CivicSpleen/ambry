@@ -60,21 +60,21 @@ def search(ct):
 
 @app.route('/search/dataset')
 def datasetsearch():
-    """Search for a dataset, using a single term"""
+    """Search for a dataset, using a single term."""
 
     return renderer().dataset_search(term=request.args.get('term'))
 
 
 @app.route('/search/place')
 def place_search():
-    """Search for a place, using a single term"""
+    """Search for a place, using a single term."""
 
     return renderer().place_search(term=request.args.get('term'))
 
 
 @app.route('/search/bundle')
 def bundle_search():
-    """Search for a datasets and partitions, using a structured JSON term"""
+    """Search for a datasets and partitions, using a structured JSON term."""
 
     return renderer().bundle_search(terms=request.args)
 
@@ -147,7 +147,7 @@ def get_sources(ct):
 
 @app.route('/warehouses/<wid>/extracts/<tid>.<ct>')
 def get_extract(wid, tid, ct):
-    """Return an extract for a table """
+    """Return an extract for a table."""
 
     from os.path import basename, dirname
     from ambry.dbexceptions import NotFoundError
@@ -167,7 +167,7 @@ def get_extract(wid, tid, ct):
 
 @app.route('/warehouses/<wid>/sample/<tid>')
 def get_sample(wid, tid, ct):
-    """Return an extract for a table """
+    """Return an extract for a table."""
 
     from os.path import basename, dirname
     from ambry.dbexceptions import NotFoundError

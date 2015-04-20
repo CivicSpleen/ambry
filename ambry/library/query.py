@@ -1,5 +1,8 @@
-"""A Library is a local collection of bundles. It holds a database for the configuration
-of the bundles that have been installed into it.
+"""A Library is a local collection of bundles.
+
+It holds a database for the configuration of the bundles that have been
+installed into it.
+
 """
 
 # Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
@@ -48,7 +51,7 @@ class _qc_attrdict(object):
 
 class QueryCommand(object):
 
-    '''An object that contains and transfers a query for a bundle
+    """An object that contains and transfers a query for a bundle.
 
     Components of the query can include.
 
@@ -99,7 +102,7 @@ class QueryCommand(object):
         word*   Matches a text field that begins with 'word'
         *word   Matches a text fiels that
 
-    '''
+    """
 
     def __init__(self, dict_=None):
 
@@ -248,7 +251,7 @@ class QueryCommand(object):
 
     @property
     def identity(self):
-        '''Return an array of terms for identity searches'''
+        """Return an array of terms for identity searches."""
         return self.getsubdict('identity')
 
     @identity.setter
@@ -257,17 +260,17 @@ class QueryCommand(object):
 
     @property
     def table(self):
-        '''Return an array of terms for table searches'''
+        """Return an array of terms for table searches."""
         return self.getsubdict('table')
 
     @property
     def column(self):
-        '''Return an array of terms for column searches'''
+        """Return an array of terms for column searches."""
         return self.getsubdict('column')
 
     @property
     def partition(self):
-        '''Return an array of terms for partition searches'''
+        """Return an array of terms for partition searches."""
         return self.getsubdict('partition')
 
     def __str__(self):
@@ -276,8 +279,8 @@ class QueryCommand(object):
 
 class Resolver(object):
 
-    '''Find a reference to a dataset or partition based on a string,
-    which may be a name or object number '''
+    """Find a reference to a dataset or partition based on a string, which may
+    be a name or object number."""
 
     def __init__(self, session):
 
@@ -340,7 +343,7 @@ class Resolver(object):
         return ip, out
 
     def _resolve_ref(self, ref):
-        '''Convert the output from _resolve_ref to nested identities'''
+        """Convert the output from _resolve_ref to nested identities."""
 
         ip, results = self._resolve_ref_orm(ref)
         from collections import OrderedDict
@@ -383,9 +386,7 @@ class Resolver(object):
         return self._resolve_ref(ref)
 
     def resolve_ref_one(self, ref, location=None):
-        '''Return the "best" result for an object specification
-
-        '''
+        """Return the "best" result for an object specification."""
         import semantic_version
         from collections import OrderedDict
 
@@ -416,7 +417,7 @@ class Resolver(object):
         return self.resolve_ref_one(ref)[1]
 
     def find(self, query_command):
-        '''Find a bundle or partition record by a QueryCommand or Identity
+        """Find a bundle or partition record by a QueryCommand or Identity.
 
         Args:
             query_command. QueryCommand or Identity
@@ -424,7 +425,8 @@ class Resolver(object):
         returns:
             A list of identities, either Identity, for datasets, or PartitionIdentity
             for partitions.
-        '''
+
+        """
 
         def like_or_eq(c, v):
 

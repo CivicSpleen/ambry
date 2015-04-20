@@ -1,6 +1,8 @@
-"""
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 from relational import RelationalDatabase
@@ -13,7 +15,7 @@ class PostgresDatabase(RelationalDatabase):
         return self.dsn.replace('postgres:', 'postgresql+psycopg2:')
 
     def _create(self):
-        """Create the database from the base SQL"""
+        """Create the database from the base SQL."""
         from ambry.orm import Config
 
         if not self.exists():
@@ -32,7 +34,11 @@ class PostgresDatabase(RelationalDatabase):
         self.create()
 
     def drop(self):
-        """Uses DROP ... CASCADE to drop tables"""
+        """Uses DROP ...
+
+        CASCADE to drop tables
+
+        """
 
         if not self.enable_delete:
             raise Exception("Deleting not enabled")
@@ -60,10 +66,10 @@ class PostgresDatabase(RelationalDatabase):
         # We probably want to create materialized view.
 
     def search(self, topic, keywords):
-        """
-
-        Search the full text search index.
+        """Search the full text search index.
 
         :param topic:
         :param keywords:
-        :return"""
+        :return
+
+        """

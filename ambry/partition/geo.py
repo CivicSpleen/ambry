@@ -1,5 +1,8 @@
-"""Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 import sys
@@ -25,7 +28,7 @@ class GeoPartitionIdentity(PartitionIdentity):
 
 class GeoPartition(SqlitePartition):
 
-    '''A Partition that hosts a Spatialite for geographic data'''
+    """A Partition that hosts a Spatialite for geographic data."""
 
     _id_class = GeoPartitionIdentity
 
@@ -73,8 +76,8 @@ class GeoPartition(SqlitePartition):
         return self.get_srs()
 
     def get_transform(self, dest_srs=4326):
-        """Get an ogr transform object to convert from the SRS of this partition
-        to another"""
+        """Get an ogr transform object to convert from the SRS of this
+        partition to another."""
         import ogr
         import osr
 
@@ -85,9 +88,11 @@ class GeoPartition(SqlitePartition):
         return transform
 
     def add_tables(self, tables):
-        """  Declare geometry columns to spatialite
+        """Declare geometry columns to spatialite.
+
         :param tables:
         :return:
+
         """
 
         super(GeoPartition, self).add_tables(tables)
@@ -214,7 +219,7 @@ class GeoPartition(SqlitePartition):
                 progress_f(i)
 
     def convert_dates(self, table_name):
-        '''Remove the 'T' at the end of dates that OGR adds erroneously'''
+        """Remove the 'T' at the end of dates that OGR adds erroneously."""
         from ambry.orm import Column
 
         table = self.bundle.schema.table(table_name)
@@ -235,11 +240,12 @@ class GeoPartition(SqlitePartition):
                     ','.join(clauses)))
 
     def load_shapefile(self, path, logger=None):
-        """
-        Load a shapefile into the partition. Loads the features and inserts them using an inserter.
+        """Load a shapefile into the partition. Loads the features and inserts
+        them using an inserter.
 
         :param path:
         :return:
+
         """
 
         from osgeo import ogr, osr
@@ -324,7 +330,7 @@ class GeoPartition(SqlitePartition):
 
     @property
     def info(self):
-        """Returns a human readable string of useful information"""
+        """Returns a human readable string of useful information."""
 
         try:
             srid = self.get_srid()

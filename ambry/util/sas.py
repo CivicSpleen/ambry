@@ -1,4 +1,4 @@
-"""Utilites for working with SAS files"""
+"""Utilites for working with SAS files."""
 
 
 #-------------------------------------------------------------------------

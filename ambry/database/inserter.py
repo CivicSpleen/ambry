@@ -1,8 +1,8 @@
-'''
-Created on Sep 7, 2013
+"""Created on Sep 7, 2013.
 
 @author: eric
-'''
+
+"""
 """
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
@@ -78,7 +78,7 @@ class SegmentedInserter(InserterInterface):
 
 class ValueWriter(InserterInterface):
 
-    '''Inserts arrays of values into  database table'''
+    """Inserts arrays of values into  database table."""
 
     def __init__(
             self,
@@ -179,9 +179,12 @@ class ValueWriter(InserterInterface):
 
 class CodeCastErrorHandler(object):
 
-    '''Used by the Value Inserter to handle errors in casting
-    data types. This version will create code table entries
-    for any values that can't be cast.  '''
+    """Used by the Value Inserter to handle errors in casting data types.
+
+    This version will create code table entries for any values that
+    can't be cast.
+
+    """
 
     def __init__(self, inserter):
         from collections import defaultdict
@@ -192,8 +195,8 @@ class CodeCastErrorHandler(object):
         return col_name + '_codes'
 
     def cast_error(self, row, cast_errors):
-        '''For each cast error, save the key and value in a set,
-        for later conversion to a code partition '''
+        """For each cast error, save the key and value in a set, for later
+        conversion to a code partition."""
 
         for k, v in cast_errors.items():
             self.codes[k].add(v)
@@ -206,7 +209,7 @@ class CodeCastErrorHandler(object):
         return row
 
     def finish(self):
-        '''Add all of the codes to the codes table'''
+        """Add all of the codes to the codes table."""
         from ..dbexceptions import NotFoundError
         schema = self.inserter.bundle.schema
 
@@ -231,7 +234,7 @@ class CodeCastErrorHandler(object):
 
 class ValueInserter(ValueWriter):
 
-    '''Inserts arrays of values into  database table'''
+    """Inserts arrays of values into  database table."""
 
     def __init__(self, db, bundle, table,
                  cast_error_handler=None,

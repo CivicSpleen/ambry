@@ -1,5 +1,8 @@
-"""Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 
@@ -18,7 +21,7 @@ class HdfPartitionIdentity(PartitionIdentity):
 
 class HdfPartition(PartitionBase):
 
-    ''' '''
+    """"""
 
     _id_class = HdfPartitionIdentity
     _db_class = None
@@ -41,8 +44,8 @@ class HdfPartition(PartitionBase):
         self.write_stats()
 
     def write_stats(self, min_key=None, max_key=None, count=None):
-        '''Assumes the partition is written without a header and that the
-        first column is the id. '''
+        """Assumes the partition is written without a header and that the first
+        column is the id."""
 
         if not min_key and not max_key and not count:
             t = self.table

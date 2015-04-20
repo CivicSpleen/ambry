@@ -1,7 +1,5 @@
 
-"""
-
-"""
+""""""
 
 # Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
@@ -88,8 +86,8 @@ class SourceTree(object):
         return datasets
 
     def dependencies(self, term=None):
-        '''Return a topologically sorted tree of dependencies, for all sources if a term is not given,
-        or for a single bundle if it is. '''
+        """Return a topologically sorted tree of dependencies, for all sources
+        if a term is not given, or for a single bundle if it is."""
         from ..util import toposort
         from ..orm import Dataset
         from ..identity import Identity
@@ -110,7 +108,8 @@ class SourceTree(object):
                 l.files.TYPE.SOURCE).all}
 
         def deps_for_sources(sources):
-            '''Get dependencies for a set of sources, which may be a subset of all sources. '''
+            """Get dependencies for a set of sources, which may be a subset of
+            all sources."""
             new_sources = set()
             for source in sources:
 
@@ -267,7 +266,8 @@ class SourceTree(object):
         )
 
     def _dir_list(self, datasets=None, key='vid'):
-        '''Get a list of sources from the directory, rather than the library '''
+        """Get a list of sources from the directory, rather than the
+        library."""
         from ..identity import LocationRef, Identity
         from ..bundle import BuildBundle
         from ..dbexceptions import ConfigurationError
@@ -343,7 +343,8 @@ class SourceTree(object):
         return f.path
 
     def bundle(self, path, buildbundle_ok=False):
-        '''Return an  Bundle object, using the class defined in the bundle source'''
+        """Return an  Bundle object, using the class defined in the bundle
+        source."""
         if path[0] != '/':
             root = os.path.join(self.base_dir, path)
         else:
@@ -375,7 +376,7 @@ class SourceTree(object):
                     ident=ident)))
 
     def resolve_build_bundle(self, term):
-        '''Return an Bundle object, using the base BuildBundle class'''
+        """Return an Bundle object, using the base BuildBundle class."""
         from ..bundle import BuildBundle
 
         ident = self.library.resolve(term, location=Dataset.LOCATION.SOURCE)

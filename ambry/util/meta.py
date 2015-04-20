@@ -1,7 +1,8 @@
-"""Metadata objects for a bundle
+"""Metadata objects for a bundle.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 import collections
@@ -11,7 +12,7 @@ import copy
 
 class Metadata(object):
 
-    """A top level group of groups"""
+    """A top level group of groups."""
 
     _members = None
     _term_values = None
@@ -92,9 +93,12 @@ class Metadata(object):
                     self._term_values[k] = v
 
     def register_members(self):
-        """Collect the names of the class member and convert them to object members.
+        """Collect the names of the class member and convert them to object
+        members.
 
-        Unlike Terms, the Group class members are converted into object members, so the configuration data
+        Unlike Terms, the Group class members are converted into object
+        members, so the configuration data
+
         """
         import copy
         from collections import OrderedDict
@@ -131,7 +135,9 @@ class Metadata(object):
     def load_all(self):
         """Load all of the files for all of the groups.
 
-        Wont re-load groups that have already been loaded or altered. """
+        Wont re-load groups that have already been loaded or altered.
+
+        """
         for group in self._members.keys():
             self.ensure_loaded(group)
 
@@ -145,7 +151,8 @@ class Metadata(object):
 
     @property
     def rows(self):
-        """Return the configuration information flattened into database records """
+        """Return the configuration information flattened into database
+        records."""
 
         for k, v in self._term_values.flatten():
 
@@ -159,7 +166,7 @@ class Metadata(object):
                 yield k, v
 
     def load_rows(self, rows):
-        """Load the metadata from the config table in a database """
+        """Load the metadata from the config table in a database."""
         import json
 
         for row in rows:
@@ -225,12 +232,12 @@ class Metadata(object):
         return out
 
     def _repr_html_(self):
-        """Adapts html() to IPython"""
+        """Adapts html() to IPython."""
         return self.html()
 
     def add_error(self, group, term, sub_term, value):
-        '''For records that are not defined as terms, either add it to the errors list,
-        or store it in a synonym'''
+        """For records that are not defined as terms, either add it to the
+        errors list, or store it in a synonym."""
 
         path = '.'.join([str(x)
                         for x in (group, term, sub_term) if x is not None])
@@ -250,7 +257,8 @@ class Metadata(object):
         return self._term_values.dump(stream, map_view=map_view)
 
     def groups_by_file(self):
-        """Returns a map of the files defined in groups, and the groups that define those files"""
+        """Returns a map of the files defined in groups, and the groups that
+        define those files."""
         from collections import OrderedDict
         d = {}
 
@@ -268,7 +276,7 @@ class Metadata(object):
         return d
 
     def load_from_dir(self, path, group=None):
-        '''Load groups from specified files. '''
+        """Load groups from specified files."""
         import os
         import yaml
 
@@ -353,7 +361,7 @@ class Metadata(object):
 
 class Group(object):
 
-    """A  group of terms"""
+    """A  group of terms."""
 
     _key = None
     _members = None
@@ -436,13 +444,13 @@ class Group(object):
         return ''
 
     def _repr_html_(self):
-        """Adapts html() to IPython"""
+        """Adapts html() to IPython."""
         return self.html()
 
 
 class DictGroup(Group, collections.MutableMapping):
 
-    """A group that holds key/value pairs"""
+    """A group that holds key/value pairs."""
 
     def init_descriptor(self, key, top):
         super(DictGroup, self).init_descriptor(key, top)
@@ -505,7 +513,7 @@ class DictGroup(Group, collections.MutableMapping):
         return self._term_values.__len__()
 
     def __iter__(self):
-        '''Iterated over dictionary values, not Term instances'''
+        """Iterated over dictionary values, not Term instances."""
         return self._term_values.__iter__()
 
     def set(self, d):
@@ -551,11 +559,13 @@ class DictGroup(Group, collections.MutableMapping):
 
 class TypedDictGroup(DictGroup):
 
-    """A DictGroup where the term structure is constrained, but they keys are not.
+    """A DictGroup where the term structure is constrained, but they keys are
+    not.
 
     There must be one term, named 'proto', to set the type of the terms.
 
     Only works with DictTerms
+
     """
 
     def init_descriptor(self, key, top):
@@ -599,8 +609,7 @@ class TypedDictGroup(DictGroup):
 
 class VarDictGroup(DictGroup):
 
-    """A Dict group that doesnt' use terms to enforce a structure.
-    """
+    """A Dict group that doesnt' use terms to enforce a structure."""
     from ..util import AttrDict
 
     def __getattr__(self, name):
@@ -624,7 +633,7 @@ class VarDictGroup(DictGroup):
 
 class ListGroup(Group, collections.MutableSequence):
 
-    """A group that holds a list of DictTerms"""
+    """A group that holds a list of DictTerms."""
 
     def __init__(self, file=None, to_rows=True):
         super(ListGroup, self).__init__(file=file, to_rows=to_rows)
@@ -672,7 +681,7 @@ class ListGroup(Group, collections.MutableSequence):
         self.__setitem__(index, value)
 
     def ensure_index(self, index):
-        """Ensure the index is in the list by possibly expanding the array"""
+        """Ensure the index is in the list by possibly expanding the array."""
         if index >= len(self._term_values):
             o = self.get_term_instance(index)
 
@@ -740,7 +749,7 @@ class ListGroup(Group, collections.MutableSequence):
 
 class Term(object):
 
-    """A single term in a group"""
+    """A single term in a group."""
 
     _key = None
     _parent = None  # set after being cloned in some subclass __get__
@@ -790,7 +799,7 @@ class Term(object):
                 return None
 
     def get(self):
-        '''Return the value type for this Term'''
+        """Return the value type for this Term."""
         raise NotImplementedError("Not implemented by {}".format(type(self)))
 
     def set(self, v):
@@ -808,7 +817,7 @@ class Term(object):
 
 class ScalarTerm(Term):
 
-    """A Term that can only be a string"""
+    """A Term that can only be a string."""
 
     def set(self, v):
         self._parent._term_values[self._key] = v
@@ -874,7 +883,7 @@ class DictTerm(Term, collections.MutableMapping):
         return o
 
     def ensure_index(self, index):
-        """Ensure the index is in the dict"""
+        """Ensure the index is in the dict."""
 
         # This sometimes will put a term at to high of a level, not sure what
         # it is really for.
@@ -944,7 +953,7 @@ class DictTerm(Term, collections.MutableMapping):
         o.set(d)
 
     def __get__(self, instance, owner):
-        """ """
+        """"""
         # Instantiate a copy of this group, assign a specific Metadata instance
         # and return it.
 
@@ -1014,7 +1023,10 @@ class ListTerm(Term):
 
     """A Term that is always a list.
 
-    The value may be specified as a scalar, in which case it will be converted to a list"""
+    The value may be specified as a scalar, in which case it will be
+    converted to a list
+
+    """
 
     def __set__(self, instance, v):
 

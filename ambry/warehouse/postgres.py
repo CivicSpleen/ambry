@@ -1,6 +1,8 @@
-"""
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 from ..dbexceptions import DependencyError
@@ -19,8 +21,12 @@ class PostgresWarehouse(Warehouse):
         self.library.database.create()
 
     def table_meta(self, identity, table_name):
-        '''Get the metadata directly from the database. This requires that
-        table_name be the same as the table as it is in stalled in the database'''
+        """Get the metadata directly from the database.
+
+        This requires that table_name be the same as the table as it is
+        in stalled in the database
+
+        """
 
         assert identity.is_partition
 

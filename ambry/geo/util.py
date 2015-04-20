@@ -1,8 +1,8 @@
-'''
-Created on Feb 15, 2013
+"""Created on Feb 15, 2013.
 
 @author: eric
-'''
+
+"""
 from collections import namedtuple
 import random
 from osgeo import gdal, ogr
@@ -17,10 +17,11 @@ def extents(
         where=None,
         lat_col='_db_lat',
         lon_col='_db_lon'):
-    '''Return the bounding box for a table in the database. The partition must specify
-    a table
+    """Return the bounding box for a table in the database.
 
-    '''
+    The partition must specify a table
+
+    """
     # Find the extents of the data and figure out the offsets for the array.
     e = database.connection.execute
 
@@ -122,10 +123,9 @@ def jenks_breaks(dataList, numClass):
 
 
 def getGVF(dataList, numClass):
-    """ The Goodness of Variance Fit (GVF) is found by taking the
-    difference between the squared deviations from the array mean (SDAM)
-    and the squared deviations from the class means (SDCM), and dividing by the SDAM
-    """
+    """The Goodness of Variance Fit (GVF) is found by taking the difference
+    between the squared deviations from the array mean (SDAM) and the squared
+    deviations from the class means (SDCM), and dividing by the SDAM."""
     breaks = jenks_breaks(dataList, numClass)
     dataList.sort()
     listMean = sum(dataList) / len(dataList)
@@ -210,7 +210,7 @@ def rasterize(pixel_size=25):
 
 
 def create_poly(points, srs):
-    """Create a polygon from a list of points"""
+    """Create a polygon from a list of points."""
 
     # create polygon object:
     ring = ogr.Geometry(type=ogr.wkbLinearRing)
@@ -245,7 +245,7 @@ def create_bb(corners, srs):
 
 
 def combine_envelopes(geos, use_bb=True, use_distance=False):
-    """Find geometries that intersect"""
+    """Find geometries that intersect."""
     loops = 0
     while True:
         i, new_geos = _combine_envelopes(geos, use_bb, use_distance)
@@ -261,7 +261,7 @@ def combine_envelopes(geos, use_bb=True, use_distance=False):
 
 
 def _combine_envelopes(geometries, use_bb=True, use_distance=False):
-    """Inner support function for combine_envelopes"""
+    """Inner support function for combine_envelopes."""
     import ambry.geo as dg
     reductions = 0
     new_geometries = []
@@ -326,8 +326,8 @@ def bound_clusters_in_raster(
         contour_value,
         use_bb=True,
         use_distance=False):
-    """Create a shapefile that contains contours and bounding boxes for clusters
-    of contours.
+    """Create a shapefile that contains contours and bounding boxes for
+    clusters of contours.
 
     :param a: A numpy array that contains the data inwhich to find clusters
     :type a: Numpy array
@@ -365,7 +365,6 @@ def bound_clusters_in_raster(
 
     If `use_bb` is set, the intersection and distance computations use the bounding boxes of the contours,
     not the contours themselves.
-
 
     """
 
@@ -544,8 +543,8 @@ def segment_points(
         places_query=None,
         bb_clause=None,
         bb_type='ll'):
-    """A generator that yields information that can be used to classify
-    points into areas
+    """A generator that yields information that can be used to classify points
+    into areas.
 
     :param areas: A `Bundle`or `partition` object with access to the places database
     :param query: A Query to return places. Must return,  for each row,  fields names 'id' ,'name'
@@ -601,8 +600,8 @@ def segment_points(
             target_col=area['type'])
 
         def is_in(x, y):
-            """Clients call this closure to make the determination if the
-            point is in the area"""
+            """Clients call this closure to make the determination if the point
+            is in the area."""
             p = ogr.Geometry(ogr.wkbPoint)
             p.SetPoint_2D(0, x, y)
 
@@ -700,7 +699,8 @@ def find_geo_containment(containers, containeds, sink, method='contains'):
 
 
 def find_containment(containers, containeds, method='contains'):
-    """Generator version of find_geo_containment, yielding for each point that is contained in a geometry.
+    """Generator version of find_geo_containment, yielding for each point that
+    is contained in a geometry.
 
     `containers` is an iterable that holds  -- or an generator that yields -- the geometry of the containing objects  :
 

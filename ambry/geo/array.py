@@ -1,5 +1,4 @@
-"""Array operations
-"""
+"""Array operations."""
 
 # Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
@@ -28,7 +27,7 @@ def std_norm(a):
 
 
 def unity_norm(a):
-    """scale to the range 0 to 1"""
+    """scale to the range 0 to 1."""
 
     range = a.max() - a.min()
     o = (a - a.min()) / range
@@ -71,9 +70,8 @@ def add(s, v, m):
 
 
 def apply_copy(kernel, a, func=add, nodata=None, mult=True):
-    """For all cells in a, or all nonzero cells, apply the kernel
-    to a new output array
-    """
+    """For all cells in a, or all nonzero cells, apply the kernel to a new
+    output array."""
     from itertools import izip
 
     o = zeros_like(a)

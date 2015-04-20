@@ -1,6 +1,4 @@
-'''
-REST Server For DataBundle Libraries.
-'''
+"""REST Server For DataBundle Libraries."""
 
 import bottle
 from bottle import error, hook, get, put, post, request, response, redirect
@@ -87,7 +85,7 @@ def capture_return_exception(e):
 
 
 def _CaptureException(f, *args, **kwargs):
-    '''Decorator implementation for capturing exceptions '''
+    """Decorator implementation for capturing exceptions."""
 
     try:
         r = f(*args, **kwargs)
@@ -104,16 +102,16 @@ def _CaptureException(f, *args, **kwargs):
 
 
 def CaptureException(f, *args, **kwargs):
-    '''Decorator to capture exceptions and convert them
-    to a dict that can be returned as JSON '''
+    """Decorator to capture exceptions and convert them to a dict that can be
+    returned as JSON."""
 
     return decorator(_CaptureException, f)  # Preserves signature
 
 
 class AllJSONPlugin(object):
 
-    '''A copy of the bottle JSONPlugin, but this one tries to convert
-    all objects to json '''
+    """A copy of the bottle JSONPlugin, but this one tries to convert all
+    objects to json."""
 
     from json import dumps as json_dumps
 
@@ -282,7 +280,7 @@ def _table_csv_parts(library, b, pid, table_name=None):
 
 
 def _read_body(request):
-    '''Read the body of a request and decompress it if required '''
+    """Read the body of a request and decompress it if required."""
     # Really important to only call request.body once! The property method isn't
     # idempotent!
     import zlib
@@ -324,7 +322,7 @@ def _read_body(request):
 
 
 def _download_redirect(identity, library):
-    '''This is very similar to get_key'''
+    """This is very similar to get_key."""
     from ambry.cache import RemoteMarker
     from ambry.dbexceptions import NotFoundError
 
@@ -365,7 +363,7 @@ def _send_csv_if(did, pid, table_name, library):
 
 
 def _send_csv(library, did, pid, table_name, i, n, where, sep=','):
-    '''Send a CSV file to the client. '''
+    """Send a CSV file to the client."""
     import unicodecsv
     import csv
     from StringIO import StringIO
@@ -455,7 +453,7 @@ def _resolve(library, ref):
 @get('/resolve/<ref:path>')
 @CaptureException
 def get_resolve(library, ref):
-    '''Resolve a name or other reference into an identity'''
+    """Resolve a name or other reference into an identity."""
 
     ip, dataset = _resolve(library, ref)
 
@@ -471,7 +469,7 @@ def get_resolve(library, ref):
 @get('/info/<ref:path>')
 @CaptureException
 def get_info(ref, library):
-    '''Resolve the reference, and redirect to the dataset or partition page'''
+    """Resolve the reference, and redirect to the dataset or partition page."""
     from ambry.cache import RemoteMarker
 
     ip, dataset = _resolve(library, ref)
@@ -492,7 +490,7 @@ def get_info(ref, library):
 @get('/files/<key:path>')
 @CaptureException
 def get_file(key, library):
-    '''Download a file based on a cache key '''
+    """Download a file based on a cache key."""
 
     path = library.cache.get(key)
     metadata = library.cache.metadata(key)
@@ -529,8 +527,7 @@ def get_key(key, library):
 
 @get('/datasets')
 def get_datasets(library):
-    '''Return all of the dataset identities, as a dict,
-    indexed by id'''
+    """Return all of the dataset identities, as a dict, indexed by id."""
 
     from ..orm import Dataset
 
@@ -555,7 +552,7 @@ def get_datasets(library):
 
 @post('/datasets/find')
 def post_datasets_find(library):
-    '''Post a QueryCommand to search the library. '''
+    """Post a QueryCommand to search the library."""
     from ambry.library.query import QueryCommand
 
     q = request.json
@@ -573,8 +570,11 @@ def post_datasets_find(library):
 @post('/datasets/<did>')
 @CaptureException
 def post_dataset(did, library):
-    '''Accept a payload that describes a bundle in the remote. Download the
-    bundle from the remote and install it. '''
+    """Accept a payload that describes a bundle in the remote.
+
+    Download the bundle from the remote and install it.
+
+    """
 
     from ambry.identity import Identity
 
@@ -616,8 +616,8 @@ def post_dataset(did, library):
 @get('/datasets/<did>')
 @CaptureException
 def get_dataset(did, library, pid=None):
-    '''Return the complete record for a dataset, including
-    the schema and all partitions. '''
+    """Return the complete record for a dataset, including the schema and all
+    partitions."""
 
     gr = library.get(did)
 
@@ -720,7 +720,7 @@ def get_dataset(did, library, pid=None):
 @get('/datasets/<did>/csv')
 @CaptureException
 def get_dataset_csv(did, library, pid=None):
-    '''List the CSV partitions for the dataset'''
+    """List the CSV partitions for the dataset."""
     pass
 
 
@@ -843,8 +843,7 @@ def get_partition_file(did, pid, library):
 @get('/datasets/<did>/partitions/<pid>/tables')
 @CaptureException
 def get_partition_tables(did, pid, library):
-    '''
-    '''
+    """"""
 
     did, _, _ = process_did(did, library)
     pid, _, _ = process_pid(did, pid, library)
@@ -878,8 +877,7 @@ def get_partition_tables(did, pid, library):
 @get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv')
 @CaptureException
 def get_partition_table_csv(did, pid, tid, library):
-    '''
-    '''
+    """"""
 
     did, _, _ = process_did(did, library)
     pid, _, _ = process_pid(did, pid, library)
@@ -898,8 +896,7 @@ def get_partition_table_csv(did, pid, tid, library):
 @get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv/parts')
 @CaptureException
 def get_partition_table_csv_parts(did, pid, tid, library):
-    '''
-    '''
+    """"""
     from ..partition.csv import CsvPartitionName
     from ..partition.geo import GeoPartitionName
     from ..partition.sqlite import SqlitePartitionName
@@ -929,14 +926,14 @@ def get_partition_table_csv_parts(did, pid, tid, library):
 @get('/datasets/<did>/partitions/<pid>/csv')
 @CaptureException
 def get_partition_csv(did, pid, library):
-    '''Stream as CSV, a  segment of the main table of a partition
+    """Stream as CSV, a  segment of the main table of a partition.
 
     Query
         n: The total number of segments to break the CSV into
         i: Which segment to retrieve
         header:If existent and not 'F', include the header on the first line.
 
-    '''
+    """
 
     return _send_csv_if(did, pid, None, library)
 
@@ -944,7 +941,7 @@ def get_partition_csv(did, pid, library):
 @get('/datasets/<did>/partitions/<pid>/csv/parts')
 @CaptureException
 def get_partition_csv_parts(did, pid, library):
-    '''Return a set of URLS for optimal CSV parts of a partition'''
+    """Return a set of URLS for optimal CSV parts of a partition."""
 
     did, d_on, b = process_did(did, library)
     pid, p_on, p_orm = process_pid(did, pid, library)
@@ -976,13 +973,13 @@ def get_partition_csv_parts(did, pid, library):
 
 @get('/test/echo/<arg>')
 def get_test_echo(arg):
-    '''just echo the argument'''
+    """just echo the argument."""
     return (arg, dict(request.query.items()))
 
 
 @put('/test/echo')
 def put_test_echo():
-    '''just echo the argument'''
+    """just echo the argument."""
 
     return (request.json, dict(request.query.items()))
 
@@ -990,20 +987,20 @@ def put_test_echo():
 @get('/test/exception')
 @CaptureException
 def get_test_exception():
-    '''Throw an exception'''
+    """Throw an exception."""
     raise Exception("throws exception")
 
 
 @put('/test/exception')
 @CaptureException
 def put_test_exception():
-    '''Throw an exception'''
+    """Throw an exception."""
     raise Exception("throws exception")
 
 
 @get('/test/isdebug')
 def get_test_isdebug():
-    '''eturn true if the server is open and is in debug mode'''
+    """eturn true if the server is open and is in debug mode."""
     try:
         global stoppable_wsgi_server_run
         if stoppable_wsgi_server_run is True:
@@ -1017,7 +1014,7 @@ def get_test_isdebug():
 @post('/test/close')
 @CaptureException
 def get_test_close():
-    '''Close the server'''
+    """Close the server."""
     global stoppable_wsgi_server_run
     if stoppable_wsgi_server_run is not None:
         global_logger.debug("SERVER CLOSING")
@@ -1030,8 +1027,12 @@ def get_test_close():
 
 class StoppableWSGIRefServer(ServerAdapter):
 
-    '''A server that can be stopped by setting the module variable
-    stoppable_wsgi_server_run to false. It is primarily used for testing. '''
+    """A server that can be stopped by setting the module variable
+    stoppable_wsgi_server_run to false.
+
+    It is primarily used for testing.
+
+    """
 
     def run(self, handler):  # pragma: no cover
         global stoppable_wsgi_server_run
@@ -1052,7 +1053,7 @@ server_names['stoppable'] = StoppableWSGIRefServer
 
 
 def test_run(config):
-    '''Run method to be called from unit tests'''
+    """Run method to be called from unit tests."""
     from bottle import run, debug  # @UnresolvedImport
 
     debug()

@@ -162,7 +162,7 @@ class FileLikeFromIter(object):
             return result
 
     def push(self, d):
-        """Push data back in; an alternative to seek"""
+        """Push data back in; an alternative to seek."""
         self.data = d + self.data
 
     def close(self):
@@ -173,7 +173,7 @@ class FileLikeFromIter(object):
 
 class MetadataFlo(object):
 
-    '''A File like object wrapper that has a slot for storing metadata'''
+    """A File like object wrapper that has a slot for storing metadata."""
 
     def __init__(self, o, metadata=None):
         self.o = o
