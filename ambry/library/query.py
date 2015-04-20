@@ -10,8 +10,8 @@ from ambry.orm import Dataset, Partition, File
 from ambry.orm import Table, Column
 from ..identity import Identity, PartitionNumber, DatasetNumber
 
-class _qc_attrdict(object):
 
+class _qc_attrdict(object):
 
     def __init__(self, inner, query):
         self.__dict__['inner'] = inner
@@ -41,12 +41,13 @@ class _qc_attrdict(object):
         return self.inner.items()
 
     def __call__(self, **kwargs):
-        for k,v in kwargs.items():
+        for k, v in kwargs.items():
             self.inner[k] = v
         return self.query
 
 
 class QueryCommand(object):
+
     '''An object that contains and transfers a query for a bundle
 
     Components of the query can include.
@@ -100,7 +101,7 @@ class QueryCommand(object):
 
     '''
 
-    def __init__(self, dict_ = None):
+    def __init__(self, dict_=None):
 
         if dict_ is None:
             dict_ = {}
@@ -111,9 +112,8 @@ class QueryCommand(object):
         return self._dict
 
     def from_dict(self, dict_):
-        for k,v in dict_.items():
-            print "FROM DICT",k,v
-
+        for k, v in dict_.items():
+            print "FROM DICT", k, v
 
     def getsubdict(self, group):
         '''Fetch a confiration group and return the contents as an
@@ -134,7 +134,8 @@ class QueryCommand(object):
     def parse(cls, s):
 
         from io import StringIO
-        import tokenize, token
+        import tokenize
+        import token
 
         state = 'name_start'
         n1 = None
@@ -145,17 +146,24 @@ class QueryCommand(object):
         qc = QueryCommand()
 
         for tt in tokenize.generate_tokens(StringIO(unicode(s)).readline):
-            t_type =  tt[0]
+            t_type = tt[0]
             t_string = tt[1].strip()
             pos = tt[2][0]
 
             line = tt[4]
 
-            #print "{:5d} {:5d} {:15s} {:20s} {:8s}.{:8s}= {:10s} || {}".format(t_type, pos, "'"+t_string+"'", state, n1, n2, value, line)
-
+            # print "{:5d} {:5d} {:15s} {:20s} {:8s}.{:8s}= {:10s} ||
+            # {}".format(t_type, pos, "'"+t_string+"'", state, n1, n2, value,
+            # line)
 
             def err(expected):
-                raise cls.ParseError("Expected {} in {} at char {}, got {}, '{}' ".format(expected, line, pos, token.tok_name[t_type], t_string))
+                raise cls.ParseError(
+                    "Expected {} in {} at char {}, got {}, '{}' ".format(
+                        expected,
+                        line,
+                        pos,
+                        token.tok_name[t_type],
+                        t_string))
 
             if not t_string:
                 continue
@@ -169,7 +177,7 @@ class QueryCommand(object):
 
             elif state == 'name_start' or state == 'name_start_or_value':
                 # First part of name
-                if state == 'name_start_or_value' and t_string in ('-','.'):
+                if state == 'name_start_or_value' and t_string in ('-', '.'):
                     if is_like:
                         value = value.strip('%')
 
@@ -180,7 +188,6 @@ class QueryCommand(object):
                     state = 'name_sep'
                     is_like = False
 
-
                 elif t_type == token.OP and t_string == ',':
                     state = 'name_start'
 
@@ -188,7 +195,7 @@ class QueryCommand(object):
                     state = 'done'
 
                 else:
-                    err( "NAME or ','; got: '{}'  ".format(t_string))
+                    err("NAME or ','; got: '{}'  ".format(t_string))
 
             elif state == 'name_sep':
                 # '.' that separates names
@@ -221,23 +228,23 @@ class QueryCommand(object):
                 if t_type == token.NAME or t_type == token.STRING or t_type == token.NUMBER:
                     value = t_string
                     if is_like:
-                        value = '%'+value+'%'
+                        value = '%' + value + '%'
 
                     state = 'name_start_or_value'
 
-                    qc.getsubdict(n1).__setattr__(n2,value.strip("'").strip('"'))
+                    qc.getsubdict(n1).__setattr__(
+                        n2,
+                        value.strip("'").strip('"'))
 
                 else:
                     raise err("NAME or STRING")
             elif state == 'done':
                 raise cls.ParseError("Got token after end")
             else:
-                raise cls.ParseError("Unknown state: {} at char {}".format(state))
-
-
+                raise cls.ParseError(
+                    "Unknown state: {} at char {}".format(state))
 
         return qc
-
 
     @property
     def identity(self):
@@ -263,27 +270,26 @@ class QueryCommand(object):
         '''Return an array of terms for partition searches'''
         return self.getsubdict('partition')
 
-
     def __str__(self):
         return str(self._dict)
 
 
 class Resolver(object):
+
     '''Find a reference to a dataset or partition based on a string,
     which may be a name or object number '''
 
-
     def __init__(self, session):
 
-        self.session = session # a Sqlalchemy connection
+        self.session = session  # a Sqlalchemy connection
 
     def _resolve_ref_orm(self, ref):
         from ..identity import Locations
 
         ip = Identity.classify(ref)
 
-        dqp = None # Dataset query parts
-        pqp = None # Partition query parts
+        dqp = None  # Dataset query parts
+        pqp = None  # Partition query parts
 
         if ip.isa == PartitionNumber:
             if ip.on.revision:
@@ -311,13 +317,12 @@ class Resolver(object):
 
         out = []
 
-
         if dqp is not None:
 
             q = (self.session.query(Dataset, File)
-                .outerjoin(File, File.ref == Dataset.vid)
-                .filter(dqp)
-                .order_by(Dataset.revision.desc()))
+                 .outerjoin(File, File.ref == Dataset.vid)
+                 .filter(dqp)
+                 .order_by(Dataset.revision.desc()))
 
             for row in (q.all()):
                 out.append((row.Dataset, None, row.File))
@@ -325,15 +330,12 @@ class Resolver(object):
         if pqp is not None:
 
             for row in (self.session.query(Dataset, Partition, File)
-                                .join(Partition)
-                                .filter(pqp)
-                                .outerjoin(File, File.ref == Partition.vid)
-                                .order_by(Dataset.revision.desc()).all()):
+                        .join(Partition)
+                        .filter(pqp)
+                        .outerjoin(File, File.ref == Partition.vid)
+                        .order_by(Dataset.revision.desc()).all()):
 
                 out.append((row.Dataset, row.Partition, row.File))
-
-
-
 
         return ip, out
 
@@ -364,7 +366,11 @@ class Resolver(object):
                     # Also need to set the location in the dataset, or the location
                     # filtering may fail later.
                     lrc = LocationRef.LOCATION
-                    d_f_type = {lrc.REMOTEPARTITION: lrc.REMOTE, lrc.PARTITION: lrc.LIBRARY}.get(f.type_, None)
+                    d_f_type = {
+                        lrc.REMOTEPARTITION: lrc.REMOTE,
+                        lrc.PARTITION: lrc.LIBRARY}.get(
+                        f.type_,
+                        None)
                     out[d.vid].locations.set(d_f_type)
 
             if p:
@@ -387,13 +393,17 @@ class Resolver(object):
 
         if location:
 
-            refs = OrderedDict( [ (k,v) for k, v in refs.items() if v.locations.has(location) ] )
+            refs = OrderedDict(
+                [(k, v) for k, v in refs.items() if v.locations.has(location)])
 
         if not isinstance(ip.version, semantic_version.Spec):
-            return ip, refs.values().pop(0) if refs and len(refs.values()) else None
+            return ip, refs.values().pop(0) if refs and len(
+                refs.values()) else None
         else:
 
-            versions = {semantic_version.Version(d.name.version):d for d in refs.values()}
+            versions = {
+                semantic_version.Version(
+                    d.name.version): d for d in refs.values()}
 
             best = ip.version.select(versions.keys())
 
@@ -416,7 +426,7 @@ class Resolver(object):
             for partitions.
         '''
 
-        def like_or_eq(c,v):
+        def like_or_eq(c, v):
 
             if v and '%' in v:
                 return c.like(v)
@@ -431,7 +441,7 @@ class Resolver(object):
             out = []
             for d in self.queryByIdentity(query_command).all():
                 id_ = d.identity
-                d.path = os.path.join(self.cache,id_.cache_key)
+                d.path = os.path.join(self.cache, id_.cache_key)
                 out.append(d)
 
         tables = [Dataset]
@@ -445,16 +455,18 @@ class Resolver(object):
         if len(query_command.column) > 0:
             tables.append(Column)
 
-        tables.append(Dataset.id_) # Dataset.id_ is included to ensure result is always a tuple)
+        # Dataset.id_ is included to ensure result is always a tuple)
+        tables.append(Dataset.id_)
 
-        query = self.session.query(*tables) # Dataset.id_ is included to ensure result is always a tuple
+        # Dataset.id_ is included to ensure result is always a tuple
+        query = self.session.query(*tables)
 
         if len(query_command.identity) > 0:
-            for k,v in query_command.identity.items():
+            for k, v in query_command.identity.items():
                 if k == 'id':
                     k = 'id_'
                 try:
-                    query = query.filter( like_or_eq(getattr(Dataset, k),v) )
+                    query = query.filter(like_or_eq(getattr(Dataset, k), v))
                 except AttributeError as e:
                     # Dataset doesn't have the attribute, so ignore it.
                     pass
@@ -462,41 +474,40 @@ class Resolver(object):
         if len(query_command.partition) > 0:
             query = query.join(Partition)
 
-            for k,v in query_command.partition.items():
+            for k, v in query_command.partition.items():
                 if k == 'id':
                     k = 'id_'
 
                 from sqlalchemy.sql import or_
 
                 if k == 'any':
-                    continue # Just join the partition
+                    continue  # Just join the partition
                 elif k == 'table':
                     # The 'table" value could be the table id
                     # or a table name
                     query = query.join(Table)
-                    query = query.filter( or_(Partition.t_id  == v,
-                                              like_or_eq(Table.name,v)))
+                    query = query.filter(or_(Partition.t_id == v,
+                                             like_or_eq(Table.name, v)))
                 elif k == 'space':
-                    query = query.filter( or_( like_or_eq(Partition.space,v)))
+                    query = query.filter(or_(like_or_eq(Partition.space, v)))
 
                 else:
-                    query = query.filter(  like_or_eq(getattr(Partition, k),v) )
-
+                    query = query.filter(like_or_eq(getattr(Partition, k), v))
 
             if not query_command.partition.format:
                 # Exclude CSV if not specified
-                query = query.filter( Partition.format  != 'csv')
+                query = query.filter(Partition.format != 'csv')
 
         if len(query_command.table) > 0:
             query = query.join(Table)
-            for k,v in query_command.table.items():
-                query = query.filter(  like_or_eq(getattr(Table, k),v) )
+            for k, v in query_command.table.items():
+                query = query.filter(like_or_eq(getattr(Table, k), v))
 
         if len(query_command.column) > 0:
             query = query.join(Table)
             query = query.join(Column)
-            for k,v in query_command.column.items():
-                query = query.filter(  like_or_eq(getattr(Column, k),v) )
+            for k, v in query_command.column.items():
+                query = query.filter(like_or_eq(getattr(Column, k), v))
 
         query = query.distinct().order_by(Dataset.revision.desc())
 

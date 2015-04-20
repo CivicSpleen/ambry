@@ -7,9 +7,15 @@ Each of the magics creates an entry in a manifest file in memory, which is execu
 __author__ = 'eric'
 
 from IPython.core.getipython import get_ipython
-from IPython.core.magic import (Magics, magics_class, line_magic, cell_magic, line_cell_magic)
+from IPython.core.magic import (
+    Magics,
+    magics_class,
+    line_magic,
+    cell_magic,
+    line_cell_magic)
 from collections import defaultdict
 from ..util import memoize
+
 
 class ManifestMagicsImpl(object):
 
@@ -26,28 +32,42 @@ class ManifestMagicsImpl(object):
 
         return ManifestMagicsImpl._manifest_
 
-
     @_manifest.setter
     def _manifest(self, value):
         ManifestMagicsImpl._manifest_ = value
 
-
-    def parseargs(self,line):
+    def parseargs(self, line):
         import argparse
         import shlex
         import re
 
-        parser = argparse.ArgumentParser(prog='ipython manifest',description='',prefix_chars='-+')
+        parser = argparse.ArgumentParser(
+            prog='ipython manifest',
+            description='',
+            prefix_chars='-+')
 
-        parser.add_argument('-f', '--force', default=False, action='store_true', help='Force re-creation of tables and fiels that already exist')
-        parser.add_argument('-c', '--cwd', default=False, action='store_true', help='Use the current working directory for the warehouse base_dir')
-        parser.add_argument('-i', '--install', default=False, action='store_true', help='Install the manifest after loading')
+        parser.add_argument(
+            '-f',
+            '--force',
+            default=False,
+            action='store_true',
+            help='Force re-creation of tables and fiels that already exist')
+        parser.add_argument(
+            '-c',
+            '--cwd',
+            default=False,
+            action='store_true',
+            help='Use the current working directory for the warehouse base_dir')
+        parser.add_argument(
+            '-i',
+            '--install',
+            default=False,
+            action='store_true',
+            help='Install the manifest after loading')
 
+        line = re.sub(r'#.*$', '', line)  # Remove comments
 
-        line = re.sub(r'#.*$','', line ) # Remove comments
-
-        return  parser.parse_args(shlex.split(line))
-
+        return parser.parse_args(shlex.split(line))
 
     @property
     @memoize
@@ -55,10 +75,14 @@ class ManifestMagicsImpl(object):
         from ambry.util import get_logger
         import logging
 
-        logger = get_logger('ipython', clear=True, template="%(levelname)s %(message)s")
+        logger = get_logger(
+            'ipython',
+            clear=True,
+            template="%(levelname)s %(message)s")
         logger.setLevel(logging.INFO)
 
         class ClearOutputAdapter(logging.LoggerAdapter):
+
             def process(self, msg, kwargs):
                 from IPython.display import clear_output
 
@@ -69,7 +93,7 @@ class ManifestMagicsImpl(object):
 
         return logger
 
-    def get_manifest(self,line, args):
+    def get_manifest(self, line, args):
         from ..run import get_runconfig
         from ..dbexceptions import ConfigurationError
         from ..warehouse.manifest import Manifest
@@ -98,11 +122,16 @@ class ManifestMagicsImpl(object):
 
         library = new_library(rc.library(library_name))
 
-
         force = args.force
         install_db = False
 
-        return  Manifest('', self.logger, library=library, base_dir=base_dir, force=force, install_db=install_db)
+        return Manifest(
+            '',
+            self.logger,
+            library=library,
+            base_dir=base_dir,
+            force=force,
+            install_db=install_db)
 
     def tag_lineno(self, tag, args, cell=None):
         """Return a cached line number for single line tags"""
@@ -142,40 +171,35 @@ class ManifestMagicsImpl(object):
         """Cell magic for all of the opening lines, TITLE, UID, ACCESS, etc.
         Line number is always 0"""
 
-
         # TBD: Parse the line to set manifest parameters
 
         args = self.parseargs(line)
 
-        if not self._manifest_ or args.force: # TBD re-get manifest if force
+        if not self._manifest_ or args.force:  # TBD re-get manifest if force
             self._manifest = self.get_manifest(line, args)
 
         self._manifest.sectionalize(cell.splitlines(), 0)
 
-
-
         if args.install:
             return self._manifest.install()
 
-
-
     def partitions(self, line, cell):
         """Partitions all start at line 20"""
-        self._manifest.sectionalize(['PARTITIONS: {}'.format(line)] + cell.splitlines(),
-                                    first_line=self.tag_lineno('partitions', line))
-
+        self._manifest.sectionalize(['PARTITIONS: {}'.format(
+            line)] + cell.splitlines(), first_line=self.tag_lineno('partitions', line))
 
     def extract(self, line):
         """Single extract line"""
-        self._manifest.sectionalize(['EXTRACT: {}'.format(line)], first_line=self.tag_lineno('extract', line))
+        self._manifest.sectionalize(
+            ['EXTRACT: {}'.format(line)], first_line=self.tag_lineno('extract', line))
 
     def view(self, line, cell):
-        self._manifest.sectionalize(['VIEW: {}'.format(line)] + cell.splitlines(),
-                                   first_line=self.tag_lineno('view', line, cell))
+        self._manifest.sectionalize(['VIEW: {}'.format(
+            line)] + cell.splitlines(), first_line=self.tag_lineno('view', line, cell))
 
     def mview(self, line, cell):
-        self._manifest.sectionalize(['MVIEW: {}'.format(line)] + cell.splitlines(),
-                                   first_line=self.tag_lineno('view', line, cell))
+        self._manifest.sectionalize(['MVIEW: {}'.format(
+            line)] + cell.splitlines(), first_line=self.tag_lineno('view', line, cell))
 
     def show(self):
         return str(self._manifest)
@@ -183,8 +207,8 @@ class ManifestMagicsImpl(object):
 
 @magics_class
 class ManifestMagics(Magics):
-    """Magics for creating Ambry manifests within an ipython notebook"""
 
+    """Magics for creating Ambry manifests within an ipython notebook"""
 
     def __init__(self, shell):
         # You must call the parent constructor
@@ -221,10 +245,6 @@ class ManifestMagics(Magics):
         self.impl.mview(line, cell)
 
 
-
-
 ip = get_ipython()
 if ip:
     ip.register_magics(ManifestMagics)
-
-

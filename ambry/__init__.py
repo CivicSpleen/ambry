@@ -22,6 +22,7 @@ from _meta import *
 from ambry.util import memoize
 import ambry.library as _l
 
+
 @memoize
 def config():
     '''Return the default run_config object for this installation'''
@@ -33,5 +34,3 @@ def config():
 def library(name='default'):
     '''Return the default library for this installation'''
     return _l.new_library(config().library(name))
-
-

@@ -10,35 +10,47 @@ from .inserter import InserterInterface
 import tables
 from ..orm import Column
 
+
 class ValueInserter(InserterInterface):
+
     '''Inserts arrays of values into  database table'''
-    def __init__(self, path, bundle,  partition, table=None, header=None, delimiter = '|',
-                 escapechar='\\', encoding='utf-8', 
-                 write_header = False,  buffer_size=2*1024*1024):
+
+    def __init__(
+            self,
+            path,
+            bundle,
+            partition,
+            table=None,
+            header=None,
+            delimiter='|',
+            escapechar='\\',
+            encoding='utf-8',
+            write_header=False,
+            buffer_size=2 *
+            1024 *
+            1024):
 
         pass
-
 
     def insert(self, values):
 
         if self._writer is None:
             self._init_writer(values)
-      
+
         try:
             self._inserter(values)
-                
+
         except (KeyboardInterrupt, SystemExit):
             self.close()
             self.delete()
             raise
         except Exception as e:
             self.close()
-            self.delete()            
+            self.delete()
             raise
 
         return True
 
-     
     def close(self):
         if self._f and not self._f.closed:
             self._f.flush()
@@ -49,12 +61,11 @@ class ValueInserter(InserterInterface):
         if os.path.exists(self.path):
             os.remove(self.path)
 
-            
     def __enter__(self):
 
         self.partition.set_state(Partitions.STATE.BUILDING)
         return self
-    
+
     def __exit__(self, type_, value, traceback):
 
         if type_ is not None:
@@ -66,11 +77,12 @@ class ValueInserter(InserterInterface):
 
         self.close()
 
+
 class HdfDb(DatabaseInterface):
-     
+
     EXTENSION = '.h5'
 
-    types  = {
+    types = {
         # Sqlalchemy, Python, Sql,
         Column.DATATYPE_TEXT: tables.StringCol,
         Column.DATATYPE_VARCHAR: tables.StringCol,
@@ -91,11 +103,11 @@ class HdfDb(DatabaseInterface):
         Column.DATATYPE_MULTIPOLYGON: tables.StringCol,
         Column.DATATYPE_GEOMETRY: tables.StringCol,
         Column.DATATYPE_BLOB: tables.StringCol,
-        }
-     
+    }
+
     def __init__(self, bundle, partition, base_path, **kwargs):
-        ''''''   
-        
+        ''''''
+
         self.bundle = bundle
         self.partition = partition
 
@@ -107,42 +119,45 @@ class HdfDb(DatabaseInterface):
         for c in table.columns:
 
             if c.type_is_text():
-                width = c.width if c.width else 100;
-                t = cls.types[c.datatype](width, pos  = c.sequence_id)
+                width = c.width if c.width else 100
+                t = cls.types[c.datatype](width, pos=c.sequence_id)
             else:
-                t = cls.types[c.datatype](pos = c.sequence_id)
+                t = cls.types[c.datatype](pos=c.sequence_id)
 
             desc[c.vid] = t
 
         return desc
 
-    @property 
+    @property
     def path(self):
-        return self.partition.path+self.EXTENSION
-
+        return self.partition.path + self.EXTENSION
 
     def exists(self):
         import os
         return os.path.exists(self.path)
-        
+
     def is_empty(self):
         return False
-        
+
     def create(self):
-        pass # Created in the inserter
-        
+        pass  # Created in the inserter
+
     def delete(self):
         import os
         if os.path.exists(self.path):
             os.remove(self.path)
-        
-    def inserter(self, header=None, skip_header = False, **kwargs):
-        
+
+    def inserter(self, header=None, skip_header=False, **kwargs):
+
         if not skip_header and header is None and self.partition.table is not None:
             header = [c.name for c in self.partition.table.columns]
 
-        return ValueInserter(self.path,  self.bundle, self.partition,  header=header, **kwargs)
+        return ValueInserter(
+            self.path,
+            self.bundle,
+            self.partition,
+            header=header,
+            **kwargs)
 
     def close(self):
         pass
-

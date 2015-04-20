@@ -9,9 +9,13 @@ import pip
 from pip.commands import InstallCommand
 from ..util import memoize
 
-def install(install_dir,egg,url):
 
-    initial_args = ['install', '--install-option=--install-purelib={}'.format(install_dir), url]
+def install(install_dir, egg, url):
+
+    initial_args = [
+        'install',
+        '--install-option=--install-purelib={}'.format(install_dir),
+        url]
 
     try:
         # An earlier version of pip
@@ -26,9 +30,7 @@ def install(install_dir,egg,url):
         command = commands[cmd_name]()
         return command.main(cmd_args)
 
-
     raise Exception()
-
 
 
 def qualified_name(o):

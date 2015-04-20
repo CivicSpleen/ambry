@@ -12,12 +12,11 @@ class PostgresWarehouse(Warehouse):
 
     drop_view_sql = 'DROP VIEW  IF EXISTS "{name}" CASCADE'
 
-
     def create(self):
         self.database.create()
-        self.database.connection.execute('CREATE SCHEMA IF NOT EXISTS library;')
+        self.database.connection.execute(
+            'CREATE SCHEMA IF NOT EXISTS library;')
         self.library.database.create()
-       
 
     def table_meta(self, identity, table_name):
         '''Get the metadata directly from the database. This requires that
@@ -29,19 +28,20 @@ class PostgresWarehouse(Warehouse):
 
         return super(PostgresWarehouse, self).table_meta(identity, table_name)
 
-
     def _ogr_args(self, partition):
 
         db = self.database
 
-        ogr_dsn = ("PG:'dbname={dbname} user={username} host={host} password={password}'"
-                   .format(username=db.username, password=db.password,
-                           host=db.server, dbname=db.dbname))
+        ogr_dsn = (
+            "PG:'dbname={dbname} user={username} host={host} password={password}'" .format(
+                username=db.username,
+                password=db.password,
+                host=db.server,
+                dbname=db.dbname))
 
         return ["-f PostgreSQL", ogr_dsn,
                 partition.database.path,
                 "--config PG_USE_COPY YES"]
-
 
     def drop_user(self, u):
         e = self.database.connection.execute
@@ -76,7 +76,8 @@ class PostgresWarehouse(Warehouse):
         e("""ALTER DEFAULT PRIVILEGES IN SCHEMA public
              GRANT SELECT ON TABLES  TO {}; """.format(user))
 
-        e("GRANT SELECT, USAGE ON ALL SEQUENCES IN SCHEMA public TO {}".format(user))
+        e("GRANT SELECT, USAGE ON ALL SEQUENCES IN SCHEMA public TO {}".format(
+            user))
 
         e("""ALTER DEFAULT PRIVILEGES IN SCHEMA public
           GRANT SELECT, USAGE ON SEQUENCES  TO {}""".format(user))
@@ -93,5 +94,3 @@ class PostgresWarehouse(Warehouse):
 
         return {row['name']: dict(row) for row
                 in self.database.connection.execute(q)}
-
-

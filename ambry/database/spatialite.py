@@ -8,7 +8,6 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from .sqlite import SqliteDatabase, SqliteAttachmentMixin
 
 
-
 class SpatialiteDatabase(SqliteDatabase, SqliteAttachmentMixin):
     is_geo = True
 
@@ -20,7 +19,6 @@ class SpatialiteDatabase(SqliteDatabase, SqliteAttachmentMixin):
         # depends on the load_extension call in database.geo._on_connect_geo()
         self.engine.execute("SELECT InitSpatialMetaData();")
 
-
     def drop(self):
         import os
         try:
@@ -29,7 +27,6 @@ class SpatialiteDatabase(SqliteDatabase, SqliteAttachmentMixin):
             pass
 
         self.create()
-
 
     def _on_create_connection(self, connection):
         '''Called from get_connection() to update the database'''
@@ -42,6 +39,7 @@ class SpatialiteDatabase(SqliteDatabase, SqliteAttachmentMixin):
         super(SpatialiteDatabase, self)._on_create_engine(engine)
 
         event.listen(self._engine, 'connect', _on_connect_geo)
+
 
 class SpatialiteWarehouseDatabase(SpatialiteDatabase):
 

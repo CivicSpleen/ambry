@@ -1,7 +1,8 @@
 from __future__ import absolute_import
 from IPython.core.getipython import get_ipython
-from IPython.core.magic import (Magics, magics_class,  cell_magic)
+from IPython.core.magic import (Magics, magics_class, cell_magic)
 from markdown import markdown
+
 
 @magics_class
 class MarkdownMagics(Magics):
@@ -9,7 +10,6 @@ class MarkdownMagics(Magics):
     @cell_magic
     def markdown(self, line, cell):
         from IPython.core.display import HTML
-
 
         vars = line.split()
 
@@ -22,4 +22,3 @@ class MarkdownMagics(Magics):
 
 
 get_ipython().register_magics(MarkdownMagics)
-

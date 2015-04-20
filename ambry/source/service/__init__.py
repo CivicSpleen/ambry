@@ -9,7 +9,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 def new_service(config):
 
     if config['service'] == 'github':
-        from github import GitHubService #@UnresolvedImport
+        from github import GitHubService  # @UnresolvedImport
 
         return GitHubService(**config)
     else:
@@ -20,14 +20,16 @@ def new_service(config):
 class ServiceException(Exception):
     pass
 
+
 class ServiceInterface(object):
-    
+
     def create_repository(self):
         '''Create a new upstream repository'''
-        raise NotImplemented()  
-    
+        raise NotImplemented()
+
     def ident(self):
         '''Return an identifier for this service'''
-        
+
+
 class GitServiceMarker(object):
     pass

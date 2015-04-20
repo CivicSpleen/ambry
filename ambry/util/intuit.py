@@ -7,9 +7,10 @@ __author__ = 'eric'
 from collections import defaultdict, deque
 import datetime
 
+
 def test_float(v):
 
-    #if v and v[0]  == '0' and len(v) > 1: #Fixed-width integer codes are actually strings.
+    # if v and v[0]  == '0' and len(v) > 1: #Fixed-width integer codes are actually strings.
     #    return 0
 
     try:
@@ -18,9 +19,10 @@ def test_float(v):
     except:
         return 0
 
+
 def test_int(v):
 
-    #if v and v[0] == '0' and len(v) > 1: #Fixed-width integer codes are actually strings.
+    # if v and v[0] == '0' and len(v) > 1: #Fixed-width integer codes are actually strings.
     #    return 0
 
     try:
@@ -31,11 +33,13 @@ def test_int(v):
     except:
         return 0
 
+
 def test_string(v):
     if isinstance(v, basestring):
         return 1
     else:
         return 0
+
 
 def test_datetime(v):
     """Test for ISO datetime"""
@@ -55,6 +59,7 @@ def test_datetime(v):
             return 0
 
     return 1
+
 
 def test_time(v):
     if not isinstance(v, basestring):
@@ -95,9 +100,8 @@ def test_date(v):
 tests = [
     (int, test_int),
     (float, test_float),
-    (str,test_string),
+    (str, test_string),
 ]
-
 
 
 class Column(object):
@@ -110,7 +114,7 @@ class Column(object):
     strings = None
 
     def __init__(self):
-        self.type_counts = { k:0 for k,v in tests}
+        self.type_counts = {k: 0 for k, v in tests}
         self.type_counts[datetime.datetime] = 0
         self.type_counts[datetime.date] = 0
         self.type_counts[datetime.time] = 0
@@ -120,13 +124,13 @@ class Column(object):
         self.length = 0
         self.date_successes = 0
 
-    def inc_type_count(self,t):
-        self.type_counts[t] +=  1
+    def inc_type_count(self, t):
+        self.type_counts[t] += 1
 
     def test(self, v):
         from dateutil import parser
 
-        self.length = max(self.length,len(str(v)))
+        self.length = max(self.length, len(str(v)))
         self.count += 1
 
         if v is None:
@@ -157,22 +161,24 @@ class Column(object):
 
                         self.strings.append(v)
 
-                    if (self.count < 1000 or self.date_successes != 0) and any(( c in '-/:T') for c in v):
+                    if (self.count < 1000 or self.date_successes != 0) and any((c in '-/:T') for c in v):
                         try:
-                            maybe_dt = parser.parse(v, default=datetime.datetime.fromtimestamp(0) )
+                            maybe_dt = parser.parse(
+                                v, default=datetime.datetime.fromtimestamp(0))
                         except (TypeError, ValueError):
                             maybe_dt = None
 
                         if maybe_dt:
                             # Check which parts of the default the parser didn't change to find
                             # the real type
-                            # HACK The time check will be wrong for the time of the start of the epoch, 16:00.
+                            # HACK The time check will be wrong for the time of
+                            # the start of the epoch, 16:00.
                             if maybe_dt.time() == datetime.datetime.fromtimestamp(0).time():
                                 type_ = datetime.date
                             elif maybe_dt.date() == datetime.datetime.fromtimestamp(0).date():
-                                type_ =  datetime.time
+                                type_ = datetime.time
                             else:
-                                type_ =  datetime.datetime
+                                type_ = datetime.datetime
 
                             self.date_successes += 1
 
@@ -180,13 +186,12 @@ class Column(object):
 
                 return type_
 
-
     def resolved_type(self):
         "Return the type for the columns, and a flag to indicate that the column has codes"
         import datetime
 
-        self.type_ratios = { test:float(self.type_counts[test]) / float(self.count)
-                             for test, testf in tests + [(None, None)] }
+        self.type_ratios = {test: float(
+            self.type_counts[test]) / float(self.count) for test, testf in tests + [(None, None)]}
 
         if self.type_ratios[str] > .2:
             return str, False
@@ -213,7 +218,9 @@ class Column(object):
         else:
             return num_type, False
 
+
 class Intuiter(object):
+
     """Determine the types of rows in a table """
     header = None
     counts = None
@@ -222,11 +229,11 @@ class Intuiter(object):
         from collections import OrderedDict
         self._columns = OrderedDict()
 
-    def iterate(self, row_gen, max_n = None):
+    def iterate(self, row_gen, max_n=None):
 
         header = row_gen.get_header()
 
-        for n,row in enumerate(row_gen):
+        for n, row in enumerate(row_gen):
 
             if max_n and n > max_n:
                 return
@@ -257,19 +264,19 @@ class Intuiter(object):
             rt = v.resolved_type()
 
             d = dict(
-                name = v.name,
+                name=v.name,
                 length=v.length,
                 resolved_type=rt[0],
                 has_codes=rt[1],
                 count=v.count,
-                ints=v.type_counts.get(int,None),
+                ints=v.type_counts.get(int, None),
                 floats=v.type_counts.get(float, None),
                 strs=v.type_counts.get(str, None),
                 nones=v.type_counts.get(None, None),
                 datetimes=v.type_counts.get(datetime.datetime, None),
-                dates = v.type_counts.get(datetime.date, None),
-                times = v.type_counts.get(datetime.time, None),
-                strvals = ','.join(list(v.strings)[:20])
+                dates=v.type_counts.get(datetime.date, None),
+                times=v.type_counts.get(datetime.time, None),
+                strvals=','.join(list(v.strings)[:20])
             )
 
             yield d

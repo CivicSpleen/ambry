@@ -7,6 +7,5 @@ def test_logging():
     logger = logging.getLogger('ipython')
     logger.propagate = False
 
-
-    for i in range(1,3):
+    for i in range(1, 3):
         logger.info('Logging message {}'.format(i))

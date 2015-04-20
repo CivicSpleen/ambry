@@ -4,24 +4,32 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from . import DatabaseInterface #@UnresolvedImport
-from .inserter import  ValueInserter
+from . import DatabaseInterface  # @UnresolvedImport
+from .inserter import ValueInserter
 import os
 import logging
 from ambry.util import get_logger, memoize
 from ..database.inserter import SegmentedInserter, SegmentInserterFactory
 from contextlib import contextmanager
-import atexit, weakref
+import atexit
+import weakref
 import pdb
 
 global_logger = get_logger(__name__)
-#global_logger.setLevel(logging.DEBUG)
+# global_logger.setLevel(logging.DEBUG)
 
 from sqlalchemy.dialects import registry
-registry.register("spatialite", "ambry.database.dialects.spatialite", "SpatialiteDialect")
-registry.register("postgis", "ambry.database.dialects.postgis", "PostgisDialect")
+registry.register(
+    "spatialite",
+    "ambry.database.dialects.spatialite",
+    "SpatialiteDialect")
+registry.register(
+    "postgis",
+    "ambry.database.dialects.postgis",
+    "PostgisDialect")
 
 connections = dict()
+
 
 def close_connections_at_exit():
     '''Close any connections that have not already been closed '''
@@ -30,35 +38,51 @@ def close_connections_at_exit():
         conn = conn_ref()
 
         if conn:
-            global_logger.debug("Closing connection {}: {}. From: {} ".format(id(conn),dsn, where))
+            global_logger.debug(
+                "Closing connection {}: {}. From: {} ".format(
+                    id(conn),
+                    dsn,
+                    where))
             conn.close()
 
         del connections[id_]
+
 
 def close_connection_on_ref(ref):
     pass
 
 atexit.register(close_connections_at_exit)
 
+
 def close_all_connections():
     close_connections_at_exit()
 
+
 class RelationalDatabase(DatabaseInterface):
+
     '''Represents a Sqlite database'''
 
     # These DSNs can get munged just before connecting, so postgres -> postgresql+psycopg2
-    # The munging isn't really used now, since we have trivial dialects for spatialite and postgis
+    # The munging isn't really used now, since we have trivial dialects for
+    # spatialite and postgis
     DBCI = {
-            'postgis':'postgis://{user}:{password}@{server}{colon_port}/{name}', # Stored in the ambry module.
-            'postgres':'postgres://{user}:{password}@{server}{colon_port}/{name}', # Stored in the ambry module.
-            'sqlite':'sqlite:///{name}',
-            'spatialite':'spatialite:///{name}' # Only works if you properly install spatialite.
-            }
+        'postgis': 'postgis://{user}:{password}@{server}{colon_port}/{name}',  # Stored in the ambry module.
+        'postgres': 'postgres://{user}:{password}@{server}{colon_port}/{name}',  # Stored in the ambry module.
+        'sqlite': 'sqlite:///{name}',
+        'spatialite': 'spatialite:///{name}'  # Only works if you properly install spatialite.
+    }
 
     dsn = None
 
-    def __init__(self,  driver=None, server=None, dbname = None, username=None, password=None, port=None,  **kwargs):
-
+    def __init__(
+            self,
+            driver=None,
+            server=None,
+            dbname=None,
+            username=None,
+            password=None,
+            port=None,
+            **kwargs):
         '''Initialize the a database object
 
         Args:
@@ -80,7 +104,7 @@ class RelationalDatabase(DatabaseInterface):
         self.enable_delete = True
 
         if port:
-            self.colon_port = ':'+str(port)
+            self.colon_port = ':' + str(port)
         else:
             self.colon_port = ''
 
@@ -88,21 +112,23 @@ class RelationalDatabase(DatabaseInterface):
 
         self._connection = None
 
-
         self._table_meta_cache = {}
 
         self.dsn_template = self.DBCI[self.driver]
 
-        self.dsn = self.dsn_template.format(user=self.username, password=self.password,
-                    server=self.server, name=self.dbname, colon_port=self.colon_port)
+        self.dsn = self.dsn_template.format(
+            user=self.username,
+            password=self.password,
+            server=self.server,
+            name=self.dbname,
+            colon_port=self.colon_port)
 
         self._session = None
-
 
     def __del__(self):
         pass
 
-    def log(self,message):
+    def log(self, message):
         global_logger.info(message)
 
     def error(self, message):
@@ -141,7 +167,7 @@ class RelationalDatabase(DatabaseInterface):
 
     def _create(self):
         """Create the database from the base SQL"""
-        from ambry.orm import  Config
+        from ambry.orm import Config
 
         if not self.exists():
 
@@ -150,14 +176,14 @@ class RelationalDatabase(DatabaseInterface):
             # For Sqlite, this will create an empty database.
             self.get_connection(check_exists=False)
 
-            tables = [ Config ]
+            tables = [Config]
 
             for table in tables:
                 table.__table__.create(bind=self.engine)
 
-            return True #signal did create
+            return True  # signal did create
 
-        return False # signal didn't create
+        return False  # signal didn't create
 
     def _post_create(self):
         # call the post create function
@@ -166,18 +192,18 @@ class RelationalDatabase(DatabaseInterface):
         from ..library.database import ROOT_CONFIG_NAME_V
 
         if not 'config' in self.inspector.get_table_names():
-            Config.__table__.create(bind=self.engine) #@UndefinedVariable
+            Config.__table__.create(bind=self.engine)  # @UndefinedVariable
 
         session = self.session
-        self.set_config_value(ROOT_CONFIG_NAME_V, 'process','dbcreated',
-                              datetime.now().isoformat(), session=session )
+        self.set_config_value(ROOT_CONFIG_NAME_V, 'process', 'dbcreated',
+                              datetime.now().isoformat(), session=session)
 
     def post_create(self):
         '''Call all implementations of _post_create in this object's class heirarchy'''
         import inspect
 
         for cls in inspect.getmro(self.__class__):
-            for n,f in inspect.getmembers(cls,lambda m: inspect.ismethod(m) and m.__func__ in m.im_class.__dict__.values()):
+            for n, f in inspect.getmembers(cls, lambda m: inspect.ismethod(m) and m.__func__ in m.im_class.__dict__.values()):
                 if n == '_post_create':
                     f(self)
 
@@ -185,7 +211,8 @@ class RelationalDatabase(DatabaseInterface):
         if not self.enable_delete:
             raise Exception("Deleting not enabled")
 
-        for table in reversed(self.metadata.sorted_tables):  # sorted by foreign key dependency
+        # sorted by foreign key dependency
+        for table in reversed(self.metadata.sorted_tables):
             if table.name not in ['spatial_ref_sys']:
                 table.drop(self.engine, checkfirst=True)
 
@@ -196,7 +223,7 @@ class RelationalDatabase(DatabaseInterface):
         except DatabaseMissingError:
             pass
 
-    def drop_table(self, table_name, use_id = False):
+    def drop_table(self, table_name, use_id=False):
         table = self.table(table_name)
 
         table.drop(self.engine)
@@ -228,25 +255,29 @@ class RelationalDatabase(DatabaseInterface):
                 path = 'sqlite://'
 
             kwargs = dict(
-                echo = False
+                echo=False
             )
 
-            if self.driver in ('sqlite','spatialite'):
-                kwargs['connect_args'] = {'detect_types': sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES}
+            if self.driver in ('sqlite', 'spatialite'):
+                kwargs['connect_args'] = {
+                    'detect_types': sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES}
                 kwargs['native_datetime'] = True
 
-            self._engine = create_engine(self.munged_dsn,  poolclass=NullPool,
-                                         isolation_level='SERIALIZABLE', **kwargs)
-
+            self._engine = create_engine(
+                self.munged_dsn,
+                poolclass=NullPool,
+                isolation_level='SERIALIZABLE',
+                **kwargs)
 
             self.Session = sessionmaker(bind=self._engine)
 
-            self._engine.pool._use_threadlocal = True # Easier than constructing the pool
+            # Easier than constructing the pool
+            self._engine.pool._use_threadlocal = True
 
             self._on_create_engine(self._engine)
 
-            self.get_connection(); # run _on_create_connection
-
+            self.get_connection()
+            # run _on_create_connection
 
         return self._engine
 
@@ -271,25 +302,34 @@ class RelationalDatabase(DatabaseInterface):
                 id_ = self._connection_id()
 
                 if self.dsn in connections:
-                    (conn_ref, dsn, where)  = connections[id_]
-                    raise Exception("Duplicate connection to {}: {}, {}, {}".format(self.dsn, conn_ref, dsn, where))
+                    (conn_ref, dsn, where) = connections[id_]
+                    raise Exception(
+                        "Duplicate connection to {}: {}, {}, {}".format(
+                            self.dsn,
+                            conn_ref,
+                            dsn,
+                            where))
 
                 tb = traceback.extract_stack()[-8:-5][0]
 
                 where = "{} in {}:{}".format(tb[2], tb[0], tb[1])
 
-                connections[id_] = (weakref.ref(self._connection,close_connection_on_ref),
-                                    self.dsn, where)
+                connections[id_] = (
+                    weakref.ref(
+                        self._connection,
+                        close_connection_on_ref),
+                    self.dsn,
+                    where)
                 self._on_create_connection(self._connection)
 
-                global_logger.debug('Create  connection: {} for {}'.format(id(self._connection), self.dsn))
+                global_logger.debug(
+                    'Create  connection: {} for {}'.format(id(self._connection), self.dsn))
 
             except Exception as e:
                 self.error("Failed to open: '{}': {} ".format(self.dsn, e))
                 raise
 
         return weakref.proxy(self._connection, close_connection_on_ref)
-
 
     @property
     @contextmanager
@@ -309,13 +349,12 @@ class RelationalDatabase(DatabaseInterface):
     def _on_create_engine(self, engine):
         pass
 
-
     def commit_hook(self, session):
         pass
 
-        #print "before commit!", self.dsn
+        # print "before commit!", self.dsn
 
-        #if self.dsn == 'sqlite:////Volumes/DataLibrary/devel/source/clarinova-private/clarinova.com/casnd/geocode/build/clarinova.com/geocode-casnd-1.0.5.db':
+        # if self.dsn == 'sqlite:////Volumes/DataLibrary/devel/source/clarinova-private/clarinova.com/casnd/geocode/build/clarinova.com/geocode-casnd-1.0.5.db':
         #    import pdb; pdb.set_trace()
 
     @property
@@ -324,12 +363,11 @@ class RelationalDatabase(DatabaseInterface):
 
         if not self._session:
 
-            engine = self.engine # Getting it might construct it.
+            engine = self.engine  # Getting it might construct it.
 
             self._session = self.Session()
 
             event.listen(self._session, "before_commit", self.commit_hook)
-
 
         return self._session
 
@@ -354,7 +392,7 @@ class RelationalDatabase(DatabaseInterface):
         try:
             return Inspector.from_engine(self.engine)
         except:
-            #pdb.set_trace()
+            # pdb.set_trace()
             raise
 
     def open(self):
@@ -369,8 +407,8 @@ class RelationalDatabase(DatabaseInterface):
             self.close_session()
 
         if self._connection:
-            global_logger.debug('Closing connection: {} for {}'.format(id(self._connection), self.dsn))
-
+            global_logger.debug(
+                'Closing connection: {} for {}'.format(id(self._connection), self.dsn))
 
             self._connection.close()
             self._connection = None
@@ -378,9 +416,8 @@ class RelationalDatabase(DatabaseInterface):
             if self._connection_id() in connections:
                 del connections[self._connection_id()]
 
-        #if self._engine:
+        # if self._engine:
         #    self._engine.dispose()
-
 
     def clean_table(self, table):
 
@@ -405,12 +442,13 @@ class RelationalDatabase(DatabaseInterface):
 
         if not table_name in self.inspector.get_table_names():
             if not table_meta:
-                table_meta, table = self.bundle.schema.get_table_meta(table_name) #@UnusedVariable
+                table_meta, table = self.bundle.schema.get_table_meta(
+                    table_name)  # @UnusedVariable
 
             table_meta.create(bind=self.engine)
 
             if not table_name in self.inspector.get_table_names():
-                raise Exception("Don't have table "+table_name)
+                raise Exception("Don't have table " + table_name)
 
     def tables(self):
 
@@ -424,7 +462,7 @@ class RelationalDatabase(DatabaseInterface):
         table = self._table_meta_cache.get(table_name, False)
 
         if table is not False:
-            r =  table
+            r = table
         else:
             metadata = self.metadata
             table = Table(table_name, metadata, autoload=True)
@@ -438,10 +476,9 @@ class RelationalDatabase(DatabaseInterface):
                     c.type = Geometry
 
             self._table_meta_cache[table_name] = table
-            r =  table
+            r = table
 
         return r
-
 
     def set_config_value(self, d_vid, group, key, value, session=None):
         from ambry.orm import Config as SAConfig
@@ -449,18 +486,17 @@ class RelationalDatabase(DatabaseInterface):
         from sqlalchemy.orm.exc import NoResultFound
 
         if group == 'identity' and d_vid != ROOT_CONFIG_NAME_V:
-            raise ValueError("Can't set identity group from this interface. Use the dataset")
-
+            raise ValueError(
+                "Can't set identity group from this interface. Use the dataset")
 
         key = key.strip('_')
-
 
         session = self.session if not session else session
 
         try:
             o = session.query(SAConfig).filter(SAConfig.group == group,
-                                  SAConfig.key == key,
-                                  SAConfig.d_vid == d_vid).one()
+                                               SAConfig.key == key,
+                                               SAConfig.d_vid == d_vid).one()
             o.value = value
         except NoResultFound:
             o = SAConfig(group=group, key=key, d_vid=d_vid, value=value)
@@ -473,9 +509,10 @@ class RelationalDatabase(DatabaseInterface):
 
         key = key.strip('_')
 
-        return self.session.query(SAConfig).filter(SAConfig.group == group,
-                                 SAConfig.key == key,
-                                 SAConfig.d_vid == d_vid).first()
+        return self.session.query(SAConfig).filter(
+            SAConfig.group == group,
+            SAConfig.key == key,
+            SAConfig.d_vid == d_vid).first()
 
     def get_config_group(self, group, d_vid):
         from ambry.orm import Config as SAConfig
@@ -483,7 +520,7 @@ class RelationalDatabase(DatabaseInterface):
         d = {}
 
         for row in self.session.query(SAConfig).filter(SAConfig.group == group,
-                                                   SAConfig.d_vid == d_vid).all():
+                                                       SAConfig.d_vid == d_vid).all():
             d[row.key] = row.value
 
         return d
@@ -497,14 +534,14 @@ class RelationalDatabase(DatabaseInterface):
         for r in self.session.query(SAConfig).filter(or_(SAConfig.group == 'config', SAConfig.group == 'process'),
                                                      SAConfig.d_vid == d_vid).all():
 
-            parts = r.key.split('.',3)
+            parts = r.key.split('.', 3)
 
             if r.group == 'process':
                 parts = ['process'] + parts
 
-            cr = ( (parts[0] if len(parts) > 0 else None,
-                    parts[1] if len(parts) > 1 else None,
-                    parts[2] if len(parts) > 2 else None
+            cr = ((parts[0] if len(parts) > 0 else None,
+                   parts[1] if len(parts) > 1 else None,
+                   parts[2] if len(parts) > 2 else None
                    ), r.value)
 
             rows.append(cr)
@@ -522,12 +559,11 @@ class RelationalBundleDatabaseMixin(object):
 
     def _create(self):
         """Create the database from the base SQL"""
-        from ambry.orm import  Dataset, Partition, Table, Column, File, Code, ColumnStat
+        from ambry.orm import Dataset, Partition, Table, Column, File, Code, ColumnStat
         from ..identity import Identity
         from sqlalchemy.orm import sessionmaker
 
-
-        tables = [ Dataset, Partition, Table, Column, File, Code, ColumnStat ]
+        tables = [Dataset, Partition, Table, Column, File, Code, ColumnStat]
 
         for table in tables:
             table.__table__.create(bind=self.engine)
@@ -568,17 +604,24 @@ class RelationalBundleDatabaseMixin(object):
             ds = (self.session.query(Dataset).one())
 
             if not ds:
-                raise NotFoundError("No dataset record found in '{}'".format(self.dsn))
+                raise NotFoundError(
+                    "No dataset record found in '{}'".format(
+                        self.dsn))
 
             return ds
 
         except OperationalError:
-            raise NotFoundError("No dataset record found in '{}'".format(self.dsn))
+            raise NotFoundError(
+                "No dataset record found in '{}'".format(
+                    self.dsn))
         except Exception as e:
             from ..util import get_logger
             # self.logger can get caught in a recursion loop
             logger = get_logger(__name__)
-            logger.error( "Failed to get dataset: {}; {}".format(e.message,self.dsn))
+            logger.error(
+                "Failed to get dataset: {}; {}".format(
+                    e.message,
+                    self.dsn))
             raise
 
     def rewrite_dataset(self):
@@ -588,8 +631,8 @@ class RelationalBundleDatabaseMixin(object):
         try:
             ds = self.get_dataset()
 
-            for k,v in self.bundle.identity.dict.items():
-                setattr(ds,k,v)
+            for k, v in self.bundle.identity.dict.items():
+                setattr(ds, k, v)
 
         except:
             ds = Dataset(**self.bundle.identity.dict)
@@ -610,9 +653,25 @@ class RelationalBundleDatabaseMixin(object):
         from ..library.database import ROOT_CONFIG_NAME_V
         from sqlalchemy.orm import sessionmaker
 
-        self.set_config_value(self.bundle.identity.vid, 'info','type', 'bundle', session=self.session )
-        self.set_config_value(ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname, session=self.session  )
-        self.set_config_value(ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid , session=self.session )
+        self.set_config_value(
+            self.bundle.identity.vid,
+            'info',
+            'type',
+            'bundle',
+            session=self.session)
+        self.set_config_value(
+            ROOT_CONFIG_NAME_V,
+            'bundle',
+            'vname',
+            self.bundle.identity.vname,
+            session=self.session)
+        self.set_config_value(
+            ROOT_CONFIG_NAME_V,
+            'bundle',
+            'vid',
+            self.bundle.identity.vid,
+            session=self.session)
+
 
 class RelationalPartitionDatabaseMixin(object):
 
@@ -627,17 +686,31 @@ class RelationalPartitionDatabaseMixin(object):
         from ..library.database import ROOT_CONFIG_NAME_V
 
         if not 'config' in self.inspector.get_table_names():
-            Config.__table__.create(bind=self.engine) #@UndefinedVariable
+            Config.__table__.create(bind=self.engine)  # @UndefinedVariable
 
-        self.set_config_value(self.bundle.identity.vid, 'info','type', 'partition' )
-        self.set_config_value(ROOT_CONFIG_NAME_V, 'bundle','vname', self.bundle.identity.vname )
-        self.set_config_value(ROOT_CONFIG_NAME_V, 'bundle','vid', self.bundle.identity.vid )
-        self.set_config_value(ROOT_CONFIG_NAME_V, 'partition','vname', self.partition.identity.vname )
-        self.set_config_value(ROOT_CONFIG_NAME_V, 'partition','vid', self.partition.identity.vid )
+        self.set_config_value(
+            self.bundle.identity.vid,
+            'info',
+            'type',
+            'partition')
+        self.set_config_value(
+            ROOT_CONFIG_NAME_V,
+            'bundle',
+            'vname',
+            self.bundle.identity.vname)
+        self.set_config_value(
+            ROOT_CONFIG_NAME_V,
+            'bundle',
+            'vid',
+            self.bundle.identity.vid)
+        self.set_config_value(
+            ROOT_CONFIG_NAME_V,
+            'partition',
+            'vname',
+            self.partition.identity.vname)
+        self.set_config_value(
+            ROOT_CONFIG_NAME_V,
+            'partition',
+            'vid',
+            self.partition.identity.vid)
         self.session.commit()
-
-
-
-
-
-

@@ -14,6 +14,7 @@ def library(name='default'):
 
     return AnalysisLibrary(_lf())
 
+
 def get_ipython_notebook_path():
     """Return the path to the current notebook file
 
@@ -36,10 +37,14 @@ def get_ipython_notebook_path():
     notebook_path = None
     for s in requests.get('http://127.0.0.1:8888/api/sessions').json():
         if s['kernel']['id'] == kernel_id:
-            notebook_path = os.path.join(get_ipython().starting_dir, s['notebook']['path'], s['notebook']['name'])
+            notebook_path = os.path.join(
+                get_ipython().starting_dir,
+                s['notebook']['path'],
+                s['notebook']['name'])
             break
 
-    return  notebook_path
+    return notebook_path
+
 
 def get_ipython_server_info():
     """Return the notebook server info as a dict, using an egregious hack.
@@ -56,15 +61,12 @@ def get_ipython_server_info():
 
     root_dir = get_ipython().starting_dir
 
-    security_dir =  os.path.dirname(cf)
+    security_dir = os.path.dirname(cf)
 
     for file in os.listdir(security_dir):
         if file.startswith("nbserver"):
-            with open(os.path.join(security_dir,file)) as f:
+            with open(os.path.join(security_dir, file)) as f:
                 d = json.loads(f.read())
                 print d
                 if d and d.get('notebook_dir') == root_dir:
                     return d
-
-
-

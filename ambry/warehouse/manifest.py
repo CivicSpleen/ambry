@@ -14,21 +14,22 @@ from pygments import highlight
 from pygments.lexers import PythonLexer
 from pygments.formatters import HtmlFormatter
 
+
 class null_logger(object):
 
     def error(self, w):
         pass
 
-
     def warn(self, w):
         pass
-
 
     def info(self, w):
         pass
 
+
 class ParseError(Exception):
     pass
+
 
 class ManifestSection(object):
 
@@ -62,16 +63,21 @@ class ManifestSection(object):
         return None
 
     def __str__(self):
-        return "Section: tag={} line={} args={} content={} doc={}".format(self.tag, self.linenumber, self.args, self.content, self.doc)
+        return "Section: tag={} line={} args={} content={} doc={}".format(
+            self.tag,
+            self.linenumber,
+            self.args,
+            self.content,
+            self.doc)
+
 
 class Manifest(object):
 
     # These tags have only a single line; revert back to 'doc' afterward
-    singles = ['uid', 'title',  'author', 'index', 'include', "geo"]
-    multi_line = ['partitions','view','mview','sql','doc']
+    singles = ['uid', 'title', 'author', 'index', 'include', "geo"]
+    multi_line = ['partitions', 'view', 'mview', 'sql', 'doc']
 
     partitions = None
-
 
     def __init__(self, file_or_data, logger=None):
 
@@ -128,7 +134,7 @@ class Manifest(object):
 
     def tagged_sections(self, tag):
 
-        if isinstance(tag,basestring):
+        if isinstance(tag, basestring):
             tag = [tag]
 
         for line in sorted(self.sections.keys()):
@@ -149,8 +155,8 @@ class Manifest(object):
 
         return False
 
-    def count_sections(self,tag):
-        return sum( section.tag == tag for section in self.sections.values())
+    def count_sections(self, tag):
+        return sum(section.tag == tag for section in self.sections.values())
 
     @property
     def cache(self):
@@ -161,13 +167,14 @@ class Manifest(object):
     def uid(self):
         from ..dbexceptions import ConfigurationError
 
-        uid =  self.single_line('uid')
+        uid = self.single_line('uid')
 
         if not uid:
             from ..identity import TopNumber
             tn = TopNumber('m')
             raise ConfigurationError(
-                "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(str(tn)))
+                "Manifest does not have a UID. Add this line to the file:\n\nUID: {}\n".format(
+                    str(tn)))
 
         return uid
 
@@ -179,7 +186,6 @@ class Manifest(object):
     def title(self):
         return self.single_line('title')
 
-
     @property
     def summary(self):
         """The first doc section"""
@@ -190,10 +196,10 @@ class Manifest(object):
                 return section.content
 
         return {
-            'text' : None,
-            'html' : None,
-            'summary_text' : None,
-            'summary_html' : None
+            'text': None,
+            'html': None,
+            'summary_text': None,
+            'summary_html': None
         }
 
     def doc_for(self, section):
@@ -209,9 +215,8 @@ class Manifest(object):
 
         return None
 
-
-    def pygmentize_sql(self,c):
-        return  highlight(c, PythonLexer(), HtmlFormatter())
+    def pygmentize_sql(self, c):
+        return highlight(c, PythonLexer(), HtmlFormatter())
 
     @property
     def css(self):
@@ -219,16 +224,27 @@ class Manifest(object):
 
     def make_item(self, sections, tag, i, args):
         """Creates a new entry in sections, which will later have lines appended to it. """
-        from ..dbexceptions import  ConfigurationError
+        from ..dbexceptions import ConfigurationError
 
         if tag not in self.singles and tag not in self.multi_line:
             # Capture Error. These don't get save to the sections array.
             line_number = i + 1
-            section = ManifestSection(self.path, tag='error', linenumber=line_number, args=args)
-            self.logger.error("Unknown section tag: '{}' at line '{}' ".format(tag, line_number))
+            section = ManifestSection(
+                self.path,
+                tag='error',
+                linenumber=line_number,
+                args=args)
+            self.logger.error(
+                "Unknown section tag: '{}' at line '{}' ".format(
+                    tag,
+                    line_number))
         else:
             line_number = i + 1
-            section = ManifestSection(self.path, tag=tag, linenumber=line_number, args=args)
+            section = ManifestSection(
+                self.path,
+                tag=tag,
+                linenumber=line_number,
+                args=args)
             sections[line_number] = section
 
         return line_number, section
@@ -242,33 +258,37 @@ class Manifest(object):
 
         tag = 'doc'  # Starts in the Doc section
         args = ''
-        non_tag_is_doc = False # The line isn't a tag, and we're in a doc section
+        # The line isn't a tag, and we're in a doc section
+        non_tag_is_doc = False
 
-        section_start_line_number, section =  self.make_item(sections, tag,  first_line, args)
+        section_start_line_number, section = self.make_item(
+            sections, tag, first_line, args)
 
         for i, line in enumerate(data):
 
             line_number = first_line + i
 
-            line_w_comments = line # A hack to handle '#compress' in cache specification
+            # A hack to handle '#compress' in cache specification
+            line_w_comments = line
 
             if tag != 'doc':
-                line = re.sub(r'#.*$','', line ) # Remove comments
+                line = re.sub(r'#.*$', '', line)  # Remove comments
 
             if not line.strip():
                 if non_tag_is_doc:
                     non_tag_is_doc = False
                     tag = 'doc'
-                    section_start_line_number, section = self.make_item(sections, tag,line_number, None)
+                    section_start_line_number, section = self.make_item(
+                        sections, tag, line_number, None)
 
-                if tag == 'doc': # save newlines for doc sections
+                if tag == 'doc':  # save newlines for doc sections
                     section.lines.append(line)
 
                 continue
 
             rx = re.match(r'^(\w+):(.*)$', line.strip())
 
-            if rx: # Section tag lines
+            if rx:  # Section tag lines
 
                 tag = rx.group(1).strip().lower()
 
@@ -277,9 +297,11 @@ class Manifest(object):
                     rx = re.match(r'^(\w+):(.*)$', line_w_comments.strip())
 
                 args = rx.group(2).strip()
-                section_start_line_number, section = self.make_item(sections, tag, line_number, args)
+                section_start_line_number, section = self.make_item(
+                    sections, tag, line_number, args)
 
-                if tag in self.singles: # Following a single line tag, the next line revers to DOC
+                # Following a single line tag, the next line revers to DOC
+                if tag in self.singles:
                     non_tag_is_doc = True
 
                 continue
@@ -287,7 +309,8 @@ class Manifest(object):
             elif non_tag_is_doc:
                 non_tag_is_doc = False
                 tag = 'doc'
-                section_start_line_number, section = self.make_item(sections, tag, line_number, None)
+                section_start_line_number, section = self.make_item(
+                    sections, tag, line_number, None)
 
             section.lines.append(line)
 
@@ -298,7 +321,8 @@ class Manifest(object):
 
             non_empty_lines = len([l for l in section.lines if l.strip()])
 
-            # clear out any empty doc sections. These tend to get created for blank lines.
+            # clear out any empty doc sections. These tend to get created for
+            # blank lines.
             if section.tag == 'doc' and non_empty_lines == 0:
                 del sections[line]
                 continue
@@ -310,7 +334,11 @@ class Manifest(object):
                 if pf:
                     section.content = pf(section)
             except Exception as e:
-                self.logger.error("Failed to process section at line {} : {}: {} ".format(line, section, e))
+                self.logger.error(
+                    "Failed to process section at line {} : {}: {} ".format(
+                        line,
+                        section,
+                        e))
                 del sections[line]
 
         # Link docs to previous sections, where appropriate
@@ -319,7 +347,7 @@ class Manifest(object):
         for line_no in sorted(sections.keys()):
             section = sections[line_no]
 
-            if previous_section and section.tag == 'doc' and previous_section.tag in ['title', 'view','mview','extract']:
+            if previous_section and section.tag == 'doc' and previous_section.tag in ['title', 'view', 'mview', 'extract']:
                 section.content['ref'] = previous_section.name
                 previous_section.doc = section.content
 
@@ -350,50 +378,74 @@ class Manifest(object):
 
         # Normal markdown documentation
         return dict(text=t.strip(),
-                    summary_text = summary,
+                    summary_text=summary,
                     html=markdown.markdown(t),
                     summary_html=markdown.markdown(summary))
 
     def _process_sql(self, section):
 
-        return sqlparse.format('\n'.join(section.lines), reindent=True, keyword_case='upper')
+        return sqlparse.format(
+            '\n'.join(
+                section.lines),
+            reindent=True,
+            keyword_case='upper')
 
     def _process_mview(self, section):
 
         if not section.args.strip():
-            raise ParseError('No name specified for view at {}'.format(section.file_line))
+            raise ParseError(
+                'No name specified for view at {}'.format(
+                    section.file_line))
 
-        t = sqlparse.format('\n'.join(section.lines), reindent=True, keyword_case='upper')
+        t = sqlparse.format(
+            '\n'.join(
+                section.lines),
+            reindent=True,
+            keyword_case='upper')
 
         if not t.strip():
-            raise ParseError('No sql specified for view at {}'.format(section.file_line))
+            raise ParseError(
+                'No sql specified for view at {}'.format(
+                    section.file_line))
 
         tc_names = set()  # table and column names
 
         # Add table names from parsing the SQL, so we can build dependencies for views. Unfortunately,
-        # it also add column names, which are removed when the template context is created.
+        # it also add column names, which are removed when the template context
+        # is created.
 
         # The SQL parser doesn't like quotes, so remove them first
-        for s in sqlparse.parse('\n'.join(section.lines).replace('"','')):
+        for s in sqlparse.parse('\n'.join(section.lines).replace('"', '')):
             for tok in s.flatten():
                 if tok.ttype == sqlparse.tokens.Name:
                     tc_names.add(str(tok))
 
-
-        return dict(text=t,html=self.pygmentize_sql(t), name = section.args.strip(), tc_names = list(tc_names))
+        return dict(
+            text=t,
+            html=self.pygmentize_sql(t),
+            name=section.args.strip(),
+            tc_names=list(tc_names))
 
     def _process_view(self, section):
         import sqlparse.tokens
 
         if not section.args.strip():
-            raise ParseError('No name specified for view at {}'.format(section.file_line))
+            raise ParseError(
+                'No name specified for view at {}'.format(
+                    section.file_line))
 
-        t = sqlparse.format('\n'.join(section.lines), reindent=True, keyword_case='upper')
+        t = sqlparse.format(
+            '\n'.join(
+                section.lines),
+            reindent=True,
+            keyword_case='upper')
 
         if not t.strip():
-            raise ParseError('No sql specified for view at {}'.format(section.file_line))
+            raise ParseError(
+                'No sql specified for view at {}'.format(
+                    section.file_line))
 
-        tc_names = set() # table and column names
+        tc_names = set()  # table and column names
 
         for s in sqlparse.parse('\n'.join(section.lines)):
 
@@ -402,9 +454,8 @@ class Manifest(object):
                 if tok.ttype in (sqlparse.tokens.Name, sqlparse.tokens.String.Symbol):
                     tc_names.add(str(tok).strip('"'))
 
-
-        return dict(text=t,html=self.pygmentize_sql(t),
-                    name = section.args.strip(), tc_names = list(tc_names))
+        return dict(text=t, html=self.pygmentize_sql(t),
+                    name=section.args.strip(), tc_names=list(tc_names))
 
     def _process_extract(self, section):
 
@@ -412,9 +463,8 @@ class Manifest(object):
 
         words = line.split()
 
-        #if len(words) != 5:
+        # if len(words) != 5:
         #    raise ParseError('Extract line has wrong format; expected 5 words, got: {}'.format(line))
-
 
         table = words.pop(0)
 
@@ -423,15 +473,13 @@ class Manifest(object):
 
         for i, word in enumerate(words):
             if word.upper() == 'AS':
-                format = words[i+1]
+                format = words[i + 1]
 
             if word.upper() == 'TO':
-                rpath = words[i+1]
-
+                rpath = words[i + 1]
 
         if not rpath:
             rpath = "{}.{}".format(table, format)
-
 
         return dict(table=table, format=format, rpath=rpath, name=rpath)
 
@@ -447,28 +495,31 @@ class Manifest(object):
         if self.path.startswith('http'):
             raise NotImplementedError
         else:
-            if not os.path.isabs(path) :
+            if not os.path.isabs(path):
                 path = os.path.join(os.path.dirname(self.path), path)
 
-        return dict(path = path )
+        return dict(path=path)
 
     def _process_partitions(self, section):
 
         partitions = []
 
-        start_line  = section.linenumber
-        for i,line in enumerate(section.lines):
+        start_line = section.linenumber
+        for i, line in enumerate(section.lines):
             try:
                 d = Manifest.parse_partition_line(line)
 
                 partitions.append(d)
 
             except ParseError as e:
-                raise ParseError("Failed to parse in section at line #{}: {}".format(start_line+i, e))
+                raise ParseError(
+                    "Failed to parse in section at line #{}: {}".format(
+                        start_line +
+                        i,
+                        e))
 
         self.partitions = partitions
         return dict(partitions=partitions)
-
 
     def add_bundles(self, library):
         """Add bundle information when a Library is available"""
@@ -480,12 +531,17 @@ class Manifest(object):
                 ident = library.resolve(partition['partition'])
 
                 if not ident:
-                    raise ParseError("Partition reference not resolved to a bundle: '{}' in manifest '{}' "
-                                     " for library {}"
-                                     .format(partition['partition'], self.path, library.database.dsn))
+                    raise ParseError(
+                        "Partition reference not resolved to a bundle: '{}' in manifest '{}' "
+                        " for library {}" .format(
+                            partition['partition'],
+                            self.path,
+                            library.database.dsn))
 
                 if not ident.partition:
-                    raise ParseError("Partition reference not resolved to a partition: '{}' ".format(partition['partition']))
+                    raise ParseError(
+                        "Partition reference not resolved to a partition: '{}' ".format(
+                            partition['partition']))
 
                 b = LibraryDbBundle(library.database, ident.vid)
 
@@ -495,8 +551,10 @@ class Manifest(object):
 
                 p = b.partitions.get(ident.partition.vid)
 
-                # The 'tables' key is used for tables specified on the partitions line in the manifest.
-                partition['table_vids'] = [ b.schema.table(t).vid for t in  p.tables]
+                # The 'tables' key is used for tables specified on the
+                # partitions line in the manifest.
+                partition['table_vids'] = [
+                    b.schema.table(t).vid for t in p.tables]
 
                 ident = ident.partition
                 partition['config'] = dict(
@@ -507,7 +565,6 @@ class Manifest(object):
                 )
 
     def _process_index(self, section):
-
 
         line = section.args
 
@@ -527,13 +584,12 @@ class Manifest(object):
     def documentation(self):
         pass
 
-
     def documentation_for(self, name):
         """Return documentation for a table"""
 
         for line, section in self.sorted_sections:
 
-            if section.tag =='doc' and section.args == name:
+            if section.tag == 'doc' and section.args == name:
                 return section
 
         return None
@@ -568,7 +624,6 @@ class Manifest(object):
     def extract_token(tp, tokens):
         '''Extract the first token of the named type. '''
 
-
         try:
             i = [t[0] for t in tokens].index(tp)
         except ValueError:
@@ -585,10 +640,15 @@ class Manifest(object):
         except ValueError:
             return None, tokens
 
-        if tokens[i+1][0] != tp2:
-            raise ParseError("Expected {}, got {}".format(tp2, tokens[i+1][1]))
+        if tokens[i + 1][0] != tp2:
+            raise ParseError(
+                "Expected {}, got {}".format(
+                    tp2,
+                    tokens[
+                        i +
+                        1][1]))
 
-        return tokens[i+1], tokens[:i]+tokens[i+2:]
+        return tokens[i + 1], tokens[:i] + tokens[i + 2:]
 
     @staticmethod
     def coalesce_list(tp, tokens):
@@ -615,38 +675,47 @@ class Manifest(object):
 
         try:
             try:
-                (_, partition), tokens = Manifest.extract_next('FROM', "NAME", tokens)
+                (_, partition), tokens = Manifest.extract_next(
+                    'FROM', "NAME", tokens)
             except TypeError:
                 partition = None
 
             if partition:
                 tables, tokens = Manifest.coalesce_list('NAME', tokens)
             else:
-                (_,partition), tokens = Manifest.extract_token("NAME", tokens)
+                (_, partition), tokens = Manifest.extract_token("NAME", tokens)
                 tables = None
 
             try:
                 (_, where), tokens = Manifest.extract_token('WHERE', tokens)
 
-                where = re.sub(r'^where','', where, flags =  re.IGNORECASE).strip()
+                where = re.sub(
+                    r'^where',
+                    '',
+                    where,
+                    flags=re.IGNORECASE).strip()
 
             except (TypeError, ValueError):
                 where = None
 
             try:
-                (_, prefix), tokens = Manifest.extract_next('PREFIX', 'NAME', tokens)
+                (_, prefix), tokens = Manifest.extract_next(
+                    'PREFIX', 'NAME', tokens)
 
-                prefix = re.sub(r'^where', '', prefix, flags=re.IGNORECASE).strip().strip("'")
-
+                prefix = re.sub(
+                    r'^where',
+                    '',
+                    prefix,
+                    flags=re.IGNORECASE).strip().strip("'")
 
             except (TypeError, ValueError):
                 prefix = None
 
             return dict(
                 partition=partition,
-                tables = tables,
-                where = where,
-                prefix = prefix
+                tables=tables,
+                where=where,
+                prefix=prefix
             )
 
         except Exception as e:
@@ -655,7 +724,7 @@ class Manifest(object):
     @property
     def dict(self):
         m = self.meta
-        m['sections'] =  [ s.__dict__ for l, s in self.sorted_sections ]
+        m['sections'] = [s.__dict__ for l, s in self.sorted_sections]
 
         return m
 
@@ -679,14 +748,15 @@ class Manifest(object):
 
             if l == 1 and c.tag == 'doc' and not c.lines:
                 last_tag_single = True
-                continue # Skip the opening doc if it doesn't exist.
+                continue  # Skip the opening doc if it doesn't exist.
 
-            this_tag_single = (c.tag  in self.singles)
+            this_tag_single = (c.tag in self.singles)
 
-            if not ( this_tag_single and last_tag_single ):
+            if not (this_tag_single and last_tag_single):
                 o += '\n'
 
-            if not(l == 1 and c.tag == 'doc' and not c.args):  # DOC is default for start, so don't need to print it
+            # DOC is default for start, so don't need to print it
+            if not(l == 1 and c.tag == 'doc' and not c.args):
                 if c.args:
                     o += "{}: {}\n".format(c.tag.upper(), c.args)
                 else:
@@ -695,11 +765,11 @@ class Manifest(object):
             if c.lines:
 
                 if 'text' in c.content:
-                    o+= c.content['text']
+                    o += c.content['text']
                 else:
                     o += '\n'.join(c.lines)
 
-                if not ( this_tag_single and last_tag_single  ):
+                if not (this_tag_single and last_tag_single):
                     o += '\n'
 
             last_tag_single = this_tag_single

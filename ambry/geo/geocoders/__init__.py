@@ -2,7 +2,9 @@
 Interfaces for webservice gocoders
 """
 
+
 class DstkGeocoder(object):
+
     """A Batch geocoder interface for the DataScienceToolkit server"""
     submit_size = 100
 
@@ -18,8 +20,8 @@ class DstkGeocoder(object):
         import dstk
 
         if isinstance(options, basestring):
-            options = { 'apiBase': options } # Single string, not an options dict
-
+            # Single string, not an options dict
+            options = {'apiBase': options}
 
         self.gen = address_gen
 
@@ -42,10 +44,9 @@ class DstkGeocoder(object):
                 results = self._send(submit_set)
                 submit_set = []
 
-                for k,result in results.items():
+                for k, result in results.items():
                     o = data_map[k]
-                    yield (k,result, o)
-
+                    yield (k, result, o)
 
         if len(submit_set) > 0:
             results = self._send(submit_set)
@@ -53,7 +54,7 @@ class DstkGeocoder(object):
 
             for k, result in results.items():
                 o = data_map[k]
-                yield (k,result, o)
+                yield (k, result, o)
 
     def _send(self, addr_set):
         try:
@@ -73,4 +74,3 @@ class DstkGeocoder(object):
                     results[addr] = None
 
             return results
-

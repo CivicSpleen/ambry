@@ -2,7 +2,8 @@
 """
 
 
-from  ambry.bundle import BuildBundle
+from ambry.bundle import BuildBundle
+
 
 class LoaderBundle(BuildBundle):
 
@@ -57,14 +58,13 @@ class LoaderBundle(BuildBundle):
         return Column.mangle_name(n.strip())
 
     def mangle_header(self, header):
-        return [ self.mangle_column_name(i,n) for i,n in enumerate(header)]
+        return [self.mangle_column_name(i, n) for i, n in enumerate(header)]
 
     def build_create_partition(self, source_name):
         """Create or find a partition based on the source
 
         Will also load the source metadata into the partition, as a dict, under the key name of the source name.
         """
-
 
         source = self.metadata.sources[source_name]
 
@@ -79,7 +79,7 @@ class LoaderBundle(BuildBundle):
 
         assert bool(table)
 
-        p =  self.partitions.find_or_new(table=table)
+        p = self.partitions.find_or_new(table=table)
 
         with self.session:
             if not 'source_data' in p.record.data:
@@ -119,7 +119,7 @@ class LoaderBundle(BuildBundle):
 
         fn = self.filesystem.download(source_name)
 
-        base_dir, file_name  = split(fn)
+        base_dir, file_name = split(fn)
         file_base, ext = splitext(file_name)
 
         if source.filetype:
@@ -128,7 +128,7 @@ class LoaderBundle(BuildBundle):
             if ext.startswith('.'):
                 ext = ext[1:]
 
-            ext = self.row_gen_ext_map.get(ext,ext)
+            ext = self.row_gen_ext_map.get(ext, ext)
 
         if source.row_spec.dict:
             rs = source.row_spec.dict
@@ -148,13 +148,15 @@ class LoaderBundle(BuildBundle):
             from rowgen import DelimitedRowGenerator
 
             return DelimitedRowGenerator(fn, **rs)
-        elif ext  == 'xls':
+        elif ext == 'xls':
             from rowgen import ExcelRowGenerator
             return ExcelRowGenerator(fn, **rs)
         else:
-            raise Exception("Unknown source file extension: '{}' for file '{}' from source {} "
-                            .format(ext,  file_name, source_name))
-
+            raise Exception(
+                "Unknown source file extension: '{}' for file '{}' from source {} " .format(
+                    ext,
+                    file_name,
+                    source_name))
 
     def make_table_for_source(self, source_name):
 
@@ -162,8 +164,8 @@ class LoaderBundle(BuildBundle):
 
         table_name = source.table if source.table else source_name
 
-        table_desc = source.description if source.description else "Table generated from {}".format(source.url)
-
+        table_desc = source.description if source.description else "Table generated from {}".format(
+            source.url)
 
         table = self.schema.add_table(table_name, description=table_desc)
 
@@ -194,7 +196,8 @@ class LoaderBundle(BuildBundle):
 
         tables = defaultdict(set)
 
-        # Collect all of the sources for each table, while also creating the tables
+        # Collect all of the sources for each table, while also creating the
+        # tables
         for source_name, source in self.metadata.sources.items():
 
             if source.is_loadable is False:
@@ -205,7 +208,7 @@ class LoaderBundle(BuildBundle):
 
         intuiters = defaultdict(Intuiter)
 
-        for table_name, sources in  tables.items():
+        for table_name, sources in tables.items():
 
             intuiter = intuiters[table_name]
 
@@ -215,7 +218,8 @@ class LoaderBundle(BuildBundle):
                 try:
                     fn = self.filesystem.download(source_name)
                 except urllib2.HTTPError:
-                    self.error("Failed to download url for source: {}".format(source_name))
+                    self.error(
+                        "Failed to download url for source: {}".format(source_name))
                     continue
 
                 self.log("Intuiting {}".format(source_name))
@@ -227,15 +231,14 @@ class LoaderBundle(BuildBundle):
 
             self.schema.update_from_intuiter(table_name, intuiter)
 
-            with open(self.filesystem.build_path('{}-intuit-report.csv'.format(table_name)),'w') as f:
+            with open(self.filesystem.build_path('{}-intuit-report.csv'.format(table_name)), 'w') as f:
                 import csv
-                w = csv.DictWriter(f, ("name length resolved_type has_codes count ints "
-                                       "floats strs nones datetimes dates times strvals".split()))
+                w = csv.DictWriter(
+                    f, ("name length resolved_type has_codes count ints "
+                        "floats strs nones datetimes dates times strvals".split()))
                 w.writeheader()
                 for d in intuiter.dump():
                     w.writerow(d)
-
-
 
         return True
 
@@ -260,13 +263,16 @@ class LoaderBundle(BuildBundle):
 
         p = self.build_create_partition(source_name)
 
-        self.log("Loading source '{}' into partition '{}'".format(source_name, str(p.identity.name)))
+        self.log(
+            "Loading source '{}' into partition '{}'".format(
+                source_name, str(
+                    p.identity.name)))
 
         lr = self.init_log_rate(print_rate=5)
 
         columns = [c.name for c in p.table.columns]
 
-        row_gen =  self.row_gen_for_source(source_name)
+        row_gen = self.row_gen_for_source(source_name)
 
         header = row_gen.get_header()
 
@@ -288,21 +294,27 @@ class LoaderBundle(BuildBundle):
                 errors = ins.insert(d)
 
                 if errors:
-                    self.error("Casting error for {}: {}".format(source_name,errors))
-
+                    self.error(
+                        "Casting error for {}: {}".format(
+                            source_name,
+                            errors))
 
     def build(self):
         for source_name in self.metadata.sources:
             self.build_from_source(source_name)
         return True
 
+
 class CsvBundle(LoaderBundle):
+
     """A Bundle variant for loading CSV files"""
 
     pass
 
+
 class ExcelBuildBundle(CsvBundle):
     pass
+
 
 class TsvBuildBundle(CsvBundle):
 
@@ -313,7 +325,6 @@ class TsvBuildBundle(CsvBundle):
         '''
 
         super(TsvBuildBundle, self).__init__(bundle_dir)
-
 
     def get_source(self, source):
         """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
@@ -330,14 +341,16 @@ class TsvBuildBundle(CsvBundle):
 
         return fn
 
+
 class GeoBuildBundle(LoaderBundle):
+
     """A Bundle variant that loads zipped Shapefiles"""
+
     def __init__(self, bundle_dir=None):
         '''
         '''
 
         super(GeoBuildBundle, self).__init__(bundle_dir)
-
 
     def meta(self):
         from ambry.geo.sfschema import copy_schema
@@ -352,7 +365,11 @@ class GeoBuildBundle(LoaderBundle):
         for table, item in self.metadata.sources.items():
 
             with self.session:
-                copy_schema(self.schema, table_name=table, path=item.url, logger=log)
+                copy_schema(
+                    self.schema,
+                    table_name=table,
+                    path=item.url,
+                    logger=log)
 
         self.schema.write_schema()
 
@@ -361,7 +378,10 @@ class GeoBuildBundle(LoaderBundle):
     def build(self):
 
         for source_name, source in self.metadata.sources.items():
-            self.log("Loading table {} from {}".format(source_name, source.url))
+            self.log(
+                "Loading table {} from {}".format(
+                    source_name,
+                    source.url))
 
             # Set the source SRS, if it was not set in the input file
             if self.metadata.build.get('s_srs', False):
@@ -380,7 +400,11 @@ class GeoBuildBundle(LoaderBundle):
             except:
                 table = source_name
 
-            p = self.partitions.new_geo_partition(table=table, shape_file=source.url, s_srs=s_srs, logger=lr)
+            p = self.partitions.new_geo_partition(
+                table=table,
+                shape_file=source.url,
+                s_srs=s_srs,
+                logger=lr)
 
             with self.session:
                 if not 'source_data' in p.record.data:

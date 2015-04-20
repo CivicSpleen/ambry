@@ -7,6 +7,5 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 
-
 IN_PRODUCTION = __file__.endswith('production.py')
 IN_DEVELOPMENT = not IN_PRODUCTION
