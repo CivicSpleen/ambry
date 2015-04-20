@@ -70,15 +70,7 @@ def library_parser(cmd):
     sp.add_argument('-p', '--partitions', default=False, action="store_true", help='Also get all of the partitions. ')
     sp.add_argument('-f','--force',  default=False, action="store_true",  help='Force retrieving from the remote')
 
-    sp = asp.add_parser('search',help='Search the full-text index')
-    sp.set_defaults(subcommand='search')
-    sp.add_argument('term', type=str, nargs=argparse.REMAINDER, help='Query term')
-    sp.add_argument('-l', '--list', default=False, action="store_true", help='List documents instead of search')
-    sp.add_argument('-d', '--datasets', default=False, action="store_true", help='Search only the dataset index')
-    sp.add_argument('-i', '--identifiers', default=False, action="store_true", help='Search only the identifiers index')
-    sp.add_argument('-p', '--partitions', default=False, action="store_true", help='Search only the partitions index')
-    sp.add_argument('-R', '--reindex', default=False, action="store_true",
-                    help='Generate documentation files and index the full-text search')
+
 
     sp = asp.add_parser('open',
                         help='Open a bundle or partition file with sqlite3')
@@ -105,14 +97,6 @@ def library_parser(cmd):
     group.add_argument('-j', '--json',  default='csv', dest='format',  action='store_const', const='json')
     group.add_argument('-c', '--csv',  default='csv', dest='format',  action='store_const', const='csv')
 
-    sp = asp.add_parser('doc', help='Start the documentation server')
-    sp.set_defaults(subcommand='doc')
-
-    sp.add_argument('-c', '--clean', default=False, action="store_true",
-                    help='When used with --reindex, delete the index and old files first. ')
-    sp.add_argument('-d', '--debug', default=False, action="store_true",
-                    help='Debug mode ')
-    sp.add_argument('-p', '--port', help='Run on a sepecific port, rather than pick a random one')
 
     whsp = asp.add_parser('config', help='Configure varibles')
     whsp.set_defaults(subcommand='config')
@@ -441,84 +425,6 @@ def library_open(args, l, config):
 
         os.execlp('sqlite3', 'sqlite3', abs_path)
 
-def library_search(args, l, config):
-    # This will fetch the data, but the return values aren't quite right
-
-    term = ' '.join(args.term)
-
-    if args.reindex:
-
-        print 'Updating the identifier'
-
-        #sources = ['census.gov-index-counties', 'census.gov-index-places', 'census.gov-index-states']
-        sources = ['census.gov-index-counties',  'census.gov-index-states']
-
-        records = []
-
-        source = 'civicknowledge.com-terms-geoterms'
-
-        p = l.get(source).partition
-        type = p.table.name
-
-        for row in p.rows:
-            records.append(dict(identifier=row['gvid'],type=row['type'],name=row['name']))
-
-        l.search.index_identifiers(records)
-
-        print "Reindexing docs"
-        l.search.index_datasets()
-
-        return
-
-    if args.identifiers:
-
-        if args.list:
-            for x in l.search.identifiers:
-                print x
-
-        else:
-            for score, gvid, name in l.search.search_identifiers(term, limit = 30):
-                print "{:6.2f} {:9s} {}".format(score, gvid, name)
-
-    elif args.datasets:
-        if args.list:
-            for x in l.search.datasets:
-                ds = l.dataset(x)
-                print x, ds.name, ds.data.get('title')
-
-        else:
-
-            print "search for ", term
-
-            for x in l.search.search_datasets(term):
-                ds = l.dataset(x)
-                print x, ds.name, ds.data.get('title')
-
-    elif args.partitions:
-
-        if args.list:
-            for x in l.search.partitions:
-                p = l.partition(x)
-                print p.vid, p.vname
-        else:
-
-            from ..identity import ObjectNumber
-            from collections import defaultdict
-
-            bundles = defaultdict(set)
-
-            for x in l.search.search_partitions(term):
-                bvid = ObjectNumber.parse(x).as_dataset
-
-                bundles[str(bvid)].add(x)
-
-            for bvid, pvids in bundles.items():
-
-                ds = l.dataset(str(bvid))
-
-                print ds.vid, ds.name, len(pvids), ds.data.get('title')
-
-
 def library_sync(args, l, config):
     '''Synchronize the remotes and the upstream to a local library
     database'''
@@ -556,34 +462,6 @@ def library_sync(args, l, config):
         l.logger.info("==== Sync warehouses")
         l.sync_warehouses()
 
-def library_doc(args, l, rc):
-
-    from ambry.ui import app, configure_application, setup_logging
-    import ambry.ui.views as views
-
-    import logging
-    from logging import FileHandler
-    import webbrowser
-    import socket
-
-    port = args.port if args.port else 8085
-
-    cache_dir = l._doc_cache.path('',missing_ok=True)
-
-    config = configure_application(dict(port = port))
-
-    file_handler = FileHandler(os.path.join(cache_dir, "web.log"))
-    file_handler.setLevel(logging.WARNING)
-    app.logger.addHandler(file_handler)
-
-    print 'Serving documentation for cache: ', cache_dir
-
-
-    if not args.debug:
-        # Don't open the browser on debugging, or it will re-open on every application reload
-        webbrowser.open("http://localhost:{}/".format(port))
-
-    app.run(host=config['host'], port=int(port), debug=args.debug)
 
 def library_config(args, l, config):
     from ..dbexceptions import ConfigurationError

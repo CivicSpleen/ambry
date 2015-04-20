@@ -16,11 +16,17 @@
   <!-- Nav tabs -->
   <ul class="nav nav-tabs" role="tablist">
     <li role="presentation" class="active">
-        <a href="#about-tab" aria-controls="home" role="tab" data-toggle="tab">About</a></li>
+        <a href="#about-tab" aria-controls="home" role="tab" data-toggle="tab">About</a>
+    </li>
     <li role="presentation">
-        <a href="#partitions-tab" aria-controls="profile" role="tab" data-toggle="tab">Data Files</a></li>
+        <a href="#partitions-tab" aria-controls="partitions" role="tab" data-toggle="tab">Data Files</a>
+    </li>
     <li role="presentation">
-        <a href="#build-tab" aria-controls="settings" role="tab" data-toggle="tab">Build</a></li>
+        <a href="#tables-tab" aria-controls="tables" role="tab" data-toggle="tab">Tables</a>
+    </li>
+    <li role="presentation">
+        <a href="#build-tab" aria-controls="settings" role="tab" data-toggle="tab">Build</a>
+    </li>
   </ul>
 
   <!-- Tab panes -->
@@ -35,7 +41,9 @@
     <div role="tabpanel" class="tab-pane" id="partitions-tab">
         {% include 'bundle/partitions.html' -%}
     </div>
-
+    <div role="tabpanel" class="tab-pane" id="tables-tab">
+        {% include 'bundle/tables.html' -%}
+    </div>
     <div role="tabpanel" class="tab-pane" id="build-tab">
 
         {% include 'bundle/process.html' -%}

@@ -374,7 +374,12 @@ class BundleFilesystem(Filesystem):
         if ( not parsed.scheme and url in self.bundle.metadata.sources):
 
             source_entry = self.bundle.metadata.sources.get(url)
-            url = source_entry.url
+
+            # If a conversion exists, load it, otherwize, get the original URL
+            if source_entry.conversion:
+                url = source_entry.conversion
+            else:
+                url = source_entry.url
             parsed = urlparse.urlparse(str(url))
 
         if parsed.scheme == 'file':

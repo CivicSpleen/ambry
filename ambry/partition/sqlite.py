@@ -301,11 +301,7 @@ class SqlitePartition(PartitionBase):
                 if 'space' in source:
                     extra_spaces.append( (source_name, source['space']))
 
-        if self.bundle.metadata.about.space: # Also from the bundle metadata
-            extra_spaces.append(('about', self.bundle.metadata.about.space))
 
-        if self.bundle.identity.bspace:  # And from the bundle name
-            extra_spaces.append(('bname', self.bundle.identity.bspace))
 
         if self.identity.space:  # And from the partition name
             extra_spaces.append(('pname', self.identity.space))
@@ -351,6 +347,7 @@ class SqlitePartition(PartitionBase):
         s.commit()
 
     def compile_time_coverage(self):
+        from ambry.util.datestimes import expand_to_years
 
         date_cols = []
         years = set()
@@ -361,22 +358,26 @@ class SqlitePartition(PartitionBase):
 
         p_s = self.database.session
 
+        ## From the table
         for dc in date_cols:
-
             for row in p_s.execute("SELECT DISTINCT {} FROM {}".format(dc, table_name)):
                 years.add(row[0])
 
+        ## From the source
         # If there was a time value in the source that this partition was created from, then
         # add it to the years.
         if 'source_data' in self.record.data:
             for source_name, source in self.record.data['source_data'].items():
                 if 'time' in source:
-                    years.add(source['time'])
+                    for year in expand_to_years(source['time']):
+                        years.add(year)
 
-        if self.bundle.metadata.about.time:
-            years.add(self.bundle.metadata.about.time)
+        ## From the partition name
+        if self.identity.name.time:
+            for year in expand_to_years(self.identity.name.time):
+                years.add(year)
 
-        self.record.data['time_coverage'] = sorted(list(years))
+        self.record.data['time_coverage'] = list(years)
 
         s = self.bundle.database.session
         s.merge(self.record)

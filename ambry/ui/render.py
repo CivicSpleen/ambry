@@ -77,7 +77,6 @@ def resolve(t):
     else:
         return None
 
-
 # Path functions, for generating URL paths.
 def bundle_path(b):
     return "/bundles/{}.html".format(resolve(b))
@@ -393,17 +392,19 @@ class Renderer(object):
 
         template = self.env.get_template('bundle/schema.html')
 
-        b = self.doc_cache.get_bundle(vid)
+        b_data = self.doc_cache.bundle(vid)
 
-        reader = reader(StringIO(self.doc_cache.get_schemacsv(vid)))
+        b = self.library.bundle(vid)
 
-        del b['partitions']
-        del b['tables']
+        reader = reader(StringIO(b.schema.as_csv()))
+
+        del b_data['partitions']
+        del b_data['tables']
 
         schema = dict(header=reader.next(),rows= [x for x in reader])
 
 
-        return self.render(template, b=b, schema=schema, **self.cc())
+        return self.render(template, b=b_data, schema=schema, **self.cc())
 
     def table(self, bvid, tid):
 
@@ -608,7 +609,7 @@ class Renderer(object):
                     for gvid in p['geo_coverage']['vids']:
                         g = GVid.parse(gvid)
 
-                        if g.level == 'state':
+                        if g.level == 'state' and not g.is_summary:
                             #facets['states'].add( (gvid, all_idents[gvid]))
                             facets['states'].add(all_idents[gvid])
 

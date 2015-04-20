@@ -186,7 +186,7 @@ class Library(object):
 
         self.bundles = weakref.WeakValueDictionary()
 
-
+        self._search = None
 
 
     def clone(self):
@@ -265,9 +265,12 @@ class Library(object):
 
         try:
             self.database.install_bundle(bundle, commit = commit)
+
             installed = True
         except ConflictError:
             installed = False
+
+        self.search.index_dataset(bundle, force = True)
 
         self.files.install_bundle_file(bundle, self.cache, commit=commit, state = 'new')
 
@@ -279,8 +282,12 @@ class Library(object):
         if install_partitions:
             for partition in bundle.partitions:
                 self.put_partition(bundle, partition, commit = commit)
+                self.search.index_partition(partition, force = True)
 
         self.mark_updated(vid=ident.vid)
+
+
+        self.search.commit()
 
         return self.cache.path(ident.cache_key), installed
 
@@ -1240,8 +1247,6 @@ class Library(object):
                     b.close() # Just means we already have it installed
                     continue
 
-                self.search.index_dataset(b)
-
                 for p in b.partitions:
                     if installed:
                         self.database.install_partition(b, p, commit='collect')
@@ -1251,7 +1256,7 @@ class Library(object):
                     else:
                         self.logger.info("    = {}".format(p.identity.name))
 
-                    self.search.index_partition(p)
+
 
                 try:
                     self.files.insert_collection()
@@ -1407,7 +1412,10 @@ class Library(object):
     def search(self):
         from search import Search
 
-        return Search(self)
+        if not self._search:
+            self._search = Search(self)
+
+        return self._search
 
 
     def _gen_schema(self):

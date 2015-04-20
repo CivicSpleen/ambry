@@ -46,7 +46,7 @@ class Test(TestBase):
 
     def test_expand_to_years(self):
 
-        from ambry.util.datestimes import expand_to_years
+        from ambry.util.datestimes import expand_to_years, compress_years
 
         self.assertEquals([2007], expand_to_years('2007') )
         self.assertEquals([2007], expand_to_years(2007) )
@@ -56,3 +56,11 @@ class Test(TestBase):
 
         self.assertEquals([2007, 2008, 2009, 2010, 2011], expand_to_years('2007/2011'))
 
+        mixed = "2001 2006 2012 P5Y/2011 P5Y/2013 1990/1993".split()
+
+        self.assertEquals([1990, 1991, 1992, 1993, 2001, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013],
+                          expand_to_years(mixed))
+
+        self.assertEquals('1990/2013', compress_years(mixed))
+
+        self.assertEquals('1990/2013', compress_years(expand_to_years(compress_years(mixed))))

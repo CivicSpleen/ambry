@@ -205,6 +205,8 @@ def bundle_parser(cmd):
     command_p.add_argument('-d', '--dep', default=False, help='Report information about a dependency')
     command_p.add_argument('-S', '--stats',default=False,action="store_true",  help='Also report column stats for partitions')
     command_p.add_argument('-P', '--partitions', default=False, action="store_true", help='Also report partition details')
+    command_p.add_argument('-c', '--coverage', default=False, action="store_true",
+                           help='Also report time and space coverage')
 
     #
     # Clean Command
@@ -316,11 +318,20 @@ def bundle_info(args, b, st, rc):
     elif args.schema:
         b.schema.as_csv()
     else:
+
+
+
         b.log("----Info: ".format(b.identity.sname))
         b.log("VID  : "+b.identity.vid)
         b.log("Name : "+b.identity.sname)
         b.log("VName: "+b.identity.vname)
         b.log("DB   : " + b.database.path)
+
+        if args.coverage:
+            from ambry.util.datestimes import compress_years
+            b.log('Geo cov   : ' + str(list(b.metadata.coverage.geo)))
+            b.log('Grain cov : ' + str(list(b.metadata.coverage.grain)))
+            b.log('Time cov  : ' + compress_years(b.metadata.coverage.time))
 
         if b.database.exists():
 
@@ -338,6 +349,7 @@ def bundle_info(args, b, st, rc):
             if process.get('buildtime', False):
                 b.log('Build time: ' + str(round(float(process['buildtime']), 2)) + 's')
 
+
             b.log("Parts: {}".format(b.partitions.count))
 
             b.log("---- Partitions ---")
@@ -347,7 +359,6 @@ def bundle_info(args, b, st, rc):
                 if i > 10:
                     b.log("    ... and {} more".format(b.partitions.count - 10))
                     break
-
 
 
         deps = None

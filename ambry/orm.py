@@ -1527,12 +1527,14 @@ class Partition(Base, LinkableMixin):
             }
 
         if 'time_coverage' in d:
-            from  dateutil import parser
+            from util.datestimes import expand_to_years
+
+            all_years = expand_to_years(d['time_coverage'])
 
             d['time_coverage'] = {
                 'years': d['time_coverage'],
-                'min': min(int(x) for x in d['time_coverage']) if d['time_coverage'] else None,
-                'max': max(int(x) for x in d['time_coverage']) if d['time_coverage'] else None,
+                'min': min(all_years) if all_years else None,
+                'max': max(all_years) if all_years else None,
 
 
             }

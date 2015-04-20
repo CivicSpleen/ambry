@@ -25,6 +25,12 @@ class Documentation(DictGroup):
     readme = ScalarTerm()
     main = ScalarTerm()
 
+class Coverage(DictGroup):
+
+    geo = ListTerm()
+    grain = ListTerm()
+    time = ListTerm()
+
 class ContactTerm(DictTerm):
 
     name = ScalarTerm(store_none=False)
@@ -159,6 +165,8 @@ class Top(Metadata):
 
     documentation = Documentation(file='meta/doc.yaml')
 
+    coverage = Coverage(file='meta/coverage.yaml')
+
 # This is a new version of the metadata structure, with
 # the sections in different places.
 class NewTop(Metadata):
@@ -180,5 +188,6 @@ class NewTop(Metadata):
     build = Build(file='meta/build.yaml')
 
     documentation = Documentation(file='meta/doc.yaml')
+
 
 

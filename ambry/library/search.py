@@ -9,23 +9,20 @@ from ambry.util import memoize
 
 class DatasetSchema(SchemaClass):
 
-    vid = ID(stored=True, unique=True) # Bundle versioned id
+    vid = ID(stored=True, unique=True) # Object versioned ID
+    bvid = ID(stored=True, unique=True)  # For partitions, the vid of the bundle
+
     title = NGRAMWORDS(stored=True)
+    names = NGRAMWORDS()
+
     source = NGRAMWORDS()  # Source ( domain ) of the
     doc = TEXT # Generated document for the core of the topic search
 
-class PartitionSchema(SchemaClass):
-
-    vid = ID(stored=True, unique=True) # Partition versioned id
-    bvid = ID(stored=True, unique=True)  # Partition versioned id
-
-    title = TEXT(stored=True)  # Title of the main table
-    names = NGRAMWORDS()
-
-    doc = TEXT # Generated document for the core of the topic search
+    doc = TEXT  # Generated document for the core of the topic search
     coverage = TEXT  # Lists of coverage identifiers, ISO time values and GVIDs
     values = TEXT  # List of uvalues from the stats for each column
     schema = TEXT  # List of uvalues from the stats for each column
+
 
 class IdentifierSchema(SchemaClass):
     """Schema that maps well-known names to ID values, such as county names, summary level names, etc. """
@@ -37,6 +34,7 @@ class IdentifierSchema(SchemaClass):
 class Search(object):
 
     def __init__(self, library):
+
 
         self.library = library
 
@@ -84,6 +82,7 @@ class Search(object):
     def commit(self):
 
         if self._dataset_writer:
+
             self._dataset_writer.commit()
             self._dataset_writer = None
 
@@ -114,25 +113,47 @@ class Search(object):
         return set([x for x in self.datasets])
 
 
-    def index_dataset(self, bundle ):
+    def index_dataset(self, bundle, force = False ):
 
-        if bundle.identity.vid in self.all_datasets:
+        if bundle.identity.vid in self.all_datasets and not force:
             return
+
+        e = bundle.database.session.execute
+
+
+        q = """SELECT t_name, c_name, c_description FROM columns
+        JOIN tables ON c_t_vid = t_vid WHERE t_d_vid = '{}' """.format(str(bundle.identity.vid))
 
         doc = u'\n'.join([ unicode(x) for x in [bundle.metadata.about.title,
                 bundle.metadata.about.summary,
                 bundle.identity.id_, bundle.identity.vid,
                 bundle.identity.source,
                 bundle.identity.name, bundle.identity.vname,
-                bundle.metadata.documentation.main]])
+                bundle.metadata.documentation.main,
+                '\n'.join([' '.join(list(t)) for t  in e(q)])
 
-        self.dataset_writer.add_document(
+                ]])
+
+        coverage = u' '.join(unicode(x) for x in list(bundle.metadata.coverage.grain) +
+                             list(bundle.metadata.coverage.geo) +
+                             list(bundle.metadata.coverage.time))
+
+
+        d = dict(
             vid=unicode(bundle.identity.vid),
-            title=unicode(bundle.identity.name)+u' '+unicode(bundle.metadata.about.title),
+            title=unicode(bundle.identity.name) + u' ' + unicode(bundle.metadata.about.title),
+            names=u' '.join([unicode(bundle.identity.vid), unicode(bundle.identity.id_),
+                             unicode(bundle.identity.name), unicode(bundle.identity.vname)]),
             source=unicode(bundle.identity.source),
             doc=unicode(doc),
-
+            coverage=coverage
         )
+
+
+        if force:
+            self.dataset_writer.delete_by_term('vid', unicode(bundle.identity.vid))
+
+        self.dataset_writer.add_document(**d)
 
         self.all_datasets.add(bundle.identity.vid )
 
@@ -302,7 +323,7 @@ class Search(object):
     def partition_index(self):
 
         if not self._partition_index:
-            self._partition_index = self.get_or_new_index(PartitionSchema, self.p_index_dir)
+            self._partition_index = self.get_or_new_index(DatasetSchema, self.p_index_dir)
 
         return self._partition_index
 
@@ -312,9 +333,9 @@ class Search(object):
             self._partition_writer = self.partition_index.writer()
         return self._partition_writer
 
-    def index_partition(self, p):
+    def index_partition(self, p, force = False):
 
-        if p.identity.vid in self.all_partitions:
+        if p.identity.vid in self.all_partitions and  not force:
             return
 
         schema = '\n'.join("{} {} {} {} {}".format(c.id_, c.vid, c.name, c.altname, c.description) for c in p.table.columns)
@@ -598,7 +619,7 @@ class SearchTermParser(object):
             elif len(terms) == 1:
                 groups[marker] = terms[0]
             else:
-                print "!!!!", marker, terms
+                pass
 
 
 

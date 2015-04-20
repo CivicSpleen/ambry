@@ -269,6 +269,7 @@ class Intuiter(object):
                 datetimes=v.type_counts.get(datetime.datetime, None),
                 dates = v.type_counts.get(datetime.date, None),
                 times = v.type_counts.get(datetime.time, None),
+                strvals = ','.join(list(v.strings)[:20])
             )
 
             yield d

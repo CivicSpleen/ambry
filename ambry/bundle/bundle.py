@@ -1333,6 +1333,10 @@ class BuildBundle(Bundle):
 
             self.post_build_write_config()
 
+            self.post_build_time_coverage()
+
+            self.post_build_geo_coverage()
+
             self.schema.write_codes()
 
             f = getattr(self, 'test', False)
@@ -1356,6 +1360,85 @@ class BuildBundle(Bundle):
         self.close()
 
         return True
+
+    def post_build_time_coverage(self):
+        """Collect all of the time coverage for the bundle"""
+        from ambry.util.datestimes import expand_to_years
+
+        years = set()
+
+        ## From the bundle about
+        if self.metadata.about.time:
+            for year in expand_to_years(self.metadata.about.time):
+                years.add(year)
+
+        ## From the bundle name
+        if self.identity.btime:
+            for year in expand_to_years(self.identity.btime):
+                years.add(year)
+
+        ## From all of the partitions
+        for p in self.partitions.all:
+            if 'time_coverage' in p.record.data:
+                for year in p.record.data['time_coverage']:
+                    years.add(year)
+
+        self.metadata.coverage.time = sorted(years)
+
+        self.metadata.write_to_dir()
+
+
+    def post_build_geo_coverage(self):
+        """Collect all of the geocoverage for the bundle"""
+        from ..dbexceptions import BuildError
+        from geoid.civick import GVid
+        from geoid import NotASummaryName
+
+        spaces = set()
+        grains = set()
+
+        def resolve(term):
+            places = list(self.library.search.search_identifiers(term))
+
+            if not places:
+                raise BuildError("Failed to find space identifier '{}' in full text identifier search".format(space))
+
+            score, gvid, name = places[0]
+
+            return gvid
+
+        if self.metadata.about.space:  # From the bundle metadata
+            spaces.add(resolve(self.metadata.about.space))
+
+        if self.metadata.about.grain:  # From the bundle metadata
+            grains.add(self.metadata.about.grain)
+
+        if self.identity.bspace:  # And from the bundle name
+            spaces.add(resolve(self.identity.bspace))
+
+        ## From all of the partitions
+        for p in self.partitions.all:
+            if 'geo_coverage' in p.record.data:
+                for space in p.record.data['geo_coverage']:
+                    spaces.add(space)
+
+            if 'geo_grain' in p.record.data:
+                for grain in p.record.data['geo_grain']:
+                    grains.add(grain)
+
+        def conv_grain(g):
+            """Some grain are expressed as summary level names, not gvids"""
+            try:
+                c =  GVid.get_class(g)
+                return str(c().summarize())
+            except NotASummaryName:
+                return g
+
+        self.metadata.coverage.geo = sorted(spaces)
+        self.metadata.coverage.grain = sorted(conv_grain(g) for g in grains)
+
+        self.metadata.write_to_dir()
+
 
     def post_build_finalize(self):
         from sqlalchemy.exc import OperationalError

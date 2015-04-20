@@ -89,6 +89,28 @@ class LoaderBundle(BuildBundle):
 
         return p
 
+    def get_source(self, source):
+        """Check for saved source"""
+        import os
+
+        # If the file we are given isn't actually a CSV file, we might have manually
+        # converted it to a CSV and put it in the source store.
+        if not fn.lower().endswith('.csv'):
+            cache = self.filesystem.source_store
+
+            if cache:
+                bare_fn, ext = os.path.splitext(os.path.basename(fn))
+
+                fn_ck = self.source_store_cache_key(bare_fn + ".csv")
+
+                if cache.has(fn_ck):
+                    if not self.filesystem.download_cache.has(fn_ck):
+                        with cache.get_stream(fn_ck) as s:
+                            self.filesystem.download_cache.put(s, fn_ck)
+
+                    return self.filesystem.download_cache.path(fn_ck)
+
+        return fn
 
     def row_gen_for_source(self, source_name):
         from os.path import dirname, split, splitext
@@ -208,7 +230,7 @@ class LoaderBundle(BuildBundle):
             with open(self.filesystem.build_path('{}-intuit-report.csv'.format(table_name)),'w') as f:
                 import csv
                 w = csv.DictWriter(f, ("name length resolved_type has_codes count ints "
-                                       "floats strs nones datetimes dates times".split()))
+                                       "floats strs nones datetimes dates times strvals".split()))
                 w.writeheader()
                 for d in intuiter.dump():
                     w.writerow(d)
@@ -250,7 +272,8 @@ class LoaderBundle(BuildBundle):
 
         for col in header:
             if col not in columns:
-                self.error("Header column '{}' not in table {} for source {}".format(col, p.table.name, source_name))
+                self.error("Header column '{}' not in table {} for source {}"
+                           .format(col, p.table.name, source_name))
 
         with p.inserter() as ins:
             for row in row_gen:
@@ -276,37 +299,7 @@ class LoaderBundle(BuildBundle):
 class CsvBundle(LoaderBundle):
     """A Bundle variant for loading CSV files"""
 
-    def get_source(self, source):
-        """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
-        and look in the source store cache """
-        import os
-
-        if not source:
-            source = self.metadata.sources.keys()[0]
-
-        fn = self.filesystem.download(source)
-
-        if fn.endswith('.zip'):
-            fn = self.filesystem.unzip(fn)
-
-        # If the file we are given isn't actually a CSV file, we might have manually
-        # converted it to a CSV and put it in the source store.
-        if not fn.lower().endswith('.csv'):
-            cache = self.filesystem.source_store
-
-            if cache:
-                bare_fn, ext = os.path.splitext(os.path.basename(fn))
-
-                fn_ck = self.source_store_cache_key(bare_fn + ".csv")
-
-                if cache.has(fn_ck):
-                    if not self.filesystem.download_cache.has(fn_ck):
-                        with cache.get_stream(fn_ck) as s:
-                            self.filesystem.download_cache.put(s, fn_ck)
-
-                    return self.filesystem.download_cache.path(fn_ck)
-
-        return fn
+    pass
 
 class ExcelBuildBundle(CsvBundle):
     pass
@@ -367,8 +360,8 @@ class GeoBuildBundle(LoaderBundle):
 
     def build(self):
 
-        for table, item in self.metadata.sources.items():
-            self.log("Loading table {} from {}".format(table, item.url))
+        for source_name, source in self.metadata.sources.items():
+            self.log("Loading table {} from {}".format(source_name, source.url))
 
             # Set the source SRS, if it was not set in the input file
             if self.metadata.build.get('s_srs', False):
@@ -378,8 +371,24 @@ class GeoBuildBundle(LoaderBundle):
 
             lr = self.init_log_rate(print_rate=10)
 
-            p = self.partitions.new_geo_partition(table=table, shape_file=item.url, s_srs=s_srs, logger=lr)
-            self.log("Loading table {}. Done".format(table))
+            try:
+                table = source['table']
+
+                if not table:
+                    table = source_name
+
+            except:
+                table = source_name
+
+            p = self.partitions.new_geo_partition(table=table, shape_file=source.url, s_srs=s_srs, logger=lr)
+
+            with self.session:
+                if not 'source_data' in p.record.data:
+                    p.record.data['source_data'] = {}
+
+                p.record.data['source_data'][source_name] = source.dict
+
+            self.log("Loading table {}. Done".format(source_name))
 
         for p in self.partitions:
             print p.info

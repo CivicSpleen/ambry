@@ -14,7 +14,7 @@ def expand_to_years(dates):
 
     if not isinstance(dates, (basestring, int)): # Can't EAFP since strings are iterable
         import itertools
-        return itertools.chain(*[ expand_to_years(x) for x in dates ])
+        return sorted(set(itertools.chain(*[ expand_to_years(x) for x in dates ])))
 
     def make_year_array(d):
         d = int(d)
@@ -29,7 +29,7 @@ def expand_to_years(dates):
 
     try:
         dates = dates.upper()  # Ambry tends to lowercase things
-        parts = dates.replace('e', '/').split('/')  # / is in std; ambry uses 'e' to be compat with urls.
+        parts = dates.replace('E', '/').split('/')  # / is in std; ambry uses 'e' to be compat with urls.
 
         rparts = []
 
@@ -57,7 +57,6 @@ def expand_to_years(dates):
         else:
             raise ValueError()
 
-
         return sorted(range(start, end))
 
     except ValueError:
@@ -67,6 +66,20 @@ def expand_to_years(dates):
         return make_year_array(isodate.parse_date(dates).year)
     except isodate.isoerror.ISO8601Error:
         pass
+
+    return []
+
+def compress_years(dates):
+    """Given a set of values that can be input for expand_to_years, expand and then
+    return as a simple string in the form start/end"""
+
+    years = expand_to_years(dates)
+
+    if not years:
+        return ''
+
+    return "{}/{}".format(min(years), max(years))
+
 
 
 
