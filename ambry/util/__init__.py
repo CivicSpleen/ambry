@@ -766,7 +766,7 @@ def configure_logging(cfg, custom_level=None):
             [cfg] + list(cfg.get(k, dict()) for k in ['handlers', 'loggers']))):
         if isinstance(entity, Mapping)\
                 and entity.get('level') == 'custom':
-                entity['level'] = custom_level
+            entity['level'] = custom_level
     logging.config.dictConfig(cfg)
     logging.captureWarnings(cfg.warnings)
 

@@ -42,11 +42,17 @@ class Search(object):
 
         self.cache = self.library._doc_cache
 
-        self.d_index_dir = self.cache.path('search/dataset',propagate=False,
+        self.d_index_dir = self.cache.path(
+            'search/dataset',
+            propagate=False,
             missing_ok=True)  # Return root directory
-        self.p_index_dir = self.cache.path('search/partition', propagate=False,
+        self.p_index_dir = self.cache.path(
+            'search/partition',
+            propagate=False,
             missing_ok=True)  # Return root directory
-        self.i_index_dir = self.cache.path('search/identifiers', propagate=False,
+        self.i_index_dir = self.cache.path(
+            'search/identifiers',
+            propagate=False,
             missing_ok=True)  # Return root directory
 
         self._dataset_index = None
@@ -98,7 +104,9 @@ class Search(object):
         from whoosh.index import create_in, open_dir
 
         if not self._dataset_index:
-            self._dataset_index = self.get_or_new_index(DatasetSchema,self.d_index_dir)
+            self._dataset_index = self.get_or_new_index(
+                DatasetSchema,
+                self.d_index_dir)
 
         return self._dataset_index
 
@@ -152,8 +160,9 @@ class Search(object):
         )
 
         if force:
-            self.dataset_writer.delete_by_term('vid', unicode(bundle.identity.vid))
-
+            self.dataset_writer.delete_by_term(
+                'vid', unicode(
+                    bundle.identity.vid))
 
         self.dataset_writer.add_document(**d)
 

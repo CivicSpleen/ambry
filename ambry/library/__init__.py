@@ -36,8 +36,8 @@ def _new_library(config):
     except OperationalError as e:
         from ..dbexceptions import DatabaseError
 
-        raise DatabaseError('Failed to create {} : {}'.format( database.dsn,
-                                                               e.message))
+        raise DatabaseError('Failed to create {} : {}'.format(database.dsn,
+                                                              e.message))
 
     root = config['root']
 
@@ -59,7 +59,6 @@ def _new_library(config):
     else:
         host = None
         port = 80
-
 
     if 'documentation' in config:
         doc_cache = new_cache(config['documentation'])
@@ -1324,9 +1323,11 @@ class Library(object):
 
                 if self.cache.has(cache_key):  # This is just for reporting.
                     self.logger.info("Remote {} has: {}".format(remote.repo_id,
-                            cache_key))
+                                                                cache_key))
                 else:
-                    self.logger.info("Remote {} sync: {}".format(remote.repo_id,
+                    self.logger.info(
+                        "Remote {} sync: {}".format(
+                            remote.repo_id,
                             cache_key))
 
                 b = self._get_bundle_by_cache_key(cache_key)
