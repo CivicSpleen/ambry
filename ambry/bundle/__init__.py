@@ -8,4 +8,3 @@ Revised BSD License, included in this distribution as LICENSE.txt
 __author__ = 'eric'
 
 from .bundle import *
-

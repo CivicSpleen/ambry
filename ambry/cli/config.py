@@ -1,51 +1,89 @@
 
 from ..cli import prt, fatal, warn, err
 
+
 def config_parser(cmd):
     import argparse
 
-    config_p = cmd.add_parser('config', help='Install or display the configuration')
+    config_p = cmd.add_parser(
+        'config',
+        help='Install or display the configuration')
     config_p.set_defaults(command='config')
 
-    asp = config_p.add_subparsers(title='Config commands', help='Configuration commands')
+    asp = config_p.add_subparsers(
+        title='Config commands',
+        help='Configuration commands')
 
     sp = asp.add_parser('install', help='Install a configuration file')
     sp.set_defaults(subcommand='install')
-    sp.add_argument('-t', '--template', default='devel',
-                    help="Suffix of the configuration template. One of: 'devel','library','builder'. Default: 'devel' ")
+    sp.add_argument(
+        '-t',
+        '--template',
+        default='devel',
+        help="Suffix of the configuration template. One of: 'devel','library','builder'. Default: 'devel' ")
     sp.add_argument('-r', '--root', default=None, help="Set the root dir")
 
-    sp.add_argument('-R', '--remote', default=None, help="Url of remote library")
-    sp.add_argument('-p', '--print', dest='prt', default=False, action='store_true',
-                          help='Print, rather than save, the config file')
+    sp.add_argument(
+        '-R',
+        '--remote',
+        default=None,
+        help="Url of remote library")
+    sp.add_argument(
+        '-p',
+        '--print',
+        dest='prt',
+        default=False,
+        action='store_true',
+        help='Print, rather than save, the config file')
 
     group = sp.add_mutually_exclusive_group()
-    group.add_argument('-e', '--edit', default=False, action='store_true', help="Edit existing file")
-    group.add_argument('-f', '--force', default=False, action='store_true',
-                      help="Force using the default config; don't re-use the existing config")
+    group.add_argument(
+        '-e',
+        '--edit',
+        default=False,
+        action='store_true',
+        help="Edit existing file")
+    group.add_argument(
+        '-f',
+        '--force',
+        default=False,
+        action='store_true',
+        help="Force using the default config; don't re-use the existing config")
 
-    sp.add_argument('args', nargs='*', help='key=value entries') # Get everything else.
+    sp.add_argument(
+        'args',
+        nargs='*',
+        help='key=value entries')  # Get everything else.
 
-    sp = asp.add_parser('value', help='Return a configuration value, or all values if no key is specified')
+    sp = asp.add_parser(
+        'value',
+        help='Return a configuration value, or all values if no key is specified')
     sp.set_defaults(subcommand='value')
-    sp.add_argument('-y', '--yaml', default=False, action='store_true', help="If no key is specified, return the while configuration as yaml")
+    sp.add_argument(
+        '-y',
+        '--yaml',
+        default=False,
+        action='store_true',
+        help="If no key is specified, return the while configuration as yaml")
     sp.add_argument('key', nargs='*', help='Value key')  # Get everything else.
 
 
 def config_command(args, rc):
-    from  ..library import new_library
+    from ..library import new_library
 
-    globals()['config_'+args.subcommand](args, rc)
+    globals()['config_' + args.subcommand](args, rc)
+
 
 def config_install(args, rc):
-    import yaml, pkgutil
+    import yaml
+    import pkgutil
     import os
     from ambry.run import RunConfig as rc
     import getpass
 
     edit_args = ' '.join(args.args)
 
-    user =  getpass.getuser()
+    user = getpass.getuser()
 
     if user == 'root':
         install_file = rc.ROOT_CONFIG
@@ -54,8 +92,7 @@ def config_install(args, rc):
         install_file = rc.USER_CONFIG
         warn(("Installing as non-root, to '{}'\n" +
               "Run as root to install for all users.").format(install_file))
-        default_root = os.path.join(os.path.expanduser('~'),'ambry')
-
+        default_root = os.path.join(os.path.expanduser('~'), 'ambry')
 
     if os.path.exists(install_file):
         if args.edit:
@@ -63,25 +100,29 @@ def config_install(args, rc):
             with open(install_file) as f:
                 contents = f.read()
         elif args.force:
-            prt("File output file exists, overwriting: {}".format(install_file))
-            contents = pkgutil.get_data("ambry.support", 'ambry-{}.yaml'.format(args.template))
+            prt("File output file exists, overwriting: {}".format(
+                install_file))
+            contents = pkgutil.get_data(
+                "ambry.support", 'ambry-{}.yaml'.format(args.template))
         else:
-            fatal("Output file {} exists. Use -e to edit, or -f to overwrite".format(install_file))
+            fatal(
+                "Output file {} exists. Use -e to edit, or -f to overwrite".format(install_file))
     else:
-        contents = pkgutil.get_data("ambry.support", 'ambry-{}.yaml'.format(args.template))
+        contents = pkgutil.get_data(
+            "ambry.support", 'ambry-{}.yaml'.format(args.template))
 
     d = yaml.load(contents)
 
     # Set the key-value entries.
     if edit_args:
-        key,value = edit_args.split('=')
+        key, value = edit_args.split('=')
         value = value.strip()
         key_parts = key.split('.')
         e = d
         for k in key_parts:
             k = k.strip()
             if k == key_parts[-1]:
-                e[k]  = value
+                e[k] = value
 
             else:
                 e = e[k]
@@ -97,11 +138,10 @@ def config_install(args, rc):
         except Exception as e:
             err("Failed to set remote: {} ".format(e))
 
-
-    s =  yaml.dump(d, indent=4, default_flow_style=False)
+    s = yaml.dump(d, indent=4, default_flow_style=False)
 
     if args.prt:
-        prt(s.replace("{","{{").replace("}","}}"))
+        prt(s.replace("{", "{{").replace("}", "}}"))
 
     else:
 
@@ -110,18 +150,18 @@ def config_install(args, rc):
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
 
-        with open(install_file,'w') as f:
+        with open(install_file, 'w') as f:
             prt('Writing config file: {}'.format(install_file))
             f.write(s)
 
     if not os.path.exists(rc.USER_ACCOUNTS):
-        with open(rc.USER_ACCOUNTS,'w') as f:
+        with open(rc.USER_ACCOUNTS, 'w') as f:
 
             d = dict(accounts=dict(
-                 ambry=dict(
-                     name = None,
-                     email = None
-                 )
+                ambry=dict(
+                     name=None,
+                     email=None
+                     )
             ))
 
             prt('Writing config file: {}'.format(rc.USER_ACCOUNTS))
@@ -143,6 +183,7 @@ def config_install(args, rc):
         except KeyError:
             pass
 
+
 def config_value(args, rc):
 
     def sub_value(value, subs):
@@ -155,9 +196,6 @@ def config_value(args, rc):
             except AttributeError:
                 return str(value)
 
-
-
-
     def dump_key(key, subs):
         for path, value in rc.config.flatten():
             dot_path = '.'.join(path)
@@ -169,7 +207,7 @@ def config_value(args, rc):
                 print dot_path, '=', sub_value(value, subs)
 
     subs = dict(
-        root = rc.filesystem_path('root')
+        root=rc.filesystem_path('root')
     )
 
     if not args.key:
@@ -179,10 +217,3 @@ def config_value(args, rc):
             dump_key(None, subs)
     else:
         dump_key(args.key[0], subs)
-
-
-
-
-
-
-

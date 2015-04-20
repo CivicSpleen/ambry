@@ -18,28 +18,28 @@ def partition_classes():
         name_by_format = {
             pnc.format_name(): pnc for pnc in (
                 GeoPartitionName,
-                #HdfPartitionName,
+                # HdfPartitionName,
                 CsvPartitionName,
                 SqlitePartitionName)}
 
         extension_by_format = {
             pc.format_name(): pc.extension() for pc in (
                 GeoPartitionName,
-                #HdfPartitionName,
+                # HdfPartitionName,
                 CsvPartitionName,
                 SqlitePartitionName)}
 
         partition_by_format = {
             pc.format_name(): pc for pc in (
                 GeoPartition,
-                #HdfPartition,
+                # HdfPartition,
                 CsvPartition,
                 SqlitePartition)}
 
         identity_by_format = {
             ic.format_name(): ic for ic in (
                 GeoPartitionIdentity,
-                #HdfPartitionIdentity,
+                # HdfPartitionIdentity,
                 CsvPartitionIdentity,
                 SqlitePartitionIdentity)}
 
@@ -113,7 +113,7 @@ def new_identity(d, bundle=None):
 
 
 class PartitionInterface(object):
-    pass #legacy
+    pass  # legacy
 
 
 class PartitionBase(PartitionInterface):
@@ -170,8 +170,10 @@ class PartitionBase(PartitionInterface):
 
         from ..orm import Partition as OrmPartition
         if not object_session(self._record):
-            self._record = (self.bundle.database.session
-                           .query(OrmPartition).filter(OrmPartition.id_==str(self.identity.id_) ).one()  )
+            self._record = (
+                self.bundle.database.session .query(OrmPartition).filter(
+                    OrmPartition.id_ == str(
+                        self.identity.id_)).one())
 
         return self._record
 
@@ -193,11 +195,11 @@ class PartitionBase(PartitionInterface):
 
     @property
     def tables(self):
-        return set(self.data.get('tables', []) + [self.table.name] )
+        return set(self.data.get('tables', []) + [self.table.name])
 
     @property
     def orm_tables(self):
-        return [ self.get_table(t) for t in self.tables  ]
+        return [self.get_table(t) for t in self.tables]
 
     def get_table(self, table_spec=None):
         """Return the orm table for this partition, or None if
@@ -223,12 +225,14 @@ class PartitionBase(PartitionInterface):
         else:
 
             if object_session(self.record) is None:
-                raise ValueError("Can't check value for {}  on internal record; object is detached ".format(name))
+                raise ValueError(
+                    "Can't check value for {}  on internal record; object is detached ".format(name))
 
             raise AttributeError(
-                'Partition does not have attribute {}, and not in record {} '.format(name, type(self._record)))
-
-
+                'Partition does not have attribute {}, and not in record {} '.format(
+                    name,
+                    type(
+                        self._record)))
 
     def unset_database(self):
         """Removes the database record from the object"""
@@ -281,7 +285,9 @@ class PartitionBase(PartitionInterface):
         from ..orm import Partition as OrmPartition
 
         with self.bundle.session as s:
-            r = s.query(OrmPartition).filter(OrmPartition.id_ == str(self.identity.id_)).one()
+            r = s.query(OrmPartition).filter(
+                OrmPartition.id_ == str(
+                    self.identity.id_)).one()
 
             r.state = state
 
@@ -291,16 +297,21 @@ class PartitionBase(PartitionInterface):
         from ..orm import Partition as OrmPartition
 
         with self.bundle.session as s:
-            r = s.query(OrmPartition).filter(OrmPartition.id_ == str(self.identity.id_)).one()
+            r = s.query(OrmPartition).filter(
+                OrmPartition.id_ == str(
+                    self.identity.id_)).one()
 
             return r.state
-
 
     def set_value(self, group, key, value):
 
         with self.bundle.session as s:
-            return self.set_config_value(self.bundle.dataset.vid, group, key, value, session=s)
-
+            return self.set_config_value(
+                self.bundle.dataset.vid,
+                group,
+                key,
+                value,
+                session=s)
 
     def get_value(self, group, key, default=None):
         v = self.get_config_value(self.bundle.dataset.vid, group, key)
@@ -310,7 +321,6 @@ class PartitionBase(PartitionInterface):
         else:
             return v
 
-
     @classmethod
     def format_name(cls):
         return cls._id_class._name_class.FORMAT
@@ -318,8 +328,6 @@ class PartitionBase(PartitionInterface):
     @classmethod
     def extension(cls):
         return cls._id_class._name_class.PATH_EXTENSION
-
-
 
     def html_doc(self):
         from ..text import PartitionDoc

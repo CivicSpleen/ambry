@@ -9,14 +9,15 @@ from ambry.util import memoize
 
 class DatasetSchema(SchemaClass):
 
-    vid = ID(stored=True, unique=True) # Object versioned ID
-    bvid = ID(stored=True, unique=True)  # For partitions, the vid of the bundle
+    vid = ID(stored=True, unique=True)  # Object versioned ID
+    # For partitions, the vid of the bundle
+    bvid = ID(stored=True, unique=True)
 
     title = NGRAMWORDS(stored=True)
     names = NGRAMWORDS()
 
     source = NGRAMWORDS()  # Source ( domain ) of the
-    doc = TEXT # Generated document for the core of the topic search
+    doc = TEXT  # Generated document for the core of the topic search
 
     doc = TEXT  # Generated document for the core of the topic search
     coverage = TEXT  # Lists of coverage identifiers, ISO time values and GVIDs
@@ -25,24 +26,28 @@ class DatasetSchema(SchemaClass):
 
 
 class IdentifierSchema(SchemaClass):
+
     """Schema that maps well-known names to ID values, such as county names, summary level names, etc. """
 
-    identifier = ID(stored=True) # Partition versioned id
-    type=ID() #
+    identifier = ID(stored=True)  # Partition versioned id
+    type = ID()
     name = NGRAM(phrase=True, stored=True, minsize=2, maxsize=8)
+
 
 class Search(object):
 
     def __init__(self, library):
 
-
         self.library = library
 
         self.cache = self.library._doc_cache
 
-        self.d_index_dir = self.cache.path('search/dataset', propagate = False, missing_ok=True) # Return root directory
-        self.p_index_dir = self.cache.path('search/partition', propagate=False, missing_ok=True)  # Return root directory
-        self.i_index_dir = self.cache.path('search/identifiers', propagate=False, missing_ok=True)  # Return root directory
+        self.d_index_dir = self.cache.path('search/dataset',propagate=False,
+            missing_ok=True)  # Return root directory
+        self.p_index_dir = self.cache.path('search/partition', propagate=False,
+            missing_ok=True)  # Return root directory
+        self.i_index_dir = self.cache.path('search/identifiers', propagate=False,
+            missing_ok=True)  # Return root directory
 
         self._dataset_index = None
         self._partition_index = None
@@ -50,7 +55,6 @@ class Search(object):
 
         self._dataset_writer = None
         self._partition_writer = None
-
 
     def reset(self):
         from shutil import rmtree
@@ -64,7 +68,6 @@ class Search(object):
             rmtree(self.p_index_dir)
 
         self._partition_index = None
-
 
     def get_or_new_index(self, schema, dir):
 
@@ -90,13 +93,12 @@ class Search(object):
             self._partition_writer.commit()
             self._partition_writer = None
 
-
     @property
     def dataset_index(self):
         from whoosh.index import create_in, open_dir
 
         if not self._dataset_index:
-            self._dataset_index =  self.get_or_new_index(DatasetSchema, self.d_index_dir)
+            self._dataset_index = self.get_or_new_index(DatasetSchema,self.d_index_dir)
 
         return self._dataset_index
 
@@ -106,38 +108,38 @@ class Search(object):
             self._dataset_writer = self.dataset_index.writer()
         return self._dataset_writer
 
-
     @property
     @memoize
     def all_datasets(self):
         return set([x for x in self.datasets])
 
-
-    def index_dataset(self, bundle, force = False ):
+    def index_dataset(self, bundle, force=False):
 
         if bundle.identity.vid in self.all_datasets and not force:
             return
 
         e = bundle.database.session.execute
 
-
         q = """SELECT t_name, c_name, c_description FROM columns
         JOIN tables ON c_t_vid = t_vid WHERE t_d_vid = '{}' """.format(str(bundle.identity.vid))
 
-        doc = u'\n'.join([ unicode(x) for x in [bundle.metadata.about.title,
-                bundle.metadata.about.summary,
-                bundle.identity.id_, bundle.identity.vid,
-                bundle.identity.source,
-                bundle.identity.name, bundle.identity.vname,
-                bundle.metadata.documentation.main,
-                '\n'.join([' '.join(list(t)) for t  in e(q)])
+        doc = u'\n'.join([unicode(x) for x in [bundle.metadata.about.title,
+                                               bundle.metadata.about.summary,
+                                               bundle.identity.id_,
+                                               bundle.identity.vid,
+                                               bundle.identity.source,
+                                               bundle.identity.name,
+                                               bundle.identity.vname,
+                                               bundle.metadata.documentation.main,
+                                               '\n'.join([' '.join(list(t)) for t in e(q)])]])
 
-                ]])
-
-        coverage = u' '.join(unicode(x) for x in list(bundle.metadata.coverage.grain) +
-                             list(bundle.metadata.coverage.geo) +
-                             list(bundle.metadata.coverage.time))
-
+        coverage = u' '.join(
+            unicode(x) for x in list(
+                bundle.metadata.coverage.grain) +
+            list(
+                bundle.metadata.coverage.geo) +
+            list(
+                bundle.metadata.coverage.time))
 
         d = dict(
             vid=unicode(bundle.identity.vid),
@@ -149,13 +151,13 @@ class Search(object):
             coverage=coverage
         )
 
-
         if force:
             self.dataset_writer.delete_by_term('vid', unicode(bundle.identity.vid))
 
+
         self.dataset_writer.add_document(**d)
 
-        self.all_datasets.add(bundle.identity.vid )
+        self.all_datasets.add(bundle.identity.vid)
 
     def index_datasets(self):
 
@@ -183,15 +185,15 @@ class Search(object):
         for x in self.dataset_index.searcher().documents():
             yield x['vid']
 
-    def search_datasets(self, search_phrase, limit = None):
+    def search_datasets(self, search_phrase, limit=None):
         """Search for just the datasets"""
         from whoosh.qparser import QueryParser
 
         from whoosh.qparser import QueryParser
 
-        parser = QueryParser("doc", schema = self.dataset_index.schema)
+        parser = QueryParser("doc", schema=self.dataset_index.schema)
 
-        query =  parser.parse(search_phrase)
+        query = parser.parse(search_phrase)
 
         with self.dataset_index.searcher() as searcher:
 
@@ -215,11 +217,9 @@ class Search(object):
         from collections import defaultdict
         from geoid.civick import GVid
 
-
         if search.get('all', False):
 
             search = SearchTermParser().parse(search['all'])
-
 
         bvid_term = about_term = source_term = with_term = grain_term = years_term = in_term = ''
 
@@ -236,7 +236,9 @@ class Search(object):
         dt_p_term = about_term if not source_term else None
 
         if search.get('in', False):
-            place_vids = list(x[1] for x in self.search_identifiers(search['in'])) # COnvert generator to list
+            place_vids = list(
+                x[1] for x in self.search_identifiers(
+                    search['in']))  # COnvert generator to list
 
             if place_vids:
 
@@ -249,14 +251,15 @@ class Search(object):
                 in_term = "coverage:({})".format(' OR '.join(place_vids))
 
         if search.get('by', False):
-            grain_term = "coverage:"+search.get('by','').strip()
+            grain_term = "coverage:" + search.get('by', '').strip()
 
         # The wackiness with the converts to int and str, and adding ' ', is because there
-        # can't be a space between the 'TO' and the brackets in the time range when one end is open
+        # can't be a space between the 'TO' and the brackets in the time range
+        # when one end is open
 
         if search.get('from', False):
             try:
-                from_year = str(int(search.get('from', False)))+' '
+                from_year = str(int(search.get('from', False))) + ' '
             except ValueError:
                 pass
         else:
@@ -264,7 +267,7 @@ class Search(object):
 
         if search.get('to', False):
             try:
-                to_year = ' '+str(int(search.get('to', False)))
+                to_year = ' ' + str(int(search.get('to', False)))
             except ValueError:
                 pass
         else:
@@ -272,33 +275,36 @@ class Search(object):
 
         if bool(from_year) or bool(to_year):
 
-            print '!!!', search , from_year
             years_term = "coverage:[{}TO{}]".format(from_year, to_year)
 
         if search.get('with', False):
             with_term = 'schema:({})'.format(search.get('with', False))
 
-
         if bool(d_term):
-            # list(...) : the return from search_datasets is a generator, so it can only be read once.
-            bvids =  list(self.search_datasets(d_term))
+            # list(...) : the return from search_datasets is a generator, so it
+            # can only be read once.
+            bvids = list(self.search_datasets(d_term))
 
         else:
             bvids = []
 
-        p_term = ' AND '.join(x for x in [in_term, years_term, grain_term, with_term] if bool(x))
-
+        p_term = ' AND '.join(
+            x for x in [
+                in_term,
+                years_term,
+                grain_term,
+                with_term] if bool(x))
 
         if bool(p_term):
             if bvids:
                 p_term += " AND bvid:({})".format(' OR '.join(bvids))
             elif dt_p_term:
-                # In case the about term didn't generate any hits for the bundle.
+                # In case the about term didn't generate any hits for the
+                # bundle.
                 p_term += " AND {}".format(dt_p_term)
         else:
             if not bvids and dt_p_term:
                 p_term = dt_p_term
-
 
         if p_term:
             pvids = list(self.search_partitions(p_term))
@@ -315,7 +321,7 @@ class Search(object):
 
         else:
 
-            rtrn = { b:[] for b in bvids }
+            rtrn = {b: [] for b in bvids}
 
         return (d_term, p_term, search), rtrn
 
@@ -323,7 +329,9 @@ class Search(object):
     def partition_index(self):
 
         if not self._partition_index:
-            self._partition_index = self.get_or_new_index(DatasetSchema, self.p_index_dir)
+            self._partition_index = self.get_or_new_index(
+                DatasetSchema,
+                self.p_index_dir)
 
         return self._partition_index
 
@@ -333,12 +341,18 @@ class Search(object):
             self._partition_writer = self.partition_index.writer()
         return self._partition_writer
 
-    def index_partition(self, p, force = False):
+    def index_partition(self, p, force=False):
 
-        if p.identity.vid in self.all_partitions and  not force:
+        if p.identity.vid in self.all_partitions and not force:
             return
 
-        schema = '\n'.join("{} {} {} {} {}".format(c.id_, c.vid, c.name, c.altname, c.description) for c in p.table.columns)
+        schema = '\n'.join(
+            "{} {} {} {} {}".format(
+                c.id_,
+                c.vid,
+                c.name,
+                c.altname,
+                c.description) for c in p.table.columns)
 
         values = ''
 
@@ -361,7 +375,7 @@ class Search(object):
             schema=unicode(schema),
             coverage=unicode(coverage),
             values=unicode(values),
-            doc = unicode(coverage+'\n'+values+'\n'+schema)
+            doc=unicode(coverage + '\n' + values + '\n' + schema)
         )
 
         self.all_partitions.add(p.identity.vid)
@@ -395,13 +409,14 @@ class Search(object):
                 if vid:
                     yield vid
 
-
     @property
     def identifier_index(self):
         from whoosh.index import create_in, open_dir
 
         if not self._identifier_index:
-            self._identifier_index = self.get_or_new_index(IdentifierSchema, self.i_index_dir)
+            self._identifier_index = self.get_or_new_index(
+                IdentifierSchema,
+                self.i_index_dir)
 
         return self._identifier_index
 
@@ -411,15 +426,16 @@ class Search(object):
 
         writer = index.writer()
 
-        all_names = set([ x['name'] for x in index.searcher().documents() ])
+        all_names = set([x['name'] for x in index.searcher().documents()])
 
         for i in identifiers:
 
-            # Could use **i, but expanding it provides a  check on contents of i
+            # Could use **i, but expanding it provides a  check on contents of
+            # i
             if i['name'] not in all_names:
 
                 writer.add_document(
-                    identifier = unicode(i['identifier']),
+                    identifier=unicode(i['identifier']),
                     type=unicode(i['type']),
                     name=unicode(i['name']),
                 )
@@ -444,6 +460,7 @@ class Search(object):
                 return self.PosSizeScorer(searcher, fieldname, text, qf=qf)
 
             class PosSizeScorer(scoring.BaseScorer):
+
                 def __init__(self, searcher, fieldname, text, qf=1):
 
                     self.searcher = searcher
@@ -457,9 +474,14 @@ class Search(object):
 
                 def score(self, matcher):
                     poses = matcher.value_as("positions")
-                    return ( 2.0 / (poses[0] + 1) +
-                             1.0 / ( len(self.text) / 4 + 1 ) +
-                             self.bmf25.scorer(searcher, self.fieldname, self.text).score(matcher) )
+                    return (2.0 /
+                            (poses[0] +
+                             1) +
+                            1.0 /
+                            (len(self.text) /
+                             4 +
+                             1) +
+                            self.bmf25.scorer(searcher, self.fieldname, self.text).score(matcher))
 
         with self.identifier_index.searcher(weighting=PosSizeWeighting()) as searcher:
 
@@ -480,19 +502,17 @@ class Search(object):
     @property
     @memoize
     def all_identifiers(self):
-        return { x['identifier']:x['name'] for x in self.identifiers }
+        return {x['identifier']: x['name'] for x in self.identifiers}
 
     @property
     @memoize
     def identifier_map(self):
         m = {}
         for x in self.identifiers:
-            if len(x['name']) > 2: # Exclude state abbreviations
+            if len(x['name']) > 2:  # Exclude state abbreviations
                 m[x['identifier']] = x['name']
 
         return m
-
-
 
 
 class SearchTermParser(object):
@@ -520,7 +540,8 @@ class SearchTermParser(object):
         'with': ('source'),
         'source': ('source')}
 
-    by_terms = 'state county zip zcta tract block blockgroup place city cbsa msa'.split()
+    by_terms = 'state county zip zcta tract block blockgroup place city cbsa msa'.split(
+    )
 
     @staticmethod
     def s_quotedterm(scanner, token):
@@ -538,41 +559,41 @@ class SearchTermParser(object):
     def s_markerterm(scanner, token):
         return (SearchTermParser.MARKER, token.lower().strip())
 
-
     @staticmethod
     def s_year(scanner, token):
         return (SearchTermParser.YEAR, int(token.lower().strip()))
 
-
     def __init__(self):
-        from nltk.stem.lancaster import LancasterStemmer  # I have no idea which one to pick
+        # I have no idea which one to pick
+        from nltk.stem.lancaster import LancasterStemmer
         import re
 
-        mt = '|'.join( [ r"\b"+x.upper()+r"\b" for x in self.marker_terms.keys()])
+        mt = '|'.join(
+            [r"\b" + x.upper() + r"\b" for x in self.marker_terms.keys()])
 
         self.scanner = re.Scanner([
             (r"\s+", None),
             (r"['\"](.*?)['\"]", self.s_quotedterm),
             (mt.lower(), self.s_markerterm),
             (mt, self.s_markerterm),
-            (r"19[789]\d|20[012]\d", self.s_year), # From 1970 to 2029
+            (r"19[789]\d|20[012]\d", self.s_year),  # From 1970 to 2029
             (r"(?:[\w\-\.?])+", self.s_domainname),
             (r".+?\b", self.s_term),
         ])
 
         self.stemmer = LancasterStemmer()
 
-        self.by_terms = [ self.stem(x) for x in self.by_terms]
-
+        self.by_terms = [self.stem(x) for x in self.by_terms]
 
     def scan(self, s):
-        s = ' '.join(s.splitlines()) # make a single line
-        return self.scanner.scan(s)[0] # Returns one item per line, but we only have one line
+        s = ' '.join(s.splitlines())  # make a single line
+        # Returns one item per line, but we only have one line
+        return self.scanner.scan(s)[0]
 
     def stem(self, w):
         return self.stemmer.stem(w)
 
-    def parse(self,s):
+    def parse(self, s):
 
         toks = self.scan(s)
 
@@ -586,7 +607,7 @@ class SearchTermParser(object):
         for t in toks:
             if t[0] == self.MARKER:
 
-                bymarker.append((t[1],[]))
+                bymarker.append((t[1], []))
             else:
                 bymarker[-1][1].append(t)
 
@@ -598,16 +619,16 @@ class SearchTermParser(object):
                 t[0] = 'by'
 
             # If the from term isn't an integer, then it is really a source.
-            if t[0] == 'from' and len(t[1]) == 1 and t[1][0][0] != self.YEAR :
+            if t[0] == 'from' and len(t[1]) == 1 and t[1][0][0] != self.YEAR:
                 t[0] = 'source'
 
             comps.append(t)
 
         # Join all of the terms into single marker groups
-        groups = { marker: [] for marker, _ in comps }
+        groups = {marker: [] for marker, _ in comps}
 
-        for marker, terms  in comps:
-            groups[marker] +=   [ term for marker, term in terms ]
+        for marker, terms in comps:
+            groups[marker] += [term for marker, term in terms]
 
         for marker, terms in groups.items():
 
@@ -621,9 +642,4 @@ class SearchTermParser(object):
             else:
                 pass
 
-
-
         return groups
-
-
-

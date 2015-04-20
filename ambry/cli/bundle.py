@@ -4,9 +4,8 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 
-
 from ..cli import prt, fatal, warn, err
-from ..cli import  _source_list, load_bundle, _print_bundle_list
+from ..cli import _source_list, load_bundle, _print_bundle_list
 from ..source import SourceTree
 
 import os
@@ -14,25 +13,26 @@ import yaml
 import shutil
 
 
-
 def bundle_command(args, rc):
     import os
     from ..run import import_file
-    from ..dbexceptions import  DependencyError
+    from ..dbexceptions import DependencyError
     from ..library import new_library
     from . import global_logger
     from ..orm import Dataset
-    from ..identity import  LocationRef
+    from ..identity import LocationRef
 
     l = new_library(rc.library(args.library_name))
     l.logger = global_logger
 
     if not args.bundle_dir:
-        bundle_file = os.path.join(os.getcwd(),'bundle.py')
+        bundle_file = os.path.join(os.getcwd(), 'bundle.py')
 
     else:
         st = l.source
-        ident = l.resolve(args.bundle_dir, location = LocationRef.LOCATION.SOURCE)
+        ident = l.resolve(
+            args.bundle_dir,
+            location=LocationRef.LOCATION.SOURCE)
 
         if ident:
 
@@ -41,8 +41,9 @@ def bundle_command(args, rc):
             if not os.path.exists(bundle_file):
                 from ..dbexceptions import ConflictError
                 # The bundle exists in the source repo, but is not local
-                fatal("Ghost bundle {}; in library but not in source tree".format(ident.vname))
-
+                fatal(
+                    "Ghost bundle {}; in library but not in source tree".format(
+                        ident.vname))
 
         elif args.bundle_dir == '-':
             # Run run for each line of input
@@ -50,28 +51,29 @@ def bundle_command(args, rc):
 
             for line in sys.stdin.readlines():
                 args.bundle_dir = line.strip()
-                prt('====== {}',args.bundle_dir)
-                bundle_command(args,rc)
+                prt('====== {}', args.bundle_dir)
+                bundle_command(args, rc)
 
             return
 
         elif args.bundle_dir[0] != '/':
-            bundle_file = os.path.join(os.getcwd(), args.bundle_dir, 'bundle.py')
+            bundle_file = os.path.join(
+                os.getcwd(),
+                args.bundle_dir,
+                'bundle.py')
 
         else:
             bundle_file = os.path.join(args.bundle_dir, 'bundle.py')
 
-
-
     if not os.path.exists(bundle_file):
-        fatal("Bundle code file does not exist: {}".format(bundle_file) )
+        fatal("Bundle code file does not exist: {}".format(bundle_file))
 
     bundle_dir = os.path.dirname(bundle_file)
 
     config_file = os.path.join(bundle_dir, 'bundle.yaml')
 
     if not os.path.exists(config_file):
-        fatal("Bundle config file does not exist: {}".format(bundle_file) )
+        fatal("Bundle config file does not exist: {}".format(bundle_file))
 
     # Import the bundle file from the
     rp = os.path.realpath(bundle_file)
@@ -85,22 +87,22 @@ def bundle_command(args, rc):
 
     b.set_args(args)
 
-    b.library  = l
+    b.library = l
 
     def getf(f):
-        return globals()['bundle_'+f]
+        return globals()['bundle_' + f]
 
     ph = {
-          'meta': ['clean'],
-          'prepare': ['clean'],
-          'build' : ['clean', 'prepare'],
-          'update' : ['clean', 'prepare'],
-          'install' : ['clean', 'prepare', 'build']
-          }
+        'meta': ['clean'],
+        'prepare': ['clean'],
+        'build': ['clean', 'prepare'],
+        'update': ['clean', 'prepare'],
+        'install': ['clean', 'prepare', 'build']
+    }
 
     phases = []
 
-    if hasattr(args,'clean') and args.clean:
+    if hasattr(args, 'clean') and args.clean:
         # If the clean arg is set, then we need to run  clean, and all of the
         # earlier build phases.
 
@@ -109,8 +111,9 @@ def bundle_command(args, rc):
     phases.append(args.subcommand)
 
     if args.debug:
-        from ..util import  debug
-        warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
+        from ..util import debug
+        warn(
+            'Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
         debug.listen()
 
     try:
@@ -128,7 +131,7 @@ def bundle_command(args, rc):
         if b:
             err("{}: Phase {} failed: {}", b.identity.name, phase, e)
             b.close()
-            st.set_bundle_state(b.identity, 'error:'+phase)
+            st.set_bundle_state(b.identity, 'error:' + phase)
         raise
     finally:
         import lockfile
@@ -143,38 +146,62 @@ def bundle_command(args, rc):
         except lockfile.NotMyLock as e:
             warn("Got logging error: {}".format(str(e)))
 
+
 def bundle_parser(cmd):
-    import argparse, multiprocessing
+    import argparse
+    import multiprocessing
 
     parser = cmd.add_parser('bundle', help='Manage bundle files')
     parser.set_defaults(command='bundle')
-    parser.add_argument('-d','--bundle-dir', required=False,   help='Path to the bundle .py file')
-    parser.add_argument('-D', '--debug', required=False, default=False, action="store_true",
-                                        help='URS1 signal will break to interactive prompt')
-    parser.add_argument('-t','--test',  default=False, action="store_true", help='Enable bundle-specific test behaviour')
-    parser.add_argument('-m','--multi',  type = int,  nargs = '?',
-                        default = 1,
-                        const = multiprocessing.cpu_count(),
-                        help='Run the build process on multiple processors, if the  method supports it')
-
+    parser.add_argument(
+        '-d',
+        '--bundle-dir',
+        required=False,
+        help='Path to the bundle .py file')
+    parser.add_argument(
+        '-D',
+        '--debug',
+        required=False,
+        default=False,
+        action="store_true",
+        help='URS1 signal will break to interactive prompt')
+    parser.add_argument(
+        '-t',
+        '--test',
+        default=False,
+        action="store_true",
+        help='Enable bundle-specific test behaviour')
+    parser.add_argument(
+        '-m',
+        '--multi',
+        type=int,
+        nargs='?',
+        default=1,
+        const=multiprocessing.cpu_count(),
+        help='Run the build process on multiple processors, if the  method supports it')
 
     sub_cmd = parser.add_subparsers(title='commands', help='command help')
 
-    command_p = sub_cmd.add_parser('config', help='Operations on the bundle configuration file')
+    command_p = sub_cmd.add_parser(
+        'config',
+        help='Operations on the bundle configuration file')
     command_p.set_defaults(subcommand='config')
 
-    asp = command_p.add_subparsers(title='Config subcommands', help='Subcommand for operations on a bundle file')
+    asp = command_p.add_subparsers(
+        title='Config subcommands',
+        help='Subcommand for operations on a bundle file')
 
-
-    sp = asp.add_parser('rewrite', help='Re-write the bundle file, updating the formatting')     
+    sp = asp.add_parser(
+        'rewrite',
+        help='Re-write the bundle file, updating the formatting')
     sp.set_defaults(subsubcommand='rewrite')
 
     #
-    sp = asp.add_parser('dump', help='dump the configuration')     
+    sp = asp.add_parser('dump', help='dump the configuration')
     sp.set_defaults(subsubcommand='dump')
 
     #
-    sp = asp.add_parser('schema', help='Print the schema')     
+    sp = asp.add_parser('schema', help='Print the schema')
     sp.set_defaults(subsubcommand='schema')
 
     #
@@ -184,117 +211,244 @@ def bundle_parser(cmd):
     #
     sp = asp.add_parser('newnum', help='Get a new dataset number')
     sp.set_defaults(subsubcommand='newnum')
-    sp.add_argument('-k', '--key', default=False, help="Set the number server key, or 'self' for self assignment ")
+    sp.add_argument(
+        '-k',
+        '--key',
+        default=False,
+        help="Set the number server key, or 'self' for self assignment ")
 
     #
-    sp = asp.add_parser('s3urls', help='Add all of the URLS below an S3 prefix as sources. ')
+    sp = asp.add_parser(
+        's3urls',
+        help='Add all of the URLS below an S3 prefix as sources. ')
     sp.set_defaults(subsubcommand='s3urls')
-    sp.add_argument('term', type=str, nargs=1, help='S3url with buckets and prefix')
+    sp.add_argument(
+        'term',
+        type=str,
+        nargs=1,
+        help='S3url with buckets and prefix')
 
     #
-    sp = asp.add_parser('scrape', help='Scrape all of the links from the page references in external_documentation.download')
+    sp = asp.add_parser(
+        'scrape',
+        help='Scrape all of the links from the page references in external_documentation.download')
     sp.set_defaults(subsubcommand='scrape')
-    sp.add_argument('-r', '--regex', default=False, help="Select entries where the UR matches the regular expression")
+    sp.add_argument(
+        '-r',
+        '--regex',
+        default=False,
+        help="Select entries where the UR matches the regular expression")
 
     # Info command
-    command_p = sub_cmd.add_parser('info', help='Print information about the bundle')
+    command_p = sub_cmd.add_parser(
+        'info',
+        help='Print information about the bundle')
     command_p.set_defaults(subcommand='info')
     command_p.set_defaults(subcommand='info')
-    command_p.add_argument('-s','--schema',  default=False,action="store_true",
-                           help='Dump the schema as a CSV. The bundle must have been prepared')
-    command_p.add_argument('-d', '--dep', default=False, help='Report information about a dependency')
-    command_p.add_argument('-S', '--stats',default=False,action="store_true",  help='Also report column stats for partitions')
-    command_p.add_argument('-P', '--partitions', default=False, action="store_true", help='Also report partition details')
-    command_p.add_argument('-c', '--coverage', default=False, action="store_true",
-                           help='Also report time and space coverage')
+    command_p.add_argument(
+        '-s',
+        '--schema',
+        default=False,
+        action="store_true",
+        help='Dump the schema as a CSV. The bundle must have been prepared')
+    command_p.add_argument(
+        '-d',
+        '--dep',
+        default=False,
+        help='Report information about a dependency')
+    command_p.add_argument(
+        '-S',
+        '--stats',
+        default=False,
+        action="store_true",
+        help='Also report column stats for partitions')
+    command_p.add_argument(
+        '-P',
+        '--partitions',
+        default=False,
+        action="store_true",
+        help='Also report partition details')
+    command_p.add_argument(
+        '-c',
+        '--coverage',
+        default=False,
+        action="store_true",
+        help='Also report time and space coverage')
 
     #
     # Clean Command
     #
-    command_p = sub_cmd.add_parser('clean', help='Return bundle to state before build, prepare and extracts')
+    command_p = sub_cmd.add_parser(
+        'clean',
+        help='Return bundle to state before build, prepare and extracts')
     command_p.set_defaults(subcommand='clean')
-    
+
     #
     # Meta Command
     #
     command_p = sub_cmd.add_parser('meta', help='Build or install metadata')
     command_p.set_defaults(subcommand='meta')
-    
-    command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
-    command_p.add_argument('-f', '--fast', default=False, action="store_true",
-                           help='Load the schema faster by not checking for extant columns')
+
+    command_p.add_argument(
+        '-c',
+        '--clean',
+        default=False,
+        action="store_true",
+        help='Clean first')
+    command_p.add_argument(
+        '-f',
+        '--fast',
+        default=False,
+        action="store_true",
+        help='Load the schema faster by not checking for extant columns')
 
     #
     # Prepare Command
     #
-    command_p = sub_cmd.add_parser('prepare', help='Prepare by creating the database and schemas')
+    command_p = sub_cmd.add_parser(
+        'prepare',
+        help='Prepare by creating the database and schemas')
     command_p.set_defaults(subcommand='prepare')
-    
-    command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
-    command_p.add_argument('-r','--rebuild', default=False,action="store_true", help='Rebuild the schema, but dont delete built files')
-    command_p.add_argument('-F','--fast', default=False,action="store_true", help='Load the schema faster by not checking for extant columns')
-    command_p.add_argument('-f', '--force', default=False, action="store_true",
-                           help='Force build. ( --clean is usually preferred ) ')
+
+    command_p.add_argument(
+        '-c',
+        '--clean',
+        default=False,
+        action="store_true",
+        help='Clean first')
+    command_p.add_argument(
+        '-r',
+        '--rebuild',
+        default=False,
+        action="store_true",
+        help='Rebuild the schema, but dont delete built files')
+    command_p.add_argument(
+        '-F',
+        '--fast',
+        default=False,
+        action="store_true",
+        help='Load the schema faster by not checking for extant columns')
+    command_p.add_argument(
+        '-f',
+        '--force',
+        default=False,
+        action="store_true",
+        help='Force build. ( --clean is usually preferred ) ')
     #
     # Build Command
     #
-    command_p = sub_cmd.add_parser('build', help='Build the data bundle and partitions')
+    command_p = sub_cmd.add_parser(
+        'build',
+        help='Build the data bundle and partitions')
     command_p.set_defaults(subcommand='build')
-    command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
-    command_p.add_argument('-f', '--force', default=False, action="store_true", help='Force build. ( --clean is usually preferred ) ')
-    command_p.add_argument('-i', '--install', default=False, action="store_true", help='Install after building')
-    command_p.add_argument('-o','--opt', action='append', help='Set options for the build phase')
-    
+    command_p.add_argument(
+        '-c',
+        '--clean',
+        default=False,
+        action="store_true",
+        help='Clean first')
+    command_p.add_argument(
+        '-f',
+        '--force',
+        default=False,
+        action="store_true",
+        help='Force build. ( --clean is usually preferred ) ')
+    command_p.add_argument(
+        '-i',
+        '--install',
+        default=False,
+        action="store_true",
+        help='Install after building')
+    command_p.add_argument(
+        '-o',
+        '--opt',
+        action='append',
+        help='Set options for the build phase')
+
     #
     # Update Command
     #
-    command_p = sub_cmd.add_parser('update', help='Build the data bundle and partitions from an earlier version')
+    command_p = sub_cmd.add_parser(
+        'update',
+        help='Build the data bundle and partitions from an earlier version')
     command_p.set_defaults(subcommand='update')
-    command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
-
+    command_p.add_argument(
+        '-c',
+        '--clean',
+        default=False,
+        action="store_true",
+        help='Clean first')
 
     #
     # Install Command
     #
-    command_p = sub_cmd.add_parser('install', help='Install bundles and partitions to the library')
+    command_p = sub_cmd.add_parser(
+        'install',
+        help='Install bundles and partitions to the library')
     command_p.set_defaults(subcommand='install')
-    command_p.add_argument('-c','--clean', default=False,action="store_true", help='Clean first')
-    command_p.add_argument('-l','--library',  help='Name of the library, defined in the config file')
-    command_p.add_argument('-f','--force', default=False,action="store_true", help='Force storing the file')
-    
-    
+    command_p.add_argument(
+        '-c',
+        '--clean',
+        default=False,
+        action="store_true",
+        help='Clean first')
+    command_p.add_argument(
+        '-l',
+        '--library',
+        help='Name of the library, defined in the config file')
+    command_p.add_argument(
+        '-f',
+        '--force',
+        default=False,
+        action="store_true",
+        help='Force storing the file')
+
     #
     # run Command
     #
     command_p = sub_cmd.add_parser('run', help='Run a method on the bundle')
     command_p.set_defaults(subcommand='run')
-    command_p.add_argument('method', metavar='Method', type=str, 
-                   help='Name of the method to run')    
-    command_p.add_argument('args',  nargs='*', type=str,help='additional arguments')
-    
+    command_p.add_argument('method', metavar='Method', type=str,
+                           help='Name of the method to run')
+    command_p.add_argument(
+        'args',
+        nargs='*',
+        type=str,
+        help='additional arguments')
 
-     
     #
     # repopulate
     #
-    command_p = sub_cmd.add_parser('repopulate', help='Load data previously submitted to the library back into the build dir')
+    command_p = sub_cmd.add_parser(
+        'repopulate',
+        help='Load data previously submitted to the library back into the build dir')
     command_p.set_defaults(subcommand='repopulate')
-    
-    
+
     #
     # Source Commands
     #
-    
+
     command_p = sub_cmd.add_parser('commit', help='Commit the source')
     command_p.set_defaults(subcommand='commit', command_group='source')
-    command_p.add_argument('-m','--message', default=None, help='Git commit message')
-    
-    command_p = sub_cmd.add_parser('push', help='Commit and push to the git origin')
+    command_p.add_argument(
+        '-m',
+        '--message',
+        default=None,
+        help='Git commit message')
+
+    command_p = sub_cmd.add_parser(
+        'push',
+        help='Commit and push to the git origin')
     command_p.set_defaults(subcommand='push', command_group='source')
-    command_p.add_argument('-m','--message', default=None, help='Git commit message')
-    
+    command_p.add_argument(
+        '-m',
+        '--message',
+        default=None,
+        help='Git commit message')
+
     command_p = sub_cmd.add_parser('pull', help='Pull from the git origin')
     command_p.set_defaults(subcommand='pull', command_group='source')
+
 
 def bundle_info(args, b, st, rc):
     import json
@@ -319,12 +473,10 @@ def bundle_info(args, b, st, rc):
         b.schema.as_csv()
     else:
 
-
-
         b.log("----Info: ".format(b.identity.sname))
-        b.log("VID  : "+b.identity.vid)
-        b.log("Name : "+b.identity.sname)
-        b.log("VName: "+b.identity.vname)
+        b.log("VID  : " + b.identity.vid)
+        b.log("Name : " + b.identity.sname)
+        b.log("VName: " + b.identity.vname)
         b.log("DB   : " + b.database.path)
 
         if args.coverage:
@@ -340,26 +492,36 @@ def bundle_info(args, b, st, rc):
             # Older bundles have the dbcreated values assigned to the root dataset vid ('a0/001')
             # instead of the bundles dataset vid
             from ambry.library.database import ROOT_CONFIG_NAME_V
-            root_db_created = b.database.get_config_value(ROOT_CONFIG_NAME_V, 'process', 'dbcreated')
+            root_db_created = b.database.get_config_value(
+                ROOT_CONFIG_NAME_V,
+                'process',
+                'dbcreated')
 
-            b.log('Created   : ' + process.get('dbcreated', root_db_created.value))
+            b.log(
+                'Created   : ' +
+                process.get(
+                    'dbcreated',
+                    root_db_created.value))
             b.log('Prepared  : ' + process.get('prepared', ''))
             b.log('Built     : ' + process.get('built', ''))
 
             if process.get('buildtime', False):
-                b.log('Build time: ' + str(round(float(process['buildtime']), 2)) + 's')
-
+                b.log('Build time: ' +
+                      str(round(float(process['buildtime']), 2)) +
+                      's')
 
             b.log("Parts: {}".format(b.partitions.count))
 
             b.log("---- Partitions ---")
             for i, partition in enumerate(b.partitions):
-                b.log(indent+partition.identity.sname)
+                b.log(indent + partition.identity.sname)
 
                 if i > 10:
-                    b.log("    ... and {} more".format(b.partitions.count - 10))
+                    b.log(
+                        "    ... and {} more".format(
+                            b.partitions.count -
+                            10))
                     break
-
 
         deps = None
         if b.metadata.dependencies:
@@ -384,26 +546,40 @@ def bundle_info(args, b, st, rc):
                 b.log("--- Partition {}: ".format(p.identity))
                 if args.partitions:
                     d = p.record.data
-                    def bl(k,v):
-                        b.log(indent+"{:7s}: {}".format(k,p.record.data.get(v,'')))
 
-                    b.log(indent+"Details: ".format(p.identity))
-                    bl('g cov','geo_coverage')
+                    def bl(k, v):
+                        b.log(
+                            indent +
+                            "{:7s}: {}".format(
+                                k,
+                                p.record.data.get(
+                                    v,
+                                    '')))
+
+                    b.log(indent + "Details: ".format(p.identity))
+                    bl('g cov', 'geo_coverage')
                     bl('g grain', 'geo_grain')
                     bl('t cov', 'time_coverage')
                 if args.stats:
-                    b.log(indent+"Stats: ")
-                    b.log(indent+"{:20.20s} {:>7s} {:>7s} {:>10s} {:s}"
-                          .format("Col name", "Count", 'Uniq', 'Mean', 'Sample Values'))
+                    b.log(indent + "Stats: ")
+                    b.log(
+                        indent +
+                        "{:20.20s} {:>7s} {:>7s} {:>10s} {:s}" .format(
+                            "Col name",
+                            "Count",
+                            'Uniq',
+                            'Mean',
+                            'Sample Values'))
                     for col_name, s in p.stats.__dict__.items():
 
-                        b.log(indent+"{:20.20s} {:7s} {:7s} {:10s} {:s}".
-                              format(col_name,
-                                     str(s.count) if s.count else '',
-                                     str(s.nuniques) if s.nuniques else '',
-                                     '{:10.2e}'.format(s.mean) if s.mean else '',
-                                     ','.join(s.uvalues.keys()[:5])))
-
+                        b.log(
+                            indent + "{:20.20s} {:7s} {:7s} {:10s} {:s}". format(
+                                col_name, str(
+                                    s.count) if s.count else '', str(
+                                    s.nuniques) if s.nuniques else '', '{:10.2e}'.format(
+                                    s.mean) if s.mean else '', ','.join(
+                                    s.uvalues.keys()[
+                                        :5])))
 
 
 def bundle_clean(args, b, st, rc):
@@ -429,12 +605,13 @@ def bundle_meta(args, b, st, rc):
     else:
         b.log("---- Skipping Meta ---- ")
 
+
 def bundle_prepare(args, b, st, rc):
     return b.do_prepare()
 
 
 def bundle_build(args, b, st, rc):
-    r =  b.do_build()
+    r = b.do_build()
 
     # Closing is generally important. In this case, if the bundle isn't closed, and the bundle is installed below,
     # the config table won't have metadata. No idea why.
@@ -444,6 +621,7 @@ def bundle_build(args, b, st, rc):
         bundle_install(args, b, st, rc)
 
     return r
+
 
 def bundle_install(args, b, st, rc):
 
@@ -460,8 +638,8 @@ def bundle_install(args, b, st, rc):
     else:
         b.log("---- Skipping Install ---- ")
 
-
     return True
+
 
 def bundle_run(args, b, st, rc):
     import sys
@@ -469,7 +647,7 @@ def bundle_run(args, b, st, rc):
     #
     # Run a method on the bundle. Can be used for testing and development.
     try:
-        f = getattr(b,str(args.method))
+        f = getattr(b, str(args.method))
     except AttributeError as e:
         b.error("Could not find method named '{}': {} ".format(args.method, e))
         b.error("Available methods : {} ".format(dir(b)))
@@ -477,18 +655,20 @@ def bundle_run(args, b, st, rc):
         return
 
     if not callable(f):
-        raise TypeError("Got object for name '{}', but it isn't a function".format(args.method))
+        raise TypeError(
+            "Got object for name '{}', but it isn't a function".format(
+                args.method))
 
-    # Install the python directory for Ambry builds so we can use bundle defined imports
+    # Install the python directory for Ambry builds so we can use bundle
+    # defined imports
     python_dir = b.config.python_dir()
 
     if python_dir and python_dir not in sys.path:
         sys.path.append(python_dir)
 
-    r =  f(*args.args)
+    r = f(*args.args)
 
     print "RETURN: ", r
-
 
 
 def bundle_update(args, b, st, rc):
@@ -503,6 +683,7 @@ def bundle_update(args, b, st, rc):
             return False
     else:
         b.log("---- Skipping Update ---- ")
+
 
 def bundle_config(args, b, st, rc):
 
@@ -587,7 +768,10 @@ def bundle_config(args, b, st, rc):
                 d['id'] = str(ns.next())
                 prt("Got number from number server: {}".format(d['id']))
             except HTTPError as e:
-                warn("Failed to get number from number server. Config = {}: {}".format(nsconfig, e.message))
+                warn(
+                    "Failed to get number from number server. Config = {}: {}".format(
+                        nsconfig,
+                        e.message))
                 warn(
                     "Using self-generated number. There is no problem with this, but they are longer than centrally generated numbers.")
                 d['id'] = str(DatasetNumber())
@@ -610,7 +794,8 @@ def bundle_config(args, b, st, rc):
 def bundle_config_scrape(args, b, st, rc):
 
     from bs4 import BeautifulSoup
-    import urllib2, urlparse
+    import urllib2
+    import urlparse
     import os
 
     page_url = b.metadata.external_documentation.download.url
@@ -619,7 +804,8 @@ def bundle_config_scrape(args, b, st, rc):
         page_url = b.metadata.external_documentation.dataset.url
 
     if not page_url:
-        fatal("Didn't get URL in either the external_documentation.download nor external_documentation.dataset config ")
+        fatal(
+            "Didn't get URL in either the external_documentation.download nor external_documentation.dataset config ")
 
     parts = list(urlparse.urlsplit(page_url))
 
@@ -629,15 +815,15 @@ def bundle_config_scrape(args, b, st, rc):
     html_page = urllib2.urlopen(page_url)
     soup = BeautifulSoup(html_page)
 
-    d = dict(external_documentation={}, sources = {} )
+    d = dict(external_documentation={}, sources={})
 
     for link in soup.findAll('a'):
 
         if not link:
-            continue;
+            continue
 
         if link.string:
-            text = str(link.string.encode('ascii','ignore'))
+            text = str(link.string.encode('ascii', 'ignore'))
         else:
             text = 'None'
 
@@ -647,7 +833,7 @@ def bundle_config_scrape(args, b, st, rc):
             continue
 
         if 'javascript' in url:
-            continue;
+            continue
 
         orig_url = url
 
@@ -664,17 +850,18 @@ def bundle_config_scrape(args, b, st, rc):
             continue
 
         try:
-            fn, ext = base.split('.',1)
+            fn, ext = base.split('.', 1)
         except ValueError:
             fn = base
             ext = 'html'
 
-        if ext.lower() in ('zip', 'csv','xls','xlsx','xlsm', 'txt'): # xlsm is a bug that adss 'm' to the end of the url. No idea.
+        # xlsm is a bug that adss 'm' to the end of the url. No idea.
+        if ext.lower() in ('zip', 'csv', 'xls', 'xlsx', 'xlsm', 'txt'):
             d['sources'][fn] = dict(
-                url = url,
-                description = text
+                url=url,
+                description=text
             )
-        elif ext.lower() in ('pdf','html'):
+        elif ext.lower() in ('pdf', 'html'):
             d['external_documentation'][fn] = dict(
                 url=url,
                 description=text,
@@ -684,7 +871,6 @@ def bundle_config_scrape(args, b, st, rc):
 
             pass
 
-
     import yaml
     print yaml.dump(d, default_flow_style=False)
 
@@ -692,20 +878,19 @@ def bundle_config_scrape(args, b, st, rc):
 def bundle_config_s3urls(args, b, st, rc):
     from ..cache import new_cache, parse_cache_string
     import urllib
-    import os, binascii
-
+    import os
+    import binascii
 
     cache = new_cache(urllib.unquote_plus(args.term[0]), run_config=rc)
 
     def has_url(url):
-        for k,v in b.metadata.sources.items():
+        for k, v in b.metadata.sources.items():
 
             if v and v.url == url:
                 return True
 
         else:
             return False
-
 
     for e, v in cache.list().items():
 
@@ -717,7 +902,6 @@ def bundle_config_s3urls(args, b, st, rc):
 
     b.metadata.write_to_dir()
 
+
 def bundle_repopulate(args, b, st, rc):
     return b.repopulate()
-
-

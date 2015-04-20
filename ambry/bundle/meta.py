@@ -6,6 +6,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from ..util.meta import *
 
+
 class About(DictGroup):
 
     title = ScalarTerm()
@@ -14,22 +15,26 @@ class About(DictGroup):
     space = ScalarTerm()
     time = ScalarTerm()
     grain = ScalarTerm()
-    access = ScalarTerm(store_none=False) # Internal, Private, Controlled, Restrcted, Registered, Licensed, Public
+    # Internal, Private, Controlled, Restrcted, Registered, Licensed, Public
+    access = ScalarTerm(store_none=False)
     license = ScalarTerm(store_none=False)
     rights = ScalarTerm(store_none=False)
     tags = ListTerm(store_none=False)
     groups = ListTerm(store_none=False)
+
 
 class Documentation(DictGroup):
 
     readme = ScalarTerm()
     main = ScalarTerm()
 
+
 class Coverage(DictGroup):
 
     geo = ListTerm()
     grain = ListTerm()
     time = ListTerm()
+
 
 class ContactTerm(DictTerm):
 
@@ -43,13 +48,16 @@ class ContactTerm(DictTerm):
     def __bool__(self):
         return self.__nonzero__()
 
+
 class Contact(DictGroup):
+
     """ """
     creator = ContactTerm()
     maintainer = ContactTerm()
 
 
 class Identity(DictGroup):
+
     """ """
     dataset = ScalarTerm()
     id = ScalarTerm()
@@ -62,7 +70,9 @@ class Identity(DictGroup):
     type = ScalarTerm()
     version = ScalarTerm()
 
+
 class Names(DictGroup):
+
     """Names that are generated from the identity"""
 
     fqname = ScalarTerm()
@@ -78,24 +88,37 @@ class RowSpecDictTerm(DictTerm):
     header_lines = ListTerm()
     header_comment_lines = ListTerm()
 
+
 class SourceTerm(DictTerm):
     url = ScalarTerm()
-    title = ScalarTerm(store_none=False) # Title for use in table.
+    title = ScalarTerm(store_none=False)  # Title for use in table.
     description = ScalarTerm(store_none=False)
-    dd_url = ScalarTerm(store_none=False) # Data Dictitionary URL
-    file = ScalarTerm(store_none=False) # A name or regex to extract from a multi-file ZIP
-    filetype = ScalarTerm(store_none=False) # For the LoaderBundle, use this file type ( file extensino ) rather than from the url
-    segment = ScalarTerm(store_none=False)  # Specify a sub-component of the file, like a sheet in an excel workbook.
+    dd_url = ScalarTerm(store_none=False)  # Data Dictitionary URL
+    # A name or regex to extract from a multi-file ZIP
+    file = ScalarTerm(store_none=False)
+    # For the LoaderBundle, use this file type ( file extensino ) rather than
+    # from the url
+    filetype = ScalarTerm(store_none=False)
+    # Specify a sub-component of the file, like a sheet in an excel workbook.
+    segment = ScalarTerm(store_none=False)
     comment = ScalarTerm(store_none=False)  # Just a comment
-    is_loadable = ScalarTerm(store_none=False)  # If false, ignore in auto-loading
-    time = ScalarTerm(store_none=False)  # Specify a time component, usually a year.
+    # If false, ignore in auto-loading
+    is_loadable = ScalarTerm(store_none=False)
+    # Specify a time component, usually a year.
+    time = ScalarTerm(store_none=False)
     space = ScalarTerm(store_none=False)  # Specify a space component
     grain = ScalarTerm(store_none=False)  # Specify a grain component
-    table = ScalarTerm(store_none=False)  # For auto imports, name of table to load into.
-    conversion = ScalarTerm(store_none=False)  # An alternate URL or regular expression for a file in the source store
-    foreign_key = ScalarTerm(store_none=False)  # ID of the foreign key for the table.
-    row_spec = RowSpecDictTerm(store_none=False) # Spec for non data rows. 'start' for first line of data, 'header' for sclar/list of header lines
-    row_data = DictTerm(store_none=False)  # A dict of values that are added to every row of the table.
+    # For auto imports, name of table to load into.
+    table = ScalarTerm(store_none=False)
+    # An alternate URL or regular expression for a file in the source store
+    conversion = ScalarTerm(store_none=False)
+    # ID of the foreign key for the table.
+    foreign_key = ScalarTerm(store_none=False)
+    # Spec for non data rows. 'start' for first line of data, 'header' for
+    # sclar/list of header lines
+    row_spec = RowSpecDictTerm(store_none=False)
+    # A dict of values that are added to every row of the table.
+    row_data = DictTerm(store_none=False)
 
     def __nonzero__(self):
         return bool(self.url or self.file or self.description or self.dd_url)
@@ -105,24 +128,35 @@ class SourceTerm(DictTerm):
 
 
 class Sources(TypedDictGroup):
+
     """References to source URLS"""
     _proto = SourceTerm()
 
 
 class Dependencies(VarDictGroup):
+
     """Bundle dependencies"""
 
+
 class Build(VarDictGroup):
+
     """Build parameters"""
 
+
 class Extract(VarDictGroup):
+
     """Extract parameters"""
+
 
 class Views(VarDictGroup):
+
     """Extract parameters"""
 
+
 class Process(VarDictGroup):
+
     """Process data. Build times, etc."""
+
 
 class ExtDocTerm(DictTerm):
     url = ScalarTerm()
@@ -130,17 +164,23 @@ class ExtDocTerm(DictTerm):
     description = ScalarTerm()
     source = ScalarTerm()
 
+
 class ExtDoc(TypedDictGroup):
+
     """External Documentation"""
-    _proto = ExtDocTerm() # Reusing
+    _proto = ExtDocTerm()  # Reusing
+
 
 class VersonTerm(DictTerm):
+
     """Version Description"""
     version = ScalarTerm()
     date = ScalarTerm()
     description = ScalarTerm(store_none=False)
 
+
 class Versions(TypedDictGroup):
+
     """Names that are generated from the identity"""
     _proto = VersonTerm()
 
@@ -169,6 +209,8 @@ class Top(Metadata):
 
 # This is a new version of the metadata structure, with
 # the sections in different places.
+
+
 class NewTop(Metadata):
 
     _non_term_file = 'meta/build.yaml'
@@ -188,6 +230,3 @@ class NewTop(Metadata):
     build = Build(file='meta/build.yaml')
 
     documentation = Documentation(file='meta/doc.yaml')
-
-
-

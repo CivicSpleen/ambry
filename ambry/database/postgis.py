@@ -7,10 +7,11 @@ from postgres import PostgresDatabase
 
 import dialects.postgis
 
+
 class PostgisDatabase(PostgresDatabase):
 
     is_geo = True
 
     @property
     def munged_dsn(self):
-        return self.dsn.replace('postgis:','postgis:')
+        return self.dsn.replace('postgis:', 'postgis:')

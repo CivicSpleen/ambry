@@ -5,111 +5,224 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from ..cli import prt, fatal, warn
-from ..cli import  load_bundle, _print_bundle_list
+from ..cli import load_bundle, _print_bundle_list
 import os
 import shutil
 
 # If the devel module exists, this is a development system.
-try: from ambry.support.devel import *
-except ImportError as e: from ambry.support.production import *
+try:
+    from ambry.support.devel import *
+except ImportError as e:
+    from ambry.support.production import *
+
 
 def source_command(args, rc):
     from ..library import new_library
     from . import global_logger
-
 
     l = new_library(rc.library(args.name))
     l.logger = global_logger
 
     st = l.source
 
-    globals()['source_'+args.subcommand](args, l, st, rc)
+    globals()['source_' + args.subcommand](args, l, st, rc)
+
 
 def source_parser(cmd):
     import argparse
-    
+
     src_p = cmd.add_parser('source', help='Manage bundle source files')
     src_p.set_defaults(command='source')
-    src_p.add_argument('-n','--name',  default='default',  help='Select the name for the repository. Defaults to "default" ')
-    asp = src_p.add_subparsers(title='source commands', help='command help')  
-   
+    src_p.add_argument(
+        '-n',
+        '--name',
+        default='default',
+        help='Select the name for the repository. Defaults to "default" ')
+    asp = src_p.add_subparsers(title='source commands', help='command help')
 
     sp = asp.add_parser('new', help='Create a new bundle')
     sp.set_defaults(subcommand='new')
-    sp.set_defaults(revision=1) # Needed in Identity.name_parts
-    sp.add_argument('-s','--source', required=True, help='Source, usually a domain name') 
-    sp.add_argument('-d','--dataset',  required=True, help='Name of the dataset') 
-    sp.add_argument('-b','--subset',  default=None, help='Name of the subset')
-    sp.add_argument('-t','--time', default=None, help='Time period. Use ISO Time intervals where possible. ')
+    sp.set_defaults(revision=1)  # Needed in Identity.name_parts
+    sp.add_argument(
+        '-s',
+        '--source',
+        required=True,
+        help='Source, usually a domain name')
+    sp.add_argument(
+        '-d',
+        '--dataset',
+        required=True,
+        help='Name of the dataset')
+    sp.add_argument('-b', '--subset', default=None, help='Name of the subset')
+    sp.add_argument(
+        '-t',
+        '--time',
+        default=None,
+        help='Time period. Use ISO Time intervals where possible. ')
     sp.add_argument('-p', '--space', default=None, help='Spatial extent name')
-    sp.add_argument('-v','--variation', default=None, help='Name of the variation')
-    sp.add_argument('-c','--creator',  required=False, help='Id of the creator')
-    sp.add_argument('-n','--dryrun',action="store_true", default=False, help='Dry run')
-    sp.add_argument('-k', '--key', help='Number server key. Use \'self\' for a random, self-generated key.')
-    sp.add_argument('args', nargs=argparse.REMAINDER) # Get everything else. 
+    sp.add_argument(
+        '-v',
+        '--variation',
+        default=None,
+        help='Name of the variation')
+    sp.add_argument(
+        '-c',
+        '--creator',
+        required=False,
+        help='Id of the creator')
+    sp.add_argument(
+        '-n',
+        '--dryrun',
+        action="store_true",
+        default=False,
+        help='Dry run')
+    sp.add_argument(
+        '-k',
+        '--key',
+        help='Number server key. Use \'self\' for a random, self-generated key.')
+    sp.add_argument('args', nargs=argparse.REMAINDER)  # Get everything else.
 
-    sp = asp.add_parser('info', help='Information about the source configuration')
+    sp = asp.add_parser(
+        'info',
+        help='Information about the source configuration')
     sp.set_defaults(subcommand='info')
-    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Name or ID of the bundle or partition to print information for')
-    
-    
-    sp = asp.add_parser('deps', help='Print the depenencies for all source bundles')
+    sp.add_argument(
+        'terms',
+        type=str,
+        nargs=argparse.REMAINDER,
+        help='Name or ID of the bundle or partition to print information for')
+
+    sp = asp.add_parser(
+        'deps',
+        help='Print the depenencies for all source bundles')
     sp.set_defaults(subcommand='deps')
     #sp.add_argument('ref', type=str,nargs='?',help='Name or id of a bundle to generate a sorted dependency list for.')
-    sp.add_argument('-d','--detail',  default=False,action="store_true",  help='Display details of locations for each bundle')
-    sp.add_argument('-F', '--fields', type=str,  help="Specify fields to use")
+    sp.add_argument(
+        '-d',
+        '--detail',
+        default=False,
+        action="store_true",
+        help='Display details of locations for each bundle')
+    sp.add_argument('-F', '--fields', type=str, help="Specify fields to use")
     group = sp.add_mutually_exclusive_group()
     #group.add_argument('-f', '--forward',  default='f', dest='direction',   action='store_const', const='f', help='Display bundles that this one depends on')
     #group.add_argument('-r', '--reverse',  default='f', dest='direction',   action='store_const', const='r', help='Display bundles that depend on this one')
-    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER,
-                    help='Name or ID of the bundle or partition as the root of the dependency tree')
-    
-    sp = asp.add_parser('init', help='Intialize the local and remote git repositories')
+    sp.add_argument(
+        'terms',
+        type=str,
+        nargs=argparse.REMAINDER,
+        help='Name or ID of the bundle or partition as the root of the dependency tree')
+
+    sp = asp.add_parser(
+        'init',
+        help='Intialize the local and remote git repositories')
     sp.set_defaults(subcommand='init')
-    sp.add_argument('dir', type=str,nargs='?',help='Directory')
+    sp.add_argument('dir', type=str, nargs='?', help='Directory')
 
     sp = asp.add_parser('list', help='List the source dirctories')
     sp.set_defaults(subcommand='list')
     sp.add_argument('-F', '--fields', type=str, help="Specify fields to use")
 
-
-    sp = asp.add_parser('buildable', help='List source bundles that can be built')
+    sp = asp.add_parser(
+        'buildable',
+        help='List source bundles that can be built')
     sp.set_defaults(subcommand='buildable')
     sp.add_argument('-F', '--fields', type=str, help="Specify fields to use")
 
     sp = asp.add_parser('build', help='Build sources')
     sp.set_defaults(subcommand='build')
 
-    sp.add_argument('-f', '--force', default=False, action="store_true", help='Build even if built or in library')
-    sp.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
-    sp.add_argument('-i', '--install', default=False, action="store_true", help='Install after build')
-    sp.add_argument('-n', '--dryrun', default=False, action="store_true", help='Only display what would be built')
+    sp.add_argument(
+        '-f',
+        '--force',
+        default=False,
+        action="store_true",
+        help='Build even if built or in library')
+    sp.add_argument(
+        '-c',
+        '--clean',
+        default=False,
+        action="store_true",
+        help='Clean first')
+    sp.add_argument(
+        '-i',
+        '--install',
+        default=False,
+        action="store_true",
+        help='Install after build')
+    sp.add_argument(
+        '-n',
+        '--dryrun',
+        default=False,
+        action="store_true",
+        help='Only display what would be built')
 
-    sp.add_argument('dir', type=str, nargs='?', help='Directory to start search for sources in. ')
+    sp.add_argument(
+        'dir',
+        type=str,
+        nargs='?',
+        help='Directory to start search for sources in. ')
 
-    sp = asp.add_parser('edit', help='Run the editor defined in the EDITOR env var on the bundle directory')
+    sp = asp.add_parser(
+        'edit',
+        help='Run the editor defined in the EDITOR env var on the bundle directory')
     sp.set_defaults(subcommand='edit')
-    sp.add_argument('term', type=str, help='Name or ID of the bundle or partition to print information for')
+    sp.add_argument(
+        'term',
+        type=str,
+        help='Name or ID of the bundle or partition to print information for')
 
-    sp = asp.add_parser('run', help='Run a shell command in source directories passed in on stdin')
+    sp = asp.add_parser(
+        'run',
+        help='Run a shell command in source directories passed in on stdin')
     sp.set_defaults(subcommand='run')
 
-    sp.add_argument('-P','--python', default=None, help=
-                    'Path to a python class file to run. Loads as module and calls run(). The '+
-                    'run() function can have any combination of arguments of these names: bundle_dir,'+
-                    ' bundle, repo')
-    sp.add_argument('-m','--message', nargs='+', default='.', help='Directory to start recursing from ')
-    sp.add_argument('terms',nargs=argparse.REMAINDER, type=str,help='Bundle refs to run command on')
+    sp.add_argument(
+        '-P',
+        '--python',
+        default=None,
+        help='Path to a python class file to run. Loads as module and calls run(). The ' +
+        'run() function can have any combination of arguments of these names: bundle_dir,' +
+        ' bundle, repo')
+    sp.add_argument(
+        '-m',
+        '--message',
+        nargs='+',
+        default='.',
+        help='Directory to start recursing from ')
+    sp.add_argument(
+        'terms',
+        nargs=argparse.REMAINDER,
+        type=str,
+        help='Bundle refs to run command on')
 
     group = sp.add_mutually_exclusive_group()
-    group.add_argument('-i', '--install',  default=False, dest='repo_command',   action='store_const', const='install', help='Install the bundle')
-    group.add_argument('-s', '--shell', default=False, dest='repo_command', action='store_const', const='shell',
-                       help='Run a shell command')
+    group.add_argument(
+        '-i',
+        '--install',
+        default=False,
+        dest='repo_command',
+        action='store_const',
+        const='install',
+        help='Install the bundle')
+    group.add_argument(
+        '-s',
+        '--shell',
+        default=False,
+        dest='repo_command',
+        action='store_const',
+        const='shell',
+        help='Run a shell command')
 
-    sp = asp.add_parser('number', help='Return the next dataset number from the number server')
+    sp = asp.add_parser(
+        'number',
+        help='Return the next dataset number from the number server')
     sp.set_defaults(subcommand='number')
     sp.add_argument('-k', '--key', help='Number server key')
-    sp.add_argument('-s', '--set',  help='Set the number in the bundle in the specified directory')
+    sp.add_argument(
+        '-s',
+        '--set',
+        help='Set the number in the bundle in the specified directory')
 
     if IN_DEVELOPMENT:
         sp = asp.add_parser('test', help='Run some deveopment test code. ')
@@ -129,7 +242,7 @@ def source_info(args, l, st, rc):
 
         for line in sys.stdin.readlines():
             args.terms = [line.strip()]
-            source_info(args,st,rc)
+            source_info(args, st, rc)
 
     else:
         import ambry.library as library
@@ -140,7 +253,9 @@ def source_info(args, l, st, rc):
         ident = l.resolve(term, location=None)
 
         if not ident:
-            fatal("Didn't find source for term '{}'. (Maybe need to run 'source sync')", term)
+            fatal(
+                "Didn't find source for term '{}'. (Maybe need to run 'source sync')",
+                term)
 
         try:
             bundle = st.resolve_bundle(ident.id_)
@@ -155,16 +270,14 @@ def source_list(args, l, st, rc, names=None):
     from collections import defaultdict
     import ambry.library as library
 
-
     if args.fields:
         fields = args.fields.split(',')
     else:
         fields = ['locations', 'vid', 'vname']
 
-    s_lst =  st.list()
+    s_lst = st.list()
 
     _print_bundle_list(s_lst.values(), fields=fields, sort=False)
-
 
 
 def source_get(args, l, st, rc):
@@ -173,7 +286,6 @@ def source_get(args, l, st, rc):
     from ..dbexceptions import ConflictError
     from ..orm import Dataset
 
-
     for term in args.terms:
         from ..dbexceptions import ConflictError
         if term.startswith('http'):
@@ -181,12 +293,13 @@ def source_get(args, l, st, rc):
             try:
                 bundle = st.clone(term)
                 if bundle:
-                    prt("Loaded {} into {}".format(bundle.identity.sname, bundle.bundle_dir))
+                    prt("Loaded {} into {}".format(
+                        bundle.identity.sname, bundle.bundle_dir))
             except ConflictError as e:
                 fatal(e.message)
 
         else:
-            ident = l.resolve(term, location = Dataset.LOCATION.SREPO)
+            ident = l.resolve(term, location=Dataset.LOCATION.SREPO)
 
             if not ident:
                 fatal("Could not find bundle for term: {} ".format(term))
@@ -199,9 +312,9 @@ def source_get(args, l, st, rc):
             args.terms = [f.source_url]
             return source_get(args, l, st, rc)
 
+
 def source_number(args, l, st, rc):
     from ..identity import NumberServer
-
 
     nsconfig = rc.group('numbers')
 
@@ -210,9 +323,7 @@ def source_number(args, l, st, rc):
 
     ns = NumberServer(**nsconfig)
 
-    n =  str(ns.next())
-
-
+    n = str(ns.next())
 
     if args.set:
         from ..bundle.config import BundleFileConfig
@@ -225,6 +336,7 @@ def source_number(args, l, st, rc):
         prt("Stored number {} into bundle at {}", n, d)
     else:
         print n
+
 
 def source_new(args, l, st, rc):
     '''Clone one or more registered source packages ( via sync ) into the source directory '''
@@ -239,10 +351,10 @@ def source_new(args, l, st, rc):
     d = vars(args)
     d['revision'] = 1
 
-    d['btime'] = d.get('time',None)
+    d['btime'] = d.get('time', None)
     d['bspace'] = d.get('space', None)
 
-    if args.dryrun or args.key  in ('rand','self'):
+    if args.dryrun or args.key in ('rand', 'self'):
 
         prt("Using self-generated id")
 
@@ -260,10 +372,13 @@ def source_new(args, l, st, rc):
             d['id'] = str(ns.next())
             prt("Got number from number server: {}".format(d['id']))
         except HTTPError as e:
-            warn("Failed to get number from number server. Config = {}: {}".format(nsconfig, e.message))
-            warn("Using self-generated number. There is no problem with this, but they are longer than centrally generated numbers.")
+            warn(
+                "Failed to get number from number server. Config = {}: {}".format(
+                    nsconfig,
+                    e.message))
+            warn(
+                "Using self-generated number. There is no problem with this, but they are longer than centrally generated numbers.")
             d['id'] = str(DatasetNumber())
-
 
     try:
         ambry_account = rc.group('accounts').get('ambry', {})
@@ -271,12 +386,15 @@ def source_new(args, l, st, rc):
         ambry_account = None
 
     if not ambry_account:
-        fatal("Failed to get an accounts.ambry entry from the configuration. ( It's usually in {}. ) ".format(rc.USER_ACCOUNTS))
+        fatal(
+            "Failed to get an accounts.ambry entry from the configuration. ( It's usually in {}. ) ".format(
+                rc.USER_ACCOUNTS))
 
     if not ambry_account.get('name') or not ambry_account.get('email'):
         from ambry.run import RunConfig as rc
-        fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
-
+        fatal(
+            "Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(
+                rc.USER_ACCOUNTS))
 
     ident = Identity.from_dict(d)
 
@@ -300,19 +418,22 @@ def source_new(args, l, st, rc):
     metadata.names = ident.names_dict
     metadata.write_to_dir(write_all=True)
 
-    # Now that the bundle has an identity, we can load the config through the bundle.
+    # Now that the bundle has an identity, we can load the config through the
+    # bundle.
 
     b = BuildBundle(bundle_dir)
 
     b.metadata.contact_bundle.creator.email = ambry_account.get('email')
     b.metadata.contact_bundle.creator.name = ambry_account.get('name')
-    b.metadata.contact_bundle.creator.url = ambry_account.get('url','')
+    b.metadata.contact_bundle.creator.url = ambry_account.get('url', '')
 
     b.metadata.contact_bundle.maintainer.email = ambry_account.get('email')
     b.metadata.contact_bundle.maintainer.name = ambry_account.get('name')
-    b.metadata.contact_bundle.maintainer.url = ambry_account.get('url','')
+    b.metadata.contact_bundle.maintainer.url = ambry_account.get('url', '')
 
-    b.metadata.sources.example = { 'url': 'http://example.com', 'description': 'description'}
+    b.metadata.sources.example = {
+        'url': 'http://example.com',
+        'description': 'description'}
 
     b.metadata.external_documentation.download = {
         'url': 'http://example.com',
@@ -334,10 +455,10 @@ def source_new(args, l, st, rc):
 
     b.update_configuration()
 
-    p = lambda x : os.path.join(os.path.dirname(__file__),'..','support',x)
-    shutil.copy(p('bundle.py'),bundle_dir)
-    #shutil.copy(p('README.md'),bundle_dir)
-    shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta')  )
+    p = lambda x: os.path.join(os.path.dirname(__file__), '..', 'support', x)
+    shutil.copy(p('bundle.py'), bundle_dir)
+    # shutil.copy(p('README.md'),bundle_dir)
+    shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta'))
     shutil.copy(p('documentation.md'), os.path.join(bundle_dir, 'meta'))
     shutil.copy(p('README.md.template'), os.path.join(bundle_dir, 'meta'))
 
@@ -348,43 +469,44 @@ def source_new(args, l, st, rc):
 
         from ..util import rm_rf
         rm_rf(bundle_dir)
-        fatal("Failed to sync bundle at {}  ; {}. Bundle deleted".format(bundle_dir, e.message))
+        fatal(
+            "Failed to sync bundle at {}  ; {}. Bundle deleted".format(
+                bundle_dir,
+                e.message))
     else:
-        prt("CREATED: {}, {}",ident.fqname, bundle_dir)
+        prt("CREATED: {}, {}", ident.fqname, bundle_dir)
 
 
 def source_build(args, l, st, rc):
     '''Build a single bundle, or a set of bundles in a directory. The build process
     will build all dependencies for each bundle before buildng the bundle. '''
-    
-    
+
     from ambry.identity import Identity
     from ..source.repository import new_repository
-    
-    repo = new_repository(rc.sourcerepo(args.name))   
-       
+
+    repo = new_repository(rc.sourcerepo(args.name))
+
     dir_ = None
     name = None
-    
+
     if args.dir:
         if os.path.exists(args.dir):
             dir_ = args.dir
             name = None
         else:
             name = args.dir
-            try: 
+            try:
                 Identity.parse_name(name)
-            except:  
-                fatal("Argument '{}' must be either a bundle name or a directory".format(name))
+            except:
+                fatal(
+                    "Argument '{}' must be either a bundle name or a directory".format(name))
                 return
-            
+
     if not dir_:
         dir_ = rc.sourcerepo.dir
-        
 
     def build(bundle_dir):
         from ambry.library import new_library
-
 
         # Import the bundle file from the directory
 
@@ -393,11 +515,11 @@ def source_build(args, l, st, rc):
 
         l = new_library(rc.library(args.library_name))
 
-        if l.get(bundle.identity.vid)  and not args.force:
+        if l.get(bundle.identity.vid) and not args.force:
             prt("{} Bundle is already in library", bundle.identity.name)
             return
         elif bundle.is_built and not args.force and not args.clean:
-            prt("{} Bundle is already built",bundle.identity.name)
+            prt("{} Bundle is already built", bundle.identity.name)
             return
         else:
 
@@ -406,42 +528,39 @@ def source_build(args, l, st, rc):
                 return
 
             repo.bundle = bundle
-             
-            if args.clean: 
+
+            if args.clean:
                 bundle.clean()
-                
-            # Re-create after cleaning is important for something ... 
+
+            # Re-create after cleaning is important for something ...
 
             bundle = bundle_class(bundle_dir)
-                
 
             prt("{} Building ", bundle.identity.name)
 
             if not bundle.run_prepare():
                 fatal("{} Prepare failed", bundle.identity.name)
-            
+
             if not bundle.run_build():
                 fatal("{} Build failed", bundle.identity.name)
-            
+
         if args.install and not args.dryrun:
             if not bundle.run_install(force=True):
                 fatal('{} Install failed', bundle.identity.name)
-            
 
     build_dirs = {}
-    
-    # Find all of the dependencies for the named bundle, and make those first. 
+
+    # Find all of the dependencies for the named bundle, and make those first.
     for root, _, files in os.walk(rc.sourcerepo.dir):
         if 'bundle.yaml' in files:
             bundle_class = load_bundle(root)
-            bundle = bundle_class(root)      
-            build_dirs[bundle.identity.name] = root 
-
+            bundle = bundle_class(root)
+            build_dirs[bundle.identity.name] = root
 
     if name:
         deps = repo.bundle_deps(name)
         deps.append(name)
-        
+
     else:
 
         deps = []
@@ -459,7 +578,6 @@ def source_build(args, l, st, rc):
                         deps.append(dep)
 
                 deps.append(bundle.identity.name)
-    
 
     for n in deps:
         try:
@@ -471,7 +589,7 @@ def source_build(args, l, st, rc):
         prt("{} Building in {}".format(n, dir_))
         build(dir_)
 
-            
+
 def source_run(args, l, st, rc):
 
     from ..orm import Dataset
@@ -492,9 +610,9 @@ def source_run(args, l, st, rc):
         ident = l.resolve(term, Dataset.LOCATION.SOURCE)
 
         if not ident:
-            warn("Didn't get source bundle for term '{}'; skipping ".format(term))
+            warn(
+                "Didn't get source bundle for term '{}'; skipping ".format(term))
             continue
-
 
         do_source_run(ident, args, l, st, rc)
 
@@ -514,14 +632,15 @@ def do_source_run(ident, args, l, st, rc):
         except ImportError:
             import ambry.cli.source_run as sr
 
-            f = os.path.join(os.path.dirname(sr.__file__), args.python+".py" )
+            f = os.path.join(os.path.dirname(sr.__file__), args.python + ".py")
             try:
                 mod = import_file(f)
             except ImportError:
                 raise
-                fatal("Could not get python file neither '{}', nor '{}'".format(args.python, f))
-
-
+                fatal(
+                    "Could not get python file neither '{}', nor '{}'".format(
+                        args.python,
+                        f))
 
         run_args = inspect.getargspec(mod.run)
 
@@ -540,22 +659,19 @@ def do_source_run(ident, args, l, st, rc):
             try:
                 a['bundle'] = bundle_mod.Bundle(dir_)
             except Exception as e:
-                warn("Failed to load bundle from dir: {}: {}", dir_, str(e) )
+                warn("Failed to load bundle from dir: {}: {}", dir_, str(e))
                 raise
 
         mod.run(**a)
 
-
     elif args.repo_command == 'install':
-        prt("--- {} {}",args.repo_command, root)
+        prt("--- {} {}", args.repo_command, root)
         bundle_class = load_bundle(root)
         bundle = bundle_class(root)
 
         bundle.run_install()
 
-
     elif args.repo_command == 'shell':
-
 
         cmd = ' '.join(args.terms)
 
@@ -569,15 +685,14 @@ def do_source_run(ident, args, l, st, rc):
         os.chdir(saved_path)
 
 
-
 def source_init(args, l, st, rc):
     from ..source.repository import new_repository
 
     dir_ = args.dir
-    
+
     if not dir_:
         dir_ = os.getcwd()
-    
+
     repo = new_repository(rc.sourcerepo(args.name))
     repo.bundle_dir = dir_
 
@@ -586,10 +701,11 @@ def source_init(args, l, st, rc):
     time.sleep(3)
     repo.init_descriptor()
     repo.init_remote()
-    
+
     repo.push()
 
     st.sync_bundle(dir_)
+
 
 def source_deps(args, l, st, rc):
     """Produce a list of dependencies for all of the source bundles"""
@@ -600,7 +716,7 @@ def source_deps(args, l, st, rc):
     if args.fields:
         fields = args.fields.split(',')
     else:
-        fields = ['locations', 'vid', 'vname','order']
+        fields = ['locations', 'vid', 'vname', 'order']
 
     term = args.terms[0] if args.terms else None
 
@@ -610,7 +726,7 @@ def source_deps(args, l, st, rc):
         b = st.resolve_bundle(e)
         for d in b.metadata.dependencies.values():
 
-            db = l.resolve(d, location = None)
+            db = l.resolve(d, location=None)
 
             if db:
                 deps[b.identity.vid].add(db.vid)
@@ -620,15 +736,13 @@ def source_deps(args, l, st, rc):
         b.close()
 
     for k, d in deps.items():
-        kr = l.resolve(k, location = None)
+        kr = l.resolve(k, location=None)
         print kr
         for e in d:
             er = l.resolve(e, location=None)
             print '   ', er
 
-
     return
-
 
     try:
         graph, errors = st.dependencies(term)
@@ -645,8 +759,6 @@ def source_deps(args, l, st, rc):
 
     identities = []
 
-
-
     return
 
     for i, level in enumerate(graph):
@@ -654,17 +766,18 @@ def source_deps(args, l, st, rc):
             if not name:
                 continue
 
-            ident = l.resolve(name, location=Dataset.LOCATION.SOURCE )
+            ident = l.resolve(name, location=Dataset.LOCATION.SOURCE)
             if ident:
-                ident.data['order'] = dict(major = i, minor = j)
+                ident.data['order'] = dict(major=i, minor=j)
                 identities.append(ident)
 
-    _print_bundle_list(identities, fields=fields, sort = False)
+    _print_bundle_list(identities, fields=fields, sort=False)
 
 
 def source_watch(args, l, st, rc):
 
     st.watch()
+
 
 def source_edit(args, l, st, rc):
     from ambry.orm import Dataset
@@ -691,7 +804,7 @@ def source_edit(args, l, st, rc):
     prt("Running: {} {}".format(editor, root))
     prt("Build with: ambry bundle -d {} build".format(ident.sname))
     prt("Directory : {}".format(ident.bundle_path))
-    Popen(['env',editor,root])
+    Popen(['env', editor, root])
 
 
 def source_buildable(args, l, st, rc):
@@ -726,7 +839,7 @@ def source_buildable(args, l, st, rc):
         import sys
         sys.exit(1)
 
-    _print_bundle_list(buildable,  fields=fields, sort=False)
+    _print_bundle_list(buildable, fields=fields, sort=False)
 
 
 def source_test(args, l, st, rc):
@@ -742,9 +855,9 @@ def source_test(args, l, st, rc):
 
         print b
 
-        d =  b.get_dataset()
+        d = b.get_dataset()
 
-        for k,v  in inspect.getmembers(d.__class__, lambda x: isinstance(x, InstrumentedAttribute)):
+        for k, v in inspect.getmembers(d.__class__, lambda x: isinstance(x, InstrumentedAttribute)):
             print k, type(v)
 
         break

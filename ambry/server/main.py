@@ -1,15 +1,15 @@
 '''
-REST Server For DataBundle Libraries. 
+REST Server For DataBundle Libraries.
 '''
 
 import bottle
-from bottle import  error, hook, get, put, post, request, response, redirect
+from bottle import error, hook, get, put, post, request, response, redirect
 from bottle import HTTPResponse, static_file, install, url, local
 from bottle import ServerAdapter, server_names, Bottle
 from bottle import run, debug
 
-from decorator import  decorator
-from  ambry.library import new_library
+from decorator import decorator
+from ambry.library import new_library
 import ambry.util
 
 import logging
@@ -21,12 +21,11 @@ global_logger = ambry.util.get_logger(__name__)
 global_logger.setLevel(logging.DEBUG)
 
 
-
 #
 # The LibraryPlugin allows the library to be inserted into a request handler with a
-# 'library' argument. 
+# 'library' argument.
 class LibraryPlugin(object):
-    
+
     def __init__(self, library_creator, keyword='library'):
 
         self.library_creator = library_creator
@@ -42,7 +41,7 @@ class LibraryPlugin(object):
         conf = context['config'].get('library') or {}
 
         keyword = conf.get('keyword', self.keyword)
-        
+
         # Test if the original callback accepts a 'library' keyword.
         # Ignore it otherwise
         args = inspect.getargspec(context['callback'])[0]
@@ -53,7 +52,7 @@ class LibraryPlugin(object):
 
             #
             # NOTE! Creating the library every call. This is because the Sqlite driver
-            # isn't multi-threaded. 
+            # isn't multi-threaded.
             #
             local.library = kwargs[keyword] = self.library_creator()
 
@@ -70,30 +69,30 @@ class LibraryPlugin(object):
         return wrapper
 
 
-
 def capture_return_exception(e):
-    
+
     import sys
     import traceback
-    
-    (exc_type, exc_value, exc_traceback) = sys.exc_info() #@UnusedVariable
-    
+
+    (exc_type, exc_value, exc_traceback) = sys.exc_info()  # @UnusedVariable
+
     tb_list = traceback.format_list(traceback.extract_tb(sys.exc_info()[2]))
-    
+
     return {'exception':
-     {'class':e.__class__.__name__, 
-      'args':e.args,
-      'trace': tb_list
-     }
-    }   
+            {'class': e.__class__.__name__,
+             'args': e.args,
+             'trace': tb_list
+             }
+            }
+
 
 def _CaptureException(f, *args, **kwargs):
     '''Decorator implementation for capturing exceptions '''
 
     try:
-        r =  f(*args, **kwargs)
+        r = f(*args, **kwargs)
     except HTTPResponse:
-        raise # redirect() uses exceptions
+        raise  # redirect() uses exceptions
     except Exception as e:
         r = capture_return_exception(e)
         if hasattr(e, 'code'):
@@ -103,45 +102,50 @@ def _CaptureException(f, *args, **kwargs):
 
     return r
 
+
 def CaptureException(f, *args, **kwargs):
     '''Decorator to capture exceptions and convert them
-    to a dict that can be returned as JSON ''' 
+    to a dict that can be returned as JSON '''
 
-    return decorator(_CaptureException, f) # Preserves signature
+    return decorator(_CaptureException, f)  # Preserves signature
+
 
 class AllJSONPlugin(object):
+
     '''A copy of the bottle JSONPlugin, but this one tries to convert
-    all objects to json ''' 
-    
+    all objects to json '''
+
     from json import dumps as json_dumps
-    
+
     name = 'json'
-    remote  = 2
+    remote = 2
 
     def __init__(self, json_dumps=json_dumps):
         self.json_dumps = json_dumps
 
     def apply(self, callback, context):
-      
+
         dumps = self.json_dumps
-        if not dumps: return callback
+        if not dumps:
+            return callback
+
         def wrapper(*a, **ka):
             rv = callback(*a, **ka)
 
-            if isinstance(rv, HTTPResponse ):
+            if isinstance(rv, HTTPResponse):
                 return rv
 
-            if isinstance(rv, basestring ):
+            if isinstance(rv, basestring):
                 return rv
 
-            #Attempt to serialize, raises exception on failure
+            # Attempt to serialize, raises exception on failure
             try:
                 json_response = dumps(rv)
             except Exception as e:
-                r =  capture_return_exception(e)
+                r = capture_return_exception(e)
                 json_response = dumps(r)
-                
-            #Set content type only if serialization succesful
+
+            # Set content type only if serialization succesful
             response.content_type = 'application/json'
             return json_response
         return wrapper
@@ -154,23 +158,27 @@ install(AllJSONPlugin())
 def error404(error):
     raise exc.NotFound("For url: {}".format(repr(request.url)))
 
+
 @error(500)
 def error500(error):
     raise exc.InternalError("For Url: {}".format(repr(request.url)))
 
+
 @hook('after_request')
 def enable_cors():
     response.headers['Access-Control-Allow-Origin'] = '*'
-    
+
+
 def _host_port(library):
 
     urlh = library.urlhost
 
     if not urlh.startswith('http'):
-        urlh = "http://"+urlh
+        urlh = "http://" + urlh
 
     return '{}'.format(urlh)
-    #return  'http://{}{}'.format(library.host, ':'+str(library.port) if library.port != 80 else '')
+    # return  'http://{}{}'.format(library.host, ':'+str(library.port) if
+    # library.port != 80 else '')
 
 
 def process_did(did, library):
@@ -184,7 +192,7 @@ def process_did(did, library):
     if not isinstance(d_on, DatasetNumber):
         raise exc.BadRequest("Not a valid dataset number {}".format(did))
 
-    b =  library.get(did)
+    b = library.get(did)
 
     if not b:
         raise exc.BadRequest("Didn't get bundle for {}".format(did))
@@ -192,9 +200,9 @@ def process_did(did, library):
     b.close()
     return did, d_on, b
 
+
 def process_pid(did, pid, library):
     from ..identity import ObjectNumber, PartitionNumber
-
 
     try:
         p_on = ObjectNumber.parse(pid)
@@ -204,7 +212,7 @@ def process_pid(did, pid, library):
     if not isinstance(p_on, PartitionNumber):
         raise exc.BadRequest("Not a valid partition number {}".format(did))
 
-    b =  library.get(did)
+    b = library.get(did)
 
     if not b:
         raise exc.BadRequest("Didn't get bundle for {}".format(did))
@@ -212,26 +220,31 @@ def process_pid(did, pid, library):
     p_orm = b.partitions.find_id(pid)
 
     if not p_orm:
-        raise exc.BadRequest("Partition reference {} not found in bundle {}".format(pid, did))
+        raise exc.BadRequest(
+            "Partition reference {} not found in bundle {}".format(
+                pid,
+                did))
 
     return pid, p_on, p_orm
 
+
 def _get_ct(typ):
-    ct = ({'application/json':'json',
-          'application/x-yaml':'yaml',
-          'text/x-yaml':'yaml',
-          'text/csv':'csv'}
+    ct = ({'application/json': 'json',
+          'application/x-yaml': 'yaml',
+          'text/x-yaml': 'yaml',
+          'text/csv': 'csv'}
           .get(request.headers.get("Content-Type"), None))
 
     if ct is None:
         try:
-            _, ct = typ.split('.',2)
+            _, ct = typ.split('.', 2)
         except:
             ct = 'json'
 
     return ct
 
-def _table_csv_parts(library,b,pid,table_name=None):
+
+def _table_csv_parts(library, b, pid, table_name=None):
     # This partition does not have CSV parts, so we'll have to make them.
     parts = []
 
@@ -242,10 +255,9 @@ def _table_csv_parts(library,b,pid,table_name=None):
     p = library.get(pid).partition
 
     if not table_name:
-        table = p.table # Use the default table
+        table = p.table  # Use the default table
     else:
         table = b.schema.table(table_name)
-
 
     count = p.query("SELECT count(*) FROM {}".format(table.name)).fetchone()
 
@@ -257,57 +269,59 @@ def _table_csv_parts(library,b,pid,table_name=None):
     part_count, rem = divmod(count, TARGET_ROW_COUNT)
 
     template = ("{}/datasets/{}/partitions/{}/tables/{}/csv"
-                .format(_host_port(library),b.identity.vid,
+                .format(_host_port(library), b.identity.vid,
                         p.identity.vid, table.id_))
 
     if part_count == 0:
         parts.append(template)
     else:
-        for i in range(1, part_count+1):
-            parts.append(template +"?i={}&n={}".format(i,part_count))
-
+        for i in range(1, part_count + 1):
+            parts.append(template + "?i={}&n={}".format(i, part_count))
 
     return parts
+
 
 def _read_body(request):
     '''Read the body of a request and decompress it if required '''
     # Really important to only call request.body once! The property method isn't
     # idempotent!
     import zlib
-    import uuid # For a random filename.
+    import uuid  # For a random filename.
     import tempfile
 
     tmp_dir = tempfile.gettempdir()
     #tmp_dir = '/tmp'
 
-    file_ = os.path.join(tmp_dir,'rest-downloads',str(uuid.uuid4())+".db")
+    file_ = os.path.join(tmp_dir, 'rest-downloads', str(uuid.uuid4()) + ".db")
     if not os.path.exists(os.path.dirname(file_)):
         os.makedirs(os.path.dirname(file_))
 
-    body = request.body # Property acessor
+    body = request.body  # Property acessor
 
     # This method can recieve data as compressed or not, and determines which
     # from the magic number in the head of the data.
     data_type = ambry.util.bundle_file_type(body)
-    decomp = zlib.decompressobj(16+zlib.MAX_WBITS) # http://stackoverflow.com/a/2424549/1144479
+    # http://stackoverflow.com/a/2424549/1144479
+    decomp = zlib.decompressobj(16 + zlib.MAX_WBITS)
 
     if not data_type:
         raise Exception("Bad data type: not compressed nor sqlite")
 
     # Read the file directly from the network, writing it to the temp file,
     # and uncompressing it if it is compressesed.
-    with open(file_,'w') as f:
+    with open(file_, 'w') as f:
 
         chunksize = 8192
-        chunk =  body.read(chunksize) #@UndefinedVariable
+        chunk = body.read(chunksize)  # @UndefinedVariable
         while chunk:
             if data_type == 'gzip':
                 f.write(decomp.decompress(chunk))
             else:
                 f.write(chunk)
-            chunk =  body.read(chunksize) #@UndefinedVariable
+            chunk = body.read(chunksize)  # @UndefinedVariable
 
     return file_
+
 
 def _download_redirect(identity, library):
     '''This is very similar to get_key'''
@@ -317,53 +331,58 @@ def _download_redirect(identity, library):
     if library.upstream:
         remote = library.upstream.get_upstream(RemoteMarker)
         if not remote:
-            global_logger.error("Library remote does not have a proper upstream")
+            global_logger.error(
+                "Library remote does not have a proper upstream")
     else:
         remote = None
 
     try:
         return remote.path(identity.cache_key)
     except NotFoundError:
-        global_logger.warn("Object not found in upstream. Return local URL; {}".format(identity.fqname))
+        global_logger.warn(
+            "Object not found in upstream. Return local URL; {}".format(
+                identity.fqname))
 
-
-    return redirect("{}/files/{}".format(_host_port(library), identity.cache_key))
+    return redirect(
+        "{}/files/{}".format(_host_port(library), identity.cache_key))
 
 
 def _send_csv_if(did, pid, table_name, library):
     '''Send csv function, with a web-processing interface '''
     did, _, _ = process_did(did, library)
-    pid, _, _  = process_pid(did, pid, library)
+    pid, _, _ = process_pid(did, pid, library)
 
-    p = library.get(pid).partition # p_orm is a database entry, not a partition
+    # p_orm is a database entry, not a partition
+    p = library.get(pid).partition
 
-    i = int(request.query.get('i',1))
-    n = int(request.query.get('n',1))
-    sep = request.query.get('sep',',')
+    i = int(request.query.get('i', 1))
+    n = int(request.query.get('n', 1))
+    sep = request.query.get('sep', ',')
 
-    where = request.query.get('where',None)
+    where = request.query.get('where', None)
 
     return _send_csv(library, did, pid, table_name, i, n, where, sep)
 
-def _send_csv(library, did, pid, table_name, i, n, where, sep=',' ):
+
+def _send_csv(library, did, pid, table_name, i, n, where, sep=','):
     '''Send a CSV file to the client. '''
     import unicodecsv
     import csv
     from StringIO import StringIO
     from sqlalchemy import text
 
-    p = library.get(pid).partition # p_orm is a database entry, not a partition
-
+    # p_orm is a database entry, not a partition
+    p = library.get(pid).partition
 
     if not table_name:
         table_name = p.table.name
 
     if i > n:
-        raise exc.BadRequest("Segment number must be less than or equal to the number of segments")
+        raise exc.BadRequest(
+            "Segment number must be less than or equal to the number of segments")
 
     if i < 1:
         raise exc.BadRequest("Segment number starts at 1")
-
 
     count = p.query("SELECT count(*) FROM {}".format(table_name)).fetchone()
 
@@ -387,11 +406,14 @@ def _send_csv(library, did, pid, table_name, i, n, where, sep=',' ):
         writer.writerow(tuple([c.name for c in p.table.columns]))
 
     if where:
-        q = "SELECT * FROM {} WHERE {} LIMIT {} OFFSET {} ".format(table_name, where, seg_size, base_seg_size*(i-1))
+        q = "SELECT * FROM {} WHERE {} LIMIT {} OFFSET {} ".format(
+            table_name, where, seg_size, base_seg_size * (i - 1))
 
         params = dict(request.query.items())
     else:
-        q = "SELECT * FROM {} LIMIT {} OFFSET {} ".format(table_name, seg_size, base_seg_size*(i-1))
+        q = "SELECT * FROM {} LIMIT {} OFFSET {} ".format(table_name,
+                                                          seg_size,
+                                                          base_seg_size * (i - 1))
         params = {}
 
     for row in p.query(text(q), params):
@@ -399,28 +421,35 @@ def _send_csv(library, did, pid, table_name, i, n, where, sep=',' ):
 
     response.content_type = 'text/csv'
 
-    response.headers["content-disposition"] = "attachment; filename='{}-{}-{}-{}.csv'".format(p.identity.vname,table_name,i,n)
+    response.headers[
+        "content-disposition"] = "attachment; filename='{}-{}-{}-{}.csv'".format(p.identity.vname, table_name, i, n)
 
     return out.getvalue()
 
 
 @get('/')
 def get_root(library):
-    
+
     hp = _host_port(library)
 
     li = library.dict
-    del li['database'] # DSN has password
+    del li['database']  # DSN has password
 
     return {
-           'datasets' : "{}/datasets".format(hp),
-           'find': "{}/datasets/find".format(hp),
-           'info': li,
-           'remotes': [ r.repo_id for r in library.remotes] if library.remotes else [] }
+        'datasets': "{}/datasets".format(hp),
+        'find': "{}/datasets/find".format(hp),
+        'info': li,
+        'remotes': [
+            r.repo_id for r in library.remotes] if library.remotes else []}
+
 
 def _resolve(library, ref):
     from ambry.orm import Dataset
-    return library.resolver.resolve_ref_one(ref, location=[Dataset.LOCATION.LIBRARY,Dataset.LOCATION.UPSTREAM ])
+    return library.resolver.resolve_ref_one(
+        ref,
+        location=[
+            Dataset.LOCATION.LIBRARY,
+            Dataset.LOCATION.UPSTREAM])
 
 
 @get('/resolve/<ref:path>')
@@ -438,6 +467,7 @@ def get_resolve(library, ref):
 
     return dataset.dict
 
+
 @get('/info/<ref:path>')
 @CaptureException
 def get_info(ref, library):
@@ -449,7 +479,6 @@ def get_info(ref, library):
     if not dataset:
         raise exc.NotFound("No file for reference: {} ".format(ref))
 
-
     if dataset.partition:
         url = '{}/datasets/{}/partitions/{}'.format(_host_port(library),
                                                     dataset.vid,
@@ -458,6 +487,7 @@ def get_info(ref, library):
         url = '{}/datasets/{}'.format(_host_port(library), dataset.vid)
 
     return redirect(url)
+
 
 @get('/files/<key:path>')
 @CaptureException
@@ -473,7 +503,8 @@ def get_file(key, library):
     if 'etag' in metadata:
         del metadata['etag']
 
-    return static_file(path, root='/', download=key.replace('/','-'))
+    return static_file(path, root='/', download=key.replace('/', '-'))
+
 
 @get('/key/<key:path>')
 @CaptureException
@@ -485,65 +516,67 @@ def get_key(key, library):
         remote = library.upstream.get_upstream(RemoteMarker)
 
         if not remote:
-            raise exc.InternalError("Library remote does not have a proper upstream")
+            raise exc.InternalError(
+                "Library remote does not have a proper upstream")
 
-        url =  remote.path(key)
+        url = remote.path(key)
 
     else:
         url = "{}/files/{}".format(_host_port(library), key)
-
 
     return redirect(url)
 
 
 @get('/datasets')
 def get_datasets(library):
-    '''Return all of the dataset identities, as a dict, 
+    '''Return all of the dataset identities, as a dict,
     indexed by id'''
 
     from ..orm import Dataset
 
-    return { dsid.cache_key : {
-                 'identity': dsid.dict ,
-                 'refs': {
-                    'path': dsid.path,
-                    'cache_key': dsid.cache_key
-                 }, 
-                 'urls': {
-                          'partitions': "{}/datasets/{}".format(_host_port(library), dsid.vid),
-                          'db': "{}/datasets/{}/db".format(_host_port(library), dsid.vid)
-                          },
-                  'schema':{
-                    'json':'{}/datasets/{}/schema.json'.format(_host_port(library), dsid.vid),
-                    'yaml':'{}/datasets/{}/schema.yaml'.format(_host_port(library), dsid.vid),
-                    'csv':'{}/datasets/{}/schema.csv'.format(_host_port(library),dsid.vid),
-                  }
-                 } 
-            for dsid in library.list(locations=[Dataset.LOCATION.LIBRARY,Dataset.LOCATION.UPSTREAM]).values()}
+    return {dsid.cache_key: {
+        'identity': dsid.dict,
+        'refs': {
+            'path': dsid.path,
+            'cache_key': dsid.cache_key
+            },
+        'urls': {
+            'partitions': "{}/datasets/{}".format(_host_port(library), dsid.vid),
+            'db': "{}/datasets/{}/db".format(_host_port(library), dsid.vid)
+        },
+        'schema': {
+            'json': '{}/datasets/{}/schema.json'.format(_host_port(library), dsid.vid),
+            'yaml': '{}/datasets/{}/schema.yaml'.format(_host_port(library), dsid.vid),
+            'csv': '{}/datasets/{}/schema.csv'.format(_host_port(library), dsid.vid),
+        }
+    }
+        for dsid in library.list(locations=[Dataset.LOCATION.LIBRARY, Dataset.LOCATION.UPSTREAM]).values()}
+
 
 @post('/datasets/find')
 def post_datasets_find(library):
     '''Post a QueryCommand to search the library. '''
     from ambry.library.query import QueryCommand
-   
+
     q = request.json
-   
+
     bq = QueryCommand(q)
     results = library.find(bq)
 
     out = []
     for r in results:
         out.append(r)
-        
+
     return out
+
 
 @post('/datasets/<did>')
 @CaptureException
-def post_dataset(did,library): 
+def post_dataset(did, library):
     '''Accept a payload that describes a bundle in the remote. Download the
     bundle from the remote and install it. '''
 
-    from ambry.identity import  Identity
+    from ambry.identity import Identity
 
     identity = Identity.from_dict(request.json)
 
@@ -551,52 +584,62 @@ def post_dataset(did,library):
         raise exc.BadRequest("The identity must have the md5 value set")
 
     if not did in set([identity.id_, identity.vid]):
-        raise exc.Conflict("Dataset address '{}' doesn't match payload id '{}'".format(did, identity.vid))
+        raise exc.Conflict(
+            "Dataset address '{}' doesn't match payload id '{}'".format(
+                did,
+                identity.vid))
 
     # need to go directly to remote, not library.get() because the
-    # dataset hasn't been loaded yet. 
+    # dataset hasn't been loaded yet.
     db_path = library.load(identity.cache_key, identity.md5)
 
     if not db_path:
-        global_logger.error("Failed to get {} from cache while posting dataset".format(identity.cache_key))
+        global_logger.error(
+            "Failed to get {} from cache while posting dataset".format(
+                identity.cache_key))
         global_logger.error("  cache =  {}".format(library.cache))
         global_logger.error("  remote = {}".format(library.upstream))
-        raise exc.NotFound("Didn't  get bundle file for cache key {} ".format(identity.cache_key))
+        raise exc.NotFound(
+            "Didn't  get bundle file for cache key {} ".format(
+                identity.cache_key))
 
-    global_logger.debug("Loading {} for identity {} ".format(db_path, identity))
+    global_logger.debug(
+        "Loading {} for identity {} ".format(
+            db_path,
+            identity))
 
     b = library.load(identity.cache_key, identity.md5)
 
     return b.identity.dict
 
 
-@get('/datasets/<did>') 
-@CaptureException   
+@get('/datasets/<did>')
+@CaptureException
 def get_dataset(did, library, pid=None):
     '''Return the complete record for a dataset, including
     the schema and all partitions. '''
 
-    gr =  library.get(did)
+    gr = library.get(did)
 
     if not gr:
         raise exc.NotFound("Failed to find dataset for {}".format(did))
-    
-    # Construct the response
-    d = {'identity' : gr.identity.dict, 'partitions' : {}}
 
+    # Construct the response
+    d = {'identity': gr.identity.dict, 'partitions': {}}
 
     files = library.files.query.installed.ref(gr.identity.vid).all
-    
+
     # Get direct access to the cache that implements the remote, so
     # we can get a URL with path()
     #remote = library.remote.get_upstream(RemoteMarker)
 
-    d['urls'] = dict(db = "{}/datasets/{}/db".format(_host_port(library), gr.identity.vid))
-    
+    d['urls'] = dict(
+        db="{}/datasets/{}/db".format(_host_port(library), gr.identity.vid))
+
     if files and len(files) > 0:
         d['file'] = dict(
-            ref = files[0].dict,
-            config = gr.identity.data
+            ref=files[0].dict,
+            config=gr.identity.data
         )
 
     if pid:
@@ -604,56 +647,68 @@ def get_dataset(did, library, pid=None):
     else:
         partitions = gr.partitions.all_nocsv
 
-    for partition in  partitions:
+    for partition in partitions:
 
         d['partitions'][partition.identity.id_] = dict()
 
-        d['partitions'][partition.identity.id_]['identity'] = partition.identity.dict
+        d['partitions'][partition.identity.id_][
+            'identity'] = partition.identity.dict
 
         files = library.files.query.installed.ref(partition.identity.vid).all
-        
+
         if len(files) > 0:
             file_ = files.pop(0)
 
             fd = file_.dict
-            d['partitions'][partition.identity.id_]['file']  = { k:v for k,v in fd.items() if k in ['state'] }
+            d['partitions'][
+                partition.identity.id_]['file'] = {
+                k: v for k,
+                v in fd.items() if k in ['state']}
 
         tables = {}
         for table_name in partition.tables:
             table = partition.bundle.schema.table(table_name)
-  
-            args = (_host_port(library), gr.identity.vid, 
-                    partition.identity.vid, table.id_, table.name)
-            whole_link = "{}/datasets/{}/partitions/{}/tables/{}/csv#{}".format(*args)
-            parts_link = "{}/datasets/{}/partitions/{}/tables/{}/csv/parts#{}".format(*args)
-            
-            tables[table.id_] = {'whole': whole_link,'parts': parts_link}
 
-        whole_link = "{}/datasets/{}/partitions/{}/csv#{}".format(_host_port(library), 
-                        gr.identity.vid, partition.identity.vid, partition.table.name)
+            args = (_host_port(library), gr.identity.vid,
+                    partition.identity.vid, table.id_, table.name)
+            whole_link = "{}/datasets/{}/partitions/{}/tables/{}/csv#{}".format(
+                *
+                args)
+            parts_link = "{}/datasets/{}/partitions/{}/tables/{}/csv/parts#{}".format(
+                *
+                args)
+
+            tables[table.id_] = {'whole': whole_link, 'parts': parts_link}
+
+        whole_link = "{}/datasets/{}/partitions/{}/csv#{}".format(
+            _host_port(library),
+            gr.identity.vid,
+            partition.identity.vid,
+            partition.table.name)
 
         if partition.identity.name.format == 'csv':
             db_link = whole_link
             parts_link = None
         else:
-            db_link = "{}/datasets/{}/partitions/{}/db".format(_host_port(library), 
-                            gr.identity.vid, partition.identity.vid)
+            db_link = "{}/datasets/{}/partitions/{}/db".format(
+                _host_port(library),
+                gr.identity.vid,
+                partition.identity.vid)
             parts_link = "{}/datasets/{}/partitions/{}/csv/parts#{}".format(
-                        _host_port(library), gr.identity.vid,
-                        partition.identity.vid, partition.table.name)
+                _host_port(library), gr.identity.vid,
+                partition.identity.vid, partition.table.name)
 
         tables_link = "{}/datasets/{}/partitions/{}/tables".format(
-                        _host_port(library), gr.identity.vid, partition.identity.vid)
+            _host_port(library), gr.identity.vid, partition.identity.vid)
 
-
-        d['partitions'][partition.identity.id_]['urls'] ={
-         'db': db_link,
-         'tables': tables_link,
-         'csv': {
-            'whole':whole_link,
-            'parts': parts_link,
-            'tables': tables
-          }
+        d['partitions'][partition.identity.id_]['urls'] = {
+            'db': db_link,
+            'tables': tables_link,
+            'csv': {
+                'whole': whole_link,
+                'parts': parts_link,
+                'tables': tables
+            }
         }
 
     d['response'] = 'dataset'
@@ -661,19 +716,21 @@ def get_dataset(did, library, pid=None):
     library.close()
     return d
 
-@get('/datasets/<did>/csv') 
-@CaptureException   
+
+@get('/datasets/<did>/csv')
+@CaptureException
 def get_dataset_csv(did, library, pid=None):
     '''List the CSV partitions for the dataset'''
     pass
 
-@post('/datasets/<did>/partitions/<pid>') 
-@CaptureException   
+
+@post('/datasets/<did>/partitions/<pid>')
+@CaptureException
 def post_partition(did, pid, library):
-    from ambry.identity import  Identity
+    from ambry.identity import Identity
     from ambry.util import md5_for_file
 
-    b =  library.get(did)
+    b = library.get(did)
 
     if not b:
         raise exc.NotFound("No bundle found for id {}".format(did))
@@ -682,30 +739,36 @@ def post_partition(did, pid, library):
     identity = Identity.from_dict(payload['identity'])
 
     p = b.partitions.get(pid)
-    
+
     if not p:
-        raise exc.NotFound("No partition for {} in dataset {}".format(pid, did))
+        raise exc.NotFound(
+            "No partition for {} in dataset {}".format(
+                pid,
+                did))
 
     if not pid in set([identity.id_, identity.vid]):
-        raise exc.Conflict("Partition address '{}' doesn't match payload id '{}'".format(pid, identity.vid))
+        raise exc.Conflict(
+            "Partition address '{}' doesn't match payload id '{}'".format(
+                pid,
+                identity.vid))
 
     library.database.add_remote_file(identity)
 
     return identity.dict
 
 
-
-@get('/datasets/<did>/db') 
-@CaptureException   
+@get('/datasets/<did>/db')
+@CaptureException
 def get_dataset_file(did, library):
     from ambry.cache import RemoteMarker
 
     ident = library.resolve(did)
-    
+
     if not ident:
         raise exc.NotFound("No dataset found for identifier '{}' ".format(did))
 
     return redirect(_download_redirect(ident, library))
+
 
 @get('/datasets/<did>/<typ:re:schema\\.?.*>')
 @CaptureException
@@ -721,11 +784,10 @@ def get_dataset_schema(did, typ, library):
 
     ct = _get_ct(typ)
 
-    b =  library.get(did)
+    b = library.get(did)
 
     if not b:
         raise exc.NotFound("No bundle found for id {}".format(did))
-
 
     if ct == 'csv':
         from StringIO import StringIO
@@ -741,19 +803,19 @@ def get_dataset_schema(did, typ, library):
         import yaml
         s = b.schema.as_struct()
         response.content_type = 'application/x-yaml'
-        return  yaml.dump(s)
+        return yaml.dump(s)
     else:
-        raise Exception("Unknown format" )
+        raise Exception("Unknown format")
+
 
 @get('/datasets/<did>/partitions/<pid>')
 @CaptureException
 def get_partition(did, pid, library):
     from ambry.cache import RemoteMarker
 
-    d =  get_dataset(did, library, pid)
+    d = get_dataset(did, library, pid)
     d['response'] = 'partition'
     return d
-
 
 
 @get('/datasets/<did>/partitions/<pid>/db')
@@ -762,7 +824,7 @@ def get_partition_file(did, pid, library):
     from ambry.cache import RemoteMarker
     from ambry.identity import Identity
 
-    b =  library.get(did)
+    b = library.get(did)
 
     if not b:
         raise exc.NotFound("No bundle found for id {}".format(did))
@@ -772,9 +834,11 @@ def get_partition_file(did, pid, library):
     p = b.partitions.get(pid)
 
     if not p:
-        raise exc.NotFound("No partition found for identifier '{}' ".format(pid))
+        raise exc.NotFound(
+            "No partition found for identifier '{}' ".format(pid))
 
     return redirect(_download_redirect(p.identity, library))
+
 
 @get('/datasets/<did>/partitions/<pid>/tables')
 @CaptureException
@@ -782,11 +846,11 @@ def get_partition_tables(did, pid, library):
     '''
     '''
 
-
     did, _, _ = process_did(did, library)
-    pid, _, _  = process_pid(did, pid, library)
+    pid, _, _ = process_pid(did, pid, library)
 
-    p = library.get(pid).partition # p_orm is a database entry, not a partition
+    # p_orm is a database entry, not a partition
+    p = library.get(pid).partition
 
     o = {}
 
@@ -796,10 +860,12 @@ def get_partition_tables(did, pid, library):
 
         args = (_host_port(library), did, pid, table.id_)
         csv_link = "{}/datasets/{}/partitions/{}/tables/{}/csv".format(*args)
-        parts_link = "{}/datasets/{}/partitions/{}/tables/{}/csv/parts".format(*args)
+        parts_link = "{}/datasets/{}/partitions/{}/tables/{}/csv/parts".format(
+            *
+            args)
 
         d['urls'] = {
-            'csv':{
+            'csv': {
                 'csv': csv_link,
                 'parts': parts_link
             }
@@ -808,6 +874,7 @@ def get_partition_tables(did, pid, library):
         o[table.name] = d
     return o
 
+
 @get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv')
 @CaptureException
 def get_partition_table_csv(did, pid, tid, library):
@@ -815,9 +882,10 @@ def get_partition_table_csv(did, pid, tid, library):
     '''
 
     did, _, _ = process_did(did, library)
-    pid, _, _  = process_pid(did, pid, library)
+    pid, _, _ = process_pid(did, pid, library)
 
-    p = library.get(pid).partition # p_orm is a database entry, not a partition
+    # p_orm is a database entry, not a partition
+    p = library.get(pid).partition
 
     table = p.bundle.schema.table(tid)
 
@@ -825,6 +893,7 @@ def get_partition_table_csv(did, pid, tid, library):
         pass
 
     return _send_csv_if(did, pid, table.name, library)
+
 
 @get('/datasets/<did>/partitions/<pid>/tables/<tid>/csv/parts')
 @CaptureException
@@ -836,22 +905,26 @@ def get_partition_table_csv_parts(did, pid, tid, library):
     from ..partition.sqlite import SqlitePartitionName
 
     did, _, _ = process_did(did, library)
-    pid, _, _  = process_pid(did, pid, library)
+    pid, _, _ = process_pid(did, pid, library)
 
-    p = library.get(pid).partition # p_orm is a database entry, not a partition
+    # p_orm is a database entry, not a partition
+    p = library.get(pid).partition
 
     if p.identity.format == CsvPartitionName.FORMAT:
-        return ['/datasets/{}/partitions/{}/db'.format(_host_port(library), pid, pid)]
-    elif p.identity.format not in  (SqlitePartitionName.FORMAT, GeoPartitionName.FORMAT):
-        raise exc.BadRequest("Can only get CSV parts for csv, geo or sqlite partitions. Got: {}".format(p.identity.format))
-
+        return [
+            '/datasets/{}/partitions/{}/db'.format(_host_port(library), pid, pid)]
+    elif p.identity.format not in (SqlitePartitionName.FORMAT, GeoPartitionName.FORMAT):
+        raise exc.BadRequest(
+            "Can only get CSV parts for csv, geo or sqlite partitions. Got: {}".format(
+                p.identity.format))
 
     table = p.bundle.schema.table(tid)
 
     if table == p.table:
         pass
 
-    return _table_csv_parts(library,p.bundle,pid, table.name)
+    return _table_csv_parts(library, p.bundle, pid, table.name)
+
 
 @get('/datasets/<did>/partitions/<pid>/csv')
 @CaptureException
@@ -867,13 +940,14 @@ def get_partition_csv(did, pid, library):
 
     return _send_csv_if(did, pid, None, library)
 
+
 @get('/datasets/<did>/partitions/<pid>/csv/parts')
 @CaptureException
 def get_partition_csv_parts(did, pid, library):
     '''Return a set of URLS for optimal CSV parts of a partition'''
 
     did, d_on, b = process_did(did, library)
-    pid, p_on, p_orm  = process_pid(did, pid, library)
+    pid, p_on, p_orm = process_pid(did, pid, library)
 
     b = library.get(did)
 
@@ -893,24 +967,25 @@ def get_partition_csv_parts(did, pid, library):
 
         pass
     else:
-        return _table_csv_parts(library,b,pid)
+        return _table_csv_parts(library, b, pid)
 
     return parts
 
 
-
-#### Test Code
+# Test Code
 
 @get('/test/echo/<arg>')
 def get_test_echo(arg):
     '''just echo the argument'''
-    return  (arg, dict(request.query.items()))
+    return (arg, dict(request.query.items()))
+
 
 @put('/test/echo')
 def put_test_echo():
     '''just echo the argument'''
 
-    return  (request.json, dict(request.query.items()))
+    return (request.json, dict(request.query.items()))
+
 
 @get('/test/exception')
 @CaptureException
@@ -918,11 +993,13 @@ def get_test_exception():
     '''Throw an exception'''
     raise Exception("throws exception")
 
+
 @put('/test/exception')
 @CaptureException
 def put_test_exception():
     '''Throw an exception'''
     raise Exception("throws exception")
+
 
 @get('/test/isdebug')
 def get_test_isdebug():
@@ -935,6 +1012,7 @@ def get_test_isdebug():
             return False
     except NameError:
         return False
+
 
 @post('/test/close')
 @CaptureException
@@ -949,18 +1027,22 @@ def get_test_close():
     else:
         raise exc.NotAuthorized("Not in debug mode, won't close")
 
+
 class StoppableWSGIRefServer(ServerAdapter):
+
     '''A server that can be stopped by setting the module variable
     stoppable_wsgi_server_run to false. It is primarily used for testing. '''
 
-    def run(self, handler): # pragma: no cover
+    def run(self, handler):  # pragma: no cover
         global stoppable_wsgi_server_run
         stoppable_wsgi_server_run = True
 
         from wsgiref.simple_server import make_server, WSGIRequestHandler
         if self.quiet:
             class QuietHandler(WSGIRequestHandler):
-                def log_request(*args, **kw): pass #@NoSelf
+
+                def log_request(*args, **kw):
+                    pass  # @NoSelf
             self.options['handler_class'] = QuietHandler
         srv = make_server(self.host, self.port, handler, **self.options)
         while stoppable_wsgi_server_run:
@@ -968,9 +1050,10 @@ class StoppableWSGIRefServer(ServerAdapter):
 
 server_names['stoppable'] = StoppableWSGIRefServer
 
+
 def test_run(config):
     '''Run method to be called from unit tests'''
-    from bottle import run, debug #@UnresolvedImport
+    from bottle import run, debug  # @UnresolvedImport
 
     debug()
 
@@ -979,13 +1062,14 @@ def test_run(config):
     l = lf()
     l.database.create()
 
-    global_logger.info("Starting test server on http://{}:{}".format(l.host, l.port))
+    global_logger.info(
+        "Starting test server on http://{}:{}".format(l.host, l.port))
     global_logger.info("Library at: {}".format(l.database.dsn))
 
     install(LibraryPlugin(lf))
 
-
     return run(host=l.host, port=l.port, reloader=False, server='stoppable')
+
 
 def local_run(config, reloader=False):
 
@@ -994,17 +1078,18 @@ def local_run(config, reloader=False):
 
     debug()
 
-    lf = lambda:  new_library(config, True)
-
+    lf = lambda: new_library(config, True)
 
     l = lf()
     l.database.create()
 
-    global_logger.info("starting local server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
+    global_logger.info(
+        "starting local server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
 
     install(LibraryPlugin(lf))
 
     return run(host=l.host, port=l.port, reloader=reloader)
+
 
 def local_debug_run(config):
 
@@ -1013,7 +1098,8 @@ def local_debug_run(config):
     port = config['port'] if config['port'] else 7979
     host = config['host'] if config['host'] else 'localhost'
 
-    global_logger.info("starting debug server on http://{}:{}".format(host, port))
+    global_logger.info(
+        "starting debug server on http://{}:{}".format(host, port))
 
     lf = lambda: new_library(config, True)
 
@@ -1022,24 +1108,22 @@ def local_debug_run(config):
 
     install(LibraryPlugin(lf))
 
-
     return run(host=host, port=port, reloader=True, server='stoppable')
+
 
 def production_run(config, reloader=False):
 
-    lf = lambda:  new_library(config, True)
-
+    lf = lambda: new_library(config, True)
 
     l = lf()
     l.database.create()
 
-    global_logger.info("starting production server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
+    global_logger.info(
+        "starting production server for library '{}' on http://{}:{}".format(l.name, l.host, l.port))
 
     install(LibraryPlugin(lf))
 
-    return run(host=l.host, port=l.port, reloader=reloader )
+    return run(host=l.host, port=l.port, reloader=reloader)
 
 if __name__ == '__main__':
     local_debug_run()
-
-

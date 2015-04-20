@@ -12,9 +12,11 @@ import functools
 root_config = '/etc/ambrydoc/config.yaml'
 user_config = '~/.ambrydoc/config.yaml'
 
-config_paths = [root_config, os.path.expanduser(user_config) ]
+config_paths = [root_config, os.path.expanduser(user_config)]
 
 # From https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize
+
+
 def memoize(obj):
     cache = obj.cache = {}
     import functools
@@ -39,13 +41,14 @@ app_config = {'host': os.getenv('AMBRYDOC_HOST', 'localhost'),
               'cache': os.getenv('AMBRYDOC_CACHE', '/data/cache/jdoc'),
               'use_proxy': bool(os.getenv('AMBRYDOC_USE_PROXY', False)),
               'debug': bool(os.getenv('AMBRYDOC_HOST', False))
-}
+              }
 
-def configure_application(command_args = {}):
+
+def configure_application(command_args={}):
 
     app_config.update(read_config())
 
-    app_config.update({ k:v for k,v in command_args.items() if v is not None } )
+    app_config.update({k: v for k, v in command_args.items() if v is not None})
 
     return app_config
 
@@ -96,10 +99,12 @@ def fscache():
     cache_config = parse_cache_string(app_config['cache'])
     return new_cache(cache_config)
 
+
 @memoize
 def renderer(content_type='html'):
     from render import Renderer
     return Renderer(content_type=content_type)
+
 
 def write_config(config):
     import yaml
@@ -114,15 +119,20 @@ def write_config(config):
                 os.makedirs(c_dir)
 
             with open(path, 'wb') as f:
-                yaml.dump(config, f, default_flow_style=False, indent=4, encoding='utf-8')
+                yaml.dump(
+                    config,
+                    f,
+                    default_flow_style=False,
+                    indent=4,
+                    encoding='utf-8')
 
             return path
-
 
         except OSError:
             pass
 
-    raise Exception("Failed to write config to any dir. Tried: {} ".format(config_paths))
+    raise Exception(
+        "Failed to write config to any dir. Tried: {} ".format(config_paths))
 
 
 def read_config():
@@ -145,6 +155,7 @@ def read_config():
 
     return {}
 
+
 def setup_logging():
     import logging
 
@@ -161,6 +172,7 @@ if False:  # How to use a proxy
     app.wsgi_app = ProxyFix(app.wsgi_app)
 
 with app.app_context():
-    current_app.app_config = configure_application() # May get run again in __main__, when running in develop mode.
+    # May get run again in __main__, when running in develop mode.
+    current_app.app_config = configure_application()
 
 import ambry.ui.views

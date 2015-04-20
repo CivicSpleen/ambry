@@ -43,6 +43,7 @@ Needed to cast params as floats in function def (or simply divide by 2.0).
 '''
 import sys
 
+
 def accepts(*types, **kw):
     '''Function decorator. Checks decorated function's arguments are
     of the expected types.
@@ -65,22 +66,23 @@ def accepts(*types, **kw):
             def newf(*args):
                 if debug is 0:
                     return f(*args)
-                assert len(args) == len(types), "Expected {} args, got {}".format(len(types), len(args))
+                assert len(args) == len(types), "Expected {} args, got {}".format(
+                    len(types), len(args))
                 argtypes = tuple(map(type, args))
                 if argtypes != types:
                     msg = info(f.__name__, types, argtypes, 0)
                     if debug is 1:
                         print >> sys.stderr, 'TypeWarning: ', msg
                     elif debug is 2:
-                        raise TypeError, msg
+                        raise TypeError(msg)
                 return f(*args)
             newf.__name__ = f.__name__
             return newf
         return decorator
-    except KeyError, key:
-        raise KeyError, key + "is not a valid keyword argument"
-    except TypeError, msg:
-        raise TypeError, msg
+    except KeyError as key:
+        raise KeyError(key + "is not a valid keyword argument")
+    except TypeError as msg:
+        raise TypeError(msg)
 
 
 def returns(ret_type, **kw):
@@ -100,6 +102,7 @@ def returns(ret_type, **kw):
             debug = 1
         else:
             debug = kw['debug']
+
         def decorator(f):
             def newf(*args):
                 result = f(*args)
@@ -111,15 +114,16 @@ def returns(ret_type, **kw):
                     if debug is 1:
                         print >> sys.stderr, 'TypeWarning: ', msg
                     elif debug is 2:
-                        raise TypeError, msg
+                        raise TypeError(msg)
                 return result
             newf.__name__ = f.__name__
             return newf
         return decorator
-    except KeyError, key:
-        raise KeyError, key + "is not a valid keyword argument"
-    except TypeError, msg:
-        raise TypeError, msg
+    except KeyError as key:
+        raise KeyError(key + "is not a valid keyword argument")
+    except TypeError as msg:
+        raise TypeError(msg)
+
 
 def info(fname, expected, actual, flag):
     '''Convenience function returns nicely formatted error/warning msg.'''
