@@ -3,8 +3,15 @@ Created on Aug 31, 2012
 
 @author: eric
 """
+import os
+import shutil
+import tempfile
 import unittest
-from test_base import  TestBase  # @UnresolvedImport
+import yaml
+
+from test_base import TestBase  # @UnresolvedImport
+from ambry.bundle.meta import Top
+
 
 class Test(TestBase):
 
@@ -91,7 +98,8 @@ views: {}
         pass
 
     def test_basic(self):
-        from ambry.bundle.meta import Metadata, ScalarTerm, TypedDictGroup, VarDictGroup, DictGroup, DictTerm, ListGroup
+        from ambry.bundle.meta import Metadata, ScalarTerm, TypedDictGroup,\
+            VarDictGroup, DictGroup, DictTerm, ListGroup
         from ambry.util import AttrDict
 
         class TestDictTerm(DictTerm):
@@ -99,20 +107,16 @@ views: {}
             dterm2 = ScalarTerm()
             unset_term = ScalarTerm()
 
-
         class TestListGroup(ListGroup):
             _proto = TestDictTerm()
-
 
         class TestGroup(DictGroup):
             term = ScalarTerm()
             term2 = ScalarTerm()
             dterm = TestDictTerm()
 
-
         class TestTDGroup(TypedDictGroup):
             _proto = TestDictTerm()
-
 
         class TestTop(Metadata):
             group = TestGroup()
@@ -120,13 +124,10 @@ views: {}
             lgroup = TestListGroup()
             vdgroup = VarDictGroup()
 
-
         tt = TestTop()
 
-
-
-        ##
-        ## Dict Group
+        #
+        # Dict Group
 
         tt.group.term = 'Term'
         tt.group.term2 = 'Term2'
@@ -138,24 +139,22 @@ views: {}
         self.assertEquals('Term2', tt.group.term2)
         self.assertEquals('Term', tt.group['term'])
         self.assertEquals(['term', 'term2', 'dterm'], tt.group.keys())
-        self.assertEquals(['Term', 'Term2',
-                           AttrDict([('dterm1', None), ('unset_term', None), ('dterm2', None)])], tt.group.values())
+        self.assertEquals(
+            ['Term', 'Term2', AttrDict([('dterm1', None), ('unset_term', None), ('dterm2', None)])],
+            tt.group.values())
 
-        ##
-        ## Dict Term
+        #
+        # Dict Term
 
         tt.group.dterm.dterm1 = 'dterm1'
         tt.group.dterm.dterm2 = 'dterm2'
 
-
         self.assertEquals('dterm1', tt.group.dterm.dterm1)
-
         self.assertEquals(['dterm1', 'unset_term', 'dterm2'], tt.group.dterm.keys())
         self.assertEquals(['dterm1', None, 'dterm2'], tt.group.dterm.values())
 
-
-        ## List Group
-
+        #
+        # List Group
 
         tt.lgroup.append({'dterm1': 'dterm1'})
         tt.lgroup.append({'dterm2': 'dterm2'})
@@ -163,8 +162,8 @@ views: {}
         self.assertEquals('dterm2', tt.lgroup[1]['dterm2'])
         self.assertEquals('dterm1', tt.lgroup[0]['dterm1'])
 
-
-        ## TypedDictGroup
+        #
+        # TypedDictGroup
 
         tt.tdgroup.foo.dterm1 = 'foo.dterm1'
 
@@ -173,36 +172,35 @@ views: {}
         tt.tdgroup.foo.dterm2 = 'foo.dterm2'
         tt.tdgroup.baz.dterm1 = 'foo.dterm1'
 
-        ## VarDict Group
+        #
+        # VarDict Group
 
         tt.vdgroup.k1['v1'] = 'v1'
         tt.vdgroup.k1.v2 = 'v2'
 
-
     def test_metadata(self):
-        from ambry.bundle.meta import Top
 
         d = dict(
-            about = dict(
-                title = 'title',
-                subject = 'subject',
-                rights = 'rights',
-                summary = 'Summary',
-                tags = 'Foobotom'
+            about=dict(
+                title='title',
+                subject='subject',
+                rights='rights',
+                summary='Summary',
+                tags='Foobotom'
             ),
-            contact_bundle = dict(
-                creator = dict(
-                    name = 'Name',
-                    email = 'Email',
-                    bingo = 'bingo'
+            contact_bundle=dict(
+                creator=dict(
+                    name='Name',
+                    email='Email',
+                    bingo='bingo'
                 )
             ),
             # These are note part of the defined set, so aren't converted to terms
-            build = dict(
-                foo = 'foo',
-                bar = 'bar'
+            build=dict(
+                foo='foo',
+                bar='bar'
             ),
-            partitions = [
+            partitions=[
                 dict(
                     name='foo',
                     grain='bar'
@@ -217,9 +215,8 @@ views: {}
                     space='space',
                     grain='grain',
                     segment=0,
-
                 ),
-                ]
+            ]
         )
 
         top = Top(d)
@@ -232,26 +229,18 @@ views: {}
 
         self.assertIn('creator', top.contact_bundle.keys())
         self.assertNotIn('url', dict(top.contact_bundle.creator))
-        self.assertEqual('Email',top.contact_bundle.creator.email)
-
+        self.assertEqual('Email', top.contact_bundle.creator.email)
         self.assertIn('name', top.partitions[0])
-
-
-
         self.assertIn('space', top.partitions[2])
         self.assertNotIn('space', top.partitions[0])
         self.assertEquals('foo', top.partitions[0]['name'])
-
         top.sources.foo.url = 'url'
         top.sources.bar.description = 'description'
 
-
     def test_metadata_TypedDictGroup(self):
 
-        from ambry.util.meta import Metadata, ScalarTerm, TypedDictGroup, VarDictGroup, DictGroup, DictTerm, ListTerm, \
-            ListGroup
-
-        import pprint, yaml
+        from ambry.util.meta import Metadata, ScalarTerm, TypedDictGroup,\
+            DictTerm
 
         class TestDictTerm(DictTerm):
             dterm1 = ScalarTerm()
@@ -271,7 +260,7 @@ group:
         dterm2: dterm2
 """
 
-        result_str = (config_str + "        unset_term: null").strip("\n")
+        result_str = (config_str + '        unset_term: null').strip('\n')
 
         top = TestTop(yaml.load(config_str))
 
@@ -280,10 +269,7 @@ group:
         self.assertEquals('dterm1', top.group.item1.dterm1)
         self.assertEquals('dterm1', top.group.item1['dterm1'])
 
-
     def test_rows(self):
-        import yaml
-        from ambry.bundle.meta import Top
 
         t1 = Top(yaml.load(self.yaml_config))
 
@@ -291,11 +277,9 @@ group:
         self.assertEquals('bar', t1.build.foo)
         self.assertEquals('bar', t1.build['foo'])
 
-
         self.assertIn('google', t1.sources.keys())
         self.assertIn('yahoo', t1.sources.keys())
         self.assertEquals('http://yahoo.com', t1.sources.yahoo.url)
-
 
         t2 = Top()
 
@@ -304,11 +288,6 @@ group:
         self.assertEquals(self.yaml_config.strip(' \n'), t2.dump().strip(' \n'))
 
     def test_read_write(self):
-        import yaml
-        import tempfile
-        from ambry.bundle.meta import Top
-        import shutil, os
-
         d = tempfile.mkdtemp('metadata-test')
 
         t1 = Top(yaml.load(self.yaml_config))
@@ -320,11 +299,11 @@ group:
 
         self.assertEquals(self.yaml_config.strip(' \n'), t2.dump().strip(' \n'))
 
-        #Test lazy loading.
+        # Test lazy loading.
         t3 = Top(path=d)
-        self.assertTrue('license',t3.about.license)
-        self.assertTrue('creator.email',t3.contact_bundle.creator.email)
-        self.assertTrue(1,t3.nonterm.a)
+        self.assertTrue('license', t3.about.license)
+        self.assertTrue('creator.email', t3.contact_bundle.creator.email)
+        self.assertTrue(1, t3.nonterm.a)
 
         t3.write_to_dir(d)
 
@@ -334,7 +313,6 @@ group:
         self.assertEquals(self.yaml_config.strip(' \n'), t4.dump().strip(' \n'))
 
         t5 = Top(path=d)
-
 
         # Check that load from dir strips out erroneous terms
         # This depends on write_to_dur not checking and stripping these values.
@@ -346,7 +324,6 @@ group:
         t5._term_values.sources.foobar = 'foobar'
         t5._term_values.contact_bundle.creator.foobar = 'foobar'
 
-
         t5.write_to_dir(d)
 
         t52 = Top(path=d)
@@ -354,9 +331,8 @@ group:
 
         self.assertEquals(self.yaml_config.strip(' \n'), t52.dump().strip(' \n'))
 
-        self.assertEquals(3,len(t52.errors))
+        self.assertEquals(3, len(t52.errors))
         self.assertIn(('contact_bundle', 'creator', 'foobar'), t52.errors.keys())
-
 
         # Does it handle missing files?
 
@@ -367,18 +343,13 @@ group:
 
         shutil.rmtree(d)
 
-
-        p = '/data/source/clarinova-public/abc.ca.gov/alcohol_licenses'
         t7 = Top(path=d)
         t7.load_all()
 
         print t7.dump()
 
-
     def test_assignment(self):
-        from ambry.bundle.meta import Top
         from ambry.identity import Identity
-        import yaml
 
         t1 = Top(yaml.load(self.yaml_config))
 
@@ -393,10 +364,8 @@ group:
 
         self.assertEquals('v2', t1.identity.variation)
 
-
-
     def test_forced_format(self):
-        yaml_config= """
+        yaml_config = """
 external_documentation:
     foodoc1:
         description: description
@@ -407,12 +376,8 @@ external_documentation:
     foodoc3:
         title: title3
 """
-        from ambry.bundle.meta import Top
-        from ambry.identity import Identity
-        import yaml
 
         t1 = Top(yaml.load(yaml_config))
-
 
         print t1.dump(keys=['external_documentation'])
 
@@ -440,10 +405,7 @@ partitions:
 
         print t2.dump(keys=['partitions'])
 
-
     def test_links(self):
-        from ambry.bundle.meta import Top
-        import yaml
 
         t = Top(yaml.load(self.yaml_config))
 
@@ -458,8 +420,6 @@ partitions:
         print t.dump()
 
     def test_errors(self):
-        from ambry.bundle.meta import Top
-        import yaml
 
         # Check that the invalid fields are removed.
 
@@ -486,30 +446,23 @@ about:
 
         t1 = Top(yaml.load(yaml_config), synonyms={'about.foo': 'about.summary'})
 
-        self.assertEquals('bar',t1.about.summary)
+        self.assertEquals('bar', t1.about.summary)
         self.assertNotIn(('about', 'foo', None), t1.errors)
 
         print t1.errors
 
     def test_html(self):
-        from ambry.bundle.meta import Top
-        import yaml
 
         t = Top(yaml.load(self.yaml_config))
         print t.about.html()
 
-
     def test_list(self):
-        from ambry.bundle.meta import Top
-        import yaml
 
         t = Top(yaml.load(self.yaml_config))
-        for x in  t.about.groups:
+        for x in t.about.groups:
             print x
 
     def test_row_spec(self):
-        from ambry.bundle.meta import Top
-        import yaml
 
         x = """
 sources:
@@ -530,11 +483,10 @@ sources:
         print t.sources.yahoo.row_spec.dict
 
 
-
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
     return suite
-      
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     unittest.TextTestRunner().run(suite())
