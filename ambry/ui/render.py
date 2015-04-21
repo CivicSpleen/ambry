@@ -1,9 +1,7 @@
-"""
-Support for creating web pages and text representations of schemas.
-"""
+"""Support for creating web pages and text representations of schemas."""
 
 import os
-from  flask.json import JSONEncoder as FlaskJSONEncoder
+from flask.json import JSONEncoder as FlaskJSONEncoder
 from . import memoize
 from flask.json import dumps
 from flask import Response
@@ -11,7 +9,7 @@ from flask import Response
 import jinja2.tests
 
 ##
-## These are in later versions of jinja, but we need them in earlier ones.
+# These are in later versions of jinja, but we need them in earlier ones.
 if not 'equalto' in jinja2.tests.TESTS:
     def test_equalto(value, other):
         return value == other
@@ -26,8 +24,12 @@ if not 'isin' in jinja2.tests.TESTS:
 
 
 def pretty_time(s):
-    """Pretty print time in seconds. From:
-    http://stackoverflow.com/a/24542445/1144479"""
+    """Pretty print time in seconds.
+
+    From:
+    http://stackoverflow.com/a/24542445/1144479
+
+    """
 
     intervals = (
         ('weeks', 604800),  # 60 * 60 * 24 * 7
@@ -53,7 +55,8 @@ def pretty_time(s):
     for i, (name, limit) in enumerate(intervals):
 
         if s > limit:
-            return display_time(int(s),4-i)
+            return display_time(int(s), 4 - i)
+
 
 def resolve(t):
 
@@ -71,30 +74,36 @@ def resolve(t):
         return t.uid
     elif isinstance(t, dict):
         if 'identity' in t:
-            return t['identity'].get('vid',None)
+            return t['identity'].get('vid', None)
         else:
             return t.get('vid', None)
     else:
         return None
 
 # Path functions, for generating URL paths.
+
+
 def bundle_path(b):
     return "/bundles/{}.html".format(resolve(b))
+
 
 def schema_path(b, format):
     return "/bundles/{}/schema.{}".format(resolve(b), format)
 
+
 def table_path(b, t):
     return "/bundles/{}/tables/{}.html".format(resolve(b), resolve(t))
 
+
 def proto_vid_path(pvid):
 
-    b,t,c  = deref_tc_ref(pvid)
+    b, t, c = deref_tc_ref(pvid)
 
     return table_path(str(b), str(t))
 
+
 def deref_tc_ref(ref):
-    """Given a column or table, vid or id, return the object"""
+    """Given a column or table, vid or id, return the object."""
     from ambry.identity import ObjectNumber
 
     on = ObjectNumber.parse(ref)
@@ -126,10 +135,11 @@ def deref_tc_ref(ref):
         if c:
             c = c.rev(t.revision)
 
-    return b,t,c
+    return b, t, c
+
 
 def tc_obj(ref):
-    """Return an object for a table or column"""
+    """Return an object for a table or column."""
     from . import renderer
 
     b, t, c = deref_tc_ref(ref)
@@ -153,11 +163,12 @@ def tc_obj(ref):
     else:
         return table
 
+
 def partition_path(b, p=None):
 
     if p is None:
         from ambry.identity import ObjectNumber
-        p  = b
+        p = b
         on = ObjectNumber.parse(p)
         try:
             b = str(on.as_dataset)
@@ -166,45 +177,54 @@ def partition_path(b, p=None):
             raise
     return "/bundles/{}/partitions/{}.html".format(resolve(b), resolve(p))
 
+
 def manifest_path(m):
     return "/manifests/{}.html".format(m)
+
 
 def store_path(s):
     return "/stores/{}.html".format(s)
 
-def store_table_path(s,t):
-    return "/stores/{}/tables/{}.html".format(s,t)
 
-def extract_url(s,t,format):
+def store_table_path(s, t):
+    return "/stores/{}/tables/{}.html".format(s, t)
+
+
+def extract_url(s, t, format):
 
     from flask import url_for
 
     return url_for('get_extract', wid=s, tid=t, ct=format)
 
 
-def db_download_url(base,s):
-    return os.path.join(base,'download',s+'.db')
+def db_download_url(base, s):
+    return os.path.join(base, 'download', s + '.db')
+
 
 def extractor_list(t):
     from . import renderer
 
-    return ['csv','json'] + ( ['kml','geojson'] if t.get('is_geo',False) else [] )
+    return ['csv', 'json'] + \
+        (['kml', 'geojson'] if t.get('is_geo', False) else [])
+
 
 class extract_entry(object):
+
     def __init__(self, extracted, completed, rel_path, abs_path, data=None):
         self.extracted = extracted
-        self.completed = completed  # For deleting files where exception thrown during generation
+        # For deleting files where exception thrown during generation
+        self.completed = completed
         self.rel_path = rel_path
         self.abs_path = abs_path
         self.data = data
 
     def __str__(self):
-        return 'extracted={} completed={} rel={} abs={} data={}'.format(self.extracted,
-                                                                        self.completed,
-                                                                        self.rel_path, self.abs_path,
-                                                                        self.data)
-
-
+        return 'extracted={} completed={} rel={} abs={} data={}'.format(
+            self.extracted,
+            self.completed,
+            self.rel_path,
+            self.abs_path,
+            self.data)
 
 
 class JSONEncoder(FlaskJSONEncoder):
@@ -213,12 +233,12 @@ class JSONEncoder(FlaskJSONEncoder):
 
         return str(type(o))
 
-        #return FlaskJSONEncoder.default(self, o)
+        # return FlaskJSONEncoder.default(self, o)
 
 
 class Renderer(object):
 
-    def __init__(self, content_type='html', blueprints = None):
+    def __init__(self, content_type='html', blueprints=None):
 
         from jinja2 import Environment, PackageLoader
 
@@ -226,25 +246,25 @@ class Renderer(object):
             from ambry.library import new_library
 
             self.library = new_library()
-            self.doc_cache =  self.library.doc_cache
+            self.doc_cache = self.library.doc_cache
         except:
             raise
 
-        self.css_files = ['css/style.css', 'css/pygments.css' ]
+        self.css_files = ['css/style.css', 'css/pygments.css']
 
         self.env = Environment(loader=PackageLoader('ambry.ui', 'templates'))
 
         self.extracts = []
 
-        self.content_type = content_type # Set to true to get Render to return json instead
+        # Set to true to get Render to return json instead
+        self.content_type = content_type
 
         self.blueprints = blueprints
 
         # Monkey patch to get the equalto test
 
-
     def maybe_render(self, rel_path, render_lambda, metadata={}, force=False):
-        """Check if a file exists and maybe render it"""
+        """Check if a file exists and maybe render it."""
 
         if rel_path[0] == '/':
             rel_path = rel_path[1:]
@@ -274,17 +294,23 @@ class Renderer(object):
             raise
 
         finally:
-            self.extracts.append(extract_entry(extracted, completed, rel_path, self.cache.path(rel_path)))
+            self.extracts.append(
+                extract_entry(
+                    extracted,
+                    completed,
+                    rel_path,
+                    self.cache.path(rel_path)))
 
     def cc(self):
-        """return common context values"""
+        """return common context values."""
         from functools import wraps
 
-        # Add a prefix to the URLs when the HTML is generated for the local filesystem.
-        def prefix_root(r,f):
+        # Add a prefix to the URLs when the HTML is generated for the local
+        # filesystem.
+        def prefix_root(r, f):
             @wraps(f)
             def wrapper(*args, **kwds):
-                return os.path.join(r,f(*args, **kwds))
+                return os.path.join(r, f(*args, **kwds))
             return wrapper
 
         return {
@@ -292,39 +318,46 @@ class Renderer(object):
             'from_root': lambda x: x,
             'bundle_path': bundle_path,
             'schema_path': schema_path,
-            'table_path' :  table_path,
+            'table_path': table_path,
             'partition_path': partition_path,
-            'manifest_path':  manifest_path,
-            'store_path':  store_path,
+            'manifest_path': manifest_path,
+            'store_path': store_path,
             'store_table_path': store_table_path,
-            'proto_vid_path' : proto_vid_path,
-            'extractors' : extractor_list,
-            'tc_obj' : tc_obj,
-            'extract_url' : extract_url,
+            'proto_vid_path': proto_vid_path,
+            'extractors': extractor_list,
+            'tc_obj': tc_obj,
+            'extract_url': extract_url,
             'db_download_url': db_download_url,
-            'bundle_sort': lambda l, key: sorted(l,key=lambda x: x['identity'][key])
-
-        }
+            'bundle_sort': lambda l,
+            key: sorted(
+                l,
+                key=lambda x: x['identity'][key])}
 
     def render(self, template, *args, **kwargs):
 
         if self.content_type == 'json':
-            return Response(dumps(dict(**kwargs), cls=JSONEncoder, indent=4), mimetype='application/json')
+            return Response(
+                dumps(
+                    dict(
+                        **kwargs),
+                    cls=JSONEncoder,
+                    indent=4),
+                mimetype='application/json')
 
         else:
             return template.render(*args, **kwargs)
 
     def compiled_times(self):
-        """Compile all of the time entried from cache calls to one per key"""
+        """Compile all of the time entried from cache calls to one per key."""
         return self.doc_cache.compiled_times()
 
     def clean(self):
-        '''Clean up the extracts on failures. '''
+        """Clean up the extracts on failures."""
         for e in self.extracts:
             if e.completed == False and os.path.exists(e.abs_path):
                 os.remove(e.abs_path)
 
-    def error500(self,e):
+    def error500(self, e):
         template = self.env.get_template('500.html')
 
         return self.render(template, e=e, **self.cc())
@@ -333,15 +366,18 @@ class Renderer(object):
 
         template = self.env.get_template('index.html')
 
-        return self.render(template, l = self.doc_cache.library_info(), **self.cc())
+        return self.render(
+            template,
+            l=self.doc_cache.library_info(),
+            **self.cc())
 
     def bundles_index(self):
-        """Render the bundle Table of Contents for a library"""
+        """Render the bundle Table of Contents for a library."""
         template = self.env.get_template('toc/bundles.html')
 
         bundles = self.doc_cache.bundle_index()
 
-        return self.render(template, bundles = bundles, **self.cc())
+        return self.render(template, bundles=bundles, **self.cc())
 
     def tables_index(self):
 
@@ -352,40 +388,42 @@ class Renderer(object):
         return self.render(template, tables=tables, **self.cc())
 
     def bundle(self, vid):
-        """Render documentation for a single bundle """
+        """Render documentation for a single bundle."""
 
         template = self.env.get_template('bundle/index.html')
 
         b = self.doc_cache.bundle(vid)
 
         for p in b['partitions'].values():
-            p['description'] = b['tables'][p['table_vid']].get('description','')
+            p['description'] = b['tables'][
+                p['table_vid']].get(
+                'description',
+                '')
 
-
-        return self.render(template, b = b , **self.cc())
+        return self.render(template, b=b, **self.cc())
 
     def bundle_summary(self, vid):
-        """Render documentation for a single bundle """
+        """Render documentation for a single bundle."""
 
         template = self.env.get_template('bundle/index.html')
 
         b = self.doc_cache.bundle_summary(vid)
 
-
         return self.render(template, b=b, **self.cc())
 
     def schemacsv(self, vid):
-        """Render documentation for a single bundle """
+        """Render documentation for a single bundle."""
         from flask import make_response
 
         response = make_response(self.doc_cache.get_schemacsv(vid))
 
-        response.headers["Content-Disposition"] = "attachment; filename={}-schema.csv".format(vid)
+        response.headers[
+            "Content-Disposition"] = "attachment; filename={}-schema.csv".format(vid)
 
         return response
 
     def schema(self, vid):
-        """Render documentation for a single bundle """
+        """Render documentation for a single bundle."""
         from csv import reader
         from StringIO import StringIO
         import json
@@ -401,8 +439,7 @@ class Renderer(object):
         del b_data['partitions']
         del b_data['tables']
 
-        schema = dict(header=reader.next(),rows= [x for x in reader])
-
+        schema = dict(header=reader.next(), rows=[x for x in reader])
 
         return self.render(template, b=b_data, schema=schema, **self.cc())
 
@@ -438,12 +475,13 @@ class Renderer(object):
                 except KeyError:
                     g = GVid.parse(gvid)
                     try:
-                        phrase = "All {} in {} ".format(g.level_plural.title(), all_idents[str(g.promote())])
+                        phrase = "All {} in {} ".format(
+                            g.level_plural.title(), all_idents[str(g.promote())])
                         p['geo_coverage']['names'].append(phrase)
-                    except  KeyError:
+                    except KeyError:
                         pass
 
-        return self.render(template,  p=p, **self.cc())
+        return self.render(template, p=p, **self.cc())
 
     def store(self, uid):
 
@@ -454,10 +492,10 @@ class Renderer(object):
         assert store
 
         # Update the manifest to get the whole object
-        store['manifests'] = { uid:self.doc_cache.manifest(uid) for uid in store['manifests']}
+        store['manifests'] = {
+            uid: self.doc_cache.manifest(uid) for uid in store['manifests']}
 
-
-        return self.render(template,  s=store, **self.cc())
+        return self.render(template, s=store, **self.cc())
 
     def store_table(self, uid, tid):
 
@@ -472,17 +510,16 @@ class Renderer(object):
         del store['manifests']
         del store['tables']
 
-
         return self.render(template, s=store, t=t, **self.cc())
 
     def info(self, app_config, run_config):
 
         template = self.env.get_template('info.html')
 
-        return self.render(template,app_config = app_config,**self.cc())
+        return self.render(template, app_config=app_config, **self.cc())
 
     def manifest(self, muid):
-        """F is the file object associated with the manifest"""
+        """F is the file object associated with the manifest."""
         from ambry.warehouse.manifest import Manifest
         from ambry.identity import ObjectNumber
 
@@ -492,13 +529,12 @@ class Renderer(object):
 
         m = Manifest(m_dict['text'])
 
-
         return self.render(template, m=m,
                            md=m_dict,
-                           **self.cc() )
+                           **self.cc())
 
     def collections_index(self):
-        """Collections/Warehouses"""
+        """Collections/Warehouses."""
         template = self.env.get_template('toc/collections.html')
 
         collections = {f.ref: dict(
@@ -509,19 +545,18 @@ class Renderer(object):
             cache=f.data['cache'],
             class_type=f.type_) for f in self.library.stores}
 
-        return self.render(template, collections = collections , **self.cc())
+        return self.render(template, collections=collections, **self.cc())
 
     @property
     def css_dir(self):
         import ambry.ui.templates as tdir
 
-        return os.path.join(os.path.dirname(tdir.__file__),'css')
+        return os.path.join(os.path.dirname(tdir.__file__), 'css')
 
     def css_path(self, name):
         import ambry.ui.templates as tdir
 
         return os.path.join(os.path.dirname(tdir.__file__), 'css', name)
-
 
     @property
     def js_dir(self):
@@ -529,32 +564,34 @@ class Renderer(object):
 
         return os.path.join(os.path.dirname(tdir.__file__), 'js')
 
-
     def place_search(self, term):
-        """Incremental search, search as you type"""
-
+        """Incremental search, search as you type."""
 
         results = []
         for score, gvid, name in self.library.search.search_identifiers(term):
             #results.append({"label":name, "value":gvid})
             results.append({"label": name})
 
-        return Response(dumps(results, cls=JSONEncoder, indent=4), mimetype='application/json')
+        return Response(
+            dumps(
+                results,
+                cls=JSONEncoder,
+                indent=4),
+            mimetype='application/json')
 
     def bundle_search(self, terms):
-        """Incremental search, search as you type"""
+        """Incremental search, search as you type."""
 
         from geoid.civick import GVid
 
         results = []
 
-
-        (b_query, p_query, terms), bp_set = self.library.search.search_bundles({ k:v.strip() for k,v in terms.items()})
+        (b_query, p_query, terms), bp_set = self.library.search.search_bundles(
+            {k: v.strip() for k, v in terms.items()})
 
         pvid_limit = 5
 
         all_idents = self.library.search.identifier_map
-
 
         for bvid, pvids in bp_set.items():
 
@@ -578,19 +615,19 @@ class Renderer(object):
                         except KeyError:
                             g = GVid.parse(gvid)
                             try:
-                                phrase =  "All {} in {} ".format(g.level_plural.title(), all_idents[str(g.promote())] )
+                                phrase = "All {} in {} ".format(
+                                    g.level_plural.title(), all_idents[str(g.promote())])
                                 p['geo_coverage']['names'].append(phrase)
-                            except  KeyError:
+                            except KeyError:
                                 pass
 
                 d['partitions'][pvid] = p
-
 
             results.append(d)
 
         template = self.env.get_template('search/results.html')
 
-        results = sorted(results, key=lambda x: x['vname'] )
+        results = sorted(results, key=lambda x: x['vname'])
 
         # Collect facets to display to the user, for additional sorting
         facets = {
@@ -601,7 +638,7 @@ class Renderer(object):
 
         for r in results:
             facets['sources'].add(r['source'])
-            for  p in r['partitions'].values():
+            for p in r['partitions'].values():
                 if 'time_coverage' in p and p['time_coverage']:
                     facets['years'] |= set(p['time_coverage']['years'])
 
@@ -613,8 +650,15 @@ class Renderer(object):
                             #facets['states'].add( (gvid, all_idents[gvid]))
                             facets['states'].add(all_idents[gvid])
 
-        return self.render(template, queries=dict(b_query=b_query, p_query=p_query, terms=terms),
-                           results=results, facets = facets, **self.cc())
+        return self.render(
+            template,
+            queries=dict(
+                b_query=b_query,
+                p_query=p_query,
+                terms=terms),
+            results=results,
+            facets=facets,
+            **self.cc())
 
     def generate_sources(self):
 

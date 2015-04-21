@@ -1,23 +1,22 @@
-"""
-Functions for geocoding using Ambry data.
-"""
+"""Functions for geocoding using Ambry data."""
 
 
 class Geocoder(object):
 
-    def __init__(self,partition, city_subs=None):
+    def __init__(self, partition, city_subs=None):
         from address_parser import Parser
 
         self.p = partition
 
         self.address_cache = {}
 
-        self.city_subs = { k.lower():v for k,v in city_subs.items() } if city_subs else {}
+        self.city_subs = {
+            k.lower(): v for k,
+            v in city_subs.items()} if city_subs else {}
 
-        self.parser =  Parser()
+        self.parser = Parser()
 
     def parse_and_code(self, addrstr, city=None, state=None, zip=None):
-
 
         adr = self.parser.parse(addrstr, city=city, state=state, zip=zip)
 
@@ -38,26 +37,25 @@ class Geocoder(object):
                 self.address_cache[adr.hash] = None
                 address_id = None
 
-        return  address_id, r, adr
-
+        return address_id, r, adr
 
     def geocode(self, number, name, direction=None,
                 suffix=None, city=None, state=None, zip=None):
-        '''Return a record from the geocoder table.
+        """Return a record from the geocoder table.
 
         This function expects a partition, p, that holds a table named 'gecoder',
         of the same structure as used in clarinova.com-geocode-casnd
-        '''
+
+        """
 
         direction = direction.upper() if direction else '-'
         suffix = suffix.title() if suffix else '-'
         city = city.title() if city else '-'
 
-
         if city.lower() in self.city_subs:
             city = self.city_subs[city.lower()].title()
 
-        if isinstance(zip, basestring ) and '-' in zip:
+        if isinstance(zip, basestring) and '-' in zip:
             zip, zsuffix = zip.split('-')
 
         zip = zip if zip else -1
@@ -88,21 +86,25 @@ class Geocoder(object):
         ORDER BY ABS(number - :number), score LIMIT 1;
         """
 
-        r =  self.p.query(q, number=number, name=name, direction=direction,
-                            suffix=suffix,city=city, state=state, zip=zip).first()
+        r = self.p.query(
+            q,
+            number=number,
+            name=name,
+            direction=direction,
+            suffix=suffix,
+            city=city,
+            state=state,
+            zip=zip).first()
 
         if not r:
             return None
 
         r = dict(r)
-        r['confidence'] = round((100.0 - ( 30.0 - r['score']) - (r['ndist'] / 2.0))/100.0,3)
+        r['confidence'] = round(
+            (100.0 - (30.0 - r['score']) - (r['ndist'] / 2.0)) / 100.0, 3)
         r['lat'] = float(r['lat']) / 100000000.0
         r['lon'] = float(r['lon']) / 100000000.0
         return r
 
     def geocode_intersection(self, street1, street2):
         pass
-
-
-
-

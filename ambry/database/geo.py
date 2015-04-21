@@ -1,6 +1,8 @@
-"""
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+"""Copyright (c) 2013 Clarinova.
+
+This file is licensed under the terms of the Revised BSD License,
+included in this distribution as LICENSE.txt
+
 """
 
 from inserter import InserterInterface
@@ -9,18 +11,16 @@ from ..partition.geo import GeoPartitionName
 from sqlalchemy.types import LargeBinary, BINARY
 
 
-
-
 class GeoDb(PartitionDb):
 
     EXTENSION = GeoPartitionName.PATH_EXTENSION
 
-    MIN_NUMBER_OF_TABLES = 5 # Used in is_empty
+    MIN_NUMBER_OF_TABLES = 5  # Used in is_empty
 
     is_geo = True
 
     def __init__(self, bundle, partition, base_path, **kwargs):
-        ''''''
+        """"""
 
         kwargs['driver'] = 'spatialite'
 
@@ -33,15 +33,23 @@ class GeoDb(PartitionDb):
     def _post_create(self):
         self.connection.execute("SELECT InitSpatialMetaData();")
 
-    def recover_geometry(self, table_name, column_name, geometry_type, srs = None):
-        from  ..geo.util import recover_geometry
+    def recover_geometry(
+            self,
+            table_name,
+            column_name,
+            geometry_type,
+            srs=None):
+        from ..geo.util import recover_geometry
 
-        recover_geometry(self.connection, table_name, column_name, geometry_type, srs = srs)
-
-
+        recover_geometry(
+            self.connection,
+            table_name,
+            column_name,
+            geometry_type,
+            srs=srs)
 
     def _on_create_connection(self, connection):
-        '''Called from get_connection() to update the database'''
+        """Called from get_connection() to update the database."""
         super(GeoDb, self)._on_create_connection(connection)
 
     def _on_create_engine(self, engine):
@@ -57,7 +65,7 @@ class SpatialiteWarehouseDatabase(GeoDb):
 
 
 def _on_connect_geo(dbapi_con, con_record):
-    '''ISSUE some Sqlite pragmas when the connection is created'''
+    """ISSUE some Sqlite pragmas when the connection is created."""
     from ..util import RedirectStdStreams
     from sqlite import _on_connect_bundle as ocb
     from ..dbexceptions import DatabaseError
@@ -65,8 +73,8 @@ def _on_connect_geo(dbapi_con, con_record):
 
     ocb(dbapi_con, con_record)
 
-    ## NOTE ABOUT journal_mode = WAL: it improves concurency, but has some downsides.
-    ## See http://sqlite.org/wal.html
+    # NOTE ABOUT journal_mode = WAL: it improves concurency, but has some downsides.
+    # See http://sqlite.org/wal.html
 
     dbapi_con.execute('PRAGMA page_size = 8192')
     dbapi_con.execute('PRAGMA temp_store = MEMORY')
@@ -85,7 +93,6 @@ def _on_connect_geo(dbapi_con, con_record):
             except AttributeError as e:
                 raise
 
-
         # This is so wrong, but I don't know what's right.
         # ( My code has become a Country song. )
 
@@ -97,21 +104,18 @@ def _on_connect_geo(dbapi_con, con_record):
 
         ]
 
-
         for l in libs:
             try:
-                with RedirectStdStreams():  # Spatialite prints its version header always, this supresses it.
+                # Spatialite prints its version header always, this supresses
+                # it.
+                with RedirectStdStreams():
                     dbapi_con.execute(l)
 
                 return
             except OperationalError:
                 continue
 
-
-        raise DatabaseError("Could not load the spatialite extension. Tried: {}".format(libs))
+        raise DatabaseError(
+            "Could not load the spatialite extension. Tried: {}".format(libs))
 
     load_extension()
-
-
-
-

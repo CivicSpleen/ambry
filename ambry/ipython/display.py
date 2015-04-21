@@ -1,8 +1,7 @@
 
 
-
 def display_list(l, list_type='ul'):
-    """Convert a list of strings into an HTML list"""
+    """Convert a list of strings into an HTML list."""
     from IPython.core.display import display_html
 
     o = ["<{}>".format(list_type)]
@@ -12,4 +11,4 @@ def display_list(l, list_type='ul'):
 
     o.append("</{}>".format(list_type))
 
-    return  display_html('\n'.join(o), raw=True)
+    return display_html('\n'.join(o), raw=True)

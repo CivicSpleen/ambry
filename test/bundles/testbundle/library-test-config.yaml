@@ -4,6 +4,7 @@ library:
     default:
       filesystem: default
       database: default
+      documentation: '/tmp/library-test/doc_cache'
 
     # Used to seperate tests that do or dont have a remote. 
     local-remoted:
@@ -13,20 +14,24 @@ library:
         - '{root}/remote-cache-3'
       filesystem: default
       database: default
+      documentation: '/tmp/library-test/doc_cache'
 
     s3-remoted:
       remotes:
         - 's3://devtest.sandiegodata.org/s3-remote#compress'
       filesystem: default
       database: default
+      documentation: '/tmp/library-test/doc_cache'
 
     http-remoted:
       remotes:
         - 'http://devtest.sandiegodata.org/s3-remote' # No #compress, since on reads compression is handled auto
       filesystem: default
       database: default
+      documentation: '/tmp/library-test/doc_cache'
 
     upstreamed:
+        documentation: '/tmp/library-test/doc_cache'
         filesystem: default
         database: default
         upstream:
@@ -34,15 +39,6 @@ library:
           prefix: library-test
           bucket: devtest.sandiegodata.org
           account: devtest.sandiegodata.org
-
-
-sourcerepo:
-  dir: '{root}/bundles'
-
-  default:
-    service: github
-    org: clarinova-data
-    account: clarinova-data
 
 
 database:

@@ -1,12 +1,11 @@
-"""Utilites for working with SAS files"""
+"""Utilites for working with SAS files."""
 
 
-
-#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------
 # Name:        sas2sqlite
 # Purpose:     translate a SAS data set to a SQLite table
 # From: https://gist.githubusercontent.com/dapangmao/17b634a94a141e7c8173/raw/gistfile1.py
-#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------
 
 def sas2sqlite(sasfile, sqlitedb):
     import sqlite3
@@ -24,7 +23,11 @@ def sas2sqlite(sasfile, sqlitedb):
 
     _table = f.header.dataset.title()
     cmd1 = "CREATE TABLE {} ({})".format(_table, ', '.join(y))
-    cmd2 = 'INSERT INTO {} VALUES ( {} )'.format(_table, ','.join(['?']*len(x)))
+    cmd2 = 'INSERT INTO {} VALUES ( {} )'.format(
+        _table,
+        ','.join(
+            ['?'] *
+            len(x)))
     conn = sqlite3.connect(sqlitedb)
     c = conn.cursor()
 
@@ -38,11 +41,11 @@ def sas2sqlite(sasfile, sqlitedb):
     c.close()
 
 
-#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------
 # Name:       sas2pd
 # Purpose:    import a SAS dataset as a Python pandas dataframe
 #
-#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------
 
 def sas2pd(sasfile):
     import pandas as pd
@@ -60,4 +63,3 @@ def sas2pd(sasfile):
     df = pd.DataFrame(a)
     df.columns = cols
     return pd.header, df
-

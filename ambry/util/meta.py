@@ -1,15 +1,18 @@
-"""Metadata objects for a bundle
+"""Metadata objects for a bundle.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 import collections
 from ..util import AttrDict, MapView
 import copy
 
+
 class Metadata(object):
-    """A top level group of groups"""
+
+    """A top level group of groups."""
 
     _members = None
     _term_values = None
@@ -19,7 +22,7 @@ class Metadata(object):
     _path = None
     _synonyms = None
 
-    def __init__(self, d=None, path=None, synonyms = None):
+    def __init__(self, d=None, path=None, synonyms=None):
 
         self._top = self
         self._path = path
@@ -59,11 +62,10 @@ class Metadata(object):
 
             self._synonyms = {}
 
-
-        for k,v in synonyms.items():
+        for k, v in synonyms.items():
             parts = v.split('.')
 
-            parts += [None] * ( 3 - len(parts))
+            parts += [None] * (3 - len(parts))
 
             if len(parts) > 3:
                 raise Exception("Can't handle synonyms with more than 3 parts")
@@ -91,14 +93,21 @@ class Metadata(object):
                     self._term_values[k] = v
 
     def register_members(self):
-        """Collect the names of the class member and convert them to object members.
+        """Collect the names of the class member and convert them to object
+        members.
 
-        Unlike Terms, the Group class members are converted into object members, so the configuration data
+        Unlike Terms, the Group class members are converted into object
+        members, so the configuration data
+
         """
         import copy
         from collections import OrderedDict
 
-        self._members = {name: attr for name, attr in type(self).__dict__.items() if isinstance(attr, Group)}
+        self._members = {
+            name: attr for name,
+            attr in type(self).__dict__.items() if isinstance(
+                attr,
+                Group)}
 
         for name, m in self._members.items():
             m.init_descriptor(name, self)
@@ -126,10 +135,11 @@ class Metadata(object):
     def load_all(self):
         """Load all of the files for all of the groups.
 
-        Wont re-load groups that have already been loaded or altered. """
+        Wont re-load groups that have already been loaded or altered.
+
+        """
         for group in self._members.keys():
             self.ensure_loaded(group)
-
 
     # For access to non term entries
     def __getattr__(self, k):
@@ -141,21 +151,22 @@ class Metadata(object):
 
     @property
     def rows(self):
-        """Return the configuration information flattened into database records """
+        """Return the configuration information flattened into database
+        records."""
 
-        for k,v in  self._term_values.flatten():
+        for k, v in self._term_values.flatten():
 
             if len(k) == 1 and isinstance(v, list):
-                for i,item in enumerate(v):
-                    yield k+(i,None), item
+                for i, item in enumerate(v):
+                    yield k + (i, None), item
             else:
                 if len(k) == 2:
                     k = k + (None, )
 
-                yield k,v
+                yield k, v
 
     def load_rows(self, rows):
-        """Load the metadata from the config table in a database """
+        """Load the metadata from the config table in a database."""
         import json
 
         for row in rows:
@@ -163,7 +174,7 @@ class Metadata(object):
             try:
                 (group, term, sub_term), value = row
             except ValueError as e:
-                raise ValueError(str(e)+" : "+str(row))
+                raise ValueError(str(e) + " : " + str(row))
 
             try:
                 v = json.loads(value)
@@ -171,8 +182,6 @@ class Metadata(object):
                 pass
             except TypeError:
                 pass
-
-
 
             try:
                 m = self._members[group]
@@ -182,16 +191,15 @@ class Metadata(object):
                     self._term_values[group] = AttrDict()
 
                 path = [term]
-                if sub_term is not  None:
+                if sub_term is not None:
                     path += [sub_term]
 
-                self._term_values[group].unflatten_row( path, value)
+                self._term_values[group].unflatten_row(path, value)
                 continue
 
             m = self._members[group]
             o = copy.copy(m)
             o.init_instance(self)
-
 
             o.set_row((term, sub_term), value)
 
@@ -200,7 +208,6 @@ class Metadata(object):
     @property
     def errors(self):
         return self._errors
-
 
     @property
     def dict(self):
@@ -220,36 +227,38 @@ class Metadata(object):
 
         for name, group in self._members.items():
 
-            out += getattr(self,name).html()
+            out += getattr(self, name).html()
 
         return out
 
     def _repr_html_(self):
-        """Adapts html() to IPython"""
+        """Adapts html() to IPython."""
         return self.html()
 
     def add_error(self, group, term, sub_term, value):
-        '''For records that are not defined as terms, either add it to the errors list,
-        or store it in a synonym'''
+        """For records that are not defined as terms, either add it to the
+        errors list, or store it in a synonym."""
 
-        path = '.'.join([ str(x) for x in (group, term, sub_term) if x is not None])
+        path = '.'.join([str(x)
+                        for x in (group, term, sub_term) if x is not None])
 
         if path in self.synonyms:
-            self.load_rows([(self.synonyms[path],value)])
+            self.load_rows([(self.synonyms[path], value)])
 
         else:
-            self._errors[(group, term, sub_term)]  =  value
+            self._errors[(group, term, sub_term)] = value
 
-    def dump(self, stream = None, map_view = None, keys = None):
+    def dump(self, stream=None, map_view=None, keys=None):
 
         if map_view is None and keys is not None:
             from ..util import MapView
-            map_view = MapView(keys = keys )
+            map_view = MapView(keys=keys)
 
-        return self._term_values.dump(stream, map_view = map_view)
+        return self._term_values.dump(stream, map_view=map_view)
 
     def groups_by_file(self):
-        """Returns a map of the files defined in groups, and the groups that define those files"""
+        """Returns a map of the files defined in groups, and the groups that
+        define those files."""
         from collections import OrderedDict
         d = {}
 
@@ -264,25 +273,25 @@ class Metadata(object):
 
             d[file_].append(m)
 
-
         return d
 
-    def load_from_dir(self, path, group = None):
-        '''Load groups from specified files. '''
+    def load_from_dir(self, path, group=None):
+        """Load groups from specified files."""
         import os
         import yaml
-
 
         n_loaded = 0
         for file_, groups in self.groups_by_file().items():
 
-            if group is not None and group not in [ g._key for g in groups]:
+            if group is not None and group not in [g._key for g in groups]:
                 continue
 
             fn = os.path.join(path, file_)
 
             if not os.path.exists(fn):
-                n_loaded += 1 # so we don't try to load the non terms for files that are missing
+                # so we don't try to load the non terms for files that are
+                # missing
+                n_loaded += 1
                 continue
 
             try:
@@ -292,7 +301,7 @@ class Metadata(object):
 
                 n_loaded += 1
 
-                for g in groups: # Each file causes multiple groups to load.
+                for g in groups:  # Each file causes multiple groups to load.
                     self.mark_loaded(g._key)
 
             except IOError:
@@ -308,7 +317,8 @@ class Metadata(object):
 
                 for file_, groups in self.groups_by_file().items():
                     if file_ == self._non_term_file:
-                        for g in groups:  # Each file causes multiple groups to load.
+                        # Each file causes multiple groups to load.
+                        for g in groups:
                             self.mark_loaded(g._key)
 
     def load_group(self, group):
@@ -323,13 +333,14 @@ class Metadata(object):
         if path is None:
             raise ValueError("Must specify a path")
 
-        non_term_keys = [key for key in self._term_values.keys() if key not in self._members]
+        non_term_keys = [
+            key for key in self._term_values.keys() if key not in self._members]
 
         for file_, groups in self.groups_by_file().items():
 
             # If we are lazy-loading, only write the files that have at least on groups loaded
             # Actually, all of the groups should be loaded.
-            if not write_all and self._path and not any([ self.is_loaded(g._key) for g in groups]):
+            if not write_all and self._path and not any([self.is_loaded(g._key) for g in groups]):
                 continue
 
             fn = os.path.join(path, file_)
@@ -339,16 +350,18 @@ class Metadata(object):
                 os.makedirs(dir_)
 
             with open(fn, 'w+') as f:
-                keys = [ g._key for g in groups]
+                keys = [g._key for g in groups]
 
                 # Include the non-term keys when writing the non-term file
-                if (hasattr(self, '_non_term_file')  and file_ == self._non_term_file and non_term_keys):
+                if (hasattr(self, '_non_term_file') and file_ == self._non_term_file and non_term_keys):
                     keys += non_term_keys
 
-                self.dump(stream=f, map_view = MapView(keys = keys))
+                self.dump(stream=f, map_view=MapView(keys=keys))
+
 
 class Group(object):
-    """A  group of terms"""
+
+    """A  group of terms."""
 
     _key = None
     _members = None
@@ -360,15 +373,18 @@ class Group(object):
     _parent = None
     _top = None
 
-
     def __init__(self, file=None, to_rows=True):
 
-        self._members = {name: attr for name, attr in type(self).__dict__.items() if isinstance(attr, Term) and not name.startswith('_')}
+        self._members = {
+            name: attr for name,
+            attr in type(self).__dict__.items() if isinstance(
+                attr,
+                Term) and not name.startswith('_')}
 
         self._file = file
         self._to_rows = to_rows
 
-    def init_descriptor(self,key, top):
+    def init_descriptor(self, key, top):
         self._key = key
 
         for name, m in self._members.items():
@@ -406,18 +422,15 @@ class Group(object):
 
         return self.get_group_instance(instance)
 
-
     @property
     def _term_values(self):
         raise NotImplementedError()
 
-    def set(self,d):
+    def set(self, d):
         raise NotImplementedError(type(self))
-
 
     def set_row(self, key, value):
         raise NotImplementedError(type(self))
-
 
     def __setattr__(self, attr, value):
 
@@ -431,12 +444,13 @@ class Group(object):
         return ''
 
     def _repr_html_(self):
-        """Adapts html() to IPython"""
+        """Adapts html() to IPython."""
         return self.html()
 
-class DictGroup(Group, collections.MutableMapping):
-    """A group that holds key/value pairs"""
 
+class DictGroup(Group, collections.MutableMapping):
+
+    """A group that holds key/value pairs."""
 
     def init_descriptor(self, key, top):
         super(DictGroup, self).init_descriptor(key, top)
@@ -456,13 +470,11 @@ class DictGroup(Group, collections.MutableMapping):
 
         return self._parent._term_values[self._key]
 
-
     def ensure_index(self, index):
 
         if index not in self._term_values:
             o = self.get_term_instance(index)
             self._term_values[index] = o.null_entry()
-
 
     def __setattr__(self, k, v):
 
@@ -473,29 +485,26 @@ class DictGroup(Group, collections.MutableMapping):
 
     def __getattr__(self, k):
 
-
         if k.startswith('_'):
             object.__getattribute__(self, k)
         else:
             return self.__getitem__(k)
-
-
 
     def __getitem__(self, key):
 
         o = self.get_term_instance(key)
         return o.get()
 
-
     def __setitem__(self, key, value):
 
         if not key in self._members:
-            raise AttributeError("No such term in {}: {}. Has: {}"
-                                 .format(self._key, key, [key for key in self._members.keys()]))
+            raise AttributeError(
+                "No such term in {}: {}. Has: {}" .format(
+                    self._key, key, [
+                        key for key in self._members.keys()]))
 
         o = self.get_term_instance(key)
         o.set(value)
-
 
     def __delitem__(self, key):
         return self._term_values.__delitem__(key)
@@ -504,15 +513,15 @@ class DictGroup(Group, collections.MutableMapping):
         return self._term_values.__len__()
 
     def __iter__(self):
-        '''Iterated over dictionary values, not Term instances'''
+        """Iterated over dictionary values, not Term instances."""
         return self._term_values.__iter__()
 
     def set(self, d):
 
         assert isinstance(d, dict)
-        for k,v in d.items():
+        for k, v in d.items():
             try:
-                self.__setitem__(k,v)
+                self.__setitem__(k, v)
             except AttributeError as e:
                 self._top.add_error(self._key, k, None, v)
 
@@ -521,9 +530,9 @@ class DictGroup(Group, collections.MutableMapping):
         key, subkey = key
 
         if subkey:
-            self.set({key: { subkey: value}})
+            self.set({key: {subkey: value}})
         else:
-            self.set({key:  value})
+            self.set({key: value})
 
     def html(self):
         out = ''
@@ -531,23 +540,32 @@ class DictGroup(Group, collections.MutableMapping):
         for name, m in self._members.items():
 
             ti = self.get_term_instance(name)
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
+            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(
+                ti._key,
+                ti.html())
 
-        return ("""
+        return (
+            """
 <h2 class="{cls}">{title}</h2>
 <table class="{cls}">
 {out}</table>
-"""
-                .format(title=self._key.title(),
-                        cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(),self._key),
-                        out=out))
+""" .format(
+            title=self._key.title(),
+            cls='ambry_meta_{} ambry_meta_{}'.format(
+                type(self).__name__.lower(),
+                self._key),
+            out=out))
+
 
 class TypedDictGroup(DictGroup):
-    """A DictGroup where the term structure is constrained, but they keys are not.
+
+    """A DictGroup where the term structure is constrained, but they keys are
+    not.
 
     There must be one term, named 'proto', to set the type of the terms.
 
     Only works with DictTerms
+
     """
 
     def init_descriptor(self, key, top):
@@ -556,7 +574,7 @@ class TypedDictGroup(DictGroup):
         if '_proto' not in dir(self):
             raise AttributeError("TypeDictGroup must have a _proto Term")
 
-        proto = type(self).__dict__['_proto'] # Avoids __get___?
+        proto = type(self).__dict__['_proto']  # Avoids __get___?
 
         proto.init_descriptor('_proto', self._top)
 
@@ -575,7 +593,9 @@ class TypedDictGroup(DictGroup):
     def __getitem__(self, key):
 
         if not key in self._term_values:
-            self._term_values[key] =  { name:None for name, _ in self._proto._members.items() }
+            self._term_values[key] = {
+                name: None for name,
+                _ in self._proto._members.items()}
 
         o = self.get_term_instance(key)
 
@@ -586,11 +606,11 @@ class TypedDictGroup(DictGroup):
         o = self.get_term_instance(key)
         o.set(value)
 
-class VarDictGroup(DictGroup):
-    """A Dict group that doesnt' use terms to enforce a structure.
-    """
-    from ..util import AttrDict
 
+class VarDictGroup(DictGroup):
+
+    """A Dict group that doesnt' use terms to enforce a structure."""
+    from ..util import AttrDict
 
     def __getattr__(self, name):
         import copy
@@ -599,11 +619,9 @@ class VarDictGroup(DictGroup):
             raise AttributeError
 
         if not name in self._term_values:
-            self._term_values[name] =  AttrDict()
-
+            self._term_values[name] = AttrDict()
 
         return self.__getitem__(name)
-
 
     def __getitem__(self, key):
 
@@ -612,12 +630,13 @@ class VarDictGroup(DictGroup):
     def __setitem__(self, key, value):
         self._term_values[key] = value
 
+
 class ListGroup(Group, collections.MutableSequence):
-    """A group that holds a list of DictTerms"""
+
+    """A group that holds a list of DictTerms."""
 
     def __init__(self, file=None, to_rows=True):
-        super(ListGroup, self).__init__(file=file, to_rows = to_rows)
-
+        super(ListGroup, self).__init__(file=file, to_rows=to_rows)
 
     def init_descriptor(self, key, top):
         super(ListGroup, self).init_descriptor(key, top)
@@ -629,7 +648,6 @@ class ListGroup(Group, collections.MutableSequence):
 
         proto.init_descriptor('_proto', self._top)
 
-
     @property
     def _term_values(self):
         # This only works after being instantiated in __get__, which sets
@@ -637,7 +655,6 @@ class ListGroup(Group, collections.MutableSequence):
 
         if not self._key in self._parent._term_values:
             self._parent._term_values[self._key] = []
-
 
         return self._parent._term_values[self._key]
 
@@ -660,16 +677,15 @@ class ListGroup(Group, collections.MutableSequence):
 
         o.set(v)
 
-
     def insert(self, index, value):
         self.__setitem__(index, value)
 
-    def ensure_index(self,index):
-        """Ensure the index is in the list by possibly expanding the array"""
+    def ensure_index(self, index):
+        """Ensure the index is in the list by possibly expanding the array."""
         if index >= len(self._term_values):
             o = self.get_term_instance(index)
 
-            to_add = ( index - len(self._term_values) + 1)
+            to_add = (index - len(self._term_values) + 1)
 
             self._parent._term_values[self._key] += ([o.null_entry()] * to_add)
 
@@ -698,7 +714,7 @@ class ListGroup(Group, collections.MutableSequence):
     def __iter__(self):
         return self._term_values.__iter__()
 
-    def set(self,d):
+    def set(self, d):
 
         for index, value in enumerate(d):
             self.__setitem__(index, value)
@@ -706,45 +722,54 @@ class ListGroup(Group, collections.MutableSequence):
     def set_row(self, key, value):
         index, _ = key
 
-        self.__setitem__(index,value)
+        self.__setitem__(index, value)
 
-    def reformat(self,v):
+    def reformat(self, v):
         raise NotImplementedError()
 
     def html(self):
         out = ''
 
         for ti in self:
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
+            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(
+                ti._key,
+                ti.html())
 
-        return ("""
+        return (
+            """
 <table class="{cls}">
 {out}</table>
-"""
-                .format(title=self._key.title(),
-                        cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
-                        out=out))
+""" .format(
+            title=self._key.title(),
+            cls='ambry_meta_{} ambry_meta_{}'.format(
+                type(self).__name__.lower(),
+                self._key),
+            out=out))
+
 
 class Term(object):
-    """A single term in a group"""
+
+    """A single term in a group."""
 
     _key = None
-    _parent = None # set after being cloned in some subclass __get__
+    _parent = None  # set after being cloned in some subclass __get__
     _top = None
     _store_none = None
     _default = None
     _members = None
     _link_on_null = None
 
-    def __init__(self, store_none=True, link_on_null = None, default = None):
+    def __init__(self, store_none=True, link_on_null=None, default=None):
 
-        self._members = {name: attr for name, attr in type(self).__dict__.items() if isinstance(attr, Term)}
-
+        self._members = {
+            name: attr for name,
+            attr in type(self).__dict__.items() if isinstance(
+                attr,
+                Term)}
 
         self._store_none = store_none
         self._default = default
         self._link_on_null = link_on_null
-
 
     def init_descriptor(self, key, top):
         assert(key is not None)
@@ -774,10 +799,10 @@ class Term(object):
                 return None
 
     def get(self):
-        '''Return the value type for this Term'''
+        """Return the value type for this Term."""
         raise NotImplementedError("Not implemented by {}".format(type(self)))
 
-    def set(self,v):
+    def set(self, v):
         raise NotImplementedError("Not implemented in {} ".format(type(self)))
 
     def is_empty(self):
@@ -789,14 +814,18 @@ class Term(object):
     def html(self):
         return ""
 
+
 class ScalarTerm(Term):
-    """A Term that can only be a string"""
+
+    """A Term that can only be a string."""
 
     def set(self, v):
         self._parent._term_values[self._key] = v
 
     def get(self):
-        return self._parent._term_values.get(self._key,None) # Supresses KeyError HACK?
+        return self._parent._term_values.get(
+            self._key,
+            None)  # Supresses KeyError HACK?
 
     def null_entry(self):
         return None
@@ -807,16 +836,19 @@ class ScalarTerm(Term):
     def is_empty(self):
         return self.get() is None
 
-
     def html(self):
         if self._key == 'url' and self.get():
-            return "<a href=\"{url}\" target=\"_blank\">{url}</a>".format(url=self.get())
+            return "<a href=\"{url}\" target=\"_blank\">{url}</a>".format(
+                url=self.get())
         if self._key == 'email' and self.get():
-            return "<a href=\"mailto:{url}\"  target=\"_blank\">{url}</a>".format(url=self.get())
+            return "<a href=\"mailto:{url}\"  target=\"_blank\">{url}</a>".format(
+                url=self.get())
         else:
             return self.get()
 
+
 class DictTerm(Term, collections.MutableMapping):
+
     """A term that contains a dict of sub-parts
 
     A value may be specified as a scalar, in which case it will be converted to a dict
@@ -833,15 +865,15 @@ class DictTerm(Term, collections.MutableMapping):
 
         assert(self._key is not None)
 
-
-        self._store_none_map =  {name: m._store_none for name, m in self._members.items()}
+        self._store_none_map = {
+            name: m._store_none for name,
+            m in self._members.items()}
 
     def get_term_instance(self, key):
         m = self._members[key]
         o = copy.copy(m)
         o.init_instance(self)
         return o
-
 
     def _new_instance(self, parent):
         o = copy.copy(self)
@@ -851,16 +883,16 @@ class DictTerm(Term, collections.MutableMapping):
         return o
 
     def ensure_index(self, index):
-        """Ensure the index is in the dict"""
+        """Ensure the index is in the dict."""
 
-        # This sometimes will put a term at to high of a level, not sure what it is really for.
+        # This sometimes will put a term at to high of a level, not sure what
+        # it is really for.
         return
 
         if not index in self._parent._term_values:
             raise Exception()
             print 'ENSURING', self._key, index
             self._parent._term_values[index] = None
-
 
     @property
     def _term_values(self):
@@ -869,7 +901,7 @@ class DictTerm(Term, collections.MutableMapping):
 
         self._parent.ensure_index(self._key)
 
-        tv =  self._parent._term_values[self._key]
+        tv = self._parent._term_values[self._key]
 
         assert tv is not None
 
@@ -895,14 +927,13 @@ class DictTerm(Term, collections.MutableMapping):
 
         o = self.get_term_instance(key)
 
-        v =  o.get()
+        v = o.get()
 
         return v
 
     def __setitem__(self, key, value):
 
-        self.set_row(key,value)
-
+        self.set_row(key, value)
 
     def __delitem__(self, key):
         return self._term_values.__delitem__(key)
@@ -916,18 +947,17 @@ class DictTerm(Term, collections.MutableMapping):
         else:
             return self._term_values.__iter__()
 
-
     def __set__(self, instance, d):
 
         o = self._new_instance(instance)
         o.set(d)
 
     def __get__(self, instance, owner):
-        """ """
+        """"""
         # Instantiate a copy of this group, assign a specific Metadata instance
         # and return it.
 
-        v =  self._new_instance(instance)
+        v = self._new_instance(instance)
 
         return v
 
@@ -940,24 +970,27 @@ class DictTerm(Term, collections.MutableMapping):
         return self._term_values.to_dict()
 
     def html(self):
-            out = ''
+        out = ''
 
-            for name, m in self._members.items():
-                ti = self.get_term_instance(name)
-                out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
+        for name, m in self._members.items():
+            ti = self.get_term_instance(name)
+            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(
+                ti._key,
+                ti.html())
 
-            return ("""
+        return (
+            """
 <table class="{cls}">
 {out}</table>
-"""
-                    .format(title=str(self._key),
-                            cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
-                            out=out))
+""" .format(
+            title=str(
+                self._key), cls='ambry_meta_{} ambry_meta_{}'.format(
+                type(self).__name__.lower(), self._key), out=out))
 
     def set(self, d):
 
         for k, v in d.items():
-            self.set_row(k,v)
+            self.set_row(k, v)
 
     def set_row(self, k, v):
 
@@ -967,7 +1000,7 @@ class DictTerm(Term, collections.MutableMapping):
 
         self._term_values[k] = v
 
-        #if k in self._term_values and self._term_values[k] is None and self._store_none_map[k] is False:
+        # if k in self._term_values and self._term_values[k] is None and self._store_none_map[k] is False:
         #    del self._term_values[k]
 
     def get(self):
@@ -983,12 +1016,17 @@ class DictTerm(Term, collections.MutableMapping):
         return d
 
     def is_empty(self):
-        return all( [v is None for v in self._term_values.values()])
+        return all([v is None for v in self._term_values.values()])
+
 
 class ListTerm(Term):
+
     """A Term that is always a list.
 
-    The value may be specified as a scalar, in which case it will be converted to a list"""
+    The value may be specified as a scalar, in which case it will be
+    converted to a list
+
+    """
 
     def __set__(self, instance, v):
 
@@ -1004,7 +1042,6 @@ class ListTerm(Term):
     def get(self):
         return self
 
-
     def null_entry(self):
         return []
 
@@ -1015,7 +1052,6 @@ class ListTerm(Term):
     def _term_values(self):
         # This only works after being instantiated in __get__, which sets
         # _parent
-
 
         if not self._key in self._parent._term_values:
             self._parent._term_values[self._key] = []

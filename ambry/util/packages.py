@@ -1,17 +1,21 @@
-"""
-Install packages using pip
+"""Install packages using pip.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 import pip
 from pip.commands import InstallCommand
 from ..util import memoize
 
-def install(install_dir,egg,url):
 
-    initial_args = ['install', '--install-option=--install-purelib={}'.format(install_dir), url]
+def install(install_dir, egg, url):
+
+    initial_args = [
+        'install',
+        '--install-option=--install-purelib={}'.format(install_dir),
+        url]
 
     try:
         # An earlier version of pip
@@ -26,20 +30,18 @@ def install(install_dir,egg,url):
         command = commands[cmd_name]()
         return command.main(cmd_args)
 
-
     raise Exception()
 
 
-
 def qualified_name(o):
-    """Return the fully qualfied name of the class of an object """
+    """Return the fully qualfied name of the class of an object."""
 
     return o.__module__ + '.' + o.__class__.__name__
 
 
 @memoize
 def import_class_by_string(name):
-    """Return a class by importing its module from a fully qualified string"""
+    """Return a class by importing its module from a fully qualified string."""
     components = name.split('.')
     clazz = components.pop()
     mod = __import__('.'.join(components))

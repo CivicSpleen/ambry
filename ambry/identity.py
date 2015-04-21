@@ -1,12 +1,13 @@
-"""Identity objects for constructing names for bundles and partitions, and 
-Object Numbers for datasets, columns, partitions and tables. 
+"""Identity objects for constructing names for bundles and partitions, and
+Object Numbers for datasets, columns, partitions and tables.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 import os.path
-from semantic_version import Version 
+from semantic_version import Version
 from util.typecheck import returns, accepts
 from util import Constant
 
@@ -14,38 +15,38 @@ from util import Constant
 class NotObjectNumberError(ValueError):
     pass
 
+
 class Base62DecodeError(ValueError):
     pass
 
 
 class Name(object):
-    '''The Name part of an identity ''' 
 
+    """The Name part of an identity."""
 
     PATH_EXTENSION = '.db'
     NAME_PART_SEP = '-'
 
     # Name, Default Value, Is Optional
-    _name_parts = [('source',None,False),
-                  ('dataset',None,False),
-                  ('subset',None,True),
-                  ('type',None,True),
-                  ('part',None,True),
-                  ('bspace', None, True),
-                  ('btime', None, True),
-                  ('variation',None,True),
-                  # Semantic Version, different from Object Number revision, 
-                  # which is an int. "Version" is the preferred name, 
-                  # but 'revision' is in the databases schema. 
-                  ('version',None,True)
-                  ]
-
+    _name_parts = [('source', None, False),
+                   ('dataset', None, False),
+                   ('subset', None, True),
+                   ('type', None, True),
+                   ('part', None, True),
+                   ('bspace', None, True),
+                   ('btime', None, True),
+                   ('variation', None, True),
+                   # Semantic Version, different from Object Number revision,
+                   # which is an int. "Version" is the preferred name,
+                   # but 'revision' is in the databases schema.
+                   ('version', None, True)
+                   ]
 
     # Names that are generated from the name parts.
     _generated_names = [
-                ('name',None,True),
-                ('vname',None,True),
-                ('fqname',None,True)]
+        ('name', None, True),
+        ('vname', None, True),
+        ('fqname', None, True)]
 
     source = None
     dataset = None
@@ -58,35 +59,31 @@ class Name(object):
     version = None
 
     def __init__(self, *args, **kwargs):
-
         """
 
         :param args:
         :param kwargs:
         """
 
-        for k,default, optional in self.name_parts:
+        for k, default, optional in self.name_parts:
             if optional:
-                setattr(self,k, kwargs.get(k,default))
+                setattr(self, k, kwargs.get(k, default))
             else:
-                setattr(self,k, kwargs.get(k))
-
+                setattr(self, k, kwargs.get(k))
 
         self.version = self._parse_version(self.version)
 
         self.clean()
 
-
         self.is_valid()
-
 
     def clean(self):
         import re
-        for k,default, optional in self.name_parts:
+        for k, default, optional in self.name_parts:
 
             # Skip the names in name query.
 
-            v = getattr(self,k)
+            v = getattr(self, k)
 
             if not v or not isinstance(v, basestring):
                 # Can only clean strings.
@@ -95,138 +92,154 @@ class Name(object):
             # The < and > chars are only there to  for <any> and <none> and version specs.
             # . is needs for source, and + is needed for version specs
 
-            nv = re.sub(r'[^a-zA-Z0-9\.\<\>=]','_',v).lower()
+            nv = re.sub(r'[^a-zA-Z0-9\.\<\>=]', '_', v).lower()
 
             if v != nv:
-                setattr(self,k, nv)
+                setattr(self, k, nv)
 
     def is_valid(self):
-
         """
 
 
         :raise ValueError:
         """
         for k, _, optional in self.name_parts:
-            if not optional and not bool(getattr(self,k)):
-                raise ValueError("Name requires field '{}' to have a value. Got: {}"
-                                 .format(k, self.name_parts))
-        
-    @returns(str, debug=2)  
-    def _parse_version(self,version):
+            if not optional and not bool(getattr(self, k)):
+                raise ValueError(
+                    "Name requires field '{}' to have a value. Got: {}" .format(
+                        k,
+                        self.name_parts))
+
+    @returns(str, debug=2)
+    def _parse_version(self, version):
         import semantic_version as sv  # @UnresolvedImport
-        
-        if version is not None and isinstance(version,basestring):
+
+        if version is not None and isinstance(version, basestring):
 
             if version == NameQuery.ANY:
                 pass
             elif version == NameQuery.NONE:
                 pass
             else:
-                try: 
+                try:
                     version = str(sv.Version(version))
                 except ValueError:
-                    try: version = str(sv.Spec(version))
+                    try:
+                        version = str(sv.Spec(version))
                     except ValueError:
-                        raise ValueError("Could not parse '{}' as a semantic version".format(version))        
-                
+                        raise ValueError(
+                            "Could not parse '{}' as a semantic version".format(version))
+
         if not version:
             version = str(sv.Version('0.0.0'))
-                
-        return version
-                
 
-    @property 
+        return version
+
+    @property
     def name_parts(self):
         return self._name_parts
 
     def clear_dict(self, d):
-        return { k:v for k,v in d.items() if v}
+        return {k: v for k, v in d.items() if v}
 
     @property
     def dict(self):
-        '''Returns the identity as a dict. values that are empty are removed'''
+        """Returns the identity as a dict.
+
+        values that are empty are removed
+
+        """
         return self._dict(with_name=True)
 
     def _dict(self, with_name=True):
-        '''Returns the identity as a dict. values that are empty are removed'''
-        
-        d = dict([ (k, getattr(self, k)) for k,_, _ in self.name_parts ] )
+        """Returns the identity as a dict.
 
+        values that are empty are removed
 
-        if with_name :
-            d['name'] =  self.name
-            try: d['vname'] = self.vname
-            except ValueError: pass 
+        """
 
-        return self.clear_dict(d) 
+        d = dict([(k, getattr(self, k)) for k, _, _ in self.name_parts])
+
+        if with_name:
+            d['name'] = self.name
+            try:
+                d['vname'] = self.vname
+            except ValueError:
+                pass
+
+        return self.clear_dict(d)
 
     @property
     def name(self):
-        '''String version of the name, excluding the version, and
-        excluding the format, if the format is 'db' '''
-        
+        """String version of the name, excluding the version, and excluding the
+        format, if the format is 'db'."""
+
         d = self._dict(with_name=False)
 
-        return self.NAME_PART_SEP.join([ str(d[k]) for (k,_,_) in self.name_parts
-                         if k and d.get(k,False)
-                         and k != 'version'
-                         and not (k == 'format' and d[k] == 'db') ])
-    
+        return self.NAME_PART_SEP.join([str(d[k]) for (k, _, _) in self.name_parts if k and d.get(
+            k, False) and k != 'version' and not (k == 'format' and d[k] == 'db')])
+
     @property
     def vname(self):
         if not self.version:
             raise ValueError("No version set")
-        
-        import semantic_version  # @UnresolvedImport
-        
-        if isinstance(self.version,semantic_version.Spec):
-            return self.name+str(self.version)
-        else:
-            return self.name+self.NAME_PART_SEP+str(self.version)
-    
 
-    def _path_join(self,names=None, excludes=None, sep=os.sep):
+        import semantic_version  # @UnresolvedImport
+
+        if isinstance(self.version, semantic_version.Spec):
+            return self.name + str(self.version)
+        else:
+            return self.name + self.NAME_PART_SEP + str(self.version)
+
+    def _path_join(self, names=None, excludes=None, sep=os.sep):
 
         d = self._dict(with_name=False)
 
-        if isinstance(excludes,basestring):
+        if isinstance(excludes, basestring):
             excludes = set([excludes])
-            
-        if not isinstance(excludes,set):
-            excludes = set(excludes)            
+
+        if not isinstance(excludes, set):
+            excludes = set(excludes)
 
         if not names:
             if not excludes:
                 excludes = set([])
-            
-            names = set(k for k,_,_ in self.name_parts) - set(excludes)
+
+            names = set(k for k, _, _ in self.name_parts) - set(excludes)
         else:
             names = set(names)
 
-        final_parts= [str(d[k]) for (k, _, _) in self.name_parts
-                      if k and d.get(k, False) and k in (names - excludes)]
+        final_parts = [str(d[k]) for (k, _, _) in self.name_parts
+                       if k and d.get(k, False) and k in (names - excludes)]
 
-        return sep.join( final_parts)
-           
+        return sep.join(final_parts)
 
     @property
     def path(self):
-        '''The path of the bundle source. Includes the revision. '''
+        """The path of the bundle source.
+
+        Includes the revision.
+
+        """
 
         # Need to do this to ensure the function produces the
         # bundle path when called from subclasses
-        names = [ k for k,_,_ in Name._name_parts]
+        names = [k for k, _, _ in Name._name_parts]
 
         return os.path.join(
-                self.source,
-                self._path_join(names=names, excludes='source',sep=self.NAME_PART_SEP)
-             )
+            self.source,
+            self._path_join(
+                names=names,
+                excludes='source',
+                sep=self.NAME_PART_SEP))
 
     @property
     def source_path(self):
-        '''The name in a form suitable for use in a filesystem.
-        Excludes the revision'''
+        """The name in a form suitable for use in a filesystem.
+
+        Excludes the revision
+
+        """
         # Need to do this to ensure the function produces the
         # bundle path when called from subclasses
         names = [k for k, _, _ in self._name_parts]
@@ -238,8 +251,14 @@ class Name(object):
         if self.bspace:
             parts.append(self.bspace)
 
-        parts.append(self._path_join(names=names,
-                                     excludes=['source', 'version', 'bspace'], sep=self.NAME_PART_SEP))
+        parts.append(
+            self._path_join(
+                names=names,
+                excludes=[
+                    'source',
+                    'version',
+                    'bspace'],
+                sep=self.NAME_PART_SEP))
 
         return os.path.join(*parts)
 
@@ -247,75 +266,78 @@ class Name(object):
     def cache_key(self):
         '''The name in a form suitable for use as a cache-key'''
         try:
-            return self.path+self.PATH_EXTENSION
+            return self.path + self.PATH_EXTENSION
         except TypeError:
-            raise TypeError("self.path is invalild: '{}', '{}'".format(str(self.path), type(self.path)))
+            raise TypeError(
+                "self.path is invalild: '{}', '{}'".format(str(self.path), type(self.path)))
 
     def clone(self):
         return self.__class__(**self.dict)
 
     def ver(self, revision):
-        '''Clone and change the version'''
+        """Clone and change the version."""
 
-            
         c = self.clone()
-        
-        c.version =  self._parse_version(self.version)
-        
+
+        c.version = self._parse_version(self.version)
+
         return c
 
     def type_is_compatible(self, o):
 
-        if type(o) != DatasetNumber:
+        if not isinstance(o, DatasetNumber):
             return False
         else:
             return True
-      
+
     # The name always stores the version number as a string, so these
     # convenience functions make it easier to update specific parts
     @property
-    def version_minor(self): return Version(self.version).minor
-    
+    def version_minor(self):
+        return Version(self.version).minor
+
     @version_minor.setter
-    def version_minor(self, value):  
+    def version_minor(self, value):
         v = Version(self.version)
         v.minor = int(value)
         self.version = str(v)
- 
+
     @property
-    def version_major(self): return Version(self.version).minor
-    
+    def version_major(self):
+        return Version(self.version).minor
+
     @version_major.setter
-    def version_major(self, value):  
+    def version_major(self, value):
         v = Version(self.version)
         v.major = int(value)
         self.version = str(v)
-    
+
     @property
-    def version_patch(self): return Version(self.version).patch
-    
+    def version_patch(self):
+        return Version(self.version).patch
+
     @version_patch.setter
-    def version_patch(self, value):  
+    def version_patch(self, value):
         v = Version(self.version)
         v.patch = int(value)
         self.version = str(v)
- 
 
     @property
-    def version_build(self): return Version(self.version).build
-    
+    def version_build(self):
+        return Version(self.version).build
+
     @version_build.setter
-    def version_build(self, value):  
+    def version_build(self, value):
         v = Version(self.version)
         v.build = value
         self.version = str(v)
 
     def as_partition(self, **kwargs):
-        '''Return a PartitionName based on this name'''
+        """Return a PartitionName based on this name."""
 
         from .partition import name_class_from_format_name
 
-        format = kwargs.get('format','db')
+        format = kwargs.get('format', 'db')
 
         nc = name_class_from_format_name(format)
 
@@ -324,15 +346,14 @@ class Name(object):
     def as_namequery(self):
         return NameQuery(**self._dict(with_name=False))
 
-
     def __str__(self):
         return self.name
 
 
 class PartialPartitionName(Name):
-    '''For specifying a PartitionName within the context of a bundle. 
-    '''
-    
+
+    """For specifying a PartitionName within the context of a bundle."""
+
     time = None
     space = None
     table = None
@@ -340,83 +361,89 @@ class PartialPartitionName(Name):
     format = None
     segment = None
 
-    _name_parts = [ 
-                  ('table',None,True),
-                  ('time',None,True),
-                  ('space',None,True),
-                  ('grain',None,True),
-                  ('format',None,True),
-                  ('segment',None,True)]
+    _name_parts = [
+        ('table', None, True),
+        ('time', None, True),
+        ('space', None, True),
+        ('grain', None, True),
+        ('format', None, True),
+        ('segment', None, True)]
 
     def promote(self, name):
-        '''Promote to a PartitionName by combining with 
-        a bundle Name'''
+        """Promote to a PartitionName by combining with a bundle Name."""
         from partition import name_class_from_format_name
-
 
         cls = name_class_from_format_name(self.format)
 
-
         return cls(**dict(name.dict.items() +
-                                    self.dict.items() ))
-        
+                          self.dict.items()))
 
-    def is_valid(self): pass
+    def is_valid(self):
+        pass
 
 
 class PartitionName(PartialPartitionName, Name):
-    '''A Partition Name'''
 
+    """A Partition Name."""
 
-    _name_parts = ( Name._name_parts[0:-1] + 
-                  PartialPartitionName._name_parts +
-                  Name._name_parts[-1:])
+    _name_parts = (Name._name_parts[0:-1] +
+                   PartialPartitionName._name_parts +
+                   Name._name_parts[-1:])
 
     def _local_parts(self):
 
         parts = []
-        
+
         if self.table:
             parts.append(self.table)
-            
-        l = []
-        if self.time: l.append(str(self.time))
-        if self.space: l.append(str(self.space))
-        
-        if l: parts.append(self.NAME_PART_SEP.join(l))
-            
-        l = []
-        if self.grain: l.append(str(self.grain))
-        if self.segment: l.append(str(self.segment))
 
-        if l: parts.append(self.NAME_PART_SEP.join([ str(x) for x in l ]))
-        
+        l = []
+        if self.time:
+            l.append(str(self.time))
+        if self.space:
+            l.append(str(self.space))
+
+        if l:
+            parts.append(self.NAME_PART_SEP.join(l))
+
+        l = []
+        if self.grain:
+            l.append(str(self.grain))
+        if self.segment:
+            l.append(str(self.segment))
+
+        if l:
+            parts.append(self.NAME_PART_SEP.join([str(x) for x in l]))
+
         # the format value is part of the file extension
 
         return parts
- 
- 
+
     @property
     def name(self):
 
         d = self._dict(with_name=False)
 
-        return self.NAME_PART_SEP.join([ str(d[k]) for (k,_,_) in self.name_parts
-                         if k and d.get(k,False) 
-                         and k != 'version'
-                         and (k != 'format' or str(d[k]) != 'db') ])
-    
-        
+        return self.NAME_PART_SEP.join([str(d[k]) for (k, _, _) in self.name_parts if k and d.get(
+            k, False) and k != 'version' and (k != 'format' or str(d[k]) != 'db')])
+
     @property
     def path(self):
-        '''The path of the partition source. Includes the revision. '''
+        """The path of the partition source.
+
+        Includes the revision.
+
+        """
 
         try:
             parts = ([super(PartitionName, self).path] + self._local_parts())
 
             return os.path.join(*parts)
         except TypeError as e:
-            raise TypeError("Path failed for partition {}: {}".format(self.name, e.message))
+            raise TypeError(
+                "Path failed for partition {}: {}".format(
+                    self.name,
+                    e.message))
 
     @property
     def source_path(self):
@@ -424,18 +451,23 @@ class PartitionName(PartialPartitionName, Name):
 
     @property
     def sub_path(self):
-        '''The path of the partition source, excluding the bundle path parts.
-         Includes the revision. '''
+        """The path of the partition source, excluding the bundle path parts.
+
+        Includes the revision.
+
+        """
 
         try:
             return os.path.join(*(self._local_parts()))
         except TypeError as e:
-            raise TypeError("Path failed for partition {} : {}".format(self.name, e.message))
-
+            raise TypeError(
+                "Path failed for partition {} : {}".format(
+                    self.name,
+                    e.message))
 
     def type_is_compatible(self, o):
-        
-        if type(o) != PartitionNumber:
+
+        if not isinstance(o, PartitionNumber):
             return False
         else:
             return True
@@ -451,17 +483,22 @@ class PartitionName(PartialPartitionName, Name):
     def as_namequery(self):
         return PartitionNameQuery(**self._dict(with_name=False))
 
-
     def as_partialname(self):
-        return PartialPartitionName( ** self.dict)
+        return PartialPartitionName(** self.dict)
 
     @property
     def partital_dict(self, with_name=True):
-        '''Returns the name as a dict, but with only the items that are particular to a PartitionName'''
+        """Returns the name as a dict, but with only the items that are
+        particular to a PartitionName."""
 
-        d = self._dict(with_name = False)
+        d = self._dict(with_name=False)
 
-        d =  {k:d.get(k) for k,_, _ in PartialPartitionName._name_parts if d.get(k,False) }
+        d = {
+            k: d.get(k) for k,
+            _,
+            _ in PartialPartitionName._name_parts if d.get(
+                k,
+                False)}
 
         if 'format' in d and d['format'] == 'db':
             del d['format']
@@ -473,70 +510,72 @@ class PartitionName(PartialPartitionName, Name):
 
 class PartialMixin(object):
 
-
     NONE = '<none>'
     ANY = '<any>'
-
 
     use_clear_dict = True
 
     def clear_dict(self, d):
         if self.use_clear_dict:
-            return { k:v if v is not None else self.NONE for k,v in d.items() }
+            return {k: v if v is not None else self.NONE for k, v in d.items()}
         else:
             return d
 
-
     def _dict(self, with_name=True):
-        '''Returns the identity as a dict. values that are empty are removed'''
+        """Returns the identity as a dict.
 
-        d = dict([ (k, getattr(self, k)) for k,_, _ in self.name_parts ] )
-            
-        return self.clear_dict(d) 
-    
+        values that are empty are removed
+
+        """
+
+        d = dict([(k, getattr(self, k)) for k, _, _ in self.name_parts])
+
+        return self.clear_dict(d)
+
     def with_none(self):
-        '''Convert the NameQuery.NONE to None. This is needed because on the
-        kwargs list, a None value means the field is not specified, which 
+        """Convert the NameQuery.NONE to None. This is needed because on the
+        kwargs list, a None value means the field is not specified, which
         equates to ANY. The _find_orm() routine, however, is easier to write if
-        the NONE value is actually None 
-        
+        the NONE value is actually None.
+
         Returns a clone of the origin, with NONE converted to None
-        '''
-    
+
+        """
+
         n = self.clone()
-    
-        for k,_,_ in n.name_parts:
-            
-            if getattr(n,k) == n.NONE:
-                delattr(n,k)
+
+        for k, _, _ in n.name_parts:
+
+            if getattr(n, k) == n.NONE:
+                delattr(n, k)
 
         n.use_clear_dict = False
-    
+
         return n
-    
+
     def is_valid(self):
         return True
-
 
     @property
     def path(self):
         raise NotImplementedError("Can't get a path from a partial name")
 
-    
     @property
     def cache_key(self):
         raise NotImplementedError("Can't get a cache_key from a partial name")
 
 
 class NameQuery(PartialMixin, Name):
-    '''A partition name used for finding and searching. 
-    does not have an expectation of having all parts completely
-    defined, and can't be used to generate a string 
-    
+
+    """A partition name used for finding and searching. does not have an
+    expectation of having all parts completely defined, and can't be used to
+    generate a string.
+
     When a partial name is returned as a dict, parts that were not
     specified in the constructor have a value of '<any.', and parts that
     were specified as None have a value of '<none>'
-    '''
+
+    """
 
     NONE = PartialMixin.NONE
     ANY = PartialMixin.ANY
@@ -548,33 +587,39 @@ class NameQuery(PartialMixin, Name):
     fqname = None
 
     def clean(self):
-        '''
-        Null operation, since NameQueries should not be cleaned.
+        """Null operation, since NameQueries should not be cleaned.
+
         :return:
-        '''
+
+        """
 
         pass
 
-    @property 
+    @property
     def name_parts(self):
-        '''Works with PartialNameMixin.clear_dict to set NONE and ANY values'''
-        
+        """Works with PartialNameMixin.clear_dict to set NONE and ANY
+        values."""
+
         default = PartialMixin.ANY
 
-        np =  ([ (k,default, True) 
-                for k,_, _ in super(NameQuery, self).name_parts ]
-               +
-                [ (k,default, True)
-                for k,_, _ in Name._generated_names ]
-               )
-  
+        np = ([(k, default, True)
+               for k, _, _ in super(NameQuery, self).name_parts]
+              +
+              [(k, default, True)
+               for k, _, _ in Name._generated_names]
+              )
+
         return np
 
 
-class PartitionNameQuery(PartialMixin,PartitionName):
-    '''A partition name used for finding and searching. 
-    does not have an expectation of having all parts completely
-    defined, and can't be used to generate a string '''
+class PartitionNameQuery(PartialMixin, PartitionName):
+
+    """A partition name used for finding and searching.
+
+    does not have an expectation of having all parts completely defined,
+    and can't be used to generate a string
+
+    """
 
     # These are valid values for a name query
     name = None
@@ -582,68 +627,67 @@ class PartitionNameQuery(PartialMixin,PartitionName):
     fqname = None
 
     def clean(self):
-        '''
-        Null operation, since NameQueries should not be cleaned.
+        """Null operation, since NameQueries should not be cleaned.
+
         :return:
-        '''
+
+        """
 
         pass
 
-    @property 
+    @property
     def name_parts(self):
-        '''Works with PartialNameMixin.clear_dict to set NONE and ANY values'''
-        
+        """Works with PartialNameMixin.clear_dict to set NONE and ANY
+        values."""
+
         default = PartialMixin.ANY
 
-        return ([ (k,default, True) 
-                for k,_, _ in PartitionName._name_parts ]
-                + 
-                [ (k,default, True)
-                for k,_, _ in Name._generated_names ]
-               )
+        return ([(k, default, True)
+                for k, _, _ in PartitionName._name_parts]
+                +
+                [(k, default, True)
+                 for k, _, _ in Name._generated_names]
+                )
 
 
 class ObjectNumber(object):
-    '''
-    Static class for holding constants and static methods related 
-    to object numbers
-    '''
-    
-    # When a name is resolved to an ObjectNumber, orig can 
-    # be set to the input value, which can be important, for instance, 
-    # if the value's use depends on whether the user specified a version 
+
+    """Static class for holding constants and static methods related to object
+    numbers."""
+
+    # When a name is resolved to an ObjectNumber, orig can
+    # be set to the input value, which can be important, for instance,
+    # if the value's use depends on whether the user specified a version
     # number, since all values are resolved to versioned ONs
     orig = None
     assignment_class = 'self'
-    
 
-
-    TYPE=Constant()
+    TYPE = Constant()
     TYPE.DATASET = 'd'
     TYPE.PARTITION = 'p'
-    TYPE.TABLE ='t'
+    TYPE.TABLE = 't'
     TYPE.COLUMN = 'c'
-    
+
     VERSION_SEP = ''
-    
-    DLEN=Constant()
-    
+
+    DLEN = Constant()
+
     # Number of digits in each assignment class
-    DLEN.DATASET = (3,5,7,9)
-    DLEN.DATASET_CLASSES=dict(authoritative=DLEN.DATASET[0], # Datasets registered by number authority . 
-                              registered=DLEN.DATASET[1], # For registered users of a numbering authority
-                              unregistered=DLEN.DATASET[2], # For unregistered users of a numebring authority
-                              self=DLEN.DATASET[3]) # Self registered
+    DLEN.DATASET = (3, 5, 7, 9)
+    DLEN.DATASET_CLASSES = dict(authoritative=DLEN.DATASET[0],  # Datasets registered by number authority .
+                                registered=DLEN.DATASET[1],  # For registered users of a numbering authority
+                                unregistered=DLEN.DATASET[2],  # For unregistered users of a numebring authority
+                                self=DLEN.DATASET[3])  # Self registered
     DLEN.PARTITION = 3
     DLEN.TABLE = 2
     DLEN.COLUMN = 3
-    DLEN.REVISION = (0,3)
-    
-    # Because the dataset number can be 3, 5, 7 or 9 characters, 
-    # And the revision is optional, the datasets ( and thus all 
+    DLEN.REVISION = (0, 3)
+
+    # Because the dataset number can be 3, 5, 7 or 9 characters,
+    # And the revision is optional, the datasets ( and thus all
     # other objects ) , can have several differnt lengths. We
     # Use these different lengths to determine what kinds of
-    # fields to parse 
+    # fields to parse
     # 's'-> short dataset, 'l'->long datset, 'r' -> has revision
     #
     # generate with:
@@ -652,62 +696,68 @@ class ObjectNumber(object):
     #         for cls, ds_len in self.DLEN.ATASET_CLASSES.items()
     #         for rl in self.DLEN.REVISION
     #     }
-    #     
+    #
     DATASET_LENGTHS = {
-                        3: (3, None, 'authoritative'),
-                        5: (5, None, 'registered'),
-                        6: (3, 3, 'authoritative'),
-                        7: (7, None, 'unregistered'),
-                        8: (5, 3, 'registered'),
-                        9: (9, None, 'self'),
-                        10: (7, 3, 'unregistered'),
-                        12: (9, 3, 'self')}
+        3: (3, None, 'authoritative'),
+        5: (5, None, 'registered'),
+        6: (3, 3, 'authoritative'),
+        7: (7, None, 'unregistered'),
+        8: (5, 3, 'registered'),
+        9: (9, None, 'self'),
+        10: (7, 3, 'unregistered'),
+        12: (9, 3, 'self')}
 
     # Length of the caracters that aren't the dataset and revisions
     NDS_LENGTH = {'d': 0,
                   'p': DLEN.PARTITION,
                   't': DLEN.TABLE,
-                  'c': DLEN.TABLE+DLEN.COLUMN}
-   
-    TCMAXVAL = 62**DLEN.TABLE -1 # maximum for table values.
-    CCMAXVAL = 62**DLEN.COLUMN -1 # maximum for column values.
-    PARTMAXVAL = 62**DLEN.PARTITION -1 # maximum for table and column values.
-     
-    EPOCH = 1389210331 # About Jan 8, 2014
+                  'c': DLEN.TABLE + DLEN.COLUMN}
+
+    TCMAXVAL = 62 ** DLEN.TABLE - 1  # maximum for table values.
+    CCMAXVAL = 62 ** DLEN.COLUMN - 1  # maximum for column values.
+    # maximum for table and column values.
+    PARTMAXVAL = 62 ** DLEN.PARTITION - 1
+
+    EPOCH = 1389210331  # About Jan 8, 2014
 
     @classmethod
-    def parse(cls, on_str): #@ReservedAssignment
-        '''Parse a string into one of the object number classes. '''
-        
+    def parse(cls, on_str):  # @ReservedAssignment
+        """Parse a string into one of the object number classes."""
+
         if on_str is None:
             return None
-        
+
         if not on_str:
             raise Exception("Didn't get input")
 
-        if  isinstance(on_str, unicode):
+        if isinstance(on_str, unicode):
             dataset = on_str.encode('ascii')
-      
+
         type_ = on_str[0]
         on_str = on_str[1:]
 
         # There are some old values to need to be translated:
         if type_ == 'a':
-            type_  = cls.TYPE.DATASET
+            type_ = cls.TYPE.DATASET
             on_str = cls.TYPE.DATASET + on_str[1:]
 
-        if not type_ in  cls.NDS_LENGTH.keys():
-            raise NotObjectNumberError("Unknown type character '{}' for '{}'".format(type_, on_str))
+        if not type_ in cls.NDS_LENGTH.keys():
+            raise NotObjectNumberError(
+                "Unknown type character '{}' for '{}'".format(
+                    type_,
+                    on_str))
 
-        ds_length = len(on_str)-cls.NDS_LENGTH[type_]
+        ds_length = len(on_str) - cls.NDS_LENGTH[type_]
 
         if not ds_length in cls.DATASET_LENGTHS:
-            raise NotObjectNumberError("Dataset string '{}' has an unfamiliar length: {}".format(on_str, ds_length))
+            raise NotObjectNumberError(
+                "Dataset string '{}' has an unfamiliar length: {}".format(
+                    on_str,
+                    ds_length))
 
         ds_lengths = cls.DATASET_LENGTHS[ds_length]
-        
-        assignment_class = ds_lengths[2]
 
+        assignment_class = ds_lengths[2]
 
         try:
             dataset = int(ObjectNumber.base62_decode(on_str[0:ds_lengths[0]]))
@@ -722,44 +772,69 @@ class ObjectNumber(object):
             on_str = on_str[ds_lengths[0]:]
 
             if type_ == cls.TYPE.DATASET:
-                return DatasetNumber(dataset, revision=revision, assignment_class=assignment_class)
+                return DatasetNumber(
+                    dataset,
+                    revision=revision,
+                    assignment_class=assignment_class)
 
             elif type_ == cls.TYPE.TABLE:
                 table = int(ObjectNumber.base62_decode(on_str))
-                return TableNumber(DatasetNumber(dataset, assignment_class=assignment_class),
-                                   table, revision=revision)
+                return TableNumber(
+                    DatasetNumber(
+                        dataset,
+                        assignment_class=assignment_class),
+                    table,
+                    revision=revision)
 
             elif type_ == cls.TYPE.PARTITION:
                 partition = int(ObjectNumber.base62_decode(on_str))
-                return PartitionNumber(DatasetNumber(dataset, assignment_class=assignment_class),
-                                       partition, revision=revision)
+                return PartitionNumber(
+                    DatasetNumber(
+                        dataset,
+                        assignment_class=assignment_class),
+                    partition,
+                    revision=revision)
 
             elif type_ == cls.TYPE.COLUMN:
-                table = int(ObjectNumber.base62_decode(on_str[0:cls.DLEN.TABLE]))
-                column = int(ObjectNumber.base62_decode(on_str[cls.DLEN.TABLE:]))
+                table = int(
+                    ObjectNumber.base62_decode(
+                        on_str[
+                            0:cls.DLEN.TABLE]))
+                column = int(
+                    ObjectNumber.base62_decode(
+                        on_str[
+                            cls.DLEN.TABLE:]))
 
-                return ColumnNumber(TableNumber(
-                                    DatasetNumber(dataset, assignment_class=assignment_class), table),
-                                    column, revision=revision)
+                return ColumnNumber(
+                    TableNumber(
+                        DatasetNumber(
+                            dataset,
+                            assignment_class=assignment_class),
+                        table),
+                    column,
+                    revision=revision)
 
             else:
-                raise NotObjectNumberError('Unknown type character: '+on_str[0]+ ' in '+str(on_str))
+                raise NotObjectNumberError(
+                    'Unknown type character: ' +
+                    on_str[0] +
+                    ' in ' +
+                    str(on_str))
         except Base62DecodeError as e:
-            raise NotObjectNumberError("Unknown character:  "+str(e))
-
-
+            raise NotObjectNumberError("Unknown character:  " + str(e))
 
     @classmethod
     def base62_encode(cls, num):
-        """Encode a number in Base X
-    
+        """Encode a number in Base X.
+
         `num`: The number to encode
         `alphabet`: The alphabet to use for encoding
         Stolen from: http://stackoverflow.com/a/1119769/1144479
+
         """
-        
-        alphabet="0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        
+
+        alphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
         if (num == 0):
             return alphabet[0]
         arr = []
@@ -772,39 +847,40 @@ class ObjectNumber(object):
         return ''.join(arr)
 
     @classmethod
-    def base62_decode(cls,string):
-        """Decode a Base X encoded string into the number
-    
+    def base62_decode(cls, string):
+        """Decode a Base X encoded string into the number.
+
         Arguments:
         - `string`: The encoded string
         - `alphabet`: The alphabet to use for encoding
         Stolen from: http://stackoverflow.com/a/1119769/1144479
+
         """
-        
-        alphabet="0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        
+
+        alphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
         base = len(alphabet)
         strlen = len(string)
         num = 0
-    
+
         idx = 0
         for char in string:
             power = (strlen - (idx + 1))
             try:
                 num += alphabet.index(char) * (base ** power)
             except ValueError:
-                raise Base62DecodeError("Failed to decode char: '{}'".format(char))
+                raise Base62DecodeError(
+                    "Failed to decode char: '{}'".format(char))
             idx += 1
-    
+
         return num
 
     def rev(self, i):
-        '''Return a clone with a different revision'''
+        """Return a clone with a different revision."""
         from copy import copy
-        on =  copy(self)
+        on = copy(self)
         on.revision = i
         return on
-
 
     def __eq__(self, other):
         return str(self) == str(other)
@@ -816,20 +892,30 @@ class ObjectNumber(object):
             return ''
 
         revision = int(revision)
-        return (ObjectNumber.base62_encode(revision).rjust(cls.DLEN.REVISION[1],'0') 
-                if bool(revision) else '')
-
+        return (
+            ObjectNumber.base62_encode(revision).rjust(
+                cls.DLEN.REVISION[1],
+                '0') if bool(revision) else '')
 
 
 class TopNumber(ObjectNumber):
-    '''A general top level number, with a given number space. Just like a DatasetNumber, with without the 'd' '''
-    def __init__(self, space, dataset=None, revision=None, assignment_class='self'):
-        '''
-        Constructor
-        '''
+
+    """A general top level number, with a given number space.
+
+    Just like a DatasetNumber, with without the 'd'
+
+    """
+
+    def __init__(
+            self,
+            space,
+            dataset=None,
+            revision=None,
+            assignment_class='self'):
+        """Constructor."""
 
         if len(space) > 1:
-            raise  ValueError("Number space must be a single letter")
+            raise ValueError("Number space must be a single letter")
 
         self.space = space
 
@@ -842,32 +928,36 @@ class TopNumber(ObjectNumber):
             # On 64 bit machine, max is about 10^17, 2^53
             # That should be random enough to prevent
             # collisions for a small number of self assigned numbers
-            max = 62**digit_length
-            dataset = random.randint(0,max)
+            max = 62 ** digit_length
+            dataset = random.randint(0, max)
 
         self.dataset = dataset
         self.revision = revision
 
     @classmethod
     def from_hex(cls, h, space, assignment_class='self'):
-        """Produce a TopNumber, with a length to match the given assignment class, based on an input hex string.
+        """Produce a TopNumber, with a length to match the given assignment
+        class, based on an input hex string.
 
         This can be used to create TopNumbers from a hash of a string.
+
         """
 
         from math import log
 
-        #Use the ln(N)/ln(base) trick to find the right number of hext digits to  use
+        # Use the ln(N)/ln(base) trick to find the right number of hext digits
+        # to  use
 
-        hex_digits = int(round(log(62**TopNumber.DLEN.DATASET_CLASSES[assignment_class]) / log(16),0))
+        hex_digits = int(
+            round(log(62 ** TopNumber.DLEN.DATASET_CLASSES[assignment_class]) / log(16), 0))
 
-        i = int(h[:hex_digits],16)
+        i = int(h[:hex_digits], 16)
 
         return TopNumber(space, i, assignment_class=assignment_class)
 
     @classmethod
     def from_string(cls, s, space):
-        """Produce a TopNumber by hashing a string"""
+        """Produce a TopNumber by hashing a string."""
 
         import hashlib
 
@@ -879,17 +969,22 @@ class TopNumber(ObjectNumber):
 
         ds_len = self.DLEN.DATASET_CLASSES[self.assignment_class]
 
-        return (ObjectNumber.base62_encode(self.dataset).rjust(ds_len,'0') )
+        return (ObjectNumber.base62_encode(self.dataset).rjust(ds_len, '0'))
 
     def __str__(self):
-        return (self.space + self._ds_str() + ObjectNumber._rev_str(self.revision))
+        return (
+            self.space +
+            self._ds_str() +
+            ObjectNumber._rev_str(
+                self.revision))
+
 
 class DatasetNumber(ObjectNumber):
-    '''An identifier for a dataset'''
+
+    """An identifier for a dataset."""
+
     def __init__(self, dataset=None, revision=None, assignment_class='self'):
-        '''
-        Constructor
-        '''
+        """Constructor."""
 
         self.assignment_class = assignment_class
 
@@ -898,35 +993,34 @@ class DatasetNumber(ObjectNumber):
             import random
             digit_length = self.DLEN.DATASET_CLASSES[self.assignment_class]
             # On 64 bit machine, max is about 10^17, 2^53
-            # That should be random enough to prevent 
+            # That should be random enough to prevent
             # collisions for a small number of self assigned numbers
-            max = 62**digit_length
-            dataset = random.randint(0,max)
-          
-        
+            max = 62 ** digit_length
+            dataset = random.randint(0, max)
+
         self.dataset = dataset
         self.revision = revision
- 
-    def _ds_str(self):
-        
-        ds_len = self.DLEN.DATASET_CLASSES[self.assignment_class]
-        
-        return (ObjectNumber.base62_encode(self.dataset).rjust(ds_len,'0') )
 
-    def as_partition(self, partition_number = 0):
-        '''Return a new PartitionNumber based on this DatasetNumber'''
+    def _ds_str(self):
+
+        ds_len = self.DLEN.DATASET_CLASSES[self.assignment_class]
+
+        return (ObjectNumber.base62_encode(self.dataset).rjust(ds_len, '0'))
+
+    def as_partition(self, partition_number=0):
+        """Return a new PartitionNumber based on this DatasetNumber."""
         return PartitionNumber(self, partition_number)
 
-
-    def __str__(self):        
-        return (ObjectNumber.TYPE.DATASET+
-                self._ds_str()+
+    def __str__(self):
+        return (ObjectNumber.TYPE.DATASET +
+                self._ds_str() +
                 ObjectNumber._rev_str(self.revision))
 
 
-
 class TableNumber(ObjectNumber):
-    '''An identifier for a table'''
+
+    """An identifier for a table."""
+
     def __init__(self, dataset, table, revision=None):
         if not isinstance(dataset, DatasetNumber):
             raise ValueError("Constructor requires a DatasetNumber")
@@ -934,89 +1028,111 @@ class TableNumber(ObjectNumber):
         if table > ObjectNumber.TCMAXVAL:
             raise ValueError("Value is too large")
 
-
         self.dataset = dataset
         self.table = table
         self.revision = revision
-        
+
         if not self.revision and dataset.revision:
             self.revision = dataset.revision
 
     @property
     def as_table(self):
-        """Returns self, so TableNumber and Column number can be used interchangably"""
+        """Returns self, so TableNumber and Column number can be used
+        interchangably."""
         return self
 
     @property
     def as_dataset(self):
-        """Unlike the .dataset property, this will include the revision"""
+        """Unlike the .dataset property, this will include the revision."""
         return self.dataset.rev(self.revision)
 
-         
-    def __str__(self):        
-        return (ObjectNumber.TYPE.TABLE+
-                self.dataset._ds_str()+
-                ObjectNumber.base62_encode(self.table).rjust(self.DLEN.TABLE,'0')+
-                ObjectNumber._rev_str(self.revision))
+    def __str__(self):
+        return (
+            ObjectNumber.TYPE.TABLE +
+            self.dataset._ds_str() +
+            ObjectNumber.base62_encode(
+                self.table).rjust(
+                self.DLEN.TABLE,
+                '0') +
+            ObjectNumber._rev_str(
+                self.revision))
+
 
 class ColumnNumber(ObjectNumber):
-    '''An identifier for a column'''
+
+    """An identifier for a column."""
+
     def __init__(self, table, column, revision=None):
         if not isinstance(table, TableNumber):
-            raise ValueError("Constructor requires a TableNumber. got: "+str(type(table)))
+            raise ValueError(
+                "Constructor requires a TableNumber. got: " + str(type(table)))
 
         column = int(column)
 
         if column > ObjectNumber.CCMAXVAL:
-            raise ValueError("Value {} is too large ( max is {} ) ".format(column, ObjectNumber.TCMAXVAL))
+            raise ValueError(
+                "Value {} is too large ( max is {} ) ".format(
+                    column,
+                    ObjectNumber.TCMAXVAL))
 
         self.table = table
         self.column = column
         self.revision = revision
-   
+
         if not self.revision and table.revision:
             self.revision = table.revision
 
     @property
     def dataset(self):
-        '''Return the dataset number for ths partition '''
+        """Return the dataset number for ths partition."""
         return self.table.dataset
 
     @property
     def as_dataset(self):
-        """Unlike the .dataset property, this will include the revision"""
+        """Unlike the .dataset property, this will include the revision."""
         return self.table.dataset.rev(self.revision)
 
     @property
     def as_table(self):
-        """Unlike the .dataset property, this will include the revision"""
+        """Unlike the .dataset property, this will include the revision."""
         return self.table.rev(self.revision)
 
-         
-    def __str__(self):        
-        return (ObjectNumber.TYPE.COLUMN+
-                self.dataset._ds_str()+
-                ObjectNumber.base62_encode(self.table.table).rjust(self.DLEN.TABLE,'0')+
-                ObjectNumber.base62_encode(self.column).rjust(self.DLEN.COLUMN,'0')+
-                ObjectNumber._rev_str(self.revision)
-                )
+    def __str__(self):
+        return (
+            ObjectNumber.TYPE.COLUMN +
+            self.dataset._ds_str() +
+            ObjectNumber.base62_encode(
+                self.table.table).rjust(
+                self.DLEN.TABLE,
+                '0') +
+            ObjectNumber.base62_encode(
+                self.column).rjust(
+                self.DLEN.COLUMN,
+                '0') +
+            ObjectNumber._rev_str(
+                self.revision))
+
 
 class PartitionNumber(ObjectNumber):
-    '''An identifier for a partition'''
+
+    """An identifier for a partition."""
+
     def __init__(self, dataset, partition, revision=None):
         '''
         Arguments:
         dataset -- Must be a DatasetNumber
         partition -- an integer, from 0 to 62^3
         '''
-        
+
         partition = int(partition)
-        
+
         if not isinstance(dataset, DatasetNumber):
             raise ValueError("Constructor requires a DatasetNumber")
 
         if partition > ObjectNumber.PARTMAXVAL:
-            raise ValueError("Value is too large. Max is: {}".format(ObjectNumber.PARTMAXVAL))
+            raise ValueError(
+                "Value is too large. Max is: {}".format(
+                    ObjectNumber.PARTMAXVAL))
 
         self.dataset = dataset
         self.partition = partition
@@ -1027,24 +1143,30 @@ class PartitionNumber(ObjectNumber):
 
     @property
     def as_dataset(self):
-        """Unlike the .dataset property, this will include the revision"""
+        """Unlike the .dataset property, this will include the revision."""
         return self.dataset.rev(self.revision)
 
-    def __str__(self):        
-        return (ObjectNumber.TYPE.PARTITION+
-                self.dataset._ds_str()+
-                ObjectNumber.base62_encode(self.partition).rjust(self.DLEN.PARTITION,'0')+
-                ObjectNumber._rev_str(self.revision))
+    def __str__(self):
+        return (
+            ObjectNumber.TYPE.PARTITION +
+            self.dataset._ds_str() +
+            ObjectNumber.base62_encode(
+                self.partition).rjust(
+                self.DLEN.PARTITION,
+                '0') +
+            ObjectNumber._rev_str(
+                self.revision))
+
 
 class LocationRef(object):
 
-    LOCATION=Constant()
+    LOCATION = Constant()
 
     LOCATION.UNKNOWN = ' '
 
     LOCATION.SOURCE = 'S'
-    LOCATION.LIBRARY = 'L' # For the bundle
-    LOCATION.REMOTE ='R'
+    LOCATION.LIBRARY = 'L'  # For the bundle
+    LOCATION.REMOTE = 'R'
     LOCATION.REMOTEPARTITION = 'RP'
     LOCATION.PARTITION = 'LP'  # For the partition, b/c also used in File.type
 
@@ -1054,7 +1176,7 @@ class LocationRef(object):
     LOCATION.UPSTREAM = 'U'
     LOCATION.WAREHOUSE = 'W'
 
-    def __init__(self,location, revision=None, version=None, code = None):
+    def __init__(self, location, revision=None, version=None, code=None):
         self.location = location
         self.revision = revision
         self.version = version
@@ -1073,7 +1195,10 @@ class LocationRef(object):
         return self.code if self.revision else self.LOCATION.UNKNOWN
 
     def __repr__(self):
-        return '{}:{}'.format(self.location,self.revision if self.revision else '')
+        return '{}:{}'.format(
+            self.location,
+            self.revision if self.revision else '')
+
 
 class Locations(object):
 
@@ -1093,29 +1218,31 @@ class Locations(object):
         return location in self.codes
 
     def has(self, location):
-        if isinstance(location,  basestring ) and len(location) == 1:
+        if isinstance(location, basestring) and len(location) == 1:
             return location in self.codes
         else:
             return any([l in self.codes for l in location])
 
     def __init__(self, ident=None):
         self.ident = ident
-        self._locations = { code:LocationRef(code) for name, code in vars(LocationRef.LOCATION).items() }
-
+        self._locations = {
+            code: LocationRef(code) for name,
+            code in vars(
+                LocationRef.LOCATION).items()}
 
     def __str__(self):
         return ''.join([str(self._locations[code]) for code in self.order])
 
     @property
     def codes(self):
-        return tuple ( ( c for c, v in self._locations.items() if v.code ) )
-
+        return tuple((c for c, v in self._locations.items() if v.code))
 
     def set(self, code, revision=None, version=None):
 
         uc_code = code.upper()
 
-        # In warehouses, there are many other file types that are not locations.
+        # In warehouses, there are many other file types that are not
+        # locations.
         if uc_code not in Locations.order:
             return
 
@@ -1127,11 +1254,17 @@ class Locations(object):
         self._locations[uc_code].version = version
         self._locations[uc_code].code = code
 
+
 class Identity(object):
-    '''Identities represent the defining set of information about a 
-    bundle or a partition. Only the vid is actually required to 
-    uniquely identify a bundle or partition, but the identity is also
-    used for generating unique names and for finding bundles and partitions. '''
+
+    """Identities represent the defining set of information about a bundle or a
+    partition.
+
+    Only the vid is actually required to uniquely identify a bundle or
+    partition, but the identity is also used for generating unique names
+    and for finding bundles and partitions.
+
+    """
 
     is_bundle = True
     is_partition = False
@@ -1147,27 +1280,30 @@ class Identity(object):
     locations = None
     partitions = None
     files = None
-    urls = None # Url dict, from a remote library.
-    url = None # Url of remote where object should be retrieved
-    bundle = None # A bundle if it is created during the identity listing process.
-    bundle_path = None # Path to bundle in file system. Set in SourceTreeLibrary.list()
-    bundle_state = None # Build state of the bundle. Set in SourceTreeLibrary.list()
-    git_state = None # State of the git repository. Set in SourceTreeLibrary.list()
+    urls = None  # Url dict, from a remote library.
+    url = None  # Url of remote where object should be retrieved
+    # A bundle if it is created during the identity listing process.
+    bundle = None
+    # Path to bundle in file system. Set in SourceTreeLibrary.list()
+    bundle_path = None
+    # Build state of the bundle. Set in SourceTreeLibrary.list()
+    bundle_state = None
+    # State of the git repository. Set in SourceTreeLibrary.list()
+    git_state = None
 
-
-    md5 = None #
-    data = None # Catch-all for other information
+    md5 = None
+    data = None  # Catch-all for other information
 
     def __init__(self, name, object_number):
 
-        assert type(name) == self._name_class, "Wrong type: {}. Expected {}"\
+        assert isinstance(name, self._name_class), "Wrong type: {}. Expected {}"\
             .format(type(name), self._name_class)
 
         self._on = object_number
         self._name = name
 
         if not self._name.type_is_compatible(self._on):
-            raise TypeError("The name and the object number must be "+
+            raise TypeError("The name and the object number must be " +
                             "of compatible types: got {} and {}"
                             .format(type(name), type(object_number)))
 
@@ -1186,18 +1322,21 @@ class Identity(object):
     @classmethod
     def from_dict(cls, d):
 
-        assert isinstance(d,dict)
+        assert isinstance(d, dict)
 
         if 'id' in d and d['id'] and 'revision' in d:
             # The vid should be constructed from the id and the revision
 
             if not d['id']:
-                raise ValueError(" 'id' key doesn't have a value in {} ".format(d))
+                raise ValueError(
+                    " 'id' key doesn't have a value in {} ".format(d))
 
             ono = ObjectNumber.parse(d['id'])
 
             if not ono:
-                raise ValueError("Failed to parse '{}' as an ObjectNumber ".format(d['id']))
+                raise ValueError(
+                    "Failed to parse '{}' as an ObjectNumber ".format(
+                        d['id']))
 
             on = ono.rev(d['revision'])
 
@@ -1205,35 +1344,43 @@ class Identity(object):
             on = ObjectNumber.parse(d['vid'])
 
             if not on:
-                raise ValueError("Failed to parse '{}' as an ObjectNumber ".format(d['vid']))
+                raise ValueError(
+                    "Failed to parse '{}' as an ObjectNumber ".format(
+                        d['vid']))
 
         else:
-            raise ValueError("Must have id and revision, or vid. Got neither from {}".format(d))
-
+            raise ValueError(
+                "Must have id and revision, or vid. Got neither from {}".format(d))
 
         if isinstance(on, DatasetNumber):
 
             try:
                 name = cls._name_class(**d)
-                ident =  cls(name, on)
+                ident = cls(name, on)
             except TypeError as e:
-                raise TypeError("Failed to make identity from \n{}\n: {}".format(d, e.message))
+                raise TypeError(
+                    "Failed to make identity from \n{}\n: {}".format(
+                        d,
+                        e.message))
 
         elif isinstance(on, PartitionNumber):
 
-            ident =  PartitionIdentity.from_dict(d)
+            ident = PartitionIdentity.from_dict(d)
         else:
-            raise TypeError("Can't make identity from {}; object number is wrong type: {}".format(d, type(on)))
+            raise TypeError(
+                "Can't make identity from {}; object number is wrong type: {}".format(
+                    d,
+                    type(on)))
 
         if 'md5' in d:
             ident.md5 = d['md5']
 
         return ident
 
-
     @classmethod
     def classify(cls, o):
-        """Break an Identity name into parts, or describe the type of other forms.
+        """Break an Identity name into parts, or describe the type of other
+        forms.
 
         Break a name or object number into parts and classify them. Returns a named tuple
         that indicates which parts of input string are name components, object number and
@@ -1242,13 +1389,14 @@ class Identity(object):
         Also can handle Name, Identity and ObjectNumbers
 
         :param o: Input object to split
+
         """
         from collections import namedtuple
 
         s = str(o)
 
         if o is None:
-            raise  ValueError("Input cannot be None")
+            raise ValueError("Input cannot be None")
 
         class IdentityParts(object):
             on = None
@@ -1261,8 +1409,8 @@ class Identity(object):
             version = None
             cache_key = None
 
-
-        ip = IdentityParts() # namedtuple('IdentityParts', ['isa', 'name', 'name_parts','on','version', 'vspec'])
+        # namedtuple('IdentityParts', ['isa', 'name', 'name_parts','on','version', 'vspec'])
+        ip = IdentityParts()
 
         if isinstance(o, (DatasetNumber, PartitionNumber)):
             ip.on = o
@@ -1270,7 +1418,7 @@ class Identity(object):
             ip.isa = type(ip.on)
             ip.name_parts = None
 
-        elif isinstance(o,Name):
+        elif isinstance(o, Name):
             ip.on = None
             ip.isa = type(o)
             ip.name = str(o)
@@ -1286,7 +1434,7 @@ class Identity(object):
             ip.name, on_s = s.strip().split(cls.OBJECT_NUMBER_SEP)
             ip.on = ObjectNumber.parse(on_s)
             ip.name_parts = ip.name.split(Name.NAME_PART_SEP)
-            ip.isa =type(ip.on)
+            ip.isa = type(ip.on)
 
         elif Name.NAME_PART_SEP in s:
             # Must be an sname or vname
@@ -1308,12 +1456,12 @@ class Identity(object):
             last = ip.name_parts[-1]
 
             try:
-                ip.version  = semantic_version.Version(last)
+                ip.version = semantic_version.Version(last)
                 ip.vname = ip.name
             except ValueError:
                 try:
-                    ip.version  = semantic_version.Spec(last)
-                    ip.vname = None # Specs aren't vnames you can query
+                    ip.version = semantic_version.Spec(last)
+                    ip.vname = None  # Specs aren't vnames you can query
                 except ValueError:
                     pass
 
@@ -1323,38 +1471,34 @@ class Identity(object):
             else:
                 ip.sname = ip.name
 
-
-
         return ip
 
     def to_meta(self, md5=None, file=None):
-        '''Return a dictionary of metadata, for use in the Remote api'''
+        """Return a dictionary of metadata, for use in the Remote api."""
         import json
         import os
         from collections import OrderedDict
 
-
         if not md5:
             if not file:
                 raise ValueError("Must specify either file or md5")
-        
+
             from util import md5_for_file
-            
+
             md5 = md5_for_file(file)
             size = os.stat(file).st_size
         else:
             size = None
-        
-        return {
-                'id':self.id_, 
-                'identity': json.dumps(self.dict),
-                'name':self.sname,
-                'fqname':self.fqname,
-                'md5':md5,
-                # This causes errors with calculating the AWS signature
-                'size': size
-                }
 
+        return {
+            'id': self.id_,
+            'identity': json.dumps(self.dict),
+            'name': self.sname,
+            'fqname': self.fqname,
+            'md5': md5,
+            # This causes errors with calculating the AWS signature
+            'size': size
+        }
 
     def add_md5(self, md5=None, file=None):
         import json
@@ -1371,7 +1515,6 @@ class Identity(object):
 
         return self
 
-
     #
     # Naming, paths and cache_keys
     #
@@ -1379,48 +1522,53 @@ class Identity(object):
     def is_valid(self):
         self._name.is_valid()
 
-
     @property
     def on(self):
-        '''Return the object number obect'''
+        """Return the object number obect."""
         return self._on
 
     @property
     def id_(self):
-        '''String version of the object number, without a revision'''
-        
+        """String version of the object number, without a revision."""
+
         return str(self._on.rev(None))
 
     @property
     def vid(self):
-        '''String version of the object number'''
+        """String version of the object number."""
         return str(self._on)
-   
+
     @property
     def name(self):
-        """The name object"""
+        """The name object."""
         return self._name
 
     @property
     def sname(self):
-        """The name of the bundle, as a string, excluding the revision"""
+        """The name of the bundle, as a string, excluding the revision."""
         return str(self._name)
-
 
     @property
     def vname(self):
-        ''' '''
-        return self._name.vname # Obsoleted by __getattr__??
- 
+        """"""
+        return self._name.vname  # Obsoleted by __getattr__??
+
     @property
     def fqname(self):
-        """The fully qualified name, the versioned name and the
-        vid. This is the same as str(self)"""
+        """The fully qualified name, the versioned name and the vid.
+
+        This is the same as str(self)
+
+        """
         return str(self)
- 
+
     @property
     def path(self):
-        '''The path of the bundle source. Includes the revision. '''
+        """The path of the bundle source.
+
+        Includes the revision.
+
+        """
 
         self.is_valid()
 
@@ -1428,7 +1576,11 @@ class Identity(object):
 
     @property
     def source_path(self):
-        '''The path of the bundle source. Includes the revision. '''
+        """The path of the bundle source.
+
+        Includes the revision.
+
+        """
 
         self.is_valid()
         return self._name.source_path
@@ -1438,16 +1590,15 @@ class Identity(object):
         if hasattr(self._name, name):
             return getattr(self._name, name)
         else:
-            raise AttributeError('Identity does not have attribute {} '.format(name))
-
-
+            raise AttributeError(
+                'Identity does not have attribute {} '.format(name))
 
     @property
     def cache_key(self):
         '''The name in a form suitable for use as a cache-key'''
         self.is_valid()
         return self._name.cache_key
- 
+
     @property
     def dict(self):
         d = self._name.dict
@@ -1460,14 +1611,19 @@ class Identity(object):
         if self.md5:
             d['md5'] = self.md5
 
-
         return d
 
     @property
     def names_dict(self):
-        '''A dictionary with only the generated names, name, vname and fqname'''
+        """A dictionary with only the generated names, name, vname and
+        fqname."""
 
-        d =  { k:v for k,v in self.dict.items() if k in ['name','vname','vid']}
+        d = {
+            k: v for k,
+            v in self.dict.items() if k in [
+                'name',
+                'vname',
+                'vid']}
 
         d['fqname'] = self.fqname
 
@@ -1475,35 +1631,50 @@ class Identity(object):
 
     @property
     def ident_dict(self):
-        '''A dictionary with only the items required to specify the identy, excluding the
-        generated names, name, vname and fqname'''
+        """A dictionary with only the items required to specify the identy,
+        excluding the generated names, name, vname and fqname."""
 
-        return { k:v for k,v in self.dict.items() if k not in ['name','vname','fqname','vid','cache_key']}
+        return {
+            k: v for k,
+            v in self.dict.items() if k not in [
+                'name',
+                'vname',
+                'fqname',
+                'vid',
+                'cache_key']}
 
     @staticmethod
     def _compose_fqname(vname, vid):
-        return vname+Identity.OBJECT_NUMBER_SEP+vid
+        return vname + Identity.OBJECT_NUMBER_SEP + vid
 
     def as_partition(self, partition=0, **kwargs):
-        '''Return a new PartitionIdentity based on this Identity
+        """Return a new PartitionIdentity based on this Identity.
+
         :param partition: Integer partition number for PartitionObjectNumber
         :param kwargs:
-        '''
+
+        """
 
         from partition import identity_class_from_format_name
 
-        assert type(self._name) == Name, "Wrong type: {}".format(type(self._name))
-        assert type(self._on) == DatasetNumber, "Wrong type: {}".format(type(self._on))
+        assert isinstance(
+            self._name, Name), "Wrong type: {}".format(
+            type(
+                self._name))
+        assert isinstance(
+            self._on, DatasetNumber), "Wrong type: {}".format(
+            type(
+                self._on))
 
         name = self._name.as_partition(**kwargs)
         on = self._on.as_partition(partition)
 
         ic = identity_class_from_format_name(name.format)
 
-        return ic(name,on)
+        return ic(name, on)
 
     def add_partition(self, p):
-        '''Add a partition identity as a child of a dataset identity'''
+        """Add a partition identity as a child of a dataset identity."""
 
         if not self.partitions:
             self.partitions = {}
@@ -1511,7 +1682,7 @@ class Identity(object):
         self.partitions[p.vid] = p
 
     def add_file(self, f):
-        '''Add a partition identity as a child of a dataset identity'''
+        """Add a partition identity as a child of a dataset identity."""
 
         if not self.files:
             self.files = set()
@@ -1520,27 +1691,25 @@ class Identity(object):
 
         self.locations.set(f.type_)
 
-
     @property
     def partition(self):
-        '''Convenience function for accessing the first partition in the partitions list,
-        when there is only one'''
+        """Convenience function for accessing the first partition in the
+        partitions list, when there is only one."""
 
         if not self.partitions:
             return None
 
         if len(self.partitions) > 1:
-            raise ValueError("Can't use this method when there is more than one partition")
-
-
+            raise ValueError(
+                "Can't use this method when there is more than one partition")
 
         return self.partitions.values()[0]
 
     def __str__(self):
-        return self._compose_fqname(self._name.vname,self.vid)
+        return self._compose_fqname(self._name.vname, self.vid)
 
     def _info(self):
-        '''Returns an OrderedDict of information, for human display '''
+        """Returns an OrderedDict of information, for human display."""
         from collections import OrderedDict
 
         d = OrderedDict()
@@ -1551,37 +1720,35 @@ class Identity(object):
 
         return d
 
-
     def __hash__(self):
         return hash(str(self))
 
+
 class PartitionIdentity(Identity):
-    '''Subclass of Identity for partitions'''
+
+    """Subclass of Identity for partitions."""
 
     is_bundle = False
     is_partition = True
 
     _name_class = PartitionName
 
-
     def is_valid(self):
         self._name.is_valid()
 
         if self._name.format:
             assert self.format_name() == self._name.format_name(), "Got format '{}', expected '{}'".format(
-                self._name.format_name(),self.format_name)
-
-
+                self._name.format_name(), self.format_name)
 
     @classmethod
     def from_dict(cls, d):
-        ''' Like Identity.from_dict, but will cast the class type based on the format.
-        i.e. if the format is hdf, return an HdfPartitionIdentity
+        """Like Identity.from_dict, but will cast the class type based on the
+        format. i.e. if the format is hdf, return an HdfPartitionIdentity.
 
         :param d:
         :return:
-        '''
 
+        """
 
         from partition import identity_class_from_format_name
 
@@ -1600,7 +1767,10 @@ class PartitionIdentity(Identity):
         try:
             return ic(name, on)
         except TypeError as e:
-            raise TypeError("Failed to make identity from \n{}\n: {}".format(d, e.message))
+            raise TypeError(
+                "Failed to make identity from \n{}\n: {}".format(
+                    d,
+                    e.message))
 
     @classmethod
     def new_subclass(cls, name, object_number):
@@ -1614,28 +1784,29 @@ class PartitionIdentity(Identity):
 
         return ic(nname, object_number)
 
-
     @property
     def table(self):
         return self._name.table
 
     def as_dataset(self):
-        """Convert this identity to the identity of the corresponding dataset. """
-        
+        """Convert this identity to the identity of the corresponding
+        dataset."""
+
         on = self.on.dataset
 
         on.revision = self.on.revision
 
         name = Name(**self.name.dict)
 
-        return  Identity(name, on)
+        return Identity(name, on)
 
     def as_partition(self, partition=0, **kwargs):
-        raise NotImplementedError("Can't generated a PartitionIdentity from a PartitionIdentity")
+        raise NotImplementedError(
+            "Can't generated a PartitionIdentity from a PartitionIdentity")
 
     @property
     def sub_path(self):
-        '''The portion of the path excluding the bundle path '''
+        """The portion of the path excluding the bundle path."""
         self.is_valid()
         return self._name.sub_path
 
@@ -1647,10 +1818,10 @@ class PartitionIdentity(Identity):
     def extension(self):
         return self._name_class.PATH_EXTENSION
 
-class NumberServer(object):
-    
-    def __init__(self, host='numbers.ambry.io', port='80', key=None, **kwargs):
 
+class NumberServer(object):
+
+    def __init__(self, host='numbers.ambry.io', port='80', key=None, **kwargs):
         """
 
         :param host:
@@ -1666,7 +1837,7 @@ class NumberServer(object):
         self.host = host
         self.port = port
         self.key = key
-        self.port_str = ':'+str(port) if port else ''
+        self.port_str = ':' + str(port) if port else ''
 
         self.last_response = None
         self.next_time = None
@@ -1679,7 +1850,8 @@ class NumberServer(object):
         else:
             params = dict()
 
-        r = requests.get('http://{}{}/next'.format(self.host, self.port_str), params=params)
+        r = requests.get(
+            'http://{}{}/next'.format(self.host, self.port_str), params=params)
 
         r.raise_for_status()
 
@@ -1701,7 +1873,8 @@ class NumberServer(object):
         else:
             params = dict()
 
-        r = requests.get('http://{}{}/find/{}'.format(self.host, self.port_str, name), params=params)
+        r = requests.get(
+            'http://{}{}/find/{}'.format(self.host, self.port_str, name), params=params)
 
         r.raise_for_status()
 
@@ -1714,24 +1887,25 @@ class NumberServer(object):
         try:
             self.next_time = time.time() + self.last_response['wait']
         except TypeError:
-            pass # wait time is None, can be added to time.
+            pass  # wait time is None, can be added to time.
 
         return ObjectNumber.parse(d['number'])
 
     def sleep(self):
-        '''Wait for the sleep time of the last response, to
-         avoid being rate limited. '''
+        """Wait for the sleep time of the last response, to avoid being rate
+        limited."""
 
         import time
 
         if self.next_time and time.time() < self.next_time:
             time.sleep(self.next_time - time.time())
 
+
 class IdentitySet(object):
-    '''A set of Identity Objects, with methods to display them. '''
+
+    """A set of Identity Objects, with methods to display them."""
 
     def __init__(self, idents, show_partitions=False, fields=None):
-
 
         if isinstance(idents, dict):
             idents = idents.values()
@@ -1743,14 +1917,16 @@ class IdentitySet(object):
         if not fields:
             fields = ['locations', 'vid', 'vname']
 
-
         self.fields = fields
 
     @staticmethod
     def deps(ident):
-        if not ident.data: return '.'
-        if not 'dependencies' in ident.data: return '.'
-        if not ident.data['dependencies']: return '0'
+        if not ident.data:
+            return '.'
+        if not 'dependencies' in ident.data:
+            return '.'
+        if not ident.data['dependencies']:
+            return '0'
         return str(len(ident.data['dependencies']))
 
     # The headings for the fields in all_fields
@@ -1758,10 +1934,10 @@ class IdentitySet(object):
 
     all_fields = [
         # Name, width, d_format_string, p_format_string, extract_function
-        ('deps', '{:3s}', '{:3s}', lambda ident: IdentitySet.deps(ident) ),
+        ('deps', '{:3s}', '{:3s}', lambda ident: IdentitySet.deps(ident)),
         ('order', '{:6s}', '{:6s}', lambda ident: "{major:02d}:{minor:02d}".format(**ident.data['order']
-        if 'order' in ident.data else {'major': -1, 'minor': -1})),
-        ('locations',      '{:6s}', '{:6s}', lambda ident: ident.locations),
+                                                                                   if 'order' in ident.data else {'major': -1, 'minor': -1})),
+        ('locations', '{:6s}', '{:6s}', lambda ident: ident.locations),
         ('vid', '{:15s}', '{:20s}', lambda ident: ident.vid),
         ('status', '{:20s}', '{:20s}', lambda ident: ident.bundle_state if ident.bundle_state else ''),
         ('vname', '{:40s}', '    {:40s}', lambda ident: ident.vname),
@@ -1770,14 +1946,13 @@ class IdentitySet(object):
         ('source_path', '{:s}', '    {:s}', lambda ident: ident.source_path),
     ]
 
-
     def __str__(self):
         out = []
         for row in self._yield_rows(self.all_fields):
-            out.append(''.join([ format.format(value) for format, value in row]))
+            out.append(''.join([format.format(value)
+                       for format, value in row]))
 
         return '\n'.join(out)
-
 
     def _repr_html_(self):
         out = []
@@ -1785,11 +1960,11 @@ class IdentitySet(object):
         all_fields = list(self.all_fields)
 
         for row in self._yield_rows(all_fields):
-            out.append('<tr>'+
-                       ''.join(["<td>{}</td>".format(format.format(value).strip()) for format, value in row])+
+            out.append('<tr>' +
+                       ''.join(["<td>{}</td>".format(format.format(value).strip()) for format, value in row]) +
                        '</tr>')
 
-        return '<table>'+'\n'.join(out)+'</table>'
+        return '<table>' + '\n'.join(out) + '</table>'
 
     def _yield_rows(self, all_fields):
 
@@ -1800,7 +1975,8 @@ class IdentitySet(object):
             values = []
 
             for e in all_fields:
-                e = dict(zip(self.record_entry_names, e))  # Just to make the following code easier to read
+                # Just to make the following code easier to read
+                e = dict(zip(self.record_entry_names, e))
 
                 if e['name'] not in self.fields:
                     continue
@@ -1816,6 +1992,3 @@ class IdentitySet(object):
 
                 for pi in ident.partitions.values():
                     yield zip(p_formats, values)
-
-
-

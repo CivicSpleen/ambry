@@ -1,5 +1,4 @@
-"""
-"""
+""""""
 
 # Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
@@ -8,6 +7,7 @@ from collections import deque
 
 
 class Times(object):
+
     """Records time entries for access to the cache."""
 
     def __init__(self, **kwargs):
@@ -28,7 +28,7 @@ class Times(object):
 
 class DocCache(object):
 
-    def __init__(self, library, cache = None):
+    def __init__(self, library, cache=None):
         import platform
 
         self.library = library
@@ -41,12 +41,14 @@ class DocCache(object):
 
         self.all_bundles = None
         self.times = deque([], maxlen=10000)
-        self.ignore_cache = False # if True, assume the next quest to cache the key does not exist
+        # if True, assume the next quest to cache the key does not exist
+        self.ignore_cache = False
 
-        # Some OS X file systems are case insensitive, causing aliasing with gvid keys
-        self.prefix_upper =  platform.system() == 'Darwin'
+        # Some OS X file systems are case insensitive, causing aliasing with
+        # gvid keys
+        self.prefix_upper = platform.system() == 'Darwin'
 
-    def _munge_key(self,  *args, **kwargs):
+    def _munge_key(self, *args, **kwargs):
 
         import string
 
@@ -63,12 +65,15 @@ class DocCache(object):
 
         assert bool(key)
 
-        # Prefix uppercase letters to avoid aliasing on case-insensitive OS X file systems
+        # Prefix uppercase letters to avoid aliasing on case-insensitive OS X
+        # file systems
         if self.prefix_upper:
-            key = ''.join('_'+x if x in string.ascii_uppercase else x for x in key)
+            key = ''.join(
+                '_' +
+                x if x in string.ascii_uppercase else x for x in key)
 
         if '_key_prefix' in kwargs:
-            pk = kwargs['_key_prefix'] + '/' +key[0] + '/' + key[1]
+            pk = kwargs['_key_prefix'] + '/' + key[0] + '/' + key[1]
             del kwargs['_key_prefix']
         else:
             pk = key[0] + '/' + key[1]
@@ -77,9 +82,13 @@ class DocCache(object):
 
         return key, args, kwargs
 
-    def cache(self, f,  *args, **kwargs):
-        """Cache the return value of a method. Normally, we'd use @memoize, but
-        we want this to run in the context of the object. """
+    def cache(self, f, *args, **kwargs):
+        """Cache the return value of a method.
+
+        Normally, we'd use @memoize, but
+        we want this to run in the context of the object.
+
+        """
         import time
 
         start = time.time()
@@ -94,9 +103,15 @@ class DocCache(object):
 
         end = time.time()
 
-
-        self.times.append(Times(start_time=start, end_time=end, key = key, from_cache = from_cache,
-                                count = 1, time = end - start))
+        self.times.append(
+            Times(
+                start_time=start,
+                end_time=end,
+                key=key,
+                from_cache=from_cache,
+                count=1,
+                time=end -
+                start))
 
         return self._cache[key]
 
@@ -108,68 +123,68 @@ class DocCache(object):
             assert isinstance(self._cache, dict)
             self._cache = {}
 
-
-    def remove(self,  *args, **kwargs):
+    def remove(self, *args, **kwargs):
 
         key, args, kwargs = self._munge_key(*args, **kwargs)
 
         if key in self._cache:
             del self._cache[key]
 
-
-
     def compiled_times(self):
-        """Compile all of the time entries from cache calls to one per key"""
+        """Compile all of the time entries from cache calls to one per key."""
         from collections import defaultdict
 
         times = defaultdict(Times)
 
         for t in self.times:
             print t.__dict__
-            k = t.key+'_'+('cached' if t.from_cache else 'func')
+            k = t.key + '_' + ('cached' if t.from_cache else 'func')
             ct = times[k]
             ct.key = k
 
             ct.time += t.time
             ct.count += t.count
 
-
-        return sorted(times.values(),key=lambda x : x.time, reverse = True)
-
+        return sorted(times.values(), key=lambda x: x.time, reverse=True)
 
     def library_info(self):
         pass
 
     ##
-    ## Index, low-information lists of all items in a category.
+    # Index, low-information lists of all items in a category.
     ##
 
-
     def library_info(self):
-        return self.cache(lambda: self.library.summary_dict, _key='library_info')
+        return self.cache(
+            lambda: self.library.summary_dict,
+            _key='library_info')
 
     def bundle_index(self):
 
-        return self.cache(lambda: self.library.versioned_datasets() , _key='bundle_index')
-
+        return self.cache(
+            lambda: self.library.versioned_datasets(),
+            _key='bundle_index')
 
     def table_index(self):
         pass
 
     ##
-    ## Single Object acessors
+    # Single Object acessors
     ##
-
 
     def dataset(self, vid):
         # Add a 'd' to the datasets, since they are just the dataset record and must
         # be distinguished from the full output with the same vid in bundle()
-        return self.cache(lambda vid: self.library.dataset(vid).dict, vid, _key_prefix='ds')
+        return self.cache(
+            lambda vid: self.library.dataset(vid).dict,
+            vid,
+            _key_prefix='ds')
 
     def bundle_summary(self, vid):
-        return self.cache(lambda vid: self.library.bundle(vid).summary_dict, vid, _key_prefix='bs')
-
-
+        return self.cache(
+            lambda vid: self.library.bundle(vid).summary_dict,
+            vid,
+            _key_prefix='bs')
 
     def bundle(self, vid):
         return self.cache(lambda vid: self.library.bundle(vid).dict, vid)
@@ -182,7 +197,9 @@ class DocCache(object):
         return self.cache(lambda vid: self.library.partition(vid).dict, vid)
 
     def table(self, vid):
-        return self.cache(lambda vid: self.library.table(vid).nonull_col_dict, vid)
+        return self.cache(
+            lambda vid: self.library.table(vid).nonull_col_dict,
+            vid)
 
     def table_schema(self, vid):
         pass
@@ -193,18 +210,19 @@ class DocCache(object):
     def manifest(self, vid):
 
         def f(vid):
-            f, m =  self.library.manifest(vid)
+            f, m = self.library.manifest(vid)
             return m.dict
 
         self.cache(f, vid)
 
     def table_version_map(self):
-        """Map unversioned table ids to vids. """
+        """Map unversioned table ids to vids."""
 
         def f():
             tm = {}
 
-            for  t in self.library.tables_no_columns: # The no_columns version is a lot faster.
+            # The no_columns version is a lot faster.
+            for t in self.library.tables_no_columns:
 
                 if not t.id_ in tm:
                     tm[t.id_] = [t.vid]
@@ -213,17 +231,21 @@ class DocCache(object):
 
             return tm
 
-        return self.cache(f,_key = 'table_version_map')
+        return self.cache(f, _key='table_version_map')
 
     ##
-    ## Manifests
+    # Manifests
 
     def manifest_relpath(self, uid):
         return self.path(self.templates['manifest'], uid=self.resolve_vid(uid))
 
-    def put_manifest(self, m,f):
-        """WARNING! This method must be run after all of the bundles are already cached, or at least
-        the bundles used in this manifest"""
+    def put_manifest(self, m, f):
+        """WARNING!
+
+        This method must be run after all of the bundles are already
+        cached, or at least the bundles used in this manifest
+
+        """
 
         from ambry.identity import ObjectNumber
 
@@ -238,22 +260,30 @@ class DocCache(object):
         # Update the partitions to include bundle references,
         # then add bundle information.
 
-        partitions = {pvid: str(ObjectNumber.parse(pvid).as_dataset) for pvid in f.dict.get('partitions',[])}
+        partitions = {
+            pvid: str(
+                ObjectNumber.parse(pvid).as_dataset) for pvid in f.dict.get(
+                'partitions',
+                [])}
 
         d["partitions"] = partitions
 
-        d['tables'] = {tvid:  {
-                          k:v for k,v in (self.get_table(tvid).items()+[('installed_names',[])]) if k != 'columns'
-                       } for tvid in f.dict.get('tables',[])
-                      }
+        d['tables'] = {tvid: {
+            k: v for k, v in (self.get_table(tvid).items() + [('installed_names', [])]) if k != 'columns'
+        } for tvid in f.dict.get('tables', [])
+        }
 
-        d['bundles'] = {vid: self.get_bundle(vid) for vid in partitions.values()}
+        d['bundles'] = {vid: self.get_bundle(vid)
+                        for vid in partitions.values()}
 
         for vid, b in d['bundles'].items():
-            b['installed_partitions'] = [pvid for pvid, pbvid in partitions.items() if vid == pbvid]
+            b['installed_partitions'] = [
+                pvid for pvid,
+                pbvid in partitions.items() if vid == pbvid]
 
-        ## Generate entries for the tables, using the names that they are installed with. These tables aren't
-        ## nessiarily installed; this maps the instllation names to vids if they are installed.
+        # Generate entries for the tables, using the names that they are installed with. These tables aren't
+        # nessiarily installed; this maps the instllation names to vids if they
+        # are installed.
 
         installed_table_names = {}
 
@@ -276,7 +306,6 @@ class DocCache(object):
                     t = b['tables'][tvid]
                     e = inst_table_entry(b, p, t)
 
-
         d['installed_table_names'] = installed_table_names
 
         # Collect the views and mviews
@@ -294,4 +323,4 @@ class DocCache(object):
 
         d['views'] = views
 
-        return self.put(self.manifest_relpath(m.uid),  d)
+        return self.put(self.manifest_relpath(m.uid), d)

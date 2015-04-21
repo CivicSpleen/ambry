@@ -1,4 +1,4 @@
-"""Test of how libraries interact with IPYthon"""
+"""Test of how libraries interact with IPYthon."""
 
 
 def test_logging():
@@ -7,6 +7,5 @@ def test_logging():
     logger = logging.getLogger('ipython')
     logger.propagate = False
 
-
-    for i in range(1,3):
+    for i in range(1, 3):
         logger.info('Logging message {}'.format(i))

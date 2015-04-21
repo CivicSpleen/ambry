@@ -1,10 +1,9 @@
-"""Text handling and conversion utilities
+"""Text handling and conversion utilities.
 
-Copyright (c) 2014 Clarinova. This file is licensed under the terms of the
-Revised BSD License, included in this distribution as LICENSE.txt
+Copyright (c) 2014 Clarinova. This file is licensed under the terms of
+the Revised BSD License, included in this distribution as LICENSE.txt
+
 """
-
-
 
 
 def generate_pdf_pages(fp):
@@ -14,7 +13,7 @@ def generate_pdf_pages(fp):
     from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
     from pdfminer.pdfdevice import PDFDevice
     from pdfminer.pdfpage import PDFPage
-    from pdfminer.converter import  TextConverter
+    from pdfminer.converter import TextConverter
     from pdfminer.cmapdb import CMapDB
     from pdfminer.layout import LAParams
 
@@ -46,7 +45,7 @@ def generate_pdf_pages(fp):
     outfp = StringIO()
 
     device = TextConverter(rsrcmgr, outfp, codec='utf-8', laparams=laparams,
-                               imagewriter=imagewriter)
+                           imagewriter=imagewriter)
 
     interpreter = PDFPageInterpreter(rsrcmgr, device)
     for page in PDFPage.get_pages(fp, pagenos,
@@ -59,8 +58,8 @@ def generate_pdf_pages(fp):
 
     device.close()
 
-    r =  outfp.getvalue()
+    r = outfp.getvalue()
 
     outfp.close()
 
-    return re.sub(r'[ ]+',' ', r) # Get rid of all of those damn spaces.
+    return re.sub(r'[ ]+', ' ', r)  # Get rid of all of those damn spaces.

@@ -1,4 +1,4 @@
-"""Support for creating packages of data
+"""Support for creating packages of data.
 
 Ambry creates packages of data that simplify the process of finding,
 cleaning, transforming and loading popular datasets. The data bundle format,
@@ -15,6 +15,7 @@ Visit  http://ambry.io for more information.
 
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
+
 """
 
 from _meta import *
@@ -22,16 +23,15 @@ from _meta import *
 from ambry.util import memoize
 import ambry.library as _l
 
+
 @memoize
 def config():
-    '''Return the default run_config object for this installation'''
+    """Return the default run_config object for this installation."""
     from ambry.run import get_runconfig
     return get_runconfig()
 
 
 @memoize
 def library(name='default'):
-    '''Return the default library for this installation'''
+    """Return the default library for this installation."""
     return _l.new_library(config().library(name))
-
-
