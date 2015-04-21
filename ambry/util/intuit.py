@@ -119,6 +119,7 @@ class Column(object):
         self.count = 0
         self.length = 0
         self.date_successes = 0
+        self.description = None
 
     def inc_type_count(self,t):
         self.type_counts[t] +=  1
@@ -225,6 +226,7 @@ class Intuiter(object):
     def iterate(self, row_gen, max_n = None):
 
         header = row_gen.get_header()
+        unmangled_header = row_gen.unmangled_header
 
         for n,row in enumerate(row_gen):
 
@@ -232,11 +234,12 @@ class Intuiter(object):
                 return
 
             try:
-                for col, value in zip(header, row):
+                for col, desc, value in zip(header, unmangled_header, row):
                     if not col in self._columns:
                         self._columns[col] = Column()
 
                     self._columns[col].test(value)
+                    self._columns[col].description = desc
 
             except Exception as e:
                 print 'Failed to add row: {}: {}'.format(row, e)

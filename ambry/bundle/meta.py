@@ -79,6 +79,8 @@ class RowSpecDictTerm(DictTerm):
     header_comment_lines = ListTerm()
 
 class SourceTerm(DictTerm):
+    """A term that describes a source file for constructing a partition"""
+
     url = ScalarTerm()
     title = ScalarTerm(store_none=False) # Title for use in table.
     description = ScalarTerm(store_none=False)
@@ -107,6 +109,9 @@ class SourceTerm(DictTerm):
 class Sources(TypedDictGroup):
     """References to source URLS"""
     _proto = SourceTerm()
+
+
+
 
 
 class Dependencies(VarDictGroup):
@@ -159,6 +164,7 @@ class Top(Metadata):
     external_documentation = ExtDoc(file='bundle.yaml')
 
     sources = Sources(file='meta/build.yaml')
+
     dependencies = Dependencies(file='meta/build.yaml')
     build = Build(file='meta/build.yaml')
     views = Views(file='meta/build.yaml')
@@ -167,27 +173,7 @@ class Top(Metadata):
 
     coverage = Coverage(file='meta/coverage.yaml')
 
-# This is a new version of the metadata structure, with
-# the sections in different places.
-class NewTop(Metadata):
 
-    _non_term_file = 'meta/build.yaml'
-
-    identity = Identity(file='identity.yaml')
-    names = Names(file='identity.yaml')
-    versions = Versions(file='identity.yaml')
-    process = Process(file='identity.yaml')
-
-    about = About(file='bundle.yaml')
-    contact_source = Contact(file='bundle.yaml')
-    contact_bundle = Contact(file='bundle.yaml')
-    external_documentation = ExtDoc(file='bundle.yaml')
-    dependencies = Dependencies(file='bundle.yaml')
-    sources = Sources(file='bundle.yaml')
-
-    build = Build(file='meta/build.yaml')
-
-    documentation = Documentation(file='meta/doc.yaml')
 
 
 

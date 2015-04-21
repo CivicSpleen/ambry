@@ -12,6 +12,8 @@ def expand_to_years(dates):
     import isodate
     import datetime
 
+    if not dates: return []
+
     if not isinstance(dates, (basestring, int)): # Can't EAFP since strings are iterable
         import itertools
         return sorted(set(itertools.chain(*[ expand_to_years(x) for x in dates ])))

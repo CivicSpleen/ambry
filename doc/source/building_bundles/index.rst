@@ -13,5 +13,6 @@ A quick guide to using Ambry
     creating
     bundle_configuration
     build_schema
+    using_loaders
 
 

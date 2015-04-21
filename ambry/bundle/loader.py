@@ -1,8 +1,8 @@
 """ Bundle variants that directly load files with little additional processing.
 """
 
-
 from  ambry.bundle import BuildBundle
+from rowgen import RowSpecIntuiter
 
 class LoaderBundle(BuildBundle):
 
@@ -12,6 +12,19 @@ class LoaderBundle(BuildBundle):
         'xlsm': 'xls',
         'xlsx': 'xls'
     }
+
+    def __init__(self, bundle_dir=None):
+        import os
+
+        super(LoaderBundle, self).__init__(bundle_dir)
+
+        self.col_map_fn = self.filesystem.path('meta', 'column_map.csv')
+
+        # Load it
+        if os.path.exists(self.col_map_fn):
+            self.col_map = self.filesystem.read_csv(self.col_map_fn, key='header')
+        else:
+            self.col_map = {}
 
     @staticmethod
     def int_caster(v):
@@ -54,9 +67,17 @@ class LoaderBundle(BuildBundle):
         if not n:
             return 'column{}'.format(i)
 
-        return Column.mangle_name(n.strip())
+        mn =  Column.mangle_name(n.strip())
+
+
+        if mn in self.col_map:
+            return self.col_map[mn]
+        else:
+            return mn
 
     def mangle_header(self, header):
+        """Transform the header as it comes from the raw row generator into a column name"""
+
         return [ self.mangle_column_name(i,n) for i,n in enumerate(header)]
 
     def build_create_partition(self, source_name):
@@ -64,7 +85,6 @@ class LoaderBundle(BuildBundle):
 
         Will also load the source metadata into the partition, as a dict, under the key name of the source name.
         """
-
 
         source = self.metadata.sources[source_name]
 
@@ -78,6 +98,11 @@ class LoaderBundle(BuildBundle):
             table = source_name
 
         assert bool(table)
+
+        kwargs = dict(table=table)
+
+        if source.grain:
+            kwargs['grain'] = source.grain
 
         p =  self.partitions.find_or_new(table=table)
 
@@ -117,6 +142,8 @@ class LoaderBundle(BuildBundle):
 
         source = self.metadata.sources[source_name]
 
+        table_config = self.metadata.tables.get(source.table if source.table else source_name)
+
         fn = self.filesystem.download(source_name)
 
         base_dir, file_name  = split(fn)
@@ -139,8 +166,11 @@ class LoaderBundle(BuildBundle):
             rs['segment'] = source.segment
 
         assert isinstance(self.prefix_headers, list)
-
         rs['prefix_headers'] = self.prefix_headers
+
+        if table_config:
+            for col_name, col in table_config.extra_columns.items():
+                print '!!!', col_name, col
 
         rs['header_mangler'] = lambda header: self.mangle_header(header)
 
@@ -164,12 +194,25 @@ class LoaderBundle(BuildBundle):
 
         table_desc = source.description if source.description else "Table generated from {}".format(source.url)
 
-
         table = self.schema.add_table(table_name, description=table_desc)
 
-        return table
+        if source.grain:
+            with self.session:
+                if 'grain' in table.data and table.data['grain'] != source.grain:
+                    raise BuildBundle("Table '{}' has grain '{}' conflicts with source '{}' grain of '{}'"
+                                      .format(table_name,table.data['grain'], source_name, source.grain ))
 
-    def meta_set_row_specs(self, row_intuitier_class):
+                table.data['grain'] = source.grain
+
+        return self.schema.table(table_name) # The session in 'if source.grain' may expire table, so refresh
+
+    def meta_set_row_specs(self, row_intuitier_class=RowSpecIntuiter):
+        """
+        Run the row intuiter, which tries to figure out where the header and data lines are.
+
+        :param row_intuitier_class: A RowSpecIntuiter class
+        :return:
+        """
 
         for source_name in self.metadata.sources:
             source = self.metadata.sources.get(source_name)
@@ -186,6 +229,12 @@ class LoaderBundle(BuildBundle):
         from collections import defaultdict
         from ..util.intuit import Intuiter
         import urllib2
+        import csv
+        import os
+
+        # A proto terms map, for setting grains
+        pt = self.library.get('civicknowledge.com-proto-proto_terms').partition
+        pt_map = {r['name']: r['obj_number'] for r in pt.rows}
 
         self.database.create()
 
@@ -205,11 +254,14 @@ class LoaderBundle(BuildBundle):
 
         intuiters = defaultdict(Intuiter)
 
+        # Intuit all of the tables
+
         for table_name, sources in  tables.items():
 
             intuiter = intuiters[table_name]
 
             iterables = []
+
             for source_name in sources:
 
                 try:
@@ -227,14 +279,91 @@ class LoaderBundle(BuildBundle):
 
             self.schema.update_from_intuiter(table_name, intuiter)
 
+            ## Now we can set the proto_vid for columns that link to the grain index
+            table = self.schema.table(table_name)
+            if 'grain' in table.data and table.data['grain']:
+                n = 0
+                with self.session:
+                    for c in table.columns:
+                        test = '{}.{}'.format(table.data['grain'], c.name)
+
+                        proto_vid = pt_map.get(test, None)
+
+                        if proto_vid and c.name  in self.prefix_headers and c.name != 'id':
+                            c.proto_vid = test
+                            self.log("Adding proto_vid '{}' to {}.{}".format(test, table_name, c.name))
+                            n += 1
+
+                if n:
+                    self.schema.write_schema()
+
+
+            # Write the first 50 lines of the csv file, to see what the intuiter got from the
+            # raw-row-gen
+
+            with open(self.filesystem.build_path('{}-raw-rows.csv'.format(table_name)), 'w') as f:
+                rg = self.row_gen_for_source(source_name)
+                rrg = rg.raw_row_gen
+                w = csv.writer(f)
+
+                for i, row in enumerate(rrg):
+                    if i > 50:
+                        break
+
+                    w.writerow(list(row))
+
+            # Now write the first 50 lines from the row gen, after appliying the row spec
+
+            with open(self.filesystem.build_path('{}-specd-rows.csv'.format(table_name)), 'w') as f:
+                rg = self.row_gen_for_source(source_name)
+
+                w = csv.writer(f)
+
+                w.writerow(rg.get_header())
+
+                for i, row in enumerate(rg):
+                    if i > 50:
+                        break
+
+                    w.writerow(list(row))
+
+            # Write an intuiter report, to review how the intuiter made it's decisions
             with open(self.filesystem.build_path('{}-intuit-report.csv'.format(table_name)),'w') as f:
-                import csv
+
                 w = csv.DictWriter(f, ("name length resolved_type has_codes count ints "
                                        "floats strs nones datetimes dates times strvals".split()))
                 w.writeheader()
                 for d in intuiter.dump():
                     w.writerow(d)
 
+            # Load and update the column map
+            # .. already loaded in the constructor
+
+            # Update
+
+            # Don't add the columns that are already mapped.
+            mapped_domain = set(item['col'] for item in self.col_map.values())
+
+            for table_name, sources in tables.items():
+                rg = self.row_gen_for_source(source_name)
+
+                header = rg.get_header() # Also sets unmangled_header
+
+                descs = [ x.replace('\n','; ') for x in (rg.unmangled_header if rg.unmangled_header else header)]
+
+                for col_name, desc  in zip(header, descs):
+                    k = col_name.strip()
+
+                    if not k in self.col_map and not col_name in mapped_domain:
+                        self.col_map[k] = dict(header=k, col='')
+
+            # Write back out
+            with open(self.col_map_fn, 'w') as f:
+
+                w = csv.DictWriter(f, fieldnames = ['header', 'col'])
+                w.writeheader()
+                for k in sorted(self.col_map.keys()):
+                    w.writerow(self.col_map[k])
 
 
         return True
@@ -289,7 +418,6 @@ class LoaderBundle(BuildBundle):
 
                 if errors:
                     self.error("Casting error for {}: {}".format(source_name,errors))
-
 
     def build(self):
         for source_name in self.metadata.sources:

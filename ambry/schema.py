@@ -1435,8 +1435,7 @@ class {name}(Base):
     #
     #
 
-    def update_from_intuiter(self, table_name, intuiter, logger=None,
-                              description=None, descriptions = None):
+    def update_from_intuiter(self, table_name, intuiter, logger=None):
         """
         Update a table schema using a memo from intuit()
 
@@ -1470,16 +1469,7 @@ class {name}(Base):
 
                     type_, has_codes = col.resolved_type()
 
-
-                    if descriptions:
-                        try:
-                            description = descriptions[name]
-                        except KeyError:
-                            description = name
-                    else:
-                        description = name
-
-                    description = re.sub('[\r\n\s]+', ' ', description).strip() if description else ''
+                    description = re.sub('[\r\n\s]+', ' ', col.description).strip() if col.description else ''
 
                     # add_column will update existing columns
                     orm_col = self.add_column(table, name,

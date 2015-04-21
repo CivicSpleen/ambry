@@ -15,6 +15,7 @@ class RowGenerator(object):
 
     prefix_headers = ['id']
     header = None
+    unmangled_header = None
     footer = None
     data_start_line = 1
     data_end_line = None
@@ -49,6 +50,10 @@ class RowGenerator(object):
         self._raw_row_gen = None
 
         self.put_row = None
+
+        self.header = None
+        self.unmangled_header = None
+
 
     def add_intuition(self, data_start_line=None, data_end_line = None, header_lines=None, header_comment_lines=None,
                       prefix_headers=None):
@@ -120,7 +125,8 @@ class RowGenerator(object):
 
                 headers[0] = hl1
 
-                header = [' '.join(col_val if col_val else '' for col_val in col_set) for col_set in zip(*headers)]
+                header = [' '.join(col_val.strip() if col_val else '' for col_val in col_set)
+                          for col_set in zip(*headers)]
 
             elif len(headers) > 0:
                 header = headers.pop()
@@ -133,6 +139,7 @@ class RowGenerator(object):
             self.header_comment = [' '.join(x) for x in zip(*header_comments)]
 
         if self.header_mangler:
+            self.unmangled_header = list(self.header)
             self.header = self.header_mangler(self.header)
 
         return self.header
@@ -273,25 +280,51 @@ class RowSpecIntuiter(object):
     header = None
     header_comments = None
 
+    lines = None
+
     def __init__(self, row_gen):
+        from collections import defaultdict
 
         self.row_gen = row_gen
 
         self.header = []
         self.header_comments = []
 
+        self.lines = []
+        self.lengths = defaultdict(int)
+
+        # Get the non-numm length of all of the rows, then find the midpoint between the min a max
+        # We'll use that for the break point between comments and data / header.
+        for i, row in enumerate(row_gen):
+            if i > 100: break
+
+            self.lines.append(row)
+
+            lng = len(self.non_nulls(row)) # Number of non-nulls
+
+            self.lengths[lng] += 1
+
+        self.mid_length = mid =  (min(self.lengths.keys()) +  max(self.lengths.keys())) / 2
+
+        print self.mid_length
+
+    def non_nulls(self, row):
+        """Return the non-empty values from a row"""
+        return [col for col in row if bool(str(col).strip())]
 
     def is_data_line(self, i, row):
         """Return true if a line is a data row"""
-        return i >= 1
+
+        return ( self.header and len(self.non_nulls(row)) > self.mid_length)
 
     def is_header_line(self, i, row):
-        """Return true if a l=row is part of the header"""
-        return i == 0
+        """Return true if a row is part of the header"""
+
+        return (not self.header and len(self.non_nulls(row)) > self.mid_length)
 
     def is_header_comment_line(self, i, row):
         """Return true if a line is a header comment"""
-        return False
+        return not self.header # All of the lines before the header
 
     def intuit(self):
         """Classify the rows of an excel file as header, comment and start of data
@@ -316,11 +349,11 @@ class RowSpecIntuiter(object):
                 if is_dl:
                     self.data_start_line = i
 
-                elif self.is_header_comment_line(i, row):
-                    self.header_comments.append(i)
-
                 elif self.is_header_line(i, row):
                     self.header.append(i)
+
+                elif self.is_header_comment_line(i, row):
+                    self.header_comments.append(i)
 
             elif self.data_start_line and not self.data_end_line:
                 if not is_dl:

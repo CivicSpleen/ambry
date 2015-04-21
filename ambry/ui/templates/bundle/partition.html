@@ -71,10 +71,28 @@
     </div>
 </div>
 
-
-{{p.sample}}
-
-
+{% if p.sample %}
+    <h2>Sample Data</h2>
+    <table class="table table-striped table-bordered table-condensed">
+        <thead>
+        <tr>
+            {% for c in p.table.columns.values()|sort(attribute='sequence_id') -%}
+            <th>{{c.vid}} / {{c.name}}</th>
+            {% endfor %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for row in p.sample %}
+        <tr>
+            <th>{{row[0]}}</th>
+            {% for col in row[1:] %}
+            <td> {{col}}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{%endif%}
 
 
 {% endblock %}
