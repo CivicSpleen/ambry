@@ -22,4 +22,3 @@ flask-compress
 ckcache
 geoid
 isodate
-pypandoc==0.9.7
