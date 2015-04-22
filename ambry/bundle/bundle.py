@@ -8,6 +8,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 import logging
 import os
+
 from ..filesystem import BundleFilesystem
 from ..schema import Schema
 from ..partitions import Partitions
@@ -153,7 +154,7 @@ class Bundle(object):
     @property
     def repository(self):
         """Return a repository object."""
-        from ..repository import Repository  # @UnresolvedImport
+        from ..old.repository import Repository  # @UnresolvedImport
 
         if not self._repository:
             repo_name = 'default'
@@ -172,7 +173,6 @@ class Bundle(object):
         return self.get_dataset()
 
     def set_value(self, group, key, value):
-        from ambry.orm import Config as SAConfig
 
         with self.session as s:
             return self.database.set_config_value(
@@ -452,7 +452,7 @@ class DbBundleBase(Bundle):
     @property
     def identity(self):
         """Return an identity object."""
-        from ..identity import Identity, LocationRef
+        from ..identity import LocationRef
 
         if not self._identity:
             self._identity = self.get_dataset().identity
@@ -465,7 +465,6 @@ class DbBundleBase(Bundle):
         """Return most important information, excluding the complete schema, as
         a dict, suitable for conversion to json."""
 
-        import json
         import markdown
 
         d = {}
@@ -630,6 +629,7 @@ class BuildBundle(Bundle):
     """
 
     META_COMPLETE_MARKER = '.meta_complete'
+    PROTO_SCHEMA_FILE = 'protoschema.csv'
     SCHEMA_FILE = 'schema.csv'
     SCHEMA_REVISED_FILE = 'schema-revised.csv'
     SCHEMA_OLD_FILE = 'schema-old.csv'
@@ -643,7 +643,6 @@ class BuildBundle(Bundle):
     def __init__(self, bundle_dir=None):
         """"""
         from ..database.sqlite import BundleLockContext
-        import os
 
         super(BuildBundle, self).__init__()
 
@@ -768,7 +767,7 @@ class BuildBundle(Bundle):
     @property
     def identity(self):
         """Return an identity object."""
-        from ..identity import Identity, Name, ObjectNumber, LocationRef
+        from ..identity import Identity, LocationRef
 
         if not self._identity:
             try:
@@ -792,10 +791,8 @@ class BuildBundle(Bundle):
         return self._identity
 
     def update_configuration(self, identity=None, rewrite_database=True):
-        from ..dbexceptions import DatabaseError
         # Re-writes the bundle.yaml file, with updates to the identity and partitions
         # sections.
-        from ..dbexceptions import DatabaseMissingError
 
         md = self.metadata
         md.load_all()
@@ -1171,15 +1168,14 @@ class BuildBundle(Bundle):
 
     def _prepare_load_schema(self, fast=False):
 
-        sf = self.filesystem.path('meta', self.SCHEMA_FILE)
+        sf_path = self.filesystem.path('meta', self.SCHEMA_FILE)
 
-        if os.path.exists(sf):
-            with open(sf, 'rbU') as f:
-                self.log("Loading schema from file: {}".format(sf))
+        if os.path.exists(sf_path):
+            with open(sf_path, 'rbU') as f:
+                self.log("Loading schema from file: {}".format(sf_path))
                 self.schema.clean()
                 with self.session:
-                    warnings, errors = self.schema.schema_from_file(
-                        f, fast=fast)
+                    warnings, errors = self.schema.schema_from_file(f, fast=fast)
 
                     self.schema.expand_table_prototypes()
 
@@ -1197,7 +1193,8 @@ class BuildBundle(Bundle):
                 if errors:
                     self.fatal("Schema load failed. Exiting")
         else:
-            self.log("No schema file ('{}') not loading schema".format(sf))
+            self.log("No schema file ('{}') not loading schema".format(sf_path))
+
 
         cf = self.filesystem.path('meta', self.CODE_FILE)
 
@@ -1281,7 +1278,6 @@ class BuildBundle(Bundle):
             # At this point, we have a dataset vid, which we didn't have when the dbcreated values was
             # set, so we can reset the value with to get it into the process
             # configuration group.
-            from ambry.orm import Config
             root_db_created = self.database.get_config_value(
                 ROOT_CONFIG_NAME_V,
                 'process',
@@ -1365,7 +1361,6 @@ class BuildBundle(Bundle):
         during the build."""
         from datetime import datetime
         from time import time
-        import shutil
 
         with self.session:
             self.set_value('process', 'built', datetime.now().isoformat())
@@ -1629,7 +1624,6 @@ class BuildBundle(Bundle):
     # Update is like build, but calls into an earlier version of the package.
     def pre_update(self):
         from time import time
-        from ..identity import Identity
 
         if not self.database.exists():
             raise ProcessError(
@@ -1768,8 +1762,6 @@ class BuildBundle(Bundle):
 
     def install(self, library_name=None, delete=False, force=True):
         """Install the bundle and all partitions in the default library."""
-
-        import ambry.library
 
         force = self.run_args.get('force', force)
 

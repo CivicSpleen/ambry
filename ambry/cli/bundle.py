@@ -270,12 +270,7 @@ def bundle_parser(cmd):
         default=False,
         action="store_true",
         help='Also report partition details')
-    command_p.add_argument(
-        '-c',
-        '--coverage',
-        default=False,
-        action="store_true",
-        help='Also report time and space coverage')
+
 
     #
     # Clean Command
@@ -474,6 +469,7 @@ def bundle_info(args, b, st, rc):
     elif args.schema:
         b.schema.as_csv()
     else:
+        from ambry.util.datestimes import compress_years
 
         b.log("----Info: ".format(b.identity.sname))
         b.log("VID  : " + b.identity.vid)
@@ -481,11 +477,9 @@ def bundle_info(args, b, st, rc):
         b.log("VName: " + b.identity.vname)
         b.log("DB   : " + b.database.path)
 
-        if args.coverage:
-            from ambry.util.datestimes import compress_years
-            b.log('Geo cov   : ' + str(list(b.metadata.coverage.geo)))
-            b.log('Grain cov : ' + str(list(b.metadata.coverage.grain)))
-            b.log('Time cov  : ' + compress_years(b.metadata.coverage.time))
+        b.log('Geo cov   : ' + str(list(b.metadata.coverage.geo)))
+        b.log('Grain cov : ' + str(list(b.metadata.coverage.grain)))
+        b.log('Time cov  : ' + compress_years(b.metadata.coverage.time))
 
         if b.database.exists():
 

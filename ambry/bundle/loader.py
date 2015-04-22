@@ -6,8 +6,6 @@ from rowgen import RowSpecIntuiter
 
 class LoaderBundle(BuildBundle):
 
-    prefix_headers = ['id']
-
     row_gen_ext_map = {
         'xlsm': 'xls',
         'xlsx': 'xls'
@@ -142,8 +140,6 @@ class LoaderBundle(BuildBundle):
 
         source = self.metadata.sources[source_name]
 
-        table_config = self.metadata.tables.get(source.table if source.table else source_name)
-
         fn = self.filesystem.download(source_name)
 
         base_dir, file_name  = split(fn)
@@ -165,12 +161,6 @@ class LoaderBundle(BuildBundle):
         if source.segment:
             rs['segment'] = source.segment
 
-        assert isinstance(self.prefix_headers, list)
-        rs['prefix_headers'] = self.prefix_headers
-
-        if table_config:
-            for col_name, col in table_config.extra_columns.items():
-                print '!!!', col_name, col
 
         rs['header_mangler'] = lambda header: self.mangle_header(header)
 
@@ -243,6 +233,14 @@ class LoaderBundle(BuildBundle):
 
         tables = defaultdict(set)
 
+        # First, load in the protoschema, to get prefix columns for each table.
+
+        sf_path = self.filesystem.path('meta', self.PROTO_SCHEMA_FILE)
+
+        if os.path.exists(sf_path):
+            with open(sf_path, 'rbU') as f:
+                warnings, errors = self.schema.schema_from_file(f)
+
         # Collect all of the sources for each table, while also creating the tables
         for source_name, source in self.metadata.sources.items():
 
@@ -289,10 +287,10 @@ class LoaderBundle(BuildBundle):
 
                         proto_vid = pt_map.get(test, None)
 
-                        if proto_vid and c.name  in self.prefix_headers and c.name != 'id':
-                            c.proto_vid = test
-                            self.log("Adding proto_vid '{}' to {}.{}".format(test, table_name, c.name))
-                            n += 1
+                        #if proto_vid and c.name  in self.prefix_headers and c.name != 'id':
+                        #    c.proto_vid = test
+                        #    self.log("Adding proto_vid '{}' to {}.{}".format(test, table_name, c.name))
+                        #    n += 1
 
                 if n:
                     self.schema.write_schema()

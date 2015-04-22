@@ -59,6 +59,9 @@ Todo
 * Meta phase
 * mangle_column_name()
 * build_modify_row()
+* Running Bambry info
+* protoschemas
+* column_map
 
 
 
