@@ -4,6 +4,7 @@
 import imp
 import os
 import sys
+import uuid
 from pip.req import parse_requirements
 from setuptools import setup, find_packages
 
@@ -47,6 +48,8 @@ def find_package_data():
 
     return {'ambry': l}
 
+requirements = parse_requirements('requirements.txt', session=uuid.uuid1())
+
 d = dict(
     name='ambry',
     version=ambry_meta.__version__,
@@ -73,7 +76,7 @@ d = dict(
         'Topic :: Utilities'
     ],
     # zip_safe=False,
-    install_requires=[x for x in reversed([str(x.req) for x in parse_requirements('requirements.txt')])],
+    install_requires=[x for x in reversed([str(x.req) for x in requirements])],
     extras_require={
         'pgsql': ['psycopg2'],
         'geo': ['sh', 'gdal'],
