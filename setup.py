@@ -22,7 +22,7 @@ try:
     # Convert README.md to *.rst expected by pypi
     import pypandoc
     long_description = pypandoc.convert('README.md', 'rst')
-except (IOError, ImportError):
+except (OSError, IOError, ImportError):
     long_description = open('README.md').read()
 
 
