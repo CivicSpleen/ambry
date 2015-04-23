@@ -11,21 +11,19 @@ libgdal-dev gdal-bin python-gdal python-numpy python-scipy "
 
 let "ver = $(lsb_release -r -s | tr -d '.')"
 
-if (( $ver >= 1404 )); then
+if (( $ver > 1404 )); then
     packages="$packages libsqlite3-dev libspatialite3 libspatialite-dev spatialite-bin libspatialindex-dev"
 else
     packages="$packages libsqlite3-dev libspatialite5 libspatialite-dev spatialite-bin libspatialindex-dev"
 fi
 
 
-for pkg in $packages; do
-    echo "INSTALLING: $pkg"
-    apt-get install -y $pkg
-    if [ $? != 0 ]; then
-        echo "ERROR: Failed to install $pkg"
-        exit $?
-    fi
-done
+apt-get install -y $packages
+if [ $? != 0 ]; then
+    echo "ERROR: Failed to install $pkg"
+    exit $?
+fi
+
 
 # This package allows Sqlalchemy to load the spatialite shared object to provide
 # Spatialite services.

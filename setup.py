@@ -17,12 +17,7 @@ if sys.version_info <= (2, 6):
 # that aren't installed until after installation.
 ambry_meta = imp.load_source('_meta', 'ambry/_meta.py')
 
-try:
-    # Convert README.md to *.rst expected by pypi
-    import pypandoc
-    long_description = pypandoc.convert('README.md', 'rst')
-except (IOError, ImportError):
-    long_description = open('README.md').read()
+long_description = open('README.rst').read()
 
 
 def find_package_data():
