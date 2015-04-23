@@ -4,6 +4,7 @@
 import imp
 import os
 import sys
+import uuid
 from pip.req import parse_requirements
 from setuptools import setup, find_packages
 
@@ -18,6 +19,7 @@ if sys.version_info <= (2, 6):
 ambry_meta = imp.load_source('_meta', 'ambry/_meta.py')
 
 long_description = open('README.rst').read()
+
 
 
 def find_package_data():
@@ -41,6 +43,8 @@ def find_package_data():
                 l.append(path)
 
     return {'ambry': l}
+
+requirements = parse_requirements('requirements.txt', session=uuid.uuid1())
 
 d = dict(
     name='ambry',
@@ -68,7 +72,7 @@ d = dict(
         'Topic :: Utilities'
     ],
     # zip_safe=False,
-    install_requires=[x for x in reversed([str(x.req) for x in parse_requirements('requirements.txt')])],
+    install_requires=[x for x in reversed([str(x.req) for x in requirements])],
     extras_require={
         'pgsql': ['psycopg2'],
         'geo': ['sh', 'gdal'],
