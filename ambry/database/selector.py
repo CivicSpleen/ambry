@@ -10,7 +10,7 @@ included in this distribution as LICENSE.txt
 class RowSelector(object):
 
     """Constructed on a query to a partition, this object allorws rows of a
-    database to be acessed in a variety of forms."""
+    database to be acessed in a variety of forms, such as pandas, numpy, petl or dicts"""
 
     def __init__(self, partition, sql=None, index_col=None, *args, **kwargs):
 
