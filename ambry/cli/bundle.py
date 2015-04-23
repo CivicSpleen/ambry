@@ -1,3 +1,4 @@
+# coding: utf-8
 """Copyright (c) 2013 Clarinova.
 
 This file is licensed under the terms of the Revised BSD License,
@@ -449,6 +450,7 @@ def bundle_parser(cmd):
 
 def bundle_info(args, b, st, rc):
     import json
+    import textwrap
     from ..dbexceptions import DatabaseMissingError
 
     indent = "    "
@@ -557,10 +559,12 @@ def bundle_info(args, b, st, rc):
                     bl('g grain', 'geo_grain')
                     bl('t cov', 'time_coverage')
                 if args.stats:
+                    wrapper = textwrap.TextWrapper()
+
                     b.log(indent + "Stats: ")
                     b.log(
                         indent +
-                        "{:20.20s} {:>7s} {:>7s} {:>10s} {:s}" .format(
+                        "{:20.20s} {:>7s} {:>7s} {:>10s} {:70s}" .format(
                             "Col name",
                             "Count",
                             'Uniq',
@@ -568,14 +572,30 @@ def bundle_info(args, b, st, rc):
                             'Sample Values'))
                     for col_name, s in p.stats.__dict__.items():
 
+                        if s.uvalues:
+                            vals = (u'\n' + u' '*84).join(wrapper.wrap(u','.join(s.uvalues.keys()[:5])))
+                        elif 'values' in s.hist:
+
+                            parts = u' ▁▂▃▄▅▆▇▉'
+
+                            def sparks(nums): # https://github.com/rory/ascii_sparks/blob/master/ascii_sparks.py
+                                nums = list(nums)
+                                fraction = max(nums) / float(len(parts) - 1)
+
+                                return ''.join(parts[int(round(x / fraction))] for x in nums)
+
+                            vals = sparks(int(x[1]) for x in s.hist['values'])
+                        else:
+                            vals = ''
+
                         b.log(
-                            indent + "{:20.20s} {:7s} {:7s} {:10s} {:s}". format(
-                                col_name, str(
-                                    s.count) if s.count else '', str(
-                                    s.nuniques) if s.nuniques else '', '{:10.2e}'.format(
-                                    s.mean) if s.mean else '', ','.join(
-                                    s.uvalues.keys()[
-                                        :5])))
+                            indent + u"{:20.20s} {:7s} {:7s} {:10s} {:70s}". format(
+                                col_name,
+                                str( s.count) if s.count else '',
+                                str(s.nuniques) if s.nuniques else '',
+                                '{:10.2e}'.format(s.mean) if s.mean else '',
+                                vals
+                            ))
 
 
 def bundle_clean(args, b, st, rc):

@@ -643,6 +643,7 @@ class BuildBundle(Bundle):
     def __init__(self, bundle_dir=None):
         """"""
         from ..database.sqlite import BundleLockContext
+        import os
 
         super(BuildBundle, self).__init__()
 
