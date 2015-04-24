@@ -102,10 +102,7 @@ class LibraryDb(object):
             # found. It looks like connections are losing the setting for the search path to the
             # library schema.
             # Disabling connection pooling solves the problem.
-            self._engine = create_engine(
-                self.dsn,
-                poolclass=NullPool,
-                echo=False)
+            self._engine = create_engine( self.dsn,poolclass=NullPool, echo=False)
 
             # Easier than constructing the pool
             self._engine.pool._use_threadlocal = True
@@ -128,6 +125,7 @@ class LibraryDb(object):
             if self.driver in ['postgres', 'postgis']:
                 self._connection.execute("SET search_path TO library")
 
+
         return self._connection
 
     @property
@@ -143,8 +141,8 @@ class LibraryDb(object):
             # set the search path
 
         if self.driver in ('postgres', 'postgis') and self._schema:
-
             self._session.execute("SET search_path TO {}".format(self._schema))
+
 
         return self._session
 
@@ -216,9 +214,7 @@ class LibraryDb(object):
             # Since we are using the connection, rather than the session, need to
             # explicitly set the search path.
                 if self.driver in ('postgres', 'postgis') and self._schema:
-                    self.connection.execute(
-                        "SET search_path TO {}".format(
-                            self._schema))
+                    self.connection.execute("SET search_path TO {}".format( self._schema))
 
                 rows = self.connection.execute(
                     "SELECT * FROM datasets WHERE d_vid = '{}' "
@@ -679,9 +675,10 @@ class LibraryDb(object):
         #   raise ConflictError("Bundle {} already installed".format(bundle.identity.fqname))
 
         try:
+
             dataset = self.install_dataset(bundle)
         except Exception as e:
-            raise
+
             from ..dbexceptions import DatabaseError
 
             raise DatabaseError("Failed to install {} into {}: {}".format(
@@ -770,10 +767,7 @@ class LibraryDb(object):
         s.query(Partition).filter(Partition.d_vid == dataset.vid).delete()
 
         for table in dataset.tables:
-
             s.query(Column).filter(Column.t_vid == table.vid).delete()
-
-        s.commit()
 
         s.query(Table).filter(Table.d_vid == dataset.vid).delete()
 
