@@ -7,6 +7,7 @@ Created on Jun 30, 2012
 import unittest
 import os.path
 import logging
+
 from  bundles.testbundle.bundle import Bundle
 from ambry.run import  get_runconfig
 import ambry.util
@@ -236,7 +237,7 @@ class Test(TestBase):
     def test_manifest_parts(self):
         from ambry.warehouse.manifest import Manifest
         from ambry.util import get_logger
-        from ambry.ipython.manifest import ManifestMagicsImpl
+        from old.ipython.manifest import ManifestMagicsImpl
 
         m = Manifest('', get_logger('TL'))
         mmi = ManifestMagicsImpl(m)

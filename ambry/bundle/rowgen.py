@@ -13,9 +13,8 @@ class RowGenerator(object):
 
     generator = None
 
-    prefix_headers = ['id']
-    header = None
-    unmangled_header = None
+    _header = None
+    _unmangled_header = None
     footer = None
     data_start_line = 1
     data_end_line = None
@@ -30,8 +29,7 @@ class RowGenerator(object):
 
 
     def __init__(self, file, data_start_line = None, data_end_line = None,
-                 header_lines = None, header_comment_lines = None, prefix_headers = None,
-                 header_mangler = None):
+                 header_lines = None, header_comment_lines = None, header_mangler = None):
         """
 
         """
@@ -42,26 +40,23 @@ class RowGenerator(object):
         if data_end_line: self.data_end_line = data_end_line
         if header_lines: self.header_lines = header_lines
         if header_comment_lines: self.header_comment_lines = header_comment_lines
-        if prefix_headers: self.prefix_headers = prefix_headers
-        if header_mangler: self.header_mangler = header_mangler
 
-        assert (isinstance(self.prefix_headers, list) or self.prefix_headers is None)
+        if header_mangler: self.header_mangler = header_mangler
 
         self._raw_row_gen = None
 
         self.put_row = None
 
-        self.header = None
-        self.unmangled_header = None
+        self._header = None
+        self._unmangled_header = None
 
 
-    def add_intuition(self, data_start_line=None, data_end_line = None, header_lines=None, header_comment_lines=None,
-                      prefix_headers=None):
+    def add_intuition(self, data_start_line=None, data_end_line = None,
+                      header_lines=None, header_comment_lines=None):
 
         if data_start_line: self.data_start_line = data_start_line
         if header_lines: self.header_lines = header_lines
         if header_comment_lines: self.header_comment_lines = header_comment_lines
-        if prefix_headers: self.prefix_headers = prefix_headers
 
     def _yield_rows(self):
         raise NotImplementedError
@@ -80,13 +75,26 @@ class RowGenerator(object):
         self._raw_row_gen = None
         self.line_number = 0
 
+    @property
+    def header(self):
+
+        if not self._header:
+            self.get_header()
+
+        return self._header
+
+    @property
+    def unmangled_header(self):
+
+        if not self._unmangled_header:
+            self.get_header()
+
+        return self._unmangled_header
+
 
     def get_header(self):
         """Open the file and read the rows for the header and header comments. It leaves the iterator
         positioned on the first data row. """
-
-        if self.header:
-            return self.header
 
         headers = []
         header_comments = []
@@ -128,21 +136,23 @@ class RowGenerator(object):
                 header = [' '.join(col_val.strip() if col_val else '' for col_val in col_set)
                           for col_set in zip(*headers)]
 
+                header = [ h.strip() for h in header ]
+
             elif len(headers) > 0:
                 header = headers.pop()
 
             else:
                 header = []
 
-            self.header =  self.prefix_headers + header
+            self._header =   header
 
             self.header_comment = [' '.join(x) for x in zip(*header_comments)]
 
         if self.header_mangler:
-            self.unmangled_header = list(self.header)
-            self.header = self.header_mangler(self.header)
+            self._unmangled_header = list(self.header)
+            self._header = self.header_mangler(self.header)
 
-        return self.header
+        return self._header
 
     def get_footer(self):
 
@@ -180,18 +190,16 @@ class RowGenerator(object):
 
         self.get_header()
 
-        pre = [None]*len(self.prefix_headers)
-
         for row in self.raw_row_gen:
 
             if self.data_end_line and self.line_number >= self.data_end_line:
                 break
 
             if self.put_row:
-                yield pre + self.put_row
+                yield self.put_row
                 self.put_row = None
 
-            yield  pre + row
+            yield  row
 
 
 
@@ -202,12 +210,13 @@ class DelimitedRowGenerator(RowGenerator):
     delimiter = None
 
     def __init__(self, file, data_start_line=None, data_end_line = None, header_lines=None,
-                 header_comment_lines=None, prefix_headers=None,
-                 header_mangler=None, delimiter = ','):
+                 header_comment_lines=None, header_mangler=None, delimiter = ','):
 
-        super(DelimitedRowGenerator, self).__init__(file, data_start_line=data_start_line, data_end_line=data_end_line,
-                                                    header_lines=header_lines, header_comment_lines=header_comment_lines,
-                                                    prefix_headers=prefix_headers, header_mangler=header_mangler)
+        super(DelimitedRowGenerator, self).__init__(file, data_start_line=data_start_line,
+                                                    data_end_line=data_end_line,
+                                                    header_lines=header_lines,
+                                                    header_comment_lines=header_comment_lines,
+                                                    header_mangler=header_mangler)
 
         self.delimiter = delimiter
 
@@ -235,18 +244,28 @@ class DelimitedRowGenerator(RowGenerator):
 class ExcelRowGenerator(RowGenerator):
 
     def __init__(self, file, data_start_line=None, data_end_line=None, header_lines=None,
-                 header_comment_lines=None, prefix_headers=None, header_mangler=None, segment = 0):
+                 header_comment_lines=None,  header_mangler=None, segment = 0):
 
         super(ExcelRowGenerator, self).__init__(file, data_start_line, data_end_line, header_lines,
-                                                header_comment_lines, prefix_headers, header_mangler)
+                                                header_comment_lines, header_mangler)
 
         self.segment = segment
         self.workbook = None
 
     def _yield_rows(self):
         from xlrd import open_workbook
+        from xlrd.biffh import XLRDError
 
-        wb = open_workbook(self.file_name)
+        try:
+            wb = open_workbook(self.file_name)
+        except XLRDError:
+            from zipfile import ZipFile
+            # Usually b/c the .xls file is XML, but not zipped.
+
+            fn = self.file_name.replace('.xls', '.xml')
+
+            wb = open_workbook(self.file_name)
+
 
         self.workbook = wb
 
@@ -306,11 +325,10 @@ class RowSpecIntuiter(object):
 
         self.mid_length = mid =  (min(self.lengths.keys()) +  max(self.lengths.keys())) / 2
 
-        print self.mid_length
 
     def non_nulls(self, row):
         """Return the non-empty values from a row"""
-        return [col for col in row if bool(str(col).strip())]
+        return [col for col in row if bool(unicode(col).encode('ascii','replace').strip())]
 
     def is_data_line(self, i, row):
         """Return true if a line is a data row"""

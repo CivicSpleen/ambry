@@ -57,9 +57,13 @@ Todo
 
 * Tutorial process
 * Intuit, raw row, and specd-row reports. 
-* Meta phase
+* Meta phase/. Run meta_set_row_specs()
 * mangle_column_name()
 * build_modify_row()
+* Running Bambry info
+* protoschemas
+* column_map
+* Run bambry info -P -S
 
 
 

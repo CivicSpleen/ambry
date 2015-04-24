@@ -315,11 +315,15 @@ class SqlitePartition(PartitionBase):
         # information.
 
         extra_spaces = []
+        extra_grain = None
 
         if 'source_data' in self.record.data:
             for source_name, source in self.record.data['source_data'].items():
                 if 'space' in source:
                     extra_spaces.append((source_name, source['space']))
+
+                if 'grain' in source:
+                    extra_grain = source['grain']
 
         if self.identity.space:  # And from the partition name
             extra_spaces.append(('pname', self.identity.space))
@@ -348,6 +352,9 @@ class SqlitePartition(PartitionBase):
                 geoids.add(civick.GVid.parse(gvid))
 
         coverage, grain = simplify(geoids)
+
+        if extra_grain:
+            grain.add(extra_grain)
 
         # The first simplification may produce a set that can be simplified
         # again
