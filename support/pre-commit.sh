@@ -1,5 +1,5 @@
 #!/bin/sh
-
+# Counts the number of commits and adds that number to the last number of the version
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd -P )"
 DIR=$(dirname $(dirname $DIR))
 COUNT=$(git rev-list HEAD --count)
