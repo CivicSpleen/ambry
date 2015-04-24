@@ -1,0 +1,4 @@
+# developer requirements
+
+-r requirements/base.txt
+pypandoc==0.9.7
