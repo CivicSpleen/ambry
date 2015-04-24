@@ -1757,8 +1757,11 @@ class Partition(Base, LinkableMixin):
             }
 
             for gvid_str in d['geo_grain']['vids']:
-                gvid = GVid.parse(gvid_str)
-                d['geo_grain']['names'].append(gvid.level.title())
+                try:
+                    gvid = GVid.parse(gvid_str)
+                    d['geo_grain']['names'].append(gvid.level.title())
+                except KeyError:
+                    d['geo_grain']['names'].append(gvid_str)
 
         if 'geo_coverage' in d:
             d['geo_coverage'] = {

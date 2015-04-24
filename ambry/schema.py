@@ -1486,10 +1486,7 @@ class {name}(Base):
                             data = {'is_code' : 1},
                             derivedfrom=orm_col.id_)
 
-
-
-        with open(self.bundle.filesystem.path('meta', self.bundle.SCHEMA_FILE), 'w') as f:
-            self.as_csv(f)
+        self.write_schema()
 
     def update_from_iterator(self, table_name, iterator, header=None,
                              max_n = None,logger = None):
