@@ -10,7 +10,7 @@ unicodecsv
 lockfile
 semantic_version
 numpy
-pandas
+pandas<=0.15.1
 sqlparse
 pygments
 jinja2
@@ -20,6 +20,5 @@ nltk
 flask
 flask-compress
 ckcache
-geoid
+geoid>=0.0.7
 isodate
-pypandoc==0.9.7

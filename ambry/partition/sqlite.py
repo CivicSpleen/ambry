@@ -193,9 +193,8 @@ class SqlitePartition(PartitionBase):
         :return:
 
         """
-        import pandas as pd
+
         import numpy as np
-        import json
 
         df = self.pandas
 
@@ -221,7 +220,12 @@ class SqlitePartition(PartitionBase):
 
                 row['nuniques'] = df[col_name].dropna().nunique()
 
-                h = np.histogram(df[col_name])
+                # return all elements that are +/-1 2 std from the mean
+                # We restrict the histograph to 4 std because for the small range of sparklines, a 0 value
+                # can make the histogram useless by pushing all other values into a single bin
+                df2std =  lambda d : d[(d < (d.mean()+2*d.std()) ) & ((d.mean()-2*d.std()) < d)]
+
+                h = np.histogram(df2std(df[col_name]))
 
                 row['hist'] = dict(values=zip(h[1], h[0]))
 
@@ -315,11 +319,15 @@ class SqlitePartition(PartitionBase):
         # information.
 
         extra_spaces = []
+        extra_grain = None
 
         if 'source_data' in self.record.data:
             for source_name, source in self.record.data['source_data'].items():
                 if 'space' in source:
                     extra_spaces.append((source_name, source['space']))
+
+                if 'grain' in source:
+                    extra_grain = source['grain']
 
         if self.identity.space:  # And from the partition name
             extra_spaces.append(('pname', self.identity.space))
@@ -348,6 +356,9 @@ class SqlitePartition(PartitionBase):
                 geoids.add(civick.GVid.parse(gvid))
 
         coverage, grain = simplify(geoids)
+
+        if extra_grain:
+            grain.add(extra_grain)
 
         # The first simplification may produce a set that can be simplified
         # again
