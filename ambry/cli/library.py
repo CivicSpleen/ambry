@@ -30,61 +30,16 @@ def library_parser(cmd):
 
     sp = asp.add_parser('push', help='Push new library files')
     sp.set_defaults(subcommand='push')
-    sp.add_argument(
-        '-w',
-        '--watch',
-        default=False,
-        action="store_true",
-        help='Check periodically for new files.')
-    sp.add_argument(
-        '-f',
-        '--force',
-        default=False,
-        action="store_true",
-        help='Push all files')
+    sp.add_argument( '-w', '--watch', default=False, action="store_true", help='Check periodically for new files.')
+    sp.add_argument( '-f', '--force', default=False, action="store_true", help='Push all files')
 
     sp = asp.add_parser('files', help='Print out files in the library')
     sp.set_defaults(subcommand='files')
-    sp.add_argument(
-        '-a',
-        '--all',
-        default='all',
-        action="store_const",
-        const='all',
-        dest='file_state',
-        help='Print all files')
-    sp.add_argument(
-        '-n',
-        '--new',
-        default=False,
-        action="store_const",
-        const='new',
-        dest='file_state',
-        help='Print new files')
-    sp.add_argument(
-        '-p',
-        '--pushed',
-        default=False,
-        action="store_const",
-        const='pushed',
-        dest='file_state',
-        help='Print pushed files')
-    sp.add_argument(
-        '-u',
-        '--pulled',
-        default=False,
-        action="store_const",
-        const='pulled',
-        dest='file_state',
-        help='Print pulled files')
-    sp.add_argument(
-        '-s',
-        '--synced',
-        default=False,
-        action="store_const",
-        const='synced',
-        dest='file_state',
-        help='Print synced source packages')
+    sp.add_argument( '-a', '--all', default='all', action="store_const", const='all', dest='file_state', help='Print all files')
+    sp.add_argument( '-n', '--new', default=False, action="store_const", const='new', dest='file_state', help='Print new files')
+    sp.add_argument( '-p', '--pushed', default=False, action="store_const", const='pushed', dest='file_state', help='Print pushed files')
+    sp.add_argument( '-u', '--pulled', default=False, action="store_const", const='pulled', dest='file_state', help='Print pulled files')
+    sp.add_argument( '-s', '--synced', default=False, action="store_const", const='synced', dest='file_state', help='Print synced source packages')
 
     sp = asp.add_parser('new', help='Create a new library')
     sp.set_defaults(subcommand='new')
@@ -92,171 +47,55 @@ def library_parser(cmd):
     sp = asp.add_parser('drop', help='Delete all of the tables in the library')
     sp.set_defaults(subcommand='drop')
 
-    sp = asp.add_parser(
-        'clean',
-        help='Remove all entries from the library database')
+    sp = asp.add_parser( 'clean', help='Remove all entries from the library database')
     sp.set_defaults(subcommand='clean')
 
-    sp = asp.add_parser(
-        'purge',
-        help='Remove all entries from the library database and delete all files')
+    sp = asp.add_parser( 'purge', help='Remove all entries from the library database and delete all files')
     sp.set_defaults(subcommand='purge')
 
-    sp = asp.add_parser(
-        'sync',
-        help='Synchronize the local directory, upstream and remote with the library')
+    sp = asp.add_parser( 'sync', help='Synchronize the local directory, upstream and remote with the library')
     sp.set_defaults(subcommand='sync')
-    sp.add_argument(
-        '-C',
-        '--clean',
-        default=False,
-        action="store_true",
-        help='Clean before syncing. Will clean only the locations that are also synced')
+    sp.add_argument( '-C', '--clean', default=False, action="store_true", help='Clean before syncing. Will clean only the locations that are also synced')
 
-    sp.add_argument(
-        '-a',
-        '--all',
-        default=False,
-        action="store_true",
-        help='Sync everything')
-    sp.add_argument(
-        '-l',
-        '--library',
-        default=False,
-        action="store_true",
-        help='Sync the library')
-    sp.add_argument(
-        '-r',
-        '--remote',
-        default=False,
-        action="store_true",
-        help='Sync the remote')
-    sp.add_argument(
-        '-s',
-        '--source',
-        default=False,
-        action="store_true",
-        help='Sync the source')
-    sp.add_argument(
-        '-j',
-        '--json',
-        default=False,
-        action="store_true",
-        help='Cache JSON versions of library objects')
-    sp.add_argument(
-        '-w',
-        '--warehouses',
-        default=False,
-        action="store_true",
-        help='Re-synchronize warehouses')
-    sp.add_argument(
-        '-F',
-        '--bundle-list',
-        help='File of bundle VIDs. Sync only VIDs listed in this file')
+    sp.add_argument('-a','--all',default=False,  action="store_true", help='Sync everything')
+    sp.add_argument( '-l', '--library', default=False, action="store_true", help='Sync the library')
+    sp.add_argument( '-r', '--remote', default=False, action="store_true", help='Sync the remote')
+    sp.add_argument( '-s', '--source', default=False, action="store_true", help='Sync the source')
+    sp.add_argument( '-j', '--json', default=False, action="store_true", help='Cache JSON versions of library objects')
+    sp.add_argument( '-w', '--warehouses', default=False, action="store_true", help='Re-synchronize warehouses')
+    sp.add_argument( '-F', '--bundle-list', help='File of bundle VIDs. Sync only VIDs listed in this file')
 
     sp = asp.add_parser('info', help='Display information about the library')
     sp.set_defaults(subcommand='info')
 
-    sp = asp.add_parser(
-        'get',
-        help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
+    sp = asp.add_parser( 'get', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
     sp.set_defaults(subcommand='get')
     sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument(
-        '-p',
-        '--partitions',
-        default=False,
-        action="store_true",
-        help='Also get all of the partitions. ')
-    sp.add_argument(
-        '-f',
-        '--force',
-        default=False,
-        action="store_true",
-        help='Force retrieving from the remote')
+    sp.add_argument( '-p', '--partitions', default=False, action="store_true", help='Also get all of the partitions. ')
+    sp.add_argument( '-f', '--force', default=False, action="store_true", help='Force retrieving from the remote')
 
-    sp = asp.add_parser('open',
-                        help='Open a bundle or partition file with sqlite3')
+    sp = asp.add_parser('open',                 help='Open a bundle or partition file with sqlite3')
     sp.set_defaults(subcommand='open')
     sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument(
-        '-f',
-        '--force',
-        default=False,
-        action="store_true",
-        help='Force retrieving from the remote')
+    sp.add_argument( '-f', '--force', default=False, action="store_true", help='Force retrieving from the remote')
 
-    sp = asp.add_parser(
-        'remove',
-        help='Delete a file from all local caches and the local library')
+    sp = asp.add_parser( 'remove', help='Delete a file from all local caches and the local library')
     sp.set_defaults(subcommand='remove')
-    sp.add_argument(
-        '-a',
-        '--all',
-        default=False,
-        action="store_true",
-        help='Remove all records')
-    sp.add_argument(
-        '-b',
-        '--bundle',
-        default=False,
-        action="store_true",
-        help='Remove the dataset and partition records')
-    sp.add_argument(
-        '-l',
-        '--library',
-        default=False,
-        action="store_true",
-        help='Remove the library file record and library files')
-    sp.add_argument(
-        '-r',
-        '--remote',
-        default=False,
-        action="store_true",
-        help='Remove the remote record')
-    sp.add_argument(
-        '-s',
-        '--source',
-        default=False,
-        action="store_true",
-        help='Remove the source record')
-    sp.add_argument(
-        'terms',
-        type=str,
-        nargs=argparse.REMAINDER,
-        help='Name or ID of the bundle or partition to remove')
+    sp.add_argument('-a','--all',default=False, action="store_true",help='Remove all records')
+    sp.add_argument('-b','--bundle',default=False,action="store_true",  help='Remove the dataset and partition records')
+    sp.add_argument( '-l', '--library', default=False, action="store_true", help='Remove the library file record and library files')
+    sp.add_argument( '-r', '--remote', default=False, action="store_true", help='Remove the remote record')
+    sp.add_argument( '-s', '--source', default=False, action="store_true", help='Remove the source record')
+    sp.add_argument( 'terms', type=str, nargs=argparse.REMAINDER, help='Name or ID of the bundle or partition to remove')
 
     sp = asp.add_parser('schema', help='Dump the schema for a bundle')
     sp.set_defaults(subcommand='schema')
     sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument(
-        '-p',
-        '--pretty',
-        default=False,
-        action="store_true",
-        help='pretty, formatted output')
+    sp.add_argument('-p','--pretty',default=False,action="store_true",help='pretty, formatted output')
     group = sp.add_mutually_exclusive_group()
-    group.add_argument(
-        '-y',
-        '--yaml',
-        default='csv',
-        dest='format',
-        action='store_const',
-        const='yaml')
-    group.add_argument(
-        '-j',
-        '--json',
-        default='csv',
-        dest='format',
-        action='store_const',
-        const='json')
-    group.add_argument(
-        '-c',
-        '--csv',
-        default='csv',
-        dest='format',
-        action='store_const',
-        const='csv')
+    group.add_argument('-y', '--yaml', default='csv', dest='format', action='store_const', const='yaml')
+    group.add_argument( '-j', '--json', default='csv', dest='format', action='store_const', const='json')
+    group.add_argument( '-c', '--csv', default='csv', dest='format', action='store_const', const='csv')
 
     whsp = asp.add_parser('config', help='Configure varibles')
     whsp.set_defaults(subcommand='config')
@@ -281,7 +120,6 @@ def library_command(args, rc):
 
 
 def library_init(args, l, config):
-
     l.database.create()
 
 
@@ -501,10 +339,11 @@ def library_files(args, l, config):
 
     from ..identity import LocationRef
 
-    files_ = l.files.query.state(
-        args.file_state).type(
-        (LocationRef.LOCATION.LIBRARY,
-         LocationRef.LOCATION.PARTITION)).all
+    if args.file_state == 'all':
+        files_ = l.files.query.all
+    else:
+        files_ = (l.files.query.state(args.file_state)
+                  .type((LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.PARTITION))).all
 
     if len(files_):
         prt("-- Display {} files", args.file_state)

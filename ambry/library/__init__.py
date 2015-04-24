@@ -261,8 +261,7 @@ class Library(object):
     ## Storing
     ##
 
-    def put_bundle(self, bundle, logger=None,
-                   install_partitions=True, commit = True):
+    def put_bundle(self, bundle, logger=None,  install_partitions=True, commit = True, file_state= 'new'):
         """Install the records for the dataset, tables, columns and possibly
         partitions. Does not install file references """
         from ..dbexceptions import ConflictError
@@ -276,8 +275,7 @@ class Library(object):
 
         self.search.index_dataset(bundle, force = True)
 
-        self.files.install_bundle_file(bundle, self.cache,
-                                       commit=commit, state = 'new')
+        self.files.install_bundle_file(bundle, self.cache, commit=commit, state = file_state)
 
         ident = bundle.identity
 
@@ -1193,8 +1191,7 @@ class Library(object):
 
         return bundles
 
-    def sync_remotes(self, remotes=None, clean = False,
-                     last_only=True, vids=None):
+    def sync_remotes(self, remotes=None, clean = False, last_only=True, vids=None):
         """Sync the local library with all of the remotes,
         create static JSON, and  build the full-text search index"""
         from ..orm import Dataset
@@ -1247,8 +1244,7 @@ class Library(object):
                     continue
 
                 if self.cache.has(cache_key):# This is just for reporting.
-                    self.logger.info("Remote {} has: {}".format(remote.repo_id,
-                                                                cache_key))
+                    self.logger.info("Remote {} has: {}".format(remote.repo_id,cache_key))
                 else:
                     self.logger.info("Remote {} sync: {}"
                                      .format(remote.repo_id, cache_key))
@@ -1266,7 +1262,8 @@ class Library(object):
                     continue
 
                 try:
-                    path, installed = self.put_bundle(b, install_partitions=False, commit=True)
+                    path, installed = self.put_bundle(b, install_partitions=False, commit=True,
+                                                      file_state = 'installed')
 
                 except NotABundle:
                     self.logger.error("Cache key {} exists, "
@@ -1281,8 +1278,7 @@ class Library(object):
                     continue
 
                 try:
-                    self.files.install_remote_bundle(b.identity, remote, {},
-                                                     commit=True)
+                    self.files.install_remote_bundle(b.identity, remote, {}, commit=True)
                 except IntegrityError:
                     b.close() # Just means we already have it installed
                     continue

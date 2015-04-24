@@ -149,6 +149,7 @@ class Files(object):
             extant.update(f)
             f = extant
 
+
         if merge:
             self.merge(f, commit=commit)
 
