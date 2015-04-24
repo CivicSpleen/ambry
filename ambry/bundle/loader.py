@@ -70,8 +70,8 @@ class LoaderBundle(BuildBundle):
         mn =  Column.mangle_name(n.strip())
 
 
-        if mn in self.col_map:
-            return self.col_map[mn]
+        if mn in self.col_map and self.col_map[mn]['col']:
+            return self.col_map[mn]['col']
         else:
             return mn
 
@@ -142,8 +142,6 @@ class LoaderBundle(BuildBundle):
 
         source = self.metadata.sources[source_name]
 
-        table_config = self.metadata.tables.get(source.table if source.table else source_name)
-
         fn = self.filesystem.download(source_name)
 
         base_dir, file_name  = split(fn)
@@ -167,10 +165,6 @@ class LoaderBundle(BuildBundle):
 
         assert isinstance(self.prefix_headers, list)
         rs['prefix_headers'] = self.prefix_headers
-
-        if table_config:
-            for col_name, col in table_config.extra_columns.items():
-                print '!!!', col_name, col
 
         rs['header_mangler'] = lambda header: self.mangle_header(header)
 

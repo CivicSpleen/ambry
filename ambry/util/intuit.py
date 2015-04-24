@@ -231,7 +231,8 @@ class Intuiter(object):
 
     def iterate(self, row_gen, max_n=None):
 
-        header = row_gen.get_header()
+        header = row_gen.header
+
         unmangled_header = row_gen.unmangled_header
 
         for n, row in enumerate(row_gen):
@@ -248,7 +249,8 @@ class Intuiter(object):
                     self._columns[col].description = desc
 
             except Exception as e:
-                print 'Failed to add row: {}: {}'.format(row, e)
+                print 'Failed to add row: {}: {} {}'.format(row, type(e), e)
+
 
     @property
     def columns(self):
