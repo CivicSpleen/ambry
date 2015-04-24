@@ -167,11 +167,6 @@ class LoaderBundle(BuildBundle):
         if source.segment:
             rs['segment'] = source.segment
 
-<<<<<<< HEAD
-        assert isinstance(self.prefix_headers, list)
-        rs['prefix_headers'] = self.prefix_headers
-=======
->>>>>>> upstream/develop
 
         rs['header_mangler'] = lambda header: self.mangle_header(header)
 
