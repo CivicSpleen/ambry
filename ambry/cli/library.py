@@ -334,7 +334,6 @@ def library_push(args, l, config):
 
         remote.store_list()
 
-
 def library_files(args, l, config):
 
     from ..identity import LocationRef
@@ -354,7 +353,6 @@ def library_files(args, l, config):
                 f.type_,
                 f.group,
                 f.path)
-
 
 def library_schema(args, l, config):
     from ambry.bundle import DbBundle
