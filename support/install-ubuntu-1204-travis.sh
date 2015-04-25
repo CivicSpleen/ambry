@@ -16,8 +16,8 @@ chmod +x miniconda.sh
 export PATH=/home/travis/miniconda/bin:/miniconda/bin:$PATH
 conda update --yes conda
 travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION pip numpy scipy
-travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION https://conda.binstar.org/kalefranz pysqlite
-travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION https://conda.binstar.org/jgomezdans libspatialite
+travis_retry conda install --yes -c https://conda.binstar.org/kalefranz pysqlite
+travis_retry conda install --yes -c https://conda.binstar.org/jgomezdans libspatialite
 
 git clone https://github.com/CivicKnowledge/ambry.git
 cd ambry
