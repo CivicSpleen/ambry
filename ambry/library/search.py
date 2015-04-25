@@ -89,7 +89,6 @@ class Search(object):
     def commit(self):
 
         if self._dataset_writer:
-
             self._dataset_writer.commit()
             self._dataset_writer = None
 
@@ -102,9 +101,7 @@ class Search(object):
         from whoosh.index import create_in, open_dir
 
         if not self._dataset_index:
-            self._dataset_index = self.get_or_new_index(
-                DatasetSchema,
-                self.d_index_dir)
+            self._dataset_index = self.get_or_new_index(DatasetSchema,self.d_index_dir)
 
         return self._dataset_index
 
