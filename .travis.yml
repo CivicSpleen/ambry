@@ -12,8 +12,8 @@ before_install:
   - export PATH=/home/travis/miniconda/bin:$PATH
   - conda update --yes conda
   - travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION pip numpy scipy
-  - travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION -c https://conda.binstar.org/kalefranz pysqlite
-  - travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION -c https://conda.binstar.org/jgomezdans libspatialite
+  - travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION https://conda.binstar.org/kalefranz pysqlite
+  - travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION https://conda.binstar.org/jgomezdans libspatialite
 
 install:
   - travis_retry pip install -r requirements.txt
