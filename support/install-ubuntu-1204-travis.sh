@@ -3,6 +3,7 @@
 # apt-get update && apt-get install -y curl && sh -c "$(curl -fsSL https://raw.githubusercontent.com/ericbusboom/ambry/develop/support/install-ubuntu-1204.sh)"
 
 TRAVIS_PYTHON_VERSION=2.7
+travis_retry=
 
 apt-get update
 locale-gen en_US.UTF-8
