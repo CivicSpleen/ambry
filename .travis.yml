@@ -1,7 +1,23 @@
 language: python
 python:
   - "2.7"
-# command to install dependencies
-install: "pip install -r requirements.txt"
+cache: apt
+before_install:
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq wget bzip2 libpq-dev libspatialindex-dev
+  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+  - chmod +x miniconda.sh
+  - ./miniconda.sh -b
+  - export PATH=/home/travis/miniconda/bin:$PATH
+  - conda update --yes conda
+  - travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION pip numpy scipy
+  - travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION-c https://conda.binstar.org/kalefranz pysqlite
+  - travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION -c https://conda.binstar.org/jgomezdans libspatialite
+
+install:
+  - travis_retry pip install -r requirements.txt
+  - travis_retry python setup.py develop
 # command to run tests
-script: nosetests
+script: 
+    - cd test
+    - python -munittest test_identity
