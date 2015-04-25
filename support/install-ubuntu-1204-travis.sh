@@ -2,6 +2,8 @@
 # Install script for Ubuntu 12.04, which is used in Travis CI
 # apt-get update && apt-get install -y curl && sh -c "$(curl -fsSL https://raw.githubusercontent.com/ericbusboom/ambry/develop/support/install-ubuntu-1204.sh)"
 
+TRAVIS_PYTHON_VERSION=2.7
+
 apt-get update
 locale-gen en_US.UTF-8
 
@@ -13,8 +15,8 @@ chmod +x miniconda.sh
 export PATH=/home/travis/miniconda/bin:/miniconda/bin:$PATH
 conda update --yes conda
 travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION pip numpy scipy
-travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION -c https://conda.binstar.org/kalefranz pysqlite
-travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION -c https://conda.binstar.org/jgomezdans libspatialite
+travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION https://conda.binstar.org/kalefranz pysqlite
+travis_retry conda install --yes python=$TRAVIS_PYTHON_VERSION https://conda.binstar.org/jgomezdans libspatialite
 
 git clone https://github.com/CivicKnowledge/ambry.git
 cd ambry
