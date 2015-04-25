@@ -20,6 +20,7 @@ install:
   - travis_retry python setup.py develop
 # command to run tests
 script: 
+    - ambry config install
     - cd test
     - python -munittest test_identity
     
