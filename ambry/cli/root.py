@@ -319,7 +319,7 @@ def root_search(args, l, config):
         b = l.get(term)
 
         if b.partition:
-            print l.search.partition_doc(b.partition)
+            print json.dumps(l.search.partition_doc(b.partition), indent = 4)
         else:
             print json.dumps(l.search.dataset_doc(b), indent = 4)
 

@@ -158,12 +158,10 @@ class Search(object):
 
         self.all_datasets.add(bundle.identity.vid)
 
-    def index_partition(self, p, force=False):
-        from geoid.civick  import GVid
-        if p.identity.vid in self.all_partitions and not force:
-            return
+    def partition_doc(self, p):
+        from geoid.civick import GVid
 
-        schema = '\n'.join(
+        schema = ' '.join(
             "{} {} {} {} {}".format(
                 c.id_,
                 c.vid,
@@ -185,24 +183,31 @@ class Search(object):
             except KeyError:
                 return g
 
-
         keywords = (
-            '\n'.join(p.data.get('geo_coverage', [])) + '\n' +
-            '\n'.join([resum(g) for g in p.data.get('geo_grain', [])]) + '\n' +
-            '\n'.join(str(x) for x in p.data.get('time_coverage', []))
+            ' '.join(p.data.get('geo_coverage', [])) + ' ' +
+            ' '.join([resum(g) for g in p.data.get('geo_grain', [])]) + ' ' +
+            ' '.join(str(x) for x in p.data.get('time_coverage', []))
         )
 
-        self.dataset_writer.add_document(
-            type=u'p',
-            vid=unicode(p.identity.vid),
-            bvid=unicode(p.identity.as_dataset().vid),
-            title=unicode(p.table.description),
-            keywords=unicode(keywords),
-            doc=unicode(values + '\n' + schema + '\n'
-                        u' '.join([unicode(p.identity.vid), unicode(p.identity.id_),
-                                 unicode(p.identity.name), unicode(p.identity.vname)]))
+        d = dict(type=u'p',
+                 vid=unicode(p.identity.vid),
+                 bvid=unicode(p.identity.as_dataset().vid),
+                 title=unicode(p.table.description),
+                 keywords=unicode(keywords),
+                 doc=unicode(values + ' ' + schema + ' '
+                              u' '.join([unicode(p.identity.vid), unicode(p.identity.id_),
+                              unicode(p.identity.name), unicode(p.identity.vname)]))
         )
 
+        return d
+
+
+    def index_partition(self, p, force=False):
+
+        if p.identity.vid in self.all_partitions and not force:
+            return
+
+        self.dataset_writer.add_document(**self.partition_doc(p))
 
         self.all_partitions.add(p.identity.vid)
 
@@ -578,6 +583,8 @@ class Search(object):
         :return:
         """
         from geoid.civick import GVid
+        from geoid.util import iallval
+        import itertools
 
         place_vids = []
         first_type = None
@@ -594,9 +601,11 @@ class Search(object):
         if place_vids:
             # Add the 'all region' gvids for the higher level
 
-            all_set = set(str(GVid.parse(x).allval()) for x in place_vids)
 
-            place_vids += list(all_set)
+
+            all_set = set( itertools.chain.from_iterable( iallval(GVid.parse(x)) for x in place_vids))
+
+            place_vids += list( str(x) for x in all_set)
 
             return place_vids
 
