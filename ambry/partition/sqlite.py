@@ -296,7 +296,7 @@ class SqlitePartition(PartitionBase):
         partition."""
 
         from geoid import civick
-        from geoid.util import simplify
+        from geoid.util import isimplify
 
         p_s = self.database.session
 
@@ -355,14 +355,12 @@ class SqlitePartition(PartitionBase):
 
                 geoids.add(civick.GVid.parse(gvid))
 
-        coverage, grain = simplify(geoids)
+        coverage = isimplify(geoids)
+        grain = set( g.summarize() for g in geoids )
 
         if extra_grain:
             grain.add(extra_grain)
 
-        # The first simplification may produce a set that can be simplified
-        # again
-        coverage, _ = simplify(coverage)
 
         # For geo_coverage, only includes the higher level summary levels,
         # counties, states, places and urban areas

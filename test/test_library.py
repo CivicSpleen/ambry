@@ -838,12 +838,25 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
 
     def test_search_parse(self):
+        from ambry.library import new_library
 
         from ambry.library.search import SearchTermParser
 
         stp = SearchTermParser()
 
-        print stp.parse('source mother')
+        config = get_runconfig().library('default')
+
+        l = new_library(config, reset=True)
+
+
+        e = lambda x: l.search.make_query_from_terms(stp.parse(x))
+
+        print e('births ')
+        print e('births source cdph')
+        print e('births with mother source cdph')
+        print e('births with mother in California by tracts')
+        print e('births with mother with birth in California by tracts')
+
 
 def suite():
     suite = unittest.TestSuite()

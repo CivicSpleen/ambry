@@ -778,12 +778,21 @@ class Schema(object):
                     self.add_column(t, name, **d)
 
     def expand_column_prototypes(self):
+        """Find values for the proto_vid that are in the proto_terms dataset, and expand them into column vids
+
+        :return:
+        """
         from orm import Column
         from identity import ObjectNumber, NotObjectNumberError
+        from collections import defaultdict
 
         q = (self.bundle.database.session.query(Column).filter(Column.proto_vid != None))
 
         pt_map = None
+
+        # Group expanded columns by souce table, to create sql indexes for the sets of columns
+        # pointing ot the same ambry index dataset
+        table_cols = defaultdict(set)
 
         for c in q.all():
 
@@ -806,7 +815,6 @@ class Schema(object):
                 if pt_row['index_partition']:
                     ip = self.bundle.library.get(pt_row['index_partition']).partition
 
-
                     for ipc in ip.table.columns:
 
                         if ipc.proto_vid == c.proto_vid:
@@ -815,6 +823,8 @@ class Schema(object):
                             self.bundle.log("expand_column_prototype: {} {} -> {}.{}".format(
                                             c.table.name, c.name,
                                             str(ip.identity.vname),ipc.name))
+
+                            table_cols[ip.identity.vid].add(c.vid)
 
 
     def process_proto_vid(self, pvid):
