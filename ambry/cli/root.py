@@ -75,6 +75,8 @@ def root_parser(cmd):
     sp.add_argument( '-R', '--reindex', default=False, action="store_true", help='Generate documentation files and index the full-text search')
     sp.add_argument( '-d', '--document', default=False, action="store_true",
                     help='Return the search document for an object id')
+    sp.add_argument('-u', '--unparsed', default=False, action="store_true",
+                    help='Pass the search term to the engine without parsing')
 
 
 def root_command(args, rc):
@@ -340,21 +342,24 @@ def root_search(args, l, config):
         if args.list:
 
             for x in l.search.datasets:
+                print x
                 ds = l.dataset(x)
                 print x, ds.name, ds.data.get('title')
 
         else:
-
-            parsed = l.search.make_query_from_terms(term)
+            if args.unparsed:
+                parsed = term
+            else:
+                parsed = l.search.make_query_from_terms(term)
 
             print "search for ", parsed
 
             datasets =  l.search.search_datasets(parsed)
 
-            for bundle_vid, body in datasets.items():
+            for  result in sorted(datasets.values(), key=lambda e: e.score, reverse=True):
 
-                ds = l.dataset(bundle_vid)
-                print body['score'], bundle_vid, ds.name, ds.data.get('title'), list(body['pvids'])[:5]
+                ds = l.dataset(result.vid)
+                print result.score, result.vid, ds.name, ds.data.get('title'), list(result.partitions)[:5]
 
 
 def root_doc(args, l, rc):

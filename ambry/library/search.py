@@ -24,6 +24,23 @@ class IdentifierSchema(SchemaClass):
     type = ID(stored=True)
     name = NGRAM(phrase=True, stored=True, minsize=2, maxsize=8)
 
+class SearchResult(object):
+
+    def __init__(self):
+        self.vid = None
+        self.b_score = 0
+        self.p_score = 0
+        self.bundle_found = False
+        self.partitions = set()
+
+    @property
+    def score(self):
+        """Compute a total score using the log of the partition score, to reduce the include of bundles
+        with a lot of partitions """
+
+        from math import log
+        return self.b_score + ( log(self.p_score) if self.p_score else 0)
+
 
 class Search(object):
 
@@ -124,12 +141,12 @@ class Search(object):
                 return g
 
 
-        keywords = u' '.join(unicode(x) for x in [
-            list(bundle.metadata.about.groups) + list(bundle.metadata.about.tags) +
+        keywords =  (
+            list(bundle.metadata.about.groups) + list(bundle.metadata.about.tags)+
             [resum(g) for g in bundle.metadata.coverage.grain] +
             list(bundle.metadata.coverage.geo) +
             list(bundle.metadata.coverage.time) +
-            sources])
+            sources)
 
         d = dict(
             type=u'b',
@@ -137,7 +154,7 @@ class Search(object):
             bvid=unicode(bundle.identity.vid),
             title=unicode(bundle.identity.name) + u' ' + unicode(bundle.metadata.about.title),
             doc=unicode(doc),
-            keywords=unicode(keywords)
+            keywords=u' '.join(unicode(x) for x in keywords)
         )
 
         return d
@@ -260,7 +277,7 @@ class Search(object):
 
         query = parser.parse(search_phrase)
 
-        datasets = defaultdict(lambda: dict(score=0, pvids=set()))
+        datasets = defaultdict(SearchResult)
 
         with self.dataset_index.searcher() as searcher:
 
@@ -268,15 +285,22 @@ class Search(object):
 
             for hit in results:
 
-                vid = hit.get('vid', False)
-                bvid = hit.get('bvid', vid)
+                vid = hit.get('vid')
+                bvid = hit.get('bvid')
+                type = hit.get('type')
 
-                pvid = vid if vid != bvid else None
 
-                datasets[bvid]['score'] += hit.score
-                datasets[bvid]['pvids'].add(pvid)
+                datasets[bvid].vid = bvid
+                if type == 'b':
+                    datasets[bvid].bundle_found = True
+                    datasets[bvid].b_score += hit.score
+                else:
+                    datasets[bvid].p_score += hit.score
+                    datasets[bvid].partitions.add(vid)
 
         return datasets
+
+
 
     def make_query_from_terms(self, terms):
         """ Create a Whoosh query from decomposed search terms
@@ -291,18 +315,16 @@ class Search(object):
         b_doc = list()
         p_doc = list()
 
+        source = None
+
         # The top level ( title, names, keywords, doc ) will get ANDed together
 
         if terms.get('about', False):
             b_doc.append(terms['about'])
             p_doc.append(terms['about'])
 
-
         if terms.get('with', False):
             p_doc.append(terms['with'])
-
-        if terms.get('source', False):
-            b_keywords.append(terms['source'])
 
         if terms.get('in', False):
             place_vids = self.expand_place_ids(terms['in'])
@@ -310,6 +332,9 @@ class Search(object):
 
         if terms.get('by', False):
             p_keywords.append(terms['by'])
+
+        if terms.get('source', False):
+            source = terms['source']
 
         frm_to = self.from_to_as_term(terms.get('from', None), terms.get('to', None))
 
@@ -319,12 +344,18 @@ class Search(object):
         def or_join(terms):
 
             if isinstance(terms, (tuple, list)):
-                return '(' +' OR '.join(terms) + ')'
+                if len(terms) > 1:
+                    return '(' +' OR '.join(terms) + ')'
+                else:
+                    return terms[0]
             else:
                 return terms
 
         def and_join(terms):
-            return '('+ ' AND '.join([ or_join(t) for t in terms]) + ')'
+            if len(terms) > 1:
+                return ' AND '.join([ or_join(t) for t in terms])
+            else:
+                return or_join(terms[0])
 
         def kwd_term(keyword, terms):
             if terms:
@@ -332,7 +363,7 @@ class Search(object):
             else:
                 return None
 
-        def per_type_terms(ttype, terms):
+        def per_type_terms(ttype, *terms):
 
             terms = [ x for x in terms if bool(x)]
 
@@ -341,131 +372,22 @@ class Search(object):
 
             return "( type:{} AND {} )".format(ttype, ' AND '.join(terms))
 
-        def bp_terms(terms):
-
+        def bp_terms(*terms):
             return ' OR '.join([x for x in terms if bool(x)])
 
+        cterms = bp_terms(
+                 per_type_terms('b',kwd_term("keywords",b_keywords), kwd_term("doc",b_doc)),
+                 per_type_terms('p',kwd_term("keywords",p_keywords), kwd_term("doc",p_doc))
+                )
 
-        return bp_terms([per_type_terms('b',[kwd_term("keywords",b_keywords), kwd_term("doc",b_doc)]),
-                        per_type_terms('p',[kwd_term("keywords",p_keywords), kwd_term("doc",p_doc)])])
+        # If the source is specified, it qualifies the whole query, if we don't pull it out, partitions
+        # that aren't from the source will get through, because the source is not applied to the partitions.
+        # However, this could probalby be handled mroe simply by adding the source to
+        # the partitions.
+        if source:
+            cterms = " (type:b AND keywords:{} ) AND {}".format(source, cterms)
 
-    def search_bundles(self, search, limit=None):
-        """Search for datasets and partitions using a structured search object.
-
-        :param search: a dict, with values for each of the search components.
-        :param limit:
-        :return:
-
-        """
-        from ..identity import ObjectNumber
-        from collections import defaultdict
-        from geoid.civick import GVid
-
-        # If the search term has not been decomposed, decompose it.
-        if search.get('all', False):
-            search = SearchTermParser().parse(search['all'])
-
-        about_term = source_term = with_term = grain_term = years_term = in_term = ''
-
-        if search.get('source', False):
-            source_term = "keywords:" + search.get('source', '').strip()
-
-        if search.get('about', False):
-            about_term = "doc:({})".format(search.get('about', '').strip())
-
-        d_term = ' AND '.join(x for x in [source_term, about_term] if bool(x))
-
-        # This is the doc terms we'll move to the partition search if the partition search returns nothing
-        # but only if the about term was the only one specified.
-        dt_p_term = about_term if not source_term else None
-
-        if search.get('in', False):
-            place_vids = list(
-                x[1] for x in self.search_identifiers(
-                    search['in']))  # COnvert generator to list
-
-            if place_vids:
-
-                # Add the 'all region' gvids for the higher level
-
-                all_set = set(str(GVid.parse(x).allval()) for x in place_vids)
-
-                place_vids += list(all_set)
-
-                in_term = "keywords:({})".format(' OR '.join(place_vids))
-
-        if search.get('by', False):
-            grain_term = "keywords:" + search.get('by', '').strip()
-
-        # The wackiness with the converts to int and str, and adding ' ', is because there
-        # can't be a space between the 'TO' and the brackets in the time range
-        # when one end is open
-
-        if search.get('from', False):
-            try:
-                from_year = str(int(search.get('from', False))) + ' '
-            except ValueError:
-                pass
-        else:
-            from_year = ''
-
-        if search.get('to', False):
-            try:
-                to_year = ' ' + str(int(search.get('to', False)))
-            except ValueError:
-                pass
-        else:
-            to_year = ''
-
-        if bool(from_year) or bool(to_year):
-
-            years_term = "keywords:[{}TO{}]".format(from_year, to_year)
-
-        if search.get('with', False):
-            with_term = 'doc:({})'.format(search.get('with', False))
-
-        if bool(d_term):
-            # list(...) : the return from search_datasets is a generator, so it
-            # can only be read once.
-            bvids = list(self.search_datasets(d_term))
-
-        else:
-            bvids = []
-
-        p_term = ' AND '.join(
-            x for x in [ in_term, years_term, grain_term, with_term] if bool(x))
-
-        if bool(p_term):
-            if bvids:
-                p_term += " AND bvid:({})".format(' OR '.join(bvids))
-            elif dt_p_term:
-                # In case the about term didn't generate any hits for the
-                # bundle.
-                p_term += " AND {}".format(dt_p_term)
-        else:
-            if not bvids and dt_p_term:
-                p_term = dt_p_term
-
-        if p_term:
-            pvids = list(self.search_partitions(p_term))
-
-            if pvids:
-                bp_set = defaultdict(set)
-                for p in pvids:
-                    bvid = str(ObjectNumber.parse(p).as_dataset)
-                    bp_set[bvid].add(p)
-
-                rtrn = {b: list(p) for b, p in bp_set.items()}
-            else:
-                rtrn = {}
-
-        else:
-
-            rtrn = {b: [] for b in bvids}
-
-        return (d_term, p_term, search), rtrn
-
-
+        return cterms
 
     @property
     def partitions(self):
