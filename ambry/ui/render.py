@@ -584,23 +584,24 @@ class Renderer(object):
 
         from geoid.civick import GVid
 
-        results = []
+        parsed = self.library.search.make_query_from_terms(terms)
 
-        (b_query, p_query, terms), bp_set = self.library.search.search_bundles(
-            {k: v.strip() for k, v in terms.items()})
+        final_results = []
+
+        init_results  = self.library.search.search_datasets(parsed)
 
         pvid_limit = 5
 
         all_idents = self.library.search.identifier_map
 
-        for bvid, pvids in bp_set.items():
+        for result in sorted(init_results.values(), key=lambda e: e.score, reverse=True):
 
-            d = self.doc_cache.dataset(bvid)
+            d = self.doc_cache.dataset(result.vid)
 
-            d['partition_count'] = len(pvids)
+            d['partition_count'] = len(result.partitions)
             d['partitions'] = {}
 
-            for pvid in pvids[:pvid_limit]:
+            for pvid in list(result.partitions)[:pvid_limit]:
 
                 p = self.doc_cache.partition(pvid)
 
@@ -623,11 +624,9 @@ class Renderer(object):
 
                 d['partitions'][pvid] = p
 
-            results.append(d)
+            final_results.append(d)
 
         template = self.env.get_template('search/results.html')
-
-        results = sorted(results, key=lambda x: x['vname'])
 
         # Collect facets to display to the user, for additional sorting
         facets = {
@@ -636,7 +635,7 @@ class Renderer(object):
             'states': set()
         }
 
-        for r in results:
+        for r in final_results:
             facets['sources'].add(r['source'])
             for p in r['partitions'].values():
                 if 'time_coverage' in p and p['time_coverage']:
@@ -648,15 +647,15 @@ class Renderer(object):
 
                         if g.level == 'state' and not g.is_summary:
                             #facets['states'].add( (gvid, all_idents[gvid]))
-                            facets['states'].add(all_idents[gvid])
+                            try:
+                                facets['states'].add(all_idents[gvid])
+                            except KeyError:
+                                pass # TODO Should probably announce an error
 
         return self.render(
             template,
-            queries=dict(
-                b_query=b_query,
-                p_query=p_query,
-                terms=terms),
-            results=results,
+            query = parsed,
+            results=final_results,
             facets=facets,
             **self.cc())
 

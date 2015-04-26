@@ -1452,7 +1452,7 @@ class BuildBundle(Bundle):
                 raise BuildError(
                     "Failed to find space identifier '{}' in full text identifier search".format(space))
 
-            score, gvid, name = places[0]
+            score, gvid, type, name = places[0]
 
             return gvid
 
