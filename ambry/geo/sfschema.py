@@ -215,8 +215,8 @@ class TableShapefile(object):
 
         self.ds = self.create_datasource(self.path, self.format)
 
-        self.type, self.geo_col_names, self.geo_col_pos = self.figure_feature_type(
-        )
+        self.type, self.geo_col_names, self.geo_col_pos = \
+            self.figure_feature_type()
 
         self.layer = None
 
@@ -307,8 +307,8 @@ class TableShapefile(object):
                 if dt == Column.DATATYPE_TEXT:
                     if not size:
                         raise ConfigurationError(
-                            "Column {} must specify a size for shapefile output".format(
-                                c.name))
+                            "Column {} must specify a size for shapefile "
+                            "output".format(c.name))
                     fdfn.SetWidth(size)
 
             layer.CreateField(fdfn)
@@ -324,14 +324,14 @@ class TableShapefile(object):
         if not self.geo_col_names[0]:
             raise ConfigurationError(
                 "Failed to get a geomoetry column in table. "
-                "Table '{}' must have a column names geometry, wky, or lat and lon " .format(
-                    self.table.name))
+                "Table '{}' must have a column names geometry, wky, or lat and "
+                "lon " .format(self.table.name))
 
         if self.type == 'point':
             if isinstance(row, dict):
-                return (row[self.geo_col_names[0]], row[self.geo_col_names[1]])
+                return row[self.geo_col_names[0]], row[self.geo_col_names[1]]
             else:
-                return (row[self.geo_col_pos[0]], row[self.geo_col_pos[1]])
+                return row[self.geo_col_pos[0]], row[self.geo_col_pos[1]]
 
         else:
 
