@@ -50,10 +50,14 @@ class GeoPartition(SqlitePartition):
         # !! Assumes only one layer!
 
         try:
-            q = "select srs_wkt, spatial_ref_sys.srid from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
+            q = "select srs_wkt, spatial_ref_sys.srid " \
+                "from geometry_columns, spatial_ref_sys " \
+                "where spatial_ref_sys.srid == geometry_columns.srid;"
             return self.database.query(q).first()
         except:
-            q = "select srtext, spatial_ref_sys.srid from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
+            q = "select srtext, spatial_ref_sys.srid " \
+                "from geometry_columns, spatial_ref_sys " \
+                "where spatial_ref_sys.srid == geometry_columns.srid;"
             return self.database.query(q).first()
 
     def get_srs_wkt(self):

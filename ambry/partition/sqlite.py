@@ -75,8 +75,9 @@ class SqlitePartition(PartitionBase):
 
         indexes = []
 
-        for row in self.database.query("""SELECT name
-            FROM sqlite_master WHERE type='index' AND tbl_name = '{}';""".format(table)):
+        for row in self.database.query(
+                """SELECT name FROM sqlite_master
+WHERE type='index' AND tbl_name = '{}';""".format(table)):
 
             if row[0].startswith('sqlite_'):
                 continue
@@ -120,7 +121,7 @@ class SqlitePartition(PartitionBase):
     def add_tables(self, tables):
 
         for t in tables:
-            if not t in self.database.inspector.get_table_names():
+            if t not in self.database.inspector.get_table_names():
                 _, table = self.bundle.schema.get_table_meta(t)
                 table.create(bind=self.database.engine)
 
@@ -133,8 +134,8 @@ class SqlitePartition(PartitionBase):
         else:
             self.database.create()
 
-        # Closing becuase when creating a lot ot them, having more than 64 open will
-        # cause the sqlite driver to return with 'unable to open database'
+        # Closing becuase when creating a lot ot them, having more than 64 open
+        # will cause the sqlite driver to return with 'unable to open database'
         # error
         self.close()
 
@@ -223,7 +224,7 @@ class SqlitePartition(PartitionBase):
                 # return all elements that are +/-1 2 std from the mean
                 # We restrict the histograph to 4 std because for the small range of sparklines, a 0 value
                 # can make the histogram useless by pushing all other values into a single bin
-                df2std =  lambda d : d[(d < (d.mean()+2*d.std()) ) & ((d.mean()-2*d.std()) < d)]
+                df2std = lambda d: d[(d < (d.mean() + 2 * d.std())) & ((d.mean() - 2 * d.std()) < d)]
 
                 h = np.histogram(df2std(df[col_name]))
 
@@ -501,7 +502,7 @@ class SqlitePartition(PartitionBase):
                 "SELECT * FROM {}".format(self.get_table().name)).pandas
         except StopIteration:
             return None  # No records, so no dataframe.
-            #raise Exception("Select failed: {}".format("SELECT * FROM {}".format(self.get_table().name)))
+            # raise Exception("Select failed: {}".format("SELECT * FROM {}".format(self.get_table().name)))
 
     @property
     def dict(self):
