@@ -39,7 +39,8 @@ class PostgresWarehouse(Warehouse):
         db = self.database
 
         ogr_dsn = (
-            "PG:'dbname={dbname} user={username} host={host} password={password}'" .format(
+            "PG:'dbname={dbname} user={username} host={host} "
+            "password={password}'" .format(
                 username=db.username,
                 password=db.password,
                 host=db.server,

@@ -76,8 +76,8 @@ class Extractor(object):
         md = self.cache.metadata(self.mangle_path(rel_path))
 
         # If the table was created after
-        if md and 'time' in md and update_time and int(md['time']) - int(update_time) < 0:
-
+        if md and 'time' in md and update_time \
+                and int(md['time']) - int(update_time) < 0:
             force = True
 
         if self.cache.has(self.mangle_path(rel_path)):

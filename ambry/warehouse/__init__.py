@@ -67,8 +67,8 @@ def new_warehouse(config, elibrary, logger=None):
 
     database = new_database(db_config, class_='warehouse')
 
-    # If the warehouse specifies a seperate external library, use it, otherwise, use the
-    # warehouse datbase for the library
+    # If the warehouse specifies a seperate external library, use it, otherwise,
+    # use the warehouse database for the library
     library_database = LibraryDb(
         **config['library']) if 'library' in config else LibraryDb(**db_config)
 
@@ -754,7 +754,7 @@ class Warehouse(object):
         tables_in_partition = inspect(p.database.engine).get_table_names()
 
         for source_table_name in p.tables:
-            if not source_table_name in tables_in_partition:
+            if source_table_name not in tables_in_partition:
                 continue
             try:
                 table, meta = self.create_table(p, source_table_name)
@@ -918,7 +918,7 @@ class Warehouse(object):
                 if d.get('altname', False):
                     d['name'], d['altname'] = d['altname'], d['name']
 
-                if not 'datatype' in d:
+                if 'datatype' not in d:
                     d['datatype'] = Column.convert_python_type(
                         type(v),
                         col_name)
@@ -1009,7 +1009,7 @@ class Warehouse(object):
                     s.add(t)
 
             if (t.type == 'table' and t.installed) or t.type in ('view', 'mview'):
-                if not 'sample' in t.data or not t.data['sample']:
+                if 'sample' not in t.data or not t.data['sample']:
 
                     self.build_sample(t)
                     s.add(t)
