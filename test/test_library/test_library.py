@@ -3,39 +3,39 @@ Created on Jun 30, 2012
 
 @author: eric
 '''
+
+# DEPRECATED: Do not extend tests here, use appropriate test file.
 import unittest
 import os.path
 import logging
 
-from  bundles.testbundle.bundle import Bundle
-from ambry.run import  get_runconfig, RunConfig
+from ..bundles.testbundle import bundle
+from ambry.run import get_runconfig, RunConfig
 from ambry.library.query import QueryCommand
 import ambry.util
-from test_base import  TestBase
+from ..test_base import TestBase
 
 
 global_logger = ambry.util.get_logger(__name__)
 global_logger.setLevel(logging.DEBUG)
 
+
 class Test(TestBase):
- 
+
     def setUp(self):
-        import bundles.testbundle.bundle
-
-
-        self.bundle_dir = os.path.dirname(bundles.testbundle.bundle.__file__)
-        self.rc = get_runconfig((os.path.join(self.bundle_dir,'library-test-config.yaml'),
-                                 os.path.join(self.bundle_dir,'bundle.yaml'),
+        self.bundle_dir = os.path.dirname(bundle.__file__)
+        self.rc = get_runconfig((os.path.join(self.bundle_dir, 'library-test-config.yaml'),
+                                 os.path.join(self.bundle_dir, 'bundle.yaml'),
                                  RunConfig.USER_ACCOUNTS)
                                  )
 
         self.copy_or_build_bundle()
 
-        self.bundle = Bundle()    
+        self.bundle = bundle.Bundle()
 
         print "Deleting: {}".format(self.rc.group('filesystem').root)
         Test.rm_rf(self.rc.group('filesystem').root)
-       
+
     @staticmethod
     def rm_rf(d):
         
@@ -191,16 +191,12 @@ class Test(TestBase):
             self.assertEquals(partition.identity.sname, r.partition.identity.sname)
             self.assertEquals(self.bundle.identity.sname, r.identity.sname)
 
-        
         r = l.get(self.bundle.identity.sname)
         self.assertTrue(r is not False)
         self.assertEquals(self.bundle.identity.sname, r.identity.sname)
 
         # An extra change so the following tests work
         l.put_bundle(self.bundle)
-        
-
-      
 
     def test_library_install(self):
         '''Install the bundle and partitions, and check that they are
@@ -236,30 +232,28 @@ class Test(TestBase):
         # Re-install the bundle, then check that the partitions are still properly installed
 
         l.put_bundle(self.bundle)
-        
+
         for partition in self.bundle.partitions.all:
-       
+
             r = l.get(partition.identity)
             self.assertIsNotNone(r)
             self.assertEquals(r.partition.identity.id_, partition.identity.id_)
-            
+
             r = l.get(partition.identity.id_)
             self.assertIsNotNone(r)
             self.assertEquals(r.partition.identity.id_, partition.identity.id_)
-            
-        # Find the bundle and partitions in the library. 
-    
+
+        # Find the bundle and partitions in the library.
+
         r = l.find(QueryCommand().table(name='tone'))
 
         self.assertEquals('source-dataset-subset-variation',r[0]['identity']['name'])
     
-
-        
         r = l.find(QueryCommand().table(name='tthree').partition(format='db', segment=None))
         self.assertEquals('source-dataset-subset-variation-tthree',r[0]['partition']['name'])
 
         #
-        #  Try getting the files 
+        #  Try getting the files
         # 
         
         r = l.find(QueryCommand().table(name='tthree').partition(any=True)) #@UnusedVariable
@@ -437,8 +431,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
             self.assertEquals(self.bundle.identity.vname, bp.identity.vname)
             self.assertEquals(p.identity.vname, bp.partition.vname)
 
-
-
     def test_versions(self):
         from ambry.run import get_runconfig
         from ambry.library.query import Resolver
@@ -461,36 +453,35 @@ source/dataset-subset-variation-0.0.1/tthree.db:
                 idnt.name.version_major = i
                 idnt.name.version_minor = i*10
 
-                bundle = Bundle()
+                new_bundle = bundle.Bundle()
                 get_runconfig.clear() #clear runconfig cache
 
-                bundle.metadata.load_all()
+                new_bundle.metadata.load_all()
 
-                bundle.metadata.identity = idnt.ident_dict
-                bundle.metadata.names = idnt.names_dict
+                new_bundle.metadata.identity = idnt.ident_dict
+                new_bundle.metadata.names = idnt.names_dict
 
-                bundle.metadata.write_to_dir(write_all=True)
+                new_bundle.metadata.write_to_dir(write_all=True)
 
                 print 'Building version {}'.format(i)
 
-                bundle = Bundle()
+                new_bundle1 = bundle.Bundle()
 
-                bundle.clean()
-                bundle.pre_prepare()
-                bundle.prepare()
-                bundle.post_prepare()
-                bundle.pre_build()
-                bundle.build_small()
-                #bundle.build()
-                bundle.post_build()
+                new_bundle1.clean()
+                new_bundle1.pre_prepare()
+                new_bundle1.prepare()
+                new_bundle1.post_prepare()
+                new_bundle1.pre_build()
+                new_bundle1.build_small()
+                # bundle1.build()
+                new_bundle1.post_build()
 
-                bundle = Bundle()
+                new_bundle2 = bundle.Bundle()
 
-                print "Installing ", bundle.identity.vname
-                l.put_bundle(bundle)
+                print "Installing ", new_bundle2.identity.vname
+                l.put_bundle(new_bundle2)
 
         finally:
-            pass
             os.rename(save, orig)
 
         #
@@ -796,8 +787,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         print l.resolve('211sandiego.org-calls-p1ye2014-orig-calls')
 
-
-
     def test_search(self):
         from ambry.library import new_library
 
@@ -807,17 +796,16 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         print l.search
 
-        #for ds in l.datasets():  print ds.vid
+        # for ds in l.datasets():  print ds.vid
 
         l.search.index_datasets()
 
-        for r in  l.search.search_datasets("title:zip"):
+        for r in l.search.search_datasets("title:zip"):
             ds = l.dataset(r)
             print r, ds.vname, ds.data.get('title')
 
         for r in l.search.search_partitions("doc:0E06"):
             print r
-
 
     def test_search_parse(self):
         from ambry.library import new_library
@@ -840,10 +828,11 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         print e('births with mother with birth in California by tracts')
 
 
+
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
     return suite
-      
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     unittest.TextTestRunner().run(suite())
