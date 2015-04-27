@@ -354,13 +354,11 @@ class Resolver(object):
 
         for d, p, f in results:
 
-            if not d.vid in out:
+            if d.vid not in out:
                 out[d.vid] = d.identity
 
             # Locations in the identity are set in add_file
-
             if f:
-
                 if not p:
                     out[d.vid].add_file(f)
                 else:

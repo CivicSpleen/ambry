@@ -140,7 +140,6 @@ class LibraryDb(object):
             if self.driver in ['postgres', 'postgis']:
                 self._connection.execute("SET search_path TO library")
 
-
         return self._connection
 
     @property
@@ -157,7 +156,6 @@ class LibraryDb(object):
 
         if self.driver in ('postgres', 'postgis') and self._schema:
             self._session.execute("SET search_path TO {}".format(self._schema))
-
 
         return self._session
 
@@ -187,7 +185,7 @@ class LibraryDb(object):
             self.session.commit()
             # self.close_session()
         except Exception as e:
-            #self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))
+            # self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))
             raise
 
     def rollback(self):
@@ -212,9 +210,9 @@ class LibraryDb(object):
 
         return Inspector.from_engine(self.engine)
 
-    ##
-    ## Creation and Existence
-    ##
+    #
+    # Creation and Existence
+    #
 
     def exists(self):
         from sqlalchemy.exc import ProgrammingError, OperationalError
@@ -226,14 +224,13 @@ class LibraryDb(object):
 
         try:
             try:
-            # Since we are using the connection, rather than the session, need to
-            # explicitly set the search path.
+                # Since we are using the connection, rather than the session, need to
+                # explicitly set the search path.
                 if self.driver in ('postgres', 'postgis') and self._schema:
-                    self.connection.execute("SET search_path TO {}".format( self._schema))
+                    self.connection.execute("SET search_path TO {}".format(self._schema))
 
                 rows = self.connection.execute(
-                    "SELECT * FROM datasets WHERE d_vid = '{}' "
-                    .format(ROOT_CONFIG_NAME_V)).fetchone()
+                    "SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)).fetchone()
 
             except ProgrammingError as e:
                 # This happens when the datasets table doesnt exist
@@ -1360,7 +1357,8 @@ class LibraryDb(object):
 def _pragma_on_connect(dbapi_con, con_record):
     """ISSUE some Sqlite pragmas when the connection is created."""
 
-    #dbapi_con.execute('PRAGMA foreign_keys = ON;')
+    # dbapi_con.execute('PRAGMA foreign_keys = ON;')
+    # dbapi_con.execute('PRAGMA foreign_keys = ON;')
     # Not clear that there is a performance improvement.
 
     dbapi_con.execute('PRAGMA journal_mode = WAL')

@@ -224,16 +224,14 @@ class DocCache(object):
             # The no_columns version is a lot faster.
             for t in self.library.tables_no_columns:
 
-                if not t.id_ in tm:
+                if t.id_ not in tm:
                     tm[t.id_] = [t.vid]
                 else:
                     tm[t.id_].append(t.vid)
-
             return tm
-
         return self.cache(f, _key='table_version_map')
 
-    ##
+    #
     # Manifests
 
     def manifest_relpath(self, uid):
@@ -253,33 +251,25 @@ class DocCache(object):
         d['file'] = f.dict
         d['text'] = str(m)
 
-        #d['files'] = f.dict['data'].get('files')
+        # d['files'] = f.dict['data'].get('files')
 
-        #del d['file']['data']
+        # del d['file']['data']
 
         # Update the partitions to include bundle references,
         # then add bundle information.
 
-        partitions = {
-            pvid: str(
-                ObjectNumber.parse(pvid).as_dataset) for pvid in f.dict.get(
-                'partitions',
-                [])}
+        partitions = {pvid: str(ObjectNumber.parse(pvid).as_dataset) for pvid in f.dict.get('partitions', [])}
 
         d["partitions"] = partitions
 
         d['tables'] = {tvid: {
             k: v for k, v in (self.get_table(tvid).items() + [('installed_names', [])]) if k != 'columns'
-        } for tvid in f.dict.get('tables', [])
-        }
+        } for tvid in f.dict.get('tables', [])}
 
-        d['bundles'] = {vid: self.get_bundle(vid)
-                        for vid in partitions.values()}
+        d['bundles'] = {vid: self.get_bundle(vid) for vid in partitions.values()}
 
         for vid, b in d['bundles'].items():
-            b['installed_partitions'] = [
-                pvid for pvid,
-                pbvid in partitions.items() if vid == pbvid]
+            b['installed_partitions'] = [pvid for pvid, pbvid in partitions.items() if vid == pbvid]
 
         # Generate entries for the tables, using the names that they are installed with. These tables aren't
         # nessiarily installed; this maps the instllation names to vids if they

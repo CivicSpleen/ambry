@@ -348,7 +348,7 @@ class LoaderBundle(BuildBundle):
                 for col_name, desc in zip(header, descs):
                     k = col_name.strip()
 
-                    if k not in col_map and not col_name in mapped_domain:
+                    if k not in col_map and col_name not in mapped_domain:
                         col_map[k] = dict(header=k, col='')
 
             # Write back out

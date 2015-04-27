@@ -136,7 +136,6 @@ class Library(object):
 
     '''
 
-
     # Names of exernally configurable values.
     configurable = ('warehouse_url')
 
@@ -172,8 +171,7 @@ class Library(object):
         self._bundle = None  # Set externally in bundle.library()
         self.host = host
         self.port = port
-        self.urlhost = urlhost if urlhost else (
-        '{}:{}'.format(self.host, self.port) if self.port else self.host)
+        self.urlhost = urlhost if urlhost else ('{}:{}'.format(self.host, self.port) if self.port else self.host)
         self.dep_cb = None  # Callback for dependency resolution
         self.require_upload = require_upload
         self._dependencies = None
@@ -194,11 +192,8 @@ class Library(object):
 
         self._search = None
 
-
     def clone(self):
-
-        return self.__class__(self.cache, self.database.clone(),
-                              self.require_upload, self.host, self.port)
+        return self.__class__(self.cache, self.database.clone(), self.require_upload, self.host, self.port)
 
     def _create_bundle(self, path):
         from ..bundle.bundle import DbBundle
@@ -212,9 +207,7 @@ class Library(object):
 
         return bundle
 
-
     def close(self):
-
         for path, bundle in self.bundles.items():
             bundle.close()
 
@@ -228,7 +221,7 @@ class Library(object):
     def commit(self):
         self.database.commit()
 
-    ## Configurables
+    # Configurables
 
     def _meta_set(self, key, value):
         from ..orm import Config
@@ -260,12 +253,11 @@ class Library(object):
 
         return r
 
-    ##
-    ## Storing
-    ##
+    #
+    # Storing
+    #
 
-    def put_bundle(self, bundle, logger=None,
-                   install_partitions=True, commit=True):
+    def put_bundle(self, bundle, logger=None, install_partitions=True, commit=True):
         """Install the records for the dataset, tables, columns and possibly
         partitions. Does not install file references """
         from ..dbexceptions import ConflictError
@@ -306,16 +298,13 @@ class Library(object):
         if partition.ref:
             return False, False
 
-        installed = self.files.install_partition_file(partition, self.cache,
-                                                      commit=commit,
-                                                      state='new')
+        installed = self.files.install_partition_file(partition, self.cache, commit=commit, state='new')
 
         # Ref partitions use the file of an earlier version, so there is no FILE to install
 
         self.cache.put(partition.database.path, partition.identity.cache_key)
 
         return self.cache.path(partition.identity.cache_key), installed
-
 
     def remove(self, bundle):
         '''Remove a bundle from the library, and delete the configuration for
@@ -327,10 +316,9 @@ class Library(object):
 
         self.cache.remove(bundle.identity.cache_key, propagate=True)
 
-
-    ##
-    ## Retreiving
-    ##
+    #
+    # Retreiving
+    #
 
     def list(self, datasets=None, with_partitions=False):
         '''Lists all of the datasets in the partition, optionally with
@@ -344,8 +332,7 @@ class Library(object):
 
         return datasets
 
-    def list_bundles(self, last_version_only=True,
-                     locations=[LocationRef.LOCATION.LIBRARY], key=None):
+    def list_bundles(self, last_version_only=True, locations=[LocationRef.LOCATION.LIBRARY], key=None):
         """Like list(), but returns bundles instead of a dict with identities.
         key is a parameter to sorted(self.list())"""
         from ..dbexceptions import NotFoundError
@@ -382,9 +369,7 @@ class Library(object):
                         current.close()
 
                     try:
-
                         current = LibraryDbBundle(self.database, ident.vid)
-
                         current.identity.data['other_versions'] = set()
                     except NotFoundError:
 
@@ -409,10 +394,8 @@ class Library(object):
                 yield b
                 b.close()
 
-
     def path(self, rel_path):
         """Return the cache path for a cache key"""
-
         return self.cache.path(rel_path)
 
     @property
@@ -454,7 +437,6 @@ class Library(object):
         bundle.library = self
 
         return bundle
-
 
     def has(self, ref, location='default'):
         dataset = self.resolve(ref, location=location)
@@ -532,9 +514,7 @@ class Library(object):
                     if delete:
                         os.remove(ref_abs_path)
 
-
                 else:
-
                     abs_path = arc.get(partition.identity.cache_key, cb=cb)
 
                 if not abs_path or not os.path.exists(abs_path):
@@ -543,10 +523,8 @@ class Library(object):
                             partition.identity.cache_key))
 
                 try:
-                    self.database.install_partition_by_id(bundle,
-                                                          dataset.partition.id_,
-                                                          install_bundle=False,
-                                                          install_tables=False)
+                    self.database.install_partition_by_id(
+                        bundle, dataset.partition.id_, install_bundle=False, install_tables=False)
                 except IntegrityError as e:
                     self.database.session.rollback()
                     self.logger.error(
@@ -579,32 +557,22 @@ class Library(object):
         return self.database.session.query(Table).options(
             lazyload('columns')).all()
 
-
     def table(self, vid):
-
         from ..orm import Table
         from sqlalchemy.orm.exc import NoResultFound
         from ..dbexceptions import NotFoundError
 
-
         try:
-            return (
-            self.database.session.query(Table).filter(Table.vid == vid).one())
+            return self.database.session.query(Table).filter(Table.vid == vid).one()
         except NoResultFound:
             # Ths vid is actually an id, so we take the latest one
             try:
-                return (self.database.session.query(Table)
-                        .filter(Table.id_ == vid).order_by(
-                    Table.vid.desc()).first())
+                return self.database.session.query(Table).filter(Table.id_ == vid).order_by(Table.vid.desc()).first()
             except NoResultFound:
-                raise NotFoundError(
-                    "Did not find table ref {} in library {}".format(vid,
-                                                                     self.database.dsn))
-
+                raise NotFoundError("Did not find table ref {} in library {}".format(vid, self.database.dsn))
 
     def derived_tables(self, proto_vid):
         """Tables with the given proto_vid"""
-
         from ..orm import Table
         from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
         from ..dbexceptions import NotFoundError, MultipleFoundError
@@ -614,21 +582,17 @@ class Library(object):
                 Table.proto_vid == proto_vid).all())
         except NoResultFound:
             raise NotFoundError(
-                "Did not find table with proto_vid {} in library {}"
-                .format(proto_vid, self.database.dsn))
-
+                "Did not find table with proto_vid {} in library {}".format(proto_vid, self.database.dsn))
 
     def dataset(self, vid):
         from ..orm import Dataset
         from sqlalchemy.orm.exc import NoResultFound
 
         try:
-            return (self.database.session.query(Dataset).filter(
-                Dataset.vid == vid).one())
+            return self.database.session.query(Dataset).filter(Dataset.vid == vid).one()
         except NoResultFound:
             try:
-                ds = self.database.session.query(Dataset).filter(
-                    Dataset.id_ == vid).order_by(
+                ds = self.database.session.query(Dataset).filter(Dataset.id_ == vid).order_by(
                     Dataset.revision.desc()).first()
 
                 if ds is None:
@@ -639,13 +603,12 @@ class Library(object):
             except NoResultFound:
                 from ..dbexceptions import NotFoundError
 
-                raise NotFoundError(
-                    "Failed to find dataset for ref '{}' ".format(vid))
+                raise NotFoundError("Failed to find dataset for ref '{}' ".format(vid))
 
     def datasets(self):
         from ..orm import Dataset
 
-        return (self.database.session.query(Dataset).all())
+        return self.database.session.query(Dataset).all()
 
     def versioned_datasets(self):
         """Like datasets(), but returns a dict structure, and only the most recent version, with other versions
@@ -692,7 +655,6 @@ class Library(object):
                 raise NotFoundError(
                     "No partition in library for vid : {} ".format(vid))
 
-
     def dataset_partitions(self, vid):
         """Return all partition records for a dataset vid"""
         from ..orm import Partition
@@ -705,7 +667,6 @@ class Library(object):
         from ..orm import Partition
 
         return (self.database.session.query(Partition).all())
-
 
     @property
     def stores(self):
@@ -739,7 +700,6 @@ class Library(object):
             self.mark_updated(vid=s.ref)
             self.database.session.delete(s)
             self.database.commit()
-
 
     def warehouse(self, uid):
 
@@ -791,7 +751,6 @@ class Library(object):
         self.database.session.delete(f)
         self.database.commit()
 
-
     @property
     def remotes(self):
 
@@ -800,14 +759,13 @@ class Library(object):
 
         return self._remotes
 
-    ##
-    ## Finding
-    ##
+    #
+    # Finding
+    #
 
     def find(self, query_command):
 
         return self.database.find(query_command)
-
 
     @property
     def resolver(self):
@@ -816,7 +774,6 @@ class Library(object):
 
     def resolve(self, ref, location='default'):
         from ..identity import LocationRef, NotObjectNumberError
-
 
         # If the location is not explicitly defined, set it to everything but source
         if location is 'default':
@@ -872,10 +829,9 @@ class Library(object):
         except (AttributeError, IndexError):
             return None
 
-
-    ##
-    ## Dependencies
-    ##
+    #
+    # Dependencies
+    #
 
     def dep(self, name):
         """"Bundle version of get(), which uses a key in the
@@ -918,8 +874,7 @@ class Library(object):
     def _get_dependencies(self):
 
         if not self._bundle:
-            raise ConfigurationError(
-                "Can't use the dep() method for a library that is not attached to a bundle");
+            raise ConfigurationError("Can't use the dep() method for a library that is not attached to a bundle")
 
         errors = 0
 
@@ -1044,19 +999,22 @@ class Library(object):
             md = identity.to_meta(file=file_.path)
 
             if upstream.has(identity.cache_key):
-                if cb: cb('Has', md, 0)
+                if cb:
+                    cb('Has', md, 0)
                 what = 'has'
                 file_.state = 'pushed'
 
             else:
                 start = time.clock()
-                if cb: cb('Pushing', md, start)
+                if cb:
+                    cb('Pushing', md, start)
 
                 upstream.put(file_.path, identity.cache_key, metadata=md)
                 end = time.clock()
                 dt = end - start
                 file_.state = 'pushed'
-                if cb: cb('Pushed', md, dt)
+                if cb:
+                    cb('Pushed', md, dt)
                 what = 'pushed'
 
             self.database.session.merge(file_)
@@ -1133,9 +1091,7 @@ class Library(object):
 
                     extant_bundle = (self.files.query.type(Files.TYPE.BUNDLE)
                                      .path(path_).one_maybe)
-                    extant_partition = (self.files.query
-                                        .type(Files.TYPE.PARTITION)
-                                        .path(path_).one_maybe )
+                    extant_partition = (self.files.query.type(Files.TYPE.PARTITION).path(path_).one_maybe)
 
                     # if (extant_bundle or extant_partition):
                     #    continue
@@ -1153,9 +1109,7 @@ class Library(object):
 
                         # The path check above is wrong sometime when there
                         # are symlinks
-                        if (self.files.query.type(Files.TYPE.BUNDLE)
-                                    .ref(bident.vid).one_maybe
-                            and self.get(bident.vid)):
+                        if self.files.query.type(Files.TYPE.BUNDLE).ref(bident.vid).one_maybe and self.get(bident.vid):
                             continue
 
                         if b.identity.is_bundle:
@@ -1165,8 +1119,7 @@ class Library(object):
                         # Probably a partition, not a bundle.
                         pass
                     except Exception as e:
-                        self.logger.error('Failed to process {}, {} : {} '
-                                          .format(file_, path_, e))
+                        self.logger.error('Failed to process {}, {} : {} '.format(file_, path_, e))
                         raise
                     finally:
                         if b:
@@ -1323,8 +1276,7 @@ class Library(object):
                     if installed:
                         self.database.install_partition(b, p, commit='collect')
 
-                    if self.files.install_remote_partition(p.identity, remote,
-                            {}, commit='collect'):
+                    if self.files.install_remote_partition(p.identity, remote, {}, commit='collect'):
                         self.logger.info("    + {}".format(p.identity.name))
                     else:
                         self.logger.info("    = {}".format(p.identity.name))
@@ -1405,7 +1357,7 @@ class Library(object):
 
         s.commit()
 
-        ## First, load in the partitions.
+        # First, load in the partitions.
 
         for remote_p in w.library.partitions:
             p = self.partition(remote_p.vid)
@@ -1414,7 +1366,7 @@ class Library(object):
             p.link_store(store)
             p.dataset.link_store(store)
 
-        ## Next, we can load the manifests.
+        # Next, we can load the manifests.
 
         for remote_manifest in w.manifests:
 
@@ -1423,10 +1375,8 @@ class Library(object):
 
             local_manifest = self.files.new_file(
                 commit=True, merge=True,
-                extant=self.files.query.ref(remote_manifest.ref)
-                    .group(self.files.TYPE.MANIFEST).one_maybe,
-                **{k: v for k, v in remote_manifest.record_dict.items()
-                   if k not in ('oid')})
+                extant=self.files.query.ref(remote_manifest.ref).group(self.files.TYPE.MANIFEST).one_maybe,
+                **{k: v for k, v in remote_manifest.record_dict.items() if k not in ('oid',)})
 
             for p in remote_manifest.linked_partitions:
                 p = self.partition(p.vid)
@@ -1440,8 +1390,7 @@ class Library(object):
 
             # This is the cheaper way to copy links, but it only works
             # when the linksare one-directional.
-            local_manifest.data['tables'] = remote_manifest.data.get('tables',
-                [])
+            local_manifest.data['tables'] = remote_manifest.data.get('tables', [])
 
             local_manifest.link_store(store)
             store.link_manifest(local_manifest)
@@ -1453,7 +1402,6 @@ class Library(object):
         return store
 
     def sync_warehouses(self):
-
         for f in self.stores:
             w = self.warehouse(f.path)
             self.logger.info("Syncing {} dsn={}".format(f.ref, f.path))
@@ -1484,7 +1432,6 @@ class Library(object):
             self._search = Search(self)
 
         return self._search
-
 
     def _gen_schema(self):
         from ..schema import Schema
@@ -1525,10 +1472,8 @@ class Library(object):
 Database: {database}
 Cache:    {cache}
 Remotes:  {remotes}
-        """.format(name=self.name, database=self.database.dsn,
-                   cache=self.cache, remotes='\n          '
-                   .join([str(x) for x in self.remotes])
-            if self.remotes else '')
+        """.format(name=self.name, database=self.database.dsn, cache=self.cache,
+                   remotes='\n          '.join([str(x) for x in self.remotes]) if self.remotes else '')
 
     @property
     def dict(self):
@@ -1543,8 +1488,7 @@ Remotes:  {remotes}
                         partitions=[p.vid for p in f.linked_partitions],
                         tables=[t.vid for t in f.linked_tables],
                         summary=f.data['summary']['summary_text'],
-                        stores=[s.ref for s in f.linked_stores])
-                               for f in self.manifests},
+                        stores=[s.ref for s in f.linked_stores]) for f in self.manifests},
                     stores={f.ref: dict(
                         title=f.data['title'],
                         summary=f.data['summary']
