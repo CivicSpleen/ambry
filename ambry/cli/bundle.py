@@ -116,7 +116,8 @@ def bundle_command(args, rc):
     if args.debug:
         from ..util import debug
         warn(
-            'Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
+            'Entering debug mode. Send USR1 signal (kill -USR1 ) to break to '
+            'interactive prompt')
         debug.listen()
 
     try:
@@ -181,7 +182,8 @@ def bundle_parser(cmd):
         nargs='?',
         default=1,
         const=multiprocessing.cpu_count(),
-        help='Run the build process on multiple processors, if the  method supports it')
+        help='Run the build process on multiple processors, if the  method '
+             'supports it')
 
     sub_cmd = parser.add_subparsers(title='commands', help='command help')
 
@@ -234,7 +236,8 @@ def bundle_parser(cmd):
     #
     sp = asp.add_parser(
         'scrape',
-        help='Scrape all of the links from the page references in external_documentation.download')
+        help='Scrape all of the links from the page references in '
+             'external_documentation.download')
     sp.set_defaults(subsubcommand='scrape')
     sp.add_argument(
         '-r',
@@ -271,7 +274,6 @@ def bundle_parser(cmd):
         default=False,
         action="store_true",
         help='Also report partition details')
-
 
     #
     # Clean Command
@@ -573,12 +575,12 @@ def bundle_info(args, b, st, rc):
                     for col_name, s in p.stats.__dict__.items():
 
                         if s.uvalues:
-                            vals = (u'\n' + u' '*84).join(wrapper.wrap(u','.join(s.uvalues.keys()[:5])))
+                            vals = (u'\n' + u' ' * 84).join(wrapper.wrap(u','.join(s.uvalues.keys()[:5])))
                         elif 'values' in s.hist:
 
                             parts = u' ▁▂▃▄▅▆▇▉'
 
-                            def sparks(nums): # https://github.com/rory/ascii_sparks/blob/master/ascii_sparks.py
+                            def sparks(nums):  # https://github.com/rory/ascii_sparks/blob/master/ascii_sparks.py
                                 nums = list(nums)
                                 fraction = max(nums) / float(len(parts) - 1)
 
@@ -591,7 +593,7 @@ def bundle_info(args, b, st, rc):
                         b.log(
                             indent + u"{:20.20s} {:7s} {:7s} {:10s} {:70s}". format(
                                 col_name,
-                                str( s.count) if s.count else '',
+                                str(s.count) if s.count else '',
                                 str(s.nuniques) if s.nuniques else '',
                                 '{:10.2e}'.format(s.mean) if s.mean else '',
                                 vals
@@ -601,7 +603,7 @@ def bundle_info(args, b, st, rc):
 def bundle_clean(args, b, st, rc):
     b.log("---- Cleaning ---")
     # Only clean the meta phases when it is explicityly specified.
-    #b.clean(clean_meta=('meta' in phases))
+    # b.clean(clean_meta=('meta' in phases))
     b.database.enable_delete = True
     b.clean()
 

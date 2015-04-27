@@ -16,9 +16,9 @@ from ..util import get_logger
 import argparse
 
 
-# The Bundle's get_runconfig ( in Bundle:config ) will use this if it is set. It gets set
-# by the CLI when the user assigns a specific configuration to use instead
-# of the defaults.
+# The Bundle's get_runconfig ( in Bundle:config ) will use this if it is set.
+# It gets set by the CLI when the user assigns a specific configuration to use
+# instead of the defaults.
 global_run_config = None
 
 global_logger = None  # Set in main()
@@ -28,12 +28,13 @@ AMBRY_CONFIG_ENV_VAR = 'AMBRY_CONFIG'
 
 
 def prt(template, *args, **kwargs):
-    #global global_logger
+    # global global_logger
     print(template.format(*args, **kwargs))
 
 
 def err(template, *args, **kwargs):
     import sys
+
     global global_logger
 
     global_logger.error(template.format(*args, **kwargs))
@@ -41,6 +42,7 @@ def err(template, *args, **kwargs):
 
 def fatal(template, *args, **kwargs):
     import sys
+
     global global_logger
 
     try:
@@ -62,6 +64,7 @@ def fatal(template, *args, **kwargs):
 
 def warn(template, *args, **kwargs):
     import sys
+
     global command
     global subcommand
 
@@ -102,7 +105,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=[]):
     def deps(ident):
         if not ident.data:
             return '.'
-        if not 'dependencies' in ident.data:
+        if 'dependencies' not in ident.data:
             return '.'
         if not ident.data['dependencies']:
             return '0'
@@ -111,13 +114,19 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=[]):
     all_fields = [
         # Name, width, d_format_string, p_format_string, extract_function
         ('deps', '{:3s}', '{:3s}', lambda ident: deps(ident)),
-        ('order', '{:6s}', '{:6s}', lambda ident: "{major:02d}:{minor:02d}".format(**ident.data['order']
-                                                                                   if 'order' in ident.data else {'major': -1, 'minor': -1})),
+        ('order', '{:6s}', '{:6s}',
+         lambda ident: "{major:02d}:{minor:02d}".format(
+             **ident.data['order'] if 'order' in ident.data else {'major': -1,
+                                                                  'minor': -1})
+         ),
         ('locations', '{:6s}', '{:6s}', lambda ident: ident.locations),
-        ('pcount', '{:5s}', '{:5s}', lambda ident: str(len(ident.partitions)) if ident.partitions else ''),
+        ('pcount', '{:5s}', '{:5s}',
+         lambda ident: str(len(ident.partitions)) if ident.partitions else ''),
         ('vid', '{:18s}', '{:20s}', lambda ident: ident.vid),
-        ('time', '{:20s}', '{:20s}', lambda ident: datetime.fromtimestamp(ident.data['time']).isoformat() if 'time' in ident.data else ''),
-        ('status', '{:20s}', '{:20s}', lambda ident: ident.bundle_state if ident.bundle_state else ''),
+        ('time', '{:20s}', '{:20s}', lambda ident: datetime.fromtimestamp(
+            ident.data['time']).isoformat() if 'time' in ident.data else ''),
+        ('status', '{:20s}', '{:20s}',
+         lambda ident: ident.bundle_state if ident.bundle_state else ''),
         ('vname', '{:40s}', '    {:40s}', lambda ident: ident.vname),
         ('sname', '{:40s}', '    {:40s}', lambda ident: ident.sname),
         ('fqname', '{:40s}', '    {:40s}', lambda ident: ident.fqname),
@@ -170,7 +179,6 @@ def _print_bundle_list(
 
 
 def _print_info(l, ident, list_partitions=False):
-
     from ..identity import LocationRef
 
     resolved_ident = l.resolve(
@@ -209,7 +217,6 @@ def _print_info(l, ident, list_partitions=False):
                 prt('B Source Dir: {}', source_dir)
 
         if bundle and bundle.is_built:
-
             process = bundle.get_value_group('process')
             prt('B Partitions: {}', bundle.partitions.count)
             prt('B Created   : {}', process.get('dbcreated', ''))
@@ -281,7 +288,6 @@ def _print_bundle_info(bundle=None, ident=None):
         prt('URL       : {}', ident.url)
 
     if bundle and bundle.is_built:
-
         d = dict(bundle.db_config.dict)
         process = d['process']
 
@@ -301,8 +307,8 @@ def main(argsv=None, ext_logger=None):
 
     parser = argparse.ArgumentParser(
         prog='ambry',
-        description='Ambry {}. Management interface for ambry, libraries and repositories. '.format(
-            ambry._meta.__version__))
+        description='Ambry {}. Management interface for ambry, libraries and '
+                    'repositories. '.format(ambry._meta.__version__))
 
     parser.add_argument(
         '-l',
@@ -315,7 +321,8 @@ def main(argsv=None, ext_logger=None):
         '--config',
         default=os.getenv(AMBRY_CONFIG_ENV_VAR),
         action='append',
-        help="Path to a run config file. Alternatively, set the AMBRY_CONFIG env var")
+        help="Path to a run config file. Alternatively, set the "
+             "AMBRY_CONFIG env var")
     parser.add_argument(
         '--single-config',
         default=False,

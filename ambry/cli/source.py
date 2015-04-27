@@ -80,7 +80,7 @@ def source_parser(cmd):
     sp.add_argument(
         '-k',
         '--key',
-        help='Number server key. Use \'self\' for a random, self-generated key.')
+        help="Number server key. Use 'self' for a random, self-generated key.")
     sp.add_argument('args', nargs=argparse.REMAINDER)  # Get everything else.
 
     sp = asp.add_parser(
@@ -97,7 +97,8 @@ def source_parser(cmd):
         'deps',
         help='Print the depenencies for all source bundles')
     sp.set_defaults(subcommand='deps')
-    #sp.add_argument('ref', type=str,nargs='?',help='Name or id of a bundle to generate a sorted dependency list for.')
+    # sp.add_argument('ref', type=str,nargs='?',
+    # help='Name or id of a bundle to generate a sorted dependency list for.')
     sp.add_argument(
         '-d',
         '--detail',
@@ -106,13 +107,18 @@ def source_parser(cmd):
         help='Display details of locations for each bundle')
     sp.add_argument('-F', '--fields', type=str, help="Specify fields to use")
     group = sp.add_mutually_exclusive_group()
-    #group.add_argument('-f', '--forward',  default='f', dest='direction',   action='store_const', const='f', help='Display bundles that this one depends on')
-    #group.add_argument('-r', '--reverse',  default='f', dest='direction',   action='store_const', const='r', help='Display bundles that depend on this one')
+    # group.add_argument('-f', '--forward',  default='f', dest='direction',
+    # action='store_const', const='f',
+    # help='Display bundles that this one depends on')
+    # group.add_argument('-r', '--reverse',  default='f', dest='direction',
+    # action='store_const', const='r',
+    # help='Display bundles that depend on this one')
     sp.add_argument(
         'terms',
         type=str,
         nargs=argparse.REMAINDER,
-        help='Name or ID of the bundle or partition as the root of the dependency tree')
+        help='Name or ID of the bundle or partition as the root of the '
+             'dependency tree')
 
     sp = asp.add_parser(
         'init',
@@ -166,7 +172,8 @@ def source_parser(cmd):
 
     sp = asp.add_parser(
         'edit',
-        help='Run the editor defined in the EDITOR env var on the bundle directory')
+        help='Run the editor defined in the EDITOR env var on the bundle '
+             'directory')
     sp.set_defaults(subcommand='edit')
     sp.add_argument(
         'term',
@@ -182,9 +189,9 @@ def source_parser(cmd):
         '-P',
         '--python',
         default=None,
-        help='Path to a python class file to run. Loads as module and calls run(). The ' +
-        'run() function can have any combination of arguments of these names: bundle_dir,' +
-        ' bundle, repo')
+        help='Path to a python class file to run. Loads as module and calls '
+             'run(). The run() function can have any combination of arguments '
+             'of these names: bundle_dir, bundle, repo')
     sp.add_argument(
         '-m',
         '--message',
@@ -255,7 +262,8 @@ def source_info(args, l, st, rc):
 
         if not ident:
             fatal(
-                "Didn't find source for term '{}'. (Maybe need to run 'source sync')",
+                "Didn't find source for term '{}'. "
+                "(Maybe need to run 'source sync')",
                 term)
 
         try:

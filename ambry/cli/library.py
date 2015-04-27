@@ -99,19 +99,22 @@ def library_parser(cmd):
 
     sp = asp.add_parser(
         'purge',
-        help='Remove all entries from the library database and delete all files')
+        help='Remove all entries from the library database and delete all '
+             'files')
     sp.set_defaults(subcommand='purge')
 
     sp = asp.add_parser(
         'sync',
-        help='Synchronize the local directory, upstream and remote with the library')
+        help='Synchronize the local directory, upstream and remote with the '
+             'library')
     sp.set_defaults(subcommand='sync')
     sp.add_argument(
         '-C',
         '--clean',
         default=False,
         action="store_true",
-        help='Clean before syncing. Will clean only the locations that are also synced')
+        help='Clean before syncing. Will clean only the locations that are '
+             'also synced')
 
     sp.add_argument(
         '-a',
@@ -159,7 +162,8 @@ def library_parser(cmd):
 
     sp = asp.add_parser(
         'get',
-        help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
+        help='Search for the argument as a bundle or partition name or id. '
+             'Possible download the file from the remote library')
     sp.set_defaults(subcommand='get')
     sp.add_argument('term', type=str, help='Query term')
     sp.add_argument(
@@ -489,8 +493,8 @@ def library_push(args, l, config):
                 else:
                     rate = 0
 
-    # Update the list file. This file is required for use with HTTP access, since you can't get
-    # a list otherwise.
+    # Update the list file. This file is required for use with HTTP access,
+    # since you can't get a list otherwise.
     for remote in l.remotes:
         prt("  {}".format(remote.repo_id))
 
@@ -652,7 +656,7 @@ def library_config(args, l, config):
         var = parts.pop(0)
         val = parts.pop(0) if parts else None
 
-        if not var in l.configurable:
+        if var not in l.configurable:
             raise ConfigurationError(
                 "Value {} is not configurable. Must be one of: {}".format(
                     args.var,

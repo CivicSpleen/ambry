@@ -20,7 +20,8 @@ def config_parser(cmd):
         '-t',
         '--template',
         default='devel',
-        help="Suffix of the configuration template. One of: 'devel','library','builder'. Default: 'devel' ")
+        help="Suffix of the configuration template. "
+             "One of: 'devel', 'library', 'builder'. Default: 'devel' ")
     sp.add_argument('-r', '--root', default=None, help="Set the root dir")
 
     sp.add_argument(
@@ -57,7 +58,8 @@ def config_parser(cmd):
 
     sp = asp.add_parser(
         'value',
-        help='Return a configuration value, or all values if no key is specified')
+        help='Return a configuration value, or all values if no key is '
+             'specified')
     sp.set_defaults(subcommand='value')
     sp.add_argument(
         '-y',
@@ -106,7 +108,8 @@ def config_install(args, rc):
                 "ambry.support", 'ambry-{}.yaml'.format(args.template))
         else:
             fatal(
-                "Output file {} exists. Use -e to edit, or -f to overwrite".format(install_file))
+                "Output file {} exists. Use -e to edit, or -f to "
+                "overwrite".format(install_file))
     else:
         contents = pkgutil.get_data(
             "ambry.support", 'ambry-{}.yaml'.format(args.template))

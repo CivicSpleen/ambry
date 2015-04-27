@@ -57,9 +57,9 @@ def test_spatialite(args, rc):
     try:
         conn.enable_load_extension(True)
         conn.execute("select load_extension('/usr/lib/libspatialite.so')")
-        #loaded_extension = True
+        # loaded_extension = True
     except AttributeError:
-        #loaded_extension = False
+        # loaded_extension = False
         prt("WARNING: Could not enable load_extension(). ")
 
     rs = cur.execute('SELECT sqlite_version(), spatialite_version()')

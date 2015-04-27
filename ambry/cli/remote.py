@@ -20,7 +20,8 @@ def remote_parser(cmd):
         '-n',
         '--name',
         default='default',
-        help='Select a different name for the library, from which the remote is located')
+        help='Select a different name for the library, '
+             'from which the remote is located')
 
     group = lib_p.add_mutually_exclusive_group()
     group.add_argument(
@@ -53,7 +54,8 @@ def remote_parser(cmd):
         '--meta',
         default=False,
         action='store_true',
-        help="Force fetching metadata for remotes that don't provide it while listing, like S3")
+        help="Force fetching metadata for remotes that don't provide it while "
+             "listing, like S3")
     sp.add_argument('term', nargs=argparse.REMAINDER)
 
     sp = asp.add_parser('fix', help='Repair brokenness')
@@ -144,7 +146,8 @@ def remote_list(args, l, rc, return_meta=False):
 
         import pprint
         pprint.pprint(datasets)
-        for id_, data in sorted(datasets.items(), key=lambda x: x[1]['identity']['vname']):
+        for id_, data in sorted(datasets.items(),
+                                key=lambda x: x[1]['identity']['vname']):
 
             try:
                 prt("{:10s} {:50s} {:s}",

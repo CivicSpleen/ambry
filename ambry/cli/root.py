@@ -36,7 +36,8 @@ def root_parser(cmd):
         '-F',
         '--fields',
         type=str,
-        help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
+        help="Specify fields to use. "
+             "One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
     sp.add_argument(
         '-p',
         '--partitions',
@@ -252,7 +253,8 @@ def root_list(args, l, rc):
 
             try:
                 m = Manifest(f.content)
-                print "{:10s} {:25s}| {}".format(m.uid, m.title, m.summary['summary_text'])
+                print "{:10s} {:25s}| {}".format(m.uid, m.title,
+                                                 m.summary['summary_text'])
             except Exception as e:
                 warn("Failed to parse manifest {}: {}".format(f.ref, e))
                 continue
@@ -366,7 +368,7 @@ def root_info(args, l, rc):
                 ident.add_partition(p.identity)
 
     except NotFoundError:
-        #fatal("Could not find bundle file for '{}'".format(ident.path))
+        # fatal("Could not find bundle file for '{}'".format(ident.path))
         pass
 
     _print_info(l, ident, list_partitions=args.partitions)
@@ -439,7 +441,7 @@ def root_search(args, l, config):
 
         print 'Updating the identifier'
 
-        #sources = ['census.gov-index-counties', 'census.gov-index-places', 'census.gov-index-states']
+        # sources = ['census.gov-index-counties', 'census.gov-index-places', 'census.gov-index-states']
         sources = ['census.gov-index-counties', 'census.gov-index-states']
 
         records = []

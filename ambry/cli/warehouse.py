@@ -67,13 +67,14 @@ def warehouse_command(args, rc):
 
     elif args.subcommand not in ['list', 'new', 'install', 'test']:
         raise ConfigurationError(
-            "Must set the id, path or dsn of the database, either on the command line or in a manifest. ")
+            "Must set the id, path or dsn of the database, "
+            "either on the command line or in a manifest. ")
 
     if not w and config:
 
         w = new_warehouse(config, l, logger=global_logger)
 
-        if not w.exists() and not args.subcommand in ['clean', 'delete']:
+        if not w.exists() and args.subcommand not in ['clean', 'delete']:
             raise ConfigurationError(
                 "Database {} must be created first".format(
                     w.database.dsn))
@@ -115,7 +116,8 @@ def warehouse_parser(cmd):
         '-D',
         '--dir',
         default='',
-        help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
+        help='Set directory, instead of configured Warehouse filesystem dir, '
+             'for relative paths')
 
     whsp.add_argument('term', type=str, help='Name of bundle or partition')
 
@@ -143,7 +145,8 @@ def warehouse_parser(cmd):
         '-D',
         '--dir',
         default='',
-        help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
+        help='Set directory, instead of configured Warehouse filesystem dir, '
+             'for relative paths')
 
     whsp = whp.add_parser('config', help='Configure varibles')
     whsp.set_defaults(subcommand='config')
@@ -254,7 +257,7 @@ def warehouse_info(args, w, config):
 
 def warehouse_remove(args, w, config):
 
-    #w.logger = Logger('Warehouse Remove',init_log_rate(prt,N=2000))
+    # w.logger = Logger('Warehouse Remove',init_log_rate(prt,N=2000))
 
     w.remove(args.term)
 
@@ -395,7 +398,7 @@ def warehouse_config(args, w, config):
         var = parts.pop(0)
         val = parts.pop(0) if parts else None
 
-        if not var in w.configurable:
+        if var not in w.configurable:
             raise ConfigurationError(
                 "Value {} is not configurable. Must be one of: {}".format(
                     args.var,
