@@ -23,7 +23,8 @@ parser.add_argument(
     '-P',
     '--use-proxy',
     action='store_true',
-    help="Setup for using a proxy in front of server, using werkzeug.contrib.fixers.ProxyFix")
+    help="Setup for using a proxy in front of server, "
+         "using werkzeug.contrib.fixers.ProxyFix")
 parser.add_argument(
     '-d',
     '--debug',

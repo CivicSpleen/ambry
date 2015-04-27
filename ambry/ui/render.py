@@ -10,13 +10,13 @@ import jinja2.tests
 
 ##
 # These are in later versions of jinja, but we need them in earlier ones.
-if not 'equalto' in jinja2.tests.TESTS:
+if 'equalto' not in jinja2.tests.TESTS:
     def test_equalto(value, other):
         return value == other
 
     jinja2.tests.TESTS['equalto'] = test_equalto
 
-if not 'isin' in jinja2.tests.TESTS:
+if 'isin' not in jinja2.tests.TESTS:
     def test_isin(value, other):
         return value in other
 
@@ -118,8 +118,8 @@ def deref_tc_ref(ref):
         c = None
 
     if not on.revision:
-        # The table does not have a revision, so we need to get one, just get the
-        # latest one
+        # The table does not have a revision, so we need to get one, just get
+        # the latest one
         from . import renderer
 
         r = renderer()
@@ -354,7 +354,7 @@ class Renderer(object):
     def clean(self):
         """Clean up the extracts on failures."""
         for e in self.extracts:
-            if e.completed == False and os.path.exists(e.abs_path):
+            if e.completed is False and os.path.exists(e.abs_path):
                 os.remove(e.abs_path)
 
     def error500(self, e):
@@ -569,7 +569,7 @@ class Renderer(object):
 
         results = []
         for score, gvid, name in self.library.search.search_identifiers(term):
-            #results.append({"label":name, "value":gvid})
+            # results.append({"label":name, "value":gvid})
             results.append({"label": name})
 
         return Response(
@@ -647,7 +647,7 @@ class Renderer(object):
                         g = GVid.parse(gvid)
 
                         if g.level == 'state' and not g.is_summary:
-                            #facets['states'].add( (gvid, all_idents[gvid]))
+                            # facets['states'].add( (gvid, all_idents[gvid]))
                             facets['states'].add(all_idents[gvid])
 
         return self.render(
@@ -669,7 +669,7 @@ class Renderer(object):
 
             source = b['identity']['source']
 
-            if not source in sources:
+            if source not in sources:
                 sources[source] = {
                     'bundles': {}
                 }
