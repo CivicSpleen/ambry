@@ -1,6 +1,7 @@
 """"""
 
-from whoosh.fields import SchemaClass, TEXT, KEYWORD, ID, STORED, DATETIME, NGRAMWORDS, NGRAM
+from whoosh.fields import SchemaClass, TEXT, KEYWORD, ID, STORED, DATETIME, \
+    NGRAMWORDS, NGRAM
 import os
 from ambry.util import memoize
 
@@ -25,7 +26,8 @@ class DatasetSchema(SchemaClass):
 
 class IdentifierSchema(SchemaClass):
 
-    """Schema that maps well-known names to ID values, such as county names, summary level names, etc. """
+    """Schema that maps well-known names to ID values, such as county names,
+    summary level names, etc. """
 
     identifier = ID(stored=True)  # Partition versioned id
     type = ID()
@@ -127,7 +129,8 @@ class Search(object):
         e = bundle.database.session.execute
 
         q = """SELECT t_name, c_name, c_description FROM columns
-        JOIN tables ON c_t_vid = t_vid WHERE t_d_vid = '{}' """.format(str(bundle.identity.vid))
+        JOIN tables ON c_t_vid = t_vid WHERE t_d_vid = '{}' """.format(
+            str(bundle.identity.vid))
 
         doc = u'\n'.join([unicode(x) for x in [bundle.metadata.about.title,
                                                bundle.metadata.about.summary,

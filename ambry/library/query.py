@@ -21,12 +21,12 @@ class _qc_attrdict(object):
         self.__dict__['query'] = query
 
     def __setattr__(self, key, value):
-        #key = key.strip('_')
+        # key = key.strip('_')
         inner = self.__dict__['inner']
         inner[key] = value
 
     def __getattr__(self, key):
-        #key = key.strip('_')
+        # key = key.strip('_')
         inner = self.__dict__['inner']
 
         if key not in inner:
@@ -122,7 +122,7 @@ class QueryCommand(object):
         '''Fetch a confiration group and return the contents as an
         attribute-accessible dict'''
 
-        if not group in self._dict:
+        if group not in self._dict:
             self._dict[group] = {}
 
         inner = self._dict[group]
