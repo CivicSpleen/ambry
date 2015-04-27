@@ -20,5 +20,5 @@ nltk
 flask
 flask-compress
 ckcache
-geoid>=0.0.8
+geoid>=0.0.9
 isodate

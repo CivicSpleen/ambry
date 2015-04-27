@@ -302,10 +302,10 @@ class Test(TestBase):
 
         self.assertEquals(5, len(l.files.query.state('new').all))
 
-        for remote in l.remotes:
+        for remote_name, remote in l.remotes.items():
             remote.clean()
 
-        a = l.remotes
+        a = l.remotes.values()
         b = l.files.query.state('new').all
 
         def cb(what, metadata, start):
@@ -313,20 +313,20 @@ class Test(TestBase):
 
         # The zippy bit rotates the files through the three caches.
         for remote, file_ in zip(a*(len(b)/len(a)+1),b):
-            l.push(file_.ref, upstream=remote, cb=cb)
+            l.push(remote, file_.ref, cb=cb)
 
         import yaml
         self.assertEqual(
 """source/dataset-subset-variation-0.0.1.db:
-  caches: [/tmp/library-test/remote-cache-1]
+  caches: [/tmp/library-test/remote-cache-2]
 source/dataset-subset-variation-0.0.1/geot1.geodb:
   caches: [/tmp/library-test/remote-cache-3]
 source/dataset-subset-variation-0.0.1/geot2.geodb:
-  caches: [/tmp/library-test/remote-cache-2]
-source/dataset-subset-variation-0.0.1/tone/missing.db:
-  caches: [/tmp/library-test/remote-cache-2]
-source/dataset-subset-variation-0.0.1/tthree.db:
   caches: [/tmp/library-test/remote-cache-1]
+source/dataset-subset-variation-0.0.1/tone/missing.db:
+  caches: [/tmp/library-test/remote-cache-1]
+source/dataset-subset-variation-0.0.1/tthree.db:
+  caches: [/tmp/library-test/remote-cache-2]
 """,
         yaml.safe_dump(l.remote_stack.list(include_partitions=True)))
 
@@ -335,7 +335,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         fn = l.remote_stack.get(self.bundle.identity.cache_key)
 
         self.assertTrue(bool(fn))
-        self.assertEquals('/tmp/library-test/remote-cache-1/source/dataset-subset-variation-0.0.1.db', fn)
+        self.assertEquals('/tmp/library-test/remote-cache-2/source/dataset-subset-variation-0.0.1.db', fn)
 
         c = l.cache
 
@@ -369,6 +369,8 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         l = self.get_library('s3-remoted')
 
+        remote = l.remotes['0']
+
         print l.info
 
         l.purge()
@@ -377,7 +379,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         def cb(what, metadata, start):
             print "PUSH ", what, metadata['name'], start
 
-        l.push(cb=cb)
+        l.push(remote, cb=cb)
 
         l.purge()
 
@@ -403,7 +405,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         self.assertEquals('piEGPXmDC8005001', dataset.partition.vid)
 
-        l.remotes[0].store_list()
+        l.remotes.values()[0].store_list()
 
 
 
@@ -411,7 +413,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         l = self.get_library('http-remoted')
 
-        r = l.remotes[0]
+        r = l.remotes.values()[0]
 
         self.assertFalse(r.has('foobar'))
         self.assertTrue(r.has(self.bundle.identity.cache_key))
@@ -759,30 +761,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many7'))) 
 
 
-    def test_query(self):
-        from ambry.library.query import QueryCommand
-        
-        tests = [
-            "column.name = 'column.name', identity.id='identity',",
-            "column.name = 'column.name', identity.id='identity' ",
-            "column.name = 'column.name' identity.id = 'identity'",
-            "partition.vname ='partition.vname'",
-            "partition.vname = '%partition.vname%'",
-            "identity.name = '%clarinova foo bar%'"
-            
-            ]
-        
-        fails = [
-            "column.name='foobar"
-        ]
-        
-        for s in tests:
-            qc = QueryCommand.parse(s)
-            print qc
-    
-        for s in fails:
 
-            self.assertRaises(QueryCommand.ParseError, QueryCommand.parse, s)
 
 
     def test_files(self):

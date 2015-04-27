@@ -43,9 +43,9 @@ def _new_library(config):
 
     root = config['root']
 
-    remotes =  [ new_cache(remote) for remote in config.get('remotes' ,[])]
+    remotes =  {  name:new_cache(remote) for name, remote in config.get('remotes', {}).items() }
 
-    for i,remote in enumerate(remotes):
+    for i, remote in enumerate(remotes.values()):
         remote.set_priority(i)
 
     source_dir = config.get('source', None)
@@ -418,7 +418,7 @@ class Library(object):
 
         from ckcache.multi import MultiCache
 
-        return MultiCache(self.remotes)
+        return MultiCache(self.remotes.values())
 
 
     def _get_bundle_by_cache_key(self, cache_key, cb=None):
@@ -760,7 +760,7 @@ class Library(object):
     def remotes(self):
 
         if not self._remotes:
-            return None
+            return {}
 
         return self._remotes
 
@@ -820,10 +820,9 @@ class Library(object):
             return ident, self.cache
 
 
-        for remote in sorted(self.remotes, key = lambda x: x.priority):
+        for remote in sorted(self.remotes.values(), key = lambda x: x.priority):
             if remote.has(ident.cache_key):
                 return ident, remote
-
 
         return ident, None
 
@@ -967,7 +966,7 @@ class Library(object):
         for nf in new_files:
             yield nf
 
-    def push(self, ref=None, cb=None, upstream = None):
+    def push(self, upstream, ref=None, cb=None, dry_run=False):
         """Push any files marked 'new' to the upstream
 
         Args:
@@ -981,8 +980,7 @@ class Library(object):
         start = None
         end = None
 
-        if not upstream:
-            upstream = self.remotes[0]
+        assert dry_run
 
         if not upstream:
             raise Exception("Can't push() without defining a upstream. ")
@@ -1011,30 +1009,35 @@ class Library(object):
             if upstream.has(identity.cache_key):
                 if cb: cb('Has', md, 0)
                 what = 'has'
-                file_.state = 'pushed'
+
+                if not dry_run:
+                    file_.state = 'pushed'
 
             else:
                 start = time.clock()
                 if cb: cb('Pushing', md, start)
 
-                upstream.put(file_.path, identity.cache_key, metadata=md)
+                if not dry_run:
+                    upstream.put(file_.path, identity.cache_key, metadata=md)
+                    file_.state = 'pushed'
+
                 end = time.clock()
                 dt = end - start
-                file_.state = 'pushed'
+
                 if cb: cb('Pushed', md, dt)
                 what = 'pushed'
 
 
-
-            self.database.session.merge(file_)
-            self.database.commit()
+            if not dry_run:
+                self.database.session.merge(file_)
+                self.database.commit()
 
             return what, start, end, md['size'] if 'size' in md else None
 
         else:
 
             for file_ in self.new_files:
-                self.push(file_.ref, cb=cb, upstream=upstream)
+                self.push(upstream, file_.ref, cb=cb, dry_run = dry_run)
 
             try:
                 upstream.store_list()
@@ -1199,6 +1202,7 @@ class Library(object):
         from ..dbexceptions import NotABundle
         import re
         from collections import defaultdict
+        from boto.exception import S3ResponseError
 
         if clean:
             self.files.query.type(Dataset.LOCATION.REMOTE).delete()
@@ -1209,9 +1213,14 @@ class Library(object):
         if not remotes:
             return
 
-        for remote in remotes:
+        for remote_name, remote in remotes.items():
 
-            remote_list = remote.list().keys()
+            try:
+                remote_list = remote.list().keys()
+                self.logger.info("Syncing from remote: {} -> {} ".format(remote_name,remote))
+            except S3ResponseError:
+                self.logger.error("Failed to get list from {} -> {} ".format(remote_name,remote))
+                continue
 
             all_keys = [ f.path for f  in
                          self.files.query.type(Dataset.LOCATION.REMOTE)
@@ -1500,7 +1509,7 @@ Cache:    {cache}
 Remotes:  {remotes}
         """.format(name=self.name, database=self.database.dsn,
                    cache=self.cache, remotes='\n          '
-                        .join([ str(x) for x in self.remotes])
+                        .join([ str(x) for x in self.remotes.items()])
             if self.remotes else '')
 
     @property
@@ -1509,7 +1518,7 @@ Remotes:  {remotes}
         return dict(name=str(self.name),
                     database=str(self.database.dsn),
                     cache=str(self.cache),
-                    remotes=[str(r) for r in self.remotes]
+                    remotes=[str(r) for r in self.remotes.items()]
                             if self.remotes else [],
                     manifests={f.data['uid']: dict(
                         title=f.data['title'],

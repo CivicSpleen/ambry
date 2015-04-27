@@ -6,7 +6,7 @@ included in this distribution as LICENSE.txt
 """
 
 import os
-from ..cli import prt, fatal, warn, _print_info  # @UnresolvedImport
+from ..cli import prt, err, fatal, warn, _print_info  # @UnresolvedImport
 from ambry.util import Progressor
 
 # If the devel module exists, this is a development system.
@@ -32,6 +32,7 @@ def library_parser(cmd):
     sp.set_defaults(subcommand='push')
     sp.add_argument( '-w', '--watch', default=False, action="store_true", help='Check periodically for new files.')
     sp.add_argument( '-f', '--force', default=False, action="store_true", help='Push all files')
+    sp.add_argument( '-n', '--dry-run', default=False, action="store_true", help="Dry run, don't actually send the files." )
 
     sp = asp.add_parser('files', help='Print out files in the library')
     sp.set_defaults(subcommand='files')
@@ -281,6 +282,8 @@ def library_push(args, l, config):
     from ..orm import Dataset
     import time
     from functools import partial
+    from boto.exception import S3ResponseError
+    from collections import defaultdict
 
     if args.force:
         files = [(f.ref, f.type_) for f in l.files.query.installed.all]
@@ -288,6 +291,8 @@ def library_push(args, l, config):
 
         files = [(f.ref, f.type_)
                  for f in l.files.query.installed.state('new').all]
+
+    remote_errors = defaultdict(int)
 
     def push_cb(rate, note, md, t):
         if note == 'Has':
@@ -305,18 +310,39 @@ def library_push(args, l, config):
         total_size = 0.0
         rate = 0
 
-        prt("-- Pushing to {}", l.remotes)
         start = time.clock()
         for ref, t in files:
 
             if t not in (Dataset.LOCATION.LIBRARY, Dataset.LOCATION.PARTITION):
                 continue
 
+            bp = l.resolve(ref)
+
+            b = l.bundle(bp.vid)
+
+            remote_name = b.metadata.about.access
+
+            if remote_name not in l.remotes:
+                err("Can't push {} (bundle: '{}' ); no remote named '{}' ".format(ref, bp.vname, remote_name) )
+                continue
+
+            if remote_errors[remote_name] > 4:
+                err("Too many errors on remote '{}', skipping ".format( remote_name))
+                continue
+
+            remote = l.remotes[remote_name]
+
             try:
-                what, start, end, size = l.push(ref, cb=partial(push_cb, rate))
+                what, start, end, size = l.push(remote, ref, cb=partial(push_cb, rate), dry_run = args.dry_run)
+            except S3ResponseError:
+                err("Failed to push to remote '{}' ".format(remote_name))
+                remote_errors[remote_name] += 1
+                continue
+
             except Exception as e:
                 prt("Failed: {}", e)
                 raise
+
 
             if what == 'pushed':
                 total_time += end - start
@@ -329,10 +355,11 @@ def library_push(args, l, config):
 
     # Update the list file. This file is required for use with HTTP access, since you can't get
     # a list otherwise.
-    for remote in l.remotes:
+    for remote_name, remote in l.remotes.items():
         prt("  {}".format(remote.repo_id))
 
-        remote.store_list()
+        if not args.dry_run:
+            remote.store_list()
 
 def library_files(args, l, config):
 

@@ -90,8 +90,6 @@ def remote_command(args, rc):
 
 
 def remote_info(args, l, rc):
-    from ..identity import Identity
-    from ambry.client.exceptions import NotFound
 
     if args.term:
         ip, ident = l.remote_resolver.resolve_ref_one(args.term)
@@ -100,8 +98,8 @@ def remote_info(args, l, rc):
             _print_bundle_entry(ident, prtf=prt)
 
     else:
-        for r in l.remotes:
-            print r
+        for name, remote in l.remotes.items():
+            print name, remote
 
 
 def remote_list(args, l, rc, return_meta=False):
