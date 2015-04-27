@@ -1,14 +1,14 @@
 """
 
-The RowGenerator reads a file and yields rows, handling simple headers in CSV files, and complex
-headers with receeding comments in Excel files.
+The RowGenerator reads a file and yields rows, handling simple headers in CSV
+files, and complex headers with receeding comments in Excel files.
 
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-class RowGenerator(object):
 
+class RowGenerator(object):
     file_name = None
 
     generator = None
@@ -24,24 +24,28 @@ class RowGenerator(object):
 
     line_number = None
 
-    put_row = None # A row that was put back to be iterated over again.
+    put_row = None  # A row that was put back to be iterated over again.
 
-
-
-    def __init__(self, file, data_start_line = None, data_end_line = None,
-                 header_lines = None, header_comment_lines = None, header_mangler = None):
+    def __init__(self, file, data_start_line=None, data_end_line=None,
+                 header_lines=None, header_comment_lines=None,
+                 header_mangler=None):
         """
 
         """
 
         self.file_name = file
 
-        if data_start_line: self.data_start_line = data_start_line
-        if data_end_line: self.data_end_line = data_end_line
-        if header_lines: self.header_lines = header_lines
-        if header_comment_lines: self.header_comment_lines = header_comment_lines
+        if data_start_line:
+            self.data_start_line = data_start_line
+        if data_end_line:
+            self.data_end_line = data_end_line
+        if header_lines:
+            self.header_lines = header_lines
+        if header_comment_lines:
+            self.header_comment_lines = header_comment_lines
 
-        if header_mangler: self.header_mangler = header_mangler
+        if header_mangler:
+            self.header_mangler = header_mangler
 
         self._raw_row_gen = None
 
@@ -50,21 +54,23 @@ class RowGenerator(object):
         self._header = None
         self._unmangled_header = None
 
-
-    def add_intuition(self, data_start_line=None, data_end_line = None,
+    def add_intuition(self, data_start_line=None, data_end_line=None,
                       header_lines=None, header_comment_lines=None):
 
-        if data_start_line: self.data_start_line = data_start_line
-        if header_lines: self.header_lines = header_lines
-        if header_comment_lines: self.header_comment_lines = header_comment_lines
+        if data_start_line:
+            self.data_start_line = data_start_line
+        if header_lines:
+            self.header_lines = header_lines
+        if header_comment_lines:
+            self.header_comment_lines = header_comment_lines
 
     def _yield_rows(self):
         raise NotImplementedError
 
     @property
     def raw_row_gen(self):
-        """Generate all rows from the underlying source, with no consideration for wether the row is data, header
-        or comment """
+        """Generate all rows from the underlying source, with no consideration
+        for wether the row is data, header or comment """
         if self._raw_row_gen is None:
             self._raw_row_gen = self._yield_rows()
             self.line_number = 0
@@ -85,12 +91,10 @@ class RowGenerator(object):
 
     @property
     def unmangled_header(self):
-
         if not self._unmangled_header:
             self.get_header()
 
         return self._unmangled_header
-
 
     def get_header(self):
         """Open the file and read the rows for the header and header comments. It leaves the iterator
@@ -107,20 +111,23 @@ class RowGenerator(object):
             row = self.raw_row_gen.next()
 
             if self.line_number in self.header_lines:
-
-                headers.append([str(unicode(x).encode('ascii','ignore')) for x in row])
+                headers.append(
+                    [str(unicode(x).encode('ascii', 'ignore')) for x in row])
 
             if self.line_number in self.header_comment_lines:
-                header_comments.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
+                header_comments.append(
+                    [str(unicode(x).encode('ascii', 'ignore')) for x in row])
 
         self.put_row = row
 
         if self.line_number == self.data_start_line:
-            # All of the header line are before this, so it is safe to construct the header now.
+            # All of the header line are before this, so it is safe to construct
+            # the header now.
 
             if len(headers) > 1:
 
-                # If there are gaps in the values in the first header line, extend them forward
+                # If there are gaps in the values in the first header line,
+                # extend them forward
                 hl1 = []
                 last = None
                 for x in headers[0]:
@@ -135,8 +142,7 @@ class RowGenerator(object):
 
                 header = [' '.join(col_val.strip() if col_val else '' for col_val in col_set)
                           for col_set in zip(*headers)]
-
-                header = [ h.strip() for h in header ]
+                header = [h.strip() for h in header]
 
             elif len(headers) > 0:
                 header = headers.pop()
@@ -144,7 +150,7 @@ class RowGenerator(object):
             else:
                 header = []
 
-            self._header =   header
+            self._header = header
 
             self.header_comment = [' '.join(x) for x in zip(*header_comments)]
 
@@ -180,10 +186,9 @@ class RowGenerator(object):
 
         return self.footer
 
-    def decode(self,v):
+    def decode(self, v):
         """Decode a string into unicode"""
         return v
-
 
     def __iter__(self):
         """Generate rows for a source file. The source value must be specified in the sources config"""
@@ -199,28 +204,23 @@ class RowGenerator(object):
                 yield self.put_row
                 self.put_row = None
 
-            yield  row
-
-
+            yield row
 
 
 class DelimitedRowGenerator(RowGenerator):
-
-
     delimiter = None
 
-    def __init__(self, file, data_start_line=None, data_end_line = None, header_lines=None,
-                 header_comment_lines=None, header_mangler=None, delimiter = ','):
+    def __init__(self, file, data_start_line=None, data_end_line=None,
+                 header_lines=None,
+                 header_comment_lines=None, header_mangler=None, delimiter=','):
 
-        super(DelimitedRowGenerator, self).__init__(file, data_start_line=data_start_line,
-                                                    data_end_line=data_end_line,
-                                                    header_lines=header_lines,
-                                                    header_comment_lines=header_comment_lines,
-                                                    header_mangler=header_mangler)
+        super(DelimitedRowGenerator, self).__init__(
+            file, data_start_line=data_start_line, data_end_line=data_end_line, header_lines=header_lines,
+            header_comment_lines=header_comment_lines, header_mangler=header_mangler)
 
         self.delimiter = delimiter
 
-    def get_csv_reader(self, f, sniff = False):
+    def get_csv_reader(self, f, sniff=False):
         import csv
 
         if sniff:
@@ -231,23 +231,26 @@ class DelimitedRowGenerator(RowGenerator):
 
         delimiter = self.delimiter if self.delimiter else ','
 
-        return csv.reader(f, delimiter = delimiter, dialect=dialect)
+        return csv.reader(f, delimiter=delimiter, dialect=dialect)
 
     def _yield_rows(self):
 
         self.line_number = 0
-        with open(self.file_name,'rU') as f:
+        with open(self.file_name, 'rU') as f:
             for i, row in enumerate(self.get_csv_reader(f)):
                 self.line_number = i
                 yield row
 
+
 class ExcelRowGenerator(RowGenerator):
+    def __init__(self, file, data_start_line=None, data_end_line=None,
+                 header_lines=None,
+                 header_comment_lines=None, header_mangler=None, segment=0):
 
-    def __init__(self, file, data_start_line=None, data_end_line=None, header_lines=None,
-                 header_comment_lines=None,  header_mangler=None, segment = 0):
-
-        super(ExcelRowGenerator, self).__init__(file, data_start_line, data_end_line, header_lines,
-                                                header_comment_lines, header_mangler)
+        super(ExcelRowGenerator, self).__init__(file, data_start_line,
+                                                data_end_line, header_lines,
+                                                header_comment_lines,
+                                                header_mangler)
 
         self.segment = segment
         self.workbook = None
@@ -266,12 +269,11 @@ class ExcelRowGenerator(RowGenerator):
 
             wb = open_workbook(self.file_name)
 
-
         self.workbook = wb
 
         s = wb.sheets()[self.segment if self.segment else 0]
 
-        for i in range(0,s.nrows):
+        for i in range(0, s.nrows):
             self.line_number = i
             yield self.srow_to_list(i, s)
 
@@ -291,8 +293,8 @@ class ExcelRowGenerator(RowGenerator):
 
         return values
 
-class RowSpecIntuiter(object):
 
+class RowSpecIntuiter(object):
     data_start_line = None
     data_end_line = None
 
@@ -315,25 +317,27 @@ class RowSpecIntuiter(object):
         # Get the non-numm length of all of the rows, then find the midpoint between the min a max
         # We'll use that for the break point between comments and data / header.
         for i, row in enumerate(row_gen):
-            if i > 100: break
+            if i > 100:
+                break
 
             self.lines.append(row)
 
-            lng = len(self.non_nulls(row)) # Number of non-nulls
+            lng = len(self.non_nulls(row))  # Number of non-nulls
 
             self.lengths[lng] += 1
 
-        self.mid_length = mid =  (min(self.lengths.keys()) +  max(self.lengths.keys())) / 2
-
+        self.mid_length = mid = (min(self.lengths.keys()) + max(
+            self.lengths.keys())) / 2
 
     def non_nulls(self, row):
         """Return the non-empty values from a row"""
-        return [col for col in row if bool(unicode(col).encode('ascii','replace').strip())]
+        return [col for col in row if
+                bool(unicode(col).encode('ascii', 'replace').strip())]
 
     def is_data_line(self, i, row):
         """Return true if a line is a data row"""
 
-        return ( self.header and len(self.non_nulls(row)) > self.mid_length)
+        return self.header and len(self.non_nulls(row)) > self.mid_length
 
     def is_header_line(self, i, row):
         """Return true if a row is part of the header"""
@@ -342,7 +346,7 @@ class RowSpecIntuiter(object):
 
     def is_header_comment_line(self, i, row):
         """Return true if a line is a header comment"""
-        return not self.header # All of the lines before the header
+        return not self.header  # All of the lines before the header
 
     def intuit(self):
         """Classify the rows of an excel file as header, comment and start of data
@@ -375,9 +379,7 @@ class RowSpecIntuiter(object):
 
             elif self.data_start_line and not self.data_end_line:
                 if not is_dl:
-
                     self.data_end_line = i
-
 
         return dict(
             data_start_line=self.data_start_line,

@@ -517,18 +517,14 @@ class DbBundleBase(Bundle):
         WARNING: This will only produce 'other_versions' if the bundle is produced from library.list_bundles
 
         """
-
         return dict(
             meta=self.metadata.dict,
             identity=self.identity.dict,
-            other_versions=[
-                ov.dict for ov in self.identity.data.get(
-                    'other_versions',
-                    [])])
+            other_versions=[ov.dict for ov in self.identity.data.get('other_versions', [])]
+        )
 
 
 class DbBundle(DbBundleBase):
-
     def __init__(self, database_file, logger=None):
         """Initialize a db and all of its sub-components.
 
@@ -568,12 +564,10 @@ class DbBundle(DbBundleBase):
 
 
 class LibraryDbBundle(DbBundleBase):
-
     """A database bundle that is built in place from the data in a library."""
 
     def __init__(self, database, dataset_id, logger=None):
         """Initialize a db and all of its sub-components.
-
         """
 
         super(LibraryDbBundle, self).__init__(logger=logger)
@@ -594,29 +588,21 @@ class LibraryDbBundle(DbBundleBase):
         from ambry.orm import Dataset
 
         try:
-            return (
-                self.database.session.query(Dataset).filter(
-                    Dataset.vid == self._dataset_id).one())
+            return self.database.session.query(Dataset).filter(Dataset.vid == self._dataset_id).one()
 
         except NoResultFound:
             from ..dbexceptions import NotFoundError
 
-            raise NotFoundError("Failed to find dataset for id {} in {} "
-                                .format(self._dataset_id, self.database.dsn))
+            raise NotFoundError("Failed to find dataset for id {} in {} ".format(self._dataset_id, self.database.dsn))
 
         except OperationalError:
-            raise NotFoundError(
-                "No dataset record found. Probably not a bundle (c): '{}'" .format(
-                    self.path))
+            raise NotFoundError("No dataset record found. Probably not a bundle (c): '{}'" .format(self.path))
 
         except Exception as e:
             from ..util import get_logger
             # self.logger can get caught in a recursion loop
             logger = get_logger(__name__)
-            logger.error(
-                "Failed to get dataset: {}; {}".format(
-                    e.message,
-                    self.database.dsn))
+            logger.error("Failed to get dataset: {}; {}".format(e.message, self.database.dsn))
             raise
 
 
@@ -782,9 +768,7 @@ class BuildBundle(Bundle):
                         e))
             except AttributeError:
                 raise AttributeError(
-                    "Failed to get required sections of config. " +
-                    "\nconfig_source = {}\n".format(
-                        self.config.source_ref))
+                    "Failed to get required sections of config.\nconfig_source = {}\n".format(self.config.source_ref))
 
             self._identity = Identity.from_dict(dict(names + idents))
             self._identity.locations.set(LocationRef.LOCATION.SOURCE)
@@ -1076,7 +1060,7 @@ class BuildBundle(Bundle):
 
         if os.path.exists(mf) and not self.run_args.get('clean', None):
             self.log("Meta information already generated")
-            #raise ProcessError("Bundle has already been prepared")
+            # raise ProcessError("Bundle has already been prepared")
             return False
 
         return True
@@ -1141,7 +1125,7 @@ class BuildBundle(Bundle):
 
         if self.is_prepared:
             self.log("Bundle has already been prepared")
-            #raise ProcessError("Bundle has already been prepared")
+            # raise ProcessError("Bundle has already been prepared")
 
             return False
 
@@ -1196,7 +1180,6 @@ class BuildBundle(Bundle):
         else:
             self.log("No schema file ('{}') not loading schema".format(sf_path))
 
-
         cf = self.filesystem.path('meta', self.CODE_FILE)
 
         if os.path.exists(cf):
@@ -1215,8 +1198,7 @@ class BuildBundle(Bundle):
                 self.database.create()
             except:
                 self.error(
-                    "Failed to create database: {} ".format(
-                        self.database.dsn))
+                    "Failed to create database: {} ".format(self.database.dsn))
                 raise
         else:
             self.log("Bundle database already exists")
@@ -1240,7 +1222,6 @@ class BuildBundle(Bundle):
                 'schema_file',
                 'meta/schema.csv'))
         with open(sf, 'rbU') as f:
-
             partitions = [p.identity for p in self.partitions.all]
             self.schema.clean()
             self.schema.schema_from_file(f)
@@ -1279,10 +1260,7 @@ class BuildBundle(Bundle):
             # At this point, we have a dataset vid, which we didn't have when the dbcreated values was
             # set, so we can reset the value with to get it into the process
             # configuration group.
-            root_db_created = self.database.get_config_value(
-                ROOT_CONFIG_NAME_V,
-                'process',
-                'dbcreated')
+            root_db_created = self.database.get_config_value(ROOT_CONFIG_NAME_V, 'process', 'dbcreated')
             self.set_value('process', 'dbcreated', root_db_created.value)
 
             self._revise_schema()
@@ -1330,12 +1308,10 @@ class BuildBundle(Bundle):
         import sys
 
         if not self.database.exists():
-            raise ProcessError(
-                "Database does not exist yet. Was the 'prepare' step run?")
+            raise ProcessError("Database does not exist yet. Was the 'prepare' step run?")
 
         if self.is_built and not self.run_args.get('force', False):
-            self.log(
-                "Bundle is already built. Skipping  ( Use --clean  or --force to force build ) ")
+            self.log("Bundle is already built. Skipping  ( Use --clean  or --force to force build ) ")
             return False
 
         with self.session:
@@ -1449,8 +1425,7 @@ class BuildBundle(Bundle):
             places = list(self.library.search.search_identifiers(term))
 
             if not places:
-                raise BuildError(
-                    "Failed to find space identifier '{}' in full text identifier search".format(space))
+                raise BuildError("Failed to find space identifier '{}' in full text identifier search".format(space))
 
             score, gvid, name = places[0]
 
@@ -1599,7 +1574,7 @@ class BuildBundle(Bundle):
         """This is the methods that is actually called in do_build; it
         dispatches to developer created prepare() methods."""
         self.set_build_state('building')
-        return self.build()
+        return self.build
 
     def do_build(self):
 
@@ -1782,7 +1757,6 @@ class BuildBundle(Bundle):
             self.log("Installed {}".format(dest[0]))
 
             for partition in self.partitions:
-
                 # Skip files that don't exist, but not if the partition is a reference to an
                 # other partition.
                 if not os.path.exists(partition.database.path) and not partition.ref:
@@ -1888,10 +1862,7 @@ class BuildBundle(Bundle):
 
             pool = Pool(n)
 
-            pool.map(
-                mp_run, [
-                    (self.bundle_dir, dict(
-                        self.run_args), method.__name__, args) for args in arg_sets])
+            pool.map(mp_run, [(self.bundle_dir, dict(self.run_args), method.__name__, args) for args in arg_sets])
 
     def _info(self, identity=None):
         """Return a nested, ordered dict  of information about the bundle."""
@@ -1899,14 +1870,10 @@ class BuildBundle(Bundle):
 
         d = super(BuildBundle, self)._info(identity)
 
-        d['source'] = OrderedDict(
-            bundle=self.bundle_dir
-        )
+        d['source'] = OrderedDict(bundle=self.bundle_dir)
 
         deps = self.config.build.get('dependencies')
-        d['build'] = OrderedDict(
-            dependencies=deps if deps else ''
-        )
+        d['build'] = OrderedDict(dependencies=deps if deps else '')
 
         if self.is_built:
             d['build'].update(self._build_info())

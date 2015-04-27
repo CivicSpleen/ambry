@@ -1,11 +1,11 @@
 """ Bundle variants that directly load files with little additional processing.
 """
 
-from  ambry.bundle import BuildBundle
+from ambry.bundle import BuildBundle
 from rowgen import RowSpecIntuiter
 
-class LoaderBundle(BuildBundle):
 
+class LoaderBundle(BuildBundle):
     row_gen_ext_map = {
         'xlsm': 'xls',
         'xlsx': 'xls'
@@ -20,7 +20,8 @@ class LoaderBundle(BuildBundle):
 
         # Load it
         if os.path.exists(self.col_map_fn):
-            self.col_map = self.filesystem.read_csv(self.col_map_fn, key='header')
+            self.col_map = self.filesystem.read_csv(self.col_map_fn,
+                                                    key='header')
         else:
             self.col_map = {}
 
@@ -53,8 +54,8 @@ class LoaderBundle(BuildBundle):
 
     def mangle_column_name(self, i, n):
         """
-        Override this method to change the way that column names from the source are altered to
-        become column names in the schema
+        Override this method to change the way that column names from the source
+        are altered to become column names in the schema
 
         :param i: column number
         :param n: original column name
@@ -65,10 +66,10 @@ class LoaderBundle(BuildBundle):
         if not n:
             return 'column{}'.format(i)
 
-        mn =  Column.mangle_name(n.strip())
+        mn = Column.mangle_name(n.strip())
 
         if mn in self.col_map:
-            col =  self.col_map[mn]['col']
+            col = self.col_map[mn]['col']
             if col:
                 return col
             else:
@@ -78,14 +79,16 @@ class LoaderBundle(BuildBundle):
             return mn
 
     def mangle_header(self, header):
-        """Transform the header as it comes from the raw row generator into a column name"""
+        """Transform the header as it comes from the raw row generator into a
+        column name"""
 
-        return [ self.mangle_column_name(i,n) for i,n in enumerate(header)]
+        return [self.mangle_column_name(i, n) for i, n in enumerate(header)]
 
     def build_create_partition(self, source_name):
         """Create or find a partition based on the source
 
-        Will also load the source metadata into the partition, as a dict, under the key name of the source name.
+        Will also load the source metadata into the partition, as a dict, under
+        the key name of the source name.
         """
 
         source = self.metadata.sources[source_name]
@@ -106,12 +109,11 @@ class LoaderBundle(BuildBundle):
         if source.grain:
             kwargs['grain'] = source.grain
 
-        p =  self.partitions.find_or_new(table=table)
+        p = self.partitions.find_or_new(table=table)
 
         with self.session:
-            if not 'source_data' in p.record.data:
+            if 'source_data' not in p.record.data:
                 p.record.data['source_data'] = {}
-
             p.record.data['source_data'][source_name] = source.dict
 
         return p
@@ -120,8 +122,8 @@ class LoaderBundle(BuildBundle):
         """Check for saved source"""
         import os
 
-        # If the file we are given isn't actually a CSV file, we might have manually
-        # converted it to a CSV and put it in the source store.
+        # If the file we are given isn't actually a CSV file, we might have
+        # manually converted it to a CSV and put it in the source store.
         if not fn.lower().endswith('.csv'):
             cache = self.filesystem.source_store
 
@@ -146,9 +148,9 @@ class LoaderBundle(BuildBundle):
 
         fn = self.filesystem.download(source_name)
 
-        #self.log("Generating from {}".format(fn))
+        # self.log("Generating from {}".format(fn))
 
-        base_dir, file_name  = split(fn)
+        base_dir, file_name = split(fn)
         file_base, ext = splitext(file_name)
 
         if source.filetype:
@@ -157,7 +159,7 @@ class LoaderBundle(BuildBundle):
             if ext.startswith('.'):
                 ext = ext[1:]
 
-            ext = self.row_gen_ext_map.get(ext,ext)
+            ext = self.row_gen_ext_map.get(ext, ext)
 
         if source.row_spec.dict:
             rs = source.row_spec.dict
@@ -167,20 +169,19 @@ class LoaderBundle(BuildBundle):
         if source.segment:
             rs['segment'] = source.segment
 
-
         rs['header_mangler'] = lambda header: self.mangle_header(header)
 
         if ext == 'csv':
             from rowgen import DelimitedRowGenerator
 
             return DelimitedRowGenerator(fn, **rs)
-        elif ext  == 'xls':
+        elif ext == 'xls':
             from rowgen import ExcelRowGenerator
+
             return ExcelRowGenerator(fn, **rs)
         else:
             raise Exception("Unknown source file extension: '{}' for file '{}' from source {} "
-                            .format(ext,  file_name, source_name))
-
+                            .format(ext, file_name, source_name))
 
     def make_table_for_source(self, source_name):
 
@@ -192,19 +193,19 @@ class LoaderBundle(BuildBundle):
 
         table = self.schema.add_table(table_name, description=table_desc)
 
-        self.schema.add_column(table, 'id', datatype = 'integer', description = table_desc, is_primary_key = True)
+        self.schema.add_column(table, 'id', datatype='integer', description=table_desc, is_primary_key=True)
 
         self.log("Created table {}".format(table.name))
 
-        if  source.grain:
+        if source.grain:
             with self.session:
                 if 'grain' in table.data and table.data['grain'] != source.grain:
                     raise BuildBundle("Table '{}' has grain '{}' conflicts with source '{}' grain of '{}'"
-                                      .format(table_name,table.data['grain'], source_name, source.grain ))
+                                      .format(table_name, table.data['grain'], source_name, source.grain))
 
                 table.data['grain'] = source.grain
 
-        return self.schema.table(table_name) # The session in 'if source.grain' may expire table, so refresh
+        return self.schema.table(table_name)  # The session in 'if source.grain' may expire table, so refresh
 
     def meta_set_row_specs(self, row_intuitier_class=RowSpecIntuiter):
         """
@@ -251,7 +252,6 @@ class LoaderBundle(BuildBundle):
         if not self.run_args.get('clean', None):
             self._prepare_load_schema()
 
-
         # Collect all of the sources for each table, while also creating the tables
         for source_name, source in self.metadata.sources.items():
 
@@ -263,12 +263,11 @@ class LoaderBundle(BuildBundle):
 
         self.schema.write_schema()
 
-
         intuiters = defaultdict(Intuiter)
 
         # Intuit all of the tables
 
-        for table_name, sources in  tables.items():
+        for table_name, sources in tables.items():
 
             intuiter = intuiters[table_name]
 
@@ -291,10 +290,8 @@ class LoaderBundle(BuildBundle):
 
             self.schema.update_from_intuiter(table_name, intuiter)
 
-
             # Write the first 50 lines of the csv file, to see what the intuiter got from the
             # raw-row-gen
-
             with open(self.filesystem.build_path('{}-raw-rows.csv'.format(table_name)), 'w') as f:
                 rg = self.row_gen_for_source(source_name)
                 rrg = rg.raw_row_gen
@@ -307,7 +304,6 @@ class LoaderBundle(BuildBundle):
                     w.writerow(list(row))
 
             # Now write the first 50 lines from the row gen, after appliying the row spec
-
             with open(self.filesystem.build_path('{}-specd-rows.csv'.format(table_name)), 'w') as f:
                 rg = self.row_gen_for_source(source_name)
 
@@ -322,8 +318,7 @@ class LoaderBundle(BuildBundle):
                     w.writerow(list(row))
 
             # Write an intuiter report, to review how the intuiter made it's decisions
-            with open(self.filesystem.build_path('{}-intuit-report.csv'.format(table_name)),'w') as f:
-
+            with open(self.filesystem.build_path('{}-intuit-report.csv'.format(table_name)), 'w') as f:
                 w = csv.DictWriter(f, ("name length resolved_type has_codes count ints "
                                        "floats strs nones datetimes dates times strvals".split()))
                 w.writeheader()
@@ -346,25 +341,23 @@ class LoaderBundle(BuildBundle):
             for table_name, sources in tables.items():
                 rg = self.row_gen_for_source(source_name)
 
-                header = rg.header # Also sets unmangled_header
+                header = rg.header  # Also sets unmangled_header
 
-                descs = [ x.replace('\n','; ') for x in (rg.unmangled_header if rg.unmangled_header else header)]
+                descs = [x.replace('\n', '; ') for x in (rg.unmangled_header if rg.unmangled_header else header)]
 
-                for col_name, desc  in zip(header, descs):
+                for col_name, desc in zip(header, descs):
                     k = col_name.strip()
 
-                    if not k in col_map and not col_name in mapped_domain:
+                    if k not in col_map and not col_name in mapped_domain:
                         col_map[k] = dict(header=k, col='')
 
             # Write back out
             with open(self.col_map_fn, 'w') as f:
 
-                w = csv.DictWriter(f, fieldnames = ['header', 'col'])
+                w = csv.DictWriter(f, fieldnames=['header', 'col'])
                 w.writeheader()
                 for k in sorted(col_map.keys()):
                     w.writerow(col_map[k])
-
-
         return True
 
     def build_modify_row(self, row_gen, p, source, row):
@@ -394,7 +387,7 @@ class LoaderBundle(BuildBundle):
 
         columns = [c.name for c in p.table.columns]
 
-        row_gen =  self.row_gen_for_source(source_name)
+        row_gen = self.row_gen_for_source(source_name)
 
         header = row_gen.header
 
@@ -416,23 +409,25 @@ class LoaderBundle(BuildBundle):
                 errors = ins.insert(d)
 
                 if errors:
-                    self.error("Casting error for {}: {}".format(source_name,errors))
+                    self.error("Casting error for {}: {}".format(source_name, errors))
 
     def build(self):
         for source_name in self.metadata.sources:
             self.build_from_source(source_name)
         return True
 
+
 class CsvBundle(LoaderBundle):
     """A Bundle variant for loading CSV files"""
 
     pass
 
+
 class ExcelBuildBundle(CsvBundle):
     pass
 
-class TsvBuildBundle(CsvBundle):
 
+class TsvBuildBundle(CsvBundle):
     delimiter = '\t'
 
     def __init__(self, bundle_dir=None):
@@ -440,7 +435,6 @@ class TsvBuildBundle(CsvBundle):
         '''
 
         super(TsvBuildBundle, self).__init__(bundle_dir)
-
 
     def get_source(self, source):
         """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
@@ -457,14 +451,15 @@ class TsvBuildBundle(CsvBundle):
 
         return fn
 
+
 class GeoBuildBundle(LoaderBundle):
     """A Bundle variant that loads zipped Shapefiles"""
+
     def __init__(self, bundle_dir=None):
         '''
         '''
 
         super(GeoBuildBundle, self).__init__(bundle_dir)
-
 
     def meta(self):
         from ambry.geo.sfschema import copy_schema
@@ -477,7 +472,6 @@ class GeoBuildBundle(LoaderBundle):
             self.log(x)
 
         for table, item in self.metadata.sources.items():
-
             with self.session:
                 copy_schema(self.schema, table_name=table, path=item.url, logger=log)
 
@@ -503,14 +497,13 @@ class GeoBuildBundle(LoaderBundle):
 
                 if not table:
                     table = source_name
-
             except:
                 table = source_name
 
             p = self.partitions.new_geo_partition(table=table, shape_file=source.url, s_srs=s_srs, logger=lr)
 
             with self.session:
-                if not 'source_data' in p.record.data:
+                if 'source_data' not in p.record.data:
                     p.record.data['source_data'] = {}
 
                 p.record.data['source_data'][source_name] = source.dict
