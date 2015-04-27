@@ -980,8 +980,6 @@ class Library(object):
         start = None
         end = None
 
-        assert dry_run
-
         if not upstream:
             raise Exception("Can't push() without defining a upstream. ")
 
