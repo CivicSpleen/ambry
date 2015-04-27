@@ -41,7 +41,7 @@ class SourceTree(object):
 
         for file_ in self.library.files.query.type(Dataset.LOCATION.SOURCE).all:
 
-            #ident = Identity.from_dict(file_.data['identity'])
+            # ident = Identity.from_dict(file_.data['identity'])
 
             ident = self.library.resolve(file_.ref, location=None)
 
@@ -148,7 +148,7 @@ class SourceTree(object):
                         print 'C', ident.sname
                         errors[bundle_ident.sname].add(ident.sname)
 
-                if not bundle_ident.sname in deps:
+                if bundle_ident.sname not in deps:
                     deps[bundle_ident.sname].add(None)
 
             return deps, list(new_sources)

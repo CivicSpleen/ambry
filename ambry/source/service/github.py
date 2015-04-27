@@ -17,11 +17,14 @@ class GitHubService(ServiceInterface, GitServiceMarker):
         self.url = ur = 'https://api.github.com/'
 
         self.urls = {
-            'repos': ur + 'orgs/{}/repos?page={{page}}'.format(self.org) if self.org else ur + 'users/{}/repos'.format(self.user),
-            'deleterepo': ur + 'repos/{}/{{name}}'.format(self.org if self.org else self.user),
+            'repos': ur + 'orgs/{}/repos?page={{page}}'.format(self.org)
+            if self.org else ur + 'users/{}/repos'.format(self.user),
+            'deleterepo': ur + 'repos/{}/{{name}}'.format(
+                self.org if self.org else self.user),
             'info': ur + 'repos/{}/{{name}}'.format(self.org),
                     'repogit': ur + '{}/{{name}}.git'.format(self.org),
-                    'yaml': "https://raw.github.com/{}/{{name}}/master/bundle.yaml".format(self.org)
+                    'yaml': "https://raw.github.com/{}/{{name}}/master/"
+                            "bundle.yaml".format(self.org)
         }
 
         self.auth = (self.user, self.password)
