@@ -6,21 +6,21 @@ Created on Aug 31, 2012
 
 import unittest
 import os.path
-import logging 
+import logging
 import ambry.util
-from  bundles.testbundle.bundle import Bundle
-from ambry.run import  get_runconfig, RunConfig
-from test_base import  TestBase
+from bundles.testbundle.bundle import Bundle
+from ambry.run import get_runconfig, RunConfig
+from test_base import TestBase
 from ambry.library.query import QueryCommand
-from ambry.library  import new_library
+from ambry.library import new_library
 from ambry.util import rm_rf
 
 global_logger = ambry.util.get_logger(__name__)
 global_logger.setLevel(logging.DEBUG)
 logging.captureWarnings(True)
 
+
 class Test(TestBase):
- 
     def setUp(self):
         import bundles.testbundle.bundle
 
@@ -30,16 +30,17 @@ class Test(TestBase):
 
         self.bundle_dir = os.path.dirname(bundles.testbundle.bundle.__file__)
 
-        self.rc = get_runconfig((os.path.join(self.bundle_dir, 'client-test-config.yaml'),
-                                 os.path.join(self.bundle_dir, 'bundle.yaml'),
-                                 RunConfig.USER_ACCOUNTS)
+        self.rc = get_runconfig(
+            (os.path.join(self.bundle_dir, 'client-test-config.yaml'),
+             os.path.join(self.bundle_dir, 'bundle.yaml'),
+             RunConfig.USER_ACCOUNTS)
         )
 
-        self.server_rc = get_runconfig((os.path.join(self.bundle_dir, 'server-test-config.yaml'),
-                                        RunConfig.USER_ACCOUNTS))
-         
+        self.server_rc = get_runconfig(
+            (os.path.join(self.bundle_dir, 'server-test-config.yaml'),
+             RunConfig.USER_ACCOUNTS))
 
-        self.bundle = Bundle()  
+        self.bundle = Bundle()
         self.bundle_dir = self.bundle.bundle_dir
 
     def tearDown(self):
@@ -52,32 +53,32 @@ class Test(TestBase):
 
         self.stop_server()
 
-    def get_library(self, name = 'default'):
+    def get_library(self, name='default'):
         """Return the same library that the server uses. """
         from ambry.library import new_library
 
         config = self.server_rc.library(name)
 
-        l =  new_library(config, reset = True)
+        l = new_library(config, reset=True)
 
         return l
 
-    def web_exists(self,s3, rel_path):
-    
+    def web_exists(self, s3, rel_path):
+
         import requests
         import urlparse
-        
-        url  = s3.path(rel_path, method='HEAD')
-      
+
+        url = s3.path(rel_path, method='HEAD')
+
         parts = list(urlparse.urlparse(url))
         qs = urlparse.parse_qs(parts[4])
         parts[4] = None
-        
+
         url = urlparse.urlunparse(parts)
         r = requests.head(urlparse.urlunparse(parts), params=qs)
 
         self.assertEquals(200, r.status_code)
-    
+
         return True
 
     def test_connection(self):
@@ -101,7 +102,7 @@ class Test(TestBase):
 
         self.assertIn('/tmp/server/remote', r['remotes'])
 
-        #self.assertEquals('library-test', r['upstream']['prefix'])
+        # self.assertEquals('library-test', r['upstream']['prefix'])
 
     def test_install(self):
 
@@ -147,7 +148,6 @@ class Test(TestBase):
 
         self.assertEquals('/tmp/server/remote', cache.repo_id)
         self.assertEquals(self.bundle.identity.vid, ident.vid)
-
 
     def test_resolve(self):
         from ambry.client.rest import RemoteLibrary
@@ -197,7 +197,7 @@ class Test(TestBase):
         self.assertEquals(ident.vid, (rl.resolve(ident.sname).vid))
 
         for p in self.bundle.partitions:
-            print '--',p.identity.cache_key
+            print '--', p.identity.cache_key
             dsid = rl.resolve(p.identity.vid)
             self.assertEquals(ident.vid, dsid.vid)
             self.assertEquals(p.identity.vid, dsid.partition.vid)
@@ -210,7 +210,7 @@ class Test(TestBase):
 
     def test_load(self):
 
-        from ambry.run import  get_runconfig, RunConfig
+        from ambry.run import get_runconfig, RunConfig
         from ambry.client.rest import RemoteLibrary
         from ambry.cache import new_cache
         from ambry.util import md5_for_file
@@ -220,7 +220,6 @@ class Test(TestBase):
         l = new_library(config)
 
         rl = RemoteLibrary(self.server_url)
-
 
         #
         # Check that the library can list datasets that are inserted externally
@@ -238,15 +237,22 @@ class Test(TestBase):
 
         self.assertEquals(4, len(s))
 
-        self.assertIn('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8003001', s)
-        self.assertIn('source-dataset-subset-variation-geot1-geo-0.0.1~piEGPXmDC8001001', s)
-        self.assertIn('source-dataset-subset-variation-geot2-geo-0.0.1~piEGPXmDC8002001', s)
+        self.assertIn(
+            'source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8003001', s)
+        self.assertIn(
+            'source-dataset-subset-variation-geot1-geo-0.0.1~piEGPXmDC8001001',
+            s)
+        self.assertIn(
+            'source-dataset-subset-variation-geot2-geo-0.0.1~piEGPXmDC8002001',
+            s)
 
         #
         # Upload the dataset to S3, clear the library, then load it back in
         #
 
-        rc = get_runconfig((os.path.join(self.bundle_dir,'test-run-config.yaml'),RunConfig.USER_ACCOUNTS))
+        rc = get_runconfig((
+            os.path.join(self.bundle_dir, 'test-run-config.yaml'),
+            RunConfig.USER_ACCOUNTS))
         cache = new_cache(rc.filesystem('cached-compressed-s3'))
 
         fn = self.bundle.database.path
@@ -254,7 +260,6 @@ class Test(TestBase):
         relpath = identity.cache_key
 
         r = cache.put(fn, relpath, identity.to_meta(file=fn))
-
 
         self.assertTrue(bool(cache.has(relpath)))
 
@@ -264,7 +269,7 @@ class Test(TestBase):
         self.assertNotIn('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
                          set([i.fqname for i in rl.list()]))
 
-        # Load from  S3, directly in to the local library
+        # Load from S3, directly in to the local library
 
         identity.add_md5(md5_for_file(fn))
 
@@ -290,7 +295,6 @@ class Test(TestBase):
         self.assertEquals(identity.vid, rl.resolve(identity.vname).vid)
         self.assertEquals(identity.vid, rl.resolve(identity.cache_key).vid)
         self.assertEquals(identity.vid, rl.resolve(identity.sname).vid)
-
 
     def test_push(self):
         from ambry.identity import Identity
@@ -350,8 +354,6 @@ class Test(TestBase):
 
         l.sync_upstream()
 
-
-
     def test_files(self):
         '''
         Test some of the server's file functions
@@ -364,7 +366,6 @@ class Test(TestBase):
         fs = new_cache(self.server_rc.filesystem('rrc-fs'))
         fs.clean()
         remote = new_cache(self.server_rc.filesystem('rrc'))
-
 
         config = self.start_server()
 
@@ -423,8 +424,8 @@ class Test(TestBase):
 
         remote_l.sync_remotes()
 
-        #print server_l.info
-        #print remote_l.info
+        # print server_l.info
+        # print remote_l.info
 
         r = remote_l.resolve(vid)
 
@@ -433,7 +434,6 @@ class Test(TestBase):
         b = remote_l.get(vid)
 
         for p in self.bundle.partitions:
-
             print "Check ", p.identity
             b = remote_l.get(p.identity.vid)
             self.assertTrue(p.identity.fqname, b.partition.identity.fqname)
@@ -442,63 +442,56 @@ class Test(TestBase):
 
         # Test out syncing.
 
-
-
     # =======================
-
-
-
 
     def _test_put_bundle(self, name, remote_config=None):
         from ambry.bundle import DbBundle
         from ambry.library.query import QueryCommand
-        
+
         rm_rf('/tmp/server')
-        
+
         self.start_server(remote_config)
-        
-        r = None #Rest(self.server_url, remote_config)
-        
+
+        r = None  # Rest(self.server_url, remote_config)
+
         bf = self.bundle.database.path
 
         # With an FLO
-        response =  r.put(open(bf), self.bundle.identity)
+        response = r.put(open(bf), self.bundle.identity)
         self.assertEquals(self.bundle.identity.id_, response.object.get('id'))
-      
+
         # with a path
-        response =  r.put( bf, self.bundle.identity)
+        response = r.put(bf, self.bundle.identity)
         self.assertEquals(self.bundle.identity.id_, response.object.get('id'))
 
         for p in self.bundle.partitions.all:
-            response =  r.put( open(p.database.path), p.identity)
+            response = r.put(open(p.database.path), p.identity)
             self.assertEquals(p.identity.id_, response.object.get('id'))
 
         # Now get the bundles
-        bundle_file = r.get(self.bundle.identity,'/tmp/foo.db')
+        bundle_file = r.get(self.bundle.identity, '/tmp/foo.db')
         bundle = DbBundle(bundle_file)
 
         self.assertIsNot(bundle, None)
-        self.assertEquals('a1DxuZ',bundle.identity.id_)
+        self.assertEquals('a1DxuZ', bundle.identity.id_)
 
         # Should show up in datasets list. 
-        
+
         o = r.list()
-   
-        self.assertTrue('a1DxuZ' in o.keys() )
-    
+
+        self.assertTrue('a1DxuZ' in o.keys())
+
         o = r.find(QueryCommand().table(name='tone').partition(any=True))
-      
-        self.assertTrue( 'b1DxuZ001' in [i.id_ for i in o])
-        self.assertTrue( 'a1DxuZ' in [i.as_dataset.id_ for i in o])
 
-
-
+        self.assertTrue('b1DxuZ001' in [i.id_ for i in o])
+        self.assertTrue('a1DxuZ' in [i.as_dataset.id_ for i in o])
 
 
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
     return suite
-      
+
+
 if __name__ == "__main__":
     unittest.TextTestRunner().run(suite())

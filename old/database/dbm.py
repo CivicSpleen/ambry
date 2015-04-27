@@ -8,6 +8,7 @@ import semidbm as dbm  # @UnresolvedImport
 import os
 import json
 
+
 class Dbm(DatabaseInterface):
     
     def __init__(self, bundle, base_path, suffix=None):
@@ -19,13 +20,12 @@ class Dbm(DatabaseInterface):
         self._path = base_path
      
         if suffix:
-            self._path += '-'+suffix
+            self._path += '-' + suffix
             
         self._path += '.dbm'
             
         self._file = None
  
-       
     @property
     def reader(self):
         self.close()
@@ -48,28 +48,21 @@ class Dbm(DatabaseInterface):
         return self
         
     def delete(self):
-        
         if os.path.exists(self._path):
             os.remove(self._path)
-        
-        
+
     def close(self):
         if self._file:
             self._file.close()
             self._file = None
 
-    
     def __getitem__(self, key):
         return json.loads(self._file[key])
-        
 
     def __setitem__(self, key, val):
-        #print key,'<-',val
+        # print key,'<-',val
 
-        self._file[str(key)] =  json.dumps(val)
+        self._file[str(key)] = json.dumps(val)
     
     def keys(self):
-        
         return self._file.keys()
-
-      
