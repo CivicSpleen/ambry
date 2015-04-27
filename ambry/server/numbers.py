@@ -19,9 +19,10 @@ numbers:
 
 
 The key is a secret key that the client will use to assign an assignment class.
-The two classes are 'authoritative' and 'registered' Only central authority operators
-( like Clarinova ) should use the authoritative class. Other users can use the
-'registered' class. Without a key and class assignment, the callers us the 'unregistered' class.
+The two classes are 'authoritative' and 'registered' Only central authority
+operators ( like Clarinova ) should use the authoritative class. Other users can
+use the 'registered' class. Without a key and class assignment, the callers us
+the 'unregistered' class.
 
 Set the assignment class with the redis-cli:
 
@@ -77,7 +78,6 @@ def capture_return_exception(e):
 
 
 class RedisPlugin(object):
-
     def __init__(self, pool, keyword='redis'):
 
         self.pool = pool
@@ -342,7 +342,7 @@ def get_next(redis, assignment_class=None, space=''):
 @CaptureException
 def get_next_space(redis, assignment_class=None, space=''):
 
-    if not space in NUMBER_SPACES:
+    if space not in NUMBER_SPACES:
         raise exc.NotFound('Invalid number space: {}'.format(space))
 
     return get_next(redis, assignment_class=assignment_class, space=space)

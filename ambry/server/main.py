@@ -20,8 +20,8 @@ global_logger.setLevel(logging.DEBUG)
 
 
 #
-# The LibraryPlugin allows the library to be inserted into a request handler with a
-# 'library' argument.
+# The LibraryPlugin allows the library to be inserted into a request handler
+# with a 'library' argument.
 class LibraryPlugin(object):
 
     def __init__(self, library_creator, keyword='library'):
@@ -49,8 +49,8 @@ class LibraryPlugin(object):
         def wrapper(*args, **kwargs):
 
             #
-            # NOTE! Creating the library every call. This is because the Sqlite driver
-            # isn't multi-threaded.
+            # NOTE! Creating the library every call. This is because the Sqlite
+            # driver isn't multi-threaded.
             #
             local.library = kwargs[keyword] = self.library_creator()
 
@@ -227,11 +227,12 @@ def process_pid(did, pid, library):
 
 
 def _get_ct(typ):
-    ct = ({'application/json': 'json',
-          'application/x-yaml': 'yaml',
-          'text/x-yaml': 'yaml',
-          'text/csv': 'csv'}
-          .get(request.headers.get("Content-Type"), None))
+    ct = ({
+        'application/json': 'json',
+        'application/x-yaml': 'yaml',
+        'text/x-yaml': 'yaml',
+        'text/csv': 'csv'
+    }.get(request.headers.get("Content-Type"), None))
 
     if ct is None:
         try:
@@ -288,7 +289,7 @@ def _read_body(request):
     import tempfile
 
     tmp_dir = tempfile.gettempdir()
-    #tmp_dir = '/tmp'
+    # tmp_dir = '/tmp'
 
     file_ = os.path.join(tmp_dir, 'rest-downloads', str(uuid.uuid4()) + ".db")
     if not os.path.exists(os.path.dirname(file_)):
@@ -397,7 +398,7 @@ def _send_csv(library, did, pid, table_name, i, n, where, sep=','):
         seg_size = base_seg_size
 
     out = StringIO()
-    #writer = unicodecsv.writer(out, delimiter=sep, escapechar='\\',quoting=csv.QUOTE_NONNUMERIC)
+    # writer = unicodecsv.writer(out, delimiter=sep, escapechar='\\',quoting=csv.QUOTE_NONNUMERIC)
     writer = unicodecsv.writer(out, delimiter=sep)
 
     if request.query.header:
@@ -536,7 +537,7 @@ def get_datasets(library):
         'refs': {
             'path': dsid.path,
             'cache_key': dsid.cache_key
-            },
+        },
         'urls': {
             'partitions': "{}/datasets/{}".format(_host_port(library), dsid.vid),
             'db': "{}/datasets/{}/db".format(_host_port(library), dsid.vid)
@@ -583,7 +584,7 @@ def post_dataset(did, library):
     if not identity.md5:
         raise exc.BadRequest("The identity must have the md5 value set")
 
-    if not did in set([identity.id_, identity.vid]):
+    if did not in set([identity.id_, identity.vid]):
         raise exc.Conflict(
             "Dataset address '{}' doesn't match payload id '{}'".format(
                 did,
@@ -631,7 +632,7 @@ def get_dataset(did, library, pid=None):
 
     # Get direct access to the cache that implements the remote, so
     # we can get a URL with path()
-    #remote = library.remote.get_upstream(RemoteMarker)
+    # remote = library.remote.get_upstream(RemoteMarker)
 
     d['urls'] = dict(
         db="{}/datasets/{}/db".format(_host_port(library), gr.identity.vid))
@@ -746,7 +747,7 @@ def post_partition(did, pid, library):
                 pid,
                 did))
 
-    if not pid in set([identity.id_, identity.vid]):
+    if pid not in set([identity.id_, identity.vid]):
         raise exc.Conflict(
             "Partition address '{}' doesn't match payload id '{}'".format(
                 pid,
