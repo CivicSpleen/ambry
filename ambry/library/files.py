@@ -53,8 +53,7 @@ class Files(object):
 
     @property
     def one_maybe(self):
-        """Return the first record that matched the internal query, with the
-        expectation that there is only one."""
+        """Return the first record that matched the internal query or None if there is no such. """
         from sqlalchemy.orm.exc import NoResultFound
 
         try:
@@ -63,21 +62,19 @@ class Files(object):
             return None
 
     def order(self, c):
-        """Return the first record that matched the internal query, with the
-        expectation that there is only one."""
+        """ Returns current instance ordered by given column. """
         self._query = self._query.order_by(c)
-
         return self
 
     def delete(self):
-        """Delete all of the records in the query."""
+        """ Delete all of the records in the query. """
 
         if self._query.count() > 0:
             self._query.delete()
             self.db.commit()
 
     def update(self, d):
-        """Delete all of the records in the query."""
+        """ Updates all the records in the query."""
 
         self._query.update(d)
 
@@ -92,7 +89,7 @@ class Files(object):
     def _check_query(self):
         if not self._query:
             from ..dbexceptions import ObjectStateError
-            raise ObjectStateError("Must use query() before filter methods")
+            raise ObjectStateError('Must use query() before filter methods')
 
     def ref(self, v):
         self._check_query()
@@ -197,25 +194,21 @@ class Files(object):
             if commit:
                 self.db.commit()
 
-        except IntegrityError as e:
+        except IntegrityError:
 
             s.rollback()
 
             s.merge(f)
             try:
                 self.db.commit()
-            except IntegrityError as e:
+            except IntegrityError:
                 s.rollback()
                 raise
 
         self.db._mark_update()
 
-    def install_bundle_file(
-            self,
-            bundle,
-            cache,
-            commit=True,
-            state='installed'):
+    def install_bundle_file(self, bundle, cache,
+                            commit=True, state='installed'):
         """Mark a bundle file as having been installed in the library."""
 
         ident = bundle.identity
@@ -234,12 +227,9 @@ class Files(object):
             data=None,
             source_url=None)
 
-    def install_partition_file(
-            self,
-            partition,
-            cache,
-            commit=True,
-            state='installed'):
+    def install_partition_file(self, partition, cache,
+                               commit=True,
+                               state='installed'):
         """Mark a partition file as having been installed in the library."""
 
         ident = partition.identity
@@ -277,7 +267,7 @@ class Files(object):
     def install_remote_partition(self, ident, upstream, metadata, commit=True):
         """Set a reference to a remote partition."""
 
-        assert bool(str(ident.cache_key)), "File path can't be null'"
+        assert bool(str(ident.cache_key)), 'File path can not be null'
 
         return self.new_file(
             commit=commit,
@@ -327,9 +317,7 @@ class Files(object):
                       title=title,
                       summary=summary,
                       cache=cache,
-                      url=url,
-
-                  ),
+                      url=url),
                   source_url=None)
 
         f = self.new_file(**kw)
@@ -393,11 +381,11 @@ class Files(object):
 
         else:
             raise ValueError(
-                "Must provied an existing path, source or content. ")
+                'Must provide an existing path, source or content.')
 
         if not content:
             raise ValueError(
-                "Didn't get non-zero sized content from path , source or content")
+                'Didn\'t get non-zero sized content from path, source or content')
 
         return dict(hash=hash, size=size, modified=modified, content=content)
 
@@ -417,7 +405,6 @@ class Files(object):
                           data=manifest.dict,
                           source_url=manifest.uid,
                           **(self._process_source_content(manifest.path))
-
                           )
 
         if warehouse:
@@ -464,6 +451,5 @@ class Files(object):
             state='installed',
             type_=self.TYPE.EXTRACT,
             data=d,
-
             source_url=source
         )
