@@ -73,7 +73,8 @@ def _on_connect_geo(dbapi_con, con_record):
 
     ocb(dbapi_con, con_record)
 
-    # NOTE ABOUT journal_mode = WAL: it improves concurency, but has some downsides.
+    # NOTE ABOUT journal_mode = WAL: it improves concurency, but has some
+    # downsides.
     # See http://sqlite.org/wal.html
 
     dbapi_con.execute('PRAGMA page_size = 8192')
@@ -100,7 +101,8 @@ def _on_connect_geo(dbapi_con, con_record):
             "select load_extension('/usr/lib/x86_64-linux-gnu/libspatialite')",
             "select load_extension('/usr/lib/libspatialite.so')",
             "select load_extension('/usr/lib/libspatialite.so.3')",
-            "select load_extension('/usr/lib/x86_64-linux-gnu/libspatialite.so.5')",
+            "select "
+            "load_extension('/usr/lib/x86_64-linux-gnu/libspatialite.so.5')",
 
         ]
 

@@ -64,14 +64,18 @@ class RelationalDatabase(DatabaseInterface):
 
     """Represents a Sqlite database."""
 
-    # These DSNs can get munged just before connecting, so postgres -> postgresql+psycopg2
+    # These DSNs can get munged just before connecting,
+    # so postgres -> postgresql+psycopg2
     # The munging isn't really used now, since we have trivial dialects for
     # spatialite and postgis
     DBCI = {
-        'postgis': 'postgis://{user}:{password}@{server}{colon_port}/{name}',  # Stored in the ambry module.
-        'postgres': 'postgres://{user}:{password}@{server}{colon_port}/{name}',  # Stored in the ambry module.
+        # Stored in the ambry module.
+        'postgis': 'postgis://{user}:{password}@{server}{colon_port}/{name}',
+        # Stored in the ambry module.
+        'postgres': 'postgres://{user}:{password}@{server}{colon_port}/{name}',
         'sqlite': 'sqlite:///{name}',
-        'spatialite': 'spatialite:///{name}'  # Only works if you properly install spatialite.
+        # Only works if you properly install spatialite.
+        'spatialite': 'spatialite:///{name}'
     }
 
     dsn = None
@@ -162,7 +166,7 @@ class RelationalDatabase(DatabaseInterface):
 
     def is_empty(self):
 
-        if not 'config' in self.inspector.get_table_names():
+        if 'config' not in self.inspector.get_table_names():
             return True
         else:
             return False
@@ -193,7 +197,7 @@ class RelationalDatabase(DatabaseInterface):
         from datetime import datetime
         from ..library.database import ROOT_CONFIG_NAME_V
 
-        if not 'config' in self.inspector.get_table_names():
+        if 'config' not in self.inspector.get_table_names():
             Config.__table__.create(bind=self.engine)  # @UndefinedVariable
 
         session = self.session
@@ -342,7 +346,7 @@ class RelationalDatabase(DatabaseInterface):
     @contextmanager
     def connection_context(self):
         raise Exception
-        #connection = self.engine.connect()
+        # connection = self.engine.connect()
         yield connection
         connection.close()
 
@@ -447,14 +451,14 @@ class RelationalDatabase(DatabaseInterface):
 
         """
 
-        if not table_name in self.inspector.get_table_names():
+        if table_name not in self.inspector.get_table_names():
             if not table_meta:
                 table_meta, table = self.bundle.schema.get_table_meta(
                     table_name)  # @UnusedVariable
 
             table_meta.create(bind=self.engine)
 
-            if not table_name in self.inspector.get_table_names():
+            if table_name not in self.inspector.get_table_names():
                 raise Exception("Don't have table " + table_name)
 
     def tables(self):
@@ -691,7 +695,7 @@ class RelationalPartitionDatabaseMixin(object):
     def _post_create(self):
         from ..library.database import ROOT_CONFIG_NAME_V
 
-        if not 'config' in self.inspector.get_table_names():
+        if 'config' not in self.inspector.get_table_names():
             Config.__table__.create(bind=self.engine)  # @UndefinedVariable
 
         self.set_config_value(

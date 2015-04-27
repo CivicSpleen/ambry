@@ -202,7 +202,7 @@ class SqliteDatabase(RelationalDatabase):
 
         self.memory = memory
 
-        if not 'driver' in kwargs:
+        if 'driver' not in kwargs:
             kwargs['driver'] = 'sqlite'
 
         super(SqliteDatabase, self).__init__(dbname=self.path, **kwargs)
@@ -348,7 +348,7 @@ class SqliteDatabase(RelationalDatabase):
 
         if self.version >= 12:
 
-            if not 'config' in self.inspector.get_table_names():
+            if 'config' not in self.inspector.get_table_names():
                 return True
             else:
                 return False
@@ -622,7 +622,7 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin, SqliteDatabase):
 
         event.listen(engine, 'connect', _on_connect_bundle)
 
-        #event.listen(engine, 'begin', _on_begin_bundle)
+        # event.listen(engine, 'begin', _on_begin_bundle)
 
     def update_schema(self):
         """Manually update the schema.
@@ -766,8 +766,8 @@ def _on_connect_bundle(dbapi_con, con_record):
         global_logger.error("Exception in {} ".format(dbapi_con))
         raise
 
-    #dbapi_con.execute('PRAGMA busy_timeout = 10000')
-    #dbapi_con.execute('PRAGMA synchronous = OFF')
+    # dbapi_con.execute('PRAGMA busy_timeout = 10000')
+    # dbapi_con.execute('PRAGMA synchronous = OFF')
 
 
 def _on_connect_update_sqlite_schema(conn, con_record):
@@ -891,10 +891,8 @@ def _on_connect_update_sqlite_schema(conn, con_record):
 
 
 def insert_or_ignore(table, columns):
-    return  ("""INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values})"""
-             .format(
-                 table=table,
-                 columns=','.join([c.name for c in columns]),
-                 values=','.join(['?' for c in columns])  # @UnusedVariable
-             )
-             )
+    return ("""INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values})""".format(
+        table=table,
+        columns=','.join([c.name for c in columns]),
+        values=','.join(['?' for c in columns])  # @UnusedVariable
+    ))

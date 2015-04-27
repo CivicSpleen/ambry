@@ -131,9 +131,9 @@ class ValueWriter(InserterInterface):
         global_logger.debug("commit continue {}".format(repr(self.session)))
         self.session.commit()
 
-        # We don't want this executing every committ since it is hard to make sure it happens
-        # in a bundle session, which can result in the database being locked,
-        # in MP runs.
+        # We don't want this executing every committ since it is hard to make
+        # sure it happens in a bundle session, which can result in the database
+        # being locked, in MP runs.
         if self.build_state != Partitions.STATE.BUILDING:
             self.build_state = Partitions.STATE.BUILDING
             self.db.partition.set_state(Partitions.STATE.BUILDING)
@@ -164,11 +164,11 @@ class ValueWriter(InserterInterface):
             if type_ is not None:
                 try:
                     self.bundle.error(
-                        "Got exception while exiting inserter context: {}: {}".format(
-                            type_,
-                            str(value)))
+                        "Got exception while exiting inserter "
+                        "context: {}: {}".format(type_, str(value)))
                 except:
-                    print "ERROR: Got Exception {}: {}".format(type_, str(value))
+                    print "ERROR: Got Exception {}: {}".format(type_,
+                                                               str(value))
                     self.rollback()
                 return False
 
@@ -201,8 +201,8 @@ class CodeCastErrorHandler(object):
         for k, v in cast_errors.items():
             self.codes[k].add(v)
 
-            # This part will only put the value in the column if the code column has been
-            # created.
+            # This part will only put the value in the column if the code column
+            # has been created.
             row[self.code_col_name(k)] = v
             row[k] = None
 
@@ -241,13 +241,8 @@ class ValueInserter(ValueWriter):
                  cache_size=50000, text_factory=None,
                  replace=False, skip_none=True, update_size=True):
 
-        super(
-            ValueInserter,
-            self).__init__(
-            db,
-            bundle,
-            cache_size=cache_size,
-            text_factory=text_factory)
+        super(ValueInserter, self).__init__(db, bundle, cache_size=cache_size,
+                                            text_factory=text_factory)
 
         if table is None and bundle is None:
             raise ValueError("Must define either table or bundle")
