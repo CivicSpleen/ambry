@@ -88,8 +88,8 @@ class Metadata(object):
 
                     self.mark_loaded(k)
                 else:
-                    # Top level groups that don't match a member group are preserved,
-                    # not errors like unknown terms in a group.
+                    # Top level groups that don't match a member group are
+                    # preserved, not errors like unknown terms in a group.
                     self._term_values[k] = v
 
     def register_members(self):
@@ -120,7 +120,8 @@ class Metadata(object):
                 self.load_group(group)
                 self.mark_loaded(group)
             except:
-                print "ERROR Failed to load group '{}' from '{}'".format(group, self._path)
+                print "ERROR Failed to load group '{}' from '{}'".format(
+                    group, self._path)
                 raise
 
         pass
@@ -465,7 +466,7 @@ class DictGroup(Group, collections.MutableMapping):
     def _term_values(self):
         # This only works after being instantiated in __get__, which sets
         # _parent
-        if not self._key in self._parent._term_values:
+        if self._key not in self._parent._term_values:
             self._parent._term_values[self._key] = {}
 
         return self._parent._term_values[self._key]
@@ -497,7 +498,7 @@ class DictGroup(Group, collections.MutableMapping):
 
     def __setitem__(self, key, value):
 
-        if not key in self._members:
+        if key not in self._members:
             raise AttributeError(
                 "No such term in {}: {}. Has: {}" .format(
                     self._key, key, [
@@ -544,17 +545,12 @@ class DictGroup(Group, collections.MutableMapping):
                 ti._key,
                 ti.html())
 
-        return (
-            """
+        return """
 <h2 class="{cls}">{title}</h2>
 <table class="{cls}">
 {out}</table>
-""" .format(
-            title=self._key.title(),
-            cls='ambry_meta_{} ambry_meta_{}'.format(
-                type(self).__name__.lower(),
-                self._key),
-            out=out))
+""" .format(title=self._key.title(), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
+            out=out)
 
 
 class TypedDictGroup(DictGroup):
@@ -592,7 +588,7 @@ class TypedDictGroup(DictGroup):
     # that actually sets the value.
     def __getitem__(self, key):
 
-        if not key in self._term_values:
+        if key not in self._term_values:
             self._term_values[key] = {
                 name: None for name,
                 _ in self._proto._members.items()}
@@ -618,7 +614,7 @@ class VarDictGroup(DictGroup):
         if name.startswith('_'):
             raise AttributeError
 
-        if not name in self._term_values:
+        if name not in self._term_values:
             self._term_values[name] = AttrDict()
 
         return self.__getitem__(name)
@@ -653,7 +649,7 @@ class ListGroup(Group, collections.MutableSequence):
         # This only works after being instantiated in __get__, which sets
         # _parent
 
-        if not self._key in self._parent._term_values:
+        if self._key not in self._parent._term_values:
             self._parent._term_values[self._key] = []
 
         return self._parent._term_values[self._key]
@@ -735,16 +731,11 @@ class ListGroup(Group, collections.MutableSequence):
                 ti._key,
                 ti.html())
 
-        return (
-            """
+        return """
 <table class="{cls}">
 {out}</table>
-""" .format(
-            title=self._key.title(),
-            cls='ambry_meta_{} ambry_meta_{}'.format(
-                type(self).__name__.lower(),
-                self._key),
-            out=out))
+""" .format(title=self._key.title(), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
+            out=out)
 
 
 class Term(object):
@@ -889,10 +880,10 @@ class DictTerm(Term, collections.MutableMapping):
         # it is really for.
         return
 
-        if not index in self._parent._term_values:
+        if index not in self._parent._term_values:
             raise Exception()
-            print 'ENSURING', self._key, index
-            self._parent._term_values[index] = None
+            # print 'ENSURING', self._key, index
+            # self._parent._term_values[index] = None
 
     @property
     def _term_values(self):
@@ -964,7 +955,7 @@ class DictTerm(Term, collections.MutableMapping):
     @property
     def dict(self):
 
-        if not self._key in self._parent._term_values:
+        if self._key not in self._parent._term_values:
             return None
 
         return self._term_values.to_dict()
@@ -978,14 +969,11 @@ class DictTerm(Term, collections.MutableMapping):
                 ti._key,
                 ti.html())
 
-        return (
-            """
+        return """
 <table class="{cls}">
 {out}</table>
-""" .format(
-            title=str(
-                self._key), cls='ambry_meta_{} ambry_meta_{}'.format(
-                type(self).__name__.lower(), self._key), out=out))
+""" .format(title=str(self._key), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
+            out=out)
 
     def set(self, d):
 
@@ -1053,7 +1041,7 @@ class ListTerm(Term):
         # This only works after being instantiated in __get__, which sets
         # _parent
 
-        if not self._key in self._parent._term_values:
+        if self._key not in self._parent._term_values:
             self._parent._term_values[self._key] = []
 
         tv = self._parent._term_values[self._key]

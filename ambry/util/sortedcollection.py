@@ -4,7 +4,6 @@ from bisect import bisect_left, bisect_right
 
 
 class SortedCollection(object):
-
     """Sequence sorted by a key function.
 
     SortedCollection() is much easier to work with than using bisect() directly.
@@ -17,8 +16,8 @@ class SortedCollection(object):
     exact matches, the last item less-than-or-equal to a key, or the first item
     greater-than-or-equal to a key.
 
-    Once found, an item's ordinal position can be located with the index() method.
-    New items can be added with the insert() and insert_right() methods.
+    Once found, an item's ordinal position can be located with the index()
+    method. New items can be added with the insert() and insert_right() methods.
     Old items can be deleted with the remove() method.
 
     The usual sequence methods are provided to support indexing, slicing,

@@ -8,7 +8,8 @@ import os
 import sys
 
 
-# from http://stackoverflow.com/questions/6796492/python-temporarily-redirect-stdout-stderr
+# from http://stackoverflow.com/questions/6796492/
+#                                   python-temporarily-redirect-stdout-stderr
 # Use as a context manager
 class RedirectStdStreams(object):
 
@@ -62,7 +63,7 @@ def copy_file_or_flo(input_, output, buffer_size=64 * 1024, cb=None):
             output = open(output, 'wb')
             output_opened = True
 
-        #shutil.copyfileobj(input_,  output, buffer_size)
+        # shutil.copyfileobj(input_,  output, buffer_size)
 
         def copyfileobj(fsrc, fdst, length=buffer_size):
             cumulative = 0

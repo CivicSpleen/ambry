@@ -1,8 +1,10 @@
-"""Debugging code. Allows breaking to an interpreter with a signal.
+""" Debugging code. Allows breaking to an interpreter with a signal.
 
-To use, just call the listen() function at some point when your program starts up
-(You could even stick it in site.py to have all python programs use it),
- and let it run. At any point, send the process a SIGUSR1 signal, using kill, or in python:
+    To use, just call the listen() function at some point when your program
+    starts up
+    (You could even stick it in site.py to have all python programs use it),
+    and let it run. At any point, send the process a SIGUSR1 signal, using kill,
+    or in python:
 
     os.kill(pid, signal.SIGUSR1)
 

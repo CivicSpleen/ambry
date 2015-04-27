@@ -3,8 +3,9 @@
 
 def expand_to_years(dates):
     """
-    Expand a single string or integer date, or an iterable, into a set of years. Parses strings to date times or durations,
-    and extracts the year, but passes integers though if they are four digits.
+    Expand a single string or integer date, or an iterable, into a set of years.
+    Parses strings to date times or durations, and extracts the year, but passes
+    integers though if they are four digits.
 
     :param dates: A string, integer or iterable producing strings or ints
     :return: an array of integer years
@@ -12,16 +13,18 @@ def expand_to_years(dates):
     import isodate
     import datetime
 
-    if not dates: return []
+    if not dates:
+        return []
 
-    if not isinstance(dates, (basestring, int)): # Can't EAFP since strings are iterable
+    #  Can't EAFP since strings are iterable
+    if not isinstance(dates, (basestring, int)):
         import itertools
-        return sorted(set(itertools.chain(*[ expand_to_years(x) for x in dates ])))
+        return sorted(set(itertools.chain(
+            *[expand_to_years(x) for x in dates])))
 
     def make_year_array(d):
 
         return [isodate.parse_date(str(int(d))).year]
-
 
     # Ints and int-convertable strings just pass though
     try:
@@ -31,7 +34,8 @@ def expand_to_years(dates):
 
     try:
         dates = dates.upper()  # Ambry tends to lowercase things
-        parts = dates.replace('E', '/').split('/')  # / is in std; ambry uses 'e' to be compat with urls.
+        parts = dates.replace('E', '/').split('/')
+        # / is in std; ambry uses 'e' to be compat with urls.
 
         rparts = []
 
@@ -71,9 +75,10 @@ def expand_to_years(dates):
 
     return []
 
+
 def compress_years(dates):
-    """Given a set of values that can be input for expand_to_years, expand and then
-    return as a simple string in the form start/end"""
+    """Given a set of values that can be input for expand_to_years, expand and
+    then return as a simple string in the form start/end"""
 
     years = expand_to_years(dates)
 
