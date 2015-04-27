@@ -20,7 +20,7 @@ class RunConfig(object):
 
     """Runtime configuration object.
 
-    The RunConfig object will search for a ambry.yaml file in multiple locations,
+    The RunConfig object will search for a ambry.yaml file in multiple locations
     including::
 
       /etc/ambry.yaml
@@ -28,8 +28,8 @@ class RunConfig(object):
       ./ambry.yaml
       A named path ( --config option )
 
-    It will start from the first directory, and for each one, try to load the file
-    and copy the values into an accumulator, with later values overwritting
+    It will start from the first directory, and for each one, try to load the
+    file and copy the values into an accumulator, with later values overwritting
     earlier ones.
 
     """
@@ -55,7 +55,7 @@ class RunConfig(object):
         """Create a new RunConfig object.
 
         Arguments
-        path -- If present, a yaml file to load last, overwriting earlier values.
+        path -- If present, a yaml file to load last, overwriting earlier values
           If it is an array, load only the files in the array.
 
         """
@@ -117,7 +117,7 @@ class RunConfig(object):
     def group(self, name):
         """return a dict for a group of configuration items."""
 
-        if not name in self.config:
+        if name not in self.config:
             raise ConfigurationError(
                 ("No group '{}' in configuration.\n" +
                  "Config has: {}\nLoaded: {}").format(
@@ -133,14 +133,10 @@ class RunConfig(object):
 
         g = self.group(group)
 
-        if not name in g:
+        if name not in g:
             raise ConfigurationError(
-                ("Could not find name '{}' in group '{}'. \n" +
-                 "Config has: {}\nLoaded: {}").format(
-                    name,
-                    group,
-                    g.keys(),
-                    self.loaded))
+                ("Could not find name '{}' in group '{}'. \n"
+                 "Config has: {}\nLoaded: {}").format(name, group, g.keys(), self.loaded))
 
         return copy.deepcopy(g[name])
 
@@ -183,7 +179,7 @@ class RunConfig(object):
         """Substitute keys in the dict e with functions defined in subs."""
 
         iters = 0
-        while (iters < 100):
+        while iters < 100:
             sub_count = 0
 
             for k, v, setter in self._yield_string(e):
@@ -346,7 +342,7 @@ class RunConfig(object):
         fs = self.group('filesystem')
         root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
 
-        if not 'source' in e:
+        if 'source' not in e:
             e['source'] = fs.get('source', None)
 
         e = self._sub_strings(e, {
@@ -367,7 +363,7 @@ class RunConfig(object):
         e['_name'] = name
         e['root'] = root_dir
 
-        if not 'warehouses' in e:
+        if 'warehouses' not in e:
             e['warehouses'] = self.filesystem('warehouses')
 
         return e
@@ -449,7 +445,7 @@ class RunConfig(object):
 
         fs = self.group('filesystem')
 
-        if not 'python' in fs:
+        if 'python' not in fs:
             return None
 
         root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
@@ -462,7 +458,7 @@ class RunConfig(object):
 
         fs = self.group('filesystem')
 
-        if not name in fs:
+        if name not in fs:
             return None
 
         root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'

@@ -128,7 +128,8 @@ class Name(object):
                         version = str(sv.Spec(version))
                     except ValueError:
                         raise ValueError(
-                            "Could not parse '{}' as a semantic version".format(version))
+                            "Could not parse '{}' as a semantic version".format(
+                                version))
 
         if not version:
             version = str(sv.Version('0.0.0'))
@@ -741,7 +742,7 @@ class ObjectNumber(object):
             type_ = cls.TYPE.DATASET
             on_str = cls.TYPE.DATASET + on_str[1:]
 
-        if not type_ in cls.NDS_LENGTH.keys():
+        if type_ not in cls.NDS_LENGTH.keys():
             raise NotObjectNumberError(
                 "Unknown type character '{}' for '{}'".format(
                     type_,
@@ -749,7 +750,7 @@ class ObjectNumber(object):
 
         ds_length = len(on_str) - cls.NDS_LENGTH[type_]
 
-        if not ds_length in cls.DATASET_LENGTHS:
+        if ds_length not in cls.DATASET_LENGTHS:
             raise NotObjectNumberError(
                 "Dataset string '{}' has an unfamiliar length: {}".format(
                     on_str,
@@ -1923,7 +1924,7 @@ class IdentitySet(object):
     def deps(ident):
         if not ident.data:
             return '.'
-        if not 'dependencies' in ident.data:
+        if 'dependencies' not in ident.data:
             return '.'
         if not ident.data['dependencies']:
             return '0'

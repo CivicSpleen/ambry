@@ -9,7 +9,8 @@ import datetime
 import sqlalchemy
 from sqlalchemy import orm
 from sqlalchemy import event
-from sqlalchemy import Column as SAColumn, Integer, Float, Boolean, UniqueConstraint
+from sqlalchemy import Column as SAColumn, Integer, Float, Boolean, \
+    UniqueConstraint
 from sqlalchemy import Float as Real, Text, String, ForeignKey, Binary, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator, TEXT, PickleType
@@ -339,15 +340,15 @@ class LinkableMixin(object):
         o: the object being linked. If none, no back link is made
         object_id: the object identitifer that is stored in the data property
         """
-        if not name in self.data:
+        if name not in self.data:
             self.data[name] = []
 
-        if not object_id in self.data[name]:
+        if object_id not in self.data[name]:
             self.data[name] = self.data[name] + [object_id]
 
     def _remove_link(self, name, object_id):
         """For linking manifests to stores."""
-        if not name in self.data:
+        if name not in self.data:
             return
 
         if self.data[name] and object_id in self.data[name]:
@@ -360,10 +361,10 @@ class DataPropertyMixin(object):
 
     def _append_string_to_list(self, sub_prop, value):
         """"""
-        if not sub_prop in self.data:
+        if sub_prop not in self.data:
             self.data[sub_prop] = []
 
-        if value and not value in self.data[sub_prop]:
+        if value and value not in self.data[sub_prop]:
             self.data[sub_prop] = self.data[sub_prop] + [value]
 
 # Sould have things derived from this, once there are test cases for it.
@@ -445,11 +446,11 @@ class Dataset(Base, LinkableMixin):
         cascade="all, delete-orphan",
         passive_updates=False)
 
-    #__table_args__ = (
+    # __table_args__ = (
     #    UniqueConstraint('d_vid', 'd_location', name='u_vid_location'),
     #    UniqueConstraint('d_fqname', 'd_location', name='u_fqname_location'),
     #    UniqueConstraint('d_cache_key', 'd_location', name='u_cache_location'),
-    #)
+    # )
 
     def __init__(self, **kwargs):
         self.id_ = kwargs.get("oid", kwargs.get("id", kwargs.get("id_", None)))
@@ -815,7 +816,7 @@ class Column(Base):
 
         if not self.name:
             self.name = 'column' + str(self.sequence_id)
-            #raise ValueError('Column must have a name. Got: {}'.format(kwargs))
+            # raise ValueError('Column must have a name. Got: {}'.format(kwargs))
 
         self.t_id = table.id_
         self.t_vid = table.vid
@@ -832,13 +833,7 @@ class Column(Base):
         :return:
 
         """
-        x = {
-            p.key: getattr(
-                self,
-                p.key) for p in self.__mapper__.attrs if p.key not in (
-                'table',
-                'stats',
-                '_codes')}
+        x = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ('table', 'stats', '_codes')}
 
         if not x:
             raise Exception(self.__dict__)
@@ -991,7 +986,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     data = SAColumn('t_data', MutationDict.as_mutable(JSONEncodedObj))
 
     __table_args__ = (
-        #ForeignKeyConstraint([d_vid, d_location], ['datasets.d_vid', 'datasets.d_location']),
+        # ForeignKeyConstraint([d_vid, d_location], ['datasets.d_vid', 'datasets.d_location']),
         UniqueConstraint('t_sequence_id', 't_d_vid', name='_uc_tables_1'),
         UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
     )
@@ -1089,7 +1084,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     def insertable_dict(self):
         x = {('t_' + k).strip('_'): v for k, v in self.dict.items()}
 
-        if not 't_vid' in x or not x['t_vid']:
+        if 't_vid' not in x or not x['t_vid']:
             raise ValueError("Must have vid set: {} ".format(x))
 
         return x
@@ -1108,7 +1103,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     @property
     def info(self):
 
-        x =  """
+        x = """
 ------ Table: {name} ------
 id   : {id_}
 vid  : {vid}
@@ -1119,9 +1114,7 @@ Columns:
         for c in self.columns:
             # ['id','vid','sequence_id', 't_vid', 'name', 'description', 'keywords', 'datatype', 'size', 'is_primary_kay', 'data']}
 
-            x += "   {sequence_id:3d} {name:12s} {schema_type:8s} {description}\n".format(
-                **c.dict)
-
+            x += "   {sequence_id:3d} {name:12s} {schema_type:8s} {description}\n".format(**c.dict)
         return x
 
     def _repr_html_(self):
@@ -1141,11 +1134,12 @@ Columns:
         """"""
 
         rows = []
-        rows.append(
-            "<tr><th>#</th><th>Name</th><th>Datatype</th><th>description</th></tr>")
+        rows.append("<tr><th>#</th><th>Name</th><th>Datatype</th><th>description</th></tr>")
         for c in self.columns:
             rows.append(
-                "<tr><td>{sequence_id:d}</td><td>{name:s}</td><td>{schema_type:s}</td><td>{description}</td></tr>".format(**c.dict))
+                "<tr><td>{sequence_id:d}</td><td>{name:s}</td><td>{schema_type:s}</td><td>{description}</td></tr>"
+                .format(**c.dict)
+            )
 
         return "<table>\n" + "\n".join(rows) + "\n</table>"
 
@@ -1159,8 +1153,8 @@ Columns:
 
         cols = []
         raise DeprecationWarning()
-        return ",".join(["{} AS {}".format(c.name, c.vid)
-                        for c in self.columns])
+        # return ",".join(["{} AS {}".format(c.name, c.vid)
+        #                 for c in self.columns])
 
     @orm.reconstructor
     def init_on_load(self):
@@ -1300,7 +1294,7 @@ Columns:
              )
 
         try:
-            if not default is None:
+            if default is not None:
                 try:
                     return q.one()
                 except:
@@ -1560,7 +1554,7 @@ class Config(Base):
     d_vid = SAColumn('co_d_vid', String(16), primary_key=True)
     group = SAColumn('co_group', String(200), primary_key=True)
     key = SAColumn('co_key', String(200), primary_key=True)
-    #value = SAColumn('co_value', PickleType(protocol=0))
+    # value = SAColumn('co_value', PickleType(protocol=0))
 
     value = SAColumn('co_value', JSONAlchemy(Text()))
 
@@ -1638,7 +1632,7 @@ class Partition(Base, LinkableMixin):
     installed = SAColumn('p_installed', String(100))
 
     __table_args__ = (
-        #ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
+        # ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
         UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'),
     )
 

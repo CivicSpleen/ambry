@@ -16,7 +16,7 @@ import urllib
 import ambry.util
 
 global_logger = ambry.util.get_logger(__name__)
-#import logging; logger.setLevel(logging.DEBUG)
+# import logging; logger.setLevel(logging.DEBUG)
 
 
 # makedirs
@@ -446,7 +446,7 @@ class BundleFilesystem(Filesystem):
         else:
             use_hash = True
 
-        #file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
+        # file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
         file_path = os.path.join(parsed.netloc, parsed.path.strip('/'))
 
         # S3 has time in the query, so it never caches

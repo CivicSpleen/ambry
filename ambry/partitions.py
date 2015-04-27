@@ -7,7 +7,8 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 import os
 
-from identity import PartitionIdentity, PartitionNameQuery, PartitionName, PartialPartitionName, NameQuery
+from identity import PartitionIdentity, PartitionNameQuery, PartitionName, \
+    PartialPartitionName, NameQuery
 from sqlalchemy.orm.exc import NoResultFound
 from util.typecheck import accepts, returns
 from dbexceptions import ConflictError
@@ -416,7 +417,7 @@ class Partitions(object):
         # the format, which is required to get the correct cache_key
         d['cache_key'] = pname.promote(self.bundle.identity.name).cache_key
 
-        if not 'format' in d:
+        if 'format' not in d:
             d['format'] = 'db'
 
         try:

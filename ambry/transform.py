@@ -62,7 +62,7 @@ class PassthroughTransform(object):
 
     def __init__(self, column, useIndex=False):
         """"""
-                # Extract the value from a position in the row
+        # Extract the value from a position in the row
         if useIndex:
             f = lambda row, column=column: row[column.sequence_id - 1]
         else:
@@ -104,11 +104,11 @@ class BasicTransform(object):
         # with a try/catch, except in this case, integers are always all digits
         # here
         if str(column.datatype) == 'integer' or str(column.datatype) == 'integer64':
-            #f = lambda v: int(v)
+            # f = lambda v: int(v)
             msg = column.name
             f = lambda v, msg = msg: coerce_int_except(v, msg)
         elif column.datatype == 'real':
-            #f = lambda v: int(v)
+            # f = lambda v: int(v)
             msg = column.name
             f = lambda v, msg = msg: coerce_float_except(v, msg)
         else:
@@ -565,9 +565,9 @@ def {}(row):
 
         if not self._compiled:
 
-            #lfn, lf = self.makeListTransform()
+            # lfn, lf = self.makeListTransform()
             # exec(lf)
-            #lf = locals()[lfn]
+            # lf = locals()[lfn]
 
             lf = None
 
