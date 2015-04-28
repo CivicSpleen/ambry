@@ -193,9 +193,8 @@ class SqlitePartition(PartitionBase):
         :return:
 
         """
-        import pandas as pd
+
         import numpy as np
-        import json
 
         df = self.pandas
 
@@ -221,7 +220,16 @@ class SqlitePartition(PartitionBase):
 
                 row['nuniques'] = df[col_name].dropna().nunique()
 
-                h = np.histogram(df[col_name])
+                # return all elements that are +/-1 2 std from the mean
+                # We restrict the histograph to 4 std because for the small range of sparklines, a 0 value
+                # can make the histogram useless by pushing all other values into a single bin
+
+                # Odd: in the second term,  ( d > (d.mean() - 2 * d.std())) workks OK, but reversing the comparison,
+                # ((d.mean() - 2 * d.std()) < d) results in an error.
+
+                df2std = lambda d: d[(d < (d.mean() + 2 * d.std()) ) & ( d > (d.mean() - 2 * d.std()))]
+
+                h = np.histogram(df2std(df[col_name]))
 
                 row['hist'] = dict(values=zip(h[1], h[0]))
 
@@ -292,7 +300,7 @@ class SqlitePartition(PartitionBase):
         partition."""
 
         from geoid import civick
-        from geoid.util import simplify
+        from geoid.util import isimplify
 
         p_s = self.database.session
 
@@ -315,11 +323,15 @@ class SqlitePartition(PartitionBase):
         # information.
 
         extra_spaces = []
+        extra_grain = None
 
         if 'source_data' in self.record.data:
             for source_name, source in self.record.data['source_data'].items():
                 if 'space' in source:
                     extra_spaces.append((source_name, source['space']))
+
+                if 'grain' in source:
+                    extra_grain = source['grain']
 
         if self.identity.space:  # And from the partition name
             extra_spaces.append(('pname', self.identity.space))
@@ -329,8 +341,7 @@ class SqlitePartition(PartitionBase):
                 g = civick.GVid.parse(space)
             except KeyError:
 
-                places = list(
-                    self.bundle.library.search.search_identifiers(space))
+                places = list(self.bundle.library.search.search_identifiers(space))
 
                 if not places:
                     from ..dbexceptions import BuildError
@@ -340,23 +351,24 @@ class SqlitePartition(PartitionBase):
                             space, str(
                                 self.identity), source_name))
 
-                score, gvid, name = places[0]
+                score, gvid, typ, name = places[0]
 
                 self.bundle.log(
                     "Resolving space '{}' from source '{}' to {}/{}". format(space, source_name, name, gvid))
 
                 geoids.add(civick.GVid.parse(gvid))
 
-        coverage, grain = simplify(geoids)
+        coverage = isimplify(geoids)
+        grain = set( g.summarize() for g in geoids )
 
-        # The first simplification may produce a set that can be simplified
-        # again
-        coverage, _ = simplify(coverage)
+        if extra_grain:
+            grain.add(extra_grain)
+
 
         # For geo_coverage, only includes the higher level summary levels,
         # counties, states, places and urban areas
         self.record.data['geo_coverage'] = sorted(
-            [str(x) for x in coverage if bool(x) and x.sl in (40, 50, 60, 160, 400)])
+            [str(x) for x in coverage if bool(x) and x.sl in (10, 40, 50, 60, 160, 400)])
         self.record.data['geo_grain'] = sorted([str(x) for x in grain])
 
         # Now add the geo and time coverage specified in the table. These values for space and time usually are specified

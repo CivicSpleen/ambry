@@ -1,0 +1,8 @@
+
+# For non virtual environments:
+
+gdal
+
+
+# Installing GDAL in a python virtenv
+#

@@ -42,6 +42,7 @@
                 <th>Proto Id</th>
                 <th>Unique Values</th>
                 <th>Mean Val</th>
+                <th>Values</th>
 
             </tr>
             {% for c in p.table.columns.values()|sort(attribute='sequence_id') -%}
@@ -63,6 +64,13 @@
                 </td>
                 <td>
                     {{p.colstats.get(c.id_).p50}}
+                </td>
+                <td>
+                    {% if p.colstats.get(c.id_).hist %}
+                    <span class="inlinesparkline">
+                    {% for e in p.colstats.get(c.id_).hist.get('values') %}{{e[1]}},{% endfor %}
+                    </span>
+                    {% endif %}
                 </td>
 
             </tr>
@@ -94,6 +102,14 @@
     </table>
 {%endif%}
 
-
 {% endblock %}
 
+{% block tailjs %}
+{{ super() }}
+    <script language="javascript" type="text/javascript" src="/js/sparklines.js"></script>
+    <script>
+        $(function() {
+         $('.inlinesparkline').sparkline('html', {type: 'bar', barColor: 'blue'} );
+        });
+    </script>
+{% endblock %}

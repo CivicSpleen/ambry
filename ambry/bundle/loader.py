@@ -6,8 +6,6 @@ from rowgen import RowSpecIntuiter
 
 class LoaderBundle(BuildBundle):
 
-    prefix_headers = ['id']
-
     row_gen_ext_map = {
         'xlsm': 'xls',
         'xlsx': 'xls'
@@ -69,9 +67,13 @@ class LoaderBundle(BuildBundle):
 
         mn =  Column.mangle_name(n.strip())
 
-
         if mn in self.col_map:
-            return self.col_map[mn]
+            col =  self.col_map[mn]['col']
+            if col:
+                return col
+            else:
+                return mn
+
         else:
             return mn
 
@@ -142,9 +144,15 @@ class LoaderBundle(BuildBundle):
 
         source = self.metadata.sources[source_name]
 
-        table_config = self.metadata.tables.get(source.table if source.table else source_name)
-
         fn = self.filesystem.download(source_name)
+
+        if fn.endswith('.zip'):
+
+            sub_file = source.file
+
+            fn = self.filesystem.unzip(fn, regex = sub_file)
+
+
 
         base_dir, file_name  = split(fn)
         file_base, ext = splitext(file_name)
@@ -157,6 +165,8 @@ class LoaderBundle(BuildBundle):
 
             ext = self.row_gen_ext_map.get(ext,ext)
 
+        print '!!!!', ext, source.filetype
+
         if source.row_spec.dict:
             rs = source.row_spec.dict
         else:
@@ -165,12 +175,6 @@ class LoaderBundle(BuildBundle):
         if source.segment:
             rs['segment'] = source.segment
 
-        assert isinstance(self.prefix_headers, list)
-        rs['prefix_headers'] = self.prefix_headers
-
-        if table_config:
-            for col_name, col in table_config.extra_columns.items():
-                print '!!!', col_name, col
 
         rs['header_mangler'] = lambda header: self.mangle_header(header)
 
@@ -196,7 +200,11 @@ class LoaderBundle(BuildBundle):
 
         table = self.schema.add_table(table_name, description=table_desc)
 
-        if source.grain:
+        self.schema.add_column(table, 'id', datatype = 'integer', description = table_desc, is_primary_key = True)
+
+        self.log("Created table {}".format(table.name))
+
+        if  source.grain:
             with self.session:
                 if 'grain' in table.data and table.data['grain'] != source.grain:
                     raise BuildBundle("Table '{}' has grain '{}' conflicts with source '{}' grain of '{}'"
@@ -229,7 +237,7 @@ class LoaderBundle(BuildBundle):
         from collections import defaultdict
         from ..util.intuit import Intuiter
         import urllib2
-        import csv
+        import unicodecsv as csv
         import os
 
         # A proto terms map, for setting grains
@@ -238,10 +246,19 @@ class LoaderBundle(BuildBundle):
 
         self.database.create()
 
+        tables = defaultdict(set)
+
+        # First, load in the protoschema, to get prefix columns for each table.
+
+        sf_path = self.filesystem.path('meta', self.PROTO_SCHEMA_FILE)
+
+        if os.path.exists(sf_path):
+            with open(sf_path, 'rbU') as f:
+                warnings, errors = self.schema.schema_from_file(f)
+
         if not self.run_args.get('clean', None):
             self._prepare_load_schema()
 
-        tables = defaultdict(set)
 
         # Collect all of the sources for each table, while also creating the tables
         for source_name, source in self.metadata.sources.items():
@@ -251,6 +268,9 @@ class LoaderBundle(BuildBundle):
 
             table = self.make_table_for_source(source_name)
             tables[table.name].add(source_name)
+
+        self.schema.write_schema()
+
 
         intuiters = defaultdict(Intuiter)
 
@@ -270,7 +290,7 @@ class LoaderBundle(BuildBundle):
                     self.error("Failed to download url for source: {}".format(source_name))
                     continue
 
-                self.log("Intuiting {}".format(source_name))
+                self.log("Intuiting {} into {}".format(source_name, table_name))
                 iterables.append(self.row_gen_for_source(source_name))
 
                 rg = self.row_gen_for_source(source_name)
@@ -278,24 +298,6 @@ class LoaderBundle(BuildBundle):
                 intuiter.iterate(rg, 2000)
 
             self.schema.update_from_intuiter(table_name, intuiter)
-
-            ## Now we can set the proto_vid for columns that link to the grain index
-            table = self.schema.table(table_name)
-            if 'grain' in table.data and table.data['grain']:
-                n = 0
-                with self.session:
-                    for c in table.columns:
-                        test = '{}.{}'.format(table.data['grain'], c.name)
-
-                        proto_vid = pt_map.get(test, None)
-
-                        if proto_vid and c.name  in self.prefix_headers and c.name != 'id':
-                            c.proto_vid = test
-                            self.log("Adding proto_vid '{}' to {}.{}".format(test, table_name, c.name))
-                            n += 1
-
-                if n:
-                    self.schema.write_schema()
 
 
             # Write the first 50 lines of the csv file, to see what the intuiter got from the
@@ -319,7 +321,7 @@ class LoaderBundle(BuildBundle):
 
                 w = csv.writer(f)
 
-                w.writerow(rg.get_header())
+                w.writerow(rg.header)
 
                 for i, row in enumerate(rg):
                     if i > 50:
@@ -341,29 +343,34 @@ class LoaderBundle(BuildBundle):
 
             # Update
 
+            if os.path.exists(self.col_map_fn):
+                col_map = self.filesystem.read_csv(self.col_map_fn, key='header')
+            else:
+                col_map = {}
+
             # Don't add the columns that are already mapped.
-            mapped_domain = set(item['col'] for item in self.col_map.values())
+            mapped_domain = set(item['col'] for item in col_map.values())
 
             for table_name, sources in tables.items():
                 rg = self.row_gen_for_source(source_name)
 
-                header = rg.get_header() # Also sets unmangled_header
+                header = rg.header # Also sets unmangled_header
 
                 descs = [ x.replace('\n','; ') for x in (rg.unmangled_header if rg.unmangled_header else header)]
 
                 for col_name, desc  in zip(header, descs):
                     k = col_name.strip()
 
-                    if not k in self.col_map and not col_name in mapped_domain:
-                        self.col_map[k] = dict(header=k, col='')
+                    if not k in col_map and not col_name in mapped_domain:
+                        col_map[k] = dict(header=k, col='')
 
             # Write back out
             with open(self.col_map_fn, 'w') as f:
 
                 w = csv.DictWriter(f, fieldnames = ['header', 'col'])
                 w.writeheader()
-                for k in sorted(self.col_map.keys()):
-                    w.writerow(self.col_map[k])
+                for k in sorted(col_map.keys()):
+                    w.writerow(col_map[k])
 
 
         return True
@@ -397,7 +404,7 @@ class LoaderBundle(BuildBundle):
 
         row_gen =  self.row_gen_for_source(source_name)
 
-        header = row_gen.get_header()
+        header = row_gen.header
 
         for col in header:
             if col not in columns:

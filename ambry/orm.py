@@ -406,19 +406,9 @@ class Dataset(Base, LinkableMixin):
     vid = SAColumn('d_vid', String(20), primary_key=True)
     id_ = SAColumn('d_id', String(20), )
     name = SAColumn('d_name', String(200), nullable=False, index=True)
-    vname = SAColumn(
-        'd_vname',
-        String(200),
-        unique=True,
-        nullable=False,
-        index=True)
+    vname = SAColumn('d_vname',String(200),unique=True,nullable=False,index=True)
     fqname = SAColumn('d_fqname', String(200), unique=True, nullable=False)
-    cache_key = SAColumn(
-        'd_cache_key',
-        String(200),
-        unique=True,
-        nullable=False,
-        index=True)
+    cache_key = SAColumn('d_cache_key',String(200),unique=True,nullable=False,index=True)
     source = SAColumn('d_source', String(200), nullable=False)
     dataset = SAColumn('d_dataset', String(200), nullable=False)
     subset = SAColumn('d_subset', String(200))
@@ -433,17 +423,9 @@ class Dataset(Base, LinkableMixin):
 
     path = None  # Set by the LIbrary and other queries.
 
-    tables = relationship(
-        "Table",
-        backref='dataset',
-        cascade="all, delete-orphan",
-        passive_updates=False)
+    tables = relationship("Table",backref='dataset',cascade="all, delete-orphan",passive_updates=False)
 
-    partitions = relationship(
-        "Partition",
-        backref='dataset',
-        cascade="all, delete-orphan",
-        passive_updates=False)
+    partitions = relationship("Partition",backref='dataset',cascade="all, delete-orphan",passive_updates=False)
 
     #__table_args__ = (
     #    UniqueConstraint('d_vid', 'd_location', name='u_vid_location'),
@@ -1591,37 +1573,14 @@ class Partition(Base, LinkableMixin):
     vid = SAColumn('p_vid', String(20), primary_key=True, nullable=False)
     id_ = SAColumn('p_id', String(20), nullable=False)
     name = SAColumn('p_name', String(200), nullable=False, index=True)
-    vname = SAColumn(
-        'p_vname',
-        String(200),
-        unique=True,
-        nullable=False,
-        index=True)
-    fqname = SAColumn(
-        'p_fqname',
-        String(200),
-        unique=True,
-        nullable=False,
-        index=True)
+    vname = SAColumn('p_vname',String(200),unique=True,nullable=False,index=True)
+    fqname = SAColumn('p_fqname',String(200),unique=True,nullable=False,index=True)
     ref = SAColumn('p_ref', String(200), index=True)
-    cache_key = SAColumn(
-        'p_cache_key',
-        String(200),
-        unique=True,
-        nullable=False,
-        index=True)
+    cache_key = SAColumn('p_cache_key',String(200),unique=True,nullable=False,index=True)
     sequence_id = SAColumn('p_sequence_id', Integer)
-    t_vid = SAColumn(
-        'p_t_vid',
-        String(20),
-        ForeignKey('tables.t_vid'),
-        index=True)
+    t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'),index=True)
     t_id = SAColumn('p_t_id', String(20))
-    d_vid = SAColumn(
-        'p_d_vid',
-        String(20),
-        ForeignKey('datasets.d_vid'),
-        index=True)
+    d_vid = SAColumn('p_d_vid',String(20),ForeignKey('datasets.d_vid'),index=True)
     d_id = SAColumn('p_d_id', String(20))
     time = SAColumn('p_time', String(20))
     space = SAColumn('p_space', String(50))
@@ -1637,8 +1596,7 @@ class Partition(Base, LinkableMixin):
 
     installed = SAColumn('p_installed', String(100))
 
-    __table_args__ = (
-        #ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
+    __table_args__ = (#ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
         UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'),
     )
 
@@ -1757,8 +1715,11 @@ class Partition(Base, LinkableMixin):
             }
 
             for gvid_str in d['geo_grain']['vids']:
-                gvid = GVid.parse(gvid_str)
-                d['geo_grain']['names'].append(gvid.level.title())
+                try:
+                    gvid = GVid.parse(gvid_str)
+                    d['geo_grain']['names'].append(gvid.level.title())
+                except KeyError:
+                    d['geo_grain']['names'].append(gvid_str)
 
         if 'geo_coverage' in d:
             d['geo_coverage'] = {

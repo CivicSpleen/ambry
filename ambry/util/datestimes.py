@@ -19,9 +19,9 @@ def expand_to_years(dates):
         return sorted(set(itertools.chain(*[ expand_to_years(x) for x in dates ])))
 
     def make_year_array(d):
-        d = int(d)
 
-        return [d] if 1000 < d < 9999 else []
+        return [isodate.parse_date(str(int(d))).year]
+
 
     # Ints and int-convertable strings just pass though
     try:

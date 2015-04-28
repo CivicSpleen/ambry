@@ -54,11 +54,23 @@ Due to the breadth of the ``sources`` configuration, most Loader bundles only re
 Todo
 ****
 
+
 * Tutorial process
 * Intuit, raw row, and specd-row reports. 
-* Meta phase
+* Meta phase/. Run meta_set_row_specs()
 * mangle_column_name()
 * build_modify_row()
+* Running Bambry info
+* protoschemas
+* column_map
+* Run bambry info -P -S
+
+
+Bambry Info
+***********
+
+There should not be any numbers in the sample values; it means the column is a string type. 
+
 
 
 

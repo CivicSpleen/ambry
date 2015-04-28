@@ -302,6 +302,8 @@ class Test(TestBase):
         l = new_library(config)
         s3 = l.upstream.last_upstream()
 
+        remote = self.remotes.values()[0]
+
         print l.info
 
         db = l.database
@@ -328,10 +330,10 @@ class Test(TestBase):
         def throw_cb(action, metadata, time):
             raise Exception("Push shonld not run")
 
-        l.push(cb=partial(push_cb, ('Pushed', 'Pushing')))
+        l.push(remote, cb=partial(push_cb, ('Pushed', 'Pushing')))
 
         # ALl should be pushed, so should not run
-        l.push(cb=throw_cb)
+        l.push(remote, cb=throw_cb)
 
         # Resetting library, but not s3, should already have all
         # records
@@ -341,7 +343,7 @@ class Test(TestBase):
         db.create()
         l.put_bundle(self.bundle)
 
-        l.push(cb=partial(push_cb, ('Has')))
+        l.push(remote, cb=partial(push_cb, ('Has')))
 
         self.web_exists(s3, self.bundle.identity.cache_key)
 
@@ -352,51 +354,6 @@ class Test(TestBase):
 
 
 
-    def test_files(self):
-        '''
-        Test some of the server's file functions
-        :return:
-        '''
-
-        from ambry.cache import new_cache
-        from ambry.bundle import DbBundle
-
-        fs = new_cache(self.server_rc.filesystem('rrc-fs'))
-        fs.clean()
-        remote = new_cache(self.server_rc.filesystem('rrc'))
-
-
-        config = self.start_server()
-
-        l = new_library(config)
-
-        l.put_bundle(self.bundle)
-        l.push()
-
-        ident = self.bundle.identity
-        ck = ident.cache_key
-
-        # The remote is tied to the REST server, so it has the
-        # bundle, but the new filesystem cache does not.
-
-        self.assertFalse(fs.has(ck))
-        self.assertTrue(remote.has(ck))
-
-        # But if we tie them together, the FS cache should have it
-
-        fs.upstream = remote
-        self.assertTrue(fs.has(ck))
-
-        path = fs.get(ck)
-
-        b = DbBundle(path)
-        self.assertEquals(ck, b.identity.cache_key)
-
-        # It should have been copied, so the fs should still have
-        # it after disconnecting.
-
-        fs.upstream = None
-        self.assertTrue(fs.has(ck))
 
     def test_remote_sync(self):
         from ambry.library import new_library

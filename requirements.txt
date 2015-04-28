@@ -1,24 +1,2 @@
-PyYAML
-sqlalchemy
-sh
-boto
-requests
-markdown
-decorator
-simplejson
-unicodecsv
-lockfile
-semantic_version
-numpy
-pandas
-sqlparse
-pygments
-jinja2
-address_parser
-pdfminer
-nltk
-flask
-flask-compress
-ckcache
-geoid
-isodate
+-r requirements/base.txt
+

@@ -34,89 +34,38 @@ def source_parser(cmd):
 
     src_p = cmd.add_parser('source', help='Manage bundle source files')
     src_p.set_defaults(command='source')
-    src_p.add_argument(
-        '-n',
-        '--name',
-        default='default',
-        help='Select the name for the repository. Defaults to "default" ')
+    src_p.add_argument('-n','--name',default='default',help='Select the name for the repository. Defaults to "default" ')
     asp = src_p.add_subparsers(title='source commands', help='command help')
 
     sp = asp.add_parser('new', help='Create a new bundle')
     sp.set_defaults(subcommand='new')
     sp.set_defaults(revision=1)  # Needed in Identity.name_parts
-    sp.add_argument(
-        '-s',
-        '--source',
-        required=True,
-        help='Source, usually a domain name')
-    sp.add_argument(
-        '-d',
-        '--dataset',
-        required=True,
-        help='Name of the dataset')
+    sp.add_argument('-s','--source',required=True,help='Source, usually a domain name')
+    sp.add_argument('-d','--dataset',required=True,help='Name of the dataset')
     sp.add_argument('-b', '--subset', default=None, help='Name of the subset')
-    sp.add_argument(
-        '-t',
-        '--time',
-        default=None,
-        help='Time period. Use ISO Time intervals where possible. ')
+    sp.add_argument('-t','--time',default=None,help='Time period. Use ISO Time intervals where possible. ')
     sp.add_argument('-p', '--space', default=None, help='Spatial extent name')
-    sp.add_argument(
-        '-v',
-        '--variation',
-        default=None,
-        help='Name of the variation')
-    sp.add_argument(
-        '-c',
-        '--creator',
-        required=False,
-        help='Id of the creator')
-    sp.add_argument(
-        '-n',
-        '--dryrun',
-        action="store_true",
-        default=False,
-        help='Dry run')
-    sp.add_argument(
-        '-k',
-        '--key',
-        help='Number server key. Use \'self\' for a random, self-generated key.')
+    sp.add_argument('-v','--variation',default=None,help='Name of the variation')
+    sp.add_argument('-c','--creator',required=False,help='Id of the creator')
+    sp.add_argument('-n','--dryrun',action="store_true",default=False,help='Dry run')
+    sp.add_argument('-k','--key',help='Number server key. Use \'self\' for a random, self-generated key.')
     sp.add_argument('args', nargs=argparse.REMAINDER)  # Get everything else.
 
-    sp = asp.add_parser(
-        'info',
-        help='Information about the source configuration')
+    sp = asp.add_parser('info',help='Information about the source configuration')
     sp.set_defaults(subcommand='info')
-    sp.add_argument(
-        'terms',
-        type=str,
-        nargs=argparse.REMAINDER,
-        help='Name or ID of the bundle or partition to print information for')
+    sp.add_argument('terms',type=str,nargs=argparse.REMAINDER,help='Name or ID of the bundle or partition to print information for')
 
-    sp = asp.add_parser(
-        'deps',
-        help='Print the depenencies for all source bundles')
+    sp = asp.add_parser('deps',help='Print the depenencies for all source bundles')
     sp.set_defaults(subcommand='deps')
     #sp.add_argument('ref', type=str,nargs='?',help='Name or id of a bundle to generate a sorted dependency list for.')
-    sp.add_argument(
-        '-d',
-        '--detail',
-        default=False,
-        action="store_true",
-        help='Display details of locations for each bundle')
+    sp.add_argument('-d','--detail',default=False,action="store_true",help='Display details of locations for each bundle')
     sp.add_argument('-F', '--fields', type=str, help="Specify fields to use")
     group = sp.add_mutually_exclusive_group()
     #group.add_argument('-f', '--forward',  default='f', dest='direction',   action='store_const', const='f', help='Display bundles that this one depends on')
     #group.add_argument('-r', '--reverse',  default='f', dest='direction',   action='store_const', const='r', help='Display bundles that depend on this one')
-    sp.add_argument(
-        'terms',
-        type=str,
-        nargs=argparse.REMAINDER,
-        help='Name or ID of the bundle or partition as the root of the dependency tree')
+    sp.add_argument('terms',type=str,nargs=argparse.REMAINDER,help='Name or ID of the bundle or partition as the root of the dependency tree')
 
-    sp = asp.add_parser(
-        'init',
-        help='Intialize the local and remote git repositories')
+    sp = asp.add_parser('init',help='Intialize the local and remote git repositories')
     sp.set_defaults(subcommand='init')
     sp.add_argument('dir', type=str, nargs='?', help='Directory')
 
@@ -124,105 +73,41 @@ def source_parser(cmd):
     sp.set_defaults(subcommand='list')
     sp.add_argument('-F', '--fields', type=str, help="Specify fields to use")
 
-    sp = asp.add_parser(
-        'buildable',
-        help='List source bundles that can be built')
+    sp = asp.add_parser('buildable',help='List source bundles that can be built')
     sp.set_defaults(subcommand='buildable')
     sp.add_argument('-F', '--fields', type=str, help="Specify fields to use")
 
     sp = asp.add_parser('build', help='Build sources')
     sp.set_defaults(subcommand='build')
 
-    sp.add_argument(
-        '-f',
-        '--force',
-        default=False,
-        action="store_true",
-        help='Build even if built or in library')
-    sp.add_argument(
-        '-c',
-        '--clean',
-        default=False,
-        action="store_true",
-        help='Clean first')
-    sp.add_argument(
-        '-i',
-        '--install',
-        default=False,
-        action="store_true",
-        help='Install after build')
-    sp.add_argument(
-        '-n',
-        '--dryrun',
-        default=False,
-        action="store_true",
-        help='Only display what would be built')
+    sp.add_argument('-f','--force',default=False,action="store_true",help='Build even if built or in library')
+    sp.add_argument('-c','--clean',default=False,action="store_true",help='Clean first')
+    sp.add_argument('-i','--install',default=False,action="store_true",help='Install after build')
+    sp.add_argument('-n','--dryrun',default=False,action="store_true",help='Only display what would be built')
 
-    sp.add_argument(
-        'dir',
-        type=str,
-        nargs='?',
-        help='Directory to start search for sources in. ')
+    sp.add_argument('dir',type=str,nargs='?',help='Directory to start search for sources in. ')
 
-    sp = asp.add_parser(
-        'edit',
-        help='Run the editor defined in the EDITOR env var on the bundle directory')
+    sp = asp.add_parser('edit',help='Run the editor defined in the EDITOR env var on the bundle directory')
     sp.set_defaults(subcommand='edit')
-    sp.add_argument(
-        'term',
-        type=str,
-        help='Name or ID of the bundle or partition to print information for')
+    sp.add_argument('term',type=str,help='Name or ID of the bundle or partition to print information for')
 
-    sp = asp.add_parser(
-        'run',
-        help='Run a shell command in source directories passed in on stdin')
+    sp = asp.add_parser('run',help='Run a shell command in source directories passed in on stdin')
     sp.set_defaults(subcommand='run')
 
-    sp.add_argument(
-        '-P',
-        '--python',
-        default=None,
-        help='Path to a python class file to run. Loads as module and calls run(). The ' +
-        'run() function can have any combination of arguments of these names: bundle_dir,' +
-        ' bundle, repo')
-    sp.add_argument(
-        '-m',
-        '--message',
-        nargs='+',
-        default='.',
-        help='Directory to start recursing from ')
-    sp.add_argument(
-        'terms',
-        nargs=argparse.REMAINDER,
-        type=str,
-        help='Bundle refs to run command on')
+    sp.add_argument('-P','--python',default=None,help='Path to a python class file to run. Loads as module and calls run(). The ' +'run() function can have any combination of arguments of these names: bundle_dir,' +' bundle, repo')
+    sp.add_argument('-m','--message',nargs='+',default='.',help='Directory to start recursing from ')
+    sp.add_argument('terms',nargs=argparse.REMAINDER,type=str,help='Bundle refs to run command on')
 
     group = sp.add_mutually_exclusive_group()
-    group.add_argument(
-        '-i',
-        '--install',
-        default=False,
-        dest='repo_command',
-        action='store_const',
-        const='install',
-        help='Install the bundle')
-    group.add_argument(
-        '-s',
-        '--shell',
-        default=False,
-        dest='repo_command',
-        action='store_const',
-        const='shell',
-        help='Run a shell command')
+    group.add_argument('-i','--install',default=False,dest='repo_command',action='store_const',const='install',
+                       help='Install the bundle')
+    group.add_argument('-s','--shell',default=False,dest='repo_command',action='store_const',const='shell',
+                       help='Run a shell command')
 
-    sp = asp.add_parser(
-        'number',
-        help='Return the next dataset number from the number server')
+    sp = asp.add_parser('number',help='Return the next dataset number from the number server')
     sp.set_defaults(subcommand='number')
     sp.add_argument('-k', '--key', help='Number server key')
-    sp.add_argument(
-        '-s',
-        '--set',
+    sp.add_argument('-s','--set',
         help='Set the number in the bundle in the specified directory')
 
     if IN_DEVELOPMENT:
@@ -237,8 +122,7 @@ def source_info(args, l, st, rc):
         prt("Source dir: {}", st.base_dir)
         return
 
-    if args.terms[0] == '-':
-        # Read terms from stdin, one per line.
+    if args.terms[0] == '-':# Read terms from stdin, one per line.
         import sys
 
         for line in sys.stdin.readlines():
@@ -644,10 +528,7 @@ def do_source_run(ident, args, l, st, rc):
                 mod = import_file(f)
             except ImportError:
                 raise
-                fatal(
-                    "Could not get python file neither '{}', nor '{}'".format(
-                        args.python,
-                        f))
+                fatal("Could not get python file neither '{}', nor '{}'".format( args.python,f))
 
         run_args = inspect.getargspec(mod.run)
 
