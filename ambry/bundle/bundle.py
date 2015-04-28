@@ -1299,7 +1299,7 @@ class BuildBundle(Bundle):
 
         self.update_configuration()
 
-        sf_out = self.filesystem.path('meta', self.SCHEMA_REVISED_FILE)
+        sf_out = self.filesystem.build_path(self.SCHEMA_REVISED_FILE)
 
         # Need to expire the unmanaged cache, or the regeneration of the schema may
         # use the cached schema object rather than the ones we just updated, if the schem objects

@@ -315,6 +315,9 @@ class Test(TestBase):
         for remote, file_ in zip(a*(len(b)/len(a)+1),b):
             l.push(remote, file_.ref, cb=cb)
 
+        ## NOTE! This is a really crappy test, and it will fail if gdal is not installed, since the
+        ## geot1.geodb database will be geot1.db
+
         import yaml
         self.assertEqual(
 """source/dataset-subset-variation-0.0.1.db:

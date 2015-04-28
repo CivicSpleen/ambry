@@ -223,7 +223,11 @@ class SqlitePartition(PartitionBase):
                 # return all elements that are +/-1 2 std from the mean
                 # We restrict the histograph to 4 std because for the small range of sparklines, a 0 value
                 # can make the histogram useless by pushing all other values into a single bin
-                df2std =  lambda d : d[(d < (d.mean()+2*d.std()) ) & ((d.mean()-2*d.std()) < d)]
+
+                # Odd: in the second term,  ( d > (d.mean() - 2 * d.std())) workks OK, but reversing the comparison,
+                # ((d.mean() - 2 * d.std()) < d) results in an error.
+
+                df2std = lambda d: d[(d < (d.mean() + 2 * d.std()) ) & ( d > (d.mean() - 2 * d.std()))]
 
                 h = np.histogram(df2std(df[col_name]))
 

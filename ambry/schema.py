@@ -879,20 +879,21 @@ class Schema(object):
 
 
         fsp = partial(self.bundle.filesystem.path,'meta')
+        fsbp = partial(self.bundle.filesystem.build_path)
         sb = self.bundle
 
 
         if os.path.exists(fsp(sb.SCHEMA_FILE)):
 
             try:
-                if not filecmp.cmp( fsp(sb.SCHEMA_FILE),fsp(sb.SCHEMA_OLD_FILE)):
-                    shutil.copy(fsp(sb.SCHEMA_FILE),fsp(sb.SCHEMA_OLD_FILE))
+                if not filecmp.cmp( fsp(sb.SCHEMA_FILE),fsbp(sb.SCHEMA_OLD_FILE)):
+                    shutil.copy(fsp(sb.SCHEMA_FILE),fsbp(sb.SCHEMA_OLD_FILE))
             except OSError: # hopefully only a file not found error
                 pass
 
             try:
-                if not filecmp.cmp(fsp(sb.SCHEMA_REVISED_FILE),fsp(sb.SCHEMA_FILE)):
-                    shutil.copy(fsp(sb.SCHEMA_REVISED_FILE),fsp(sb.SCHEMA_FILE))
+                if not filecmp.cmp(fsbp(sb.SCHEMA_REVISED_FILE),fsp(sb.SCHEMA_FILE)):
+                    shutil.copy(fsbp(sb.SCHEMA_REVISED_FILE),fsp(sb.SCHEMA_FILE))
             except OSError: # hopefully only a file not found error
                 pass
 
