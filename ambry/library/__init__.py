@@ -1013,7 +1013,7 @@ class Library(object):
 
             else:
                 start = time.clock()
-                if cb: cb('Pushing', md, start)
+                if cb: cb('Pushing to {}'.format(upstream), md, start)
 
                 if not dry_run:
                     upstream.put(file_.path, identity.cache_key, metadata=md)
@@ -1338,6 +1338,7 @@ class Library(object):
                 self.logger.error("Failed to sync: bundle_path={} : {} "
                                   .format(ident.bundle_path, e.message))
 
+
         self.database.commit()
 
     def sync_source_dir(self, ident, path):
@@ -1348,6 +1349,7 @@ class Library(object):
         try:
             self.database.install_dataset_identity(ident)
             self.database.commit()
+
         except (ConflictError, IntegrityError) as e:
             self.database.rollback()
             pass
@@ -1358,6 +1360,7 @@ class Library(object):
             self.files.install_bundle_source(bundle, self.source, commit=True)
             bundle.close()
             self.database.commit()
+
         except IntegrityError:
             self.database.rollback()
             pass

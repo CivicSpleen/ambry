@@ -337,8 +337,7 @@ class SqlitePartition(PartitionBase):
                 g = civick.GVid.parse(space)
             except KeyError:
 
-                places = list(
-                    self.bundle.library.search.search_identifiers(space))
+                places = list(self.bundle.library.search.search_identifiers(space))
 
                 if not places:
                     from ..dbexceptions import BuildError
@@ -348,7 +347,7 @@ class SqlitePartition(PartitionBase):
                             space, str(
                                 self.identity), source_name))
 
-                score, gvid, name = places[0]
+                score, gvid, typ, name = places[0]
 
                 self.bundle.log(
                     "Resolving space '{}' from source '{}' to {}/{}". format(space, source_name, name, gvid))

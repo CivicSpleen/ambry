@@ -1299,13 +1299,7 @@ class {name}(Base):
             for t in self.tables:
                 for c in t.columns:
                     for cd in c._codes:
-                        row = [
-                            t.name,
-                            c.name,
-                            cd.key,
-                            cd.value,
-                            cd.description
-                        ]
+                        row = [ t.name,c.name,cd.key,cd.value,cd.description]
 
                         w.writerow(row)
                         count += 1
