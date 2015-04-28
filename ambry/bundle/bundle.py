@@ -918,7 +918,7 @@ class BuildBundle(Bundle):
             html_template = fo.read()
 
         df = self.filesystem.path(self.DOC_FILE)
-        hdf = self.filesystem.path(self.DOC_HTML)
+        hdf = self.filesystem.build_path(self.DOC_HTML)
 
         if os.path.exists(df):
             with open(df) as dfo:

@@ -42,6 +42,6 @@ schema-revised.csv
 build-save
 *.sqlite3
 
-
-
 test/coverage
+meta/coverage.yaml
+
