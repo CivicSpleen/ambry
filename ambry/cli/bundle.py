@@ -156,47 +156,19 @@ def bundle_parser(cmd):
 
     parser = cmd.add_parser('bundle', help='Manage bundle files')
     parser.set_defaults(command='bundle')
-    parser.add_argument(
-        '-d',
-        '--bundle-dir',
-        required=False,
-        help='Path to the bundle .py file')
-    parser.add_argument(
-        '-D',
-        '--debug',
-        required=False,
-        default=False,
-        action="store_true",
-        help='URS1 signal will break to interactive prompt')
-    parser.add_argument(
-        '-t',
-        '--test',
-        default=False,
-        action="store_true",
-        help='Enable bundle-specific test behaviour')
-    parser.add_argument(
-        '-m',
-        '--multi',
-        type=int,
-        nargs='?',
-        default=1,
-        const=multiprocessing.cpu_count(),
-        help='Run the build process on multiple processors, if the  method supports it')
+    parser.add_argument('-d','--bundle-dir',required=False,help='Path to the bundle .py file')
+    parser.add_argument('-D','--debug',required=False,default=False,action="store_true",help='URS1 signal will break to interactive prompt')
+    parser.add_argument('-t','--test',default=False,action="store_true",help='Enable bundle-specific test behaviour')
+    parser.add_argument('-m','--multi',type=int,nargs='?',default=1,const=multiprocessing.cpu_count(),help='Run the build process on multiple processors, if the  method supports it')
 
     sub_cmd = parser.add_subparsers(title='commands', help='command help')
 
-    command_p = sub_cmd.add_parser(
-        'config',
-        help='Operations on the bundle configuration file')
+    command_p = sub_cmd.add_parser('config',help='Operations on the bundle configuration file')
     command_p.set_defaults(subcommand='config')
 
-    asp = command_p.add_subparsers(
-        title='Config subcommands',
-        help='Subcommand for operations on a bundle file')
+    asp = command_p.add_subparsers(title='Config subcommands',help='Subcommand for operations on a bundle file')
 
-    sp = asp.add_parser(
-        'rewrite',
-        help='Re-write the bundle file, updating the formatting')
+    sp = asp.add_parser('rewrite',help='Re-write the bundle file, updating the formatting')
     sp.set_defaults(subsubcommand='rewrite')
 
     #
@@ -214,71 +186,32 @@ def bundle_parser(cmd):
     #
     sp = asp.add_parser('newnum', help='Get a new dataset number')
     sp.set_defaults(subsubcommand='newnum')
-    sp.add_argument(
-        '-k',
-        '--key',
-        default=False,
-        help="Set the number server key, or 'self' for self assignment ")
+    sp.add_argument('-k','--key',default=False,help="Set the number server key, or 'self' for self assignment ")
 
     #
-    sp = asp.add_parser(
-        's3urls',
-        help='Add all of the URLS below an S3 prefix as sources. ')
+    sp = asp.add_parser('s3urls',help='Add all of the URLS below an S3 prefix as sources. ')
     sp.set_defaults(subsubcommand='s3urls')
-    sp.add_argument(
-        'term',
-        type=str,
-        nargs=1,
-        help='S3url with buckets and prefix')
+    sp.add_argument('term',type=str,nargs=1,help='S3url with buckets and prefix')
 
     #
-    sp = asp.add_parser(
-        'scrape',
-        help='Scrape all of the links from the page references in external_documentation.download')
+    sp = asp.add_parser('scrape',help='Scrape all of the links from the page references in external_documentation.download')
     sp.set_defaults(subsubcommand='scrape')
-    sp.add_argument(
-        '-r',
-        '--regex',
-        default=False,
-        help="Select entries where the UR matches the regular expression")
+    sp.add_argument('-r','--regex',default=False,help="Select entries where the UR matches the regular expression")
 
     # Info command
-    command_p = sub_cmd.add_parser(
-        'info',
-        help='Print information about the bundle')
+    command_p = sub_cmd.add_parser('info',help='Print information about the bundle')
     command_p.set_defaults(subcommand='info')
     command_p.set_defaults(subcommand='info')
-    command_p.add_argument(
-        '-s',
-        '--schema',
-        default=False,
-        action="store_true",
-        help='Dump the schema as a CSV. The bundle must have been prepared')
-    command_p.add_argument(
-        '-d',
-        '--dep',
-        default=False,
-        help='Report information about a dependency')
-    command_p.add_argument(
-        '-S',
-        '--stats',
-        default=False,
-        action="store_true",
-        help='Also report column stats for partitions')
-    command_p.add_argument(
-        '-P',
-        '--partitions',
-        default=False,
-        action="store_true",
-        help='Also report partition details')
+    command_p.add_argument('-s','--schema',default=False,action="store_true",help='Dump the schema as a CSV. The bundle must have been prepared')
+    command_p.add_argument('-d','--dep',default=False,help='Report information about a dependency')
+    command_p.add_argument('-S','--stats',default=False,action="store_true",help='Also report column stats for partitions')
+    command_p.add_argument('-P','--partitions',default=False,action="store_true",help='Also report partition details')
 
 
     #
     # Clean Command
     #
-    command_p = sub_cmd.add_parser(
-        'clean',
-        help='Return bundle to state before build, prepare and extracts')
+    command_p = sub_cmd.add_parser('clean',help='Return bundle to state before build, prepare and extracts')
     command_p.set_defaults(subcommand='clean')
 
     #
@@ -287,139 +220,60 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('meta', help='Build or install metadata')
     command_p.set_defaults(subcommand='meta')
 
-    command_p.add_argument(
-        '-c',
-        '--clean',
-        default=False,
-        action="store_true",
-        help='Clean first')
-    command_p.add_argument(
-        '-f',
-        '--fast',
-        default=False,
-        action="store_true",
-        help='Load the schema faster by not checking for extant columns')
+    command_p.add_argument('-c','--clean',default=False,action="store_true",help='Clean first')
+    command_p.add_argument('-f','--fast',default=False,action="store_true",help='Load the schema faster by not checking for extant columns')
 
     #
     # Prepare Command
     #
-    command_p = sub_cmd.add_parser(
-        'prepare',
-        help='Prepare by creating the database and schemas')
+    command_p = sub_cmd.add_parser('prepare',help='Prepare by creating the database and schemas')
     command_p.set_defaults(subcommand='prepare')
 
-    command_p.add_argument(
-        '-c',
-        '--clean',
-        default=False,
-        action="store_true",
-        help='Clean first')
-    command_p.add_argument(
-        '-r',
-        '--rebuild',
-        default=False,
-        action="store_true",
-        help='Rebuild the schema, but dont delete built files')
-    command_p.add_argument(
-        '-F',
-        '--fast',
-        default=False,
-        action="store_true",
-        help='Load the schema faster by not checking for extant columns')
-    command_p.add_argument(
-        '-f',
-        '--force',
-        default=False,
-        action="store_true",
-        help='Force build. ( --clean is usually preferred ) ')
+    command_p.add_argument('-c','--clean',default=False,action="store_true",help='Clean first')
+    command_p.add_argument('-r','--rebuild',default=False,action="store_true",help='Rebuild the schema, but dont delete built files')
+    command_p.add_argument('-F','--fast',default=False,action="store_true",help='Load the schema faster by not checking for extant columns')
+    command_p.add_argument('-f','--force',default=False,action="store_true",help='Force build. ( --clean is usually preferred ) ')
     #
     # Build Command
     #
-    command_p = sub_cmd.add_parser(
-        'build',
-        help='Build the data bundle and partitions')
+    command_p = sub_cmd.add_parser('build',help='Build the data bundle and partitions')
     command_p.set_defaults(subcommand='build')
-    command_p.add_argument(
-        '-c',
-        '--clean',
-        default=False,
-        action="store_true",
-        help='Clean first')
-    command_p.add_argument(
-        '-f',
-        '--force',
-        default=False,
-        action="store_true",
-        help='Force build. ( --clean is usually preferred ) ')
-    command_p.add_argument(
-        '-i',
-        '--install',
-        default=False,
-        action="store_true",
-        help='Install after building')
-    command_p.add_argument(
-        '-o',
-        '--opt',
-        action='append',
-        help='Set options for the build phase')
+    command_p.add_argument('-c','--clean',default=False,action="store_true",help='Clean first')
+    command_p.add_argument('-f','--force',default=False,action="store_true",help='Force build. ( --clean is usually preferred ) ')
+    command_p.add_argument('-i','--install',default=False,action="store_true",help='Install after building')
+    command_p.add_argument('-o','--opt',action='append',help='Set options for the build phase')
 
     #
     # Update Command
     #
-    command_p = sub_cmd.add_parser(
-        'update',
-        help='Build the data bundle and partitions from an earlier version')
+    command_p = sub_cmd.add_parser('update',help='Build the data bundle and partitions from an earlier version')
     command_p.set_defaults(subcommand='update')
-    command_p.add_argument(
-        '-c',
-        '--clean',
-        default=False,
-        action="store_true",
-        help='Clean first')
+    command_p.add_argument('-c','--clean',default=False,action="store_true",help='Clean first')
+    command_p.add_argument('-f', '--force', default=False, action="store_true",
+                           help='Force build. ( --clean is usually preferred ) ')
+
 
     #
     # Install Command
     #
-    command_p = sub_cmd.add_parser(
-        'install',
-        help='Install bundles and partitions to the library')
+    command_p = sub_cmd.add_parser('install',help='Install bundles and partitions to the library')
     command_p.set_defaults(subcommand='install')
-    command_p.add_argument(
-        '-c',
-        '--clean',
-        default=False,
-        action="store_true",
-        help='Clean first')
-    command_p.add_argument(
-        '-l',
-        '--library',
-        help='Name of the library, defined in the config file')
-    command_p.add_argument(
-        '-f',
-        '--force',
-        default=False,
-        action="store_true",
-        help='Force storing the file')
+    command_p.add_argument('-c','--clean',default=False,action="store_true",help='Clean first')
+    command_p.add_argument('-l','--library',help='Name of the library, defined in the config file')
+    command_p.add_argument('-f','--force',default=False,action="store_true",help='Force storing the file')
 
     #
     # run Command
     #
     command_p = sub_cmd.add_parser('run', help='Run a method on the bundle')
     command_p.set_defaults(subcommand='run')
-    command_p.add_argument('method', metavar='Method', type=str,
-                           help='Name of the method to run')
-    command_p.add_argument(
-        'args',
-        nargs='*',
-        type=str,
-        help='additional arguments')
+    command_p.add_argument('method', metavar='Method', type=str, help='Name of the method to run')
+    command_p.add_argument('args',nargs='*',type=str,help='additional arguments')
 
     #
     # repopulate
     #
-    command_p = sub_cmd.add_parser(
-        'repopulate',
-        help='Load data previously submitted to the library back into the build dir')
+    command_p = sub_cmd.add_parser('repopulate',help='Load data previously submitted to the library back into the build dir')
     command_p.set_defaults(subcommand='repopulate')
 
     #
@@ -428,21 +282,11 @@ def bundle_parser(cmd):
 
     command_p = sub_cmd.add_parser('commit', help='Commit the source')
     command_p.set_defaults(subcommand='commit', command_group='source')
-    command_p.add_argument(
-        '-m',
-        '--message',
-        default=None,
-        help='Git commit message')
+    command_p.add_argument('-m','--message',default=None,help='Git commit message')
 
-    command_p = sub_cmd.add_parser(
-        'push',
-        help='Commit and push to the git origin')
+    command_p = sub_cmd.add_parser('push',help='Commit and push to the git origin')
     command_p.set_defaults(subcommand='push', command_group='source')
-    command_p.add_argument(
-        '-m',
-        '--message',
-        default=None,
-        help='Git commit message')
+    command_p.add_argument('-m','--message',default=None, help='Git commit message')
 
     command_p = sub_cmd.add_parser('pull', help='Pull from the git origin')
     command_p.set_defaults(subcommand='pull', command_group='source')
@@ -714,47 +558,11 @@ def bundle_config(args, b, st, rc):
         print b.schema.as_markdown()
 
     elif args.subsubcommand == 'incver':
-        from ..identity import Identity
-        from datetime import datetime
-        identity = b.identity
 
-        # Get the latest installed version of this dataset
-        prior_ident = b.library.resolve(b.identity.name)
 
-        if prior_ident:
-            prior_version = prior_ident.on.revision
-        else:
-            prior_version = identity.on.revision
+        description = raw_input("Revision Description: ")
 
-        # If the source bundle is already incremented past the installed versions
-        # use that instead.
-        if b.identity.on.revision > prior_version:
-            prior_version = b.identity.on.revision
-            b.close()
-
-        b.clean()
-        b.prepare()
-        b.close()
-
-        # Now, update this version to be one more.
-        ident = b.identity
-
-        identity.on.revision = prior_version + 1
-
-        identity = Identity.from_dict(identity.ident_dict)
-
-        b.update_configuration(identity=identity)
-
-        # Create a new revision entry
-        md = b.metadata
-        md.load_all()
-        md.versions[identity.on.revision] = {
-            'description': raw_input("Revision Description: "),
-            'version': md.identity.version,
-            'date': datetime.now().isoformat()
-        }
-
-        md.write_to_dir()
+        identity = b.increment_revision(description)
 
         print identity.fqname
 

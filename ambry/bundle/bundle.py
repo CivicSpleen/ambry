@@ -151,16 +151,7 @@ class Bundle(object):
 
         return self._partitions
 
-    @property
-    def repository(self):
-        """Return a repository object."""
-        from ..old.repository import Repository  # @UnresolvedImport
 
-        if not self._repository:
-            repo_name = 'default'
-            self._repository = Repository(self, repo_name)
-
-        return self._repository
 
     def get_dataset(self):
         raise NotImplementedError()
@@ -791,6 +782,56 @@ class BuildBundle(Bundle):
 
         return self._identity
 
+    def increment_revision(self, description):
+        """Increament the revision and set a message"""
+        from ..identity import Identity
+        from datetime import datetime
+
+
+
+        identity = self.identity
+
+        # Get the latest installed version of this dataset
+        prior_ident = self.library.resolve(self.identity.name)
+
+        if prior_ident:
+            prior_version = prior_ident.on.revision
+        else:
+            prior_version = identity.on.revision
+
+        # If the source bundle is already incremented past the installed versions
+        # use that instead.
+        if self.identity.on.revision > prior_version:
+            prior_version = self.identity.on.revision
+            self.close()
+
+        self.clean()
+        self.prepare()
+        self.close()
+
+        # Now, update this version to be one more.
+        ident = self.identity
+
+        identity.on.revision = prior_version + 1
+
+        identity = Identity.from_dict(identity.ident_dict)
+
+        self.update_configuration(identity=identity)
+
+        # Create a new revision entry
+        md = self.metadata
+        md.load_all()
+        md.versions[identity.on.revision] = {
+            'description': description,
+            'version': md.identity.version,
+            'date': datetime.now().isoformat()
+        }
+
+        md.write_to_dir()
+
+        return identity
+
+
     def update_configuration(self, identity=None, rewrite_database=True):
         # Re-writes the bundle.yaml file, with updates to the identity and partitions
         # sections.
@@ -877,7 +918,7 @@ class BuildBundle(Bundle):
             html_template = fo.read()
 
         df = self.filesystem.path(self.DOC_FILE)
-        hdf = self.filesystem.path(self.DOC_HTML)
+        hdf = self.filesystem.build_path(self.DOC_HTML)
 
         if os.path.exists(df):
             with open(df) as dfo:
@@ -1258,7 +1299,7 @@ class BuildBundle(Bundle):
 
         self.update_configuration()
 
-        sf_out = self.filesystem.path('meta', self.SCHEMA_REVISED_FILE)
+        sf_out = self.filesystem.build_path(self.SCHEMA_REVISED_FILE)
 
         # Need to expire the unmanaged cache, or the regeneration of the schema may
         # use the cached schema object rather than the ones we just updated, if the schem objects
@@ -1384,24 +1425,7 @@ class BuildBundle(Bundle):
 
             self.schema.write_codes()
 
-            f = getattr(self, 'test', False)
-
-            if f:
-                try:
-                    f()
-                except AssertionError as e:
-                    import traceback
-                    import sys
-
-                    _, _, tb = sys.exc_info()
-                    traceback.print_tb(tb)  # Fixed format
-                    tb_info = traceback.extract_tb(tb)
-                    filename, line, func, text = tb_info[-1]
-                    self.error(
-                        "Test case failed on line {} : {}".format(
-                            line,
-                            text))
-                    return False
+            self.post_build_test()
 
             self.set_value('process', 'last', datetime.now().isoformat())
             self.set_build_state('built')
@@ -1409,6 +1433,25 @@ class BuildBundle(Bundle):
         self.close()
 
         return True
+
+    def post_build_test(self):
+
+        f = getattr(self, 'test', False)
+
+        if f:
+            try:
+                f()
+            except AssertionError as e:
+                import traceback
+                import sys
+
+                _, _, tb = sys.exc_info()
+                traceback.print_tb(tb)  # Fixed format
+                tb_info = traceback.extract_tb(tb)
+                filename, line, func, text = tb_info[-1]
+                self.error(
+                    "Test case failed on line {} : {}".format(line, text))
+                return False
 
     def post_build_time_coverage(self):
         """Collect all of the time coverage for the bundle."""
@@ -1452,7 +1495,7 @@ class BuildBundle(Bundle):
                 raise BuildError(
                     "Failed to find space identifier '{}' in full text identifier search".format(space))
 
-            score, gvid, name = places[0]
+            score, gvid, type, name = places[0]
 
             return gvid
 
@@ -1563,9 +1606,7 @@ class BuildBundle(Bundle):
         if not self.database.exists():
             return False
 
-        v = self.get_value('process', 'built', False)
-
-        return bool(v)
+        return bool(self.get_value('process', 'built', False)) or self.get_value('process', 'updated', False)
 
     @property
     def is_installed(self):
@@ -1577,12 +1618,13 @@ class BuildBundle(Bundle):
 
     @property
     def build_state(self):
-        from ..dbexceptions import DatabaseMissingError
+        from ..dbexceptions import DatabaseMissingError, NotFoundError
+
 
         try:
             c = self.get_value('process', 'state')
             return c.value
-        except DatabaseMissingError:
+        except (DatabaseMissingError, NotFoundError):
             return 'new'
 
     def set_build_state(self, state):
@@ -1594,6 +1636,7 @@ class BuildBundle(Bundle):
 
         if self.library.source:
             self.library.source.set_bundle_state(self.identity, state)
+
 
     def build_main(self):
         """This is the methods that is actually called in do_build; it
@@ -1665,20 +1708,16 @@ class BuildBundle(Bundle):
             for pp in prior.partitions:
                 d = pp.record.dict
                 p, _ = self.partitions._find_or_new(
-                    d, format=d.get(
-                        'format', None), tables=d.get(
-                        'tables', None), data=d.get(
-                        'data', None), create=False)
+                    d, format=d.get('format', None),
+                    tables=d.get('tables', None),
+                    data=d.get('data', None), create=False)
                 # The referenced partition is also a reference.
                 if pp.record.ref:
                     p.record.ref = pp.record.ref
                 else:
                     p.record.ref = pp.vid
 
-                self.log(
-                    "Referenced partition {} to {}".format(
-                        pp.identity,
-                        p.identity))
+                self.log("Referenced partition {} to {}".format(pp.identity,p.identity))
 
     def update_copy_schema(self):
         """Copy the schema from a previous version, updating the vids."""
@@ -1728,9 +1767,21 @@ class BuildBundle(Bundle):
             self.set_value('process', 'updatetime', time() - self._update_time)
             self.update_configuration()
 
-        self.post_build()
+            self._revise_schema()
+
+            self.schema.move_revised_schema()
+
+            self.post_build_finalize()
+
+            self.post_build_write_config()
+
+            self.set_value('process', 'last', datetime.now().isoformat())
+            self.set_build_state('updated')
+
+        self.close()
 
         return True
+
 
     def do_update(self):
 

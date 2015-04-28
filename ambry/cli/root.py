@@ -26,206 +26,57 @@ def root_parser(cmd):
     sp = cmd.add_parser('list', help='List bundles and partitions')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='list')
-    sp.add_argument(
-        '-P',
-        '--plain',
-        default=False,
-        action="store_true",
-        help="Print only vids")
-    sp.add_argument(
-        '-F',
-        '--fields',
-        type=str,
-        help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
-    sp.add_argument(
-        '-p',
-        '--partitions',
-        default=False,
-        action="store_true",
-        help="Show partitions")
-    sp.add_argument(
-        '-t',
-        '--tables',
-        default=False,
-        action="store_true",
-        help="Show tables")
-    sp.add_argument(
-        '-a',
-        '--all',
-        default=False,
-        action="store_true",
-        help='List everything')
-    sp.add_argument(
-        '-l',
-        '--library',
-        default=False,
-        action="store_const",
-        const=lr.LIBRARY,
-        help='List only the library')
-    sp.add_argument(
-        '-r',
-        '--remote',
-        default=False,
-        action="store_const",
-        const=lr.REMOTE,
-        help='List only the remote')
-    sp.add_argument(
-        '-s',
-        '--source',
-        default=False,
-        action="store_const",
-        const=lr.SOURCE,
-        help='List only the source')
-    sp.add_argument(
-        '-w',
-        '--warehouse',
-        default=False,
-        action="store_const",
-        const='warehouse',
-        help='List warehouses')
-    sp.add_argument(
-        '-c',
-        '--collection',
-        default=False,
-        action="store_const",
-        const='collection',
-        help='List collections')
-    sp.add_argument(
-        'term',
-        nargs='?',
-        type=str,
-        help='Name or ID of the bundle or partition')
+    sp.add_argument( '-P', '--plain', default=False, action="store_true", help="Print only vids")
+    sp.add_argument( '-F', '--fields', type=str, help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
+    sp.add_argument( '-p', '--partitions', default=False, action="store_true", help="Show partitions")
+    sp.add_argument( '-t', '--tables', default=False, action="store_true", help="Show tables")
+    sp.add_argument( '-a', '--all', default=False, action="store_true", help='List everything')
+    sp.add_argument( '-l', '--library', default=False, action="store_const", const=lr.LIBRARY, help='List only the library')
+    sp.add_argument( '-r', '--remote', default=False, action="store_const", const=lr.REMOTE, help='List only the remote')
+    sp.add_argument( '-s', '--source', default=False, action="store_const", const=lr.SOURCE, help='List only the source')
+    sp.add_argument( '-w', '--warehouse', default=False, action="store_const", const='warehouse', help='List warehouses')
+    sp.add_argument( '-c', '--collection', default=False, action="store_const", const='collection', help='List collections')
+    sp.add_argument( 'term', nargs='?', type=str, help='Name or ID of the bundle or partition')
 
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='info')
-    sp.add_argument(
-        '-l',
-        '--library',
-        default=False,
-        action="store_const",
-        const=lr.LIBRARY,
-        help='Search only the library')
-    sp.add_argument(
-        '-r',
-        '--remote',
-        default=False,
-        action="store_const",
-        const=lr.REMOTE,
-        help='Search only the remote')
-    sp.add_argument(
-        '-s',
-        '--source',
-        default=False,
-        action="store_const",
-        const=lr.SOURCE,
-        help='Search only the source')
-    sp.add_argument(
-        '-p',
-        '--partitions',
-        default=False,
-        action="store_true",
-        help="Show partitions")
-    sp.add_argument(
-        'term',
-        type=str,
-        nargs='?',
-        help='Name or ID of the bundle or partition')
+    sp.add_argument( '-l', '--library', default=False, action="store_const", const=lr.LIBRARY, help='Search only the library')
+    sp.add_argument( '-r', '--remote', default=False, action="store_const", const=lr.REMOTE, help='Search only the remote')
+    sp.add_argument( '-s', '--source', default=False, action="store_const", const=lr.SOURCE, help='Search only the source')
+    sp.add_argument( '-p', '--partitions', default=False, action="store_true", help="Show partitions")
+    sp.add_argument( 'term', type=str, nargs='?', help='Name or ID of the bundle or partition')
 
     sp = cmd.add_parser('meta', help='Dump the metadata for a bundle')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='meta')
-    sp.add_argument(
-        'term',
-        type=str,
-        nargs='?',
-        help='Name or ID of the bundle or partition')
-    sp.add_argument(
-        '-k',
-        '--key',
-        default=False,
-        type=str,
-        help='Return the value of a specific key')
+    sp.add_argument( 'term', type=str, nargs='?', help='Name or ID of the bundle or partition')
+    sp.add_argument( '-k', '--key', default=False, type=str, help='Return the value of a specific key')
     group = sp.add_mutually_exclusive_group()
-    group.add_argument(
-        '-y',
-        '--yaml',
-        default=False,
-        action='store_true',
-        help='Output yaml')
-    group.add_argument(
-        '-j',
-        '--json',
-        default=False,
-        action='store_true',
-        help='Output json')
-    group.add_argument(
-        '-r',
-        '--rows',
-        default=False,
-        action='store_true',
-        help='Output key/value pair rows')
-    sp.add_argument(
-        'terms',
-        type=str,
-        nargs=argparse.REMAINDER,
-        help='Query commands to find packages with. ')
+    group.add_argument( '-y', '--yaml', default=False, action='store_true', help='Output yaml')
+    group.add_argument( '-j', '--json', default=False, action='store_true', help='Output json')
+    group.add_argument( '-r', '--rows', default=False, action='store_true', help='Output key/value pair rows')
+    sp.add_argument( 'terms', type=str, nargs=argparse.REMAINDER, help='Query commands to find packages with. ')
 
     sp = cmd.add_parser('doc', help='Start the documentation server')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='doc')
 
-    sp.add_argument(
-        '-c',
-        '--clean',
-        default=False,
-        action="store_true",
-        help='When used with --reindex, delete the index and old files first. ')
-    sp.add_argument('-d', '--debug', default=False, action="store_true",
-                    help='Debug mode ')
-    sp.add_argument(
-        '-p',
-        '--port',
-        help='Run on a sepecific port, rather than pick a random one')
+    sp.add_argument( '-c', '--clean', default=False, action="store_true", help='When used with --reindex, delete the index and old files first. ')
+    sp.add_argument('-d', '--debug', default=False, action="store_true",             help='Debug mode ')
+    sp.add_argument( '-p', '--port', help='Run on a sepecific port, rather than pick a random one')
 
     sp = cmd.add_parser('search', help='Search the full-text index')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='search')
-    sp.add_argument(
-        'term',
-        type=str,
-        nargs=argparse.REMAINDER,
-        help='Query term')
-    sp.add_argument(
-        '-l',
-        '--list',
-        default=False,
-        action="store_true",
-        help='List documents instead of search')
-    sp.add_argument(
-        '-d',
-        '--datasets',
-        default=False,
-        action="store_true",
-        help='Search only the dataset index')
-    sp.add_argument(
-        '-i',
-        '--identifiers',
-        default=False,
-        action="store_true",
-        help='Search only the identifiers index')
-    sp.add_argument(
-        '-p',
-        '--partitions',
-        default=False,
-        action="store_true",
-        help='Search only the partitions index')
-    sp.add_argument(
-        '-R',
-        '--reindex',
-        default=False,
-        action="store_true",
-        help='Generate documentation files and index the full-text search')
+    sp.add_argument( 'term', type=str, nargs=argparse.REMAINDER, help='Query term')
+    sp.add_argument( '-l', '--list', default=False, action="store_true", help='List documents instead of search')
+    sp.add_argument( '-i', '--identifiers', default=False, action="store_true", help='Search only the identifiers index')
+    sp.add_argument( '-R', '--reindex', default=False, action="store_true", help='Generate documentation files and index the full-text search')
+    sp.add_argument( '-d', '--document', default=False, action="store_true",
+                    help='Return the search document for an object id')
+    sp.add_argument('-u', '--unparsed', default=False, action="store_true",
+                    help='Pass the search term to the engine without parsing')
 
 
 def root_command(args, rc):
@@ -435,83 +286,80 @@ def root_search(args, l, config):
 
     term = ' '.join(args.term)
 
+
     if args.reindex:
 
         print 'Updating the identifier'
 
-        #sources = ['census.gov-index-counties', 'census.gov-index-places', 'census.gov-index-states']
-        sources = ['census.gov-index-counties', 'census.gov-index-states']
+        def tick(message):
+            """Writes a tick to the stdout, without a space or newline."""
+            import sys
+
+            sys.stdout.write("\033[K{}\r".format(message))
+            sys.stdout.flush()
+
 
         records = []
 
         source = 'civicknowledge.com-terms-geoterms'
 
         p = l.get(source).partition
-        type = p.table.name
 
         for row in p.rows:
-            records.append(
-                dict(
-                    identifier=row['gvid'],
-                    type=row['type'],
-                    name=row['name']))
+            records.append( dict(identifier=row['gvid'],type=row['type'],name=row['name']))
 
         l.search.index_identifiers(records)
 
         print "Reindexing docs"
-        l.search.index_datasets()
+        l.search.index_datasets(tick_f = tick)
 
         return
 
-    if args.identifiers:
+    if args.document:
+        import json
+
+        b = l.get(term)
+
+        if b.partition:
+            print json.dumps(l.search.partition_doc(b.partition), indent = 4)
+        else:
+            print json.dumps(l.search.dataset_doc(b), indent = 4)
+
+        return
+
+    elif args.identifiers:
 
         if args.list:
             for x in l.search.identifiers:
                 print x
 
         else:
-            for score, gvid, name in l.search.search_identifiers(term, limit=30):
-                print "{:6.2f} {:9s} {}".format(score, gvid, name)
+            for score, gvid, rtype, name in l.search.search_identifiers(term, limit=30):
+                print "{:6.2f} {:9s} {} {}".format(score, gvid, rtype, name)
 
-    elif args.datasets or not (args.identifiers or args.partitions):
+    else:
 
         if args.list:
 
             for x in l.search.datasets:
+                print x
                 ds = l.dataset(x)
                 print x, ds.name, ds.data.get('title')
 
         else:
+            if args.unparsed:
+                parsed = term
+            else:
+                parsed = l.search.make_query_from_terms(term)
 
-            print "search for ", term
+            print "search for ", parsed
 
-            for x in l.search.search_datasets(term):
-                ds = l.dataset(x)
-                print x, ds.name, ds.data.get('title')
+            datasets =  l.search.search_datasets(parsed)
 
-    elif args.partitions:
+            for  result in sorted(datasets.values(), key=lambda e: e.score, reverse=True):
 
-        if args.list:
-            for x in l.search.partitions:
-                p = l.partition(x)
-                print p.vid, p.vname
-        else:
-
-            from ..identity import ObjectNumber
-            from collections import defaultdict
-
-            bundles = defaultdict(set)
-
-            for x in l.search.search_partitions(term):
-                bvid = ObjectNumber.parse(x).as_dataset
-
-                bundles[str(bvid)].add(x)
-
-            for bvid, pvids in bundles.items():
-
-                ds = l.dataset(str(bvid))
-
-                print ds.vid, ds.name, len(pvids), ds.data.get('title')
+                ds = l.dataset(result.vid)
+                print result.score, result.vid, ds.name, ds.data.get('title'), list(result.partitions)[:5]
 
 
 def root_doc(args, l, rc):

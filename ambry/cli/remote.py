@@ -90,8 +90,8 @@ def remote_command(args, rc):
 
 
 def remote_info(args, l, rc):
-    from ..identity import Identity
-    from ambry.client.exceptions import NotFound
+
+    from boto.exception import S3ResponseError
 
     if args.term:
         ip, ident = l.remote_resolver.resolve_ref_one(args.term)
@@ -100,8 +100,17 @@ def remote_info(args, l, rc):
             _print_bundle_entry(ident, prtf=prt)
 
     else:
-        for r in l.remotes:
-            print r
+        for name, remote in l.remotes.items():
+
+            try:
+                lst = remote.list()
+                ok = 'OK {} bundles'.format(len(lst))
+            except S3ResponseError as e:
+                ok = 'S3 Error: '+str(e)
+            except Exception as e:
+                ok = 'Error : '+str(e)
+
+            print name, remote, ok
 
 
 def remote_list(args, l, rc, return_meta=False):

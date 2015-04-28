@@ -320,22 +320,13 @@ class BundleFilesystem(Filesystem):
                 if regex is None:
                     # Assume only one file in zip archive.
                     name = iter(zf.namelist()).next()
-                    abs_path = self._get_unzip_file(
-                        cache,
-                        tmpdir,
-                        zf,
-                        path,
-                        name)
+                    abs_path = self._get_unzip_file(cache,tmpdir,zf,path,name)
                 else:
 
                     for name in zf.namelist():
                         if regex.match(name):
-                            abs_path = self._get_unzip_file(
-                                cache,
-                                tmpdir,
-                                zf,
-                                path,
-                                name)
+                            abs_path = self._get_unzip_file(cache,tmpdir,zf,path, name)
+                            print '!!!!', abs_path
                             break
 
                 return abs_path

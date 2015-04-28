@@ -778,12 +778,21 @@ class Schema(object):
                     self.add_column(t, name, **d)
 
     def expand_column_prototypes(self):
+        """Find values for the proto_vid that are in the proto_terms dataset, and expand them into column vids
+
+        :return:
+        """
         from orm import Column
         from identity import ObjectNumber, NotObjectNumberError
+        from collections import defaultdict
 
         q = (self.bundle.database.session.query(Column).filter(Column.proto_vid != None))
 
         pt_map = None
+
+        # Group expanded columns by souce table, to create sql indexes for the sets of columns
+        # pointing ot the same ambry index dataset
+        table_cols = defaultdict(set)
 
         for c in q.all():
 
@@ -806,7 +815,6 @@ class Schema(object):
                 if pt_row['index_partition']:
                     ip = self.bundle.library.get(pt_row['index_partition']).partition
 
-
                     for ipc in ip.table.columns:
 
                         if ipc.proto_vid == c.proto_vid:
@@ -815,6 +823,8 @@ class Schema(object):
                             self.bundle.log("expand_column_prototype: {} {} -> {}.{}".format(
                                             c.table.name, c.name,
                                             str(ip.identity.vname),ipc.name))
+
+                            table_cols[ip.identity.vid].add(c.vid)
 
 
     def process_proto_vid(self, pvid):
@@ -869,20 +879,21 @@ class Schema(object):
 
 
         fsp = partial(self.bundle.filesystem.path,'meta')
+        fsbp = partial(self.bundle.filesystem.build_path)
         sb = self.bundle
 
 
         if os.path.exists(fsp(sb.SCHEMA_FILE)):
 
             try:
-                if not filecmp.cmp( fsp(sb.SCHEMA_FILE),fsp(sb.SCHEMA_OLD_FILE)):
-                    shutil.copy(fsp(sb.SCHEMA_FILE),fsp(sb.SCHEMA_OLD_FILE))
+                if not filecmp.cmp( fsp(sb.SCHEMA_FILE),fsbp(sb.SCHEMA_OLD_FILE)):
+                    shutil.copy(fsp(sb.SCHEMA_FILE),fsbp(sb.SCHEMA_OLD_FILE))
             except OSError: # hopefully only a file not found error
                 pass
 
             try:
-                if not filecmp.cmp(fsp(sb.SCHEMA_REVISED_FILE),fsp(sb.SCHEMA_FILE)):
-                    shutil.copy(fsp(sb.SCHEMA_REVISED_FILE),fsp(sb.SCHEMA_FILE))
+                if not filecmp.cmp(fsbp(sb.SCHEMA_REVISED_FILE),fsp(sb.SCHEMA_FILE)):
+                    shutil.copy(fsbp(sb.SCHEMA_REVISED_FILE),fsp(sb.SCHEMA_FILE))
             except OSError: # hopefully only a file not found error
                 pass
 
@@ -1289,13 +1300,7 @@ class {name}(Base):
             for t in self.tables:
                 for c in t.columns:
                     for cd in c._codes:
-                        row = [
-                            t.name,
-                            c.name,
-                            cd.key,
-                            cd.value,
-                            cd.description
-                        ]
+                        row = [ t.name,c.name,cd.key,cd.value,cd.description]
 
                         w.writerow(row)
                         count += 1

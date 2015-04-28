@@ -146,7 +146,13 @@ class LoaderBundle(BuildBundle):
 
         fn = self.filesystem.download(source_name)
 
-        #self.log("Generating from {}".format(fn))
+        if fn.endswith('.zip'):
+
+            sub_file = source.file
+
+            fn = self.filesystem.unzip(fn, regex = sub_file)
+
+
 
         base_dir, file_name  = split(fn)
         file_base, ext = splitext(file_name)
@@ -158,6 +164,8 @@ class LoaderBundle(BuildBundle):
                 ext = ext[1:]
 
             ext = self.row_gen_ext_map.get(ext,ext)
+
+        print '!!!!', ext, source.filetype
 
         if source.row_spec.dict:
             rs = source.row_spec.dict
