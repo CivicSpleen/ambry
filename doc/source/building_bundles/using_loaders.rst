@@ -66,5 +66,12 @@ Todo
 * Run bambry info -P -S
 
 
+Bambry Info
+***********
+
+There should not be any numbers in the sample values; it means the column is a string type. 
+
+
+
 
              

@@ -67,13 +67,13 @@ class LoaderBundle(BuildBundle):
 
         mn =  Column.mangle_name(n.strip())
 
-
         if mn in self.col_map:
             col =  self.col_map[mn]['col']
             if col:
                 return col
             else:
                 return mn
+
         else:
             return mn
 
