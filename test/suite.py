@@ -3,7 +3,6 @@ Created on Oct 15, 2012
 
 @author: eric
 """
-
 import unittest
 import test_bundle
 import test_library
@@ -12,7 +11,8 @@ import test_metadata
 import test_cli
 
 
-if __name__ == '__main__':
+if __name__ in ('__main__', 'test.suite'):
+    # it is test.suite if tests run from setup.py
     suite = unittest.TestSuite()
 
     suite.addTests(test_identity.suite())

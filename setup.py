@@ -76,7 +76,8 @@ d = dict(
     extras_require={
         'pgsql': ['psycopg2'],
         'geo': ['sh', 'gdal'],
-        'server': ['paste', 'bottle']}
+        'server': ['paste', 'bottle']},
+    test_suite='test.suite'
 )
 
 setup(**d)
