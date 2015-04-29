@@ -44,3 +44,12 @@ After setting up anmry, you can use conda to install gdal
     $ pip install -r requirements.txt
     $ conda install gdal
     $ python setup.py devel
+
+Running the ambry tests
+=======================
+.. code-block:: bash
+
+    $ git clone https://github.com/<githubid>/ambry.git
+    $ cd ambry
+    $ pip install -r requirements/dev.txt
+    $ python setup.py test
