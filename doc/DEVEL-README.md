@@ -12,12 +12,14 @@ or
 
 
 To run tests:
+
     $ git clone https://github.com/<githubid>/ambry.git
     $ cd ambry
     $ pip install -r requirements/dev.txt
     $ python setup.py test
 
 To run tests with coverage:
+
     1. Run with coverage
       $ coverage run python setup.py test
     2. Generage html:
