@@ -21,8 +21,6 @@ logger_init = set()
 
 def get_logger(name,file_name=None,stream=None,template=None,clear=False,propagate=False):
 
-    raise Exception(name)
-
     return _get_logger(name,file_name=file_name,stream=stream,template=template,
                        clear=clear,propagate=propagate)
 
