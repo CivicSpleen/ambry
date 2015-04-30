@@ -21,7 +21,6 @@ install:
 # command to run tests
 script: 
     - ambry config install
-    - cd test
-    - python -munittest test_identity
+    - python setup.py test
     
     
