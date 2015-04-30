@@ -85,10 +85,7 @@ class SqlitePartition(PartitionBase):
 
         for index_name in indexes:
 
-            print 'Drop', index_name
-
-            self.database.connection.execute(
-                "DROP INDEX {}".format(index_name))
+            self.database.connection.execute("DROP INDEX {}".format(index_name))
 
     def create_with_tables(self, tables=None, clean=False):
         '''Create, or re-create,  the partition, possibly copying tables

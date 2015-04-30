@@ -3,16 +3,20 @@ Created on Jul 6, 2013
 
 @author: eric
 """
+
 import unittest
+from test_base import  TestBase
 
 from ambry.identity import *
 from  bundles.testbundle.bundle import Bundle
-from test_base import  TestBase
+
 
 
 class Test(TestBase):
 
     def setUp(self):
+
+        super(Test,self).setUp()
 
         self.copy_or_build_bundle()
 
@@ -292,14 +296,13 @@ class Test(TestBase):
                           space='space',
                           format='hdf'
                           )
-        #import pprint
-        #pprint.pprint(pnq.dict)
+
 
         #
         # Locations
         #
 
-        print str(ident.locations)
+
         self.assertEquals('       ', str(ident.locations))
         ident.locations.set(LocationRef.LOCATION.LIBRARY, 1)
         ident.locations.set(LocationRef.LOCATION.REMOTE, 2)
@@ -529,7 +532,12 @@ class Test(TestBase):
 
 
         p = bp.find_or_new_geo(time = 't2', space='s1')
-        self.assertEquals('source-dataset-subset-variation-t2-s1-geo-0.0.1~piEGPXmDC8003001', p.identity.fqname)
+
+        # Which it is depends on whether GDAL is installed.
+        self.assertIn(p.identity.fqname,[
+            'source-dataset-subset-variation-t2-s1-geo-0.0.1~piEGPXmDC8003001',
+            'source-dataset-subset-variation-t2-s1-0.0.1~piEGPXmDC8003001' ]
+        )
 
 
         # Ok! Build!
@@ -562,9 +570,14 @@ class Test(TestBase):
         
         from ambry.identity import NumberServer
         from ambry.run import  get_runconfig
+        from ambry.dbexceptions import ConfigurationError
+
         rc = get_runconfig()
-    
-        ng = rc.group('numbers')
+
+        try:
+            ng = rc.service('numbers')
+        except ConfigurationError:
+            return
 
         # You'll need to run a local service at this address
         host = "numbers"
@@ -598,76 +611,7 @@ class Test(TestBase):
         self.assertEquals(str(n1), str(ns.find('foobar')))
         self.assertEquals(str(n1), str(ns.find('foobar')))
 
-    #
-    # This test is turned off because it doesn't delete the bundle at the end,
-    # so the next test fails.
-    #
-    def x_test_rewrite(self):
-        from  testbundle.bundle import Bundle
-        import json
-        from ambry.run import get_runconfig
 
-        # Prepare to rewrite the bundle.yaml file.
-        bundle = Bundle()
-        orig = os.path.join(bundle.bundle_dir,'bundle.yaml')
-        save = os.path.join(bundle.bundle_dir,'bundle.yaml.save')
-
-        try:
-            os.rename(orig,save)
-
-            print 'Write to ', orig
-            with open(orig,'w') as f:
-                f.write(json.dumps(
-                    {
-                        "identity":{
-                            "dataset": "dataset1",
-                            "id": "dfoo",
-                            "revision": 100,
-                            "source": "source1",
-                            "subset": "subset1",
-                            "variation": "variation1",
-                            "version": "1.0.1",
-                            "vid": "dfob001",
-                        },
-                        "about": {
-                            "author": "bob@bob.com"
-                        }
-                    }
-                ))
-
-            get_runconfig.clear() # clear config cache.
-            bundle = Bundle()
-            bundle.clean()
-            bundle.pre_prepare()
-            bundle.prepare()
-            bundle.post_prepare() # Does the rewrite, adding the 'names'
-
-            # Need to clear and reload one more time for the 'names' to appear
-            get_runconfig.clear() # clear config cache.
-            bundle = Bundle()
-            bundle.exit_on_fatal = False
-
-            self.assertEquals('dataset1', bundle.config.identity.dataset)
-            self.assertEquals('dfoo', bundle.config.identity.id)
-            self.assertEquals(100, bundle.config.identity.revision)
-
-            self.assertEquals("source1-dataset1-subset1-variation1-1.0.100~dfoo01C", bundle.config.names.fqname)
-
-            self.assertEquals("bob@bob.com", bundle.config.about.author)
-
-        finally:
-            os.rename(save, orig)
-            self.delete_bundle()
-
-
-    def test_format(self):
-
-        name = Name(source='source.com', dataset='foobar',  version='0.0.1')
-        dn = DatasetNumber(10000, 1, assignment_class='registered')
-
-        for format in ('geo','db'):
-            pi = Identity(name, dn).as_partition(space='space', format=format)
-            print type(pi), pi.path
 
 
     def test_time_space(self):
@@ -712,11 +656,7 @@ class Test(TestBase):
                 'version': '0.0.1'
             }
 
-    def test_namequery(self):
-        from ambry.identity import PartitionNameQuery
-        pnq = PartitionNameQuery(table='foobar', time='tomorrow')
 
-        print pnq
 
 
 

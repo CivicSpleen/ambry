@@ -95,8 +95,6 @@ class LibraryDb(object):
 
         if not self._engine:
 
-            # print "Create Engine",os.getpid(), self.dsn
-
             # There appears to be a problem related to connection pooling on Linux + Postgres, where
             # multiprocess runs will throw exceptions when the Datasets table record can't be
             # found. It looks like connections are losing the setting for the search path to the
@@ -316,7 +314,7 @@ class LibraryDb(object):
         self.commit()
 
     def __del__(self):
-        pass  # print  'closing LibraryDb'
+        pass
 
     def clone(self):
         return self.__class__(

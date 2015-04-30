@@ -14,7 +14,8 @@ import logging
 
 from ambry.orm import Dataset
 from ..identity import LocationRef, Identity
-from ..util import memoize, get_logger
+from ..util import memoize
+
 import weakref
 from files import Files
 from sqlalchemy import event
@@ -157,6 +158,7 @@ class Library(object):
         sync: If true, put to remote synchronously. Defaults to False.
 
         '''
+        from ..util import get_logger
 
         assert database is not None
 

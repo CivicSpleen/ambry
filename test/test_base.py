@@ -3,6 +3,14 @@ Created on Jun 22, 2012
 
 @author: eric
 """
+
+# Monkey patch loggin, because I really don't understand logging
+
+import ambry.util
+from ambry.util import install_test_logger
+
+ambry.util.get_logger = install_test_logger('/tmp/ambry-test.log')
+
 import unittest
 from  bundles.testbundle.bundle import Bundle
 from ambry.identity import * #@UnusedWildImport
@@ -17,6 +25,12 @@ logging.captureWarnings(True)
 class TestBase(unittest.TestCase):
 
     server_url = None
+
+    def setUp(self):
+        import ambry.util
+
+        ambry.util.install_test_logger('/tmp/test.log')
+
 
     def bundle_dirs(self):
 
@@ -93,7 +107,7 @@ class TestBase(unittest.TestCase):
                 os.system("rm -rf {1}; rsync -arv {0} {1} > /dev/null ".format(build_dir, save_dir))
 
         # Always copy, just to be safe. 
-        global_logger.info(  "Copying bundle from {}".format(save_dir))
+        #global_logger.info(  "Copying bundle from {}".format(save_dir))
         os.system("rm -rf {0}; rsync -arv {1} {0}  > /dev/null ".format(build_dir, save_dir))
 
 

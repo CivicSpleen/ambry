@@ -416,7 +416,7 @@ class TableShapefile(object):
                             v = str(
                                 v.decode('latin1').encode('utf_8') if v else None)
                         except Exception:
-                            print row
+
                             raise
 
                     if v is not False:
@@ -446,7 +446,7 @@ class TableShapefile(object):
                             feature.SetField(
                                 str(c.name), c.python_type(c.default))
                         except:
-                            print "Failed for {} ".format(c.name)
+
                             raise
 
         else:

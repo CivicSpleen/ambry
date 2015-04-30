@@ -249,7 +249,9 @@ class Intuiter(object):
                     self._columns[col].description = desc
 
             except Exception as e:
-                print 'Failed to add row: {}: {} {}'.format(row, type(e), e)
+                # This usually doesn't matter, since there are usually plenty of other rows to intuit from
+                # print 'Failed to add row: {}: {} {}'.format(row, type(e), e)
+                pass
 
 
     @property
