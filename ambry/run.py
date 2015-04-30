@@ -119,11 +119,8 @@ class RunConfig(object):
 
         if not name in self.config:
             raise ConfigurationError(
-                ("No group '{}' in configuration.\n" +
-                 "Config has: {}\nLoaded: {}").format(
-                    name,
-                    self.config.keys(),
-                    self.loaded))
+                ("No group '{}' in configuration.\n" + "Config has: {}\nLoaded: {}")
+                    .format(name,self.config.keys(),self.loaded))
 
         return self.config.get(name, {})
 

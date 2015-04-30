@@ -13,23 +13,18 @@ from heapq import nsmallest
 from operator import itemgetter
 import logging
 import yaml
-from collections import Mapping, OrderedDict, defaultdict
-import os
-import sys
+from collections import OrderedDict, defaultdict
 
 from flo import *  # Legacy; should convert clients to direct import
-from functools import reduce
 
 logger_init = set()
 
+def get_logger(name,file_name=None,stream=None,template=None,clear=False,propagate=False):
 
-def get_logger(
-        name,
-        file_name=None,
-        stream=None,
-        template=None,
-        clear=False,
-        propagate=False):
+    return _get_logger(name,file_name=file_name,stream=stream,template=template,
+                       clear=clear,propagate=propagate)
+
+def _get_logger(name,file_name=None,stream=None,template=None,clear=False,propagate=False):
     """Get a logger by name.
 
     if file_name is specified, and the dirname() of the file_name
@@ -64,7 +59,6 @@ def get_logger(
         handlers = []
 
         if stream is not None:
-
             handlers.append(logging.StreamHandler(stream=stream))
 
         if file_name is not None:
@@ -83,6 +77,24 @@ def get_logger(
         logger_init.add(name)
 
     return logger
+
+def install_test_logger(test_file_name):
+
+    def test_get_logger(name,file_name=None,stream=None,template=None,clear=False,propagate=False):
+        """A quiet logger used for testing. """
+
+        import logging
+
+        logger = logging.getLogger(name )
+        hdlr = logging.FileHandler(test_file_name)
+        formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+        hdlr.setFormatter(formatter)
+        logger.addHandler(hdlr)
+        logger.setLevel(logging.DEBUG)
+
+        return logger
+
+    return test_get_logger
 
 
 def clear_logger(name):

@@ -203,8 +203,7 @@ class OgrExtractor(Extractor):
                 break
 
         if not geo_col:
-            print all_cols
-            print geo_cols
+            pass
 
         types = ce(
             'SELECT count(*) AS count, GeometryType({geo}) AS type,  CoordDimension({geo}) AS cd '
@@ -268,8 +267,6 @@ class OgrExtractor(Extractor):
                 fdfn = ogr.FieldDefn(name, self.ogr_type_map(row['type']))
             except KeyError:
                 continue
-
-            print "CREATE", name, self.ogr_type_map(row['type'])
 
             if row['type'] == '':
                 # FIXME Wasteful, but would have to scan table for max value.
@@ -356,10 +353,10 @@ class OgrExtractor(Extractor):
 
                         feature.SetField(name, value)
                     except Exception as e:
-                        print 'Failed for {}={} ({})'.format(name, value, type(value))
+
                         raise
                     except NotImplementedError as e:
-                        print e
+
                         raise
 
             geometry = ogr.CreateGeometryFromWkt(row['_wkt'])

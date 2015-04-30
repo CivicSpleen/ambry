@@ -141,10 +141,12 @@ class LoaderBundle(BuildBundle):
 
     def row_gen_for_source(self, source_name):
         from os.path import dirname, split, splitext
+        from ..dbexceptions import BuildError
 
         source = self.metadata.sources[source_name]
 
-        fn = self.filesystem.download(source_name)
+        dfn = fn = self.filesystem.download(source_name)
+
 
         if fn.endswith('.zip'):
 
@@ -152,7 +154,8 @@ class LoaderBundle(BuildBundle):
 
             fn = self.filesystem.unzip(fn, regex = sub_file)
 
-
+        if not fn:
+           raise BuildError("Didn't get file out of zip file '{}'. Regex = '{}'".format(dfn, sub_file))
 
         base_dir, file_name  = split(fn)
         file_base, ext = splitext(file_name)
@@ -164,8 +167,6 @@ class LoaderBundle(BuildBundle):
                 ext = ext[1:]
 
             ext = self.row_gen_ext_map.get(ext,ext)
-
-        print '!!!!', ext, source.filetype
 
         if source.row_spec.dict:
             rs = source.row_spec.dict
@@ -429,6 +430,10 @@ class LoaderBundle(BuildBundle):
     def build(self):
         for source_name in self.metadata.sources:
             self.build_from_source(source_name)
+
+            if self.run_args.test:
+                break
+
         return True
 
 class CsvBundle(LoaderBundle):

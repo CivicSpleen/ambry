@@ -137,7 +137,7 @@ class DocCache(object):
         times = defaultdict(Times)
 
         for t in self.times:
-            print t.__dict__
+
             k = t.key + '_' + ('cached' if t.from_cache else 'func')
             ct = times[k]
             ct.key = k

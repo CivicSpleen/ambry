@@ -122,7 +122,7 @@ class Bundle(object):
         # Force the logger to re-open, which will re-create the file that just
         # got deleted
         self._logger = None
-        clear_logger(__name__)
+        #clear_logger(__name__)
 
     @property
     def database(self):

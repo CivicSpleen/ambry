@@ -13,7 +13,7 @@ from test_base import  TestBase
 class Test(TestBase):
  
     def setUp(self):
-
+        super(Test, self).setUp()
         self.bundle = Bundle()
         self.bundle_dir = self.bundle.bundle_dir
 

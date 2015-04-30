@@ -14,7 +14,8 @@ import logging
 
 from ambry.orm import Dataset
 from ..identity import LocationRef, Identity
-from ..util import memoize, get_logger
+from ..util import memoize
+
 import weakref
 from files import Files
 from sqlalchemy import event
@@ -157,6 +158,7 @@ class Library(object):
         sync: If true, put to remote synchronously. Defaults to False.
 
         '''
+        from ..util import get_logger
 
         assert database is not None
 
@@ -1233,7 +1235,10 @@ class Library(object):
                 for cache_key in remote_list:
                     # Key without the version
                     nv_key = re.sub(r'-\d+\.\d+\.\d+\.db', '', cache_key)
-                    version = int(re.search(r'(\d+)\.db$', cache_key).group(1))
+                    try:
+                        version = int(re.search(r'(\d+)\.db$', cache_key).group(1))
+                    except AttributeError:
+                        self.logger.error("Failed to find version numbers in '{}' ".format(cache_key))
 
                     if version > last_keys[nv_key][0]:
                         last_keys[nv_key] = [version, cache_key]
