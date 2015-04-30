@@ -78,6 +78,9 @@ def root_parser(cmd):
     sp.add_argument('-u', '--unparsed', default=False, action="store_true",
                     help='Pass the search term to the engine without parsing')
 
+    sp = cmd.add_parser('sync', help='Sync with the remotes')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='sync')
 
 def root_command(args, rc):
     from ..library import new_library
@@ -281,6 +284,13 @@ def root_meta(args, l, rc):
                 print o.dump()
 
 
+def root_sync(args, l, config):
+    """Sync with the remote. For more options, use library sync
+    """
+
+    l.logger.info("==== Sync Remotes")
+    l.sync_remotes()
+
 def root_search(args, l, config):
     # This will fetch the data, but the return values aren't quite right
 
@@ -390,3 +400,4 @@ def root_doc(args, l, rc):
         webbrowser.open("http://localhost:{}/".format(port))
 
     app.run(host=config['host'], port=int(port), debug=args.debug)
+

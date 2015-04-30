@@ -151,7 +151,7 @@ def tc_obj(ref):
     if c:
 
         if not table:
-            print '!!! in tc_obj, No table for ', str(t)
+            pass
 
         try:
             return table['columns'][str(c.rev(0))]

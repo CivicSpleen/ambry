@@ -314,10 +314,6 @@ class Test(TestBase):
                 pids[pid.fqname] = pid
 
 
-
-        #print '!!!', self.bundle.database.dsn
-        #return
-
         with self.bundle.session as s:
 
             s.commit()

@@ -214,7 +214,7 @@ class SourceTree(object):
             f.state = state
             self.library.files.merge(f)
         else:
-            print 'Naught for ', ident.vid
+            pass
 
     def add_source_url(self, ident, repo, data):
 

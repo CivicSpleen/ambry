@@ -1233,7 +1233,10 @@ class Library(object):
                 for cache_key in remote_list:
                     # Key without the version
                     nv_key = re.sub(r'-\d+\.\d+\.\d+\.db', '', cache_key)
-                    version = int(re.search(r'(\d+)\.db$', cache_key).group(1))
+                    try:
+                        version = int(re.search(r'(\d+)\.db$', cache_key).group(1))
+                    except AttributeError:
+                        self.logger.error("Failed to find version numbers in '{}' ".format(cache_key))
 
                     if version > last_keys[nv_key][0]:
                         last_keys[nv_key] = [version, cache_key]
