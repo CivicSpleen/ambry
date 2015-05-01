@@ -1,3 +1,5 @@
+environment:
+    category: development
 
 library:
     default:

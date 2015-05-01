@@ -9,11 +9,7 @@ import os
 from ..cli import prt, err, fatal, warn, _print_info  # @UnresolvedImport
 from ambry.util import Progressor
 
-# If the devel module exists, this is a development system.
-try:
-    from ambry.support.devel import *
-except ImportError as e:
-    from ambry.support.production import *
+
 
 
 def library_parser(cmd):
@@ -102,11 +98,6 @@ def library_parser(cmd):
     whsp.set_defaults(subcommand='config')
     whsp.add_argument('term', type=str, nargs='?', help='Var=Value')
 
-    if IN_DEVELOPMENT:
-        sp = asp.add_parser('test', help='Run development test code')
-        sp.set_defaults(subcommand='test')
-        sp.add_argument('terms', type=str, nargs=argparse.REMAINDER,
-                        help='Name or ID of the bundle or partition to remove')
 
 
 def library_command(args, rc):
