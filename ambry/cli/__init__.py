@@ -396,12 +396,16 @@ def main(argsv=None, ext_logger=None):
             rc = get_runconfig(rc_path)
 
         except ConfigurationError:
-            fatal(
-                "Could not find configuration file at {}\nRun 'ambry config install; to create one ",
+            fatal("Could not find configuration file at {}\nRun 'ambry config install; to create one ",
                 rc_path)
 
         global global_run_config
         global_run_config = rc
+
+
+        if not rc.environment.get('category', False):
+            raise ConfigurationError("Must set a config value for environment.class, one of: "
+                                      "development, production, testing, staging")
 
     if not f:
         fatal("Error: No command: " + args.command)

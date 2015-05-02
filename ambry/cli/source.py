@@ -10,13 +10,6 @@ from ..cli import load_bundle, _print_bundle_list
 import os
 import shutil
 
-# If the devel module exists, this is a development system.
-try:
-    from ambry.support.devel import *
-except ImportError as e:
-    from ambry.support.production import *
-
-
 def source_command(args, rc):
     from ..library import new_library
     from . import global_logger
@@ -109,11 +102,6 @@ def source_parser(cmd):
     sp.add_argument('-k', '--key', help='Number server key')
     sp.add_argument('-s','--set',
         help='Set the number in the bundle in the specified directory')
-
-    if IN_DEVELOPMENT:
-        sp = asp.add_parser('test', help='Run some deveopment test code. ')
-        sp.set_defaults(subcommand='test')
-
 
 def source_info(args, l, st, rc):
     from . import _print_bundle_info
