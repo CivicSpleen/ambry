@@ -36,7 +36,6 @@ class ConfigFactory(SQLAlchemyModelFactory):
     value = factory.Sequence(lambda n: 'value-%03d' % n)
 
 
-
 class TableFactory(SQLAlchemyModelFactory):
     class Meta:
         model = Table
