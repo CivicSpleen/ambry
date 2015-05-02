@@ -32,6 +32,9 @@ class ConfigFactory(SQLAlchemyModelFactory):
 
     d_vid = factory.Sequence(lambda n: '%03d' % n)
     group = factory.Sequence(lambda n: '%03d' % n)
+    key = factory.Sequence(lambda n: 'key-%03d' % n)
+    value = factory.Sequence(lambda n: 'value-%03d' % n)
+
 
 
 class TableFactory(SQLAlchemyModelFactory):

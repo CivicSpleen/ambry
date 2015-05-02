@@ -4,6 +4,7 @@ import unittest
 import fudge
 
 from ambry.library.database import LibraryDb
+from ambry.orm import Dataset, Config, Partition, File, Column, ColumnStat, Table, Code
 
 from test.test_library.factories import DatasetFactory, ConfigFactory,\
     TableFactory, ColumnFactory, FileFactory, PartitionFactory, CodeFactory,\
@@ -18,6 +19,17 @@ class LibraryDbTest(unittest.TestCase):
     def tearDown(self):
         self.sqlite_db.drop()
         os.remove('test_database.db')
+
+    # helpers
+    def _assert_exists(self, model_class, **filter_kwargs):
+        query = self.sqlite_db.session.query(model_class)\
+            .filter_by(**filter_kwargs)
+        assert query.first() is not None
+
+    def _assert_does_not_exist(self, model_class, **filter_kwargs):
+        query = self.sqlite_db.session.query(model_class)\
+            .filter_by(**filter_kwargs)
+        assert query.first() is None
 
     def test_initialization_raises_exception_if_driver_not_found(self):
         with self.assertRaises(ValueError):
@@ -221,3 +233,47 @@ class LibraryDbTest(unittest.TestCase):
         ColumnStatFactory._meta.sqlalchemy_session = self.sqlite_db.session
         ColumnStatFactory(partition=partition1, column=column1)
         self.sqlite_db.session.commit()
+
+    # clean tests
+    def test_clean_deletes_all_instances(self):
+        self.sqlite_db.create_tables()
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        TableFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        ColumnFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        PartitionFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        ColumnStatFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        ConfigFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        FileFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        CodeFactory._meta.sqlalchemy_session = self.sqlite_db.session
+
+        conf1 = ConfigFactory()
+        ds1 = DatasetFactory()
+        file1 = FileFactory()
+        code1 = CodeFactory()
+        partition1 = PartitionFactory(dataset=ds1)
+
+        table1 = TableFactory(dataset=ds1)
+        column1 = ColumnFactory(table=table1)
+        colstat1 = ColumnStatFactory(partition=partition1, column=column1)
+
+        self.sqlite_db.session.commit()
+
+        models = [
+            (Code, dict(oid=code1.oid)),
+            (Column, dict(vid=column1.vid)),
+            (ColumnStat, dict(id=colstat1.id)),
+            (Config, dict(d_vid=conf1.d_vid)),
+            (Dataset, dict(vid=ds1.vid)),
+            (File, dict(path=file1.path)),
+            (Partition, dict(vid=partition1.vid)),
+            (Table, dict(vid=table1.vid))
+        ]
+
+        # validate existance
+        for model, kwargs in models:
+            self._assert_exists(model, **kwargs)
+
+        self.sqlite_db.clean()
+
+        for model, kwargs in models:
+            self._assert_does_not_exist(model, **kwargs)
