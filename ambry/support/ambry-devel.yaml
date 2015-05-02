@@ -6,7 +6,8 @@ library:
         filesystem: '{root}/library'
         database: 'sqlite://{root}/library.db'
         remotes:
-        - 'http://s3.sandiegodata.org/library'
+            public: 'http://public.library.civicknowledge.com'
+            system: 'http://system.library.civicknowledge.com'
 
 filesystem:
     root: /var/ambry
