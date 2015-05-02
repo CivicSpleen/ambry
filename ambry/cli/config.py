@@ -80,6 +80,7 @@ def config_install(args, rc):
     import os
     from ambry.run import RunConfig as rc
     import getpass
+    import os
 
     edit_args = ' '.join(args.args)
 
@@ -87,7 +88,9 @@ def config_install(args, rc):
 
     if user == 'root':
         install_file = rc.ROOT_CONFIG
-        default_root = '/ambry'
+    elif os.getenv('VIRTUAL_ENV'): # Special case for python virtual environments
+        install_file = os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')
+        default_root = os.path.join(os.getenv('VIRTUAL_ENV'), 'data')
     else:
         install_file = rc.USER_CONFIG
         warn(("Installing as non-root, to '{}'\n" +
@@ -129,7 +132,7 @@ def config_install(args, rc):
 
     if args.root:
         d['filesystem']['root'] = args.root
-    else:
+    elif default_root:
         d['filesystem']['root'] = default_root
 
     if args.remote:
