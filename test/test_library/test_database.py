@@ -3,6 +3,8 @@ import unittest
 
 import fudge
 
+from sqlalchemy.exc import IntegrityError
+
 from ambry.library.database import LibraryDb, ROOT_CONFIG_NAME_V
 from ambry.orm import Dataset, Config, Partition, File, Column, ColumnStat, Table, Code
 from ambry.dbexceptions import ConflictError
@@ -468,7 +470,6 @@ class LibraryDbTest(unittest.TestCase):
 
     def tests_raises_ConflictError_exception_if_save_failed(self):
         self.sqlite_db.create_tables()
-        from sqlalchemy.exc import IntegrityError
         fake_commit = fudge.Fake('commit')\
             .expects_call()\
             .raises(IntegrityError('a', 'a', 'a'))
