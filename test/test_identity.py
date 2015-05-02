@@ -559,7 +559,8 @@ class Test(TestBase):
         self.assertEquals('source-dataset-subset-variation-0.0.1',bundle.identity.vname)
         self.assertEquals('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',bundle.identity.fqname)
 
-    def test_number_service(self):
+    # TODO: This test should run against a number server setup locally, not the main server.
+    def x_test_number_service(self):
         
         ## For this test, setup these access keys in the
         ## Redis Server:
