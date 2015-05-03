@@ -883,6 +883,21 @@ class Column(Base):
         # _codes is a backref from Codes
         return self._codes  # Caches the query, I hope ...
 
+    @property
+    @memoize
+    def reverse_code_map(self):
+        """Return a map from a code ( usually a string ) to the  shorter numeric value"""
+
+        return { c.value:(c.ikey if c.ikey else c.key) for c in self.codes}
+
+    @property
+    @memoize
+    def forward_code_map(self):
+        """Return  a map from the short code to the full value """
+
+        return { (c.ikey if c.ikey else c.key):c.value for c in self.codes}
+
+
     def add_code(self, key, value, description=None, data=None):
         """
 
@@ -901,9 +916,15 @@ class Column(Base):
             if cd.key == str(key):
                 return cd
 
+        def cast_to_int(s):
+            try:
+                return int(s)
+            except ValueError:
+                return None
+
         cd = Code(c_vid=self.vid, t_vid=self.t_vid,
                   key=str(key),
-                  ikey=key if isinstance(key, int) else None,
+                  ikey= cast_to_int(key),
                   value=value,
                   description=description, data=data)
 
@@ -2030,34 +2051,16 @@ class Code(Base, SavableMixin, LinkableMixin):
 
     oid = SAColumn('cd_id', Integer, primary_key=True, nullable=False)
 
-    t_vid = SAColumn(
-        'cd_t_vid',
-        String(20),
-        ForeignKey('tables.t_vid'),
-        index=True)
+    t_vid = SAColumn('cd_t_vid',String(20),ForeignKey('tables.t_vid'),index=True)
     table = relationship('Table', backref='codes', lazy='subquery')
 
-    c_vid = SAColumn(
-        'cd_c_vid',
-        String(20),
-        ForeignKey('columns.c_vid'),
-        index=True)
+    c_vid = SAColumn('cd_c_vid',String(20),ForeignKey('columns.c_vid'),index=True)
     column = relationship('Column', backref='_codes', lazy='subquery')
 
-    key = SAColumn(
-        'cd_skey',
-        String(20),
-        nullable=False,
-        index=True)  # String version of the key, the value in the dataset
-    ikey = SAColumn(
-        'cd_ikey',
-        Integer,
-        index=True)  # Set only if the key is actually an integer
+    key = SAColumn('cd_skey',String(20),nullable=False,index=True)  # String version of the key, the value in the dataset
+    ikey = SAColumn( 'cd_ikey',Integer,index=True)  # Set only if the key is actually an integer
 
-    value = SAColumn(
-        'cd_value',
-        Text,
-        nullable=False)  # The value the key maps to
+    value = SAColumn('cd_value', Text,nullable=False)  # The value the key maps to
     description = SAColumn('f_description', Text, index=True)
 
     data = SAColumn('co_data', MutationDict.as_mutable(JSONEncodedObj))
@@ -2097,13 +2100,9 @@ class Code(Base, SavableMixin, LinkableMixin):
     @property
     def dict(self):
 
-        d = {
-            p.key: getattr(
-                self,
-                p.key) for p in self.__mapper__.attrs if p.key not in (
-                'data',
-                'column',
-                'table')}
+        d = {p.key: getattr( self,p.key)
+             for p in self.__mapper__.attrs if p.key not in ('data','column','table')
+        }
 
         if self.data:
             for k in self.data:
@@ -2117,16 +2116,6 @@ class Code(Base, SavableMixin, LinkableMixin):
         return {('cd_' + k).strip('_'): v for k, v in self.dict.items()}
 
 
-class SearchDoc(Base):
-
-    """Documents for full text search."""
-    __tablename__ = 'searchdocs'
-
-    id = SAColumn('sd_id', Integer, primary_key=True, nullable=False)
-
-    vid = SAColumn('sd_vid', String(20), index=True, unique=True)
-    keywords = SAColumn('sd_keywords', Text)
-    text = SAColumn('sd_text', Text)
 
 lom_enums = "nom ord int ratio".split()
 
@@ -2138,12 +2127,7 @@ class ColumnStat(Base, SavableMixin, LinkableMixin):
 
     id = SAColumn('cs_id', Integer, primary_key=True, nullable=False)
 
-    p_vid = SAColumn(
-        'cs_p_vid',
-        String(20),
-        ForeignKey('partitions.p_vid'),
-        nullable=False,
-        index=True)
+    p_vid = SAColumn('cs_p_vid',String(20),ForeignKey('partitions.p_vid'), nullable=False,index=True)
     partition = relationship('Partition', backref='_stats')
 
     # This really should be Nullable=False, but I can't get cascading deletes

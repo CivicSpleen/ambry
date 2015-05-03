@@ -38,13 +38,15 @@ class Bundle(object):
         """"""
 
         # This bit of wackiness allows the var(self.run_args) code
-        # to work when there have been no artgs parsed.
+        # to work when there have been no args parsed.
         class null_args(object):
             none = None
             multi = False
             test = False
 
         self.run_args = vars(null_args())
+
+
 
     def __del__(self):
         try:
@@ -787,8 +789,6 @@ class BuildBundle(Bundle):
         from ..identity import Identity
         from datetime import datetime
 
-
-
         identity = self.identity
 
         # Get the latest installed version of this dataset
@@ -1407,23 +1407,18 @@ class BuildBundle(Bundle):
         with self.session:
             self.set_value('process', 'built', datetime.now().isoformat())
             self.set_value('process', 'buildtime', time() - self._build_time)
-            self.update_configuration()
-
-            self._revise_schema()
-
-            self.schema.move_revised_schema()
 
             self.post_build_finalize()
 
-            self.post_build_write_partitions()
-
-            self.post_build_write_config()
-
-            self.post_build_time_coverage()
-
-            self.post_build_geo_coverage()
-
-            self.schema.write_codes()
+            if self.config.environment.category == 'development':
+                self.update_configuration()
+                self._revise_schema()
+                self.schema.move_revised_schema()
+                self.post_build_write_partitions()
+                self.post_build_write_config()
+                self.post_build_geo_coverage()
+                self.post_build_time_coverage()
+                self.schema.write_codes()
 
             self.post_build_test()
 

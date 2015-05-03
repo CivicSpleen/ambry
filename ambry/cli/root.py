@@ -8,14 +8,7 @@ included in this distribution as LICENSE.txt
 from ..cli import prt, warn, fatal
 from ..identity import LocationRef
 
-# If the devel module exists, this is a development system.
-try:
-    from ambry.support.devel import *
-except ImportError as e:
-    from ambry.support.production import *
-
 default_locations = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.REMOTE]
-
 
 def root_parser(cmd):
     import argparse
@@ -193,7 +186,7 @@ def root_info(args, l, rc):
         locations = default_locations
 
     if not args.term:
-        print "Version:  {}, {}".format(ambry._meta.__version__, 'production' if IN_PRODUCTION else 'development')
+        print "Version:  {}, {}".format(ambry._meta.__version__, rc.environment.category)
         print "Root dir: {}".format(rc.filesystem('root')['dir'])
 
         try:

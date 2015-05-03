@@ -7,13 +7,7 @@ included in this distribution as LICENSE.txt
 
 from . import prt, err, fatal, _print_info, _print_bundle_list
 
-# If the devel module exists, this is a development system.
-try:
-    from ambry.support.devel import *
-except ImportError as e:
-    from ambry.support.production import *
 from ..dbexceptions import ConfigurationError, NotFoundError
-
 
 def warehouse_command(args, rc):
     from ambry.warehouse import new_warehouse
@@ -232,11 +226,6 @@ def warehouse_parser(cmd):
         help='Generate documentation and open an browser')
     whsp.set_defaults(subcommand='doc')
     whsp.add_argument('-c', '--clean')
-
-    if IN_DEVELOPMENT:
-        whsp = whp.add_parser('test', help='Run a test')
-        whsp.set_defaults(subcommand='test')
-        whsp.add_argument('term', type=str, nargs='?', help='A test argument')
 
 
 def warehouse_info(args, w, config):

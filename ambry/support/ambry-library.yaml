@@ -1,3 +1,5 @@
+environment:
+    category: production
 
 library:
     default:

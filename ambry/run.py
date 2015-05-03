@@ -38,9 +38,21 @@ class RunConfig(object):
     AMBRY_CONFIG_ENV_VAR = 'AMBRY_CONFIG'
 
     ROOT_CONFIG = '/etc/ambry.yaml'
-    USER_CONFIG = os.getenv(AMBRY_CONFIG_ENV_VAR) if os.getenv(
-        AMBRY_CONFIG_ENV_VAR) else os.path.expanduser('~/.ambry.yaml')
+    USER_CONFIG = (os.getenv(AMBRY_CONFIG_ENV_VAR)
+                   if os.getenv(AMBRY_CONFIG_ENV_VAR)
+                   else os.path.expanduser('~/.ambry.yaml') )
+
+    # A special case for virtual environments -- look for a user config file there first.
+    if os.getenv(AMBRY_CONFIG_ENV_VAR):
+        USER_CONFIG = os.getenv(AMBRY_CONFIG_ENV_VAR)
+    elif os.getenv('VIRTUAL_ENV') and os.path.exists(os.path.join(os.getenv('VIRTUAL_ENV'),'.ambry.yaml')):
+        USER_CONFIG = os.path.join(os.getenv('VIRTUAL_ENV'),'.ambry.yaml')
+    else:
+        USER_CONFIG = os.path.expanduser('~/.ambry.yaml')
+
+
     USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
+
     try:
         DIR_CONFIG = os.path.join(
             os.getcwd(),
