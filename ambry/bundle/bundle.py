@@ -1488,7 +1488,7 @@ class BuildBundle(Bundle):
 
             if not places:
                 raise BuildError(
-                    "Failed to find space identifier '{}' in full text identifier search".format(space))
+                    "Failed to find space identifier '{}' in full text identifier search".format(term))
 
             score, gvid, type, name = places[0]
 
