@@ -238,7 +238,7 @@ class JSONEncoder(FlaskJSONEncoder):
 
 class Renderer(object):
 
-    def __init__(self, content_type='html', blueprints=None):
+    def __init__(self, content_type='html', session = {}, blueprints=None):
 
         from jinja2 import Environment, PackageLoader
 
@@ -260,6 +260,8 @@ class Renderer(object):
         self.content_type = content_type
 
         self.blueprints = blueprints
+
+        self.session = session
 
         # Monkey patch to get the equalto test
 
@@ -368,6 +370,8 @@ class Renderer(object):
 
         return self.render(
             template,
+            last_search_terms = self.session.get('last_search_terms',''),
+            last_search_results = self.session.get('last_search_results',None),
             l=self.doc_cache.library_info(),
             **self.cc())
 
@@ -551,18 +555,18 @@ class Renderer(object):
     def css_dir(self):
         import ambry.ui.templates as tdir
 
-        return os.path.join(os.path.dirname(tdir.__file__), 'css')
+        return os.path.join(os.path.abspath(os.path.dirname(tdir.__file__)), 'css')
 
     def css_path(self, name):
         import ambry.ui.templates as tdir
 
-        return os.path.join(os.path.dirname(tdir.__file__), 'css', name)
+        return os.path.join(os.path.abspath(os.path.dirname(tdir.__file__)), 'css', name)
 
     @property
     def js_dir(self):
         import ambry.ui.templates as tdir
 
-        return os.path.join(os.path.dirname(tdir.__file__), 'js')
+        return os.path.join(os.path.abspath(os.path.dirname(tdir.__file__)), 'js')
 
     def place_search(self, term):
         """Incremental search, search as you type."""
@@ -579,10 +583,12 @@ class Renderer(object):
                 indent=4),
             mimetype='application/json')
 
-    def bundle_search(self, terms):
+    def bundle_search(self,  terms):
         """Incremental search, search as you type."""
 
         from geoid.civick import GVid
+
+        self.session['last_search_terms'] = terms
 
         parsed = self.library.search.make_query_from_terms(terms)
 
@@ -652,12 +658,9 @@ class Renderer(object):
                             except KeyError:
                                 pass # TODO Should probably announce an error
 
-        return self.render(
-            template,
-            query = parsed,
-            results=final_results,
-            facets=facets,
-            **self.cc())
+        self.session['last_search_results'] = final_results
+
+        return self.render(template,query = parsed,results=final_results,facets=facets,**self.cc())
 
     def generate_sources(self):
 

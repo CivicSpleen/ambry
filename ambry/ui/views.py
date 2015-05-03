@@ -6,6 +6,7 @@ from . import app, renderer
 from flask import g, current_app, send_from_directory, request, abort
 from flask.json import jsonify
 
+from flask import  session
 
 @app.teardown_appcontext
 def close_connection(exception):
@@ -39,30 +40,22 @@ def js_file(path):
 @app.route('/')
 @app.route('/index')
 def index():
-    return renderer().index()
+    import time
+
+    session['time_time'] = time.time() # Just for testing
+
+    return renderer(session=session).index()
 
 
 @app.route('/index.<ct>')
 def index_ct(ct):
-    return renderer(content_type=ct).index()
+    return renderer(content_type=ct,session=session).index()
 
 
 @app.route('/databases.<ct>')
 def databases_ct(ct):
     return renderer(content_type=ct).databases()
 
-
-@app.route('/search.<ct>')
-def search(ct):
-
-    return renderer(content_type=ct).search(term=request.args.get('term'))
-
-
-@app.route('/search/dataset')
-def datasetsearch():
-    """Search for a dataset, using a single term."""
-
-    return renderer().dataset_search(term=request.args.get('term'))
 
 
 @app.route('/search/place')
@@ -76,7 +69,7 @@ def place_search():
 def bundle_search():
     """Search for a datasets and partitions, using a structured JSON term."""
 
-    return renderer().bundle_search(terms=request.args['terms'])
+    return renderer(session=session).bundle_search(terms=request.args['terms'])
 
 
 @app.route('/bundles/<vid>.<ct>')

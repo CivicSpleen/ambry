@@ -4,7 +4,7 @@
 
 import argparse
 import sys
-from ambry.ui import app, configure_application, write_config, config_paths
+from ambry.ui import app, app_config
 from ambry.ui import fscache
 
 parser = argparse.ArgumentParser(
@@ -45,7 +45,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-config = configure_application(vars(args))
+app_config.update(vars(args))
 
 if args.use_proxy:
     from werkzeug.contrib.fixers import ProxyFix
@@ -54,4 +54,4 @@ if args.use_proxy:
 
 import ambry.ui.views
 
-app.run(host=config['host'], port=int(config['port']), debug=config['debug'])
+app.run(host=app_config['host'], port=int(app_config['port']), debug=app_config['debug'])

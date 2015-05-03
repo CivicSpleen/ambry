@@ -367,7 +367,7 @@ def root_search(args, l, config):
 
 def root_doc(args, l, rc):
 
-    from ambry.ui import app, configure_application, setup_logging
+    from ambry.ui import app, app_config
     import ambry.ui.views as views
     import os
 
@@ -375,11 +375,11 @@ def root_doc(args, l, rc):
     from logging import FileHandler
     import webbrowser
 
-    port = args.port if args.port else 8085
 
     cache_dir = l._doc_cache.path('', missing_ok=True)
 
-    config = configure_application(dict(port=port))
+    app_config['port'] = args.port if args.port else 8085
+
 
     file_handler = FileHandler(os.path.join(cache_dir, "web.log"))
     file_handler.setLevel(logging.WARNING)
@@ -390,7 +390,7 @@ def root_doc(args, l, rc):
     if not args.debug:
         # Don't open the browser on debugging, or it will re-open on every
         # application reload
-        webbrowser.open("http://localhost:{}/".format(port))
+        webbrowser.open("http://localhost:{}/".format(app_config['port']))
 
-    app.run(host=config['host'], port=int(port), debug=args.debug)
+    app.run(host=app_config['host'], port=int(app_config['port']), debug=args.debug)
 
