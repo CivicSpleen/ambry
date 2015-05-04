@@ -211,9 +211,14 @@ class Test(TestBase):
         '''Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent'''
 
+        from ambry.orm import Table
+
         l = self.get_library()
 
         l.put_bundle(self.bundle)
+
+        l.put_bundle(self.bundle)
+
         l.put_bundle(self.bundle)
 
         r = l.get(self.bundle.identity)
@@ -222,22 +227,41 @@ class Test(TestBase):
         self.assertTrue(r is not False)
         self.assertEquals(r.identity.id_, r.identity.id_)
 
+        num_tables = 9
+        self.assertEquals(num_tables, len(l.database.session.query(Table).all()))
+
+        b = l.get(self.bundle.identity.vid)
+        self.assertEquals(num_tables, len(b.schema.tables))
+
+        l.remove(b)
+        l.database.session.commit()
+        self.assertEquals(0, len(l.database.session.query(Table).all()))
+
+        l.put_bundle(self.bundle)
+
         # Install the partition, then check that we can fetch it
         # a few different ways.
-        for partition in self.bundle.partitions:
-            l.put_partition(self.bundle, partition)
-            l.put_partition(self.bundle, partition)
+        def install_partitions():
+            for partition in self.bundle.partitions:
+                l.put_partition(self.bundle, partition)
+                l.put_partition(self.bundle, partition)
 
-            r = l.get(partition.identity)
-            self.assertIsNotNone(r)
-            self.assertEquals( partition.identity.id_, r.partition.identity.id_)
-            
-            r = l.get(partition.identity.id_)
-            self.assertIsNotNone(r)
-            self.assertEquals(partition.identity.id_, r.partition.identity.id_)
-            
+                r = l.get(partition.identity)
+                self.assertIsNotNone(r)
+                self.assertEquals( partition.identity.id_, r.partition.identity.id_)
+
+                r = l.get(partition.identity.id_)
+                self.assertIsNotNone(r)
+                self.assertEquals(partition.identity.id_, r.partition.identity.id_)
+
+        install_partitions()
+
+        l.remove(b)
+
+        self.assertEquals(0, len(l.database.session.query(Table).all()))
+
         # Re-install the bundle, then check that the partitions are still properly installed
-
+        install_partitions()
         l.put_bundle(self.bundle)
         
         for partition in self.bundle.partitions.all:
@@ -765,9 +789,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many7'))) 
 
 
-
-
-
     def test_files(self):
 
         l = self.get_library()
@@ -785,6 +806,36 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         def refs(itr):
             return [ f.ref for f in i ]
 
+    def test_codes(self):
+
+        from ambry.bundle import LibraryDbBundle
+        from ambry.orm import Code
+
+        l = self.get_library()
+
+        self.assertEqual(0, len(l.database.session.query(Code).all()))
+
+        r = l.put_bundle(self.bundle)
+
+        b = l.bundle(self.bundle.identity.vid)
+
+        # Check that the bundle is from the library
+        self.assertTrue(b.database.dsn.endswith('library.db'))
+        self.assertTrue(isinstance(b,LibraryDbBundle))
+
+        t = b.schema.table('tone')
+        c = t.column('code')
+
+        self.assertEqual(10, len(c.forward_code_map))
+        self.assertIn('5',c.forward_code_map.keys())
+
+        l.remove(b)
+
+        self.assertEqual(0,len(l.database.session.query(Code).all()))
+
+        # Should be able to re-put without conflict
+        l.put_bundle(self.bundle)
+
 
     # Needs to be re-written to use only test bundles.
     def x_test_search(self):
@@ -794,8 +845,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         config = get_runconfig().library('default')
 
         l = new_library(config, reset=True)
-
-
 
         #for ds in l.datasets():  print ds.vid
 

@@ -14,12 +14,11 @@ import os.path
 import ambry
 import ambry.util
 from ambry.util import temp_file_name
-from ambry.bundle import DbBundle
-from ..identity import LocationRef, Identity
-from ambry.orm import Column, Partition, Table, Dataset, Config, File, Base, Code, ColumnStat
+from ..identity import  Identity
+from ambry.orm import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat
 
 from collections import namedtuple
-from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
+from sqlalchemy.exc import IntegrityError
 
 
 ROOT_CONFIG_NAME = 'd000'
@@ -168,6 +167,8 @@ class LibraryDb(object):
     def commit(self):
         try:
             self.session.commit()
+            self.session.expunge_all() # Clear any cached object in the session.
+            self.session.expire_all()
             # self.close_session()
         except Exception as e:
             #self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))
@@ -239,11 +240,12 @@ class LibraryDb(object):
         s.query(Config).delete()
         s.query(ColumnStat).delete()
         s.query(File).delete()
+        s.query(Code).delete()
         s.query(Column).delete()
         s.query(Partition).delete()
         s.query(Table).delete()
         s.query(Dataset).delete()
-        s.query(Code).delete()
+
 
         if add_config_root:
             self._add_config_root()
@@ -648,14 +650,10 @@ class LibraryDb(object):
     def install_bundle(self, bundle, commit=True):
         """Copy the schema and partitions lists into the library database."""
         from ambry.bundle import Bundle
-        from sqlalchemy.orm.exc import NoResultFound
-        from ..dbexceptions import ConflictError, NotFoundError
-        from sqlalchemy import update, or_
+        from ..dbexceptions import NotFoundError
 
         if not isinstance(bundle, Bundle):
-            raise ValueError(
-                "Can only install a  Bundle object. Got a {}".format(
-                    type(bundle)))
+            raise ValueError("Can only install a  Bundle object. Got a {}".format(type(bundle)))
 
             # The Tables only get installed when the dataset is installed,
             # not for the partition
@@ -680,8 +678,7 @@ class LibraryDb(object):
             from ..dbexceptions import DatabaseError
 
             raise DatabaseError("Failed to install {} into {}: {}".format(
-                bundle.database.path, self.dsn, e.message
-            ))
+                bundle.database.path, self.dsn, e.message))
 
         s = self.session
 
@@ -689,6 +686,7 @@ class LibraryDb(object):
 
         tables = []
         columns = []
+        codes = []
 
         # Link these after the tables and columns are created
         foreign_keys = []
@@ -702,10 +700,23 @@ class LibraryDb(object):
 
                 columns.append(d)
 
+                # The array gets built, but not inserted, because just pulling the codes into
+                # memory causes Sqlalchemy to save them along with the Coulm. This is probably
+                # dues to the way they are lazy loaded.
+                for cd in column._codes:
+                    codes.append(cd.insertable_dict)
+
+
         if tables:
+
             s.execute(Table.__table__.insert(), tables)
 
             s.execute(Column.__table__.insert(), columns)
+
+        # Don't need to do this, because Sqlalchemy write the codes with the columns, but
+        # only if thecodes have been explicityly loaded.
+        #if codes:
+        #    s.execute(Code.__table__.insert(), codes)
 
         for config in bundle.database.session.query(Config).all():
             s.merge(config)
@@ -729,9 +740,14 @@ class LibraryDb(object):
 
         """
 
+        from sqlalchemy.orm import noload
         from sqlalchemy.exc import OperationalError
-        from ..dbexceptions import NotABundle
-        from sqlalchemy import or_
+        from ..dbexceptions import NotABundle, NotFoundError
+
+        try: # Remove an existing bundle
+            self.remove_bundle(bundle)
+        except NotFoundError:
+            pass
 
         # There should be only one dataset record in the
         # bundle
@@ -743,31 +759,22 @@ class LibraryDb(object):
         s = self.session
 
         try:
-            dataset = bdbs.query(Dataset).one()
+            dataset = bdbs.query(Dataset).options(noload('*')).one()
         except OperationalError as e:
-            raise NotABundle(
-                "Error when refencing dataset for {} : {} ".format(
-                    bundle.database.path,
-                    e))
+            raise NotABundle("Error when refencing dataset for {} : {} ".format(
+                    bundle.database.path,e))
 
         dataset.location = Dataset.LOCATION.LIBRARY
 
         dataset.data['title'] = bundle.metadata.about.title
         dataset.data['summary'] = bundle.metadata.about.summary
 
+        s.commit()
         s.merge(dataset)
+        s.commit()
 
         for config in bdbs.query(Config).all():
             s.merge(config)
-
-        self.delete_dataset_colstats(dataset.vid)
-
-        s.query(Partition).filter(Partition.d_vid == dataset.vid).delete()
-
-        for table in dataset.tables:
-            s.query(Column).filter(Column.t_vid == table.vid).delete()
-
-        s.query(Table).filter(Table.d_vid == dataset.vid).delete()
 
         try:
             s.commit()
@@ -807,13 +814,7 @@ class LibraryDb(object):
             install_tables=install_tables,
             commit=commit)
 
-    def install_partition(
-            self,
-            bundle,
-            partition,
-            install_bundle=True,
-            install_tables=True,
-            commit=True):
+    def install_partition(self,bundle,partition,install_bundle=True,install_tables=True,commit=True):
         """Install a single partition and its tables. This is mostly used for
         installing into warehouses, where it isn't desirable to install the
         whole bundle.
@@ -824,13 +825,14 @@ class LibraryDb(object):
         """
 
         s = self.session
-        s.merge(bundle.get_dataset())
-        s.merge(partition.record)
+        with s.no_autoflush:
+            s.merge(bundle.get_dataset())
+            s.merge(partition.record)
 
-        for cs in partition.record._stats:
-            s.merge(cs)
+            for cs in partition.record._stats:
+                s.merge(cs)
 
-        s.commit()
+            s.commit()
 
         # Sqlalchemy loads in all of the records linked to the
         # partition, including the tables and columns. But not column stats
@@ -884,8 +886,7 @@ class LibraryDb(object):
         from ..bundle import LibraryDbBundle
 
         try:
-            dataset, partition = self.get_id(
-                bundle.identity.vid)  # @UnusedVariable
+            dataset, partition = self.get_id( bundle.identity.vid)
         except AttributeError:
             dataset, partition = bundle, None
 
@@ -899,9 +900,7 @@ class LibraryDb(object):
             for p in b.partitions:
                 self.remove_partition(p)
 
-        dataset = (
-            self.session.query(Dataset).filter(
-                Dataset.vid == dataset.identity.vid).one())
+        dataset =  self.session.query(Dataset).filter( Dataset.vid == dataset.identity.vid).one()
 
         self.delete_dataset_colstats(dataset.vid)
 
@@ -909,7 +908,12 @@ class LibraryDb(object):
         # trigger in-python cascades!
         self.session.delete(dataset)
 
+        # The foreign keys on the codes are nullable, so they set set to Null when
+        # the columsn are deleted, so we can just clean those up
+        self.session.query(Code).filter(Code.t_vid == None).delete()
+
         self.commit()
+
 
     def delete_dataset_colstats(self, dvid):
         """Total hack to deal with not being able to get delete cascades to
@@ -921,20 +925,18 @@ class LibraryDb(object):
         """
         s = self.session
 
+        # Get the partitions for the dataset
         part_query = s.query(Partition.vid).filter(Partition.d_vid == dvid)
 
-        s.query(ColumnStat).filter(
-            ColumnStat.p_vid.in_(
-                part_query.subquery())).delete(
-            synchronize_session='fetch')
+        # Delete those colstats that reference the partitions.
+        s.query(ColumnStat).filter(ColumnStat.p_vid.in_(part_query.subquery())).delete(synchronize_session='fetch')
+
 
     def remove_dataset(self, vid):
         """Remove all references to a Dataset."""
         from ..orm import Dataset, ColumnStat
 
-        dataset = (
-            self.session.query(Dataset).filter(
-                Dataset.vid == vid).one())
+        dataset = (self.session.query(Dataset).filter(Dataset.vid == vid).one())
 
         # Total hack to avoid having to figure out cascades between partitions
         # and colstats
@@ -943,6 +945,10 @@ class LibraryDb(object):
         # Can't use delete() on the query -- bulk delete queries do not
         # trigger in-python cascades!
         self.session.delete(dataset)
+
+        # The foreign keys on the codes are nullable, so they set set to Null when
+        # the columsn are deleted, so we can just clean those up
+        self.session.query(Code).filter(Code.t_vid == None).delete()
 
         self.session.commit()
 

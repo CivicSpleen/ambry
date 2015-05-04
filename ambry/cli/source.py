@@ -261,14 +261,12 @@ def source_new(args, l, st, rc):
         ambry_account = None
 
     if not ambry_account:
-        fatal(
-            "Failed to get an accounts.ambry entry from the configuration. ( It's usually in {}. ) ".format(
+        fatal("Failed to get an accounts.ambry entry from the configuration. ( It's usually in {}. ) ".format(
                 rc.USER_ACCOUNTS))
 
     if not ambry_account.get('name') or not ambry_account.get('email'):
         from ambry.run import RunConfig as rc
-        fatal(
-            "Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(
+        fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(
                 rc.USER_ACCOUNTS))
 
     ident = Identity.from_dict(d)

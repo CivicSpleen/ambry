@@ -215,8 +215,13 @@ class SqlitePartition(PartitionBase):
         else:
             q = "SELECT * FROM {}".format(self.get_table().name)
 
+
+
         # self.pandas might return all of the rows, which is very expensive in some cases
-        df = self.select(q,index_col=self.get_table().primary_key.name).pandas
+        try:
+            df = self.select(q,index_col=self.get_table().primary_key.name).pandas
+        except StopIteration:
+            return
 
         if df is None:
             return  # Usually b/c there are no records in the table.

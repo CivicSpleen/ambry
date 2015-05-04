@@ -580,6 +580,7 @@ class LibraryDbBundle(DbBundleBase):
 
     def get_dataset(self):
         """Return the dataset."""
+        from sqlalchemy.orm import noload
         from sqlalchemy.orm.exc import NoResultFound
         from sqlalchemy.exc import OperationalError
         from ..dbexceptions import NotFoundError
@@ -588,8 +589,8 @@ class LibraryDbBundle(DbBundleBase):
 
         try:
             return (
-                self.database.session.query(Dataset).filter(
-                    Dataset.vid == self._dataset_id).one())
+                self.database.session.query(Dataset).options(noload('*'))
+                .filter(Dataset.vid == self._dataset_id).one())
 
         except NoResultFound:
             from ..dbexceptions import NotFoundError

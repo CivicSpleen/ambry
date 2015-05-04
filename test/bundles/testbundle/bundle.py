@@ -25,6 +25,7 @@ class Bundle(BuildBundle):
                   ('text',partial(random.choice, ['chocolate', 'strawberry', 'vanilla'])),
                   ('integer', partial(random.randint, 0, 500)),
                   ('float', random.random),
+                  ('code', partial(random.randint, 0, 10))
                   ]
   
     @property
@@ -38,6 +39,7 @@ class Bundle(BuildBundle):
                   ('float', random.random),
                   ('extra', lambda: None),
                   ('extra2', lambda: None),
+                  ('code', partial(random.randint, 0, 10))
                   ]
 
     @property
@@ -71,8 +73,6 @@ class Bundle(BuildBundle):
         return True
     def build(self):
 
-        #self.log("=== Build hdf")
-        #self.build_hdf()
 
         self.log("=== Build geo")
         self.build_geo()
@@ -91,12 +91,9 @@ class Bundle(BuildBundle):
         
         with p.database.inserter('tone') as ins:
             for i in range(1000):
-                ins.insert({ 'tone_id':None,
-                             'text':"str"+str(i),
-                             'integer':i,
-                             'float':i})
+                ins.insert({ 'tone_id':None,'text':"str"+str(i),'integer':i,'float':i})
 
-    def build_db_inserter_codes(self):  
+    def build_db_inserter_codes(self):
         from collections import defaultdict
         from ambry.database.inserter import CodeCastErrorHandler
         p = self.partitions.find_or_new_db(table='coding')
@@ -114,20 +111,19 @@ class Bundle(BuildBundle):
 
                 if i % 13 == 0:
                     row['date'] = chr(65+(i/13 % 26))
-   
+
                 yield row
 
 
 
 
-    def build_db_inserter(self):  
+    def build_db_inserter(self):
         
         p = self.partitions.find_or_new_db(table='tthree')
 
         with self.session:
             table = p.table
             caster = table.caster
-
 
         field_gen =  self.fields3
       
@@ -178,38 +174,7 @@ class Bundle(BuildBundle):
                     ins.insert({'name': str(lon)+';'+str(lat), 'lon':lon, 'lat':lat})
 
 
-    def build_hdf(self):
-        import numpy as np
-        hdf = self.partitions.find_or_new_hdf(table='hdf5')
 
-        a = np.zeros((10,10))
-        for y in range(10):
-            for x in range(10):
-                a[x,y] = x*y
- 
-        ds = hdf.database.create_dataset('hdf', data=a, compression=9)
-        hdf.database.close()
-
-        #hdf = self.partitions.find_or_new_hdf(table='hdf5')
-
-
-
-
-
-    def build_csv(self):
-        from ambry.identity import Identity
-        
-        for j in range(1,5):
-            csvt = self.partitions.find_or_new_csv(table='csv', segment=j)
-            lr = self.init_log_rate(2500, "Segment "+str(j))
-            with csvt.database.inserter(skip_header=True) as ins:
-                for i in range(5000):
-                    r = [i,'foo',i, float(i)* 37.452, '|','\\','"']
-                    ins.insert(r)
-                    lr()
-
-
-            self.log("Wrote to {}".format(csvt.database.path))
 
     def deps(self):
         

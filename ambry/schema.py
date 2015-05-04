@@ -111,7 +111,7 @@ class Schema(object):
         from sqlalchemy.sql import or_, and_
 
         if not name_or_id:
-            raise ValueError("Got an invalid argument: {}".format(name_or_id))
+            raise ValueError("Got an invalid argument for name_or_id: '{}'".format(name_or_id))
 
         Table.mangle_name(name_or_id)
 
@@ -1321,6 +1321,8 @@ class {name}(Base):
             table = None
             column = None
             for row in r:
+                if not row['table'] or not row['column'] or not row['key']:
+                    continue
 
                 try:
                     if not table or table.name != row['table']:

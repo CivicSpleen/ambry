@@ -35,9 +35,9 @@ class DocCache(object):
 
         if self.library._doc_cache:
             from ckcache.dictionary import DictCache
-            self._cache = DictCache(self.library._doc_cache)
+            self._cache = DictCache(self.library._doc_cache) # Dict interface on an upstream filesystem cache
         else:
-            self._cache = {}
+            self._cache = {} # An actual dict.
 
         self.all_bundles = None
         self.times = deque([], maxlen=10000)
@@ -197,9 +197,7 @@ class DocCache(object):
         return self.cache(lambda vid: self.library.partition(vid).dict, vid)
 
     def table(self, vid):
-        return self.cache(
-            lambda vid: self.library.table(vid).nonull_col_dict,
-            vid)
+        return self.cache(lambda vid: self.library.table(vid).nonull_col_dict,vid)
 
     def table_schema(self, vid):
         pass

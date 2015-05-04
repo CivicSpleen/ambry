@@ -1050,12 +1050,8 @@ class TableNumber(ObjectNumber):
         return (
             ObjectNumber.TYPE.TABLE +
             self.dataset._ds_str() +
-            ObjectNumber.base62_encode(
-                self.table).rjust(
-                self.DLEN.TABLE,
-                '0') +
-            ObjectNumber._rev_str(
-                self.revision))
+            ObjectNumber.base62_encode(self.table).rjust(self.DLEN.TABLE,'0') +
+            ObjectNumber._rev_str( self.revision))
 
 
 class ColumnNumber(ObjectNumber):
@@ -1358,10 +1354,7 @@ class Identity(object):
                 name = cls._name_class(**d)
                 ident = cls(name, on)
             except TypeError as e:
-                raise TypeError(
-                    "Failed to make identity from \n{}\n: {}".format(
-                        d,
-                        e.message))
+                raise TypeError("Failed to make identity from \n{}\n: {}".format(d,e.message))
 
         elif isinstance(on, PartitionNumber):
 
@@ -1645,6 +1638,8 @@ class Identity(object):
 
     @staticmethod
     def _compose_fqname(vname, vid):
+        assert vid is not None
+        assert vname is not None
         return vname + Identity.OBJECT_NUMBER_SEP + vid
 
     def as_partition(self, partition=0, **kwargs):

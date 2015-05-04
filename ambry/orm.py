@@ -452,6 +452,11 @@ class Dataset(Base, LinkableMixin):
         self.revision = kwargs.get("revision", None)
         self.version = kwargs.get("version", None)
 
+        if self.vid and not self.id_:
+            self.revision = ObjectNumber.parse(self.vid).revision
+            self.id_ = str(ObjectNumber.parse(self.vid).rev(None))
+
+
         if not self.id_:
             dn = DatasetNumber(None, self.revision)
             self.vid = str(dn)
@@ -465,6 +470,18 @@ class Dataset(Base, LinkableMixin):
 
         if self.cache_key is None:
             self.cache_key = self.identity.cache_key
+
+        if not self.name:
+            self.name = str(self.identity.name)
+
+        if not self.vname:
+            self.vname = str(self.identity.vname)
+
+        if not self.fqname:
+            self.fqname = str(self.identity.fqname)
+
+        if not self.version:
+            self.version = str(self.identity.version)
 
         assert self.vid[0] == 'd'
 
@@ -548,11 +565,7 @@ class Column(Base):
     vid = SAColumn('c_vid', String(20), primary_key=True)
     id_ = SAColumn('c_id', String(20))
     sequence_id = SAColumn('c_sequence_id', Integer)
-    t_vid = SAColumn(
-        'c_t_vid',
-        String(20),
-        ForeignKey('tables.t_vid'),
-        index=True)
+    t_vid = SAColumn('c_t_vid',String(20),ForeignKey('tables.t_vid'),index=True)
     t_id = SAColumn('c_t_id', String(20))
     name = SAColumn('c_name', Text)
     altname = SAColumn('c_altname', Text)
@@ -767,9 +780,11 @@ class Column(Base):
     def foreign_key(self):
         return self.fk_vid
 
-    def __init__(self, table, **kwargs):
+    def __init__(self, table=None, **kwargs):
 
-        self.sequence_id = kwargs.get("sequence_id", len(table.columns) + 1)
+
+        self.sequence_id = kwargs.get("sequence_id", len(table.columns) + 1 if table else None)
+
         self.name = kwargs.get("name", None)
         self.altname = kwargs.get("altname", None)
         self.is_primary_key = _clean_flag(kwargs.get("is_primary_key", False))
@@ -795,16 +810,19 @@ class Column(Base):
         # building the schema, linking the columns to tables.
         self.table_name = kwargs.get("table_name", None)
 
+        assert self.sequence_id is not None
+
         if not self.name:
             self.name = 'column' + str(self.sequence_id)
             #raise ValueError('Column must have a name. Got: {}'.format(kwargs))
 
-        self.t_id = table.id_
-        self.t_vid = table.vid
-        ton = ObjectNumber.parse(table.vid)
-        con = ColumnNumber(ton, self.sequence_id)
-        self.vid = str(con)
-        self.id = str(con.rev(None))
+        if table:
+            self.t_id = table.id_
+            self.t_vid = table.vid
+            ton = ObjectNumber.parse(table.vid)
+            con = ColumnNumber(ton, self.sequence_id)
+            self.vid = str(con)
+            self.id = str(con.rev(None))
 
     @property
     def dict(self):
@@ -815,12 +833,8 @@ class Column(Base):
 
         """
         x = {
-            p.key: getattr(
-                self,
-                p.key) for p in self.__mapper__.attrs if p.key not in (
-                'table',
-                'stats',
-                '_codes')}
+            p.key: getattr(self,p.key) for p in self.__mapper__.attrs if p.key not in (
+                'table','stats','_codes')}
 
         if not x:
             raise Exception(self.__dict__)
@@ -895,7 +909,7 @@ class Column(Base):
     def forward_code_map(self):
         """Return  a map from the short code to the full value """
 
-        return { (c.ikey if c.ikey else c.key):c.value for c in self.codes}
+        return { c.key:c.value for c in self.codes}
 
 
     def add_code(self, key, value, description=None, data=None):
@@ -928,7 +942,8 @@ class Column(Base):
                   value=value,
                   description=description, data=data)
 
-        Session.object_session(self).add(cd)
+
+        self._codes.append(cd)
 
         return cd
 
@@ -958,8 +973,17 @@ class Column(Base):
         id for the column."""
 
         if target.id_ is None:
-            table_on = ObjectNumber.parse(target.t_id)
-            target.id_ = str(ColumnNumber(table_on, target.sequence_id))
+
+            if target.table:
+                table_on = ObjectNumber.parse(target.table.vid)
+            else:
+                table_on = ObjectNumber.parse(target.t_vid)
+
+            if not target.vid:
+                target.vid = str(ColumnNumber(table_on, target.sequence_id))
+
+            if not target.id_:
+                target.id_ = str(ColumnNumber(table_on, target.sequence_id).rev(None))
 
     def __repr__(self):
         return "<column: {}, {}>".format(self.name, self.vid)
@@ -974,11 +998,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     vid = SAColumn('t_vid', String(20), primary_key=True)
     id_ = SAColumn('t_id', String(20), primary_key=False)
     d_id = SAColumn('t_d_id', String(20))
-    d_vid = SAColumn(
-        't_d_vid',
-        String(20),
-        ForeignKey('datasets.d_vid'),
-        index=True)
+    d_vid = SAColumn('t_d_vid',String(20),ForeignKey('datasets.d_vid'),index=True)
     sequence_id = SAColumn('t_sequence_id', Integer, nullable=False)
     name = SAColumn('t_name', String(200), nullable=False)
     altname = SAColumn('t_altname', Text)
@@ -1028,11 +1048,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
         self.id_ = str(ton.rev(None))
 
         if self.name:
-            self.name = self.mangle_name(
-                self.name,
-                kwargs.get(
-                    'preserve_case',
-                    False))
+            self.name = self.mangle_name(self.name, kwargs.get('preserve_case',False))
 
         self.init_on_load()
 
@@ -1079,6 +1095,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     def nonull_col_dict(self):
 
         tdc = {}
+
         for c in self.columns:
             tdc[c.id_] = c.nonull_dict
             tdc[c.id_]['codes'] = {cd.key: cd.dict for cd in c.codes}
@@ -1200,8 +1217,6 @@ Columns:
             dataset_id = ObjectNumber.parse(target.d_id)
             target.id_ = str(TableNumber(dataset_id, target.sequence_id))
 
-        # Check that pro vaules are removed, from warehouse install_table()
-        assert 'proto_vid' not in target.data
 
     @staticmethod
     def mangle_name(name, preserve_case=False):
@@ -1227,6 +1242,8 @@ Columns:
         from dbexceptions import NotFoundError
 
         s = sqlalchemy.orm.session.Session.object_session(self)
+
+        assert s, "Can't create column with this method unless the table has a session"
 
         name = Column.mangle_name(name)
 
@@ -1295,7 +1312,9 @@ Columns:
 
         s = sqlalchemy.orm.session.Session.object_session(self)
 
-        assert s, "Table doesn't have a DB session, so can't find a column"
+        if not s: # No session, so can't find a column.
+            return None
+
 
         q = (s.query(Column)
              .filter(or_(Column.id_ == name_or_id, Column.name == name_or_id))
@@ -1652,6 +1671,16 @@ class Partition(Base, LinkableMixin):
             don = ObjectNumber.parse(self.d_vid)
             ton = ObjectNumber.parse(self.t_id)
             self.t_vid = str(ton.rev(don.revision))
+
+        from identity import PartialPartitionName
+        ppn = PartialPartitionName(**kwargs)
+
+        if not self.vname:
+            self.vname = ppn.promote(dataset.identity.name).vname
+            self.name = ppn.promote(dataset.identity.name).name
+
+        if not self.cache_key:
+            self.cache_key = ppn.promote(dataset.identity.name).cache_key
 
         assert self.cache_key is not None
 
@@ -2051,10 +2080,10 @@ class Code(Base, SavableMixin, LinkableMixin):
 
     oid = SAColumn('cd_id', Integer, primary_key=True, nullable=False)
 
-    t_vid = SAColumn('cd_t_vid',String(20),ForeignKey('tables.t_vid'),index=True)
-    table = relationship('Table', backref='codes', lazy='subquery')
+    #t_vid = SAColumn('cd_t_vid',String(20),ForeignKey('tables.t_vid'),index=True,nullable=False)
+    #table = relationship('Table', backref='codes', lazy='subquery')
 
-    c_vid = SAColumn('cd_c_vid',String(20),ForeignKey('columns.c_vid'),index=True)
+    c_vid = SAColumn('cd_c_vid',String(20),ForeignKey('columns.c_vid'),index=True,nullable=False)
     column = relationship('Column', backref='_codes', lazy='subquery')
 
     key = SAColumn('cd_skey',String(20),nullable=False,index=True)  # String version of the key, the value in the dataset
@@ -2100,7 +2129,7 @@ class Code(Base, SavableMixin, LinkableMixin):
     @property
     def dict(self):
 
-        d = {p.key: getattr( self,p.key)
+        d = { p.key: getattr( self,p.key)
              for p in self.__mapper__.attrs if p.key not in ('data','column','table')
         }
 
@@ -2113,7 +2142,14 @@ class Code(Base, SavableMixin, LinkableMixin):
 
     @property
     def insertable_dict(self):
-        return {('cd_' + k).strip('_'): v for k, v in self.dict.items()}
+
+        d =  {('cd_' + k).strip('_'): v for k, v in self.dict.items()}
+
+        # the `key` property is not named after its db column
+        d['cd_skey'] = d['cd_key']
+        del d['cd_key']
+
+        return d
 
 
 
@@ -2172,8 +2208,4 @@ class ColumnStat(Base, SavableMixin, LinkableMixin):
         return {
             p.key: getattr(
                 self,
-                p.key) for p in self.__mapper__.attrs if p.key not in (
-                'data',
-                'column',
-                'table',
-                'partition')}
+                p.key) for p in self.__mapper__.attrs if p.key not in ('data','column', 'table','partition')}

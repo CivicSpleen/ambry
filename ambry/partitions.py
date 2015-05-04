@@ -369,8 +369,7 @@ class Partitions(object):
         from ambry.orm import Partition as OrmPartition, Table
         from sqlalchemy.exc import IntegrityError
 
-        assert isinstance(
-            pname, PartialPartitionName), "Expected PartialPartitionName, got {}".format(
+        assert isinstance(pname, PartialPartitionName), "Expected PartialPartitionName, got {}".format(
             type(pname))
 
         if tables and not isinstance(tables, (list, tuple, set)):
@@ -387,8 +386,7 @@ class Partitions(object):
         session = self.bundle.database.session
 
         if pname.table:
-            q = session.query(Table).filter(
-                (Table.name == pname.table) | (
+            q = session.query(Table).filter( (Table.name == pname.table) | (
                     Table.id_ == pname.table))
             try:
                 table = q.one()
@@ -412,7 +410,7 @@ class Partitions(object):
 
         d = pname.dict
 
-        # Promoting to a PartitionName create the partitionName subcless from
+        # Promoting to a PartitionName create the partitionName subclass from
         # the format, which is required to get the correct cache_key
         d['cache_key'] = pname.promote(self.bundle.identity.name).cache_key
 
@@ -470,17 +468,10 @@ class Partitions(object):
 
         session.query(OrmPartition).delete()
 
-    def _new_partition(
-            self,
-            ppn,
-            tables=None,
-            data=None,
-            clean=False,
-            create=True):
+    def _new_partition(self,ppn,tables=None,data=None,clean=False,create=True):
         """Creates a new OrmPartition record."""
 
-        assert isinstance(
-            ppn, PartialPartitionName), "Expected PartialPartitionName, got {}".format(
+        assert isinstance(ppn, PartialPartitionName), "Expected PartialPartitionName, got {}".format(
             type(ppn))
 
         with self.bundle.session as s:
@@ -491,14 +482,10 @@ class Partitions(object):
         partition = self.find(PartitionNameQuery(fqname=fqname))
 
         try:
-            assert bool(
-                partition), '''Failed to find partition that was just created'''
+            assert bool(partition), '''Failed to find partition that was just created'''
         except AssertionError:
-            self.bundle.error(
-                "Failed to get partition for: created={}, fqname={}, database={} " .format(
-                    ppn,
-                    fqname,
-                    self.bundle.database.dsn))
+            self.bundle.error("Failed to get partition for: created={}, fqname={}, database={} " .format(
+                    ppn,fqname,self.bundle.database.dsn))
             raise
 
         if create:
@@ -511,14 +498,7 @@ class Partitions(object):
 
         return partition
 
-    def _find_or_new(
-            self,
-            kwargs,
-            clean=False,
-            format=None,
-            tables=None,
-            data=None,
-            create=True):
+    def _find_or_new(self, kwargs,clean=False,format=None,tables=None,data=None,create=True):
         """Returns True if the partition was found, not created, False if it
         was created."""
 

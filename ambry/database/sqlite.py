@@ -632,9 +632,7 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin, SqliteDatabase):
         dont get used.
 
         """
-        _on_connect_update_sqlite_schema(
-            self.connection,
-            None)  # in both _conn and _engine.
+        _on_connect_update_sqlite_schema(self.connection, None)  # in both _conn and _engine.
 
     def create(self):
 
