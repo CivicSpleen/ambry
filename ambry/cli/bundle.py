@@ -390,15 +390,11 @@ def bundle_info(args, b, st, rc):
                     d = p.record.data
 
                     def bl(k, v):
-                        b.log(
-                            indent +
-                            "{:7s}: {}".format(
-                                k,
-                                p.record.data.get(
-                                    v,
-                                    '')))
+                        b.log(indent +"{:7s}: {}".format(k,
+                                p.record.data.get(v,'')))
 
-                    b.log(indent + "Details: ".format(p.identity))
+
+                    b.log(indent + "# Rows : {}".format(p.record.count))
                     bl('g cov', 'geo_coverage')
                     bl('g grain', 'geo_grain')
                     bl('t cov', 'time_coverage')

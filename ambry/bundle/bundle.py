@@ -1330,9 +1330,13 @@ class BuildBundle(Bundle):
 
         self.schema.move_revised_schema()
 
-        self.set_build_state('prepared')
+
 
         self.update_configuration()
+
+        self.write_config_to_bundle()
+
+        self.set_build_state('prepared')
 
         return True
 
@@ -1411,14 +1415,16 @@ class BuildBundle(Bundle):
             self.post_build_finalize()
 
             if self.config.environment.category == 'development':
-                self.update_configuration()
-                self._revise_schema()
-                self.schema.move_revised_schema()
-                self.post_build_write_partitions()
-                self.post_build_write_config()
-                self.post_build_geo_coverage()
-                self.post_build_time_coverage()
-                self.schema.write_codes()
+                pass
+
+            self.update_configuration()
+            self._revise_schema()
+            self.schema.move_revised_schema()
+            self.post_build_write_partitions()
+            self.write_config_to_bundle()
+            self.post_build_geo_coverage()
+            self.post_build_time_coverage()
+            self.schema.write_codes()
 
             self.post_build_test()
 
@@ -1579,7 +1585,7 @@ class BuildBundle(Bundle):
                 indent=4,
                 encoding='utf-8')
 
-    def post_build_write_config(self):
+    def write_config_to_bundle(self):
         """Write  the config into the database."""
         exclude_keys = ('names', 'identity')
 
@@ -1768,7 +1774,7 @@ class BuildBundle(Bundle):
 
             self.post_build_finalize()
 
-            self.post_build_write_config()
+            self.write_config_to_bundle()
 
             self.set_value('process', 'last', datetime.now().isoformat())
             self.set_build_state('updated')

@@ -404,7 +404,7 @@ def main(argsv=None, ext_logger=None):
 
 
         if not rc.environment.get('category', False):
-            raise ConfigurationError("Must set a config value for environment.class, one of: "
+            raise ConfigurationError("Must set a config value for environment.category, one of: "
                                       "development, production, testing, staging")
 
     if not f:

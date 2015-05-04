@@ -441,8 +441,6 @@ class BundleFilesystem(Filesystem):
 
             config['account'] = self.config.account(bucket)
 
-            import pprint; pprint.pprint(config)
-
             s3cache = new_cache(config)
 
             url = s3cache.path(urllib.unquote_plus(parsed.path.strip('/')))
