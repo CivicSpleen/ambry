@@ -16,7 +16,7 @@ from IPython.core.magic import (
     cell_magic,
     line_cell_magic)
 from collections import defaultdict
-from ..util import memoize
+from ambry.util import memoize
 
 
 class ManifestMagicsImpl(object):
