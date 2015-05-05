@@ -5,9 +5,6 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-import ogr
-
-
 class ExtractError(Exception):
     pass
 
@@ -219,24 +216,31 @@ class OgrExtractor(Extractor):
 
         return t, cd, geo_col
 
-    geo_map = {
-        'POLYGON': ogr.wkbPolygon,
-        'MULTIPOLYGON': ogr.wkbMultiPolygon,
-        'POINT': ogr.wkbPoint,
-        'MULTIPOINT': ogr.wkbMultiPoint,
-        # There are a lot more , add them as they are encountered.
-    }
+    geo_map = None
+    _ogr_type_map = None
 
-    _ogr_type_map = {
-        None: ogr.OFTString,
-        '': ogr.OFTString,
-        'TEXT': ogr.OFTString,
-        'VARCHAR': ogr.OFTString,
-        'INT': ogr.OFTInteger,
-        'INTEGER': ogr.OFTInteger,
-        'REAL': ogr.OFTReal,
-        'FLOAT': ogr.OFTReal,
-    }
+    try:
+        from osgeo import ogr
+        geo_map = {
+            'POLYGON': ogr.wkbPolygon,
+            'MULTIPOLYGON': ogr.wkbMultiPolygon,
+            'POINT': ogr.wkbPoint,
+            'MULTIPOINT': ogr.wkbMultiPoint,
+            # There are a lot more , add them as they are encountered.
+        }
+
+        _ogr_type_map = {
+            None: ogr.OFTString,
+            '': ogr.OFTString,
+            'TEXT': ogr.OFTString,
+            'VARCHAR': ogr.OFTString,
+            'INT': ogr.OFTInteger,
+            'INTEGER': ogr.OFTInteger,
+            'REAL': ogr.OFTReal,
+            'FLOAT': ogr.OFTReal,
+        }
+    except ImportError:
+        pass
 
     def ogr_type_map(self, v):
         return self._ogr_type_map[
@@ -253,6 +257,7 @@ class OgrExtractor(Extractor):
         return False
 
     def create_schema(self, database, table, layer):
+        from osgeo import ogr
         ce = database.connection.execute
 
         # TODO! pragma only works in sqlite
@@ -275,6 +280,7 @@ class OgrExtractor(Extractor):
             layer.CreateField(fdfn)
 
     def new_layer(self, abs_dest, name, t):
+        from osgeo import ogr
 
         ogr.UseExceptions()
 
@@ -320,9 +326,7 @@ class OgrExtractor(Extractor):
                 self.mangled_names.values()))
 
     def _extract_shapes(self, abs_dest, table):
-
-        import ogr
-        import os
+        from osgeo import ogr
 
         t, cd, geo_col = self.geometry_type(self.database, table)
 
@@ -473,7 +477,6 @@ class KmlExtractor(OgrExtractor):
     max_name_len = 40
 
     def _extract(self, table, rel_path, metadata):
-        import tempfile
         from ambry.util import temp_file_name
         from ambry.util.flo import copy_file_or_flo
         import os
@@ -494,14 +497,21 @@ class KmlExtractor(OgrExtractor):
 
         return self.cache.path(rel_path)
 
+extractors = None
 
-extractors = dict(
-    csv=CsvExtractor,
-    json=JsonExtractor,
-    shapefile=ShapeExtractor,
-    geojson=GeoJsonExtractor,
-    kml=KmlExtractor
-)
+try:
+    import osgeo
+except ImportError:
+    extractors = dict(
+        csv=CsvExtractor,
+        json=JsonExtractor)
+else:
+    extractors = dict(
+        csv=CsvExtractor,
+        json=JsonExtractor,
+        shapefile=ShapeExtractor,
+        geojson=GeoJsonExtractor,
+        kml=KmlExtractor)
 
 
 def geo_extractors():
