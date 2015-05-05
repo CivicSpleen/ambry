@@ -602,11 +602,8 @@ class LibraryDb(object):
                 self.commit()
 
             except IntegrityError as e:
-                raise ConflictError(
-                    "Can't install dataset vid={}; \nOne already exists. ('{}');\n {}" .format(
-                        identity.vid,
-                        e.message,
-                        ds.dict))
+                raise ConflictError("Can't install dataset vid={}; \nOne already exists. ('{}');\n {}" .format(
+                        identity.vid,e.message,ds.dict))
 
     def install_partition_identity(self, identity, data={}, overwrite=True):
         """Create the record for the dataset.
@@ -651,6 +648,8 @@ class LibraryDb(object):
         """Copy the schema and partitions lists into the library database."""
         from ambry.bundle import Bundle
         from ..dbexceptions import NotFoundError
+        from sqlalchemy.orm import joinedload_all, joinedload, noload
+        from ..orm import Partition
 
         if not isinstance(bundle, Bundle):
             raise ValueError("Can only install a  Bundle object. Got a {}".format(type(bundle)))
@@ -665,6 +664,21 @@ class LibraryDb(object):
         except NotFoundError:
             dvid = None
 
+
+
+        dataset = bundle.database.session.query(Dataset).options(
+            noload('*'),
+            joinedload('tables').joinedload('columns').joinedload('codes'),
+            joinedload('partitions'),
+            joinedload('tables').joinedload('columns').joinedload('stats')
+
+
+        ).filter(Dataset.vid == str(bundle.identity.vid)).one()
+
+        self.session.merge(dataset)
+        self.session.commit()
+
+        return
         # This was taken out because it prevents library bundles from being installed when the
         # dataset already exists because the source bundle was installed.
         # if dvid:
@@ -705,6 +719,7 @@ class LibraryDb(object):
                 # dues to the way they are lazy loaded.
                 for cd in column._codes:
                     codes.append(cd.insertable_dict)
+
 
 
         if tables:
@@ -769,7 +784,7 @@ class LibraryDb(object):
         dataset.data['title'] = bundle.metadata.about.title
         dataset.data['summary'] = bundle.metadata.about.summary
 
-        s.commit()
+
         s.merge(dataset)
         s.commit()
 
@@ -785,13 +800,7 @@ class LibraryDb(object):
 
         return dataset
 
-    def install_partition_by_id(
-            self,
-            bundle,
-            p_id,
-            install_bundle=True,
-            install_tables=True,
-            commit=True):
+    def install_partition_by_id(self,bundle,p_id,install_bundle=True,install_tables=True,commit=True):
         """Install a single partition and its tables. This is mostly used for
         installing into warehouses, where it isn't desirable to install the
         whole bundle.
@@ -825,14 +834,14 @@ class LibraryDb(object):
         """
 
         s = self.session
-        with s.no_autoflush:
-            s.merge(bundle.get_dataset())
-            s.merge(partition.record)
 
-            for cs in partition.record._stats:
-                s.merge(cs)
+        s.merge(bundle.get_dataset())
+        #s.merge(partition.record)
 
-            s.commit()
+        #for cs in partition.record._stats:
+        #    s.merge(cs)
+
+        s.commit()
 
         # Sqlalchemy loads in all of the records linked to the
         # partition, including the tables and columns. But not column stats

@@ -52,7 +52,10 @@ class Test(TestBase):
         return t
 
     def new_partition(self,ds,n):
-        return Partition(ds, sequence_id=n, table='table{}'.format(n))
+
+        t_vids = sorted(t.id_ for t in ds.tables)
+
+        return Partition(ds, sequence_id=n, t_id = t_vids[n])
 
     def test_basic(self):
 
@@ -81,6 +84,14 @@ class Test(TestBase):
 
         self.session.commit()
 
+        for p in ds.partitions:
+            for c in  p.table.columns:
+                p.add_stat(c.vid, dict(count=10, mean=5))
+
+
+        self.session.commit()
+
+        self.assertEquals(25, len(self.session.query(ColumnStat).all()))
         self.assertEquals(25, len(self.session.query(Column).all()))
         self.assertEquals(125, len(self.session.query(Code).all()))
 
@@ -89,6 +100,7 @@ class Test(TestBase):
         self.session.commit()
 
         # Deleting the dataset should cascade to the columns
+        self.assertEquals(0, len(self.session.query(ColumnStat).all()))
         self.assertEquals(0, len(self.session.query(Code).all()))
         self.assertEquals(0, len(self.session.query(Column).all()))
 

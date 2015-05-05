@@ -1299,7 +1299,7 @@ class {name}(Base):
             w.writerow(header)
             for t in self.tables:
                 for c in t.columns:
-                    for cd in c._codes:
+                    for cd in c.codes:
                         row = [ t.name,c.name,cd.key,cd.value,cd.description]
 
                         w.writerow(row)
@@ -1333,8 +1333,9 @@ class {name}(Base):
                         column = table.column(row['column'])
 
                     column.add_code(row['key'], row['value'], row['description'])
-                except NotFoundError:
-                    self.bundle.error("Skipping code '{}' for non existent table '{}".format(row['key'],row['table']))
+                except NotFoundError as e:
+                    self.bundle.error("Skipping code '{}' for {}.{} : {}"
+                                      .format(row['key'],row['table'],row['column'], e))
 
 
     @property

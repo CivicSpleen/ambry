@@ -1123,12 +1123,10 @@ class PartitionNumber(ObjectNumber):
         partition = int(partition)
 
         if not isinstance(dataset, DatasetNumber):
-            raise ValueError("Constructor requires a DatasetNumber")
+            raise ValueError("Constructor requires a DatasetNumber. Got '{}' ".format(dataset))
 
         if partition > ObjectNumber.PARTMAXVAL:
-            raise ValueError(
-                "Value is too large. Max is: {}".format(
-                    ObjectNumber.PARTMAXVAL))
+            raise ValueError("Value is too large. Max is: {}".format(ObjectNumber.PARTMAXVAL))
 
         self.dataset = dataset
         self.partition = partition

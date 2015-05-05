@@ -164,17 +164,36 @@ class Test(TestBase):
 
     def test_simple_install(self):
 
-        from ambry.util import temp_file_name
-        import os
+        from ambry.orm import Dataset, Partition, Table, Column, ColumnStat, Code
         from ambry.dbexceptions import NotFoundError
 
         l = self.get_library()
+        ldsq = l.database.session.query
+
+        bdsq = self.bundle.database.session.query
+
+        self.assertEquals(4, len(bdsq(Partition).all()))
+
 
         r = l.put_bundle(self.bundle)
 
         r = l.get(self.bundle.identity.sname)
         self.assertTrue(r is not False)
         self.assertEquals(self.bundle.identity.sname, r.identity.sname)
+
+        print 'Partitions', len(ldsq(Partition).all())
+        print 'Tables', len(ldsq(Table).all())
+        print 'Columns', len(ldsq(Column).all())
+        print 'Code', len(ldsq(Code).all())
+        print 'Stats', len(ldsq(ColumnStat).all())
+
+        self.assertEquals(4, len(ldsq(Partition).all()))
+        self.assertEquals(9, len(ldsq(Table).all()))
+        self.assertEquals(45, len(ldsq(Column).all()))
+        self.assertEquals(20, len(ldsq(Code).all()))
+        self.assertEquals(23, len(ldsq(ColumnStat).all()))
+
+        return
 
         with self.assertRaises(NotFoundError):
             r = l.get('gibberish')

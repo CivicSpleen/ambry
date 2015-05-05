@@ -275,6 +275,7 @@ class Library(object):
         except ConflictError:
             installed = False
 
+
         self.search.index_dataset(bundle, force = True)
 
         self.files.install_bundle_file(bundle, self.cache, commit=commit, state = file_state)

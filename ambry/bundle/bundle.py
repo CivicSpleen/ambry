@@ -1241,6 +1241,8 @@ class BuildBundle(Bundle):
 
         cf = self.filesystem.path('meta', self.CODE_FILE)
 
+
+
         if os.path.exists(cf):
             self.log("Loading codes file: {}".format(cf))
             with self.session:
@@ -1425,7 +1427,7 @@ class BuildBundle(Bundle):
             self.write_config_to_bundle()
             self.post_build_geo_coverage()
             self.post_build_time_coverage()
-            self.schema.write_codes()
+            #self.schema.write_codes()
 
             self.post_build_test()
 

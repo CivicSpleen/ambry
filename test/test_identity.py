@@ -436,30 +436,32 @@ class Test(TestBase):
         bundle.exit_on_fatal = False
         bundle.clean()
         bundle.database.create()
+        bundle.prepare()
 
         bp = bundle.partitions
 
+
         with bundle.session:
-            bp._new_orm_partition(PartialPartitionName(time = 't1', space='s1'))
-            bp._new_orm_partition(PartialPartitionName(time = 't1', space='s2'))
-            bp._new_orm_partition(PartialPartitionName(time = 't1', space=None))
-            bp._new_orm_partition(PartialPartitionName(time = 't2', space='s1'))
-            bp._new_orm_partition(PartialPartitionName(time = 't2', space='s2'))
-            bp._new_orm_partition(PartialPartitionName(time = 't2', space=None))
+            bp._new_orm_partition(PartialPartitionName(table = 'tone', time = 't1', space='s1'))
+            bp._new_orm_partition(PartialPartitionName(table = 'tone', time = 't1', space='s2'))
+            bp._new_orm_partition(PartialPartitionName(table = 'tone', time = 't1', space=None))
+            bp._new_orm_partition(PartialPartitionName(table = 'tone', time = 't2', space='s1'))
+            bp._new_orm_partition(PartialPartitionName(table = 'tone', time = 't2', space='s2'))
+            bp._new_orm_partition(PartialPartitionName(table = 'tone', time = 't2', space=None))
 
 
         with self.assertRaises(ConflictError):
             with bundle.session:
-                bp._new_orm_partition(PartialPartitionName(time = 't1', space='s1'))
+                bp._new_orm_partition(PartialPartitionName(table = 'tone',time = 't1', space='s1'))
 
-        pnq = PartitionNameQuery(time=NameQuery.ANY, space='s1')
+        pnq = PartitionNameQuery(table = 'tone', time=NameQuery.ANY, space='s1')
 
         names = [p.vname
                  for p in bp._find_orm(pnq).all()]
 
 
-        self.assertEqual({u'source-dataset-subset-variation-t2-s1-0.0.1',
-                          u'source-dataset-subset-variation-t1-s1-0.0.1'},
+        self.assertEqual({u'source-dataset-subset-variation-tone-t1-s1-0.0.1',
+                          u'source-dataset-subset-variation-tone-t2-s1-0.0.1'},
                          set(names))
 
         names = [p.vname
@@ -468,18 +470,18 @@ class Test(TestBase):
         self.assertEqual(6,len(names))
 
         names = [p.vname
-                 for p in bp._find_orm(PartitionNameQuery(time='t1',space=NameQuery.ANY)).all()]
+                 for p in bp._find_orm(PartitionNameQuery(table = 'tone',time='t1',space=NameQuery.ANY)).all()]
 
-        self.assertEqual({'source-dataset-subset-variation-t1-s2-0.0.1',
-                              'source-dataset-subset-variation-t1-0.0.1',
-                              'source-dataset-subset-variation-t1-s1-0.0.1'},
+        self.assertEqual({'source-dataset-subset-variation-tone-t1-s2-0.0.1',
+                              'source-dataset-subset-variation-tone-t1-0.0.1',
+                              'source-dataset-subset-variation-tone-t1-s1-0.0.1'},
                          set(names))
 
 
         names = [p.vname
-                 for p in bp._find_orm(PartitionNameQuery(time='t1',space=NameQuery.NONE)).all()]
+                 for p in bp._find_orm(PartitionNameQuery(table = 'tone',time='t1',space=NameQuery.NONE)).all()]
 
-        self.assertEqual({'source-dataset-subset-variation-t1-0.0.1'},
+        self.assertEqual({'source-dataset-subset-variation-tone-t1-0.0.1'},
                          set(names))
 
         # Start over, use a higher level function to create the partitions
@@ -489,26 +491,27 @@ class Test(TestBase):
         bundle.exit_on_fatal = False
         bundle.clean()
         bundle.database.create()
+        bundle.prepare()
         bp = bundle.partitions
 
-        bp._new_partition(PartialPartitionName(time = 't1', space='s1'))
+        bp._new_partition(PartialPartitionName(table = 'tone',time = 't1', space='s1'))
         self.assertEquals(1, len(bp.all))
 
-        bp._new_partition(PartialPartitionName(time = 't1', space='s2'))
+        bp._new_partition(PartialPartitionName(table = 'tone',time = 't1', space='s2'))
         self.assertEquals(2, len(bp.all))
 
-        bp._new_partition(PartialPartitionName(time = 't1', space=None))
-        bp._new_partition(PartialPartitionName(time = 't2', space='s1'))
-        bp._new_partition(PartialPartitionName(time = 't2', space='s2'))
-        bp._new_partition(PartialPartitionName(time = 't2', space=None))
+        bp._new_partition(PartialPartitionName(table = 'tone',time = 't1', space=None))
+        bp._new_partition(PartialPartitionName(table = 'tone',time = 't2', space='s1'))
+        bp._new_partition(PartialPartitionName(table = 'tone',time = 't2', space='s2'))
+        bp._new_partition(PartialPartitionName(table = 'tone',time = 't2', space=None))
         self.assertEquals(6, len(bp.all))
 
         names = [p.vname
                  for p in bp._find_orm(PartitionNameQuery(time='t1',space=NameQuery.ANY)).all()]
 
-        self.assertEqual({'source-dataset-subset-variation-t1-s2-0.0.1',
-                              'source-dataset-subset-variation-t1-0.0.1',
-                              'source-dataset-subset-variation-t1-s1-0.0.1'},
+        self.assertEqual({'source-dataset-subset-variation-tone-t1-s2-0.0.1',
+                              'source-dataset-subset-variation-tone-t1-0.0.1',
+                              'source-dataset-subset-variation-tone-t1-s1-0.0.1'},
                          set(names))
 
 
@@ -518,25 +521,26 @@ class Test(TestBase):
         bundle.exit_on_fatal = False
         bundle.clean()
         bundle.database.create()
+        bundle.prepare()
         bp = bundle.partitions
 
-        p = bp.new_db_partition(time = 't1', space='s1')
-        self.assertEquals('source-dataset-subset-variation-t1-s1-0.0.1~piEGPXmDC8001001', p.identity.fqname)
+        p = bp.new_db_partition(table = 'tone',time = 't1', space='s1')
+        self.assertEquals('source-dataset-subset-variation-tone-t1-s1-0.0.1~piEGPXmDC8001001', p.identity.fqname)
 
-        p = bp.find_or_new(time = 't1', space='s2')
-        self.assertEquals('source-dataset-subset-variation-t1-s2-0.0.1~piEGPXmDC8002001', p.identity.fqname)
+        p = bp.find_or_new(table = 'tone',time = 't1', space='s2')
+        self.assertEquals('source-dataset-subset-variation-tone-t1-s2-0.0.1~piEGPXmDC8002001', p.identity.fqname)
 
         # Duplicate
-        p = bp.find_or_new(time = 't1', space='s2')
-        self.assertEquals('source-dataset-subset-variation-t1-s2-0.0.1~piEGPXmDC8002001', p.identity.fqname)
+        p = bp.find_or_new(table = 'tone',time = 't1', space='s2')
+        self.assertEquals('source-dataset-subset-variation-tone-t1-s2-0.0.1~piEGPXmDC8002001', p.identity.fqname)
 
 
-        p = bp.find_or_new_geo(time = 't2', space='s1')
+        p = bp.find_or_new_geo(table = 'tone',time = 't2', space='s1')
 
         # Which it is depends on whether GDAL is installed.
         self.assertIn(p.identity.fqname,[
-            'source-dataset-subset-variation-t2-s1-geo-0.0.1~piEGPXmDC8003001',
-            'source-dataset-subset-variation-t2-s1-0.0.1~piEGPXmDC8003001' ]
+            'source-dataset-subset-variation-tone-t2-s1-geo-0.0.1~piEGPXmDC8003001',
+            'source-dataset-subset-variation-tone-t2-s1-0.0.1~piEGPXmDC8003001' ]
         )
 
 

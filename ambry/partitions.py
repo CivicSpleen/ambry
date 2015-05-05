@@ -386,15 +386,12 @@ class Partitions(object):
         session = self.bundle.database.session
 
         if pname.table:
-            q = session.query(Table).filter( (Table.name == pname.table) | (
-                    Table.id_ == pname.table))
+            q = session.query(Table).filter( (Table.name == pname.table) | (Table.id_ == pname.table))
             try:
                 table = q.one()
             except:
                 from dbexceptions import NotFoundError
-                raise NotFoundError(
-                    'Failed to find table for name or id: {}'.format(
-                        pname.table))
+                raise NotFoundError('Failed to find table for name or id: {}'.format(pname.table))
         else:
             table = None
 
@@ -407,6 +404,9 @@ class Partitions(object):
 
         if tables:
             data['tables'] = tables
+
+        if not table and tables:
+            table = tables[0]
 
         d = pname.dict
 
@@ -427,13 +427,11 @@ class Partitions(object):
 
         # This code must have the session established in the context be active.
 
-        op = OrmPartition(
-            self.bundle.get_dataset(),
-            t_id=table.id_ if table else None,
-            data=data,
-            state=Partitions.STATE.NEW,
-            **d
-        )
+
+        assert table
+
+        op = OrmPartition(self.bundle.get_dataset(), t_id=table.id_,
+            data=data,state=Partitions.STATE.NEW,**d)
 
         if memory:
             from random import randint
