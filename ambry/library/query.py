@@ -333,8 +333,7 @@ class Resolver(object):
         if pqp is not None:
 
             for row in (self.session.query(Dataset, Partition, File)
-                        .join(Partition)
-                        .filter(pqp)
+                        .join(Partition).filter(pqp)
                         .outerjoin(File, File.ref == Partition.vid)
                         .order_by(Dataset.revision.desc()).all()):
 
@@ -345,9 +344,10 @@ class Resolver(object):
     def _resolve_ref(self, ref):
         """Convert the output from _resolve_ref to nested identities."""
 
-        ip, results = self._resolve_ref_orm(ref)
         from collections import OrderedDict
         from ..identity import LocationRef
+
+        ip, results = self._resolve_ref_orm(ref)
 
         # Convert the ORM results to identities
         out = OrderedDict()
@@ -369,11 +369,7 @@ class Resolver(object):
                     # Also need to set the location in the dataset, or the location
                     # filtering may fail later.
                     lrc = LocationRef.LOCATION
-                    d_f_type = {
-                        lrc.REMOTEPARTITION: lrc.REMOTE,
-                        lrc.PARTITION: lrc.LIBRARY}.get(
-                        f.type_,
-                        None)
+                    d_f_type = { lrc.REMOTEPARTITION: lrc.REMOTE,lrc.PARTITION: lrc.LIBRARY}.get( f.type_, None)
                     out[d.vid].locations.set(d_f_type)
 
             if p:
@@ -394,17 +390,13 @@ class Resolver(object):
 
         if location:
 
-            refs = OrderedDict(
-                [(k, v) for k, v in refs.items() if v.locations.has(location)])
+            refs = OrderedDict([(k, v) for k, v in refs.items() if v.locations.has(location)])
 
         if not isinstance(ip.version, semantic_version.Spec):
-            return ip, refs.values().pop(0) if refs and len(
-                refs.values()) else None
+            return ip, refs.values().pop(0) if refs and len(refs.values()) else None
         else:
 
-            versions = {
-                semantic_version.Version(
-                    d.name.version): d for d in refs.values()}
+            versions = { semantic_version.Version(d.name.version): d for d in refs.values()}
 
             best = ip.version.select(versions.keys())
 

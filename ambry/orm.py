@@ -427,6 +427,11 @@ class Dataset(Base, LinkableMixin):
 
     partitions = relationship("Partition",backref='dataset',cascade="all, delete-orphan",passive_updates=False)
 
+    configs = relationship('Config', backref='dataset', cascade="all, delete-orphan")
+
+    files = relationship('File', backref='dataset', cascade="all, delete-orphan",
+                         primaryjoin="File.ref == Dataset.vid ", foreign_keys="File.ref")
+
     #__table_args__ = (
     #    UniqueConstraint('d_vid', 'd_location', name='u_vid_location'),
     #    UniqueConstraint('d_fqname', 'd_location', name='u_fqname_location'),
@@ -1709,10 +1714,9 @@ class Config(Base):
 
     __tablename__ = 'config'
 
-    d_vid = SAColumn('co_d_vid', String(16), primary_key=True)
+    d_vid = SAColumn('co_d_vid', String(16), ForeignKey('datasets.d_vid'), primary_key=True)
     group = SAColumn('co_group', String(200), primary_key=True)
     key = SAColumn('co_key', String(200), primary_key=True)
-    #value = SAColumn('co_value', PickleType(protocol=0))
 
     value = SAColumn('co_value', JSONAlchemy(Text()))
 

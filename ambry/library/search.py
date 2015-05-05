@@ -167,9 +167,7 @@ class Search(object):
         d = self.dataset_doc(bundle)
 
         if force:
-            self.dataset_writer.delete_by_term(
-                'vid', unicode(
-                    bundle.identity.vid))
+            self.dataset_writer.delete_by_term( 'vid', unicode( bundle.identity.vid))
 
         self.dataset_writer.add_document(**d)
 

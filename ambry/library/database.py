@@ -605,257 +605,29 @@ class LibraryDb(object):
                 raise ConflictError("Can't install dataset vid={}; \nOne already exists. ('{}');\n {}" .format(
                         identity.vid,e.message,ds.dict))
 
-    def install_partition_identity(self, identity, data={}, overwrite=True):
-        """Create the record for the dataset.
 
-        Does not add an File objects
 
-        """
-        from sqlalchemy.exc import IntegrityError
-        from ..dbexceptions import ConflictError
-
-        ds = Dataset(**identity.as_dataset().dict)
-
-        d = identity.dict
-        del d['dataset']
-
-        p = Partition(ds, **d)
-
-        p.data = data
-
-        try:
-            try:
-                self.session.add(p)
-                self.commit()
-
-            except IntegrityError as e:
-
-                if not overwrite:
-                    return
-
-                self.session.rollback()
-                self.session.merge(p)
-                self.commit()
-
-        except IntegrityError as e:
-            raise ConflictError(
-                "Can't install partition vid={};\nOne already exists. ('{}');\n{}" .format(
-                    identity.vid,
-                    e.message,
-                    p.dict))
-
-    def install_bundle(self, bundle, commit=True):
+    def install_bundle(self, bundle):
         """Copy the schema and partitions lists into the library database."""
         from ambry.bundle import Bundle
-        from ..dbexceptions import NotFoundError
-        from sqlalchemy.orm import joinedload_all, joinedload, noload
-        from ..orm import Partition
+        from sqlalchemy.orm import joinedload, noload
 
         if not isinstance(bundle, Bundle):
             raise ValueError("Can only install a  Bundle object. Got a {}".format(type(bundle)))
-
-            # The Tables only get installed when the dataset is installed,
-            # not for the partition
-
-        self._mark_update()
-
-        try:
-            dvid = self.get(bundle.identity.vid)
-        except NotFoundError:
-            dvid = None
-
-
 
         dataset = bundle.database.session.query(Dataset).options(
             noload('*'),
             joinedload('tables').joinedload('columns').joinedload('codes'),
             joinedload('partitions'),
-            joinedload('tables').joinedload('columns').joinedload('stats')
-
+            joinedload('tables').joinedload('columns').joinedload('stats'),
+            joinedload('configs'),
 
         ).filter(Dataset.vid == str(bundle.identity.vid)).one()
 
         self.session.merge(dataset)
         self.session.commit()
+        self._mark_update()
 
-        return
-        # This was taken out because it prevents library bundles from being installed when the
-        # dataset already exists because the source bundle was installed.
-        # if dvid:
-        #   raise ConflictError("Bundle {} already installed".format(bundle.identity.fqname))
-
-        try:
-
-            dataset = self.install_dataset(bundle)
-        except Exception as e:
-
-            from ..dbexceptions import DatabaseError
-
-            raise DatabaseError("Failed to install {} into {}: {}".format(
-                bundle.database.path, self.dsn, e.message))
-
-        s = self.session
-
-        # using s.merge() is a lot easer, but this is spectacularly faster.
-
-        tables = []
-        columns = []
-        codes = []
-
-        # Link these after the tables and columns are created
-        foreign_keys = []
-
-        for table in dataset.tables:
-            tables.append(table.insertable_dict)
-
-            for column in table.columns:
-
-                d = column.insertable_dict
-
-                columns.append(d)
-
-                # The array gets built, but not inserted, because just pulling the codes into
-                # memory causes Sqlalchemy to save them along with the Coulm. This is probably
-                # dues to the way they are lazy loaded.
-                for cd in column._codes:
-                    codes.append(cd.insertable_dict)
-
-
-
-        if tables:
-
-            s.execute(Table.__table__.insert(), tables)
-
-            s.execute(Column.__table__.insert(), columns)
-
-        # Don't need to do this, because Sqlalchemy write the codes with the columns, but
-        # only if thecodes have been explicityly loaded.
-        #if codes:
-        #    s.execute(Code.__table__.insert(), codes)
-
-        for config in bundle.database.session.query(Config).all():
-            s.merge(config)
-
-        if commit:
-            try:
-                self.commit()
-            except IntegrityError as e:
-                self.logger.error("Failed to merge into {}".format(self.dsn))
-                self.rollback()
-                raise e
-
-    def install_dataset(self, bundle):
-        """Install only the most basic parts of the bundle, excluding the
-        partitions and tables. Use install_bundle to install everything.
-
-        This will delete all of the tables and partitions associated
-        with the bundle, if they already exist, so callers should check
-        that the dataset does not already exist  before installing
-        again.
-
-        """
-
-        from sqlalchemy.orm import noload
-        from sqlalchemy.exc import OperationalError
-        from ..dbexceptions import NotABundle, NotFoundError
-
-        try: # Remove an existing bundle
-            self.remove_bundle(bundle)
-        except NotFoundError:
-            pass
-
-        # There should be only one dataset record in the
-        # bundle
-        db = bundle.database
-        db.update_schema()
-
-        bdbs = db.session
-
-        s = self.session
-
-        try:
-            dataset = bdbs.query(Dataset).options(noload('*')).one()
-        except OperationalError as e:
-            raise NotABundle("Error when refencing dataset for {} : {} ".format(
-                    bundle.database.path,e))
-
-        dataset.location = Dataset.LOCATION.LIBRARY
-
-        dataset.data['title'] = bundle.metadata.about.title
-        dataset.data['summary'] = bundle.metadata.about.summary
-
-
-        s.merge(dataset)
-        s.commit()
-
-        for config in bdbs.query(Config).all():
-            s.merge(config)
-
-        try:
-            s.commit()
-        except IntegrityError as e:
-            self.logger.error("Failed to merge in {}".format(self.dsn))
-            self.rollback()
-            raise e
-
-        return dataset
-
-    def install_partition_by_id(self,bundle,p_id,install_bundle=True,install_tables=True,commit=True):
-        """Install a single partition and its tables. This is mostly used for
-        installing into warehouses, where it isn't desirable to install the
-        whole bundle.
-
-        if commit = 'collect', the partitions are collected and inserted with insert_partition_collection,
-        in this case, tables and column will not be installed.
-
-        """
-
-        from ..dbexceptions import NotFoundError
-        from ..identity import PartitionNameQuery
-        from sqlalchemy.orm.exc import NoResultFound
-
-        partition = bundle.partitions.get(p_id)
-
-        return self.install_partition(
-            bundle,
-            partition,
-            install_bundle=install_bundle,
-            install_tables=install_tables,
-            commit=commit)
-
-    def install_partition(self,bundle,partition,install_bundle=True,install_tables=True,commit=True):
-        """Install a single partition and its tables. This is mostly used for
-        installing into warehouses, where it isn't desirable to install the
-        whole bundle.
-
-        if commit = 'collect', the partitions are collected and inserted with insert_partition_collection,
-        in this case, tables and column will not be installed.
-
-        """
-
-        s = self.session
-
-        s.merge(bundle.get_dataset())
-        #s.merge(partition.record)
-
-        #for cs in partition.record._stats:
-        #    s.merge(cs)
-
-        s.commit()
-
-        # Sqlalchemy loads in all of the records linked to the
-        # partition, including the tables and columns. But not column stats
-
-    def insert_partition_collection(self):
-
-        if len(self._partition_collection) == 0:
-            return
-
-        self.session.execute(
-            Partition.__table__.insert(),
-            self._partition_collection)
-
-        self._partition_collection = []
 
     def mark_table_installed(self, table_or_vid, name=None):
         """Mark a table record as installed."""
@@ -917,9 +689,6 @@ class LibraryDb(object):
         # trigger in-python cascades!
         self.session.delete(dataset)
 
-        # The foreign keys on the codes are nullable, so they set set to Null when
-        # the columsn are deleted, so we can just clean those up
-        self.session.query(Code).filter(Code.t_vid == None).delete()
 
         self.commit()
 

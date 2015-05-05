@@ -210,12 +210,7 @@ class Files(object):
 
         self.db._mark_update()
 
-    def install_bundle_file(
-            self,
-            bundle,
-            cache,
-            commit=True,
-            state='installed'):
+    def install_bundle_file(self,bundle,cache,commit=True,state='installed'):
         """Mark a bundle file as having been installed in the library."""
 
         ident = bundle.identity
@@ -234,12 +229,7 @@ class Files(object):
             data=None,
             source_url=None)
 
-    def install_partition_file(
-            self,
-            partition,
-            cache,
-            commit=True,
-            state='installed'):
+    def install_partition_file(self,partition,cache,commit=True,state='installed'):
         """Mark a partition file as having been installed in the library."""
 
         ident = partition.identity

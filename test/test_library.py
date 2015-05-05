@@ -164,7 +164,7 @@ class Test(TestBase):
 
     def test_simple_install(self):
 
-        from ambry.orm import Dataset, Partition, Table, Column, ColumnStat, Code
+        from ambry.orm import Dataset, Partition, Table, Column, ColumnStat, Code, Config, File
         from ambry.dbexceptions import NotFoundError
 
         l = self.get_library()
@@ -174,24 +174,25 @@ class Test(TestBase):
 
         self.assertEquals(4, len(bdsq(Partition).all()))
 
-
         r = l.put_bundle(self.bundle)
 
         r = l.get(self.bundle.identity.sname)
         self.assertTrue(r is not False)
         self.assertEquals(self.bundle.identity.sname, r.identity.sname)
 
-        print 'Partitions', len(ldsq(Partition).all())
-        print 'Tables', len(ldsq(Table).all())
-        print 'Columns', len(ldsq(Column).all())
-        print 'Code', len(ldsq(Code).all())
-        print 'Stats', len(ldsq(ColumnStat).all())
-
         self.assertEquals(4, len(ldsq(Partition).all()))
         self.assertEquals(9, len(ldsq(Table).all()))
         self.assertEquals(45, len(ldsq(Column).all()))
         self.assertEquals(20, len(ldsq(Code).all()))
         self.assertEquals(23, len(ldsq(ColumnStat).all()))
+        self.assertEquals(36, len(ldsq(Config).all()))
+
+        f = ldsq(File).one()
+        self.assertEquals(self.bundle.vid, f.ref)
+        self.assertEquals('L', f.type_)
+
+        for p in self.bundle.partitions.all:
+            l.get(p.identity.vid)
 
         return
 
@@ -224,12 +225,11 @@ class Test(TestBase):
         l.put_bundle(self.bundle)
         
 
-      
 
     def test_library_install(self):
         '''Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent'''
-
+        from ambry.orm import Dataset, Partition, Table, Column, ColumnStat, Code
         from ambry.orm import Table
 
         l = self.get_library()
@@ -238,7 +238,20 @@ class Test(TestBase):
 
         l.put_bundle(self.bundle)
 
+        ldsq = l.database.session.query
+        self.assertEquals(4, len(ldsq(Partition).all()))
+        self.assertEquals(9, len(ldsq(Table).all()))
+        self.assertEquals(45, len(ldsq(Column).all()))
+        self.assertEquals(20, len(ldsq(Code).all()))
+        self.assertEquals(23, len(ldsq(ColumnStat).all()))
+
         l.put_bundle(self.bundle)
+
+        self.assertEquals(4, len(ldsq(Partition).all()))
+        self.assertEquals(9, len(ldsq(Table).all()))
+        self.assertEquals(45, len(ldsq(Column).all()))
+        self.assertEquals(20, len(ldsq(Code).all()))
+        self.assertEquals(23, len(ldsq(ColumnStat).all()))
 
         r = l.get(self.bundle.identity)
 
@@ -253,39 +266,23 @@ class Test(TestBase):
         self.assertEquals(num_tables, len(b.schema.tables))
 
         l.remove(b)
-        l.database.session.commit()
-        self.assertEquals(0, len(l.database.session.query(Table).all()))
 
-        l.put_bundle(self.bundle)
-
-        # Install the partition, then check that we can fetch it
-        # a few different ways.
-        def install_partitions():
-            for partition in self.bundle.partitions:
-                l.put_partition(self.bundle, partition)
-                l.put_partition(self.bundle, partition)
-
-                r = l.get(partition.identity)
-                self.assertIsNotNone(r)
-                self.assertEquals( partition.identity.id_, r.partition.identity.id_)
-
-                r = l.get(partition.identity.id_)
-                self.assertIsNotNone(r)
-                self.assertEquals(partition.identity.id_, r.partition.identity.id_)
-
-        install_partitions()
-
-        l.remove(b)
-
-        self.assertEquals(0, len(l.database.session.query(Table).all()))
+        self.assertEquals(0, len(ldsq(Partition).all()))
+        self.assertEquals(0, len(ldsq(Table).all()))
+        self.assertEquals(0, len(ldsq(Column).all()))
+        self.assertEquals(0, len(ldsq(Code).all()))
+        self.assertEquals(0, len(ldsq(ColumnStat).all()))
 
         # Re-install the bundle, then check that the partitions are still properly installed
-        install_partitions()
+
         l.put_bundle(self.bundle)
-        
+
+        for p in ldsq(Partition).all():
+            print p.vid, p.name, p.vname
+
         for partition in self.bundle.partitions.all:
-       
-            r = l.get(partition.identity)
+
+            r = l.get(partition.identity.vid)
             self.assertIsNotNone(r)
             self.assertEquals(r.partition.identity.id_, partition.identity.id_)
             

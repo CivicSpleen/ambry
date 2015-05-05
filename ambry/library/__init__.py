@@ -263,55 +263,37 @@ class Library(object):
     ## Storing
     ##
 
-    def put_bundle(self, bundle, logger=None,  install_partitions=True, commit = True, file_state= 'new'):
+    def put_bundle(self, bundle, file_state= 'new', commit=True):
         """Install the records for the dataset, tables, columns and possibly
         partitions. Does not install file references """
-        from ..dbexceptions import ConflictError
 
-        try:
-            self.database.install_bundle(bundle, commit = commit)
+        self.database.install_bundle(bundle)
 
-            installed = True
-        except ConflictError:
-            installed = False
+        installed = self.files.install_bundle_file(bundle, self.cache, commit=commit, state = file_state)
 
+        # Copy the file in if we don't have it already
+        if not self.cache.has(bundle.identity.cache_key):
+            self.cache.put(bundle.database.path, bundle.identity.cache_key)
 
-        self.search.index_dataset(bundle, force = True)
+        self.search.index_dataset(bundle, force=True)
 
-        self.files.install_bundle_file(bundle, self.cache, commit=commit, state = file_state)
+        for partition in bundle.partitions:
+            self.search.index_partition(partition, force = True)
 
-        ident = bundle.identity
-
-        if not self.cache.has(ident.cache_key):
-            self.cache.put(bundle.database.path, ident.cache_key)
-
-        if install_partitions:
-            for partition in bundle.partitions:
-                self.put_partition(bundle, partition, commit = commit)
-                self.search.index_partition(partition, force = True)
-
-        self.mark_updated(vid=ident.vid)
-
+        self.mark_updated(vid=bundle.identity.vid)
 
         self.search.commit()
 
-        return self.cache.path(ident.cache_key), installed
+        return self.cache.path(bundle.identity.cache_key), installed
 
-    def put_partition(self, bundle, partition, commit = True):
+    def put_partition(self,  partition,  file_state= 'new', commit=True):
         """Install the record and file reference for the partition """
 
-        self.database.install_partition(bundle, partition, commit = commit)
-
-        if partition.ref:
-           return False, False
-
-        installed = self.files.install_partition_file(partition, self.cache,
-                                                      commit = commit,
-                                                      state = 'new')
+        installed = self.files.install_partition_file(partition, self.cache,commit = commit,state = file_state)
 
         # Ref partitions use the file of an earlier version, so there is no FILE to install
-
-        self.cache.put(partition.database.path, partition.identity.cache_key)
+        if not self.cache.has(partition.identity.cache_key):
+            self.cache.put(partition.database.path, partition.identity.cache_key)
 
         return self.cache.path(partition.identity.cache_key), installed
 
@@ -1175,9 +1157,6 @@ class Library(object):
 
                     self.files.insert_collection()
 
-                    if installed:
-                        self.database.insert_partition_collection()
-
                     self.database.commit()
                     self.database.close()
                 except Exception as e:
@@ -1223,8 +1202,7 @@ class Library(object):
                 self.logger.error("Failed to get list from {} -> {} ".format(remote_name,remote))
                 continue
 
-            all_keys = [ f.path for f  in
-                         self.files.query.type(Dataset.LOCATION.REMOTE)
+            all_keys = [ f.path for f  in self.files.query.type(Dataset.LOCATION.REMOTE)
                              .group(remote.repo_id).all ]
 
             last_keys = defaultdict(lambda : [0,''] )
@@ -1275,8 +1253,7 @@ class Library(object):
                     continue
 
                 try:
-                    path, installed = self.put_bundle(b, install_partitions=False, commit=True,
-                                                      file_state = 'installed')
+                    path, installed = self.put_bundle(b,  commit=True, file_state = 'installed')
 
                 except NotABundle:
                     self.logger.error("Cache key {} exists, "
@@ -1296,17 +1273,6 @@ class Library(object):
                     b.close() # Just means we already have it installed
                     continue
 
-                for p in b.partitions:
-                    if installed:
-                        self.database.install_partition(b, p, commit='collect')
-
-                    if self.files.install_remote_partition(p.identity, remote,
-                            {}, commit = 'collect'):
-                        self.logger.info("    + {}".format(p.identity.name))
-                    else:
-                        self.logger.info("    = {}".format(p.identity.name))
-
-
 
                 try:
                     self.files.insert_collection()
@@ -1315,8 +1281,6 @@ class Library(object):
                     raise
                     continue
 
-                if installed:
-                    self.database.insert_partition_collection()
 
 
                 self.database.commit()
@@ -1379,14 +1343,7 @@ class Library(object):
 
         w.url = self.warehouse_url
 
-        store = self.files.install_data_store(w,
-                                          name = w.name,
-                                          title=w.title,
-                                          url = w.url,
-                                          summary=w.summary)
-
-
-
+        store = self.files.install_data_store(w,name = w.name,title=w.title,url = w.url,summary=w.summary)
 
         s = self.database.session
 

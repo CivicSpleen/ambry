@@ -1829,33 +1829,12 @@ class BuildBundle(Bundle):
 
             library = self.library
 
-            self.log(
-                "Install   {} to  library {}".format(
-                    self.identity.name,
-                    library.database.dsn))
-            dest = library.put_bundle(self, install_partitions=False)
+            self.log("Install   {} to  library {}".format(self.identity.name,library.database.dsn))
+
+            dest = library.put_bundle(self)
+
             self.log("Installed {}".format(dest[0]))
 
-            for partition in self.partitions:
-
-                # Skip files that don't exist, but not if the partition is a reference to an
-                # other partition.
-                if not os.path.exists(partition.database.path) and not partition.ref:
-                    self.log(
-                        "{} File does not exist, skipping".format(
-                            partition.database.path))
-                    continue
-
-                self.log("Install   {}".format(partition.name))
-                dest = library.put_partition(self, partition)
-                if dest[0]:
-                    self.log("Installed {}".format(dest[0]))
-
-                if delete:
-                    os.remove(partition.database.path)
-                    self.log("Deleted {}".format(partition.database.path))
-
-                pass
 
         return True
 
