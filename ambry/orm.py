@@ -427,7 +427,8 @@ class Dataset(Base, LinkableMixin):
 
     partitions = relationship("Partition",backref='dataset',cascade="all, delete-orphan",passive_updates=False)
 
-    configs = relationship('Config', backref='dataset', cascade="all, delete-orphan")
+    configs = relationship('Config', backref='dataset', cascade="all, delete-orphan",
+                           primaryjoin="Config.d_vid == Dataset.vid ", foreign_keys="Config.d_vid")
 
     files = relationship('File', backref='dataset', cascade="all, delete-orphan",
                          primaryjoin="File.ref == Dataset.vid ", foreign_keys="File.ref")
@@ -1714,7 +1715,7 @@ class Config(Base):
 
     __tablename__ = 'config'
 
-    d_vid = SAColumn('co_d_vid', String(16), ForeignKey('datasets.d_vid'), primary_key=True)
+    d_vid = SAColumn('co_d_vid', String(16), primary_key=True)
     group = SAColumn('co_group', String(200), primary_key=True)
     key = SAColumn('co_key', String(200), primary_key=True)
 

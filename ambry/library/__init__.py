@@ -263,13 +263,18 @@ class Library(object):
     ## Storing
     ##
 
-    def put_bundle(self, bundle, file_state= 'new', commit=True):
+    def put_bundle(self, bundle, install_partitions = True, file_state= 'new', commit=True):
         """Install the records for the dataset, tables, columns and possibly
         partitions. Does not install file references """
 
         self.database.install_bundle(bundle)
 
         installed = self.files.install_bundle_file(bundle, self.cache, commit=commit, state = file_state)
+
+        if install_partitions:
+            for p in bundle.partitions.all:
+                if not self.cache.has(p.identity.cache_key):
+                    self.put_partition(p)
 
         # Copy the file in if we don't have it already
         if not self.cache.has(bundle.identity.cache_key):
@@ -293,6 +298,7 @@ class Library(object):
 
         # Ref partitions use the file of an earlier version, so there is no FILE to install
         if not self.cache.has(partition.identity.cache_key):
+            assert os.path.exists(partition.database.path)
             self.cache.put(partition.database.path, partition.identity.cache_key)
 
         return self.cache.path(partition.identity.cache_key), installed
@@ -474,6 +480,7 @@ class Library(object):
                     raise NotFoundError('Failed to get partition {} from bundle at {} '
                                         .format(dataset.partition.fqname, dataset.cache_key))
 
+
                 arc = AltReadCache(self.cache, self.remote_stack)
 
                 # If the partition has a reference, get that instead. This will load it into the local file
@@ -507,21 +514,13 @@ class Library(object):
                     if delete:
                         os.remove(ref_abs_path)
 
-
                 else:
-
                     abs_path = arc.get(partition.identity.cache_key, cb=cb)
-
 
                 if not abs_path or not os.path.exists(abs_path):
                     raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.cache_key))
 
-                try:
-                    self.database.install_partition_by_id(bundle, dataset.partition.id_,
-                                                    install_bundle=False, install_tables=False)
-                except IntegrityError as e:
-                    self.database.session.rollback()
-                    self.logger.error("Partition is already in Library.: {} ".format(e.message))
+                self.put_partition(partition)
 
                 # Attach the partition into the bundle, and return both.
                 bundle.partition = partition
@@ -1019,8 +1018,8 @@ class Library(object):
 
         else:
 
-            for file_ in self.new_files:
-                self.push(upstream, file_.ref, cb=cb, dry_run = dry_run)
+            for ref in [ file_.ref for file_ in self.new_files]:
+                self.push(upstream, ref, cb=cb, dry_run = dry_run)
 
             try:
                 upstream.store_list()
@@ -1253,12 +1252,11 @@ class Library(object):
                     continue
 
                 try:
-                    path, installed = self.put_bundle(b,  commit=True, file_state = 'installed')
+                    path, installed = self.put_bundle(b,  install_partitions = False,
+                                                      commit=True, file_state = 'installed')
 
                 except NotABundle:
-                    self.logger.error("Cache key {} exists, "
-                                      "but isn't a valid bundle"
-                                      .format(cache_key))
+                    self.logger.error("Cache key {} exists, but isn't a valid bundle".format(cache_key))
                     b.close()
                     continue
                 except Exception as e:

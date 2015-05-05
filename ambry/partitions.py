@@ -522,35 +522,17 @@ class Partitions(object):
         if partition:
             return partition, True
 
-        partition = self._new_partition(
-            ppn,
-            tables=tables,
-            data=data,
-            create=create)
+        partition = self._new_partition(ppn,tables=tables, data=data,create=create)
 
         return partition, False
 
     def new_partition(self, clean=False, tables=None, data=None, **kwargs):
-        return self.new_db_partition(
-            clean=clean,
-            tables=tables,
-            data=data,
-            **kwargs)
+        return self.new_db_partition(clean=clean,tables=tables,data=data,**kwargs)
 
     def find_or_new(self, clean=False, tables=None, data=None, **kwargs):
-        return self.find_or_new_db(
-            tables=tables,
-            clean=clean,
-            data=data,
-            **kwargs)
+        return self.find_or_new_db(tables=tables,clean=clean,data=data,**kwargs)
 
-    def new_db_partition(
-            self,
-            clean=False,
-            tables=None,
-            data=None,
-            create=True,
-            **kwargs):
+    def new_db_partition(self,clean=False,tables=None,data=None,create=True,**kwargs):
 
         p, found = self._find_or_new(
             kwargs, clean=False, tables=tables, data=data, create=create, format='db')
@@ -560,13 +542,7 @@ class Partitions(object):
 
         return p
 
-    def new_db_from_pandas(
-            self,
-            frame,
-            table=None,
-            data=None,
-            load=True,
-            **kwargs):
+    def new_db_from_pandas(self,frame,table=None,data=None,load=True, **kwargs):
         """Create a new db partition from a pandas data frame.
 
         If the table does not exist, it will be created

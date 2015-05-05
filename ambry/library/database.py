@@ -674,21 +674,9 @@ class LibraryDb(object):
         if not dataset:
             return False
 
-        if partition:
-            self.remove_partition(partition)
-        else:
-            b = LibraryDbBundle(self, dataset.identity.vid)
-            for p in b.partitions:
-                self.remove_partition(p)
-
         dataset =  self.session.query(Dataset).filter( Dataset.vid == dataset.identity.vid).one()
 
-        self.delete_dataset_colstats(dataset.vid)
-
-        # Can't use delete() on the query -- bulk delete queries do not
-        # trigger in-python cascades!
         self.session.delete(dataset)
-
 
         self.commit()
 
