@@ -26,8 +26,7 @@ class RowGenerator(object):
 
     put_row = None  # A row that was put back to be iterated over again.
 
-    def __init__(self, file, data_start_line=None, data_end_line=None,
-                 header_lines=None, header_comment_lines=None,
+    def __init__(self, file, data_start_line=None, data_end_line=None, header_lines=None, header_comment_lines=None,
                  header_mangler=None):
         """
 
@@ -111,23 +110,19 @@ class RowGenerator(object):
             row = self.raw_row_gen.next()
 
             if self.line_number in self.header_lines:
-                headers.append(
-                    [str(unicode(x).encode('ascii', 'ignore')) for x in row])
+                headers.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
 
             if self.line_number in self.header_comment_lines:
-                header_comments.append(
-                    [str(unicode(x).encode('ascii', 'ignore')) for x in row])
+                header_comments.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
 
         self.put_row = row
 
         if self.line_number == self.data_start_line:
-            # All of the header line are before this, so it is safe to construct
-            # the header now.
+            # All of the header line are before this, so it is safe to construct the header now.
 
             if len(headers) > 1:
 
-                # If there are gaps in the values in the first header line,
-                # extend them forward
+                # If there are gaps in the values in the first header line, extend them forward
                 hl1 = []
                 last = None
                 for x in headers[0]:
@@ -210,9 +205,8 @@ class RowGenerator(object):
 class DelimitedRowGenerator(RowGenerator):
     delimiter = None
 
-    def __init__(self, file, data_start_line=None, data_end_line=None,
-                 header_lines=None,
-                 header_comment_lines=None, header_mangler=None, delimiter=','):
+    def __init__(self, file, data_start_line=None, data_end_line=None, header_lines=None, header_comment_lines=None,
+                 header_mangler=None, delimiter=','):
 
         super(DelimitedRowGenerator, self).__init__(
             file, data_start_line=data_start_line, data_end_line=data_end_line, header_lines=header_lines,
@@ -243,14 +237,11 @@ class DelimitedRowGenerator(RowGenerator):
 
 
 class ExcelRowGenerator(RowGenerator):
-    def __init__(self, file, data_start_line=None, data_end_line=None,
-                 header_lines=None,
-                 header_comment_lines=None, header_mangler=None, segment=0):
+    def __init__(self, file, data_start_line=None, data_end_line=None, header_lines=None, header_comment_lines=None,
+                 header_mangler=None, segment=0):
 
-        super(ExcelRowGenerator, self).__init__(file, data_start_line,
-                                                data_end_line, header_lines,
-                                                header_comment_lines,
-                                                header_mangler)
+        super(ExcelRowGenerator, self).__init__(file, data_start_line, data_end_line, header_lines,
+                                                header_comment_lines, header_mangler)
 
         self.segment = segment
         self.workbook = None
@@ -265,7 +256,7 @@ class ExcelRowGenerator(RowGenerator):
             from zipfile import ZipFile
             # Usually b/c the .xls file is XML, but not zipped.
 
-            fn = self.file_name.replace('.xls', '.xml')
+            self.file_name.replace('.xls', '.xml')
 
             wb = open_workbook(self.file_name)
 
@@ -326,13 +317,11 @@ class RowSpecIntuiter(object):
 
             self.lengths[lng] += 1
 
-        self.mid_length = mid = (min(self.lengths.keys()) + max(
-            self.lengths.keys())) / 2
+        self.mid_length = (min(self.lengths.keys()) + max(self.lengths.keys())) / 2
 
     def non_nulls(self, row):
         """Return the non-empty values from a row"""
-        return [col for col in row if
-                bool(unicode(col).encode('ascii', 'replace').strip())]
+        return [col for col in row if bool(unicode(col).encode('ascii', 'replace').strip())]
 
     def is_data_line(self, i, row):
         """Return true if a line is a data row"""
@@ -342,7 +331,7 @@ class RowSpecIntuiter(object):
     def is_header_line(self, i, row):
         """Return true if a row is part of the header"""
 
-        return (not self.header and len(self.non_nulls(row)) > self.mid_length)
+        return not self.header and len(self.non_nulls(row)) > self.mid_length
 
     def is_header_comment_line(self, i, row):
         """Return true if a line is a header comment"""

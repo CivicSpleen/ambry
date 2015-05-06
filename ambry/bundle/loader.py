@@ -20,8 +20,7 @@ class LoaderBundle(BuildBundle):
 
         # Load it
         if os.path.exists(self.col_map_fn):
-            self.col_map = self.filesystem.read_csv(self.col_map_fn,
-                                                    key='header')
+            self.col_map = self.filesystem.read_csv(self.col_map_fn, key='header')
         else:
             self.col_map = {}
 
@@ -54,8 +53,8 @@ class LoaderBundle(BuildBundle):
 
     def mangle_column_name(self, i, n):
         """
-        Override this method to change the way that column names from the source
-        are altered to become column names in the schema
+        Override this method to change the way that column names from the source are altered to
+        become column names in the schema
 
         :param i: column number
         :param n: original column name
@@ -79,16 +78,14 @@ class LoaderBundle(BuildBundle):
             return mn
 
     def mangle_header(self, header):
-        """Transform the header as it comes from the raw row generator into a
-        column name"""
+        """Transform the header as it comes from the raw row generator into a column name"""
 
         return [self.mangle_column_name(i, n) for i, n in enumerate(header)]
 
     def build_create_partition(self, source_name):
         """Create or find a partition based on the source
 
-        Will also load the source metadata into the partition, as a dict, under
-        the key name of the source name.
+        Will also load the source metadata into the partition, as a dict, under the key name of the source name.
         """
 
         source = self.metadata.sources[source_name]
@@ -122,8 +119,8 @@ class LoaderBundle(BuildBundle):
         """Check for saved source"""
         import os
 
-        # If the file we are given isn't actually a CSV file, we might have
-        # manually converted it to a CSV and put it in the source store.
+        # If the file we are given isn't actually a CSV file, we might have manually
+        # converted it to a CSV and put it in the source store.
         if not fn.lower().endswith('.csv'):
             cache = self.filesystem.source_store
 
@@ -148,7 +145,9 @@ class LoaderBundle(BuildBundle):
 
         fn = self.filesystem.download(source_name)
 
-        # self.log("Generating from {}".format(fn))
+        if fn.endswith('.zip'):
+            sub_file = source.file
+            fn = self.filesystem.unzip(fn, regex=sub_file)
 
         base_dir, file_name = split(fn)
         file_base, ext = splitext(file_name)
@@ -160,6 +159,8 @@ class LoaderBundle(BuildBundle):
                 ext = ext[1:]
 
             ext = self.row_gen_ext_map.get(ext, ext)
+
+        print '!!!!', ext, source.filetype
 
         if source.row_spec.dict:
             rs = source.row_spec.dict
@@ -177,7 +178,6 @@ class LoaderBundle(BuildBundle):
             return DelimitedRowGenerator(fn, **rs)
         elif ext == 'xls':
             from rowgen import ExcelRowGenerator
-
             return ExcelRowGenerator(fn, **rs)
         else:
             raise Exception("Unknown source file extension: '{}' for file '{}' from source {} "
@@ -235,19 +235,18 @@ class LoaderBundle(BuildBundle):
 
         # A proto terms map, for setting grains
         pt = self.library.get('civicknowledge.com-proto-proto_terms').partition
-        pt_map = {r['name']: r['obj_number'] for r in pt.rows}
+        {r['name']: r['obj_number'] for r in pt.rows}
 
         self.database.create()
 
         tables = defaultdict(set)
 
         # First, load in the protoschema, to get prefix columns for each table.
-
         sf_path = self.filesystem.path('meta', self.PROTO_SCHEMA_FILE)
 
         if os.path.exists(sf_path):
             with open(sf_path, 'rbU') as f:
-                warnings, errors = self.schema.schema_from_file(f)
+                self.schema.schema_from_file(f)
 
         if not self.run_args.get('clean', None):
             self._prepare_load_schema()
@@ -276,7 +275,7 @@ class LoaderBundle(BuildBundle):
             for source_name in sources:
 
                 try:
-                    fn = self.filesystem.download(source_name)
+                    self.filesystem.download(source_name)
                 except urllib2.HTTPError:
                     self.error("Failed to download url for source: {}".format(source_name))
                     continue
@@ -338,6 +337,7 @@ class LoaderBundle(BuildBundle):
             # Don't add the columns that are already mapped.
             mapped_domain = set(item['col'] for item in col_map.values())
 
+            # TODO: do we need this loop here?
             for table_name, sources in tables.items():
                 rg = self.row_gen_for_source(source_name)
 
@@ -431,8 +431,8 @@ class TsvBuildBundle(CsvBundle):
     delimiter = '\t'
 
     def __init__(self, bundle_dir=None):
-        '''
-        '''
+        """
+        """
 
         super(TsvBuildBundle, self).__init__(bundle_dir)
 
@@ -456,8 +456,8 @@ class GeoBuildBundle(LoaderBundle):
     """A Bundle variant that loads zipped Shapefiles"""
 
     def __init__(self, bundle_dir=None):
-        '''
-        '''
+        """
+        """
 
         super(GeoBuildBundle, self).__init__(bundle_dir)
 

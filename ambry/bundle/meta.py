@@ -88,31 +88,23 @@ class SourceTerm(DictTerm):
     title = ScalarTerm(store_none=False)  # Title for use in table.
     description = ScalarTerm(store_none=False)
     dd_url = ScalarTerm(store_none=False)  # Data Dictitionary URL
-    # A name or regex to extract from a multi-file ZIP
-    file = ScalarTerm(store_none=False)
-    # For the LoaderBundle, use this file type ( file extensino ) rather than
-    # from the url
+    file = ScalarTerm(store_none=False)  # A name or regex to extract from a multi-file ZIP
     filetype = ScalarTerm(store_none=False)
-    # Specify a sub-component of the file, like a sheet in an excel workbook.
-    segment = ScalarTerm(store_none=False)
+    # For the LoaderBundle, use this file type ( file extensino ) rather than from the url
+
+    segment = ScalarTerm(store_none=False)  # Specify a sub-component of the file, like a sheet in an excel workbook.
     comment = ScalarTerm(store_none=False)  # Just a comment
-    # If false, ignore in auto-loading
-    is_loadable = ScalarTerm(store_none=False)
-    # Specify a time component, usually a year.
-    time = ScalarTerm(store_none=False)
+    is_loadable = ScalarTerm(store_none=False)  # If false, ignore in auto-loading
+    time = ScalarTerm(store_none=False)  # Specify a time component, usually a year.
     space = ScalarTerm(store_none=False)  # Specify a space component
     grain = ScalarTerm(store_none=False)  # Specify a grain component
-    # For auto imports, name of table to load into.
-    table = ScalarTerm(store_none=False)
-    # An alternate URL or regular expression for a file in the source store
-    conversion = ScalarTerm(store_none=False)
-    # ID of the foreign key for the table.
-    foreign_key = ScalarTerm(store_none=False)
-    # Spec for non data rows. 'start' for first line of data, 'header'
-    # for sclar/list of header lines
+    table = ScalarTerm(store_none=False)  # For auto imports, name of table to load into.
+    conversion = ScalarTerm(store_none=False)  # An alternate URL or regular expression for a file in the source store
+    foreign_key = ScalarTerm(store_none=False)  # ID of the foreign key for the table.
     row_spec = RowSpecDictTerm(store_none=False)
-    # A dict of values that are added to every row of the table.
-    row_data = DictTerm(store_none=False)
+    # Spec for non data rows. 'start' for first line of data, 'header' for sclar/list of header lines
+
+    row_data = DictTerm(store_none=False)  # A dict of values that are added to every row of the table.
 
     def __nonzero__(self):
         return bool(self.url or self.file or self.description or self.dd_url)
