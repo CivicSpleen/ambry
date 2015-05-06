@@ -236,7 +236,7 @@ def _print_info(l, ident, list_partitions=False):
 
     if ident.partitions:
 
-        if len(ident.partitions) == 1 and not list_partitions:
+        if len(ident.partitions) == 1 :
 
             ds_ident = l.resolve(ident.partition.vid, location=None)
 

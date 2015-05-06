@@ -290,9 +290,9 @@ def root_sync(args, l, config):
 
 def root_search(args, l, config):
     # This will fetch the data, but the return values aren't quite right
+    from ambry.dbexceptions import NotFoundError
 
     term = ' '.join(args.term)
-
 
     if args.reindex:
 
@@ -304,7 +304,6 @@ def root_search(args, l, config):
 
             sys.stdout.write("\033[K{}\r".format(message))
             sys.stdout.flush()
-
 
         records = []
 
@@ -364,9 +363,14 @@ def root_search(args, l, config):
             datasets =  l.search.search_datasets(parsed)
 
             for  result in sorted(datasets.values(), key=lambda e: e.score, reverse=True):
+                try:
+                    ds = l.dataset(result.vid)
+                    print result.score, result.vid, ds.name, ds.data.get('title'), list(result.partitions)[:5]
+                except NotFoundError:
+                    print "ERROR: Failed to find {} in library".format(result.vid)
 
-                ds = l.dataset(result.vid)
-                print result.score, result.vid, ds.name, ds.data.get('title'), list(result.partitions)[:5]
+
+
 
 
 def root_doc(args, l, rc):

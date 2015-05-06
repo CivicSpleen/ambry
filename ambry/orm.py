@@ -573,10 +573,9 @@ class Code(Base, SavableMixin, LinkableMixin):
 
     oid = SAColumn('cd_id', Integer, primary_key=True, nullable=False)
 
-    #t_vid = SAColumn('cd_t_vid',String(20),ForeignKey('tables.t_vid'),index=True,nullable=False)
-    #table = relationship('Table', backref='codes', lazy='subquery')
-
     c_vid = SAColumn('cd_c_vid',String(20),ForeignKey('columns.c_vid'),index=True,nullable=False)
+
+    d_vid = SAColumn('cd_d_vid', String(20), ForeignKey('datasets.d_vid'), nullable=False, index=True)
 
     key = SAColumn('cd_skey',String(20),nullable=False,index=True)  # String version of the key, the value in the dataset
     ikey = SAColumn( 'cd_ikey',Integer,index=True)  # Set only if the key is actually an integer
@@ -599,6 +598,8 @@ class Code(Base, SavableMixin, LinkableMixin):
 
         if self.data:
             self.data.update(kwargs)
+
+
 
     def __repr__(self):
         return "<code: {}->{} >".format(self.key, self.value)
@@ -644,6 +645,14 @@ class Code(Base, SavableMixin, LinkableMixin):
         return d
 
 
+    @staticmethod
+    def before_insert(mapper, conn, target):
+
+        target.d_vid = str(ObjectNumber.parse(target.c_vid).as_dataset)
+
+
+event.listen(Code, 'before_insert', Code.before_insert)
+
 
 lom_enums = "nom ord int ratio".split()
 
@@ -653,14 +662,14 @@ class ColumnStat(Base, SavableMixin, LinkableMixin):
     """Table for per column, per partition stats."""
     __tablename__ = 'colstats'
 
-    id = SAColumn('cs_id', Integer, primary_key=True, nullable=False)
 
-    p_vid = SAColumn('cs_p_vid',String(20),ForeignKey('partitions.p_vid'), nullable=False,index=True)
+    p_vid = SAColumn('cs_p_vid',String(20),ForeignKey('partitions.p_vid'), primary_key=True, nullable=False, index=True)
     partition = relationship('Partition', backref='_stats')
 
-    # This really should be Nullable=False, but I can't get cascading deletes
-    # to work.
-    c_vid = SAColumn('cs_c_vid',String(20),ForeignKey('columns.c_vid'),nullable=False,index=True)
+    c_vid = SAColumn('cs_c_vid', String(20), ForeignKey('columns.c_vid'), primary_key=True, nullable=False, index=True)
+
+    d_vid = SAColumn('cs_d_vid', String(20), ForeignKey('datasets.d_vid'), nullable=False, index=True)
+
 
     lom = SAColumn('cs_lom', String(12))
     count = SAColumn('cs_count', BigIntegerType)
@@ -688,6 +697,10 @@ class ColumnStat(Base, SavableMixin, LinkableMixin):
                 setattr(self, p.key, kwargs[p.key])
                 del kwargs[p.key]
 
+        self.d_vid = str(ObjectNumber.parse(self.p_vid).as_dataset)
+
+        assert str(ObjectNumber.parse(self.p_vid).as_dataset) == str(ObjectNumber.parse(self.c_vid).as_dataset)
+
     @property
     def dict(self):
 
@@ -696,14 +709,14 @@ class ColumnStat(Base, SavableMixin, LinkableMixin):
                 self,
                 p.key) for p in self.__mapper__.attrs if p.key not in ('data','column', 'table','partition')}
 
-
 class Column(Base):
     __tablename__ = 'columns'
 
     vid = SAColumn('c_vid', String(20), primary_key=True)
     id_ = SAColumn('c_id', String(20))
     sequence_id = SAColumn('c_sequence_id', Integer)
-    t_vid = SAColumn('c_t_vid',String(20),ForeignKey('tables.t_vid'),index=True)
+    t_vid = SAColumn('c_t_vid',String(20),ForeignKey('tables.t_vid'), nullable=False, index=True)
+    d_vid = SAColumn('c_d_vid', String(20), ForeignKey('datasets.d_vid'), nullable=False, index=True)
     t_id = SAColumn('c_t_id', String(20))
     name = SAColumn('c_name', Text)
     altname = SAColumn('c_altname', Text)
@@ -1121,11 +1134,15 @@ class Column(Base):
             if not target.id_:
                 target.id_ = str(ColumnNumber(table_on, target.sequence_id).rev(None))
 
+        target.d_vid = str(ObjectNumber.parse(target.t_vid).as_dataset)
+
     def __repr__(self):
         return "<column: {}, {}>".format(self.name, self.vid)
 
 event.listen(Column, 'before_insert', Column.before_insert)
 event.listen(Column, 'before_update', Column.before_update)
+
+
 
 
 class Table(Base, LinkableMixin, DataPropertyMixin):
@@ -1469,16 +1486,10 @@ Columns:
                 except MultipleResultsFound:
                     raise MultipleFoundError(
                         ("Got more than one result for query for column: '{}' "
-                         " In table {} ({})").format(
-                            name_or_id,
-                            self.vid,
-                            self.name))
+                         " In table {} ({})").format(name_or_id,self.vid,self.name))
 
         except NoResultFound:
-            raise NotFoundError(
-                "Failed to find column '{}' in table '{}' ".format(
-                    name_or_id,
-                    self.name))
+            raise NotFoundError("Failed to find column '{}' in table '{}' ".format(name_or_id,self.name))
 
     @property
     def primary_key(self):
@@ -2058,7 +2069,6 @@ class Partition(Base, LinkableMixin):
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
 
-
 class File(Base, SavableMixin, LinkableMixin):
     __tablename__ = 'files'
 
@@ -2080,8 +2090,8 @@ class File(Base, SavableMixin, LinkableMixin):
     content = SAColumn('f_content', Binary)
 
     __table_args__ = (
-        UniqueConstraint('f_path', 'f_type', 'f_group', name='u_type_path'),
-        UniqueConstraint('f_ref', 'f_type', 'f_group', name='u_ref_path'),
+        UniqueConstraint('f_path', 'f_type', 'f_group', 'f_source_url', name='u_type_path'),
+        UniqueConstraint('f_ref', 'f_type', 'f_group', 'f_source_url', name='u_ref_path')
     )
 
     def __init__(self, **kwargs):

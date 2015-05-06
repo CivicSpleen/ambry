@@ -606,28 +606,50 @@ class LibraryDb(object):
                         identity.vid,e.message,ds.dict))
 
 
-
     def install_bundle(self, bundle):
         """Copy the schema and partitions lists into the library database."""
         from ambry.bundle import Bundle
         from sqlalchemy.orm import joinedload, noload
+        import time
 
         if not isinstance(bundle, Bundle):
             raise ValueError("Can only install a  Bundle object. Got a {}".format(type(bundle)))
 
-        dataset = bundle.database.session.query(Dataset).options(
-            noload('*'),
-            joinedload('tables').joinedload('columns').joinedload('codes'),
-            joinedload('partitions'),
-            joinedload('tables').joinedload('columns').joinedload('stats'),
-            joinedload('configs'),
+        if self.session.query(Dataset).filter(Dataset.vid == str(bundle.identity.vid) ).first():
+            return False
 
-        ).filter(Dataset.vid == str(bundle.identity.vid)).one()
+        dataset = (bundle.database.session.query(Dataset).options(noload('*'), joinedload('configs'))
+                       .filter(Dataset.vid == str(bundle.identity.vid)).one() )
 
         self.session.merge(dataset)
         self.session.commit()
+
+        d_vid = dataset.vid
+
+        import time
+        # This is a lot faster than going through the ORM.
+        for tbl in [Table, Column, Code, Partition, ColumnStat]:
+
+            rows = [dict(r.items()) for r in bundle.database.session.execute(tbl.__table__.select()) ]
+
+            # There were recent schema updates that add a d_vid to every object, but these will be null
+            # in old bundles, so we need to set the value manually.
+            if tbl == Column or tbl == ColumnStat or tbl == Code:
+                for r in rows:
+                    for k,v in r.items():
+                        if k.endswith('_d_vid') and not bool(v):
+                            r[k] = d_vid
+            if rows:
+
+
+                self.session.execute(tbl.__table__.insert(), rows)
+
+            s = time.time()
+            self.session.commit()
+
         self._mark_update()
 
+        return True
 
     def mark_table_installed(self, table_or_vid, name=None):
         """Mark a table record as installed."""

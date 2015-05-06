@@ -155,14 +155,7 @@ class Files(object):
 
         return f
 
-    def insert_collection(self):
 
-        if len(self._collection) == 0:
-            return
-
-        self.db.session.execute(File.__table__.insert(), self._collection)
-
-        self._collection = []
 
     def merge(self, f, commit=True):
         """If commit is 'collect' add the files to the collection for later
@@ -186,8 +179,7 @@ class Files(object):
                 f.size = f.size if f.size else None
 
         if commit == 'collect':
-            self._collection.append(f.insertable_dict)
-            return
+            raise NotImplementedError()
 
         # Sqlalchemy doesn't automatically rollback on exceptions, and you
         # can't re-try the commit until you roll back.
@@ -210,77 +202,44 @@ class Files(object):
 
         self.db._mark_update()
 
-    def install_bundle_file(self,bundle,cache,commit=True,state='installed'):
+    def install_bundle_file(self,bundle,source,commit=True,state='installed'):
         """Mark a bundle file as having been installed in the library."""
 
         ident = bundle.identity
 
-        if self.query.group(cache.repo_id).type(Files.TYPE.BUNDLE).ref(ident.vid).one_maybe:
+        if self.query.group('datasets').source_url(source).type(Files.TYPE.BUNDLE).ref(ident.vid).one_maybe:
             return False
 
         return self.new_file(
             commit=commit,
             merge=True,
             path=bundle.database.path,
-            group=cache.repo_id,
+            group='datasets',
             ref=ident.vid,
             state=state,
             type_=Files.TYPE.BUNDLE,
             data=None,
-            source_url=None)
+            source_url=source)
 
-    def install_partition_file(self,partition,cache,commit=True,state='installed'):
+    def install_partition_file(self,partition,source,commit=True,state='installed'):
         """Mark a partition file as having been installed in the library."""
 
         ident = partition.identity
 
-        if self.query.group(cache.repo_id).type(Files.TYPE.PARTITION).ref(ident.vid).one_maybe:
+        if self.query.group('datasets').source_url(source).type(Files.TYPE.PARTITION).ref(ident.vid).one_maybe:
             return False
 
         return self.new_file(
             commit=commit,
             merge=True,
             path=partition.database.path,
-            group=cache.repo_id,
+            group='datasets',
             ref=ident.vid,
             state=state,
             type_=Files.TYPE.PARTITION,
             data=None,
-            source_url=None)
+            source_url=source)
 
-    def install_remote_bundle(self, ident, upstream, metadata, commit=True):
-        """Set a reference to a remote bundle."""
-
-        return self.new_file(
-            commit=commit,
-            merge=True,
-            path=ident.cache_key,
-            group=upstream.repo_id,
-            ref=ident.vid,
-            state='installed',
-            type_=Files.TYPE.REMOTE,
-            data=metadata,
-            hash=metadata.get('md5', None),
-            priority=upstream.priority,
-            source_url=upstream.repo_id)
-
-    def install_remote_partition(self, ident, upstream, metadata, commit=True):
-        """Set a reference to a remote partition."""
-
-        assert bool(str(ident.cache_key)), "File path can't be null'"
-
-        return self.new_file(
-            commit=commit,
-            merge=True,
-            path=ident.cache_key,
-            group=upstream.repo_id,
-            ref=ident.vid,
-            state='installed',
-            type_=Files.TYPE.REMOTEPARTITION,
-            data=metadata,
-            hash=metadata.get('md5', None),
-            priority=upstream.priority,
-            source_url=upstream.repo_id, )
 
     def install_bundle_source(self, bundle, source, commit=True):
         """Set a reference a bundle source."""

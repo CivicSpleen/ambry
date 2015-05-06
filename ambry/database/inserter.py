@@ -80,13 +80,7 @@ class ValueWriter(InserterInterface):
 
     """Inserts arrays of values into  database table."""
 
-    def __init__(
-            self,
-            db,
-            bundle,
-            cache_size=50000,
-            text_factory=None,
-            replace=False):
+    def __init__(self,db,bundle,cache_size=50000, text_factory=None,replace=False):
         import string
         self.cache = []
 

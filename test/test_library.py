@@ -189,9 +189,6 @@ class Test(TestBase):
 
         self.assertEquals(5, len(ldsq(File).all()))
 
-        for f in ldsq(File).all():
-            print f.ref, f.group
-
         for p in self.bundle.partitions.all:
             l.get(p.identity.vid)
 
@@ -234,6 +231,7 @@ class Test(TestBase):
         from ambry.orm import Table
 
         l = self.get_library()
+        l.clean()
 
         l.put_bundle(self.bundle)
 

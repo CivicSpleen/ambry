@@ -16,9 +16,7 @@ class RowSelector(object):
 
         if sql is None:
             pk = partition.get_table().primary_key.name
-            sql = "SELECT * FROM {} ORDER BY {} ".format(
-                partition.get_table().name,
-                pk)
+            sql = "SELECT * FROM {} ORDER BY {} ".format(partition.get_table().name,pk)
 
         self.partition = partition
         self.sql = sql

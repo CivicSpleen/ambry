@@ -228,22 +228,11 @@ class Manifest(object):
         if tag not in self.singles and tag not in self.multi_line:
             # Capture Error. These don't get save to the sections array.
             line_number = i + 1
-            section = ManifestSection(
-                self.path,
-                tag='error',
-                linenumber=line_number,
-                args=args)
-            self.logger.error(
-                "Unknown section tag: '{}' at line '{}' ".format(
-                    tag,
-                    line_number))
+            section = ManifestSection(self.path,tag='error',linenumber=line_number,args=args)
+            self.logger.error( "Unknown section tag: '{}' at line '{}' ".format(tag,line_number))
         else:
             line_number = i + 1
-            section = ManifestSection(
-                self.path,
-                tag=tag,
-                linenumber=line_number,
-                args=args)
+            section = ManifestSection(self.path, tag=tag,linenumber=line_number,args=args)
             sections[line_number] = section
 
         return line_number, section
@@ -277,8 +266,7 @@ class Manifest(object):
                 if non_tag_is_doc:
                     non_tag_is_doc = False
                     tag = 'doc'
-                    section_start_line_number, section = self.make_item(
-                        sections, tag, line_number, None)
+                    section_start_line_number, section = self.make_item(sections, tag, line_number, None)
 
                 if tag == 'doc':  # save newlines for doc sections
                     section.lines.append(line)
@@ -333,11 +321,8 @@ class Manifest(object):
                 if pf:
                     section.content = pf(section)
             except Exception as e:
-                self.logger.error(
-                    "Failed to process section at line {} : {}: {} ".format(
-                        line,
-                        section,
-                        e))
+                self.logger.error("Failed to process section at line {} : {}: {} ".format(
+                        line,section,e))
                 del sections[line]
 
         # Link docs to previous sections, where appropriate
@@ -368,8 +353,6 @@ class Manifest(object):
 
     def _process_doc(self, section):
         import markdown
-        from ..util import normalize_newlines
-        import textwrap
 
         t = '\n'.join(section.lines)
 
@@ -383,11 +366,7 @@ class Manifest(object):
 
     def _process_sql(self, section):
 
-        return sqlparse.format(
-            '\n'.join(
-                section.lines),
-            reindent=True,
-            keyword_case='upper')
+        return sqlparse.format('\n'.join(section.lines),reindent=True,keyword_case='upper')
 
     def _process_mview(self, section):
 
@@ -396,16 +375,10 @@ class Manifest(object):
                 'No name specified for view at {}'.format(
                     section.file_line))
 
-        t = sqlparse.format(
-            '\n'.join(
-                section.lines),
-            reindent=True,
-            keyword_case='upper')
+        t = sqlparse.format('\n'.join(section.lines),reindent=True,keyword_case='upper')
 
         if not t.strip():
-            raise ParseError(
-                'No sql specified for view at {}'.format(
-                    section.file_line))
+            raise ParseError('No sql specified for view at {}'.format(section.file_line))
 
         tc_names = set()  # table and column names
 
@@ -511,11 +484,7 @@ class Manifest(object):
                 partitions.append(d)
 
             except ParseError as e:
-                raise ParseError(
-                    "Failed to parse in section at line #{}: {}".format(
-                        start_line +
-                        i,
-                        e))
+                raise ParseError("Failed to parse in section at line #{}: {}".format(start_line +i,e))
 
         self.partitions = partitions
         return dict(partitions=partitions)
@@ -532,15 +501,11 @@ class Manifest(object):
                 if not ident:
                     raise ParseError(
                         "Partition reference not resolved to a bundle: '{}' in manifest '{}' "
-                        " for library {}" .format(
-                            partition['partition'],
-                            self.path,
-                            library.database.dsn))
+                        " for library {}" .format( partition['partition'],self.path,library.database.dsn))
 
                 if not ident.partition:
                     raise ParseError(
-                        "Partition reference not resolved to a partition: '{}' ".format(
-                            partition['partition']))
+                        "Partition reference not resolved to a partition: '{}' ".format(partition['partition']))
 
                 b = LibraryDbBundle(library.database, ident.vid)
 
@@ -689,11 +654,7 @@ class Manifest(object):
             try:
                 (_, where), tokens = Manifest.extract_token('WHERE', tokens)
 
-                where = re.sub(
-                    r'^where',
-                    '',
-                    where,
-                    flags=re.IGNORECASE).strip()
+                where = re.sub(r'^where','',where,flags=re.IGNORECASE).strip()
 
             except (TypeError, ValueError):
                 where = None
@@ -702,11 +663,7 @@ class Manifest(object):
                 (_, prefix), tokens = Manifest.extract_next(
                     'PREFIX', 'NAME', tokens)
 
-                prefix = re.sub(
-                    r'^where',
-                    '',
-                    prefix,
-                    flags=re.IGNORECASE).strip().strip("'")
+                prefix = re.sub(r'^where', '',prefix,flags=re.IGNORECASE).strip().strip("'")
 
             except (TypeError, ValueError):
                 prefix = None

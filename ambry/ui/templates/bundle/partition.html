@@ -45,6 +45,7 @@
                 <th>Values</th>
 
             </tr>
+
             {% for c in p.table.columns.values()|sort(attribute='sequence_id') -%}
             <tr>
                 <td>{{c.sequence_id}}</td>
@@ -66,11 +67,23 @@
                     {{p.colstats.get(c.id_).p50}}
                 </td>
                 <td>
-                    {% if p.colstats.get(c.id_).hist %}
-                    <span class="inlinesparkline">
-                    {% for e in p.colstats.get(c.id_).hist.get('values') %}{{e[1]}},{% endfor %}
-                    </span>
+                    {%  if  p.colstats.get(c.id_).hist %}
+                       <div><span class="histospark">
+                        {% for e in p.colstats.get(c.id_).hist.get('values') %}{{e[1]}},{% endfor %}
+                        </span></div>
+                        <div><span class="boxplot">
+                            {{ p.colstats.get(c.id_).min }},
+                            {{p.colstats.get(c.id_).p25}},
+                            {{p.colstats.get(c.id_).p50}},
+                            {{p.colstats.get(c.id_).p70}},
+                            {{p.colstats.get(c.id_).max}}
+                        </span></div>
+                    {% else %}
+                        {{ p.colstats.get(c.id_).uvalues|sort|join(', ') }}
                     {% endif %}
+
+
+
                 </td>
 
             </tr>
@@ -109,7 +122,9 @@
     <script language="javascript" type="text/javascript" src="/js/sparklines.js"></script>
     <script>
         $(function() {
-         $('.inlinesparkline').sparkline('html', {type: 'bar', barColor: 'blue'} );
+         $('.histospark').sparkline('html', {height: 25, barWidth: 8, type: 'bar', barColor: 'blue'} );
+         $('.boxplot').sparkline('html', {height: 25, width: 100, type: 'box', barColor: 'blue', raw: true,
+             showOutliers:false } );
         });
     </script>
 {% endblock %}

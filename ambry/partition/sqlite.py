@@ -37,11 +37,7 @@ class SqlitePartition(PartitionBase):
     @property
     def database(self):
         if self._database is None:
-            self._database = PartitionDb(
-                self.bundle,
-                self,
-                base_path=self.path,
-                memory=self.memory)
+            self._database = PartitionDb(self.bundle,self,base_path=self.path,memory=self.memory)
         return self._database
 
     def detach(self, name=None):

@@ -166,7 +166,7 @@ class SqliteAttachmentMixin(object):
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
-    SCHEMA_VERSION = 27
+    SCHEMA_VERSION = 28
 
     _lock = None
 
@@ -776,6 +776,13 @@ def _on_connect_update_sqlite_schema(conn, con_record):
     if version:
         version = int(version)
 
+    def maybe_exec(s):
+        try:
+            conn.execute(s)
+        except Exception as e:
+
+            pass
+
     # Some files have version of 0 because the version was not set.
     if version > 10:
         if version < 14:
@@ -853,8 +860,7 @@ def _on_connect_update_sqlite_schema(conn, con_record):
         if version < 23:
 
             try:
-                conn.execute(
-                    'ALTER TABLE columns ADD COLUMN c_derivedfrom VARCHAR(200)')
+                conn.execute('ALTER TABLE columns ADD COLUMN c_derivedfrom VARCHAR(200)')
             except OperationalError as e:
                 pass
 
@@ -877,17 +883,16 @@ def _on_connect_update_sqlite_schema(conn, con_record):
                 pass
 
         if version < 27:
+            maybe_exec('ALTER TABLE colstats ADD COLUMN cs_lom VARCHAR(6)')
 
-            try:
-                conn.execute(
-                    'ALTER TABLE colstats ADD COLUMN cs_lom VARCHAR(6)')
-            except OperationalError as e:
-                pass
+        if version < 28:
+
+            maybe_exec('ALTER TABLE columns ADD COLUMN c_d_vid VARCHAR(20)')
+            maybe_exec('ALTER TABLE colstats ADD COLUMN cs_d_vid VARCHAR(20)')
+            maybe_exec('ALTER TABLE codes ADD COLUMN cd_d_vid VARCHAR(20)')
 
     if version < SqliteDatabase.SCHEMA_VERSION:
-        conn.execute(
-            'PRAGMA user_version = {}'.format(
-                SqliteDatabase.SCHEMA_VERSION))
+        conn.execute('PRAGMA user_version = {}'.format( SqliteDatabase.SCHEMA_VERSION))
 
 
 def insert_or_ignore(table, columns):
