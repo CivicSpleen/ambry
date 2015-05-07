@@ -38,11 +38,10 @@
                 <th>Type</th>
                 <th>Size</th>
                 <th>Description</th>
+                <th>Unique Values</th>
+                <th>Values ( &mu;&plusmn;2&sigma; range )</th>
                 <th>Vid</th>
                 <th>Proto Id</th>
-                <th>Unique Values</th>
-                <th>Mean Val</th>
-                <th>Values</th>
 
             </tr>
 
@@ -54,17 +53,9 @@
                 <td>{{c.datatype}}</td>
                 <td>{{c.size}}</td>
                 <td>{{c.description}}</td>
-                <td>{%if c.sequence_id == 1 %}{{p.table.vid}}{% else %}{{c.vid}}{% endif %}</td>
-                <td>{%if c.proto_vid %}
-                    <a href="{{proto_vid_path(c.proto_vid)}}">{{c.proto_vid}} ({{tc_obj(c.proto_vid).name}})</a>
-                    {%endif-%}
 
-                </td>
                 <td>
                     {{p.colstats.get(c.id_).nuniques}}
-                </td>
-                <td>
-                    {{p.colstats.get(c.id_).p50}}
                 </td>
                 <td>
                     {%  if  p.colstats.get(c.id_).hist %}
@@ -75,14 +66,18 @@
                             {{ p.colstats.get(c.id_).min }},
                             {{p.colstats.get(c.id_).p25}},
                             {{p.colstats.get(c.id_).p50}},
-                            {{p.colstats.get(c.id_).p70}},
+                            {{p.colstats.get(c.id_).p75}},
                             {{p.colstats.get(c.id_).max}}
                         </span></div>
                     {% else %}
                         {{ p.colstats.get(c.id_).uvalues|sort|join(', ') }}
                     {% endif %}
 
-
+                </td>
+                <td>{%if c.sequence_id == 1 %}{{p.table.vid}}{% else %}{{c.vid}}{% endif %}</td>
+                <td>{%if c.proto_vid %}
+                    <a href="{{proto_vid_path(c.proto_vid)}}">{{c.proto_vid}} ({{tc_obj(c.proto_vid).name}})</a>
+                    {%endif-%}
 
                 </td>
 

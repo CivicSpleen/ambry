@@ -834,7 +834,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         print e('births with mother in California by tracts')
         print e('births with mother with birth in California by tracts')
 
-
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))

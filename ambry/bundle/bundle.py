@@ -1831,7 +1831,7 @@ class BuildBundle(Bundle):
 
             self.log("Install   {} to  library {}".format(self.identity.name,library.database.dsn))
 
-            dest = library.put_bundle(self)
+            dest = library.put_bundle(self, file_state='new')
 
             self.log("Installed {}".format(dest[0]))
 

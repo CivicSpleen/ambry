@@ -548,10 +548,8 @@ class Partitions(object):
         If the table does not exist, it will be created
 
         """
-        import pandas as pd
-        import numpy as np
+
         from orm import Column
-        from dbexceptions import ConfigurationError
 
         # Create the table from the information in the data frame.
         with self.bundle.session:
@@ -563,12 +561,8 @@ class Partitions(object):
             else:
                 id_name = 'id'
 
-            sch.add_column(
-                t,
-                id_name,
-                datatype=Column.convert_numpy_type(
-                    frame.index.dtype),
-                is_primary_key=True)
+            sch.add_column(t,id_name,
+                datatype=Column.convert_numpy_type(frame.index.dtype),is_primary_key=True)
 
             for name, type_ in zip([row for row in frame.columns],
                                    [row for row in frame.convert_objects(convert_numeric=True,

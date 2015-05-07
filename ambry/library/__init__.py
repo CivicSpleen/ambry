@@ -263,7 +263,7 @@ class Library(object):
     ## Storing
     ##
 
-    def put_bundle(self, bundle, source = None, install_partitions = True, file_state= 'new', commit=True):
+    def put_bundle(self, bundle, source = None, install_partitions = True, file_state= 'installed', commit=True):
         """Install the records for the dataset, tables, columns and possibly
         partitions. Does not install file references """
 
@@ -294,7 +294,7 @@ class Library(object):
 
         return self.cache.path(bundle.identity.cache_key), installed
 
-    def put_partition(self,  partition, source = None, file_state= 'new', commit=True):
+    def put_partition(self,  partition, source = None, file_state= 'installed', commit=True):
         """Install the record and file reference for the partition """
 
         if source is None:
