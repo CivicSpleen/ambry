@@ -276,8 +276,7 @@ class Library(object):
 
         if install_partitions:
             for p in bundle.partitions.all:
-                if not self.cache.has(p.identity.cache_key):
-                    self.put_partition(p, source, commit = commit)
+                self.put_partition(p, source, commit = commit, file_state = file_state)
 
         # Copy the file in if we don't have it already
         if not self.cache.has(bundle.identity.cache_key):
@@ -306,9 +305,8 @@ class Library(object):
         if not self.cache.has(partition.identity.cache_key) and os.path.exists(partition.database.path):
             self.cache.put(partition.database.path, partition.identity.cache_key)
 
-            return self.cache.path(partition.identity.cache_key), installed
 
-        return False
+        return self.cache.path(partition.identity.cache_key), installed
 
 
     def remove(self, bundle):
