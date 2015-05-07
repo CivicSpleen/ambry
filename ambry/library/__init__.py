@@ -456,7 +456,7 @@ class Library(object):
         else:
             return self.cache.has(dataset.cache_key)
 
-    def get(self, ref, force=False, cb=None, location = 'default'):
+    def get(self, ref, remote = None, force=False, cb=None, location = 'default'):
         '''Get a bundle, given an id string or a name '''
 
         from .files import  Files
@@ -471,13 +471,14 @@ class Library(object):
         df =  self.files.query.group('datasets').type(Files.TYPE.BUNDLE).ref(dataset.vid).one
 
         # Get the remote that the bundle came from.
-        remote = None
-        for r in self.remotes.values():
-            if r.repo_id == df.source_url:
-                remote = r
-                break
 
-        assert not remote or remote.repo_id == df.source_url
+        if remote is None:
+            for r in self.remotes.values():
+                if r.repo_id == df.source_url:
+                    remote = r
+                    break
+
+            assert not remote or remote.repo_id == df.source_url
 
         if not dataset:
             raise NotFoundError("Failed to resolve reference '{}' in library '{}' ".format(ref, self.database.dsn))
@@ -515,14 +516,19 @@ class Library(object):
                         source_ident = partition.identity
 
                     # Copy the partition from the remote to the local cache.
-                    with self.cache.put_stream(partition.identity.cache_key) as s:
-                        copy_file_or_flo(remote.get_stream(source_ident.cache_key, cb=cb), s)
+                    with self.cache.put_stream(partition.identity.cache_key) as out_s:
+                        in_s = remote.get_stream(source_ident.cache_key, cb=cb)
+
+                        if not in_s:
+                            raise NotFoundError('Failed to get partition {} from cache {}'
+                                                .format(partition.identity.cache_key, str(remote)))
+                        copy_file_or_flo(in_s, out_s)
 
                     abs_path = self.cache.path(partition.identity.cache_key)
 
                     if not abs_path or not os.path.exists(abs_path):
-                        raise NotFoundError('Failed to get partition {} from cache '
-                                            .format(partition.identity.cache_key))
+                        raise NotFoundError('Failed to get partition {} from cache {}'
+                                            .format(partition.identity.cache_key, str(remote)))
 
                     source = remote.repo_id
 

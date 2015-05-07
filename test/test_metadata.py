@@ -21,12 +21,15 @@ class Test(TestBase):
         self.yaml_config = """
 about:
     access: null
+    footnote: null
     grain: null
     groups:
     - Group 1
     - Group 2
     license: license
+    processed: null
     rights: rights
+    source: null
     space: null
     subject: subject
     summary: summary

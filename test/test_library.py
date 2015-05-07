@@ -185,7 +185,7 @@ class Test(TestBase):
         self.assertEquals(45, len(ldsq(Column).all()))
         self.assertEquals(20, len(ldsq(Code).all()))
         self.assertEquals(23, len(ldsq(ColumnStat).all()))
-        self.assertEquals(36, len(ldsq(Config).all()))
+        self.assertEquals(39, len(ldsq(Config).all()))
 
         self.assertEquals(5, len(ldsq(File).all()))
 
@@ -320,6 +320,7 @@ class Test(TestBase):
         # The zippy bit rotates the files through the three caches.
         rf = [ (remote, file_.ref) for remote, file_ in zip(a*(len(b)/len(a)+1),b)]
         for remote, ref in rf:
+
             l.push(remote, ref, cb=cb)
 
         ## NOTE! This is a really crappy test, and it will fail if gdal is not installed, since the
@@ -380,7 +381,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         self.assertEqual('source-dataset-subset-variation-0.0.1', str(b.identity.vname))
 
         for p in b.partitions:
-            bp = l.get(p.identity.vid)
+            bp = l.get(p.identity.vid, remote = l.remote_stack)
 
             self.assertIn(bp.partition.identity.vname,
                 [
@@ -389,7 +390,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
                     'source-dataset-subset-variation-tthree-0.0.1',
                     'source-dataset-subset-variation-tone-missing-0.0.1'
                 ])
-
 
     def test_s3_push(self):
         '''Install the bundle and partitions, and check that they are
@@ -542,8 +542,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         ip, results = r.resolve_ref_all(ref)
 
-        for row in results:
-            print row
 
         #os.remove(f)
 

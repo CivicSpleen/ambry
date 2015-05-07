@@ -571,23 +571,18 @@ class Code(Base, SavableMixin, LinkableMixin):
     """Code entries for variables."""
     __tablename__ = 'codes'
 
-    oid = SAColumn('cd_id', Integer, primary_key=True, nullable=False)
 
-    c_vid = SAColumn('cd_c_vid',String(20),ForeignKey('columns.c_vid'),index=True,nullable=False)
+    c_vid = SAColumn('cd_c_vid',String(20),ForeignKey('columns.c_vid'), primary_key=True,index=True,nullable=False)
 
-    d_vid = SAColumn('cd_d_vid', String(20), ForeignKey('datasets.d_vid'), nullable=False, index=True)
+    d_vid = SAColumn('cd_d_vid', String(20), ForeignKey('datasets.d_vid'), primary_key=True, nullable=False, index=True)
 
-    key = SAColumn('cd_skey',String(20),nullable=False,index=True)  # String version of the key, the value in the dataset
+    key = SAColumn('cd_skey',String(20), primary_key=True,nullable=False,index=True)  # String version of the key, the value in the dataset
     ikey = SAColumn( 'cd_ikey',Integer,index=True)  # Set only if the key is actually an integer
 
     value = SAColumn('cd_value', Text,nullable=False)  # The value the key maps to
     description = SAColumn('f_description', Text, index=True)
 
     data = SAColumn('co_data', MutationDict.as_mutable(JSONEncodedObj))
-
-    __table_args__ = (
-        UniqueConstraint('cd_c_vid', 'cd_skey', name='u_code_col_key'),
-    )
 
     def __init__(self, **kwargs):
 
