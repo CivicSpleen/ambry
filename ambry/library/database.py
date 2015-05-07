@@ -734,9 +734,6 @@ class LibraryDb(object):
         # trigger in-python cascades!
         self.session.delete(dataset)
 
-        # The foreign keys on the codes are nullable, so they set set to Null when
-        # the columsn are deleted, so we can just clean those up
-        self.session.query(Code).filter(Code.t_vid == None).delete()
 
         self.session.commit()
 

@@ -207,8 +207,7 @@ class Files(object):
 
         ident = bundle.identity
 
-        if self.query.group('datasets').source_url(source).type(Files.TYPE.BUNDLE).ref(ident.vid).one_maybe:
-            return False
+        self.query.group('datasets').source_url(source).type(Files.TYPE.BUNDLE).ref(ident.vid).delete()
 
         return self.new_file(
             commit=commit,
@@ -226,8 +225,7 @@ class Files(object):
 
         ident = partition.identity
 
-        if self.query.group('datasets').source_url(source).type(Files.TYPE.PARTITION).ref(ident.vid).one_maybe:
-            return False
+        self.query.group('datasets').source_url(source).type(Files.TYPE.PARTITION).ref(ident.vid).delete()
 
         return self.new_file(
             commit=commit,
