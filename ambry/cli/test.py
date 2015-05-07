@@ -5,12 +5,10 @@ included in this distribution as LICENSE.txt
 
 """
 
-from ..cli import prt, fatal
+from ..cli import prt
 
 
 def test_parser(cmd):
-    import argparse
-
     test_p = cmd.add_parser('test', help='Test and debugging')
     test_p.set_defaults(command='test')
 
@@ -33,8 +31,6 @@ def test_parser(cmd):
 
 
 def test_command(args, rc):
-    from ..library import new_library
-
     globals()['test_' + args.subcommand](args, rc)
 
 

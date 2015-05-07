@@ -5,14 +5,9 @@ included in this distribution as LICENSE.txt
 
 """
 
-from . import prt, err, fatal, _print_info, _print_bundle_list
+from . import prt, _print_bundle_list
 
-# If the devel module exists, this is a development system.
-try:
-    from ambry.support.devel import *
-except ImportError as e:
-    from ambry.support.production import *
-from ..dbexceptions import ConfigurationError, NotFoundError
+from ..dbexceptions import ConfigurationError
 
 
 def warehouse_command(args, rc):
@@ -35,7 +30,6 @@ def warehouse_command(args, rc):
 
     if not args.database and args.subcommand == 'install':
         from ..warehouse.manifest import Manifest
-        import os.path
 
         m = Manifest(args.term)
 
@@ -67,17 +61,14 @@ def warehouse_command(args, rc):
 
     elif args.subcommand not in ['list', 'new', 'install', 'test']:
         raise ConfigurationError(
-            "Must set the id, path or dsn of the database, "
-            "either on the command line or in a manifest. ")
+            "Must set the id, path or dsn of the database, either on the command line or in a manifest. ")
 
     if not w and config:
 
         w = new_warehouse(config, l, logger=global_logger)
 
         if not w.exists() and args.subcommand not in ['clean', 'delete']:
-            raise ConfigurationError(
-                "Database {} must be created first".format(
-                    w.database.dsn))
+            raise ConfigurationError("Database {} must be created first".format(w.database.dsn))
 
     if args.subcommand == 'new':
         globals()['warehouse_' + args.subcommand](args, l, rc)
@@ -116,8 +107,7 @@ def warehouse_parser(cmd):
         '-D',
         '--dir',
         default='',
-        help='Set directory, instead of configured Warehouse filesystem dir, '
-             'for relative paths')
+        help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
 
     whsp.add_argument('term', type=str, help='Name of bundle or partition')
 
@@ -145,8 +135,7 @@ def warehouse_parser(cmd):
         '-D',
         '--dir',
         default='',
-        help='Set directory, instead of configured Warehouse filesystem dir, '
-             'for relative paths')
+        help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
 
     whsp = whp.add_parser('config', help='Configure varibles')
     whsp.set_defaults(subcommand='config')
@@ -235,11 +224,6 @@ def warehouse_parser(cmd):
         help='Generate documentation and open an browser')
     whsp.set_defaults(subcommand='doc')
     whsp.add_argument('-c', '--clean')
-
-    if IN_DEVELOPMENT:
-        whsp = whp.add_parser('test', help='Run a test')
-        whsp.set_defaults(subcommand='test')
-        whsp.add_argument('term', type=str, nargs='?', help='A test argument')
 
 
 def warehouse_info(args, w, config):
@@ -351,9 +335,9 @@ def warehouse_list(args, w, config):
 
     else:
         raise NotImplementedError()
-        d, p = l.get_ref(args.term)
+        # d, p = l.get_ref(args.term)
 
-        _print_info(l, d, p, list_partitions=True)
+        # _print_info(l, d, p, list_partitions=True)
 
 
 def warehouse_install(args, w, config):
@@ -364,8 +348,8 @@ def warehouse_install(args, w, config):
     if args.clean:
         w.logger.info("Cleaning before installation")
         raise Exception()
-        w.clean()
-        w.create()
+        # w.clean()
+        # w.create()
 
     w.logger.info("Installing to {}".format(w.database.dsn))
 
@@ -399,10 +383,8 @@ def warehouse_config(args, w, config):
         val = parts.pop(0) if parts else None
 
         if var not in w.configurable:
-            raise ConfigurationError(
-                "Value {} is not configurable. Must be one of: {}".format(
-                    args.var,
-                    w.configurable))
+            raise ConfigurationError("Value {} is not configurable. Must be one of: {}".format(args.var,
+                                                                                               w.configurable))
 
         if val:
             setattr(w, var, val)
@@ -415,8 +397,6 @@ def warehouse_config(args, w, config):
 
 
 def warehouse_test(args, w, config):
-
-    from ambry.bundle import LibraryDbBundle
 
     print w.dsn
     print w.library.database.dsn

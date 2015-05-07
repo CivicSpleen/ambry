@@ -13,23 +13,18 @@ from heapq import nsmallest
 from operator import itemgetter
 import logging
 import yaml
-from collections import Mapping, OrderedDict, defaultdict
-import os
-import sys
+from collections import OrderedDict, defaultdict
 
 from flo import *  # Legacy; should convert clients to direct import
-from functools import reduce
 
 logger_init = set()
 
 
-def get_logger(
-        name,
-        file_name=None,
-        stream=None,
-        template=None,
-        clear=False,
-        propagate=False):
+def get_logger(name, file_name=None, stream=None, template=None, clear=False, propagate=False):
+    return _get_logger(name, file_name=file_name, stream=stream, template=template, clear=clear, propagate=propagate)
+
+
+def _get_logger(name, file_name=None, stream=None, template=None, clear=False, propagate=False):
     """Get a logger by name.
 
     if file_name is specified, and the dirname() of the file_name
@@ -64,7 +59,6 @@ def get_logger(
         handlers = []
 
         if stream is not None:
-
             handlers.append(logging.StreamHandler(stream=stream))
 
         if file_name is not None:
@@ -83,6 +77,24 @@ def get_logger(
         logger_init.add(name)
 
     return logger
+
+
+def install_test_logger(test_file_name):
+    def test_get_logger(name, file_name=None, stream=None, template=None, clear=False, propagate=False):
+        """A quiet logger used for testing. """
+
+        import logging
+
+        logger = logging.getLogger(name)
+        hdlr = logging.FileHandler(test_file_name)
+        formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+        hdlr.setFormatter(formatter)
+        logger.addHandler(hdlr)
+        logger.setLevel(logging.DEBUG)
+
+        return logger
+
+    return test_get_logger
 
 
 def clear_logger(name):
@@ -166,9 +178,8 @@ def bundle_file_type(path_or_file):
     else:
         return None
 
+
 # From https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize
-
-
 def memoize(obj):
     cache = obj.cache = {}
 
@@ -209,16 +220,14 @@ def expiring_memoize(obj):
 
 
 class Counter(dict):
-
     """Mapping where default values are zero."""
 
     def __missing__(self, key):
         return 0
 
+
 # Stolen from:
 # http://code.activestate.com/recipes/498245-lru-and-lfu-cache-decorators/
-
-
 def lru_cache(maxsize=128, maxtime=60):
     '''Least-recently-used cache decorator.
 
@@ -239,11 +248,12 @@ def lru_cache(maxsize=128, maxtime=60):
             sorted=sorted,
             KeyError=KeyError):
         from time import time
-        cache = {}                  # mapping of args to results
+
+        cache = {}  # mapping of args to results
         queue = collections.deque()  # order that keys have been used
-        refcount = Counter()        # times each key is in the queue
-        sentinel = object()         # marker for looping around the queue
-        kwd_mark = object()         # separate positional and keyword args
+        refcount = Counter()  # times each key is in the queue
+        sentinel = object()  # marker for looping around the queue
+        kwd_mark = object()  # separate positional and keyword args
 
         # lookup optimizations (ugly but fast)
         queue_append, queue_popleft = queue.append, queue.popleft
@@ -308,6 +318,7 @@ def lru_cache(maxsize=128, maxtime=60):
         wrapper.hits = wrapper.misses = 0
         wrapper.clear = clear
         return wrapper
+
     return decorating_function
 
 
@@ -320,10 +331,11 @@ def lfu_cache(maxsize=100):
     http://en.wikipedia.org/wiki/Least_Frequently_Used
 
     '''
+
     def decorating_function(user_function):
-        cache = {}                      # mapping of args to results
-        use_count = Counter()           # times each key has been accessed
-        kwd_mark = object()             # separate positional and keyword args
+        cache = {}  # mapping of args to results
+        use_count = Counter()  # times each key has been accessed
+        kwd_mark = object()  # separate positional and keyword args
 
         @functools.wraps(user_function)
         def wrapper(*args, **kwds):
@@ -358,6 +370,7 @@ def lfu_cache(maxsize=100):
         wrapper.hits = wrapper.misses = 0
         wrapper.clear = clear
         return wrapper
+
     return decorating_function
 
 
@@ -366,17 +379,17 @@ def patch_file_open():
     debugging file descriptor exhaustion."""
     import __builtin__
     import traceback
+
     openfiles = set()
     oldfile = __builtin__.file
 
     class newfile(oldfile):
-
         def __init__(self, *args, **kwargs):
             self.x = args[0]
 
             all_fds = count_open_fds()
 
-            print (
+            print(
                 "### {} OPENING {} ( {} total )###".format(
                     len(openfiles), str(
                         self.x), all_fds))
@@ -385,7 +398,7 @@ def patch_file_open():
             openfiles.add(self)
 
         def close(self):
-            print ("### {} CLOSING {} ###".format(len(openfiles), str(self.x)))
+            print("### {} CLOSING {} ###".format(len(openfiles), str(self.x)))
             oldfile.close(self)
             openfiles.remove(self)
 
@@ -395,6 +408,7 @@ def patch_file_open():
     __builtin__.file = newfile
     __builtin__.open = newopen
 
+
 # patch_file_open()
 
 # From
@@ -402,9 +416,7 @@ def patch_file_open():
 
 
 class YamlIncludeLoader(yaml.Loader):
-
     def __init__(self, stream):
-
         self._root = os.path.split(stream.name)[0]
 
         super(YamlIncludeLoader, self).__init__(stream)
@@ -412,7 +424,6 @@ class YamlIncludeLoader(yaml.Loader):
 
 # From http://pypi.python.org/pypi/layered-yaml-attrdict-config/12.07.1
 class OrderedDictYAMLLoader(yaml.Loader):
-
     'Based on: https://gist.github.com/844388'
 
     def __init__(self, *args, **kwargs):
@@ -488,12 +499,12 @@ class OrderedDictYAMLLoader(yaml.Loader):
             else:
                 return IncludeFile(abspath, relpath, f.read())
 
+
 # IncludeFile and include_representer ensures that when config files are re-written, they are
 # represented as an include, not the contents of the include
 
 
 class IncludeFile(str):
-
     def __new__(cls, abspath, relpath, data):
         s = str.__new__(cls, data)
         s.abspath = abspath
@@ -508,11 +519,11 @@ def include_representer(dumper, data):
 def include_representer(dumper, data):
     return dumper.represent_scalar(u'!include', data.relpath)
 
+
 # http://pypi.python.org/pypi/layered-yaml-attrdict-config/12.07.1
 
 
 class AttrDict(OrderedDict):
-
     def __init__(self, *argz, **kwz):
         super(AttrDict, self).__init__(*argz, **kwz)
 
@@ -681,7 +692,6 @@ class AttrDict(OrderedDict):
 
 
 class MapView(collections.MutableMapping):
-
     """A group that holds key/value pairs."""
 
     _inner = None
@@ -768,12 +778,13 @@ def configure_logging(cfg, custom_level=None):
         custom_level = logging.WARNING
     for entity in it.chain.from_iterable(it.imap(
             op.methodcaller('viewvalues'),
-            [cfg] + list(cfg.get(k, dict()) for k in ['handlers', 'loggers']))):
-        if isinstance(entity, Mapping)\
+                    [cfg] + list(cfg.get(k, dict()) for k in ['handlers', 'loggers']))):
+        if isinstance(entity, Mapping) \
                 and entity.get('level') == 'custom':
             entity['level'] = custom_level
     logging.config.dictConfig(cfg)
     logging.captureWarnings(cfg.warnings)
+
 
 # {{{ http://code.activestate.com/recipes/578272/ (r1)
 
@@ -787,8 +798,8 @@ def toposort(data):
 
 >>> print '\\n'.join(repr(sorted(x)) for x in toposort2({
 ...     2: set([11]),
-...     9: set([11, 8]),
-...     10: set([11, 3]),
+...     9: set([11,8]),
+...     10: set([11,3]),
 ...     11: set([7, 5]),
 ...     8: set([7, 3]),
 ...     }) )
@@ -819,6 +830,8 @@ def toposort(data):
 
     assert not data, "Cyclic dependencies exist among these items:\n%s" % '\n'.join(
         repr(x) for x in data.iteritems())
+
+
 # end of http://code.activestate.com/recipes/578272/ }}}
 
 
@@ -830,9 +843,9 @@ def chunks(l, n):
 
 
 def zip_dir(dir, file_):
-
     import zipfile
     import glob
+
     with zipfile.ZipFile(file_, 'w') as zf:
         g = os.path.join(dir, '*')
         for f in glob.glob(g):
@@ -868,6 +881,7 @@ def md5_for_file(f, block_size=2 ** 20):
 def rd(v, n=100.0):
     """Round down, to the nearest even 100."""
     import math
+
     n = float(n)
     return math.floor(v / n) * int(n)
 
@@ -875,6 +889,7 @@ def rd(v, n=100.0):
 def ru(v, n=100.0):
     """Round up, to the nearest even 100."""
     import math
+
     n = float(n)
     return math.ceil(v / n) * int(n)
 
@@ -1001,7 +1016,6 @@ def zipdir(basedir, archivename):
 
             # NOTE: ignore empty directories
             for fn in files:
-
                 absfn = os.path.join(root, fn)
                 zfn = absfn[len(basedir) + len(os.sep):]  # XXX: relative path
                 z.write(absfn, zfn)
@@ -1119,8 +1133,9 @@ def daemonize(f, args, rc, prog_name='ambry'):
     import logging
 
     if args.kill:
-            # Not portable, but works in most of our environments.
+        # Not portable, but works in most of our environments.
         import os
+
         print("Killing ... ")
         os.system("pkill -f '{}'".format(prog_name))
         return
@@ -1157,7 +1172,6 @@ def daemonize(f, args, rc, prog_name='ambry'):
     class DaemonContext():  # daemon.DaemonContext):
 
         def __exit__(self, exc_type, exc_value, exc_traceback):
-
             logger.info("Exiting")
 
             super(
@@ -1193,7 +1207,6 @@ def _print(*args):
 
 
 class Progressor(object):
-
     """Progress reporter suitable for calling in Library.get()
 
     Example:  r = l.get(args.term, cb=Progressor().progress)
@@ -1207,6 +1220,7 @@ class Progressor(object):
     def __init__(self, message='Download', printf=_print):
         import time
         from collections import deque
+
         self.start = time.clock()
         self.message = message
         self.rates = deque(maxlen=10)
@@ -1215,6 +1229,7 @@ class Progressor(object):
     def progress(self, i, n):
 
         import time
+
         now = time.clock()
 
         if not self.last:
@@ -1239,6 +1254,7 @@ class Progressor(object):
                 round(float(i) / (1024. * 1024.), 2),
                 round(float(rate) / (1024 * 1024), 2), rate_type))
 
+
 # http://stackoverflow.com/a/1695250
 # >>> Numbers = enum('ZERO', 'ONE', TWO = 20, THREE = 30)
 # >>> print Numbers.ONE
@@ -1251,8 +1267,8 @@ def enum(*sequential, **named):
 
 
 class Constant:
-
     """Organizes constants in a class."""
+
     class ConstError(TypeError):
         pass
 
@@ -1263,7 +1279,6 @@ class Constant:
 
 
 class session_context(object):
-
     """Provide a transactional scope around a series of Sqlalchemy
     operations."""
 
@@ -1347,7 +1362,6 @@ def parse_url_to_dict(url):
 
 
 def unparse_url_dict(d):
-
     if 'hostname' in d and d['hostname']:
         host_port = d['hostname']
     else:
@@ -1388,6 +1402,7 @@ def filter_url(url, **kwargs):
 def normalize_newlines(string):
     """Convert \r\n or \r to \n."""
     import re
+
     return re.sub(r'(\r\n|\r|\n)', '\n', string)
 
 
@@ -1396,7 +1411,8 @@ def print_yaml(o):
     import yaml
     from ..orm import MutationList, MutationDict
 
-    print (yaml.dump(o, default_flow_style=False, indent=4, encoding='utf-8'))
+    print(yaml.dump(o, default_flow_style=False, indent=4, encoding='utf-8'))
+
 
 # There is probably another function in Ambry that does this, but I can't
 # remember where.

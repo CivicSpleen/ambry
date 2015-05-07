@@ -6,19 +6,20 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 from __future__ import print_function
-import os.path
-import shlex
-from ambry.run import get_runconfig
-
-import ambry._meta
 import logging
-from ..util import get_logger
 import argparse
 
+import os.path
+from ambry.run import get_runconfig
+import ambry._meta
+from ..util import get_logger
 
-# The Bundle's get_runconfig ( in Bundle:config ) will use this if it is set.
-# It gets set by the CLI when the user assigns a specific configuration to use
-# instead of the defaults.
+
+
+
+# The Bundle's get_runconfig ( in Bundle:config ) will use this if it is set. It gets set
+# by the CLI when the user assigns a specific configuration to use instead
+# of the defaults.
 global_run_config = None
 
 global_logger = None  # Set in main()
@@ -33,8 +34,6 @@ def prt(template, *args, **kwargs):
 
 
 def err(template, *args, **kwargs):
-    import sys
-
     global global_logger
 
     global_logger.error(template.format(*args, **kwargs))
@@ -63,8 +62,6 @@ def fatal(template, *args, **kwargs):
 
 
 def warn(template, *args, **kwargs):
-    import sys
-
     global command
     global subcommand
 
@@ -97,7 +94,8 @@ def _source_list(dir_):
     return lst
 
 
-def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=[]):
+def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=None):
+    fields = fields or []
     from datetime import datetime
 
     record_entry_names = ('name', 'd_format', 'p_format', 'extractor')
@@ -116,8 +114,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=[]):
         ('deps', '{:3s}', '{:3s}', lambda ident: deps(ident)),
         ('order', '{:6s}', '{:6s}',
          lambda ident: "{major:02d}:{minor:02d}".format(
-             **ident.data['order'] if 'order' in ident.data else {'major': -1,
-                                                                  'minor': -1})
+             **ident.data['order'] if 'order' in ident.data else {'major': -1, 'minor': -1})
          ),
         ('locations', '{:6s}', '{:6s}', lambda ident: ident.locations),
         ('pcount', '{:5s}', '{:5s}',
@@ -160,22 +157,14 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=[]):
             prtf(p_format, *[f(pi) for f in extractors])
 
 
-def _print_bundle_list(
-        idents,
-        subset_names=None,
-        prtf=prt,
-        fields=[],
-        show_partitions=False,
-        sort=True):
+def _print_bundle_list(idents, subset_names=None, prtf=prt, fields=None, show_partitions=False, sort=True):
     """Create a nice display of a list of source packages."""
-    from collections import defaultdict
-
+    fields = fields or []
     if sort:
         idents = sorted(idents, key=lambda i: i.sname)
 
     for ident in idents:
-        _print_bundle_entry(ident, prtf=prtf, fields=fields,
-                            show_partitions=show_partitions)
+        _print_bundle_entry(ident, prtf=prtf, fields=fields, show_partitions=show_partitions)
 
 
 def _print_info(l, ident, list_partitions=False):
@@ -274,8 +263,6 @@ def _print_info(l, ident, list_partitions=False):
 
 
 def _print_bundle_info(bundle=None, ident=None):
-    from ..source.repository import new_repository
-
     if ident is None and bundle:
         ident = bundle.identity
 
@@ -303,12 +290,9 @@ def _print_bundle_info(bundle=None, ident=None):
 def main(argsv=None, ext_logger=None):
     import ambry._meta
     import os
-    import sys
 
-    parser = argparse.ArgumentParser(
-        prog='ambry',
-        description='Ambry {}. Management interface for ambry, libraries and '
-                    'repositories. '.format(ambry._meta.__version__))
+    parser = argparse.ArgumentParser(prog='ambry', description='Ambry {}. Management interface for ambry, libraries and'
+                                                               ' repositories. '.format(ambry._meta.__version__))
 
     parser.add_argument(
         '-l',
@@ -321,8 +305,7 @@ def main(argsv=None, ext_logger=None):
         '--config',
         default=os.getenv(AMBRY_CONFIG_ENV_VAR),
         action='append',
-        help="Path to a run config file. Alternatively, set the "
-             "AMBRY_CONFIG env var")
+        help="Path to a run config file. Alternatively, set the AMBRY_CONFIG env var")
     parser.add_argument(
         '--single-config',
         default=False,
@@ -381,7 +364,6 @@ def main(argsv=None, ext_logger=None):
         'source': source_command,
         'config': config_command,
         'root': root_command,
-
     }
 
     global global_logger
@@ -394,7 +376,7 @@ def main(argsv=None, ext_logger=None):
 
     global_logger.setLevel(logging.INFO)
 
-    f = funcs.get(args.command, False)
+    f = funcs.get(args.command, None)
 
     if args.command == 'config' and args.subcommand == 'install':
         rc = None
@@ -403,14 +385,16 @@ def main(argsv=None, ext_logger=None):
             rc = get_runconfig(rc_path)
 
         except ConfigurationError:
-            fatal(
-                "Could not find configuration file at {}\nRun 'ambry config install; to create one ",
-                rc_path)
+            fatal("Could not find configuration file at {}\nRun 'ambry config install; to create one ", rc_path)
 
         global global_run_config
         global_run_config = rc
 
-    if not f:
+        if not rc.environment.get('category', False):
+            raise ConfigurationError("Must set a config value for environment.class, one of: "
+                                     "development, production, testing, staging")
+
+    if f is None:
         fatal("Error: No command: " + args.command)
     else:
         try:

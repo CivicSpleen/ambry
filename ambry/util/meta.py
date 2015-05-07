@@ -88,8 +88,8 @@ class Metadata(object):
 
                     self.mark_loaded(k)
                 else:
-                    # Top level groups that don't match a member group are
-                    # preserved, not errors like unknown terms in a group.
+                    # Top level groups that don't match a member group are preserved,
+                    # not errors like unknown terms in a group.
                     self._term_values[k] = v
 
     def register_members(self):
@@ -120,8 +120,7 @@ class Metadata(object):
                 self.load_group(group)
                 self.mark_loaded(group)
             except:
-                print "ERROR Failed to load group '{}' from '{}'".format(
-                    group, self._path)
+                print "ERROR Failed to load group '{}' from '{}'".format(group, self._path)
                 raise
 
         pass
@@ -541,16 +540,13 @@ class DictGroup(Group, collections.MutableMapping):
         for name, m in self._members.items():
 
             ti = self.get_term_instance(name)
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(
-                ti._key,
-                ti.html())
+            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
 
         return """
 <h2 class="{cls}">{title}</h2>
 <table class="{cls}">
 {out}</table>
-""" .format(title=self._key.title(), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
-            out=out)
+""" .format(title=self._key.title(), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key), out=out)
 
 
 class TypedDictGroup(DictGroup):
@@ -727,9 +723,7 @@ class ListGroup(Group, collections.MutableSequence):
         out = ''
 
         for ti in self:
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(
-                ti._key,
-                ti.html())
+            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
 
         return """
 <table class="{cls}">
@@ -739,7 +733,6 @@ class ListGroup(Group, collections.MutableSequence):
 
 
 class Term(object):
-
     """A single term in a group."""
 
     _key = None
@@ -814,9 +807,7 @@ class ScalarTerm(Term):
         self._parent._term_values[self._key] = v
 
     def get(self):
-        return self._parent._term_values.get(
-            self._key,
-            None)  # Supresses KeyError HACK?
+        return self._parent._term_values.get(self._key, None)  # Supresses KeyError HACK?
 
     def null_entry(self):
         return None
@@ -880,10 +871,10 @@ class DictTerm(Term, collections.MutableMapping):
         # it is really for.
         return
 
-        if index not in self._parent._term_values:
-            raise Exception()
-            # print 'ENSURING', self._key, index
-            # self._parent._term_values[index] = None
+        # if index not in self._parent._term_values:
+        #     raise Exception()
+        #     # print 'ENSURING', self._key, index
+        #     # self._parent._term_values[index] = None
 
     @property
     def _term_values(self):
@@ -965,9 +956,7 @@ class DictTerm(Term, collections.MutableMapping):
 
         for name, m in self._members.items():
             ti = self.get_term_instance(name)
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(
-                ti._key,
-                ti.html())
+            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
 
         return """
 <table class="{cls}">

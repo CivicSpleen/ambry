@@ -8,8 +8,7 @@ import os
 import sys
 
 
-# from http://stackoverflow.com/questions/6796492/
-#                                   python-temporarily-redirect-stdout-stderr
+# from http://stackoverflow.com/questions/6796492/python-temporarily-redirect-stdout-stderr
 # Use as a context manager
 class RedirectStdStreams(object):
 

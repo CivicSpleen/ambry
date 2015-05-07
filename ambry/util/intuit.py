@@ -162,8 +162,7 @@ class Column(object):
 
                         self.strings.append(v)
 
-                    if (self.count < 1000 or self.date_successes != 0) and \
-                            any((c in '-/:T') for c in v):
+                    if (self.count < 1000 or self.date_successes != 0) and any((c in '-/:T') for c in v):
                         try:
                             maybe_dt = parser.parse(
                                 v, default=datetime.datetime.fromtimestamp(0))
@@ -171,15 +170,13 @@ class Column(object):
                             maybe_dt = None
 
                         if maybe_dt:
-                            # Check which parts of the default the parser didn't
-                            # change to find the real type
+                            # Check which parts of the default the parser didn't change to find
+                            # the real type
                             # HACK The time check will be wrong for the time of
                             # the start of the epoch, 16:00.
-                            if maybe_dt.time() == \
-                                    datetime.datetime.fromtimestamp(0).time():
+                            if maybe_dt.time() == datetime.datetime.fromtimestamp(0).time():
                                 type_ = datetime.date
-                            elif maybe_dt.date() == \
-                                    datetime.datetime.fromtimestamp(0).date():
+                            elif maybe_dt.date() == datetime.datetime.fromtimestamp(0).date():
                                 type_ = datetime.time
                             else:
                                 type_ = datetime.datetime
@@ -195,9 +192,8 @@ class Column(object):
         column has codes."""
         import datetime
 
-        self.type_ratios = {
-            test: float(self.type_counts[test]) / float(self.count)
-            for test, testf in tests + [(None, None)]}
+        self.type_ratios = {test: float(
+            self.type_counts[test]) / float(self.count) for test, testf in tests + [(None, None)]}
 
         if self.type_ratios[str] > .2:
             return str, False
@@ -255,7 +251,10 @@ class Intuiter(object):
                     self._columns[col].description = desc
 
             except Exception as e:
-                print 'Failed to add row: {}: {} {}'.format(row, type(e), e)
+                # This usually doesn't matter, since there are usually plenty of other rows to intuit from
+                # print 'Failed to add row: {}: {} {}'.format(row, type(e), e)
+                pass
+
 
     @property
     def columns(self):
