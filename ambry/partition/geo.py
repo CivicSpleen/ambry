@@ -237,11 +237,8 @@ class GeoPartition(SqlitePartition):
                         col=column.name))
 
         if clauses:
-            print 'convert_dates HERE', self.database.dsn
-            self.database.connection.execute(
-                "UPDATE {} SET {}".format(
-                    table.name,
-                    ','.join(clauses)))
+
+            self.database.connection.execute( "UPDATE {} SET {}".format( table.name,  ','.join(clauses)))
 
     def load_shapefile(self, path, logger=None):
         """Load a shapefile into the partition. Loads the features and inserts

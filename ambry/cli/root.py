@@ -10,7 +10,6 @@ from ..identity import LocationRef
 
 default_locations = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.REMOTE]
 
-
 def root_parser(cmd):
     import argparse
     from ..identity import LocationRef
@@ -298,6 +297,7 @@ def root_search(args, l, config):
 
     term = ' '.join(args.term)
 
+
     if args.reindex:
 
         print 'Updating the identifier'
@@ -397,3 +397,4 @@ def root_doc(args, l, rc):
         webbrowser.open("http://localhost:{}/".format(port))
 
     app.run(host=config['host'], port=int(port), debug=args.debug)
+

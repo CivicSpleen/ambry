@@ -36,8 +36,8 @@ warehouse:
             username: test
             password: test
 
-    sqlite: 'sqlite:////tmp/sqlite_warehouse'
-    spatialite: 'spatialite:////tmp/spatialite_warehouse'
+    sqlite: 'sqlite:////tmp/sqlite_warehouse.db'
+    spatialite: 'spatialite:////tmp/spatialite_warehouse.db'
 
 database:
 
@@ -45,7 +45,7 @@ database:
         dbname: '/tmp/warehouse/library.db'
         driver: sqlite
 
-  
+
     spatialite_warehouse:
         dbname: '/tmp/warehouse/spatialite.db'
         driver: spatialite
@@ -53,21 +53,21 @@ database:
     sqlite_warehouse:
         dbname: '/tmp/warehouse/sqlite.db'
         driver: sqlite
-  
+
     sqlite_library:
         dbname: '/tmp/warehouse/warehouse-library.db'
-        driver: sqlite  
-        
-        
+        driver: sqlite
+
+
     mysql_warehouse:
         driver: mysql
         server: testdb.cnhz40f0cmdb.us-east-1.rds.amazonaws.com
         dbname: test
         username: test
-        password: samizdat 
+        password: samizdat
 
 
-filesystem:  
+filesystem:
   root_dir: /tmp/warehouse-test/
   default:
       dir: '{root}/cache-l1'
@@ -79,4 +79,4 @@ filesystem:
   library: /tmp/server/warehouse/library
 
 
-        
+

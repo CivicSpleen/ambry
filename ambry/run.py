@@ -38,9 +38,21 @@ class RunConfig(object):
     AMBRY_CONFIG_ENV_VAR = 'AMBRY_CONFIG'
 
     ROOT_CONFIG = '/etc/ambry.yaml'
-    USER_CONFIG = os.getenv(AMBRY_CONFIG_ENV_VAR) if os.getenv(
-        AMBRY_CONFIG_ENV_VAR) else os.path.expanduser('~/.ambry.yaml')
+    USER_CONFIG = (os.getenv(AMBRY_CONFIG_ENV_VAR)
+                   if os.getenv(AMBRY_CONFIG_ENV_VAR)
+                   else os.path.expanduser('~/.ambry.yaml') )
+
+    # A special case for virtual environments -- look for a user config file there first.
+    if os.getenv(AMBRY_CONFIG_ENV_VAR):
+        USER_CONFIG = os.getenv(AMBRY_CONFIG_ENV_VAR)
+    elif os.getenv('VIRTUAL_ENV') and os.path.exists(os.path.join(os.getenv('VIRTUAL_ENV'),'.ambry.yaml')):
+        USER_CONFIG = os.path.join(os.getenv('VIRTUAL_ENV'),'.ambry.yaml')
+    else:
+        USER_CONFIG = os.path.expanduser('~/.ambry.yaml')
+
+
     USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
+
     try:
         DIR_CONFIG = os.path.join(
             os.getcwd(),
@@ -119,11 +131,8 @@ class RunConfig(object):
 
         if name not in self.config:
             raise ConfigurationError(
-                ("No group '{}' in configuration.\n" +
-                 "Config has: {}\nLoaded: {}").format(
-                    name,
-                    self.config.keys(),
-                    self.loaded))
+                ("No group '{}' in configuration.\n" + "Config has: {}\nLoaded: {}")
+                    .format(name,self.config.keys(),self.loaded))
 
         return self.config.get(name, {})
 
@@ -183,6 +192,7 @@ class RunConfig(object):
             sub_count = 0
 
             for k, v, setter in self._yield_string(e):
+
                 if k in subs:
                     setter(subs[k](k, v))
                     sub_count += 1
@@ -314,20 +324,26 @@ class RunConfig(object):
         from ckcache import parse_cache_string
         # Re-format the string remotes from strings to dicts.
 
-        r = []
-
         fs = self.group('filesystem')
         root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
 
-        for remote in remotes:
+        r = {}
+
+        try:
+            pairs = remotes.items()
+        except AttributeError:
+            pairs = list(enumerate(remotes))
+
+        for name, remote in pairs :
 
             if not isinstance(remote, basestring):
-                r.append(remote)
-                continue
-
-            r.append(parse_cache_string(remote, root_dir))
+                r[str(name)] = remote
+            else:
+                r[str(name)] = parse_cache_string(remote, root_dir)
 
         return r
+
+
 
     def datarepo(self, name):
         e = self.group_item('datarepo', name)
@@ -349,16 +365,20 @@ class RunConfig(object):
             'filesystem': lambda k, v: self.filesystem(v, missing_is_dir=True),
             'database': lambda k, v: self.database(v, missing_is_dsn=True),
             'account': lambda k, v: self.account(v),
-            'remotes': lambda k, v: self.remotes(v),
             'cdn': lambda k, v: self.account(v),
             'source': lambda k, v: v.format(root=root_dir)
         })
 
+        # This block will expand the remotes from strings to full configuration.
+        # this willget converted again in the library to cache objects.
         if 'remotes' in e:
-            e['remotes'] = [self._sub_strings(remote, {
+
+            e['remotes'] = self.remotes(e['remotes']) # Convert from dict or list to dict
+
+            e['remotes'] = { name:self._sub_strings(remote, {
                 'account': lambda k, v: self.account(v),
                 'source': lambda k, v: v.format(root=root_dir)
-            }) for remote in e['remotes']]
+            }) for name, remote in e['remotes'].items() if isinstance(remote, dict) }
 
         e['_name'] = name
         e['root'] = root_dir

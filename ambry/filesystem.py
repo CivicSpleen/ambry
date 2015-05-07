@@ -82,6 +82,7 @@ class Filesystem(object):
 
         config = self.config.filesystem(name)
 
+
         if not config:
             raise ConfigurationError(
                 'No filesystem cache by name of {}'.format(name))
@@ -305,6 +306,7 @@ class BundleFilesystem(Filesystem):
 
         if isinstance(regex, basestring):
             import re
+            oregex = regex
             regex = re.compile(regex)
 
         cache = self.get_cache_by_name('extracts')
@@ -320,22 +322,14 @@ class BundleFilesystem(Filesystem):
                 if regex is None:
                     # Assume only one file in zip archive.
                     name = iter(zf.namelist()).next()
-                    abs_path = self._get_unzip_file(
-                        cache,
-                        tmpdir,
-                        zf,
-                        path,
-                        name)
+                    abs_path = self._get_unzip_file(cache,tmpdir,zf,path,name)
                 else:
 
                     for name in zf.namelist():
-                        if regex.match(name):
-                            abs_path = self._get_unzip_file(
-                                cache,
-                                tmpdir,
-                                zf,
-                                path,
-                                name)
+
+                        if regex.search(name):
+                            abs_path = self._get_unzip_file(cache,tmpdir,zf,path, name)
+
                             break
 
                 return abs_path
@@ -418,6 +412,7 @@ class BundleFilesystem(Filesystem):
         cache = self.get_cache_by_name('downloads')
         parsed = urlparse.urlparse(str(url))
 
+
         # If the URL doesn't parse as a URL, then it is a name of a source.
         if (not parsed.scheme and url in self.bundle.metadata.sources):
 
@@ -430,15 +425,25 @@ class BundleFilesystem(Filesystem):
                 url = source_entry.url
             parsed = urlparse.urlparse(str(url))
 
-        if parsed.scheme == 'file':
+        if parsed.scheme == 'file' or  not parsed.scheme:
             return parsed.path
 
         elif parsed.scheme == 's3':
             # To keep the rest of the code simple, we'll use the S# cache to generate a signed URL, then
             # download that through the normal process.
-            from ckcache import new_cache
+            from ckcache import new_cache, parse_cache_string
 
-            s3cache = new_cache("s3://{}".format(parsed.netloc.strip('/')))
+            bucket = parsed.netloc.strip('/')
+
+            cache_url = "s3://{}".format(bucket)
+
+            config = parse_cache_string(cache_url)
+
+            config['account'] = self.config.account(bucket)
+
+            import pprint; pprint.pprint(config)
+
+            s3cache = new_cache(config)
 
             url = s3cache.path(urllib.unquote_plus(parsed.path.strip('/')))
             parsed = urlparse.urlparse(str(url))
@@ -461,10 +466,7 @@ class BundleFilesystem(Filesystem):
         # We download to a temp file, then move it into place when
         # done. This allows the code to detect and correct partial
         # downloads.
-        download_path = os.path.join(
-            tempfile.gettempdir(),
-            file_path +
-            ".download")
+        download_path = os.path.join(tempfile.gettempdir(),file_path +".download")
 
         def test_zip_file(f):
             if not os.path.exists(f):

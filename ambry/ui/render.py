@@ -10,13 +10,13 @@ import jinja2.tests
 
 ##
 # These are in later versions of jinja, but we need them in earlier ones.
-if 'equalto' not in jinja2.tests.TESTS:
+if not 'equalto' in jinja2.tests.TESTS:
     def test_equalto(value, other):
         return value == other
 
     jinja2.tests.TESTS['equalto'] = test_equalto
 
-if 'isin' not in jinja2.tests.TESTS:
+if not 'isin' in jinja2.tests.TESTS:
     def test_isin(value, other):
         return value in other
 
@@ -118,8 +118,8 @@ def deref_tc_ref(ref):
         c = None
 
     if not on.revision:
-        # The table does not have a revision, so we need to get one, just get
-        # the latest one
+        # The table does not have a revision, so we need to get one, just get the
+        # latest one
         from . import renderer
 
         r = renderer()
@@ -151,7 +151,7 @@ def tc_obj(ref):
     if c:
 
         if not table:
-            print '!!! in tc_obj, No table for ', str(t)
+            pass
 
         try:
             return table['columns'][str(c.rev(0))]
@@ -354,7 +354,7 @@ class Renderer(object):
     def clean(self):
         """Clean up the extracts on failures."""
         for e in self.extracts:
-            if e.completed is False and os.path.exists(e.abs_path):
+            if e.completed == False and os.path.exists(e.abs_path):
                 os.remove(e.abs_path)
 
     def error500(self, e):
@@ -569,7 +569,7 @@ class Renderer(object):
 
         results = []
         for score, gvid, name in self.library.search.search_identifiers(term):
-            # results.append({"label":name, "value":gvid})
+            #results.append({"label":name, "value":gvid})
             results.append({"label": name})
 
         return Response(
@@ -584,23 +584,24 @@ class Renderer(object):
 
         from geoid.civick import GVid
 
-        results = []
+        parsed = self.library.search.make_query_from_terms(terms)
 
-        (b_query, p_query, terms), bp_set = self.library.search.search_bundles(
-            {k: v.strip() for k, v in terms.items()})
+        final_results = []
+
+        init_results  = self.library.search.search_datasets(parsed)
 
         pvid_limit = 5
 
         all_idents = self.library.search.identifier_map
 
-        for bvid, pvids in bp_set.items():
+        for result in sorted(init_results.values(), key=lambda e: e.score, reverse=True):
 
-            d = self.doc_cache.dataset(bvid)
+            d = self.doc_cache.dataset(result.vid)
 
-            d['partition_count'] = len(pvids)
+            d['partition_count'] = len(result.partitions)
             d['partitions'] = {}
 
-            for pvid in pvids[:pvid_limit]:
+            for pvid in list(result.partitions)[:pvid_limit]:
 
                 p = self.doc_cache.partition(pvid)
 
@@ -623,11 +624,9 @@ class Renderer(object):
 
                 d['partitions'][pvid] = p
 
-            results.append(d)
+            final_results.append(d)
 
         template = self.env.get_template('search/results.html')
-
-        results = sorted(results, key=lambda x: x['vname'])
 
         # Collect facets to display to the user, for additional sorting
         facets = {
@@ -636,7 +635,7 @@ class Renderer(object):
             'states': set()
         }
 
-        for r in results:
+        for r in final_results:
             facets['sources'].add(r['source'])
             for p in r['partitions'].values():
                 if 'time_coverage' in p and p['time_coverage']:
@@ -647,16 +646,16 @@ class Renderer(object):
                         g = GVid.parse(gvid)
 
                         if g.level == 'state' and not g.is_summary:
-                            # facets['states'].add( (gvid, all_idents[gvid]))
-                            facets['states'].add(all_idents[gvid])
+                            #facets['states'].add( (gvid, all_idents[gvid]))
+                            try:
+                                facets['states'].add(all_idents[gvid])
+                            except KeyError:
+                                pass # TODO Should probably announce an error
 
         return self.render(
             template,
-            queries=dict(
-                b_query=b_query,
-                p_query=p_query,
-                terms=terms),
-            results=results,
+            query = parsed,
+            results=final_results,
             facets=facets,
             **self.cc())
 
@@ -669,7 +668,7 @@ class Renderer(object):
 
             source = b['identity']['source']
 
-            if source not in sources:
+            if not source in sources:
                 sources[source] = {
                     'bundles': {}
                 }

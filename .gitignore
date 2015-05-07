@@ -26,6 +26,7 @@ pip-log.txt
 .coverage
 .tox
 nosetests.xml
+htmlcov/*
 
 # Translations
 *.mo
@@ -42,6 +43,6 @@ schema-revised.csv
 build-save
 *.sqlite3
 
-
-
 test/coverage
+meta/coverage.yaml
+

@@ -6,77 +6,88 @@ Created on Jun 30, 2012
 import unittest
 import os.path
 import logging
+from test_base import  TestBase # Must be first ambry import to get logger set to internal logger.
 
-from bundles.testbundle.bundle import Bundle
-from ambry.run import get_runconfig, RunConfig
+from  bundles.testbundle.bundle import Bundle
+from ambry.run import  get_runconfig, RunConfig
 from ambry.library.query import QueryCommand
 import ambry.util
-from test_base import TestBase
 
 
 global_logger = ambry.util.get_logger(__name__)
-global_logger.setLevel(logging.DEBUG)
+global_logger.setLevel(logging.FATAL)
 
+import ckcache.filesystem
+ckcache.filesystem.global_logger = global_logger
 
 class Test(TestBase):
+ 
     def setUp(self):
+
+        super(Test, self).setUp() #
+
         import bundles.testbundle.bundle
 
+
         self.bundle_dir = os.path.dirname(bundles.testbundle.bundle.__file__)
-        self.rc = get_runconfig(
-            (os.path.join(self.bundle_dir, 'library-test-config.yaml'),
-             os.path.join(self.bundle_dir, 'bundle.yaml'),
-             RunConfig.USER_ACCOUNTS))
+        self.rc = get_runconfig((os.path.join(self.bundle_dir,'library-test-config.yaml'),
+                                 os.path.join(self.bundle_dir,'bundle.yaml'),
+                                 RunConfig.USER_ACCOUNTS)
+                                 )
 
         self.copy_or_build_bundle()
 
-        self.bundle = Bundle()
+        self.bundle = Bundle()    
 
-        print "Deleting: {}".format(self.rc.group('filesystem').root)
+
         Test.rm_rf(self.rc.group('filesystem').root)
-
+       
     @staticmethod
     def rm_rf(d):
+        
         if not os.path.exists(d):
             return
-
-        for path in (os.path.join(d, f) for f in os.listdir(d)):
+        
+        for path in (os.path.join(d,f) for f in os.listdir(d)):
             if os.path.isdir(path):
                 Test.rm_rf(path)
             else:
                 os.unlink(path)
         os.rmdir(d)
 
-    def get_library(self, name='default'):
+
+    def get_library(self, name = 'default'):
         """Clear out the database before the test run"""
         from ambry.library import new_library
 
         config = self.rc.library(name)
 
-        l = new_library(config, reset=True)
+        l =  new_library(config, reset = True)
 
         return l
+        
 
     def tearDown(self):
         pass
+
 
     @staticmethod
     def new_db():
         from ambry.util import temp_file_name
         from ambry.library.database import LibraryDb
-
-        db_file = temp_file_name() + ".db"
+        db_file = temp_file_name()+".db"
 
         db = LibraryDb(driver='sqlite', dbname=db_file)
 
         return db_file, db
 
     def test_database(self):
-        f, db = self.new_db()
 
-        #
-        # Test basic creation
-        #
+        f,db = self.new_db()
+
+        ##
+        ## Test basic creation
+        ##
 
         self.assertFalse(db.exists())
 
@@ -84,15 +95,15 @@ class Test(TestBase):
 
         self.assertTrue(db.exists())
 
-        db.set_config_value('test', 'one', 1)
-        db.set_config_value('test', 'two', 2)
+        db.set_config_value('test','one',1)
+        db.set_config_value('test','two',2)
 
-        self.assertEquals(1, db.get_config_value('test', 'one').value)
-        self.assertEquals(2, db.get_config_value('test', 'two').value)
+        self.assertEquals(1,db.get_config_value('test','one').value)
+        self.assertEquals(2,db.get_config_value('test','two').value)
 
-        self.assertIn(('test', 'one'), db.config_values)
-        self.assertIn(('test', 'two'), db.config_values)
-        self.assertEquals(2, db.config_values[('test', 'two')])
+        self.assertIn(('test', 'one'),db.config_values)
+        self.assertIn(('test', 'two'),db.config_values)
+        self.assertEquals(2,db.config_values[('test', 'two')])
 
         self.assertEquals(0, len(db.list()))
 
@@ -103,24 +114,26 @@ class Test(TestBase):
 
         os.remove(f)
 
+
     def test_database_query(self):
         from ambry.orm import Dataset, Partition
         from ambry.library.query import Resolver
         from ambry.library.database import ROOT_CONFIG_NAME_V
 
-        f, db = self.new_db()
-        print 'Testing ', f
+        f,db = self.new_db()
+
         db.create()
 
         db.install_bundle(self.bundle)
 
         #
-        # Get a bunch of names from the existing bundles. This will check
-        # the simple queries for single objects.
+        # Get a bunch of names from the existing bundles. This will check the simple
+        # queries for single objects.
         #
 
         tests = {}
         for r in db.session.query(Dataset, Partition).filter(Dataset.vid != ROOT_CONFIG_NAME_V).all():
+
             di = r.Dataset.identity
 
             tests[di.sname] = di.vid
@@ -138,20 +151,24 @@ class Test(TestBase):
         r = Resolver(db.session)
 
         for ref, vid in tests.items():
+
             ip, results = r.resolve_ref_all(ref)
 
             self.assertEqual(1, len(results))
 
-            first = results.values().pop(0)
-            vid2 = first.vid if not first.partitions else first.partitions.values()[0].vid
+            first= results.values().pop(0)
+            vid2 = first.vid if not first.partitions  else first.partitions.values()[0].vid
 
             self.assertEquals(vid, vid2)
 
+
     def test_simple_install(self):
+
+        from ambry.util import temp_file_name
+        import os
         from ambry.dbexceptions import NotFoundError
 
         l = self.get_library()
-        print "Library: ", l.database.dsn
 
         r = l.put_bundle(self.bundle)
 
@@ -163,38 +180,38 @@ class Test(TestBase):
             r = l.get('gibberish')
 
         for partition in self.bundle.partitions:
-            print "Install and check: ", partition.identity.vname
+
             r = l.put_partition(self.bundle, partition)
 
             # Get the partition with a name
             r = l.get(partition.identity.sname)
             self.assertTrue(r is not False)
-            self.assertEquals(partition.identity.sname,
-                              r.partition.identity.sname)
+            self.assertEquals(partition.identity.sname, r.partition.identity.sname)
             self.assertEquals(self.bundle.identity.sname, r.identity.sname)
-
+            
             # Get the partition with an id
             r = l.get(partition.identity.id_)
 
             self.assertTrue(bool(r))
-            self.assertEquals(partition.identity.sname,
-                              r.partition.identity.sname)
+            self.assertEquals(partition.identity.sname, r.partition.identity.sname)
             self.assertEquals(self.bundle.identity.sname, r.identity.sname)
 
+        
         r = l.get(self.bundle.identity.sname)
         self.assertTrue(r is not False)
         self.assertEquals(self.bundle.identity.sname, r.identity.sname)
 
         # An extra change so the following tests work
         l.put_bundle(self.bundle)
+        
+
+      
 
     def test_library_install(self):
         '''Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent'''
 
         l = self.get_library()
-
-        print l.database.dsn
 
         l.put_bundle(self.bundle)
         l.put_bundle(self.bundle)
@@ -213,64 +230,62 @@ class Test(TestBase):
 
             r = l.get(partition.identity)
             self.assertIsNotNone(r)
-            self.assertEquals(partition.identity.id_, r.partition.identity.id_)
-
+            self.assertEquals( partition.identity.id_, r.partition.identity.id_)
+            
             r = l.get(partition.identity.id_)
             self.assertIsNotNone(r)
             self.assertEquals(partition.identity.id_, r.partition.identity.id_)
-
-        # Re-install the bundle, then check that the partitions are still
-        # properly installed
+            
+        # Re-install the bundle, then check that the partitions are still properly installed
 
         l.put_bundle(self.bundle)
-
+        
         for partition in self.bundle.partitions.all:
+       
             r = l.get(partition.identity)
             self.assertIsNotNone(r)
             self.assertEquals(r.partition.identity.id_, partition.identity.id_)
-
+            
             r = l.get(partition.identity.id_)
             self.assertIsNotNone(r)
             self.assertEquals(r.partition.identity.id_, partition.identity.id_)
-
+            
         # Find the bundle and partitions in the library. 
-
+    
         r = l.find(QueryCommand().table(name='tone'))
 
-        self.assertEquals('source-dataset-subset-variation',
-                          r[0]['identity']['name'])
+        self.assertEquals('source-dataset-subset-variation',r[0]['identity']['name'])
+    
 
-        r = l.find(
-            QueryCommand().table(name='tthree').partition(format='db',
-                                                          segment=None))
-        self.assertEquals('source-dataset-subset-variation-tthree',
-                          r[0]['partition']['name'])
+        
+        r = l.find(QueryCommand().table(name='tthree').partition(format='db', segment=None))
+        self.assertEquals('source-dataset-subset-variation-tthree',r[0]['partition']['name'])
 
         #
-        # Try getting the files
+        #  Try getting the files 
         # 
-
-        r = l.find(QueryCommand().table(
-            name='tthree').partition(any=True))  # @UnusedVariable
-
+        
+        r = l.find(QueryCommand().table(name='tthree').partition(any=True)) #@UnusedVariable
+       
         bp = l.get(r[0]['identity']['id'])
-
+        
         self.assertTrue(os.path.exists(bp.database.path))
-
+        
         # Put the bundle with remove to check that the partitions are reset
-
+        
         l.remove(self.bundle)
-
+        
         r = l.find(QueryCommand().table(name='tone').partition(any=True))
-        self.assertEquals(0, len(r))
-
+        self.assertEquals(0, len(r))      
+        
         l.put_bundle(self.bundle)
-
+    
         r = l.find(QueryCommand().table(name='tone').partition(any=True))
         self.assertEquals(1, len(r))
-
+       
         ds_names = [ds.sname for ds in l.list().values()]
         self.assertIn('source-dataset-subset-variation', ds_names)
+
 
     def test_library_push(self):
         '''Install the bundle and partitions, and check that they are
@@ -278,7 +293,6 @@ class Test(TestBase):
 
         l = self.get_library('local-remoted')
 
-        print l.info
 
         l.put_bundle(self.bundle)
 
@@ -290,44 +304,59 @@ class Test(TestBase):
 
         self.assertEquals(5, len(l.files.query.state('new').all))
 
-        for remote in l.remotes:
+        for remote_name, remote in l.remotes.items():
             remote.clean()
 
-        a = l.remotes
+        a = l.remotes.values()
         b = l.files.query.state('new').all
 
         def cb(what, metadata, start):
-            print "PUSH ", what, metadata['name'], start
+            pass # print "PUSH ", what, metadata['name'], start
 
         # The zippy bit rotates the files through the three caches.
-        for remote, file_ in zip(a * (len(b) / len(a) + 1), b):
-            l.push(file_.ref, upstream=remote, cb=cb)
+        for remote, file_ in zip(a*(len(b)/len(a)+1),b):
+            l.push(remote, file_.ref, cb=cb)
+
+        ## NOTE! This is a really crappy test, and it will fail if gdal is not installed, since the
+        ## geot1.geodb database will be geot1.db
 
         import yaml
 
-        self.assertEqual(
-            """source/dataset-subset-variation-0.0.1.db:
-  caches: [/tmp/library-test/remote-cache-1]
+        try: # Can't create geodbs if don't have gdal installed
+            import gdal
+            out_string = """source/dataset-subset-variation-0.0.1.db:
+  caches: [/tmp/library-test/remote-cache-2]
 source/dataset-subset-variation-0.0.1/geot1.geodb:
   caches: [/tmp/library-test/remote-cache-3]
 source/dataset-subset-variation-0.0.1/geot2.geodb:
-  caches: [/tmp/library-test/remote-cache-2]
-source/dataset-subset-variation-0.0.1/tone/missing.db:
-  caches: [/tmp/library-test/remote-cache-2]
-source/dataset-subset-variation-0.0.1/tthree.db:
   caches: [/tmp/library-test/remote-cache-1]
-""",
-            yaml.safe_dump(l.remote_stack.list(include_partitions=True)))
+source/dataset-subset-variation-0.0.1/tone/missing.db:
+  caches: [/tmp/library-test/remote-cache-1]
+source/dataset-subset-variation-0.0.1/tthree.db:
+  caches: [/tmp/library-test/remote-cache-2]
+"""
+        except ImportError:
+
+            out_string = """source/dataset-subset-variation-0.0.1.db:
+  caches: [/tmp/library-test/remote-cache-2]
+source/dataset-subset-variation-0.0.1/geot1.db:
+  caches: [/tmp/library-test/remote-cache-3]
+source/dataset-subset-variation-0.0.1/geot2.db:
+  caches: [/tmp/library-test/remote-cache-1]
+source/dataset-subset-variation-0.0.1/tone/missing.db:
+  caches: [/tmp/library-test/remote-cache-1]
+source/dataset-subset-variation-0.0.1/tthree.db:
+  caches: [/tmp/library-test/remote-cache-2]
+"""
+
+        self.assertEqual(out_string,yaml.safe_dump(l.remote_stack.list(include_partitions=True)))
 
         l.purge()
 
         fn = l.remote_stack.get(self.bundle.identity.cache_key)
 
         self.assertTrue(bool(fn))
-        self.assertEquals(
-            '/tmp/library-test/remote-cache-1/source/'
-            'dataset-subset-variation-0.0.1.db',
-            fn)
+        self.assertEquals('/tmp/library-test/remote-cache-2/source/dataset-subset-variation-0.0.1.db', fn)
 
         c = l.cache
 
@@ -343,14 +372,19 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         self.assertIsNotNone(b)
 
-        print b.identity
+        self.assertEqual('source-dataset-subset-variation-0.0.1', str(b.identity.vname))
 
         for p in b.partitions:
             bp = l.get(p.identity.vid)
 
-            print '----'
-            print bp.identity.vname
-            print bp.partition.identity.vname
+            self.assertIn(bp.partition.identity.vname,
+                [
+                    'source-dataset-subset-variation-geot2-0.0.1',
+                    'source-dataset-subset-variation-geot1-0.0.1',
+                    'source-dataset-subset-variation-tthree-0.0.1',
+                    'source-dataset-subset-variation-tone-missing-0.0.1'
+                ])
+
 
     def test_s3_push(self):
         '''Install the bundle and partitions, and check that they are
@@ -360,15 +394,15 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         l = self.get_library('s3-remoted')
 
-        print l.info
+        remote = l.remotes['0']
 
         l.purge()
         l.put_bundle(self.bundle)
 
         def cb(what, metadata, start):
-            print "PUSH ", what, metadata['name'], start
+            pass #print "PUSH ", what, metadata['name'], start
 
-        l.push(cb=cb)
+        l.push(remote, cb=cb)
 
         l.purge()
 
@@ -388,17 +422,21 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
             file_ = l.files.query.ref(bp.partition.identity.vid).one
 
+
         dataset = l.resolve(p.identity.vid)
+
 
         self.assertEquals('piEGPXmDC8005001', dataset.partition.vid)
 
-        l.remotes[0].store_list()
+        l.remotes.values()[0].store_list()
+
+
 
     def test_http_cache(self):
 
         l = self.get_library('http-remoted')
 
-        r = l.remotes[0]
+        r = l.remotes.values()[0]
 
         self.assertFalse(r.has('foobar'))
         self.assertTrue(r.has(self.bundle.identity.cache_key))
@@ -415,35 +453,36 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         for p in b.partitions:
             bp = l.get(p.identity.vid)
-            print p.identity.vname
+
             self.assertEquals(self.bundle.identity.vname, bp.identity.vname)
             self.assertEquals(p.identity.vname, bp.partition.vname)
+
+
 
     def test_versions(self):
         from ambry.run import get_runconfig
         from ambry.library.query import Resolver
         import shutil
-
         idnt = self.bundle.identity
 
         l = self.get_library()
 
         l.purge()
 
-        orig = os.path.join(self.bundle.bundle_dir, 'bundle.yaml')
-        save = os.path.join(self.bundle.bundle_dir, 'bundle.yaml.save')
-        shutil.copyfile(orig, save)
+        orig = os.path.join(self.bundle.bundle_dir,'bundle.yaml')
+        save = os.path.join(self.bundle.bundle_dir,'bundle.yaml.save')
+        shutil.copyfile(orig,save)
 
         datasets = {}
 
         try:
-            for i in [1, 2, 3]:
+            for i in [1,2,3]:
                 idnt._on.revision = i
                 idnt.name.version_major = i
-                idnt.name.version_minor = i * 10
+                idnt.name.version_minor = i*10
 
                 bundle = Bundle()
-                get_runconfig.clear()  # clear runconfig cache
+                get_runconfig.clear() #clear runconfig cache
 
                 bundle.metadata.load_all()
 
@@ -452,7 +491,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
                 bundle.metadata.write_to_dir(write_all=True)
 
-                print 'Building version {}'.format(i)
 
                 bundle = Bundle()
 
@@ -462,12 +500,11 @@ source/dataset-subset-variation-0.0.1/tthree.db:
                 bundle.post_prepare()
                 bundle.pre_build()
                 bundle.build_small()
-                # bundle.build()
+                #bundle.build()
                 bundle.post_build()
 
                 bundle = Bundle()
 
-                print "Installing ", bundle.identity.vname
                 l.put_bundle(bundle)
 
         finally:
@@ -488,10 +525,8 @@ source/dataset-subset-variation-0.0.1/tthree.db:
             for p_vid, p in d.partitions.items():
                 datasets[d.vid]['partitions'][p_vid] = p.dict
 
-        with open(self.bundle.filesystem.path('meta', 'version_datasets.json'),
-                  'w') as f:
+        with open(self.bundle.filesystem.path('meta','version_datasets.json'),'w') as f:
             import json
-
             f.write(json.dumps(datasets))
 
         r = Resolver(db.session)
@@ -505,13 +540,14 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         for row in results:
             print row
 
-            # os.remove(f)
+        #os.remove(f)
+
 
     def test_version_resolver(self):
         from ambry.library.query import Resolver
 
         l = self.get_library()
-        print l.database.dsn
+
 
         db = l.database
         db.enable_delete = True
@@ -533,16 +569,12 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         # Cache keys
 
-        ip, result = r.resolve_ref_one(
-            'source/dataset-subset-variation-0.0.1.db')
-        self.assertEquals('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',
-                          str(result))
+        ip, result = r.resolve_ref_one('source/dataset-subset-variation-0.0.1.db')
+        self.assertEquals('source-dataset-subset-variation-0.0.1~diEGPXmDC8001',str(result))
 
-        ip, result = r.resolve_ref_one(
-            'source/dataset-subset-variation-0.0.1/tthree.db')
-        self.assertEquals(
-            'source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8003001',
-            str(result.partition))
+        ip, result = r.resolve_ref_one('source/dataset-subset-variation-0.0.1/tthree.db')
+        self.assertEquals('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8003001',str(result.partition))
+
 
         # Now in the library, which has a slightly different interface.
 
@@ -552,135 +584,108 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         ident = l.resolve('source-dataset-subset-variation-0.0.1~diEGPXmDC8001')
         self.assertEquals('diEGPXmDC8001', ident.vid)
 
-        ident = l.resolve(
-            'source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8001001')
+        ident = l.resolve('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8001001')
         self.assertEquals('diEGPXmDC8001', ident.vid)
         self.assertEquals('piEGPXmDC8001001', ident.partition.vid)
 
-        #
-        # Test semantic version matching
-        # WARNING! The Mock object below only works for testing semantic
-        # versions.
-        #
+        ##
+        ## Test semantic version matching
+        ## WARNING! The Mock object below only works for testing semantic versions.
+        ##
 
-        with open(self.bundle.filesystem.path('meta',
-                                              'version_datasets.json')) as f:
+        with open(self.bundle.filesystem.path('meta','version_datasets.json')) as f:
             import json
-
             datasets = json.loads(f.read())
 
         # This mock object only works on datasets; it will return all of the
-        # partitions for each dataset, and each of the datasets. It is only for
-        # testing version filtering.
+        # partitions for each dataset, and each of the datasets. It is only for testing
+        # version filtering.
         class TestResolver(Resolver):
             def _resolve_ref(self, ref, location=None):
                 from ambry.identity import Identity
-
                 ip = Identity.classify(ref)
-                return ip, {k: Identity.from_dict(ds) for k, ds in
-                            datasets.items()}
+                return ip, { k:Identity.from_dict(ds) for k,ds in datasets.items() }
 
         r = TestResolver(db.session)
 
-        ip, result = r.resolve_ref_one(
-            'source-dataset-subset-variation-==1.10.1')
-        self.assertEquals(
-            'source-dataset-subset-variation-1.10.1~diEGPXmDC8001', str(result))
 
-        ip, result = r.resolve_ref_one(
-            'source-dataset-subset-variation->=1.10.1,<3.0.0')
-        self.assertEquals(
-            'source-dataset-subset-variation-2.20.2~diEGPXmDC8002', str(result))
+        ip, result = r.resolve_ref_one('source-dataset-subset-variation-==1.10.1')
+        self.assertEquals('source-dataset-subset-variation-1.10.1~diEGPXmDC8001',str(result))
 
-        ip, result = r.resolve_ref_one(
-            'source-dataset-subset-variation->=1.10.1,<2.0.0')
-        self.assertEquals(
-            'source-dataset-subset-variation-1.10.1~diEGPXmDC8001', str(result))
+        ip, result = r.resolve_ref_one('source-dataset-subset-variation->=1.10.1,<3.0.0')
+        self.assertEquals('source-dataset-subset-variation-2.20.2~diEGPXmDC8002',str(result))
+
+        ip, result = r.resolve_ref_one('source-dataset-subset-variation->=1.10.1,<2.0.0')
+        self.assertEquals('source-dataset-subset-variation-1.10.1~diEGPXmDC8001',str(result))
 
         ip, result = r.resolve_ref_one('source-dataset-subset-variation->2.0.0')
-        self.assertEquals(
-            'source-dataset-subset-variation-3.30.3~diEGPXmDC8003', str(result))
+        self.assertEquals('source-dataset-subset-variation-3.30.3~diEGPXmDC8003',str(result))
 
-        ip, result = r.resolve_ref_one(
-            'source-dataset-subset-variation-<=3.0.0')
-        self.assertEquals(
-            'source-dataset-subset-variation-2.20.2~diEGPXmDC8002', str(result))
+        ip, result = r.resolve_ref_one('source-dataset-subset-variation-<=3.0.0')
+        self.assertEquals('source-dataset-subset-variation-2.20.2~diEGPXmDC8002',str(result))
 
-    def x_test_remote(self):
-        from ambry.run import RunConfig
-        from ambry.library import new_library
 
-        rc = get_runconfig((
-            os.path.join(self.bundle_dir, 'server-test-config.yaml'),
-            RunConfig.USER_CONFIG))
 
-        config = rc.library('default')
-        library = new_library(config)
-
-        print library.upstream
-        print library.upstream.last_upstream()
-        print library.cache
-        print library.cache.last_upstream()
 
     def test_compression_cache(self):
         '''Test a two-level cache where the upstream compresses files '''
-        from ckcache.filesystem import FsCache, FsCompressionCache
-
+        from ckcache.filesystem import  FsCache,FsCompressionCache
+         
         root = self.rc.group('filesystem').root
-
-        l1_repo_dir = os.path.join(root, 'comp-repo-l1')
+      
+        l1_repo_dir = os.path.join(root,'comp-repo-l1')
         os.makedirs(l1_repo_dir)
-        l2_repo_dir = os.path.join(root, 'comp-repo-l2')
+        l2_repo_dir = os.path.join(root,'comp-repo-l2')
         os.makedirs(l2_repo_dir)
-
-        testfile = self.new_rand_file(os.path.join(root, 'testfile'))
+        
+        testfile = self.new_rand_file(os.path.join(root,'testfile'))
 
         # Create a cache with an upstream wrapped in compression
         l3 = FsCache(l2_repo_dir)
         l2 = FsCompressionCache(l3)
         l1 = FsCache(l1_repo_dir, upstream=l2)
-
-        f1 = l1.put(testfile, 'tf1')
-
-        self.assertTrue(os.path.exists(f1))
-
+      
+        f1 = l1.put(testfile,'tf1')         
+  
+        self.assertTrue(os.path.exists(f1))  
+        
         l1.remove('tf1', propagate=False)
-
-        self.assertFalse(os.path.exists(f1))
-
+        
+        self.assertFalse(os.path.exists(f1))  
+        
         f1 = l1.get('tf1')
-
+        
         self.assertIsNotNone(f1)
-
-        self.assertTrue(os.path.exists(f1))
+        
+        self.assertTrue(os.path.exists(f1))  
+        
 
     def test_partitions(self):
         from ambry.identity import PartitionNameQuery
         from sqlalchemy.exc import IntegrityError
-
+        
         l = self.get_library()
-        print l.info
+
 
         l.purge()
 
-        l.put_bundle(
-            self.bundle)  # Install the partition references in the library.
+        l.put_bundle(self.bundle) # Install the partition references in the library.
 
         b = l.get(self.bundle.identity)
 
         for partition in self.bundle.partitions:
-            l.put_partition(self.bundle, partition)
-            l.put_partition(self.bundle, partition)
 
-            print partition.identity.sname, partition.database.path
+            l.put_partition(self.bundle, partition)
+            l.put_partition(self.bundle, partition)
 
             r = l.get(partition.identity)
             self.assertIsNotNone(r)
-            self.assertEquals(partition.identity.id_, r.partition.identity.id_)
-
+            self.assertEquals( partition.identity.id_, r.partition.identity.id_)
+            
             r = l.get(partition.identity.id_)
             self.assertIsNotNone(r)
             self.assertEquals(partition.identity.id_, r.partition.identity.id_)
+
 
         #
         # Create all possible combinations of partition names
@@ -697,93 +702,71 @@ source/dataset-subset-variation-0.0.1/tthree.db:
                 pids[pid.fqname] = pid
 
         for pid in pids.values():
-            print pid.sname
+
             try:
-                # One will fail with an integrity error, but it doesn't matter
-                # for this test.
+                # One will fail with an integrity error, but it doesn't matter for this test.
 
                 part = self.bundle.partitions.new_db_partition(**pid.dict)
                 part.create()
 
-                parts = self.bundle.partitions._find_orm(
-                    PartitionNameQuery(vid=pid.vid)).all()
+                parts = self.bundle.partitions._find_orm(PartitionNameQuery(vid=pid.vid)).all()
                 self.assertIn(pid.sname, [p.name for p in parts])
             except IntegrityError:
                 pass
 
+        
     def test_s3(self):
-        # ambry.util.get_logger('ambry.filesystem').setLevel(logging.DEBUG)
+
+        #ambry.util.get_logger('ambry.filesystem').setLevel(logging.DEBUG)
         # Set up the test directory and make some test files. 
         from ckcache import new_cache
-
+        
         root = self.rc.group('filesystem').root
         os.makedirs(root)
-
-        testfile = os.path.join(root, 'testfile')
-
-        with open(testfile, 'w+') as f:
+                
+        testfile = os.path.join(root,'testfile')
+        
+        with open(testfile,'w+') as f:
             for i in range(1024):
-                f.write('.' * 1023)
+                f.write('.'*1023)
                 f.write('\n')
-
-        # fs = self.bundle.filesystem
-        # local = fs.get_cache('downloads')
-
+         
+        #fs = self.bundle.filesystem
+        #local = fs.get_cache('downloads')
+        
         cache = new_cache(self.rc.filesystem('s3'))
-        repo_dir = cache.cache_dir
+        repo_dir  = cache.cache_dir
 
-        print "Repo Dir: {}".format(repo_dir)
-
-        for i in range(0, 10):
-            global_logger.info("Putting " + str(i))
-            cache.put(testfile, 'many' + str(i))
-
-        self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many1')))
+        for i in range(0,10):
+            global_logger.info("Putting "+str(i))
+            cache.put(testfile,'many'+str(i))
+        
+        self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many1')))   
         self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many2')))
         self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many3')))
-
+                
         p = cache.get('many1')
         self.assertTrue(p is not None)
-
-        self.assertTrue(os.path.exists(os.path.join(repo_dir, 'many1')))
+                
+        self.assertTrue(os.path.exists(os.path.join(repo_dir, 'many1')))   
         self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many2')))
         self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many3')))
-
+        
         p = cache.get('many2')
         self.assertTrue(p is not None)
-
-        self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many3')))
-        self.assertTrue(os.path.exists(os.path.join(repo_dir, 'many7')))
-
+                
+        self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many3')))      
+        self.assertTrue(os.path.exists(os.path.join(repo_dir, 'many7'))) 
+ 
         p = cache.get('many3')
         self.assertTrue(p is not None)
+                
+        self.assertTrue(os.path.exists(os.path.join(repo_dir, 'many3')))      
+        self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many7'))) 
 
-        self.assertTrue(os.path.exists(os.path.join(repo_dir, 'many3')))
-        self.assertFalse(os.path.exists(os.path.join(repo_dir, 'many7')))
 
-    def test_query(self):
-        from ambry.library.query import QueryCommand
 
-        tests = [
-            "column.name = 'column.name', identity.id='identity',",
-            "column.name = 'column.name', identity.id='identity' ",
-            "column.name = 'column.name' identity.id = 'identity'",
-            "partition.vname ='partition.vname'",
-            "partition.vname = '%partition.vname%'",
-            "identity.name = '%clarinova foo bar%'"
 
-        ]
-
-        fails = [
-            "column.name='foobar"
-        ]
-
-        for s in tests:
-            qc = QueryCommand.parse(s)
-            print qc
-
-        for s in fails:
-            self.assertRaises(QueryCommand.ParseError, QueryCommand.parse, s)
 
     def test_files(self):
 
@@ -793,55 +776,68 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         fls = l.files
 
-        for e in [(str(i), str(j)) for i in range(10) for j in range(3)]:
-            f = l.files.new_file(path='path' + e[0], ref="{}-{}".format(*e), group=e[1], type_=e[1])
+        for e in [ (str(i), str(j) ) for i in range(10) for j in range(3)  ]:
+
+            f = l.files.new_file(path='path'+e[0], ref="{}-{}".format(*e), group=e[1], type_=e[1])
+
             l.files.merge(f)
 
         def refs(itr):
-            return [f.ref for f in i]
+            return [ f.ref for f in i ]
 
-        print l.files.query.path('path3').first
 
-    def test_adhoc(self):
-        from ambry.library import new_library
-        config = get_runconfig().library('default')
-        l = new_library(config, reset=True)
-        print l.resolve('211sandiego.org-calls-p1ye2014-orig-calls')
+    # Needs to be re-written to use only test bundles.
+    def x_test_search(self):
 
-    def test_search(self):
         from ambry.library import new_library
 
         config = get_runconfig().library('default')
 
         l = new_library(config, reset=True)
 
-        print l.search
 
-        # for ds in l.datasets():  print ds.vid
+
+        #for ds in l.datasets():  print ds.vid
 
         l.search.index_datasets()
 
-        for r in l.search.search_datasets("title:zip"):
+        for r in  l.search.search_datasets("title:zip"):
             ds = l.dataset(r)
             print r, ds.vname, ds.data.get('title')
 
         for r in l.search.search_partitions("doc:0E06"):
             print r
 
-    def test_search_parse(self):
+
+    # This test requires that specific bundles are installed. It needs to be re-written with the
+    # text bundles, which means that a test bundle need to be created that can exercise a variety
+    # of search situations.
+    def x_test_search_parse(self):
+
+        from ambry.library import new_library
 
         from ambry.library.search import SearchTermParser
 
         stp = SearchTermParser()
 
-        print stp.parse('source mother')
+        config = get_runconfig().library('default')
+
+        l = new_library(config, reset=True)
+
+
+        e = lambda x: l.search.make_query_from_terms(stp.parse(x))
+
+        print e('births ')
+        print e('births source cdph')
+        print e('births with mother source cdph')
+        print e('births with mother in California by tracts')
+        print e('births with mother with birth in California by tracts')
 
 
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
     return suite
-
-
+      
 if __name__ == "__main__":
     unittest.TextTestRunner().run(suite())

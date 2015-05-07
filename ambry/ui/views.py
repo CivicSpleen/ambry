@@ -76,7 +76,7 @@ def place_search():
 def bundle_search():
     """Search for a datasets and partitions, using a structured JSON term."""
 
-    return renderer().bundle_search(terms=request.args)
+    return renderer().bundle_search(terms=request.args['terms'])
 
 
 @app.route('/bundles/<vid>.<ct>')

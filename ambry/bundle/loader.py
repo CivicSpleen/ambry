@@ -140,10 +140,11 @@ class LoaderBundle(BuildBundle):
 
     def row_gen_for_source(self, source_name):
         from os.path import dirname, split, splitext
+        from ..dbexceptions import BuildError
 
         source = self.metadata.sources[source_name]
 
-        fn = self.filesystem.download(source_name)
+        dfn = fn = self.filesystem.download(source_name)
 
         if fn.endswith('.zip'):
             sub_file = source.file
@@ -414,6 +415,10 @@ class LoaderBundle(BuildBundle):
     def build(self):
         for source_name in self.metadata.sources:
             self.build_from_source(source_name)
+
+            if self.run_args.test:
+                break
+
         return True
 
 

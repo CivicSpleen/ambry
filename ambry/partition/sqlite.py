@@ -75,9 +75,8 @@ class SqlitePartition(PartitionBase):
 
         indexes = []
 
-        for row in self.database.query(
-                """SELECT name FROM sqlite_master
-WHERE type='index' AND tbl_name = '{}';""".format(table)):
+        for row in self.database.query("""SELECT name
+            FROM sqlite_master WHERE type='index' AND tbl_name = '{}';""".format(table)):
 
             if row[0].startswith('sqlite_'):
                 continue
@@ -86,10 +85,7 @@ WHERE type='index' AND tbl_name = '{}';""".format(table)):
 
         for index_name in indexes:
 
-            print 'Drop', index_name
-
-            self.database.connection.execute(
-                "DROP INDEX {}".format(index_name))
+            self.database.connection.execute("DROP INDEX {}".format(index_name))
 
     def create_with_tables(self, tables=None, clean=False):
         '''Create, or re-create,  the partition, possibly copying tables
@@ -121,7 +117,7 @@ WHERE type='index' AND tbl_name = '{}';""".format(table)):
     def add_tables(self, tables):
 
         for t in tables:
-            if t not in self.database.inspector.get_table_names():
+            if not t in self.database.inspector.get_table_names():
                 _, table = self.bundle.schema.get_table_meta(t)
                 table.create(bind=self.database.engine)
 
@@ -134,8 +130,8 @@ WHERE type='index' AND tbl_name = '{}';""".format(table)):
         else:
             self.database.create()
 
-        # Closing becuase when creating a lot ot them, having more than 64 open
-        # will cause the sqlite driver to return with 'unable to open database'
+        # Closing becuase when creating a lot ot them, having more than 64 open will
+        # cause the sqlite driver to return with 'unable to open database'
         # error
         self.close()
 
@@ -224,7 +220,11 @@ WHERE type='index' AND tbl_name = '{}';""".format(table)):
                 # return all elements that are +/-1 2 std from the mean
                 # We restrict the histograph to 4 std because for the small range of sparklines, a 0 value
                 # can make the histogram useless by pushing all other values into a single bin
-                df2std = lambda d: d[(d < (d.mean() + 2 * d.std())) & ((d.mean() - 2 * d.std()) < d)]
+
+                # Odd: in the second term,  ( d > (d.mean() - 2 * d.std())) workks OK, but reversing the comparison,
+                # ((d.mean() - 2 * d.std()) < d) results in an error.
+
+                df2std = lambda d: d[(d < (d.mean() + 2 * d.std()) ) & ( d > (d.mean() - 2 * d.std()))]
 
                 h = np.histogram(df2std(df[col_name]))
 
@@ -297,7 +297,7 @@ WHERE type='index' AND tbl_name = '{}';""".format(table)):
         partition."""
 
         from geoid import civick
-        from geoid.util import simplify
+        from geoid.util import isimplify
 
         p_s = self.database.session
 
@@ -338,8 +338,7 @@ WHERE type='index' AND tbl_name = '{}';""".format(table)):
                 g = civick.GVid.parse(space)
             except KeyError:
 
-                places = list(
-                    self.bundle.library.search.search_identifiers(space))
+                places = list(self.bundle.library.search.search_identifiers(space))
 
                 if not places:
                     from ..dbexceptions import BuildError
@@ -349,26 +348,24 @@ WHERE type='index' AND tbl_name = '{}';""".format(table)):
                             space, str(
                                 self.identity), source_name))
 
-                score, gvid, name = places[0]
+                score, gvid, typ, name = places[0]
 
                 self.bundle.log(
                     "Resolving space '{}' from source '{}' to {}/{}". format(space, source_name, name, gvid))
 
                 geoids.add(civick.GVid.parse(gvid))
 
-        coverage, grain = simplify(geoids)
+        coverage = isimplify(geoids)
+        grain = set( g.summarize() for g in geoids )
 
         if extra_grain:
             grain.add(extra_grain)
 
-        # The first simplification may produce a set that can be simplified
-        # again
-        coverage, _ = simplify(coverage)
 
         # For geo_coverage, only includes the higher level summary levels,
         # counties, states, places and urban areas
         self.record.data['geo_coverage'] = sorted(
-            [str(x) for x in coverage if bool(x) and x.sl in (40, 50, 60, 160, 400)])
+            [str(x) for x in coverage if bool(x) and x.sl in (10, 40, 50, 60, 160, 400)])
         self.record.data['geo_grain'] = sorted([str(x) for x in grain])
 
         # Now add the geo and time coverage specified in the table. These values for space and time usually are specified
@@ -502,7 +499,7 @@ WHERE type='index' AND tbl_name = '{}';""".format(table)):
                 "SELECT * FROM {}".format(self.get_table().name)).pandas
         except StopIteration:
             return None  # No records, so no dataframe.
-            # raise Exception("Select failed: {}".format("SELECT * FROM {}".format(self.get_table().name)))
+            #raise Exception("Select failed: {}".format("SELECT * FROM {}".format(self.get_table().name)))
 
     @property
     def dict(self):

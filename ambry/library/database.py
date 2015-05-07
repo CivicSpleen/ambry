@@ -16,8 +16,7 @@ import ambry.util
 from ambry.util import temp_file_name
 from ambry.bundle import DbBundle
 from ..identity import LocationRef, Identity
-from ambry.orm import Column, Partition, Table, Dataset, Config, File, Base, \
-    Code, ColumnStat
+from ambry.orm import Column, Partition, Table, Dataset, Config, File, Base, Code, ColumnStat
 
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
@@ -36,22 +35,14 @@ class LibraryDb(object):
     Dbci = namedtuple('Dbc', 'dsn_template sql')
 
     DBCI = {
-        'postgis': Dbci(
-            dsn_template='postgresql+psycopg2://'
-                         '{user}:{password}@{server}{colon_port}/{name}',
-            sql='support/configuration-pg.sql'),
-        'postgres': Dbci(
-            dsn_template='postgresql+psycopg2://'
-                         '{user}:{password}@{server}{colon_port}/{name}',
-            sql='support/configuration-pg.sql'),  # Stored in the ambry module.
-        'sqlite': Dbci(dsn_template='sqlite:///{name}',
-                       sql='support/configuration-sqlite.sql'),
-        'spatialite': Dbci(dsn_template='sqlite:///{name}',
-                           sql='support/configuration-sqlite.sql'),
-        'mysql': Dbci(
-            dsn_template='mysql://'
-                         '{user}:{password}@{server}{colon_port}/{name}',
-            sql='support/configuration-sqlite.sql')
+        'postgis': Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}', 
+                        sql='support/configuration-pg.sql'),
+        'postgres': Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}', 
+                         sql='support/configuration-pg.sql'),  # Stored in the ambry module.
+        'sqlite': Dbci(dsn_template='sqlite:///{name}', sql='support/configuration-sqlite.sql'),
+        'spatialite': Dbci(dsn_template='sqlite:///{name}', sql='support/configuration-sqlite.sql'),
+        'mysql': Dbci(dsn_template='mysql://{user}:{password}@{server}{colon_port}/{name}', 
+                      sql='support/configuration-sqlite.sql')
     }
 
     def __init__(self, driver=None, server=None, dbname=None,
@@ -107,12 +98,9 @@ class LibraryDb(object):
 
         if not self._engine:
 
-            # print "Create Engine",os.getpid(), self.dsn
-
-            # There appears to be a problem related to connection pooling on
-            # Linux + Postgres, where multiprocess runs will throw exceptions
-            # when the Datasets table record can't be found. It looks like
-            # connections are losing the setting for the search path to the
+            # There appears to be a problem related to connection pooling on Linux + Postgres, where
+            # multiprocess runs will throw exceptions when the Datasets table record can't be
+            # found. It looks like connections are losing the setting for the search path to the
             # library schema.
             # Disabling connection pooling solves the problem.
             self._engine = create_engine(self.dsn, poolclass=NullPool,
@@ -328,7 +316,7 @@ class LibraryDb(object):
         self.commit()
 
     def __del__(self):
-        pass  # print  'closing LibraryDb'
+        pass
 
     def clone(self):
         return self.__class__(
@@ -1357,7 +1345,6 @@ class LibraryDb(object):
 def _pragma_on_connect(dbapi_con, con_record):
     """ISSUE some Sqlite pragmas when the connection is created."""
 
-    # dbapi_con.execute('PRAGMA foreign_keys = ON;')
     # dbapi_con.execute('PRAGMA foreign_keys = ON;')
     # Not clear that there is a performance improvement.
 

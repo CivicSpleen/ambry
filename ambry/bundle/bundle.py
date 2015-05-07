@@ -38,13 +38,15 @@ class Bundle(object):
         """"""
 
         # This bit of wackiness allows the var(self.run_args) code
-        # to work when there have been no artgs parsed.
-        class NullArgs(object):
+        # to work when there have been no args parsed.
+        class null_args(object):
             none = None
             multi = False
             test = False
 
-        self.run_args = vars(NullArgs())
+        self.run_args = vars(null_args())
+
+
 
     def __del__(self):
         try:
@@ -122,7 +124,7 @@ class Bundle(object):
         # Force the logger to re-open, which will re-create the file that just
         # got deleted
         self._logger = None
-        clear_logger(__name__)
+        # clear_logger(__name__)
 
     @property
     def database(self):
@@ -1373,23 +1375,18 @@ class BuildBundle(Bundle):
         with self.session:
             self.set_value('process', 'built', datetime.now().isoformat())
             self.set_value('process', 'buildtime', time() - self._build_time)
-            self.update_configuration()
-
-            self._revise_schema()
-
-            self.schema.move_revised_schema()
 
             self.post_build_finalize()
 
-            self.post_build_write_partitions()
-
-            self.post_build_write_config()
-
-            self.post_build_time_coverage()
-
-            self.post_build_geo_coverage()
-
-            self.schema.write_codes()
+            if self.config.environment.category == 'development':
+                self.update_configuration()
+                self._revise_schema()
+                self.schema.move_revised_schema()
+                self.post_build_write_partitions()
+                self.post_build_write_config()
+                self.post_build_geo_coverage()
+                self.post_build_time_coverage()
+                self.schema.write_codes()
 
             self.post_build_test()
 
@@ -1401,12 +1398,13 @@ class BuildBundle(Bundle):
         return True
 
     def post_build_test(self):
+
         f = getattr(self, 'test', False)
 
         if f:
             try:
                 f()
-            except AssertionError:
+            except AssertionError as e:
                 import traceback
                 import sys
 
@@ -1583,6 +1581,7 @@ class BuildBundle(Bundle):
     def build_state(self):
         from ..dbexceptions import DatabaseMissingError, NotFoundError
 
+
         try:
             c = self.get_value('process', 'state')
             return c.value
@@ -1598,6 +1597,7 @@ class BuildBundle(Bundle):
 
         if self.library.source:
             self.library.source.set_bundle_state(self.identity, state)
+
 
     def build_main(self):
         """This is the methods that is actually called in do_build; it
@@ -1742,6 +1742,7 @@ class BuildBundle(Bundle):
         self.close()
 
         return True
+
 
     def do_update(self):
 

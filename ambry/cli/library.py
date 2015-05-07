@@ -336,6 +336,7 @@ def library_push(args, l, config):
                 prt("Failed: {}", e)
                 raise
 
+
             if what == 'pushed':
                 total_time += end - start
                 total_size += size
@@ -352,7 +353,6 @@ def library_push(args, l, config):
 
         if not args.dry_run:
             remote.store_list()
-
 
 def library_files(args, l, config):
     from ..identity import LocationRef
@@ -372,7 +372,6 @@ def library_files(args, l, config):
                 f.type_,
                 f.group,
                 f.path)
-
 
 def library_schema(args, l, config):
     from ambry.bundle import DbBundle

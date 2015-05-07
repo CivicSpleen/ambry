@@ -861,11 +861,13 @@ def _on_connect_update_sqlite_schema(conn, con_record):
                 pass
 
         if version < 24:
-            from ..orm import SearchDoc
 
             try:
+                from ..orm import SearchDoc
                 SearchDoc.__table__.create(bind=conn.engine)
             except OperationalError as e:
+                pass
+            except ImportError: # SearchDoc object was removed
                 pass
 
         if version < 25:

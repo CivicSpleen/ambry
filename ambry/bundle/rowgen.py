@@ -215,6 +215,7 @@ class DelimitedRowGenerator(RowGenerator):
         self.delimiter = delimiter
 
     def get_csv_reader(self, f, sniff=False):
+        #import unicodecsv as csv
         import csv
 
         if sniff:

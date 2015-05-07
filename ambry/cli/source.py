@@ -209,7 +209,6 @@ def source_number(args, l, st, rc):
 
     if args.set:
         from ..bundle.config import BundleFileConfig
-
         d = args.set
         if os.path.isfile(d):
             d = os.path.dirname(d)

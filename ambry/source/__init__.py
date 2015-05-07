@@ -201,21 +201,20 @@ class SourceTree(object):
         from sqlalchemy.exc import InvalidRequestError
 
         try:
-            f = self.library.files.query.ref(
-                ident.vid).type(
-                Dataset.LOCATION.SOURCE).one_maybe
+            f = self.library.files.query.ref(ident.vid).type(Dataset.LOCATION.SOURCE).one_maybe
         except InvalidRequestError:
             # Happens when there is an error installing into the library.
             self.library.database.session.rollback()
-            f = self.library.files.query.ref(
-                ident.vid).type(
-                Dataset.LOCATION.SOURCE).one_maybe
+            f = self.library.files.query.ref(ident.vid).type(Dataset.LOCATION.SOURCE).one_maybe
+
 
         if f:
             import time
             f.modified = int(time.time())
             f.state = state
             self.library.files.merge(f)
+        else:
+            pass
 
     def add_source_url(self, ident, repo, data):
 
@@ -364,16 +363,13 @@ class SourceTree(object):
 
     def resolve_bundle(self, term):
         from ambry.orm import Dataset
+
         ident = self.library.resolve(term, location=Dataset.LOCATION.SOURCE)
 
         if not ident:
             return None
 
-        return self.bundle(
-            os.path.join(
-                self.base_dir,
-                self.source_path(
-                    ident=ident)))
+        return self.bundle(os.path.join(self.base_dir,self.source_path(ident=ident)))
 
     def resolve_build_bundle(self, term):
         """Return an Bundle object, using the base BuildBundle class."""

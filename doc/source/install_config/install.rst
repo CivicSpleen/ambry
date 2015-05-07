@@ -82,14 +82,14 @@ For Ubuntu 13.04 through 14.04, use this script to install the dependencies and 
 
 .. code-block:: bash
 
-    $ sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install-ubuntu.sh)"
+    $ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install-ubuntu.sh)"
 
 If you've created a fresh Ubuntu install, you'll probably also have to update and install curl. Here's one line that will take care of everything.  
 
 .. code-block:: bash
 
     $ apt-get update && apt-get install -y curl && \
-    sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install-ubuntu.sh)"
+    sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/CivicKnowledge/ambry/master/support/install-ubuntu.sh)"
 
 
 Follow up with :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 

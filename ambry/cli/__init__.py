@@ -390,6 +390,11 @@ def main(argsv=None, ext_logger=None):
         global global_run_config
         global_run_config = rc
 
+
+        if not rc.environment.get('category', False):
+            raise ConfigurationError("Must set a config value for environment.class, one of: "
+                                      "development, production, testing, staging")
+
         if not rc.environment.get('category', False):
             raise ConfigurationError("Must set a config value for environment.class, one of: "
                                      "development, production, testing, staging")
