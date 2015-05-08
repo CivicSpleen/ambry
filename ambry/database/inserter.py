@@ -8,14 +8,12 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 from ambry.util import get_logger
-import logging
 
 global_logger = get_logger(__name__)
 # logger.setLevel(logging.DEBUG)
 
 
 class InserterInterface(object):
-
     def __enter__(self):
         raise NotImplemented()
 
@@ -30,13 +28,11 @@ class InserterInterface(object):
 
 
 class SegmentInserterFactory(object):
-
     def next_inserter(self, segment):
         raise NotImplemented()
 
 
 class SegmentedInserter(InserterInterface):
-
     def __init__(self, segment_size=100000, segment_factory=None):
         pass
 
@@ -51,7 +47,6 @@ class SegmentedInserter(InserterInterface):
         self.inserter.__enter__()
 
     def __enter__(self):
-
         return self
 
     def __exit__(self, type_, value, traceback):
@@ -59,7 +54,6 @@ class SegmentedInserter(InserterInterface):
         return self
 
     def insert(self, row, **kwargs):
-
         self.count += 1
 
         if self.count > self.segment_size:
@@ -77,17 +71,9 @@ class SegmentedInserter(InserterInterface):
 
 
 class ValueWriter(InserterInterface):
-
     """Inserts arrays of values into  database table."""
 
-    def __init__(
-            self,
-            db,
-            bundle,
-            cache_size=50000,
-            text_factory=None,
-            replace=False):
-        import string
+    def __init__(self, db, bundle, cache_size=50000, text_factory=None, replace=False):
         self.cache = []
 
         self.bundle = bundle
@@ -114,6 +100,7 @@ class ValueWriter(InserterInterface):
 
     def rollback(self):
         from ..partitions import Partitions
+
         global_logger.debug("rollback {}".format(repr(self.session)))
         self.session.rollback()
         self.build_state = Partitions.STATE.ERROR
@@ -121,6 +108,7 @@ class ValueWriter(InserterInterface):
 
     def commit_end(self):
         from ..partitions import Partitions
+
         global_logger.debug("commit end {}".format(repr(self.session)))
         self.session.commit()
         self.build_state = Partitions.STATE.BUILT
@@ -128,12 +116,13 @@ class ValueWriter(InserterInterface):
 
     def commit_continue(self):
         from ..partitions import Partitions
+
         global_logger.debug("commit continue {}".format(repr(self.session)))
         self.session.commit()
 
-        # We don't want this executing every committ since it is hard to make sure it happens
-        # in a bundle session, which can result in the database being locked,
-        # in MP runs.
+        # We don't want this executing every committ since it is hard to make
+        # sure it happens in a bundle session, which can result in the database
+        # being locked, in MP runs.
         if self.build_state != Partitions.STATE.BUILDING:
             self.build_state = Partitions.STATE.BUILDING
             self.db.partition.set_state(Partitions.STATE.BUILDING)
@@ -164,9 +153,8 @@ class ValueWriter(InserterInterface):
             if type_ is not None:
                 try:
                     self.bundle.error(
-                        "Got exception while exiting inserter context: {}: {}".format(
-                            type_,
-                            str(value)))
+                        "Got exception while exiting inserter "
+                        "context: {}: {}".format(type_, str(value)))
                 except:
                     print "ERROR: Got Exception {}: {}".format(type_, str(value))
                     self.rollback()
@@ -178,7 +166,6 @@ class ValueWriter(InserterInterface):
 
 
 class CodeCastErrorHandler(object):
-
     """Used by the Value Inserter to handle errors in casting data types.
 
     This version will create code table entries for any values that
@@ -188,6 +175,7 @@ class CodeCastErrorHandler(object):
 
     def __init__(self, inserter):
         from collections import defaultdict
+
         self.codes = defaultdict(set)
         self.inserter = inserter
 
@@ -201,8 +189,8 @@ class CodeCastErrorHandler(object):
         for k, v in cast_errors.items():
             self.codes[k].add(v)
 
-            # This part will only put the value in the column if the code column has been
-            # created.
+            # This part will only put the value in the column if the code column
+            # has been created.
             row[self.code_col_name(k)] = v
             row[k] = None
 
@@ -211,6 +199,7 @@ class CodeCastErrorHandler(object):
     def finish(self):
         """Add all of the codes to the codes table."""
         from ..dbexceptions import NotFoundError
+
         schema = self.inserter.bundle.schema
 
         with self.inserter.bundle.session:
@@ -233,7 +222,6 @@ class CodeCastErrorHandler(object):
 
 
 class ValueInserter(ValueWriter):
-
     """Inserts arrays of values into  database table."""
 
     def __init__(self, db, bundle, table,
@@ -241,13 +229,8 @@ class ValueInserter(ValueWriter):
                  cache_size=50000, text_factory=None,
                  replace=False, skip_none=True, update_size=True):
 
-        super(
-            ValueInserter,
-            self).__init__(
-            db,
-            bundle,
-            cache_size=cache_size,
-            text_factory=text_factory)
+        super(ValueInserter, self).__init__(db, bundle, cache_size=cache_size,
+                                            text_factory=text_factory)
 
         if table is None and bundle is None:
             raise ValueError("Must define either table or bundle")
@@ -270,7 +253,8 @@ class ValueInserter(ValueWriter):
         self.cast_error_handler = cast_error_handler(
             self) if cast_error_handler else None
 
-        self._max_lengths = [0 for x in self.sizable_fields]
+        self._max_lengths = [0] * len(self.sizable_fields)
+        # self._max_lengths = [0 for x in self.sizable_fields]
 
         self.statement = self.table.insert()
 
@@ -289,8 +273,6 @@ class ValueInserter(ValueWriter):
         if isinstance(values, RowProxy):
             values = dict(values)
 
-        code_dict = None
-
         try:
             cast_errors = None
 
@@ -304,10 +286,9 @@ class ValueInserter(ValueWriter):
                              for k, v in values.items())
 
                 if self.skip_none:
-
                     d = {
                         k: d[k] if k in d and d[k] is not None else v for k,
-                        v in self.null_row.items()}
+                                                                          v in self.null_row.items()}
 
             else:
                 raise DeprecationWarning(
@@ -330,7 +311,6 @@ class ValueInserter(ValueWriter):
                     self.row_id = max(self.row_id, d['id']) + 1
 
             if cast_errors and self.cast_error_handler:
-
                 d = self.cast_error_handler.cast_error(d, cast_errors)
                 cast_errors = None
 
@@ -362,7 +342,7 @@ class ValueInserter(ValueWriter):
             self.cache = []
             raise
 
-        return True
+            # return True
 
     @property
     def max_lengths(self):

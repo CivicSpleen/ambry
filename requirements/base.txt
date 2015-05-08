@@ -4,8 +4,8 @@ address-parser==0.0.1
 boto==2.38.0
 ckcache==0.1.2
 decorator==3.4.2
-Flask==0.10.1
 Flask-Compress==1.2.0
+Flask==0.10.1
 geoid>=0.0.9
 ipython==3.1.0
 isodate==0.5.1
@@ -24,12 +24,15 @@ python-dateutil==2.4.2
 pytz==2015.2
 PyYAML==3.11
 requests==2.6.0
+sas7bdat==2.0.4
 semantic-version==2.4.1
 sh==1.11
 simplejson==3.6.5
 six==1.9.0
 SQLAlchemy==1.0.0
 sqlparse==0.1.15
+tables==3.2.0
 unicodecsv==0.12.0
 Werkzeug==0.10.4
 whoosh==2.7.0
+xlrd==0.9.3

@@ -5,17 +5,17 @@ included in this distribution as LICENSE.txt
 
 """
 
-from ..dbexceptions import DependencyError
+# from ..dbexceptions import DependencyError
 from . import Warehouse
-from ..library.database import LibraryDb
-from . import ResolutionError
+# from ..library.database import LibraryDb
+# from . import ResolutionError
 
 
 class SqliteWarehouse(Warehouse):
 
-    ##
-    ## Datasets and Bundles
-    ##
+    #
+    # Datasets and Bundles
+    #
 
     def load_local(
             self,
@@ -106,12 +106,14 @@ class SpatialiteWarehouse(SqliteWarehouse):
 
         ce = self.database.connection.execute
 
-        for col in [row['name'].lower() for row in ce('PRAGMA table_info({})'.format(name)).fetchall()]:
+        for col in [row['name'].lower() for row in ce('PRAGMA table_info({})'
+                    .format(name)).fetchall()]:
 
             if col.endswith('geometry'):
 
                 types = ce(
-                    'SELECT count(*) AS count, GeometryType({}) AS type,  CoordDimension({}) AS cd '
+                    'SELECT count(*) AS count, GeometryType({}) AS type,  '
+                    'CoordDimension({}) AS cd '
                     'FROM {} GROUP BY type ORDER BY type desc;'.format(
                         col,
                         col,
@@ -121,9 +123,10 @@ class SpatialiteWarehouse(SqliteWarehouse):
                 cd = types[0][2]
 
                 # connection.execute(
-                #    'UPDATE {} SET {} = SetSrid({}, {});'.format(table_name, column_name, column_name, srs))
+                #    'UPDATE {} SET {} = SetSrid({}, {});'
+                #           .format(table_name, column_name, column_name, srs))
 
-                ce("SELECT RecoverGeometryColumn('{}', '{}', 4326, '{}', '{}');".format(
-                    name, col, t, cd))
+                ce("SELECT RecoverGeometryColumn('{}', '{}', 4326, '{}', '{}');"
+                    .format(name, col, t, cd))
 
         return True

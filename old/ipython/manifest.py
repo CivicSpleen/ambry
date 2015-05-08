@@ -20,7 +20,6 @@ from ambry.util import memoize
 
 
 class ManifestMagicsImpl(object):
-
     _manifest_ = None
 
     tag_line_numbers = dict()
@@ -84,7 +83,6 @@ class ManifestMagicsImpl(object):
         logger.setLevel(logging.INFO)
 
         class ClearOutputAdapter(logging.LoggerAdapter):
-
             def process(self, msg, kwargs):
                 from IPython.display import clear_output
 
@@ -114,11 +112,13 @@ class ManifestMagicsImpl(object):
 
         if args.cwd:
             import os
+
             base_dir = os.getcwd()
 
         if not base_dir:
             raise ConfigurationError(
-                "Must specify -b for base directory,  or set filesystem.warehouse in configuration")
+                "Must specify -b for base directory, "
+                "or set filesystem.warehouse in configuration")
 
         library_name = 'default'
 
@@ -147,7 +147,7 @@ class ManifestMagicsImpl(object):
         tag = tag.strip().lower()
         args = args.strip().lower()
 
-        if not tag in self.tag_line_numbers:
+        if tag not in self.tag_line_numbers:
             self.tag_line_numbers[tag] = dict()
             self.tag_line_numbers[tag]['_max'] = 0
 
@@ -191,20 +191,25 @@ class ManifestMagicsImpl(object):
     def partitions(self, line, cell):
         """Partitions all start at line 20."""
         self._manifest.sectionalize(['PARTITIONS: {}'.format(
-            line)] + cell.splitlines(), first_line=self.tag_lineno('partitions', line))
+            line)] + cell.splitlines(), first_line=self.tag_lineno('partitions',
+                                                                   line))
 
     def extract(self, line):
         """Single extract line."""
         self._manifest.sectionalize(
-            ['EXTRACT: {}'.format(line)], first_line=self.tag_lineno('extract', line))
+            ['EXTRACT: {}'.format(line)],
+            first_line=self.tag_lineno('extract', line)
+        )
 
     def view(self, line, cell):
         self._manifest.sectionalize(['VIEW: {}'.format(
-            line)] + cell.splitlines(), first_line=self.tag_lineno('view', line, cell))
+            line)] + cell.splitlines(), first_line=self.tag_lineno('view', line,
+                                                                   cell))
 
     def mview(self, line, cell):
         self._manifest.sectionalize(['MVIEW: {}'.format(
-            line)] + cell.splitlines(), first_line=self.tag_lineno('view', line, cell))
+            line)] + cell.splitlines(), first_line=self.tag_lineno('view', line,
+                                                                   cell))
 
     def show(self):
         return str(self._manifest)
@@ -212,7 +217,6 @@ class ManifestMagicsImpl(object):
 
 @magics_class
 class ManifestMagics(Magics):
-
     """Magics for creating Ambry manifests within an ipython notebook."""
 
     def __init__(self, shell):

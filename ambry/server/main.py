@@ -1,9 +1,9 @@
 """REST Server For DataBundle Libraries."""
 
-import bottle
+# import bottle
 from bottle import error, hook, get, put, post, request, response, redirect
-from bottle import HTTPResponse, static_file, install, url, local
-from bottle import ServerAdapter, server_names, Bottle
+from bottle import HTTPResponse, static_file, install, local  # , url
+from bottle import ServerAdapter, server_names  # , Bottle
 from bottle import run, debug
 
 from decorator import decorator
@@ -20,8 +20,8 @@ global_logger.setLevel(logging.DEBUG)
 
 
 #
-# The LibraryPlugin allows the library to be inserted into a request handler with a
-# 'library' argument.
+# The LibraryPlugin allows the library to be inserted into a request handler
+# with a 'library' argument.
 class LibraryPlugin(object):
 
     def __init__(self, library_creator, keyword='library'):
@@ -49,8 +49,8 @@ class LibraryPlugin(object):
         def wrapper(*args, **kwargs):
 
             #
-            # NOTE! Creating the library every call. This is because the Sqlite driver
-            # isn't multi-threaded.
+            # NOTE! Creating the library every call. This is because the Sqlite
+            # driver isn't multi-threaded.
             #
             local.library = kwargs[keyword] = self.library_creator()
 
@@ -72,16 +72,15 @@ def capture_return_exception(e):
     import sys
     import traceback
 
-    (exc_type, exc_value, exc_traceback) = sys.exc_info()  # @UnusedVariable
+    # (exc_type, exc_value, exc_traceback) = sys.exc_info()  # @UnusedVariable
 
     tb_list = traceback.format_list(traceback.extract_tb(sys.exc_info()[2]))
 
-    return {'exception':
-            {'class': e.__class__.__name__,
-             'args': e.args,
-             'trace': tb_list
-             }
-            }
+    return {'exception': {
+        'class': e.__class__.__name__,
+        'args': e.args,
+        'trace': tb_list
+    }}
 
 
 def _CaptureException(f, *args, **kwargs):
@@ -227,11 +226,12 @@ def process_pid(did, pid, library):
 
 
 def _get_ct(typ):
-    ct = ({'application/json': 'json',
-          'application/x-yaml': 'yaml',
-          'text/x-yaml': 'yaml',
-          'text/csv': 'csv'}
-          .get(request.headers.get("Content-Type"), None))
+    ct = ({
+        'application/json': 'json',
+        'application/x-yaml': 'yaml',
+        'text/x-yaml': 'yaml',
+        'text/csv': 'csv'
+    }.get(request.headers.get("Content-Type"), None))
 
     if ct is None:
         try:
@@ -288,7 +288,7 @@ def _read_body(request):
     import tempfile
 
     tmp_dir = tempfile.gettempdir()
-    #tmp_dir = '/tmp'
+    # tmp_dir = '/tmp'
 
     file_ = os.path.join(tmp_dir, 'rest-downloads', str(uuid.uuid4()) + ".db")
     if not os.path.exists(os.path.dirname(file_)):
@@ -346,12 +346,13 @@ def _download_redirect(identity, library):
 
 
 def _send_csv_if(did, pid, table_name, library):
-    '''Send csv function, with a web-processing interface '''
+    """Send csv function, with a web-processing interface """
     did, _, _ = process_did(did, library)
     pid, _, _ = process_pid(did, pid, library)
 
     # p_orm is a database entry, not a partition
-    p = library.get(pid).partition
+    library.get(pid).partition
+    # p = library.get(pid).partition
 
     i = int(request.query.get('i', 1))
     n = int(request.query.get('n', 1))
@@ -365,7 +366,7 @@ def _send_csv_if(did, pid, table_name, library):
 def _send_csv(library, did, pid, table_name, i, n, where, sep=','):
     """Send a CSV file to the client."""
     import unicodecsv
-    import csv
+    # import csv
     from StringIO import StringIO
     from sqlalchemy import text
 
@@ -397,7 +398,7 @@ def _send_csv(library, did, pid, table_name, i, n, where, sep=','):
         seg_size = base_seg_size
 
     out = StringIO()
-    #writer = unicodecsv.writer(out, delimiter=sep, escapechar='\\',quoting=csv.QUOTE_NONNUMERIC)
+    # writer = unicodecsv.writer(out, delimiter=sep, escapechar='\\',quoting=csv.QUOTE_NONNUMERIC)
     writer = unicodecsv.writer(out, delimiter=sep)
 
     if request.query.header:
@@ -470,7 +471,7 @@ def get_resolve(library, ref):
 @CaptureException
 def get_info(ref, library):
     """Resolve the reference, and redirect to the dataset or partition page."""
-    from ambry.cache import RemoteMarker
+    # from ambry.cache import RemoteMarker
 
     ip, dataset = _resolve(library, ref)
 
@@ -514,8 +515,7 @@ def get_key(key, library):
         remote = library.upstream.get_upstream(RemoteMarker)
 
         if not remote:
-            raise exc.InternalError(
-                "Library remote does not have a proper upstream")
+            raise exc.InternalError("Library remote does not have a proper upstream")
 
         url = remote.path(key)
 
@@ -536,7 +536,7 @@ def get_datasets(library):
         'refs': {
             'path': dsid.path,
             'cache_key': dsid.cache_key
-            },
+        },
         'urls': {
             'partitions': "{}/datasets/{}".format(_host_port(library), dsid.vid),
             'db': "{}/datasets/{}/db".format(_host_port(library), dsid.vid)
@@ -583,7 +583,7 @@ def post_dataset(did, library):
     if not identity.md5:
         raise exc.BadRequest("The identity must have the md5 value set")
 
-    if not did in set([identity.id_, identity.vid]):
+    if did not in {identity.id_, identity.vid}:
         raise exc.Conflict(
             "Dataset address '{}' doesn't match payload id '{}'".format(
                 did,
@@ -631,7 +631,7 @@ def get_dataset(did, library, pid=None):
 
     # Get direct access to the cache that implements the remote, so
     # we can get a URL with path()
-    #remote = library.remote.get_upstream(RemoteMarker)
+    # remote = library.remote.get_upstream(RemoteMarker)
 
     d['urls'] = dict(
         db="{}/datasets/{}/db".format(_host_port(library), gr.identity.vid))
@@ -728,7 +728,7 @@ def get_dataset_csv(did, library, pid=None):
 @CaptureException
 def post_partition(did, pid, library):
     from ambry.identity import Identity
-    from ambry.util import md5_for_file
+    # from ambry.util import md5_for_file
 
     b = library.get(did)
 
@@ -746,7 +746,7 @@ def post_partition(did, pid, library):
                 pid,
                 did))
 
-    if not pid in set([identity.id_, identity.vid]):
+    if pid not in {identity.id_, identity.vid}:
         raise exc.Conflict(
             "Partition address '{}' doesn't match payload id '{}'".format(
                 pid,
@@ -760,7 +760,7 @@ def post_partition(did, pid, library):
 @get('/datasets/<did>/db')
 @CaptureException
 def get_dataset_file(did, library):
-    from ambry.cache import RemoteMarker
+    # from ambry.cache import RemoteMarker
 
     ident = library.resolve(did)
 
@@ -780,7 +780,7 @@ def get_dataset_schema(did, typ, library):
     :param library:
     :return:
     """
-    from ambry.cache import RemoteMarker
+    # from ambry.cache import RemoteMarker
 
     ct = _get_ct(typ)
 
@@ -796,7 +796,7 @@ def get_dataset_schema(did, typ, library):
         b.schema.as_csv(output)
         static_file(output)
     elif ct == 'json':
-        import json
+        # import json
         s = b.schema.as_struct()
         return s
     elif ct == 'yaml':
@@ -811,7 +811,7 @@ def get_dataset_schema(did, typ, library):
 @get('/datasets/<did>/partitions/<pid>')
 @CaptureException
 def get_partition(did, pid, library):
-    from ambry.cache import RemoteMarker
+    # from ambry.cache import RemoteMarker
 
     d = get_dataset(did, library, pid)
     d['response'] = 'partition'
@@ -821,15 +821,15 @@ def get_partition(did, pid, library):
 @get('/datasets/<did>/partitions/<pid>/db')
 @CaptureException
 def get_partition_file(did, pid, library):
-    from ambry.cache import RemoteMarker
-    from ambry.identity import Identity
+    # from ambry.cache import RemoteMarker
+    # from ambry.identity import Identity
 
     b = library.get(did)
 
     if not b:
         raise exc.NotFound("No bundle found for id {}".format(did))
 
-    payload = request.json
+    # payload = request.json
 
     p = b.partitions.get(pid)
 
@@ -974,14 +974,14 @@ def get_partition_csv_parts(did, pid, library):
 @get('/test/echo/<arg>')
 def get_test_echo(arg):
     """just echo the argument."""
-    return (arg, dict(request.query.items()))
+    return arg, dict(request.query.items())
 
 
 @put('/test/echo')
 def put_test_echo():
     """just echo the argument."""
 
-    return (request.json, dict(request.query.items()))
+    return request.json, dict(request.query.items())
 
 
 @get('/test/exception')

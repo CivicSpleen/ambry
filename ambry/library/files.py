@@ -149,7 +149,6 @@ class Files(object):
             extant.update(f)
             f = extant
 
-
         if merge:
             self.merge(f, commit=commit)
 
@@ -197,14 +196,14 @@ class Files(object):
             if commit:
                 self.db.commit()
 
-        except IntegrityError as e:
+        except IntegrityError:
 
             s.rollback()
 
             s.merge(f)
             try:
                 self.db.commit()
-            except IntegrityError as e:
+            except IntegrityError:
                 s.rollback()
                 raise
 
@@ -343,8 +342,8 @@ class Files(object):
         import hashlib
         import time
 
-        hash = None
-        size = None
+        # hash = None
+        # size = None
         modified = None
 
         if bool(path) and path.startswith('http'):

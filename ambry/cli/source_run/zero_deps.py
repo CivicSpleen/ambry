@@ -4,8 +4,6 @@ bundle has."""
 
 def run(args, bundle_dir, bundle):
 
-    import sys
-
     # if bundle.is_built:
     #    return
 

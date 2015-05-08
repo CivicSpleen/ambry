@@ -5,10 +5,11 @@ included in this distribution as LICENSE.txt
 
 """
 
-from ..cli import prt, warn, fatal
+from ..cli import warn, fatal
 from ..identity import LocationRef
 
 default_locations = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.REMOTE]
+
 
 def root_parser(cmd):
     import argparse
@@ -19,54 +20,62 @@ def root_parser(cmd):
     sp = cmd.add_parser('list', help='List bundles and partitions')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='list')
-    sp.add_argument( '-P', '--plain', default=False, action="store_true", help="Print only vids")
-    sp.add_argument( '-F', '--fields', type=str, help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
-    sp.add_argument( '-p', '--partitions', default=False, action="store_true", help="Show partitions")
-    sp.add_argument( '-t', '--tables', default=False, action="store_true", help="Show tables")
-    sp.add_argument( '-a', '--all', default=False, action="store_true", help='List everything')
-    sp.add_argument( '-l', '--library', default=False, action="store_const", const=lr.LIBRARY, help='List only the library')
-    sp.add_argument( '-r', '--remote', default=False, action="store_const", const=lr.REMOTE, help='List only the remote')
-    sp.add_argument( '-s', '--source', default=False, action="store_const", const=lr.SOURCE, help='List only the source')
-    sp.add_argument( '-w', '--warehouse', default=False, action="store_const", const='warehouse', help='List warehouses')
-    sp.add_argument( '-c', '--collection', default=False, action="store_const", const='collection', help='List collections')
-    sp.add_argument( 'term', nargs='?', type=str, help='Name or ID of the bundle or partition')
+    sp.add_argument('-P', '--plain', default=False, action="store_true", help="Print only vids")
+    sp.add_argument('-F', '--fields', type=str,
+                    help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
+    sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
+    sp.add_argument('-t', '--tables', default=False, action="store_true", help="Show tables")
+    sp.add_argument('-a', '--all', default=False, action="store_true", help='List everything')
+    sp.add_argument('-l', '--library', default=False, action="store_const", const=lr.LIBRARY,
+                    help='List only the library')
+    sp.add_argument('-r', '--remote', default=False, action="store_const", const=lr.REMOTE, help='List only the remote')
+    sp.add_argument('-s', '--source', default=False, action="store_const", const=lr.SOURCE, help='List only the source')
+    sp.add_argument('-w', '--warehouse', default=False, action="store_const", const='warehouse', help='List warehouses')
+    sp.add_argument('-c', '--collection', default=False, action="store_const", const='collection',
+                    help='List collections')
+    sp.add_argument('term', nargs='?', type=str, help='Name or ID of the bundle or partition')
 
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='info')
-    sp.add_argument( '-l', '--library', default=False, action="store_const", const=lr.LIBRARY, help='Search only the library')
-    sp.add_argument( '-r', '--remote', default=False, action="store_const", const=lr.REMOTE, help='Search only the remote')
-    sp.add_argument( '-s', '--source', default=False, action="store_const", const=lr.SOURCE, help='Search only the source')
-    sp.add_argument( '-p', '--partitions', default=False, action="store_true", help="Show partitions")
-    sp.add_argument( 'term', type=str, nargs='?', help='Name or ID of the bundle or partition')
+    sp.add_argument('-l', '--library', default=False, action="store_const", const=lr.LIBRARY,
+                    help='Search only the library')
+    sp.add_argument('-r', '--remote', default=False, action="store_const", const=lr.REMOTE,
+                    help='Search only the remote')
+    sp.add_argument('-s', '--source', default=False, action="store_const", const=lr.SOURCE,
+                    help='Search only the source')
+    sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
+    sp.add_argument('term', type=str, nargs='?', help='Name or ID of the bundle or partition')
 
     sp = cmd.add_parser('meta', help='Dump the metadata for a bundle')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='meta')
-    sp.add_argument( 'term', type=str, nargs='?', help='Name or ID of the bundle or partition')
-    sp.add_argument( '-k', '--key', default=False, type=str, help='Return the value of a specific key')
+    sp.add_argument('term', type=str, nargs='?', help='Name or ID of the bundle or partition')
+    sp.add_argument('-k', '--key', default=False, type=str, help='Return the value of a specific key')
     group = sp.add_mutually_exclusive_group()
-    group.add_argument( '-y', '--yaml', default=False, action='store_true', help='Output yaml')
-    group.add_argument( '-j', '--json', default=False, action='store_true', help='Output json')
-    group.add_argument( '-r', '--rows', default=False, action='store_true', help='Output key/value pair rows')
-    sp.add_argument( 'terms', type=str, nargs=argparse.REMAINDER, help='Query commands to find packages with. ')
+    group.add_argument('-y', '--yaml', default=False, action='store_true', help='Output yaml')
+    group.add_argument('-j', '--json', default=False, action='store_true', help='Output json')
+    group.add_argument('-r', '--rows', default=False, action='store_true', help='Output key/value pair rows')
+    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Query commands to find packages with. ')
 
     sp = cmd.add_parser('doc', help='Start the documentation server')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='doc')
 
-    sp.add_argument( '-c', '--clean', default=False, action="store_true", help='When used with --reindex, delete the index and old files first. ')
-    sp.add_argument('-d', '--debug', default=False, action="store_true",             help='Debug mode ')
-    sp.add_argument( '-p', '--port', help='Run on a sepecific port, rather than pick a random one')
+    sp.add_argument('-c', '--clean', default=False, action="store_true",
+                    help='When used with --reindex, delete the index and old files first. ')
+    sp.add_argument('-d', '--debug', default=False, action="store_true", help='Debug mode ')
+    sp.add_argument('-p', '--port', help='Run on a sepecific port, rather than pick a random one')
 
     sp = cmd.add_parser('search', help='Search the full-text index')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='search')
-    sp.add_argument( 'term', type=str, nargs=argparse.REMAINDER, help='Query term')
-    sp.add_argument( '-l', '--list', default=False, action="store_true", help='List documents instead of search')
-    sp.add_argument( '-i', '--identifiers', default=False, action="store_true", help='Search only the identifiers index')
-    sp.add_argument( '-R', '--reindex', default=False, action="store_true", help='Generate documentation files and index the full-text search')
-    sp.add_argument( '-d', '--document', default=False, action="store_true",
+    sp.add_argument('term', type=str, nargs=argparse.REMAINDER, help='Query term')
+    sp.add_argument('-l', '--list', default=False, action="store_true", help='List documents instead of search')
+    sp.add_argument('-i', '--identifiers', default=False, action="store_true", help='Search only the identifiers index')
+    sp.add_argument('-R', '--reindex', default=False, action="store_true",
+                    help='Generate documentation files and index the full-text search')
+    sp.add_argument('-d', '--document', default=False, action="store_true",
                     help='Return the search document for an object id')
     sp.add_argument('-u', '--unparsed', default=False, action="store_true",
                     help='Pass the search term to the engine without parsing')
@@ -75,10 +84,10 @@ def root_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='sync')
 
+
 def root_command(args, rc):
     from ..library import new_library
     from . import global_logger
-    from ..dbexceptions import ConfigurationError
 
     l = new_library(rc.library(args.library_name))
     l.logger = global_logger
@@ -89,7 +98,6 @@ def root_command(args, rc):
 def root_list(args, l, rc):
     from ..cli import _print_bundle_list
     from ambry.warehouse.manifest import Manifest
-    from . import global_logger
     ##
     # Listing warehouses and collections is different
 
@@ -213,14 +221,13 @@ def root_info(args, l, rc):
                 ident.add_partition(p.identity)
 
     except NotFoundError:
-        #fatal("Could not find bundle file for '{}'".format(ident.path))
+        # fatal("Could not find bundle file for '{}'".format(ident.path))
         pass
 
     _print_info(l, ident, list_partitions=args.partitions)
 
 
 def root_meta(args, l, rc):
-
     ident = l.resolve(args.term)
 
     if not ident:
@@ -249,6 +256,7 @@ def root_meta(args, l, rc):
 
         v = None
         from ..util import AttrDict
+
         o = AttrDict()
         count = 0
 
@@ -284,11 +292,11 @@ def root_sync(args, l, config):
     l.logger.info("==== Sync Remotes")
     l.sync_remotes()
 
+
 def root_search(args, l, config):
     # This will fetch the data, but the return values aren't quite right
 
     term = ' '.join(args.term)
-
 
     if args.reindex:
 
@@ -301,7 +309,6 @@ def root_search(args, l, config):
             sys.stdout.write("\033[K{}\r".format(message))
             sys.stdout.flush()
 
-
         records = []
 
         source = 'civicknowledge.com-terms-geoterms'
@@ -309,12 +316,12 @@ def root_search(args, l, config):
         p = l.get(source).partition
 
         for row in p.rows:
-            records.append( dict(identifier=row['gvid'],type=row['type'],name=row['name']))
+            records.append(dict(identifier=row['gvid'], type=row['type'], name=row['name']))
 
         l.search.index_identifiers(records)
 
         print "Reindexing docs"
-        l.search.index_datasets(tick_f = tick)
+        l.search.index_datasets(tick_f=tick)
 
         return
 
@@ -324,9 +331,9 @@ def root_search(args, l, config):
         b = l.get(term)
 
         if b.partition:
-            print json.dumps(l.search.partition_doc(b.partition), indent = 4)
+            print json.dumps(l.search.partition_doc(b.partition), indent=4)
         else:
-            print json.dumps(l.search.dataset_doc(b), indent = 4)
+            print json.dumps(l.search.dataset_doc(b), indent=4)
 
         return
 
@@ -357,18 +364,15 @@ def root_search(args, l, config):
 
             print "search for ", parsed
 
-            datasets =  l.search.search_datasets(parsed)
+            datasets = l.search.search_datasets(parsed)
 
-            for  result in sorted(datasets.values(), key=lambda e: e.score, reverse=True):
-
+            for result in sorted(datasets.values(), key=lambda e: e.score, reverse=True):
                 ds = l.dataset(result.vid)
                 print result.score, result.vid, ds.name, ds.data.get('title'), list(result.partitions)[:5]
 
 
 def root_doc(args, l, rc):
-
-    from ambry.ui import app, configure_application, setup_logging
-    import ambry.ui.views as views
+    from ambry.ui import app, configure_application
     import os
 
     import logging

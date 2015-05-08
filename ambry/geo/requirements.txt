@@ -11,4 +11,8 @@ h5py # Must be installed externally on ubuntu
 #
 pyshp
 
-
+ogr
+osr
+dstk
+rtree
+shapely

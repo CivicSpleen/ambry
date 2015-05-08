@@ -6,8 +6,8 @@
 import os.path
 import re
 import sqlparse
-import markdown
-from ..util import memoize
+# import markdown
+# from ..util import memoize
 from pygments import highlight
 from pygments.lexers import PythonLexer
 from pygments.formatters import HtmlFormatter
@@ -79,7 +79,7 @@ class Manifest(object):
 
     def __init__(self, file_or_data, logger=None):
 
-        from ..dbexceptions import ConfigurationError
+        # from ..dbexceptions import ConfigurationError
 
         self.logger = logger if logger else null_logger()
         self.last_line = 0
@@ -223,7 +223,7 @@ class Manifest(object):
     def make_item(self, sections, tag, i, args):
         """Creates a new entry in sections, which will later have lines
         appended to it."""
-        from ..dbexceptions import ConfigurationError
+        # from ..dbexceptions import ConfigurationError
 
         if tag not in self.singles and tag not in self.multi_line:
             # Capture Error. These don't get save to the sections array.
@@ -346,7 +346,8 @@ class Manifest(object):
         for line_no in sorted(sections.keys()):
             section = sections[line_no]
 
-            if previous_section and section.tag == 'doc' and previous_section.tag in ['title', 'view', 'mview', 'extract']:
+            if previous_section and section.tag == 'doc' \
+                    and previous_section.tag in ['title', 'view', 'mview', 'extract']:
                 section.content['ref'] = previous_section.name
                 previous_section.doc = section.content
 
@@ -368,8 +369,8 @@ class Manifest(object):
 
     def _process_doc(self, section):
         import markdown
-        from ..util import normalize_newlines
-        import textwrap
+        # from ..util import normalize_newlines
+        # import textwrap
 
         t = '\n'.join(section.lines)
 
