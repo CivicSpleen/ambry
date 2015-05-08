@@ -43,8 +43,8 @@ class Geocoder(object):
                 suffix=None, city=None, state=None, zip=None):
         """Return a record from the geocoder table.
 
-        This function expects a partition, p, that holds a table named 'gecoder',
-        of the same structure as used in clarinova.com-geocode-casnd
+        This function expects a partition, p, that holds a table named
+        'gecoder', of the same structure as used in clarinova.com-geocode-casnd
 
         """
 

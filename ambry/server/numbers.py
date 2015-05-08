@@ -19,9 +19,10 @@ numbers:
 
 
 The key is a secret key that the client will use to assign an assignment class.
-The two classes are 'authoritative' and 'registered' Only central authority operators
-( like Clarinova ) should use the authoritative class. Other users can use the
-'registered' class. Without a key and class assignment, the callers us the 'unregistered' class.
+The two classes are 'authoritative' and 'registered' Only central authority
+operators ( like Clarinova ) should use the authoritative class. Other users can
+use the 'registered' class. Without a key and class assignment, the callers us
+the 'unregistered' class.
 
 Set the assignment class with the redis-cli:
 
@@ -39,10 +40,10 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 
-from bottle import error, hook, get, put, post, request, response, redirect
-from bottle import HTTPResponse, static_file, install, url
-from bottle import Bottle
-from bottle import run, debug  # @UnresolvedImport
+from bottle import error, hook, get, request, response  # , redirect, put, post
+from bottle import HTTPResponse, install  # , static_file, url
+# from bottle import Bottle
+from bottle import run  # , debug  # @UnresolvedImport
 
 from decorator import decorator  # @UnresolvedImport
 import logging
@@ -64,20 +65,18 @@ def capture_return_exception(e):
     import sys
     import traceback
 
-    (exc_type, exc_value, exc_traceback) = sys.exc_info()  # @UnusedVariable
+    # (exc_type, exc_value, exc_traceback) = sys.exc_info()  # @UnusedVariable
 
     tb_list = traceback.format_list(traceback.extract_tb(sys.exc_info()[2]))
 
-    return {'exception':
-            {'class': e.__class__.__name__,
-             'args': e.args,
-             'trace': "\n".join(tb_list)
-             }
-            }
+    return {'exception': {
+        'class': e.__class__.__name__,
+        'args': e.args,
+        'trace': "\n".join(tb_list)
+    }}
 
 
 class RedisPlugin(object):
-
     def __init__(self, pool, keyword='redis'):
 
         self.pool = pool
@@ -213,7 +212,7 @@ def request_delay(nxt, delay, delay_factor):
 
     try:
         delay = float(delay)
-    except:
+    except ValueError:
         delay = 1.0
 
     nxt = float(nxt) if nxt else now - 1
@@ -306,12 +305,13 @@ def get_next(redis, assignment_class=None, space=''):
 
     ok, since, nxt, delay, wait, safe = request_delay(nxt, delay, delay_factor)
 
-    with redis.pipeline() as pipe:
+    # with redis.pipeline() as pipe:
+    with redis.pipeline():
         redis.set(next_key, nxt)
         redis.set(delay_key, delay)
 
-    global_logger.info("ip={} ok={} since={} nxt={} delay={} wait={} safe={}"
-                       .format(ip, ok, since, nxt, delay, wait, safe))
+    global_logger.info("ip={} ok={} since={} nxt={} delay={} wait={} safe={}".format(ip, ok, since, nxt, delay, wait,
+                                                                                     safe))
 
     if ok:
         number = redis.incr(number_key)
@@ -325,9 +325,7 @@ def get_next(redis, assignment_class=None, space=''):
         redis.sadd(authallocated_key, dn)
 
     else:
-        number = None
-        raise exc.TooManyRequests(
-            " Access will resume in {} seconds".format(wait))
+        raise exc.TooManyRequests(" Access will resume in {} seconds".format(wait))
 
     return dict(ok=ok,
                 number=str(dn),
@@ -342,7 +340,7 @@ def get_next(redis, assignment_class=None, space=''):
 @CaptureException
 def get_next_space(redis, assignment_class=None, space=''):
 
-    if not space in NUMBER_SPACES:
+    if space not in NUMBER_SPACES:
         raise exc.NotFound('Invalid number space: {}'.format(space))
 
     return get_next(redis, assignment_class=assignment_class, space=space)

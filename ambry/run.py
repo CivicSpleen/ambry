@@ -17,10 +17,9 @@ def get_runconfig(path=None):
 
 
 class RunConfig(object):
-
     """Runtime configuration object.
 
-    The RunConfig object will search for a ambry.yaml file in multiple locations,
+    The RunConfig object will search for a ambry.yaml file in multiple locations
     including::
 
       /etc/ambry.yaml
@@ -28,8 +27,8 @@ class RunConfig(object):
       ./ambry.yaml
       A named path ( --config option )
 
-    It will start from the first directory, and for each one, try to load the file
-    and copy the values into an accumulator, with later values overwritting
+    It will start from the first directory, and for each one, try to load the
+    file and copy the values into an accumulator, with later values overwritting
     earlier ones.
 
     """
@@ -39,17 +38,15 @@ class RunConfig(object):
 
     ROOT_CONFIG = '/etc/ambry.yaml'
     USER_CONFIG = (os.getenv(AMBRY_CONFIG_ENV_VAR)
-                   if os.getenv(AMBRY_CONFIG_ENV_VAR)
-                   else os.path.expanduser('~/.ambry.yaml') )
+                   if os.getenv(AMBRY_CONFIG_ENV_VAR) else os.path.expanduser('~/.ambry.yaml'))
 
     # A special case for virtual environments -- look for a user config file there first.
     if os.getenv(AMBRY_CONFIG_ENV_VAR):
         USER_CONFIG = os.getenv(AMBRY_CONFIG_ENV_VAR)
-    elif os.getenv('VIRTUAL_ENV') and os.path.exists(os.path.join(os.getenv('VIRTUAL_ENV'),'.ambry.yaml')):
-        USER_CONFIG = os.path.join(os.getenv('VIRTUAL_ENV'),'.ambry.yaml')
+    elif os.getenv('VIRTUAL_ENV') and os.path.exists(os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')):
+        USER_CONFIG = os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')
     else:
         USER_CONFIG = os.path.expanduser('~/.ambry.yaml')
-
 
     USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
 
@@ -67,7 +64,7 @@ class RunConfig(object):
         """Create a new RunConfig object.
 
         Arguments
-        path -- If present, a yaml file to load last, overwriting earlier values.
+        path -- If present, a yaml file to load last, overwriting earlier values
           If it is an array, load only the files in the array.
 
         """
@@ -108,14 +105,14 @@ class RunConfig(object):
         object.__setattr__(self, 'files', files)
 
     def __getattr__(self, group):
-        '''Fetch a configuration group and return the contents as an
-        attribute-accessible dict'''
+        """Fetch a configuration group and return the contents as an
+        attribute-accessible dict"""
 
         return self.config.get(group, {})
 
     def __setattr__(self, group, v):
-        '''Fetch a configuration group and return the contents as an
-        attribute-accessible dict'''
+        """Fetch a configuration group and return the contents as an
+        attribute-accessible dict"""
 
         self.config[group] = v
 
@@ -129,10 +126,10 @@ class RunConfig(object):
     def group(self, name):
         """return a dict for a group of configuration items."""
 
-        if not name in self.config:
+        if name not in self.config:
             raise ConfigurationError(
-                ("No group '{}' in configuration.\n" + "Config has: {}\nLoaded: {}")
-                    .format(name,self.config.keys(),self.loaded))
+                "No group '{}' in configuration.\n"
+                "Config has: {}\nLoaded: {}".format(name, self.config.keys(), self.loaded))
 
         return self.config.get(name, {})
 
@@ -142,14 +139,10 @@ class RunConfig(object):
 
         g = self.group(group)
 
-        if not name in g:
+        if name not in g:
             raise ConfigurationError(
-                ("Could not find name '{}' in group '{}'. \n" +
-                 "Config has: {}\nLoaded: {}").format(
-                    name,
-                    group,
-                    g.keys(),
-                    self.loaded))
+                "Could not find name '{}' in group '{}'. \n"
+                "Config has: {}\nLoaded: {}".format(name, group, g.keys(), self.loaded))
 
         return copy.deepcopy(g[name])
 
@@ -192,7 +185,7 @@ class RunConfig(object):
         """Substitute keys in the dict e with functions defined in subs."""
 
         iters = 0
-        while (iters < 100):
+        while iters < 100:
             sub_count = 0
 
             for k, v, setter in self._yield_string(e):
@@ -213,6 +206,7 @@ class RunConfig(object):
         to_string = False
         if stream is None:
             import StringIO
+
             stream = StringIO.StringIO()
             to_string = True
 
@@ -243,12 +237,14 @@ class RunConfig(object):
 
         if isinstance(e, basestring):
             import urlparse
+
             parts = urlparse.urlparse(e)
 
             if not parts.scheme:
                 e = dict(dir=e)
             else:
                 from ckcache import parse_cache_string
+
                 e = parse_cache_string(e, root_dir)
 
         e = self._sub_strings(e, {
@@ -292,7 +288,7 @@ class RunConfig(object):
 
     def servers(self, name, default=None):
         """For configuring the server side of services."""
-        from util import parse_url_to_dict, unparse_url_dict
+        # from util import parse_url_to_dict, unparse_url_dict
 
         try:
             e = self.group_item('servers', name)
@@ -338,7 +334,7 @@ class RunConfig(object):
         except AttributeError:
             pairs = list(enumerate(remotes))
 
-        for name, remote in pairs :
+        for name, remote in pairs:
 
             if not isinstance(remote, basestring):
                 r[str(name)] = remote
@@ -346,8 +342,6 @@ class RunConfig(object):
                 r[str(name)] = parse_cache_string(remote, root_dir)
 
         return r
-
-
 
     def datarepo(self, name):
         e = self.group_item('datarepo', name)
@@ -362,7 +356,7 @@ class RunConfig(object):
         fs = self.group('filesystem')
         root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
 
-        if not 'source' in e:
+        if 'source' not in e:
             e['source'] = fs.get('source', None)
 
         e = self._sub_strings(e, {
@@ -376,18 +370,17 @@ class RunConfig(object):
         # This block will expand the remotes from strings to full configuration.
         # this willget converted again in the library to cache objects.
         if 'remotes' in e:
+            e['remotes'] = self.remotes(e['remotes'])  # Convert from dict or list to dict
 
-            e['remotes'] = self.remotes(e['remotes']) # Convert from dict or list to dict
-
-            e['remotes'] = { name:self._sub_strings(remote, {
+            e['remotes'] = {name: self._sub_strings(remote, {
                 'account': lambda k, v: self.account(v),
                 'source': lambda k, v: v.format(root=root_dir)
-            }) for name, remote in e['remotes'].items() if isinstance(remote, dict) }
+            }) for name, remote in e['remotes'].items() if isinstance(remote, dict)}
 
         e['_name'] = name
         e['root'] = root_dir
 
-        if not 'warehouses' in e:
+        if 'warehouses' not in e:
             e['warehouses'] = self.filesystem('warehouses')
 
         return e
@@ -430,6 +423,7 @@ class RunConfig(object):
 
         if isinstance(e, basestring):
             from util import parse_url_to_dict
+
             d = parse_url_to_dict(e)
 
             e = dict(
@@ -444,12 +438,8 @@ class RunConfig(object):
                 e['account'] = "{driver}://{username}@{server}/{dbname}".format(
                     **e)
 
-        e = self._sub_strings(e,
-                              {'dbname': lambda k,
-                               v: v.format(root=root_dir),
-                                  'account': lambda k,
-                                  v: self.account(v),
-                               })
+        e = self._sub_strings(e, {'dbname': lambda k, v: v.format(root=root_dir),
+                                  'account': lambda k, v: self.account(v)})
 
         # Copy account credentials into the database record, so there is consistent access
         # pattern
@@ -469,7 +459,7 @@ class RunConfig(object):
 
         fs = self.group('filesystem')
 
-        if not 'python' in fs:
+        if 'python' not in fs:
             return None
 
         root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
@@ -482,7 +472,7 @@ class RunConfig(object):
 
         fs = self.group('filesystem')
 
-        if not name in fs:
+        if name not in fs:
             return None
 
         root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
@@ -497,7 +487,7 @@ class RunConfig(object):
 
 
 def mp_run(mp_run_args):
-    ''' Run a bundle in a multi-processor child process. '''
+    """ Run a bundle in a multi-processor child process. """
     import traceback
     import sys
 
@@ -505,11 +495,11 @@ def mp_run(mp_run_args):
 
     try:
 
-        bundle_file = sys.argv[1]
+        # bundle_file = sys.argv[1]
 
         if not os.path.exists(os.path.join(os.getcwd(), 'bundle.yaml')):
-            print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file, so it isn't a bundle file. Did you mean to run 'cli'?".format(
-                os.getcwd())
+            print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file, " \
+                                 "so it isn't a bundle file. Did you mean to run 'cli'?".format(os.getcwd())
             sys.exit(1)
 
         # Import the bundle file from the
@@ -549,6 +539,7 @@ def mp_run(mp_run_args):
 def import_file(filename):
     """"""
     import imp
+
     (path, name) = os.path.split(filename)
     (name, _) = os.path.splitext(name)
     (_, modname) = os.path.split(path)
@@ -560,18 +551,20 @@ def import_file(filename):
 
     return imp.load_module(modname, file_, filename, data)
 
+
 if __name__ == '__main__':
     """When bambry is run, this routine will load the bundle module from a file
     wire it into the namespace and run it with the arguments passed into
     bambry."""
     import sys
+
     args = list(sys.argv)
 
     bundle_file = sys.argv[1]
 
     if not os.path.exists(os.path.join(os.getcwd(), 'bundle.yaml')):
-        print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file, so it isn't a bundle file. Did you mean to run 'cli'?".format(
-            os.getcwd())
+        print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file, " \
+                             "so it isn't a bundle file. Did you mean to run 'cli'?".format(os.getcwd())
         sys.exit(1)
 
     # Import the bundle file from the

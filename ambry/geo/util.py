@@ -40,16 +40,16 @@ def extents(
 
     return o
 
+
 # From http://danieljlewis.org/files/2010/06/Jenks.pdf
 #
-#  Use pysal instead!
+# Use pysal instead!
 # http://pysal.geodacenter.org/1.2/library/esda/mapclassify.html#pysal.esda.mapclassify.Natural_Breaks
 #
 # Or, a cleaner Python implementation: https://gist.github.com/drewda/1299198
 
 
 def jenks_breaks(dataList, numClass):
-
     print "A"
     mat1 = []
     for i in range(0, len(dataList) + 1):
@@ -250,10 +250,10 @@ def combine_envelopes(geos, use_bb=True, use_distance=False):
     while True:
         i, new_geos = _combine_envelopes(geos, use_bb, use_distance)
         old = len(geos)
-        geos = None
         geos = [g.Clone() for g in new_geos]
         loops += 1
-        print "{}) {} reductions. {} old, {} new".format(loops, i, old, len(geos))
+        print "{}) {} reductions. {} old, {} new".format(loops, i, old,
+                                                         len(geos))
         if old == len(geos):
             break
 
@@ -263,6 +263,7 @@ def combine_envelopes(geos, use_bb=True, use_distance=False):
 def _combine_envelopes(geometries, use_bb=True, use_distance=False):
     """Inner support function for combine_envelopes."""
     import ambry.geo as dg
+
     reductions = 0
     new_geometries = []
 
@@ -281,12 +282,13 @@ def _combine_envelopes(geometries, use_bb=True, use_distance=False):
 
             intersects = False
 
-            if (g1.Intersects(g2) or g1.Contains(g2) or g2.Contains(g1) or g1.Touches(g2)):
+            if (g1.Intersects(g2) or g1.Contains(g2) or g2.Contains(g1) or
+                    g1.Touches(g2)):
                 intersects = True
 
-            # If the final output is to onvert the reduced geometries to bounding boxes, it
-            # can have BBs that intersect that were not reduced, because the underlying geometries
-            # didn't intersect
+            # If the final output is to onvert the reduced geometries
+            # to bounding boxes, it can have BBs that intersect that were
+            # not reduced, because the underlying geometries didn't intersect
             if use_bb and not intersects:
                 bb1 = dg.create_bb(g1.GetEnvelope(), g1.GetSpatialReference())
                 bb2 = dg.create_bb(g2.GetEnvelope(), g2.GetSpatialReference())
@@ -332,39 +334,48 @@ def bound_clusters_in_raster(
     :param a: A numpy array that contains the data inwhich to find clusters
     :type a: Numpy array
 
-    :param aa: The analysis object that sets the coordinate system for the area that contains the array
+    :param aa: The analysis object that sets the coordinate system for the area
+               that contains the array
     :type aa: ambry.geo.AnalysisArea
 
-    :param shape_file_dir: The path to a directory where generated files will be stored.
+    :param shape_file_dir: The path to a directory where generated files will be
+                           stored.
     :type shape_file_dir: string
 
-    :param contour_interval: The difference between successive contour intervals.
+    :param contour_interval: The difference between successive contour
+                             intervals.
     :type contour_interval: float
 
     :param contour_value:
     :type contour_value: float
 
-    :param use_bb: If True, compute nearness and intersection using the contours bounding boxes, not the geometry
+    :param use_bb: If True, compute nearness and intersection using the contours
+                   bounding boxes, not the geometry
     :type use_bb: bool
 
-    :param use_distance: If not False, consider contours that are closer than this value to be overlapping.
+    :param use_distance: If not False, consider contours that are closer than
+                         this value to be overlapping.
     :type : number
 
-    :rtype: Returns a list of dictionaries, one for each of the combined bounding boxes
+    :rtype: Returns a list of dictionaries, one for each of the combined
+            bounding boxes
 
     This method will store, in the `shape_file_dir` directory:
 
     * a GeoTIFF representation of the array `a`
     * An ERSI shapefile layer  named `countours`, holding all of the countours.
-    * A layer named `contour_bounds` with the bounding boxes for all of the contours with value `contour_value`
-    * A layer named `combined_bounds` with bounding boxes of intersecting and nearby boxes rom `contour_bounds`
+    * A layer named `contour_bounds` with the bounding boxes for all of the
+        contours with value `contour_value`
+    * A layer named `combined_bounds` with bounding boxes of intersecting and
+        nearby boxes rom `contour_bounds`
 
     The routine will iteratively combine contours that overlap.
 
-    If `use_distance` is set to a number, and contours that are closer than this value will be joined.
+    If `use_distance` is set to a number, and contours that are closer than this
+    value will be joined.
 
-    If `use_bb` is set, the intersection and distance computations use the bounding boxes of the contours,
-    not the contours themselves.
+    If `use_bb` is set, the intersection and distance computations use the
+    bounding boxes of the contours, not the contours themselves.
 
     """
 
@@ -396,16 +407,17 @@ def bound_clusters_in_raster(
     ds.GetRasterBand(1).SetNoDataValue(0)
     ds.GetRasterBand(1).WriteArray(np.flipud(a))
 
-    gdal.ContourGenerate(ds.GetRasterBand(1),
-                         contour_interval,  # contourInterval
-                         0,   # contourBase
-                         [],  # fixedLevelCount
-                         0,  # useNoData
-                         0,  # noDataValue
-                         ogr_lyr,  # destination layer
-                         0,  # idField
-                         1  # elevation field
-                         )
+    gdal.ContourGenerate(
+        ds.GetRasterBand(1),
+        contour_interval,  # contourInterval
+        0,  # contourBase
+        [],  # fixedLevelCount
+        0,  # useNoData
+        0,  # noDataValue
+        ogr_lyr,  # destination layer
+        0,  # idField
+        1  # elevation field
+    )
 
     # Get buffered bounding boxes around each of the hotspots,
     # and put them into a new layer.
@@ -421,9 +433,9 @@ def bound_clusters_in_raster(
         f.SetGeometry(bb)
         bound_lyr.CreateFeature(f)
 
-    # Doing a full loop instead of a list comprehension b/c the way that comprehensions
-    # compose arrays results in segfaults, probably because a copied geometry
-    # object is being released before being used.
+    # Doing a full loop instead of a list comprehension b/c the way that
+    # comprehensions compose arrays results in segfaults, probably because a
+    # copied geometry object is being released before being used.
     geos = []
     for i in range(bound_lyr.GetFeatureCount()):
         f = bound_lyr.GetFeature(i)
@@ -458,40 +470,39 @@ def bound_clusters_in_raster(
 
     return envelopes
 
-geo_type_map = {'1': 'GEOMETRY',
-                '2': 'GEOMETRYCOLLECTION',
-                '3': 'POINT',
-                'Point': 'POINT',
-                '4': 'MULTIPOINT',
-                '5': 'POLYGON',
-                '6': 'MULTIPOLYGON',
-                '7': 'LINESTRING',
-                'Line String': 'LINESTRING',
-                '3D Line String': 'LINESTRING',
-                '8': 'MULTILINESTRING',
-                '3D Multi Line String': 'MULTILINESTRING',
-                'Multi Line String': 'MULTILINESTRING',
-                '3D Point': 'POINT',
-                '3D Multi Point': 'MULTIPOINT',
-                'Polygon': 'POLYGON',
-                '3D Polygon': 'POLYGON',
-                'Multi Polygon': 'MULTIPOLYGON',
-                '3D Multi Polygon': 'MULTIPOLYGON',
-                }
+
+geo_type_map = {
+    '1': 'GEOMETRY',
+    '2': 'GEOMETRYCOLLECTION',
+    '3': 'POINT',
+    'Point': 'POINT',
+    '4': 'MULTIPOINT',
+    '5': 'POLYGON',
+    '6': 'MULTIPOLYGON',
+    '7': 'LINESTRING',
+    'Line String': 'LINESTRING',
+    '3D Line String': 'LINESTRING',
+    '8': 'MULTILINESTRING',
+    '3D Multi Line String': 'MULTILINESTRING',
+    'Multi Line String': 'MULTILINESTRING',
+    '3D Point': 'POINT',
+    '3D Multi Point': 'MULTIPOINT',
+    'Polygon': 'POLYGON',
+    '3D Polygon': 'POLYGON',
+    'Multi Polygon': 'MULTIPOLYGON',
+    '3D Multi Polygon': 'MULTIPOLYGON',
+}
 
 
 def get_type_from_geometry(geometry):
-
     return geo_type_map[ogr.GeometryTypeToName(geometry.GetGeometryType())]
 
 
 def get_shapefile_geometry_types(shape_file):
-
     shapes = ogr.Open(shape_file)
     layer = shapes.GetLayer(0)
 
     types = set()
-    type_ = None
 
     limit = 20000
     count = layer.GetFeatureCount()
@@ -518,20 +529,17 @@ def get_shapefile_geometry_types(shape_file):
     if len(types) == 1:
         type_ = list(types).pop()
     elif len(types) == 2:
-        if set(('POLYGON', 'MULTIPOLYGON')) & types == set(('POLYGON', 'MULTIPOLYGON')):
+        if {'POLYGON', 'MULTIPOLYGON'} & types == {'POLYGON', 'MULTIPOLYGON'}:
             type_ = 'MULTIPOLYGON'
-        elif set(('POINT', 'MULTIPOINT')) & types == set(('POINT', 'MULTIPOINT')):
+        elif {'POINT', 'MULTIPOINT'} & types == {'POINT', 'MULTIPOINT'}:
             type_ = 'MULTIPOINT'
-        elif set(('LINESTRING', 'MULTILINESTRING')) & types == set(('LINESTRING', 'MULTILINESTRING')):
+        elif {'LINESTRING', 'MULTILINESTRING'} & types == {'LINESTRING', 'MULTILINESTRING'}:
             type_ = 'MULTILINESTRING'
         else:
-            raise Exception(
-                "Didn't get valid combination of types: " +
-                str(types))
+            raise Exception("Didn't get valid combination of types: " + str(types))
     else:
-        raise Exception(
-            "Can't deal with files that have three more type_ different geometry types, or less than one: " +
-            str(types))
+        raise Exception("Can't deal with files that have three more type_ "
+                        "different geometry types, or less than one: " + str(types))
 
     return types, type_
 
@@ -546,16 +554,18 @@ def segment_points(
     """A generator that yields information that can be used to classify points
     into areas.
 
-    :param areas: A `Bundle`or `partition` object with access to the places database
-    :param query: A Query to return places. Must return,  for each row,  fields names 'id' ,'name'
+    :param areas: A `Bundle`or `partition` object with access to the places
+                  database
+    :param query: A Query to return places. Must return,  for each row,  fields
+                  names 'id' ,'name'
     and 'wkt'
-    :param bb_type: Either 'll' to use lon/lat for the bounding box query, or 'xy' to use x/y for the query
+    :param bb_type: Either 'll' to use lon/lat for the bounding box query,
+                    or 'xy' to use x/y for the query
     :rtype: a `LibraryDb` object
 
 
-    The 'wkt' field returned by the query is the Well Know Text representation of the area
-    geometry
-
+    The 'wkt' field returned by the query is the Well Know Text representation
+    of the area geometry
     """
 
     import osr
@@ -568,20 +578,23 @@ def segment_points(
     transform = osr.CoordinateTransformation(source_srs, dest_srs)
 
     if query_template is None:
-    # Took the 'empty_clause' out because it is really slow if there is no
-    # index.
-        empty_clause = "AND ({target_col} IS NULL OR {target_col} = 'NONE' OR {target_col} = '-')"
+        # Took the 'empty_clause' out because it is really slow if there is no
+        # index.
+        # empty_clause = "AND ({target_col} IS NULL OR {target_col} = 'NONE' " \
+        #                "OR {target_col} = '-')"
         query_template = "SELECT * FROM {table_name} WHERE {bb_clause}  "
 
     if places_query is None:
-        places_query = "SELECT *, AsText(geometry) AS wkt FROM {} ORDER BY area ASC".format(
-            areas.identity.table)
+        places_query = "SELECT *, AsText(geometry) AS wkt FROM {} " \
+                       "ORDER BY area ASC".format(areas.identity.table)
 
     if bb_clause is None:
         if bb_type == 'll':
-            bb_clause = "lon BETWEEN {x1} AND {x2} AND lat BETWEEN {y1} and {y2}"
+            bb_clause = "lon BETWEEN {x1} AND {x2} AND lat " \
+                        "BETWEEN {y1} and {y2}"
         elif bb_type == 'xy':
-            bb_clause = "x BETWEEN {x1} AND {x2} AND y BETWEEN {y1} and {y2}"
+            bb_clause = "x BETWEEN {x1} AND {x2} AND y " \
+                        "BETWEEN {y1} and {y2}"
         else:
             raise ValueError(
                 "Must use 'll' or 'xy' for bb_type. got: {}".format(bb_type))
@@ -631,11 +644,12 @@ def find_geo_containment(containers, containeds, sink, method='contains'):
 
     `Coords` is a tuple of floats and `contained_obj` is any object.
 
-    If coords is two floats, they are the X and Y for a point. If it is four, they are the  (minx, miny, maxx, maxy) for the
-    bounding box of a geometry.
+    If coords is two floats, they are the X and Y for a point. If it is four, they are the  (minx, miny, maxx, maxy)
+    for the bounding box of a geometry.
 
 
-    For each point that is contained in a polygon, the routine calls sends to the `sink` generator, which should have a line like:
+    For each point that is contained in a polygon, the routine calls sends to the `sink` generator, which should have
+    a line like:
 
         Point(x,y), contained_obj, poly_obj)  = yield
 
@@ -667,7 +681,8 @@ def find_geo_containment(containers, containeds, sink, method='contains'):
 
         if len(contained_coords) == 2:
             contained = Point(contained_coords)
-        elif len(contained_coords) == 4 and not isinstance(contained_coords[0], Iterable):
+        elif len(contained_coords) == 4 and not isinstance(contained_coords[0],
+                                                           Iterable):
             # Assume it is bounding box coords. If the elements were iterables ( x,y points ) it
             # could be something else.
             # bounding boxes are: (minx, miny, maxx, maxy)
@@ -715,8 +730,8 @@ def find_containment(containers, containeds, method='contains'):
 
     `Coords` is a tuple of floats and `contained_obj` is any object.
 
-    If coords is two floats, they are the X and Y for a point. If it is four, they are the  (minx, miny, maxx, maxy) for the
-    bounding box of a geometry.
+    If coords is two floats, they are the X and Y for a point. If it is four, they are the  (minx, miny, maxx, maxy)
+    for the bounding box of a geometry.
 
 
     For each point that is contained in a polygon, the routine yields:
@@ -755,7 +770,8 @@ def find_containment(containers, containeds, method='contains'):
 
         if len(contained_coords) == 2:
             contained = Point(contained_coords)
-        elif len(contained_coords) == 4 and not isinstance(contained_coords[0], Iterable):
+        elif len(contained_coords) == 4 and not isinstance(contained_coords[0],
+                                                           Iterable):
             # Assume it is bounding box coords. If the elements were iterables ( x,y points ) it
             # could be something else.
             # bounding boxes are: (minx, miny, maxx, maxy)

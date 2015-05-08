@@ -13,7 +13,7 @@ class HdfDb(Hdf5File, DatabaseInterface):
     
     EXTENSION = '.hdf'
     
-    def __init__(self,  partition):
+    def __init__(self, partition):
         self.partition = partition
         self.bundle = partition.bundle
 
@@ -46,5 +46,4 @@ class HdfDb(Hdf5File, DatabaseInterface):
         pass
 
     def close(self):
-        pass # Need ot figure out how to do this ...
-    
+        pass  # Need ot figure out how to do this ...

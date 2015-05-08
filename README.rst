@@ -4,7 +4,8 @@ Ambry Databundles
 Install
 =======
 
-See: http://ambry.io
+See http://ambry.io for the general documentation, http://docs.ambry.io/en/latest/install_config/install.html for instgallation, 
+and http://docs.ambry.io/en/latest/install_config/configuration.html for additional configuration. 
 
 Setup with Miniconda on Mac
 ===========================
