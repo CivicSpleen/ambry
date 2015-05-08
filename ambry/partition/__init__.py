@@ -337,6 +337,7 @@ class PartitionBase(PartitionInterface):
         return cls._id_class._name_class.PATH_EXTENSION
 
     def html_doc(self):
+        # TODO: where is text module
         from ..text import PartitionDoc
 
         pd = PartitionDoc(self)

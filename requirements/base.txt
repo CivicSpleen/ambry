@@ -33,3 +33,8 @@ sqlparse==0.1.15
 unicodecsv==0.12.0
 Werkzeug==0.10.4
 whoosh==2.7.0
+
+xlrd
+tables
+watchdog
+sas7bdat

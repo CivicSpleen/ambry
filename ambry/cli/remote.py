@@ -91,6 +91,7 @@ def remote_command(args, rc):
 
 
 def remote_info(args, l, rc):
+    from boto.exception import S3ResponseError
     if args.term:
         ip, ident = l.remote_resolver.resolve_ref_one(args.term)
 
@@ -104,7 +105,7 @@ def remote_info(args, l, rc):
                 lst = remote.list()
                 ok = 'OK {} bundles'.format(len(lst))
             except S3ResponseError as e:
-                ok = 'S3 Error: '+str(e)
+                ok = 'S3 Error: ' + str(e)
             except Exception as e:
                 ok = 'Error : '+str(e)
 

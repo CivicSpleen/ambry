@@ -7,15 +7,15 @@ included in this distribution as LICENSE.txt
 """
 
 from . import DatabaseInterface  # @UnresolvedImport
-from .inserter import ValueInserter
-import os
-import logging
-from ambry.util import get_logger, memoize
-from ..database.inserter import SegmentedInserter, SegmentInserterFactory
+# from .inserter import ValueInserter
+# import os
+# import logging
+from ambry.util import get_logger  # , memoize
+# from ..database.inserter import SegmentedInserter, SegmentInserterFactory
 from contextlib import contextmanager
 import atexit
 import weakref
-import pdb
+# import pdb
 
 global_logger = get_logger(__name__)
 # global_logger.setLevel(logging.DEBUG)
@@ -156,7 +156,7 @@ class RelationalDatabase(DatabaseInterface):
             # contextual_connect to allow threadlocal connections
             conn = self.engine.contextual_connect()
             conn.close()
-        except Exception as e:
+        except Exception:
             return False
 
         if self.is_empty():
@@ -210,7 +210,8 @@ class RelationalDatabase(DatabaseInterface):
         import inspect
 
         for cls in inspect.getmro(self.__class__):
-            for n, f in inspect.getmembers(cls, lambda m: inspect.ismethod(m) and m.__func__ in m.im_class.__dict__.values()):
+            for n, f in inspect.getmembers(
+                    cls, lambda m: inspect.ismethod(m) and m.__func__ in m.im_class.__dict__.values()):
                 if n == '_post_create':
                     f(self)
 
@@ -256,18 +257,15 @@ class RelationalDatabase(DatabaseInterface):
         if not self._engine:
 
             self.require_path()
-            path = self.dsn
+            # path = self.dsn
+            #
+            # if path == 'sqlite:///:memory:':
+            #     path = 'sqlite://'
 
-            if path == 'sqlite:///:memory:':
-                path = 'sqlite://'
-
-            kwargs = dict(
-                echo=False
-            )
+            kwargs = dict(echo=False)
 
             if self.driver in ('sqlite', 'spatialite'):
-                kwargs['connect_args'] = {
-                    'detect_types': sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES}
+                kwargs['connect_args'] = {'detect_types': sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES}
                 kwargs['native_datetime'] = True
 
             self._engine = create_engine(
@@ -347,8 +345,8 @@ class RelationalDatabase(DatabaseInterface):
     def connection_context(self):
         raise Exception
         # connection = self.engine.connect()
-        yield connection
-        connection.close()
+        # yield connection
+        # connection.close()
 
     def require_path(self):
         """Used in engine but only implemented for sqlite."""
@@ -365,7 +363,8 @@ class RelationalDatabase(DatabaseInterface):
 
         # print "before commit!", self.dsn
 
-        # if self.dsn == 'sqlite:////Volumes/DataLibrary/devel/source/clarinova-private/clarinova.com/casnd/geocode/build/clarinova.com/geocode-casnd-1.0.5.db':
+        # if self.dsn == 'sqlite:////Volumes/DataLibrary/devel/source/clarinova-private/clarinova.com/casnd/geocode' \
+        #                '/build/clarinova.com/geocode-casnd-1.0.5.db':
         #    import pdb; pdb.set_trace()
 
     @property
@@ -374,7 +373,8 @@ class RelationalDatabase(DatabaseInterface):
 
         if not self._session:
 
-            engine = self.engine  # Getting it might construct it.
+            # engine = self.engine  # Getting it might construct it.
+            self.engine
 
             self._session = self.Session()
 
@@ -572,7 +572,7 @@ class RelationalBundleDatabaseMixin(object):
         """Create the database from the base SQL."""
         from ambry.orm import Dataset, Partition, Table, Column, File, Code, ColumnStat
         from ..identity import Identity
-        from sqlalchemy.orm import sessionmaker
+        # from sqlalchemy.orm import sessionmaker
 
         tables = [Dataset, Partition, Table, Column, File, Code, ColumnStat]
 
@@ -661,7 +661,7 @@ class RelationalBundleDatabaseMixin(object):
 
     def _post_create(self):
         from ..library.database import ROOT_CONFIG_NAME_V
-        from sqlalchemy.orm import sessionmaker
+        # from sqlalchemy.orm import sessionmaker
 
         self.set_config_value(
             self.bundle.identity.vid,

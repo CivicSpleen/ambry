@@ -7,18 +7,17 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 import logging
-import os
 
+import os
 from ..filesystem import BundleFilesystem
 from ..schema import Schema
 from ..partitions import Partitions
-from ..util import get_logger, clear_logger
+from ..util import get_logger
 from ..dbexceptions import ConfigurationError, ProcessError
 from ..util import memoize
 
 
 class Bundle(object):
-
     """Represents a bundle, including all configuration and top level
     operations."""
 
@@ -46,8 +45,6 @@ class Bundle(object):
 
         self.run_args = vars(null_args())
 
-
-
     def __del__(self):
         try:
             self.close()
@@ -58,6 +55,7 @@ class Bundle(object):
         """Close the bundle database and all partition databases, committing
         and closing any sessions and connections."""
         from ..dbexceptions import NotFoundError, DatabaseMissingError
+
         self.partitions.close()
 
         if self._database:
@@ -84,6 +82,7 @@ class Bundle(object):
     def logger(self):
         """The bundle logger."""
         import sys
+
         if not self._logger:
 
             try:
@@ -92,7 +91,7 @@ class Bundle(object):
 
                 if self.run_args.multi > 1:
                     template = "%(levelname)s " + ident.sname + \
-                        " %(process)s %(message)s"
+                               " %(process)s %(message)s"
 
             except:
                 template = "%(message)s"
@@ -217,6 +216,7 @@ class Bundle(object):
             return t.format(**d)
         except KeyError as e:
             import json
+
             self.error(
                 "Failed to substitute template in {}. Key Error: {}".format(
                     self.identity,
@@ -307,12 +307,14 @@ class Bundle(object):
 
         """
         import sys
+
         self.logger.fatal(message)
         sys.stderr.flush()
         if self.exit_on_fatal:
             sys.exit(1)
         else:
             from ..dbexceptions import FatalError
+
             raise FatalError(message)
 
     def _build_info(self):
@@ -324,12 +326,12 @@ class Bundle(object):
             created=process.get('dbcreated', ''),
             prepared=process.get('prepared', ''),
             built=process.get('built' ''),
-            build_time=str(round(float(process['buildtime']), 2)) +
-            's' if process.get('buildtime', False) else '')
+            build_time=str(round(float(process['buildtime']), 2)) + 's' if process.get('buildtime', False) else '')
 
     def _info(self, identity=None):
         """Return a nested, ordered dict  of information about the bundle."""
         from collections import OrderedDict
+
         d = OrderedDict()
 
         d['identity'] = identity if identity else self.identity._info()
@@ -382,7 +384,6 @@ class Bundle(object):
 
 
 class DbBundleBase(Bundle):
-
     """Base class for DbBundle and LibraryDbBundle.
 
     A better design would for one to derive fro the other; this is
@@ -584,7 +585,7 @@ class LibraryDbBundle(DbBundleBase):
             raise NotFoundError("Failed to find dataset for id {} in {} ".format(self._dataset_id, self.database.dsn))
 
         except OperationalError:
-            raise NotFoundError("No dataset record found. Probably not a bundle (c): '{}'" .format(self.path))
+            raise NotFoundError("No dataset record found. Probably not a bundle (c): '{}'".format(self.path))
 
         except Exception as e:
             from ..util import get_logger
@@ -595,7 +596,6 @@ class LibraryDbBundle(DbBundleBase):
 
 
 class BuildBundle(Bundle):
-
     """A bundle class for building bundle files.
 
     Uses the bundle.yaml file for identity configuration
@@ -617,13 +617,12 @@ class BuildBundle(Bundle):
     def __init__(self, bundle_dir=None):
         """"""
         from ..database.sqlite import BundleLockContext
-        import os
 
         super(BuildBundle, self).__init__()
 
         if bundle_dir is None:
             import inspect
-            import os
+
             bundle_dir = os.path.abspath(
                 os.path.dirname(
                     inspect.getfile(
@@ -631,6 +630,7 @@ class BuildBundle(Bundle):
 
         if bundle_dir is None or not os.path.isdir(bundle_dir):
             from ambry.dbexceptions import BundleError
+
             raise BundleError("BuildBundle must be constructed on a cache. " +
                               str(bundle_dir) + " is not a directory")
 
@@ -641,6 +641,7 @@ class BuildBundle(Bundle):
         self.filesystem = BundleFilesystem(self, self.bundle_dir)
 
         import base64
+
         self.logid = base64.urlsafe_b64encode(os.urandom(6))
         self.ptick_count = 0
 
@@ -648,6 +649,7 @@ class BuildBundle(Bundle):
         lib_dir = self.filesystem.path('lib')
         if os.path.exists(lib_dir):
             import sys
+
             sys.path.append(lib_dir)
 
         self._build_time = None
@@ -670,11 +672,12 @@ class BuildBundle(Bundle):
 
         except (OperationalError, NoResultFound):
             raise NotFoundError(
-                "No dataset record found. Probably not a bundle (d): '{}'" .format(
+                "No dataset record found. Probably not a bundle (d): '{}'".format(
                     self.path))
 
         except Exception:
             from ..util import get_logger
+
             raise
 
     @property
@@ -720,6 +723,7 @@ class BuildBundle(Bundle):
     @memoize
     def metadata(self):
         from ambry.bundle.meta import Top
+
         return Top(path=self.bundle_dir)
 
     @property
@@ -789,7 +793,7 @@ class BuildBundle(Bundle):
         self.close()
 
         # Now, update this version to be one more.
-        self.identity
+        self.identity()
 
         identity.on.revision = prior_version + 1
 
@@ -836,7 +840,7 @@ class BuildBundle(Bundle):
 
         # Ensure there is an entry for every revision, if only to nag the maintainer to fill it in.
         # for i in range(1, md.identity.revision+1):
-        #    md.versions[i]
+        # md.versions[i]
         #    if i == md.identity.revision:
         #        md.versions[i].version = md.identity.version
 
@@ -898,7 +902,6 @@ class BuildBundle(Bundle):
 
         if os.path.exists(df):
             with open(df) as dfo:
-
                 with open(self.filesystem.path(hdf), 'w') as hdfo:
                     html = html_template.format(
                         content=markdown.markdown(
@@ -935,6 +938,7 @@ class BuildBundle(Bundle):
 
         if not v:
             from ..dbexceptions import ConfigurationError
+
             raise ConfigurationError(
                 "No key in sources for '{}' ".format(name))
 
@@ -1044,7 +1048,7 @@ class BuildBundle(Bundle):
         # Should check for a shared download file -- specified
         # as part of the library; Don't delete that.
         # if not self.cache_downloads :
-        #    self.rm_rf(self.filesystem.downloads_path())
+        # self.rm_rf(self.filesystem.downloads_path())
 
         self.set_build_state('cleaned')
 
@@ -1066,6 +1070,7 @@ class BuildBundle(Bundle):
     def ptick(self, message):
         """Writes a tick to the stdout, without a space or newline."""
         import sys
+
         sys.stdout.write(message)
         sys.stdout.flush()
 
@@ -1164,6 +1169,7 @@ class BuildBundle(Bundle):
 
         try:
             from ..orm import Dataset
+
             b = self.library.resolve(
                 self.identity.id_,
                 location=[
@@ -1172,7 +1178,7 @@ class BuildBundle(Bundle):
             if b and b.on.revision >= self.identity.on.revision and not self.run_args.force:
                 self.fatal(
                     ("Can't build this version. Library {} has version {} of {}"
-                     " which is less than or equal this version {}") .format(
+                     " which is less than or equal this version {}").format(
                         self.library.database.dsn,
                         b.on.revision,
                         b.fqname,
@@ -1327,7 +1333,6 @@ class BuildBundle(Bundle):
                 self.log("---- Done Preparing ----")
             else:
                 self.log("---- Prepare exited with failure ----")
-                r = False
         else:
             self.log("---- Skipping prepare ---- ")
 
@@ -1404,7 +1409,7 @@ class BuildBundle(Bundle):
         if f:
             try:
                 f()
-            except AssertionError as e:
+            except AssertionError:
                 import traceback
                 import sys
 
@@ -1581,7 +1586,6 @@ class BuildBundle(Bundle):
     def build_state(self):
         from ..dbexceptions import DatabaseMissingError, NotFoundError
 
-
         try:
             c = self.get_value('process', 'state')
             return c.value
@@ -1597,7 +1601,6 @@ class BuildBundle(Bundle):
 
         if self.library.source:
             self.library.source.set_bundle_state(self.identity, state)
-
 
     def build_main(self):
         """This is the methods that is actually called in do_build; it
@@ -1723,6 +1726,7 @@ class BuildBundle(Bundle):
     def post_update(self):
         from datetime import datetime
         from time import time
+
         with self.session:
             self.set_value('process', 'updated', datetime.now().isoformat())
             self.set_value('process', 'updatetime', time() - self._update_time)
@@ -1742,7 +1746,6 @@ class BuildBundle(Bundle):
         self.close()
 
         return True
-
 
     def do_update(self):
 
@@ -1817,6 +1820,7 @@ class BuildBundle(Bundle):
 
     def post_install(self):
         from datetime import datetime
+
         self.set_value('process', 'installed', datetime.now().isoformat())
         self.set_build_state('installed')
 

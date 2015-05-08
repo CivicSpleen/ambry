@@ -37,17 +37,14 @@ class RowSelector(object):
 
         if self.index_col:
             def gen():
-                header = None
-                for i, row in enumerate(self.partition.query(
-                        self.sql, *self.args, **self.kwargs)):
+                for i, row in enumerate(self.partition.query(self.sql, *self.args, **self.kwargs)):
                     if i == 0:
                         yield [k for k, v in row.items()]
 
                     yield (row[self.index_col], list(row))
         else:
             def gen():
-                for i, row in enumerate(self.partition.query(
-                        self.sql, *self.args, **self.kwargs)):
+                for i, row in enumerate(self.partition.query(self.sql, *self.args, **self.kwargs)):
                     if i == 0:
                         yield [k for k, v in row.items()]
                     yield (i, list(row))

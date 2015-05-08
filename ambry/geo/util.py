@@ -250,7 +250,6 @@ def combine_envelopes(geos, use_bb=True, use_distance=False):
     while True:
         i, new_geos = _combine_envelopes(geos, use_bb, use_distance)
         old = len(geos)
-        geos = None
         geos = [g.Clone() for g in new_geos]
         loops += 1
         print "{}) {} reductions. {} old, {} new".format(loops, i, old,
@@ -504,7 +503,6 @@ def get_shapefile_geometry_types(shape_file):
     layer = shapes.GetLayer(0)
 
     types = set()
-    type_ = None
 
     limit = 20000
     count = layer.GetFeatureCount()
@@ -531,24 +529,17 @@ def get_shapefile_geometry_types(shape_file):
     if len(types) == 1:
         type_ = list(types).pop()
     elif len(types) == 2:
-        if set(('POLYGON', 'MULTIPOLYGON')) & types == \
-                set(('POLYGON', 'MULTIPOLYGON')):
+        if {'POLYGON', 'MULTIPOLYGON'} & types == {'POLYGON', 'MULTIPOLYGON'}:
             type_ = 'MULTIPOLYGON'
-        elif set(('POINT', 'MULTIPOINT')) & types == \
-                set(('POINT', 'MULTIPOINT')):
+        elif {'POINT', 'MULTIPOINT'} & types == {'POINT', 'MULTIPOINT'}:
             type_ = 'MULTIPOINT'
-        elif set(('LINESTRING', 'MULTILINESTRING')) & types == \
-                set(('LINESTRING', 'MULTILINESTRING')):
+        elif {'LINESTRING', 'MULTILINESTRING'} & types == {'LINESTRING', 'MULTILINESTRING'}:
             type_ = 'MULTILINESTRING'
         else:
-            raise Exception(
-                "Didn't get valid combination of types: " +
-                str(types))
+            raise Exception("Didn't get valid combination of types: " + str(types))
     else:
-        raise Exception(
-            "Can't deal with files that have three more type_ different "
-            "geometry types, or less than one: " +
-            str(types))
+        raise Exception("Can't deal with files that have three more type_ "
+                        "different geometry types, or less than one: " + str(types))
 
     return types, type_
 
@@ -589,8 +580,8 @@ def segment_points(
     if query_template is None:
         # Took the 'empty_clause' out because it is really slow if there is no
         # index.
-        empty_clause = "AND ({target_col} IS NULL OR {target_col} = 'NONE' " \
-                       "OR {target_col} = '-')"
+        # empty_clause = "AND ({target_col} IS NULL OR {target_col} = 'NONE' " \
+        #                "OR {target_col} = '-')"
         query_template = "SELECT * FROM {table_name} WHERE {bb_clause}  "
 
     if places_query is None:
@@ -653,11 +644,12 @@ def find_geo_containment(containers, containeds, sink, method='contains'):
 
     `Coords` is a tuple of floats and `contained_obj` is any object.
 
-    If coords is two floats, they are the X and Y for a point. If it is four, they are the  (minx, miny, maxx, maxy) for the
-    bounding box of a geometry.
+    If coords is two floats, they are the X and Y for a point. If it is four, they are the  (minx, miny, maxx, maxy)
+    for the bounding box of a geometry.
 
 
-    For each point that is contained in a polygon, the routine calls sends to the `sink` generator, which should have a line like:
+    For each point that is contained in a polygon, the routine calls sends to the `sink` generator, which should have
+    a line like:
 
         Point(x,y), contained_obj, poly_obj)  = yield
 
@@ -738,8 +730,8 @@ def find_containment(containers, containeds, method='contains'):
 
     `Coords` is a tuple of floats and `contained_obj` is any object.
 
-    If coords is two floats, they are the X and Y for a point. If it is four, they are the  (minx, miny, maxx, maxy) for the
-    bounding box of a geometry.
+    If coords is two floats, they are the X and Y for a point. If it is four, they are the  (minx, miny, maxx, maxy)
+    for the bounding box of a geometry.
 
 
     For each point that is contained in a polygon, the routine yields:

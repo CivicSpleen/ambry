@@ -1,16 +1,14 @@
 """Intuit data types for rows of values."""
 __author__ = 'eric'
 
-
-from collections import defaultdict, deque
+from collections import deque
 import datetime
 
 
 def test_float(v):
-
     # Fixed-width integer codes are actually strings.
     # if v and v[0]  == '0' and len(v) > 1:
-    #    return 0
+    # return 0
 
     try:
         float(v)
@@ -20,10 +18,9 @@ def test_float(v):
 
 
 def test_int(v):
-
     # Fixed-width integer codes are actually strings.
     # if v and v[0] == '0' and len(v) > 1:
-    #    return 0
+    # return 0
 
     try:
         if float(v) == int(float(v)):
@@ -79,7 +76,6 @@ def test_time(v):
 
 
 def test_date(v):
-
     if not isinstance(v, basestring):
         return 0
 
@@ -97,6 +93,7 @@ def test_date(v):
 
     return 1
 
+
 tests = [
     (int, test_int),
     (float, test_float),
@@ -105,7 +102,6 @@ tests = [
 
 
 class Column(object):
-
     name = None
     type_counts = None
     type_ratios = None
@@ -149,8 +145,6 @@ class Column(object):
             self.type_counts[None] += 1
             return None
 
-        type_ = None
-
         for test, testf in tests:
             t = testf(v)
 
@@ -159,7 +153,6 @@ class Column(object):
 
                 if test == str:
                     if v not in self.strings:
-
                         self.strings.append(v)
 
                     if (self.count < 1000 or self.date_successes != 0) and any((c in '-/:T') for c in v):
@@ -222,13 +215,13 @@ class Column(object):
 
 
 class Intuiter(object):
-
     """Determine the types of rows in a table."""
     header = None
     counts = None
 
     def __init__(self):
         from collections import OrderedDict
+
         self._columns = OrderedDict()
 
     def iterate(self, row_gen, max_n=None):
@@ -250,17 +243,15 @@ class Intuiter(object):
                     self._columns[col].test(value)
                     self._columns[col].description = desc
 
-            except Exception as e:
+            except Exception:
                 # This usually doesn't matter, since there are usually plenty of other rows to intuit from
                 # print 'Failed to add row: {}: {} {}'.format(row, type(e), e)
                 pass
-
 
     @property
     def columns(self):
 
         for k, v in self._columns.items():
-
             v.name = k
 
             yield v
@@ -268,7 +259,6 @@ class Intuiter(object):
     def dump(self):
 
         for v in self.columns:
-
             rt = v.resolved_type()
 
             d = dict(

@@ -32,7 +32,7 @@ class GitHubService(ServiceInterface, GitServiceMarker):
     def get(self, url):
         """Constructs a request, using auth is the user is set."""
         import requests
-        import json
+        # import json
 
         if self.user:
             r = requests.get(url, auth=self.auth)
@@ -42,8 +42,8 @@ class GitHubService(ServiceInterface, GitServiceMarker):
         return r
 
     def has(self, name):
-        import requests
-        import json
+        # import requests
+        # import json
 
         url = self.urls['info'].format(name=name)
 
@@ -70,7 +70,7 @@ class GitHubService(ServiceInterface, GitServiceMarker):
     def delete(self, name):
         """Delete the upstream repository."""
         import requests
-        import json
+        # import json
 
         r = requests.delete(
             self.urls['deleterepo'].format(
@@ -87,7 +87,7 @@ class GitHubService(ServiceInterface, GitServiceMarker):
         import requests
         import yaml
         from ambry.util import OrderedDictYAMLLoader
-        import pprint
+        # import pprint
         from yaml.scanner import ScannerError
 
         out = []

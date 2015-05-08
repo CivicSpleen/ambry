@@ -139,12 +139,11 @@ class LoaderBundle(BuildBundle):
         return fn
 
     def row_gen_for_source(self, source_name):
-        from os.path import dirname, split, splitext
-        from ..dbexceptions import BuildError
+        from os.path import split, splitext
 
         source = self.metadata.sources[source_name]
 
-        dfn = fn = self.filesystem.download(source_name)
+        fn = self.filesystem.download(source_name)
 
         if fn.endswith('.zip'):
             sub_file = source.file
@@ -179,6 +178,7 @@ class LoaderBundle(BuildBundle):
             return DelimitedRowGenerator(fn, **rs)
         elif ext == 'xls':
             from rowgen import ExcelRowGenerator
+
             return ExcelRowGenerator(fn, **rs)
         else:
             raise Exception("Unknown source file extension: '{}' for file '{}' from source {} "
@@ -444,7 +444,6 @@ class TsvBuildBundle(CsvBundle):
     def get_source(self, source):
         """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
         and look in the source store cache """
-        import os
 
         if not source:
             source = self.metadata.sources.keys()[0]

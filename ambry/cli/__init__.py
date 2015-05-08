@@ -14,9 +14,6 @@ from ambry.run import get_runconfig
 import ambry._meta
 from ..util import get_logger
 
-
-
-
 # The Bundle's get_runconfig ( in Bundle:config ) will use this if it is set. It gets set
 # by the CLI when the user assigns a specific configuration to use instead
 # of the defaults.
@@ -390,10 +387,9 @@ def main(argsv=None, ext_logger=None):
         global global_run_config
         global_run_config = rc
 
-
         if not rc.environment.get('category', False):
             raise ConfigurationError("Must set a config value for environment.class, one of: "
-                                      "development, production, testing, staging")
+                                     "development, production, testing, staging")
 
         if not rc.environment.get('category', False):
             raise ConfigurationError("Must set a config value for environment.class, one of: "

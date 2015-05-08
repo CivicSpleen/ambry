@@ -5,9 +5,9 @@ included in this distribution as LICENSE.txt
 
 """
 
-from ..dbexceptions import DependencyError
+# from ..dbexceptions import DependencyError
 from . import Warehouse
-from ..library.database import LibraryDb
+# from ..library.database import LibraryDb
 
 
 class PostgresWarehouse(Warehouse):

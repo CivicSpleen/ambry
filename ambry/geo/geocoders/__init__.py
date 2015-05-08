@@ -52,7 +52,7 @@ class DstkGeocoder(object):
 
         if len(submit_set) > 0:
             results = self._send(submit_set)
-            submit_set = []
+            # submit_set = []
 
             for k, result in results.items():
                 o = data_map[k]

@@ -10,6 +10,7 @@ from ..identity import LocationRef
 
 default_locations = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.REMOTE]
 
+
 def root_parser(cmd):
     import argparse
     from ..identity import LocationRef
@@ -296,7 +297,6 @@ def root_search(args, l, config):
     # This will fetch the data, but the return values aren't quite right
 
     term = ' '.join(args.term)
-
 
     if args.reindex:
 

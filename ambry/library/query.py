@@ -119,8 +119,8 @@ class QueryCommand(object):
             print "FROM DICT", k, v
 
     def getsubdict(self, group):
-        '''Fetch a confiration group and return the contents as an
-        attribute-accessible dict'''
+        """Fetch a confiration group and return the contents as an
+        attribute-accessible dict"""
 
         if group not in self._dict:
             self._dict[group] = {}
@@ -287,7 +287,7 @@ class Resolver(object):
         self.session = session  # a Sqlalchemy connection
 
     def _resolve_ref_orm(self, ref):
-        from ..identity import Locations
+        # from ..identity import Locations
 
         ip = Identity.classify(ref)
 
@@ -433,16 +433,16 @@ class Resolver(object):
             else:
                 return c == v
 
-        has_partition = False
-        has_where = False
+        # has_partition = False
+        # has_where = False
 
         if isinstance(query_command, Identity):
             raise NotImplementedError()
-            out = []
-            for d in self.queryByIdentity(query_command).all():
-                id_ = d.identity
-                d.path = os.path.join(self.cache, id_.cache_key)
-                out.append(d)
+            # out = []
+            # for d in self.queryByIdentity(query_command).all():
+            #     id_ = d.identity
+            #     d.path = os.path.join(self.cache, id_.cache_key)
+            #     out.append(d)
 
         tables = [Dataset]
 
@@ -467,7 +467,7 @@ class Resolver(object):
                     k = 'id_'
                 try:
                     query = query.filter(like_or_eq(getattr(Dataset, k), v))
-                except AttributeError as e:
+                except AttributeError:
                     # Dataset doesn't have the attribute, so ignore it.
                     pass
 

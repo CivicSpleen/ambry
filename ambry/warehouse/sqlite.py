@@ -5,10 +5,10 @@ included in this distribution as LICENSE.txt
 
 """
 
-from ..dbexceptions import DependencyError
+# from ..dbexceptions import DependencyError
 from . import Warehouse
-from ..library.database import LibraryDb
-from . import ResolutionError
+# from ..library.database import LibraryDb
+# from . import ResolutionError
 
 
 class SqliteWarehouse(Warehouse):

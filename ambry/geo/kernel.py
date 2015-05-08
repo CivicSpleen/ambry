@@ -107,7 +107,7 @@ class Kernel(object):
 
         if point.x < self.offset:
             if point.x < 0:
-                return (False, None, None, None, None)
+                return False, None, None, None, None
 
             x_start = max(point.x - self.offset, 0)
             x_end = point.x + self.offset + 1
@@ -116,7 +116,7 @@ class Kernel(object):
 
         elif point.x + self.offset + 1 > x_max:
             if point.x > x_max:
-                return (False, None, None, None, None)
+                return False, None, None, None, None
 
             x_start = point.x - self.offset
             x_end = min(point.x + self.offset + 1, x_max)
@@ -131,20 +131,20 @@ class Kernel(object):
 
         if point.y < self.offset:
             if point.y < 0:
-                return (False, None, None, None, None)
+                return False, None, None, None, None
 
             y_start = max(point.y - self.offset, 0)
             y_end = point.y + self.offset + 1
             m = sm[(self.offset - point.y):sm.shape[0], :]
-            use_m = True
+            # use_m = True
         elif point.y + self.offset + 1 > y_max:
             if point.y > y_max:
-                return (False, None, None, None, None)
+                return False, None, None, None, None
 
             y_start = point.y - self.offset
             y_end = point.y + self.offset + 1
             m = sm[0:sm.shape[0] + (y_max - point.y - self.offset) - 1, :]
-            use_m = True
+            # use_m = True
         else:
             y_start = point.y - self.offset
             y_end = point.y + self.offset + 1
@@ -152,7 +152,7 @@ class Kernel(object):
         if m is None:
             m = self.matrix
 
-        return (m, y_start, y_end, x_start, x_end)
+        return m, y_start, y_end, x_start, x_end
 
     @property
     def dindices(self):
@@ -332,7 +332,7 @@ class DistanceKernel(Kernel):
         # ma.masked_array(zeros((size,size)), mask=True, dtype=float)
         self.matrix = np.zeros((size, size), dtype=float)
 
-        row_max = size - self.center - 1  # Max value on a horix or vert edge
+        # row_max = size - self.center - 1  # Max value on a horix or vert edge
 
         for (y_m, x_m), value in np.ndenumerate(self.matrix):
             r = np.sqrt((y_m - self.center) ** 2 + (x_m - self.center) ** 2)
@@ -366,9 +366,9 @@ class MostCommonKernel(ConstantKernel):
 
         """
 
-        if v:
-            from functools import partial
-            f = partial(f, v)
+        # if v:
+        #     from functools import partial
+        #     f = partial(f, v)
 
         (m, y_start, y_end, x_start, x_end) = self.bounds(a, point)
 

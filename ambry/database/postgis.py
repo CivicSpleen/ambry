@@ -7,7 +7,7 @@ included in this distribution as LICENSE.txt
 
 from postgres import PostgresDatabase
 
-import dialects.postgis
+# import dialects.postgis
 
 
 class PostgisDatabase(PostgresDatabase):

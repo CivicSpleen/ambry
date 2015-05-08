@@ -43,7 +43,8 @@ app_config = {'host': os.getenv('AMBRYDOC_HOST', 'localhost'),
               }
 
 
-def configure_application(command_args={}):
+def configure_application(command_args=None):
+    command_args = command_args or {}
 
     app_config.update(read_config())
 

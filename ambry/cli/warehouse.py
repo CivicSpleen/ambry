@@ -45,17 +45,14 @@ def warehouse_command(args, rc):
 
         if not w.exists():
             w.create()
+        w.uid()
 
-        database_uid = w.uid
     elif args.database:
-
         # Check if the string is the uid of a database in the library.
         s = l.store(args.database)
 
         if not s:
-            raise ConfigurationError(
-                "Could not identitfy warehouse for term '{}'".format(
-                    args.database))
+            raise ConfigurationError("Could not identitfy warehouse for term '{}'".format(args.database))
 
         config = database_config(s.path)
 
@@ -101,7 +98,7 @@ def warehouse_parser(cmd):
         help='Recreate the database before installation')
 
     # For extract, when called from install
-    group = whsp.add_mutually_exclusive_group()
+    whsp.add_mutually_exclusive_group()
 
     whsp.add_argument(
         '-D',
@@ -127,7 +124,7 @@ def warehouse_parser(cmd):
         default=False,
         action='store_true',
         help='Only extract the documentation files')
-    group = whsp.add_mutually_exclusive_group()
+    whsp.add_mutually_exclusive_group()
 
     whsp.add_argument('-F', '--force', default=False, action='store_true',
                       help='Force re-creation of files that already exist')
@@ -322,21 +319,14 @@ def warehouse_users(args, w, config):
 
 def warehouse_list(args, w, config):
 
-    l = w.library
+    # l = w.library
 
     if not args.term:
-
-        _print_bundle_list(
-            w.list(),
-            fields=[
-                'vid',
-                'vname'],
-            show_partitions=False)
+        _print_bundle_list(w.list(), fields=['vid', 'vname'], show_partitions=False)
 
     else:
         raise NotImplementedError()
         # d, p = l.get_ref(args.term)
-
         # _print_info(l, d, p, list_partitions=True)
 
 

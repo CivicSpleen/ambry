@@ -208,6 +208,7 @@ def source_number(args, l, st, rc):
     n = str(ns.next())
 
     if args.set:
+        # TODO: Where is ambry.bundle.config?
         from ..bundle.config import BundleFileConfig
         d = args.set
         if os.path.isfile(d):
@@ -591,12 +592,12 @@ def source_init(args, l, st, rc):
 def source_deps(args, l, st, rc):
     """Produce a list of dependencies for all of the source bundles."""
 
-    if args.fields:
-        fields = args.fields.split(',')
-    else:
-        fields = ['locations', 'vid', 'vname', 'order']
+    # if args.fields:
+    #     fields = args.fields.split(',')
+    # else:
+    #     fields = ['locations', 'vid', 'vname', 'order']
 
-    term = args.terms[0] if args.terms else None
+    # term = args.terms[0] if args.terms else None
 
     from collections import defaultdict
 
@@ -706,8 +707,7 @@ def source_buildable(args, l, st, rc):
             if not bundle.is_built and not bundle.is_installed:
                 buildable.append(v)
 
-        except DependencyError as e:
-
+        except DependencyError:
             pass
         finally:
             bundle.close()

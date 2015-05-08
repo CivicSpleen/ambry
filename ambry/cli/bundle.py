@@ -26,12 +26,9 @@ def bundle_command(args, rc):
 
     else:
         st = l.source
-        ident = l.resolve(
-            args.bundle_dir,
-            location=LocationRef.LOCATION.SOURCE)
+        ident = l.resolve(args.bundle_dir, location=LocationRef.LOCATION.SOURCE)
 
         if ident:
-
             bundle_file = os.path.join(ident.bundle_path, 'bundle.py')
 
             if not os.path.exists(bundle_file):
@@ -52,10 +49,7 @@ def bundle_command(args, rc):
             return
 
         elif args.bundle_dir[0] != '/':
-            bundle_file = os.path.join(
-                os.getcwd(),
-                args.bundle_dir,
-                'bundle.py')
+            bundle_file = os.path.join(os.getcwd(), args.bundle_dir, 'bundle.py')
 
         else:
             bundle_file = os.path.join(args.bundle_dir, 'bundle.py')
@@ -253,7 +247,6 @@ def bundle_parser(cmd):
     command_p.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
     command_p.add_argument('-f', '--force', default=False, action="store_true",
                            help='Force build. ( --clean is usually preferred ) ')
-
 
     #
     # Install Command
@@ -687,6 +680,7 @@ def bundle_config_scrape(args, b, st, rc):
 
 
 def bundle_config_s3urls(args, b, st, rc):
+    # TODO: Where is cache package?
     from ..cache import new_cache
     import urllib
     import os

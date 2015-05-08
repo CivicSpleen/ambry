@@ -1,9 +1,9 @@
 """REST Server For DataBundle Libraries."""
 
-import bottle
+# import bottle
 from bottle import error, hook, get, put, post, request, response, redirect
-from bottle import HTTPResponse, static_file, install, url, local
-from bottle import ServerAdapter, server_names, Bottle
+from bottle import HTTPResponse, static_file, install, local  # , url
+from bottle import ServerAdapter, server_names  # , Bottle
 from bottle import run, debug
 
 from decorator import decorator
@@ -72,16 +72,15 @@ def capture_return_exception(e):
     import sys
     import traceback
 
-    (exc_type, exc_value, exc_traceback) = sys.exc_info()  # @UnusedVariable
+    # (exc_type, exc_value, exc_traceback) = sys.exc_info()  # @UnusedVariable
 
     tb_list = traceback.format_list(traceback.extract_tb(sys.exc_info()[2]))
 
-    return {'exception':
-            {'class': e.__class__.__name__,
-             'args': e.args,
-             'trace': tb_list
-             }
-            }
+    return {'exception': {
+        'class': e.__class__.__name__,
+        'args': e.args,
+        'trace': tb_list
+    }}
 
 
 def _CaptureException(f, *args, **kwargs):
@@ -347,12 +346,13 @@ def _download_redirect(identity, library):
 
 
 def _send_csv_if(did, pid, table_name, library):
-    '''Send csv function, with a web-processing interface '''
+    """Send csv function, with a web-processing interface """
     did, _, _ = process_did(did, library)
     pid, _, _ = process_pid(did, pid, library)
 
     # p_orm is a database entry, not a partition
-    p = library.get(pid).partition
+    library.get(pid).partition
+    # p = library.get(pid).partition
 
     i = int(request.query.get('i', 1))
     n = int(request.query.get('n', 1))
@@ -366,7 +366,7 @@ def _send_csv_if(did, pid, table_name, library):
 def _send_csv(library, did, pid, table_name, i, n, where, sep=','):
     """Send a CSV file to the client."""
     import unicodecsv
-    import csv
+    # import csv
     from StringIO import StringIO
     from sqlalchemy import text
 
@@ -471,7 +471,7 @@ def get_resolve(library, ref):
 @CaptureException
 def get_info(ref, library):
     """Resolve the reference, and redirect to the dataset or partition page."""
-    from ambry.cache import RemoteMarker
+    # from ambry.cache import RemoteMarker
 
     ip, dataset = _resolve(library, ref)
 
@@ -515,8 +515,7 @@ def get_key(key, library):
         remote = library.upstream.get_upstream(RemoteMarker)
 
         if not remote:
-            raise exc.InternalError(
-                "Library remote does not have a proper upstream")
+            raise exc.InternalError("Library remote does not have a proper upstream")
 
         url = remote.path(key)
 
@@ -584,7 +583,7 @@ def post_dataset(did, library):
     if not identity.md5:
         raise exc.BadRequest("The identity must have the md5 value set")
 
-    if did not in set([identity.id_, identity.vid]):
+    if did not in {identity.id_, identity.vid}:
         raise exc.Conflict(
             "Dataset address '{}' doesn't match payload id '{}'".format(
                 did,
@@ -729,7 +728,7 @@ def get_dataset_csv(did, library, pid=None):
 @CaptureException
 def post_partition(did, pid, library):
     from ambry.identity import Identity
-    from ambry.util import md5_for_file
+    # from ambry.util import md5_for_file
 
     b = library.get(did)
 
@@ -747,7 +746,7 @@ def post_partition(did, pid, library):
                 pid,
                 did))
 
-    if pid not in set([identity.id_, identity.vid]):
+    if pid not in {identity.id_, identity.vid}:
         raise exc.Conflict(
             "Partition address '{}' doesn't match payload id '{}'".format(
                 pid,
@@ -761,7 +760,7 @@ def post_partition(did, pid, library):
 @get('/datasets/<did>/db')
 @CaptureException
 def get_dataset_file(did, library):
-    from ambry.cache import RemoteMarker
+    # from ambry.cache import RemoteMarker
 
     ident = library.resolve(did)
 
@@ -781,7 +780,7 @@ def get_dataset_schema(did, typ, library):
     :param library:
     :return:
     """
-    from ambry.cache import RemoteMarker
+    # from ambry.cache import RemoteMarker
 
     ct = _get_ct(typ)
 
@@ -797,7 +796,7 @@ def get_dataset_schema(did, typ, library):
         b.schema.as_csv(output)
         static_file(output)
     elif ct == 'json':
-        import json
+        # import json
         s = b.schema.as_struct()
         return s
     elif ct == 'yaml':
@@ -812,7 +811,7 @@ def get_dataset_schema(did, typ, library):
 @get('/datasets/<did>/partitions/<pid>')
 @CaptureException
 def get_partition(did, pid, library):
-    from ambry.cache import RemoteMarker
+    # from ambry.cache import RemoteMarker
 
     d = get_dataset(did, library, pid)
     d['response'] = 'partition'
@@ -822,15 +821,15 @@ def get_partition(did, pid, library):
 @get('/datasets/<did>/partitions/<pid>/db')
 @CaptureException
 def get_partition_file(did, pid, library):
-    from ambry.cache import RemoteMarker
-    from ambry.identity import Identity
+    # from ambry.cache import RemoteMarker
+    # from ambry.identity import Identity
 
     b = library.get(did)
 
     if not b:
         raise exc.NotFound("No bundle found for id {}".format(did))
 
-    payload = request.json
+    # payload = request.json
 
     p = b.partitions.get(pid)
 
@@ -975,14 +974,14 @@ def get_partition_csv_parts(did, pid, library):
 @get('/test/echo/<arg>')
 def get_test_echo(arg):
     """just echo the argument."""
-    return (arg, dict(request.query.items()))
+    return arg, dict(request.query.items())
 
 
 @put('/test/echo')
 def put_test_echo():
     """just echo the argument."""
 
-    return (request.json, dict(request.query.items()))
+    return request.json, dict(request.query.items())
 
 
 @get('/test/exception')

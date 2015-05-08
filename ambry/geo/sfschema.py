@@ -338,15 +338,15 @@ class TableShapefile(object):
             if isinstance(row, dict):
 
                 if self.geo_col_names[0] in row:
-                    return (row[self.geo_col_names[0]], None)
+                    return row[self.geo_col_names[0]], None
                 elif self.geo_col_names[0].upper() in row:
-                    return (row[self.geo_col_names[0].upper()], None)
+                    return row[self.geo_col_names[0].upper()], None
                 else:
                     raise KeyError(
                         "{} not in row".format(
                             self.geo_col_names[0]))
             else:
-                return (row[self.geo_col_pos[0]], None)
+                return row[self.geo_col_pos[0]], None
 
     def get_geometry(self, row):
 
@@ -476,7 +476,7 @@ class TableShapefile(object):
 
         if srs_spec is None and default is not None:
             return self._get_srs(default, None)
-            srs.ImportFromEPSG(default)  # Lat/Long in WGS84
+            # srs.ImportFromEPSG(default)  # Lat/Long in WGS84
         elif isinstance(srs_spec, int):
             srs.ImportFromEPSG(srs_spec)
         elif isinstance(srs_spec, basestring):

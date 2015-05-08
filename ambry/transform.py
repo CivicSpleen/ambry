@@ -453,59 +453,61 @@ class CasterTransformBuilder(object):
         self.custom_types[t.__name__] = t
 
     def makeListTransform(self):
-        import uuid
-        import datetime
-        f_name = "row_transform_" + str(uuid.uuid4()).replace('-', '')
-
         raise NotImplementedError("Needs to be fixed")
-
-        o = """
-def {}(row):
-
-    raise NotImplementedError()
-
-    stripped_num = lambda x: x.strip() if isinstance(x, basestring) else x
-    is_not_nothing = lambda x: True if x!='' and x != None else False
-    
-    try:
-        return [
-""".format(f_name)
-
-        for i, (name, type_) in enumerate(self.types):
-            if i != 0:
-                o += ',\n'
-
-            if type_ == float or type_ == int:
-                o += "{type}(row[{i}]) if is_not_nothing(stripped_num(row[{i}])) else None".format(
-                    type=type_.__name__,
-                    i=i)
-            else:
-                o += "{type}(row[{i}].strip()) if is_not_nothing(row[{i}]) else None".format(
-                    type=type_.__name__,
-                    i=i)
-
-        names = ','.join(["('{}',{})".format(name, type_.__name__)
-                         for name, type_ in self.types])
-
-        o += """
-        ]
-    except ValueError as e:
-        for i,(name,type_) in  enumerate( [{names}] ):
-            try:
-                type_(row[i].strip()) if row[i] else None
-            except ValueError:
-                raise ValueError("Failed to convert value '{{}}' in field '{{}}' to '{{}}'".format(row[i], name,type_.__name__))
-        raise
-""".format(names=names)
-
-        return f_name, o
+#         import uuid
+#         import datetime
+#         f_name = "row_transform_" + str(uuid.uuid4()).replace('-', '')
+#
+#
+#
+#         o = """
+# def {}(row):
+#
+#     raise NotImplementedError()
+#
+#     stripped_num = lambda x: x.strip() if isinstance(x, basestring) else x
+#     is_not_nothing = lambda x: True if x!='' and x != None else False
+#
+#     try:
+#         return [
+# """.format(f_name)
+#
+#         for i, (name, type_) in enumerate(self.types):
+#             if i != 0:
+#                 o += ',\n'
+#
+#             if type_ == float or type_ == int:
+#                 o += "{type}(row[{i}]) if is_not_nothing(stripped_num(row[{i}])) else None".format(
+#                     type=type_.__name__,
+#                     i=i)
+#             else:
+#                 o += "{type}(row[{i}].strip()) if is_not_nothing(row[{i}]) else None".format(
+#                     type=type_.__name__,
+#                     i=i)
+#
+#         names = ','.join(["('{}',{})".format(name, type_.__name__)
+#                          for name, type_ in self.types])
+#
+#         o += """
+#         ]
+#     except ValueError as e:
+#         for i,(name,type_) in  enumerate( [{names}] ):
+#             try:
+#                 type_(row[i].strip()) if row[i] else None
+#             except ValueError:
+#                 raise ValueError(
+#                     "Failed to convert value '{{}}' in field '{{}}' to '{{}}'".format(row[i], name,type_.__name__))
+#         raise
+# """.format(names=names)
+#
+#         return f_name, o
 
     def makeDictTransform(self):
         import uuid
         import datetime
 
         f_name = "dict_transform_" + str(uuid.uuid4()).replace('-', '')
-        f_name_inner = "dict_transform_" + str(uuid.uuid4()).replace('-', '')
+        # f_name_inner = "dict_transform_" + str(uuid.uuid4()).replace('-', '')
 
         c = []
 
@@ -561,7 +563,7 @@ def {}(row):
         return f_name, o, cf
 
     def compile(self):
-        import uuid
+        # import uuid
 
         if not self._compiled:
 
@@ -574,11 +576,11 @@ def {}(row):
             # Get the code in string form.
             dfn, df, cf = self.makeDictTransform()
 
-            exec(df)
+            exec df
 
             df = locals()[dfn]
 
-            exec(cf)
+            exec cf
             cf = locals()['caster_funcs']
 
             self._compiled = (lf, df, cf)
@@ -603,7 +605,7 @@ def {}(row):
 
             try:
                 return f[1](d), {}
-            except CastingError as e:
+            except CastingError:
 
                 do = {}
                 cast_errors = {}

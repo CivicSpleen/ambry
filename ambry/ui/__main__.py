@@ -3,9 +3,9 @@
 # http://stackoverflow.com/a/18888854
 
 import argparse
-import sys
-from ambry.ui import app, configure_application, write_config, config_paths
-from ambry.ui import fscache
+# import sys
+from ambry.ui import app, configure_application  # , write_config, config_paths
+# from ambry.ui import fscache
 
 parser = argparse.ArgumentParser(
     prog='python -mambry.server.documentation',

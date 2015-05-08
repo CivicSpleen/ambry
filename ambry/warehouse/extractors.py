@@ -5,6 +5,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
+
 class ExtractError(Exception):
     pass
 
@@ -243,9 +244,7 @@ class OgrExtractor(Extractor):
         pass
 
     def ogr_type_map(self, v):
-        return self._ogr_type_map[
-            v.split(
-                '(', 1)[0]]  # Sometimes 'VARCHAR', sometimes 'VARCHAR(10)'
+        return self._ogr_type_map[v.split('(', 1)[0]]  # Sometimes 'VARCHAR', sometimes 'VARCHAR(10)'
 
     @classmethod
     def can_extract(cls, t):
@@ -356,11 +355,9 @@ class OgrExtractor(Extractor):
                         name = self.mangle_name(str(name))
 
                         feature.SetField(name, value)
-                    except Exception as e:
-
+                    except Exception:
                         raise
-                    except NotImplementedError as e:
-
+                    except NotImplementedError:
                         raise
 
             geometry = ogr.CreateGeometryFromWkt(row['_wkt'])
@@ -369,9 +366,7 @@ class OgrExtractor(Extractor):
             if layer.CreateFeature(feature) != 0:
                 import gdal
                 raise Exception(
-                    'Failed to add feature: {}: geometry={}'.format(
-                        gdal.GetLastErrorMsg(),
-                        geometry.ExportToWkt()))
+                    'Failed to add feature: {}: geometry={}'.format(gdal.GetLastErrorMsg(), geometry.ExportToWkt()))
 
             feature.Destroy()
 

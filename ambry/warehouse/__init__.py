@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 from ..library import Library
 from ..library.database import LibraryDb
-from ckcache import new_cache, Cache
+from ckcache import Cache
 from ..database import new_database
 import os
 from ..util import Constant, memoize
@@ -11,13 +11,11 @@ from ..identity import TopNumber
 
 
 class NullCache(Cache):
-
     def has(self, rel_path, md5=None, use_upstream=True):
         return False
 
 
 class NullLogger(object):
-
     def __init__(self):
         pass
 
@@ -41,17 +39,14 @@ class NullLogger(object):
 
 
 class WLibrary(Library):
-
     """Extends the Library class to remove the Location parameter on identity
     resolution."""
 
     def resolve(self, ref, location=None):
-
         return super(WLibrary, self).resolve(ref, location=location)
 
 
 def new_warehouse(config, elibrary, logger=None):
-
     assert elibrary is not None
 
     if isinstance(config, basestring):
@@ -86,6 +81,7 @@ def new_warehouse(config, elibrary, logger=None):
 
     if service == 'sqlite':
         from .sqlite import SqliteWarehouse
+
         w = SqliteWarehouse(**args)
 
     elif service == 'spatialite':
@@ -115,7 +111,6 @@ class ResolutionError(Exception):
 
 
 class Warehouse(object):
-
     FILE_TYPE = Constant()
 
     FILE_TYPE.MANIFEST = 'manifest'
@@ -186,22 +181,14 @@ class Warehouse(object):
         # partitions created in the database.
         s = self.database.session
         try:
-            ds = s.query(Dataset).filter(
-                Dataset.id_ == self.vid).order_by(
-                Dataset.revision.desc()).one()
+            s.query(Dataset).filter(Dataset.id_ == self.vid).order_by(Dataset.revision.desc()).one()
         except NoResultFound:
             from ..identity import Identity
 
-            ident = Identity.from_dict(
-                dict(
-                    id=self.vid,
-                    revision=1,
-                    source='ambry',
-                    dataset=self.vid))
+            ident = Identity.from_dict(dict(id=self.vid, revision=1, source='ambry', dataset=self.vid))
 
             ds = Dataset(
-                data=dict(
-                    dsn=self.dsn),
+                data=dict(dsn=self.dsn),
                 creator='ambry',
                 fqname=ident.fqname,
                 **ident.dict)
@@ -265,18 +252,16 @@ class Warehouse(object):
     ##
 
     def _meta_set(self, key, value):
-        from ..orm import Config
         return self.library.database.set_config_value('warehouse', key, value)
 
         # Also write to the file, since when the warehouse is installed in a library,
         # it's the file that is used for storing information about the title,
         # summary, etc.
-        f = self.wlibrary.store(self.uid)
-        f['data']['key'] = value
-        self.wlibrary.commit()
+        # f = self.wlibrary.store(self.uid)
+        # f['data']['key'] = value
+        # self.wlibrary.commit()
 
     def _meta_get(self, key):
-        from ..orm import Config
 
         try:
             return self.library.database.get_config_value(
@@ -406,13 +391,7 @@ class Warehouse(object):
         l = self.library.list(with_partitions=True)
 
         for k, v in l.items():
-
-            d = {
-                e.key.replace(
-                    '.',
-                    '_'): e.value for e in self.library.database.get_bundle_values(
-                    k,
-                    'config')}
+            d = {e.key.replace('.', '_'): e.value for e in self.library.database.get_bundle_values(k, 'config')}
             v.data.update(d)
 
         return l
@@ -438,7 +417,8 @@ class Warehouse(object):
 
         assert identity.is_partition
 
-        p_vid = self._to_vid(identity)
+        # p_vid = self._to_vid(identity)
+        self._to_vid(identity)
         d_vid = self._partition_to_dataset_vid(identity)
 
         meta, table = Schema.get_table_meta_from_db(self.library.database,
@@ -506,12 +486,7 @@ class Warehouse(object):
         """Digest manifest into a list of commands for the installer."""
         from ..orm import Partition
 
-        commands = []
-
-        commands.append(
-            ('about',
-             manifest.title,
-             manifest.summary['summary_text']))
+        commands = [('about', manifest.title, manifest.summary['summary_text'])]
 
         # First pass
         for line, section in manifest.sorted_sections:
@@ -520,10 +495,8 @@ class Warehouse(object):
 
             if tag in ('partitions', 'sql', 'index', 'mview', 'view'):
                 self.logger.info(
-                    "== Processing manifest '{}' section '{}' at line {}" .format(
-                        manifest.path,
-                        section.tag,
-                        section.linenumber))
+                    "== Processing manifest '{}' section '{}' at line {}".format(manifest.path, section.tag,
+                                                                                 section.linenumber))
 
             if tag == 'partitions':
                 for pd in section.content['partitions']:
@@ -559,13 +532,10 @@ class Warehouse(object):
 
                         if ident.format not in ('db', 'geo'):
                             self.logger.warn(
-                                "Skipping {}; uninstallable format: {}".format(
-                                    ident.vname,
-                                    ident.format))
+                                "Skipping {}; uninstallable format: {}".format(ident.vname, ident.format))
                             continue
 
-                        commands.append(
-                            ('install', dataset, tables, pd['where']))
+                        commands.append(('install', dataset, tables, pd['where']))
 
             elif tag == 'sql':
                 sql = section.content
@@ -577,21 +547,15 @@ class Warehouse(object):
                 c = section.content
                 commands.append(('index', c['name'], c['table'], c['columns']))
 
-            elif tag == 'mview' or tag == 'view':
+            elif tag in ('mview', 'view'):
                 commands.append(
-                    (tag,
-                     section.args,
-                     section.content['text'],
-                     dict(
-                         tc_names=section.content['tc_names'],
-                         summary=section.doc.get(
-                             'summary_text',
-                             '') if section.doc else '',
-                         doc=section.doc,
-                         manifests=[
-                             manifest.uid],
-                         sql_formatted=section.content['html']),
-                        force))
+                    (tag, section.args, section.content['text'],
+                     dict(tc_names=section.content['tc_names'],
+                          summary=section.doc.get('summary_text', '') if section.doc else '',
+                          doc=section.doc, manifests=[manifest.uid], sql_formatted=section.content['html']),
+                     force
+                     )
+                )
 
             elif tag == 'extract':
 
@@ -617,7 +581,7 @@ class Warehouse(object):
     def execute_commands(self, commands):
         """Execute a set of installation commands, which are usually from a
         digested manifest."""
-        from ..dbexceptions import NotFoundError, ConfigurationError
+        from ..dbexceptions import NotFoundError
 
         installed_partitions = []
         installed_tables = []
@@ -685,9 +649,8 @@ class Warehouse(object):
         """Install the partitions and views specified in a manifest file."""
 
         from datetime import datetime
-        import os
 
-        errors = []
+        # errors = []
 
         # Mark all of the files associated with the manifest, so if they aren't in the manifest
         # we can remove them.
@@ -757,7 +720,8 @@ class Warehouse(object):
             if source_table_name not in tables_in_partition:
                 continue
             try:
-                table, meta = self.create_table(p, source_table_name)
+                self.create_table(p, source_table_name)
+                # table, meta = self.create_table(p, source_table_name)
             except Exception as e:
                 print e
                 raise
@@ -1004,13 +968,11 @@ class Warehouse(object):
                 # derived_tables checks the proto_id, used to link  aliases to
                 # base tables.
                 for dt in sorted(self.library.derived_tables(t.vid), key=lambda x: x.name):
-
                     t.add_installed_name(dt.name)
                     s.add(t)
 
             if (t.type == 'table' and t.installed) or t.type in ('view', 'mview'):
                 if 'sample' not in t.data or not t.data['sample']:
-
                     self.build_sample(t)
                     s.add(t)
 
@@ -1140,16 +1102,12 @@ class Warehouse(object):
 
             self.build_schema(t)
 
-        except Exception as e:
-
+        except Exception:
             self.logger.error("Failed to install view: \n{}".format(sql))
-
             raise
 
         except OperationalError:
-
             self.logger.error("Failed to execute: {} ".format(sql))
-
             raise
 
     def install_table_alias(self, table_name, alias, proto_vid=None):
@@ -1164,7 +1122,7 @@ class Warehouse(object):
 
         """
 
-        from ..orm import Table, Config, Dataset
+        from ..orm import Table, Dataset
 
         from sqlalchemy import func
         from sqlalchemy.orm.exc import NoResultFound
@@ -1177,7 +1135,7 @@ class Warehouse(object):
             q = (
                 s.query(Table).filter(
                     Table.d_vid == self.vid,
-                    Table.name == name) .options(
+                    Table.name == name).options(
                     lazyload('columns')))
 
             t = q.one()
@@ -1192,7 +1150,7 @@ class Warehouse(object):
             q = (
                 s.query(
                     func.max(
-                        Table.sequence_id)) .filter(
+                        Table.sequence_id)).filter(
                     Table.d_vid == self.vid))
 
             seq = q.one()[0]
@@ -1213,7 +1171,6 @@ class Warehouse(object):
             del data['type']
 
         if data and 'summary' in data:
-
             t.description = data['summary']
 
             del data['summary']
@@ -1258,7 +1215,6 @@ class Warehouse(object):
             source_table_name,
             dest_table_name,
             where=None):
-        from ..database.inserter import ValueInserter
         from sqlalchemy import Table, MetaData
         from sqlalchemy.dialects.postgresql.base import BYTEA
         import psycopg2
@@ -1381,9 +1337,7 @@ class Warehouse(object):
         return dest_table_name
 
     def remove(self, name):
-        from ..orm import Dataset
         from ..bundle import LibraryDbBundle
-        from ..identity import PartitionNameQuery
         from sqlalchemy.exc import NoSuchTableError, ProgrammingError
 
         dataset = self.wlibrary.resolve(name)
@@ -1452,7 +1406,6 @@ class Warehouse(object):
 
     def create_table(self, partition, table_name):
         """Create the table in the warehouse, using an augmented table name."""
-        from ..schema import Schema
 
         meta, table = self.table_meta(partition.identity, table_name)
 
@@ -1464,25 +1417,25 @@ class Warehouse(object):
 
         return table, meta
 
-        def create_index(self, name, table, columns):
+    def create_index(self, name, table, columns):
 
-            from sqlalchemy.exc import OperationalError, ProgrammingError
+        from sqlalchemy.exc import OperationalError, ProgrammingError
 
-            sql = 'CREATE INDEX {} ON "{}" ({})'.format(
-                name,
-                table,
-                ','.join(columns))
+        sql = 'CREATE INDEX {} ON "{}" ({})'.format(
+            name,
+            table,
+            ','.join(columns))
 
-            try:
-                self.database.connection.execute(sql)
-                self.logger.info('create_index {}'.format(name))
-            except (OperationalError, ProgrammingError) as e:
+        try:
+            self.database.connection.execute(sql)
+            self.logger.info('create_index {}'.format(name))
+        except (OperationalError, ProgrammingError) as e:
 
-                if 'exists' not in str(e).lower():
-                    raise
+            if 'exists' not in str(e).lower():
+                raise
 
-                self.logger.info('index_exists {}'.format(name))
-                # Ignore if it already exists.
+            self.logger.info('index_exists {}'.format(name))
+            # Ignore if it already exists.
 
     def _to_vid(self, partition):
         from ..partition import PartitionBase
@@ -1576,15 +1529,13 @@ class Warehouse(object):
     def extract_all(self, force=False):
         """Generate the extracts and return a struture listing the extracted
         files."""
-        from contextlib import closing
 
         from .extractors import new_extractor
-        import time
         from ..util import md5_for_file
 
         # Get the URL to the root. The public_utl arg only affects S3, and
         # gives a URL without a signature.
-        root = self.cache.path('', missing_ok=True, public_url=True)
+        self.cache.path('', missing_ok=True, public_url=True)
 
         extracts = []
 
@@ -1594,16 +1545,11 @@ class Warehouse(object):
 
             t = self.orm_table_by_name(f.data['table'])
 
-            if (t and t.data.get('updated') and
-                f.modified and
-                    int(t.data.get('updated')) > f.modified) or (not f.modified):
+            if (t and t.data.get('updated') and f.modified and int(t.data.get('updated')) > f.modified) \
+                    or (not f.modified):
                 force = True
 
-            ex = new_extractor(
-                f.data.get('format'),
-                self,
-                self.cache,
-                force=force)
+            ex = new_extractor(f.data.get('format'), self, self.cache, force=force)
 
             e = ex.extract(f.data['table'], self.cache, f.path)
 
@@ -1622,7 +1568,6 @@ class Warehouse(object):
 
     def extract_table(self, tid, content_type='csv'):
         from .extractors import new_extractor
-        from os.path import basename, dirname
         from ..dbexceptions import NotFoundError
 
         t = self.orm_table(tid)  # For installed tables
@@ -1637,10 +1582,7 @@ class Warehouse(object):
 
         ref = t.name if t.type in ('view', 'mview') else t.vid
 
-        ee = e.extract(
-            ref, '{}.{}'.format(
-                tid, content_type), t.data.get(
-                'updated', None))
+        ee = e.extract(ref, '{}.{}'.format(tid, content_type), t.data.get('updated', None))
 
         return ee.abs_path, "{}_{}.{}".format(t.vid, t.name, content_type)
 
@@ -1717,7 +1659,6 @@ def database_config(db, base_dir=''):
 
 
 class Logger(object):
-
     def __init__(self, logger, lr):
         self.lr = lr
         self.logger = logger

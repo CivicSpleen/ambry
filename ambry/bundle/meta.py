@@ -8,7 +8,6 @@ from ..util.meta import *
 
 
 class About(DictGroup):
-
     title = ScalarTerm()
     subject = ScalarTerm()
     summary = ScalarTerm()
@@ -163,7 +162,6 @@ class Versions(TypedDictGroup):
 
 
 class Top(Metadata):
-
     _non_term_file = 'meta/build.yaml'
 
     about = About(file='bundle.yaml')

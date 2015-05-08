@@ -91,7 +91,7 @@ def _on_connect_geo(dbapi_con, con_record):
         except:
             try:
                 dbapi_con.enable_load_extension(True)
-            except AttributeError as e:
+            except AttributeError:
                 raise
 
         # This is so wrong, but I don't know what's right.

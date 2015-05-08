@@ -252,8 +252,7 @@ class GzipFile(io.BufferedIOBase):
         if flag & FEXTRA:
             import json
             # Read & discard the extra field, if present
-            xlen = ord(self.fileobj.read(1))
-            xlen = xlen + 256 * ord(self.fileobj.read(1))
+            xlen = ord(self.fileobj.read(1)) + 256 * ord(self.fileobj.read(1))
             data = self.fileobj.read(xlen)
             try:
                 self.extra = json.loads(data)
@@ -296,7 +295,7 @@ class GzipFile(io.BufferedIOBase):
             data = data.tobytes()
 
         if len(data) > 0:
-            self.size = self.size + len(data)
+            self.size += len(data)
             self.crc = zlib.crc32(data, self.crc) & 0xffffffff
             self.fileobj.write(self.compress.compress(data))
             self.offset += len(data)
@@ -337,7 +336,7 @@ class GzipFile(io.BufferedIOBase):
         return chunk
 
     def _unread(self, buf):
-        self.extrasize = len(buf) + self.extrasize
+        self.extrasize += len(buf)
         self.offset -= len(buf)
 
     def _read(self, size=1024):
@@ -412,9 +411,9 @@ class GzipFile(io.BufferedIOBase):
         self.crc = zlib.crc32(data, self.crc) & 0xffffffff
         offset = self.offset - self.extrastart
         self.extrabuf = self.extrabuf[offset:] + data
-        self.extrasize = self.extrasize + len(data)
+        self.extrasize += len(data)
         self.extrastart = self.offset
-        self.size = self.size + len(data)
+        self.size += len(data)
 
     def _read_eof(self, last_bytes=None):
         # We've read to the end of the file, so we have to rewind in order
@@ -508,7 +507,7 @@ class GzipFile(io.BufferedIOBase):
     def seek(self, offset, whence=0):
         if whence:
             if whence == 1:
-                offset = self.offset + offset
+                offset += self.offset
             else:
                 raise ValueError('Seek from end not supported')
         if self.mode == WRITE:
@@ -562,7 +561,7 @@ class GzipFile(io.BufferedIOBase):
 
             # Append chunk to list, decrease 'size',
             bufs.append(c)
-            size = size - len(c)
+            size -= len(c)
             readsize = min(size, readsize * 2)
         if readsize > self.min_readsize:
             self.min_readsize = min(readsize, self.min_readsize * 2, 512)

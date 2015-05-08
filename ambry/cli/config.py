@@ -76,7 +76,6 @@ def config_install(args, rc):
     import os
     from ambry.run import RunConfig as rc
     import getpass
-    import os
 
     edit_args = ' '.join(args.args)
 

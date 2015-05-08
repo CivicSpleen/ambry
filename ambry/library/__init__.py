@@ -19,7 +19,7 @@ from ..util import memoize
 
 import weakref
 from files import Files
-from sqlalchemy import event
+# from sqlalchemy import event
 
 libraries = {}
 
@@ -44,9 +44,9 @@ def _new_library(config):
     if 'upstream' in config:
         raise DeprecationWarning("Upstream no longer allowed in configuration")
 
-    root = config['root']
+    # root = config['root']
 
-    remotes = {name: new_cache(remote) for name, remote in config.get('remotes', {}).items() }
+    remotes = {name: new_cache(remote) for name, remote in config.get('remotes', {}).items()}
 
     for i, remote in enumerate(remotes.values()):
         remote.set_priority(i)
@@ -133,12 +133,12 @@ def clear_libraries():
 
 
 class Library(object):
-    '''
+    """
 
-    '''
+    """
 
     # Names of exernally configurable values.
-    configurable = ('warehouse_url')
+    configurable = 'warehouse_url'
 
     def __init__(self, cache, database,
                  name=None, remotes=None,
@@ -148,7 +148,7 @@ class Library(object):
                  warehouse_cache=None,
                  host=None, port=None, urlhost=None):
 
-        '''Libraries are constructed on the root cache name for the library.
+        """Libraries are constructed on the root cache name for the library.
         If the cache does not exist, it will be created.
 
         Args:
@@ -158,7 +158,7 @@ class Library(object):
         remote: URL of a remote library, for fallback for get and put.
         sync: If true, put to remote synchronously. Defaults to False.
 
-        '''
+        """
         from ..util import get_logger
 
         assert database is not None
@@ -217,7 +217,7 @@ class Library(object):
 
     @property
     def database(self):
-        '''Return ambry.database.Database object'''
+        """Return ambry.database.Database object"""
         return self._database
 
     def commit(self):
@@ -226,12 +226,12 @@ class Library(object):
     # Configurables
 
     def _meta_set(self, key, value):
-        from ..orm import Config
+        # from ..orm import Config
 
         return self.database.set_config_value('library', key, value)
 
     def _meta_get(self, key):
-        from ..orm import Config
+        # from ..orm import Config
 
         try:
             return self.database.get_config_value('library', key).value
@@ -259,7 +259,7 @@ class Library(object):
     # Storing
     #
 
-    def put_bundle(self, bundle, logger=None,  install_partitions=True, commit=True, file_state='new'):
+    def put_bundle(self, bundle, logger=None, install_partitions=True, commit=True, file_state='new'):
         """Install the records for the dataset, tables, columns and possibly
         partitions. Does not install file references """
         from ..dbexceptions import ConflictError
@@ -308,8 +308,8 @@ class Library(object):
         return self.cache.path(partition.identity.cache_key), installed
 
     def remove(self, bundle):
-        '''Remove a bundle from the library, and delete the configuration for
-        it from the library database'''
+        """Remove a bundle from the library, and delete the configuration for
+        it from the library database"""
 
         self.database.remove_bundle(bundle)
 
@@ -322,9 +322,9 @@ class Library(object):
     #
 
     def list(self, datasets=None, with_partitions=False):
-        '''Lists all of the datasets in the partition, optionally with
+        """Lists all of the datasets in the partition, optionally with
         metadata. Does not include partitions. This returns a dictionary
-        in  a form that is similar to the remote and source lists. '''
+        in  a form that is similar to the remote and source lists. """
 
         if datasets is None:
             datasets = {}
@@ -407,7 +407,6 @@ class Library(object):
 
         return MultiCache(self.remotes.values())
 
-
     def _get_bundle_by_cache_key(self, cache_key, cb=None):
         from ckcache.multi import AltReadCache
         from sqlite3 import DatabaseError
@@ -448,7 +447,7 @@ class Library(object):
             return self.cache.has(dataset.cache_key)
 
     def get(self, ref, force=False, cb=None, location='default'):
-        '''Get a bundle, given an id string or a name '''
+        """Get a bundle, given an id string or a name """
         from sqlalchemy.exc import IntegrityError
         from .files import Files
         from ckcache.multi import AltReadCache
@@ -477,9 +476,8 @@ class Library(object):
                 partition = bundle.partitions.get(dataset.partition.vid)
 
                 if not partition:
-                    raise NotFoundError(
-                        'Failed to get partition {} from bundle at {} '
-                        .format(dataset.partition.fqname, dataset.cache_key))
+                    raise NotFoundError('Failed to get partition {} from bundle at {} '.format(dataset.partition.fqname,
+                                                                                               dataset.cache_key))
 
                 arc = AltReadCache(self.cache, self.remote_stack)
 
@@ -489,9 +487,8 @@ class Library(object):
                     ref_ident = self.resolve(partition.ref)
 
                     if not ref_ident:
-                        raise NotFoundError(
-                            "Reference '{}' refers to another partition, '{}', which does not exist"
-                            .format(ref, partition.ref))
+                        raise NotFoundError("Reference '{}' refers to another partition, '{}', which does not exist"
+                                            .format(ref, partition.ref))
 
                     ref_partition_ident = ref_ident.partition
 
@@ -575,15 +572,15 @@ class Library(object):
     def derived_tables(self, proto_vid):
         """Tables with the given proto_vid"""
         from ..orm import Table
-        from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
-        from ..dbexceptions import NotFoundError, MultipleFoundError
+        from sqlalchemy.orm.exc import NoResultFound  # , MultipleResultsFound
+        from ..dbexceptions import NotFoundError  # , MultipleFoundError
 
         try:
             return (self.database.session.query(Table).filter(
                 Table.proto_vid == proto_vid).all())
         except NoResultFound:
-            raise NotFoundError(
-                "Did not find table with proto_vid {} in library {}".format(proto_vid, self.database.dsn))
+            raise NotFoundError("Did not find table with proto_vid {} in library {}".format(proto_vid,
+                                                                                            self.database.dsn))
 
     def dataset(self, vid):
         from ..orm import Dataset
@@ -667,7 +664,7 @@ class Library(object):
     def partitions(self):
         from ..orm import Partition
 
-        return (self.database.session.query(Partition).all())
+        return self.database.session.query(Partition).all()
 
     @property
     def stores(self):
@@ -721,7 +718,7 @@ class Library(object):
     @property
     def manifests(self):
         """Return all of the registered manifests. """
-        from ..warehouse.manifest import Manifest
+        # from ..warehouse.manifest import Manifest
 
         # Construct manifest with Manifest(f.content, logger=self.logger)
 
@@ -877,7 +874,7 @@ class Library(object):
         if not self._bundle:
             raise ConfigurationError("Can't use the dep() method for a library that is not attached to a bundle")
 
-        errors = 0
+        # errors = 0
 
         deps = self._bundle.metadata.dependencies
 
@@ -940,7 +937,7 @@ class Library(object):
 
     @property
     def source(self):
-        '''Return a SourceTree object, based on the source_repo configuration'''
+        """Return a SourceTree object, based on the source_repo configuration"""
         from ..source import SourceTree
 
         if not self.source_dir:
@@ -950,8 +947,8 @@ class Library(object):
 
     @property
     def new_files(self):
-        '''Generator that returns files that should be pushed to the remote
-        library'''
+        """Generator that returns files that should be pushed to the remote
+        library"""
 
         new_files = self.files.query.installed.state('new').all
 
@@ -968,7 +965,7 @@ class Library(object):
         """
         import time
 
-        what = None
+        # what = None
         start = None
         end = None
 
@@ -1006,7 +1003,7 @@ class Library(object):
 
             else:
                 start = time.clock()
-                if cb: 
+                if cb:
                     cb('Pushing to {}'.format(upstream), md, start)
 
                 if not dry_run:
@@ -1016,10 +1013,9 @@ class Library(object):
                 end = time.clock()
                 dt = end - start
 
-                if cb: 
+                if cb:
                     cb('Pushed', md, dt)
                 what = 'pushed'
-
 
             if not dry_run:
                 self.database.session.merge(file_)
@@ -1030,7 +1026,7 @@ class Library(object):
         else:
 
             for file_ in self.new_files:
-                self.push(upstream, file_.ref, cb=cb, dry_run = dry_run)
+                self.push(upstream, file_.ref, cb=cb, dry_run=dry_run)
 
             try:
                 upstream.store_list()
@@ -1061,8 +1057,8 @@ class Library(object):
         self.doc_cache.remove(vid)
 
     def sync_library(self, clean=False):
-        '''Rebuild the database from the bundles that are already installed
-        in the repository cache'''
+        """Rebuild the database from the bundles that are already installed
+        in the repository cache"""
 
         from ..orm import Dataset
         from .files import Files
@@ -1094,12 +1090,11 @@ class Library(object):
 
                     path_ = os.path.join(r, file_)
 
-                    extant_bundle = (self.files.query.type(Files.TYPE.BUNDLE)
-                                     .path(path_).one_maybe)
-                    extant_partition = (self.files.query.type(Files.TYPE.PARTITION).path(path_).one_maybe)
+                    # extant_bundle = self.files.query.type(Files.TYPE.BUNDLE).path(path_).one_maybe
+                    # extant_partition = self.files.query.type(Files.TYPE.PARTITION).path(path_).one_maybe
 
                     # if (extant_bundle or extant_partition):
-                    #    continue
+                    # continue
 
                     b = None
                     try:
@@ -1176,7 +1171,7 @@ class Library(object):
                 self.logger.error('Failed to install bundle {}: {}'
                                   .format(bundle.identity.vname, e.message))
                 raise
-                continue
+                # continue
 
         return bundles
 
@@ -1203,9 +1198,9 @@ class Library(object):
 
             try:
                 remote_list = remote.list().keys()
-                self.logger.info("Syncing from remote: {} -> {} ".format(remote_name,remote))
+                self.logger.info("Syncing from remote: {} -> {} ".format(remote_name, remote))
             except S3ResponseError:
-                self.logger.error("Failed to get list from {} -> {} ".format(remote_name,remote))
+                self.logger.error("Failed to get list from {} -> {} ".format(remote_name, remote))
                 continue
 
             all_keys = [f.path for f in
@@ -1290,10 +1285,10 @@ class Library(object):
 
                 try:
                     self.files.insert_collection()
-                except IntegrityError as e:
+                except IntegrityError:
                     b.close()  # Just means we already have it installed
                     raise
-                    continue
+                    # continue
 
                 if installed:
                     self.database.insert_partition_collection()
@@ -1305,8 +1300,8 @@ class Library(object):
             self.search.commit()
 
     def sync_source(self, clean=False):
-        '''Rebuild the database from the bundles that are already installed
-        in the repository cache'''
+        """Rebuild the database from the bundles that are already installed
+        in the repository cache"""
 
         if clean:
             self.files.query.type(Dataset.LOCATION.SOURCE).delete()
@@ -1319,9 +1314,7 @@ class Library(object):
                 self.sync_source_dir(ident, path)
 
             except Exception as e:
-                self.logger.error("Failed to sync: bundle_path={} : {} "
-                                  .format(ident.bundle_path, e.message))
-
+                self.logger.error("Failed to sync: bundle_path={} : {} ".format(ident.bundle_path, e.message))
 
         self.database.commit()
 
@@ -1334,7 +1327,7 @@ class Library(object):
             self.database.install_dataset_identity(ident)
             self.database.commit()
 
-        except (ConflictError, IntegrityError) as e:
+        except (ConflictError, IntegrityError):
             self.database.rollback()
             pass
 
@@ -1353,15 +1346,11 @@ class Library(object):
         """Create a reference to the warehouse and link all
         of the partitions to it. """
 
-        from ambry.util.packages import qualified_name
+        # from ambry.util.packages import qualified_name
 
         w.url = self.warehouse_url
 
-        store = self.files.install_data_store(w,
-                                              name=w.name,
-                                              title=w.title,
-                                              url=w.url,
-                                              summary=w.summary)
+        store = self.files.install_data_store(w, name=w.name, title=w.title, url=w.url, summary=w.summary)
 
         s = self.database.session
 
@@ -1426,7 +1415,7 @@ class Library(object):
             return DocCache(self)
         except ImportError:
             raise
-            return None
+            # return None
 
     @property
     def warehouse_cache(self):
@@ -1482,7 +1471,7 @@ class Library(object):
 Database: {database}
 Cache:    {cache}
 Remotes:  {remotes}
-        """.format(name=self.name, database=self.database.dsn, cache=self.cache, 
+        """.format(name=self.name, database=self.database.dsn, cache=self.cache,
                    remotes='\n          '.join([str(x) for x in self.remotes.items()]) if self.remotes else '')
 
     @property

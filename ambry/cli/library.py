@@ -282,8 +282,7 @@ def library_push(args, l, config):
         files = [(f.ref, f.type_) for f in l.files.query.installed.all]
     else:
 
-        files = [(f.ref, f.type_)
-                 for f in l.files.query.installed.state('new').all]
+        files = [(f.ref, f.type_) for f in l.files.query.installed.state('new').all]
 
     remote_errors = defaultdict(int)
 
@@ -303,7 +302,7 @@ def library_push(args, l, config):
         total_size = 0.0
         rate = 0
 
-        start = time.clock()
+        # start = time.clock()
         for ref, t in files:
 
             if t not in (Dataset.LOCATION.LIBRARY, Dataset.LOCATION.PARTITION):
@@ -336,7 +335,6 @@ def library_push(args, l, config):
                 prt("Failed: {}", e)
                 raise
 
-
             if what == 'pushed':
                 total_time += end - start
                 total_size += size
@@ -353,6 +351,7 @@ def library_push(args, l, config):
 
         if not args.dry_run:
             remote.store_list()
+
 
 def library_files(args, l, config):
     from ..identity import LocationRef
@@ -372,6 +371,7 @@ def library_files(args, l, config):
                 f.type_,
                 f.group,
                 f.path)
+
 
 def library_schema(args, l, config):
     from ambry.bundle import DbBundle
@@ -430,7 +430,7 @@ def library_get(args, l, config):
     elif b.partitions:
         for p in b.partitions:
             prt("get: {}".format(p.identity.vname))
-            bp = l.get(p.identity.vid)
+            l.get(p.identity.vid)
 
         b.partition = None
 

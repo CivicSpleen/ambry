@@ -102,8 +102,6 @@ class PartitionDb(
         _on_connect_partition(connection, None)
 
     def _on_create_engine(self, engine):
-        from sqlalchemy import event
-
         super(PartitionDb, self)._on_create_engine(engine)
 
         # This looks like it should be connected to the listener, but it causes
@@ -111,7 +109,7 @@ class PartitionDb(
         # event.listen(self._engine, 'connect', _on_connect_partition)
 
     def create(self):
-        from ambry.orm import Dataset
+        # from ambry.orm import Dataset
 
         '''Like the create() for the bundle, but this one also copies
         the dataset and makes and entry for the partition '''
@@ -126,7 +124,7 @@ class PartitionDb(
 
 def _on_connect_partition(dbapi_con, con_record):
     """ISSUE some Sqlite pragmas when the connection is created."""
-    from sqlite import _on_connect_bundle as ocb
+    # from sqlite import _on_connect_bundle as ocb
 
     dbapi_con.execute('PRAGMA page_size = 8192')
     dbapi_con.execute('PRAGMA temp_store = MEMORY')

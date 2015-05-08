@@ -6,7 +6,7 @@
 
 
 import os
-from ..identity import Identity
+# from ..identity import Identity
 from ..orm import Dataset
 
 
@@ -34,7 +34,7 @@ class SourceTree(object):
                     self.base_dir))
 
     def list(self, datasets=None, key='vid'):
-        from ..identity import Identity, LocationRef
+        from ..identity import LocationRef  # , Identity
 
         if datasets is None:
             datasets = {}
@@ -131,7 +131,7 @@ class SourceTree(object):
                 for v in source.data['dependencies'].values():
                     try:
                         ident = l.resolve(v, location=None, use_remote=False)
-                    except Exception as e:
+                    except Exception:
                         ident = None
 
                     if not ident:
@@ -207,7 +207,6 @@ class SourceTree(object):
             self.library.database.session.rollback()
             f = self.library.files.query.ref(ident.vid).type(Dataset.LOCATION.SOURCE).one_maybe
 
-
         if f:
             import time
             f.modified = int(time.time())
@@ -241,11 +240,11 @@ class SourceTree(object):
             try:
                 self.sync_bundle(ident.bundle_path, ident)
             except Exception as e:
-                raise
-                self.logger.error(
-                    "Failed to sync: bundle_path={} : {} ".format(
-                        ident.bundle_path,
-                        e.message))
+                raise e
+                # self.logger.error(
+                #     "Failed to sync: bundle_path={} : {} ".format(
+                #         ident.bundle_path,
+                #         e.message))
 
     def _bundle_data(self, ident, bundle):
 
@@ -267,7 +266,7 @@ class SourceTree(object):
     def _dir_list(self, datasets=None, key='vid'):
         """Get a list of sources from the directory, rather than the
         library."""
-        from ..identity import LocationRef, Identity
+        from ..identity import LocationRef  # , Identity
         from ..bundle import BuildBundle
         from ..dbexceptions import ConfigurationError
 
@@ -369,7 +368,7 @@ class SourceTree(object):
         if not ident:
             return None
 
-        return self.bundle(os.path.join(self.base_dir,self.source_path(ident=ident)))
+        return self.bundle(os.path.join(self.base_dir, self.source_path(ident=ident)))
 
     def resolve_build_bundle(self, term):
         """Return an Bundle object, using the base BuildBundle class."""
@@ -474,8 +473,8 @@ class SourceTree(object):
             self.logger.warn(
                 "Failed to get number from number server: {}".format(
                     e.message))
-            self.logger.warn(
-                "Using self-generated number. There is no problem with this, but they are longer than centrally generated numbers.")
+            self.logger.warn("Using self-generated number. There is no problem with this, "
+                             "but they are longer than centrally generated numbers.")
             d['id'] = str(DatasetNumber())
 
         ident = Identity.from_dict(d)
@@ -587,10 +586,11 @@ class SourceTreeLibrary(object):
         import os.path
         from ..util import md5_for_file
 
-        hash = None
+        # hash = None
 
         if os.path.is_file(path):
-            hash = md5_for_file(path)
+            md5_for_file(path)
+            # hash = md5_for_file(path)
 
         self._library.database.add_file(
             path=path,
@@ -617,7 +617,7 @@ class SourceTreeWatcher(object):
         from watchdog.observers import Observer
         from watchdog.events import PatternMatchingEventHandler
 
-        library = self.library
+        # library = self.library
         this = self
 
         class EventHandler(PatternMatchingEventHandler):

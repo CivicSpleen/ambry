@@ -150,14 +150,12 @@ class DocCache(object):
     def library_info(self):
         pass
 
-    ##
+    #
     # Index, low-information lists of all items in a category.
-    ##
+    #
 
     def library_info(self):
-        return self.cache(
-            lambda: self.library.summary_dict,
-            _key='library_info')
+        return self.cache(lambda: self.library.summary_dict, _key='library_info')
 
     def bundle_index(self):
 
@@ -294,7 +292,7 @@ class DocCache(object):
                 for tvid in p['table_vids']:
 
                     t = b['tables'][tvid]
-                    e = inst_table_entry(b, p, t)
+                    inst_table_entry(b, p, t)
 
         d['installed_table_names'] = installed_table_names
 
