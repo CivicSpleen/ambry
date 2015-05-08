@@ -28,12 +28,7 @@ def css_file(name):
 def js_file(path):
     import os.path
 
-    return send_from_directory(
-        *
-        os.path.split(
-            os.path.join(
-                renderer().js_dir,
-                path)))
+    return send_from_directory(*os.path.split(os.path.join(renderer().js_dir,path)))
 
 
 @app.route('/')
