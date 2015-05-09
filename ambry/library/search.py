@@ -67,12 +67,17 @@ class Search(object):
 
         from whoosh.index import create_in, open_dir
 
-        if not os.path.exists(dir):
-            os.makedirs(dir)
-            index = create_in(dir, schema)
+        try:
+            if not os.path.exists(dir):
+                os.makedirs(dir)
+                index = create_in(dir, schema)
 
-        else:
-            index = open_dir(dir)
+            else:
+                index = open_dir(dir)
+        except:
+            self.library.logger.error("Failed to open search index at: '{}' ".format(dir))
+            raise
+
 
         return index
 
