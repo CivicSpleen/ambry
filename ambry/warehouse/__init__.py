@@ -430,22 +430,6 @@ class Warehouse(object):
                                                     session=self.library.database.session)
         return meta, table
 
-    def table(self, table_name):
-        """Get table metadata from the database."""
-        from sqlalchemy import Table
-
-        table = self._table_meta_cache.get(table_name, False)
-
-        if table is not False:
-            r = table
-        else:
-            metadata = self.metadata  # FIXME Will probably fail ..
-            table = Table(table_name, metadata, autoload=True)
-            self._table_meta_cache[table_name] = table
-            r = table
-
-        return r
-
     @property
     def tables(self):
         from ..orm import Table
