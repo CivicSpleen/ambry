@@ -9,15 +9,8 @@ import os
 from ..cli import prt, err, fatal, warn, _print_info  # @UnresolvedImport
 from ambry.util import Progressor
 
-# If the devel module exists, this is a development system.
-try:
-    from ambry.support.devel import *
-except ImportError as e:
-    from ambry.support.production import *
-
 
 def library_parser(cmd):
-
     import argparse
 
     #
@@ -30,17 +23,23 @@ def library_parser(cmd):
 
     sp = asp.add_parser('push', help='Push new library files')
     sp.set_defaults(subcommand='push')
-    sp.add_argument( '-w', '--watch', default=False, action="store_true", help='Check periodically for new files.')
-    sp.add_argument( '-f', '--force', default=False, action="store_true", help='Push all files')
-    sp.add_argument( '-n', '--dry-run', default=False, action="store_true", help="Dry run, don't actually send the files." )
+    sp.add_argument('-w', '--watch', default=False, action="store_true", help='Check periodically for new files.')
+    sp.add_argument('-f', '--force', default=False, action="store_true", help='Push all files')
+    sp.add_argument('-n', '--dry-run', default=False, action="store_true",
+                    help="Dry run, don't actually send the files.")
 
     sp = asp.add_parser('files', help='Print out files in the library')
     sp.set_defaults(subcommand='files')
-    sp.add_argument( '-a', '--all', default='all', action="store_const", const='all', dest='file_state', help='Print all files')
-    sp.add_argument( '-n', '--new', default=False, action="store_const", const='new', dest='file_state', help='Print new files')
-    sp.add_argument( '-p', '--pushed', default=False, action="store_const", const='pushed', dest='file_state', help='Print pushed files')
-    sp.add_argument( '-u', '--pulled', default=False, action="store_const", const='pulled', dest='file_state', help='Print pulled files')
-    sp.add_argument( '-s', '--synced', default=False, action="store_const", const='synced', dest='file_state', help='Print synced source packages')
+    sp.add_argument('-a', '--all', default='all', action="store_const", const='all', dest='file_state',
+                    help='Print all files')
+    sp.add_argument('-n', '--new', default=False, action="store_const", const='new', dest='file_state',
+                    help='Print new files')
+    sp.add_argument('-p', '--pushed', default=False, action="store_const", const='pushed', dest='file_state',
+                    help='Print pushed files')
+    sp.add_argument('-u', '--pulled', default=False, action="store_const", const='pulled', dest='file_state',
+                    help='Print pulled files')
+    sp.add_argument('-s', '--synced', default=False, action="store_const", const='synced', dest='file_state',
+                    help='Print synced source packages')
 
     sp = asp.add_parser('new', help='Create a new library')
     sp.set_defaults(subcommand='new')
@@ -48,65 +47,63 @@ def library_parser(cmd):
     sp = asp.add_parser('drop', help='Delete all of the tables in the library')
     sp.set_defaults(subcommand='drop')
 
-    sp = asp.add_parser( 'clean', help='Remove all entries from the library database')
+    sp = asp.add_parser('clean', help='Remove all entries from the library database')
     sp.set_defaults(subcommand='clean')
 
-    sp = asp.add_parser( 'purge', help='Remove all entries from the library database and delete all files')
+    sp = asp.add_parser('purge', help='Remove all entries from the library database and delete all files')
     sp.set_defaults(subcommand='purge')
 
-    sp = asp.add_parser( 'sync', help='Synchronize the local directory, upstream and remote with the library')
+    sp = asp.add_parser('sync', help='Synchronize the local directory, upstream and remote with the library')
     sp.set_defaults(subcommand='sync')
-    sp.add_argument( '-C', '--clean', default=False, action="store_true", help='Clean before syncing. Will clean only the locations that are also synced')
+    sp.add_argument('-C', '--clean', default=False, action="store_true",
+                    help='Clean before syncing. Will clean only the locations that are also synced')
 
-    sp.add_argument('-a','--all',default=False,  action="store_true", help='Sync everything')
-    sp.add_argument( '-l', '--library', default=False, action="store_true", help='Sync the library')
-    sp.add_argument( '-r', '--remote', default=False, action="store_true", help='Sync the remote')
-    sp.add_argument( '-s', '--source', default=False, action="store_true", help='Sync the source')
-    sp.add_argument( '-j', '--json', default=False, action="store_true", help='Cache JSON versions of library objects')
-    sp.add_argument( '-w', '--warehouses', default=False, action="store_true", help='Re-synchronize warehouses')
-    sp.add_argument( '-F', '--bundle-list', help='File of bundle VIDs. Sync only VIDs listed in this file')
+    sp.add_argument('-a', '--all', default=False, action="store_true", help='Sync everything')
+    sp.add_argument('-l', '--library', default=False, action="store_true", help='Sync the library')
+    sp.add_argument('-r', '--remote', default=False, action="store_true", help='Sync the remote')
+    sp.add_argument('-s', '--source', default=False, action="store_true", help='Sync the source')
+    sp.add_argument('-j', '--json', default=False, action="store_true", help='Cache JSON versions of library objects')
+    sp.add_argument('-w', '--warehouses', default=False, action="store_true", help='Re-synchronize warehouses')
+    sp.add_argument('-F', '--bundle-list', help='File of bundle VIDs. Sync only VIDs listed in this file')
 
     sp = asp.add_parser('info', help='Display information about the library')
     sp.set_defaults(subcommand='info')
 
-    sp = asp.add_parser( 'get', help='Search for the argument as a bundle or partition name or id. Possible download the file from the remote library')
+    sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. '
+                                    'Possible download the file from the remote library')
     sp.set_defaults(subcommand='get')
     sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument( '-p', '--partitions', default=False, action="store_true", help='Also get all of the partitions. ')
-    sp.add_argument( '-f', '--force', default=False, action="store_true", help='Force retrieving from the remote')
+    sp.add_argument('-p', '--partitions', default=False, action="store_true", help='Also get all of the partitions. ')
+    sp.add_argument('-f', '--force', default=False, action="store_true", help='Force retrieving from the remote')
 
-    sp = asp.add_parser('open',                 help='Open a bundle or partition file with sqlite3')
+    sp = asp.add_parser('open', help='Open a bundle or partition file with sqlite3')
     sp.set_defaults(subcommand='open')
     sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument( '-f', '--force', default=False, action="store_true", help='Force retrieving from the remote')
+    sp.add_argument('-f', '--force', default=False, action="store_true", help='Force retrieving from the remote')
 
-    sp = asp.add_parser( 'remove', help='Delete a file from all local caches and the local library')
+    sp = asp.add_parser('remove', help='Delete a file from all local caches and the local library')
     sp.set_defaults(subcommand='remove')
-    sp.add_argument('-a','--all',default=False, action="store_true",help='Remove all records')
-    sp.add_argument('-b','--bundle',default=False,action="store_true",  help='Remove the dataset and partition records')
-    sp.add_argument( '-l', '--library', default=False, action="store_true", help='Remove the library file record and library files')
-    sp.add_argument( '-r', '--remote', default=False, action="store_true", help='Remove the remote record')
-    sp.add_argument( '-s', '--source', default=False, action="store_true", help='Remove the source record')
-    sp.add_argument( 'terms', type=str, nargs=argparse.REMAINDER, help='Name or ID of the bundle or partition to remove')
+    sp.add_argument('-a', '--all', default=False, action="store_true", help='Remove all records')
+    sp.add_argument('-b', '--bundle', default=False, action="store_true",
+                    help='Remove the dataset and partition records')
+    sp.add_argument('-l', '--library', default=False, action="store_true",
+                    help='Remove the library file record and library files')
+    sp.add_argument('-r', '--remote', default=False, action="store_true", help='Remove the remote record')
+    sp.add_argument('-s', '--source', default=False, action="store_true", help='Remove the source record')
+    sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Name or ID of the bundle or partition to remove')
 
     sp = asp.add_parser('schema', help='Dump the schema for a bundle')
     sp.set_defaults(subcommand='schema')
     sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument('-p','--pretty',default=False,action="store_true",help='pretty, formatted output')
+    sp.add_argument('-p', '--pretty', default=False, action="store_true", help='pretty, formatted output')
     group = sp.add_mutually_exclusive_group()
     group.add_argument('-y', '--yaml', default='csv', dest='format', action='store_const', const='yaml')
-    group.add_argument( '-j', '--json', default='csv', dest='format', action='store_const', const='json')
-    group.add_argument( '-c', '--csv', default='csv', dest='format', action='store_const', const='csv')
+    group.add_argument('-j', '--json', default='csv', dest='format', action='store_const', const='json')
+    group.add_argument('-c', '--csv', default='csv', dest='format', action='store_const', const='csv')
 
     whsp = asp.add_parser('config', help='Configure varibles')
     whsp.set_defaults(subcommand='config')
     whsp.add_argument('term', type=str, nargs='?', help='Var=Value')
-
-    if IN_DEVELOPMENT:
-        sp = asp.add_parser('test', help='Run development test code')
-        sp.set_defaults(subcommand='test')
-        sp.add_argument('terms', type=str, nargs=argparse.REMAINDER,
-                        help='Name or ID of the bundle or partition to remove')
 
 
 def library_command(args, rc):
@@ -125,7 +122,6 @@ def library_init(args, l, config):
 
 
 def library_backup(args, l, config):
-
     import tempfile
 
     if args.file:
@@ -140,6 +136,7 @@ def library_backup(args, l, config):
 
     if args.date:
         from datetime import datetime
+
         date = datetime.now().strftime('%Y%m%dT%H%M')
         parts = backup_file.split('.')
         if len(parts) >= 2:
@@ -165,20 +162,17 @@ def library_backup(args, l, config):
 
 
 def library_drop(args, l, config):
-
     prt("Drop tables")
     l.database.enable_delete = True
     l.database.drop()
 
 
 def library_clean(args, l, config):
-
     prt("Clean tables")
     l.database.clean()
 
 
 def library_purge(args, l, config):
-
     prt("Purge library")
     l.purge()
 
@@ -267,7 +261,6 @@ def library_remove(args, l, config):
 
 
 def library_info(args, l, config, list_all=False):
-
     prt("Library Info")
     prt("Name:      {}", args.library_name)
     prt("Database:  {}", l.database.dsn)
@@ -275,7 +268,7 @@ def library_info(args, l, config, list_all=False):
     prt("Doc Cache: {}", l.doc_cache.cache)
     prt("Whs Cache: {}", l.warehouse_cache)
     prt("Remotes:   {}", ', '.join([str(r)
-        for r in l.remotes]) if l.remotes else '')
+                                    for r in l.remotes]) if l.remotes else '')
 
 
 def library_push(args, l, config):
@@ -289,8 +282,7 @@ def library_push(args, l, config):
         files = [(f.ref, f.type_) for f in l.files.query.installed.all]
     else:
 
-        files = [(f.ref, f.type_)
-                 for f in l.files.query.installed.state('new').all]
+        files = [(f.ref, f.type_) for f in l.files.query.installed.state('new').all]
 
     remote_errors = defaultdict(int)
 
@@ -310,7 +302,7 @@ def library_push(args, l, config):
         total_size = 0.0
         rate = 0
 
-        start = time.clock()
+        # start = time.clock()
         for ref, t in files:
 
             if t not in (Dataset.LOCATION.LIBRARY, Dataset.LOCATION.PARTITION):
@@ -323,17 +315,17 @@ def library_push(args, l, config):
             remote_name = b.metadata.about.access
 
             if remote_name not in l.remotes:
-                err("Can't push {} (bundle: '{}' ); no remote named '{}' ".format(ref, bp.vname, remote_name) )
+                err("Can't push {} (bundle: '{}' ); no remote named '{}' ".format(ref, bp.vname, remote_name))
                 continue
 
             if remote_errors[remote_name] > 4:
-                err("Too many errors on remote '{}', skipping ".format( remote_name))
+                err("Too many errors on remote '{}', skipping ".format(remote_name))
                 continue
 
             remote = l.remotes[remote_name]
 
             try:
-                what, start, end, size = l.push(remote, ref, cb=partial(push_cb, rate), dry_run = args.dry_run)
+                what, start, end, size = l.push(remote, ref, cb=partial(push_cb, rate), dry_run=args.dry_run)
             except S3ResponseError:
                 err("Failed to push to remote '{}' ".format(remote_name))
                 remote_errors[remote_name] += 1
@@ -342,7 +334,6 @@ def library_push(args, l, config):
             except Exception as e:
                 prt("Failed: {}", e)
                 raise
-
 
             if what == 'pushed':
                 total_time += end - start
@@ -361,8 +352,8 @@ def library_push(args, l, config):
         if not args.dry_run:
             remote.store_list()
 
-def library_files(args, l, config):
 
+def library_files(args, l, config):
     from ..identity import LocationRef
 
     if args.file_state == 'all':
@@ -381,6 +372,7 @@ def library_files(args, l, config):
                 f.group,
                 f.path)
 
+
 def library_schema(args, l, config):
     from ambry.bundle import DbBundle
 
@@ -394,20 +386,15 @@ def library_schema(args, l, config):
         b.schema.as_csv()
     elif args.format == 'json':
         import json
+
         s = b.schema.as_struct()
         if args.pretty:
-            print(
-                json.dumps(
-                    s,
-                    sort_keys=True,
-                    indent=4,
-                    separators=(
-                        ',',
-                        ': ')))
+            print(json.dumps(s, sort_keys=True, indent=4, separators=(',', ': ')))
         else:
             print(json.dumps(s))
     elif args.format == 'yaml':
         import yaml
+
         s = b.schema.as_struct()
         if args.pretty:
             print(yaml.dump(s, indent=4, default_flow_style=False))
@@ -418,7 +405,6 @@ def library_schema(args, l, config):
 
 
 def library_get(args, l, config):
-
     ident = l.resolve(args.term)
 
     if not ident:
@@ -444,7 +430,7 @@ def library_get(args, l, config):
     elif b.partitions:
         for p in b.partitions:
             prt("get: {}".format(p.identity.vname))
-            bp = l.get(p.identity.vid)
+            l.get(p.identity.vid)
 
         b.partition = None
 
@@ -497,11 +483,11 @@ def library_sync(args, l, config):
         l.logger.info("==== Sync Source")
         l.sync_source(clean=args.clean)
 
-    if (args.json or all):
+    if args.json or all:
         l.logger.info("==== Sync Cached JSON")
         l.sync_doc_json(clean=args.clean)
 
-    if (args.warehouses):
+    if args.warehouses:
         l.logger.info("==== Sync warehouses")
         l.sync_warehouses()
 
@@ -516,7 +502,7 @@ def library_config(args, l, config):
         var = parts.pop(0)
         val = parts.pop(0) if parts else None
 
-        if not var in l.configurable:
+        if var not in l.configurable:
             raise ConfigurationError(
                 "Value {} is not configurable. Must be one of: {}".format(
                     args.var,
@@ -540,8 +526,6 @@ def library_unknown(args, l, config):
 
 
 def library_test(args, l, config):
-    import time
-
     term = 'Alabama city New Hope'
 
     for t in range(len(term)):

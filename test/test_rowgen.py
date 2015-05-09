@@ -1,13 +1,12 @@
-
-from test_base import  TestBase
+from test_base import TestBase
 from ambry.bundle.rowgen import DelimitedRowGenerator
 
+
 class Test(TestBase):
- 
     def setUp(self):
         pass
 
-    def  test_basic(self):
+    def test_basic(self):
         from test import support
         from os.path import join, dirname
 
@@ -30,15 +29,15 @@ class Test(TestBase):
         class RG(DelimitedRowGenerator):
             def is_data_line(self, i, row):
                 try:
-                    return len(filter(bool,row)) > 5 and int(row[0])
+                    return len(filter(bool, row)) > 5 and int(row[0])
                 except ValueError:
                     return False
 
             def is_header_comment_line(self, i, row):
-                return len(filter(bool,row)) < 2
+                return len(filter(bool, row)) < 2
 
             def is_header_line(self, i, row):
-                return len(filter(bool,row)) > 2
+                return len(filter(bool, row)) > 2
 
         rg = RG(fn('rowgen_multiheader.csv'))
 

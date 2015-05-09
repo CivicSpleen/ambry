@@ -4,15 +4,16 @@ Created on Jun 22, 2012
 @author: eric
 """
 import unittest
+from test_base import  TestBase
 
 from bundles.testbundle.bundle import Bundle
 from ambry.identity import *
-from test_base import  TestBase
-
 
 class Test(TestBase):
  
     def setUp(self):
+
+        super(Test, self).setUp()
 
         self.copy_or_build_bundle()
 
@@ -130,10 +131,6 @@ class Test(TestBase):
             s.add_column(t3,name='col1', datatype=Column.DATATYPE_REAL )
             s.add_column(t3,name='col2', datatype=Column.DATATYPE_INTEGER )
             s.add_column(t3,name='col3', datatype=Column.DATATYPE_TEXT )   
-
-     
-    def test_names(self):
-        print 'Testing Names'
 
      
     def test_column_processor(self):
@@ -292,7 +289,7 @@ class Test(TestBase):
 
         bundle = Bundle()
         p = bundle.partitions.find(pnq3)
-        print p.data 
+
         self.assertEquals('bar',p.data['foo'] ) 
 
         #p = self.bundle.partitions.find(PartitionNameQuery(name='source-dataset-subset-variation-30-hdf'))
@@ -313,10 +310,6 @@ class Test(TestBase):
                 pid = self.bundle.identity.as_partition(**dict(p[i:i+j+1]))
                 pids[pid.fqname] = pid
 
-
-
-        #print '!!!', self.bundle.database.dsn
-        #return
 
         with self.bundle.session as s:
 
@@ -454,8 +447,6 @@ class Test(TestBase):
         bundle.exit_on_fatal = False
         bundle.pre_prepare()
         bundle.prepare()
-
-        print bundle.database.dsn
 
         bundle.post_prepare()
         bundle.pre_build()

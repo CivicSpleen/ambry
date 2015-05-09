@@ -10,7 +10,7 @@ def new_repository(config):
 
     from ..service import new_service, GitServiceMarker  # @UnresolvedImport
 
-    if not 'account' in config:
+    if 'account' not in config:
         config['account'] = {'user': None, 'password': None}
 
     service_config = config['account']

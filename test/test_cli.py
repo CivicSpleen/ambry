@@ -8,9 +8,10 @@ env variable:
 
 """
 import unittest
+from test_base import  TestBase
 from bundles.testbundle.bundle import Bundle
 from ambry.run import  RunConfig
-from test_base import  TestBase  # @UnresolvedImport
+
 from ambry.util import memoize
 
 class Test(TestBase):
@@ -20,6 +21,8 @@ class Test(TestBase):
     def setUp(self):
         import os
         from ambry.run import  get_runconfig
+
+        super(Test, self).setUp()
 
         #self.test_dir = tempfile.mkdtemp(prefix='test_cli_')
         self.test_dir = '/tmp/test_cli'
@@ -117,7 +120,7 @@ class Test(TestBase):
         args = [  '-c',self.config_file ] + list(args)
 
         args = ['python','-mambry.cli'] + args
-        print "=== Execute: ", " ".join(args)
+        #print "=== Execute: ", " ".join(args)
         try:
             s=subprocess.check_output(args)
         except subprocess.CalledProcessError as e:
@@ -139,6 +142,7 @@ class Test(TestBase):
 
         self.assertIn('sqlite:////tmp/test_cli/library.db', c('library', 'info'))
         self.assertIn('Database:  sqlite:////tmp/test_cli/library.db', c('library', 'info'))
+
 
     def test_sync_build(self):
         import os
@@ -179,7 +183,7 @@ class Test(TestBase):
             c('bundle -d dHSyDm4MNR002 prepare --clean ')
 
 
-
+    # Broken
     def test_library(self):
 
         c = self.cmd

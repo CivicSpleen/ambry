@@ -17,7 +17,7 @@ try:
 except ImportError as e:
     raise RequirementError("Failed to import gdal: {}".format(str(e)))
 
-#from analysisarea import *
+# from analysisarea import *
 from kernel import *
 from util import *
 from array import *

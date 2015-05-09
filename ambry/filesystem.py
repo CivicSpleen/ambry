@@ -6,17 +6,17 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-import os
 import io
-
-from ambry.orm import File
 import zipfile
-
 import urllib
+
+import os
+from ambry.orm import File
 import ambry.util
 
+
 global_logger = ambry.util.get_logger(__name__)
-#import logging; logger.setLevel(logging.DEBUG)
+# import logging; logger.setLevel(logging.DEBUG)
 
 
 # makedirs
@@ -32,12 +32,13 @@ def testzip(self):
             # Read by chunks, to avoid an OverflowError or a
             # MemoryError with very large embedded files.
             f = self.open(zinfo.filename, "r")
-            while f.read(chunk_size):     # Check CRC-32
+            while f.read(chunk_size):  # Check CRC-32
                 pass
             f.close()
             f._fileobj.close()  # This shoulnd't be necessary, but it is.
         except zipfile.BadZipfile:
             return zinfo.filename
+
 
 zipfile.ZipFile.testzip = testzip
 
@@ -47,11 +48,9 @@ class DownloadFailedError(Exception):
 
 
 class FileRef(File):
-
     """Extends the File orm class with awareness of the filsystem."""
 
     def __init__(self, bundle):
-
         self.super_ = super(FileRef, self)
         self.super_.__init__()
 
@@ -72,7 +71,6 @@ class FileRef(File):
 
 
 class Filesystem(object):
-
     def __init__(self, config):
         self.config = config
 
@@ -83,8 +81,7 @@ class Filesystem(object):
         config = self.config.filesystem(name)
 
         if not config:
-            raise ConfigurationError(
-                'No filesystem cache by name of {}'.format(name))
+            raise ConfigurationError('No filesystem cache by name of {}'.format(name))
 
         return new_cache(config)
 
@@ -107,7 +104,6 @@ class Filesystem(object):
 
 
 class BundleFilesystem(Filesystem):
-
     BUILD_DIR = 'build'
     META_DIR = 'meta'
 
@@ -135,7 +131,7 @@ class BundleFilesystem(Filesystem):
 
             test = os.path.normpath(d + '/' + testFile)
 
-            if(os.path.isfile(test)):
+            if os.path.isfile(test):
                 return d
             d = os.path.dirname(d)
 
@@ -179,7 +175,7 @@ class BundleFilesystem(Filesystem):
             try:
                 # MUltiple process may try to make, so it could already exist
                 os.makedirs(dir_)
-            except Exception as e:  # @UnusedVariable
+            except Exception:
                 pass
 
             if not os.path.exists(dir_):
@@ -227,7 +223,7 @@ class BundleFilesystem(Filesystem):
         """Resolve a path that is relative to the bundle root into an absoulte
         path."""
         abs_path = self.path(rel_path)
-        if(not os.path.isdir(abs_path)):
+        if not os.path.isdir(abs_path):
             os.makedirs(abs_path)
         return abs_path
 
@@ -235,6 +231,7 @@ class BundleFilesystem(Filesystem):
     def file_hash(path):
         """Compute hash of a file in chunks."""
         import hashlib
+
         md5 = hashlib.md5()
         with open(path, 'rb') as f:
             for chunk in iter(lambda: f.read(8192), b''):
@@ -300,11 +297,12 @@ class BundleFilesystem(Filesystem):
     def unzip(self, path, regex=None):
         """Context manager to extract a single file from a zip archive, and
         delete it when finished."""
-        import tempfile
         import uuid
 
         if isinstance(regex, basestring):
             import re
+
+            # oregex = regex
             regex = re.compile(regex)
 
         cache = self.get_cache_by_name('extracts')
@@ -320,13 +318,14 @@ class BundleFilesystem(Filesystem):
                 if regex is None:
                     # Assume only one file in zip archive.
                     name = iter(zf.namelist()).next()
-                    abs_path = self._get_unzip_file(cache,tmpdir,zf,path,name)
+                    abs_path = self._get_unzip_file(cache, tmpdir, zf, path, name)
                 else:
 
                     for name in zf.namelist():
-                        if regex.match(name):
-                            abs_path = self._get_unzip_file(cache,tmpdir,zf,path, name)
-                            print '!!!!', abs_path
+
+                        if regex.search(name):
+                            abs_path = self._get_unzip_file(cache, tmpdir, zf, path, name)
+
                             break
 
                 return abs_path
@@ -337,7 +336,7 @@ class BundleFilesystem(Filesystem):
         finally:
             self.rm_rf(tmpdir)
 
-        return None
+        # return None
 
     def unzip_dir(self, path, regex=None):
         """Generator that yields the files from a zip file.
@@ -347,7 +346,6 @@ class BundleFilesystem(Filesystem):
         pattern.
 
         """
-        import tempfile
         import uuid
 
         cache = self.get_cache_by_name('extracts')
@@ -357,22 +355,17 @@ class BundleFilesystem(Filesystem):
         if not os.path.isdir(tmpdir):
             os.makedirs(tmpdir)
 
-        rtrn = True
+        # rtrn = True
 
         try:
             with zipfile.ZipFile(path) as zf:
-                abs_path = None
+                # abs_path = None
                 for name in zf.namelist():
                     # Noidea about this, but it seems useless.
                     if '__MACOSX' in name:
                         continue
 
-                    abs_path = self._get_unzip_file(
-                        cache,
-                        tmpdir,
-                        zf,
-                        path,
-                        name)
+                    abs_path = self._get_unzip_file(cache, tmpdir, zf, path, name)
 
                     if not abs_path:
                         continue
@@ -380,10 +373,7 @@ class BundleFilesystem(Filesystem):
                     if regex and regex.match(name) or not regex:
                         yield abs_path
         except Exception as e:
-            self.bundle.error(
-                "File '{}' can't be unzipped, removing it: {}".format(
-                    path,
-                    e))
+            self.bundle.error("File '{}' can't be unzipped, removing it: {}".format(path, e))
             os.remove(path)
             raise
         finally:
@@ -410,7 +400,7 @@ class BundleFilesystem(Filesystem):
         parsed = urlparse.urlparse(str(url))
 
         # If the URL doesn't parse as a URL, then it is a name of a source.
-        if (not parsed.scheme and url in self.bundle.metadata.sources):
+        if not parsed.scheme and url in self.bundle.metadata.sources:
 
             source_entry = self.bundle.metadata.sources.get(url)
 
@@ -421,15 +411,27 @@ class BundleFilesystem(Filesystem):
                 url = source_entry.url
             parsed = urlparse.urlparse(str(url))
 
-        if parsed.scheme == 'file':
+        if parsed.scheme == 'file' or not parsed.scheme:
             return parsed.path
 
         elif parsed.scheme == 's3':
             # To keep the rest of the code simple, we'll use the S# cache to generate a signed URL, then
             # download that through the normal process.
-            from ckcache import new_cache
+            from ckcache import new_cache, parse_cache_string
 
-            s3cache = new_cache("s3://{}".format(parsed.netloc.strip('/')))
+            bucket = parsed.netloc.strip('/')
+
+            cache_url = "s3://{}".format(bucket)
+
+            config = parse_cache_string(cache_url)
+
+            config['account'] = self.config.account(bucket)
+
+            import pprint
+
+            pprint.pprint(config)
+
+            s3cache = new_cache(config)
 
             url = s3cache.path(urllib.unquote_plus(parsed.path.strip('/')))
             parsed = urlparse.urlparse(str(url))
@@ -437,7 +439,7 @@ class BundleFilesystem(Filesystem):
         else:
             use_hash = True
 
-        #file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
+        # file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
         file_path = os.path.join(parsed.netloc, parsed.path.strip('/'))
 
         # S3 has time in the query, so it never caches
@@ -452,10 +454,7 @@ class BundleFilesystem(Filesystem):
         # We download to a temp file, then move it into place when
         # done. This allows the code to detect and correct partial
         # downloads.
-        download_path = os.path.join(
-            tempfile.gettempdir(),
-            file_path +
-            ".download")
+        download_path = os.path.join(tempfile.gettempdir(), file_path + ".download")
 
         def test_zip_file(f):
             if not os.path.exists(f):
@@ -475,7 +474,6 @@ class BundleFilesystem(Filesystem):
             if attempts > 0:
                 self.bundle.error("Retrying download of {}".format(url))
 
-            cached_file = None
             out_file = None
             excpt = None
 
@@ -504,27 +502,22 @@ class BundleFilesystem(Filesystem):
                             missing_ok=True))
 
                     resp = urllib2.urlopen(url)
-                    headers = resp.info()  # @UnusedVariable
+                    # headers = resp.info()  # @UnusedVariable
+                    resp.info()
 
                     if resp.getcode() is not None and resp.getcode() != 200:
-                        raise DownloadFailedError(
-                            "Failed to download {}: code: {} ".format(
-                                url, resp.getcode()))
+                        raise DownloadFailedError("Failed to download {}: code: {} ".format(url, resp.getcode()))
 
                     try:
                         out_file = cache.put(resp, file_path)
                     except:
-                        self.bundle.error(
-                            "Caught exception, deleting download file")
+                        self.bundle.error("Caught exception, deleting download file")
                         cache.remove(file_path, propagate=True)
                         raise
 
                     if test_f and not test_f(out_file):
                         cache.remove(file_path, propagate=True)
-                        raise DownloadFailedError(
-                            "Download didn't pass test function " +
-                            url)
-
+                        raise DownloadFailedError("Download didn't pass test function " + url)
                 break
 
             except KeyboardInterrupt:
@@ -535,13 +528,7 @@ class BundleFilesystem(Filesystem):
                 self.bundle.error("Failed:  " + str(e))
                 excpt = e
             except IOError as e:
-                self.bundle.error(
-                    "Failed to download " +
-                    url +
-                    " to " +
-                    file_path +
-                    " : " +
-                    str(e))
+                self.bundle.error("Failed to download " + url + " to " + file_path + " : " + str(e))
                 excpt = e
             except urllib.ContentTooShortError as e:
                 self.bundle.error("Content too short for " + url)
@@ -591,7 +578,7 @@ class BundleFilesystem(Filesystem):
         """
         import os.path
 
-        opened = False
+        # opened = False
         if isinstance(f, basestring):
             if not f.endswith('.csv'):  # Maybe the name of a source
                 if f in self.bundle.metadata.sources:
@@ -685,8 +672,6 @@ class BundleFilesystem(Filesystem):
         """
         import yaml
 
-        from ambry.util import AttrDict
-
         with open(self.path(*args), 'rb') as f:
             return yaml.load(f)
 
@@ -759,7 +744,7 @@ class BundleFilesystem(Filesystem):
             s.commit()
             o._is_new = True
 
-        except Exception as e:
+        except Exception:
             return None
 
         return o
@@ -777,11 +762,9 @@ SEEK_END = getattr(io, 'SEEK_END', 2)
 
 
 class FileChunkIO(io.FileIO):
-
     """A class that allows you reading only a chunk of a file."""
 
-    def __init__(self, name, mode='r', closefd=True, offset=0, bytes_=None,
-                 *args, **kwargs):
+    def __init__(self, name, mode='r', closefd=True, offset=0, bytes_=None, *args, **kwargs):
         """Open a file chunk.
 
         The mode can only be 'r' for reading. Offset is the amount of
@@ -833,6 +816,7 @@ class FileChunkIO(io.FileIO):
             b[:n] = data
         except TypeError as err:
             import array
+
             if not isinstance(b, array.array):
                 raise err
             b[:n] = array.array(b'b', data)

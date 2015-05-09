@@ -37,20 +37,20 @@ library:
 
 
 warehouse:
-    health: 
+    health:
         database: 'sqlite:////tmp/health.db'
         title: Health Warehouse
         name: health
         local_cache: /tmp/health_cache
-    education: 
+    education:
         database: 'sqlite:////tmp/education.db'
         title: education warehouse
         name: education
         summary: This is a BS summary
         local_cache: /tmp/ambry-whtest/health_cache
 
-    sqlite: 'sqlite:////tmp/sqlite_warehouse'
-    spatialite: 'spatialite:////tmp/spatialite_warehouse'
+    sqlite: 'sqlite:////tmp/sqlite_warehouse.db'
+    spatialite: 'spatialite:////tmp/spatialite_warehouse.db'
     postgres1: postgis://user:user@warehouse2/manifest_test
 
 services:

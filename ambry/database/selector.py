@@ -10,7 +10,8 @@ included in this distribution as LICENSE.txt
 class RowSelector(object):
 
     """Constructed on a query to a partition, this object allorws rows of a
-    database to be acessed in a variety of forms, such as pandas, numpy, petl or dicts"""
+    database to be acessed in a variety of forms, such as pandas, numpy, petl
+    or dicts"""
 
     def __init__(self, partition, sql=None, index_col=None, *args, **kwargs):
 
@@ -36,7 +37,6 @@ class RowSelector(object):
 
         if self.index_col:
             def gen():
-                header = None
                 for i, row in enumerate(self.partition.query(self.sql, *self.args, **self.kwargs)):
                     if i == 0:
                         yield [k for k, v in row.items()]

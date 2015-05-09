@@ -20,7 +20,6 @@ class SqlitePartitionIdentity(PartitionIdentity):
 
 
 class SqlitePartition(PartitionBase):
-
     """Represents a bundle partition, part of the bundle data broken out in
     time, space, or by table."""
 
@@ -75,8 +74,8 @@ class SqlitePartition(PartitionBase):
 
         indexes = []
 
-        for row in self.database.query("""SELECT name
-            FROM sqlite_master WHERE type='index' AND tbl_name = '{}';""".format(table)):
+        for row in self.database.query("SELECT name FROM sqlite_master "
+                                       "WHERE type='index' AND tbl_name = '{}';".format(table)):
 
             if row[0].startswith('sqlite_'):
                 continue
@@ -84,14 +83,10 @@ class SqlitePartition(PartitionBase):
             indexes.append(row[0])
 
         for index_name in indexes:
-
-            print 'Drop', index_name
-
-            self.database.connection.execute(
-                "DROP INDEX {}".format(index_name))
+            self.database.connection.execute("DROP INDEX {}".format(index_name))
 
     def create_with_tables(self, tables=None, clean=False):
-        '''Create, or re-create,  the partition, possibly copying tables
+        """Create, or re-create,  the partition, possibly copying tables
         from the main bundle
 
         Args:
@@ -100,7 +95,7 @@ class SqlitePartition(PartitionBase):
 
             clean. If True, delete the database first. Defaults to true.
 
-        '''
+        """
 
         if not tables:
             raise ValueError("'tables' cannot be empty")
@@ -120,7 +115,7 @@ class SqlitePartition(PartitionBase):
     def add_tables(self, tables):
 
         for t in tables:
-            if not t in self.database.inspector.get_table_names():
+            if t not in self.database.inspector.get_table_names():
                 _, table = self.bundle.schema.get_table_meta(t)
                 table.create(bind=self.database.engine)
 
@@ -227,7 +222,7 @@ class SqlitePartition(PartitionBase):
                 # Odd: in the second term,  ( d > (d.mean() - 2 * d.std())) workks OK, but reversing the comparison,
                 # ((d.mean() - 2 * d.std()) < d) results in an error.
 
-                df2std = lambda d: d[(d < (d.mean() + 2 * d.std()) ) & ( d > (d.mean() - 2 * d.std()))]
+                df2std = lambda d: d[(d < (d.mean() + 2 * d.std())) & (d > (d.mean() - 2 * d.std()))]
 
                 h = np.histogram(df2std(df[col_name]))
 
@@ -248,11 +243,10 @@ class SqlitePartition(PartitionBase):
                 row['nuniques'] = df[col_name].dropna().nunique()
 
                 if col.type_is_text():
-
                     row['uvalues'] = df[col_name].value_counts().sort(
                         inplace=False,
                         ascending=False)[
-                        :100].to_dict()
+                                     :100].to_dict()
 
                 p.add_stat(col.vid, row)
 
@@ -264,7 +258,6 @@ class SqlitePartition(PartitionBase):
         t = self.get_table()
 
         if not t:
-
             return
 
         if not t.primary_key:
@@ -338,32 +331,32 @@ class SqlitePartition(PartitionBase):
 
         for source_name, space in extra_spaces:
             try:
-                g = civick.GVid.parse(space)
+                civick.GVid.parse(space)
+                # g = civick.GVid.parse(space)
             except KeyError:
 
                 places = list(self.bundle.library.search.search_identifiers(space))
 
                 if not places:
                     from ..dbexceptions import BuildError
+
                     raise BuildError(
                         ("Failed to find space identifier '{}' in full text identifier search"
-                         " for partition '{}' and source name '{}'") .format(
-                            space, str(
-                                self.identity), source_name))
+                         " for partition '{}' and source name '{}'").format(
+                            space, str(self.identity), source_name))
 
                 score, gvid, typ, name = places[0]
 
                 self.bundle.log(
-                    "Resolving space '{}' from source '{}' to {}/{}". format(space, source_name, name, gvid))
+                    "Resolving space '{}' from source '{}' to {}/{}".format(space, source_name, name, gvid))
 
                 geoids.add(civick.GVid.parse(gvid))
 
         coverage = isimplify(geoids)
-        grain = set( g.summarize() for g in geoids )
+        grain = set(g.summarize() for g in geoids)
 
         if extra_grain:
             grain.add(extra_grain)
-
 
         # For geo_coverage, only includes the higher level summary levels,
         # counties, states, places and urban areas
@@ -371,8 +364,8 @@ class SqlitePartition(PartitionBase):
             [str(x) for x in coverage if bool(x) and x.sl in (10, 40, 50, 60, 160, 400)])
         self.record.data['geo_grain'] = sorted([str(x) for x in grain])
 
-        # Now add the geo and time coverage specified in the table. These values for space and time usually are specified
-        # in the sources metadata, and are copied into the
+        # Now add the geo and time coverage specified in the table. These values for space and time usually are
+        # specified in the sources metadata, and are copied into the
 
         s = self.bundle.database.session
         s.merge(self.record)
@@ -502,7 +495,7 @@ class SqlitePartition(PartitionBase):
                 "SELECT * FROM {}".format(self.get_table().name)).pandas
         except StopIteration:
             return None  # No records, so no dataframe.
-            #raise Exception("Select failed: {}".format("SELECT * FROM {}".format(self.get_table().name)))
+            # raise Exception("Select failed: {}".format("SELECT * FROM {}".format(self.get_table().name)))
 
     @property
     def dict(self):

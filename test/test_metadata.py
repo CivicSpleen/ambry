@@ -9,13 +9,15 @@ import tempfile
 import unittest
 import yaml
 
-from test_base import TestBase  # @UnresolvedImport
+from test_base import TestBase
 from ambry.bundle.meta import Top
 
 
 class Test(TestBase):
 
     def setUp(self):
+        super(Test, self).setUp()
+
         self.yaml_config = """
 about:
     access: null
@@ -54,6 +56,10 @@ contact_source:
         email: null
         name: Source maintainer
         url: http://clarinova.com
+coverage:
+    geo: []
+    grain: []
+    time: []
 dependencies: {}
 documentation:
     main: null
@@ -221,9 +227,6 @@ views: {}
 
         top = Top(d)
 
-        print top.dump()
-
-        print dict(top.partitions[0])
 
         self.assertIn(('contact_bundle', 'creator', 'bingo'), top.errors)
 
@@ -346,7 +349,7 @@ group:
         t7 = Top(path=d)
         t7.load_all()
 
-        print t7.dump()
+
 
     def test_assignment(self):
         from ambry.identity import Identity
@@ -379,7 +382,6 @@ external_documentation:
 
         t1 = Top(yaml.load(yaml_config))
 
-        print t1.dump(keys=['external_documentation'])
 
         yaml_config = """
 partitions:
@@ -403,7 +405,6 @@ partitions:
 
         t2 = Top(yaml.load(yaml_config))
 
-        print t2.dump(keys=['partitions'])
 
     def test_links(self):
 
@@ -411,13 +412,12 @@ partitions:
 
         t.contact_bundle.creator.name = 'Bob Bobson'
 
-        print t.contact_bundle.creator.name
+        self.assertEquals('Bob Bobson',t.contact_bundle.creator.name)
 
         idd = dict(t.identity)
 
         t.identity = idd
 
-        print t.dump()
 
     def test_errors(self):
 
@@ -449,38 +449,14 @@ about:
         self.assertEquals('bar', t1.about.summary)
         self.assertNotIn(('about', 'foo', None), t1.errors)
 
-        print t1.errors
 
-    def test_html(self):
-
-        t = Top(yaml.load(self.yaml_config))
-        print t.about.html()
 
     def test_list(self):
 
         t = Top(yaml.load(self.yaml_config))
         for x in t.about.groups:
-            print x
+            self.assertIn(str(x),['Group 1', 'Group 2'])
 
-    def test_row_spec(self):
-
-        x = """
-sources:
-    google:
-        description: The Google Homepage
-        url: http://google.com
-        row_spec:
-            data_start_line: 4
-            header_lines: [1,2]
-    yahoo:
-        description: The Yahoo Homepage
-        url: http://yahoo.com
-    """
-
-        t = Top(yaml.load(x))
-
-        print t.sources.google.row_spec.dict
-        print t.sources.yahoo.row_spec.dict
 
 
 def suite():

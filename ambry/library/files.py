@@ -146,7 +146,6 @@ class Files(object):
             extant.update(f)
             f = extant
 
-
         if merge:
             self.merge(f, commit=commit)
 
@@ -331,8 +330,8 @@ class Files(object):
         import hashlib
         import time
 
-        hash = None
-        size = None
+        # hash = None
+        # size = None
         modified = None
 
         if bool(path) and path.startswith('http'):

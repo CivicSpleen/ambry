@@ -13,14 +13,11 @@ class PostgisWarehouse(PostgresWarehouse):
     def create(self):
         super(PostgisWarehouse, self).create()
 
-        self.database.connection.execute(
-            'CREATE EXTENSION IF NOT EXISTS postgis')
-        self.database.connection.execute(
-            'CREATE EXTENSION IF NOT EXISTS postgis_topology;')
+        self.database.connection.execute('CREATE EXTENSION IF NOT EXISTS postgis')
+        self.database.connection.execute('CREATE EXTENSION IF NOT EXISTS postgis_topology;')
 
         # Actually only for Amazon RDS
         try:
-            self.database.connection.execute(
-                'CREATE EXTENSION IF NOT EXISTS fuzzystrmatch')
+            self.database.connection.execute('CREATE EXTENSION IF NOT EXISTS fuzzystrmatch')
         except:
             pass

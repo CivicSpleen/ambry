@@ -2,6 +2,20 @@
 
 After installing and configuring, you'll need to synchronize with a library to get databundles. At the very least, you'll need the ``civicknowledge.com-terms`` bundle to build the search index. 
 
+Install Configuration
+*********************
+
+
+
+If you haven't already done so, install the configuration file, run:
+
+.. code-block:: bash
+
+    $ ambry config install
+
+See :ref:`configuration_generation` for more information about the configuration file installation. 
+
+
 Synchronize to Remotes
 **********************
 
@@ -9,7 +23,7 @@ To build a local library from configured remotes:
 
 .. code-block:: bash
 
-    $ ambry library sync -r
+    $ ambry sync
     
 That command may run for about 10 minutes as it downloads bundles ( but not partitions ) and installs them in the local library. After it completes, you should be able to run :command:`ambry list` to get a list of the installed files. 
 

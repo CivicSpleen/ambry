@@ -6,26 +6,22 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 __docformat__ = 'restructuredtext en'
 import datetime
+import json
+
 import sqlalchemy
 from sqlalchemy import orm
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, Float, Boolean, UniqueConstraint
-from sqlalchemy import Float as Real, Text, String, ForeignKey, Binary, Enum
+from sqlalchemy import Float as Real, Text, String, ForeignKey, Binary
 from sqlalchemy.orm import relationship
-from sqlalchemy.types import TypeDecorator, TEXT, PickleType
+from sqlalchemy.types import TypeDecorator, TEXT
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import Mutable
-from sqlalchemy.exc import OperationalError
 from util import Constant, memoize
 from identity import LocationRef
-
 from sqlalchemy.sql import text
-import sqlalchemy.types as types
 from ambry.identity import DatasetNumber, ColumnNumber
 from ambry.identity import TableNumber, PartitionNumber, ObjectNumber
-
-import json
-
 
 # http://stackoverflow.com/a/23175518/1144479
 # SQLAlchemy does not map BigInt to Int by default on the sqlite dialect.
@@ -44,7 +40,6 @@ from sqlalchemy.types import UserDefinedType
 
 
 class Geometry(UserDefinedType):
-
     """Geometry type, to ensure that WKT text is properly inserted into the
     database with the GeomFromText() function.
 
@@ -68,9 +63,9 @@ class Geometry(UserDefinedType):
 
 
 class SpatialiteGeometry(Geometry):
-
     def get_col_spec(self):
         return "BLOB"
+
 
 GeometryType = Geometry()
 GeometryType = GeometryType.with_variant(SpatialiteGeometry(), 'spatialite')
@@ -83,12 +78,10 @@ Base = declarative_base()
 
 
 class JSONEncoder(json.JSONEncoder):
-
     """A JSON encoder that turns unknown objets into a string representation of
     the type."""
 
     def default(self, o):
-        from ambry.identity import Identity
 
         try:
             return o.dict
@@ -97,7 +90,6 @@ class JSONEncoder(json.JSONEncoder):
 
 
 class JSONEncodedObj(TypeDecorator):
-
     "Represents an immutable structure as a json-encoded string."
 
     impl = TEXT
@@ -117,6 +109,7 @@ class JSONEncodedObj(TypeDecorator):
                 # We've changed from using pickle to json, so this handles
                 # legacy cases
                 import pickle
+
                 value = pickle.loads(value)
 
         else:
@@ -125,7 +118,6 @@ class JSONEncodedObj(TypeDecorator):
 
 
 class MutationDict(Mutable, dict):
-
     @classmethod
     def coerce(cls, key, value):  # @ReservedAssignment
         """Convert plain dictionaries to MutationDict."""
@@ -153,7 +145,6 @@ class MutationDict(Mutable, dict):
 
 
 class MutationObj(Mutable):
-
     @classmethod
     def coerce(cls, key, value):
         if isinstance(value, dict) and not isinstance(value, MutationDict):
@@ -234,7 +225,6 @@ class MutationObj(Mutable):
 
 
 class MutationList(MutationObj, list):
-
     @classmethod
     def coerce(cls, key, value):
         """Convert plain list to MutationList."""
@@ -295,6 +285,7 @@ def JSONAlchemy(sqltype):
     Column(JSONAlchemy(Text(600)))
 
     """
+
     class _JSONEncodedObj(JSONEncodedObj):
         impl = sqltype
 
@@ -302,13 +293,11 @@ def JSONAlchemy(sqltype):
 
 
 class SavableMixin(object):
-
     def save(self):
         self.session.commit()
 
 
 class LinkableMixin(object):
-
     """A mixin for creating acessors to link between objects with references in
     the .dataproperty Should probably be a descriptor, but I don't feel like
     fighting with it."""
@@ -339,15 +328,15 @@ class LinkableMixin(object):
         o: the object being linked. If none, no back link is made
         object_id: the object identitifer that is stored in the data property
         """
-        if not name in self.data:
+        if name not in self.data:
             self.data[name] = []
 
-        if not object_id in self.data[name]:
+        if object_id not in self.data[name]:
             self.data[name] = self.data[name] + [object_id]
 
     def _remove_link(self, name, object_id):
         """For linking manifests to stores."""
-        if not name in self.data:
+        if name not in self.data:
             return
 
         if self.data[name] and object_id in self.data[name]:
@@ -355,23 +344,22 @@ class LinkableMixin(object):
 
 
 class DataPropertyMixin(object):
-
     """A Mixin for appending a value into a list in the data field."""
 
     def _append_string_to_list(self, sub_prop, value):
         """"""
-        if not sub_prop in self.data:
+        if sub_prop not in self.data:
             self.data[sub_prop] = []
 
-        if value and not value in self.data[sub_prop]:
+        if value and value not in self.data[sub_prop]:
             self.data[sub_prop] = self.data[sub_prop] + [value]
+
 
 # Sould have things derived from this, once there are test cases for it.
 # Actually, this is a mixin.
 
 
 class DictableMixin(object):
-
     def set_attributes(self, **kwargs):
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -406,9 +394,9 @@ class Dataset(Base, LinkableMixin):
     vid = SAColumn('d_vid', String(20), primary_key=True)
     id_ = SAColumn('d_id', String(20), )
     name = SAColumn('d_name', String(200), nullable=False, index=True)
-    vname = SAColumn('d_vname',String(200),unique=True,nullable=False,index=True)
+    vname = SAColumn('d_vname', String(200), unique=True, nullable=False, index=True)
     fqname = SAColumn('d_fqname', String(200), unique=True, nullable=False)
-    cache_key = SAColumn('d_cache_key',String(200),unique=True,nullable=False,index=True)
+    cache_key = SAColumn('d_cache_key', String(200), unique=True, nullable=False, index=True)
     source = SAColumn('d_source', String(200), nullable=False)
     dataset = SAColumn('d_dataset', String(200), nullable=False)
     subset = SAColumn('d_subset', String(200))
@@ -423,15 +411,15 @@ class Dataset(Base, LinkableMixin):
 
     path = None  # Set by the LIbrary and other queries.
 
-    tables = relationship("Table",backref='dataset',cascade="all, delete-orphan",passive_updates=False)
+    tables = relationship("Table", backref='dataset', cascade="all, delete-orphan", passive_updates=False)
 
-    partitions = relationship("Partition",backref='dataset',cascade="all, delete-orphan",passive_updates=False)
+    partitions = relationship("Partition", backref='dataset', cascade="all, delete-orphan", passive_updates=False)
 
-    #__table_args__ = (
-    #    UniqueConstraint('d_vid', 'd_location', name='u_vid_location'),
-    #    UniqueConstraint('d_fqname', 'd_location', name='u_fqname_location'),
-    #    UniqueConstraint('d_cache_key', 'd_location', name='u_cache_location'),
-    #)
+    # __table_args__ = (
+    # UniqueConstraint('d_vid', 'd_location', name='u_vid_location'),
+    # UniqueConstraint('d_fqname', 'd_location', name='u_fqname_location'),
+    # UniqueConstraint('d_cache_key', 'd_location', name='u_cache_location'),
+    # )
 
     def __init__(self, **kwargs):
         self.id_ = kwargs.get("oid", kwargs.get("id", kwargs.get("id_", None)))
@@ -483,6 +471,7 @@ class Dataset(Base, LinkableMixin):
     @property
     def identity(self):
         from identity import Identity
+
         return Identity.from_dict(self.dict)
 
     @property
@@ -535,7 +524,6 @@ class Dataset(Base, LinkableMixin):
 
 
 def _clean_flag(in_flag):
-
     if in_flag is None or in_flag == '0':
         return False
 
@@ -687,6 +675,7 @@ class Column(Base):
 
         if self.type_is_time():
             import dateutil.parser
+
             dt = dateutil.parser.parse(v)
 
             if self.datatype == Column.DATATYPE_TIME:
@@ -708,11 +697,12 @@ class Column(Base):
     def schema_type(self):
 
         if not self.datatype:
-            from dbexceptions import ConfigurationError
             raise Exception("Column '{}' has no datatype".format(self.name))
-            raise ConfigurationError(
-                "Column '{}' has no datatype".format(
-                    self.name))
+            # from dbexceptions import ConfigurationError
+
+            # raise ConfigurationError(
+            #     "Column '{}' has no datatype".format(
+            #         self.name))
 
         try:
             return self.types[self.datatype][2]
@@ -728,8 +718,6 @@ class Column(Base):
         Implemented as a function to decouple from numpy
 
         """
-
-        import numpy as np
 
         m = {
             'int64': cls.DATATYPE_INTEGER64,
@@ -797,7 +785,7 @@ class Column(Base):
 
         if not self.name:
             self.name = 'column' + str(self.sequence_id)
-            #raise ValueError('Column must have a name. Got: {}'.format(kwargs))
+            # raise ValueError('Column must have a name. Got: {}'.format(kwargs))
 
         self.t_id = table.id_
         self.t_vid = table.vid
@@ -856,6 +844,7 @@ class Column(Base):
 
         """
         import re
+
         try:
             return re.sub(
                 '_+',
@@ -883,6 +872,20 @@ class Column(Base):
         # _codes is a backref from Codes
         return self._codes  # Caches the query, I hope ...
 
+    @property
+    @memoize
+    def reverse_code_map(self):
+        """Return a map from a code ( usually a string ) to the  shorter numeric value"""
+
+        return {c.value: (c.ikey if c.ikey else c.key) for c in self.codes}
+
+    @property
+    @memoize
+    def forward_code_map(self):
+        """Return  a map from the short code to the full value """
+
+        return {(c.ikey if c.ikey else c.key): c.value for c in self.codes}
+
     def add_code(self, key, value, description=None, data=None):
         """
 
@@ -901,9 +904,15 @@ class Column(Base):
             if cd.key == str(key):
                 return cd
 
+        def cast_to_int(s):
+            try:
+                return int(s)
+            except ValueError:
+                return None
+
         cd = Code(c_vid=self.vid, t_vid=self.t_vid,
                   key=str(key),
-                  ikey=key if isinstance(key, int) else None,
+                  ikey=cast_to_int(key),
                   value=value,
                   description=description, data=data)
 
@@ -943,6 +952,7 @@ class Column(Base):
     def __repr__(self):
         return "<column: {}, {}>".format(self.name, self.vid)
 
+
 event.listen(Column, 'before_insert', Column.before_insert)
 event.listen(Column, 'before_update', Column.before_update)
 
@@ -973,7 +983,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     data = SAColumn('t_data', MutationDict.as_mutable(JSONEncodedObj))
 
     __table_args__ = (
-        #ForeignKeyConstraint([d_vid, d_location], ['datasets.d_vid', 'datasets.d_location']),
+        # ForeignKeyConstraint([d_vid, d_location], ['datasets.d_vid', 'datasets.d_location']),
         UniqueConstraint('t_sequence_id', 't_d_vid', name='_uc_tables_1'),
         UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
     )
@@ -1017,29 +1027,13 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
 
     @property
     def dict(self):
-        d = {
-            k: v for k,
-            v in self.__dict__.items() if k in [
-                'id_',
-                'vid',
-                'd_id',
-                'd_vid',
-                'sequence_id',
-                'name',
-                'altname',
-                'vname',
-                'description',
-                'universe',
-                'keywords',
-                'installed',
-                'proto_vid',
-                'type',
-                '_codes']}
+        d = {k: v for k, v in self.__dict__.items() if k in ['id_', 'vid', 'd_id', 'd_vid', 'sequence_id', 'name',
+                                                             'altname', 'vname', 'description', 'universe', 'keywords',
+                                                             'installed', 'proto_vid', 'type', '_codes']}
 
         if self.data:
             for k in self.data:
-                assert k not in d, "Value '{}' is a table field and should not be in data ".format(
-                    k)
+                assert k not in d, "Value '{}' is a table field and should not be in data ".format(k)
                 d[k] = self.data[k]
 
         d['is_geo'] = False
@@ -1047,6 +1041,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
         for c in self.columns:
             if c in ('geometry', 'wkt', 'wkb', 'lat'):
                 d['is_geo'] = True
+                break
 
         return d
 
@@ -1071,7 +1066,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     def insertable_dict(self):
         x = {('t_' + k).strip('_'): v for k, v in self.dict.items()}
 
-        if not 't_vid' in x or not x['t_vid']:
+        if 't_vid' not in x or not x['t_vid']:
             raise ValueError("Must have vid set: {} ".format(x))
 
         return x
@@ -1090,7 +1085,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     @property
     def info(self):
 
-        x =  """
+        x = """
 ------ Table: {name} ------
 id   : {id_}
 vid  : {vid}
@@ -1099,10 +1094,9 @@ Columns:
 """.format(**self.dict)
 
         for c in self.columns:
-            # ['id','vid','sequence_id', 't_vid', 'name', 'description', 'keywords', 'datatype', 'size', 'is_primary_kay', 'data']}
-
-            x += "   {sequence_id:3d} {name:12s} {schema_type:8s} {description}\n".format(
-                **c.dict)
+            # ['id', 'vid', 'sequence_id', 't_vid', 'name', 'description', 'keywords', 'datatype', 'size',
+            #  'is_primary_kay', 'data']}
+            x += "   {sequence_id:3d} {name:12s} {schema_type:8s} {description}\n".format(**c.dict)
 
         return x
 
@@ -1122,12 +1116,10 @@ Columns:
     def html_table(self):
         """"""
 
-        rows = []
-        rows.append(
-            "<tr><th>#</th><th>Name</th><th>Datatype</th><th>description</th></tr>")
+        rows = ["<tr><th>#</th><th>Name</th><th>Datatype</th><th>description</th></tr>"]
         for c in self.columns:
-            rows.append(
-                "<tr><td>{sequence_id:d}</td><td>{name:s}</td><td>{schema_type:s}</td><td>{description}</td></tr>".format(**c.dict))
+            rows.append("<tr><td>{sequence_id:d}</td><td>{name:s}</td><td>{schema_type:s}</td>"
+                        "<td>{description}</td></tr>".format(**c.dict))
 
         return "<table>\n" + "\n".join(rows) + "\n</table>"
 
@@ -1139,10 +1131,9 @@ Columns:
 
         """
 
-        cols = []
+        # cols = []
         raise DeprecationWarning()
-        return ",".join(["{} AS {}".format(c.name, c.vid)
-                        for c in self.columns])
+        # return ",".join(["{} AS {}".format(c.name, c.vid) for c in self.columns])
 
     @orm.reconstructor
     def init_on_load(self):
@@ -1185,6 +1176,7 @@ Columns:
     @staticmethod
     def mangle_name(name, preserve_case=False):
         import re
+
         try:
             r = re.sub('[^\w_]', '_', name.strip())
 
@@ -1278,11 +1270,10 @@ Columns:
 
         q = (s.query(Column)
              .filter(or_(Column.id_ == name_or_id, Column.name == name_or_id))
-             .filter(Column.t_vid == self.vid)
-             )
+             .filter(Column.t_vid == self.vid))
 
         try:
-            if not default is None:
+            if not (default is None):
                 try:
                     return q.one()
                 except:
@@ -1339,6 +1330,7 @@ Columns:
         regular expression to  parsing a fixed width file."""
         from functools import partial
         import struct
+
         unpack_str = ''
         header = []
         length = 0
@@ -1478,19 +1470,14 @@ Columns:
 
         # Otherwise, just use everything by the primary key.
         if len(indexes) == 0:
-            indexes = [
-                i for i,
-                c in enumerate(
-                    self.columns) if not c.is_primary_key]
+            indexes = [i for i, c in enumerate(self.columns) if not c.is_primary_key]
 
         def hasher(values):
             m = hashlib.md5()
             for index in indexes:
                 x = values[index]
                 try:
-                    m.update(
-                        x.encode('utf-8') +
-                        '|')  # '|' is so 1,23,4 and 12,3,4 aren't the same
+                    m.update(x.encode('utf-8') + '|')  # '|' is so 1,23,4 and 12,3,4 aren't the same
                 except:
                     m.update(str(x) + '|')
             return int(m.hexdigest()[:14], 16)
@@ -1531,18 +1518,18 @@ Columns:
     def delink_manifest(self, f):
         return self._remove_link('manifests', f.ref)
 
+
 event.listen(Table, 'before_insert', Table.before_insert)
 event.listen(Table, 'before_update', Table.before_update)
 
 
 class Config(Base):
-
     __tablename__ = 'config'
 
     d_vid = SAColumn('co_d_vid', String(16), primary_key=True)
     group = SAColumn('co_group', String(200), primary_key=True)
     key = SAColumn('co_key', String(200), primary_key=True)
-    #value = SAColumn('co_value', PickleType(protocol=0))
+    # value = SAColumn('co_value', PickleType(protocol=0))
 
     value = SAColumn('co_value', JSONAlchemy(Text()))
 
@@ -1573,14 +1560,14 @@ class Partition(Base, LinkableMixin):
     vid = SAColumn('p_vid', String(20), primary_key=True, nullable=False)
     id_ = SAColumn('p_id', String(20), nullable=False)
     name = SAColumn('p_name', String(200), nullable=False, index=True)
-    vname = SAColumn('p_vname',String(200),unique=True,nullable=False,index=True)
-    fqname = SAColumn('p_fqname',String(200),unique=True,nullable=False,index=True)
+    vname = SAColumn('p_vname', String(200), unique=True, nullable=False, index=True)
+    fqname = SAColumn('p_fqname', String(200), unique=True, nullable=False, index=True)
     ref = SAColumn('p_ref', String(200), index=True)
-    cache_key = SAColumn('p_cache_key',String(200),unique=True,nullable=False,index=True)
+    cache_key = SAColumn('p_cache_key', String(200), unique=True, nullable=False, index=True)
     sequence_id = SAColumn('p_sequence_id', Integer)
-    t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'),index=True)
+    t_vid = SAColumn('p_t_vid', String(20), ForeignKey('tables.t_vid'), index=True)
     t_id = SAColumn('p_t_id', String(20))
-    d_vid = SAColumn('p_d_vid',String(20),ForeignKey('datasets.d_vid'),index=True)
+    d_vid = SAColumn('p_d_vid', String(20), ForeignKey('datasets.d_vid'), index=True)
     d_id = SAColumn('p_d_id', String(20))
     time = SAColumn('p_time', String(20))
     space = SAColumn('p_space', String(50))
@@ -1596,7 +1583,8 @@ class Partition(Base, LinkableMixin):
 
     installed = SAColumn('p_installed', String(100))
 
-    __table_args__ = (#ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
+    __table_args__ = (
+        # ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
         UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'),
     )
 
@@ -1685,9 +1673,9 @@ class Partition(Base, LinkableMixin):
             'fqname': self.fqname,
             'cache_key': self.cache_key,
             'd_id': self.d_id,
-            'd_vid': self. d_vid,
+            'd_vid': self.d_vid,
             't_id': self.t_id,
-            't_vid': self. t_vid,
+            't_vid': self.t_vid,
             'space': self.space,
             'time': self.time,
             'table': self.table.name if self.t_vid is not None else None,
@@ -1762,7 +1750,6 @@ class Partition(Base, LinkableMixin):
         from identity import Identity
 
         if not self.vid or not self.id_:
-
             self.sequence_id = sequence_id
 
             don = ObjectNumber.parse(self.d_vid)
@@ -1819,7 +1806,6 @@ class Partition(Base, LinkableMixin):
     @property
     def stats(self):
         class Bunch(object):
-
             def __init__(self, o):
                 self.__dict__.update(o)
 
@@ -1840,7 +1826,6 @@ class Partition(Base, LinkableMixin):
     def before_insert(mapper, conn, target):
         """event.listen method for Sqlalchemy to set the sequence for this
         object and create an ObjectNumber value for the id_"""
-        from identity import Identity
 
         if target.sequence_id is None:
             # These records can be added in an multi-process environment, we
@@ -1868,6 +1853,7 @@ class Partition(Base, LinkableMixin):
         if not target.id_:
             dataset = ObjectNumber.parse(target.d_id)
             target.id_ = str(PartitionNumber(dataset, target.sequence_id))
+
 
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
@@ -2024,40 +2010,22 @@ class File(Base, SavableMixin, LinkableMixin):
 
 
 class Code(Base, SavableMixin, LinkableMixin):
-
     """Code entries for variables."""
     __tablename__ = 'codes'
 
     oid = SAColumn('cd_id', Integer, primary_key=True, nullable=False)
 
-    t_vid = SAColumn(
-        'cd_t_vid',
-        String(20),
-        ForeignKey('tables.t_vid'),
-        index=True)
+    t_vid = SAColumn('cd_t_vid', String(20), ForeignKey('tables.t_vid'), index=True)
     table = relationship('Table', backref='codes', lazy='subquery')
 
-    c_vid = SAColumn(
-        'cd_c_vid',
-        String(20),
-        ForeignKey('columns.c_vid'),
-        index=True)
+    c_vid = SAColumn('cd_c_vid', String(20), ForeignKey('columns.c_vid'), index=True)
     column = relationship('Column', backref='_codes', lazy='subquery')
 
-    key = SAColumn(
-        'cd_skey',
-        String(20),
-        nullable=False,
-        index=True)  # String version of the key, the value in the dataset
-    ikey = SAColumn(
-        'cd_ikey',
-        Integer,
-        index=True)  # Set only if the key is actually an integer
+    key = SAColumn('cd_skey', String(20), nullable=False,
+                   index=True)  # String version of the key, the value in the dataset
+    ikey = SAColumn('cd_ikey', Integer, index=True)  # Set only if the key is actually an integer
 
-    value = SAColumn(
-        'cd_value',
-        Text,
-        nullable=False)  # The value the key maps to
+    value = SAColumn('cd_value', Text, nullable=False)  # The value the key maps to
     description = SAColumn('f_description', Text, index=True)
 
     data = SAColumn('co_data', MutationDict.as_mutable(JSONEncodedObj))
@@ -2097,13 +2065,9 @@ class Code(Base, SavableMixin, LinkableMixin):
     @property
     def dict(self):
 
-        d = {
-            p.key: getattr(
-                self,
-                p.key) for p in self.__mapper__.attrs if p.key not in (
-                'data',
-                'column',
-                'table')}
+        d = {p.key: getattr(self, p.key)
+             for p in self.__mapper__.attrs if p.key not in ('data', 'column', 'table')
+             }
 
         if self.data:
             for k in self.data:
@@ -2117,33 +2081,16 @@ class Code(Base, SavableMixin, LinkableMixin):
         return {('cd_' + k).strip('_'): v for k, v in self.dict.items()}
 
 
-class SearchDoc(Base):
-
-    """Documents for full text search."""
-    __tablename__ = 'searchdocs'
-
-    id = SAColumn('sd_id', Integer, primary_key=True, nullable=False)
-
-    vid = SAColumn('sd_vid', String(20), index=True, unique=True)
-    keywords = SAColumn('sd_keywords', Text)
-    text = SAColumn('sd_text', Text)
-
 lom_enums = "nom ord int ratio".split()
 
 
 class ColumnStat(Base, SavableMixin, LinkableMixin):
-
     """Table for per column, per partition stats."""
     __tablename__ = 'colstats'
 
     id = SAColumn('cs_id', Integer, primary_key=True, nullable=False)
 
-    p_vid = SAColumn(
-        'cs_p_vid',
-        String(20),
-        ForeignKey('partitions.p_vid'),
-        nullable=False,
-        index=True)
+    p_vid = SAColumn('cs_p_vid', String(20), ForeignKey('partitions.p_vid'), nullable=False, index=True)
     partition = relationship('Partition', backref='_stats')
 
     # This really should be Nullable=False, but I can't get cascading deletes
@@ -2178,7 +2125,6 @@ class ColumnStat(Base, SavableMixin, LinkableMixin):
 
         for p in self.__mapper__.attrs:
             if p.key in kwargs:
-
                 setattr(self, p.key, kwargs[p.key])
                 del kwargs[p.key]
 
