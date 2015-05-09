@@ -22,7 +22,7 @@ class DatasetFactory(SQLAlchemyModelFactory):
     dataset = factory.Sequence(lambda n: 'dataset-%03d' % n)
     creator = factory.Sequence(lambda n: 'creator-%03d' % n)
     revision = 1
-    version = '0.1'
+    version = '0.1.3'
 
 
 class ConfigFactory(SQLAlchemyModelFactory):

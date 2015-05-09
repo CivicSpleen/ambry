@@ -434,7 +434,7 @@ class FilesTest(unittest.TestCase):
         self.assertEquals(installed.source_url, manifest.uid)
         self.assertEquals(new_f, installed)
 
-    def test_raises_not_found_error_if_given_warehouse_not_found(self):
+    def test_raises_NotFoundError_if_given_warehouse_not_found(self):
         query = self.sqlite_db.session.query(File)
         all_files = Files(self.sqlite_db, query=query)
         # saving of the file is not important here, so stub it.
