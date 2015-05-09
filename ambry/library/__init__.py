@@ -466,7 +466,10 @@ class Library(object):
 
         dataset = self.resolve(ref,  location=location)
 
-        df =  self.files.query.group('datasets').type(Files.TYPE.BUNDLE).ref(dataset.vid).one
+        if not dataset:
+            raise NotFoundError("Failed to resolve reference '{}' in library '{}' ".format(ref, self.database.dsn))
+
+        df = self.files.query.group('datasets').type(Files.TYPE.BUNDLE).ref(dataset.vid).one
 
         # Get the remote that the bundle came from.
 
@@ -477,9 +480,6 @@ class Library(object):
                     break
 
             assert not remote or remote.repo_id == df.source_url
-
-        if not dataset:
-            raise NotFoundError("Failed to resolve reference '{}' in library '{}' ".format(ref, self.database.dsn))
 
         bundle = self._get_bundle_by_cache_key(dataset.cache_key) # BUndle head is always installed, no need for remote
 

@@ -182,6 +182,7 @@ def bundle_parser(cmd):
     #
     sp = asp.add_parser('incver', help='Increment the version number')
     sp.set_defaults(subsubcommand='incver')
+    sp.add_argument('-m', '--message', default=False, help="Message ")
 
     #
     sp = asp.add_parser('newnum', help='Get a new dataset number')
@@ -555,8 +556,10 @@ def bundle_config(args, b, st, rc):
 
     elif args.subsubcommand == 'incver':
 
-
-        description = raw_input("Revision Description: ")
+        if args.message:
+            description = args.message
+        else:
+            description = raw_input("Revision Description: ")
 
         identity = b.increment_revision(description)
 

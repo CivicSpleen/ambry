@@ -785,6 +785,7 @@ class Schema(object):
         from orm import Column
         from identity import ObjectNumber, NotObjectNumberError
         from collections import defaultdict
+        from dbexceptions import NotFoundError
 
         q = (self.bundle.database.session.query(Column).filter(Column.proto_vid != None))
 
@@ -813,7 +814,12 @@ class Schema(object):
                 c.proto_vid = pt_row['obj_number']
 
                 if pt_row['index_partition']:
-                    ip = self.bundle.library.get(pt_row['index_partition']).partition
+                    try:
+                        ip = self.bundle.library.get(pt_row['index_partition']).partition
+                    except NotFoundError:
+                        self.bundle.error(("Failed to get index '{}' while trying to expand proto_id for column"
+                        " {}.{} ").format(pt_row['index_partition'], c.table.name, c.name ))
+                        continue
 
                     for ipc in ip.table.columns:
 
@@ -1486,13 +1492,6 @@ class {name}(Base):
                                     size=col.length if type_ == str else None,
                                     data = dict(has_codes=1) if has_codes else {})
 
-                    if has_codes:
-                        if False:
-                            # This mostly just muchs up loading files be altering the header.
-                            self.add_column(table, name+'_codes',datatype='varchar',
-                            description='Non-numeric codes extracted from the {} column'.format(name),
-                            data = {'is_code' : 1},
-                            derivedfrom=orm_col.id_)
 
         self.write_schema()
 

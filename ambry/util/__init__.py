@@ -520,12 +520,14 @@ def include_representer(dumper, data):
 def include_representer(dumper, data):
     return dumper.represent_scalar(u'!include', data.relpath)
 
+
 # http://pypi.python.org/pypi/layered-yaml-attrdict-config/12.07.1
 
 
 class AttrDict(OrderedDict):
 
     def __init__(self, *argz, **kwz):
+
         super(AttrDict, self).__init__(*argz, **kwz)
 
     def __setitem__(self, k, v):
@@ -643,6 +645,8 @@ class AttrDict(OrderedDict):
     def dump(self, stream=None, map_view=None):
         from StringIO import StringIO
         from ..orm import MutationList, MutationDict
+        from yaml.representer import RepresenterError
+        from meta import _ScalarTermS, _ScalarTermU
 
         yaml.representer.SafeRepresenter.add_representer(
             MapView, yaml.representer.SafeRepresenter.represent_dict)
@@ -668,17 +672,30 @@ class AttrDict(OrderedDict):
         yaml.representer.SafeRepresenter.add_representer(
             IncludeFile, include_representer)
 
+        yaml.representer.SafeRepresenter.add_representer(
+            _ScalarTermS, yaml.representer.SafeRepresenter.represent_str)
+
+        yaml.representer.SafeRepresenter.add_representer(
+            _ScalarTermU, yaml.representer.SafeRepresenter.represent_str)
+
         if stream is None:
             stream = StringIO()
 
         d = self
 
+
         if map_view is not None:
             map_view.inner = d
             d = map_view
 
-        yaml.safe_dump(d, stream,
+        try:
+            yaml.safe_dump(d, stream,
                        default_flow_style=False, indent=4, encoding='utf-8')
+        except RepresenterError:
+            import pprint
+
+            pprint.pprint(self.to_dict())
+            raise
 
         if isinstance(stream, StringIO):
             return stream.getvalue()

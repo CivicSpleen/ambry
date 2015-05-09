@@ -28,6 +28,10 @@ class Documentation(DictGroup):
 
     readme = ScalarTerm()
     main = ScalarTerm()
+    source = ScalarTerm(store_none=False)  # Expanded from about.source
+    footnote = ScalarTerm(store_none=False) # Expanded from about.footnote
+    processed = ScalarTerm(store_none=False)  # expanded from about.processed
+
 
 class Coverage(DictGroup):
 

@@ -112,7 +112,7 @@ class Name(object):
 
     @returns(str, debug=2)
     def _parse_version(self, version):
-        import semantic_version as sv  # @UnresolvedImport
+        import semantic_version as sv
 
         if version is not None and isinstance(version, basestring):
 
@@ -127,8 +127,7 @@ class Name(object):
                     try:
                         version = str(sv.Spec(version))
                     except ValueError:
-                        raise ValueError(
-                            "Could not parse '{}' as a semantic version".format(version))
+                        raise ValueError("Could not parse '{}' as a semantic version".format(version))
 
         if not version:
             version = str(sv.Version('0.0.0'))
@@ -1322,15 +1321,12 @@ class Identity(object):
             # The vid should be constructed from the id and the revision
 
             if not d['id']:
-                raise ValueError(
-                    " 'id' key doesn't have a value in {} ".format(d))
+                raise ValueError(" 'id' key doesn't have a value in {} ".format(d))
 
             ono = ObjectNumber.parse(d['id'])
 
             if not ono:
-                raise ValueError(
-                    "Failed to parse '{}' as an ObjectNumber ".format(
-                        d['id']))
+                raise ValueError("Failed to parse '{}' as an ObjectNumber ".format(d['id']))
 
             on = ono.rev(d['revision'])
 
@@ -1339,8 +1335,7 @@ class Identity(object):
 
             if not on:
                 raise ValueError(
-                    "Failed to parse '{}' as an ObjectNumber ".format(
-                        d['vid']))
+                    "Failed to parse '{}' as an ObjectNumber ".format(d['vid']))
 
         else:
             raise ValueError(
@@ -1359,9 +1354,7 @@ class Identity(object):
             ident = PartitionIdentity.from_dict(d)
         else:
             raise TypeError(
-                "Can't make identity from {}; object number is wrong type: {}".format(
-                    d,
-                    type(on)))
+                "Can't make identity from {}; object number is wrong type: {}".format(d,type(on)))
 
         if 'md5' in d:
             ident.md5 = d['md5']

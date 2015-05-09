@@ -1138,8 +1138,6 @@ event.listen(Column, 'before_insert', Column.before_insert)
 event.listen(Column, 'before_update', Column.before_update)
 
 
-
-
 class Table(Base, LinkableMixin, DataPropertyMixin):
     __tablename__ = 'tables'
 
@@ -1451,6 +1449,9 @@ Columns:
             s.commit()
 
         return row
+
+    def add_id_column(self):
+        self.add_column(name='id',datatype='integer',is_primary_key = True, description = self.description)
 
     def column(self, name_or_id, default=None):
         from sqlalchemy.sql import or_

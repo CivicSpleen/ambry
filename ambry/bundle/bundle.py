@@ -46,8 +46,6 @@ class Bundle(object):
 
         self.run_args = vars(null_args())
 
-
-
     def __del__(self):
         try:
             self.close()
@@ -205,8 +203,10 @@ class Bundle(object):
             with self.session:
                 self.set_value('rdep', key, ident.dict)
 
+
     def sub_template(self, t):
-        """Substitute some data values into a format() template."""
+        """Substitute some data values into a format() template.
+        Deprecated. Use JINJA format substitutions, builtin to the metadata"""
         d = {}
         for r in self.metadata.rows:
 
@@ -215,19 +215,15 @@ class Bundle(object):
                 d[k] = r[1]
 
         try:
-
+            # This should not be necessary, but it handles old templates that get substituted with Jina format
+            # titles and such.
             return t.format(**d)
         except KeyError as e:
             import json
             self.error(
-                "Failed to substitute template in {}. Key Error: {}".format(
-                    self.identity,
-                    e))
+                "Failed to substitute template in {}. Key Error: {}".format(self.identity,e))
             self.error(
-                "Available keys are:\n {}".format(
-                    json.dumps(
-                        d,
-                        indent=4)))
+                "Available keys are:\n {}".format(json.dumps(d,indent=4)))
             return t
 
     @property
@@ -417,14 +413,13 @@ class DbBundleBase(Bundle):
         rows = self.database.get_config_rows(ds.vid)
 
         t = Top()
-
         t.load_rows(rows)
 
         # The database config rows don't hold name and identity
         t.identity = self.identity.ident_dict
         t.names = self.identity.names_dict
 
-        return t
+        return Top(context=t.dict)
 
     def _info(self, identity=None):
         """Return a nested, ordered dict  of information about the bundle."""
@@ -634,6 +629,9 @@ class BuildBundle(Bundle):
     DOC_FILE = 'meta/documentation.md'
     DOC_HTML = 'meta/documentation.html'
 
+    # Partition where to get a map from source domains to full name
+    SOURCE_TERMS = 'civicknowledge.com-terms-sources'
+
     def __init__(self, bundle_dir=None):
         """"""
         from ..database.sqlite import BundleLockContext
@@ -740,7 +738,11 @@ class BuildBundle(Bundle):
     @memoize
     def metadata(self):
         from ambry.bundle.meta import Top
-        return Top(path=self.bundle_dir)
+
+        t = Top(path=self.bundle_dir)
+        t.load_all()
+
+        return Top(path=self.bundle_dir, context=t.dict)
 
     @property
     @memoize
@@ -766,6 +768,7 @@ class BuildBundle(Bundle):
 
         if not self._identity:
             try:
+
                 names = self.metadata.names.items()
                 idents = self.metadata.identity.items()
 
@@ -872,6 +875,8 @@ class BuildBundle(Bundle):
             except IOError:
                 return ''
 
+        self.update_source()
+
         # The main doc is subbed on the fly, but the README has to be a real
         # file, since it is displayed in github
         self.rewrite_readme()
@@ -880,6 +885,8 @@ class BuildBundle(Bundle):
 
         md.documentation.readme = read_file(self.README_FILE)
         md.documentation.main = self.sub_template(read_file(self.DOC_FILE))
+
+
 
         md.write_to_dir(write_all=True)
 
@@ -897,6 +904,27 @@ class BuildBundle(Bundle):
 
                 self.database.rewrite_dataset()
 
+    def update_source(self):
+        from ..dbexceptions import NotFoundError
+        if not bool(self.metadata.contact_source.creator):
+
+            source_domain = self.identity.source
+
+            try:
+                p = self.library.get(self.SOURCE_TERMS).partition
+
+                source = p.query("SELECT * FROM sources WHERE domain = ?", source_domain).first()
+
+                self.metadata.contact_source.creator.org = source.name
+                self.metadata.contact_source.creator.url = source.homepage
+
+            except NotFoundError:
+                self.error("Can't expand sources; didn't find source partition '{}'".format(self.SOURCE_TERMS))
+
+
+
+
+
     def rewrite_readme(self):
 
         tf = self.filesystem.path(self.README_FILE_TEMPLATE)
@@ -911,9 +939,7 @@ class BuildBundle(Bundle):
         import ambry.support as sdir
 
         html_template_file = os.path.join(
-            os.path.dirname(
-                sdir.__file__),
-            'documentation.html')
+            os.path.dirname( sdir.__file__),'documentation.html')
 
         with open(html_template_file) as fo:
             html_template = fo.read()
@@ -926,9 +952,7 @@ class BuildBundle(Bundle):
 
                 with open(self.filesystem.path(hdf), 'w') as hdfo:
                     html = html_template.format(
-                        content=markdown.markdown(
-                            self.sub_template(
-                                dfo.read())))
+                        content=markdown.markdown(self.sub_template(dfo.read())))
                     hdfo.write(html)
 
     def sources(self):
@@ -1323,17 +1347,12 @@ class BuildBundle(Bundle):
             # At this point, we have a dataset vid, which we didn't have when the dbcreated values was
             # set, so we can reset the value with to get it into the process
             # configuration group.
-            root_db_created = self.database.get_config_value(
-                ROOT_CONFIG_NAME_V,
-                'process',
-                'dbcreated')
+            root_db_created = self.database.get_config_value(ROOT_CONFIG_NAME_V,'process','dbcreated')
             self.set_value('process', 'dbcreated', root_db_created.value)
 
             self._revise_schema()
 
         self.schema.move_revised_schema()
-
-
 
         self.update_configuration()
 

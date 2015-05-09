@@ -65,8 +65,11 @@ coverage:
     time: []
 dependencies: {}
 documentation:
+    footnote: null
     main: null
+    processed: null
     readme: null
+    source: null
 identity:
     bspace: null
     btime: null

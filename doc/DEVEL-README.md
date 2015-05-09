@@ -21,7 +21,7 @@ To run tests:
 To run tests with coverage:
 
     1. Run with coverage
-      $ coverage run python setup.py test
+      $ coverage run setup.py test
     2. Generage html:
       $ coverage html
     3. Open htmlcov/index.html in the browser.

@@ -276,8 +276,6 @@ class Test(TestBase):
 
         l.put_bundle(self.bundle)
 
-        for p in ldsq(Partition).all():
-            print p.vid, p.name, p.vname
 
         for partition in self.bundle.partitions.all:
 
@@ -298,7 +296,7 @@ class Test(TestBase):
 
         l = self.get_library('local-remoted')
 
-        l.put_bundle(self.bundle, install_partitions=True)
+        l.put_bundle(self.bundle, install_partitions=True, file_state = 'new')
 
         r = l.get(self.bundle.identity)
 

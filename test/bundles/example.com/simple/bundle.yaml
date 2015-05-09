@@ -1,13 +1,16 @@
 about:
     access: null
+    footnote: null
     grain: null
     groups:
     - Examples
     license: other-open
+    processed: Packaged for [Ambry](http://ambry.io) by {{contact_bundle.creator.org}}
     rights: null
+    source: '{{contact_source.creator.org}}'
     space: null
     subject: null
-    summary: This is a short summary of the data bundle.
+    summary: This is a short summary of the data bundle, from {{contact_source.creator.org}}
     tags:
     - example
     time: null
@@ -16,20 +19,14 @@ contact_bundle:
     creator:
         email: bob@bob.com
         name: Bob Bobson
+        org: Example Com
         url: http://example.com
-    maintainer:
-        email: null
-        name: Examplearium
-        url: null
+    maintainer: {}
 contact_source:
     creator:
-        email: info@bobcom.com
-        name: Bobcom
-        url: https://clarinova.com
-    maintainer:
-        email: null
-        name: null
-        url: null
+        org: Example Com
+        url: http://example.com
+    maintainer: {}
 external_documentation:
     main_site:
         description: Main website for Example.com

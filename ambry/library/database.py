@@ -860,9 +860,7 @@ class LibraryDb(object):
             if ck not in datasets:
                 datasets[ck] = d.identity
                 datasets[ck].summary = self.get_bundle_value(
-                    d.vid,
-                    'config',
-                    'about.title')
+                    d.vid,'config','about.title')
 
             # Adding the file to the identity gets us the bundle state and
             # modification time.
@@ -885,11 +883,7 @@ class LibraryDb(object):
 
         all = set()
 
-        q = (
-            self.session.query(
-                Dataset,
-                Partition).join(Partition).filter(
-                Dataset.vid != ROOT_CONFIG_NAME_V))
+        q = (self.session.query(Dataset,Partition).join(Partition).filter(Dataset.vid != ROOT_CONFIG_NAME_V))
 
         for row in q.all():
             all.add(row.Dataset.vid)
@@ -918,217 +912,8 @@ class LibraryDb(object):
         from .query import Resolver
         return Resolver(self.session)
 
-    def find(self, query_command):
-        """Find a bundle or partition record by a QueryCommand or Identity.
 
-        Args:
-            query_command. QueryCommand or Identity
 
-        returns:
-            A list of identities, either Identity, for datasets, or PartitionIdentity
-            for partitions.
-
-        """
-
-        def like_or_eq(c, v):
-
-            if v and '%' in v:
-                return c.like(v)
-            else:
-                return c == v
-
-        s = self.session
-
-        has_partition = False
-        has_where = False
-
-        if isinstance(query_command, Identity):
-            raise NotImplementedError()
-            out = []
-            for d in self.queryByIdentity(query_command).all():
-                id_ = d.identity
-                d.path = os.path.join(self.cache, id_.cache_key)
-                out.append(d)
-
-        tables = [Dataset]
-
-        if len(query_command.partition) > 0:
-            tables.append(Partition)
-
-        if len(query_command.table) > 0:
-            tables.append(Table)
-
-        if len(query_command.column) > 0:
-            tables.append(Column)
-
-        # Dataset.id_ is included to ensure result is always a tuple)
-        tables.append(Dataset.id_)
-
-        # Dataset.id_ is included to ensure result is always a tuple
-        query = s.query(*tables)
-
-        if len(query_command.identity) > 0:
-            for k, v in query_command.identity.items():
-                if k == 'id':
-                    k = 'id_'
-                try:
-                    query = query.filter(like_or_eq(getattr(Dataset, k), v))
-                except AttributeError as e:
-                    # Dataset doesn't have the attribute, so ignore it.
-                    pass
-
-        if len(query_command.partition) > 0:
-            query = query.join(Partition)
-
-            for k, v in query_command.partition.items():
-                if k == 'id':
-                    k = 'id_'
-
-                from sqlalchemy.sql import or_
-
-                if k == 'any':
-                    continue  # Just join the partition
-                elif k == 'table':
-                    # The 'table" value could be the table id
-                    # or a table name
-                    query = query.join(Table)
-                    query = query.filter(
-                        or_(Partition.t_id == v, like_or_eq(Table.name, v.lower())))
-                elif k == 'space':
-                    query = query.filter(
-                        or_(like_or_eq(Partition.space, v.lower())))
-
-                else:
-                    query = query.filter(like_or_eq(getattr(Partition, k), v))
-
-            if not query_command.partition.format:
-                # Exclude CSV if not specified
-                query = query.filter(Partition.format != 'csv')
-
-        if len(query_command.table) > 0:
-            query = query.join(Table)
-            for k, v in query_command.table.items():
-                query = query.filter(like_or_eq(getattr(Table, k), v))
-
-        if len(query_command.column) > 0:
-            query = query.join(Table)
-            query = query.join(Column)
-            for k, v in query_command.column.items():
-                query = query.filter(like_or_eq(getattr(Column, k), v))
-
-        query = query.distinct().order_by(Dataset.revision.desc())
-
-        out = []
-
-        try:
-            for r in query.all():
-
-                o = {}
-
-                try:
-                    o['identity'] = r.Dataset.identity.dict
-                    o['partition'] = r.Partition.identity.dict
-
-                except:
-                    o['identity'] = r.Dataset.identity.dict
-
-                try:
-                    o['table'] = r.Table.dict
-                except:
-                    pass
-
-                try:
-                    o['column'] = r.Column.dict
-                except:
-                    pass
-
-                out.append(o)
-        except Exception as e:
-            self.logger.error(
-                "Exception while querrying in {}, schema {}".format(
-                    self.dsn,
-                    self._schema))
-            raise
-
-        return out
-
-    def queryByIdentity(self, identity):
-        from ..orm import Dataset, Partition
-        from ..identity import Identity, PartitionIdentity
-        from sqlalchemy import desc
-
-        s = self.database.session
-
-        # If it is a string, it is a name or a dataset id
-        if isinstance(identity, str) or isinstance(identity, unicode):
-            query = (
-                s.query(Dataset) .filter(
-                    Dataset.location == Dataset.LOCATION.LIBRARY) .filter(
-                    (Dataset.id_ == identity) | (
-                        Dataset.name == identity)))
-        elif isinstance(identity, PartitionIdentity):
-
-            query = s.query(Dataset, Partition)
-
-            for k, v in identity.to_dict().items():
-                d = {}
-
-                if k == 'revision':
-                    v = int(v)
-
-                d[k] = v
-
-            query = query.filter_by(**d)
-
-        elif isinstance(identity, Identity):
-            query = s.query(Dataset).filter(
-                Dataset.location == Dataset.LOCATION.LIBRARY)
-
-            for k, v in identity.to_dict().items():
-                d = {}
-                d[k] = v
-
-            query = query.filter_by(**d)
-
-        elif isinstance(identity, dict):
-            query = s.query(Dataset).filter(
-                Dataset.location == Dataset.LOCATION.LIBRARY)
-
-            for k, v in identity.items():
-                d = {}
-                d[k] = v
-                query = query.filter_by(**d)
-
-        else:
-            raise ValueError("Invalid type for identity")
-
-        query.order_by(desc(Dataset.revision))
-
-        return query
-
-    ##
-    # Database backup and restore. Synchronizes the database with
-    # a remote. This is used when a library is created attached to a remote, and
-    # needs to get the library database from the remote.
-    ##
-
-    def _copy_db(self, src, dst):
-        from sqlalchemy.orm.exc import NoResultFound
-
-        try:
-            dst.session.query(Dataset).filter(Dataset.vid == 'a0').delete()
-        except:
-            pass
-
-        # sorted by foreign key dependency
-        for table in self.metadata.sorted_tables:
-
-            rows = src.session.execute(table.select()).fetchall()
-            dst.session.execute(table.delete())
-            for row in rows:
-                dst.session.execute(table.insert(), row)
-
-        dst.session.commit()
 
 
 def _pragma_on_connect(dbapi_con, con_record):

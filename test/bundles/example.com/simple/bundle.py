@@ -57,4 +57,12 @@ class Bundle(BuildBundle):
                         code_key += 1
                         cd = c.add_code(code_key, 'code val {}'.format(code_key))
                         
+    def check_meta_html(self):
+        
+        print "R", self.metadata.about.processed
+        print "H", self.metadata.about.processed.html
+        print "T", self.metadata.about.processed.text
+        
+        
+                        
         

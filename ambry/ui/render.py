@@ -469,8 +469,6 @@ class Renderer(object):
 
         p['table'] = self.doc_cache.table(p['table_vid'])
 
-        print "Renderer:", self.library.table(p['table_vid']).columns
-
         if 'geo_coverage' in p:
 
             all_idents = self.library.search.identifier_map

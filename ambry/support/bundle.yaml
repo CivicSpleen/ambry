@@ -6,6 +6,8 @@ about:
     rights: null
     subject: null
     summary: null
+    processed: 'Packaged for Ambry (http://ambry.io) by {{contact_bundle.creator.org}}'
+    source: '{{contact_source.creator.org}}'
     tags:
     - tag1
     - tag2
