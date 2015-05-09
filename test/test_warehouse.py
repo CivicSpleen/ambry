@@ -11,10 +11,14 @@ from bundles.testbundle.bundle import Bundle
 from ambry.run import get_runconfig
 from ambry.warehouse.manifest import Manifest
 from test_base import TestBase
-from ambry.util import get_logger
+from ambry.util import get_logger, Constant
 
 
 class Test(TestBase):
+    EXAMPLE = Constant()
+    EXAMPLE.TABLE_NAME = 'geot1'
+    EXAMPLE.CONF_DB_SQLITE = 'sqlite'
+    EXAMPLE.CONF_DB_POSTGRES = 'postgres1'
 
     def setUp(self):
         import bundles.testbundle.bundle
@@ -33,16 +37,18 @@ class Test(TestBase):
 
         self.bundle = Bundle()
 
-        self.m = os.path.join(os.path.dirname(manifests.__file__), 'test.ambry')
+        self.mf = os.path.join(os.path.dirname(manifests.__file__),
+                               'test.ambry')
 
-        with open(self.m) as f:
+        with open(self.mf) as f:
             self.m_contents = f.read()
 
     def tearDown(self):
         pass
 
     def resolver(self, name):
-        if name == self.bundle.identity.name or name == self.bundle.identity.vname:
+        if (name == self.bundle.identity.name
+           or name == self.bundle.identity.vname):
             return self.bundle
         else:
             return False
@@ -52,7 +58,6 @@ class Test(TestBase):
         from ambry.library import new_library
 
         config = self.rc.library(name)
-
         l = new_library(config, reset=True)
 
         return l
@@ -60,61 +65,91 @@ class Test(TestBase):
     def get_warehouse(self, l, name, delete=True):
         from ambry.warehouse import new_warehouse
 
-        w = new_warehouse(self.rc.warehouse(name), l)
+        waho = new_warehouse(self.rc.warehouse(name), l)
 
         if delete:
-            w.database.enable_delete = True
-            w.database.delete()
-            w.create()
+            waho.database.enable_delete = True
+            waho.database.delete()
+            waho.create()
 
-        return w
+        return waho
 
-    def _test_manifest_install(self, name):
+    def _default_warehouse(self, name=None):
+        name = self.EXAMPLE.CONF_DB_SQLITE if not name else name
         l = self.get_library()
         l.put_bundle(self.bundle)
-        w = self.get_warehouse(l, name)
 
-        w.title = "This is the Warehouse!"
-        w.about = "A Warehouse full of wonder"
+        return self.get_warehouse(l, name)
 
-        m = Manifest(self.m, get_logger('TL'))
+    def _test_manifest_install(self, name):
+        """
+        Install test manifest and check the database for the table
+        """
+        test_table = 'geot1'
+        test_table_name = 'config'
 
-        w.install_manifest(m)
+        waho = self._default_warehouse(name)
+        mf = Manifest(self.mf, get_logger('TL'))
+
+        waho.install_manifest(mf)
+        tst = (mfile.path for mfile in waho.manifests)
+
+        # because of problems with the session!!! FIXME
+        # doing some tests here
+        self.assertIn(mf.path, tst)
+        self.assertIn(test_table, (t.name for t in waho.tables))
+        self.assertEqual(test_table, waho.orm_table_by_name(test_table).name)
+        self.assertTrue(waho.has_table(test_table_name))
+
+        # TODO: test here
+        # install_material_view
+        # install_view
+        # install_table
+        # install_partition
+        # augmented_table_name
+        # bundles
+        # close
+
+        waho.clean()
+        self.assertFalse(waho.has_table(test_table_name))
+
+        waho.delete()
+        self.assertFalse(waho.database.exists())
+        self.assertFalse(waho.wlibrary.database.exists())
+        waho.create()
+        self.assertTrue(waho.database.exists())
+        self.assertTrue(waho.wlibrary.database.exists())
 
     def test_sqlite_install(self):
         """
         Install manifest with sqlite
         """
-        self._test_manifest_install('sqlite')
+        self._test_manifest_install(self.EXAMPLE.CONF_DB_SQLITE)
 
-    # TODO, This requires psycopg2, which isn't part of the requuirements.
-    def x_test_postgres_install(self):
+    def test_postgres_install(self):
         """
         Install manifest with postgres
         """
-        self._test_manifest_install('postgres1')
+        self._test_manifest_install(self.EXAMPLE.CONF_DB_POSTGRES)
 
     def test_manifest(self):
         """
         Load the manifest and convert it to a string to check the round-trip
         """
 
-        m = Manifest(self.m, get_logger('TL'))
+        mf = Manifest(self.mf, get_logger('TL'))
 
         orig_mf = self.m_contents.replace('\n', '').strip()
-        conv_mf = str(m).replace('\n', '').strip()
+        conv_mf = str(mf).replace('\n', '').strip()
 
         self.assertEqual(orig_mf, conv_mf)
-
-        # w.extracts
 
     def test_extract(self):
         l = self.get_library()
         l.put_bundle(self.bundle)
-        w = self.get_warehouse(l, 'sqlite', delete=False)
+        waho = self.get_warehouse(l, self.EXAMPLE.CONF_DB_SQLITE, delete=False)
         # cache = new_cache('s3://warehouse.sandiegodata.org/test', run_config = get_runconfig())
-
-        w.extract_all(force=True)
+        waho.extract_all(force=True)
 
     def test_manifest_parser(self):
         lines = [
@@ -132,8 +167,8 @@ class Test(TestBase):
     def test_manifest_parts(self):
         from old.ipython.manifest import ManifestMagicsImpl
 
-        m = Manifest('', get_logger('TL'))
-        mmi = ManifestMagicsImpl(m)
+        mf = Manifest('', get_logger('TL'))
+        mmi = ManifestMagicsImpl(mf)
 
         m_head = """
 TITLE:  A Test Manifest, For Testing
@@ -190,63 +225,67 @@ WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
                 for i in t.get_identifiers():
                     pass
 
-    def x_test_install(self):
 
-        def resolver(name):
-            if name == self.bundle.identity.name or name == self.bundle.identity.vname:
-                return self.bundle
-            else:
-                return False
+    def test_exists(self):
+        """
+        Test the existence of the database
+        """
+        waho = self._default_warehouse()
+        self.assertTrue(waho.exists())
 
-        def progress_cb(lr, type, name, n):
-            if n:
-                lr("{} {}: {}".format(type, name, n))
-            else:
-                self.bundle.log("{} {}".format(type, name))
+    def test_meta(self):
+        """
+        Test meta
+        """
+        waho = self._default_warehouse()
+        title = 'my title'
+        summary = 'my summary'
+        name = 'my name '
+        url = 'http://www.example.com'
 
-        from ambry.warehouse import new_warehouse
-        from functools import partial
+        waho.title = title
+        waho.summary = summary
+        waho.name = name
+        waho.url = url
 
-        w = new_warehouse(self.rc.warehouse('postgres'))
+        self.assertEquals(title, waho.title)
+        self.assertEquals(summary, waho.summary)
+        self.assertEquals(name, waho.name)
+        self.assertEquals(url, waho.url)
 
-        w.database.enable_delete = True
-        w.resolver = resolver
-        w.progress_cb = progress_cb
+    def test_cache(self):
+        waho = self._default_warehouse()
+        self.assertIsNotNone(waho.cache)
 
-        try:
-            w.drop()
-        except:
-            pass
+    def test_dict(self):
+        waho = self._default_warehouse()
+        self.assertIsInstance(waho.dict, dict)
 
-        w.create()
+    def test_load_local(self):
+        pass
 
-        # self.bundle.partitions.all
+    def test_load_insert(self):
+        pass
 
-        for p in self.bundle.partitions:
-            lr = self.bundle.init_log_rate(10000)
-            w.install(p, progress_cb=partial(progress_cb, lr))
+    def test_remove(self):
+        # delete all from wlibrary
+        pass
 
-        self.assertTrue(w.has(self.bundle.identity.vname))
+    def test_run_sql(self):
+        # + create_table
+        pass
 
-        for p in self.bundle.partitions:
-            self.assertTrue(w.has(p.identity.vname))
+    def test_get(self):
+        pass
 
-        for p in self.bundle.partitions:
-            w.remove(p.identity.vname)
+    def test_has(self):
+        pass
 
-        w.get(self.bundle.identity.name)
-        w.get(self.bundle.identity.vname)
-        w.get(self.bundle.identity.id_)
+    def test_list(self):
+        pass
 
-        w.install(self.bundle)
-
-        w.get(self.bundle.identity.name)
-        w.get(self.bundle.identity.vname)
-        w.get(self.bundle.identity.id_)
-
-        for p in self.bundle.partitions:
-            lr = self.bundle.init_log_rate(10000)
-            w.install(p, progress_cb=partial(progress_cb, lr))
+    def test_info(self):
+        pass
 
 
 def suite():
