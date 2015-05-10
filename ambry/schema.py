@@ -393,6 +393,8 @@ class Schema(object):
         from sqlalchemy import Column as SAColumn
         from sqlalchemy import Table as SATable
         from sqlalchemy.orm.exc import NoResultFound
+        from dbexceptions import NotFoundError
+
 
         if use_fq_col_names:
             def col_name(c):
@@ -402,8 +404,11 @@ class Schema(object):
                 return c.name
 
         metadata = MetaData()
-        
-        table = self.get_table_from_database(db, name_or_id, d_vid = d_vid, session=session)
+
+        try:
+            table = self.get_table_from_database(db, name_or_id, d_vid = d_vid, session=session)
+        except NotFoundError:
+            raise NotFoundError("Did not find table '{}' in database {}".format(name_or_id, db.dsn))
 
         if alt_name and use_id:
             raise ConfigurationError("Can't specify both alt_name and use_id")

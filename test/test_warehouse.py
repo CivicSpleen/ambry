@@ -117,6 +117,20 @@ class Test(TestBase):
 
         return FsCache(cache_dir)
 
+    def test_basic(self):
+
+        l = self.get_library()
+
+        l.put_bundle(self.bundle)
+
+        w = self.get_warehouse(l, 'sqlite')
+
+        w.clean()
+        w.create()
+
+        w.install_partition("source-dataset-subset-variation-tthree")
+
+
     def _test_local_install(self, name):
 
         l = self.get_library()

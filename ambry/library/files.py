@@ -99,6 +99,11 @@ class Files(object):
         self._query = self._query.filter(File.ref == v)
         return self
 
+    def oid(self, v):
+        self._check_query()
+        self._query = self._query.filter(File.oid == v)
+        return self
+
     def state(self, v):
         self._check_query()
         self._query = self._query.filter(File.state == v)
@@ -111,6 +116,10 @@ class Files(object):
 
     def type(self, v):
         self._check_query()
+
+        if not v:
+            return self
+
         if isinstance(v, basestring):
             self._query = self._query.filter(File.type_ == v)
         else:
@@ -167,9 +176,10 @@ class Files(object):
         self.db._mark_update()
 
         f = self.db.session.merge(f)
-        if commit:
-            self.db.commit()
 
+        if commit:
+
+            self.db.commit()
 
         return f
 
@@ -227,23 +237,21 @@ class Files(object):
         """A reference for a data store, such as a warehouse or a file
         store."""
 
-        extant = self.query.path(w.dsn).group(self.TYPE.STORE).one_maybe
-
-        kw = dict(commit=commit, merge=True, extant=extant,
+        kw = dict(commit=commit,
                   path=w.dsn,
-                  group=self.TYPE.STORE,
                   ref=w.uid,
                   state=None,
-                  type_=w.database_class,
+                  type_=self.TYPE.STORE,
                   data=dict(
                       name=name,
                       title=title,
                       summary=summary,
                       cache=cache,
                       url=url,
+                      db_class=w.database_class,
 
                   ),
-                  source_url=None)
+                  source_url=w.dsn)
 
         f = self.new_file(**kw)
 
@@ -319,7 +327,7 @@ class Files(object):
 
         f = self.new_file(ref=manifest.uid,
                           path=manifest.path,
-                          group=self.TYPE.MANIFEST,
+                          type=self.TYPE.MANIFEST,
                           source_url=manifest.uid,
                           state=None,
                           data=manifest.dict,

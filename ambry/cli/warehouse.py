@@ -85,73 +85,36 @@ def warehouse_parser(cmd):
     whr_p.set_defaults(command='warehouse')
     whp = whr_p.add_subparsers(title='warehouse commands', help='command help')
 
-    whr_p.add_argument(
-        '-d',
-        '--database',
-        help='Uid, Path or connection url for a database. ')
+    whr_p.add_argument('-d','--database',help='Uid, Path or connection url for a database. ')
 
-    whsp = whp.add_parser(
-        'install',
-        help='Install a bundle or partition to a warehouse')
+    whsp = whp.add_parser('install',help='Install a bundle or partition to a warehouse')
     whsp.set_defaults(subcommand='install')
     whsp.add_argument('-n', '--name', help='Set the name of the database')
-    whsp.add_argument(
-        '-c',
-        '--clean',
-        default=False,
-        action='store_true',
-        help='Recreate the database before installation')
+    whsp.add_argument('-c','--clean',default=False,action='store_true',help='Recreate the database before installation')
 
     # For extract, when called from install
     group = whsp.add_mutually_exclusive_group()
 
-    whsp.add_argument(
-        '-D',
-        '--dir',
-        default='',
-        help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
+    whsp.add_argument('-D','--dir',default='',help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
 
     whsp.add_argument('term', type=str, help='Name of bundle or partition')
 
-    whsp = whp.add_parser(
-        'extract',
-        help='Extract files or documentation to a cache')
+    whsp = whp.add_parser('extract',help='Extract files or documentation to a cache')
     whsp.set_defaults(subcommand='extract')
-    whsp.add_argument(
-        '-f',
-        '--files-only',
-        default=False,
-        action='store_true',
-        help='Only extract the extract files')
-    whsp.add_argument(
-        '-d',
-        '--doc-only',
-        default=False,
-        action='store_true',
-        help='Only extract the documentation files')
+    whsp.add_argument('-f','--files-only',default=False,action='store_true',help='Only extract the extract files')
+    whsp.add_argument('-d','--doc-only',default=False,action='store_true',help='Only extract the documentation files')
     group = whsp.add_mutually_exclusive_group()
 
-    whsp.add_argument('-F', '--force', default=False, action='store_true',
-                      help='Force re-creation of files that already exist')
-    whsp.add_argument(
-        '-D',
-        '--dir',
-        default='',
-        help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
+    whsp.add_argument('-F', '--force', default=False, action='store_true',              help='Force re-creation of files that already exist')
+    whsp.add_argument('-D','--dir',default='',help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
 
     whsp = whp.add_parser('config', help='Configure varibles')
     whsp.set_defaults(subcommand='config')
     whsp.add_argument('term', type=str, nargs='?', help='Var=Value')
 
-    whsp = whp.add_parser(
-        'remove',
-        help='Remove a bundle or partition from a warehouse')
+    whsp = whp.add_parser('remove',help='Remove a bundle or partition from a warehouse')
     whsp.set_defaults(subcommand='remove')
-    whsp.add_argument(
-        'term',
-        type=str,
-        nargs='?',
-        help='Name of bundle, partition, manifest or database')
+    whsp.add_argument('term',type=str,nargs='?',help='Name of bundle, partition, manifest or database')
 
     whsp = whp.add_parser('connect', help='Test connection to a warehouse')
     whsp.set_defaults(subcommand='connect')
@@ -159,71 +122,37 @@ def warehouse_parser(cmd):
     whsp = whp.add_parser('info', help='Configuration information')
     whsp.set_defaults(subcommand='info')
 
-    whsp = whp.add_parser(
-        'clean',
-        help='Remove all of the contents from the warehouse')
+    whsp = whp.add_parser('clean',help='Remove all of the contents from the warehouse')
     whsp.set_defaults(subcommand='clean')
 
-    whsp = whp.add_parser(
-        'delete',
-        help='Remove all of the contents from the and delete it')
+    whsp = whp.add_parser('delete',help='Remove all of the contents from the and delete it')
     whsp.set_defaults(subcommand='delete')
 
     whsp = whp.add_parser('new', help='Create a new warehouse')
     whsp.set_defaults(subcommand='new')
     whsp.add_argument('-t', '--title', help='Set the title for the database')
-    whsp.add_argument(
-        '-s',
-        '--summary',
-        help='Set the summary for the database')
+    whsp.add_argument('-s','--summary',help='Set the summary for the database')
     whsp.add_argument('-c', '--cache', help='Specify the cache')
 
-    whsp.add_argument(
-        'term',
-        type=str,
-        nargs=1,
-        help='The DSN of the database')
+    whsp.add_argument('term',type=str,nargs=1,help='The DSN of the database')
 
     whsp = whp.add_parser('users', help='Create and configure warehouse users')
     whsp.set_defaults(subcommand='users')
     group = whsp.add_mutually_exclusive_group()
-    group.add_argument(
-        '-L',
-        '--list',
-        dest='action',
-        action='store_const',
-        const='list')
+    group.add_argument('-L','--list',dest='action',action='store_const',const='list')
     group.add_argument('-a', '--add')
     group.add_argument('-d', '--delete')
     whsp.add_argument('-p', '--password')
 
     whsp = whp.add_parser('list', help='List the datasets in the warehouse')
     whsp.set_defaults(subcommand='list')
-    whsp.add_argument(
-        'term',
-        type=str,
-        nargs='?',
-        help='Name of bundle, to list partitions')
+    whsp.add_argument('term',type=str,nargs='?',help='Name of bundle, to list partitions')
     group = whsp.add_mutually_exclusive_group()
-    group.add_argument(
-        '-m',
-        '--manifests',
-        action='store_true',
-        help='List manifests')
-    group.add_argument(
-        '-d',
-        '--databases',
-        action='store_true',
-        help='List Databases')
-    group.add_argument(
-        '-p',
-        '--partitions',
-        action='store_true',
-        help='List partitions')
+    group.add_argument('-m','--manifests',action='store_true',help='List manifests')
+    group.add_argument('-d','--databases',action='store_true',help='List Databases')
+    group.add_argument('-p','--partitions',action='store_true',help='List partitions')
 
-    whsp = whp.add_parser(
-        'doc',
-        help='Generate documentation and open an browser')
+    whsp = whp.add_parser('doc',help='Generate documentation and open an browser')
     whsp.set_defaults(subcommand='doc')
     whsp.add_argument('-c', '--clean')
 
@@ -264,8 +193,7 @@ def warehouse_new(args, l, config):
 
     from ambry.warehouse import database_config
 
-    if isinstance(args, basestring):
-        term = args
+    if isinstance(args, basestring):term = args
     else:
         term = args.term[0]
 

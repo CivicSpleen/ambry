@@ -751,7 +751,7 @@ class Column(Base):
     codes = relationship(Code, backref='column',order_by="asc(Code.key)",
                            cascade="all, delete-orphan", lazy='joined')
 
-    stats = relationship(ColumnStat, backref='column', cascade="all, delete-orphan", lazy='joined')
+    stats = relationship(ColumnStat, backref='column', cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint( 'c_sequence_id','c_t_vid', name='_uc_columns_1'),
@@ -1778,7 +1778,7 @@ class Partition(Base, LinkableMixin):
 
     table = relationship('Table', backref='partitions')
 
-    stats = relationship(ColumnStat, backref='partition', cascade="all, delete-orphan", lazy='joined')
+    stats = relationship(ColumnStat, backref='partition', cascade="all, delete-orphan")
 
     def __init__(self, dataset, t_id, **kwargs):
 
@@ -2033,13 +2033,13 @@ class Partition(Base, LinkableMixin):
         object and create an ObjectNumber value for the id_"""
         from identity import Identity
 
+
         if target.sequence_id is None:
             # These records can be added in an multi-process environment, we
             # we need exclusive locking here, where we don't for other sequence
             # ids.
             conn.execute("BEGIN IMMEDIATE")
-            sql = text(
-                '''SELECT max(p_sequence_id)+1 FROM Partitions WHERE p_d_id = :did''')
+            sql = text("SELECT max(p_sequence_id)+1 FROM Partitions WHERE p_d_id = :did")
 
             max_id, = conn.execute(sql, did=target.d_id).fetchone()
 
@@ -2186,7 +2186,7 @@ class File(Base, SavableMixin, LinkableMixin):
         return self._get_link_array('manifests', File, File.ref)
 
     def link_manifest(self, f):
-        assert self.group != 'manifest'
+        assert self.type_ != 'manifest'
         return self._append_link('manifests', f.ref)
 
     def delink_manifest(self, f):

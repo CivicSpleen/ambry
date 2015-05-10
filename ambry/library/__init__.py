@@ -282,14 +282,15 @@ class Library(object):
         if not self.cache.has(bundle.identity.cache_key):
             self.cache.put(bundle.database.path, bundle.identity.cache_key)
 
-        self.search.index_dataset(bundle, force=True)
+        if self._doc_cache:
+            self.search.index_dataset(bundle, force=True)
 
-        for partition in bundle.partitions:
-            self.search.index_partition(partition, force = True)
+            for partition in bundle.partitions:
+                self.search.index_partition(partition, force = True)
+
+            self.search.commit()
 
         self.mark_updated(vid=bundle.identity.vid)
-
-        self.search.commit()
 
         return self.cache.path(bundle.identity.cache_key), installed
 

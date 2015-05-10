@@ -49,8 +49,8 @@ warehouse:
         summary: This is a BS summary
         local_cache: /tmp/ambry-whtest/health_cache
 
-    sqlite: 'sqlite:////tmp/sqlite_warehouse'
-    spatialite: 'spatialite:////tmp/spatialite_warehouse'
+    sqlite: 'sqlite:////tmp/sqlite_warehouse.db'
+    spatialite: 'spatialite:////tmp/spatialite_warehouse.db'
     postgres1: postgis://user:user@warehouse2/manifest_test
 
 services:

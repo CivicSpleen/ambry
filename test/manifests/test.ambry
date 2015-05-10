@@ -19,5 +19,3 @@ FROM "pIjqPRbrGq001001_example"
 VIEW: health_mview
 SELECT *
 FROM "p00G002001_example"
-
-EXTRACT: health_mview AS csv TO health_mview.csv

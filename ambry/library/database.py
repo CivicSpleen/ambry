@@ -131,7 +131,7 @@ class LibraryDb(object):
         from sqlalchemy.orm import sessionmaker
 
         if not self.Session:
-            self.Session = sessionmaker(bind=self.engine)
+            self.Session = sessionmaker(bind=self.engine, expire_on_commit = False)
 
         if not self._session:
             self._session = self.Session()
@@ -235,17 +235,22 @@ class LibraryDb(object):
             self.close_connection()
 
     def clean(self, add_config_root=True):
+        from sqlalchemy.exc import OperationalError
+
         s = self.session
 
-        s.query(Config).delete()
-        s.query(ColumnStat).delete()
-        s.query(File).delete()
-        s.query(Code).delete()
-        s.query(Column).delete()
-        s.query(Partition).delete()
-        s.query(Table).delete()
-        s.query(Dataset).delete()
-
+        try:
+            s.query(Config).delete()
+            s.query(ColumnStat).delete()
+            s.query(File).delete()
+            s.query(Code).delete()
+            s.query(Column).delete()
+            s.query(Partition).delete()
+            s.query(Table).delete()
+            s.query(Dataset).delete()
+        except OperationalError:
+            # Tables dont exist?
+            raise
 
         if add_config_root:
             self._add_config_root()
@@ -319,24 +324,11 @@ class LibraryDb(object):
         pass
 
     def clone(self):
-        return self.__class__(
-            self.driver,
-            self.server,
-            self.dbname,
-            self.username,
-            self.password)
+        return self.__class__(self.driver,self.server,self.dbname,self.username,self.password)
 
     def create_tables(self):
         from sqlalchemy.exc import OperationalError
-        tables = [
-            Dataset,
-            Config,
-            Table,
-            Column,
-            File,
-            Partition,
-            Code,
-            ColumnStat]
+        tables = [ Dataset,Config,Table,Column,File,Partition,Code,ColumnStat]
 
         try:
             self.drop()
@@ -605,28 +597,35 @@ class LibraryDb(object):
                 raise ConflictError("Can't install dataset vid={}; \nOne already exists. ('{}');\n {}" .format(
                         identity.vid,e.message,ds.dict))
 
+    def install_bundle_dataset(self, bundle):
+        """Install only the dataset record for the bundle"""
 
-    def install_bundle(self, bundle):
-        """Copy the schema and partitions lists into the library database."""
-        from ambry.bundle import Bundle
         from sqlalchemy.orm import joinedload, noload
-        import time
 
-        if not isinstance(bundle, Bundle):
-            raise ValueError("Can only install a  Bundle object. Got a {}".format(type(bundle)))
-
-        if self.session.query(Dataset).filter(Dataset.vid == str(bundle.identity.vid) ).first():
+        if self.session.query(Dataset).filter(Dataset.vid == str(bundle.identity.vid)).first():
             return False
 
         dataset = (bundle.database.session.query(Dataset).options(noload('*'), joinedload('configs'))
-                       .filter(Dataset.vid == str(bundle.identity.vid)).one() )
+                   .filter(Dataset.vid == str(bundle.identity.vid)).one() )
 
         self.session.merge(dataset)
         self.session.commit()
 
+        return dataset
+
+
+    def install_bundle(self, bundle):
+        """Copy the schema and partitions lists into the library database."""
+
+        from sqlalchemy.orm import joinedload, noload
+
+        if self.session.query(Dataset).filter(Dataset.vid == str(bundle.identity.vid) ).first():
+            return False
+
+        dataset = self.install_bundle_dataset(bundle)
+
         d_vid = dataset.vid
 
-        import time
         # This is a lot faster than going through the ORM.
         for tbl in [Table, Column, Code, Partition, ColumnStat]:
 
@@ -640,16 +639,13 @@ class LibraryDb(object):
                         if k.endswith('_d_vid') and not bool(v):
                             r[k] = d_vid
             if rows:
-
-
                 self.session.execute(tbl.__table__.insert(), rows)
 
-            s = time.time()
             self.session.commit()
 
         self._mark_update()
 
-        return True
+        return dataset
 
     def mark_table_installed(self, table_or_vid, name=None):
         """Mark a table record as installed."""

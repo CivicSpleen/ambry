@@ -151,6 +151,8 @@ class Warehouse(object):
         self.test = test
         self._cache = cache
 
+        assert self.wlibrary.database.dsn != self.elibrary.database.dsn
+
         logger = logger if logger else NullLogger()
 
         self.logger = Logger(logger, init_log_rate(logger.info, N=2000))
@@ -177,34 +179,20 @@ class Warehouse(object):
         self.wlibrary.database.create()
 
         # Create the uid from the DSN.
-        self._meta_set(
-            'uid', str(
-                TopNumber.from_string(
-                    self.database.dsn, 'd')))
+        self._meta_set('uid', str(TopNumber.from_string(self.database.dsn, 'd')))
 
         # Create the dataset record for the database. This will be the dataset for tables and
         # partitions created in the database.
         s = self.database.session
+
         try:
-            ds = s.query(Dataset).filter(
-                Dataset.id_ == self.vid).order_by(
-                Dataset.revision.desc()).one()
+            ds = s.query(Dataset).filter( Dataset.id_ == self.vid).order_by(Dataset.revision.desc()).one()
         except NoResultFound:
             from ..identity import Identity
 
-            ident = Identity.from_dict(
-                dict(
-                    id=self.vid,
-                    revision=1,
-                    source='ambry',
-                    dataset=self.vid))
+            ident = Identity.from_dict(dict(id=self.vid,revision=1,source='ambry',dataset=self.vid))
 
-            ds = Dataset(
-                data=dict(
-                    dsn=self.dsn),
-                creator='ambry',
-                fqname=ident.fqname,
-                **ident.dict)
+            ds = Dataset(data=dict(dsn=self.dsn),creator='ambry',fqname=ident.fqname,**ident.dict)
 
             s.add(ds)
 
@@ -216,8 +204,8 @@ class Warehouse(object):
 
     def clean(self):
 
-        self.database.clean()
-        self.wlibrary.clean()
+        self.wlibrary.clean() # Deletes everything from all tables.
+        self.database.clean() # For sqlite, just deleted the database file.
 
     def delete(self):
         self.database.enable_delete = True
@@ -387,9 +375,8 @@ class Warehouse(object):
         """Return the parsed manifests that have been installed."""
         from .manifest import Manifest
 
-        return self.library.files.query.type(
-            self.FILE_TYPE.MANIFEST).group(
-            self.FILE_GROUP.MANIFEST).all
+        return self.library.files.query.type(self.FILE_TYPE.MANIFEST).all
+
 
     @property
     def bundles(self):
@@ -632,17 +619,12 @@ class Warehouse(object):
 
                 dataset, tables, where = command_set
 
-                if where and len(tables) == 1:
-                    tables = [(tables[0], "WHERE (" + where + ")")]
 
                 try:
-                    tables, p = self.install_partition(
-                        dataset.partition.vid, tables)
+                    tables, p = self.install_partition(dataset.partition.vid)
                 except NotFoundError as e:
-                    self.logger.error(
-                        "Failed to install partition {}: {}".format(
-                            dataset.partition,
-                            e))
+                    self.logger.error("Failed to install partition {}: {}".format(dataset.partition,e))
+
                     continue
 
                 installed_tables += tables
@@ -723,8 +705,7 @@ class Warehouse(object):
         self.database.session.commit()
 
         # Delete all of the files ( extracts ) that were not installed
-        (self.library.files.query.type(
-            self.library.files.TYPE.EXTRACT).state('deleteable')).delete()
+        (self.library.files.query.type(self.library.files.TYPE.EXTRACT).state('deleteable')).delete()
 
         # Record the installtion time of the manifest.
         self._meta_set(manifest.uid, datetime.now().isoformat())
@@ -733,21 +714,42 @@ class Warehouse(object):
 
         return self.database.dsn
 
-    def install_partition(self, p_vid, tables=None, prefix=None):
+    def install_partition(self, p_vid):
         """Install a partition and the tables in the partition."""
 
         from sqlalchemy.exc import OperationalError
         from sqlalchemy import inspect
+        from ..dbexceptions import NotFoundError
+        from ..orm import Partition
+        from sqlalchemy.orm import joinedload, noload
 
-        dataset = self.elibrary.resolve(p_vid)
-        b = self.elibrary.get(dataset)
+        dataset_ident = self.elibrary.resolve(p_vid)
+
+        if not dataset_ident:
+            raise NotFoundError("Did not find partition '{}' in external library".format(p_vid))
+
+        b = self.elibrary.get(dataset_ident)
+
+        dataset = self.wlibrary.database.install_bundle_dataset(b)
+
         # This one gets the ref from the bundle
-        p = b.partitions.get(dataset.partition)
+        p = b.partitions.get(dataset_ident.partition)
 
-        # This one downloads the database.
-        self.elibrary.get(dataset.partition)
+        if not p:
+            raise NotFoundError("Did not find partition '{}' in bundle".format(p_vid))
 
-        self.library.files.install_partition_file(p, 'ext_library')
+
+        orm_p = (self.elibrary.database.session.query(Partition)
+                 .options(noload('*'), joinedload('table'))
+                 .filter(Partition.vid == p.identity.vid).one() )
+
+
+        self.wlibrary.database.session.merge(orm_p)
+        self.wlibrary.database.session.commit()
+
+        self.elibrary.get(dataset_ident.partition) # This one downloads the partition database.
+
+        self.library.files.install_partition_file(p, self.elibrary.database.dsn)
 
         installed_tables = []
 
@@ -756,6 +758,7 @@ class Warehouse(object):
         for source_table_name in p.tables:
             if not source_table_name in tables_in_partition:
                 continue
+
             try:
                 table, meta = self.create_table(p, source_table_name)
             except Exception as e:
@@ -764,8 +767,7 @@ class Warehouse(object):
 
             # Compute the installation name, and an alias that does not have
             # the version number
-            dest_table_name, alias = self.augmented_table_name(
-                p.identity, source_table_name)
+            dest_table_name, alias = self.augmented_table_name(p.identity, source_table_name)
 
             if isinstance(source_table_name, (list, tuple)):
                 source_table_name, where = source_table_name
@@ -776,11 +778,7 @@ class Warehouse(object):
                 # Copy the data to the destination table
 
                 self.elibrary.get(p.vid)  # ensure it is local
-                itn = self.load_local(
-                    p,
-                    source_table_name,
-                    dest_table_name,
-                    where)
+                itn = self.load_local(p,source_table_name,dest_table_name,where)
 
                 t_vid = p.get_table(source_table_name).vid
                 w_table = self.library.table(t_vid)
@@ -788,26 +786,15 @@ class Warehouse(object):
                 # Create a table entry for the name of the table with the partition in it,
                 # and link it to the main table record.
                 proto_vid = w_table.vid
-                self.install_table(
-                    dest_table_name,
-                    alt_name=alias,
-                    data=dict(
-                        type='installed',
-                        proto_vid=proto_vid))
+                self.install_table(dest_table_name,alt_name=alias,
+                    data=dict(type='installed',proto_vid=proto_vid))
 
                 # Link the table name and the alias
-                self.install_table_alias(
-                    dest_table_name,
-                    alias,
-                    proto_vid=proto_vid)
+                self.install_table_alias(dest_table_name,alias,proto_vid=proto_vid)
 
-                self.library.database.mark_table_installed(
-                    p.get_table(source_table_name).vid,
-                    itn)
+                self.library.database.mark_table_installed(p.get_table(source_table_name).vid,itn)
 
-                assert self.augmented_table_name(
-                    p.identity,
-                    source_table_name)[0] == itn
+                assert self.augmented_table_name(p.identity,source_table_name)[0] == itn
 
                 w_table.data['source_partition'] = p.identity.dict
 
@@ -820,13 +807,10 @@ class Warehouse(object):
                 installed_tables.append(w_table.name)
 
             except OperationalError as e:
-                self.logger.error(
-                    "Failed to install table '{}': {}".format(
-                        source_table_name,
-                        e))
+                self.logger.error("Failed to install table '{}': {}".format(source_table_name,e))
                 raise
 
-        self.library.database.mark_partition_installed(p_vid)
+        self.library.database.mark_partition_installed(p.identity.vid)
 
         return installed_tables, p
 
@@ -871,7 +855,7 @@ class Warehouse(object):
 
         sql = 'SELECT * FROM "{}" LIMIT 1'.format(t.name)
 
-        row = self.database.connection.execute(sql).fetchone()
+        row = self.database.session.execute(sql).fetchone()
 
         if row:
             for i, (col_name, v) in enumerate(row.items(), 1):
@@ -1124,31 +1108,26 @@ class Warehouse(object):
 
         data['sample'] = None
 
-        sqls = [
-            self.drop_view_sql.format(
-                name=name), self.create_view_sql.format(
-                name=name, sql=sql)]
+        sqls = [ self.drop_view_sql.format(name=name), self.create_view_sql.format(name=name, sql=sql)]
 
         try:
             for sql in sqls:
                 # Creates the table in the database
-                self.database.connection.execute(sql)
+                self.database.session.execute(sql)
 
-            t = self.install_table(
-                name,
-                data=data)  # Creates the table library record
+            t = self.install_table( name, data=data)  # Creates the table library record
 
             self.build_schema(t)
 
         except Exception as e:
 
-            self.logger.error("Failed to install view: \n{}".format(sql))
+            self.logger.error("Failed to install view: \n{}\nin: {}".format(sqls, self.database.dsn))
 
             raise
 
         except OperationalError:
 
-            self.logger.error("Failed to execute: {} ".format(sql))
+            self.logger.error("Failed to execute: \n{}\nin: {}".format(sqls, self.database.dsn))
 
             raise
 
@@ -1174,11 +1153,7 @@ class Warehouse(object):
         try:
             from sqlalchemy.orm import lazyload
 
-            q = (
-                s.query(Table).filter(
-                    Table.d_vid == self.vid,
-                    Table.name == name) .options(
-                    lazyload('columns')))
+            q = (s.query(Table).filter(Table.d_vid == self.vid,Table.name == name) .options(lazyload('columns')))
 
             t = q.one()
 
@@ -1186,14 +1161,9 @@ class Warehouse(object):
             # Create a new table, attached to to the warehouse dataset
             # Search for the table by the vid
 
-            ds = s.query(Dataset).filter(
-                Dataset.vid == self.vid).one()  # Get the Warehouse dataset.
+            ds = s.query(Dataset).filter(Dataset.vid == self.vid).one()  # Get the Warehouse dataset.
 
-            q = (
-                s.query(
-                    func.max(
-                        Table.sequence_id)) .filter(
-                    Table.d_vid == self.vid))
+            q = (s.query(func.max(Table.sequence_id)) .filter(Table.d_vid == self.vid))
 
             seq = q.one()[0]
 
@@ -1464,25 +1434,25 @@ class Warehouse(object):
 
         return table, meta
 
-        def create_index(self, name, table, columns):
+    def create_index(self, name, table, columns):
 
-            from sqlalchemy.exc import OperationalError, ProgrammingError
+        from sqlalchemy.exc import OperationalError, ProgrammingError
 
-            sql = 'CREATE INDEX {} ON "{}" ({})'.format(
-                name,
-                table,
-                ','.join(columns))
+        sql = 'CREATE INDEX {} ON "{}" ({})'.format(
+            name,
+            table,
+            ','.join(columns))
 
-            try:
-                self.database.connection.execute(sql)
-                self.logger.info('create_index {}'.format(name))
-            except (OperationalError, ProgrammingError) as e:
+        try:
+            self.database.connection.execute(sql)
+            self.logger.info('create_index {}'.format(name))
+        except (OperationalError, ProgrammingError) as e:
 
-                if 'exists' not in str(e).lower():
-                    raise
+            if 'exists' not in str(e).lower():
+                raise
 
-                self.logger.info('index_exists {}'.format(name))
-                # Ignore if it already exists.
+            self.logger.info('index_exists {}'.format(name))
+            # Ignore if it already exists.
 
     def _to_vid(self, partition):
         from ..partition import PartitionBase
