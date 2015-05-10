@@ -469,7 +469,7 @@ class Library(object):
         if not dataset:
             raise NotFoundError("Failed to resolve reference '{}' in library '{}' ".format(ref, self.database.dsn))
 
-        df = self.files.query.group('datasets').type(Files.TYPE.BUNDLE).ref(dataset.vid).one
+        df = self.files.query.type(Files.TYPE.BUNDLE).ref(dataset.vid).one
 
         # Get the remote that the bundle came from.
 
@@ -1191,7 +1191,7 @@ class Library(object):
                 continue
 
             all_keys = [ f.path for f  in self.files.query.type(Dataset.LOCATION.REMOTE)
-                             .group(remote.repo_id).all ]
+                          .source_url(remote.repo_id).all ]
 
             last_keys = defaultdict(lambda : [0,''] )
 
@@ -1319,7 +1319,6 @@ class Library(object):
 
         s = self.database.session
 
-        s.commit()
 
         ## First, load in the partitions.
 
@@ -1338,12 +1337,15 @@ class Library(object):
             # Copy the file record. There really should be an easier way
             # to do this.
 
-            local_manifest = self.files.new_file(
-                commit=True, merge=True,
-                extant=self.files.query.ref(remote_manifest.ref)
-                        .group(self.files.TYPE.MANIFEST).one_maybe,
-                **{ k:v for k,v in remote_manifest.record_dict.items()
-                    if k not in ('oid')})
+            extant = (self.files.query.ref(remote_manifest.ref).first)
+
+            if not extant:
+                (self.files.query.path(remote_manifest.path).first)
+
+            print 'XXX', remote_manifest.ref, remote_manifest.path, extant
+
+            local_manifest = self.files.new_file(commit=True, merge=True,extant=extant,
+                **{ k:v for k,v in remote_manifest.record_dict.items() if k not in ('oid')})
 
             for p  in remote_manifest.linked_partitions:
                 p = self.partition(p.vid)

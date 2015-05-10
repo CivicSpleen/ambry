@@ -863,6 +863,7 @@ class _ScalarTermS(str):
         s.feed(self.html)
         return s.get_data()
 
+
 class _ScalarTermU(unicode):
 
     def __new__(cls, string, jinja_sub):
@@ -899,10 +900,8 @@ class ScalarTerm(Term):
 
         st = self._parent._term_values.get(self._key,None)
 
-        if st is None:
-            return st
-
         def jinja_sub(st):
+
             if  self._top._context and isinstance(st, basestring):
                 from jinja2 import Template
 
@@ -917,6 +916,8 @@ class ScalarTerm(Term):
             return _ScalarTermS(st, jinja_sub)
         elif isinstance(st, unicode):
             return _ScalarTermS(st, jinja_sub)
+        elif st is None:
+            return _ScalarTermS('', jinja_sub)
         else:
             return st
 

@@ -118,10 +118,6 @@ class Files(object):
 
         return self
 
-    def group(self, v):
-        self._check_query()
-        self._query = self._query.filter(File.group == v)
-        return self
 
     def source_url(self, v):
         self._check_query()
@@ -135,85 +131,59 @@ class Files(object):
     @property
     def installed(self):
         self._check_query()
-        self._query = self._query.filter(
-            or_(File.type_ == self.TYPE.BUNDLE, File.type_ == self.TYPE.PARTITION))
+        self._query = self._query.filter(or_(File.type_ == self.TYPE.BUNDLE, File.type_ == self.TYPE.PARTITION))
         return self
 
-    def new_file(self, merge=False, commit=True, extant=None, **kwargs):
+    def new_file(self,  commit = True, **kwargs):
         """If merge is 'collect', the files will be added to the collection,
         for later insertion."""
+        from sqlalchemy.exc import IntegrityError
+
+        if 'oid' in kwargs:
+            del kwargs['oid']
 
         f = File(**kwargs)
 
+        extant = self.query.ref(f.ref).type(f.type_).source_url(f.source_url).one_maybe
+
         if extant:
-            extant.update(f)
-            f = extant
+            for k, v in kwargs.items():
+                setattr(extant, k, v)
+                f = extant
 
+        path = f.path
 
-        if merge:
-            self.merge(f, commit=commit)
+        if path and os.path.exists(path):
+            stat = os.stat(path)
+
+            if not f.modified or stat.st_mtime > f.modified:
+                f.modified = int(stat.st_mtime)
+
+            f.size = stat.st_size
+        else:
+            f.modified = f.modified if f.modified else None
+            f.size = f.size if f.size else None
+
+        self.db._mark_update()
+
+        f = self.db.session.merge(f)
+        if commit:
+            self.db.commit()
+
 
         return f
 
 
-
-    def merge(self, f, commit=True):
-        """If commit is 'collect' add the files to the collection for later
-        insertion."""
-        from sqlalchemy.exc import IntegrityError
-
-        s = self.db.session
-
-        path = f.path
-
-        if True:
-            if path and os.path.exists(path):
-                stat = os.stat(path)
-
-                if not f.modified or stat.st_mtime > f.modified:
-                    f.modified = int(stat.st_mtime)
-
-                f.size = stat.st_size
-            else:
-                f.modified = f.modified if f.modified else None
-                f.size = f.size if f.size else None
-
-        if commit == 'collect':
-            raise NotImplementedError()
-
-        # Sqlalchemy doesn't automatically rollback on exceptions, and you
-        # can't re-try the commit until you roll back.
-        try:
-
-            s.add(f)
-            if commit:
-                self.db.commit()
-
-        except IntegrityError as e:
-
-            s.rollback()
-
-            s.merge(f)
-            try:
-                self.db.commit()
-            except IntegrityError as e:
-                s.rollback()
-                raise
-
-        self.db._mark_update()
 
     def install_bundle_file(self,bundle,source,commit=True,state='installed'):
         """Mark a bundle file as having been installed in the library."""
 
         ident = bundle.identity
 
-        self.query.group('datasets').source_url(source).type(Files.TYPE.BUNDLE).ref(ident.vid).delete()
-
         return self.new_file(
             commit=commit,
             merge=True,
             path=bundle.database.path,
-            group='datasets',
             ref=ident.vid,
             state=state,
             type_=Files.TYPE.BUNDLE,
@@ -225,13 +195,10 @@ class Files(object):
 
         ident = partition.identity
 
-        self.query.group('datasets').source_url(source).type(Files.TYPE.PARTITION).ref(ident.vid).delete()
-
         return self.new_file(
             commit=commit,
             merge=True,
             path=partition.database.path,
-            group='datasets',
             ref=ident.vid,
             state=state,
             type_=Files.TYPE.PARTITION,
@@ -246,7 +213,6 @@ class Files(object):
             commit=commit,
             merge=True,
             path=bundle.bundle_dir,
-            group=source.base_dir,
             ref=bundle.identity.vid,
             state=bundle.build_state,
             type_=Files.TYPE.SOURCE,
@@ -351,27 +317,18 @@ class Files(object):
     def install_manifest(self, manifest, warehouse=None, commit=True):
         """Store a references to, and content for, a manifest."""
 
-        extant = self.query.ref(
-            manifest.uid).group(
-            self.TYPE.MANIFEST).one_maybe
-
-        f = self.new_file(commit=commit, merge=True, extant=extant,
+        f = self.new_file(ref=manifest.uid,
                           path=manifest.path,
                           group=self.TYPE.MANIFEST,
-                          ref=manifest.uid,
-                          state=None,
-                          type_=self.TYPE.MANIFEST,
-                          data=manifest.dict,
                           source_url=manifest.uid,
-                          **(self._process_source_content(manifest.path))
+                          state=None,
+                          data=manifest.dict,
+                          **(self._process_source_content(manifest.path)))
 
-                          )
 
         if warehouse:
 
-            whf = self.query.path(
-                warehouse.database.dsn).group(
-                self.TYPE.STORE).one_maybe
+            whf = self.query.path(warehouse.database.dsn).group(self.TYPE.STORE).one_maybe
 
             if not whf:
                 from ..dbexceptions import NotFoundError

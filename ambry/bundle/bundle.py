@@ -885,6 +885,11 @@ class BuildBundle(Bundle):
 
         md.documentation.readme = read_file(self.README_FILE)
         md.documentation.main = self.sub_template(read_file(self.DOC_FILE))
+        md.documentation.title = md.about.title.text
+        md.documentation.summary = md.about.summary.text
+        md.documentation.source = md.about.source.text
+        md.documentation.processed = md.about.processed.text
+        md.documentation.summary = md.about.summary.text
 
 
 
@@ -915,8 +920,11 @@ class BuildBundle(Bundle):
 
                 source = p.query("SELECT * FROM sources WHERE domain = ?", source_domain).first()
 
-                self.metadata.contact_source.creator.org = source.name
-                self.metadata.contact_source.creator.url = source.homepage
+                if source:
+                    self.metadata.contact_source.creator.org = source.name
+                    self.metadata.contact_source.creator.url = source.homepage
+                else:
+                    self.error("Failed to find source domain '{}' in {}".format(source_domain,self.SOURCE_TERMS))
 
             except NotFoundError:
                 self.error("Can't expand sources; didn't find source partition '{}'".format(self.SOURCE_TERMS))

@@ -252,7 +252,6 @@ class Test(TestBase):
     def test_partition(self):
         from ambry.dbexceptions import ConflictError
         from ambry.identity import PartitionNameQuery
-        from ambry.partition.csv import CsvPartition
 
         self.bundle.clean()
         self.bundle.prepare()

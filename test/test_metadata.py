@@ -70,6 +70,8 @@ documentation:
     processed: null
     readme: null
     source: null
+    summary: null
+    title: null
 identity:
     bspace: null
     btime: null
@@ -152,7 +154,7 @@ views: {}
         self.assertEquals('Term', tt.group['term'])
         self.assertEquals(['term', 'term2', 'dterm'], tt.group.keys())
         self.assertEquals(
-            ['Term', 'Term2', AttrDict([('dterm1', None), ('unset_term', None), ('dterm2', None)])],
+            ['Term', 'Term2', AttrDict([('dterm1', ''), ('unset_term', ''), ('dterm2', '')])],
             tt.group.values())
 
         #
@@ -163,7 +165,7 @@ views: {}
 
         self.assertEquals('dterm1', tt.group.dterm.dterm1)
         self.assertEquals(['dterm1', 'unset_term', 'dterm2'], tt.group.dterm.keys())
-        self.assertEquals(['dterm1', None, 'dterm2'], tt.group.dterm.values())
+        self.assertEquals(['dterm1', '', 'dterm2'], tt.group.dterm.values())
 
         #
         # List Group
@@ -446,7 +448,7 @@ about:
         self.assertIn('rights', yc2['about'])
         self.assertNotIn('author', yc2['about'])
         self.assertNotIn('url', yc2['about'])
-        self.assertIsNone(t1.about.summary)
+        self.assertEquals('', t1.about.summary)
 
         self.assertIn(('about', 'foo', None), t1.errors)
 

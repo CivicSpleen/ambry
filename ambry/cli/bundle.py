@@ -422,9 +422,10 @@ def bundle_info(args, b, st, rc):
                             def sparks(nums): # https://github.com/rory/ascii_sparks/blob/master/ascii_sparks.py
                                 nums = list(nums)
                                 fraction = max(nums) / float(len(parts) - 1)
-
-                                return ''.join(parts[int(round(x / fraction))] for x in nums)
-
+                                if fraction:
+                                    return ''.join(parts[int(round(x / fraction))] for x in nums)
+                                else:
+                                    return ''
                             vals = sparks(int(x[1]) for x in s.hist['values'])
                         else:
                             vals = ''

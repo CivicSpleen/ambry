@@ -475,10 +475,10 @@ class SqlitePartition(PartitionBase):
         statinfo = os.stat(self.database.path)
 
         f = File(path=self.identity.cache_key,
-                 group='partition',
                  ref=self.identity.vid,
                  state='built',
                  type_='P',
+                 source_url = 'build',
                  hash=md5_for_file(self.database.path),
                  size=statinfo.st_size)
 

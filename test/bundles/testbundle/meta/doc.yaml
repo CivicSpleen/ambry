@@ -141,6 +141,8 @@ documentation:
         \ \n\nThis data is based on data from SANDAG, which is subject to its own\
         \ terms and conditions. See the [SANDAG Legal Notice for details](http://rdw.sandag.org/m).\
         \ \n\n"
-    processed: null
+    processed: ''
     readme: What do you know? A readme!
-    source: null
+    source: ''
+    summary: An example bundle
+    title: This is the Title

@@ -747,7 +747,7 @@ class Warehouse(object):
         # This one downloads the database.
         self.elibrary.get(dataset.partition)
 
-        self.library.database.install_partition(b, p)
+        self.library.files.install_partition_file(p, 'ext_library')
 
         installed_tables = []
 

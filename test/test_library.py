@@ -749,12 +749,18 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         for e in [ (str(i), str(j) ) for i in range(10) for j in range(3)  ]:
 
-            f = l.files.new_file(path='path'+e[0], ref="{}-{}".format(*e), group=e[1], type_=e[1])
+            f = l.files.new_file(path='path'+e[0], ref="{}-{}".format(*e), source_url = 'foo', group=e[1], type_=e[1])
 
-            l.files.merge(f)
+        self.assertEquals(30, len(l.files.query.all))
 
-        def refs(itr):
-            return [ f.ref for f in i ]
+        # Will throw an exception on duplicate error
+        f1 = l.files.new_file(path='ref-a', type = 'type-a', source = 'source-a', state = 'a')
+        self.assertEquals('a', l.files.query.path('ref-a').one.state)
+
+        # Test that it overwrites inistead of duplicates
+        f2 = l.files.new_file(path='ref-a', type='type-a', source='source-a', state = 'b')
+        self.assertEquals('b', l.files.query.path('ref-a').one.state)
+        self.assertEquals(31, len(l.files.query.all))
 
     def test_codes(self):
 

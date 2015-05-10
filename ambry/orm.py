@@ -42,7 +42,6 @@ BigIntegerType = BigIntegerType.with_variant(sqlite.INTEGER(), 'sqlite')
 from sqlalchemy import func
 from sqlalchemy.types import UserDefinedType
 
-
 class Geometry(UserDefinedType):
 
     """Geometry type, to ensure that WKT text is properly inserted into the
@@ -80,7 +79,6 @@ GeometryType = GeometryType.with_variant(
 GeometryType = GeometryType.with_variant(Text(), 'postgresql')
 
 Base = declarative_base()
-
 
 class JSONEncoder(json.JSONEncoder):
 
@@ -2070,15 +2068,15 @@ class File(Base, SavableMixin, LinkableMixin):
 
     oid = SAColumn('f_id', Integer, primary_key=True, nullable=False)
     path = SAColumn('f_path', Text, nullable=False)
-    ref = SAColumn('f_ref', Text, index=True)
-    type_ = SAColumn('f_type', Text)
-    source_url = SAColumn('f_source_url', Text)
+    ref = SAColumn('f_ref', Text, index=True, nullable=False)
+    type_ = SAColumn('f_type', Text, nullable=False)
+    source_url = SAColumn('f_source_url', Text, nullable=False)
     process = SAColumn('f_process', Text)
     state = SAColumn('f_state', Text)
     hash = SAColumn('f_hash', Text)
     modified = SAColumn('f_modified', Integer)
     size = SAColumn('f_size', BigIntegerType)
-    group = SAColumn('f_group', Text)
+
     priority = SAColumn('f_priority', Integer)
 
     data = SAColumn('f_data', MutationDict.as_mutable(JSONEncodedObj))
@@ -2086,14 +2084,13 @@ class File(Base, SavableMixin, LinkableMixin):
     content = SAColumn('f_content', Binary)
 
     __table_args__ = (
-        UniqueConstraint('f_path', 'f_type', 'f_group', 'f_source_url', name='u_type_path'),
-        UniqueConstraint('f_ref', 'f_type', 'f_group', 'f_source_url', name='u_ref_path')
+        UniqueConstraint('f_ref', 'f_type', 'f_source_url', name='u_ref_path'),
     )
 
     def __init__(self, **kwargs):
         self.oid = kwargs.get("oid", None)
         self.path = kwargs.get("path", None)
-        self.source_url = kwargs.get("source_url", None)
+        self.source_url = kwargs.get("source_url", kwargs.get("source", None))
         self.process = kwargs.get("process", None)
         self.state = kwargs.get("state", None)
         self.modified = kwargs.get("modified", None)
@@ -2106,6 +2103,11 @@ class File(Base, SavableMixin, LinkableMixin):
         self.data = kwargs.get('data', None)
         self.priority = kwargs.get('priority', 0)
         self.content = kwargs.get('content', None)
+
+        if not self.ref:
+            import hashlib
+            self.ref =  hashlib.md5(self.path).hexdigest()
+
 
     def __repr__(self):
         return "<file: {}; {}>".format(self.path, self.state)
@@ -2128,23 +2130,9 @@ class File(Base, SavableMixin, LinkableMixin):
     @property
     def dict(self):
 
-        d = dict(
-            (col,
-             getattr(
-                 self,
-                 col)) for col in [
-                'oid',
-                'path',
-                'ref',
-                'type_',
-                'source_url',
-                'process',
-                'state',
-                'hash',
-                'modified',
-                'size',
-                'group',
-                'priority'])
+        d = dict((col, getattr(self,col)) for col in [
+                'oid','path','ref','type_','source_url','process',
+                'state','hash','modified','size','group','priority'])
 
         if self.data:
             for k in self.data:

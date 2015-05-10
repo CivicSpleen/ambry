@@ -203,15 +203,6 @@ class Test(TestBase):
         self.assertEquals('source.com/dataset-variation-0.0.1/time-space',part_name.path)
 
 
-        pname = PartialPartitionName(time = 'time',
-                                  space='space',
-                                  table='table',
-                                  format='csv'
-                                  )
-
-        part_name = pname.promote(name)
-        
-        self.assertEquals('source.com-dataset-variation-table-time-space-csv-0.0.1',part_name.vname)
 
         # Cloning
 
@@ -325,7 +316,6 @@ class Test(TestBase):
 
     def test_identity_from_dict(self):
         from ambry.partition.sqlite import SqlitePartitionIdentity
-        from ambry.partition.csv import CsvPartitionIdentity
         from ambry.partition.geo import GeoPartitionIdentity
 
         name = Name(source='source.com', dataset='foobar',  variation='orig', version='0.0.1')
@@ -345,12 +335,6 @@ class Test(TestBase):
         ident = Identity.from_dict(pidict)
         self.assertIsInstance(ident, SqlitePartitionIdentity)
         self.assertEquals('source.com/foobar-orig-0.0.1.db', ident.cache_key)
-
-
-        pidict['format'] = 'csv'
-        ident = Identity.from_dict(pidict)
-        self.assertIsInstance(ident, CsvPartitionIdentity)
-        self.assertEquals('source.com/foobar-orig-0.0.1.csv', ident.cache_key)
 
         pidict['format'] = 'geo'
         ident = Identity.from_dict(pidict)

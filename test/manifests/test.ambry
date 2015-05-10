@@ -1,0 +1,23 @@
+
+TITLE: A Test Manifest, For Testing
+
+DOC:
+This would be the summary
+
+UID: xxx-yyy-zzz
+
+PARTITIONS:
+example.com-segmented-example-2
+
+example.com-combined-combined
+
+
+VIEW: health_view
+SELECT *
+FROM "pIjqPRbrGq001001_example"
+
+VIEW: health_mview
+SELECT *
+FROM "p00G002001_example"
+
+EXTRACT: health_mview AS csv TO health_mview.csv
