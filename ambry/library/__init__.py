@@ -26,6 +26,7 @@ def _new_library(config):
     from ckcache import new_cache
     from database import LibraryDb
     from sqlalchemy.exc import OperationalError
+    from boto.exception import S3ResponseError # the ckcache lib should return its own exception
 
     cache = new_cache(config['filesystem'])
 
@@ -44,7 +45,18 @@ def _new_library(config):
 
     root = config['root']
 
-    remotes =  {  name:new_cache(remote) for name, remote in config.get('remotes', {}).items() }
+    remotes = {}
+
+    for name, remote in config.get('remotes', {}).items():
+
+        try:
+            remotes[name] = new_cache(remote)
+        except S3ResponseError as e:
+            from ..util import get_logger
+            logger = get_logger(__name__)
+            logger.error("Failed to init cache {} : {}; {} ".format(name, str(remote), e))
+
+
 
     for i, remote in enumerate(remotes.values()):
         remote.set_priority(i)
