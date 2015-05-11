@@ -54,7 +54,7 @@ def _new_library(config):
         except S3ResponseError as e:
             from ..util import get_logger
             logger = get_logger(__name__)
-            logger.error("Failed to init cache {} : {}; {} ".format(name, str(remote), e))
+            logger.error("Failed to init cache {} : {}; {} ".format(name, str(remote.bucket), e))
 
 
 
