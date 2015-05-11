@@ -421,14 +421,14 @@ class Dataset(Base, LinkableMixin):
 
     path = None  # Set by the LIbrary and other queries.
 
-    tables = relationship("Table",backref='dataset',cascade="all, delete-orphan",passive_updates=False)
+    tables = relationship("Table",backref='dataset',cascade="delete, delete-orphan")
 
-    partitions = relationship("Partition",backref='dataset',cascade="all, delete-orphan",passive_updates=False)
+    partitions = relationship("Partition",backref='dataset',cascade="delete, delete-orphan")
 
-    configs = relationship('Config', backref='dataset', cascade="all, delete-orphan",
+    configs = relationship('Config', backref='dataset', cascade="delete, delete-orphan",
                            primaryjoin="Config.d_vid == Dataset.vid ", foreign_keys="Config.d_vid")
 
-    files = relationship('File', backref='dataset', cascade="all, delete-orphan",
+    files = relationship('File', backref='dataset', cascade="delete, delete-orphan",
                          primaryjoin="File.ref == Dataset.vid ", foreign_keys="File.ref")
 
     #__table_args__ = (
@@ -469,7 +469,6 @@ class Dataset(Base, LinkableMixin):
             try:
                 self.vid = str(ObjectNumber.parse(self.id_).rev(self.revision))
             except ValueError as e:
-                print repr(self)
                 raise ValueError('Could not parse id value; ' + e.message)
 
         if self.cache_key is None:
@@ -748,10 +747,9 @@ class Column(Base):
     default = SAColumn('c_default', Text)
     illegal_value = SAColumn('c_illegal_value', Text)
 
-    codes = relationship(Code, backref='column',order_by="asc(Code.key)",
-                           cascade="all, delete-orphan", lazy='joined')
+    codes = relationship(Code, backref='column',order_by="asc(Code.key)", cascade="delete, delete-orphan")
 
-    stats = relationship(ColumnStat, backref='column', cascade="all, delete-orphan")
+    stats = relationship(ColumnStat, backref='column', cascade="delete, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint( 'c_sequence_id','c_t_vid', name='_uc_columns_1'),
@@ -1164,7 +1162,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     )
 
     columns = relationship(Column, backref='table', order_by="asc(Column.sequence_id)",
-                           cascade="all, delete-orphan", lazy='joined')
+                           cascade="merge, delete, delete-orphan", lazy='joined')
 
 
     def __init__(self, dataset, **kwargs):
@@ -1725,6 +1723,8 @@ Columns:
     def delink_manifest(self, f):
         return self._remove_link('manifests', f.ref)
 
+
+
 event.listen(Table, 'before_insert', Table.before_insert)
 event.listen(Table, 'before_update', Table.before_update)
 
@@ -1764,13 +1764,13 @@ class Partition(Base, LinkableMixin):
     name = SAColumn('p_name', String(200), nullable=False, index=True)
     vname = SAColumn('p_vname',String(200),unique=True,nullable=False,index=True)
     fqname = SAColumn('p_fqname',String(200),unique=True,nullable=False,index=True)
-    ref = SAColumn('p_ref', String(200), index=True)
     cache_key = SAColumn('p_cache_key',String(200),unique=True,nullable=False,index=True)
     sequence_id = SAColumn('p_sequence_id', Integer)
-    t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'),index=True)
+    t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'),nullable=False,index=True)
     t_id = SAColumn('p_t_id', String(20))
-    d_vid = SAColumn('p_d_vid',String(20),ForeignKey('datasets.d_vid'),index=True)
+    d_vid = SAColumn('p_d_vid',String(20),ForeignKey('datasets.d_vid'),nullable=False,index=True)
     d_id = SAColumn('p_d_id', String(20))
+    ref = SAColumn('p_ref', String(200), index=True)
     time = SAColumn('p_time', String(20))
     space = SAColumn('p_space', String(50))
     grain = SAColumn('p_grain', String(50))
@@ -1795,7 +1795,7 @@ class Partition(Base, LinkableMixin):
 
     warehouse_tables = relationship('Table', backref='source_partition', foreign_keys='Table.p_vid')
 
-    stats = relationship(ColumnStat, backref='partition', cascade="all, delete-orphan")
+    stats = relationship(ColumnStat, backref='partition', cascade="delete, delete-orphan")
 
     def __init__(self, dataset, t_id, **kwargs):
 
@@ -2077,6 +2077,13 @@ class Partition(Base, LinkableMixin):
             dataset = ObjectNumber.parse(target.d_id)
             target.id_ = str(PartitionNumber(dataset, target.sequence_id))
 
+    @staticmethod
+    def set_t_vid(target, value, oldvalue, initiator):
+        "Check that t_vid isn't set to Null"
+        if not bool(value):
+            raise AssertionError("Partition.t_vid can't be null (set_t_vid): {} -> {}".format(oldvalue, value))
+
+#event.listen(Partition.t_vid, 'set', Partition.set_t_vid)
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
 

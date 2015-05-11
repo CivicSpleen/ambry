@@ -506,8 +506,7 @@ class Warehouse(object):
     def partition(self, vid):
         from ..orm import Partition
 
-        return self.library.database.session.query(
-            Partition).filter(Partition.vid == vid).first()
+        return self.library.database.session.query(Partition).filter(Partition.vid == vid).first()
 
     ##
     # Installation
@@ -530,47 +529,45 @@ class Warehouse(object):
                 self.logger.info("== Processing manifest '{}' section '{}' at line {}" .format(
                         manifest.path,section.tag,section.linenumber))
 
+            def resolve_partition(pd):
+
+                dataset = self.elibrary.resolve(self._to_vid(pd))
+
+                if not dataset:
+                    raise ResolutionError("Library does not have object for reference: {}".format(pd))
+
+                if not dataset.partition:
+                    raise ResolutionError(
+                        "Ref resolves to a bundle, not a partition. Can only install partitions: {}".format(pd))
+
+                return dataset.partition
+
             if tag == 'partitions':
 
                 partitions = [ p['partition'] for p in section.content['partitions']]
 
+                it_command = None
                 if section.content['args'].get('index', None) and section.content['args'].get('table', None):
                     index = section.content['args']['index']
                     table = section.content['args']['table']
-                    partitions.append(index)
+
+                    try:
+                        it_command = ('indexed_table', table, resolve_partition(index), partitions )
+                        partitions.append(index)
+
+                    except ResolutionError:
+                        it_command = ('indexed_table', table, index, partitions )
+
                 else:
                     index, table = None, None
 
-
                 for pd in partitions:
-
-                    p_vid = self._to_vid(pd)
-
-                    dataset = self.elibrary.resolve(p_vid)
-
-                    if not dataset:
-                        raise ResolutionError("Library does not have object for reference: {}".format(pd))
-
-                    ident = dataset.partition
-
-                    if not ident:
-                        raise ResolutionError(
-                            "Ref resolves to a bundle, not a partition. Can only install partitions: {}".format(pd))
-
-                    if ident.format not in ('db', 'geo'):
-                        self.logger.warn("Skipping {}; uninstallable format: {}".format(
-                                ident.vname,ident.format))
-                        continue
-
-                    commands.append(('install', dataset ))
+                    commands.append(('install', resolve_partition(pd)))
 
                 # Now that all of the partition install commands have been added, we can add additional commands for
                 # creating an index.
-
-
-                if table and index:
-                    commands.append(('indexed_table', table, index, partitions ))
-
+                if it_command:
+                    commands.append(it_command)
 
             elif tag == 'sql':
                 sql = section.content
@@ -634,18 +631,18 @@ class Warehouse(object):
 
             if command == 'install':
 
-                dataset, = command_set
+                partition, = command_set
 
-                p_orm = self.wlibrary.database.session.query(Partition).filter(Partition.vid == dataset.partition.vid).first()
+                p_orm = self.wlibrary.database.session.query(Partition).filter(Partition.vid == partition.vid).first()
 
                 if p_orm and p_orm.installed == 'y':
                     self.logger.info("Skipping {}; already installed".format(p_orm.vname))
                     continue
 
                 try:
-                    tables, p = self.install_partition(dataset.partition.vid)
+                    tables, p = self.install_partition(partition.vid)
                 except NotFoundError as e:
-                    self.logger.error("Failed to install partition {}: {}".format(dataset.partition,e))
+                    self.logger.error("Failed to install partition {}: {}".format(partition,e))
 
                     continue
 
@@ -668,7 +665,7 @@ class Warehouse(object):
 
             elif command == 'index':
                 name, table, columns = command_set
-                self.create_index(name, table, columns)
+                self.create_index( table, columns, name = name)
 
             elif command == 'mview':
                 name, sql, data, force = command_set
@@ -860,31 +857,52 @@ class Warehouse(object):
         :return:
         """
 
-        ip_ident = self.wlibrary.resolve(index_partition).partition
+        try:
+            try:
+                ip_ident = self.wlibrary.resolve(index_partition).partition
+            except AttributeError:
+                raise ResolutionError()
 
-        ip = self.partition(ip_ident.vid)
-        ip_table = self.installed_table(ip.table.vid, ip.vid)
+            ip = self.partition(ip_ident.vid)
+            installed_table = self.installed_table(ip.table.vid, ip.vid)
+            orig_table = ip.table
 
-        sql = "SELECT * FROM {} ".format(ip_table.name)
+        except ResolutionError:
+            orig_table = installed_table = self.orm_table_by_name(index_partition)
+
+
+
+        indexes = set()
+
+        sql = "SELECT * FROM {} -- indexed on {} \n".format(installed_table.name, index_partition)
 
         for p_name in partitions:
-
-            print p_name
 
             p_ident = self.wlibrary.resolve(p_name).partition
 
             p = self.partition(p_ident.vid)
 
-            if p.vid == ip.vid:
-                continue
+            try:
+                p_table = self.installed_table(p.table.vid, p.vid)
+            except AttributeError:
+                self.logger.error("p: "+str(p.dict))
+                self.logger.error(p_name)
+                self.logger.error(p_ident)
+                raise
 
-            p_table = self.installed_table(p.table.vid, p.vid)
-
-            link_map =  ip.table.link_columns(p.table)
+            link_map =  orig_table.link_columns(p.table)
 
             for col_a, col_b in link_map:
 
                 sql +=  'JOIN {} ON "{}" = "{}" \n ' .format( p_table.name, col_a.altname, col_b.altname)
+
+                if installed_table.type != 'view':
+                    indexes.add((installed_table.name, col_a.altname))
+
+                indexes.add((p_table.name, col_b.altname))
+
+        for table, col in indexes:
+            self.create_index(table, [col])
 
         self.install_view(table_name, sql, data=dict(), type_='indexed')
 
@@ -915,18 +933,22 @@ class Warehouse(object):
 
     def build_schema(self, t):
 
-        from ..orm import Column
+        from ..orm import Column, Table, Column
         from ..identity import ObjectNumber
 
         s = self.library.database.session
 
-        s.execute("DELETE FROM columns WHERE c_t_vid = :tid", {'tid': t.vid})
-        s.commit()
+        self.logger.info("Building schema for table: {}/{}".format(t.vid, t.name))
+
+        #s.query(Column).filter(Column.vid == t.vid).delete()
+
+        t.columns = [] # Select all of the columns. Overwriting would be better, but want to use Table.add_column
 
         # Have to re-fetch the session, in order to get the "SET search_path" run again on postgres,
-        # which apparently gets clearedin the commit()
+        # which apparently gets cleared in the commit()
         s = self.library.database.session
         t = self.library.table(t.vid)
+
 
         sql = 'SELECT * FROM "{}" LIMIT 1'.format(t.name)
 
@@ -948,14 +970,10 @@ class Warehouse(object):
 
                     orig_column = orig_table.column(c_id)
 
-                    orig_column.data['col_datatype'] = Column.convert_python_type(
-                        type(v),
-                        col_name)
+                    orig_column.data['col_datatype'] = Column.convert_python_type(type(v),col_name)
                     d = orig_column.dict
 
-                    d['description'] = "{}; {}".format(
-                        orig_table.description,
-                        d['description'])
+                    d['description'] = "{}; {}".format(orig_table.description,d['description'])
 
                 # Coudn't split the col name, probl b/c the user added it in
                 # SQL
@@ -974,15 +992,15 @@ class Warehouse(object):
                     # keys
                     pass
 
-                if d.get('altname', False):
-                    d['name'], d['altname'] = d['altname'], d['name']
+                #if d.get('altname', False):
+                #    d['name'], d['altname'] = d['altname'], d['name']
 
                 if not 'datatype' in d:
-                    d['datatype'] = Column.convert_python_type(
-                        type(v),
-                        col_name)
+                    d['datatype'] = Column.convert_python_type(type(v),col_name)
 
                 t.add_column(**d)
+
+            self.elibrary.mark_updated(vid=t.vid)
 
             s.commit()
 
@@ -1278,6 +1296,8 @@ class Warehouse(object):
         s.merge(t)
         s.commit()
 
+        self.elibrary.mark_updated(vid=t.vid) #clear doc_cache
+
         return t
 
     def load_local(self,partition,source_table_name,dest_table_name,where=None):
@@ -1475,14 +1495,14 @@ class Warehouse(object):
 
         return table, meta
 
-    def create_index(self, name, table, columns):
+    def create_index(self, table, columns, name = None):
 
         from sqlalchemy.exc import OperationalError, ProgrammingError
 
-        sql = 'CREATE INDEX {} ON "{}" ({})'.format(
-            name,
-            table,
-            ','.join(columns))
+        if not name:
+            name = '_'.join([table]+columns)
+
+        sql = 'CREATE INDEX {} ON "{}" ({})'.format(name,table,','.join(columns))
 
         try:
             self.database.connection.execute(sql)
@@ -1504,12 +1524,10 @@ class Warehouse(object):
             dsid = self.elibrary.resolve(partition)
 
             if not dsid:
-                raise NotFoundError(
-                    "Didn't find {} in external library".format(partition))
+                raise ResolutionError("Didn't find {} in external library".format(partition))
 
             if not dsid.partition:
-                raise ResolutionError(
-                    "Term referred to a dataset, not a partition: {}".format(partition))
+                raise ResolutionError("Term referred to a dataset, not a partition: {}".format(partition))
 
             pid = dsid.partition.vid
 

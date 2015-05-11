@@ -151,11 +151,6 @@ class Files(object):
         if 'oid' in kwargs:
             del kwargs['oid']
 
-        if kwargs.get('ref',False):
-            import hashlib
-
-            kwargs['ref'] = hashlib.md5(kwargs['path']).hexdigest()
-
 
         f = File(**kwargs)
 
@@ -241,14 +236,14 @@ class Files(object):
             priority=None,
             source_url=None, )
 
-    def install_data_store(self, w,
-                           name=None, title=None, summary=None,
-                           cache=None, url=None, commit=True):
+    def install_data_store(self, w,name=None, title=None, summary=None,cache=None, url=None, commit=True):
         """A reference for a data store, such as a warehouse or a file
         store."""
 
         assert bool(w.dsn)
         assert bool(w.uid)
+
+
 
         kw = dict(commit=commit,
                   path=w.dsn,

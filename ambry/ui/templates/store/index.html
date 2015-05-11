@@ -65,7 +65,7 @@
 
             {% if s.url -%}<th>Extracts</th>{% endif -%}
         </tr>
-    {% for t in s.tables.values()|selectattr('type','isin',['view', 'mview']) -%}
+    {% for t in s.tables.values()|selectattr('type','isin',['view', 'mview','indexed']) -%}
         <tr>
         <td><a href="{{store_table_path(s.uid,t.vid)}}">{{t.vid}}</a></td>
         <td>{{t.name}}</td>

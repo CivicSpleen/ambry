@@ -102,8 +102,6 @@ class DocCache(object):
         if key in self._cache:
             del self._cache[key]
 
-
-
     def library_info(self):
         pass
 
