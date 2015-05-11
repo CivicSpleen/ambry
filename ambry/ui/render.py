@@ -606,8 +606,6 @@ class Renderer(object):
 
                 p = self.doc_cache.partition(pvid)
 
-
-
                 p['table'] = self.doc_cache.table(p['table_vid'])
 
                 if 'geo_coverage' in p:

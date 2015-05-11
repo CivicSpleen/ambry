@@ -96,15 +96,8 @@ class SqliteAttachmentMixin(object):
 
         self._attachments.remove(name)
 
-    def copy_from_attached(
-            self,
-            table,
-            columns=None,
-            name=None,
-            on_conflict='ABORT',
-            where=None,
-            conn=None,
-            copy_n=None):
+    def copy_from_attached(self, table,columns=None, name=None, on_conflict='ABORT',
+            where=None,conn=None,copy_n=None):
         """Copy from this database to an attached database.
 
         Args:
