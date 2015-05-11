@@ -185,7 +185,7 @@ class Test(TestBase):
         self.assertEquals(45, len(ldsq(Column).all()))
         self.assertEquals(20, len(ldsq(Code).all()))
         self.assertEquals(23, len(ldsq(ColumnStat).all()))
-        self.assertEquals(39, len(ldsq(Config).all()))
+        self.assertEquals(44, len(ldsq(Config).all()))
 
         self.assertEquals(5, len(ldsq(File).all()))
 

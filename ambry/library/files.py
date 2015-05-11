@@ -151,6 +151,12 @@ class Files(object):
         if 'oid' in kwargs:
             del kwargs['oid']
 
+        if kwargs.get('ref',False):
+            import hashlib
+
+            kwargs['ref'] = hashlib.md5(kwargs['path']).hexdigest()
+
+
         f = File(**kwargs)
 
         extant = self.query.ref(f.ref).type(f.type_).source_url(f.source_url).one_maybe
@@ -173,13 +179,17 @@ class Files(object):
             f.modified = f.modified if f.modified else None
             f.size = f.size if f.size else None
 
-        self.db._mark_update()
+        # Debugging code. Kill on sight.
+        #for i in self.db.session.identity_map.items():
+        #    print i
 
         f = self.db.session.merge(f)
 
         if commit:
-
             self.db.commit()
+
+        self.db._mark_update()
+
 
         return f
 
@@ -236,6 +246,9 @@ class Files(object):
                            cache=None, url=None, commit=True):
         """A reference for a data store, such as a warehouse or a file
         store."""
+
+        assert bool(w.dsn)
+        assert bool(w.uid)
 
         kw = dict(commit=commit,
                   path=w.dsn,
@@ -325,18 +338,36 @@ class Files(object):
     def install_manifest(self, manifest, warehouse=None, commit=True):
         """Store a references to, and content for, a manifest."""
 
-        f = self.new_file(ref=manifest.uid,
-                          path=manifest.path,
-                          type=self.TYPE.MANIFEST,
-                          source_url=manifest.uid,
-                          state=None,
-                          data=manifest.dict,
-                          **(self._process_source_content(manifest.path)))
 
+        try:
+            # manifest if a real Manifest object
+
+            ref = manifest.uid
+            path = manifest.path
+            data = manifest.dict
+            extra = (self._process_source_content(path))
+
+        except AttributeError:
+            # The manifest is actually a File object, from a warehouse database.
+            ref = manifest.ref
+            path = manifest.path
+            data = manifest.data
+            extra = (self._process_source_content(path))
+
+        assert bool(ref)
+        assert bool(path)
+
+        f = self.new_file(ref=ref,
+                          path=path,
+                          type=self.TYPE.MANIFEST,
+                          source_url=ref,
+                          state=None,
+                          data=data,
+                          **extra)
 
         if warehouse:
 
-            whf = self.query.path(warehouse.database.dsn).group(self.TYPE.STORE).one_maybe
+            whf = self.query.path(warehouse.database.dsn).type(self.TYPE.STORE).one_maybe
 
             if not whf:
                 from ..dbexceptions import NotFoundError

@@ -11,7 +11,8 @@ from ..util import memoize
 from pygments import highlight
 from pygments.lexers import PythonLexer
 from pygments.formatters import HtmlFormatter
-
+import argparse
+from ..dbexceptions import ConfigurationError
 
 class null_logger(object):
 
@@ -23,6 +24,12 @@ class null_logger(object):
 
     def info(self, w):
         pass
+
+
+class ThrowingArgumentParser(argparse.ArgumentParser):
+    '''An argument parser that throws an exception instead of exiting'''
+    def error(self, message):
+        raise ConfigurationError(message)
 
 
 class ParseError(Exception):
@@ -435,9 +442,6 @@ class Manifest(object):
 
         words = line.split()
 
-        # if len(words) != 5:
-        #    raise ParseError('Extract line has wrong format; expected 5 words, got: {}'.format(line))
-
         table = words.pop(0)
 
         format = 'csv'
@@ -474,6 +478,11 @@ class Manifest(object):
 
     def _process_partitions(self, section):
 
+        parser = ThrowingArgumentParser(prog='partitions')
+
+        parser.add_argument('-t', '--table', help="Name of table to join partitions on")
+        parser.add_argument('-i', '--index', help="Index for the table")
+
         partitions = []
 
         start_line = section.linenumber
@@ -487,7 +496,8 @@ class Manifest(object):
                 raise ParseError("Failed to parse in section at line #{}: {}".format(start_line +i,e))
 
         self.partitions = partitions
-        return dict(partitions=partitions)
+
+        return dict(partitions=partitions, args = vars(parser.parse_args(section.args.split())))
 
     def add_bundles(self, library):
         """Add bundle information when a Library is available."""
@@ -640,8 +650,7 @@ class Manifest(object):
 
         try:
             try:
-                (_, partition), tokens = Manifest.extract_next(
-                    'FROM', "NAME", tokens)
+                (_, partition), tokens = Manifest.extract_next('FROM', "NAME", tokens)
             except TypeError:
                 partition = None
 
@@ -651,28 +660,21 @@ class Manifest(object):
                 (_, partition), tokens = Manifest.extract_token("NAME", tokens)
                 tables = None
 
-            try:
-                (_, where), tokens = Manifest.extract_token('WHERE', tokens)
+            # Saving this for adding future parmaters to the partitions section
+            # try:
+            #     (_, where), tokens = Manifest.extract_token('WHERE', tokens)
+            #
+            #     where = re.sub(r'^where','',where,flags=re.IGNORECASE).strip()
+            #
+            # except (TypeError, ValueError):
+            #     where = None
 
-                where = re.sub(r'^where','',where,flags=re.IGNORECASE).strip()
 
-            except (TypeError, ValueError):
-                where = None
 
-            try:
-                (_, prefix), tokens = Manifest.extract_next(
-                    'PREFIX', 'NAME', tokens)
-
-                prefix = re.sub(r'^where', '',prefix,flags=re.IGNORECASE).strip().strip("'")
-
-            except (TypeError, ValueError):
-                prefix = None
-
-            return dict(
-                partition=partition,
-                tables=tables,
-                where=where,
-                prefix=prefix
+            return dict(partition=partition,
+                #tables=tables,
+                #where=where,
+                #prefix=prefix
             )
 
         except Exception as e:

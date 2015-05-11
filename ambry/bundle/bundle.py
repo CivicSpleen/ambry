@@ -419,7 +419,13 @@ class DbBundleBase(Bundle):
         t.identity = self.identity.ident_dict
         t.names = self.identity.names_dict
 
-        return Top(context=t.dict)
+        # The first one it to create the substitution contest, and the second is the actual
+        # metadata
+        t2 = Top(context=t.dict)
+        t2.load_rows(rows)
+        t2.identity = self.identity.ident_dict
+        t2.names = self.identity.names_dict
+        return t2
 
     def _info(self, identity=None):
         """Return a nested, ordered dict  of information about the bundle."""
@@ -457,6 +463,7 @@ class DbBundleBase(Bundle):
 
         d = {}
         metadata = self.metadata.dict
+
         d['identity'] = metadata['identity']
         d['identity'].update(metadata['names'])
         del metadata['names']

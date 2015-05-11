@@ -382,6 +382,8 @@ class Search(object):
         # that aren't from the source will get through, because the source is not applied to the partitions.
         # However, this could probalby be handled mroe simply by adding the source to
         # the partitions.
+        # FIXME. This doesn't work if the orig cterms does not include a bundle term.
+        # So 'counties with counties source oshpd' is OK, but 'with counties source oshpd' fails
         if source:
             cterms = " (type:b AND keywords:{} ) AND {}".format(source, cterms)
 

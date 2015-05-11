@@ -5,8 +5,6 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-import ogr
-
 
 class ExtractError(Exception):
     pass
@@ -62,14 +60,8 @@ class Extractor(object):
     def extract(self, table, rel_path, update_time=None):
         import time
 
-        e = ExtractEntry(
-            False,
-            rel_path,
-            self.cache.path(
-                self.mangle_path(rel_path),
-                missing_ok=True),
-            (table,
-             self.__class__))
+        e = ExtractEntry(False,rel_path,self.cache.path(self.mangle_path(rel_path),missing_ok=True),
+            (table,self.__class__))
 
         force = self.force
 
@@ -176,10 +168,32 @@ class OgrExtractor(Extractor):
     is_geo = True
 
     def __init__(self, warehouse, cache, force=False):
+        import ogr
 
         super(OgrExtractor, self).__init__(warehouse, cache, force=force)
 
         self.mangled_names = {}
+
+        # Inside the initializer because org is an optional depency
+        self.geo_map = {
+            'POLYGON': ogr.wkbPolygon,
+            'MULTIPOLYGON': ogr.wkbMultiPolygon,
+            'POINT': ogr.wkbPoint,
+            'MULTIPOINT': ogr.wkbMultiPoint,
+            # There are a lot more , add them as they are encountered.
+        }
+
+        self._ogr_type_map = {
+            None: ogr.OFTString,
+            '': ogr.OFTString,
+            'TEXT': ogr.OFTString,
+            'VARCHAR': ogr.OFTString,
+            'INT': ogr.OFTInteger,
+            'INTEGER': ogr.OFTInteger,
+            'REAL': ogr.OFTReal,
+            'FLOAT': ogr.OFTReal,
+        }
+
 
     def geometry_type(self, database, table):
         """Return the name of the most common geometry type and the coordinate
@@ -193,8 +207,7 @@ class OgrExtractor(Extractor):
         q = "SElECT f_geometry_column FROM geometry_columns " .format(table)
         geo_cols = [row['f_geometry_column'] for row in ce(q).fetchall()]
 
-        all_cols = ce(
-            "SELECT * FROM {} LIMIT 1".format(table)).fetchone().keys()
+        all_cols = ce("SELECT * FROM {} LIMIT 1".format(table)).fetchone().keys()
 
         geo_col = None
         for col in all_cols:
@@ -219,24 +232,7 @@ class OgrExtractor(Extractor):
 
         return t, cd, geo_col
 
-    geo_map = {
-        'POLYGON': ogr.wkbPolygon,
-        'MULTIPOLYGON': ogr.wkbMultiPolygon,
-        'POINT': ogr.wkbPoint,
-        'MULTIPOINT': ogr.wkbMultiPoint,
-        # There are a lot more , add them as they are encountered.
-    }
 
-    _ogr_type_map = {
-        None: ogr.OFTString,
-        '': ogr.OFTString,
-        'TEXT': ogr.OFTString,
-        'VARCHAR': ogr.OFTString,
-        'INT': ogr.OFTInteger,
-        'INTEGER': ogr.OFTInteger,
-        'REAL': ogr.OFTReal,
-        'FLOAT': ogr.OFTReal,
-    }
 
     def ogr_type_map(self, v):
         return self._ogr_type_map[

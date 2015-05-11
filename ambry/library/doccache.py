@@ -6,26 +6,6 @@
 from collections import deque
 
 
-class Times(object):
-
-    """Records time entries for access to the cache."""
-
-    def __init__(self, **kwargs):
-        self.start_time = 0
-        self.end_time = 0
-        self.time = 0
-        self.count = 0
-        self.key = None
-        self.from_cache = None
-        self.__dict__.update(kwargs)
-
-    def __str__(self):
-        return str(self.__dict__)
-
-    def __repr__(self):
-        return str(self.__dict__)
-
-
 class DocCache(object):
 
     def __init__(self, library, cache=None):
@@ -89,29 +69,21 @@ class DocCache(object):
         we want this to run in the context of the object.
 
         """
-        import time
 
-        start = time.time()
+        force =  'force' in kwargs
+
+        if force:
+            del kwargs['force']
+
 
         key, args, kwargs = self._munge_key(*args, **kwargs)
 
-        if key not in self._cache or kwargs.get('force') or self.ignore_cache:
+        if force or key not in self._cache or kwargs.get('force') or self.ignore_cache:
             self._cache[key] = f(*args, **kwargs)
             from_cache = False
         else:
             from_cache = True
 
-        end = time.time()
-
-        self.times.append(
-            Times(
-                start_time=start,
-                end_time=end,
-                key=key,
-                from_cache=from_cache,
-                count=1,
-                time=end -
-                start))
 
         return self._cache[key]
 
@@ -130,22 +102,7 @@ class DocCache(object):
         if key in self._cache:
             del self._cache[key]
 
-    def compiled_times(self):
-        """Compile all of the time entries from cache calls to one per key."""
-        from collections import defaultdict
 
-        times = defaultdict(Times)
-
-        for t in self.times:
-
-            k = t.key + '_' + ('cached' if t.from_cache else 'func')
-            ct = times[k]
-            ct.key = k
-
-            ct.time += t.time
-            ct.count += t.count
-
-        return sorted(times.values(), key=lambda x: x.time, reverse=True)
 
     def library_info(self):
         pass
@@ -175,18 +132,14 @@ class DocCache(object):
     def dataset(self, vid):
         # Add a 'd' to the datasets, since they are just the dataset record and must
         # be distinguished from the full output with the same vid in bundle()
-        return self.cache(
-            lambda vid: self.library.dataset(vid).dict,
-            vid,
-            _key_prefix='ds')
+        return self.cache(lambda vid: self.library.dataset(vid).dict,vid,_key_prefix='ds')
 
     def bundle_summary(self, vid):
-        return self.cache(
-            lambda vid: self.library.bundle(vid).summary_dict,
-            vid,
-            _key_prefix='bs')
+
+        return self.cache(lambda vid: self.library.bundle(vid).summary_dict,vid,_key_prefix='bs')
 
     def bundle(self, vid):
+
         return self.cache(lambda vid: self.library.bundle(vid).dict, vid)
 
     def bundle_schema(self, vid):

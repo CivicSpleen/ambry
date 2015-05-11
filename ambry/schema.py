@@ -426,7 +426,9 @@ class Schema(object):
         uindexes = {}
         constraints = {}
         foreign_keys = {}
-       
+
+        assert len(table.columns) > 0, "Tables can't have 0 columns: '{}'".format(table_name)
+
         for column in table.columns:
             
             kwargs = {}

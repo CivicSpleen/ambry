@@ -554,10 +554,7 @@ class LibraryDb(object):
 
         import datetime
 
-        self.set_config_value(
-            'activity',
-            'change',
-            datetime.datetime.utcnow().isoformat())
+        self.set_config_value('activity','change',datetime.datetime.utcnow().isoformat())
 
     ##
     # Install and remove bundles and partitions

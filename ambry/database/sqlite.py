@@ -166,7 +166,7 @@ class SqliteAttachmentMixin(object):
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
-    SCHEMA_VERSION = 28
+    SCHEMA_VERSION = 29
 
     _lock = None
 
@@ -890,6 +890,9 @@ def _on_connect_update_sqlite_schema(conn, con_record):
             maybe_exec('ALTER TABLE columns ADD COLUMN c_d_vid VARCHAR(20)')
             maybe_exec('ALTER TABLE colstats ADD COLUMN cs_d_vid VARCHAR(20)')
             maybe_exec('ALTER TABLE codes ADD COLUMN cd_d_vid VARCHAR(20)')
+
+        if version < 29:
+            maybe_exec('ALTER TABLE tables ADD COLUMN t_p_vid VARCHAR(20)')
 
     if version < SqliteDatabase.SCHEMA_VERSION:
         conn.execute('PRAGMA user_version = {}'.format( SqliteDatabase.SCHEMA_VERSION))

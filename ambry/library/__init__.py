@@ -267,7 +267,8 @@ class Library(object):
         """Install the records for the dataset, tables, columns and possibly
         partitions. Does not install file references """
 
-        self.database.install_bundle(bundle)
+        if not self.database.install_bundle(bundle):
+            self.cache.path(bundle.identity.cache_key), False
 
         if source is None:
             source = self.cache.repo_id
@@ -470,17 +471,27 @@ class Library(object):
         if not dataset:
             raise NotFoundError("Failed to resolve reference '{}' in library '{}' ".format(ref, self.database.dsn))
 
-        df = self.files.query.type(Files.TYPE.BUNDLE).ref(dataset.vid).one
+        dataset_files = self.files.query.type(Files.TYPE.BUNDLE).ref(dataset.vid).all
 
-        # Get the remote that the bundle came from.
+        if dataset_files:
 
-        if remote is None:
-            for r in self.remotes.values():
-                if r.repo_id == df.source_url:
-                    remote = r
-                    break
+            df_remotes = [ df.source_url for df in dataset_files]
 
-            assert not remote or remote.repo_id == df.source_url
+            # Get the remote that the bundle came from. TODO, this just finds the first one, somewhat randomly.
+            # There should be a priority to which remote it finds. Maybe the file File.all method
+            # should sort by priority
+
+            if remote is None:
+                for r in self.remotes.values():
+                    if r.repo_id in df_remotes:
+                        remote = r
+                        break
+
+                assert not remote or remote.repo_id == df.source_url
+
+        else:
+
+            remote = None
 
         bundle = self._get_bundle_by_cache_key(dataset.cache_key) # BUndle head is always installed, no need for remote
 
@@ -678,15 +689,15 @@ class Library(object):
     def stores(self):
         """Return all of the refistered data stores. """
 
-        return self.files.query.group(self.files.TYPE.STORE).all
+        return self.files.query.type(self.files.TYPE.STORE).all
 
     def store(self, uid):
         """Return a tuple of a manifest file object and the manifest. . """
 
-        f = self.files.query.group(self.files.TYPE.STORE).ref(uid).one_maybe
+        f = self.files.query.type(self.files.TYPE.STORE).ref(uid).one_maybe
 
         if not f:
-            f = self.files.query.group(self.files.TYPE.STORE).path(uid).one_maybe
+            f = self.files.query.type(self.files.TYPE.STORE).path(uid).one_maybe
 
         return f
 
@@ -735,7 +746,7 @@ class Library(object):
 
         from ..warehouse.manifest import Manifest
 
-        f = self.files.query.group(self.files.TYPE.MANIFEST).ref(uid).one_maybe
+        f = self.files.query.type(self.files.TYPE.MANIFEST).ref(uid).one_maybe
 
         if not f:
             return None, None
@@ -1174,7 +1185,7 @@ class Library(object):
 
         if clean:
             for remote_name, remote in remotes.items():
-                self.files.query.group('datasets').source_url(remote.repo_id).delete()
+                self.files.query.type(( Files.TYPE.PARTITION, Files.TYPE.BUNDLE)).source_url(remote.repo_id).delete()
 
         if not remotes:
             remotes = self.remotes
@@ -1242,7 +1253,6 @@ class Library(object):
                     continue
 
                 try:
-
                     self.put_bundle(b, remote.repo_id, install_partitions = False,
                                     commit=True, file_state = 'installed')
 
@@ -1338,15 +1348,7 @@ class Library(object):
             # Copy the file record. There really should be an easier way
             # to do this.
 
-            extant = (self.files.query.ref(remote_manifest.ref).first)
-
-            if not extant:
-                (self.files.query.path(remote_manifest.path).first)
-
-            print 'XXX', remote_manifest.ref, remote_manifest.path, extant
-
-            local_manifest = self.files.new_file(commit=True, merge=True,extant=extant,
-                **{ k:v for k,v in remote_manifest.record_dict.items() if k not in ('oid')})
+            local_manifest = self.files.install_manifest(remote_manifest, warehouse=w)
 
             for p  in remote_manifest.linked_partitions:
                 p = self.partition(p.vid)

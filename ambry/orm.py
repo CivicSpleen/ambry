@@ -1143,6 +1143,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     id_ = SAColumn('t_id', String(20), primary_key=False)
     d_id = SAColumn('t_d_id', String(20))
     d_vid = SAColumn('t_d_vid',String(20),ForeignKey('datasets.d_vid'),index=True)
+    p_vid = SAColumn('t_p_vid', String(20), ForeignKey('partitions.p_vid'), index=True, nullable=True)
     sequence_id = SAColumn('t_sequence_id', Integer, nullable=False)
     name = SAColumn('t_name', String(200), nullable=False)
     altname = SAColumn('t_altname', Text)
@@ -1150,8 +1151,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     universe = SAColumn('t_universe', String(200))
     keywords = SAColumn('t_keywords', Text)
     type = SAColumn('t_type', String(20))
-    # Reference to a column that provides an example of whow this column
-    # should be used.
+    # Reference to a column that provides an example of how this table should be used.
     proto_vid = SAColumn('t_proto_vid', String(20), index=True)
 
     installed = SAColumn('t_installed', String(100))
@@ -1163,9 +1163,9 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
         UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
     )
 
-    columns = relationship(Column, backref='table',
-                           order_by="asc(Column.sequence_id)",
+    columns = relationship(Column, backref='table', order_by="asc(Column.sequence_id)",
                            cascade="all, delete-orphan", lazy='joined')
+
 
     def __init__(self, dataset, **kwargs):
 
@@ -1201,26 +1201,12 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
         d = {
             k: v for k,
             v in self.__dict__.items() if k in [
-                'id_',
-                'vid',
-                'd_id',
-                'd_vid',
-                'sequence_id',
-                'name',
-                'altname',
-                'vname',
-                'description',
-                'universe',
-                'keywords',
-                'installed',
-                'proto_vid',
-                'type',
-                'codes']}
+                'id_','vid','d_id','d_vid','sequence_id','name','altname','vname','description','universe','keywords',
+                'installed','proto_vid','type','codes']}
 
         if self.data:
             for k in self.data:
-                assert k not in d, "Value '{}' is a table field and should not be in data ".format(
-                    k)
+                assert k not in d, "Value '{}' is a table field and should not be in data ".format(k)
                 d[k] = self.data[k]
 
         d['is_geo'] = False
@@ -1248,6 +1234,34 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
         td['columns'] = tdc
 
         return td
+
+    def link_columns(self, other):
+        """Return columns that can be used to link another table to this one"""
+
+        def protos(t):
+            from identity import ObjectNumber
+
+            protos = {}
+
+            protos.update({ c.fk_vid:c for c in t.columns if c.fk_vid })
+            protos.update({ c.proto_vid:c for c in t.columns if c.proto_vid})
+
+            protos = { str(ObjectNumber.parse(n).rev(None)):c for n, c in protos.items() } # Remove revisions
+
+            # HACK: The numbering in the proto dataset changes, so we have to make substitutions
+            if 'c00104002' in protos:
+                protos['c00109003'] = protos['c00104002']
+                del protos['c00104002']
+
+            return protos
+
+        protos_s = protos(self)
+        protos_o = protos(other)
+
+        inter =   set(protos_s.keys())  & set(protos_o.keys())
+
+        return [ (protos_s[n], protos_o[n])  for n in inter ]
+
 
     @property
     def insertable_dict(self):
@@ -1465,8 +1479,7 @@ Columns:
 
         q = (s.query(Column)
              .filter(or_(Column.id_ == name_or_id, Column.name == name_or_id))
-             .filter(Column.t_vid == self.vid)
-             )
+             .filter(Column.t_vid == self.vid))
 
         try:
             if not default is None:
@@ -1776,7 +1789,11 @@ class Partition(Base, LinkableMixin):
         UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'),
     )
 
-    table = relationship('Table', backref='partitions')
+    # For the primary table for the partition. There is one per partition, but a table
+    # can be primary in multiple partitions.
+    table = relationship('Table', backref='partitions', foreign_keys='Partition.t_vid')
+
+    warehouse_tables = relationship('Table', backref='source_partition', foreign_keys='Table.p_vid')
 
     stats = relationship(ColumnStat, backref='partition', cascade="all, delete-orphan")
 
@@ -2088,6 +2105,12 @@ class File(Base, SavableMixin, LinkableMixin):
     )
 
     def __init__(self, **kwargs):
+
+        if not kwargs.get("ref", None):
+            import hashlib
+
+            kwargs['ref'] = hashlib.md5(kwargs['path']).hexdigest()
+
         self.oid = kwargs.get("oid", None)
         self.path = kwargs.get("path", None)
         self.source_url = kwargs.get("source_url", kwargs.get("source", None))
@@ -2104,13 +2127,11 @@ class File(Base, SavableMixin, LinkableMixin):
         self.priority = kwargs.get('priority', 0)
         self.content = kwargs.get('content', None)
 
-        if not self.ref:
-            import hashlib
-            self.ref =  hashlib.md5(self.path).hexdigest()
+
 
 
     def __repr__(self):
-        return "<file: {}; {}>".format(self.path, self.state)
+        return "<file: {}; {}>".format(self.path, self.ref, self.state)
 
     def update(self, f):
         """Copy another files properties into this one."""
@@ -2132,7 +2153,7 @@ class File(Base, SavableMixin, LinkableMixin):
 
         d = dict((col, getattr(self,col)) for col in [
                 'oid','path','ref','type_','source_url','process',
-                'state','hash','modified','size','group','priority'])
+                'state','hash','modified','size', 'priority'])
 
         if self.data:
             for k in self.data:
@@ -2202,3 +2223,19 @@ class File(Base, SavableMixin, LinkableMixin):
     def delink_store(self, f):
         return self._remove_link('stores', f.ref)
 
+    @staticmethod
+    def before_update(mapper, conn, target):
+        """Set the column id number based on the table number and the sequence
+        id for the column."""
+
+        assert bool(target.ref), "File.ref can't be null (before_update)"
+
+    @staticmethod
+    def set_ref(target, value, oldvalue, initiator):
+        "Strip non-numeric characters from a phone number"
+
+        assert bool(value), "File.ref can't be null (set_ref)"
+
+event.listen(File, 'before_insert', File.before_update)
+event.listen(File, 'before_update', File.before_update)
+event.listen(File.ref, 'set', File.set_ref)

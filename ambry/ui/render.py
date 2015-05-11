@@ -296,12 +296,7 @@ class Renderer(object):
             raise
 
         finally:
-            self.extracts.append(
-                extract_entry(
-                    extracted,
-                    completed,
-                    rel_path,
-                    self.cache.path(rel_path)))
+            self.extracts.append(extract_entry(extracted,completed,rel_path,self.cache.path(rel_path)))
 
     def cc(self):
         """return common context values."""

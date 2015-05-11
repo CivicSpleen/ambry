@@ -59,7 +59,7 @@ def warehouse_command(args, rc):
 
         config = database_config(s.path)
 
-    elif args.subcommand not in ['list', 'new', 'install', 'test']:
+    elif args.subcommand not in ['list', 'new', 'install', 'test', 'parse']:
         raise ConfigurationError(
             "Must set the id, path or dsn of the database, either on the command line or in a manifest. ")
 
@@ -91,19 +91,17 @@ def warehouse_parser(cmd):
     whsp.set_defaults(subcommand='install')
     whsp.add_argument('-n', '--name', help='Set the name of the database')
     whsp.add_argument('-c','--clean',default=False,action='store_true',help='Recreate the database before installation')
-
-    # For extract, when called from install
-    group = whsp.add_mutually_exclusive_group()
-
     whsp.add_argument('-D','--dir',default='',help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
-
     whsp.add_argument('term', type=str, help='Name of bundle or partition')
 
     whsp = whp.add_parser('extract',help='Extract files or documentation to a cache')
     whsp.set_defaults(subcommand='extract')
     whsp.add_argument('-f','--files-only',default=False,action='store_true',help='Only extract the extract files')
     whsp.add_argument('-d','--doc-only',default=False,action='store_true',help='Only extract the documentation files')
-    group = whsp.add_mutually_exclusive_group()
+
+    whsp = whp.add_parser('parse',help='Parse a manifest')
+    whsp.set_defaults(subcommand='parse')
+    whsp.add_argument('term', type=str, help='Name of bundle or partition')
 
     whsp.add_argument('-F', '--force', default=False, action='store_true',              help='Force re-creation of files that already exist')
     whsp.add_argument('-D','--dir',default='',help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
@@ -326,6 +324,22 @@ def warehouse_config(args, w, config):
     else:
         for e in w.library.database.get_config_group('warehouse'):
             print e
+
+
+def warehouse_parse(args, w, config):
+    from ambry.warehouse.manifest import Manifest
+    from . import global_logger
+
+    m = Manifest(args.term, logger = global_logger)
+
+    for line_no,section  in m.sorted_sections:
+        print str(section)
+        print
+
+        if section.tag == 'partitions':
+            partions = section.content['partitions']
+            index = section.content.get('index',None)
+            table = section.content.get('table', None)
 
 
 def warehouse_test(args, w, config):
