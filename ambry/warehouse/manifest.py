@@ -338,7 +338,9 @@ class Manifest(object):
         for line_no in sorted(sections.keys()):
             section = sections[line_no]
 
-            if previous_section and section.tag == 'doc' and previous_section.tag in ['title', 'view', 'mview', 'extract']:
+            if ( previous_section and section.tag == 'doc'
+                 and previous_section.tag in ['title', 'view', 'mview', 'extract', 'partitions']):
+
                 section.content['ref'] = previous_section.name
                 previous_section.doc = section.content
 

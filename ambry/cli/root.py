@@ -78,10 +78,14 @@ def root_parser(cmd):
 def root_command(args, rc):
     from ..library import new_library
     from . import global_logger
-    from ..dbexceptions import ConfigurationError
+    from ..dbexceptions import ConfigurationError, DatabaseError
 
-    l = new_library(rc.library(args.library_name))
-    l.logger = global_logger
+    try:
+        l = new_library(rc.library(args.library_name))
+        l.logger = global_logger
+    except DatabaseError as e:
+        warn("No library: {}".format(e))
+        l = None
 
     globals()['root_' + args.subcommand](args, l, rc)
 
@@ -176,7 +180,7 @@ def root_list(args, l, rc):
 
 
 def root_info(args, l, rc):
-    from ..cli import _print_info
+    from ..cli import _print_info, err, fatal
     from ..dbexceptions import NotFoundError, ConfigurationError
     import ambry
 
@@ -192,12 +196,15 @@ def root_info(args, l, rc):
         try:
             if l.source:
                 print "Source :  {}".format(l.source.base_dir)
-        except ConfigurationError:
+        except (ConfigurationError, AttributeError):
             print "Source :  No source directory"
 
         print "Configs:  {}".format(rc.dict['loaded'])
 
         return
+
+    if not l:
+        fatal("No library, probably due to a configuration error")
 
     ident = l.resolve(args.term, location=locations)
 

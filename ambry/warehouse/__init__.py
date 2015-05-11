@@ -552,11 +552,11 @@ class Warehouse(object):
                     table = section.content['args']['table']
 
                     try:
-                        it_command = ('indexed_table', table, resolve_partition(index), partitions )
+                        it_command = ('indexed_table', table, resolve_partition(index), partitions, section.doc )
                         partitions.append(index)
 
                     except ResolutionError:
-                        it_command = ('indexed_table', table, index, partitions )
+                        it_command = ('indexed_table', table, index, partitions, section.doc )
 
                 else:
                     index, table = None, None
@@ -681,9 +681,9 @@ class Warehouse(object):
                 self.wlibrary.files.install_extract(extract_path, m_uid, d)
 
             elif command == 'indexed_table':
-                table_name, index_partition, partitions = command_set
+                table_name, index_partition, partitions, doc = command_set
 
-                self.install_indexed_table(table_name, index_partition, partitions)
+                self.install_indexed_table(table_name, index_partition, partitions, doc)
 
 
         return installed_partitions, installed_tables
@@ -850,7 +850,7 @@ class Warehouse(object):
         p.database.close()
         return installed_tables, p
 
-    def install_indexed_table(self, table_name, index_partition, partitions):
+    def install_indexed_table(self, table_name, index_partition, partitions, doc):
         """ Create a new view that combines a set of partition tables with an index
         :param table_name:
         :param index_partition:
@@ -904,7 +904,7 @@ class Warehouse(object):
         for table, col in indexes:
             self.create_index(table, [col])
 
-        self.install_view(table_name, sql, data=dict(), type_='indexed')
+        self.install_view(table_name, sql, data=dict(), type_='indexed', doc=doc)
 
 
     def build_sample(self, t):
@@ -1164,7 +1164,7 @@ class Warehouse(object):
 
         return False
 
-    def install_view(self, name, sql, type_='view', proto_vid=None, p_vid = None, data=None ):
+    def install_view(self, name, sql, type_='view', proto_vid=None, p_vid = None, data=None, doc=None ):
         import time
 
         assert name
@@ -1197,18 +1197,17 @@ class Warehouse(object):
                 # Creates the table in the database
                 self.database.session.execute(sql)
 
-            t = self.install_table( name, data=data, type_=type_, proto_vid=proto_vid, p_vid = p_vid)  # Creates the table library record
+            # Creates the table library record
 
+            t = self.install_table( name, data=data, type_=type_, proto_vid=proto_vid, p_vid = p_vid, doc=doc)
             self.build_schema(t)
 
         except Exception as e:
-
             self.logger.error("Failed to install view: \n{}\nin: {}".format(sqls, self.database.dsn))
 
             raise
 
         except OperationalError:
-
             self.logger.error("Failed to execute: \n{}\nin: {}".format(sqls, self.database.dsn))
 
             raise
@@ -1218,7 +1217,7 @@ class Warehouse(object):
         self.install_view(alias, "SELECT * FROM \"{}\" ".format(table_name),data=dict(),
                           type_='alias', proto_vid=proto_vid, p_vid=p_vid)
 
-    def install_table(self, name, alt_name=None,  type_='view', proto_vid=None, p_vid = None, data=None):
+    def install_table(self, name, alt_name=None,  type_='view', proto_vid=None, p_vid = None, data=None, doc=None):
         """Install a view, mview or alias as a Table record.
 
         Real tables are copied
@@ -1288,6 +1287,9 @@ class Warehouse(object):
 
         if data and 'doc' in data:
             t.data.doc = data['doc']
+
+        if doc:
+            t.description = doc['summary_text']
 
         t.p_vid = p_vid
 
