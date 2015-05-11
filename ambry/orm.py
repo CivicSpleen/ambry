@@ -328,8 +328,7 @@ class LinkableMixin(object):
         if not id_values:
             return []
 
-        return object_session(self).query(clz).filter(
-            id_column.in_(id_values)).all()
+        return object_session(self).query(clz).filter(id_column.in_(id_values)).all()
 
     def _append_link(self, name, object_id):
         """
@@ -531,6 +530,17 @@ class Dataset(Base, LinkableMixin):
                 d[k] = self.data[k]
 
         return d
+
+    def config(self,  key, group = 'config'):
+        from sqlalchemy.orm import object_session
+        s = object_session(self)
+        return (s.query(Config)
+              .filter(Config.d_vid == self.vid)
+              .filter(Config.group == group )
+              .filter(Config.key == key )
+              .one())
+
+
 
     # For linking partitions to manifests
     @property

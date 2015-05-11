@@ -296,8 +296,8 @@ class Search(object):
                     datasets[bvid].p_score += hit.score
                     datasets[bvid].partitions.add(vid)
 
-        return datasets
 
+        return datasets
 
 
     def make_query_from_terms(self, terms):

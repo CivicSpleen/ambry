@@ -130,7 +130,21 @@ class DocCache(object):
     def dataset(self, vid):
         # Add a 'd' to the datasets, since they are just the dataset record and must
         # be distinguished from the full output with the same vid in bundle()
-        return self.cache(lambda vid: self.library.dataset(vid).dict,vid,_key_prefix='ds')
+
+        # Some of the older bundles don't have the title and summary in the darta for the dataset,
+        # so we have to gfet it from the config
+        def dict_and_summary(vid):
+            ds = self.library.dataset(vid)
+            d = ds.dict
+
+            if not d.get('title', False) or not d.get('summary', False):
+                d['title'] =  ds.config('about.title').value
+                d['summary'] = ds.config('about.summary').value
+
+            return d
+
+
+        return self.cache(lambda vid: dict_and_summary(vid),vid,_key_prefix='ds', force = True)
 
     def bundle_summary(self, vid):
 
