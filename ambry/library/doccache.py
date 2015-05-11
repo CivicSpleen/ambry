@@ -138,13 +138,17 @@ class DocCache(object):
             d = ds.dict
 
             if not d.get('title', False) or not d.get('summary', False):
-                d['title'] =  ds.config('about.title').value
-                d['summary'] = ds.config('about.summary').value
-
+                from sqlalchemy.orm.exc import NoResultFound
+                try:
+                    d['title'] =  ds.config('about.title').value
+                    d['summary'] = ds.config('about.summary').value
+                except NoResultFound:
+                    pass
+                
             return d
 
 
-        return self.cache(lambda vid: dict_and_summary(vid),vid,_key_prefix='ds', force = True)
+        return self.cache(lambda vid: dict_and_summary(vid),vid,_key_prefix='ds')
 
     def bundle_summary(self, vid):
 
