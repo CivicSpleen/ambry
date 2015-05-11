@@ -144,7 +144,7 @@ class DocCache(object):
                     d['summary'] = ds.config('about.summary').value
                 except NoResultFound:
                     pass
-                
+
             return d
 
 
