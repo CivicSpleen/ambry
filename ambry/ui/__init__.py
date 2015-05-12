@@ -67,7 +67,10 @@ def fscache():
     return new_cache(cache_config)
 
 
-def renderer(content_type='html', session = {}):
+def renderer(content_type='html', session = None):
+
+    session = session if session else {}
+
     from render import Renderer
     return Renderer(content_type=content_type, session=session)
 

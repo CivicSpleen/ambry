@@ -45,8 +45,7 @@ def warehouse_command(args, rc):
 
         if not w.exists():
             w.create()
-        w.uid()
-
+      
     elif args.database:
         # Check if the string is the uid of a database in the library.
         s = l.store(args.database)
