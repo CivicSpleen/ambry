@@ -1,21 +1,11 @@
-
-TITLE: A Test Manifest, For Testing
+TITLE: A Crime Manifest
 
 DOC:
-This would be the summary
+This is a fake crime file manifest
 
-UID: xxx-yyy-zzz
+UID: m5PJKUrX0U
 
 PARTITIONS:
-example.com-segmented-example-2
-
-example.com-combined-combined
-
-
-VIEW: health_view
-SELECT *
-FROM "pIjqPRbrGq001001_example"
-
-VIEW: health_mview
-SELECT *
-FROM "p00G002001_example"
+source-dataset-subset-variation-tthree
+source-dataset-subset-variation-geot1
+source-dataset-subset-variation-geot2

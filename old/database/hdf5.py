@@ -8,6 +8,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 import h5py
 from numpy import *
 
+
 class Hdf5File(h5py.File):
     
     def __init__(self, path):
@@ -48,7 +49,7 @@ class Hdf5File(h5py.File):
         
         return parent, ds_name
 
-    def put_geo(self,path, a, aa):
+    def put_geo(self, path, a, aa):
         '''Store an array along with an Analysis Area'''
         import json
 
@@ -69,7 +70,6 @@ class Hdf5File(h5py.File):
         
         self.flush()
         
-
     def get_geo(self, path):
         """Return an array an an associated analysis area"""
         import json
@@ -77,50 +77,47 @@ class Hdf5File(h5py.File):
 
         group, name = self.recursive_require_group(path)
 
-        
         try:
             ds = group[name]
         except KeyError:
-            raise KeyError("Geo group in {} doesn't have dataset named '{}'".format(self.path,name))
+            raise KeyError("Geo group in {} doesn't have dataset named '{}'".format(self.path, name))
         
-
         aa = AnalysisArea(**(json.loads(ds.attrs['analysis-area'])))
         
-        return ds,aa
+        return ds, aa
 
     def list_geo(self):
 
         return self.require_group("geo").keys()
 
     def table(self, table_name, mode='a', expected=None):
-        import tables #@UnresolvedImport
+        import tables  # @UnresolvedImport
         from ambry.orm import Column
 
         raise NotImplemented()
 
-        try:
-            return self.file.root._f_getChild(table_name)
-        except tables.NoSuchNodeError:
-
-            tdef = self.bundle.schema.table(table_name)
-            descr = {}
-            for i, col in enumerate(tdef.columns):
-                if col.datatype == Column.DATATYPE_INTEGER64:
-                    descr[str(col.name)] = tables.Int64Col(pos=i) #@UndefinedVariable
-                    
-                elif col.datatype == Column.DATATYPE_INTEGER:
-                    descr[str(col.name)] = tables.Int32Col(pos=i) #@UndefinedVariable
-                    
-                elif col.datatype == Column.DATATYPE_REAL:
-                    descr[str(col.name)] = tables.Float32Col(pos=i) #@UndefinedVariable
-                    
-                elif col.datatype == Column.DATATYPE_TEXT:
-                    descr[str(col.name)] = tables.StringCol(pos=i, itemsize= col.width if col.width else 50) #@UndefinedVariable
-                else:
-                    raise ValueError('Unknown datatype: '+col.datatype)
-
- 
-            table = self._file.createTable(self.file.root, table_name, descr, expectedrows=expected)
-        
-            return table
-        
+        # try:
+        #     return self.file.root._f_getChild(table_name)
+        # except tables.NoSuchNodeError:
+        #
+        #     tdef = self.bundle.schema.table(table_name)
+        #     descr = {}
+        #     for i, col in enumerate(tdef.columns):
+        #         if col.datatype == Column.DATATYPE_INTEGER64:
+        #             descr[str(col.name)] = tables.Int64Col(pos=i) #@UndefinedVariable
+        #
+        #         elif col.datatype == Column.DATATYPE_INTEGER:
+        #             descr[str(col.name)] = tables.Int32Col(pos=i) #@UndefinedVariable
+        #
+        #         elif col.datatype == Column.DATATYPE_REAL:
+        #             descr[str(col.name)] = tables.Float32Col(pos=i) #@UndefinedVariable
+        #
+        #         elif col.datatype == Column.DATATYPE_TEXT:
+        #             descr[str(col.name)] = tables.StringCol(pos=i, itemsize= col.width if col.width else 50) #@UndefinedVariable
+        #         else:
+        #             raise ValueError('Unknown datatype: '+col.datatype)
+        #
+        #
+        #     table = self._file.createTable(self.file.root, table_name, descr, expectedrows=expected)
+        #
+        #     return table

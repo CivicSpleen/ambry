@@ -2,7 +2,7 @@
 
 import os
 from flask.json import JSONEncoder as FlaskJSONEncoder
-from . import memoize
+# from . import memoize
 from flask.json import dumps
 from flask import Response
 
@@ -10,13 +10,13 @@ import jinja2.tests
 
 ##
 # These are in later versions of jinja, but we need them in earlier ones.
-if not 'equalto' in jinja2.tests.TESTS:
+if 'equalto' not in jinja2.tests.TESTS:
     def test_equalto(value, other):
         return value == other
 
     jinja2.tests.TESTS['equalto'] = test_equalto
 
-if not 'isin' in jinja2.tests.TESTS:
+if 'isin' not in jinja2.tests.TESTS:
     def test_isin(value, other):
         return value in other
 
@@ -59,7 +59,6 @@ def pretty_time(s):
 
 
 def resolve(t):
-
     from ambry.identity import Identity
     from ambry.orm import Table
     from ambry.warehouse.manifest import Manifest
@@ -80,6 +79,7 @@ def resolve(t):
     else:
         return None
 
+
 # Path functions, for generating URL paths.
 
 
@@ -96,7 +96,6 @@ def table_path(b, t):
 
 
 def proto_vid_path(pvid):
-
     b, t, c = deref_tc_ref(pvid)
 
     return table_path(str(b), str(t))
@@ -165,9 +164,9 @@ def tc_obj(ref):
 
 
 def partition_path(b, p=None):
-
     if p is None:
         from ambry.identity import ObjectNumber
+
         p = b
         on = ObjectNumber.parse(p)
         try:
@@ -191,7 +190,6 @@ def store_table_path(s, t):
 
 
 def extract_url(s, t, format):
-
     from flask import url_for
 
     return url_for('get_extract', wid=s, tid=t, ct=format)
@@ -202,14 +200,12 @@ def db_download_url(base, s):
 
 
 def extractor_list(t):
-    from . import renderer
+    # from . import renderer
 
-    return ['csv', 'json'] + \
-        (['kml', 'geojson'] if t.get('is_geo', False) else [])
+    return ['csv', 'json'] + (['kml', 'geojson'] if t.get('is_geo', False) else [])
 
 
 class extract_entry(object):
-
     def __init__(self, extracted, completed, rel_path, abs_path, data=None):
         self.extracted = extracted
         # For deleting files where exception thrown during generation
@@ -228,9 +224,7 @@ class extract_entry(object):
 
 
 class JSONEncoder(FlaskJSONEncoder):
-
     def default(self, o):
-
         return str(type(o))
 
         # return FlaskJSONEncoder.default(self, o)
@@ -265,8 +259,9 @@ class Renderer(object):
 
         # Monkey patch to get the equalto test
 
-    def maybe_render(self, rel_path, render_lambda, metadata={}, force=False):
+    def maybe_render(self, rel_path, render_lambda, metadata=None, force=False):
         """Check if a file exists and maybe render it."""
+        metadata = metadata or {}
 
         if rel_path[0] == '/':
             rel_path = rel_path[1:]
@@ -308,6 +303,7 @@ class Renderer(object):
             @wraps(f)
             def wrapper(*args, **kwds):
                 return os.path.join(r, f(*args, **kwds))
+
             return wrapper
 
         return {
@@ -326,7 +322,7 @@ class Renderer(object):
             'extract_url': extract_url,
             'db_download_url': db_download_url,
             'bundle_sort': lambda l,
-            key: sorted(
+                                  key: sorted(
                 l,
                 key=lambda x: x['identity'][key])}
 
@@ -351,7 +347,7 @@ class Renderer(object):
     def clean(self):
         """Clean up the extracts on failures."""
         for e in self.extracts:
-            if e.completed == False and os.path.exists(e.abs_path):
+            if e.completed is False and os.path.exists(e.abs_path):
                 os.remove(e.abs_path)
 
     def error500(self, e):
@@ -425,7 +421,7 @@ class Renderer(object):
         """Render documentation for a single bundle."""
         from csv import reader
         from StringIO import StringIO
-        import json
+        # import json
 
         template = self.env.get_template('bundle/schema.html')
 
@@ -520,7 +516,7 @@ class Renderer(object):
     def manifest(self, muid):
         """F is the file object associated with the manifest."""
         from ambry.warehouse.manifest import Manifest
-        from ambry.identity import ObjectNumber
+        # from ambry.identity import ObjectNumber
 
         template = self.env.get_template('manifest/index.html')
 
@@ -568,7 +564,7 @@ class Renderer(object):
 
         results = []
         for score, gvid, name in self.library.search.search_identifiers(term):
-            #results.append({"label":name, "value":gvid})
+            # results.append({"label":name, "value":gvid})
             results.append({"label": name})
 
         return Response(
@@ -589,7 +585,7 @@ class Renderer(object):
 
         final_results = []
 
-        init_results  = self.library.search.search_datasets(parsed)
+        init_results = self.library.search.search_datasets(parsed)
 
         pvid_limit = 5
 
@@ -647,11 +643,11 @@ class Renderer(object):
                         g = GVid.parse(gvid)
 
                         if g.level == 'state' and not g.is_summary:
-                            #facets['states'].add( (gvid, all_idents[gvid]))
+                            # facets['states'].add( (gvid, all_idents[gvid]))
                             try:
                                 facets['states'].add(all_idents[gvid])
                             except KeyError:
-                                pass # TODO Should probably announce an error
+                                pass  # TODO Should probably announce an error
 
         self.session['last_search_results'] = final_results
 
@@ -666,7 +662,7 @@ class Renderer(object):
 
             source = b['identity']['source']
 
-            if not source in sources:
+            if source not in sources:
                 sources[source] = {
                     'bundles': {}
                 }

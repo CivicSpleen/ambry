@@ -9,7 +9,6 @@ from ambry.dbexceptions import ConfigurationError
 
 
 class Repository(object):
-
     """Interface to the CKAN data repository, for uploading bundle records and
     data extracts.
 
@@ -36,6 +35,7 @@ class Repository(object):
 
     def set_api(self):
         import ambry.client.ckan
+
         repo_group = self.bundle.config.group('datarepo')
 
         if not repo_group.get(self.repo_name):
@@ -62,6 +62,7 @@ class Repository(object):
     def _validate_for_expr(self, astr, debug=False):
         """Check that an expression is save to evaluate."""
         import ast
+
         try:
             tree = ast.parse(astr)
         except SyntaxError:
@@ -85,9 +86,7 @@ class Repository(object):
                                  ast.Call
                                  )):
                 continue
-            if (isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Attribute)
-                    and node.func.attr == 'datetime'):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'datetime':
                 continue
             if debug:
                 attrs = [
@@ -274,6 +273,7 @@ class Repository(object):
         # If the filestore exists, write to S3 first, the upload the URL
         if self.filestore:
             from ambry.util import md5_for_file
+
             urlf = self.filestore.public_url_f(public=True)
             path = self.bundle.identity.path + '/' + name
 
@@ -385,7 +385,8 @@ class Repository(object):
                 partitions = [partition]
             else:
                 raise Exception(
-                    "Didn't get a partition for name: {}".format(partition_name))
+                    "Didn't get a partition for name: {}".format(
+                        partition_name))
 
         out = []
 
@@ -520,7 +521,8 @@ class Repository(object):
                     yield self._sub(dict(extract.items() + data.items()))
             else:
                 self.bundle.error(
-                    "Extract group {} should have either a function or a partition".format(key))
+                    "Extract group {} should have either a function or a partition".format(
+                        key))
 
     def store_document(self, package, config):
         import re
@@ -644,7 +646,8 @@ class Repository(object):
         for in_zf, out_zf in zip_outputs.items():
             extract_data = zip_inputs[in_zf]
             extract_data['name'] = extract_data[
-                'zipname'] if 'zipname' in extract_data else extract_data['name']
+                'zipname'] if 'zipname' in extract_data else extract_data[
+                'name']
             r = self._send(ckb, extract_data, out_zf)
 
             url = r['ckan_url']

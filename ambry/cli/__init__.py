@@ -6,15 +6,13 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 from __future__ import print_function
-import os.path
-import shlex
-from ambry.run import get_runconfig
-
-import ambry._meta
 import logging
-from ..util import get_logger
 import argparse
 
+import os.path
+from ambry.run import get_runconfig
+import ambry._meta
+from ..util import get_logger
 
 # The Bundle's get_runconfig ( in Bundle:config ) will use this if it is set. It gets set
 # by the CLI when the user assigns a specific configuration to use instead
@@ -28,12 +26,11 @@ AMBRY_CONFIG_ENV_VAR = 'AMBRY_CONFIG'
 
 
 def prt(template, *args, **kwargs):
-    #global global_logger
+    # global global_logger
     print(template.format(*args, **kwargs))
 
 
 def err(template, *args, **kwargs):
-    import sys
     global global_logger
 
     global_logger.error(template.format(*args, **kwargs))
@@ -41,6 +38,7 @@ def err(template, *args, **kwargs):
 
 def fatal(template, *args, **kwargs):
     import sys
+
     global global_logger
 
     try:
@@ -54,7 +52,6 @@ def fatal(template, *args, **kwargs):
     sys.exit(1)
 
 def warn(template, *args, **kwargs):
-    import sys
     global command
     global subcommand
 
@@ -87,7 +84,8 @@ def _source_list(dir_):
     return lst
 
 
-def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=[]):
+def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=None):
+    fields = fields or []
     from datetime import datetime
 
     record_entry_names = ('name', 'd_format', 'p_format', 'extractor')
@@ -95,7 +93,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=[]):
     def deps(ident):
         if not ident.data:
             return '.'
-        if not 'dependencies' in ident.data:
+        if 'dependencies' not in ident.data:
             return '.'
         if not ident.data['dependencies']:
             return '0'
@@ -104,13 +102,18 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=[]):
     all_fields = [
         # Name, width, d_format_string, p_format_string, extract_function
         ('deps', '{:3s}', '{:3s}', lambda ident: deps(ident)),
-        ('order', '{:6s}', '{:6s}', lambda ident: "{major:02d}:{minor:02d}".format(**ident.data['order']
-                                                                                   if 'order' in ident.data else {'major': -1, 'minor': -1})),
+        ('order', '{:6s}', '{:6s}',
+         lambda ident: "{major:02d}:{minor:02d}".format(
+             **ident.data['order'] if 'order' in ident.data else {'major': -1, 'minor': -1})
+         ),
         ('locations', '{:6s}', '{:6s}', lambda ident: ident.locations),
-        ('pcount', '{:5s}', '{:5s}', lambda ident: str(len(ident.partitions)) if ident.partitions else ''),
+        ('pcount', '{:5s}', '{:5s}',
+         lambda ident: str(len(ident.partitions)) if ident.partitions else ''),
         ('vid', '{:18s}', '{:20s}', lambda ident: ident.vid),
-        ('time', '{:20s}', '{:20s}', lambda ident: datetime.fromtimestamp(ident.data['time']).isoformat() if 'time' in ident.data else ''),
-        ('status', '{:20s}', '{:20s}', lambda ident: ident.bundle_state if ident.bundle_state else ''),
+        ('time', '{:20s}', '{:20s}', lambda ident: datetime.fromtimestamp(
+            ident.data['time']).isoformat() if 'time' in ident.data else ''),
+        ('status', '{:20s}', '{:20s}',
+         lambda ident: ident.bundle_state if ident.bundle_state else ''),
         ('vname', '{:40s}', '    {:40s}', lambda ident: ident.vname),
         ('sname', '{:40s}', '    {:40s}', lambda ident: ident.sname),
         ('fqname', '{:40s}', '    {:40s}', lambda ident: ident.fqname),
@@ -144,26 +147,17 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=[]):
             prtf(p_format, *[f(pi) for f in extractors])
 
 
-def _print_bundle_list(
-        idents,
-        subset_names=None,
-        prtf=prt,
-        fields=[],
-        show_partitions=False,
-        sort=True):
+def _print_bundle_list(idents, subset_names=None, prtf=prt, fields=None, show_partitions=False, sort=True):
     """Create a nice display of a list of source packages."""
-    from collections import defaultdict
-
+    fields = fields or []
     if sort:
         idents = sorted(idents, key=lambda i: i.sname)
 
     for ident in idents:
-        _print_bundle_entry(ident, prtf=prtf, fields=fields,
-                            show_partitions=show_partitions)
+        _print_bundle_entry(ident, prtf=prtf, fields=fields, show_partitions=show_partitions)
 
 
 def _print_info(l, ident, list_partitions=False):
-
     from ..identity import LocationRef
 
     resolved_ident = l.resolve(
@@ -202,7 +196,6 @@ def _print_info(l, ident, list_partitions=False):
                 prt('B Source Dir: {}', source_dir)
 
         if bundle and bundle.is_built:
-
             process = bundle.get_value_group('process')
             prt('B Partitions: {}', bundle.partitions.count)
             prt('B Created   : {}', process.get('dbcreated', ''))
@@ -260,8 +253,6 @@ def _print_info(l, ident, list_partitions=False):
 
 
 def _print_bundle_info(bundle=None, ident=None):
-    from ..source.repository import new_repository
-
     if ident is None and bundle:
         ident = bundle.identity
 
@@ -274,7 +265,6 @@ def _print_bundle_info(bundle=None, ident=None):
         prt('URL       : {}', ident.url)
 
     if bundle and bundle.is_built:
-
         d = dict(bundle.db_config.dict)
         process = d['process']
 
@@ -290,12 +280,9 @@ def _print_bundle_info(bundle=None, ident=None):
 def main(argsv=None, ext_logger=None):
     import ambry._meta
     import os
-    import sys
 
-    parser = argparse.ArgumentParser(
-        prog='ambry',
-        description='Ambry {}. Management interface for ambry, libraries and repositories. '.format(
-            ambry._meta.__version__))
+    parser = argparse.ArgumentParser(prog='ambry', description='Ambry {}. Management interface for ambry, libraries and'
+                                                               ' repositories. '.format(ambry._meta.__version__))
 
     parser.add_argument('-l','--library',dest='library_name',default="default",help="Name of library, from the library secton of the config")
     parser.add_argument('-c','--config',default=os.getenv(AMBRY_CONFIG_ENV_VAR),action='append',help="Path to a run config file. Alternatively, set the AMBRY_CONFIG env var")
@@ -348,7 +335,6 @@ def main(argsv=None, ext_logger=None):
         'source': source_command,
         'config': config_command,
         'root': root_command,
-
     }
 
     global global_logger
@@ -361,7 +347,7 @@ def main(argsv=None, ext_logger=None):
 
     global_logger.setLevel(logging.INFO)
 
-    f = funcs.get(args.command, False)
+    f = funcs.get(args.command, None)
 
     if args.command == 'config' and args.subcommand == 'install':
         rc = None
@@ -370,18 +356,20 @@ def main(argsv=None, ext_logger=None):
             rc = get_runconfig(rc_path)
 
         except ConfigurationError:
-            fatal("Could not find configuration file at {}\nRun 'ambry config install; to create one ",
-                rc_path)
+            fatal("Could not find configuration file at {}\nRun 'ambry config install; to create one ", rc_path)
 
         global global_run_config
         global_run_config = rc
 
+        if not rc.environment.get('category', False):
+            raise ConfigurationError("Must set a config value for environment.class, one of: "
+                                     "development, production, testing, staging")
 
         if not rc.environment.get('category', False):
-            raise ConfigurationError("Must set a config value for environment.category, one of: "
-                                      "development, production, testing, staging")
+            raise ConfigurationError("Must set a config value for environment.class, one of: "
+                                     "development, production, testing, staging")
 
-    if not f:
+    if f is None:
         fatal("Error: No command: " + args.command)
     else:
         try:

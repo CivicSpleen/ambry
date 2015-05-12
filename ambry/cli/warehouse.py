@@ -5,9 +5,10 @@ included in this distribution as LICENSE.txt
 
 """
 
-from . import prt, err, fatal, _print_info, _print_bundle_list
+from . import prt, _print_bundle_list
 
-from ..dbexceptions import ConfigurationError, NotFoundError
+from ..dbexceptions import ConfigurationError
+
 
 def warehouse_command(args, rc):
     from ambry.warehouse import new_warehouse
@@ -29,7 +30,6 @@ def warehouse_command(args, rc):
 
     if not args.database and args.subcommand == 'install':
         from ..warehouse.manifest import Manifest
-        import os.path
 
         m = Manifest(args.term)
 
@@ -45,17 +45,14 @@ def warehouse_command(args, rc):
 
         if not w.exists():
             w.create()
+        w.uid()
 
-        database_uid = w.uid
     elif args.database:
-
         # Check if the string is the uid of a database in the library.
         s = l.store(args.database)
 
         if not s:
-            raise ConfigurationError(
-                "Could not identitfy warehouse for term '{}'".format(
-                    args.database))
+            raise ConfigurationError("Could not identitfy warehouse for term '{}'".format(args.database))
 
         config = database_config(s.path)
 
@@ -67,10 +64,8 @@ def warehouse_command(args, rc):
 
         w = new_warehouse(config, l, logger=global_logger)
 
-        if not w.exists() and not args.subcommand in ['clean', 'delete']:
-            raise ConfigurationError(
-                "Database {} must be created first".format(
-                    w.database.dsn))
+        if not w.exists() and args.subcommand not in ['clean', 'delete']:
+            raise ConfigurationError("Database {} must be created first".format(w.database.dsn))
 
     if args.subcommand == 'new':
         globals()['warehouse_' + args.subcommand](args, l, rc)
@@ -92,12 +87,15 @@ def warehouse_parser(cmd):
     whsp.add_argument('-n', '--name', help='Set the name of the database')
     whsp.add_argument('-c','--clean',default=False,action='store_true',help='Recreate the database before installation')
     whsp.add_argument('-D','--dir',default='',help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
+
     whsp.add_argument('term', type=str, help='Name of bundle or partition')
 
     whsp = whp.add_parser('extract',help='Extract files or documentation to a cache')
     whsp.set_defaults(subcommand='extract')
+
     whsp.add_argument('-f','--files-only',default=False,action='store_true',help='Only extract the extract files')
     whsp.add_argument('-d','--doc-only',default=False,action='store_true',help='Only extract the documentation files')
+
 
     whsp = whp.add_parser('parse',help='Parse a manifest')
     whsp.set_defaults(subcommand='parse')
@@ -170,7 +168,7 @@ def warehouse_info(args, w, config):
 
 def warehouse_remove(args, w, config):
 
-    #w.logger = Logger('Warehouse Remove',init_log_rate(prt,N=2000))
+    # w.logger = Logger('Warehouse Remove',init_log_rate(prt,N=2000))
 
     w.remove(args.term)
 
@@ -250,22 +248,15 @@ def warehouse_users(args, w, config):
 
 def warehouse_list(args, w, config):
 
-    l = w.library
+    # l = w.library
 
     if not args.term:
-
-        _print_bundle_list(
-            w.list(),
-            fields=[
-                'vid',
-                'vname'],
-            show_partitions=False)
+        _print_bundle_list(w.list(), fields=['vid', 'vname'], show_partitions=False)
 
     else:
         raise NotImplementedError()
-        d, p = l.get_ref(args.term)
-
-        _print_info(l, d, p, list_partitions=True)
+        # d, p = l.get_ref(args.term)
+        # _print_info(l, d, p, list_partitions=True)
 
 
 def warehouse_install(args, w, config):
@@ -276,8 +267,8 @@ def warehouse_install(args, w, config):
     if args.clean:
         w.logger.info("Cleaning before installation")
         raise Exception()
-        w.clean()
-        w.create()
+        # w.clean()
+        # w.create()
 
     w.logger.info("Installing to {}".format(w.database.dsn))
 
@@ -310,11 +301,9 @@ def warehouse_config(args, w, config):
         var = parts.pop(0)
         val = parts.pop(0) if parts else None
 
-        if not var in w.configurable:
-            raise ConfigurationError(
-                "Value {} is not configurable. Must be one of: {}".format(
-                    args.var,
-                    w.configurable))
+        if var not in w.configurable:
+            raise ConfigurationError("Value {} is not configurable. Must be one of: {}".format(args.var,
+                                                                                               w.configurable))
 
         if val:
             setattr(w, var, val)
@@ -343,8 +332,6 @@ def warehouse_parse(args, w, config):
 
 
 def warehouse_test(args, w, config):
-
-    from ambry.bundle import LibraryDbBundle
 
     print w.dsn
     print w.library.database.dsn

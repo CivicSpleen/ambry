@@ -5,11 +5,12 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-import os
+# import os
 
-from identity import PartitionIdentity, PartitionNameQuery, PartitionName, PartialPartitionName, NameQuery
+from identity import PartitionIdentity, PartitionNameQuery, PartialPartitionName, NameQuery  # , PartitionName
+
 from sqlalchemy.orm.exc import NoResultFound
-from util.typecheck import accepts, returns
+# from util.typecheck import accepts, returns
 from dbexceptions import ConflictError
 from util import Constant
 
@@ -107,7 +108,7 @@ class Partitions(object):
 
         """
         from ambry.orm import Partition as OrmPartition
-        from sqlalchemy.orm import joinedload_all
+        # from sqlalchemy.orm import joinedload_all
         import sqlalchemy.exc
 
         try:
@@ -123,13 +124,13 @@ class Partitions(object):
             for op in q.all():
                 try:
                     partitions.append(self.partition(op))
-                except KeyError as e:  # Unknown partition type, usually 'hdf'
+                except KeyError:  # as e:  # Unknown partition type, usually 'hdf'
                     raise
 
             return partitions
         except sqlalchemy.exc.OperationalError:
             raise
-            return []
+            # return []
 
     def __iter__(self):
         return iter(self.all)
@@ -278,7 +279,7 @@ class Partitions(object):
         The object returned is immutable; changes are not persisted
 
         """
-        from identity import Identity
+        # from identity import Identity
         from sqlalchemy.orm.exc import NoResultFound
 
         if pnq is None:
@@ -301,9 +302,9 @@ class Partitions(object):
         An ORM object is returned, so changes can be persisted.
 
         """
-        import sqlalchemy.orm.exc
-        from ambry.orm import Partition as OrmPartition, Table
-        from sqlalchemy.orm import joinedload_all, joinedload
+        # import sqlalchemy.orm.exc
+        from ambry.orm import Partition as OrmPartition  # , Table
+        from sqlalchemy.orm import joinedload  # , joinedload_all
 
         assert isinstance(
             pnq, PartitionNameQuery), "Expected PartitionNameQuery, got {}".format(
@@ -414,7 +415,7 @@ class Partitions(object):
         # the format, which is required to get the correct cache_key
         d['cache_key'] = pname.promote(self.bundle.identity.name).cache_key
 
-        if not 'format' in d:
+        if 'format' not in d:
             d['format'] = 'db'
 
         try:
@@ -472,7 +473,7 @@ class Partitions(object):
         assert isinstance(ppn, PartialPartitionName), "Expected PartialPartitionName, got {}".format(
             type(ppn))
 
-        with self.bundle.session as s:
+        with self.bundle.session:  # as s:
             op = self._new_orm_partition(ppn, tables=tables, data=data)
 
             fqname = op.fqname
@@ -483,7 +484,7 @@ class Partitions(object):
             assert bool(partition), '''Failed to find partition that was just created'''
         except AssertionError:
             self.bundle.error("Failed to get partition for: created={}, fqname={}, database={} " .format(
-                    ppn,fqname,self.bundle.database.dsn))
+                ppn, fqname, self.bundle.database.dsn))
             raise
 
         if create:
@@ -496,7 +497,7 @@ class Partitions(object):
 
         return partition
 
-    def _find_or_new(self, kwargs,clean=False,format=None,tables=None,data=None,create=True):
+    def _find_or_new(self, kwargs, clean=False, format=None, tables=None, data=None, create=True):
         """Returns True if the partition was found, not created, False if it
         was created."""
 
@@ -550,6 +551,7 @@ class Partitions(object):
         """
 
         from orm import Column
+        # from dbexceptions import ConfigurationError
 
         # Create the table from the information in the data frame.
         with self.bundle.session:
@@ -612,7 +614,7 @@ class Partitions(object):
             shape_file=None,
             logger=None,
             **kwargs):
-        from sqlalchemy.orm.exc import NoResultFound
+        # from sqlalchemy.orm.exc import NoResultFound
 
         try:
             import gdal
@@ -678,13 +680,7 @@ class Partitions(object):
 
         return p
 
-    def find_or_new_hdf(
-            self,
-            clean=False,
-            tables=None,
-            data=None,
-            create=False,
-            **kwargs):
+    def find_or_new_hdf(self, clean=False, tables=None, data=None, create=False, **kwargs):
         """
         :param clean:
         :param tables:
@@ -696,10 +692,9 @@ class Partitions(object):
 
         raise NotImplementedError()
 
-        p, _ = self._find_or_new(kwargs, clean=False, tables=None,
-                                 data=None, create=True, format='hdf')
-
-        return p
+        # p, _ = self._find_or_new(kwargs, clean=False, tables=None, data=None, create=True, format='hdf')
+        #
+        # return p
 
     def new_memory_partition(self, tables=None, data=None, **kwargs):
         """Find a partition identified by pid, and if it does not exist, create
@@ -711,7 +706,7 @@ class Partitions(object):
 
         """
 
-        from partition.sqlite import SqlitePartition
+        # from partition.sqlite import SqlitePartition
         from partition import partition_classes
 
         ppn = PartialPartitionName(**kwargs)

@@ -639,6 +639,7 @@ class LibraryDb(object):
                         if k.endswith('_d_vid') and not bool(v):
                             r[k] = d_vid
             if rows:
+                
                 self.session.execute(tbl.__table__.insert(), rows)
 
             self.session.commit()

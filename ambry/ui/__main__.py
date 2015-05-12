@@ -3,9 +3,9 @@
 # http://stackoverflow.com/a/18888854
 
 import argparse
-import sys
-from ambry.ui import app, app_config
-from ambry.ui import fscache
+# import sys
+from ambry.ui import app, configure_application  # , write_config, config_paths
+# from ambry.ui import fscache
 
 raise DeprecationWarning()
 
@@ -25,7 +25,8 @@ parser.add_argument(
     '-P',
     '--use-proxy',
     action='store_true',
-    help="Setup for using a proxy in front of server, using werkzeug.contrib.fixers.ProxyFix")
+    help="Setup for using a proxy in front of server, "
+         "using werkzeug.contrib.fixers.ProxyFix")
 parser.add_argument(
     '-d',
     '--debug',

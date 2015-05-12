@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 from ..library import Library
 from ..library.database import LibraryDb
-from ckcache import new_cache, Cache
+from ckcache import Cache
 from ..database import new_database
 import os
 from ..util import Constant, memoize
@@ -11,13 +11,11 @@ from ..identity import TopNumber
 
 
 class NullCache(Cache):
-
     def has(self, rel_path, md5=None, use_upstream=True):
         return False
 
 
 class NullLogger(object):
-
     def __init__(self):
         pass
 
@@ -41,17 +39,14 @@ class NullLogger(object):
 
 
 class WLibrary(Library):
-
     """Extends the Library class to remove the Location parameter on identity
     resolution."""
 
     def resolve(self, ref, location=None):
-
         return super(WLibrary, self).resolve(ref, location=location)
 
 
 def new_warehouse(config, elibrary, logger=None):
-
     assert elibrary is not None
 
     if isinstance(config, basestring):
@@ -67,8 +62,8 @@ def new_warehouse(config, elibrary, logger=None):
 
     database = new_database(db_config, class_='warehouse')
 
-    # If the warehouse specifies a seperate external library, use it, otherwise, use the
-    # warehouse datbase for the library
+    # If the warehouse specifies a seperate external library, use it, otherwise,
+    # use the warehouse database for the library
     library_database = LibraryDb(
         **config['library']) if 'library' in config else LibraryDb(**db_config)
 
@@ -86,6 +81,7 @@ def new_warehouse(config, elibrary, logger=None):
 
     if service == 'sqlite':
         from .sqlite import SqliteWarehouse
+
         w = SqliteWarehouse(**args)
 
     elif service == 'spatialite':
@@ -115,7 +111,6 @@ class ResolutionError(Exception):
 
 
 class Warehouse(object):
-
     FILE_TYPE = Constant()
 
     FILE_TYPE.MANIFEST = 'manifest'
@@ -253,18 +248,16 @@ class Warehouse(object):
     ##
 
     def _meta_set(self, key, value):
-        from ..orm import Config
         return self.library.database.set_config_value('warehouse', key, value)
 
         # Also write to the file, since when the warehouse is installed in a library,
         # it's the file that is used for storing information about the title,
         # summary, etc.
-        f = self.wlibrary.store(self.uid)
-        f['data']['key'] = value
-        self.wlibrary.commit()
+        # f = self.wlibrary.store(self.uid)
+        # f['data']['key'] = value
+        # self.wlibrary.commit()
 
     def _meta_get(self, key):
-        from ..orm import Config
 
         try:
             return self.library.database.get_config_value(
@@ -394,13 +387,7 @@ class Warehouse(object):
         l = self.library.list(with_partitions=True)
 
         for k, v in l.items():
-
-            d = {
-                e.key.replace(
-                    '.',
-                    '_'): e.value for e in self.library.database.get_bundle_values(
-                    k,
-                    'config')}
+            d = {e.key.replace('.', '_'): e.value for e in self.library.database.get_bundle_values(k, 'config')}
             v.data.update(d)
 
         return l
@@ -426,7 +413,8 @@ class Warehouse(object):
 
         assert identity.is_partition
 
-        p_vid = self._to_vid(identity)
+        # p_vid = self._to_vid(identity)
+        self._to_vid(identity)
         d_vid = self._partition_to_dataset_vid(identity)
 
         meta, table = Schema.get_table_meta_from_db(self.library.database,
@@ -692,9 +680,8 @@ class Warehouse(object):
         """Install the partitions and views specified in a manifest file."""
 
         from datetime import datetime
-        import os
 
-        errors = []
+        # errors = []
 
         # Mark all of the files associated with the manifest, so if they aren't in the manifest
         # we can remove them.
@@ -795,7 +782,8 @@ class Warehouse(object):
                 continue
 
             try:
-                table, meta = self.create_table(p, source_table_name)
+                self.create_table(p, source_table_name)
+                # table, meta = self.create_table(p, source_table_name)
             except Exception as e:
                 print e
                 raise
@@ -1068,13 +1056,11 @@ class Warehouse(object):
                 # derived_tables checks the proto_id, used to link  aliases to
                 # base tables.
                 for dt in sorted(self.library.derived_tables(t.vid), key=lambda x: x.name):
-
                     t.add_installed_name(dt.name)
                     s.add(t)
 
             if (t.type == 'table' and t.installed) or t.type in ('view', 'mview'):
-                if not 'sample' in t.data or not t.data['sample']:
-
+                if 'sample' not in t.data or not t.data['sample']:
                     self.build_sample(t)
                     s.add(t)
 
@@ -1224,7 +1210,7 @@ class Warehouse(object):
 
         """
 
-        from ..orm import Table, Config, Dataset
+        from ..orm import Table, Dataset
 
         from sqlalchemy import func
         from sqlalchemy.orm.exc import NoResultFound
@@ -1414,9 +1400,7 @@ class Warehouse(object):
         return dest_table_name
 
     def remove(self, name):
-        from ..orm import Dataset
         from ..bundle import LibraryDbBundle
-        from ..identity import PartitionNameQuery
         from sqlalchemy.exc import NoSuchTableError, ProgrammingError
 
         dataset = self.wlibrary.resolve(name)
@@ -1485,7 +1469,6 @@ class Warehouse(object):
 
     def create_table(self, partition, table_name):
         """Create the table in the warehouse, using an augmented table name."""
-        from ..schema import Schema
 
         meta, table = self.table_meta(partition.identity, table_name)
 
@@ -1607,15 +1590,13 @@ class Warehouse(object):
     def extract_all(self, force=False):
         """Generate the extracts and return a struture listing the extracted
         files."""
-        from contextlib import closing
 
         from .extractors import new_extractor
-        import time
         from ..util import md5_for_file
 
         # Get the URL to the root. The public_utl arg only affects S3, and
         # gives a URL without a signature.
-        root = self.cache.path('', missing_ok=True, public_url=True)
+        self.cache.path('', missing_ok=True, public_url=True)
 
         extracts = []
 
@@ -1625,16 +1606,11 @@ class Warehouse(object):
 
             t = self.orm_table_by_name(f.data['table'])
 
-            if (t and t.data.get('updated') and
-                f.modified and
-                    int(t.data.get('updated')) > f.modified) or (not f.modified):
+            if (t and t.data.get('updated') and f.modified and int(t.data.get('updated')) > f.modified) \
+                    or (not f.modified):
                 force = True
 
-            ex = new_extractor(
-                f.data.get('format'),
-                self,
-                self.cache,
-                force=force)
+            ex = new_extractor(f.data.get('format'), self, self.cache, force=force)
 
             e = ex.extract(f.data['table'], self.cache, f.path)
 
@@ -1653,7 +1629,6 @@ class Warehouse(object):
 
     def extract_table(self, tid, content_type='csv'):
         from .extractors import new_extractor
-        from os.path import basename, dirname
         from ..dbexceptions import NotFoundError
 
         t = self.orm_table(tid)  # For installed tables
@@ -1765,7 +1740,6 @@ def database_config(db, base_dir=''):
 
 
 class Logger(object):
-
     def __init__(self, logger, lr):
         self.lr = lr
         self.logger = logger

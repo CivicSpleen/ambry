@@ -4,7 +4,6 @@ from bisect import bisect_left, bisect_right
 
 
 class SortedCollection(object):
-
     """Sequence sorted by a key function.
 
     SortedCollection() is much easier to work with than using bisect() directly.
@@ -233,6 +232,3 @@ class SortedCollection(object):
         if i != len(self):
             return self._items[i]
         raise ValueError('No item found with key above: %r' % (k,))
-
-
-#

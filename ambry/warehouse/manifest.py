@@ -6,8 +6,8 @@
 import os.path
 import re
 import sqlparse
-import markdown
-from ..util import memoize
+# import markdown
+# from ..util import memoize
 from pygments import highlight
 from pygments.lexers import PythonLexer
 from pygments.formatters import HtmlFormatter
@@ -86,7 +86,7 @@ class Manifest(object):
 
     def __init__(self, file_or_data, logger=None):
 
-        from ..dbexceptions import ConfigurationError
+        # from ..dbexceptions import ConfigurationError
 
         self.logger = logger if logger else null_logger()
         self.last_line = 0
@@ -230,7 +230,7 @@ class Manifest(object):
     def make_item(self, sections, tag, i, args):
         """Creates a new entry in sections, which will later have lines
         appended to it."""
-        from ..dbexceptions import ConfigurationError
+        # from ..dbexceptions import ConfigurationError
 
         if tag not in self.singles and tag not in self.multi_line:
             # Capture Error. These don't get save to the sections array.

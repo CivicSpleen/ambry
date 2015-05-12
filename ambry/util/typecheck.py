@@ -1,6 +1,4 @@
-'''
-
-From: https://wiki.python.org/moin/PythonDecoratorLibrary#Type_Enforcement_.28accepts.2Freturns.29
+"""
 
 One of three degrees of enforcement may be specified by passing
 the 'debug' keyword argument to the decorator:
@@ -39,8 +37,7 @@ Needed to cast params as floats in function def (or simply divide by 2.0).
     Traceback (most recent call last):
       ...
     TypeError: 'fib' method accepts (int), but was given (float)
-
-'''
+"""
 import sys
 
 
@@ -66,8 +63,7 @@ def accepts(*types, **kw):
             def newf(*args):
                 if debug is 0:
                     return f(*args)
-                assert len(args) == len(types), "Expected {} args, got {}".format(
-                    len(types), len(args))
+                assert len(args) == len(types), "Expected {} args, got {}".format(len(types), len(args))
                 argtypes = tuple(map(type, args))
                 if argtypes != types:
                     msg = info(f.__name__, types, argtypes, 0)
@@ -130,7 +126,7 @@ def info(fname, expected, actual, flag):
     """Convenience function returns nicely formatted error/warning msg."""
     format = lambda types: ', '.join([str(t).split("'")[1] for t in types])
     expected, actual = format(expected), format(actual)
-    msg = "'{}' method ".format( fname )\
-          + ("accepts", "returns")[flag] + " ({}), but ".format(expected)\
+    msg = "'{}' method ".format(fname) \
+          + ("accepts", "returns")[flag] + " ({}), but ".format(expected) \
           + ("was given", "result is")[flag] + " ({})".format(actual)
     return msg
