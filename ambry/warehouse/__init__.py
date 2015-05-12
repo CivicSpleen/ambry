@@ -1666,14 +1666,31 @@ class Warehouse(object):
 
         e = new_extractor(content_type, self, self.cache.subcache('extracts'))
 
-        ref = t.name if t.type in ('view', 'mview') else t.vid
+        ref = t.name if t.type in ('view', 'mview', 'indexed') else t.vid
 
-        ee = e.extract(
-            ref, '{}.{}'.format(
-                tid, content_type), t.data.get(
-                'updated', None))
+        ee = e.extract(ref, '{}.{}'.format(tid, content_type), t.data.get('updated', None))
 
         return ee.abs_path, "{}_{}.{}".format(t.vid, t.name, content_type)
+
+    def stream_table(self, tid, content_type='csv'):
+        """Return a generator function that can yield rows, and can be passed to a Flask Response object
+        to stream a file """
+        from .extractors import new_extractor
+        from ..dbexceptions import NotFoundError
+
+        t = self.orm_table(tid)  # For installed tables
+
+        if not t:
+            t = self.orm_table_by_name(tid)  # For views
+
+        if not t:
+            raise NotFoundError("Didn't get table for '{}' ".format(tid))
+
+        e = new_extractor(content_type, self, self.cache.subcache('extracts'))
+
+        ref = t.name if t.type in ('view', 'mview', 'indexed') else t.vid
+
+        return e.stream(ref, '{}.{}'.format(tid, content_type) )
 
 
 def database_config(db, base_dir=''):

@@ -618,7 +618,6 @@ class Library(object):
                                 .format(proto_vid, self.database.dsn))
 
 
-
     def dataset(self, vid):
         from ..orm import Dataset
         from sqlalchemy.orm.exc import NoResultFound
@@ -1210,8 +1209,8 @@ class Library(object):
             try:
                 remote_list = remote.list().keys()
                 self.logger.info("Syncing from remote: {} -> {} ".format(remote_name,remote))
-            except S3ResponseError:
-                self.logger.error("Failed to get list from {} -> {} ".format(remote_name,remote))
+            except S3ResponseError as e:
+                self.logger.error("Failed to get list from {} -> {} : {} ".format(remote_name,remote, e))
                 continue
 
             all_keys = [ f.path for f  in self.files.query.type(Dataset.LOCATION.REMOTE)

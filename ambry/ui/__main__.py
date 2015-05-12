@@ -7,6 +7,8 @@ import sys
 from ambry.ui import app, app_config
 from ambry.ui import fscache
 
+raise DeprecationWarning()
+
 parser = argparse.ArgumentParser(
     prog='python -mambry.server.documentation',
     description='Run an Ambry documentation server')

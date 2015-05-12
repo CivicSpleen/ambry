@@ -144,18 +144,27 @@ def get_extract(wid, tid, ct):
 
     from os.path import basename, dirname
     from ambry.dbexceptions import NotFoundError
+    from flask import Response
 
-    try:
 
-        path, attach_filename = warehouse(
-            wid).extract_table(tid, content_type=ct)
+    if ct == 'csv':
 
-        return send_from_directory(directory=dirname(path),
-                                   filename=basename(path),
-                                   as_attachment=True,
-                                   attachment_filename=attach_filename)
-    except NotFoundError:
-        abort(404)
+        row_gen = warehouse(wid).stream_table(tid, content_type=ct)
+
+        return Response(row_gen(), mimetype='text/csv')
+
+    else:
+
+        try:
+
+            path, attach_filename = warehouse(wid).extract_table(tid, content_type=ct)
+
+            return send_from_directory(directory=dirname(path),
+                                       filename=basename(path),
+                                       as_attachment=True,
+                                       attachment_filename=attach_filename)
+        except NotFoundError:
+            abort(404)
 
 
 @app.route('/warehouses/<wid>/sample/<tid>')
@@ -167,8 +176,7 @@ def get_sample(wid, tid, ct):
 
     try:
 
-        path, attach_filename = warehouse(
-            wid).extract_table(tid, content_type='json')
+        path, attach_filename = warehouse(wid).extract_table(tid, content_type='json')
 
     except NotFoundError:
         abort(404)
