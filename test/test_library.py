@@ -235,7 +235,6 @@ class Test(TestBase):
 
         l.put_bundle(self.bundle)
 
-        l.put_bundle(self.bundle)
 
         ldsq = l.database.session.query
         self.assertEquals(4, len(ldsq(Partition).all()))
@@ -243,6 +242,8 @@ class Test(TestBase):
         self.assertEquals(45, len(ldsq(Column).all()))
         self.assertEquals(20, len(ldsq(Code).all()))
         self.assertEquals(23, len(ldsq(ColumnStat).all()))
+
+        l.put_bundle(self.bundle)
 
         l.put_bundle(self.bundle)
 

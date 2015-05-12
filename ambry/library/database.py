@@ -235,7 +235,8 @@ class LibraryDb(object):
             self.close_connection()
 
     def clean(self, add_config_root=True):
-        from sqlalchemy.exc import OperationalError
+        from sqlalchemy.exc import OperationalError, IntegrityError
+        from ..dbexceptions import DatabaseError
 
         s = self.session
 
@@ -245,12 +246,13 @@ class LibraryDb(object):
             s.query(File).delete()
             s.query(Code).delete()
             s.query(Column).delete()
+            s.query(Table).update({Table.p_vid: None}) # Prob should be handled with a cascade on relationship. 
             s.query(Partition).delete()
             s.query(Table).delete()
             s.query(Dataset).delete()
-        except OperationalError:
+        except (OperationalError, IntegrityError) as e:
             # Tables dont exist?
-            raise
+            raise DatabaseError("Failed to data records from {}: {}".format(self.dsn, str(e)))
 
         if add_config_root:
             self._add_config_root()

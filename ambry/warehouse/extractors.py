@@ -190,7 +190,7 @@ class OgrExtractor(Extractor):
     is_geo = True
 
     def __init__(self, warehouse, cache, force=False):
-        import ogr
+        import ogr # In the initializer b/c it is an optional dependency
 
         super(OgrExtractor, self).__init__(warehouse, cache, force=force)
 
@@ -254,20 +254,6 @@ class OgrExtractor(Extractor):
 
         return t, cd, geo_col
 
-
-
-        _ogr_type_map = {
-            None: ogr.OFTString,
-            '': ogr.OFTString,
-            'TEXT': ogr.OFTString,
-            'VARCHAR': ogr.OFTString,
-            'INT': ogr.OFTInteger,
-            'INTEGER': ogr.OFTInteger,
-            'REAL': ogr.OFTReal,
-            'FLOAT': ogr.OFTReal,
-        }
-    except ImportError:
-        pass
 
     def ogr_type_map(self, v):
         return self._ogr_type_map[v.split('(', 1)[0]]  # Sometimes 'VARCHAR', sometimes 'VARCHAR(10)'

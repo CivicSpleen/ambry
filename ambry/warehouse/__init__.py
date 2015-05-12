@@ -1602,7 +1602,7 @@ class Warehouse(object):
 
         # Generate the file etracts
 
-        for f in self.library.files.query.group('manifest').type('extract').all:
+        for f in self.library.files.query.type('manifest').type('extract').all:
 
             t = self.orm_table_by_name(f.data['table'])
 
