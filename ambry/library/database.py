@@ -294,16 +294,10 @@ class LibraryDb(object):
                     raise Exception("Couldn't create directory " + dir_)
 
     def drop(self):
-        from sqlalchemy.exc import NoSuchTableError
+        from sqlalchemy.exc import NoSuchTableError, ProgrammingError
+
         if not self.enable_delete:
             raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
-
-        # Tables and partitions can have a cyclic rlationship.
-        # Prob should be handled with a cascade on relationship.
-        self.session.query(Table).update({Table.p_vid: None})
-        self.session.commit()
-
-        library_tables = [Config, ColumnStat, File, Code, Partition, Column, Table, Dataset]
 
         try:
             self.metadata.sorted_tables
@@ -311,7 +305,20 @@ class LibraryDb(object):
             # Deleted the tables out from under it, so we're done.
             return
 
+
+        # Tables and partitions can have a cyclic rlationship.
+        # Prob should be handled with a cascade on relationship.
+        try:
+            self.session.query(Table).update({Table.p_vid: None})
+            self.session.commit()
+        except ProgrammingError: # Table doesn't exist.
+            self._session.rollback()
+            pass
+
+        library_tables = [Config, ColumnStat, File, Code, Partition, Column, Table, Dataset]
+
         for table in library_tables:
+
             table.__table__.drop(self.engine, checkfirst=True)
 
         self.commit()
@@ -323,8 +330,9 @@ class LibraryDb(object):
         return self.__class__(self.driver,self.server,self.dbname,self.username,self.password)
 
     def create_tables(self):
+
         from sqlalchemy.exc import OperationalError
-        tables = [ Dataset,Config,Table,Column,File,Partition,Code,ColumnStat]
+        tables = [ Dataset,Config,Table,Column,Partition,File,Code,ColumnStat]
 
         try:
             self.drop()

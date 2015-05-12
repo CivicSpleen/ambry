@@ -1151,7 +1151,8 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     id_ = SAColumn('t_id', String(20), primary_key=False)
     d_id = SAColumn('t_d_id', String(20))
     d_vid = SAColumn('t_d_vid',String(20),ForeignKey('datasets.d_vid'),index=True)
-    p_vid = SAColumn('t_p_vid', String(20), ForeignKey('partitions.p_vid'), index=True, nullable=True)
+    # This is a freign key, but is not declared as such
+    p_vid = SAColumn('t_p_vid', String(20), index=True, nullable=True)
     sequence_id = SAColumn('t_sequence_id', Integer, nullable=False)
     name = SAColumn('t_name', String(200), nullable=False)
     altname = SAColumn('t_altname', Text)
@@ -1803,7 +1804,8 @@ class Partition(Base, LinkableMixin):
     # can be primary in multiple partitions.
     table = relationship('Table', backref='partitions', foreign_keys='Partition.t_vid')
 
-    warehouse_tables = relationship('Table', backref='source_partition', foreign_keys='Table.p_vid')
+    warehouse_tables = relationship('Table', backref='source_partition', foreign_keys='Table.p_vid',
+                                    primaryjoin="Partition.vid == Table.p_vid")
 
     stats = relationship(ColumnStat, backref='partition', cascade="delete, delete-orphan")
 
