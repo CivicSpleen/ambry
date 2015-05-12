@@ -7,6 +7,8 @@ import sys
 import uuid
 from pip.req import parse_requirements
 from setuptools import setup, find_packages
+from distutils.core import Command
+import unittest
 
 
 if sys.version_info <= (2, 6):
@@ -44,6 +46,28 @@ def find_package_data():
 
     return {'ambry': l}
 
+
+class TestCommand(Command):
+    """Custom distutils command to run the test suite."""
+
+    user_options = [
+        ('verbosity=', None, 'Verbosity of the test'),
+        ('failfast', None, 'Stop testing on first fail'),
+    ]
+
+    def initialize_options(self):
+        """ Initializes options with default values. """
+        self.verbosity = 1
+        self.failfast = False
+
+    def finalize_options(self):
+        self.verbosity = int(self.verbosity)
+
+    def run(self):
+        """ Runs ambry's tests suite."""
+        from test.suite import suite
+        unittest.TextTestRunner(verbosity=self.verbosity, failfast=self.failfast).run(suite)
+
 requirements = parse_requirements('requirements.txt', session=uuid.uuid1())
 
 d = dict(
@@ -61,6 +85,7 @@ d = dict(
              'scripts/ambry-load-sqlite', 'scripts/ambry_build_all'],
     package_data=find_package_data(),
     license=ambry_meta.__license__,
+    cmdclass={'test': TestCommand},
     platforms='Posix; MacOS X; Linux',
     classifiers=[
         'Development Status :: 3 - Alpha',
@@ -76,8 +101,7 @@ d = dict(
     extras_require={
         'pgsql': ['psycopg2'],
         'geo': ['sh', 'gdal'],
-        'server': ['paste', 'bottle']},
-    test_suite='test.suite'
+        'server': ['paste', 'bottle']}
 )
 
 setup(**d)
