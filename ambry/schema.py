@@ -753,7 +753,8 @@ class Schema(object):
         from collections import defaultdict
         from dbexceptions import NotFoundError
 
-        q = (self.bundle.database.session.query(Column).filter(Column.proto_vid != None))
+        q = (self.bundle.database.session.query(Column)
+             .filter(Column.proto_vid != None).filter(Column.proto_vid != ''))
 
         pt_map = None
 
@@ -764,7 +765,6 @@ class Schema(object):
         for c in q.all():
 
             try:
-                # on = ObjectNumber.parse(c.proto_vid)
                 ObjectNumber.parse(c.proto_vid)
                 # Its all good.
 

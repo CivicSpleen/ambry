@@ -727,7 +727,7 @@ class ObjectNumber(object):
             return None
 
         if not on_str:
-            raise Exception("Didn't get input")
+            raise NotObjectNumberError("Got null input")
 
         # if isinstance(on_str, unicode):
         #     dataset = on_str.encode('ascii')
@@ -741,18 +741,12 @@ class ObjectNumber(object):
             on_str = cls.TYPE.DATASET + on_str[1:]
 
         if type_ not in cls.NDS_LENGTH.keys():
-            raise NotObjectNumberError(
-                "Unknown type character '{}' for '{}'".format(
-                    type_,
-                    on_str))
+            raise NotObjectNumberError("Unknown type character '{}' for '{}'".format(type_,on_str))
 
         ds_length = len(on_str) - cls.NDS_LENGTH[type_]
 
         if ds_length not in cls.DATASET_LENGTHS:
-            raise NotObjectNumberError(
-                "Dataset string '{}' has an unfamiliar length: {}".format(
-                    on_str,
-                    ds_length))
+            raise NotObjectNumberError("Dataset string '{}' has an unfamiliar length: {}".format(on_str,ds_length))
 
         ds_lengths = cls.DATASET_LENGTHS[ds_length]
 

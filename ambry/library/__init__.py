@@ -500,7 +500,7 @@ class Library(object):
                         remote = r
                         break
 
-                assert not remote or remote.repo_id == df.source_url
+            assert not remote or remote.repo_id == df.source_url
 
         else:
 
@@ -522,7 +522,9 @@ class Library(object):
 
                 if not self.cache.has(partition.identity.cache_key):
 
-                    assert remote
+                    if not remote:
+                        raise NotFoundError("No remote defined for nonlocal partition. Expected remote name '{}' "
+                                            .format(df.source_url))
 
                     # If the partition has a reference, get that instead. This will
                     # load it into the local file
