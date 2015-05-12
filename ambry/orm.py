@@ -807,6 +807,56 @@ class Column(Base):
         DATATYPE_BLOB: (sqlalchemy.types.LargeBinary, buffer, 'BLOB')
     }
 
+    def __init__(self, table=None, **kwargs):
+
+
+        self.sequence_id = kwargs.get("sequence_id", len(table.columns) + 1 if table else None)
+
+        self.name = kwargs.get("name", None)
+        self.altname = kwargs.get("altname", None)
+        self.is_primary_key = _clean_flag(kwargs.get("is_primary_key", False))
+        self.datatype = kwargs.get("datatype", None)
+        self.size = kwargs.get("size", None)
+        self.precision = kwargs.get("precision", None)
+        self.start = kwargs.get("start", None)
+        self.width = kwargs.get("width", None)
+        self.sql = kwargs.get("sql", None)
+        self.flags = kwargs.get("flags", None)
+        self.description = kwargs.get("description", None)
+        self.keywords = kwargs.get("keywords", None)
+        self.measure = kwargs.get("measure", None)
+        self.units = kwargs.get("units", None)
+        self.universe = kwargs.get("universe", None)
+        self.scale = kwargs.get("scale", None)
+        self.fk_vid = kwargs.get("fk_vid", kwargs.get("foreign_key", None))
+        self.proto_vid = kwargs.get("proto_vid", kwargs.get("proto", None))
+        self.derivedfrom = kwargs.get("derivedfrom", None)
+        self.data = kwargs.get("data", None)
+
+        # the table_name attribute is not stored. It is only for
+        # building the schema, linking the columns to tables.
+        self.table_name = kwargs.get("table_name", None)
+
+        assert self.sequence_id is not None
+
+        if not self.name:
+            self.name = 'column' + str(self.sequence_id)
+            # raise ValueError('Column must have a name. Got: {}'.format(kwargs))
+
+        # Don't allow these values to be the empty string
+        self.fk_vid = self.fk_vid or None
+        self.proto_vid = self.proto_vid or None
+        self.derivedfrom = self.derivedfrom or None
+
+        if table:
+            self.t_id = table.id_
+            self.t_vid = table.vid
+            ton = ObjectNumber.parse(table.vid)
+            con = ColumnNumber(ton, self.sequence_id)
+            self.vid = str(con)
+            self.id = str(con.rev(None))
+
+
     def type_is_int(self):
         return self.datatype in (
             Column.DATATYPE_INTEGER,
@@ -934,51 +984,7 @@ class Column(Base):
     def foreign_key(self):
         return self.fk_vid
 
-    def __init__(self, table=None, **kwargs):
-
-
-        self.sequence_id = kwargs.get("sequence_id", len(table.columns) + 1 if table else None)
-
-        self.name = kwargs.get("name", None)
-        self.altname = kwargs.get("altname", None)
-        self.is_primary_key = _clean_flag(kwargs.get("is_primary_key", False))
-        self.datatype = kwargs.get("datatype", None)
-        self.size = kwargs.get("size", None)
-        self.precision = kwargs.get("precision", None)
-        self.start = kwargs.get("start", None)
-        self.width = kwargs.get("width", None)
-        self.sql = kwargs.get("sql", None)
-        self.flags = kwargs.get("flags", None)
-        self.description = kwargs.get("description", None)
-        self.keywords = kwargs.get("keywords", None)
-        self.measure = kwargs.get("measure", None)
-        self.units = kwargs.get("units", None)
-        self.universe = kwargs.get("universe", None)
-        self.scale = kwargs.get("scale", None)
-        self.fk_vid = kwargs.get("fk_vid", kwargs.get("foreign_key", None))
-        self.proto_vid = kwargs.get("proto_vid", kwargs.get("proto", None))
-        self.derivedfrom = kwargs.get("derivedfrom", None)
-        self.data = kwargs.get("data", None)
-
-        # the table_name attribute is not stored. It is only for
-        # building the schema, linking the columns to tables.
-        self.table_name = kwargs.get("table_name", None)
-
-        assert self.sequence_id is not None
-
-        if not self.name:
-            self.name = 'column' + str(self.sequence_id)
-            #raise ValueError('Column must have a name. Got: {}'.format(kwargs))
-
-        if table:
-            self.t_id = table.id_
-            self.t_vid = table.vid
-            ton = ObjectNumber.parse(table.vid)
-            con = ColumnNumber(ton, self.sequence_id)
-            self.vid = str(con)
-            self.id = str(con.rev(None))
-
-    @property
+  @property
     def dict(self):
         """A dict that holds key/values for all of the properties in the
         object.
