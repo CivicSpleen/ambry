@@ -1269,13 +1269,16 @@ class {name}(Base):
         import csv
         from dbexceptions import NotFoundError
 
-        with open(self.bundle.filesystem.path('meta', self.bundle.CODE_FILE), 'r') as f:
+
+        with  open(self.bundle.filesystem.path('meta', self.bundle.CODE_FILE), 'r') as f:
 
             r = csv.DictReader(f)
             table = None
             column = None
             for row in r:
+
                 if not row['table'] or not row['column'] or not row['key']:
+
                     continue
 
                 try:
@@ -1290,6 +1293,7 @@ class {name}(Base):
                 except NotFoundError as e:
                     self.bundle.error("Skipping code '{}' for {}.{} : {}"
                                       .format(row['key'],row['table'],row['column'], e))
+
 
     @property
     def dict(self):

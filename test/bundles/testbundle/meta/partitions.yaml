@@ -1,9 +1,2 @@
--   name: source-dataset-subset-variation-geot2
-    table: geot2
--   name: source-dataset-subset-variation-geot1
-    table: geot1
--   name: source-dataset-subset-variation-tthree
-    table: tthree
--   grain: missing
-    name: source-dataset-subset-variation-tone-missing
-    table: tone
+-   name: source-dataset-subset-variation-coding
+    table: coding

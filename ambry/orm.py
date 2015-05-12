@@ -757,7 +757,7 @@ class Column(Base):
     default = SAColumn('c_default', Text)
     illegal_value = SAColumn('c_illegal_value', Text)
 
-    codes = relationship(Code, backref='column',order_by="asc(Code.key)", cascade="delete, delete-orphan")
+    codes = relationship(Code, backref='column',order_by="asc(Code.key)", cascade="save-update, delete, delete-orphan")
 
     stats = relationship(ColumnStat, backref='column', cascade="delete, delete-orphan")
 
