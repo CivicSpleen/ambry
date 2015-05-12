@@ -279,8 +279,9 @@ class Library(object):
         """Install the records for the dataset, tables, columns and possibly
         partitions. Does not install file references """
 
+
         if not self.database.install_bundle(bundle):
-            self.cache.path(bundle.identity.cache_key), False
+            return self.cache.path(bundle.identity.cache_key), False
 
         if source is None:
             source = self.cache.repo_id
@@ -1250,6 +1251,7 @@ class Library(object):
                     continue
 
                 if self.cache.has(cache_key):# This is just for reporting.
+
                     self.logger.info("Remote {} has: {}".format(remote.repo_id,cache_key))
 
                 else:

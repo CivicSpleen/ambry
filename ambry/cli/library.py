@@ -365,12 +365,7 @@ def library_files(args, l, config):
     if len(files_):
         prt("-- Display {} files", args.file_state)
         for f in files_:
-            prt("{0:14s} {1:4s} {2:6s} {3:20s} {4}",
-                f.ref,
-                f.state,
-                f.type_,
-                f.group,
-                f.path)
+            prt("{0:14s} {1:4s} {2:6s} {3}",f.ref,f.state,f.type_, f.path)
 
 
 def library_schema(args, l, config):
