@@ -984,7 +984,7 @@ class Column(Base):
     def foreign_key(self):
         return self.fk_vid
 
-  @property
+    @property
     def dict(self):
         """A dict that holds key/values for all of the properties in the
         object.
