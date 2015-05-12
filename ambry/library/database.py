@@ -298,26 +298,21 @@ class LibraryDb(object):
         if not self.enable_delete:
             raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
 
+        # Tables and partitions can have a cyclic rlationship.
+        # Prob should be handled with a cascade on relationship.
+        self.session.query(Table).update({Table.p_vid: None})
+        self.session.commit()
 
-        library_tables = [
-            Config.__table__,
-            ColumnStat.__table__,
-            Column.__table__,
-            Code.__table__,
-            Partition.__table__,
-            Table.__table__,
-            File.__table__,
-            Dataset.__table__,
-            ]
+        library_tables = [Config, ColumnStat, File, Code, Partition, Column, Table, Dataset]
 
         try:
-            db_tables = reversed(self.metadata.sorted_tables)
+            self.metadata.sorted_tables
         except NoSuchTableError:
             # Deleted the tables out from under it, so we're done.
             return
 
         for table in library_tables:
-            table.drop(self.engine, checkfirst=True)
+            table.__table__.drop(self.engine, checkfirst=True)
 
         self.commit()
 

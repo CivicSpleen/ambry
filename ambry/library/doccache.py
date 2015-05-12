@@ -141,10 +141,7 @@ class DocCache(object):
                     d['title'] =  ds.config('about.title').value
                     d['summary'] = ds.config('about.summary').value
                 except NoResultFound:
-                    print '!!! '
-                    for c in ds.configs:
-                        print '   ', ds.dict
-                    pass
+                    pass # Probably bad -- every bundle should have about.title and about.summary by now
 
             return d
 

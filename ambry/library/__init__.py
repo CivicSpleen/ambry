@@ -432,6 +432,7 @@ class Library(object):
 
 
     def _get_bundle_by_cache_key(self, cache_key, cb=None):
+        """Load a bundle from either the local cache, or the remote if it is not local """
         from ckcache.multi import AltReadCache
         from sqlite3 import DatabaseError
         from sqlalchemy.exc import OperationalError

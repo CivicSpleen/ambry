@@ -375,20 +375,9 @@ class SqliteDatabase(RelationalDatabase):
 
         # return self.load_insert(a,table, encoding=encoding, caster=caster,
         # logger=logger)
-        return self.load_shell(
-            a,
-            table,
-            encoding=encoding,
-            caster=caster,
-            logger=logger)
+        return self.load_shell(a,table,encoding=encoding,caster=caster, logger=logger)
 
-    def load_insert(
-            self,
-            a,
-            table=None,
-            encoding='utf-8',
-            caster=None,
-            logger=None):
+    def load_insert(self, a,table=None, encoding='utf-8', caster=None, logger=None):
         from ..partition import PartitionInterface
         from ..database.csv import CsvDb
         from ..dbexceptions import ConfigurationError
@@ -496,11 +485,7 @@ class BundleLockContext(object):
 
         tb = traceback.extract_stack()[-4:-3][0]
 
-        global_logger.debug(
-            "Using Session Context, from {} in {}:{}".format(
-                tb[2],
-                tb[0],
-                tb[1]))
+        global_logger.debug("Using Session Context, from {} in {}:{}".format(tb[2],tb[0],tb[1]))
 
         self._lock_depth = 0
 

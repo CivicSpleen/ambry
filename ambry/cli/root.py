@@ -88,6 +88,7 @@ def root_parser(cmd):
 def root_command(args, rc):
     from ..library import new_library
     from . import global_logger
+    from ambry.dbexceptions import DatabaseError
 
     try:
         l = new_library(rc.library(args.library_name))
@@ -386,7 +387,9 @@ def root_search(args, l, config):
 
 
 def root_doc(args, l, rc):
-    from ambry.ui import app, configure_application
+
+    from ambry.ui import app, app_config
+    import ambry.ui.views as views
     import os
 
     import logging
