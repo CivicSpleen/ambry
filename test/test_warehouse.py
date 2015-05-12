@@ -38,7 +38,7 @@ class Test(TestBase):
 
         self.bundle = Bundle()
 
-        self.mf = os.path.join(os.path.dirname(manifests.__file__),'test.ambry')
+        self.mf = os.path.join(os.path.dirname(manifests.__file__), 'test.ambry')
 
         # Delete the whole test tree every run.
         if os.path.exists(self.rc.group('filesystem').root):
@@ -51,8 +51,7 @@ class Test(TestBase):
         pass
 
     def resolver(self, name):
-        if (name == self.bundle.identity.name
-           or name == self.bundle.identity.vname):
+        if name == self.bundle.identity.name or name == self.bundle.identity.vname:
             return self.bundle
         else:
             return False
@@ -139,7 +138,7 @@ class Test(TestBase):
         # Travis-CI
         return
 
-        self._test_manifest_install(self.EXAMPLE.CONF_DB_POSTGRES)
+        # self._test_manifest_install(self.EXAMPLE.CONF_DB_POSTGRES)
 
     def test_manifest(self):
         """
@@ -231,9 +230,9 @@ WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
 
         for t in r[0].tokens:
             if isinstance(t, sqlparse.sql.IdentifierList):
-                for i in t.get_identifiers():
-                    pass
-
+                # for i in t.get_identifiers():
+                #     pass
+                t.get_identifiers()
 
     def test_exists(self):
         """
@@ -301,6 +300,7 @@ def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
     return suite
+
 
 if __name__ == "__main__":
     unittest.TextTestRunner().run(suite())

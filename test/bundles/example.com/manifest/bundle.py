@@ -1,12 +1,12 @@
-'''
+"""
 
-'''
+"""
 
 from ambry.bundle import BuildBundle
 
 
 class Bundle(BuildBundle):
-    ''' '''
+    """ """
 
     def __init__(self, directory=None):
         super(Bundle, self).__init__(directory)
@@ -14,7 +14,6 @@ class Bundle(BuildBundle):
     def build(self):
         from ambry.warehouse import new_warehouse
         from ambry.warehouse.manifest import Manifest
-        import sqlite3
 
         wf = self.filesystem.build_path(self.identity.vname, 'warehouse.db')
 

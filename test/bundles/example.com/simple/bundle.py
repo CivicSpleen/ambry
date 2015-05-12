@@ -1,11 +1,11 @@
-'''
-'''
+"""
+"""
 
 from ambry.bundle import BuildBundle
 
 
 class Bundle(BuildBundle):
-    ''' '''
+    """ """
 
     def __init__(self, directory=None):
         super(Bundle, self).__init__(directory)
@@ -45,13 +45,13 @@ class Bundle(BuildBundle):
 
     def build_add_codes(self):
         raise Exception()
-        code_key = 0
-
-        for tn in ('example2', 'example3'):
-            t = self.schema.table(tn)
-
-            with self.session:
-                for c in t.columns:
-                    if c.datatype in (c.DATATYPE_INTEGER, c.DATATYPE_FLOAT) and c.name != 'id':
-                        code_key += 1
-                        cd = c.add_code(code_key, 'code val {}'.format(code_key))
+        # code_key = 0
+        #
+        # for tn in ('example2', 'example3'):
+        #     t = self.schema.table(tn)
+        #
+        #     with self.session:
+        #         for c in t.columns:
+        #             if c.datatype in (c.DATATYPE_INTEGER, c.DATATYPE_FLOAT) and c.name != 'id':
+        #                 code_key += 1
+        #                 cd = c.add_code(code_key, 'code val {}'.format(code_key))

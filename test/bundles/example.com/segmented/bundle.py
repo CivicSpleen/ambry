@@ -1,11 +1,11 @@
-'''
-'''
+"""
+"""
 
 from ambry.bundle import BuildBundle
 
 
 class Bundle(BuildBundle):
-    ''' '''
+    """ """
 
     records_per_segment = 5000
 
