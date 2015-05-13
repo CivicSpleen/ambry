@@ -1328,12 +1328,10 @@ class Identity(object):
             on = ObjectNumber.parse(d['vid'])
 
             if not on:
-                raise ValueError(
-                    "Failed to parse '{}' as an ObjectNumber ".format(d['vid']))
+                raise ValueError("Failed to parse '{}' as an ObjectNumber ".format(d['vid']))
 
         else:
-            raise ValueError(
-                "Must have id and revision, or vid. Got neither from {}".format(d))
+            raise ValueError("Must have id and revision, or vid. Got neither from {}".format(d))
 
         if isinstance(on, DatasetNumber):
 
@@ -1341,14 +1339,13 @@ class Identity(object):
                 name = cls._name_class(**d)
                 ident = cls(name, on)
             except TypeError as e:
-                raise TypeError("Failed to make identity from \n{}\n: {}".format(d,e.message))
+                raise TypeError("Failed to make identity from \n{}\n: {}".format(d, e.message))
 
         elif isinstance(on, PartitionNumber):
 
             ident = PartitionIdentity.from_dict(d)
         else:
-            raise TypeError(
-                "Can't make identity from {}; object number is wrong type: {}".format(d,type(on)))
+            raise TypeError("Can't make identity from {}; object number is wrong type: {}".format(d, type(on)))
 
         if 'md5' in d:
             ident.md5 = d['md5']

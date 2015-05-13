@@ -631,16 +631,12 @@ class BuildBundle(Bundle):
         if bundle_dir is None:
             import inspect
 
-            bundle_dir = os.path.abspath(
-                os.path.dirname(
-                    inspect.getfile(
-                        self.__class__)))
+            bundle_dir = os.path.abspath(os.path.dirname(inspect.getfile(self.__class__)))
 
         if bundle_dir is None or not os.path.isdir(bundle_dir):
             from ambry.dbexceptions import BundleError
 
-            raise BundleError("BuildBundle must be constructed on a cache. " +
-                              str(bundle_dir) + " is not a directory")
+            raise BundleError("BuildBundle must be constructed on a cache. " + str(bundle_dir) + " is not a directory")
 
         self.bundle_dir = bundle_dir
 
@@ -768,10 +764,7 @@ class BuildBundle(Bundle):
                 idents = self.metadata.identity.items()
 
             except KeyError as e:
-                raise ConfigurationError(
-                    "Bad bundle config in: {}: {} ".format(
-                        self.bundle_dir,
-                        e))
+                raise ConfigurationError("Bad bundle config in: {}: {} ".format(self.bundle_dir, e))
             except AttributeError:
                 raise AttributeError(
                     "Failed to get required sections of config.\nconfig_source = {}\n".format(self.config.source_ref))
