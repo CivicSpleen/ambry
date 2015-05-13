@@ -111,7 +111,7 @@ class Schema(object):
         from sqlalchemy.sql import or_, and_
 
         if not name_or_id:
-            raise ValueError("Got an invalid argument: {}".format(name_or_id))
+            raise ValueError("Got an invalid argument for name_or_id: '{}'".format(name_or_id))
 
         Table.mangle_name(name_or_id)
 
@@ -386,7 +386,8 @@ class Schema(object):
         from sqlalchemy import MetaData, UniqueConstraint, Index, text
         from sqlalchemy import Column as SAColumn
         from sqlalchemy import Table as SATable
-        # from sqlalchemy.orm.exc import NoResultFound
+        from dbexceptions import NotFoundError
+
 
         if use_fq_col_names:
             def col_name(c):
@@ -397,7 +398,10 @@ class Schema(object):
 
         metadata = MetaData()
 
-        table = cls.get_table_from_database(db, name_or_id, d_vid=d_vid, session=session)
+        try:
+            table = cls.get_table_from_database(db, name_or_id, d_vid = d_vid, session=session)
+        except NotFoundError:
+            raise NotFoundError("Did not find table '{}' in database {}".format(name_or_id, db.dsn))
 
         if alt_name and use_id:
             raise ConfigurationError("Can't specify both alt_name and use_id")
@@ -414,7 +418,9 @@ class Schema(object):
         indexes = {}
         uindexes = {}
         constraints = {}
-        # foreign_keys = {}
+        foreign_keys = {}
+
+        assert len(table.columns) > 0, "Tables can't have 0 columns: '{}'".format(table_name)
 
         for column in table.columns:
 
@@ -745,8 +751,10 @@ class Schema(object):
         from orm import Column
         from identity import ObjectNumber, NotObjectNumberError
         from collections import defaultdict
+        from dbexceptions import NotFoundError
 
-        q = (self.bundle.database.session.query(Column).filter(Column.proto_vid != None))
+        q = (self.bundle.database.session.query(Column)
+             .filter(Column.proto_vid != None).filter(Column.proto_vid != ''))
 
         pt_map = None
 
@@ -757,7 +765,6 @@ class Schema(object):
         for c in q.all():
 
             try:
-                # on = ObjectNumber.parse(c.proto_vid)
                 ObjectNumber.parse(c.proto_vid)
                 # Its all good.
 
@@ -773,7 +780,12 @@ class Schema(object):
                 c.proto_vid = pt_row['obj_number']
 
                 if pt_row['index_partition']:
-                    ip = self.bundle.library.get(pt_row['index_partition']).partition
+                    try:
+                        ip = self.bundle.library.get(pt_row['index_partition']).partition
+                    except NotFoundError:
+                        self.bundle.error(("Failed to get index '{}' while trying to expand proto_id for column"
+                        " {}.{} ").format(pt_row['index_partition'], c.table.name, c.name ))
+                        continue
 
                     for ipc in ip.table.columns:
 
@@ -1241,8 +1253,8 @@ class {name}(Base):
             w.writerow(header)
             for t in self.tables:
                 for c in t.columns:
-                    for cd in c._codes:
-                        row = [t.name, c.name, cd.key, cd.value, cd.description]
+                    for cd in c.codes:
+                        row = [ t.name,c.name,cd.key,cd.value,cd.description]
 
                         w.writerow(row)
                         count += 1
@@ -1257,12 +1269,17 @@ class {name}(Base):
         import csv
         from dbexceptions import NotFoundError
 
-        with open(self.bundle.filesystem.path('meta', self.bundle.CODE_FILE), 'r') as f:
+
+        with  open(self.bundle.filesystem.path('meta', self.bundle.CODE_FILE), 'r') as f:
 
             r = csv.DictReader(f)
             table = None
             column = None
             for row in r:
+
+                if not row['table'] or not row['column'] or not row['key']:
+
+                    continue
 
                 try:
                     if not table or table.name != row['table']:
@@ -1273,8 +1290,10 @@ class {name}(Base):
                         column = table.column(row['column'])
 
                     column.add_code(row['key'], row['value'], row['description'])
-                except NotFoundError:
-                    self.bundle.error("Skipping code '{}' for non existent table '{}".format(row['key'], row['table']))
+                except NotFoundError as e:
+                    self.bundle.error("Skipping code '{}' for {}.{} : {}"
+                                      .format(row['key'],row['table'],row['column'], e))
+
 
     @property
     def dict(self):
@@ -1422,13 +1441,6 @@ class {name}(Base):
                         table, name, datatype=type_map[type_], description=description,
                         size=col.length if type_ == str else None, data=dict(has_codes=1) if has_codes else {})
 
-                    if has_codes:
-                        if False:
-                            # This mostly just muchs up loading files be altering the header.
-                            self.add_column(table, name + '_codes', datatype='varchar',
-                                            description='Non-numeric codes extracted from the {} column'.format(name),
-                                            data={'is_code': 1},
-                                            derivedfrom=orm_col.id_)
 
         self.write_schema()
 

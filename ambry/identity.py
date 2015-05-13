@@ -112,7 +112,7 @@ class Name(object):
 
     @returns(str, debug=2)
     def _parse_version(self, version):
-        import semantic_version as sv  # @UnresolvedImport
+        import semantic_version as sv
 
         if version is not None and isinstance(version, basestring):
 
@@ -127,9 +127,9 @@ class Name(object):
                     try:
                         version = str(sv.Spec(version))
                     except ValueError:
-                        raise ValueError(
-                            "Could not parse '{}' as a semantic version".format(
-                                version))
+
+                        raise ValueError("Could not parse '{}' as a semantic version".format(version))
+
 
         if not version:
             version = str(sv.Version('0.0.0'))
@@ -727,7 +727,7 @@ class ObjectNumber(object):
             return None
 
         if not on_str:
-            raise Exception("Didn't get input")
+            raise NotObjectNumberError("Got null input")
 
         # if isinstance(on_str, unicode):
         #     dataset = on_str.encode('ascii')
@@ -741,18 +741,12 @@ class ObjectNumber(object):
             on_str = cls.TYPE.DATASET + on_str[1:]
 
         if type_ not in cls.NDS_LENGTH.keys():
-            raise NotObjectNumberError(
-                "Unknown type character '{}' for '{}'".format(
-                    type_,
-                    on_str))
+            raise NotObjectNumberError("Unknown type character '{}' for '{}'".format(type_,on_str))
 
         ds_length = len(on_str) - cls.NDS_LENGTH[type_]
 
         if ds_length not in cls.DATASET_LENGTHS:
-            raise NotObjectNumberError(
-                "Dataset string '{}' has an unfamiliar length: {}".format(
-                    on_str,
-                    ds_length))
+            raise NotObjectNumberError("Dataset string '{}' has an unfamiliar length: {}".format(on_str,ds_length))
 
         ds_lengths = cls.DATASET_LENGTHS[ds_length]
 
@@ -1049,12 +1043,8 @@ class TableNumber(ObjectNumber):
         return (
             ObjectNumber.TYPE.TABLE +
             self.dataset._ds_str() +
-            ObjectNumber.base62_encode(
-                self.table).rjust(
-                self.DLEN.TABLE,
-                '0') +
-            ObjectNumber._rev_str(
-                self.revision))
+            ObjectNumber.base62_encode(self.table).rjust(self.DLEN.TABLE,'0') +
+            ObjectNumber._rev_str( self.revision))
 
 
 class ColumnNumber(ObjectNumber):
@@ -1126,12 +1116,10 @@ class PartitionNumber(ObjectNumber):
         partition = int(partition)
 
         if not isinstance(dataset, DatasetNumber):
-            raise ValueError("Constructor requires a DatasetNumber")
+            raise ValueError("Constructor requires a DatasetNumber. Got '{}' ".format(dataset))
 
         if partition > ObjectNumber.PARTMAXVAL:
-            raise ValueError(
-                "Value is too large. Max is: {}".format(
-                    ObjectNumber.PARTMAXVAL))
+            raise ValueError("Value is too large. Max is: {}".format(ObjectNumber.PARTMAXVAL))
 
         self.dataset = dataset
         self.partition = partition
@@ -1327,15 +1315,12 @@ class Identity(object):
             # The vid should be constructed from the id and the revision
 
             if not d['id']:
-                raise ValueError(
-                    " 'id' key doesn't have a value in {} ".format(d))
+                raise ValueError(" 'id' key doesn't have a value in {} ".format(d))
 
             ono = ObjectNumber.parse(d['id'])
 
             if not ono:
-                raise ValueError(
-                    "Failed to parse '{}' as an ObjectNumber ".format(
-                        d['id']))
+                raise ValueError("Failed to parse '{}' as an ObjectNumber ".format(d['id']))
 
             on = ono.rev(d['revision'])
 
@@ -1344,8 +1329,7 @@ class Identity(object):
 
             if not on:
                 raise ValueError(
-                    "Failed to parse '{}' as an ObjectNumber ".format(
-                        d['vid']))
+                    "Failed to parse '{}' as an ObjectNumber ".format(d['vid']))
 
         else:
             raise ValueError(
@@ -1357,19 +1341,14 @@ class Identity(object):
                 name = cls._name_class(**d)
                 ident = cls(name, on)
             except TypeError as e:
-                raise TypeError(
-                    "Failed to make identity from \n{}\n: {}".format(
-                        d,
-                        e.message))
+                raise TypeError("Failed to make identity from \n{}\n: {}".format(d,e.message))
 
         elif isinstance(on, PartitionNumber):
 
             ident = PartitionIdentity.from_dict(d)
         else:
             raise TypeError(
-                "Can't make identity from {}; object number is wrong type: {}".format(
-                    d,
-                    type(on)))
+                "Can't make identity from {}; object number is wrong type: {}".format(d,type(on)))
 
         if 'md5' in d:
             ident.md5 = d['md5']
@@ -1644,6 +1623,8 @@ class Identity(object):
 
     @staticmethod
     def _compose_fqname(vname, vid):
+        assert vid is not None
+        assert vname is not None
         return vname + Identity.OBJECT_NUMBER_SEP + vid
 
     def as_partition(self, partition=0, **kwargs):

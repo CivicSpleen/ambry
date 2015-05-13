@@ -163,9 +163,7 @@ class Search(object):
         d = self.dataset_doc(bundle)
 
         if force:
-            self.dataset_writer.delete_by_term(
-                'vid', unicode(
-                    bundle.identity.vid))
+            self.dataset_writer.delete_by_term( 'vid', unicode( bundle.identity.vid))
 
         self.dataset_writer.add_document(**d)
 
@@ -292,6 +290,7 @@ class Search(object):
                     datasets[bvid].p_score += hit.score
                     datasets[bvid].partitions.add(vid)
 
+
         return datasets
 
     def make_query_from_terms(self, terms):
@@ -376,6 +375,8 @@ class Search(object):
         # that aren't from the source will get through, because the source is not applied to the partitions.
         # However, this could probalby be handled mroe simply by adding the source to
         # the partitions.
+        # FIXME. This doesn't work if the orig cterms does not include a bundle term.
+        # So 'counties with counties source oshpd' is OK, but 'with counties source oshpd' fails
         if source:
             cterms = " (type:b AND keywords:{} ) AND {}".format(source, cterms)
 

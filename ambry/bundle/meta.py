@@ -20,11 +20,21 @@ class About(DictGroup):
     rights = ScalarTerm(store_none=False)
     tags = ListTerm(store_none=False)
     groups = ListTerm(store_none=False)
+    source = ScalarTerm(store_none=False) # A text statement about the source of the data
+    footnote = ScalarTerm(store_none=False) # A footnote entry
+    processed = ScalarTerm(store_none=False) # A statement about how the data were processed.
+
 
 
 class Documentation(DictGroup):
     readme = ScalarTerm()
     main = ScalarTerm()
+    source = ScalarTerm(store_none=False)  # Expanded from about.source
+    footnote = ScalarTerm(store_none=False) # Expanded from about.footnote
+    processed = ScalarTerm(store_none=False)  # expanded from about.processed
+    title = ScalarTerm(store_none=False)  # expanded from about.title
+    summary = ScalarTerm(store_none=False)  # expanded from about.summary
+
 
 
 class Coverage(DictGroup):
@@ -35,6 +45,7 @@ class Coverage(DictGroup):
 
 class ContactTerm(DictTerm):
     name = ScalarTerm(store_none=False)
+    org = ScalarTerm(store_none=False)
     email = ScalarTerm(store_none=False)
     url = ScalarTerm(store_none=False)
 

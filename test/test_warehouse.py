@@ -135,7 +135,7 @@ class Test(TestBase):
         Install manifest with postgres
         """
 
-        # FIXME: Neet to figure out how to do this in a flexible way that can run on
+        # FIXME: Need to figure out how to do this in a flexible way that can run on
         # Travis-CI
         return
 

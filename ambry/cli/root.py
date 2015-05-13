@@ -88,9 +88,14 @@ def root_parser(cmd):
 def root_command(args, rc):
     from ..library import new_library
     from . import global_logger
+    from ambry.dbexceptions import DatabaseError
 
-    l = new_library(rc.library(args.library_name))
-    l.logger = global_logger
+    try:
+        l = new_library(rc.library(args.library_name))
+        l.logger = global_logger
+    except DatabaseError as e:
+        warn("No library: {}".format(e))
+        l = None
 
     globals()['root_' + args.subcommand](args, l, rc)
 
@@ -184,7 +189,7 @@ def root_list(args, l, rc):
 
 
 def root_info(args, l, rc):
-    from ..cli import _print_info
+    from ..cli import _print_info, err, fatal
     from ..dbexceptions import NotFoundError, ConfigurationError
     import ambry
 
@@ -200,12 +205,15 @@ def root_info(args, l, rc):
         try:
             if l.source:
                 print "Source :  {}".format(l.source.base_dir)
-        except ConfigurationError:
+        except (ConfigurationError, AttributeError):
             print "Source :  No source directory"
 
         print "Configs:  {}".format(rc.dict['loaded'])
 
         return
+
+    if not l:
+        fatal("No library, probably due to a configuration error")
 
     ident = l.resolve(args.term, location=locations)
 
@@ -224,7 +232,11 @@ def root_info(args, l, rc):
         # fatal("Could not find bundle file for '{}'".format(ident.path))
         pass
 
-    _print_info(l, ident, list_partitions=args.partitions)
+
+    # Always list partitions if there are 10 or fewer. If more, defer to the partitions flag
+    list_partitions = args.partitions if len(ident.partitions) > 10 else True
+
+    _print_info(l, ident, list_partitions=list_partitions)
 
 
 def root_meta(args, l, rc):
@@ -295,6 +307,7 @@ def root_sync(args, l, config):
 
 def root_search(args, l, config):
     # This will fetch the data, but the return values aren't quite right
+    from ambry.dbexceptions import NotFoundError
 
     term = ' '.join(args.term)
 
@@ -371,19 +384,23 @@ def root_search(args, l, config):
                 print result.score, result.vid, ds.name, ds.data.get('title'), list(result.partitions)[:5]
 
 
+
+
 def root_doc(args, l, rc):
-    from ambry.ui import app, configure_application
+
+    from ambry.ui import app, app_config
+    import ambry.ui.views as views
     import os
 
     import logging
     from logging import FileHandler
     import webbrowser
 
-    port = args.port if args.port else 8085
 
     cache_dir = l._doc_cache.path('', missing_ok=True)
 
-    config = configure_application(dict(port=port))
+    app_config['port'] = args.port if args.port else 8085
+
 
     file_handler = FileHandler(os.path.join(cache_dir, "web.log"))
     file_handler.setLevel(logging.WARNING)
@@ -394,7 +411,7 @@ def root_doc(args, l, rc):
     if not args.debug:
         # Don't open the browser on debugging, or it will re-open on every
         # application reload
-        webbrowser.open("http://localhost:{}/".format(port))
+        webbrowser.open("http://localhost:{}/".format(app_config['port']))
 
-    app.run(host=config['host'], port=int(port), debug=args.debug)
+    app.run(host=app_config['host'], port=int(app_config['port']), debug=args.debug)
 

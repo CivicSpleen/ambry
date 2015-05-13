@@ -83,6 +83,7 @@ def config_install(args, rc):
 
     if user == 'root':
         install_file = rc.ROOT_CONFIG
+        default_root = '/ambry'
     elif os.getenv('VIRTUAL_ENV'):  # Special case for python virtual environments
         install_file = os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')
         default_root = os.path.join(os.getenv('VIRTUAL_ENV'), 'data')
