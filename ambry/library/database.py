@@ -294,7 +294,7 @@ class LibraryDb(object):
                     raise Exception("Couldn't create directory " + dir_)
 
     def drop(self):
-        from sqlalchemy.exc import NoSuchTableError, ProgrammingError
+        from sqlalchemy.exc import NoSuchTableError, ProgrammingError, OperationalError
 
         if not self.enable_delete:
             raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
@@ -311,7 +311,7 @@ class LibraryDb(object):
         try:
             self.session.query(Table).update({Table.p_vid: None})
             self.session.commit()
-        except ProgrammingError: # Table doesn't exist.
+        except (ProgrammingError, OperationalError): # Table doesn't exist.
             self._session.rollback()
             pass
 
