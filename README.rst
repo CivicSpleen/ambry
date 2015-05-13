@@ -4,7 +4,8 @@ Ambry Databundles
 Install
 =======
 
-See: http://ambry.io
+See http://ambry.io for the general documentation, http://docs.ambry.io/en/latest/install_config/install.html for instgallation, 
+and http://docs.ambry.io/en/latest/install_config/configuration.html for additional configuration. 
 
 Setup with Miniconda on Mac
 ===========================
@@ -53,3 +54,11 @@ Running the ambry tests
     $ cd ambry
     $ pip install -r requirements/dev.txt
     $ python setup.py test
+
+Test command options:
+  --verbosity - verbosity of the tests, 1 by default.
+  --failfast - if given, stop testing on first fail.
+
+Examples:
+.. code-block:: bash
+    $ python setup.py test --verbosity=2 --failfast

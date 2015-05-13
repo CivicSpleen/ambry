@@ -5,8 +5,6 @@ included in this distribution as LICENSE.txt
 
 """
 
-from ..cli import prt
-
 
 def ckan_parser(cmd):
     lib_p = cmd.add_parser('ckan', help='Access a CKAN repository')
@@ -41,7 +39,7 @@ def ckan_parser(cmd):
 
 
 def ckan_command(args, rc):
-    from ambry.dbexceptions import ConfigurationError
+    # TODO: Where is ambry.client package?
     import ambry.client.ckan
     import requests
 

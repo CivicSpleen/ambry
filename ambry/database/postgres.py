@@ -56,7 +56,8 @@ class PostgresDatabase(RelationalDatabase):
         """
         Add a search document to the full-text search index.
 
-        :param vid: Versioned ID for the object. Should be a dataset, partition table or column
+        :param vid: Versioned ID for the object. Should be a dataset, partition
+                    table or column
         :param topic: A text document or description.
         :param keywords: A list of keywords
         :return:

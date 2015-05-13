@@ -55,17 +55,18 @@ class Kernel(object):
         # This assumes that there is a radial gradient.
 
         for (x_m, y_m), value in np.ndenumerate(self.matrix):
-            if math.sqrt((x_m - self.center) ** 2 + (y_m - self.center) ** 2) > float(self.size) / 2.:
+            if math.sqrt((x_m - self.center) ** 2 + (y_m - self.center) ** 2) \
+                    > float(self.size) / 2.:
                 self.matrix[y_m][x_m] = 0
 
     def norm(self):
-        #self.matrix /= sum(self.matrix)
+        # self.matrix /= sum(self.matrix)
         self.matrix /= self.matrix.max()
 
     def invert(self):
         """'Invert the values, so the cells closer to the center have the
         higher values."""
-        #range = self.matrix.max() - self.matrix.min()
+        # range = self.matrix.max() - self.matrix.min()
 
         self.matrix = self.matrix.max() - self.matrix
         self.inverted = ~self.inverted
@@ -106,7 +107,7 @@ class Kernel(object):
 
         if point.x < self.offset:
             if point.x < 0:
-                return (False, None, None, None, None)
+                return False, None, None, None, None
 
             x_start = max(point.x - self.offset, 0)
             x_end = point.x + self.offset + 1
@@ -115,7 +116,7 @@ class Kernel(object):
 
         elif point.x + self.offset + 1 > x_max:
             if point.x > x_max:
-                return (False, None, None, None, None)
+                return False, None, None, None, None
 
             x_start = point.x - self.offset
             x_end = min(point.x + self.offset + 1, x_max)
@@ -130,20 +131,20 @@ class Kernel(object):
 
         if point.y < self.offset:
             if point.y < 0:
-                return (False, None, None, None, None)
+                return False, None, None, None, None
 
             y_start = max(point.y - self.offset, 0)
             y_end = point.y + self.offset + 1
             m = sm[(self.offset - point.y):sm.shape[0], :]
-            use_m = True
+            # use_m = True
         elif point.y + self.offset + 1 > y_max:
             if point.y > y_max:
-                return (False, None, None, None, None)
+                return False, None, None, None, None
 
             y_start = point.y - self.offset
             y_end = point.y + self.offset + 1
             m = sm[0:sm.shape[0] + (y_max - point.y - self.offset) - 1, :]
-            use_m = True
+            # use_m = True
         else:
             y_start = point.y - self.offset
             y_end = point.y + self.offset + 1
@@ -151,7 +152,7 @@ class Kernel(object):
         if m is None:
             m = self.matrix
 
-        return (m, y_start, y_end, x_start, x_end)
+        return m, y_start, y_end, x_start, x_end
 
     @property
     def dindices(self):
@@ -167,7 +168,8 @@ class Kernel(object):
                 indices.append(i)
 
             self._dindices = sorted(
-                indices, key=lambda i: math.sqrt((i[0] - c) ** 2 + (i[1] - c) ** 2))
+                indices,
+                key=lambda i: math.sqrt((i[0] - c) ** 2 + (i[1] - c) ** 2))
 
         return self._dindices
 
@@ -186,11 +188,14 @@ class Kernel(object):
 
         :param a: The array to apply to
         :type a: numpy.array
-        :param source: The source for reading data. Must have same dimensions as a
+        :param source: The source for reading data.
+                       Must have same dimensions as a
         :type a: numpy.array
-        :param f: A two argument function that decides which value to apply to the array
+        :param f: A two argument function that decides which value to apply
+                  to the array
         :type f: callable
-        :param point: The point, in the array coordinate system, where the center of the
+        :param point: The point, in the array coordinate system, where
+                      the center of the
         kernel will be applied
         :type point: Point
         :param v: External value to be passed into the function
@@ -215,8 +220,7 @@ class Kernel(object):
         else:
             raise OutOfBounds(
                 "Point {} is out of bounds for this array ( {} )".format(
-                    str(point), str(
-                        a.shape)))
+                    str(point), str(a.shape)))
 
     def iterate(self, a, indices=None):
         """Iterate over kernel sized arrays of the input array.
@@ -231,7 +235,8 @@ class Kernel(object):
             while not it.finished:
                 (m, y_start, y_end, x_start, x_end) = self.bounds(
                     a, Point(it.multi_index[1], it.multi_index[0]))
-                yield it.multi_index[0], it.multi_index[1], a[y_start:y_end, x_start:x_end], m
+                yield it.multi_index[0], it.multi_index[1], a[y_start:y_end,
+                                                              x_start:x_end], m
                 it.iternext()
         else:
             for y, x in zip(indices[0], indices[1]):
@@ -301,7 +306,8 @@ class GaussianKernel(Kernel):
         y = x[:, np.newaxis]
         x0 = y0 = size // 2
         ar = np.array(
-            np.exp(-4 * np.log(2) * ((x - x0) ** 2 + (y - y0) ** 2) / fwhm ** 2))
+            np.exp(-4 * np.log(2) * ((x - x0) ** 2 + (y - y0) ** 2) /
+                   fwhm ** 2))
         # mask less than the value at the edge to make it round.
         m = np.ma.masked_less(ar, ar[0, x0 + 1]).filled(0)
 
@@ -322,10 +328,11 @@ class DistanceKernel(Kernel):
 
         self.inverted = False
 
-        #self.matrix = ma.masked_array(zeros((size,size)), mask=True, dtype=float)
+        # self.matrix =
+        # ma.masked_array(zeros((size,size)), mask=True, dtype=float)
         self.matrix = np.zeros((size, size), dtype=float)
 
-        row_max = size - self.center - 1  # Max value on a horix or vert edge
+        # row_max = size - self.center - 1  # Max value on a horix or vert edge
 
         for (y_m, x_m), value in np.ndenumerate(self.matrix):
             r = np.sqrt((y_m - self.center) ** 2 + (x_m - self.center) ** 2)
@@ -344,11 +351,14 @@ class MostCommonKernel(ConstantKernel):
 
         :param a: The array to apply to
         :type a: numpy.array
-        :param source: The source for reading data. Must have same dimensions as a
+        :param source: The source for reading data. Must have same
+                       dimensions as a
         :type a: numpy.array
-        :param f: A two argument function that decides which value to apply to the array
+        :param f: A two argument function that decides which value to apply to
+                  the array
         :type f: callable
-        :param point: The point, in the array coordinate system, where the center of the
+        :param point: The point, in the array coordinate system, where the
+                      center of the
         kernel will be applied
         :type point: Point
         :param v: External value to be passed into the function
@@ -356,9 +366,9 @@ class MostCommonKernel(ConstantKernel):
 
         """
 
-        if v:
-            from functools import partial
-            f = partial(f, v)
+        # if v:
+        #     from functools import partial
+        #     f = partial(f, v)
 
         (m, y_start, y_end, x_start, x_end) = self.bounds(a, point)
 

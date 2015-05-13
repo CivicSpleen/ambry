@@ -41,9 +41,9 @@ class PartitionDb(
         self._session = None
 
         assert partition.identity.extension() == self.EXTENSION, (
-            "Identity extension '{}' not same as db extension '{}' for database {}".format(
-                partition.identity.extension(), self.EXTENSION, type(self)
-            ))
+            "Identity extension '{}' not same as db extension '{}' "
+            "for database {}".format(partition.identity.extension(),
+                                     self.EXTENSION, type(self)))
 
     def query(self, *args, **kwargs):
         """Convenience function for self.connection.execute()"""
@@ -79,13 +79,13 @@ class PartitionDb(
 
             table_name = table_or_name
 
-            if not table_name in self.inspector.get_table_names():
+            if table_name not in self.inspector.get_table_names():
 
                 t_meta, table = self.bundle.schema.get_table_meta(
                     table_name)  # @UnusedVariable
                 table.create(bind=self.engine)
 
-                if not table_name in self.inspector.get_table_names():
+                if table_name not in self.inspector.get_table_names():
                     raise Exception("Don't have table " + table_name)
 
             table = self.table(table_name)
@@ -102,16 +102,14 @@ class PartitionDb(
         _on_connect_partition(connection, None)
 
     def _on_create_engine(self, engine):
-        from sqlalchemy import event
-
         super(PartitionDb, self)._on_create_engine(engine)
 
         # This looks like it should be connected to the listener, but it causes
         # I/O errors, so it is in _on_create_connection
-        #event.listen(self._engine, 'connect', _on_connect_partition)
+        # event.listen(self._engine, 'connect', _on_connect_partition)
 
     def create(self):
-        from ambry.orm import Dataset
+        # from ambry.orm import Dataset
 
         '''Like the create() for the bundle, but this one also copies
         the dataset and makes and entry for the partition '''
@@ -126,7 +124,7 @@ class PartitionDb(
 
 def _on_connect_partition(dbapi_con, con_record):
     """ISSUE some Sqlite pragmas when the connection is created."""
-    from sqlite import _on_connect_bundle as ocb
+    # from sqlite import _on_connect_bundle as ocb
 
     dbapi_con.execute('PRAGMA page_size = 8192')
     dbapi_con.execute('PRAGMA temp_store = MEMORY')

@@ -5,7 +5,7 @@ included in this distribution as LICENSE.txt
 
 """
 
-import sys
+# import sys
 from ..identity import PartitionIdentity, PartitionName
 from sqlite import SqlitePartition
 
@@ -50,10 +50,14 @@ class GeoPartition(SqlitePartition):
         # !! Assumes only one layer!
 
         try:
-            q = "select srs_wkt, spatial_ref_sys.srid from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
+            q = "select srs_wkt, spatial_ref_sys.srid " \
+                "from geometry_columns, spatial_ref_sys " \
+                "where spatial_ref_sys.srid == geometry_columns.srid;"
             return self.database.query(q).first()
         except:
-            q = "select srtext, spatial_ref_sys.srid from geometry_columns, spatial_ref_sys where spatial_ref_sys.srid == geometry_columns.srid;"
+            q = "select srtext, spatial_ref_sys.srid " \
+                "from geometry_columns, spatial_ref_sys " \
+                "where spatial_ref_sys.srid == geometry_columns.srid;"
             return self.database.query(q).first()
 
     def get_srs_wkt(self):
@@ -110,7 +114,7 @@ class GeoPartition(SqlitePartition):
         """Convert a spatialite geopartition to a regular arg
         by extracting the geometry and re-projecting it to WGS84
 
-        :param config: a `RunConfig` object
+        # :param config: a `RunConfig` object
         :rtype: a `LibraryDb` object
 
         :param config: a `RunConfig` object
@@ -208,7 +212,8 @@ class GeoPartition(SqlitePartition):
 
         # local csv module shadows root #@UndefinedVariable
         rdr = csv.reader(stdout.decode('ascii').splitlines())
-        header = rdr.next()
+        # header = rdr.next()
+        rdr.next()
 
         if not progress_f:
             progress_f = lambda x: x
@@ -234,7 +239,7 @@ class GeoPartition(SqlitePartition):
 
         if clauses:
 
-            self.database.connection.execute( "UPDATE {} SET {}".format( table.name,  ','.join(clauses)))
+            self.database.connection.execute("UPDATE {} SET {}".format(table.name,  ','.join(clauses)))
 
     def load_shapefile(self, path, logger=None):
         """Load a shapefile into the partition. Loads the features and inserts
@@ -245,7 +250,7 @@ class GeoPartition(SqlitePartition):
 
         """
 
-        from osgeo import ogr, osr
+        from osgeo import ogr  # , osr
         from ..geo.sfschema import ogr_inv_type_map, mangle_name
         from ..orm import Column, Geometry
         from ..geo.util import get_type_from_geometry

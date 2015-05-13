@@ -282,7 +282,7 @@ class GitRepository(RepositoryInterface):
 
         if not self.service.has(self.name):
             pass
-            #raise ConfigurationError("Repo {} already exists. Checkout instead?".format(self.name))
+            # raise ConfigurationError("Repo {} already exists. Checkout instead?".format(self.name))
             self.bundle.log("Creating repository: {}".format(self.name))
             self.service.create(self.name)
 
@@ -552,7 +552,7 @@ class GitRepository(RepositoryInterface):
         final = []
 
         for n in reversed(out):
-            if not n in final:
+            if n not in final:
                 final.append(n)
 
         return final

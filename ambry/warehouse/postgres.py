@@ -5,9 +5,9 @@ included in this distribution as LICENSE.txt
 
 """
 
-from ..dbexceptions import DependencyError
+# from ..dbexceptions import DependencyError
 from . import Warehouse
-from ..library.database import LibraryDb
+# from ..library.database import LibraryDb
 
 
 class PostgresWarehouse(Warehouse):
@@ -39,7 +39,8 @@ class PostgresWarehouse(Warehouse):
         db = self.database
 
         ogr_dsn = (
-            "PG:'dbname={dbname} user={username} host={host} password={password}'" .format(
+            "PG:'dbname={dbname} user={username} host={host} "
+            "password={password}'" .format(
                 username=db.username,
                 password=db.password,
                 host=db.server,

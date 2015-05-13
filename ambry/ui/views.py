@@ -28,12 +28,7 @@ def css_file(name):
 def js_file(path):
     import os.path
 
-    return send_from_directory(
-        *
-        os.path.split(
-            os.path.join(
-                renderer().js_dir,
-                path)))
+    return send_from_directory(*os.path.split(os.path.join(renderer().js_dir,path)))
 
 
 @app.route('/')
@@ -169,13 +164,12 @@ def get_extract(wid, tid, ct):
 def get_sample(wid, tid, ct):
     """Return an extract for a table."""
 
-    from os.path import basename, dirname
+    # from os.path import basename, dirname
     from ambry.dbexceptions import NotFoundError
 
     try:
-
-        path, attach_filename = warehouse(
-            wid).extract_table(tid, content_type='json')
+        warehouse(wid).extract_table(tid, content_type='json')
+        # path, attach_filename = warehouse(wid).extract_table(tid, content_type='json')
 
     except NotFoundError:
         abort(404)

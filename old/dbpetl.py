@@ -3,55 +3,54 @@
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
-import  petl
+import petl
+
 
 def follow(table, func, **kwargs):
     """
     Call a function for each non header row
-    """   
- 
+    """
+
     return FollowView(table, func, **kwargs)
 
 
-
 class FollowView(petl.util.RowContainer):
-    
     def __init__(self, source, f):
         self.source = source
         self.f = f
-        
+
     def cachetag(self):
         return self.source.cachetag()
-    
+
     def __iter__(self):
-     
         for r in self.source:
             self.f(r)
             yield r
-   
+
+
 def mogrify(table, func, **kwargs):
     """
     Call a function for each row and replace the
     row with the one returned by the function
-    """   
- 
+    """
+
     return MogrifyView(table, func, **kwargs)
 
+
 class MogrifyView(petl.util.RowContainer):
-    
     def __init__(self, source, f):
         self.source = source
         self.f = f
-        
+
     def cachetag(self):
         return self.source.cachetag()
-    
+
     def __iter__(self):
         itr = iter(self.source)
-        yield  itr.next() # Header
+        yield itr.next()  # Header
         for r in itr:
             yield self.f(r)
-   
+
 
 def fromregex(source, *args, **kwargs):
     """
@@ -104,13 +103,12 @@ def fromregex(source, *args, **kwargs):
 
 
 class RegexLineView(petl.util.RowContainer):
-    
     def __init__(self, source, *args, **kwargs):
         self.source = source
         self.args = args
         self.kwargs = kwargs
         self.header = None
-    
+
         if 'regex' in kwargs:
             self.regex = kwargs['regex']
 
@@ -118,29 +116,27 @@ class RegexLineView(petl.util.RowContainer):
             self.header = kwargs['header']
         else:
             raise Exception('fromregex() requires a header')
-        
-        
+
     def __iter__(self):
-           
+
         yield tuple(self.header)
-        
+
         with self.source.open_() as f:
             for line in f:
                 m = self.regex.match(line)
-                if m:            
-                    yield  m.groups()
+                if m:
+                    yield m.groups()
                 else:
-                    raise ValueError("Failed to match regex on line: "+line)
-                    
+                    raise ValueError("Failed to match regex on line: " + line)
+
     def cachetag(self):
         try:
-            return hash((self.source.checksum(), self.args, tuple(self.kwargs.items())))
+            return hash(
+                (self.source.checksum(), self.args, tuple(self.kwargs.items())))
         except Exception as e:
             raise Exception(e)
 
 
-
-  
 #
 # Fluentize
 #
@@ -156,4 +152,3 @@ from petl.fluent import FluentWrapper, wrap
 for n, c in sys.modules[__name__].__dict__.items():
     if callable(c):
         setattr(FluentWrapper, n, wrap(c)) 
-        

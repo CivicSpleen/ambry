@@ -1,11 +1,11 @@
 """ Bundle variants that directly load files with little additional processing.
 """
 
-from  ambry.bundle import BuildBundle
+from ambry.bundle import BuildBundle
 from rowgen import RowSpecIntuiter
 
-class LoaderBundle(BuildBundle):
 
+class LoaderBundle(BuildBundle):
     row_gen_ext_map = {
         'xlsm': 'xls',
         'xlsx': 'xls'
@@ -65,10 +65,10 @@ class LoaderBundle(BuildBundle):
         if not n:
             return 'column{}'.format(i)
 
-        mn =  Column.mangle_name(n.strip())
+        mn = Column.mangle_name(n.strip())
 
         if mn in self.col_map:
-            col =  self.col_map[mn]['col']
+            col = self.col_map[mn]['col']
             if col:
                 return col
             else:
@@ -80,7 +80,7 @@ class LoaderBundle(BuildBundle):
     def mangle_header(self, header):
         """Transform the header as it comes from the raw row generator into a column name"""
 
-        return [ self.mangle_column_name(i,n) for i,n in enumerate(header)]
+        return [self.mangle_column_name(i, n) for i, n in enumerate(header)]
 
     def build_create_partition(self, source_name):
         """Create or find a partition based on the source
@@ -106,12 +106,11 @@ class LoaderBundle(BuildBundle):
         if source.grain:
             kwargs['grain'] = source.grain
 
-        p =  self.partitions.find_or_new(table=table)
+        p = self.partitions.find_or_new(table=table)
 
         with self.session:
-            if not 'source_data' in p.record.data:
+            if 'source_data' not in p.record.data:
                 p.record.data['source_data'] = {}
-
             p.record.data['source_data'][source_name] = source.dict
 
         return p
@@ -140,24 +139,17 @@ class LoaderBundle(BuildBundle):
         return fn
 
     def row_gen_for_source(self, source_name):
-        from os.path import dirname, split, splitext
-        from ..dbexceptions import BuildError
+        from os.path import split, splitext
 
         source = self.metadata.sources[source_name]
 
-        dfn = fn = self.filesystem.download(source_name)
-
+        fn = self.filesystem.download(source_name)
 
         if fn.endswith('.zip'):
-
             sub_file = source.file
+            fn = self.filesystem.unzip(fn, regex=sub_file)
 
-            fn = self.filesystem.unzip(fn, regex = sub_file)
-
-        if not fn:
-           raise BuildError("Didn't get file out of zip file '{}'. Regex = '{}'".format(dfn, sub_file))
-
-        base_dir, file_name  = split(fn)
+        base_dir, file_name = split(fn)
         file_base, ext = splitext(file_name)
 
         if source.filetype:
@@ -166,7 +158,9 @@ class LoaderBundle(BuildBundle):
             if ext.startswith('.'):
                 ext = ext[1:]
 
-            ext = self.row_gen_ext_map.get(ext,ext)
+            ext = self.row_gen_ext_map.get(ext, ext)
+
+        print '!!!!', ext, source.filetype
 
         if source.row_spec.dict:
             rs = source.row_spec.dict
@@ -176,20 +170,19 @@ class LoaderBundle(BuildBundle):
         if source.segment:
             rs['segment'] = source.segment
 
-
         rs['header_mangler'] = lambda header: self.mangle_header(header)
 
         if ext == 'csv':
             from rowgen import DelimitedRowGenerator
 
             return DelimitedRowGenerator(fn, **rs)
-        elif ext  == 'xls':
+        elif ext == 'xls':
             from rowgen import ExcelRowGenerator
+
             return ExcelRowGenerator(fn, **rs)
         else:
             raise Exception("Unknown source file extension: '{}' for file '{}' from source {} "
-                            .format(ext,  file_name, source_name))
-
+                            .format(ext, file_name, source_name))
 
     def make_table_for_source(self, source_name):
 
@@ -201,19 +194,19 @@ class LoaderBundle(BuildBundle):
 
         table = self.schema.add_table(table_name, description=table_desc)
 
-        self.schema.add_column(table, 'id', datatype = 'integer', description = table_desc, is_primary_key = True)
+        self.schema.add_column(table, 'id', datatype='integer', description=table_desc, is_primary_key=True)
 
         self.log("Created table {}".format(table.name))
 
-        if  source.grain:
+        if source.grain:
             with self.session:
                 if 'grain' in table.data and table.data['grain'] != source.grain:
                     raise BuildBundle("Table '{}' has grain '{}' conflicts with source '{}' grain of '{}'"
-                                      .format(table_name,table.data['grain'], source_name, source.grain ))
+                                      .format(table_name, table.data['grain'], source_name, source.grain))
 
                 table.data['grain'] = source.grain
 
-        return self.schema.table(table_name) # The session in 'if source.grain' may expire table, so refresh
+        return self.schema.table(table_name)  # The session in 'if source.grain' may expire table, so refresh
 
     def meta_set_row_specs(self, row_intuitier_class=RowSpecIntuiter):
         """
@@ -243,23 +236,21 @@ class LoaderBundle(BuildBundle):
 
         # A proto terms map, for setting grains
         pt = self.library.get('civicknowledge.com-proto-proto_terms').partition
-        pt_map = {r['name']: r['obj_number'] for r in pt.rows}
+        {r['name']: r['obj_number'] for r in pt.rows}
 
         self.database.create()
 
         tables = defaultdict(set)
 
         # First, load in the protoschema, to get prefix columns for each table.
-
         sf_path = self.filesystem.path('meta', self.PROTO_SCHEMA_FILE)
 
         if os.path.exists(sf_path):
             with open(sf_path, 'rbU') as f:
-                warnings, errors = self.schema.schema_from_file(f)
+                self.schema.schema_from_file(f)
 
         if not self.run_args.get('clean', None):
             self._prepare_load_schema()
-
 
         # Collect all of the sources for each table, while also creating the tables
         for source_name, source in self.metadata.sources.items():
@@ -272,12 +263,11 @@ class LoaderBundle(BuildBundle):
 
         self.schema.write_schema()
 
-
         intuiters = defaultdict(Intuiter)
 
         # Intuit all of the tables
 
-        for table_name, sources in  tables.items():
+        for table_name, sources in tables.items():
 
             intuiter = intuiters[table_name]
 
@@ -286,7 +276,7 @@ class LoaderBundle(BuildBundle):
             for source_name in sources:
 
                 try:
-                    fn = self.filesystem.download(source_name)
+                    self.filesystem.download(source_name)
                 except urllib2.HTTPError:
                     self.error("Failed to download url for source: {}".format(source_name))
                     continue
@@ -300,10 +290,8 @@ class LoaderBundle(BuildBundle):
 
             self.schema.update_from_intuiter(table_name, intuiter)
 
-
             # Write the first 50 lines of the csv file, to see what the intuiter got from the
             # raw-row-gen
-
             with open(self.filesystem.build_path('{}-raw-rows.csv'.format(table_name)), 'w') as f:
                 rg = self.row_gen_for_source(source_name)
                 rrg = rg.raw_row_gen
@@ -316,7 +304,6 @@ class LoaderBundle(BuildBundle):
                     w.writerow(list(row))
 
             # Now write the first 50 lines from the row gen, after appliying the row spec
-
             with open(self.filesystem.build_path('{}-specd-rows.csv'.format(table_name)), 'w') as f:
                 rg = self.row_gen_for_source(source_name)
 
@@ -331,8 +318,7 @@ class LoaderBundle(BuildBundle):
                     w.writerow(list(row))
 
             # Write an intuiter report, to review how the intuiter made it's decisions
-            with open(self.filesystem.build_path('{}-intuit-report.csv'.format(table_name)),'w') as f:
-
+            with open(self.filesystem.build_path('{}-intuit-report.csv'.format(table_name)), 'w') as f:
                 w = csv.DictWriter(f, ("name length resolved_type has_codes count ints "
                                        "floats strs nones datetimes dates times strvals".split()))
                 w.writeheader()
@@ -352,28 +338,27 @@ class LoaderBundle(BuildBundle):
             # Don't add the columns that are already mapped.
             mapped_domain = set(item['col'] for item in col_map.values())
 
+            # TODO: do we need this loop here?
             for table_name, sources in tables.items():
                 rg = self.row_gen_for_source(source_name)
 
-                header = rg.header # Also sets unmangled_header
+                header = rg.header  # Also sets unmangled_header
 
-                descs = [ x.replace('\n','; ') for x in (rg.unmangled_header if rg.unmangled_header else header)]
+                descs = [x.replace('\n', '; ') for x in (rg.unmangled_header if rg.unmangled_header else header)]
 
-                for col_name, desc  in zip(header, descs):
+                for col_name, desc in zip(header, descs):
                     k = col_name.strip()
 
-                    if not k in col_map and not col_name in mapped_domain:
+                    if k not in col_map and col_name not in mapped_domain:
                         col_map[k] = dict(header=k, col='')
 
             # Write back out
             with open(self.col_map_fn, 'w') as f:
 
-                w = csv.DictWriter(f, fieldnames = ['header', 'col'])
+                w = csv.DictWriter(f, fieldnames=['header', 'col'])
                 w.writeheader()
                 for k in sorted(col_map.keys()):
                     w.writerow(col_map[k])
-
-
         return True
 
     def build_modify_row(self, row_gen, p, source, row):
@@ -403,7 +388,7 @@ class LoaderBundle(BuildBundle):
 
         columns = [c.name for c in p.table.columns]
 
-        row_gen =  self.row_gen_for_source(source_name)
+        row_gen = self.row_gen_for_source(source_name)
 
         header = row_gen.header
 
@@ -425,7 +410,7 @@ class LoaderBundle(BuildBundle):
                 errors = ins.insert(d)
 
                 if errors:
-                    self.error("Casting error for {}: {}".format(source_name,errors))
+                    self.error("Casting error for {}: {}".format(source_name, errors))
 
     def build(self):
         for source_name in self.metadata.sources:
@@ -436,29 +421,29 @@ class LoaderBundle(BuildBundle):
 
         return True
 
+
 class CsvBundle(LoaderBundle):
     """A Bundle variant for loading CSV files"""
 
     pass
 
+
 class ExcelBuildBundle(CsvBundle):
     pass
 
-class TsvBuildBundle(CsvBundle):
 
+class TsvBuildBundle(CsvBundle):
     delimiter = '\t'
 
     def __init__(self, bundle_dir=None):
-        '''
-        '''
+        """
+        """
 
         super(TsvBuildBundle, self).__init__(bundle_dir)
-
 
     def get_source(self, source):
         """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
         and look in the source store cache """
-        import os
 
         if not source:
             source = self.metadata.sources.keys()[0]
@@ -470,14 +455,15 @@ class TsvBuildBundle(CsvBundle):
 
         return fn
 
+
 class GeoBuildBundle(LoaderBundle):
     """A Bundle variant that loads zipped Shapefiles"""
+
     def __init__(self, bundle_dir=None):
-        '''
-        '''
+        """
+        """
 
         super(GeoBuildBundle, self).__init__(bundle_dir)
-
 
     def meta(self):
         from ambry.geo.sfschema import copy_schema
@@ -490,7 +476,6 @@ class GeoBuildBundle(LoaderBundle):
             self.log(x)
 
         for table, item in self.metadata.sources.items():
-
             with self.session:
                 copy_schema(self.schema, table_name=table, path=item.url, logger=log)
 
@@ -516,14 +501,13 @@ class GeoBuildBundle(LoaderBundle):
 
                 if not table:
                     table = source_name
-
             except:
                 table = source_name
 
             p = self.partitions.new_geo_partition(table=table, shape_file=source.url, s_srs=s_srs, logger=lr)
 
             with self.session:
-                if not 'source_data' in p.record.data:
+                if 'source_data' not in p.record.data:
                     p.record.data['source_data'] = {}
 
                 p.record.data['source_data'][source_name] = source.dict

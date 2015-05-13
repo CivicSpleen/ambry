@@ -2,14 +2,13 @@
 Example bundle that builds a single partition with a table of random numbers
 '''
 
-from  ambry.bundle import BuildBundle
+from ambry.bundle import BuildBundle
  
-
 
 class Bundle(BuildBundle):
     ''' '''
 
-    def __init__(self,directory=None):
+    def __init__(self, directory=None):
 
         super(Bundle, self).__init__(directory)
 
@@ -22,13 +21,12 @@ class Bundle(BuildBundle):
         lr = self.init_log_rate()
 
         for t in ("level3_1", "level3_2"):
-            p = self.partitions.new_partition(table = t)
+            p = self.partitions.new_partition(table=t)
 
             with p.database.inserter() as ins:
                 for row in in_p.rows:
                 
                     ins.insert(dict(row))
                     lr()
-
         return True
 
