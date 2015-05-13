@@ -9,7 +9,7 @@ import fudge
 from fudge.inspector import arg
 
 from sqlalchemy.engine.reflection import Inspector
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm.query import Query
 
 from ambry.library.database import LibraryDb, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME
@@ -195,6 +195,41 @@ class LibraryDbTest(unittest.TestCase):
     def test_sqlite_database_does_not_exists_if_file_not_found(self):
         db = LibraryDb(driver='sqlite', dbname='no-such-file.db')
         self.assertFalse(db.exists())
+
+    def test_returns_false_if_dataset_does_not_exist(self):
+        self.sqlite_db.create_tables()
+        query = "SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)
+        self.assertIsNone(self.sqlite_db.connection.execute(query).fetchone())
+        ret = self.sqlite_db.exists()
+        self.assertFalse(ret)
+
+    def test_returns_false_if_datasets_table_does_not_exist(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        self._assert_spec(self.sqlite_db.connection.execute, ['self', 'object'])
+
+        # prepare state
+        statement = 'select 1'
+        params = []
+
+        self.sqlite_db.connection.execute = fudge.Fake()\
+            .expects_call()\
+            .raises(ProgrammingError(statement, params, 'orig'))
+
+        # testing.
+        ret = self.sqlite_db.exists()
+        self.assertFalse(ret)
+
+    def test_returns_true_if_root_config_dataset_exists(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        # prepare state
+        self.sqlite_db.create_tables()
+        root_config_ds = DatasetFactory()
+        root_config_ds.vid = ROOT_CONFIG_NAME_V
+        self.sqlite_db.session.commit()
+
+        # testing.
+        ret = self.sqlite_db.exists()
+        self.assertTrue(ret)
 
     # clean tests
     def test_clean_deletes_all_instances(self):
@@ -755,3 +790,204 @@ class LibraryDbTest(unittest.TestCase):
 
         with self.assertRaises(ConflictError):
             self.sqlite_db.install_dataset_identity(FakeIdentity(), overwrite=True)
+
+    # .mark_table_installed tests
+    def test_marks_table_as_installed(self):
+        # prepare state
+        self.sqlite_db.create_tables()
+        self.sqlite_db.session.commit()
+
+        ds1 = DatasetFactory()
+        table1 = TableFactory(dataset=ds1)
+        assert table1.installed is None
+
+        # test
+        self.sqlite_db.mark_table_installed(table1.vid)
+        self.assertEqual(
+            self.sqlite_db.session.query(Table).filter_by(vid=table1.vid).one().installed,
+            'y')
+
+    # .mark_partition_installed tests
+    def test_marks_partition_as_installed(self):
+        # prepare state
+        self.sqlite_db.create_tables()
+        self.sqlite_db.session.commit()
+
+        ds1 = DatasetFactory()
+        partition1 = PartitionFactory(dataset=ds1)
+        assert partition1.installed is None
+
+        # test
+        self.sqlite_db.mark_partition_installed(partition1.vid)
+        self.assertEqual(
+            self.sqlite_db.session.query(Partition).filter_by(vid=partition1.vid).one().installed,
+            'y')
+
+    # .remove_bundle tests
+    @unittest.skip('Where is Library.get_id definition?')
+    def test_removes_all_partitions(self):
+        pass
+
+    @unittest.skip('Where is Library.get_id definition?')
+    def test_deletes_dataset_colstats(test):
+        pass
+
+    @unittest.skip('Where is Library.get_id definition?')
+    def test_deletes_dataset(test):
+        pass
+
+    # .delete_dataset_colstats tests
+    def test_deletes_column_stat(self):
+        # prepare state
+        self.sqlite_db.create_tables()
+        self.sqlite_db.session.commit()
+
+        ds1 = DatasetFactory()
+        partition1 = PartitionFactory(dataset=ds1)
+
+        table1 = TableFactory(dataset=ds1)
+        column1 = ColumnFactory(table=table1)
+        colstat1 = ColumnStatFactory(partition=partition1, column=column1)
+
+        # save id to get rid of ObjectDeletedError.
+        colstat1_id = colstat1.id
+        self.sqlite_db.session.commit()
+
+        # testing.
+        self.sqlite_db.delete_dataset_colstats(ds1.vid)
+        self.assertEquals(
+            self.sqlite_db.session.query(ColumnStat).filter_by(id=colstat1_id).all(),
+            [])
+
+    # .remove_dataset tests
+    def test_removes_dataset_colstats(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        self._assert_spec(self.sqlite_db.delete_dataset_colstats, ['self', 'dvid'])
+
+        # prepare state.
+        self.sqlite_db.create_tables()
+        self.sqlite_db.session.commit()
+
+        ds1 = DatasetFactory()
+        fake_delete = fudge.Fake().expects_call()
+        with fudge.patched_context(LibraryDb, 'delete_dataset_colstats', fake_delete):
+            self.sqlite_db.remove_dataset(ds1.vid)
+        fudge.verify()
+
+    def test_removes_dataset(self):
+
+        # prepare state.
+        self.sqlite_db.create_tables()
+        self.sqlite_db.session.commit()
+
+        ds1 = DatasetFactory()
+        ds1_vid = ds1.vid
+
+        # testing
+        self.sqlite_db.remove_dataset(ds1.vid)
+        self.assertEquals(
+            self.sqlite_db.session.query(Dataset).filter_by(vid=ds1_vid).all(),
+            [],
+            'Dataset was not removed.')
+
+    # .remove_partition_record tests
+    def test_removes_partition_and_stat(self):
+
+        # prepare state
+        self.sqlite_db.create_tables()
+        self.sqlite_db.session.commit()
+
+        ds1 = DatasetFactory()
+        partition1 = PartitionFactory(dataset=ds1)
+        table1 = TableFactory(dataset=ds1)
+        column1 = ColumnFactory(table=table1)
+        colstat1 = ColumnStatFactory(partition=partition1, column=column1)
+        partition_vid = partition1.vid
+        colstat1_id = colstat1.id
+
+        # testing
+        self.sqlite_db.remove_partition_record(partition_vid)
+        partition_query = self.sqlite_db.session.query(Partition).filter_by(vid=partition_vid)
+        self.assertEquals(partition_query.all(), [], 'Partition was not deleted.')
+
+        colstat_query = self.sqlite_db.session.query(ColumnStat).filter_by(id=colstat1_id)
+        self.assertEquals(colstat_query.all(), [], 'ColumnStat instance was not deleted.')
+
+    # .get tests
+    # TODO:
+
+    # .get_table tests
+
+    def test_returns_table(self):
+
+        # prepare state
+        self.sqlite_db.create_tables()
+        self.sqlite_db.session.commit()
+
+        ds1 = DatasetFactory()
+        table1 = TableFactory(dataset=ds1)
+
+        # testing
+        ret = self.sqlite_db.get_table(table1.vid)
+        self.assertIsInstance(ret, Table)
+        self.assertEquals(ret.vid, table1.vid)
+
+    # .tables tests
+    @unittest.skip(
+        '.tables() method raises TypeError: list indices must be integers exception and seems unused.')
+    def test_dict_with_all_tables(self):
+
+        # prepare state
+        self.sqlite_db.create_tables()
+        self.sqlite_db.session.commit()
+
+        ds1 = DatasetFactory()
+        table1 = TableFactory(dataset=ds1)
+
+        ds2 = DatasetFactory()
+        table2 = TableFactory(dataset=ds2)
+
+        # testing
+        ret = self.sqlite_db.tables()
+        self.assertIsInstance(ret, dict)
+        self.assertIn(table1.name, ret)
+        self.assertIn(table2.name, ret)
+
+    # .list tests
+    # TODO:
+
+    # .all_vids tests
+    def test_returns_all_datasets_and_partitions(self):
+        # prepare state
+        self.sqlite_db.create_tables()
+        self.sqlite_db.session.commit()
+
+        ds1 = DatasetFactory()
+        partition1 = PartitionFactory(dataset=ds1)
+        partition2 = PartitionFactory(dataset=ds1)
+
+        # testing
+        ret = self.sqlite_db.all_vids()
+        self.assertEquals(len(ret), 3)
+        self.assertIn(ds1.vid, ret)
+        self.assertIn(partition1.vid, ret)
+        self.assertIn(partition2.vid, ret)
+
+    # .datasets tests
+    @unittest.skip('raises `AttributeError: type object \'Dataset\' has no attribute \'location\'` error.')
+    def test_returns_dict_with_library_datasets(self):
+        # prepare state
+        self.sqlite_db.create_tables()
+        self.sqlite_db.session.commit()
+
+        ds1 = DatasetFactory(location=Dataset.LOCATION.LIBRARY)
+        ds2 = DatasetFactory(location=Dataset.LOCATION.LIBRARY)
+        ds3 = DatasetFactory(location=Dataset.LOCATION.PARTITION)
+
+        # testing
+        ret = self.sqlite_db.datasets()
+        self.assertIsInstance(ret, dict)
+        self.assertEquals(len(ret.keys()), 2)
+        self.assertIn(ds1.vid, ret)
+        self.assertIn(ds2.vid, ret)
+        self.assertIn(ds3.vid, ret)
