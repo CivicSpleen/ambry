@@ -95,15 +95,8 @@ class SqliteAttachmentMixin(object):
 
         self._attachments.remove(name)
 
-    def copy_from_attached(
-            self,
-            table,
-            columns=None,
-            name=None,
-            on_conflict='ABORT',
-            where=None,
-            conn=None,
-            copy_n=None):
+    def copy_from_attached(self, table,columns=None, name=None, on_conflict='ABORT',
+            where=None,conn=None,copy_n=None):
         """Copy from this database to an attached database.
 
         Args:
@@ -165,7 +158,7 @@ class SqliteAttachmentMixin(object):
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
-    SCHEMA_VERSION = 27
+    SCHEMA_VERSION = 29
 
     _lock = None
 
@@ -382,20 +375,9 @@ class SqliteDatabase(RelationalDatabase):
 
         # return self.load_insert(a,table, encoding=encoding, caster=caster,
         # logger=logger)
-        return self.load_shell(
-            a,
-            table,
-            encoding=encoding,
-            caster=caster,
-            logger=logger)
+        return self.load_shell(a,table,encoding=encoding,caster=caster, logger=logger)
 
-    def load_insert(
-            self,
-            a,
-            table=None,
-            encoding='utf-8',
-            caster=None,
-            logger=None):
+    def load_insert(self, a,table=None, encoding='utf-8', caster=None, logger=None):
         from ..partition import PartitionInterface
         from ..database.csv import CsvDb
         from ..dbexceptions import ConfigurationError
@@ -503,11 +485,7 @@ class BundleLockContext(object):
 
         tb = traceback.extract_stack()[-4:-3][0]
 
-        global_logger.debug(
-            "Using Session Context, from {} in {}:{}".format(
-                tb[2],
-                tb[0],
-                tb[1]))
+        global_logger.debug("Using Session Context, from {} in {}:{}".format(tb[2],tb[0],tb[1]))
 
         self._lock_depth = 0
 
@@ -615,9 +593,7 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin, SqliteDatabase):
         dont get used.
 
         """
-        _on_connect_update_sqlite_schema(
-            self.connection,
-            None)  # in both _conn and _engine.
+        _on_connect_update_sqlite_schema(self.connection, None)  # in both _conn and _engine.
 
     def create(self):
 
@@ -761,6 +737,13 @@ def _on_connect_update_sqlite_schema(conn, con_record):
     if version:
         version = int(version)
 
+    def maybe_exec(s):
+        try:
+            conn.execute(s)
+        except Exception as e:
+
+            pass
+
     # Some files have version of 0 because the version was not set.
     if version > 10:
         if version < 14:
@@ -834,7 +817,9 @@ def _on_connect_update_sqlite_schema(conn, con_record):
 
             try:
                 conn.execute('ALTER TABLE columns ADD COLUMN c_derivedfrom VARCHAR(200)')
+
             except OperationalError:
+
                 pass
 
         if version < 24:
@@ -856,14 +841,20 @@ def _on_connect_update_sqlite_schema(conn, con_record):
                 pass
 
         if version < 27:
+            maybe_exec('ALTER TABLE colstats ADD COLUMN cs_lom VARCHAR(6)')
 
-            try:
-                conn.execute('ALTER TABLE colstats ADD COLUMN cs_lom VARCHAR(6)')
-            except OperationalError:
-                pass
+        if version < 28:
+
+            maybe_exec('ALTER TABLE columns ADD COLUMN c_d_vid VARCHAR(20)')
+            maybe_exec('ALTER TABLE colstats ADD COLUMN cs_d_vid VARCHAR(20)')
+            maybe_exec('ALTER TABLE codes ADD COLUMN cd_d_vid VARCHAR(20)')
+
+        if version < 29:
+            maybe_exec('ALTER TABLE tables ADD COLUMN t_p_vid VARCHAR(20)')
 
     if version < SqliteDatabase.SCHEMA_VERSION:
-        conn.execute('PRAGMA user_version = {}'.format(SqliteDatabase.SCHEMA_VERSION))
+        conn.execute('PRAGMA user_version = {}'.format( SqliteDatabase.SCHEMA_VERSION))
+
 
 
 def insert_or_ignore(table, columns):

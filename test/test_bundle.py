@@ -252,30 +252,29 @@ class Test(TestBase):
     def test_partition(self):
         from ambry.dbexceptions import ConflictError
         from ambry.identity import PartitionNameQuery
-        from ambry.partition.csv import CsvPartition
 
         self.bundle.clean()
         self.bundle.prepare()
 
-        p = self.bundle.partitions.new_db_partition(time=10, space=10, data={'pid':'pid1'})
+        p = self.bundle.partitions.new_db_partition(table='tone', time=10, space=10, data={'pid':'pid1'})
 
 
 
         with self.assertRaises(ConflictError):
-            self.bundle.partitions.new_db_partition(time=10, space=10, data={'pid':'pid1'})
+            self.bundle.partitions.new_db_partition(table='tone',time=10, space=10, data={'pid':'pid1'})
 
 
         self.assertEqual(1, len(self.bundle.partitions.all))
 
-        p = self.bundle.partitions.find_or_new(time=10, space=10)
+        p = self.bundle.partitions.find_or_new(table='tone',time=10, space=10)
         p.database.create() # Find will go to the library if the database doesn't exist.
         self.assertEqual(1, len(self.bundle.partitions.all))
         self.assertEquals('pid1',p.data['pid'] )
 
-        p = self.bundle.partitions.find(PartitionNameQuery(time=10, space=10))
+        p = self.bundle.partitions.find(PartitionNameQuery(table='tone',time=10, space=10))
         self.assertEquals('pid1',p.data['pid'] )
 
-        p = self.bundle.partitions.find(time=10, space=10)
+        p = self.bundle.partitions.find(table='tone',time=10, space=10)
         self.assertEquals('pid1', p.data['pid'])
 
 
@@ -329,30 +328,7 @@ class Test(TestBase):
                 s.execute("DELETE FROM partitions WHERE p_vid = :vid", {'vid':p.vid})
                 #s.delete(p)
 
-    def test_partition_2(self):
 
-        bundle = Bundle()
-        bundle.clean()
-        bundle.pre_prepare()
-        bundle.prepare()
-        bundle.post_prepare()
-
-        table = self.bundle.schema.tables[0]
-
-        p = (('time', 'time2'), ('space', 'space3'), ('table', table.name), ('grain', 'grain4'))
-        p += p
-        pids = {}
-        for i in range(4):
-            for j in range(4):
-                pid = self.bundle.identity.as_partition(**dict(p[i:i + j + 1]))
-                pids[pid.fqname] = pid
-
-        for pid in pids.values():
-            part = bundle.partitions.new_db_partition(**pid.dict)
-            part.create()
-
-            parts = bundle.partitions._find_orm(PartitionNameQuery(vid=pid.vid)).all()
-            self.assertIn(pid.sname, [p.name for p in parts])
 
         
     def test_runconfig(self):
@@ -367,7 +343,6 @@ class Test(TestBase):
         self.assertEquals('filesystem1', l['filesystem']['_name'])
         self.assertEquals('filesystem2', l['filesystem']['upstream']['_name'])
         self.assertEquals('filesystem3', l['filesystem']['upstream']['upstream']['_name'])
-        self.assertEquals('devtest.sandiegodata.org', l['filesystem']['upstream']['upstream']['account']['_name'])
 
 
     def test_build_bundle(self):  

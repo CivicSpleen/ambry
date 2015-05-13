@@ -1,4 +1,5 @@
 documentation:
+    footnote: null
     main: "Processed crime incidents, based on data supplied by SANDAG.\n\nImportant:\n\
         \n  * See Caveats for limitations and warnings regarding this data. \n  *\
         \ Use of this data is subject to multiple terms and conditions. See Terms\
@@ -140,4 +141,8 @@ documentation:
         \ \n\nThis data is based on data from SANDAG, which is subject to its own\
         \ terms and conditions. See the [SANDAG Legal Notice for details](http://rdw.sandag.org/m).\
         \ \n\n"
+    processed: ''
     readme: What do you know? A readme!
+    source: ''
+    summary: An example bundle
+    title: This is the Title

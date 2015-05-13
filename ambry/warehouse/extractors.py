@@ -60,14 +60,8 @@ class Extractor(object):
     def extract(self, table, rel_path, update_time=None):
         import time
 
-        e = ExtractEntry(
-            False,
-            rel_path,
-            self.cache.path(
-                self.mangle_path(rel_path),
-                missing_ok=True),
-            (table,
-             self.__class__))
+        e = ExtractEntry(False,rel_path,self.cache.path(self.mangle_path(rel_path),missing_ok=True),
+            (table,self.__class__))
 
         force = self.force
 
@@ -84,14 +78,15 @@ class Extractor(object):
             else:
                 return e
 
-        md = {
-            'time': time.time()
-        }
+        md = {'time': time.time()}
 
         self._extract(table, rel_path, md)
         e.time = time.time()
         e.extracted = True
         return e
+
+    def stream(self, table, rel_path, update_time = None):
+        return self._stream(table, rel_path, None )
 
 
 class CsvExtractor(Extractor):
@@ -111,8 +106,7 @@ class CsvExtractor(Extractor):
 
         rel_path = self.mangle_path(rel_path)
 
-        row_gen = self.warehouse.database.connection.execute(
-            "SELECT * FROM {}".format(table))
+        row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table))
 
         with self.cache.put_stream(rel_path, metadata=metadata) as stream:
             w = unicodecsv.writer(stream)
@@ -124,6 +118,28 @@ class CsvExtractor(Extractor):
                 w.writerow(row)
 
         return True, self.cache.path(rel_path)
+
+    def _stream(self, table, rel_path, metadata):
+        """Return a generator that yields from the CSV data. Give to Flask to stream output. """
+        import unicodecsv
+        from ambry.util.flo import StringQueue
+
+        row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table))
+
+        def yield_rows():
+            f = StringQueue()
+
+            w = unicodecsv.writer(f)
+
+            for i, row in enumerate(row_gen):
+                if i == 0:
+                    w.writerow(row.keys())
+
+                w.writerow(row)
+
+                yield f.read() # Returns everything previously written
+
+        return yield_rows
 
 
 class JsonExtractor(Extractor):
@@ -174,10 +190,32 @@ class OgrExtractor(Extractor):
     is_geo = True
 
     def __init__(self, warehouse, cache, force=False):
+        import ogr # In the initializer b/c it is an optional dependency
 
         super(OgrExtractor, self).__init__(warehouse, cache, force=force)
 
         self.mangled_names = {}
+
+        # Inside the initializer because org is an optional depency
+        self.geo_map = {
+            'POLYGON': ogr.wkbPolygon,
+            'MULTIPOLYGON': ogr.wkbMultiPolygon,
+            'POINT': ogr.wkbPoint,
+            'MULTIPOINT': ogr.wkbMultiPoint,
+            # There are a lot more , add them as they are encountered.
+        }
+
+        self._ogr_type_map = {
+            None: ogr.OFTString,
+            '': ogr.OFTString,
+            'TEXT': ogr.OFTString,
+            'VARCHAR': ogr.OFTString,
+            'INT': ogr.OFTInteger,
+            'INTEGER': ogr.OFTInteger,
+            'REAL': ogr.OFTReal,
+            'FLOAT': ogr.OFTReal,
+        }
+
 
     def geometry_type(self, database, table):
         """Return the name of the most common geometry type and the coordinate
@@ -191,8 +229,7 @@ class OgrExtractor(Extractor):
         q = "SElECT f_geometry_column FROM geometry_columns " .format(table)
         geo_cols = [row['f_geometry_column'] for row in ce(q).fetchall()]
 
-        all_cols = ce(
-            "SELECT * FROM {} LIMIT 1".format(table)).fetchone().keys()
+        all_cols = ce("SELECT * FROM {} LIMIT 1".format(table)).fetchone().keys()
 
         geo_col = None
         for col in all_cols:
@@ -217,31 +254,6 @@ class OgrExtractor(Extractor):
 
         return t, cd, geo_col
 
-    geo_map = None
-    _ogr_type_map = None
-
-    try:
-        from osgeo import ogr
-        geo_map = {
-            'POLYGON': ogr.wkbPolygon,
-            'MULTIPOLYGON': ogr.wkbMultiPolygon,
-            'POINT': ogr.wkbPoint,
-            'MULTIPOINT': ogr.wkbMultiPoint,
-            # There are a lot more , add them as they are encountered.
-        }
-
-        _ogr_type_map = {
-            None: ogr.OFTString,
-            '': ogr.OFTString,
-            'TEXT': ogr.OFTString,
-            'VARCHAR': ogr.OFTString,
-            'INT': ogr.OFTInteger,
-            'INTEGER': ogr.OFTInteger,
-            'REAL': ogr.OFTReal,
-            'FLOAT': ogr.OFTReal,
-        }
-    except ImportError:
-        pass
 
     def ogr_type_map(self, v):
         return self._ogr_type_map[v.split('(', 1)[0]]  # Sometimes 'VARCHAR', sometimes 'VARCHAR(10)'

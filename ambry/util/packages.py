@@ -6,16 +6,27 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 import pip
-from pip.commands import InstallCommand
+
 from ..util import memoize
 
 
 def install(install_dir, egg, url):
 
-    initial_args = [
-        'install',
+    initial_args = ['install',
         '--install-option=--install-purelib={}'.format(install_dir),
         url]
+
+
+    try:
+        # This version works for Pip 6.
+        from pip.commands import InstallCommand
+
+        cmd_name, options = pip.parseopts(initial_args)
+
+        command = InstallCommand()
+        return command.main(options)
+    except:
+        pass
 
     try:
         # An earlier version of pip
@@ -26,11 +37,10 @@ def install(install_dir, egg, url):
 
     except ValueError:
         from pip.commands import commands
+
         cmd_name, cmd_args = pip.parseopts(initial_args)
         command = commands[cmd_name]()
         return command.main(cmd_args)
-
-    raise Exception()
 
 
 def qualified_name(o):

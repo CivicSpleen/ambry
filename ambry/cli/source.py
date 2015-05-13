@@ -269,16 +269,13 @@ def source_new(args, l, st, rc):
         ambry_account = None
 
     if not ambry_account:
-        fatal(
-            "Failed to get an accounts.ambry entry from the configuration. ( It's usually in {}. ) ".format(
+        fatal("Failed to get an accounts.ambry entry from the configuration. ( It's usually in {}. ) ".format(
                 rc.USER_ACCOUNTS))
 
     if not ambry_account.get('name') or not ambry_account.get('email'):
         from ambry.run import RunConfig as rc
 
-        fatal(
-            "Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(
-                rc.USER_ACCOUNTS))
+        fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
 
     ident = Identity.from_dict(d)
 
@@ -310,10 +307,7 @@ def source_new(args, l, st, rc):
     b.metadata.contact_bundle.creator.email = ambry_account.get('email')
     b.metadata.contact_bundle.creator.name = ambry_account.get('name')
     b.metadata.contact_bundle.creator.url = ambry_account.get('url', '')
-
-    b.metadata.contact_bundle.maintainer.email = ambry_account.get('email')
-    b.metadata.contact_bundle.maintainer.name = ambry_account.get('name')
-    b.metadata.contact_bundle.maintainer.url = ambry_account.get('url', '')
+    b.metadata.contact_bundle.creator.org = ambry_account.get('org', '')
 
     b.metadata.sources.example = {
         'url': 'http://example.com',

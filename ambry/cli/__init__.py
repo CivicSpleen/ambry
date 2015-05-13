@@ -47,16 +47,9 @@ def fatal(template, *args, **kwargs):
         # When the error string is a template
 
         global_logger.critical(
-            template.replace(
-                '{',
-                '{{').replace(
-                '}',
-                '}}').format(
-                *args,
-                **kwargs))
+            template.replace('{','{{').replace('}','}}').format(*args, **kwargs))
 
     sys.exit(1)
-
 
 def warn(template, *args, **kwargs):
     global command
@@ -229,7 +222,7 @@ def _print_info(l, ident, list_partitions=False):
 
     if ident.partitions:
 
-        if len(ident.partitions) == 1 and not list_partitions:
+        if len(ident.partitions) == 1 :
 
             ds_ident = l.resolve(ident.partition.vid, location=None)
 
@@ -291,29 +284,10 @@ def main(argsv=None, ext_logger=None):
     parser = argparse.ArgumentParser(prog='ambry', description='Ambry {}. Management interface for ambry, libraries and'
                                                                ' repositories. '.format(ambry._meta.__version__))
 
-    parser.add_argument(
-        '-l',
-        '--library',
-        dest='library_name',
-        default="default",
-        help="Name of library, from the library secton of the config")
-    parser.add_argument(
-        '-c',
-        '--config',
-        default=os.getenv(AMBRY_CONFIG_ENV_VAR),
-        action='append',
-        help="Path to a run config file. Alternatively, set the AMBRY_CONFIG env var")
-    parser.add_argument(
-        '--single-config',
-        default=False,
-        action="store_true",
-        help="Load only the config file specified")
-    parser.add_argument(
-        '-E',
-        '--exceptions',
-        default=False,
-        action="store_true",
-        help="Show full exception trace on all exceptions")
+    parser.add_argument('-l','--library',dest='library_name',default="default",help="Name of library, from the library secton of the config")
+    parser.add_argument('-c','--config',default=os.getenv(AMBRY_CONFIG_ENV_VAR),action='append',help="Path to a run config file. Alternatively, set the AMBRY_CONFIG env var")
+    parser.add_argument('--single-config',default=False,action="store_true",help="Load only the config file specified")
+    parser.add_argument('-E','--exceptions',default=False,action="store_true",help="Show full exception trace on all exceptions")
 
     cmd = parser.add_subparsers(title='commands', help='command help')
 

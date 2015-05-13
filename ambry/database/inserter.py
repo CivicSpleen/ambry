@@ -73,7 +73,9 @@ class SegmentedInserter(InserterInterface):
 class ValueWriter(InserterInterface):
     """Inserts arrays of values into  database table."""
 
+
     def __init__(self, db, bundle, cache_size=50000, text_factory=None, replace=False):
+
         self.cache = []
 
         self.bundle = bundle
@@ -88,8 +90,7 @@ class ValueWriter(InserterInterface):
         self.build_state = None
 
         if text_factory:
-            self.db.engine.raw_connection(
-            ).connection.text_factory = text_factory
+            self.db.engine.raw_connection().connection.text_factory = text_factory
 
     def __enter__(self):
         from ..partitions import Partitions

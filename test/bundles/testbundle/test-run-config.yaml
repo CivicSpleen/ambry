@@ -18,8 +18,6 @@ library:
     remoted:
       remotes:
         - '{root}/url_cache#compress'
-        - s3://devtest.sandiegodata.org/cache-uncompressed
-        - s3://devtest.sandiegodata.org/cache-compressed#compress
       filesystem: default
       database: default
 
@@ -56,8 +54,7 @@ filesystem:
 
     filesystem3:
         dir: filesystem3
-        account: 'devtest.sandiegodata.org'
-        
+
     fscache:
       dir: '{root}/fscache'
       

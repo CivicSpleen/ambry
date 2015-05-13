@@ -475,6 +475,7 @@ class RelationalDatabase(DatabaseInterface):
         if table is not False:
             r = table
         else:
+
             metadata = self.metadata
             table = Table(table_name, metadata, autoload=True)
 

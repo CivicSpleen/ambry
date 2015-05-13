@@ -26,6 +26,8 @@ class SqlitePartition(PartitionBase):
     _id_class = SqlitePartitionIdentity
     _db_class = PartitionDb
 
+    STATS_MAX = 1324657 # Maximum number of records used for computing full stats.
+
     def __init__(self, bundle, record, memory=False, **kwargs):
 
         super(SqlitePartition, self).__init__(bundle, record)
@@ -34,11 +36,7 @@ class SqlitePartition(PartitionBase):
     @property
     def database(self):
         if self._database is None:
-            self._database = PartitionDb(
-                self.bundle,
-                self,
-                base_path=self.path,
-                memory=self.memory)
+            self._database = PartitionDb(self.bundle,self,base_path=self.path,memory=self.memory)
         return self._database
 
     def detach(self, name=None):
@@ -191,7 +189,33 @@ class SqlitePartition(PartitionBase):
 
         import numpy as np
 
-        df = self.pandas
+        # Having too many records makes the stats calc really slow -- 10M records with a lot of strings
+        # can take 100G of memory and 10 hours to process. So, we need to limit the number of rows,
+        # but try take a sample, rather than just the first N records.
+
+        offset = None
+        if self.record.count > self.STATS_MAX:
+            skip = int(self.record.count / self.STATS_MAX)
+        else:
+            skip = 0
+
+        if skip > 1:
+            q = "SELECT * FROM {} WHERE id % {} = 0 LIMIT {}".format(self.get_table().name, skip,  self.STATS_MAX)
+        elif self.record.count > self.STATS_MAX:
+            offset = int( (self.record.count - self.STATS_MAX) / 2)
+
+            q = "SELECT * FROM {} LIMIT {} OFFSET {}".format(self.get_table().name, self.STATS_MAX, offset)
+
+        else:
+            q = "SELECT * FROM {}".format(self.get_table().name)
+
+
+
+        # self.pandas might return all of the rows, which is very expensive in some cases
+        try:
+            df = self.select(q,index_col=self.get_table().primary_key.name).pandas
+        except StopIteration:
+            return
 
         if df is None:
             return  # Usually b/c there are no records in the table.
@@ -413,15 +437,12 @@ class SqlitePartition(PartitionBase):
         name = self.table.name
 
         count = int(
-            self.database.connection.execute(
-                'SELECT count(*) FROM "{}"'.format(name)).fetchone()[0])
+            self.database.connection.execute('SELECT count(*) FROM "{}"'.format(name)).fetchone()[0])
 
         skip = count / 20
 
         if count > 100:
-            sql = 'SELECT * FROM "{}" WHERE id % {} = 0 LIMIT 20'.format(
-                name,
-                skip)
+            sql = 'SELECT * FROM "{}" WHERE id % {} = 0 LIMIT 20'.format(name,skip)
         else:
             sql = 'SELECT * FROM "{}" LIMIT 20'.format(name)
 
@@ -450,10 +471,10 @@ class SqlitePartition(PartitionBase):
         statinfo = os.stat(self.database.path)
 
         f = File(path=self.identity.cache_key,
-                 group='partition',
                  ref=self.identity.vid,
                  state='built',
                  type_='P',
+                 source_url = 'build',
                  hash=md5_for_file(self.database.path),
                  size=statinfo.st_size)
 
@@ -488,14 +509,16 @@ class SqlitePartition(PartitionBase):
         pk = self.get_table().primary_key.name
 
         try:
-            return self.select(
-                "SELECT * FROM {}".format(self.get_table().name), index_col=pk).pandas
+            return self.select("SELECT * FROM {}".format(self.get_table().name), index_col=pk).pandas
         except NoSuchColumnError:
-            return self.select(
-                "SELECT * FROM {}".format(self.get_table().name)).pandas
+            return self.select("SELECT * FROM {}".format(self.get_table().name)).pandas
         except StopIteration:
             return None  # No records, so no dataframe.
             # raise Exception("Select failed: {}".format("SELECT * FROM {}".format(self.get_table().name)))
+
+
+
+
 
     @property
     def dict(self):

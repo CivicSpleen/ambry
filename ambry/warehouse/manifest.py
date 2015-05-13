@@ -11,7 +11,8 @@ import sqlparse
 from pygments import highlight
 from pygments.lexers import PythonLexer
 from pygments.formatters import HtmlFormatter
-
+import argparse
+from ..dbexceptions import ConfigurationError
 
 class null_logger(object):
 
@@ -23,6 +24,12 @@ class null_logger(object):
 
     def info(self, w):
         pass
+
+
+class ThrowingArgumentParser(argparse.ArgumentParser):
+    '''An argument parser that throws an exception instead of exiting'''
+    def error(self, message):
+        raise ConfigurationError(message)
 
 
 class ParseError(Exception):
@@ -228,22 +235,11 @@ class Manifest(object):
         if tag not in self.singles and tag not in self.multi_line:
             # Capture Error. These don't get save to the sections array.
             line_number = i + 1
-            section = ManifestSection(
-                self.path,
-                tag='error',
-                linenumber=line_number,
-                args=args)
-            self.logger.error(
-                "Unknown section tag: '{}' at line '{}' ".format(
-                    tag,
-                    line_number))
+            section = ManifestSection(self.path,tag='error',linenumber=line_number,args=args)
+            self.logger.error( "Unknown section tag: '{}' at line '{}' ".format(tag,line_number))
         else:
             line_number = i + 1
-            section = ManifestSection(
-                self.path,
-                tag=tag,
-                linenumber=line_number,
-                args=args)
+            section = ManifestSection(self.path, tag=tag,linenumber=line_number,args=args)
             sections[line_number] = section
 
         return line_number, section
@@ -277,8 +273,7 @@ class Manifest(object):
                 if non_tag_is_doc:
                     non_tag_is_doc = False
                     tag = 'doc'
-                    section_start_line_number, section = self.make_item(
-                        sections, tag, line_number, None)
+                    section_start_line_number, section = self.make_item(sections, tag, line_number, None)
 
                 if tag == 'doc':  # save newlines for doc sections
                     section.lines.append(line)
@@ -333,11 +328,8 @@ class Manifest(object):
                 if pf:
                     section.content = pf(section)
             except Exception as e:
-                self.logger.error(
-                    "Failed to process section at line {} : {}: {} ".format(
-                        line,
-                        section,
-                        e))
+                self.logger.error("Failed to process section at line {} : {}: {} ".format(
+                        line,section,e))
                 del sections[line]
 
         # Link docs to previous sections, where appropriate
@@ -346,8 +338,9 @@ class Manifest(object):
         for line_no in sorted(sections.keys()):
             section = sections[line_no]
 
-            if previous_section and section.tag == 'doc' \
-                    and previous_section.tag in ['title', 'view', 'mview', 'extract']:
+            if ( previous_section and section.tag == 'doc'
+                 and previous_section.tag in ['title', 'view', 'mview', 'extract', 'partitions']):
+
                 section.content['ref'] = previous_section.name
                 previous_section.doc = section.content
 
@@ -369,8 +362,6 @@ class Manifest(object):
 
     def _process_doc(self, section):
         import markdown
-        # from ..util import normalize_newlines
-        # import textwrap
 
         t = '\n'.join(section.lines)
 
@@ -384,11 +375,7 @@ class Manifest(object):
 
     def _process_sql(self, section):
 
-        return sqlparse.format(
-            '\n'.join(
-                section.lines),
-            reindent=True,
-            keyword_case='upper')
+        return sqlparse.format('\n'.join(section.lines),reindent=True,keyword_case='upper')
 
     def _process_mview(self, section):
 
@@ -397,16 +384,10 @@ class Manifest(object):
                 'No name specified for view at {}'.format(
                     section.file_line))
 
-        t = sqlparse.format(
-            '\n'.join(
-                section.lines),
-            reindent=True,
-            keyword_case='upper')
+        t = sqlparse.format('\n'.join(section.lines),reindent=True,keyword_case='upper')
 
         if not t.strip():
-            raise ParseError(
-                'No sql specified for view at {}'.format(
-                    section.file_line))
+            raise ParseError('No sql specified for view at {}'.format(section.file_line))
 
         tc_names = set()  # table and column names
 
@@ -463,9 +444,6 @@ class Manifest(object):
 
         words = line.split()
 
-        # if len(words) != 5:
-        #    raise ParseError('Extract line has wrong format; expected 5 words, got: {}'.format(line))
-
         table = words.pop(0)
 
         format = 'csv'
@@ -502,6 +480,11 @@ class Manifest(object):
 
     def _process_partitions(self, section):
 
+        parser = ThrowingArgumentParser(prog='partitions')
+
+        parser.add_argument('-t', '--table', help="Name of table to join partitions on")
+        parser.add_argument('-i', '--index', help="Index for the table")
+
         partitions = []
 
         start_line = section.linenumber
@@ -512,14 +495,11 @@ class Manifest(object):
                 partitions.append(d)
 
             except ParseError as e:
-                raise ParseError(
-                    "Failed to parse in section at line #{}: {}".format(
-                        start_line +
-                        i,
-                        e))
+                raise ParseError("Failed to parse in section at line #{}: {}".format(start_line +i,e))
 
         self.partitions = partitions
-        return dict(partitions=partitions)
+
+        return dict(partitions=partitions, args = vars(parser.parse_args(section.args.split())))
 
     def add_bundles(self, library):
         """Add bundle information when a Library is available."""
@@ -533,15 +513,11 @@ class Manifest(object):
                 if not ident:
                     raise ParseError(
                         "Partition reference not resolved to a bundle: '{}' in manifest '{}' "
-                        " for library {}" .format(
-                            partition['partition'],
-                            self.path,
-                            library.database.dsn))
+                        " for library {}" .format( partition['partition'],self.path,library.database.dsn))
 
                 if not ident.partition:
                     raise ParseError(
-                        "Partition reference not resolved to a partition: '{}' ".format(
-                            partition['partition']))
+                        "Partition reference not resolved to a partition: '{}' ".format(partition['partition']))
 
                 b = LibraryDbBundle(library.database, ident.vid)
 
@@ -676,8 +652,7 @@ class Manifest(object):
 
         try:
             try:
-                (_, partition), tokens = Manifest.extract_next(
-                    'FROM', "NAME", tokens)
+                (_, partition), tokens = Manifest.extract_next('FROM', "NAME", tokens)
             except TypeError:
                 partition = None
 
@@ -687,36 +662,21 @@ class Manifest(object):
                 (_, partition), tokens = Manifest.extract_token("NAME", tokens)
                 tables = None
 
-            try:
-                (_, where), tokens = Manifest.extract_token('WHERE', tokens)
+            # Saving this for adding future parmaters to the partitions section
+            # try:
+            #     (_, where), tokens = Manifest.extract_token('WHERE', tokens)
+            #
+            #     where = re.sub(r'^where','',where,flags=re.IGNORECASE).strip()
+            #
+            # except (TypeError, ValueError):
+            #     where = None
 
-                where = re.sub(
-                    r'^where',
-                    '',
-                    where,
-                    flags=re.IGNORECASE).strip()
 
-            except (TypeError, ValueError):
-                where = None
 
-            try:
-                (_, prefix), tokens = Manifest.extract_next(
-                    'PREFIX', 'NAME', tokens)
-
-                prefix = re.sub(
-                    r'^where',
-                    '',
-                    prefix,
-                    flags=re.IGNORECASE).strip().strip("'")
-
-            except (TypeError, ValueError):
-                prefix = None
-
-            return dict(
-                partition=partition,
-                tables=tables,
-                where=where,
-                prefix=prefix
+            return dict(partition=partition,
+                #tables=tables,
+                #where=where,
+                #prefix=prefix
             )
 
         except Exception as e:

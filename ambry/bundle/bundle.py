@@ -202,8 +202,10 @@ class Bundle(object):
             with self.session:
                 self.set_value('rdep', key, ident.dict)
 
+
     def sub_template(self, t):
-        """Substitute some data values into a format() template."""
+        """Substitute some data values into a format() template.
+        Deprecated. Use JINJA format substitutions, builtin to the metadata"""
         d = {}
         for r in self.metadata.rows:
 
@@ -212,20 +214,16 @@ class Bundle(object):
                 d[k] = r[1]
 
         try:
-
+            # This should not be necessary, but it handles old templates that get substituted with Jina format
+            # titles and such.
             return t.format(**d)
         except KeyError as e:
             import json
 
             self.error(
-                "Failed to substitute template in {}. Key Error: {}".format(
-                    self.identity,
-                    e))
+                "Failed to substitute template in {}. Key Error: {}".format(self.identity,e))
             self.error(
-                "Available keys are:\n {}".format(
-                    json.dumps(
-                        d,
-                        indent=4)))
+                "Available keys are:\n {}".format(json.dumps(d,indent=4)))
             return t
 
     @property
@@ -412,14 +410,19 @@ class DbBundleBase(Bundle):
         rows = self.database.get_config_rows(ds.vid)
 
         t = Top()
-
         t.load_rows(rows)
 
         # The database config rows don't hold name and identity
         t.identity = self.identity.ident_dict
         t.names = self.identity.names_dict
 
-        return t
+        # The first one it to create the substitution contest, and the second is the actual
+        # metadata
+        t2 = Top(context=t.dict)
+        t2.load_rows(rows)
+        t2.identity = self.identity.ident_dict
+        t2.names = self.identity.names_dict
+        return t2
 
     def _info(self, identity=None):
         """Return a nested, ordered dict  of information about the bundle."""
@@ -457,6 +460,7 @@ class DbBundleBase(Bundle):
 
         d = {}
         metadata = self.metadata.dict
+
         d['identity'] = metadata['identity']
         d['identity'].update(metadata['names'])
         del metadata['names']
@@ -570,6 +574,7 @@ class LibraryDbBundle(DbBundleBase):
 
     def get_dataset(self):
         """Return the dataset."""
+        from sqlalchemy.orm import noload
         from sqlalchemy.orm.exc import NoResultFound
         from sqlalchemy.exc import OperationalError
         from ..dbexceptions import NotFoundError
@@ -613,6 +618,9 @@ class BuildBundle(Bundle):
     README_FILE_TEMPLATE = 'meta/README.md.template'
     DOC_FILE = 'meta/documentation.md'
     DOC_HTML = 'meta/documentation.html'
+
+    # Partition where to get a map from source domains to full name
+    SOURCE_TERMS = 'civicknowledge.com-terms-sources'
 
     def __init__(self, bundle_dir=None):
         """"""
@@ -726,6 +734,11 @@ class BuildBundle(Bundle):
 
         return Top(path=self.bundle_dir)
 
+        t = Top(path=self.bundle_dir)
+        t.load_all()
+
+        return Top(path=self.bundle_dir, context=t.dict)
+
     @property
     @memoize
     def config(self):
@@ -750,6 +763,7 @@ class BuildBundle(Bundle):
 
         if not self._identity:
             try:
+
                 names = self.metadata.names.items()
                 idents = self.metadata.identity.items()
 
@@ -853,6 +867,8 @@ class BuildBundle(Bundle):
             except IOError:
                 return ''
 
+        self.update_source()
+
         # The main doc is subbed on the fly, but the README has to be a real
         # file, since it is displayed in github
         self.rewrite_readme()
@@ -861,6 +877,13 @@ class BuildBundle(Bundle):
 
         md.documentation.readme = read_file(self.README_FILE)
         md.documentation.main = self.sub_template(read_file(self.DOC_FILE))
+        md.documentation.title = md.about.title.text
+        md.documentation.summary = md.about.summary.text
+        md.documentation.source = md.about.source.text
+        md.documentation.processed = md.about.processed.text
+        md.documentation.summary = md.about.summary.text
+
+
 
         md.write_to_dir(write_all=True)
 
@@ -876,6 +899,30 @@ class BuildBundle(Bundle):
 
                 self.database.rewrite_dataset()
 
+    def update_source(self):
+        from ..dbexceptions import NotFoundError
+        if not bool(self.metadata.contact_source.creator):
+
+            source_domain = self.identity.source
+
+            try:
+                p = self.library.get(self.SOURCE_TERMS).partition
+
+                source = p.query("SELECT * FROM sources WHERE domain = ?", source_domain).first()
+
+                if source:
+                    self.metadata.contact_source.creator.org = source.name
+                    self.metadata.contact_source.creator.url = source.homepage
+                else:
+                    self.error("Failed to find source domain '{}' in {}".format(source_domain,self.SOURCE_TERMS))
+
+            except NotFoundError:
+                self.error("Can't expand sources; didn't find source partition '{}'".format(self.SOURCE_TERMS))
+
+
+
+
+
     def rewrite_readme(self):
 
         tf = self.filesystem.path(self.README_FILE_TEMPLATE)
@@ -890,9 +937,7 @@ class BuildBundle(Bundle):
         import ambry.support as sdir
 
         html_template_file = os.path.join(
-            os.path.dirname(
-                sdir.__file__),
-            'documentation.html')
+            os.path.dirname( sdir.__file__),'documentation.html')
 
         with open(html_template_file) as fo:
             html_template = fo.read()
@@ -904,9 +949,7 @@ class BuildBundle(Bundle):
             with open(df) as dfo:
                 with open(self.filesystem.path(hdf), 'w') as hdfo:
                     html = html_template.format(
-                        content=markdown.markdown(
-                            self.sub_template(
-                                dfo.read())))
+                        content=markdown.markdown(self.sub_template(dfo.read())))
                     hdfo.write(html)
 
     def sources(self):
@@ -1221,6 +1264,8 @@ class BuildBundle(Bundle):
 
         cf = self.filesystem.path('meta', self.CODE_FILE)
 
+
+
         if os.path.exists(cf):
             self.log("Loading codes file: {}".format(cf))
             with self.session:
@@ -1306,9 +1351,11 @@ class BuildBundle(Bundle):
 
         self.schema.move_revised_schema()
 
-        self.set_build_state('prepared')
-
         self.update_configuration()
+
+        self.write_config_to_bundle()
+
+        self.set_build_state('prepared')
 
         return True
 
@@ -1384,14 +1431,16 @@ class BuildBundle(Bundle):
             self.post_build_finalize()
 
             if self.config.environment.category == 'development':
-                self.update_configuration()
-                self._revise_schema()
-                self.schema.move_revised_schema()
-                self.post_build_write_partitions()
-                self.post_build_write_config()
-                self.post_build_geo_coverage()
-                self.post_build_time_coverage()
-                self.schema.write_codes()
+                pass
+
+            self.update_configuration()
+            self._revise_schema()
+            self.schema.move_revised_schema()
+            self.post_build_write_partitions()
+            self.write_config_to_bundle()
+            self.post_build_geo_coverage()
+            self.post_build_time_coverage()
+            #self.schema.write_codes()
 
             self.post_build_test()
 
@@ -1550,7 +1599,7 @@ class BuildBundle(Bundle):
                 indent=4,
                 encoding='utf-8')
 
-    def post_build_write_config(self):
+    def write_config_to_bundle(self):
         """Write  the config into the database."""
         exclude_keys = ('names', 'identity')
 
@@ -1738,7 +1787,7 @@ class BuildBundle(Bundle):
 
             self.post_build_finalize()
 
-            self.post_build_write_config()
+            self.write_config_to_bundle()
 
             self.set_value('process', 'last', datetime.now().isoformat())
             self.set_build_state('updated')
@@ -1789,24 +1838,19 @@ class BuildBundle(Bundle):
 
             library = self.library
 
-            self.log(
-                "Install   {} to  library {}".format(
-                    self.identity.name,
-                    library.database.dsn))
-            dest = library.put_bundle(self, install_partitions=False)
+            self.log("Install   {} to  library {}".format(self.identity.name,library.database.dsn))
+            dest = library.put_bundle(self, install_partitions=False, file_state = 'new')
             self.log("Installed {}".format(dest[0]))
 
             for partition in self.partitions:
                 # Skip files that don't exist, but not if the partition is a reference to an
                 # other partition.
                 if not os.path.exists(partition.database.path) and not partition.ref:
-                    self.log(
-                        "{} File does not exist, skipping".format(
-                            partition.database.path))
+                    self.log("{} File does not exist, skipping".format( partition.database.path))
                     continue
 
                 self.log("Install   {}".format(partition.name))
-                dest = library.put_partition(self, partition)
+                dest = library.put_partition(partition, file_state = 'new')
                 if dest[0]:
                     self.log("Installed {}".format(dest[0]))
 
