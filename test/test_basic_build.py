@@ -13,21 +13,16 @@ from test_base import  TestBase
 class Test(TestBase):
  
     def setUp(self):
-
+        super(Test, self).setUp()
         self.bundle = Bundle()
         self.bundle_dir = self.bundle.bundle_dir
-
-    def save_bundle(self):
-        pass
-        
-    def restore_bundle(self):
-        pass 
 
 
 
     def test_db_bundle(self):
         
         from ambry.bundle import BuildBundle, DbBundle
+        from ambry.orm import Dataset, Partition, Table, Column, Code, ColumnStat
         
         b = BuildBundle(self.bundle_dir)
         b.clean()
@@ -60,6 +55,14 @@ class Test(TestBase):
         b.build_geo()
         b.post_build()
         b.close()
+
+        dbsq = b.database.session.query
+
+        self.assertEquals(2, len(dbsq(Partition).all()))
+        self.assertEquals(9, len(dbsq(Table).all()))
+        self.assertEquals(45, len(dbsq(Column).all()))
+        self.assertEquals(20, len(dbsq(Code).all()))
+        self.assertEquals(9, len(dbsq(ColumnStat).all()))
 
 
 def suite():

@@ -14,7 +14,8 @@ import logging
 
 from ambry.orm import Dataset
 from ..identity import LocationRef, Identity
-from ..util import memoize, get_logger
+from ..util import memoize
+
 import weakref
 from files import Files
 from sqlalchemy import event
@@ -25,6 +26,7 @@ def _new_library(config):
     from ckcache import new_cache
     from database import LibraryDb
     from sqlalchemy.exc import OperationalError
+    from boto.exception import S3ResponseError # the ckcache lib should return its own exception
 
     cache = new_cache(config['filesystem'])
 
@@ -43,7 +45,18 @@ def _new_library(config):
 
     root = config['root']
 
-    remotes =  {  name:new_cache(remote) for name, remote in config.get('remotes', {}).items() }
+    remotes = {}
+
+    for name, remote in config.get('remotes', {}).items():
+
+        try:
+            remotes[name] = new_cache(remote)
+        except S3ResponseError as e:
+            from ..util import get_logger
+            logger = get_logger(__name__)
+            logger.error("Failed to init cache {} : {}; {} ".format(name, str(remote.bucket), e))
+
+
 
     for i, remote in enumerate(remotes.values()):
         remote.set_priority(i)
@@ -157,6 +170,7 @@ class Library(object):
         sync: If true, put to remote synchronously. Defaults to False.
 
         '''
+        from ..util import get_logger
 
         assert database is not None
 
@@ -261,54 +275,51 @@ class Library(object):
     ## Storing
     ##
 
-    def put_bundle(self, bundle, logger=None,  install_partitions=True, commit = True, file_state= 'new'):
+    def put_bundle(self, bundle, source = None, install_partitions = True, file_state= 'installed', commit=True):
         """Install the records for the dataset, tables, columns and possibly
         partitions. Does not install file references """
-        from ..dbexceptions import ConflictError
 
-        try:
-            self.database.install_bundle(bundle, commit = commit)
 
-            installed = True
-        except ConflictError:
-            installed = False
+        if not self.database.install_bundle(bundle):
+            return self.cache.path(bundle.identity.cache_key), False
 
-        self.search.index_dataset(bundle, force = True)
+        if source is None:
+            source = self.cache.repo_id
 
-        self.files.install_bundle_file(bundle, self.cache, commit=commit, state = file_state)
-
-        ident = bundle.identity
-
-        if not self.cache.has(ident.cache_key):
-            self.cache.put(bundle.database.path, ident.cache_key)
+        installed = self.files.install_bundle_file(bundle, source, commit=commit, state = file_state)
 
         if install_partitions:
+            for p in bundle.partitions.all:
+                self.put_partition(p, source, commit = commit, file_state = file_state)
+
+        # Copy the file in if we don't have it already
+        if not self.cache.has(bundle.identity.cache_key):
+            self.cache.put(bundle.database.path, bundle.identity.cache_key)
+
+        if self._doc_cache:
+            self.search.index_dataset(bundle, force=True)
+
             for partition in bundle.partitions:
-                self.put_partition(bundle, partition, commit = commit)
                 self.search.index_partition(partition, force = True)
 
-        self.mark_updated(vid=ident.vid)
+            self.search.commit()
 
+        self.mark_updated(vid=bundle.identity.vid)
 
-        self.search.commit()
+        return self.cache.path(bundle.identity.cache_key), installed
 
-        return self.cache.path(ident.cache_key), installed
-
-    def put_partition(self, bundle, partition, commit = True):
+    def put_partition(self,  partition, source = None, file_state= 'installed', commit=True):
         """Install the record and file reference for the partition """
 
-        self.database.install_partition(bundle, partition, commit = commit)
+        if source is None:
+            source = self.cache.repo_id
 
-        if partition.ref:
-           return False, False
+        installed = self.files.install_partition_file(partition, source, commit = commit,state = file_state)
 
-        installed = self.files.install_partition_file(partition, self.cache,
-                                                      commit = commit,
-                                                      state = 'new')
+        # Ref partitions use the file of an earlier version, so there is no file to install
+        if not self.cache.has(partition.identity.cache_key) and os.path.exists(partition.database.path):
+            self.cache.put(partition.database.path, partition.identity.cache_key)
 
-        # Ref partitions use the file of an earlier version, so there is no FILE to install
-
-        self.cache.put(partition.database.path, partition.identity.cache_key)
 
         return self.cache.path(partition.identity.cache_key), installed
 
@@ -422,6 +433,7 @@ class Library(object):
 
 
     def _get_bundle_by_cache_key(self, cache_key, cb=None):
+        """Load a bundle from either the local cache, or the remote if it is not local """
         from ckcache.multi import AltReadCache
         from sqlite3 import DatabaseError
         from sqlalchemy.exc import OperationalError
@@ -458,12 +470,12 @@ class Library(object):
         else:
             return self.cache.has(dataset.cache_key)
 
-    def get(self, ref, force=False, cb=None, location = 'default'):
+    def get(self, ref, remote = None, force=False, cb=None, location = 'default'):
         '''Get a bundle, given an id string or a name '''
-        from sqlalchemy.exc import IntegrityError
+
         from .files import  Files
-        from ckcache.multi import AltReadCache
         from ..dbexceptions import NotFoundError
+        from ckcache import copy_file_or_flo
 
         # Get a reference to the dataset, partition and relative path
         # from the local database.
@@ -473,7 +485,28 @@ class Library(object):
         if not dataset:
             raise NotFoundError("Failed to resolve reference '{}' in library '{}' ".format(ref, self.database.dsn))
 
-        bundle = self._get_bundle_by_cache_key(dataset.cache_key)
+        dataset_files = self.files.query.type(Files.TYPE.BUNDLE).ref(dataset.vid).all
+
+        if dataset_files:
+
+            df_remotes = [ df.source_url for df in dataset_files]
+
+            # Get the remote that the bundle came from. TODO, this just finds the first one, somewhat randomly.
+            # There should be a priority to which remote it finds. Maybe the file File.all method
+            # should sort by priority
+
+            if remote is None:
+                for r in self.remotes.values():
+                    if r.repo_id in df_remotes:
+                        remote = r
+                        break
+
+
+        else:
+
+            remote = None
+
+        bundle = self._get_bundle_by_cache_key(dataset.cache_key) # BUndle head is always installed, no need for remote
 
         if not bundle:
             raise NotFoundError("Failed to get bundle from cache key: '{}'".format(dataset.cache_key) )
@@ -483,60 +516,52 @@ class Library(object):
 
                 partition = bundle.partitions.get(dataset.partition.vid)
 
-
                 if not partition:
-
                     raise NotFoundError('Failed to get partition {} from bundle at {} '
                                         .format(dataset.partition.fqname, dataset.cache_key))
 
-                arc = AltReadCache(self.cache, self.remote_stack)
+                if not self.cache.has(partition.identity.cache_key):
 
-                # If the partition has a reference, get that instead. This will load it into the local file
-                if partition.ref:
+                    if not remote:
+                        raise NotFoundError("No remote defined for nonlocal partition. Expected remote name '{}' "
+                                            .format(df.source_url))
 
-                    ref_ident = self.resolve(partition.ref)
+                    # If the partition has a reference, get that instead. This will
+                    # load it into the local file
+                    if partition.ref:
 
-                    if not ref_ident:
-                        raise NotFoundError("Reference '{}' refers to another partition, '{}', which does not exist"
-                                            .format(ref, partition.ref))
+                        source_ident = self.resolve(partition.ref)
 
-                    ref_partition_ident = ref_ident.partition
-
-                    if self.cache.has(ref_partition_ident.cache_key):
-                        # The referenced partition already exists, so it should be copied to the
-                        # refferent path
-                        delete = False
-
+                        # TODO! requiring the prior version to exist in the library will be a problem,
+                        # since the current sync_remote will avoid loading old version of a bundle.
+                        if not source_ident:
+                            raise NotFoundError("Reference '{}' refers to another partition, '{}', which does not exist"
+                                                .format(ref, partition.ref))
                     else:
-                        # The referenced partition does not exist, so it should be moved to the
-                        # refferent path
-                        # BUT, moving is not really supported by the caches, so we will copy then
-                        # delete.
+                        source_ident = partition.identity
 
-                        delete = True
+                    # Copy the partition from the remote to the local cache.
+                    with self.cache.put_stream(partition.identity.cache_key) as out_s:
+                        in_s = remote.get_stream(source_ident.cache_key, cb=cb)
 
-                    ref_abs_path = arc.get(ref_partition_ident.cache_key, cb=cb)
+                        if not in_s:
+                            raise NotFoundError('Failed to get partition {} from cache {}'
+                                                .format(partition.identity.cache_key, str(remote)))
+                        copy_file_or_flo(in_s, out_s)
 
-                    abs_path = self.cache.put(ref_abs_path, partition.cache_key)
+                    abs_path = self.cache.path(partition.identity.cache_key)
 
-                    if delete:
-                        os.remove(ref_abs_path)
+                    if not abs_path or not os.path.exists(abs_path):
+                        raise NotFoundError('Failed to get partition {} from cache {}'
+                                            .format(partition.identity.cache_key, str(remote)))
 
+                    source = remote.repo_id
 
                 else:
 
-                    abs_path = arc.get(partition.identity.cache_key, cb=cb)
+                    source = self.cache.repo_id
 
-
-                if not abs_path or not os.path.exists(abs_path):
-                    raise NotFoundError('Failed to get partition {} from cache '.format(partition.identity.cache_key))
-
-                try:
-                    self.database.install_partition_by_id(bundle, dataset.partition.id_,
-                                                    install_bundle=False, install_tables=False)
-                except IntegrityError as e:
-                    self.database.session.rollback()
-                    self.logger.error("Partition is already in Library.: {} ".format(e.message))
+                self.put_partition(partition, source, 'installed')
 
                 # Attach the partition into the bundle, and return both.
                 bundle.partition = partition
@@ -569,7 +594,7 @@ class Library(object):
         from ..orm import Table
         from sqlalchemy.orm.exc import NoResultFound
         from ..dbexceptions import NotFoundError
-
+        from sqlalchemy.orm import joinedload
 
         try:
             return (self.database.session.query(Table).filter(Table.vid == vid).one())
@@ -594,7 +619,6 @@ class Library(object):
         except NoResultFound:
             raise NotFoundError("Did not find table with proto_vid {} in library {}"
                                 .format(proto_vid, self.database.dsn))
-
 
 
     def dataset(self, vid):
@@ -679,15 +703,15 @@ class Library(object):
     def stores(self):
         """Return all of the refistered data stores. """
 
-        return self.files.query.group(self.files.TYPE.STORE).all
+        return self.files.query.type(self.files.TYPE.STORE).all
 
     def store(self, uid):
         """Return a tuple of a manifest file object and the manifest. . """
 
-        f = self.files.query.group(self.files.TYPE.STORE).ref(uid).one_maybe
+        f = self.files.query.type(self.files.TYPE.STORE).ref(uid).one_maybe
 
         if not f:
-            f = self.files.query.group(self.files.TYPE.STORE).path(uid).one_maybe
+            f = self.files.query.type(self.files.TYPE.STORE).path(uid).one_maybe
 
         return f
 
@@ -736,7 +760,7 @@ class Library(object):
 
         from ..warehouse.manifest import Manifest
 
-        f = self.files.query.group(self.files.TYPE.MANIFEST).ref(uid).one_maybe
+        f = self.files.query.type(self.files.TYPE.MANIFEST).ref(uid).one_maybe
 
         if not f:
             return None, None
@@ -1034,8 +1058,8 @@ class Library(object):
 
         else:
 
-            for file_ in self.new_files:
-                self.push(upstream, file_.ref, cb=cb, dry_run = dry_run)
+            for ref in [ file_.ref for file_ in self.new_files]:
+                self.push(upstream, ref, cb=cb, dry_run = dry_run)
 
             try:
                 upstream.store_list()
@@ -1078,7 +1102,8 @@ class Library(object):
         assert Files.TYPE.PARTITION == Dataset.LOCATION.PARTITION
 
         if clean:
-            self.files.query.type(Dataset.LOCATION.REMOTE).delete()
+            self.files.query.type(Files.TYPE.BUNDLE).delete()
+            self.files.query.type(Files.TYPE.PARTITION).delete()
 
         bundles = []
 
@@ -1099,15 +1124,6 @@ class Library(object):
 
                     path_ = os.path.join(r, file_)
 
-                    extant_bundle = (self.files.query.type(Files.TYPE.BUNDLE)
-                                     .path(path_).one_maybe)
-                    extant_partition = (self.files.query
-                                        .type(Files.TYPE.PARTITION)
-                                        .path(path_).one_maybe )
-
-                    #if (extant_bundle or extant_partition):
-                    #    continue
-
                     b = None
                     try:
                         b = self._create_bundle( path_)
@@ -1115,15 +1131,7 @@ class Library(object):
                         try:
                             bident = b.identity
                         except Exception as e:
-                            self.logger.error("Failed to open bundle from "
-                                              "{}: {} ".format(path_, e))
-                            continue
-
-                        # The path check above is wrong sometime when there
-                        # are symlinks
-                        if (self.files.query.type(Files.TYPE.BUNDLE)
-                                    .ref(bident.vid).one_maybe
-                            and self.get(bident.vid)):
+                            self.logger.error("Failed to open bundle from {}: {} ".format(path_, e))
                             continue
 
                         if b.identity.is_bundle:
@@ -1147,39 +1155,26 @@ class Library(object):
             self.logger.info('Installing: {} '.format(bundle.identity.vname))
 
             try:
-
                 try:
-                    self.database.install_bundle(bundle, commit=True)
+                    # Not installing partitions so can report progress on them later
+                    self.put_bundle(bundle, self.cache.repo_id, install_partitions = False, commit=True)
                     installed = True
                 except ConflictError:
                     installed = False
 
                 try:
-                    self.files.install_bundle_file(bundle, self.cache,
-                                                   commit=True)
-
-                    for p in bundle.partitions:
-                        self.logger.info('            {} '
-                                         .format(p.identity.vname))
-
-                        if installed:
-                            self.database.install_partition(bundle, p,
-                                                            commit='collect')
-
-                        self.files.install_partition_file(p, self.cache,
-                                                          commit='collect')
-
-
-                    self.files.insert_collection()
 
                     if installed:
-                        self.database.insert_partition_collection()
+                        for p in bundle.partitions:
+                            if self.put_partition(p, self.cache.repo_id, commit=False):
+                                self.logger.info('            {} '.format(p.identity.vname))
+
 
                     self.database.commit()
                     self.database.close()
                 except Exception as e:
-                    self.logger.error("Failed to sync {}; {}"
-                                      .format(bundle.identity.vname, e))
+                    raise
+                    self.logger.error("Failed to sync {}; {}".format(bundle.identity.vname, e))
 
 
                 bundle.close()
@@ -1203,7 +1198,8 @@ class Library(object):
         from boto.exception import S3ResponseError
 
         if clean:
-            self.files.query.type(Dataset.LOCATION.REMOTE).delete()
+            for remote_name, remote in remotes.items():
+                self.files.query.type(( Files.TYPE.PARTITION, Files.TYPE.BUNDLE)).source_url(remote.repo_id).delete()
 
         if not remotes:
             remotes = self.remotes
@@ -1216,13 +1212,12 @@ class Library(object):
             try:
                 remote_list = remote.list().keys()
                 self.logger.info("Syncing from remote: {} -> {} ".format(remote_name,remote))
-            except S3ResponseError:
-                self.logger.error("Failed to get list from {} -> {} ".format(remote_name,remote))
+            except S3ResponseError as e:
+                self.logger.error("Failed to get list from {} -> {} : {} ".format(remote_name,remote, e))
                 continue
 
-            all_keys = [ f.path for f  in
-                         self.files.query.type(Dataset.LOCATION.REMOTE)
-                             .group(remote.repo_id).all ]
+            all_keys = [ f.path for f  in self.files.query.type(Dataset.LOCATION.REMOTE)
+                          .source_url(remote.repo_id).all ]
 
             last_keys = defaultdict(lambda : [0,''] )
 
@@ -1233,7 +1228,10 @@ class Library(object):
                 for cache_key in remote_list:
                     # Key without the version
                     nv_key = re.sub(r'-\d+\.\d+\.\d+\.db', '', cache_key)
-                    version = int(re.search(r'(\d+)\.db$', cache_key).group(1))
+                    try:
+                        version = int(re.search(r'(\d+)\.db$', cache_key).group(1))
+                    except AttributeError:
+                        self.logger.error("Failed to find version numbers in '{}' ".format(cache_key))
 
                     if version > last_keys[nv_key][0]:
                         last_keys[nv_key] = [version, cache_key]
@@ -1244,6 +1242,7 @@ class Library(object):
             for cache_key in remote_list:
 
                 if cache_key in all_keys:
+
                     continue
 
                 if use_only and cache_key not in use_only:
@@ -1251,16 +1250,16 @@ class Library(object):
                     continue
 
                 if self.cache.has(cache_key):# This is just for reporting.
+
                     self.logger.info("Remote {} has: {}".format(remote.repo_id,cache_key))
+
                 else:
-                    self.logger.info("Remote {} sync: {}"
-                                     .format(remote.repo_id, cache_key))
+                    self.logger.info("Remote {} sync: {}".format(remote.repo_id, cache_key))
 
                 b = self._get_bundle_by_cache_key(cache_key)
 
                 if not b:
-                    self.logger.error("Failed to fetch bundle for {} "
-                                      .format(cache_key))
+                    self.logger.error("Failed to fetch bundle for {} ".format(cache_key))
                     continue
 
                 vid =  str(b.identity.vid)
@@ -1269,13 +1268,11 @@ class Library(object):
                     continue
 
                 try:
-                    path, installed = self.put_bundle(b, install_partitions=False, commit=True,
-                                                      file_state = 'installed')
+                    self.put_bundle(b, remote.repo_id, install_partitions = False,
+                                    commit=True, file_state = 'installed')
 
                 except NotABundle:
-                    self.logger.error("Cache key {} exists, "
-                                      "but isn't a valid bundle"
-                                      .format(cache_key))
+                    self.logger.error("Cache key {} exists, but isn't a valid bundle".format(cache_key))
                     b.close()
                     continue
                 except Exception as e:
@@ -1284,40 +1281,11 @@ class Library(object):
                     raise
                     continue
 
-                try:
-                    self.files.install_remote_bundle(b.identity, remote, {}, commit=True)
-                except IntegrityError:
-                    b.close() # Just means we already have it installed
-                    continue
-
-                for p in b.partitions:
-                    if installed:
-                        self.database.install_partition(b, p, commit='collect')
-
-                    if self.files.install_remote_partition(p.identity, remote,
-                            {}, commit = 'collect'):
-                        self.logger.info("    + {}".format(p.identity.name))
-                    else:
-                        self.logger.info("    = {}".format(p.identity.name))
-
-
-
-                try:
-                    self.files.insert_collection()
-                except IntegrityError as e:
-                    b.close() # Just means we already have it installed
-                    raise
-                    continue
-
-                if installed:
-                    self.database.insert_partition_collection()
-
 
                 self.database.commit()
                 self.database.close()
                 b.close()
 
-            self.search.commit()
 
     def sync_source(self, clean=False):
         '''Rebuild the database from the bundles that are already installed
@@ -1373,18 +1341,10 @@ class Library(object):
 
         w.url = self.warehouse_url
 
-        store = self.files.install_data_store(w,
-                                          name = w.name,
-                                          title=w.title,
-                                          url = w.url,
-                                          summary=w.summary)
-
-
-
+        store = self.files.install_data_store(w,name = w.name,title=w.title,url = w.url,summary=w.summary)
 
         s = self.database.session
 
-        s.commit()
 
         ## First, load in the partitions.
 
@@ -1403,12 +1363,7 @@ class Library(object):
             # Copy the file record. There really should be an easier way
             # to do this.
 
-            local_manifest = self.files.new_file(
-                commit=True, merge=True,
-                extant=self.files.query.ref(remote_manifest.ref)
-                        .group(self.files.TYPE.MANIFEST).one_maybe,
-                **{ k:v for k,v in remote_manifest.record_dict.items()
-                    if k not in ('oid')})
+            local_manifest = self.files.install_manifest(remote_manifest, warehouse=w)
 
             for p  in remote_manifest.linked_partitions:
                 p = self.partition(p.vid)

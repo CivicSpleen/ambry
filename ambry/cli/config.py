@@ -3,8 +3,6 @@ from ..cli import prt, fatal, warn, err
 
 
 def config_parser(cmd):
-    import argparse
-
     config_p = cmd.add_parser(
         'config',
         help='Install or display the configuration')
@@ -20,7 +18,7 @@ def config_parser(cmd):
         '-t',
         '--template',
         default='devel',
-        help="Suffix of the configuration template. One of: 'devel','library','builder'. Default: 'devel' ")
+        help="Suffix of the configuration template. One of: 'devel', 'library', 'builder'. Default: 'devel' ")
     sp.add_argument('-r', '--root', default=None, help="Set the root dir")
 
     sp.add_argument(
@@ -69,8 +67,6 @@ def config_parser(cmd):
 
 
 def config_command(args, rc):
-    from ..library import new_library
-
     globals()['config_' + args.subcommand](args, rc)
 
 
@@ -88,6 +84,9 @@ def config_install(args, rc):
     if user == 'root':
         install_file = rc.ROOT_CONFIG
         default_root = '/ambry'
+    elif os.getenv('VIRTUAL_ENV'):  # Special case for python virtual environments
+        install_file = os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')
+        default_root = os.path.join(os.getenv('VIRTUAL_ENV'), 'data')
     else:
         install_file = rc.USER_CONFIG
         warn(("Installing as non-root, to '{}'\n" +
@@ -129,7 +128,7 @@ def config_install(args, rc):
 
     if args.root:
         d['filesystem']['root'] = args.root
-    else:
+    elif default_root:
         d['filesystem']['root'] = default_root
 
     if args.remote:
@@ -157,12 +156,7 @@ def config_install(args, rc):
     if not os.path.exists(rc.USER_ACCOUNTS):
         with open(rc.USER_ACCOUNTS, 'w') as f:
 
-            d = dict(accounts=dict(
-                ambry=dict(
-                     name=None,
-                     email=None
-                     )
-            ))
+            d = dict(accounts=dict(ambry=dict(name=None, email=None)))
 
             prt('Writing config file: {}'.format(rc.USER_ACCOUNTS))
             f.write(yaml.dump(d, indent=4, default_flow_style=False))
@@ -206,9 +200,7 @@ def config_value(args, rc):
             else:
                 print dot_path, '=', sub_value(value, subs)
 
-    subs = dict(
-        root=rc.filesystem_path('root')
-    )
+    subs = dict(root=rc.filesystem_path('root'))
 
     if not args.key:
         if args.yaml:

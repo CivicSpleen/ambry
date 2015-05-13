@@ -1,9 +1,12 @@
 about:
     access: null
+    footnote: null
     grain: null
     groups: []
     license: other-open
+    processed: null
     rights: url of rights document
+    source: null
     space: null
     subject: What the data is about
     summary: An example bundle
@@ -48,8 +51,3 @@ names:
     vid: diEGPXmDC8001
     vname: source-dataset-subset-variation-0.0.1
 process: {}
-versions:
-    1:
-        date: null
-        description: null
-        version: 0.0.1

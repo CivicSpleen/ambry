@@ -5,12 +5,10 @@ included in this distribution as LICENSE.txt
 
 """
 
-from ..cli import prt, fatal
+from ..cli import prt
 
 
 def test_parser(cmd):
-    import argparse
-
     test_p = cmd.add_parser('test', help='Test and debugging')
     test_p.set_defaults(command='test')
 
@@ -33,8 +31,6 @@ def test_parser(cmd):
 
 
 def test_command(args, rc):
-    from ..library import new_library
-
     globals()['test_' + args.subcommand](args, rc)
 
 
@@ -57,9 +53,9 @@ def test_spatialite(args, rc):
     try:
         conn.enable_load_extension(True)
         conn.execute("select load_extension('/usr/lib/libspatialite.so')")
-        #loaded_extension = True
+        # loaded_extension = True
     except AttributeError:
-        #loaded_extension = False
+        # loaded_extension = False
         prt("WARNING: Could not enable load_extension(). ")
 
     rs = cur.execute('SELECT sqlite_version(), spatialite_version()')

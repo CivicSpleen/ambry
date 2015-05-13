@@ -8,7 +8,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 import os.path
 from semantic_version import Version
-from util.typecheck import returns, accepts
+from util.typecheck import returns  # , accepts
 from util import Constant
 
 
@@ -112,7 +112,7 @@ class Name(object):
 
     @returns(str, debug=2)
     def _parse_version(self, version):
-        import semantic_version as sv  # @UnresolvedImport
+        import semantic_version as sv
 
         if version is not None and isinstance(version, basestring):
 
@@ -127,8 +127,9 @@ class Name(object):
                     try:
                         version = str(sv.Spec(version))
                     except ValueError:
-                        raise ValueError(
-                            "Could not parse '{}' as a semantic version".format(version))
+
+                        raise ValueError("Could not parse '{}' as a semantic version".format(version))
+
 
         if not version:
             version = str(sv.Version('0.0.0'))
@@ -196,7 +197,7 @@ class Name(object):
         d = self._dict(with_name=False)
 
         if isinstance(excludes, basestring):
-            excludes = set([excludes])
+            excludes = {excludes}
 
         if not isinstance(excludes, set):
             excludes = set(excludes)
@@ -244,9 +245,7 @@ class Name(object):
         # bundle path when called from subclasses
         names = [k for k, _, _ in self._name_parts]
 
-        parts = []
-
-        parts.append(self.source)
+        parts = [self.source]
 
         if self.bspace:
             parts.append(self.bspace)
@@ -264,7 +263,7 @@ class Name(object):
 
     @property
     def cache_key(self):
-        '''The name in a form suitable for use as a cache-key'''
+        """The name in a form suitable for use as a cache-key"""
         try:
             return self.path + self.PATH_EXTENSION
         except TypeError:
@@ -473,12 +472,12 @@ class PartitionName(PartialPartitionName, Name):
             return True
 
     @classmethod
-    def format_name(self):
-        return self.FORMAT
+    def format_name(cls):
+        return cls.FORMAT
 
     @classmethod
-    def extension(self):
-        return self.PATH_EXTENSION
+    def extension(cls):
+        return cls.PATH_EXTENSION
 
     def as_namequery(self):
         return PartitionNameQuery(**self._dict(with_name=False))
@@ -728,10 +727,10 @@ class ObjectNumber(object):
             return None
 
         if not on_str:
-            raise Exception("Didn't get input")
+            raise NotObjectNumberError("Got null input")
 
-        if isinstance(on_str, unicode):
-            dataset = on_str.encode('ascii')
+        # if isinstance(on_str, unicode):
+        #     dataset = on_str.encode('ascii')
 
         type_ = on_str[0]
         on_str = on_str[1:]
@@ -741,19 +740,13 @@ class ObjectNumber(object):
             type_ = cls.TYPE.DATASET
             on_str = cls.TYPE.DATASET + on_str[1:]
 
-        if not type_ in cls.NDS_LENGTH.keys():
-            raise NotObjectNumberError(
-                "Unknown type character '{}' for '{}'".format(
-                    type_,
-                    on_str))
+        if type_ not in cls.NDS_LENGTH.keys():
+            raise NotObjectNumberError("Unknown type character '{}' for '{}'".format(type_,on_str))
 
         ds_length = len(on_str) - cls.NDS_LENGTH[type_]
 
-        if not ds_length in cls.DATASET_LENGTHS:
-            raise NotObjectNumberError(
-                "Dataset string '{}' has an unfamiliar length: {}".format(
-                    on_str,
-                    ds_length))
+        if ds_length not in cls.DATASET_LENGTHS:
+            raise NotObjectNumberError("Dataset string '{}' has an unfamiliar length: {}".format(on_str,ds_length))
 
         ds_lengths = cls.DATASET_LENGTHS[ds_length]
 
@@ -835,7 +828,7 @@ class ObjectNumber(object):
 
         alphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-        if (num == 0):
+        if num == 0:
             return alphabet[0]
         arr = []
         base = len(alphabet)
@@ -969,7 +962,7 @@ class TopNumber(ObjectNumber):
 
         ds_len = self.DLEN.DATASET_CLASSES[self.assignment_class]
 
-        return (ObjectNumber.base62_encode(self.dataset).rjust(ds_len, '0'))
+        return ObjectNumber.base62_encode(self.dataset).rjust(ds_len, '0')
 
     def __str__(self):
         return (
@@ -1005,7 +998,7 @@ class DatasetNumber(ObjectNumber):
 
         ds_len = self.DLEN.DATASET_CLASSES[self.assignment_class]
 
-        return (ObjectNumber.base62_encode(self.dataset).rjust(ds_len, '0'))
+        return ObjectNumber.base62_encode(self.dataset).rjust(ds_len, '0')
 
     def as_partition(self, partition_number=0):
         """Return a new PartitionNumber based on this DatasetNumber."""
@@ -1050,12 +1043,8 @@ class TableNumber(ObjectNumber):
         return (
             ObjectNumber.TYPE.TABLE +
             self.dataset._ds_str() +
-            ObjectNumber.base62_encode(
-                self.table).rjust(
-                self.DLEN.TABLE,
-                '0') +
-            ObjectNumber._rev_str(
-                self.revision))
+            ObjectNumber.base62_encode(self.table).rjust(self.DLEN.TABLE,'0') +
+            ObjectNumber._rev_str( self.revision))
 
 
 class ColumnNumber(ObjectNumber):
@@ -1118,21 +1107,19 @@ class PartitionNumber(ObjectNumber):
     """An identifier for a partition."""
 
     def __init__(self, dataset, partition, revision=None):
-        '''
+        """
         Arguments:
         dataset -- Must be a DatasetNumber
         partition -- an integer, from 0 to 62^3
-        '''
+        """
 
         partition = int(partition)
 
         if not isinstance(dataset, DatasetNumber):
-            raise ValueError("Constructor requires a DatasetNumber")
+            raise ValueError("Constructor requires a DatasetNumber. Got '{}' ".format(dataset))
 
         if partition > ObjectNumber.PARTMAXVAL:
-            raise ValueError(
-                "Value is too large. Max is: {}".format(
-                    ObjectNumber.PARTMAXVAL))
+            raise ValueError("Value is too large. Max is: {}".format(ObjectNumber.PARTMAXVAL))
 
         self.dataset = dataset
         self.partition = partition
@@ -1328,15 +1315,12 @@ class Identity(object):
             # The vid should be constructed from the id and the revision
 
             if not d['id']:
-                raise ValueError(
-                    " 'id' key doesn't have a value in {} ".format(d))
+                raise ValueError(" 'id' key doesn't have a value in {} ".format(d))
 
             ono = ObjectNumber.parse(d['id'])
 
             if not ono:
-                raise ValueError(
-                    "Failed to parse '{}' as an ObjectNumber ".format(
-                        d['id']))
+                raise ValueError("Failed to parse '{}' as an ObjectNumber ".format(d['id']))
 
             on = ono.rev(d['revision'])
 
@@ -1345,8 +1329,7 @@ class Identity(object):
 
             if not on:
                 raise ValueError(
-                    "Failed to parse '{}' as an ObjectNumber ".format(
-                        d['vid']))
+                    "Failed to parse '{}' as an ObjectNumber ".format(d['vid']))
 
         else:
             raise ValueError(
@@ -1358,19 +1341,14 @@ class Identity(object):
                 name = cls._name_class(**d)
                 ident = cls(name, on)
             except TypeError as e:
-                raise TypeError(
-                    "Failed to make identity from \n{}\n: {}".format(
-                        d,
-                        e.message))
+                raise TypeError("Failed to make identity from \n{}\n: {}".format(d,e.message))
 
         elif isinstance(on, PartitionNumber):
 
             ident = PartitionIdentity.from_dict(d)
         else:
             raise TypeError(
-                "Can't make identity from {}; object number is wrong type: {}".format(
-                    d,
-                    type(on)))
+                "Can't make identity from {}; object number is wrong type: {}".format(d,type(on)))
 
         if 'md5' in d:
             ident.md5 = d['md5']
@@ -1391,7 +1369,7 @@ class Identity(object):
         :param o: Input object to split
 
         """
-        from collections import namedtuple
+        # from collections import namedtuple
 
         s = str(o)
 
@@ -1477,7 +1455,7 @@ class Identity(object):
         """Return a dictionary of metadata, for use in the Remote api."""
         import json
         import os
-        from collections import OrderedDict
+        # from collections import OrderedDict
 
         if not md5:
             if not file:
@@ -1501,7 +1479,7 @@ class Identity(object):
         }
 
     def add_md5(self, md5=None, file=None):
-        import json
+        # import json
 
         if not md5:
             if not file:
@@ -1595,7 +1573,7 @@ class Identity(object):
 
     @property
     def cache_key(self):
-        '''The name in a form suitable for use as a cache-key'''
+        """The name in a form suitable for use as a cache-key"""
         self.is_valid()
         return self._name.cache_key
 
@@ -1645,6 +1623,8 @@ class Identity(object):
 
     @staticmethod
     def _compose_fqname(vname, vid):
+        assert vid is not None
+        assert vname is not None
         return vname + Identity.OBJECT_NUMBER_SEP + vid
 
     def as_partition(self, partition=0, **kwargs):
@@ -1811,12 +1791,12 @@ class PartitionIdentity(Identity):
         return self._name.sub_path
 
     @classmethod
-    def format_name(self):
-        return self._name_class.FORMAT
+    def format_name(cls):
+        return cls._name_class.FORMAT
 
     @classmethod
-    def extension(self):
-        return self._name_class.PATH_EXTENSION
+    def extension(cls):
+        return cls._name_class.PATH_EXTENSION
 
 
 class NumberServer(object):
@@ -1923,7 +1903,7 @@ class IdentitySet(object):
     def deps(ident):
         if not ident.data:
             return '.'
-        if not 'dependencies' in ident.data:
+        if 'dependencies' not in ident.data:
             return '.'
         if not ident.data['dependencies']:
             return '0'
@@ -1935,8 +1915,8 @@ class IdentitySet(object):
     all_fields = [
         # Name, width, d_format_string, p_format_string, extract_function
         ('deps', '{:3s}', '{:3s}', lambda ident: IdentitySet.deps(ident)),
-        ('order', '{:6s}', '{:6s}', lambda ident: "{major:02d}:{minor:02d}".format(**ident.data['order']
-                                                                                   if 'order' in ident.data else {'major': -1, 'minor': -1})),
+        ('order', '{:6s}', '{:6s}', lambda ident: "{major:02d}:{minor:02d}".format(
+            **ident.data['order'] if 'order' in ident.data else {'major': -1, 'minor': -1})),
         ('locations', '{:6s}', '{:6s}', lambda ident: ident.locations),
         ('vid', '{:15s}', '{:20s}', lambda ident: ident.vid),
         ('status', '{:20s}', '{:20s}', lambda ident: ident.bundle_state if ident.bundle_state else ''),

@@ -14,12 +14,11 @@ import os.path
 import ambry
 import ambry.util
 from ambry.util import temp_file_name
-from ambry.bundle import DbBundle
-from ..identity import LocationRef, Identity
-from ambry.orm import Column, Partition, Table, Dataset, Config, File, Base, Code, ColumnStat
+from ..identity import  Identity
+from ambry.orm import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat
 
 from collections import namedtuple
-from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
+from sqlalchemy.exc import IntegrityError
 
 
 ROOT_CONFIG_NAME = 'd000'
@@ -95,8 +94,6 @@ class LibraryDb(object):
 
         if not self._engine:
 
-            # print "Create Engine",os.getpid(), self.dsn
-
             # There appears to be a problem related to connection pooling on Linux + Postgres, where
             # multiprocess runs will throw exceptions when the Datasets table record can't be
             # found. It looks like connections are losing the setting for the search path to the
@@ -134,7 +131,7 @@ class LibraryDb(object):
         from sqlalchemy.orm import sessionmaker
 
         if not self.Session:
-            self.Session = sessionmaker(bind=self.engine)
+            self.Session = sessionmaker(bind=self.engine, expire_on_commit = False)
 
         if not self._session:
             self._session = self.Session()
@@ -170,6 +167,8 @@ class LibraryDb(object):
     def commit(self):
         try:
             self.session.commit()
+            self.session.expunge_all() # Clear any cached object in the session.
+            self.session.expire_all()
             # self.close_session()
         except Exception as e:
             #self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))
@@ -236,16 +235,24 @@ class LibraryDb(object):
             self.close_connection()
 
     def clean(self, add_config_root=True):
+        from sqlalchemy.exc import OperationalError, IntegrityError
+        from ..dbexceptions import DatabaseError
+
         s = self.session
 
-        s.query(Config).delete()
-        s.query(ColumnStat).delete()
-        s.query(File).delete()
-        s.query(Column).delete()
-        s.query(Partition).delete()
-        s.query(Table).delete()
-        s.query(Dataset).delete()
-        s.query(Code).delete()
+        try:
+            s.query(Config).delete()
+            s.query(ColumnStat).delete()
+            s.query(File).delete()
+            s.query(Code).delete()
+            s.query(Column).delete()
+            s.query(Table).update({Table.p_vid: None}) # Prob should be handled with a cascade on relationship. 
+            s.query(Partition).delete()
+            s.query(Table).delete()
+            s.query(Dataset).delete()
+        except (OperationalError, IntegrityError) as e:
+            # Tables dont exist?
+            raise DatabaseError("Failed to data records from {}: {}".format(self.dsn, str(e)))
 
         if add_config_root:
             self._add_config_root()
@@ -287,56 +294,45 @@ class LibraryDb(object):
                     raise Exception("Couldn't create directory " + dir_)
 
     def drop(self):
-        from sqlalchemy.exc import NoSuchTableError
-        if not self.enable_delete:
-            raise Exception(
-                "Deleting not enabled. Set library.database.enable_delete = True")
+        from sqlalchemy.exc import NoSuchTableError, ProgrammingError, OperationalError
 
-        library_tables = [
-            Config.__tablename__,
-            ColumnStat.__tablename__,
-            Column.__tablename__,
-            Partition.__tablename__,
-            Table.__tablename__,
-            File.__tablename__,
-            Dataset.__tablename__,
-            Code.__tablename__]
+        if not self.enable_delete:
+            raise Exception("Deleting not enabled. Set library.database.enable_delete = True")
 
         try:
-            db_tables = reversed(self.metadata.sorted_tables)
+            self.metadata.sorted_tables
         except NoSuchTableError:
             # Deleted the tables out from under it, so we're done.
             return
 
-        # sorted by foreign key dependency
-        for table in reversed(self.metadata.sorted_tables):
-            if table.name in library_tables:
-                table.drop(self.engine, checkfirst=True)
+
+        # Tables and partitions can have a cyclic rlationship.
+        # Prob should be handled with a cascade on relationship.
+        try:
+            self.session.query(Table).update({Table.p_vid: None})
+            self.session.commit()
+        except (ProgrammingError, OperationalError): # Table doesn't exist.
+            self._session.rollback()
+            pass
+
+        library_tables = [Config, ColumnStat, File, Code, Partition, Column, Table, Dataset]
+
+        for table in library_tables:
+
+            table.__table__.drop(self.engine, checkfirst=True)
 
         self.commit()
 
     def __del__(self):
-        pass  # print  'closing LibraryDb'
+        pass
 
     def clone(self):
-        return self.__class__(
-            self.driver,
-            self.server,
-            self.dbname,
-            self.username,
-            self.password)
+        return self.__class__(self.driver,self.server,self.dbname,self.username,self.password)
 
     def create_tables(self):
+
         from sqlalchemy.exc import OperationalError
-        tables = [
-            Dataset,
-            Config,
-            Table,
-            Column,
-            File,
-            Partition,
-            Code,
-            ColumnStat]
+        tables = [ Dataset,Config,Table,Column,Partition,File,Code,ColumnStat]
 
         try:
             self.drop()
@@ -562,10 +558,7 @@ class LibraryDb(object):
 
         import datetime
 
-        self.set_config_value(
-            'activity',
-            'change',
-            datetime.datetime.utcnow().isoformat())
+        self.set_config_value('activity','change',datetime.datetime.utcnow().isoformat())
 
     ##
     # Install and remove bundles and partitions
@@ -602,251 +595,62 @@ class LibraryDb(object):
                 self.commit()
 
             except IntegrityError as e:
-                raise ConflictError(
-                    "Can't install dataset vid={}; \nOne already exists. ('{}');\n {}" .format(
-                        identity.vid,
-                        e.message,
-                        ds.dict))
+                raise ConflictError("Can't install dataset vid={}; \nOne already exists. ('{}');\n {}" .format(
+                        identity.vid,e.message,ds.dict))
 
-    def install_partition_identity(self, identity, data={}, overwrite=True):
-        """Create the record for the dataset.
+    def install_bundle_dataset(self, bundle):
+        """Install only the dataset record for the bundle"""
 
-        Does not add an File objects
+        from sqlalchemy.orm import joinedload, noload
 
-        """
-        from sqlalchemy.exc import IntegrityError
-        from ..dbexceptions import ConflictError
+        if self.session.query(Dataset).filter(Dataset.vid == str(bundle.identity.vid)).first():
+            return False
 
-        ds = Dataset(**identity.as_dataset().dict)
+        dataset = (bundle.database.session.query(Dataset).options(noload('*'), joinedload('configs'))
+                   .filter(Dataset.vid == str(bundle.identity.vid)).one() )
 
-        d = identity.dict
-        del d['dataset']
+        self.session.merge(dataset)
 
-        p = Partition(ds, **d)
+        for cfg in dataset.configs:
+            self.session.merge(cfg)
 
-        p.data = data
-
-        try:
-            try:
-                self.session.add(p)
-                self.commit()
-
-            except IntegrityError as e:
-
-                if not overwrite:
-                    return
-
-                self.session.rollback()
-                self.session.merge(p)
-                self.commit()
-
-        except IntegrityError as e:
-            raise ConflictError(
-                "Can't install partition vid={};\nOne already exists. ('{}');\n{}" .format(
-                    identity.vid,
-                    e.message,
-                    p.dict))
-
-    def install_bundle(self, bundle, commit=True):
-        """Copy the schema and partitions lists into the library database."""
-        from ambry.bundle import Bundle
-        from sqlalchemy.orm.exc import NoResultFound
-        from ..dbexceptions import ConflictError, NotFoundError
-        from sqlalchemy import update, or_
-
-        if not isinstance(bundle, Bundle):
-            raise ValueError(
-                "Can only install a  Bundle object. Got a {}".format(
-                    type(bundle)))
-
-            # The Tables only get installed when the dataset is installed,
-            # not for the partition
-
-        self._mark_update()
-
-        try:
-            dvid = self.get(bundle.identity.vid)
-        except NotFoundError:
-            dvid = None
-
-        # This was taken out because it prevents library bundles from being installed when the
-        # dataset already exists because the source bundle was installed.
-        # if dvid:
-        #   raise ConflictError("Bundle {} already installed".format(bundle.identity.fqname))
-
-        try:
-
-            dataset = self.install_dataset(bundle)
-        except Exception as e:
-
-            from ..dbexceptions import DatabaseError
-
-            raise DatabaseError("Failed to install {} into {}: {}".format(
-                bundle.database.path, self.dsn, e.message
-            ))
-
-        s = self.session
-
-        # using s.merge() is a lot easer, but this is spectacularly faster.
-
-        tables = []
-        columns = []
-
-        # Link these after the tables and columns are created
-        foreign_keys = []
-
-        for table in dataset.tables:
-            tables.append(table.insertable_dict)
-
-            for column in table.columns:
-
-                d = column.insertable_dict
-
-                columns.append(d)
-
-        if tables:
-            s.execute(Table.__table__.insert(), tables)
-
-            s.execute(Column.__table__.insert(), columns)
-
-        for config in bundle.database.session.query(Config).all():
-            s.merge(config)
-
-        if commit:
-            try:
-                self.commit()
-            except IntegrityError as e:
-                self.logger.error("Failed to merge into {}".format(self.dsn))
-                self.rollback()
-                raise e
-
-    def install_dataset(self, bundle):
-        """Install only the most basic parts of the bundle, excluding the
-        partitions and tables. Use install_bundle to install everything.
-
-        This will delete all of the tables and partitions associated
-        with the bundle, if they already exist, so callers should check
-        that the dataset does not already exist  before installing
-        again.
-
-        """
-
-        from sqlalchemy.exc import OperationalError
-        from ..dbexceptions import NotABundle
-        from sqlalchemy import or_
-
-        # There should be only one dataset record in the
-        # bundle
-        db = bundle.database
-        db.update_schema()
-
-        bdbs = db.session
-
-        s = self.session
-
-        try:
-            dataset = bdbs.query(Dataset).one()
-        except OperationalError as e:
-            raise NotABundle(
-                "Error when refencing dataset for {} : {} ".format(
-                    bundle.database.path,
-                    e))
-
-        dataset.location = Dataset.LOCATION.LIBRARY
-
-        dataset.data['title'] = bundle.metadata.about.title
-        dataset.data['summary'] = bundle.metadata.about.summary
-
-        s.merge(dataset)
-
-        for config in bdbs.query(Config).all():
-            s.merge(config)
-
-        self.delete_dataset_colstats(dataset.vid)
-
-        s.query(Partition).filter(Partition.d_vid == dataset.vid).delete()
-
-        for table in dataset.tables:
-            s.query(Column).filter(Column.t_vid == table.vid).delete()
-
-        s.query(Table).filter(Table.d_vid == dataset.vid).delete()
-
-        try:
-            s.commit()
-        except IntegrityError as e:
-            self.logger.error("Failed to merge in {}".format(self.dsn))
-            self.rollback()
-            raise e
+        self.session.commit()
 
         return dataset
 
-    def install_partition_by_id(
-            self,
-            bundle,
-            p_id,
-            install_bundle=True,
-            install_tables=True,
-            commit=True):
-        """Install a single partition and its tables. This is mostly used for
-        installing into warehouses, where it isn't desirable to install the
-        whole bundle.
 
-        if commit = 'collect', the partitions are collected and inserted with insert_partition_collection,
-        in this case, tables and column will not be installed.
+    def install_bundle(self, bundle):
+        """Copy the schema and partitions lists into the library database."""
 
-        """
+        from sqlalchemy.orm import joinedload, noload
 
-        from ..dbexceptions import NotFoundError
-        from ..identity import PartitionNameQuery
-        from sqlalchemy.orm.exc import NoResultFound
+        if self.session.query(Dataset).filter(Dataset.vid == str(bundle.identity.vid) ).first():
+            return False
 
-        partition = bundle.partitions.get(p_id)
+        dataset = self.install_bundle_dataset(bundle)
 
-        return self.install_partition(
-            bundle,
-            partition,
-            install_bundle=install_bundle,
-            install_tables=install_tables,
-            commit=commit)
+        d_vid = dataset.vid
 
-    def install_partition(
-            self,
-            bundle,
-            partition,
-            install_bundle=True,
-            install_tables=True,
-            commit=True):
-        """Install a single partition and its tables. This is mostly used for
-        installing into warehouses, where it isn't desirable to install the
-        whole bundle.
+        # This is a lot faster than going through the ORM.
+        for tbl in [Table, Column, Code, Partition, ColumnStat]:
 
-        if commit = 'collect', the partitions are collected and inserted with insert_partition_collection,
-        in this case, tables and column will not be installed.
+            rows = [dict(r.items()) for r in bundle.database.session.execute(tbl.__table__.select()) ]
 
-        """
+            # There were recent schema updates that add a d_vid to every object, but these will be null
+            # in old bundles, so we need to set the value manually.
+            if tbl == Column or tbl == ColumnStat or tbl == Code:
+                for r in rows:
+                    for k,v in r.items():
+                        if k.endswith('_d_vid') and not bool(v):
+                            r[k] = d_vid
+            if rows:
+                self.session.execute(tbl.__table__.insert(), rows)
 
-        s = self.session
-        s.merge(bundle.get_dataset())
-        s.merge(partition.record)
+            self.session.commit()
 
-        for cs in partition.record._stats:
-            s.merge(cs)
+        self._mark_update()
 
-        s.commit()
-
-        # Sqlalchemy loads in all of the records linked to the
-        # partition, including the tables and columns. But not column stats
-
-    def insert_partition_collection(self):
-
-        if len(self._partition_collection) == 0:
-            return
-
-        self.session.execute(
-            Partition.__table__.insert(),
-            self._partition_collection)
-
-        self._partition_collection = []
+        return dataset
 
     def mark_table_installed(self, table_or_vid, name=None):
         """Mark a table record as installed."""
@@ -886,32 +690,19 @@ class LibraryDb(object):
         from ..bundle import LibraryDbBundle
 
         try:
-            dataset, partition = self.get_id(
-                bundle.identity.vid)  # @UnusedVariable
+            dataset, partition = self.get_id( bundle.identity.vid)
         except AttributeError:
             dataset, partition = bundle, None
 
         if not dataset:
             return False
 
-        if partition:
-            self.remove_partition(partition)
-        else:
-            b = LibraryDbBundle(self, dataset.identity.vid)
-            for p in b.partitions:
-                self.remove_partition(p)
+        dataset =  self.session.query(Dataset).filter( Dataset.vid == dataset.identity.vid).one()
 
-        dataset = (
-            self.session.query(Dataset).filter(
-                Dataset.vid == dataset.identity.vid).one())
-
-        self.delete_dataset_colstats(dataset.vid)
-
-        # Can't use delete() on the query -- bulk delete queries do not
-        # trigger in-python cascades!
         self.session.delete(dataset)
 
         self.commit()
+
 
     def delete_dataset_colstats(self, dvid):
         """Total hack to deal with not being able to get delete cascades to
@@ -923,20 +714,18 @@ class LibraryDb(object):
         """
         s = self.session
 
+        # Get the partitions for the dataset
         part_query = s.query(Partition.vid).filter(Partition.d_vid == dvid)
 
-        s.query(ColumnStat).filter(
-            ColumnStat.p_vid.in_(
-                part_query.subquery())).delete(
-            synchronize_session='fetch')
+        # Delete those colstats that reference the partitions.
+        s.query(ColumnStat).filter(ColumnStat.p_vid.in_(part_query.subquery())).delete(synchronize_session='fetch')
+
 
     def remove_dataset(self, vid):
         """Remove all references to a Dataset."""
         from ..orm import Dataset, ColumnStat
 
-        dataset = (
-            self.session.query(Dataset).filter(
-                Dataset.vid == vid).one())
+        dataset = (self.session.query(Dataset).filter(Dataset.vid == vid).one())
 
         # Total hack to avoid having to figure out cascades between partitions
         # and colstats
@@ -945,6 +734,7 @@ class LibraryDb(object):
         # Can't use delete() on the query -- bulk delete queries do not
         # trigger in-python cascades!
         self.session.delete(dataset)
+
 
         self.session.commit()
 
@@ -1071,9 +861,7 @@ class LibraryDb(object):
             if ck not in datasets:
                 datasets[ck] = d.identity
                 datasets[ck].summary = self.get_bundle_value(
-                    d.vid,
-                    'config',
-                    'about.title')
+                    d.vid,'config','about.title')
 
             # Adding the file to the identity gets us the bundle state and
             # modification time.
@@ -1096,11 +884,7 @@ class LibraryDb(object):
 
         all = set()
 
-        q = (
-            self.session.query(
-                Dataset,
-                Partition).join(Partition).filter(
-                Dataset.vid != ROOT_CONFIG_NAME_V))
+        q = (self.session.query(Dataset,Partition).join(Partition).filter(Dataset.vid != ROOT_CONFIG_NAME_V))
 
         for row in q.all():
             all.add(row.Dataset.vid)
@@ -1129,217 +913,8 @@ class LibraryDb(object):
         from .query import Resolver
         return Resolver(self.session)
 
-    def find(self, query_command):
-        """Find a bundle or partition record by a QueryCommand or Identity.
 
-        Args:
-            query_command. QueryCommand or Identity
 
-        returns:
-            A list of identities, either Identity, for datasets, or PartitionIdentity
-            for partitions.
-
-        """
-
-        def like_or_eq(c, v):
-
-            if v and '%' in v:
-                return c.like(v)
-            else:
-                return c == v
-
-        s = self.session
-
-        has_partition = False
-        has_where = False
-
-        if isinstance(query_command, Identity):
-            raise NotImplementedError()
-            out = []
-            for d in self.queryByIdentity(query_command).all():
-                id_ = d.identity
-                d.path = os.path.join(self.cache, id_.cache_key)
-                out.append(d)
-
-        tables = [Dataset]
-
-        if len(query_command.partition) > 0:
-            tables.append(Partition)
-
-        if len(query_command.table) > 0:
-            tables.append(Table)
-
-        if len(query_command.column) > 0:
-            tables.append(Column)
-
-        # Dataset.id_ is included to ensure result is always a tuple)
-        tables.append(Dataset.id_)
-
-        # Dataset.id_ is included to ensure result is always a tuple
-        query = s.query(*tables)
-
-        if len(query_command.identity) > 0:
-            for k, v in query_command.identity.items():
-                if k == 'id':
-                    k = 'id_'
-                try:
-                    query = query.filter(like_or_eq(getattr(Dataset, k), v))
-                except AttributeError as e:
-                    # Dataset doesn't have the attribute, so ignore it.
-                    pass
-
-        if len(query_command.partition) > 0:
-            query = query.join(Partition)
-
-            for k, v in query_command.partition.items():
-                if k == 'id':
-                    k = 'id_'
-
-                from sqlalchemy.sql import or_
-
-                if k == 'any':
-                    continue  # Just join the partition
-                elif k == 'table':
-                    # The 'table" value could be the table id
-                    # or a table name
-                    query = query.join(Table)
-                    query = query.filter(
-                        or_(Partition.t_id == v, like_or_eq(Table.name, v.lower())))
-                elif k == 'space':
-                    query = query.filter(
-                        or_(like_or_eq(Partition.space, v.lower())))
-
-                else:
-                    query = query.filter(like_or_eq(getattr(Partition, k), v))
-
-            if not query_command.partition.format:
-                # Exclude CSV if not specified
-                query = query.filter(Partition.format != 'csv')
-
-        if len(query_command.table) > 0:
-            query = query.join(Table)
-            for k, v in query_command.table.items():
-                query = query.filter(like_or_eq(getattr(Table, k), v))
-
-        if len(query_command.column) > 0:
-            query = query.join(Table)
-            query = query.join(Column)
-            for k, v in query_command.column.items():
-                query = query.filter(like_or_eq(getattr(Column, k), v))
-
-        query = query.distinct().order_by(Dataset.revision.desc())
-
-        out = []
-
-        try:
-            for r in query.all():
-
-                o = {}
-
-                try:
-                    o['identity'] = r.Dataset.identity.dict
-                    o['partition'] = r.Partition.identity.dict
-
-                except:
-                    o['identity'] = r.Dataset.identity.dict
-
-                try:
-                    o['table'] = r.Table.dict
-                except:
-                    pass
-
-                try:
-                    o['column'] = r.Column.dict
-                except:
-                    pass
-
-                out.append(o)
-        except Exception as e:
-            self.logger.error(
-                "Exception while querrying in {}, schema {}".format(
-                    self.dsn,
-                    self._schema))
-            raise
-
-        return out
-
-    def queryByIdentity(self, identity):
-        from ..orm import Dataset, Partition
-        from ..identity import Identity, PartitionIdentity
-        from sqlalchemy import desc
-
-        s = self.database.session
-
-        # If it is a string, it is a name or a dataset id
-        if isinstance(identity, str) or isinstance(identity, unicode):
-            query = (
-                s.query(Dataset) .filter(
-                    Dataset.location == Dataset.LOCATION.LIBRARY) .filter(
-                    (Dataset.id_ == identity) | (
-                        Dataset.name == identity)))
-        elif isinstance(identity, PartitionIdentity):
-
-            query = s.query(Dataset, Partition)
-
-            for k, v in identity.to_dict().items():
-                d = {}
-
-                if k == 'revision':
-                    v = int(v)
-
-                d[k] = v
-
-            query = query.filter_by(**d)
-
-        elif isinstance(identity, Identity):
-            query = s.query(Dataset).filter(
-                Dataset.location == Dataset.LOCATION.LIBRARY)
-
-            for k, v in identity.to_dict().items():
-                d = {}
-                d[k] = v
-
-            query = query.filter_by(**d)
-
-        elif isinstance(identity, dict):
-            query = s.query(Dataset).filter(
-                Dataset.location == Dataset.LOCATION.LIBRARY)
-
-            for k, v in identity.items():
-                d = {}
-                d[k] = v
-                query = query.filter_by(**d)
-
-        else:
-            raise ValueError("Invalid type for identity")
-
-        query.order_by(desc(Dataset.revision))
-
-        return query
-
-    ##
-    # Database backup and restore. Synchronizes the database with
-    # a remote. This is used when a library is created attached to a remote, and
-    # needs to get the library database from the remote.
-    ##
-
-    def _copy_db(self, src, dst):
-        from sqlalchemy.orm.exc import NoResultFound
-
-        try:
-            dst.session.query(Dataset).filter(Dataset.vid == 'a0').delete()
-        except:
-            pass
-
-        # sorted by foreign key dependency
-        for table in self.metadata.sorted_tables:
-
-            rows = src.session.execute(table.select()).fetchall()
-            dst.session.execute(table.delete())
-            for row in rows:
-                dst.session.execute(table.insert(), row)
-
-        dst.session.commit()
 
 
 def _pragma_on_connect(dbapi_con, con_record):

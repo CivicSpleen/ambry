@@ -22,7 +22,15 @@ class Metadata(object):
     _path = None
     _synonyms = None
 
-    def __init__(self, d=None, path=None, synonyms=None):
+    def __init__(self, d=None, path=None, synonyms=None, context=None):
+        """ Object heirarchy for holding metadata.
+
+        :param d:  Initial dict of values.
+        :param path: File path for writing data to yaml
+        :param synonyms: Mapping for values that will be considered the same
+        :param context: Context for Jinja2 template conversion in SalarTerms
+        :return:
+        """
 
         self._top = self
         self._path = path
@@ -30,6 +38,8 @@ class Metadata(object):
         self._term_values = AttrDict()
         self._errors = {}
         self._loaded = set()
+        self._context = context
+
 
         if self._synonyms is not None:
 
@@ -177,7 +187,7 @@ class Metadata(object):
                 raise ValueError(str(e) + " : " + str(row))
 
             try:
-                v = json.loads(value)
+                json.loads(value)
             except ValueError:
                 pass
             except TypeError:
@@ -349,14 +359,14 @@ class Metadata(object):
             if not os.path.isdir(dir_):
                 os.makedirs(dir_)
 
+            keys = [g._key for g in groups]
+
+            # Include the non-term keys when writing the non-term file
+            if (hasattr(self, '_non_term_file') and file_ == self._non_term_file and non_term_keys):
+                keys += non_term_keys
+
             with open(fn, 'w+') as f:
-                keys = [g._key for g in groups]
-
-                # Include the non-term keys when writing the non-term file
-                if (hasattr(self, '_non_term_file') and file_ == self._non_term_file and non_term_keys):
-                    keys += non_term_keys
-
-                self.dump(stream=f, map_view=MapView(keys=keys))
+                self.dump(stream=f, keys=keys)
 
 
 class Group(object):
@@ -465,7 +475,7 @@ class DictGroup(Group, collections.MutableMapping):
     def _term_values(self):
         # This only works after being instantiated in __get__, which sets
         # _parent
-        if not self._key in self._parent._term_values:
+        if self._key not in self._parent._term_values:
             self._parent._term_values[self._key] = {}
 
         return self._parent._term_values[self._key]
@@ -497,7 +507,7 @@ class DictGroup(Group, collections.MutableMapping):
 
     def __setitem__(self, key, value):
 
-        if not key in self._members:
+        if key not in self._members:
             raise AttributeError(
                 "No such term in {}: {}. Has: {}" .format(
                     self._key, key, [
@@ -522,7 +532,7 @@ class DictGroup(Group, collections.MutableMapping):
         for k, v in d.items():
             try:
                 self.__setitem__(k, v)
-            except AttributeError as e:
+            except AttributeError:
                 self._top.add_error(self._key, k, None, v)
 
     def set_row(self, key, value):
@@ -540,21 +550,14 @@ class DictGroup(Group, collections.MutableMapping):
         for name, m in self._members.items():
 
             ti = self.get_term_instance(name)
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(
-                ti._key,
-                ti.html())
+            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
 
-        return (
-            """
+        return """
 <h2 class="{cls}">{title}</h2>
 <table class="{cls}">
 {out}</table>
-""" .format(
-            title=self._key.title(),
-            cls='ambry_meta_{} ambry_meta_{}'.format(
-                type(self).__name__.lower(),
-                self._key),
-            out=out))
+""" .format(title=self._key.title(), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
+            out=out)
 
 
 class TypedDictGroup(DictGroup):
@@ -592,7 +595,7 @@ class TypedDictGroup(DictGroup):
     # that actually sets the value.
     def __getitem__(self, key):
 
-        if not key in self._term_values:
+        if key not in self._term_values:
             self._term_values[key] = {
                 name: None for name,
                 _ in self._proto._members.items()}
@@ -618,7 +621,7 @@ class VarDictGroup(DictGroup):
         if name.startswith('_'):
             raise AttributeError
 
-        if not name in self._term_values:
+        if name not in self._term_values:
             self._term_values[name] = AttrDict()
 
         return self.__getitem__(name)
@@ -653,7 +656,7 @@ class ListGroup(Group, collections.MutableSequence):
         # This only works after being instantiated in __get__, which sets
         # _parent
 
-        if not self._key in self._parent._term_values:
+        if self._key not in self._parent._term_values:
             self._parent._term_values[self._key] = []
 
         return self._parent._term_values[self._key]
@@ -731,24 +734,16 @@ class ListGroup(Group, collections.MutableSequence):
         out = ''
 
         for ti in self:
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(
-                ti._key,
-                ti.html())
+            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
 
-        return (
-            """
+        return """
 <table class="{cls}">
 {out}</table>
-""" .format(
-            title=self._key.title(),
-            cls='ambry_meta_{} ambry_meta_{}'.format(
-                type(self).__name__.lower(),
-                self._key),
-            out=out))
+""" .format(title=self._key.title(), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
+            out=out)
 
 
 class Term(object):
-
     """A single term in a group."""
 
     _key = None
@@ -814,6 +809,70 @@ class Term(object):
     def html(self):
         return ""
 
+# For ScalarTerm.text()
+# from http://stackoverflow.com/a/925630/1144479
+from HTMLParser import HTMLParser
+
+class MLStripper(HTMLParser):
+    def __init__(self):
+        self.reset()
+        self.fed = []
+    def handle_data(self, d):
+        self.fed.append(d)
+    def get_data(self):
+        return ''.join(self.fed)
+
+class _ScalarTermS(str):
+
+    def __new__(cls, string, jinja_sub):
+        ob = super(_ScalarTermS, cls).__new__(cls, string)
+        return ob
+
+    def __init__(self, string, jinja_sub):
+        ob = super(_ScalarTermS, self).__init__(string)
+        self.jinja_sub = jinja_sub
+        return ob
+
+    @property
+    def html(self):
+        """Interpret the scalar as Markdown and return HTML"""
+        import markdown
+
+        return markdown.markdown(self.jinja_sub(self))
+
+    @property
+    def text(self):
+        """Interpret the scalar as Markdown, strip the HTML and return text"""
+
+        s = MLStripper()
+        s.feed(self.html)
+        return s.get_data()
+
+
+class _ScalarTermU(unicode):
+
+    def __new__(cls, string, jinja_sub):
+        ob = super(_ScalarTermU, cls).__new__(cls, string)
+        return ob
+
+    def __init__(self, string, jinja_sub):
+        ob = super(_ScalarTermU, self).__init__(string)
+        self.jinja_sub = jinja_sub
+        return ob
+
+    @property
+    def html(self):
+        """Interpret the scalar as Markdown and return HTML"""
+        import markdown
+        return markdown.markdown(self.jinja_sub(self))
+
+    @property
+    def text(self):
+        """Interpret the scalar as Markdown, strip the HTML and return text"""
+
+        s = MLStripper()
+        s.feed(self.html)
+        return s.get_data()
 
 class ScalarTerm(Term):
 
@@ -823,9 +882,30 @@ class ScalarTerm(Term):
         self._parent._term_values[self._key] = v
 
     def get(self):
-        return self._parent._term_values.get(
-            self._key,
-            None)  # Supresses KeyError HACK?
+
+        st = self._parent._term_values.get(self._key,None)
+
+        def jinja_sub(st):
+
+            if  self._top._context and isinstance(st, basestring):
+                from jinja2 import Template
+
+                try:
+                    return Template(st).render(**(self._top._context))
+                except Exception as e:
+                    raise ValueError("Failed to render jinja template for metadata value '{}': {}".format(st, e))
+
+            return st
+
+        if isinstance(st, str):
+            return _ScalarTermS(st, jinja_sub)
+        elif isinstance(st, unicode):
+            return _ScalarTermU(st, jinja_sub)
+        elif st is None:
+            return _ScalarTermS('', jinja_sub)
+        else:
+            return st
+
 
     def null_entry(self):
         return None
@@ -836,15 +916,8 @@ class ScalarTerm(Term):
     def is_empty(self):
         return self.get() is None
 
-    def html(self):
-        if self._key == 'url' and self.get():
-            return "<a href=\"{url}\" target=\"_blank\">{url}</a>".format(
-                url=self.get())
-        if self._key == 'email' and self.get():
-            return "<a href=\"mailto:{url}\"  target=\"_blank\">{url}</a>".format(
-                url=self.get())
-        else:
-            return self.get()
+
+
 
 
 class DictTerm(Term, collections.MutableMapping):
@@ -889,10 +962,10 @@ class DictTerm(Term, collections.MutableMapping):
         # it is really for.
         return
 
-        if not index in self._parent._term_values:
-            raise Exception()
-            print 'ENSURING', self._key, index
-            self._parent._term_values[index] = None
+        # if index not in self._parent._term_values:
+        #     raise Exception()
+        #     # print 'ENSURING', self._key, index
+        #     # self._parent._term_values[index] = None
 
     @property
     def _term_values(self):
@@ -964,7 +1037,7 @@ class DictTerm(Term, collections.MutableMapping):
     @property
     def dict(self):
 
-        if not self._key in self._parent._term_values:
+        if self._key not in self._parent._term_values:
             return None
 
         return self._term_values.to_dict()
@@ -974,18 +1047,13 @@ class DictTerm(Term, collections.MutableMapping):
 
         for name, m in self._members.items():
             ti = self.get_term_instance(name)
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(
-                ti._key,
-                ti.html())
+            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
 
-        return (
-            """
+        return """
 <table class="{cls}">
 {out}</table>
-""" .format(
-            title=str(
-                self._key), cls='ambry_meta_{} ambry_meta_{}'.format(
-                type(self).__name__.lower(), self._key), out=out))
+""" .format(title=str(self._key), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
+            out=out)
 
     def set(self, d):
 
@@ -1053,7 +1121,7 @@ class ListTerm(Term):
         # This only works after being instantiated in __get__, which sets
         # _parent
 
-        if not self._key in self._parent._term_values:
+        if self._key not in self._parent._term_values:
             self._parent._term_values[self._key] = []
 
         tv = self._parent._term_values[self._key]

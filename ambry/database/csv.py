@@ -71,7 +71,7 @@ class ValueInserter(InserterInterface):
             self.close()
             self.delete()
             raise
-        except Exception as e:
+        except Exception:
             self.close()
             self.delete()
             raise

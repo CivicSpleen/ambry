@@ -2,6 +2,9 @@
 # For non virtual environments:
 
 gdal
+ogr
+osr
+dstk
 
 
 # Installing GDAL in a python virtenv

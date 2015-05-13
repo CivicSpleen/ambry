@@ -14,37 +14,31 @@ def partition_classes():
     """
 
     from geo import GeoPartitionName, GeoPartitionName, GeoPartition, GeoPartitionIdentity
-    #from hdf import HdfPartitionName, HdfPartition, HdfPartitionIdentity
-    from csv import CsvPartitionName, CsvPartitionName, CsvPartition, CsvPartitionIdentity
+
     from sqlite import SqlitePartitionName, SqlitePartitionName, SqlitePartition, SqlitePartitionIdentity
 
     class PartitionClasses(object):
+
+        # This has a complicated structure because there used to be four types of partitions, not just two.
+
         name_by_format = {
             pnc.format_name(): pnc for pnc in (
                 GeoPartitionName,
-                # HdfPartitionName,
-                CsvPartitionName,
                 SqlitePartitionName)}
 
         extension_by_format = {
             pc.format_name(): pc.extension() for pc in (
                 GeoPartitionName,
-                # HdfPartitionName,
-                CsvPartitionName,
                 SqlitePartitionName)}
 
         partition_by_format = {
             pc.format_name(): pc for pc in (
                 GeoPartition,
-                # HdfPartition,
-                CsvPartition,
                 SqlitePartition)}
 
         identity_by_format = {
             ic.format_name(): ic for ic in (
                 GeoPartitionIdentity,
-                # HdfPartitionIdentity,
-                CsvPartitionIdentity,
                 SqlitePartitionIdentity)}
 
     return PartitionClasses()
@@ -106,7 +100,7 @@ def new_identity(d, bundle=None):
     if bundle:
         d = dict(d.items() + bundle.identity.dict.items())
 
-    if not 'format' in d:
+    if 'format' not in d:
         d['format'] = 'db'
 
     format_name = d['format']
@@ -141,7 +135,7 @@ class PartitionBase(PartitionInterface):
         # is not bound to a Session; attribute refresh operation cannot proceed
         self.record_count = self.record.count
 
-        #self.table = self.get_table()
+        # self.table = self.get_table()
 
         self.record_dict = self.record.dict
 
@@ -334,6 +328,7 @@ class PartitionBase(PartitionInterface):
         return cls._id_class._name_class.PATH_EXTENSION
 
     def html_doc(self):
+        # TODO: where is text module
         from ..text import PartitionDoc
 
         pd = PartitionDoc(self)

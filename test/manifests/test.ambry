@@ -1,0 +1,11 @@
+TITLE: A Crime Manifest
+
+DOC:
+This is a fake crime file manifest
+
+UID: m5PJKUrX0U
+
+PARTITIONS:
+source-dataset-subset-variation-tthree
+source-dataset-subset-variation-geot1
+source-dataset-subset-variation-geot2

@@ -3,9 +3,11 @@
 # http://stackoverflow.com/a/18888854
 
 import argparse
-import sys
-from ambry.ui import app, configure_application, write_config, config_paths
-from ambry.ui import fscache
+# import sys
+from ambry.ui import app, configure_application  # , write_config, config_paths
+# from ambry.ui import fscache
+
+raise DeprecationWarning()
 
 parser = argparse.ArgumentParser(
     prog='python -mambry.server.documentation',
@@ -23,7 +25,8 @@ parser.add_argument(
     '-P',
     '--use-proxy',
     action='store_true',
-    help="Setup for using a proxy in front of server, using werkzeug.contrib.fixers.ProxyFix")
+    help="Setup for using a proxy in front of server, "
+         "using werkzeug.contrib.fixers.ProxyFix")
 parser.add_argument(
     '-d',
     '--debug',
@@ -45,7 +48,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-config = configure_application(vars(args))
+app_config.update(vars(args))
 
 if args.use_proxy:
     from werkzeug.contrib.fixers import ProxyFix
@@ -54,4 +57,4 @@ if args.use_proxy:
 
 import ambry.ui.views
 
-app.run(host=config['host'], port=int(config['port']), debug=config['debug'])
+app.run(host=app_config['host'], port=int(app_config['port']), debug=app_config['debug'])

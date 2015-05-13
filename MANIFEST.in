@@ -1,5 +1,7 @@
 include requirements.txt
-include requirements_extra.json
+include requirements/base.txt
+include requirements/geo.txt
+include requirements/dev.txt
 include INSTALL
 include README.md
 include LICENSE

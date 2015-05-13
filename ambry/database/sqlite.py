@@ -12,7 +12,7 @@ from .relational import RelationalBundleDatabaseMixin, RelationalDatabase
 import os
 from ambry.util import get_logger
 
-import logging
+# import logging
 
 global_logger = get_logger(__name__)
 # logger.setLevel(logging.DEBUG)
@@ -65,8 +65,7 @@ class SqliteAttachmentMixin(object):
         if name is None:
             import random
             import string
-            name = ''.join(random.choice(string.letters)
-                           for i in xrange(10))  # @UnusedVariable
+            name = ''.join(random.choice(string.letters) for i in xrange(10))  # @UnusedVariable
 
         q = """ATTACH DATABASE '{}' AS '{}' """.format(path, name)
 
@@ -96,15 +95,8 @@ class SqliteAttachmentMixin(object):
 
         self._attachments.remove(name)
 
-    def copy_from_attached(
-            self,
-            table,
-            columns=None,
-            name=None,
-            on_conflict='ABORT',
-            where=None,
-            conn=None,
-            copy_n=None):
+    def copy_from_attached(self, table,columns=None, name=None, on_conflict='ABORT',
+            where=None,conn=None,copy_n=None):
         """Copy from this database to an attached database.
 
         Args:
@@ -166,34 +158,24 @@ class SqliteAttachmentMixin(object):
 class SqliteDatabase(RelationalDatabase):
 
     EXTENSION = '.db'
-    SCHEMA_VERSION = 27
+    SCHEMA_VERSION = 29
 
     _lock = None
 
     def __init__(self, dbname, memory=False, **kwargs):
         """"""
-        import os
-
         # For database bundles, where we have to pass in the whole file path
-        if memory:
-            base_path = ':memory:'
-        else:
-
+        if memory is False:
             if not dbname:
                 raise ValueError("Must have a dbname")
 
             if dbname[0] != '/':
-                import os
                 dbname = os.path.join(os.getcwd(), dbname)
 
             base_path, ext = os.path.splitext(dbname)
 
             if ext and ext != self.EXTENSION:
-                raise Exception(
-                    "Bad extension to file '{}': '{}'. Expected: {}".format(
-                        dbname,
-                        ext,
-                        self.EXTENSION))
+                raise Exception("Bad extension to file '{}': '{}'. Expected: {}".format(dbname, ext, self.EXTENSION))
 
             self.base_path = base_path
 
@@ -202,7 +184,7 @@ class SqliteDatabase(RelationalDatabase):
 
         self.memory = memory
 
-        if not 'driver' in kwargs:
+        if 'driver' not in kwargs:
             kwargs['driver'] = 'sqlite'
 
         super(SqliteDatabase, self).__init__(dbname=self.path, **kwargs)
@@ -226,8 +208,7 @@ class SqliteDatabase(RelationalDatabase):
     def lock(self):
         """Create an external file lock for the bundle database."""
 
-        from lockfile import FileLock, LockTimeout, AlreadyLocked
-        import os
+        from lockfile import FileLock, AlreadyLocked  # , LockTimeout
         import time
         import traceback
         from ..dbexceptions import LockedFailed
@@ -251,14 +232,12 @@ class SqliteDatabase(RelationalDatabase):
                         tb[0],
                         tb[1]))
                 return
-            except AlreadyLocked as e:
+            except AlreadyLocked:
                 global_logger.debug("Waiting for bundle lock")
                 time.sleep(1)
 
-        raise LockedFailed(
-            "Failed to acquire lock on {}".format(
-                self.lock_path))
-        self._lock = None
+        raise LockedFailed("Failed to acquire lock on {}".format(self.lock_path))
+        # self._lock = None
 
     def unlock(self):
         """Release the external lock on the external database."""
@@ -348,7 +327,7 @@ class SqliteDatabase(RelationalDatabase):
 
         if self.version >= 12:
 
-            if not 'config' in self.inspector.get_table_names():
+            if 'config' not in self.inspector.get_table_names():
                 return True
             else:
                 return False
@@ -396,20 +375,9 @@ class SqliteDatabase(RelationalDatabase):
 
         # return self.load_insert(a,table, encoding=encoding, caster=caster,
         # logger=logger)
-        return self.load_shell(
-            a,
-            table,
-            encoding=encoding,
-            caster=caster,
-            logger=logger)
+        return self.load_shell(a,table,encoding=encoding,caster=caster, logger=logger)
 
-    def load_insert(
-            self,
-            a,
-            table=None,
-            encoding='utf-8',
-            caster=None,
-            logger=None):
+    def load_insert(self, a,table=None, encoding='utf-8', caster=None, logger=None):
         from ..partition import PartitionInterface
         from ..database.csv import CsvDb
         from ..dbexceptions import ConfigurationError
@@ -442,9 +410,9 @@ class SqliteDatabase(RelationalDatabase):
         from ..dbexceptions import ConfigurationError
         import time
         import subprocess
-        import uuid
+        # import uuid
         from ..util import temp_file_name
-        import os
+        # import os
 
         if isinstance(a, PartitionInterface):
             db = a.database
@@ -458,7 +426,7 @@ class SqliteDatabase(RelationalDatabase):
         except AttributeError:
             table_name = table
 
-        sql_file = temp_file_name()
+        # sql_file = temp_file_name()
 
         sql = '''
 .mode csv
@@ -510,34 +478,27 @@ class BundleLockContext(object):
 
     def __init__(self, bundle):
         import traceback
-        from lockfile import FileLock
+        # from lockfile import FileLock
 
         self._bundle = bundle
         self._database = self._bundle.database
 
         tb = traceback.extract_stack()[-4:-3][0]
 
-        global_logger.debug(
-            "Using Session Context, from {} in {}:{}".format(
-                tb[2],
-                tb[0],
-                tb[1]))
+        global_logger.debug("Using Session Context, from {} in {}:{}".format(tb[2],tb[0],tb[1]))
 
         self._lock_depth = 0
 
     def __enter__(self):
-        from sqlalchemy.orm import sessionmaker
-        from ambry.dbexceptions import Locked
+        # from sqlalchemy.orm import sessionmaker
+        # from ambry.dbexceptions import Locked
 
         # import pdb;pdb.set_trace()
 
         # if self._lock_depth == 0:
         #    self._database.lock()
 
-        global_logger.debug(
-            "Enter session with depth {}".format(
-                repr(
-                    self._lock_depth)))
+        global_logger.debug("Enter session with depth {}".format(repr(self._lock_depth)))
 
         self._lock_depth += 1
 
@@ -611,7 +572,7 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin, SqliteDatabase):
     def _on_create_engine(self, engine):
         """Called just after the engine is created."""
         from sqlalchemy import event
-        from functools import partial
+        # from functools import partial
 
         super(SqliteBundleDatabase, self)._on_create_engine(engine)
 
@@ -622,7 +583,7 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin, SqliteDatabase):
 
         event.listen(engine, 'connect', _on_connect_bundle)
 
-        #event.listen(engine, 'begin', _on_begin_bundle)
+        # event.listen(engine, 'begin', _on_begin_bundle)
 
     def update_schema(self):
         """Manually update the schema.
@@ -632,9 +593,7 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin, SqliteDatabase):
         dont get used.
 
         """
-        _on_connect_update_sqlite_schema(
-            self.connection,
-            None)  # in both _conn and _engine.
+        _on_connect_update_sqlite_schema(self.connection, None)  # in both _conn and _engine.
 
     def create(self):
 
@@ -762,21 +721,28 @@ def _on_connect_bundle(dbapi_con, con_record):
         dbapi_con.execute('PRAGMA temp_store = MEMORY')
         dbapi_con.execute('PRAGMA cache_size = 50000')
         dbapi_con.execute('PRAGMA foreign_keys = OFF')
-    except Exception as e:
+    except Exception:
         global_logger.error("Exception in {} ".format(dbapi_con))
         raise
 
-    #dbapi_con.execute('PRAGMA busy_timeout = 10000')
-    #dbapi_con.execute('PRAGMA synchronous = OFF')
+    # dbapi_con.execute('PRAGMA busy_timeout = 10000')
+    # dbapi_con.execute('PRAGMA synchronous = OFF')
 
 
 def _on_connect_update_sqlite_schema(conn, con_record):
-    '''Perform on-the-fly schema updates based on the user version'''
+    """Perform on-the-fly schema updates based on the user version"""
     from sqlalchemy.exc import OperationalError
 
     version = conn.execute('PRAGMA user_version').fetchone()[0]
     if version:
         version = int(version)
+
+    def maybe_exec(s):
+        try:
+            conn.execute(s)
+        except Exception as e:
+
+            pass
 
     # Some files have version of 0 because the version was not set.
     if version > 10:
@@ -788,29 +754,25 @@ def _on_connect_update_sqlite_schema(conn, con_record):
         if version < 15:
 
             try:
-                conn.execute(
-                    'ALTER TABLE datasets ADD COLUMN d_cache_key VARCHAR(200);')
+                conn.execute('ALTER TABLE datasets ADD COLUMN d_cache_key VARCHAR(200);')
             except:
                 pass
 
             try:
-                conn.execute(
-                    'ALTER TABLE partitions ADD COLUMN p_cache_key VARCHAR(200);')
+                conn.execute('ALTER TABLE partitions ADD COLUMN p_cache_key VARCHAR(200);')
             except:
                 pass
 
         if version < 16:
             try:
-                conn.execute(
-                    'ALTER TABLE tables ADD COLUMN t_universe VARCHAR(200);')
-            except Exception as e:
+                conn.execute('ALTER TABLE tables ADD COLUMN t_universe VARCHAR(200);')
+            except Exception:
                 pass
 
         if version < 17:
 
             try:
-                conn.execute(
-                    'ALTER TABLE partitions ADD COLUMN p_ref VARCHAR(200);')
+                conn.execute('ALTER TABLE partitions ADD COLUMN p_ref VARCHAR(200);')
             except:
                 pass
 
@@ -839,9 +801,8 @@ def _on_connect_update_sqlite_schema(conn, con_record):
 
         if version < 21:
             try:
-                conn.execute(
-                    "ALTER TABLE tables ADD COLUMN t_type VARCHAR(20) DEFAULT 'table'; ")
-            except Exception as e:
+                conn.execute("ALTER TABLE tables ADD COLUMN t_type VARCHAR(20) DEFAULT 'table'; ")
+            except Exception:
                 pass
 
         if version < 22:
@@ -849,23 +810,26 @@ def _on_connect_update_sqlite_schema(conn, con_record):
 
             try:
                 Code.__table__.create(bind=conn.engine)
-            except Exception as e:
+            except Exception:
                 pass
 
         if version < 23:
 
             try:
-                conn.execute(
-                    'ALTER TABLE columns ADD COLUMN c_derivedfrom VARCHAR(200)')
-            except OperationalError as e:
+                conn.execute('ALTER TABLE columns ADD COLUMN c_derivedfrom VARCHAR(200)')
+
+            except OperationalError:
+
                 pass
 
         if version < 24:
-            from ..orm import SearchDoc
 
             try:
+                from ..orm import SearchDoc
                 SearchDoc.__table__.create(bind=conn.engine)
-            except OperationalError as e:
+            except OperationalError:
+                pass
+            except ImportError:  # SearchDoc object was removed
                 pass
 
         if version < 25:
@@ -873,28 +837,30 @@ def _on_connect_update_sqlite_schema(conn, con_record):
 
             try:
                 ColumnStat.__table__.create(bind=conn.engine)
-            except OperationalError as e:
+            except OperationalError:
                 pass
 
         if version < 27:
+            maybe_exec('ALTER TABLE colstats ADD COLUMN cs_lom VARCHAR(6)')
 
-            try:
-                conn.execute(
-                    'ALTER TABLE colstats ADD COLUMN cs_lom VARCHAR(6)')
-            except OperationalError as e:
-                pass
+        if version < 28:
+
+            maybe_exec('ALTER TABLE columns ADD COLUMN c_d_vid VARCHAR(20)')
+            maybe_exec('ALTER TABLE colstats ADD COLUMN cs_d_vid VARCHAR(20)')
+            maybe_exec('ALTER TABLE codes ADD COLUMN cd_d_vid VARCHAR(20)')
+
+        if version < 29:
+            maybe_exec('ALTER TABLE tables ADD COLUMN t_p_vid VARCHAR(20)')
 
     if version < SqliteDatabase.SCHEMA_VERSION:
-        conn.execute(
-            'PRAGMA user_version = {}'.format(
-                SqliteDatabase.SCHEMA_VERSION))
+        conn.execute('PRAGMA user_version = {}'.format( SqliteDatabase.SCHEMA_VERSION))
+
 
 
 def insert_or_ignore(table, columns):
-    return  ("""INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values})"""
-             .format(
-                 table=table,
-                 columns=','.join([c.name for c in columns]),
-                 values=','.join(['?' for c in columns])  # @UnusedVariable
-             )
-             )
+    return ("""INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values})""".format(
+        table=table,
+        columns=','.join([c.name for c in columns]),
+        values=','.join(['?'] * len(columns))  # @UnusedVariable
+        # values=','.join(['?' for c in columns])  # @UnusedVariable
+    ))

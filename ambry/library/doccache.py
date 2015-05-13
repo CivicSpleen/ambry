@@ -1,29 +1,9 @@
 """"""
 
-# Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
-# Revised BSD License, included in this distribution as LICENSE.txt
+# Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of
+# the Revised BSD License, included in this distribution as LICENSE.txt
 
 from collections import deque
-
-
-class Times(object):
-
-    """Records time entries for access to the cache."""
-
-    def __init__(self, **kwargs):
-        self.start_time = 0
-        self.end_time = 0
-        self.time = 0
-        self.count = 0
-        self.key = None
-        self.from_cache = None
-        self.__dict__.update(kwargs)
-
-    def __str__(self):
-        return str(self.__dict__)
-
-    def __repr__(self):
-        return str(self.__dict__)
 
 
 class DocCache(object):
@@ -35,9 +15,9 @@ class DocCache(object):
 
         if self.library._doc_cache:
             from ckcache.dictionary import DictCache
-            self._cache = DictCache(self.library._doc_cache)
+            self._cache = DictCache(self.library._doc_cache) # Dict interface on an upstream filesystem cache
         else:
-            self._cache = {}
+            self._cache = {} # An actual dict.
 
         self.all_bundles = None
         self.times = deque([], maxlen=10000)
@@ -89,29 +69,21 @@ class DocCache(object):
         we want this to run in the context of the object.
 
         """
-        import time
 
-        start = time.time()
+        force =  'force' in kwargs
+
+        if force:
+            del kwargs['force']
+
 
         key, args, kwargs = self._munge_key(*args, **kwargs)
 
-        if key not in self._cache or kwargs.get('force') or self.ignore_cache:
+        if force or key not in self._cache or kwargs.get('force') or self.ignore_cache:
             self._cache[key] = f(*args, **kwargs)
             from_cache = False
         else:
             from_cache = True
 
-        end = time.time()
-
-        self.times.append(
-            Times(
-                start_time=start,
-                end_time=end,
-                key=key,
-                from_cache=from_cache,
-                count=1,
-                time=end -
-                start))
 
         return self._cache[key]
 
@@ -130,34 +102,15 @@ class DocCache(object):
         if key in self._cache:
             del self._cache[key]
 
-    def compiled_times(self):
-        """Compile all of the time entries from cache calls to one per key."""
-        from collections import defaultdict
-
-        times = defaultdict(Times)
-
-        for t in self.times:
-            print t.__dict__
-            k = t.key + '_' + ('cached' if t.from_cache else 'func')
-            ct = times[k]
-            ct.key = k
-
-            ct.time += t.time
-            ct.count += t.count
-
-        return sorted(times.values(), key=lambda x: x.time, reverse=True)
-
     def library_info(self):
         pass
 
-    ##
+    #
     # Index, low-information lists of all items in a category.
-    ##
+    #
 
     def library_info(self):
-        return self.cache(
-            lambda: self.library.summary_dict,
-            _key='library_info')
+        return self.cache(lambda: self.library.summary_dict, _key='library_info')
 
     def bundle_index(self):
 
@@ -175,18 +128,32 @@ class DocCache(object):
     def dataset(self, vid):
         # Add a 'd' to the datasets, since they are just the dataset record and must
         # be distinguished from the full output with the same vid in bundle()
-        return self.cache(
-            lambda vid: self.library.dataset(vid).dict,
-            vid,
-            _key_prefix='ds')
+
+        # Some of the older bundles don't have the title and summary in the darta for the dataset,
+        # so we have to gfet it from the config
+        def dict_and_summary(vid):
+            ds = self.library.dataset(vid)
+            d = ds.dict
+
+            if not d.get('title', False) or not d.get('summary', False):
+                from sqlalchemy.orm.exc import NoResultFound
+                try:
+                    d['title'] =  ds.config('about.title').value
+                    d['summary'] = ds.config('about.summary').value
+                except NoResultFound:
+                    pass # Probably bad -- every bundle should have about.title and about.summary by now
+
+            return d
+
+
+        return self.cache(lambda vid: dict_and_summary(vid),vid,_key_prefix='ds')
 
     def bundle_summary(self, vid):
-        return self.cache(
-            lambda vid: self.library.bundle(vid).summary_dict,
-            vid,
-            _key_prefix='bs')
+
+        return self.cache(lambda vid: self.library.bundle(vid).summary_dict,vid,_key_prefix='bs')
 
     def bundle(self, vid):
+
         return self.cache(lambda vid: self.library.bundle(vid).dict, vid)
 
     def bundle_schema(self, vid):
@@ -197,9 +164,7 @@ class DocCache(object):
         return self.cache(lambda vid: self.library.partition(vid).dict, vid)
 
     def table(self, vid):
-        return self.cache(
-            lambda vid: self.library.table(vid).nonull_col_dict,
-            vid)
+        return self.cache(lambda vid: self.library.table(vid).nonull_col_dict,vid)
 
     def table_schema(self, vid):
         pass
@@ -224,16 +189,14 @@ class DocCache(object):
             # The no_columns version is a lot faster.
             for t in self.library.tables_no_columns:
 
-                if not t.id_ in tm:
+                if t.id_ not in tm:
                     tm[t.id_] = [t.vid]
                 else:
                     tm[t.id_].append(t.vid)
-
             return tm
-
         return self.cache(f, _key='table_version_map')
 
-    ##
+    #
     # Manifests
 
     def manifest_relpath(self, uid):
@@ -253,33 +216,25 @@ class DocCache(object):
         d['file'] = f.dict
         d['text'] = str(m)
 
-        #d['files'] = f.dict['data'].get('files')
+        # d['files'] = f.dict['data'].get('files')
 
-        #del d['file']['data']
+        # del d['file']['data']
 
         # Update the partitions to include bundle references,
         # then add bundle information.
 
-        partitions = {
-            pvid: str(
-                ObjectNumber.parse(pvid).as_dataset) for pvid in f.dict.get(
-                'partitions',
-                [])}
+        partitions = {pvid: str(ObjectNumber.parse(pvid).as_dataset) for pvid in f.dict.get('partitions', [])}
 
         d["partitions"] = partitions
 
         d['tables'] = {tvid: {
             k: v for k, v in (self.get_table(tvid).items() + [('installed_names', [])]) if k != 'columns'
-        } for tvid in f.dict.get('tables', [])
-        }
+        } for tvid in f.dict.get('tables', [])}
 
-        d['bundles'] = {vid: self.get_bundle(vid)
-                        for vid in partitions.values()}
+        d['bundles'] = {vid: self.get_bundle(vid) for vid in partitions.values()}
 
         for vid, b in d['bundles'].items():
-            b['installed_partitions'] = [
-                pvid for pvid,
-                pbvid in partitions.items() if vid == pbvid]
+            b['installed_partitions'] = [pvid for pvid, pbvid in partitions.items() if vid == pbvid]
 
         # Generate entries for the tables, using the names that they are installed with. These tables aren't
         # nessiarily installed; this maps the instllation names to vids if they
@@ -304,7 +259,7 @@ class DocCache(object):
                 for tvid in p['table_vids']:
 
                     t = b['tables'][tvid]
-                    e = inst_table_entry(b, p, t)
+                    inst_table_entry(b, p, t)
 
         d['installed_table_names'] = installed_table_names
 

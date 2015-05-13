@@ -4,17 +4,16 @@ Created on Aug 31, 2012
 @author: eric
 """
 import unittest
-from test_base import  TestBase  # @UnresolvedImport
+
+from test_base import TestBase  # @UnresolvedImport
+
 
 class Test(TestBase):
-
     def setUp(self):
-
         pass
 
     def tearDown(self):
         pass
-
 
     def test_lru(self):
         from ambry.util import lru_cache
@@ -22,12 +21,11 @@ class Test(TestBase):
 
         @lru_cache(maxsize=3)
         def f(x):
-            from  random import randint
+            from random import randint
 
-            return (x,randint(0,1000))
+            return (x, randint(0, 1000))
 
-
-        o =  f(1)
+        o = f(1)
         self.assertEquals(o, f(1))
         self.assertEquals(o, f(1))
         f(2)
@@ -37,13 +35,12 @@ class Test(TestBase):
         f(5)
         self.assertNotEquals(o, f(1))
 
-
         #
         # Verify expiration based on time.
         #
         @lru_cache(maxtime=3)
         def g(x):
-            from  random import randint
+            from random import randint
 
             return (x, randint(0, 1000))
 
@@ -133,9 +130,9 @@ class Test(TestBase):
             url: http://yahoo.com
     """
 
-
     def test_metadata(self):
-        from ambry.bundle.meta import Metadata, ScalarTerm, TypedDictGroup, VarDictGroup, DictGroup, DictTerm, ListGroup
+        from ambry.bundle.meta import Metadata, ScalarTerm, TypedDictGroup, \
+            VarDictGroup, DictGroup, DictTerm, ListGroup
 
         import yaml
         from ambry.util import AttrDict
@@ -164,27 +161,25 @@ class Test(TestBase):
 
         tt = TestTop()
 
-
-        ##
-        ## Dict Group
+        #
+        # Dict Group
 
         tt.group.term = 'Term'
         tt.group.term2 = 'Term2'
 
-
         with self.assertRaises(AttributeError):
             tt.group.term3 = 'Term3'
 
-
-        self.assertEquals('Term',tt.group.term)
+        self.assertEquals('Term', tt.group.term)
         self.assertEquals('Term2', tt.group.term2)
         self.assertEquals('Term', tt.group['term'])
         self.assertEquals(['term', 'term2', 'dterm'], tt.group.keys())
         self.assertEquals(['Term', 'Term2',
-                           AttrDict([('dterm1', None), ('unset_term', None), ('dterm2', None)])], tt.group.values())
+                           AttrDict([('dterm1', None), ('unset_term', None),
+                                     ('dterm2', None)])], tt.group.values())
 
-        ##
-        ## Dict Term
+        #
+        # Dict Term
 
         tt.group.dterm.dterm1 = 'dterm1'
         tt.group.dterm.dterm2 = 'dterm2'
@@ -192,58 +187,55 @@ class Test(TestBase):
         with self.assertRaises(AttributeError):
             tt.group.dterm.dterm3 = 'dterm3'
 
-
         self.assertEquals('dterm1', tt.group.dterm.dterm1)
 
-        self.assertEquals(['dterm1', 'unset_term', 'dterm2'], tt.group.dterm.keys())
+        self.assertEquals(['dterm1', 'unset_term', 'dterm2'],
+                          tt.group.dterm.keys())
         self.assertEquals(['dterm1', None, 'dterm2'], tt.group.dterm.values())
 
+        # List Group
 
-        ## List Group
-
-        tt.lgroup.append({'k1':'v1'})
+        tt.lgroup.append({'k1': 'v1'})
         tt.lgroup.append({'k2': 'v2'})
 
-        self.assertEquals('v1',tt.lgroup[0]['k1'])
+        self.assertEquals('v1', tt.lgroup[0]['k1'])
         self.assertEquals('v2', tt.lgroup[1]['k2'])
 
-        ## TypedDictGroup
+        # TypedDictGroup
 
         tt.tdgroup.foo.dterm1 = 'foo.dterm1'
 
-        self.assertEqual('foo.dterm1', tt.tdgroup.foo.dterm1 )
+        self.assertEqual('foo.dterm1', tt.tdgroup.foo.dterm1)
 
         tt.tdgroup.foo.dterm2 = 'foo.dterm2'
         tt.tdgroup.baz.dterm1 = 'foo.dterm1'
 
-        ## VarDict Group
+        # VarDict Group
 
         tt.vdgroup.k1['v1'] = 'v1'
         tt.vdgroup.k1.v2 = 'v2'
 
-
-
         d = dict(
-            about = dict(
-                title = 'title',
-                subject = 'subject',
-                rights = 'rights',
-                summary = 'Summary',
-                tags = 'Foobotom'
+            about=dict(
+                title='title',
+                subject='subject',
+                rights='rights',
+                summary='Summary',
+                tags='Foobotom'
             ),
-            contact = dict(
-                creator = dict(
-                    name = 'Name',
-                    email = 'Email',
-                    bingo = 'bingo'
+            contact=dict(
+                creator=dict(
+                    name='Name',
+                    email='Email',
+                    bingo='bingo'
                 )
             ),
             # These are note part of the defined set, so aren't converted to terms
-            build = dict(
-                foo = 'foo',
-                bar = 'bar'
+            build=dict(
+                foo='foo',
+                bar='bar'
             ),
-            partitions = [
+            partitions=[
                 dict(
                     name='foo',
                     grain='bar'
@@ -260,7 +252,7 @@ class Test(TestBase):
                     segment=0,
 
                 ),
-                ]
+            ]
         )
 
         top = Top(d)
@@ -271,7 +263,7 @@ class Test(TestBase):
 
         self.assertIn('publisher', top.contact.keys())
         self.assertIn('url', dict(top.contact.creator))
-        self.assertEqual('Email',top.contact.creator.email)
+        self.assertEqual('Email', top.contact.creator.email)
 
         self.assertIn('name', top.partitions[0])
         self.assertNotIn('space', top.partitions[0])
@@ -281,9 +273,7 @@ class Test(TestBase):
         top.sources.foo.url = 'url'
         top.sources.bar.description = 'description'
 
-
         top = Top(yaml.load(config_str))
-
 
         self.assertEquals(['foo', 'baz'], top.build.keys())
         self.assertEquals('bar', top.build.foo)
@@ -291,27 +281,25 @@ class Test(TestBase):
 
         self.assertEqual(6, len(top.partitions))
 
-        self.assertIn('google',top.sources.keys())
+        self.assertIn('google', top.sources.keys())
         self.assertIn('yahoo', top.sources.keys())
         self.assertEquals('http://yahoo.com', top.sources.yahoo.url)
 
-        #print top.write_to_dir(None)
+        # print top.write_to_dir(None)
 
-        #for (group, term, subterm),v in top.rows:
-        #    print group, term, subterm,v
-
+        # for (group, term, subterm),v in top.rows:
+        # print group, term, subterm,v
 
         t3 = Top()
         t3.load_rows(top.rows)
 
-        #print t3.dump()
+        # print t3.dump()
 
     def test_metadata_TypedDictGroup(self):
+        from ambry.util.meta import Metadata, ScalarTerm, TypedDictGroup, \
+            DictTerm
 
-        from ambry.util.meta import Metadata, ScalarTerm, TypedDictGroup, VarDictGroup, DictGroup, DictTerm, ListTerm, \
-            ListGroup
-
-        import pprint, yaml
+        import yaml
 
         class TestDictTerm(DictTerm):
             dterm1 = ScalarTerm()
@@ -323,7 +311,6 @@ class Test(TestBase):
 
         class TestTop(Metadata):
             group = TestTDGroup()
-
 
         config_str = """
 group:
@@ -346,6 +333,7 @@ def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
     return suite
-      
+
+
 if __name__ == "__main__":
     unittest.TextTestRunner().run(suite())

@@ -194,3 +194,12 @@ div.search-result-partition {
     padding: 5px;
     margin-bottom: 5px;
 }
+
+/* The Tooltips for the sparklines don't format properly. This makes all of the tip
+visible, but its clearly wrong -- it should adjust to the actual tool tip size.
+*/
+
+.jqstooltip {
+  height: 12em;
+  width: 15em;
+}

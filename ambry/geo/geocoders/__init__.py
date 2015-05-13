@@ -10,8 +10,10 @@ class DstkGeocoder(object):
         """Batch geocode addresses using DSTK.
 
         :param url: URL to a DTSK server
-        :param address_gen: A generator that yields tuples of (address, object), where address is an address string.
-            The address is geocoded, and the object is passed thorugh to the result.
+        :param address_gen: A generator that yields tuples of (address, object),
+        where address is an address string.
+            The address is geocoded, and the object is passed thorugh to the
+            result.
         :return:
 
         """
@@ -50,7 +52,7 @@ class DstkGeocoder(object):
 
         if len(submit_set) > 0:
             results = self._send(submit_set)
-            submit_set = []
+            # submit_set = []
 
             for k, result in results.items():
                 o = data_map[k]
@@ -62,7 +64,8 @@ class DstkGeocoder(object):
             return results
 
         except UnicodeDecodeError:
-            # DSTK occasionally thows decode errors on the data, on the way back.
+            # DSTK occasionally thows decode errors on the data,
+            # on the way back.
             # No idea what the problem is.
             results = {}
 

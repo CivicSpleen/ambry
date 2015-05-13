@@ -5,8 +5,6 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-import ogr
-
 
 class ExtractError(Exception):
     pass
@@ -62,22 +60,16 @@ class Extractor(object):
     def extract(self, table, rel_path, update_time=None):
         import time
 
-        e = ExtractEntry(
-            False,
-            rel_path,
-            self.cache.path(
-                self.mangle_path(rel_path),
-                missing_ok=True),
-            (table,
-             self.__class__))
+        e = ExtractEntry(False,rel_path,self.cache.path(self.mangle_path(rel_path),missing_ok=True),
+            (table,self.__class__))
 
         force = self.force
 
         md = self.cache.metadata(self.mangle_path(rel_path))
 
         # If the table was created after
-        if md and 'time' in md and update_time and int(md['time']) - int(update_time) < 0:
-
+        if md and 'time' in md and update_time \
+                and int(md['time']) - int(update_time) < 0:
             force = True
 
         if self.cache.has(self.mangle_path(rel_path)):
@@ -86,14 +78,15 @@ class Extractor(object):
             else:
                 return e
 
-        md = {
-            'time': time.time()
-        }
+        md = {'time': time.time()}
 
         self._extract(table, rel_path, md)
         e.time = time.time()
         e.extracted = True
         return e
+
+    def stream(self, table, rel_path, update_time = None):
+        return self._stream(table, rel_path, None )
 
 
 class CsvExtractor(Extractor):
@@ -113,8 +106,7 @@ class CsvExtractor(Extractor):
 
         rel_path = self.mangle_path(rel_path)
 
-        row_gen = self.warehouse.database.connection.execute(
-            "SELECT * FROM {}".format(table))
+        row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table))
 
         with self.cache.put_stream(rel_path, metadata=metadata) as stream:
             w = unicodecsv.writer(stream)
@@ -126,6 +118,28 @@ class CsvExtractor(Extractor):
                 w.writerow(row)
 
         return True, self.cache.path(rel_path)
+
+    def _stream(self, table, rel_path, metadata):
+        """Return a generator that yields from the CSV data. Give to Flask to stream output. """
+        import unicodecsv
+        from ambry.util.flo import StringQueue
+
+        row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table))
+
+        def yield_rows():
+            f = StringQueue()
+
+            w = unicodecsv.writer(f)
+
+            for i, row in enumerate(row_gen):
+                if i == 0:
+                    w.writerow(row.keys())
+
+                w.writerow(row)
+
+                yield f.read() # Returns everything previously written
+
+        return yield_rows
 
 
 class JsonExtractor(Extractor):
@@ -176,10 +190,32 @@ class OgrExtractor(Extractor):
     is_geo = True
 
     def __init__(self, warehouse, cache, force=False):
+        import ogr # In the initializer b/c it is an optional dependency
 
         super(OgrExtractor, self).__init__(warehouse, cache, force=force)
 
         self.mangled_names = {}
+
+        # Inside the initializer because org is an optional depency
+        self.geo_map = {
+            'POLYGON': ogr.wkbPolygon,
+            'MULTIPOLYGON': ogr.wkbMultiPolygon,
+            'POINT': ogr.wkbPoint,
+            'MULTIPOINT': ogr.wkbMultiPoint,
+            # There are a lot more , add them as they are encountered.
+        }
+
+        self._ogr_type_map = {
+            None: ogr.OFTString,
+            '': ogr.OFTString,
+            'TEXT': ogr.OFTString,
+            'VARCHAR': ogr.OFTString,
+            'INT': ogr.OFTInteger,
+            'INTEGER': ogr.OFTInteger,
+            'REAL': ogr.OFTReal,
+            'FLOAT': ogr.OFTReal,
+        }
+
 
     def geometry_type(self, database, table):
         """Return the name of the most common geometry type and the coordinate
@@ -193,8 +229,7 @@ class OgrExtractor(Extractor):
         q = "SElECT f_geometry_column FROM geometry_columns " .format(table)
         geo_cols = [row['f_geometry_column'] for row in ce(q).fetchall()]
 
-        all_cols = ce(
-            "SELECT * FROM {} LIMIT 1".format(table)).fetchone().keys()
+        all_cols = ce("SELECT * FROM {} LIMIT 1".format(table)).fetchone().keys()
 
         geo_col = None
         for col in all_cols:
@@ -203,8 +238,7 @@ class OgrExtractor(Extractor):
                 break
 
         if not geo_col:
-            print all_cols
-            print geo_cols
+            pass
 
         types = ce(
             'SELECT count(*) AS count, GeometryType({geo}) AS type,  CoordDimension({geo}) AS cd '
@@ -220,29 +254,9 @@ class OgrExtractor(Extractor):
 
         return t, cd, geo_col
 
-    geo_map = {
-        'POLYGON': ogr.wkbPolygon,
-        'MULTIPOLYGON': ogr.wkbMultiPolygon,
-        'POINT': ogr.wkbPoint,
-        'MULTIPOINT': ogr.wkbMultiPoint,
-        # There are a lot more , add them as they are encountered.
-    }
-
-    _ogr_type_map = {
-        None: ogr.OFTString,
-        '': ogr.OFTString,
-        'TEXT': ogr.OFTString,
-        'VARCHAR': ogr.OFTString,
-        'INT': ogr.OFTInteger,
-        'INTEGER': ogr.OFTInteger,
-        'REAL': ogr.OFTReal,
-        'FLOAT': ogr.OFTReal,
-    }
 
     def ogr_type_map(self, v):
-        return self._ogr_type_map[
-            v.split(
-                '(', 1)[0]]  # Sometimes 'VARCHAR', sometimes 'VARCHAR(10)'
+        return self._ogr_type_map[v.split('(', 1)[0]]  # Sometimes 'VARCHAR', sometimes 'VARCHAR(10)'
 
     @classmethod
     def can_extract(cls, t):
@@ -254,6 +268,7 @@ class OgrExtractor(Extractor):
         return False
 
     def create_schema(self, database, table, layer):
+        from osgeo import ogr
         ce = database.connection.execute
 
         # TODO! pragma only works in sqlite
@@ -269,8 +284,6 @@ class OgrExtractor(Extractor):
             except KeyError:
                 continue
 
-            print "CREATE", name, self.ogr_type_map(row['type'])
-
             if row['type'] == '':
                 # FIXME Wasteful, but would have to scan table for max value.
                 fdfn.SetWidth(254)
@@ -278,6 +291,7 @@ class OgrExtractor(Extractor):
             layer.CreateField(fdfn)
 
     def new_layer(self, abs_dest, name, t):
+        from osgeo import ogr
 
         ogr.UseExceptions()
 
@@ -323,9 +337,7 @@ class OgrExtractor(Extractor):
                 self.mangled_names.values()))
 
     def _extract_shapes(self, abs_dest, table):
-
-        import ogr
-        import os
+        from osgeo import ogr
 
         t, cd, geo_col = self.geometry_type(self.database, table)
 
@@ -355,11 +367,9 @@ class OgrExtractor(Extractor):
                         name = self.mangle_name(str(name))
 
                         feature.SetField(name, value)
-                    except Exception as e:
-                        print 'Failed for {}={} ({})'.format(name, value, type(value))
+                    except Exception:
                         raise
-                    except NotImplementedError as e:
-                        print e
+                    except NotImplementedError:
                         raise
 
             geometry = ogr.CreateGeometryFromWkt(row['_wkt'])
@@ -368,9 +378,7 @@ class OgrExtractor(Extractor):
             if layer.CreateFeature(feature) != 0:
                 import gdal
                 raise Exception(
-                    'Failed to add feature: {}: geometry={}'.format(
-                        gdal.GetLastErrorMsg(),
-                        geometry.ExportToWkt()))
+                    'Failed to add feature: {}: geometry={}'.format(gdal.GetLastErrorMsg(), geometry.ExportToWkt()))
 
             feature.Destroy()
 
@@ -476,7 +484,6 @@ class KmlExtractor(OgrExtractor):
     max_name_len = 40
 
     def _extract(self, table, rel_path, metadata):
-        import tempfile
         from ambry.util import temp_file_name
         from ambry.util.flo import copy_file_or_flo
         import os
@@ -497,14 +504,21 @@ class KmlExtractor(OgrExtractor):
 
         return self.cache.path(rel_path)
 
+extractors = None
 
-extractors = dict(
-    csv=CsvExtractor,
-    json=JsonExtractor,
-    shapefile=ShapeExtractor,
-    geojson=GeoJsonExtractor,
-    kml=KmlExtractor
-)
+try:
+    import osgeo
+except ImportError:
+    extractors = dict(
+        csv=CsvExtractor,
+        json=JsonExtractor)
+else:
+    extractors = dict(
+        csv=CsvExtractor,
+        json=JsonExtractor,
+        shapefile=ShapeExtractor,
+        geojson=GeoJsonExtractor,
+        kml=KmlExtractor)
 
 
 def geo_extractors():

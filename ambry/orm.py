@@ -42,7 +42,6 @@ BigIntegerType = BigIntegerType.with_variant(sqlite.INTEGER(), 'sqlite')
 from sqlalchemy import func
 from sqlalchemy.types import UserDefinedType
 
-
 class Geometry(UserDefinedType):
 
     """Geometry type, to ensure that WKT text is properly inserted into the
@@ -80,7 +79,6 @@ GeometryType = GeometryType.with_variant(
 GeometryType = GeometryType.with_variant(Text(), 'postgresql')
 
 Base = declarative_base()
-
 
 class JSONEncoder(json.JSONEncoder):
 
@@ -330,8 +328,7 @@ class LinkableMixin(object):
         if not id_values:
             return []
 
-        return object_session(self).query(clz).filter(
-            id_column.in_(id_values)).all()
+        return object_session(self).query(clz).filter(id_column.in_(id_values)).all()
 
     def _append_link(self, name, object_id):
         """
@@ -423,9 +420,15 @@ class Dataset(Base, LinkableMixin):
 
     path = None  # Set by the LIbrary and other queries.
 
-    tables = relationship("Table",backref='dataset',cascade="all, delete-orphan",passive_updates=False)
+    tables = relationship("Table",backref='dataset',cascade="delete, delete-orphan")
 
-    partitions = relationship("Partition",backref='dataset',cascade="all, delete-orphan",passive_updates=False)
+    partitions = relationship("Partition",backref='dataset',cascade="delete, delete-orphan")
+
+    configs = relationship('Config', backref='dataset', cascade="delete, delete-orphan",
+                           primaryjoin="Config.d_vid == Dataset.vid ", foreign_keys="Config.d_vid")
+
+    files = relationship('File', backref='dataset', cascade="delete, delete-orphan",
+                         primaryjoin="File.ref == Dataset.vid ", foreign_keys="File.ref")
 
     #__table_args__ = (
     #    UniqueConstraint('d_vid', 'd_location', name='u_vid_location'),
@@ -452,6 +455,11 @@ class Dataset(Base, LinkableMixin):
         self.revision = kwargs.get("revision", None)
         self.version = kwargs.get("version", None)
 
+        if self.vid and not self.id_:
+            self.revision = ObjectNumber.parse(self.vid).revision
+            self.id_ = str(ObjectNumber.parse(self.vid).rev(None))
+
+
         if not self.id_:
             dn = DatasetNumber(None, self.revision)
             self.vid = str(dn)
@@ -460,11 +468,22 @@ class Dataset(Base, LinkableMixin):
             try:
                 self.vid = str(ObjectNumber.parse(self.id_).rev(self.revision))
             except ValueError as e:
-                print repr(self)
                 raise ValueError('Could not parse id value; ' + e.message)
 
         if self.cache_key is None:
             self.cache_key = self.identity.cache_key
+
+        if not self.name:
+            self.name = str(self.identity.name)
+
+        if not self.vname:
+            self.vname = str(self.identity.vname)
+
+        if not self.fqname:
+            self.fqname = str(self.identity.fqname)
+
+        if not self.version:
+            self.version = str(self.identity.version)
 
         assert self.vid[0] == 'd'
 
@@ -512,6 +531,17 @@ class Dataset(Base, LinkableMixin):
 
         return d
 
+    def config(self,  key, group = 'config'):
+        from sqlalchemy.orm import object_session
+        s = object_session(self)
+        return (s.query(Config)
+              .filter(Config.d_vid == self.vid)
+              .filter(Config.group == group )
+              .filter(Config.key == key )
+              .one())
+
+
+
     # For linking partitions to manifests
     @property
     def linked_manifests(self):
@@ -542,17 +572,153 @@ def _clean_flag(in_flag):
     return bool(in_flag)
 
 
+
+class Code(Base, SavableMixin, LinkableMixin):
+
+    """Code entries for variables."""
+    __tablename__ = 'codes'
+
+
+    c_vid = SAColumn('cd_c_vid',String(20),ForeignKey('columns.c_vid'), primary_key=True,index=True,nullable=False)
+
+    d_vid = SAColumn('cd_d_vid', String(20), ForeignKey('datasets.d_vid'), primary_key=True, nullable=False, index=True)
+
+    key = SAColumn('cd_skey',String(20), primary_key=True,nullable=False,index=True)  # String version of the key, the value in the dataset
+    ikey = SAColumn( 'cd_ikey',Integer,index=True)  # Set only if the key is actually an integer
+
+    value = SAColumn('cd_value', Text,nullable=False)  # The value the key maps to
+    description = SAColumn('f_description', Text, index=True)
+
+    data = SAColumn('co_data', MutationDict.as_mutable(JSONEncodedObj))
+
+    def __init__(self, **kwargs):
+
+        for p in self.__mapper__.attrs:
+            if p.key in kwargs:
+                setattr(self, p.key, kwargs[p.key])
+                del kwargs[p.key]
+
+        if self.data:
+            self.data.update(kwargs)
+
+
+
+    def __repr__(self):
+        return "<code: {}->{} >".format(self.key, self.value)
+
+    def update(self, f):
+        """Copy another files properties into this one."""
+
+        for p in self.__mapper__.attrs:
+
+            if p.key == 'oid':
+                continue
+            try:
+                setattr(self, p.key, getattr(f, p.key))
+
+            except AttributeError:
+                # The dict() method copies data property values into the main dict,
+                # and these don't have associated class properties.
+                continue
+
+    @property
+    def dict(self):
+
+        d = { p.key: getattr( self,p.key)
+             for p in self.__mapper__.attrs if p.key not in ('data','column','table')
+        }
+
+        if self.data:
+            for k in self.data:
+                assert k not in d
+                d[k] = self.data[k]
+
+        return d
+
+    @property
+    def insertable_dict(self):
+
+        d =  {('cd_' + k).strip('_'): v for k, v in self.dict.items()}
+
+        # the `key` property is not named after its db column
+        d['cd_skey'] = d['cd_key']
+        del d['cd_key']
+
+        return d
+
+
+    @staticmethod
+    def before_insert(mapper, conn, target):
+
+        target.d_vid = str(ObjectNumber.parse(target.c_vid).as_dataset)
+
+
+event.listen(Code, 'before_insert', Code.before_insert)
+
+
+lom_enums = "nom ord int ratio".split()
+
+
+class ColumnStat(Base, SavableMixin, LinkableMixin):
+
+    """Table for per column, per partition stats."""
+    __tablename__ = 'colstats'
+
+
+    p_vid = SAColumn('cs_p_vid',String(20),ForeignKey('partitions.p_vid'), primary_key=True, nullable=False, index=True)
+    partition = relationship('Partition', backref='_stats')
+
+    c_vid = SAColumn('cs_c_vid', String(20), ForeignKey('columns.c_vid'), primary_key=True, nullable=False, index=True)
+
+    d_vid = SAColumn('cs_d_vid', String(20), ForeignKey('datasets.d_vid'), nullable=False, index=True)
+
+
+    lom = SAColumn('cs_lom', String(12))
+    count = SAColumn('cs_count', BigIntegerType)
+    mean = SAColumn('cs_mean', Float)
+    std = SAColumn('cs_std', Float)
+    min = SAColumn('cs_min', BigIntegerType)
+    p25 = SAColumn('cs_p25', BigIntegerType)
+    p50 = SAColumn('cs_p50', BigIntegerType)
+    p75 = SAColumn('cs_p75', BigIntegerType)
+    max = SAColumn('cs_max', BigIntegerType)
+    nuniques = SAColumn('cs_nuniques', Integer)
+
+    uvalues = SAColumn('f_uvalues', MutationDict.as_mutable(JSONEncodedObj))
+    hist = SAColumn('f_hist', MutationDict.as_mutable(JSONEncodedObj))
+
+    __table_args__ = (
+        UniqueConstraint('cs_p_vid', 'cs_c_vid', name='u_cols_stats'),
+    )
+
+    def __init__(self, **kwargs):
+
+        for p in self.__mapper__.attrs:
+            if p.key in kwargs:
+
+                setattr(self, p.key, kwargs[p.key])
+                del kwargs[p.key]
+
+        self.d_vid = str(ObjectNumber.parse(self.p_vid).as_dataset)
+
+        assert str(ObjectNumber.parse(self.p_vid).as_dataset) == str(ObjectNumber.parse(self.c_vid).as_dataset)
+
+    @property
+    def dict(self):
+
+        return {
+            p.key: getattr(
+                self,
+                p.key) for p in self.__mapper__.attrs if p.key not in ('data','column', 'table','partition')}
+
 class Column(Base):
     __tablename__ = 'columns'
 
     vid = SAColumn('c_vid', String(20), primary_key=True)
     id_ = SAColumn('c_id', String(20))
     sequence_id = SAColumn('c_sequence_id', Integer)
-    t_vid = SAColumn(
-        'c_t_vid',
-        String(20),
-        ForeignKey('tables.t_vid'),
-        index=True)
+    t_vid = SAColumn('c_t_vid',String(20),ForeignKey('tables.t_vid'), nullable=False, index=True)
+    d_vid = SAColumn('c_d_vid', String(20), ForeignKey('datasets.d_vid'), nullable=False, index=True)
     t_id = SAColumn('c_t_id', String(20))
     name = SAColumn('c_name', Text)
     altname = SAColumn('c_altname', Text)
@@ -591,11 +757,12 @@ class Column(Base):
     default = SAColumn('c_default', Text)
     illegal_value = SAColumn('c_illegal_value', Text)
 
+    codes = relationship(Code, backref='column',order_by="asc(Code.key)", cascade="save-update, delete, delete-orphan")
+
+    stats = relationship(ColumnStat, backref='column', cascade="delete, delete-orphan")
+
     __table_args__ = (
-        UniqueConstraint(
-            'c_sequence_id',
-            'c_t_vid',
-            name='_uc_columns_1'),
+        UniqueConstraint( 'c_sequence_id','c_t_vid', name='_uc_columns_1'),
     )
 
     DATATYPE_TEXT = 'text'
@@ -639,6 +806,56 @@ class Column(Base):
         DATATYPE_GEOMETRY: (GeometryType, str, 'GEOMETRY'),
         DATATYPE_BLOB: (sqlalchemy.types.LargeBinary, buffer, 'BLOB')
     }
+
+    def __init__(self, table=None, **kwargs):
+
+
+        self.sequence_id = kwargs.get("sequence_id", len(table.columns) + 1 if table else None)
+
+        self.name = kwargs.get("name", None)
+        self.altname = kwargs.get("altname", None)
+        self.is_primary_key = _clean_flag(kwargs.get("is_primary_key", False))
+        self.datatype = kwargs.get("datatype", None)
+        self.size = kwargs.get("size", None)
+        self.precision = kwargs.get("precision", None)
+        self.start = kwargs.get("start", None)
+        self.width = kwargs.get("width", None)
+        self.sql = kwargs.get("sql", None)
+        self.flags = kwargs.get("flags", None)
+        self.description = kwargs.get("description", None)
+        self.keywords = kwargs.get("keywords", None)
+        self.measure = kwargs.get("measure", None)
+        self.units = kwargs.get("units", None)
+        self.universe = kwargs.get("universe", None)
+        self.scale = kwargs.get("scale", None)
+        self.fk_vid = kwargs.get("fk_vid", kwargs.get("foreign_key", None))
+        self.proto_vid = kwargs.get("proto_vid", kwargs.get("proto", None))
+        self.derivedfrom = kwargs.get("derivedfrom", None)
+        self.data = kwargs.get("data", None)
+
+        # the table_name attribute is not stored. It is only for
+        # building the schema, linking the columns to tables.
+        self.table_name = kwargs.get("table_name", None)
+
+        assert self.sequence_id is not None
+
+        if not self.name:
+            self.name = 'column' + str(self.sequence_id)
+            # raise ValueError('Column must have a name. Got: {}'.format(kwargs))
+
+        # Don't allow these values to be the empty string
+        self.fk_vid = self.fk_vid or None
+        self.proto_vid = self.proto_vid or None
+        self.derivedfrom = self.derivedfrom or None
+
+        if table:
+            self.t_id = table.id_
+            self.t_vid = table.vid
+            ton = ObjectNumber.parse(table.vid)
+            con = ColumnNumber(ton, self.sequence_id)
+            self.vid = str(con)
+            self.id = str(con.rev(None))
+
 
     def type_is_int(self):
         return self.datatype in (
@@ -767,45 +984,6 @@ class Column(Base):
     def foreign_key(self):
         return self.fk_vid
 
-    def __init__(self, table, **kwargs):
-
-        self.sequence_id = kwargs.get("sequence_id", len(table.columns) + 1)
-        self.name = kwargs.get("name", None)
-        self.altname = kwargs.get("altname", None)
-        self.is_primary_key = _clean_flag(kwargs.get("is_primary_key", False))
-        self.datatype = kwargs.get("datatype", None)
-        self.size = kwargs.get("size", None)
-        self.precision = kwargs.get("precision", None)
-        self.start = kwargs.get("start", None)
-        self.width = kwargs.get("width", None)
-        self.sql = kwargs.get("sql", None)
-        self.flags = kwargs.get("flags", None)
-        self.description = kwargs.get("description", None)
-        self.keywords = kwargs.get("keywords", None)
-        self.measure = kwargs.get("measure", None)
-        self.units = kwargs.get("units", None)
-        self.universe = kwargs.get("universe", None)
-        self.scale = kwargs.get("scale", None)
-        self.fk_vid = kwargs.get("fk_vid", kwargs.get("foreign_key", None))
-        self.proto_vid = kwargs.get("proto_vid", kwargs.get("proto", None))
-        self.derivedfrom = kwargs.get("derivedfrom", None)
-        self.data = kwargs.get("data", None)
-
-        # the table_name attribute is not stored. It is only for
-        # building the schema, linking the columns to tables.
-        self.table_name = kwargs.get("table_name", None)
-
-        if not self.name:
-            self.name = 'column' + str(self.sequence_id)
-            #raise ValueError('Column must have a name. Got: {}'.format(kwargs))
-
-        self.t_id = table.id_
-        self.t_vid = table.vid
-        ton = ObjectNumber.parse(table.vid)
-        con = ColumnNumber(ton, self.sequence_id)
-        self.vid = str(con)
-        self.id = str(con.rev(None))
-
     @property
     def dict(self):
         """A dict that holds key/values for all of the properties in the
@@ -815,12 +993,8 @@ class Column(Base):
 
         """
         x = {
-            p.key: getattr(
-                self,
-                p.key) for p in self.__mapper__.attrs if p.key not in (
-                'table',
-                'stats',
-                '_codes')}
+            p.key: getattr(self,p.key) for p in self.__mapper__.attrs if p.key not in (
+                'table','stats','_codes')}
 
         if not x:
             raise Exception(self.__dict__)
@@ -857,13 +1031,7 @@ class Column(Base):
         """
         import re
         try:
-            return re.sub(
-                '_+',
-                '_',
-                re.sub(
-                    '[^\w_]',
-                    '_',
-                    name).lower()).rstrip('_')
+            return re.sub('_+','_',re.sub('[^\w_]','_',name).lower()).rstrip('_')
         except TypeError:
             raise TypeError(
                 'Trying to mangle name with invalid type of: ' + str(type(name)))
@@ -877,11 +1045,22 @@ class Column(Base):
         """
         return "{}_{}".format(self.id_, self.name)
 
+
+
     @property
     @memoize
-    def codes(self):
-        # _codes is a backref from Codes
-        return self._codes  # Caches the query, I hope ...
+    def reverse_code_map(self):
+        """Return a map from a code ( usually a string ) to the  shorter numeric value"""
+
+        return { c.value:(c.ikey if c.ikey else c.key) for c in self.codes}
+
+    @property
+    @memoize
+    def forward_code_map(self):
+        """Return  a map from the short code to the full value """
+
+        return { c.key:c.value for c in self.codes}
+
 
     def add_code(self, key, value, description=None, data=None):
         """
@@ -897,17 +1076,24 @@ class Column(Base):
         # Ignore codes we already have, but will not catch codes added earlier for this same
         # object, since the code are cached
 
-        for cd in self._codes:
+        for cd in self.codes:
             if cd.key == str(key):
                 return cd
 
+        def cast_to_int(s):
+            try:
+                return int(s)
+            except ValueError:
+                return None
+
         cd = Code(c_vid=self.vid, t_vid=self.t_vid,
                   key=str(key),
-                  ikey=key if isinstance(key, int) else None,
+                  ikey= cast_to_int(key),
                   value=value,
                   description=description, data=data)
 
-        Session.object_session(self).add(cd)
+
+        self.codes.append(cd)
 
         return cd
 
@@ -937,8 +1123,19 @@ class Column(Base):
         id for the column."""
 
         if target.id_ is None:
-            table_on = ObjectNumber.parse(target.t_id)
-            target.id_ = str(ColumnNumber(table_on, target.sequence_id))
+
+            if target.table:
+                table_on = ObjectNumber.parse(target.table.vid)
+            else:
+                table_on = ObjectNumber.parse(target.t_vid)
+
+            if not target.vid:
+                target.vid = str(ColumnNumber(table_on, target.sequence_id))
+
+            if not target.id_:
+                target.id_ = str(ColumnNumber(table_on, target.sequence_id).rev(None))
+
+        target.d_vid = str(ObjectNumber.parse(target.t_vid).as_dataset)
 
     def __repr__(self):
         return "<column: {}, {}>".format(self.name, self.vid)
@@ -953,11 +1150,9 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     vid = SAColumn('t_vid', String(20), primary_key=True)
     id_ = SAColumn('t_id', String(20), primary_key=False)
     d_id = SAColumn('t_d_id', String(20))
-    d_vid = SAColumn(
-        't_d_vid',
-        String(20),
-        ForeignKey('datasets.d_vid'),
-        index=True)
+    d_vid = SAColumn('t_d_vid',String(20),ForeignKey('datasets.d_vid'),index=True)
+    # This is a freign key, but is not declared as such
+    p_vid = SAColumn('t_p_vid', String(20), index=True, nullable=True)
     sequence_id = SAColumn('t_sequence_id', Integer, nullable=False)
     name = SAColumn('t_name', String(200), nullable=False)
     altname = SAColumn('t_altname', Text)
@@ -965,8 +1160,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
     universe = SAColumn('t_universe', String(200))
     keywords = SAColumn('t_keywords', Text)
     type = SAColumn('t_type', String(20))
-    # Reference to a column that provides an example of whow this column
-    # should be used.
+    # Reference to a column that provides an example of how this table should be used.
     proto_vid = SAColumn('t_proto_vid', String(20), index=True)
 
     installed = SAColumn('t_installed', String(100))
@@ -978,9 +1172,9 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
         UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
     )
 
-    columns = relationship(Column, backref='table',
-                           order_by="asc(Column.sequence_id)",
-                           cascade="all, delete-orphan", lazy='joined')
+    columns = relationship(Column, backref='table', order_by="asc(Column.sequence_id)",
+                           cascade="merge, delete, delete-orphan", lazy='joined')
+
 
     def __init__(self, dataset, **kwargs):
 
@@ -1007,11 +1201,7 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
         self.id_ = str(ton.rev(None))
 
         if self.name:
-            self.name = self.mangle_name(
-                self.name,
-                kwargs.get(
-                    'preserve_case',
-                    False))
+            self.name = self.mangle_name(self.name, kwargs.get('preserve_case',False))
 
         self.init_on_load()
 
@@ -1020,26 +1210,12 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
         d = {
             k: v for k,
             v in self.__dict__.items() if k in [
-                'id_',
-                'vid',
-                'd_id',
-                'd_vid',
-                'sequence_id',
-                'name',
-                'altname',
-                'vname',
-                'description',
-                'universe',
-                'keywords',
-                'installed',
-                'proto_vid',
-                'type',
-                '_codes']}
+                'id_','vid','d_id','d_vid','sequence_id','name','altname','vname','description','universe','keywords',
+                'installed','proto_vid','type','codes']}
 
         if self.data:
             for k in self.data:
-                assert k not in d, "Value '{}' is a table field and should not be in data ".format(
-                    k)
+                assert k not in d, "Value '{}' is a table field and should not be in data ".format(k)
                 d[k] = self.data[k]
 
         d['is_geo'] = False
@@ -1052,12 +1228,13 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
 
     @property
     def nonull_dict(self):
-        return {k: v for k, v in self.dict.items() if v and k not in '_codes'}
+        return {k: v for k, v in self.dict.items() if v and k not in 'codes'}
 
     @property
     def nonull_col_dict(self):
 
         tdc = {}
+
         for c in self.columns:
             tdc[c.id_] = c.nonull_dict
             tdc[c.id_]['codes'] = {cd.key: cd.dict for cd in c.codes}
@@ -1066,6 +1243,34 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
         td['columns'] = tdc
 
         return td
+
+    def link_columns(self, other):
+        """Return columns that can be used to link another table to this one"""
+
+        def protos(t):
+            from identity import ObjectNumber
+
+            protos = {}
+
+            protos.update({ c.fk_vid:c for c in t.columns if c.fk_vid })
+            protos.update({ c.proto_vid:c for c in t.columns if c.proto_vid})
+
+            protos = { str(ObjectNumber.parse(n).rev(None)):c for n, c in protos.items() } # Remove revisions
+
+            # HACK: The numbering in the proto dataset changes, so we have to make substitutions
+            if 'c00104002' in protos:
+                protos['c00109003'] = protos['c00104002']
+                del protos['c00104002']
+
+            return protos
+
+        protos_s = protos(self)
+        protos_o = protos(other)
+
+        inter =   set(protos_s.keys())  & set(protos_o.keys())
+
+        return [ (protos_s[n], protos_o[n])  for n in inter ]
+
 
     @property
     def insertable_dict(self):
@@ -1179,8 +1384,6 @@ Columns:
             dataset_id = ObjectNumber.parse(target.d_id)
             target.id_ = str(TableNumber(dataset_id, target.sequence_id))
 
-        # Check that pro vaules are removed, from warehouse install_table()
-        assert 'proto_vid' not in target.data
 
     @staticmethod
     def mangle_name(name, preserve_case=False):
@@ -1206,6 +1409,8 @@ Columns:
         from dbexceptions import NotFoundError
 
         s = sqlalchemy.orm.session.Session.object_session(self)
+
+        assert s, "Can't create column with this method unless the table has a session"
 
         name = Column.mangle_name(name)
 
@@ -1266,6 +1471,9 @@ Columns:
 
         return row
 
+    def add_id_column(self):
+        self.add_column(name='id',datatype='integer',is_primary_key = True, description = self.description)
+
     def column(self, name_or_id, default=None):
         from sqlalchemy.sql import or_
         import sqlalchemy.orm.session
@@ -1274,12 +1482,13 @@ Columns:
 
         s = sqlalchemy.orm.session.Session.object_session(self)
 
-        assert s, "Table doesn't have a DB session, so can't find a column"
+        if not s: # No session, so can't find a column.
+            return None
+
 
         q = (s.query(Column)
              .filter(or_(Column.id_ == name_or_id, Column.name == name_or_id))
-             .filter(Column.t_vid == self.vid)
-             )
+             .filter(Column.t_vid == self.vid))
 
         try:
             if not default is None:
@@ -1293,16 +1502,10 @@ Columns:
                 except MultipleResultsFound:
                     raise MultipleFoundError(
                         ("Got more than one result for query for column: '{}' "
-                         " In table {} ({})").format(
-                            name_or_id,
-                            self.vid,
-                            self.name))
+                         " In table {} ({})").format(name_or_id,self.vid,self.name))
 
         except NoResultFound:
-            raise NotFoundError(
-                "Failed to find column '{}' in table '{}' ".format(
-                    name_or_id,
-                    self.name))
+            raise NotFoundError("Failed to find column '{}' in table '{}' ".format(name_or_id,self.name))
 
     @property
     def primary_key(self):
@@ -1531,6 +1734,8 @@ Columns:
     def delink_manifest(self, f):
         return self._remove_link('manifests', f.ref)
 
+
+
 event.listen(Table, 'before_insert', Table.before_insert)
 event.listen(Table, 'before_update', Table.before_update)
 
@@ -1542,7 +1747,6 @@ class Config(Base):
     d_vid = SAColumn('co_d_vid', String(16), primary_key=True)
     group = SAColumn('co_group', String(200), primary_key=True)
     key = SAColumn('co_key', String(200), primary_key=True)
-    #value = SAColumn('co_value', PickleType(protocol=0))
 
     value = SAColumn('co_value', JSONAlchemy(Text()))
 
@@ -1560,11 +1764,7 @@ class Config(Base):
         return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs}
 
     def __repr__(self):
-        return "<config: {},{},{} = {}>".format(
-            self.d_vid,
-            self.group,
-            self.key,
-            self.value)
+        return "<config: {},{},{} = {}>".format(self.d_vid,self.group,self.key,self.value)
 
 
 class Partition(Base, LinkableMixin):
@@ -1575,13 +1775,13 @@ class Partition(Base, LinkableMixin):
     name = SAColumn('p_name', String(200), nullable=False, index=True)
     vname = SAColumn('p_vname',String(200),unique=True,nullable=False,index=True)
     fqname = SAColumn('p_fqname',String(200),unique=True,nullable=False,index=True)
-    ref = SAColumn('p_ref', String(200), index=True)
     cache_key = SAColumn('p_cache_key',String(200),unique=True,nullable=False,index=True)
     sequence_id = SAColumn('p_sequence_id', Integer)
-    t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'),index=True)
+    t_vid = SAColumn('p_t_vid',String(20),ForeignKey('tables.t_vid'),nullable=False,index=True)
     t_id = SAColumn('p_t_id', String(20))
-    d_vid = SAColumn('p_d_vid',String(20),ForeignKey('datasets.d_vid'),index=True)
+    d_vid = SAColumn('p_d_vid',String(20),ForeignKey('datasets.d_vid'),nullable=False,index=True)
     d_id = SAColumn('p_d_id', String(20))
+    ref = SAColumn('p_ref', String(200), index=True)
     time = SAColumn('p_time', String(20))
     space = SAColumn('p_space', String(50))
     grain = SAColumn('p_grain', String(50))
@@ -1600,9 +1800,16 @@ class Partition(Base, LinkableMixin):
         UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'),
     )
 
-    table = relationship('Table', backref='partitions', lazy='subquery')
+    # For the primary table for the partition. There is one per partition, but a table
+    # can be primary in multiple partitions.
+    table = relationship('Table', backref='partitions', foreign_keys='Partition.t_vid')
 
-    def __init__(self, dataset, **kwargs):
+    warehouse_tables = relationship('Table', backref='source_partition', foreign_keys='Table.p_vid',
+                                    primaryjoin="Partition.vid == Table.p_vid")
+
+    stats = relationship(ColumnStat, backref='partition', cascade="delete, delete-orphan")
+
+    def __init__(self, dataset, t_id, **kwargs):
 
         self.vid = kwargs.get("vid", kwargs.get("id_", None))
         self.id_ = kwargs.get("id", kwargs.get("id_", None))
@@ -1612,25 +1819,37 @@ class Partition(Base, LinkableMixin):
         self.fqname = kwargs.get("fqname", None)
         self.cache_key = kwargs.get("cache_key", None)
         self.sequence_id = kwargs.get("sequence_id", None)
-        self.d_id = kwargs.get("d_id", None)
+
         self.space = kwargs.get("space", None)
         self.time = kwargs.get("time", None)
-        self.t_id = kwargs.get("t_id", None)
         self.grain = kwargs.get('grain', None)
         self.format = kwargs.get('format', None)
         self.segment = kwargs.get('segment', None)
         self.data = kwargs.get('data', None)
 
-        if dataset:
-            self.d_id = dataset.id_
-            self.d_vid = dataset.vid
+        self.d_vid = dataset.vid
+        self.d_id = dataset.id_
 
-        # See before_insert for setting self.vid and self.id_
+        self.t_id = t_id
 
-        if self.t_id:
-            don = ObjectNumber.parse(self.d_vid)
-            ton = ObjectNumber.parse(self.t_id)
-            self.t_vid = str(ton.rev(don.revision))
+
+        tables = { t.id_: t.name for t in dataset.tables }
+
+        don = ObjectNumber.parse(self.d_vid)
+        ton = ObjectNumber.parse(self.t_id)
+        self.t_vid = str(ton.rev(don.revision))
+
+
+        from identity import PartialPartitionName
+        kwargs['table'] = tables[self.t_id]
+        ppn = PartialPartitionName(**kwargs)
+
+        if not self.vname:
+            self.vname = ppn.promote(dataset.identity.name).vname
+            self.name = ppn.promote(dataset.identity.name).name
+
+        if not self.cache_key:
+            self.cache_key = ppn.promote(dataset.identity.name).cache_key
 
         assert self.cache_key is not None
 
@@ -1810,16 +2029,17 @@ class Partition(Base, LinkableMixin):
 
         stats = {stat_map.get(k, k): v for k, v in stats.items()}
 
-        cd = ColumnStat(p_vid=self.vid, c_vid=c_vid, **stats)
+        cs = ColumnStat(p_vid=self.vid, c_vid=c_vid, **stats)
 
-        Session.object_session(self).add(cd)
+        self._stats.append(cs)
 
-        return cd
+        return cs
 
     @property
     def stats(self):
-        class Bunch(object):
 
+        class Bunch(object):
+            """Dict and object access to properties"""
             def __init__(self, o):
                 self.__dict__.update(o)
 
@@ -1842,13 +2062,13 @@ class Partition(Base, LinkableMixin):
         object and create an ObjectNumber value for the id_"""
         from identity import Identity
 
+
         if target.sequence_id is None:
             # These records can be added in an multi-process environment, we
             # we need exclusive locking here, where we don't for other sequence
             # ids.
             conn.execute("BEGIN IMMEDIATE")
-            sql = text(
-                '''SELECT max(p_sequence_id)+1 FROM Partitions WHERE p_d_id = :did''')
+            sql = text("SELECT max(p_sequence_id)+1 FROM Partitions WHERE p_d_id = :did")
 
             max_id, = conn.execute(sql, did=target.d_id).fetchone()
 
@@ -1869,24 +2089,30 @@ class Partition(Base, LinkableMixin):
             dataset = ObjectNumber.parse(target.d_id)
             target.id_ = str(PartitionNumber(dataset, target.sequence_id))
 
+    @staticmethod
+    def set_t_vid(target, value, oldvalue, initiator):
+        "Check that t_vid isn't set to Null"
+        if not bool(value):
+            raise AssertionError("Partition.t_vid can't be null (set_t_vid): {} -> {}".format(oldvalue, value))
+
+#event.listen(Partition.t_vid, 'set', Partition.set_t_vid)
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)
-
 
 class File(Base, SavableMixin, LinkableMixin):
     __tablename__ = 'files'
 
     oid = SAColumn('f_id', Integer, primary_key=True, nullable=False)
     path = SAColumn('f_path', Text, nullable=False)
-    ref = SAColumn('f_ref', Text, index=True)
-    type_ = SAColumn('f_type', Text)
-    source_url = SAColumn('f_source_url', Text)
+    ref = SAColumn('f_ref', Text, index=True, nullable=False)
+    type_ = SAColumn('f_type', Text, nullable=False)
+    source_url = SAColumn('f_source_url', Text, nullable=False)
     process = SAColumn('f_process', Text)
     state = SAColumn('f_state', Text)
     hash = SAColumn('f_hash', Text)
     modified = SAColumn('f_modified', Integer)
     size = SAColumn('f_size', BigIntegerType)
-    group = SAColumn('f_group', Text)
+
     priority = SAColumn('f_priority', Integer)
 
     data = SAColumn('f_data', MutationDict.as_mutable(JSONEncodedObj))
@@ -1894,14 +2120,19 @@ class File(Base, SavableMixin, LinkableMixin):
     content = SAColumn('f_content', Binary)
 
     __table_args__ = (
-        UniqueConstraint('f_path', 'f_type', 'f_group', name='u_type_path'),
-        UniqueConstraint('f_ref', 'f_type', 'f_group', name='u_ref_path'),
+        UniqueConstraint('f_ref', 'f_type', 'f_source_url', name='u_ref_path'),
     )
 
     def __init__(self, **kwargs):
+
+        if not kwargs.get("ref", None):
+            import hashlib
+
+            kwargs['ref'] = hashlib.md5(kwargs['path']).hexdigest()
+
         self.oid = kwargs.get("oid", None)
         self.path = kwargs.get("path", None)
-        self.source_url = kwargs.get("source_url", None)
+        self.source_url = kwargs.get("source_url", kwargs.get("source", None))
         self.process = kwargs.get("process", None)
         self.state = kwargs.get("state", None)
         self.modified = kwargs.get("modified", None)
@@ -1915,8 +2146,11 @@ class File(Base, SavableMixin, LinkableMixin):
         self.priority = kwargs.get('priority', 0)
         self.content = kwargs.get('content', None)
 
+
+
+
     def __repr__(self):
-        return "<file: {}; {}>".format(self.path, self.state)
+        return "<file: {}; {}>".format(self.path, self.ref, self.state)
 
     def update(self, f):
         """Copy another files properties into this one."""
@@ -1936,23 +2170,9 @@ class File(Base, SavableMixin, LinkableMixin):
     @property
     def dict(self):
 
-        d = dict(
-            (col,
-             getattr(
-                 self,
-                 col)) for col in [
-                'oid',
-                'path',
-                'ref',
-                'type_',
-                'source_url',
-                'process',
-                'state',
-                'hash',
-                'modified',
-                'size',
-                'group',
-                'priority'])
+        d = dict((col, getattr(self,col)) for col in [
+                'oid','path','ref','type_','source_url','process',
+                'state','hash','modified','size', 'priority'])
 
         if self.data:
             for k in self.data:
@@ -2006,7 +2226,7 @@ class File(Base, SavableMixin, LinkableMixin):
         return self._get_link_array('manifests', File, File.ref)
 
     def link_manifest(self, f):
-        assert self.group != 'manifest'
+        assert self.type_ != 'manifest'
         return self._append_link('manifests', f.ref)
 
     def delink_manifest(self, f):
@@ -2022,174 +2242,19 @@ class File(Base, SavableMixin, LinkableMixin):
     def delink_store(self, f):
         return self._remove_link('stores', f.ref)
 
+    @staticmethod
+    def before_update(mapper, conn, target):
+        """Set the column id number based on the table number and the sequence
+        id for the column."""
 
-class Code(Base, SavableMixin, LinkableMixin):
+        assert bool(target.ref), "File.ref can't be null (before_update)"
 
-    """Code entries for variables."""
-    __tablename__ = 'codes'
+    @staticmethod
+    def set_ref(target, value, oldvalue, initiator):
+        "Strip non-numeric characters from a phone number"
 
-    oid = SAColumn('cd_id', Integer, primary_key=True, nullable=False)
+        assert bool(value), "File.ref can't be null (set_ref)"
 
-    t_vid = SAColumn(
-        'cd_t_vid',
-        String(20),
-        ForeignKey('tables.t_vid'),
-        index=True)
-    table = relationship('Table', backref='codes', lazy='subquery')
-
-    c_vid = SAColumn(
-        'cd_c_vid',
-        String(20),
-        ForeignKey('columns.c_vid'),
-        index=True)
-    column = relationship('Column', backref='_codes', lazy='subquery')
-
-    key = SAColumn(
-        'cd_skey',
-        String(20),
-        nullable=False,
-        index=True)  # String version of the key, the value in the dataset
-    ikey = SAColumn(
-        'cd_ikey',
-        Integer,
-        index=True)  # Set only if the key is actually an integer
-
-    value = SAColumn(
-        'cd_value',
-        Text,
-        nullable=False)  # The value the key maps to
-    description = SAColumn('f_description', Text, index=True)
-
-    data = SAColumn('co_data', MutationDict.as_mutable(JSONEncodedObj))
-
-    __table_args__ = (
-        UniqueConstraint('cd_c_vid', 'cd_skey', name='u_code_col_key'),
-    )
-
-    def __init__(self, **kwargs):
-
-        for p in self.__mapper__.attrs:
-            if p.key in kwargs:
-                setattr(self, p.key, kwargs[p.key])
-                del kwargs[p.key]
-
-        if self.data:
-            self.data.update(kwargs)
-
-    def __repr__(self):
-        return "<code: {}->{} >".format(self.key, self.value)
-
-    def update(self, f):
-        """Copy another files properties into this one."""
-
-        for p in self.__mapper__.attrs:
-
-            if p.key == 'oid':
-                continue
-            try:
-                setattr(self, p.key, getattr(f, p.key))
-
-            except AttributeError:
-                # The dict() method copies data property values into the main dict,
-                # and these don't have associated class properties.
-                continue
-
-    @property
-    def dict(self):
-
-        d = {
-            p.key: getattr(
-                self,
-                p.key) for p in self.__mapper__.attrs if p.key not in (
-                'data',
-                'column',
-                'table')}
-
-        if self.data:
-            for k in self.data:
-                assert k not in d
-                d[k] = self.data[k]
-
-        return d
-
-    @property
-    def insertable_dict(self):
-        return {('cd_' + k).strip('_'): v for k, v in self.dict.items()}
-
-
-class SearchDoc(Base):
-
-    """Documents for full text search."""
-    __tablename__ = 'searchdocs'
-
-    id = SAColumn('sd_id', Integer, primary_key=True, nullable=False)
-
-    vid = SAColumn('sd_vid', String(20), index=True, unique=True)
-    keywords = SAColumn('sd_keywords', Text)
-    text = SAColumn('sd_text', Text)
-
-lom_enums = "nom ord int ratio".split()
-
-
-class ColumnStat(Base, SavableMixin, LinkableMixin):
-
-    """Table for per column, per partition stats."""
-    __tablename__ = 'colstats'
-
-    id = SAColumn('cs_id', Integer, primary_key=True, nullable=False)
-
-    p_vid = SAColumn(
-        'cs_p_vid',
-        String(20),
-        ForeignKey('partitions.p_vid'),
-        nullable=False,
-        index=True)
-    partition = relationship('Partition', backref='_stats')
-
-    # This really should be Nullable=False, but I can't get cascading deletes
-    # to work.
-    c_vid = SAColumn(
-        'cs_c_vid',
-        String(20),
-        ForeignKey('columns.c_vid'),
-        nullable=False,
-        index=True)
-    column = relationship('Column', backref='stats')
-
-    lom = SAColumn('cs_lom', String(12))
-    count = SAColumn('cs_count', BigIntegerType)
-    mean = SAColumn('cs_mean', Float)
-    std = SAColumn('cs_std', Float)
-    min = SAColumn('cs_min', BigIntegerType)
-    p25 = SAColumn('cs_p25', BigIntegerType)
-    p50 = SAColumn('cs_p50', BigIntegerType)
-    p75 = SAColumn('cs_p75', BigIntegerType)
-    max = SAColumn('cs_max', BigIntegerType)
-    nuniques = SAColumn('cs_nuniques', Integer)
-
-    uvalues = SAColumn('f_uvalues', MutationDict.as_mutable(JSONEncodedObj))
-    hist = SAColumn('f_hist', MutationDict.as_mutable(JSONEncodedObj))
-
-    __table_args__ = (
-        UniqueConstraint('cs_p_vid', 'cs_c_vid', name='u_cols_stats'),
-    )
-
-    def __init__(self, **kwargs):
-
-        for p in self.__mapper__.attrs:
-            if p.key in kwargs:
-
-                setattr(self, p.key, kwargs[p.key])
-                del kwargs[p.key]
-
-    @property
-    def dict(self):
-
-        return {
-            p.key: getattr(
-                self,
-                p.key) for p in self.__mapper__.attrs if p.key not in (
-                'data',
-                'column',
-                'table',
-                'partition')}
+event.listen(File, 'before_insert', File.before_update)
+event.listen(File, 'before_update', File.before_update)
+event.listen(File.ref, 'set', File.set_ref)

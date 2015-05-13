@@ -6,7 +6,7 @@ echo "--- Installing Ambry"
 apt-get update
 locale-gen en_US.UTF-8
 
-packages="git gcc g++ python-pip  python-dev sqlite3  libpq-dev
+packages="git gcc g++ python-pip  python-dev sqlite3  libpq-dev libffi-dev
 libgdal-dev gdal-bin python-gdal python-numpy python-scipy "
 
 let "ver=$(lsb_release -r -s | tr -d '.')"
@@ -22,6 +22,8 @@ if [ $? != 0 ]; then
     echo "ERROR: Failed to install $pkg"
     exit $?
 fi
+
+pip install -U pip
 
 
 # This package allows Sqlalchemy to load the spatialite shared object to provide
