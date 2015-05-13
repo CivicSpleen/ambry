@@ -343,7 +343,6 @@ class Test(TestBase):
         self.assertEquals('filesystem1', l['filesystem']['_name'])
         self.assertEquals('filesystem2', l['filesystem']['upstream']['_name'])
         self.assertEquals('filesystem3', l['filesystem']['upstream']['upstream']['_name'])
-        self.assertEquals('devtest.sandiegodata.org', l['filesystem']['upstream']['upstream']['account']['_name'])
 
 
     def test_build_bundle(self):  

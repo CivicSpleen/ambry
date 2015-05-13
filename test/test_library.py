@@ -394,9 +394,17 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         '''Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent'''
 
+        from ambry.dbexceptions import ConfigurationError
+
         root = self.rc.group('filesystem').root
 
-        l = self.get_library('s3-remoted')
+
+        try:
+            l = self.get_library('s3-remoted')
+        except ConfigurationError:
+            return # Skip if the devtest.sandiegodata.org bucket is not configured
+
+
 
         remote = l.remotes['0']
 
@@ -695,6 +703,8 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         #ambry.util.get_logger('ambry.filesystem').setLevel(logging.DEBUG)
         # Set up the test directory and make some test files. 
         from ckcache import new_cache
+        from ambry.dbexceptions import ConfigurationError
+
         
         root = self.rc.group('filesystem').root
         os.makedirs(root)
@@ -705,11 +715,13 @@ source/dataset-subset-variation-0.0.1/tthree.db:
             for i in range(1024):
                 f.write('.'*1023)
                 f.write('\n')
-         
-        #fs = self.bundle.filesystem
-        #local = fs.get_cache('downloads')
-        
-        cache = new_cache(self.rc.filesystem('s3'))
+
+        try:
+            cache = new_cache(self.rc.filesystem('s3'))
+        except ConfigurationError:
+            return # Skip if the devtest.sandiegodata.org bucket is not configured
+
+
         repo_dir  = cache.cache_dir
 
         for i in range(0,10):

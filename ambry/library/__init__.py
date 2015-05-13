@@ -501,7 +501,6 @@ class Library(object):
                         remote = r
                         break
 
-            assert not remote or remote.repo_id == df.source_url
 
         else:
 
