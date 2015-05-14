@@ -140,12 +140,21 @@ def deref_tc_ref(ref):
 def tc_obj(ref):
     """Return an object for a table or column."""
     from . import renderer
+    from ambry.dbexceptions import NotFoundError
 
     b, t, c = deref_tc_ref(ref)
 
     dc = renderer().doc_cache
 
-    table = dc.table(str(t))
+    try:
+        table = dc.table(str(t))
+    except NotFoundError:
+
+        # This can happen when the table reference has a version id in it, and that version is not available.
+        # So, try it again without the version
+        from ambry.identity import ObjectNumber
+
+        table = dc.table(str(ObjectNumber.parse(str(t)).rev(None)))
 
     if c:
 

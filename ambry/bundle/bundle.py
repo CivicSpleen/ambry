@@ -216,7 +216,7 @@ class Bundle(object):
         try:
             # This should not be necessary, but it handles old templates that get substituted with Jina format
             # titles and such.
-            return t.format(**d)
+            return unicode(t).format(**d)
         except KeyError as e:
             import json
 
@@ -799,9 +799,6 @@ class BuildBundle(Bundle):
         self.prepare()
         self.close()
 
-        # Now, update this version to be one more.
-        self.identity()
-
         identity.on.revision = prior_version + 1
 
         identity = Identity.from_dict(identity.ident_dict)
@@ -922,8 +919,10 @@ class BuildBundle(Bundle):
         if os.path.exists(tf):
             with open(self.filesystem.path(tf)) as fi:
                 rmf = self.filesystem.path(self.README_FILE)
-                with open(self.filesystem.path(rmf), 'w') as fo:
-                    fo.write(self.sub_template(fi.read()))
+                with open(self.filesystem.path(rmf), 'wb') as fo:
+                    in_text = fi.read()
+                    in_text_sub = self.sub_template(in_text)
+                    fo.write(in_text_sub.encode('utf-8'))
 
     def write_doc_html(self):
         import markdown
@@ -941,9 +940,11 @@ class BuildBundle(Bundle):
         if os.path.exists(df):
             with open(df) as dfo:
                 with open(self.filesystem.path(hdf), 'w') as hdfo:
-                    html = html_template.format(
-                        content=markdown.markdown(self.sub_template(dfo.read())))
-                    hdfo.write(html)
+                    in_text = dfo.read()
+                    in_text_sub = self.sub_template(in_text)
+                    md = markdown.markdown(in_text_sub)
+                    html = unicode(html_template).format(content=md)
+                    hdfo.write(html.encode("utf-8"))
 
     def sources(self):
         """Iterate over the sources.
@@ -1206,10 +1207,7 @@ class BuildBundle(Bundle):
         try:
             from ..orm import Dataset
 
-            b = self.library.resolve(
-                self.identity.id_,
-                location=[
-                    Dataset.LOCATION.LIBRARY])
+            b = self.library.resolve(self.identity.id_,location=[ Dataset.LOCATION.LIBRARY])
 
             if b and b.on.revision >= self.identity.on.revision and not self.run_args.force:
                 self.fatal(
@@ -1501,7 +1499,7 @@ class BuildBundle(Bundle):
             places = list(self.library.search.search_identifiers(term))
 
             if not places:
-                raise BuildError("Failed to find space identifier '{}' in full text identifier search".format(space))
+                raise BuildError("Failed to find space identifier '{}' in full text identifier search".format(term))
 
             score, gvid, type, name = places[0]
 
@@ -1832,8 +1830,11 @@ class BuildBundle(Bundle):
             library = self.library
 
             self.log("Install   {} to  library {}".format(self.identity.name,library.database.dsn))
-            dest = library.put_bundle(self, install_partitions=False, file_state = 'new')
-            self.log("Installed {}".format(dest[0]))
+            dest = library.put_bundle(self, install_partitions=False, file_state = 'new', force = True)
+            if dest[1]:
+                self.log("Installed {}".format(dest[0]))
+            else:
+                self.log("Previously Installed {}".format(dest[0]))
 
             for partition in self.partitions:
                 # Skip files that don't exist, but not if the partition is a reference to an

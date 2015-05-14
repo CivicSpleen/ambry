@@ -255,10 +255,7 @@ def source_new(args, l, st, rc):
             d['id'] = str(ns.next())
             prt("Got number from number server: {}".format(d['id']))
         except HTTPError as e:
-            warn(
-                "Failed to get number from number server. Config = {}: {}".format(
-                    nsconfig,
-                    e.message))
+            warn("Failed to get number from number server. Config = {}: {}".format( nsconfig,e.message))
             warn("Using self-generated number. "
                  "There is no problem with this, but they are longer than centrally generated numbers.")
             d['id'] = str(DatasetNumber())

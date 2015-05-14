@@ -275,13 +275,15 @@ class Library(object):
     ## Storing
     ##
 
-    def put_bundle(self, bundle, source = None, install_partitions = True, file_state= 'installed', commit=True):
+    def put_bundle(self, bundle, source = None, install_partitions = True, file_state= 'installed',
+                   commit=True, force = False):
         """Install the records for the dataset, tables, columns and possibly
         partitions. Does not install file references """
 
-
-        if not self.database.install_bundle(bundle):
+        if not force and self.files.query.ref(bundle.identity.vid).type(Files.TYPE.BUNDLE).one_maybe:
             return self.cache.path(bundle.identity.cache_key), False
+
+        self.database.install_bundle(bundle)
 
         if source is None:
             source = self.cache.repo_id
@@ -305,6 +307,8 @@ class Library(object):
             self.search.commit()
 
         self.mark_updated(vid=bundle.identity.vid)
+        self.mark_updated(key="bundle_index")
+        self.mark_updated(key="library_info")
 
         return self.cache.path(bundle.identity.cache_key), installed
 
@@ -588,7 +592,6 @@ class Library(object):
 
         return self.database.session.query(Table).options(lazyload('columns')).all()
 
-
     def table(self, vid):
 
         from ..orm import Table
@@ -601,8 +604,14 @@ class Library(object):
         except NoResultFound:
             # Ths vid is actually an id, so we take the latest one
             try:
-                return (self.database.session.query(Table)
+                t =  (self.database.session.query(Table)
                         .filter(Table.id_ == vid).order_by(Table.vid.desc()).first())
+
+                if not t:
+                    raise NoResultFound
+
+                return t
+
             except NoResultFound:
                 raise NotFoundError("Did not find table ref {} in library {}".format(vid, self.database.dsn))
 
@@ -1083,11 +1092,11 @@ class Library(object):
     # Synchronize
     #
 
-    def mark_updated(self, o=None, vid=None):
+    def mark_updated(self, o=None, vid=None, key=None):
         """Mark an object as recently updated, for instance to clear
         the doc_cache"""
 
-        self.doc_cache.remove(vid)
+        self.doc_cache.remove(vid, _key=key)
 
     def sync_library(self, clean = False):
         '''Rebuild the database from the bundles that are already installed
@@ -1256,7 +1265,12 @@ class Library(object):
                 else:
                     self.logger.info("Remote {} sync: {}".format(remote.repo_id, cache_key))
 
-                b = self._get_bundle_by_cache_key(cache_key)
+                try:
+                    b = self._get_bundle_by_cache_key(cache_key)
+                except S3ResponseError as e:
+                    self.logger.error("Failed to get {} from {} : {} ".format(cache_key, remote, e))
+                    continue
+
 
                 if not b:
                     self.logger.error("Failed to fetch bundle for {} ".format(cache_key))
@@ -1285,6 +1299,9 @@ class Library(object):
                 self.database.commit()
                 self.database.close()
                 b.close()
+
+        self.mark_updated(key="bundle_index")
+        self.mark_updated(key="library_info")
 
 
     def sync_source(self, clean=False):
@@ -1319,6 +1336,7 @@ class Library(object):
             self.database.commit()
 
         except (ConflictError, IntegrityError) as e:
+            self.logger.error(e)
             self.database.rollback()
             pass
 
@@ -1329,7 +1347,8 @@ class Library(object):
             bundle.close()
             self.database.commit()
 
-        except IntegrityError:
+        except IntegrityError as e:
+            self.logger.error(e)
             self.database.rollback()
             pass
 

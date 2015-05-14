@@ -85,6 +85,7 @@ class Resolver(object):
 
         ip, results = self._resolve_ref_orm(ref)
 
+
         # Convert the ORM results to identities
         out = OrderedDict()
 
@@ -129,6 +130,7 @@ class Resolver(object):
         from collections import OrderedDict
 
         ip, refs = self._resolve_ref(ref)
+
 
         if location:
 

@@ -230,6 +230,7 @@ class Intuiter(object):
 
         unmangled_header = row_gen.unmangled_header
 
+
         for n, row in enumerate(row_gen):
 
             if max_n and n > max_n:
@@ -256,7 +257,37 @@ class Intuiter(object):
 
             yield v
 
-    def dump(self):
+    def dump(self, fn=None):
+
+        if fn:
+
+            import unicodecsv as csv
+
+            try:
+                f = open(fn, 'w')
+                close = True
+            except TypeError:
+                f = fn
+                close = False
+
+            try:
+                w = csv.DictWriter(f, ("name length resolved_type has_codes count ints "
+                                       "floats strs nones datetimes dates times strvals".split()))
+                w.writeheader()
+                for d in self._dump():
+                    w.writerow(d)
+            finally:
+                if close:
+                    f.close()
+
+            return
+
+        else:
+
+            return self._dump()
+
+
+    def _dump(self):
 
         for v in self.columns:
             rt = v.resolved_type()
@@ -278,3 +309,4 @@ class Intuiter(object):
             )
 
             yield d
+

@@ -85,6 +85,12 @@ class Files(object):
     def query(self):
         return Files(self.db, self.db.session.query(File))
 
+    def merge(self, f):
+        self.db.session.merge(f)
+
+    def commit(self, f):
+        self.db.session.commit()
+
     #
     # Filters
     #
@@ -234,7 +240,7 @@ class Files(object):
             data=None,
             hash=None,
             priority=None,
-            source_url=None, )
+            source_url='localhost', )
 
     def install_data_store(self, w,name=None, title=None, summary=None,cache=None, url=None, commit=True):
         """A reference for a data store, such as a warehouse or a file

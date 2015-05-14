@@ -115,28 +115,6 @@ class LoaderBundle(BuildBundle):
 
         return p
 
-    def get_source(self, source):
-        """Check for saved source"""
-        import os
-
-        # If the file we are given isn't actually a CSV file, we might have manually
-        # converted it to a CSV and put it in the source store.
-        if not fn.lower().endswith('.csv'):
-            cache = self.filesystem.source_store
-
-            if cache:
-                bare_fn, ext = os.path.splitext(os.path.basename(fn))
-
-                fn_ck = self.source_store_cache_key(bare_fn + ".csv")
-
-                if cache.has(fn_ck):
-                    if not self.filesystem.download_cache.has(fn_ck):
-                        with cache.get_stream(fn_ck) as s:
-                            self.filesystem.download_cache.put(s, fn_ck)
-
-                    return self.filesystem.download_cache.path(fn_ck)
-
-        return fn
 
     def row_gen_for_source(self, source_name):
         from os.path import split, splitext
@@ -159,8 +137,6 @@ class LoaderBundle(BuildBundle):
                 ext = ext[1:]
 
             ext = self.row_gen_ext_map.get(ext, ext)
-
-        print '!!!!', ext, source.filetype
 
         if source.row_spec.dict:
             rs = source.row_spec.dict
@@ -236,7 +212,6 @@ class LoaderBundle(BuildBundle):
 
         # A proto terms map, for setting grains
         pt = self.library.get('civicknowledge.com-proto-proto_terms').partition
-        {r['name']: r['obj_number'] for r in pt.rows}
 
         self.database.create()
 
@@ -286,7 +261,7 @@ class LoaderBundle(BuildBundle):
 
                 rg = self.row_gen_for_source(source_name)
 
-                intuiter.iterate(rg, 2000)
+                intuiter.iterate(rg, 5000)
 
             self.schema.update_from_intuiter(table_name, intuiter)
 
@@ -298,7 +273,7 @@ class LoaderBundle(BuildBundle):
                 w = csv.writer(f)
 
                 for i, row in enumerate(rrg):
-                    if i > 50:
+                    if i > 100:
                         break
 
                     w.writerow(list(row))
@@ -312,7 +287,7 @@ class LoaderBundle(BuildBundle):
                 w.writerow(rg.header)
 
                 for i, row in enumerate(rg):
-                    if i > 50:
+                    if i > 100:
                         break
 
                     w.writerow(list(row))
@@ -338,19 +313,17 @@ class LoaderBundle(BuildBundle):
             # Don't add the columns that are already mapped.
             mapped_domain = set(item['col'] for item in col_map.values())
 
-            # TODO: do we need this loop here?
-            for table_name, sources in tables.items():
-                rg = self.row_gen_for_source(source_name)
+            rg = self.row_gen_for_source(source_name)
 
-                header = rg.header  # Also sets unmangled_header
+            header = rg.header  # Also sets unmangled_header
 
-                descs = [x.replace('\n', '; ') for x in (rg.unmangled_header if rg.unmangled_header else header)]
+            descs = [x.replace('\n', '; ') for x in (rg.unmangled_header if rg.unmangled_header else header)]
 
-                for col_name, desc in zip(header, descs):
-                    k = col_name.strip()
+            for col_name, desc in zip(header, descs):
+                k = col_name.strip()
 
-                    if k not in col_map and col_name not in mapped_domain:
-                        col_map[k] = dict(header=k, col='')
+                if k not in col_map and col_name not in mapped_domain:
+                    col_map[k] = dict(header=k, col='')
 
             # Write back out
             with open(self.col_map_fn, 'w') as f:
@@ -359,7 +332,28 @@ class LoaderBundle(BuildBundle):
                 w.writeheader()
                 for k in sorted(col_map.keys()):
                     w.writerow(col_map[k])
+
+
         return True
+
+    def meta_intuit_table(self, table_name, row_gen):
+        """Create a table ( but don't write the schema ) based on the values returned from a row generator"""
+
+        from ambry.util.intuit import Intuiter
+
+        self.prepare()
+
+        intuiter = Intuiter()
+
+        intuiter.iterate(row_gen, 10000)
+
+        intuiter.dump(self.filesystem.build_path('{}-raw-rows.csv'.format(table_name)))
+
+        self.schema.add_table(table_name)
+
+        self.schema.update_from_intuiter(table_name, intuiter)
+
+
 
     def build_modify_row(self, row_gen, p, source, row):
         """
@@ -380,22 +374,33 @@ class LoaderBundle(BuildBundle):
         if source.is_loadable is False:
             return
 
+        source._name = source_name # for build_from_row_gen
+
         p = self.build_create_partition(source_name)
 
         self.log("Loading source '{}' into partition '{}'".format(source_name, str(p.identity.name)))
+
+        row_gen = self.row_gen_for_source(source_name)
+
+        return self.build_from_row_gen(row_gen, p)
+
+
+    def build_from_row_gen(self, row_gen, p, source = None):
 
         lr = self.init_log_rate(print_rate=5)
 
         columns = [c.name for c in p.table.columns]
 
-        row_gen = self.row_gen_for_source(source_name)
-
         header = row_gen.header
+
+        if source and source.get('_name'):
+            source_name = 'source '+source.get('_name')
+        else:
+            source_name = 'partition '+str(p.identity.name)
 
         for col in header:
             if col not in columns:
-                self.error("Header column '{}' not in table {} for source {}"
-                           .format(col, p.table.name, source_name))
+                self.error("Header column '{}' not in table {} for  {}".format(col, p.table.name, source_name))
 
         with p.inserter() as ins:
             for row in row_gen:
@@ -410,7 +415,8 @@ class LoaderBundle(BuildBundle):
                 errors = ins.insert(d)
 
                 if errors:
-                    self.error("Casting error for {}: {}".format(source_name, errors))
+                   self.error("Casting error for {}: {}".format(source_name, errors))
+
 
     def build(self):
         for source_name in self.metadata.sources:

@@ -1092,7 +1092,6 @@ class Column(Base):
                   value=value,
                   description=description, data=data)
 
-
         self.codes.append(cd)
 
         return cd
@@ -1101,6 +1100,9 @@ class Column(Base):
     def before_insert(mapper, conn, target):
         """event.listen method for Sqlalchemy to set the seqience_id for this
         object and create an ObjectNumber value for the id_"""
+
+        #from identity import ObjectNumber
+        #assert not target.fk_vid or not ObjectNumber.parse(target.fk_vid).revision
 
         if target.sequence_id is None:
             # In case this happens in multi-process mode

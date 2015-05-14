@@ -882,7 +882,14 @@ class Warehouse(object):
 
             for col_a, col_b in link_map:
 
-                sql +=  'JOIN {} ON "{}" = "{}" \n ' .format( p_table.name, col_a.altname, col_b.altname)
+                if col_a.id_ == col_b.id_:
+                    continue
+
+                if col_a.datatype != col_b.datatype:
+                    self.logger.error('Link column datatypes differ! {} ({}) != {} ({})'
+                                      .format(col_a.datatype,col_a.name, col_b.datatype, col_b.name))
+
+                sql +=  'LEFT JOIN {} ON "{}" = "{}" \n ' .format( p_table.name, col_a.altname, col_b.altname)
 
                 if installed_table.type != 'view':
                     indexes.add((installed_table.name, col_a.altname))
@@ -891,6 +898,8 @@ class Warehouse(object):
 
         for table, col in indexes:
             self.create_index(table, [col])
+
+        self.logger.info("Creating indexed table {} with: \n{}".format(table_name, sql))
 
         self.install_view(table_name, sql, data=dict(), type_='indexed', doc=doc)
 

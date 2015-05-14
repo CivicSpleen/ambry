@@ -8,7 +8,7 @@ included in this distribution as LICENSE.txt
 from ..cli import warn, fatal
 from ..identity import LocationRef
 
-default_locations = [LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.REMOTE]
+default_locations = [LocationRef.LOCATION.LIBRARY,  LocationRef.LOCATION.REMOTE]
 
 
 def root_parser(cmd):
@@ -189,7 +189,7 @@ def root_list(args, l, rc):
 
 
 def root_info(args, l, rc):
-    from ..cli import _print_info, err, fatal
+    from ..cli import _print_info, err, fatal, prt
     from ..dbexceptions import NotFoundError, ConfigurationError
     import ambry
 
@@ -199,16 +199,23 @@ def root_info(args, l, rc):
         locations = default_locations
 
     if not args.term:
-        print "Version:  {}, {}".format(ambry._meta.__version__, rc.environment.category)
-        print "Root dir: {}".format(rc.filesystem('root')['dir'])
+        prt("Version:   {}, {}",ambry._meta.__version__, rc.environment.category)
+        prt("Root dir:  {}",rc.filesystem('root')['dir'])
 
         try:
             if l.source:
-                print "Source :  {}".format(l.source.base_dir)
+                prt("Source :   {}",l.source.base_dir)
         except (ConfigurationError, AttributeError):
-            print "Source :  No source directory"
+            prt("Source :   No source directory")
 
-        print "Configs:  {}".format(rc.dict['loaded'])
+
+        prt("Configs:   {}",rc.dict['loaded'])
+
+        prt("Library:   {}", l.database.dsn)
+        prt("Cache:     {}", l.cache)
+        prt("Doc Cache: {}", l._doc_cache)
+        prt("Whs Cache: {}", l.warehouse_cache)
+        prt("Remotes:   {}", ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
 
         return
 
@@ -216,6 +223,7 @@ def root_info(args, l, rc):
         fatal("No library, probably due to a configuration error")
 
     ident = l.resolve(args.term, location=locations)
+
 
     if not ident:
         fatal("Failed to find record for: {}", args.term)

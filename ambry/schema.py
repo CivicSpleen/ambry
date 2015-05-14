@@ -287,6 +287,8 @@ class Schema(object):
     @classmethod
     def validate_column(cls, table, column, warnings, errors):
 
+        from identity import ObjectNumber
+
         # Postgres doesn't allow size modifiers on Text fields.
         if column.datatype == Column.DATATYPE_TEXT and column.size:
             warnings.append(
@@ -314,6 +316,9 @@ class Schema(object):
             except ValueError:
                 errors.append((table.name, column.name,
                                "Bad default value '{}' for type '{}' (V)".format(column.default, column.datatype)))
+
+        if column.fk_vid and ObjectNumber.parse(column.fk_vid).revision:
+            errors.append((table.name, column.name, "Foreign key can't have a revision number"))
 
     @classmethod
     def translate_type(cls, driver, table, column):

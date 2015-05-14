@@ -210,6 +210,7 @@ class SourceTree(object):
             f.modified = int(time.time())
             f.state = state
             self.library.files.merge(f)
+            self.library.files.commit(f)
         else:
             pass
 
