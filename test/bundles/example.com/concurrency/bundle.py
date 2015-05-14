@@ -1,12 +1,12 @@
-'''
+"""
 Example bundle that builds a single partition with a table of random numbers
-'''
+"""
 
 from ambry.bundle import BuildBundle
 
 
 class Bundle(BuildBundle):
-    ''' '''
+    """ """
 
     def __init__(self, directory=None):
 
@@ -41,10 +41,7 @@ class Bundle(BuildBundle):
 
         with p.database.inserter() as ins:
             for i in range(n):
-                row = {}
-                row['uuid'] = str(uuid.uuid4())
-                row['int'] = random.randint(0, 100)
-                row['float'] = random.random() * 100
+                row = {'uuid': str(uuid.uuid4()), 'int': random.randint(0, 100), 'float': random.random() * 100}
 
                 ins.insert(row)
                 lr("seg={}".format(seg_no))
@@ -57,8 +54,8 @@ class Bundle(BuildBundle):
         return True
 
     def x_build_segment(self, seg_no):
-        '''Create all of the tables for a segment. This will load both 
-        geographies ( large and small ) and all of the states or one segment'''
+        """Create all of the tables for a segment. This will load both
+        geographies ( large and small ) and all of the states or one segment"""
         import csv
         import yaml
         from ambry.partitions import Partitions

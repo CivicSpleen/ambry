@@ -1,9 +1,12 @@
 about:
     access: null
+    footnote: null
     grain: null
     groups: []
     license: other-open
+    processed: null
     rights: url of rights document
+    source: null
     space: null
     subject: What the data is about
     summary: An example bundle

@@ -53,7 +53,8 @@ class Files(object):
 
     @property
     def one_maybe(self):
-        """Return the first record that matched the internal query or None if there is no such. """
+        """Return the first record that matched the internal query, with the
+        expectation that there is only one."""
         from sqlalchemy.orm.exc import NoResultFound
 
         try:
@@ -62,19 +63,21 @@ class Files(object):
             return None
 
     def order(self, c):
-        """ Returns current instance ordered by given column. """
+        """Return the first record that matched the internal query, with the
+        expectation that there is only one."""
         self._query = self._query.order_by(c)
+
         return self
 
     def delete(self):
-        """ Delete all of the records in the query. """
+        """Delete all of the records in the query."""
 
         if self._query.count() > 0:
             self._query.delete()
             self.db.commit()
 
     def update(self, d):
-        """ Updates all the records in the query."""
+        """Delete all of the records in the query."""
 
         self._query.update(d)
 
@@ -89,11 +92,16 @@ class Files(object):
     def _check_query(self):
         if not self._query:
             from ..dbexceptions import ObjectStateError
-            raise ObjectStateError('Must use query() before filter methods')
+            raise ObjectStateError("Must use query() before filter methods")
 
     def ref(self, v):
         self._check_query()
         self._query = self._query.filter(File.ref == v)
+        return self
+
+    def oid(self, v):
+        self._check_query()
+        self._query = self._query.filter(File.oid == v)
         return self
 
     def state(self, v):
@@ -108,6 +116,10 @@ class Files(object):
 
     def type(self, v):
         self._check_query()
+
+        if not v:
+            return self
+
         if isinstance(v, basestring):
             self._query = self._query.filter(File.type_ == v)
         else:
@@ -132,154 +144,86 @@ class Files(object):
     @property
     def installed(self):
         self._check_query()
-        self._query = self._query.filter(
-            or_(File.type_ == self.TYPE.BUNDLE, File.type_ == self.TYPE.PARTITION))
+        self._query = self._query.filter(or_(File.type_ == self.TYPE.BUNDLE, File.type_ == self.TYPE.PARTITION))
         return self
 
-    def new_file(self, merge=False, commit=True, extant=None, **kwargs):
+    def new_file(self,  commit = True, **kwargs):
         """If merge is 'collect', the files will be added to the collection,
         for later insertion."""
+        from sqlalchemy.exc import IntegrityError
+
+        if 'oid' in kwargs:
+            del kwargs['oid']
+
 
         f = File(**kwargs)
 
+        extant = self.query.ref(f.ref).type(f.type_).source_url(f.source_url).one_maybe
+
         if extant:
-            extant.update(f)
-            f = extant
-
-        if merge:
-            self.merge(f, commit=commit)
-
-        return f
-
-    def insert_collection(self):
-
-        if len(self._collection) == 0:
-            return
-
-        self.db.session.execute(File.__table__.insert(), self._collection)
-
-        self._collection = []
-
-    def merge(self, f, commit=True):
-        """If commit is 'collect' add the files to the collection for later
-        insertion."""
-        from sqlalchemy.exc import IntegrityError
-
-        s = self.db.session
+            for k, v in kwargs.items():
+                setattr(extant, k, v)
+                f = extant
 
         path = f.path
 
-        if True:
-            if path and os.path.exists(path):
-                stat = os.stat(path)
+        if path and os.path.exists(path):
+            stat = os.stat(path)
 
-                if not f.modified or stat.st_mtime > f.modified:
-                    f.modified = int(stat.st_mtime)
+            if not f.modified or stat.st_mtime > f.modified:
+                f.modified = int(stat.st_mtime)
 
-                f.size = stat.st_size
-            else:
-                f.modified = f.modified if f.modified else None
-                f.size = f.size if f.size else None
+            f.size = stat.st_size
+        else:
+            f.modified = f.modified if f.modified else None
+            f.size = f.size if f.size else None
 
-        if commit == 'collect':
-            self._collection.append(f.insertable_dict)
-            return
+        # Debugging code. Kill on sight.
+        #for i in self.db.session.identity_map.items():
+        #    print i
 
-        # Sqlalchemy doesn't automatically rollback on exceptions, and you
-        # can't re-try the commit until you roll back.
-        try:
+        f = self.db.session.merge(f)
 
-            s.add(f)
-            if commit:
-                self.db.commit()
-
-        except IntegrityError:
-
-            s.rollback()
-
-            s.merge(f)
-            try:
-                self.db.commit()
-            except IntegrityError:
-                s.rollback()
-                raise
+        if commit:
+            self.db.commit()
 
         self.db._mark_update()
 
-    def install_bundle_file(self, bundle, cache,
-                            commit=True, state='installed'):
+
+        return f
+
+
+
+    def install_bundle_file(self,bundle,source,commit=True,state='installed'):
         """Mark a bundle file as having been installed in the library."""
 
         ident = bundle.identity
-
-        if self.query.group(cache.repo_id).type(Files.TYPE.BUNDLE).ref(ident.vid).one_maybe:
-            return False
 
         return self.new_file(
             commit=commit,
             merge=True,
             path=bundle.database.path,
-            group=cache.repo_id,
             ref=ident.vid,
             state=state,
             type_=Files.TYPE.BUNDLE,
             data=None,
-            source_url=None)
+            source_url=source)
 
-    def install_partition_file(self, partition, cache,
-                               commit=True,
-                               state='installed'):
+    def install_partition_file(self,partition,source,commit=True,state='installed'):
         """Mark a partition file as having been installed in the library."""
 
         ident = partition.identity
-
-        if self.query.group(cache.repo_id).type(Files.TYPE.PARTITION).ref(ident.vid).one_maybe:
-            return False
 
         return self.new_file(
             commit=commit,
             merge=True,
             path=partition.database.path,
-            group=cache.repo_id,
             ref=ident.vid,
             state=state,
             type_=Files.TYPE.PARTITION,
             data=None,
-            source_url=None)
+            source_url=source)
 
-    def install_remote_bundle(self, ident, upstream, metadata, commit=True):
-        """Set a reference to a remote bundle."""
-
-        return self.new_file(
-            commit=commit,
-            merge=True,
-            path=ident.cache_key,
-            group=upstream.repo_id,
-            ref=ident.vid,
-            state='installed',
-            type_=Files.TYPE.REMOTE,
-            data=metadata,
-            hash=metadata.get('md5', None),
-            priority=upstream.priority,
-            source_url=upstream.repo_id)
-
-    def install_remote_partition(self, ident, upstream, metadata, commit=True):
-        """Set a reference to a remote partition."""
-
-        assert bool(str(ident.cache_key)), 'File path can not be null'
-
-        return self.new_file(
-            commit=commit,
-            merge=True,
-            path=ident.cache_key,
-            group=upstream.repo_id,
-            ref=ident.vid,
-            state='installed',
-            type_=Files.TYPE.REMOTEPARTITION,
-            data=metadata,
-            hash=metadata.get('md5', None),
-            priority=upstream.priority,
-            source_url=upstream.repo_id, )
 
     def install_bundle_source(self, bundle, source, commit=True):
         """Set a reference a bundle source."""
@@ -288,7 +232,6 @@ class Files(object):
             commit=commit,
             merge=True,
             path=bundle.bundle_dir,
-            group=source.base_dir,
             ref=bundle.identity.vid,
             state=bundle.build_state,
             type_=Files.TYPE.SOURCE,
@@ -297,27 +240,30 @@ class Files(object):
             priority=None,
             source_url=None, )
 
-    def install_data_store(self, w,
-                           name=None, title=None, summary=None,
-                           cache=None, url=None, commit=True):
+    def install_data_store(self, w,name=None, title=None, summary=None,cache=None, url=None, commit=True):
         """A reference for a data store, such as a warehouse or a file
         store."""
 
-        extant = self.query.path(w.dsn).group(self.TYPE.STORE).one_maybe
+        assert bool(w.dsn)
+        assert bool(w.uid)
 
-        kw = dict(commit=commit, merge=True, extant=extant,
+
+
+        kw = dict(commit=commit,
                   path=w.dsn,
-                  group=self.TYPE.STORE,
                   ref=w.uid,
                   state=None,
-                  type_=w.database_class,
+                  type_=self.TYPE.STORE,
                   data=dict(
                       name=name,
                       title=title,
                       summary=summary,
                       cache=cache,
-                      url=url),
-                  source_url=None)
+                      url=url,
+                      db_class=w.database_class,
+
+                  ),
+                  source_url=w.dsn)
 
         f = self.new_file(**kw)
 
@@ -330,8 +276,8 @@ class Files(object):
         import hashlib
         import time
 
-        # hash = None
-        # size = None
+        hash = None
+        size = None
         modified = None
 
         if bool(path) and path.startswith('http'):
@@ -380,37 +326,47 @@ class Files(object):
 
         else:
             raise ValueError(
-                'Must provide an existing path, source or content.')
+                "Must provied an existing path, source or content. ")
 
         if not content:
             raise ValueError(
-                'Didn\'t get non-zero sized content from path, source or content')
+                "Didn't get non-zero sized content from path , source or content")
 
         return dict(hash=hash, size=size, modified=modified, content=content)
 
     def install_manifest(self, manifest, warehouse=None, commit=True):
         """Store a references to, and content for, a manifest."""
 
-        extant = self.query.ref(
-            manifest.uid).group(
-            self.TYPE.MANIFEST).one_maybe
 
-        f = self.new_file(commit=commit, merge=True, extant=extant,
-                          path=manifest.path,
-                          group=self.TYPE.MANIFEST,
-                          ref=manifest.uid,
+        try:
+            # manifest if a real Manifest object
+
+            ref = manifest.uid
+            path = manifest.path
+            data = manifest.dict
+            extra = (self._process_source_content(path))
+
+        except AttributeError:
+            # The manifest is actually a File object, from a warehouse database.
+            ref = manifest.ref
+            path = manifest.path
+            data = manifest.data
+            extra = (self._process_source_content(path))
+
+        assert bool(ref)
+        assert bool(path)
+
+        f = self.new_file(ref=ref,
+                          path=path,
+                          type=self.TYPE.MANIFEST,
+                          source_url=ref,
                           state=None,
-                          type_=self.TYPE.MANIFEST,
-                          data=manifest.dict,
-                          source_url=manifest.uid,
-                          **(self._process_source_content(manifest.path))
-                          )
+                          data=data,
+                          **extra)
 
         if warehouse:
 
-            whf = self.query.path(
-                warehouse.database.dsn).group(
-                self.TYPE.STORE).one_maybe
+            whf = self.query.path(warehouse.database.dsn).type(self.TYPE.STORE).one_maybe
 
             if not whf:
                 from ..dbexceptions import NotFoundError
@@ -450,5 +406,6 @@ class Files(object):
             state='installed',
             type_=self.TYPE.EXTRACT,
             data=d,
+
             source_url=source
         )

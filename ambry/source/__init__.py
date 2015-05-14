@@ -29,9 +29,7 @@ class SourceTree(object):
 
         if not os.path.exists(self.base_dir):
             from ..dbexceptions import ConfigurationError
-            raise ConfigurationError(
-                "Source directory {} does not exist".format(
-                    self.base_dir))
+            raise ConfigurationError("Source directory {} does not exist".format(self.base_dir))
 
     def list(self, datasets=None, key='vid'):
         from ..identity import LocationRef  # , Identity

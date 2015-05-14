@@ -17,19 +17,27 @@ class Bundle(BuildBundle):
     def fields(self):
         from functools import partial
         import random
-
-        return [
-            ('id', lambda: None),
-            ('text', partial(random.choice,
-                             ['chocolate', 'strawberry', 'vanilla'])),
-            ('integer', partial(random.randint, 0, 500)),
-            ('float', random.random),
-        ]
-
+        return   [
+                  ('id', lambda: None),
+                  ('text',partial(random.choice, ['chocolate', 'strawberry', 'vanilla'])),
+                  ('integer', partial(random.randint, 0, 500)),
+                  ('float', random.random),
+                  ('code', partial(random.randint, 0, 10))
+                  ]
+  
     @property
     def fields2(self):
         from functools import partial
         import random
+        return   [
+                  ('id', lambda: None),
+                  ('text',partial(random.choice, ['chocolate', 'strawberry', 'vanilla'])),
+                  ('integer', partial(random.randint, 0, 500)),
+                  ('float', random.random),
+                  ('extra', lambda: None),
+                  ('extra2', lambda: None),
+                  ('code', partial(random.randint, 0, 10))
+                  ]
 
         return [
             ('id', lambda: None),
@@ -65,7 +73,7 @@ class Bundle(BuildBundle):
 
     def build_small(self):
         p = self.partitions.find_or_new_db(table='tthree')
-        table = p.table
+        # table = p.table
 
         field_gen = self.fields3
 
@@ -73,13 +81,10 @@ class Bundle(BuildBundle):
             for i in range(5000):
                 row = {f[0]: f[1]() for f in field_gen}
                 ins.insert(row)
-
         return True
 
     def build(self):
 
-        # self.log("=== Build hdf")
-        # self.build_hdf()
 
         self.log("=== Build geo")
         self.build_geo()
@@ -98,39 +103,37 @@ class Bundle(BuildBundle):
 
         with p.database.inserter('tone') as ins:
             for i in range(1000):
-                ins.insert({'tone_id': None,
-                            'text': "str" + str(i),
-                            'integer': i,
-                            'float': i})
+                ins.insert({ 'tone_id':None,'text':"str"+str(i),'integer':i,'float':i})
 
     def build_db_inserter_codes(self):
-        p = self.partitions.find_or_new_db(table='coding')
-        table = p.table
-
-        def yield_rows():
-
-            field_gen = self.fields3
-
-            for i in range(10000):
-                row = {f[0]: f[1]() for f in field_gen}
-
-                if i % 51 == 0:
-                    row['integer'] = chr(65 + (i / 51 % 26))
-
-                if i % 13 == 0:
-                    row['date'] = chr(65 + (i / 13 % 26))
-
-                yield row
+        self.partitions.find_or_new_db(table='coding')
+        # p = self.partitions.find_or_new_db(table='coding')
+        # table = p.table
+        #
+        # def yield_rows():
+        #     field_gen = self.fields3
+        #
+        #     for i in range(10000):
+        #         row = {f[0]: f[1]() for f in field_gen}
+        #
+        #         if i % 51 == 0:
+        #             row['integer'] = chr(65 + (i / 51 % 26))
+        #
+        #         if i % 13 == 0:
+        #             row['date'] = chr(65 + (i / 13 % 26))
+        #
+        #         yield row
 
     def build_db_inserter(self):
+        
         p = self.partitions.find_or_new_db(table='tthree')
 
         with self.session:
             table = p.table
             caster = table.caster
 
-        field_gen = self.fields3
-
+        field_gen =  self.fields3
+      
         lr = self.init_log_rate(5000)
 
         with p.inserter() as ins:
@@ -172,33 +175,8 @@ class Bundle(BuildBundle):
                     ins.insert({'name': str(lon) + ';' + str(lat), 'lon': lon,
                                 'lat': lat})
 
-    def build_hdf(self):
-        import numpy as np
 
-        hdf = self.partitions.find_or_new_hdf(table='hdf5')
 
-        a = np.zeros((10, 10))
-        for y in range(10):
-            for x in range(10):
-                a[x, y] = x * y
-
-        ds = hdf.database.create_dataset('hdf', data=a, compression=9)
-        hdf.database.close()
-
-        # hdf = self.partitions.find_or_new_hdf(table='hdf5')
-
-    def build_csv(self):
-
-        for j in range(1, 5):
-            csvt = self.partitions.find_or_new_csv(table='csv', segment=j)
-            lr = self.init_log_rate(2500, "Segment " + str(j))
-            with csvt.database.inserter(skip_header=True) as ins:
-                for i in range(5000):
-                    r = [i, 'foo', i, float(i) * 37.452, '|', '\\', '"']
-                    ins.insert(r)
-                    lr()
-
-            self.log("Wrote to {}".format(csvt.database.path))
 
     def deps(self):
 

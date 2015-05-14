@@ -26,7 +26,8 @@
         <th>Size</th>
         <th>Description</th>
         <th>Vid</th>
-        <th>Proto Id</th>
+        <th>Proto Id / Foreign Key</th>
+        <th>Codes</th>
 
     </tr>
     {% for c in t.columns.values()|sort(attribute='sequence_id') -%}
@@ -41,6 +42,17 @@
         <td>{%if c.proto_vid %}
             <a href="{{proto_vid_path(c.proto_vid)}}">{{c.proto_vid}} ({{tc_obj(c.proto_vid).name}})</a>
             {%endif-%}
+            {%if c.fk_vid %}
+            <a href="{{proto_vid_path(c.fk_vid)}}">{{c.fk_vid}} ({{tc_obj(c.fk_vid).name}})</a>
+            {%endif-%}
+        </td>
+        <td>{% if c.codes %}
+            <ul>
+                {% for cd in c.codes.values()|sort(attribute='key') %}
+                <li>{{cd.key}}->{{ cd.value }}</li>
+                {% endfor %}
+            </ul>
+            {%endif%}
 
         </td>
 

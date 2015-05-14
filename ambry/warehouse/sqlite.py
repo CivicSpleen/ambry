@@ -17,25 +17,11 @@ class SqliteWarehouse(Warehouse):
     # Datasets and Bundles
     #
 
-    def load_local(
-            self,
-            partition,
-            source_table_name,
-            dest_table_name=None,
-            where=None):
+    def load_local(self,partition,source_table_name,dest_table_name=None,where=None):
 
-        return self.load_attach(
-            partition,
-            source_table_name,
-            dest_table_name,
-            where)
+        return self.load_attach( partition,source_table_name,dest_table_name,where)
 
-    def load_attach(
-            self,
-            partition,
-            source_table_name,
-            dest_table_name=None,
-            where=None):
+    def load_attach(self,partition,source_table_name,dest_table_name=None,where=None):
 
         self.logger.info('load_attach {}'.format(partition.identity.name))
 

@@ -13,41 +13,32 @@ def partition_classes():
 
     """
 
-    from geo import GeoPartitionName, GeoPartitionName, GeoPartition, \
-        GeoPartitionIdentity
-    # from hdf import HdfPartitionName, HdfPartition, HdfPartitionIdentity
-    from csv import CsvPartitionName, CsvPartitionName, CsvPartition, \
-        CsvPartitionIdentity
-    from sqlite import SqlitePartitionName, SqlitePartitionName, \
-        SqlitePartition, SqlitePartitionIdentity
+    from geo import GeoPartitionName, GeoPartitionName, GeoPartition, GeoPartitionIdentity
+
+    from sqlite import SqlitePartitionName, SqlitePartitionName, SqlitePartition, SqlitePartitionIdentity
 
     class PartitionClasses(object):
+
+        # This has a complicated structure because there used to be four types of partitions, not just two.
+
         name_by_format = {
             pnc.format_name(): pnc for pnc in (
                 GeoPartitionName,
-                # HdfPartitionName,
-                CsvPartitionName,
                 SqlitePartitionName)}
 
         extension_by_format = {
             pc.format_name(): pc.extension() for pc in (
                 GeoPartitionName,
-                # HdfPartitionName,
-                CsvPartitionName,
                 SqlitePartitionName)}
 
         partition_by_format = {
             pc.format_name(): pc for pc in (
                 GeoPartition,
-                # HdfPartition,
-                CsvPartition,
                 SqlitePartition)}
 
         identity_by_format = {
             ic.format_name(): ic for ic in (
                 GeoPartitionIdentity,
-                # HdfPartitionIdentity,
-                CsvPartitionIdentity,
                 SqlitePartitionIdentity)}
 
     return PartitionClasses()
