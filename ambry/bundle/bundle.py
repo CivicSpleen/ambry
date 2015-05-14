@@ -1194,8 +1194,7 @@ class BuildBundle(Bundle):
                     self.log(
                         "Required package already installed: {}->{}".format(k, v))
                 except ImportError:
-                    self.log(
-                        "Installing required package: {}->{}".format(k, v))
+                    self.log("Installing required package: {}->{}".format(k, v))
                     install(python_dir, k, v)
 
         if self.is_prepared:
@@ -1221,6 +1220,9 @@ class BuildBundle(Bundle):
 
         except Exception:
             raise
+
+        if not self.metadata.about.access:
+            raise ConfigurationError("about.access must be set to the name of a remote")
 
         return True
 

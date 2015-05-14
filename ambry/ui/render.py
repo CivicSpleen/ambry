@@ -330,21 +330,12 @@ class Renderer(object):
             'tc_obj': tc_obj,
             'extract_url': extract_url,
             'db_download_url': db_download_url,
-            'bundle_sort': lambda l,
-                                  key: sorted(
-                l,
-                key=lambda x: x['identity'][key])}
+            'bundle_sort': lambda l, key: sorted(l,key=lambda x: x['identity'][key])}
 
     def render(self, template, *args, **kwargs):
 
         if self.content_type == 'json':
-            return Response(
-                dumps(
-                    dict(
-                        **kwargs),
-                    cls=JSONEncoder,
-                    indent=4),
-                mimetype='application/json')
+            return Response(dumps(dict(**kwargs),cls=JSONEncoder,indent=4), mimetype='application/json')
 
         else:
             return template.render(*args, **kwargs)
@@ -503,8 +494,6 @@ class Renderer(object):
 
     def store_table(self, uid, tid):
 
-        template = self.env.get_template('store/table.html')
-
         # Copy so we don't modify the cached version
         store = dict(self.doc_cache.warehouse(uid).items())
 
@@ -514,7 +503,47 @@ class Renderer(object):
         del store['manifests']
         del store['tables']
 
-        return self.render(template, s=store, t=t, **self.cc())
+        if self.content_type == 'csv':
+
+            def yield_csv():
+                import unicodecsv
+                from ambry.util.flo import StringQueue
+
+                h = [ 'seq_id', 'vid', 'datatype',  'column_name', 'alt_name',  'description',
+                      'user_column_name', 'user_description' ]
+
+                f = StringQueue()
+
+                w = unicodecsv.writer(f)
+
+                w.writerow(h)
+                yield f.read()
+
+                for c in sorted(t['columns'].values(), key =  lambda c: c['sequence_id'] ):
+
+                    w.writerow([
+                        c['sequence_id'],
+                        c['vid'],
+                        c['datatype'],
+                        c['name'],
+                        c['altname'],
+                        c.get('description',''),
+                        c.get('user_column_name', ''),
+                        c.get('user_description', ''),
+                    ])
+
+                    yield f.read()  # Returns everything previously written
+
+            return Response(yield_csv(), mimetype='text/csv',
+                            headers = {"Content-Disposition": "attachment; filename=table-{}.csv".format(t['vid']) })
+
+
+        else:
+            template = self.env.get_template('store/table.html')
+
+            return self.render(template, s=store, t=t, **self.cc())
+
+
 
     def info(self, app_config, run_config):
 
@@ -576,12 +605,7 @@ class Renderer(object):
             # results.append({"label":name, "value":gvid})
             results.append({"label": name})
 
-        return Response(
-            dumps(
-                results,
-                cls=JSONEncoder,
-                indent=4),
-            mimetype='application/json')
+        return Response(dumps(results,cls=JSONEncoder,indent=4),mimetype='application/json')
 
     def bundle_search(self,  terms):
         """Incremental search, search as you type."""

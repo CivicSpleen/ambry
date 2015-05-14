@@ -234,7 +234,7 @@ class MetadataFlo(object):
 
 # http://code.activestate.com/recipes/426060-a-queue-for-string-data-which-looks-like-a-file-ob/
 class StringQueue(object):
-    """ A File Like FIFO"""
+    """ A File Like FIFO """
     def __init__(self, data=""):
         self.l_buffer = []
         self.s_buffer = ""

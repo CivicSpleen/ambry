@@ -143,7 +143,6 @@ class DocCache(object):
 
             return d
 
-
         return self.cache(lambda vid: dict_and_summary(vid),vid,_key_prefix='ds')
 
     def bundle_summary(self, vid):
