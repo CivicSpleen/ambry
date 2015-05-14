@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import inspect
 import os
 import shutil
 import unittest
@@ -17,9 +16,11 @@ from ambry.orm import Dataset, Config, Partition, File, Column, ColumnStat, Tabl
 from ambry.dbexceptions import ConflictError
 from ambry.database.inserter import ValueInserter
 
-from test.test_library.factories import DatasetFactory, ConfigFactory,\
+from .factories import DatasetFactory, ConfigFactory,\
     TableFactory, ColumnFactory, FileFactory, PartitionFactory, CodeFactory,\
     ColumnStatFactory
+
+from .helpers import assert_spec
 
 TEST_TEMP_DIR = 'test-library-'
 
@@ -205,7 +206,7 @@ class LibraryDbTest(unittest.TestCase):
 
     def test_returns_false_if_datasets_table_does_not_exist(self):
         # first assert signatures of the functions we are going to mock did not change.
-        self._assert_spec(self.sqlite_db.connection.execute, ['self', 'object'])
+        assert_spec(self.sqlite_db.connection.execute, ['self', 'object'])
 
         # prepare state
         statement = 'select 1'
@@ -267,22 +268,13 @@ class LibraryDbTest(unittest.TestCase):
         for model, kwargs in models:
             self._assert_does_not_exist(model, **kwargs)
 
-    def _assert_spec(self, fn, expected_args):
-        """ Matches function arguments to the expected arguments. Raises AssertionError on
-            mismatch.
-        """
-        fn_args = inspect.getargspec(fn).args
-        msg = '{} function requires {} args, but you expect {}'\
-            .format(fn, fn_args, expected_args)
-        self.assertEquals(fn_args, expected_args, msg)
-
     # .create tests
     def test_creates_new_database(self):
         # first assert signatures of the functions we are going to mock did not change.
-        self._assert_spec(self.sqlite_db._create_path, ['self'])
-        self._assert_spec(self.sqlite_db.exists, ['self'])
-        self._assert_spec(self.sqlite_db.create_tables, ['self'])
-        self._assert_spec(self.sqlite_db._add_config_root, ['self'])
+        assert_spec(self.sqlite_db._create_path, ['self'])
+        assert_spec(self.sqlite_db.exists, ['self'])
+        assert_spec(self.sqlite_db.create_tables, ['self'])
+        assert_spec(self.sqlite_db._add_config_root, ['self'])
 
         # prepare state
         self.sqlite_db.exists = fudge.Fake('exists').expects_call().returns(False)
@@ -295,7 +287,7 @@ class LibraryDbTest(unittest.TestCase):
 
     def test_returns_false_if_database_exists(self):
         # first assert signatures of the functions we are going to mock did not change.
-        self._assert_spec(self.sqlite_db.exists, ['self'])
+        assert_spec(self.sqlite_db.exists, ['self'])
 
         # prepare state
         self.sqlite_db.exists = fudge.Fake('exists').expects_call().returns(True)
@@ -306,8 +298,8 @@ class LibraryDbTest(unittest.TestCase):
     # ._create_path tests
     def test_makes_database_directory(self):
         # first assert signatures of the functions we are going to mock did not change.
-        self._assert_spec(os.makedirs, ['name', 'mode'])
-        self._assert_spec(os.path.exists, ['path'])
+        assert_spec(os.makedirs, ['name', 'mode'])
+        assert_spec(os.path.exists, ['path'])
 
         # prepare state
         fake_makedirs = fudge.Fake('makedirs').expects_call()
@@ -327,7 +319,7 @@ class LibraryDbTest(unittest.TestCase):
 
     def test_ignores_exception_if_makedirs_failed(self):
         # first assert signatures of the functions we are going to mock did not change.
-        self._assert_spec(os.makedirs, ['name', 'mode'])
+        assert_spec(os.makedirs, ['name', 'mode'])
 
         fake_makedirs = fudge.Fake('makedirs')\
             .expects_call()\
@@ -349,8 +341,8 @@ class LibraryDbTest(unittest.TestCase):
 
     def test_raises_exception_if_dir_does_not_exists_after_creation_attempt(self):
         # first assert signatures of the functions we are going to mock did not change.
-        self._assert_spec(os.makedirs, ['name', 'mode'])
-        self._assert_spec(os.path.exists, ['path'])
+        assert_spec(os.makedirs, ['name', 'mode'])
+        assert_spec(os.path.exists, ['path'])
 
         # prepare state
         fake_makedirs = fudge.Fake('makedirs')\
@@ -480,7 +472,7 @@ class LibraryDbTest(unittest.TestCase):
 
     def test_closes_session_if_root_config_exists(self):
         # first assert signatures of the functions we are going to mock did not change.
-        self._assert_spec(self.sqlite_db.close_session, ['self'])
+        assert_spec(self.sqlite_db.close_session, ['self'])
 
         # prepare state
         self.sqlite_db.create_tables()
@@ -735,7 +727,7 @@ class LibraryDbTest(unittest.TestCase):
     # ._mark_update test
     def test_updates_config(self):
         # first assert signatures of the functions we are going to mock did not change.
-        self._assert_spec(self.sqlite_db.set_config_value, ['self', 'group', 'key', 'value'])
+        assert_spec(self.sqlite_db.set_config_value, ['self', 'group', 'key', 'value'])
 
         self.sqlite_db.set_config_value = fudge.Fake('set_config_value')\
             .expects_call()\
@@ -862,7 +854,7 @@ class LibraryDbTest(unittest.TestCase):
     # .remove_dataset tests
     def test_removes_dataset_colstats(self):
         # first assert signatures of the functions we are going to mock did not change.
-        self._assert_spec(self.sqlite_db.delete_dataset_colstats, ['self', 'dvid'])
+        assert_spec(self.sqlite_db.delete_dataset_colstats, ['self', 'dvid'])
 
         # prepare state.
         self.sqlite_db.create_tables()
