@@ -7,6 +7,7 @@ env variable:
 
 
 """
+import sys
 import unittest
 from test_base import  TestBase
 from bundles.testbundle.bundle import Bundle
@@ -119,7 +120,7 @@ class Test(TestBase):
 
         args = [  '-c',self.config_file ] + list(args)
 
-        args = ['python','-mambry.cli'] + args
+        args = [sys.executable, '-mambry.cli'] + args
         #print "=== Execute: ", " ".join(args)
         try:
             s=subprocess.check_output(args)
