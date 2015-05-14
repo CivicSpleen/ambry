@@ -1,6 +1,6 @@
-'''
+"""
 
-'''
+"""
 
 from ambry.bundle import BuildBundle
 
@@ -11,13 +11,14 @@ from ambry.database.inserter import CodeCastErrorHandler
 
 
 class Bundle(BuildBundle):
-    ''' '''
+    """ """
 
     def __init__(self, directory=None):
 
         super(Bundle, self).__init__(directory)
 
-    def gen_rows(self, as_dict=False, prefix_headers=['id']):
+    def gen_rows(self, as_dict=False, prefix_headers=None):
+        prefix_headers = prefix_headers or ['id']
         import uuid
         import random
         from collections import OrderedDict
@@ -28,7 +29,7 @@ class Bundle(BuildBundle):
 
         norm = np.random.normal(500, 100, 10000)
         rayleigh = np.random.rayleigh(300, 10000)
-        poisson = np.random.poisson(300, 10000)
+        # poisson = np.random.poisson(300, 10000)
         pareto = np.random.pareto(2.0, 20000)
         pareto = pareto[pareto < 8]  # Tuncate so distribution histograms are interesting.
 
@@ -53,7 +54,6 @@ class Bundle(BuildBundle):
 
                 yield dict(row.items())
             else:
-
                 yield prefix_headers + row.keys(), [None] * len(prefix_headers) + row.values()
 
     def meta(self):
@@ -62,12 +62,12 @@ class Bundle(BuildBundle):
         self.prepare()
         table_name = 'stats'
 
-        with self.session as s:
+        with self.session:
 
             try:
-                t = self.schema.table(table_name)
+                self.schema.table(table_name)
             except NotFoundError:
-                t = self.schema.add_table(table_name, add_id=True)
+                self.schema.add_table(table_name, add_id=True)
 
             header, row = self.gen_rows(as_dict=False).next()
 

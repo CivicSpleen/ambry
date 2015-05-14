@@ -1,12 +1,12 @@
-'''
+"""
 Example bundle that builds a single partition with a table of random numbers
-'''
+"""
 
 from ambry.bundle import BuildBundle
  
 
 class Bundle(BuildBundle):
-    ''' '''
+    """ """
     def build(self):
         import csv
         
@@ -33,8 +33,8 @@ class Bundle(BuildBundle):
 
         # References the dependencies so they get into the metadata. 
         
-        p = self.library.dep('random')
-        p = self.library.dep('simple')
+        self.library.dep('random')
+        self.library.dep('simple')
 
         return True
 

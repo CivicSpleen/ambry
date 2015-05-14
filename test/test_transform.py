@@ -4,8 +4,8 @@ Created on Aug 31, 2012
 @author: eric
 """
 import unittest
+
 from bundles.testbundle.bundle import Bundle
-from ambry.run import RunConfig
 from test_base import TestBase  # @UnresolvedImport
 
 
@@ -21,7 +21,7 @@ class Test(TestBase):
         pass
 
     def test_caster(self):
-        from ambry.transform import CasterTransformBuilder, NonNegativeInt, NaturalInt
+        from ambry.transform import CasterTransformBuilder, NaturalInt
         import datetime
 
         ctb = CasterTransformBuilder()
@@ -114,7 +114,8 @@ class Test(TestBase):
         ctb.append('ni1', NaturalInt)
         ctb.append('ni2', NaturalInt)
 
-        row, errors = ctb({'int': '.', 'float': 'a', 'str': '3', 'ni1': 0, 'ni2': 3}, codify_cast_errors=True)
+        # row, errors = ctb({'int': '.', 'float': 'a', 'str': '3', 'ni1': 0, 'ni2': 3}, codify_cast_errors=True)
+        ctb({'int': '.', 'float': 'a', 'str': '3', 'ni1': 0, 'ni2': 3}, codify_cast_errors=True)
 
     def test_intuit(self):
         import pprint

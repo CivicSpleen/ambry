@@ -40,3 +40,6 @@ datarepo:
       database: 
         dbname: '{root}/warehouse/sqlite.db'
         driver: spatialite
+environment:
+    category: development
+    class: development

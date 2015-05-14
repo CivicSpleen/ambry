@@ -14,19 +14,21 @@ from ambry.bundle.meta import Top
 
 
 class Test(TestBase):
-
     def setUp(self):
         super(Test, self).setUp()
 
         self.yaml_config = """
 about:
     access: null
+    footnote: null
     grain: null
     groups:
     - Group 1
     - Group 2
     license: license
+    processed: null
     rights: rights
+    source: null
     space: null
     subject: subject
     summary: summary
@@ -62,8 +64,13 @@ coverage:
     time: []
 dependencies: {}
 documentation:
+    footnote: null
     main: null
+    processed: null
     readme: null
+    source: null
+    summary: null
+    title: null
 identity:
     bspace: null
     btime: null
@@ -104,7 +111,7 @@ views: {}
         pass
 
     def test_basic(self):
-        from ambry.bundle.meta import Metadata, ScalarTerm, TypedDictGroup,\
+        from ambry.bundle.meta import Metadata, ScalarTerm, TypedDictGroup, \
             VarDictGroup, DictGroup, DictTerm, ListGroup
         from ambry.util import AttrDict
 
@@ -146,7 +153,7 @@ views: {}
         self.assertEquals('Term', tt.group['term'])
         self.assertEquals(['term', 'term2', 'dterm'], tt.group.keys())
         self.assertEquals(
-            ['Term', 'Term2', AttrDict([('dterm1', None), ('unset_term', None), ('dterm2', None)])],
+            ['Term', 'Term2', AttrDict([('dterm1', ''), ('unset_term', ''), ('dterm2', '')])],
             tt.group.values())
 
         #
@@ -157,7 +164,7 @@ views: {}
 
         self.assertEquals('dterm1', tt.group.dterm.dterm1)
         self.assertEquals(['dterm1', 'unset_term', 'dterm2'], tt.group.dterm.keys())
-        self.assertEquals(['dterm1', None, 'dterm2'], tt.group.dterm.values())
+        self.assertEquals(['dterm1', '', 'dterm2'], tt.group.dterm.values())
 
         #
         # List Group
@@ -185,7 +192,6 @@ views: {}
         tt.vdgroup.k1.v2 = 'v2'
 
     def test_metadata(self):
-
         d = dict(
             about=dict(
                 title='title',
@@ -227,7 +233,6 @@ views: {}
 
         top = Top(d)
 
-
         self.assertIn(('contact_bundle', 'creator', 'bingo'), top.errors)
 
         self.assertIn('creator', top.contact_bundle.keys())
@@ -241,8 +246,7 @@ views: {}
         top.sources.bar.description = 'description'
 
     def test_metadata_TypedDictGroup(self):
-
-        from ambry.util.meta import Metadata, ScalarTerm, TypedDictGroup,\
+        from ambry.util.meta import Metadata, ScalarTerm, TypedDictGroup, \
             DictTerm
 
         class TestDictTerm(DictTerm):
@@ -273,7 +277,6 @@ group:
         self.assertEquals('dterm1', top.group.item1['dterm1'])
 
     def test_rows(self):
-
         t1 = Top(yaml.load(self.yaml_config))
 
         self.assertEquals(['foo', 'baz'], t1.build.keys())
@@ -315,8 +318,6 @@ group:
 
         self.assertEquals(self.yaml_config.strip(' \n'), t4.dump().strip(' \n'))
 
-        t5 = Top(path=d)
-
         # Check that load from dir strips out erroneous terms
         # This depends on write_to_dur not checking and stripping these values.
 
@@ -349,8 +350,6 @@ group:
         t7 = Top(path=d)
         t7.load_all()
 
-
-
     def test_assignment(self):
         from ambry.identity import Identity
 
@@ -380,8 +379,7 @@ external_documentation:
         title: title3
 """
 
-        t1 = Top(yaml.load(yaml_config))
-
+        Top(yaml.load(yaml_config))
 
         yaml_config = """
 partitions:
@@ -403,24 +401,20 @@ partitions:
     segment: 1
     table: csv """
 
-        t2 = Top(yaml.load(yaml_config))
-
+        Top(yaml.load(yaml_config))
 
     def test_links(self):
-
         t = Top(yaml.load(self.yaml_config))
 
         t.contact_bundle.creator.name = 'Bob Bobson'
 
-        self.assertEquals('Bob Bobson',t.contact_bundle.creator.name)
+        self.assertEquals('Bob Bobson', t.contact_bundle.creator.name)
 
         idd = dict(t.identity)
 
         t.identity = idd
 
-
     def test_errors(self):
-
         # Check that the invalid fields are removed.
 
         yaml_config = """
@@ -440,7 +434,7 @@ about:
         self.assertIn('rights', yc2['about'])
         self.assertNotIn('author', yc2['about'])
         self.assertNotIn('url', yc2['about'])
-        self.assertIsNone(t1.about.summary)
+        self.assertEquals('', t1.about.summary)
 
         self.assertIn(('about', 'foo', None), t1.errors)
 
@@ -449,20 +443,17 @@ about:
         self.assertEquals('bar', t1.about.summary)
         self.assertNotIn(('about', 'foo', None), t1.errors)
 
-
-
     def test_list(self):
-
         t = Top(yaml.load(self.yaml_config))
         for x in t.about.groups:
-            self.assertIn(str(x),['Group 1', 'Group 2'])
-
+            self.assertIn(str(x), ['Group 1', 'Group 2'])
 
 
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
     return suite
+
 
 if __name__ == '__main__':
     unittest.TextTestRunner().run(suite())

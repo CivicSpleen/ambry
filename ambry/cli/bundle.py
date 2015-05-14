@@ -169,6 +169,7 @@ def bundle_parser(cmd):
     #
     sp = asp.add_parser('incver', help='Increment the version number')
     sp.set_defaults(subsubcommand='incver')
+    sp.add_argument('-m', '--message', default=False, help="Message ")
 
     #
     sp = asp.add_parser('newnum', help='Get a new dataset number')
@@ -384,7 +385,8 @@ def bundle_info(args, b, st, rc):
                     def bl(k, v):
                         b.log(indent + "{:7s}: {}".format(k, p.record.data.get(v, '')))
 
-                    b.log(indent + "Details: ".format(p.identity))
+
+                    b.log(indent + "# Rows : {}".format(p.record.count))
                     bl('g cov', 'geo_coverage')
                     bl('g grain', 'geo_grain')
                     bl('t cov', 'time_coverage')
@@ -411,9 +413,10 @@ def bundle_info(args, b, st, rc):
                             def sparks(nums):  # https://github.com/rory/ascii_sparks/blob/master/ascii_sparks.py
                                 nums = list(nums)
                                 fraction = max(nums) / float(len(parts) - 1)
-
-                                return ''.join(parts[int(round(x / fraction))] for x in nums)
-
+                                if fraction:
+                                    return ''.join(parts[int(round(x / fraction))] for x in nums)
+                                else:
+                                    return ''
                             vals = sparks(int(x[1]) for x in s.hist['values'])
                         else:
                             vals = ''

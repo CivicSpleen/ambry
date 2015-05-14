@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block masthead %}
-    <h1 class="title">Warehouse: {{s.title}}</h1>
+    <h1 class="title">Collection: {{s.title}}</h1>
     <p>UID: {{s.uid}}
         <br/>DSN: {%if s.url and ( s.dsn.startswith('spatialite') or s.dsn.startswith('sqlite') ) %}
         <a href="{{db_download_url(s.url,s.uid)}}">{{s.dsn}}</a>
@@ -65,7 +65,7 @@
 
             {% if s.url -%}<th>Extracts</th>{% endif -%}
         </tr>
-    {% for t in s.tables.values()|selectattr('type','isin',['view', 'mview']) -%}
+    {% for t in s.tables.values()|selectattr('type','isin',['view', 'mview','indexed']) -%}
         <tr>
         <td><a href="{{store_table_path(s.uid,t.vid)}}">{{t.vid}}</a></td>
         <td>{{t.name}}</td>

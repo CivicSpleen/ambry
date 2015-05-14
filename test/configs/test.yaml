@@ -18,7 +18,7 @@ filesystem:
     extracts: '{root}/cache/extracts'
     analysis: '{root}/source/analysis'
     build: '{root}/build'
-    source: /Users/eric/proj/ambry/test/bundles/example.com
+    source: '{root}/library/source'
     warehouses: '{root}/warehouses'
 
 library:
@@ -37,13 +37,13 @@ library:
 
 
 warehouse:
-    health:
-        database: 'sqlite:////tmp/health.db'
+    health: 
+        database: 'sqlite:////{root}/warehouses/health.db'
         title: Health Warehouse
         name: health
         local_cache: /tmp/health_cache
-    education:
-        database: 'sqlite:////tmp/education.db'
+    education: 
+        database: 'sqlite:////{root}/warehouses/education.db'
         title: education warehouse
         name: education
         summary: This is a BS summary

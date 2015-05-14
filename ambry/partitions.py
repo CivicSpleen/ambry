@@ -370,8 +370,7 @@ class Partitions(object):
         from ambry.orm import Partition as OrmPartition, Table
         from sqlalchemy.exc import IntegrityError
 
-        assert isinstance(
-            pname, PartialPartitionName), "Expected PartialPartitionName, got {}".format(
+        assert isinstance(pname, PartialPartitionName), "Expected PartialPartitionName, got {}".format(
             type(pname))
 
         if tables and not isinstance(tables, (list, tuple, set)):
@@ -388,16 +387,12 @@ class Partitions(object):
         session = self.bundle.database.session
 
         if pname.table:
-            q = session.query(Table).filter(
-                (Table.name == pname.table) | (
-                    Table.id_ == pname.table))
+            q = session.query(Table).filter( (Table.name == pname.table) | (Table.id_ == pname.table))
             try:
                 table = q.one()
             except:
                 from dbexceptions import NotFoundError
-                raise NotFoundError(
-                    'Failed to find table for name or id: {}'.format(
-                        pname.table))
+                raise NotFoundError('Failed to find table for name or id: {}'.format(pname.table))
         else:
             table = None
 
@@ -411,9 +406,12 @@ class Partitions(object):
         if tables:
             data['tables'] = tables
 
+        if not table and tables:
+            table = tables[0]
+
         d = pname.dict
 
-        # Promoting to a PartitionName create the partitionName subcless from
+        # Promoting to a PartitionName create the partitionName subclass from
         # the format, which is required to get the correct cache_key
         d['cache_key'] = pname.promote(self.bundle.identity.name).cache_key
 
@@ -430,13 +428,11 @@ class Partitions(object):
 
         # This code must have the session established in the context be active.
 
-        op = OrmPartition(
-            self.bundle.get_dataset(),
-            t_id=table.id_ if table else None,
-            data=data,
-            state=Partitions.STATE.NEW,
-            **d
-        )
+
+        assert table
+
+        op = OrmPartition(self.bundle.get_dataset(), t_id=table.id_,
+            data=data,state=Partitions.STATE.NEW,**d)
 
         if memory:
             from random import randint
@@ -471,17 +467,10 @@ class Partitions(object):
 
         session.query(OrmPartition).delete()
 
-    def _new_partition(
-            self,
-            ppn,
-            tables=None,
-            data=None,
-            clean=False,
-            create=True):
+    def _new_partition(self,ppn,tables=None,data=None,clean=False,create=True):
         """Creates a new OrmPartition record."""
 
-        assert isinstance(
-            ppn, PartialPartitionName), "Expected PartialPartitionName, got {}".format(
+        assert isinstance(ppn, PartialPartitionName), "Expected PartialPartitionName, got {}".format(
             type(ppn))
 
         with self.bundle.session:  # as s:
@@ -534,35 +523,17 @@ class Partitions(object):
         if partition:
             return partition, True
 
-        partition = self._new_partition(
-            ppn,
-            tables=tables,
-            data=data,
-            create=create)
+        partition = self._new_partition(ppn,tables=tables, data=data,create=create)
 
         return partition, False
 
     def new_partition(self, clean=False, tables=None, data=None, **kwargs):
-        return self.new_db_partition(
-            clean=clean,
-            tables=tables,
-            data=data,
-            **kwargs)
+        return self.new_db_partition(clean=clean,tables=tables,data=data,**kwargs)
 
     def find_or_new(self, clean=False, tables=None, data=None, **kwargs):
-        return self.find_or_new_db(
-            tables=tables,
-            clean=clean,
-            data=data,
-            **kwargs)
+        return self.find_or_new_db(tables=tables,clean=clean,data=data,**kwargs)
 
-    def new_db_partition(
-            self,
-            clean=False,
-            tables=None,
-            data=None,
-            create=True,
-            **kwargs):
+    def new_db_partition(self,clean=False,tables=None,data=None,create=True,**kwargs):
 
         p, found = self._find_or_new(
             kwargs, clean=False, tables=tables, data=data, create=create, format='db')
@@ -572,20 +543,13 @@ class Partitions(object):
 
         return p
 
-    def new_db_from_pandas(
-            self,
-            frame,
-            table=None,
-            data=None,
-            load=True,
-            **kwargs):
+    def new_db_from_pandas(self,frame,table=None,data=None,load=True, **kwargs):
         """Create a new db partition from a pandas data frame.
 
         If the table does not exist, it will be created
 
         """
-        # import pandas as pd
-        # import numpy as np
+
         from orm import Column
         # from dbexceptions import ConfigurationError
 
@@ -599,12 +563,8 @@ class Partitions(object):
             else:
                 id_name = 'id'
 
-            sch.add_column(
-                t,
-                id_name,
-                datatype=Column.convert_numpy_type(
-                    frame.index.dtype),
-                is_primary_key=True)
+            sch.add_column(t,id_name,
+                datatype=Column.convert_numpy_type(frame.index.dtype),is_primary_key=True)
 
             for name, type_ in zip([row for row in frame.columns],
                                    [row for row in frame.convert_objects(convert_numeric=True,
