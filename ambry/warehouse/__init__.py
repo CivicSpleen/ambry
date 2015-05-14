@@ -1576,6 +1576,7 @@ class Warehouse(object):
 
         return sorted(idents, key=lambda x: x.fqname)
 
+    # FIXME: fix or delete ?
     def info(self):
         config = self.config.to_dict()
 
