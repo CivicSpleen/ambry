@@ -96,14 +96,21 @@ def table_path(b, t):
 
 
 def proto_vid_path(pvid):
-    b, t, c = deref_tc_ref(pvid)
+    from ambry.dbexceptions import NotFoundError
 
-    return table_path(str(b), str(t))
+    try:
+        b, t, c = deref_tc_ref(pvid)
+
+        return table_path(str(b), str(t))
+
+    except NotFoundError:
+        return '#'
 
 
 def deref_tc_ref(ref):
     """Given a column or table, vid or id, return the object."""
     from ambry.identity import ObjectNumber
+    from ambry.dbexceptions import NotFoundError
 
     on = ObjectNumber.parse(ref)
 
@@ -126,6 +133,13 @@ def deref_tc_ref(ref):
 
         tm = dc.table_version_map()
 
+
+        if not str(t) in tm:
+            # This happens when the the referenced table is in a bundle that is not installed,
+            # often because it is private or restricted
+            raise NotFoundError('Table {} not in table_version_map'.format(str(t)))
+
+
         t_vid = reversed(sorted(tm.get(str(t)))).next()
 
         t = ObjectNumber.parse(t_vid)
@@ -142,9 +156,14 @@ def tc_obj(ref):
     from . import renderer
     from ambry.dbexceptions import NotFoundError
 
-    b, t, c = deref_tc_ref(ref)
 
     dc = renderer().doc_cache
+
+    try:
+        b, t, c = deref_tc_ref(ref)
+    except NotFoundError:
+        return None
+
 
     try:
         table = dc.table(str(t))
