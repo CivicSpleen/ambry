@@ -12,13 +12,13 @@ from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm.query import Query
 
 from ambry.library.database import LibraryDb, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME
-from ambry.orm import Dataset, Config, Partition, File, Column, ColumnStat, Table, Code
+from ambry.orm import Dataset, Config, Partition, File, Column, ColumnStat, Table
 from ambry.dbexceptions import ConflictError
 from ambry.database.inserter import ValueInserter
 
 from .factories import DatasetFactory, ConfigFactory,\
-    TableFactory, ColumnFactory, FileFactory, PartitionFactory, CodeFactory,\
-    ColumnStatFactory
+    TableFactory, ColumnFactory, PartitionFactory,\
+    ColumnStatFactory, FileFactory
 
 from .helpers import assert_spec
 
@@ -48,7 +48,10 @@ class LibraryDbTest(unittest.TestCase):
         ColumnStatFactory._meta.sqlalchemy_session = self.sqlite_db.session
         ConfigFactory._meta.sqlalchemy_session = self.sqlite_db.session
         FileFactory._meta.sqlalchemy_session = self.sqlite_db.session
-        CodeFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        # TODO: Uncomment and implement.
+        # CodeFactory._meta.sqlalchemy_session = self.sqlite_db.session
+
+        self.query = self.sqlite_db.session.query
 
     def tearDown(self):
         fudge.clear_expectations()
@@ -60,12 +63,12 @@ class LibraryDbTest(unittest.TestCase):
 
     # helpers
     def _assert_exists(self, model_class, **filter_kwargs):
-        query = self.sqlite_db.session.query(model_class)\
+        query = self.query(model_class)\
             .filter_by(**filter_kwargs)
         assert query.first() is not None
 
     def _assert_does_not_exist(self, model_class, **filter_kwargs):
-        query = self.sqlite_db.session.query(model_class)\
+        query = self.query(model_class)\
             .filter_by(**filter_kwargs)
         assert query.first() is None
 
@@ -161,24 +164,18 @@ class LibraryDbTest(unittest.TestCase):
 
     # .commit tests
     def test_commit_commits_session(self):
-        fake_session = fudge.Fake('session')\
-            .provides('commit')\
-            .expects_call()
-        db = LibraryDb(driver='sqlite')
-        db.Session = fake_session
-        db._session = fake_session
-        db.commit()
+        self.sqlite_db._session.commit = fudge.Fake().expects_call()
+        self.sqlite_db.commit()
+
+        fudge.verify()
 
     def test_commit_raises_session_commit_exception(self):
-        fake_session = fudge.Fake('session')\
-            .provides('commit')\
-            .expects_call()\
-            .raises(ValueError)
-        db = LibraryDb(driver='sqlite')
-        db.Session = fake_session
-        db._session = fake_session
+        self.sqlite_db._session.commit = fudge.Fake().expects_call().raises(ValueError)
+
         with self.assertRaises(ValueError):
-            db.commit()
+            self.sqlite_db.commit()
+
+        fudge.verify()
 
     # .rollback tests
     def test_rollbacks_session(self):
@@ -239,19 +236,20 @@ class LibraryDbTest(unittest.TestCase):
         conf1 = ConfigFactory()
         ds1 = DatasetFactory()
         file1 = FileFactory()
-        code1 = CodeFactory()
-        partition1 = PartitionFactory(dataset=ds1)
+        # TODO: Uncomment and implement
+        # code1 = CodeFactory()
+        partition1 = PartitionFactory()
 
         table1 = TableFactory(dataset=ds1)
         column1 = ColumnFactory(table=table1)
-        colstat1 = ColumnStatFactory(partition=partition1, column=column1)
+        colstat1 = ColumnStatFactory()
 
         self.sqlite_db.session.commit()
 
         models = [
-            (Code, dict(oid=code1.oid)),
+            # (Code, dict(oid=code1.oid)),
             (Column, dict(vid=column1.vid)),
-            (ColumnStat, dict(id=colstat1.id)),
+            (ColumnStat, dict(d_vid=colstat1.d_vid)),
             (Config, dict(d_vid=conf1.d_vid)),
             (Dataset, dict(vid=ds1.vid)),
             (File, dict(path=file1.path)),
@@ -426,7 +424,6 @@ class LibraryDbTest(unittest.TestCase):
     def test_creates_file_table(self):
         self.sqlite_db.create_tables()
         FileFactory()
-
         self.sqlite_db.session.commit()
 
     def test_creates_partition_table(self):
@@ -436,36 +433,28 @@ class LibraryDbTest(unittest.TestCase):
         PartitionFactory(dataset=ds1)
         self.sqlite_db.session.commit()
 
+    @unittest.skip('Uncomment and implement.')
     def test_creates_code_table(self):
         self.sqlite_db.create_tables()
-        CodeFactory()
+        # CodeFactory()
         self.sqlite_db.session.commit()
 
     def test_creates_columnstat_table(self):
         self.sqlite_db.create_tables()
-
-        ds1 = DatasetFactory()
         self.sqlite_db.session.commit()
-        partition1 = PartitionFactory(dataset=ds1)
-
-        table1 = TableFactory(dataset=ds1)
-        self.sqlite_db.session.commit()
-
-        column1 = ColumnFactory(table=table1)
-
-        ColumnStatFactory(partition=partition1, column=column1)
+        ColumnStatFactory()
         self.sqlite_db.session.commit()
 
     # ._add_config_root
     def test_creates_new_root_config(self):
         # prepare state
         self.sqlite_db.create_tables()
-        datasets = self.sqlite_db.session.query(Dataset).all()
+        datasets = self.query(Dataset).all()
         self.assertEquals(len(datasets), 0)
 
         # testing
         self.sqlite_db._add_config_root()
-        datasets = self.sqlite_db.session.query(Dataset).all()
+        datasets = self.query(Dataset).all()
         self.assertEquals(len(datasets), 1)
         self.assertEquals(datasets[0].name, ROOT_CONFIG_NAME)
         self.assertEquals(datasets[0].vname, ROOT_CONFIG_NAME_V)
@@ -476,9 +465,8 @@ class LibraryDbTest(unittest.TestCase):
 
         # prepare state
         self.sqlite_db.create_tables()
-        ds = DatasetFactory(vid=ROOT_CONFIG_NAME)
-        ds.vid = ROOT_CONFIG_NAME
-        self.sqlite_db.session.merge(ds)
+        DatasetFactory(id_=ROOT_CONFIG_NAME, vid=ROOT_CONFIG_NAME)
+        self.sqlite_db.session.commit()
         self.sqlite_db.close_session = fudge.Fake('close_session').expects_call()
 
         # testing
@@ -502,7 +490,7 @@ class LibraryDbTest(unittest.TestCase):
         self.sqlite_db._clean_config_root()
 
         # refresh dataset
-        ds = self.sqlite_db.session.query(Dataset).filter(
+        ds = self.query(Dataset).filter(
             Dataset.id_ == ROOT_CONFIG_NAME).one()
         self.assertEquals(ds.name, ROOT_CONFIG_NAME)
         self.assertEquals(ds.vname, ROOT_CONFIG_NAME_V)
@@ -536,7 +524,10 @@ class LibraryDbTest(unittest.TestCase):
         key = 'key-1'
         value = 'value-1'
 
-        ConfigFactory(group=group, key=key, value=value, d_vid=ROOT_CONFIG_NAME_V)
+        DatasetFactory(id_=ROOT_CONFIG_NAME, vid=ROOT_CONFIG_NAME_V)
+        ConfigFactory(
+            d_vid=ROOT_CONFIG_NAME_V,
+            group=group, key=key, value=value)
         self._assert_exists(Config, group=group, key=key, value=value)
 
         new_value = 'value-2'
@@ -552,7 +543,10 @@ class LibraryDbTest(unittest.TestCase):
         key = 'key-1'
         value = 'value-1'
 
-        ConfigFactory(group=group, key=key, value=value, d_vid=ROOT_CONFIG_NAME_V)
+        DatasetFactory(id_=ROOT_CONFIG_NAME, d_vid=ROOT_CONFIG_NAME_V)
+        ConfigFactory(
+            d_vid=ROOT_CONFIG_NAME_V,
+            group=group, key=key, value=value)
         ret = self.sqlite_db.get_config_value(group, key)
         self.assertIsNotNone(ret)
         self.assertEquals(ret.value, value)
@@ -584,8 +578,14 @@ class LibraryDbTest(unittest.TestCase):
         key2 = 'key-2'
         value2 = 'value-2'
 
-        ConfigFactory(group=group1, key=key1, value=value1, d_vid=ROOT_CONFIG_NAME_V)
-        ConfigFactory(group=group1, key=key2, value=value2, d_vid=ROOT_CONFIG_NAME_V)
+        DatasetFactory(id_=ROOT_CONFIG_NAME, d_vid=ROOT_CONFIG_NAME_V)
+
+        ConfigFactory(
+            d_vid=ROOT_CONFIG_NAME_V,
+            group=group1, key=key1, value=value1)
+        ConfigFactory(
+            d_vid=ROOT_CONFIG_NAME_V,
+            group=group1, key=key2, value=value2)
 
         ret = self.sqlite_db.get_config_group(group1)
         self.assertIn(key1, ret)
@@ -655,7 +655,13 @@ class LibraryDbTest(unittest.TestCase):
         group = 'group-1'
         key = 'key-1'
         value = 'value-1'
-        ConfigFactory(group=group, key=key, value=value, d_vid=ROOT_CONFIG_NAME_V)
+
+        DatasetFactory(id_=ROOT_CONFIG_NAME, d_vid=ROOT_CONFIG_NAME_V)
+
+        ConfigFactory(
+            d_vid=ROOT_CONFIG_NAME_V,
+            group=group, key=key, value=value)
+
         self.assertEquals(
             self.sqlite_db.get_bundle_value(ROOT_CONFIG_NAME_V, group, key),
             value)
@@ -679,8 +685,15 @@ class LibraryDbTest(unittest.TestCase):
         key2 = 'key-2'
         value2 = 'value-2'
 
-        ConfigFactory(group=group, key=key1, value=value1, d_vid=ROOT_CONFIG_NAME_V)
-        ConfigFactory(group=group, key=key2, value=value2, d_vid=ROOT_CONFIG_NAME_V)
+        DatasetFactory(id_=ROOT_CONFIG_NAME, d_vid=ROOT_CONFIG_NAME_V)
+
+        ConfigFactory(
+            d_vid=ROOT_CONFIG_NAME_V,
+            group=group, key=key1, value=value1)
+        ConfigFactory(
+            d_vid=ROOT_CONFIG_NAME_V,
+            group=group, key=key2, value=value2)
+
         ret = self.sqlite_db.get_bundle_values(ROOT_CONFIG_NAME_V, group)
         self.assertEquals(len(ret), 2)
         values = [x.value for x in ret]
@@ -708,8 +721,14 @@ class LibraryDbTest(unittest.TestCase):
         key2 = 'key-2'
         value2 = 'value-2'
 
-        ConfigFactory(group=group, key=key1, value=value1, d_vid=ROOT_CONFIG_NAME_V)
-        ConfigFactory(group=group2, key=key2, value=value2, d_vid=ROOT_CONFIG_NAME_V)
+        DatasetFactory(id_=ROOT_CONFIG_NAME, d_vid=ROOT_CONFIG_NAME_V)
+
+        ConfigFactory(
+            d_vid=ROOT_CONFIG_NAME_V,
+            group=group, key=key1, value=value1)
+        ConfigFactory(
+            d_vid=ROOT_CONFIG_NAME_V,
+            group=group2, key=key2, value=value2)
         self.assertIn(
             (group, key1),
             self.sqlite_db.config_values)
@@ -796,7 +815,7 @@ class LibraryDbTest(unittest.TestCase):
         # test
         self.sqlite_db.mark_table_installed(table1.vid)
         self.assertEqual(
-            self.sqlite_db.session.query(Table).filter_by(vid=table1.vid).one().installed,
+            self.query(Table).filter_by(vid=table1.vid).one().installed,
             'y')
 
     # .mark_partition_installed tests
@@ -812,7 +831,7 @@ class LibraryDbTest(unittest.TestCase):
         # test
         self.sqlite_db.mark_partition_installed(partition1.vid)
         self.assertEqual(
-            self.sqlite_db.session.query(Partition).filter_by(vid=partition1.vid).one().installed,
+            self.query(Partition).filter_by(vid=partition1.vid).one().installed,
             'y')
 
     # .remove_bundle tests
@@ -834,21 +853,16 @@ class LibraryDbTest(unittest.TestCase):
         self.sqlite_db.create_tables()
         self.sqlite_db.session.commit()
 
-        ds1 = DatasetFactory()
-        partition1 = PartitionFactory(dataset=ds1)
-
-        table1 = TableFactory(dataset=ds1)
-        column1 = ColumnFactory(table=table1)
-        colstat1 = ColumnStatFactory(partition=partition1, column=column1)
+        colstat1 = ColumnStatFactory()
 
         # save id to get rid of ObjectDeletedError.
-        colstat1_id = colstat1.id
+        colstat1_d_vid = colstat1.d_vid
         self.sqlite_db.session.commit()
 
         # testing.
-        self.sqlite_db.delete_dataset_colstats(ds1.vid)
+        self.sqlite_db.delete_dataset_colstats(colstat1.d_vid)
         self.assertEquals(
-            self.sqlite_db.session.query(ColumnStat).filter_by(id=colstat1_id).all(),
+            self.query(ColumnStat).filter_by(d_vid=colstat1_d_vid).all(),
             [])
 
     # .remove_dataset tests
@@ -878,7 +892,7 @@ class LibraryDbTest(unittest.TestCase):
         # testing
         self.sqlite_db.remove_dataset(ds1.vid)
         self.assertEquals(
-            self.sqlite_db.session.query(Dataset).filter_by(vid=ds1_vid).all(),
+            self.query(Dataset).filter_by(vid=ds1_vid).all(),
             [],
             'Dataset was not removed.')
 
@@ -890,19 +904,22 @@ class LibraryDbTest(unittest.TestCase):
         self.sqlite_db.session.commit()
 
         ds1 = DatasetFactory()
-        partition1 = PartitionFactory(dataset=ds1)
         table1 = TableFactory(dataset=ds1)
+        partition1 = PartitionFactory(dataset=ds1, table=table1)
         column1 = ColumnFactory(table=table1)
-        colstat1 = ColumnStatFactory(partition=partition1, column=column1)
+        colstat1 = ColumnStatFactory(p_vid=partition1.vid, c_vid=column1.vid, d_vid=ds1.vid)
+        self.sqlite_db.session.commit()
+
+        # save necessary ids for later use.
         partition_vid = partition1.vid
-        colstat1_id = colstat1.id
+        colstat1_c_vid = colstat1.c_vid
 
         # testing
         self.sqlite_db.remove_partition_record(partition_vid)
-        partition_query = self.sqlite_db.session.query(Partition).filter_by(vid=partition_vid)
+        partition_query = self.query(Partition).filter_by(vid=partition_vid)
         self.assertEquals(partition_query.all(), [], 'Partition was not deleted.')
 
-        colstat_query = self.sqlite_db.session.query(ColumnStat).filter_by(id=colstat1_id)
+        colstat_query = self.query(ColumnStat).filter_by(c_vid=colstat1_c_vid)
         self.assertEquals(colstat_query.all(), [], 'ColumnStat instance was not deleted.')
 
     # .get tests
@@ -955,8 +972,12 @@ class LibraryDbTest(unittest.TestCase):
         self.sqlite_db.session.commit()
 
         ds1 = DatasetFactory()
-        partition1 = PartitionFactory(dataset=ds1)
-        partition2 = PartitionFactory(dataset=ds1)
+        table1 = TableFactory(dataset=ds1)
+        self.sqlite_db.session.commit()
+
+        partition1 = PartitionFactory(dataset=ds1, t_id=table1.id_)
+        partition2 = PartitionFactory(dataset=ds1, t_id=table1.id_)
+        self.sqlite_db.session.commit()
 
         # testing
         ret = self.sqlite_db.all_vids()
