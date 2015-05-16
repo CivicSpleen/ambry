@@ -68,7 +68,7 @@ class SqliteWarehouse(Warehouse):
 
         self.logger.info('Running SQL')
 
-        self.database.connection.executescript(sql_text)
+        self.database.connection.execute(sql_text)
 
 
 class SpatialiteWarehouse(SqliteWarehouse):

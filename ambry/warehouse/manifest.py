@@ -374,8 +374,9 @@ class Manifest(object):
                     summary_html=markdown.markdown(summary))
 
     def _process_sql(self, section):
-
-        return sqlparse.format('\n'.join(section.lines),reindent=True,keyword_case='upper')
+        return {section.args: sqlparse.format('\n'.join(section.lines),
+                                              reindent=True,
+                                              keyword_case='upper')}
 
     def _process_mview(self, section):
 
