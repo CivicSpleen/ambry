@@ -456,12 +456,16 @@ class LibraryTest(unittest.TestCase):
     def test_returns_given_dataset_partitions(self):
         # prepare state
         self.sqlite_db.create_tables()
+        self.sqlite_db.session.commit()
+
         ds1 = DatasetFactory()
-        partition1 = PartitionFactory(dataset=ds1)
-        partition2 = PartitionFactory(dataset=ds1)
+        table1 = TableFactory(dataset=ds1)
+        partition1 = PartitionFactory(dataset=ds1, t_id=table1.id_)
+        partition2 = PartitionFactory(dataset=ds1, t_id=table1.id_)
 
         ds2 = DatasetFactory()
-        partition3 = PartitionFactory(dataset=ds2)
+        table2 = TableFactory(dataset=ds2)
+        partition3 = PartitionFactory(dataset=ds2, t_id=table2.id_)
 
         lib = Library(self.cache, self.sqlite_db)
 
@@ -477,11 +481,13 @@ class LibraryTest(unittest.TestCase):
         # prepare state
         self.sqlite_db.create_tables()
         ds1 = DatasetFactory()
-        partition1 = PartitionFactory(dataset=ds1)
-        partition2 = PartitionFactory(dataset=ds1)
+        table1 = TableFactory(dataset=ds1)
+        partition1 = PartitionFactory(dataset=ds1, t_id=table1.id_)
+        partition2 = PartitionFactory(dataset=ds1, t_id=table1.id_)
 
         ds2 = DatasetFactory()
-        partition3 = PartitionFactory(dataset=ds2)
+        table2 = TableFactory(dataset=ds2)
+        partition3 = PartitionFactory(dataset=ds2, t_id=table2.id_)
 
         lib = Library(self.cache, self.sqlite_db)
 
