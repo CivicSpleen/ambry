@@ -382,7 +382,7 @@ class LoaderBundle(BuildBundle):
 
         row_gen = self.row_gen_for_source(source_name)
 
-        return self.build_from_row_gen(row_gen, p)
+        return self.build_from_row_gen(row_gen, p, source = source)
 
 
     def build_from_row_gen(self, row_gen, p, source = None):
@@ -393,8 +393,8 @@ class LoaderBundle(BuildBundle):
 
         header = row_gen.header
 
-        if source and source.get('_name'):
-            source_name = 'source '+source.get('_name')
+        if source and getattr(source,'_name', False):
+            source_name = 'source '+getattr(source,'_name')
         else:
             source_name = 'partition '+str(p.identity.name)
 

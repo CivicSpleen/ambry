@@ -1,4 +1,5 @@
 documentation:
+    footnote: null
     main: '
 
         # A Bundle that just provides prototype columns for other bundles.
@@ -7,7 +8,11 @@ documentation:
         None
 
         '
+    processed: ''
     readme: '# A Bundle that just provides prototype columns for other bundles.
 
 
         None'
+    source: ''
+    summary: ''
+    title: A Bundle that just provides prototype columns for other bundles.

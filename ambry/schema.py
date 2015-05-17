@@ -771,18 +771,22 @@ class Schema(object):
 
             try:
                 ObjectNumber.parse(c.proto_vid)
-                # Its all good.
+                # Its all good. The proto_vid is an Object, not a name.
 
             except NotObjectNumberError:
                 if not pt_map:
                     p = self.bundle.library.get('civicknowledge.com-proto-proto_terms').partition
-
                     pt_map = {row['name']: dict(row) for row in p.rows}
 
                 pt_row = pt_map[c.proto_vid]
 
                 c.data['orig_proto_vid'] = c.proto_vid
                 c.proto_vid = pt_row['obj_number']
+
+                if c.datatype != pt_row['datatype']:
+                    raise ConfigurationError(("Column datatype for {}.{} doesn't match prototype: "
+                                              "{} != {} ").format(c.table.name, c.name, c.datatype, pt_row['datatype']))
+
 
                 if pt_row['index_partition']:
                     try:
@@ -797,8 +801,7 @@ class Schema(object):
                         if ipc.proto_vid == c.proto_vid:
                             c.fk_vid = ipc.id_
                             c.data['index'] = "{}:{}".format(str(ip.identity.vname), ipc.name)
-                            self.bundle.log("expand_column_prototype: {} {} -> {}.{}".format(
-                                c.table.name, c.name,
+                            self.bundle.log("expand_column_prototype: {} {} -> {}.{}".format(c.table.name, c.name,
                                 str(ip.identity.vname), ipc.name))
 
                             table_cols[ip.identity.vid].add(c.vid)
