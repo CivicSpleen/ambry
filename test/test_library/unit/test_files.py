@@ -17,7 +17,7 @@ from ambry.library.database import LibraryDb
 from ambry.library.files import Files
 from ambry.dbexceptions import ObjectStateError, NotFoundError
 from ambry.orm import File
-from .factories import FileFactory, PartitionFactory
+from test.test_library.factories import FileFactory, PartitionFactory
 
 
 class FilesTest(unittest.TestCase):

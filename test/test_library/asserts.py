@@ -2,6 +2,7 @@
 import inspect
 
 
+# TODO: Move to the test/ dir
 def assert_spec(fn, expected_args):
     """ Matches function arguments against the `expected_args`. Raises AssertionError on
         mismatch.

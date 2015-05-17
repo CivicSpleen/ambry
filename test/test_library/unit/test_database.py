@@ -16,11 +16,11 @@ from ambry.orm import Dataset, Config, Partition, File, Column, ColumnStat, Tabl
 from ambry.dbexceptions import ConflictError
 from ambry.database.inserter import ValueInserter
 
-from .factories import DatasetFactory, ConfigFactory,\
+from test.test_library.factories import DatasetFactory, ConfigFactory,\
     TableFactory, ColumnFactory, PartitionFactory,\
     ColumnStatFactory, FileFactory
 
-from .helpers import assert_spec
+from test.test_library.asserts import assert_spec
 
 TEST_TEMP_DIR = 'test-library-'
 

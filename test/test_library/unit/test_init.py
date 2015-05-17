@@ -14,8 +14,8 @@ from ambry.library import Library
 from ambry.library.database import LibraryDb
 from ambry.library import _new_library
 
-from .helpers import assert_spec
-from .factories import DatasetFactory, ConfigFactory,\
+from test.test_library.asserts import assert_spec
+from test.test_library.factories import DatasetFactory, ConfigFactory,\
     TableFactory, ColumnFactory, FileFactory, PartitionFactory, CodeFactory,\
     ColumnStatFactory
 

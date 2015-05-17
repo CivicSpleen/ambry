@@ -101,7 +101,7 @@ class ConfigFactory(SQLAlchemyModelFactory):
         """Returns True if fields populated with correct values. Otherwise raises AssertionError.
 
         Args:
-            dataset (Dataset): dataset instance to validate.
+            config (Config): config instance to validate.
         """
         assert config.d_vid.startswith('d')
         dataset = cls._meta.sqlalchemy_session.query(Dataset).filter_by(vid=config.d_vid).one()

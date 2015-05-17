@@ -15,8 +15,8 @@ from ambry.library import Library
 from ambry.library.database import LibraryDb
 from ambry.library.search import SearchTermParser, SearchResult, Search
 
-from .factories import DatasetFactory, PartitionFactory
-from .helpers import assert_spec
+from test.test_library.factories import DatasetFactory, PartitionFactory
+from test.test_library.asserts import assert_spec
 
 BUNDLES_DIR_PREFIX = 'test_library_test_search_bundles'
 DOC_CACHE_DIR_PREFIX = 'test_library_test_search_doc_cache'
