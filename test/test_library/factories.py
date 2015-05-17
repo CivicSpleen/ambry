@@ -236,8 +236,6 @@ class FileFactory(SQLAlchemyModelFactory):
         model = File
         sqlalchemy_session = None  # Set that just before TableFactory using.
 
-    # TODO: uncomment and implement.
-
     oid = factory.Sequence(lambda n: n)
     path = factory.Sequence(lambda n: 'path-%03d' % n)
     type_ = Files.TYPE.BUNDLE
@@ -268,12 +266,14 @@ class PartitionFactory(SQLAlchemyModelFactory):
     def _prepare(cls, create, **kwargs):
         dataset = kwargs.get('dataset')
         if not dataset:
+            DatasetFactory._meta.sqlalchemy_session = cls._meta.sqlalchemy_session
             dataset = DatasetFactory()
 
         t_id = kwargs.get('t_id')
         if t_id:
             table = cls._meta.sqlalchemy_session.query(Table).filter_by(id_=t_id).one()
         else:
+            TableFactory._meta.sqlalchemy_session = cls._meta.sqlalchemy_session
             table = TableFactory(dataset=dataset)
 
         kwargs['dataset'] = dataset
