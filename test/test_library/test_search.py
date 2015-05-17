@@ -78,6 +78,43 @@ class SearchTest(unittest.TestCase):
         doc_cache = fudge.Fake('doc_cache').provides('path').calls(fake_path)
         return doc_cache
 
+    def _get_fake_identifier(self, search_result=None):
+
+        class MyDict(dict):
+            pass
+
+        if not search_result:
+            PARTITION_TYPE = 'p'
+            DATASET_TYPE = 'b'
+            result1 = MyDict(
+                {'vid': 'vid1', 'bvid': 'bvid1', 'identifier': 'bvid1', 'type': PARTITION_TYPE})
+            result1.score = 0.5
+            result2 = MyDict(
+                {'vid': 'vid2', 'bvid': 'bvid2', 'identifier': 'bvid2', 'type': DATASET_TYPE})
+            result2.score = 0.6
+            search_result = [result1, result2]
+
+        class FakeSearcher(object):
+            def search(self, query, limit=20):
+                # returns result of the search need by search_datasets.
+                return search_result
+
+            def documents(self):
+                return search_result
+
+            def __enter__(self, *args, **kwargs):
+                return self
+
+            def __exit__(self, *args, **kwargs):
+                pass
+
+        class FakeIdentifierIndex(object):
+            schema = '?'
+
+            def searcher(*args, **kwargs):
+                return FakeSearcher()
+        return FakeIdentifierIndex()
+
     # .reset tests
     @fudge.patch(
         'os.path.exists',
@@ -131,6 +168,23 @@ class SearchTest(unittest.TestCase):
         with fudge.patched_context(index, 'open_dir', fake_open_dir):
             search.get_or_new_index(SCHEMA, search.d_index_dir)
 
+    @fudge.patch('os.path.exists')
+    def test_logs_error_to_library_logger(self, fake_exists):
+
+        # prepare state.
+        SCHEMA = 'schema'
+
+        # We have to create Search instance before mocking because __init__ uses os modules.
+        search = Search(self.lib)
+
+        fake_exists.expects_call().raises(Exception('My fake exception.'))
+        fake_error = fudge.Fake('error').expects_call()
+
+        # testing
+        with fudge.patched_context(self.sqlite_db.logger, 'error', fake_error):
+            with self.assertRaises(Exception):
+                search.get_or_new_index(SCHEMA, search.d_index_dir)
+
     # .index_datasets tests
     def test_indexes_library_datasets(self):
 
@@ -145,38 +199,40 @@ class SearchTest(unittest.TestCase):
         with fudge.patched_context(search, 'all_datasets', []):
             search.index_datasets()
 
+    def test_tick_fn_gets_each_vid(self):
+
+        # prepare state.
+        DatasetFactory()
+        DatasetFactory()
+
+        search = Search(self.lib)
+        search.index_dataset = fudge.Fake().expects_call()
+        tick_f = fudge.Fake()\
+            .expects_call().with_args('datasets: 1 partitions: 0')\
+            .next_call().with_args('datasets: 2 partitions: 0')
+
+        # testing
+        with fudge.patched_context(search, 'all_datasets', []):
+            search.index_datasets(tick_f=tick_f)
+
     # .datasets property tests
-    # TODO:
+    def test_generates_vids_found_by_searcher(self):
+        # prepare state.
+
+        search = Search(self.lib)
+        search._dataset_index = self._get_fake_identifier()
+
+        # testing
+        datasets_gen = search.datasets
+        self.assertTrue(hasattr(datasets_gen, 'next'))
+        datasets = [x for x in datasets_gen]
+        self.assertEquals(datasets, ['vid2'])
 
     # .search_datasets_tests
     def test_returns_dict_with_datasets_found_by_searcher(self):
 
-        class MyDict(dict):
-            pass
-
-        class FakeSearcher(object):
-            def search(self, query, limit=20):
-                # returns result of the search need by search_datasets.
-                result1 = MyDict({'vid': 'vid1', 'bvid': 'bvid1', 'type': 'type1'})
-                result1.score = 0.5
-                result2 = MyDict({'vid': 'vid2', 'bvid': 'bvid2', 'type': 'b'})
-                result2.score = 0.6
-                return [result1, result2]
-
-            def __enter__(self, *args, **kwargs):
-                return self
-
-            def __exit__(self, *args, **kwargs):
-                pass
-
-        class FakeIdentifierIndex(object):
-            schema = '?'
-
-            def searcher(*args, **kwargs):
-                return FakeSearcher()
-
         search = Search(self.lib)
-        search._dataset_index = FakeIdentifierIndex()
+        search._dataset_index = self._get_fake_identifier()
         ret = search.search_datasets('about me')
 
         self.assertIsInstance(ret, dict)
@@ -232,6 +288,21 @@ class SearchTest(unittest.TestCase):
         cterms = search.make_query_from_terms({'by': 'Beslan', 'about': 'Beslan'})
         expected = '( type:b AND doc:(Beslan) ) OR ( type:p AND keywords:(Beslan) AND doc:(Beslan) )'
         self.assertEquals(cterms, expected)
+
+    # .partitions property tests
+    def test_generates_vids_of_the_partitions_found_by_searcher(self):
+        # prepare state.
+
+        search = Search(self.lib)
+        search._dataset_index = self._get_fake_identifier()
+
+        # testing
+        partitions_gen = search.partitions
+
+        # it returns generator.
+        self.assertTrue(hasattr(partitions_gen, 'next'))
+        partitions = [x for x in partitions_gen]
+        self.assertEquals(partitions, ['vid1'])
 
     # .search_partitions tests
     def test_generates_vids_of_the_found_docs(self):
@@ -322,6 +393,21 @@ class SearchTest(unittest.TestCase):
         search.index_identifiers(identifiers)
         fudge.verify()
 
+    # .search_identifiers tests
+    def test_generates_results_found_by_searcher(self):
+        # prepare state
+        search = Search(self.lib)
+        search._identifier_index = self._get_fake_identifier()
+
+        # testing
+        ret = search.search_identifiers('about me')
+
+        # it is a generator.
+        self.assertTrue(hasattr(ret, 'next'))
+        expected_result = [(0.5, 'bvid1', 'p', False), (0.6, 'bvid2', 'b', False)]
+        result = [x for x in ret]
+        self.assertEquals(result, expected_result)
+
     # .expand_place_ids tests
     def test_returns_place_vids(self):
         # first assert signatures of the functions we are going to mock did not change.
@@ -351,6 +437,21 @@ class SearchTest(unittest.TestCase):
         ret = search.expand_place_ids('California')
         self.assertEquals(ret, 'California')
 
+    # .identifiers property tests
+    def test_contains_generator_with_documents_found_by_searcher(self):
+        # prepare state
+        search = Search(self.lib)
+        search._identifier_index = self._get_fake_identifier()
+
+        # testing
+        identifiers_gen = search.identifiers
+        self.assertTrue(hasattr(identifiers_gen, 'next'))
+
+        identifiers = [x for x in identifiers_gen]
+        self.assertEquals(len(identifiers), 2)
+        self.assertIn('identifier', identifiers[0])
+        self.assertIn('identifier', identifiers[1])
+
     # .all_identifiers property tests
     def test_returns_dict_with_all_identifiers(self):
         # prepare state
@@ -362,7 +463,7 @@ class SearchTest(unittest.TestCase):
 
         # testing
         with fudge.patched_context(Search, 'identifiers', fake_identifiers):
-            ret = search.identifier_map
+            ret = search.all_identifiers
             self.assertIsInstance(ret, dict)
             self.assertIn('identifier1', ret)
             self.assertIn('identifier2', ret)
