@@ -8,11 +8,12 @@ import fudge
 
 from sqlalchemy.exc import OperationalError
 
-from ambry.bundle import DbBundle, BuildBundle
+from ambry.bundle import DbBundle
 from ambry.dbexceptions import NotFoundError, DatabaseError
-from ambry.library import Library
+from ambry.library import Library, _new_library
 from ambry.library.database import LibraryDb
-from ambry.library import _new_library
+from ambry.library.files import Files
+from ambry.orm import File
 
 from test.test_library.asserts import assert_spec
 from test.test_library.factories import DatasetFactory, ConfigFactory,\
@@ -75,6 +76,8 @@ class LibraryTest(unittest.TestCase):
         self.sqlite_db = LibraryDb(driver='sqlite', dbname=SQLITE_DATABASE)
         self.sqlite_db.enable_delete = True
         self.sqlite_db.create_tables()
+
+        self.query = self.sqlite_db.session.query
 
         # each factory requires db session. Populate all of them here, because we know the session.
         DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
@@ -408,7 +411,26 @@ class LibraryTest(unittest.TestCase):
         self.assertIn(ds2, datasets)
 
     # .versioned_datasets tests
-    # TODO:
+    def test_returns_dict_with_versioned_datasets(self):
+        # prepare state
+        self.sqlite_db.create_tables()
+        lib = Library(self.cache, self.sqlite_db)
+
+        ds1_id = 'dds01'
+        ds1_01 = DatasetFactory(id_=ds1_id, revision=1)
+        ds1_02 = DatasetFactory(id_=ds1_id, revision=2)
+        ds2 = DatasetFactory()
+
+        # testing
+        datasets = lib.versioned_datasets()
+        self.assertIn(ds1_id, datasets)
+        # highest revision lives on top level
+        self.assertEquals(datasets[ds1_id]['vid'], ds1_02.vid)
+        self.assertEquals(datasets[ds1_id]['revision'], ds1_02.revision)
+        self.assertIn(ds2.id_, datasets)
+
+        # ds1 contains version with other revision
+        self.assertIn(ds1_01.vid, datasets[ds1_id]['other_versions'])
 
     # .bundle tests
     # TODO:
@@ -497,3 +519,36 @@ class LibraryTest(unittest.TestCase):
         self.assertIn(partition1, partitions)
         self.assertIn(partition2, partitions)
         self.assertIn(partition3, partitions)
+
+    # .stores property tests
+    def test_contains_all_stores(self):
+        lib = Library(self.cache, self.sqlite_db)
+        FileFactory(type_=Files.TYPE.STORE)
+        FileFactory(type_=Files.TYPE.STORE)
+        stores = lib.stores
+        self.assertEquals(len(stores), 2)
+
+    # .store tests
+    def test_returns_store_file_by_ref(self):
+        lib = Library(self.cache, self.sqlite_db)
+        ref = 'ref1'
+        file1 = FileFactory(type_=Files.TYPE.STORE, ref=ref)
+        FileFactory(type_=Files.TYPE.STORE, ref='ref2')
+        ret = lib.store(ref)
+        self.assertIsInstance(ret, File)
+        self.assertEquals(ret.oid, file1.oid)
+
+    # .remove_store tests
+    def test_removes_store(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        ref = 'ref1'
+        FileFactory(type_=Files.TYPE.STORE, ref=ref)
+        file2 = FileFactory(type_=Files.TYPE.STORE, ref='ref2')
+
+        # testing
+        with fudge.patched_context(Library, 'warehouse', fudge.Fake().is_a_stub()):
+            lib.remove_store(ref)
+            all_ = self.query(File).all()
+            self.assertEquals(len(all_), 1)
+        self.assertEquals(all_[0].ref, file2.ref)
