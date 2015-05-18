@@ -7,25 +7,24 @@
 from ..orm import File
 from sqlalchemy.sql import or_
 from ..util import Constant
-from ..identity import LocationRef
 import os
 
 
 class Files(object):
 
     TYPE = Constant()
-    TYPE.BUNDLE = LocationRef.LOCATION.LIBRARY
-    TYPE.PARTITION = LocationRef.LOCATION.PARTITION
-    TYPE.SOURCE = LocationRef.LOCATION.SOURCE
-    TYPE.SREPO = LocationRef.LOCATION.SREPO
-    TYPE.UPSTREAM = LocationRef.LOCATION.UPSTREAM
-    TYPE.REMOTE = LocationRef.LOCATION.REMOTE
-    TYPE.REMOTEPARTITION = LocationRef.LOCATION.REMOTEPARTITION
+    TYPE.BUNDLE = File.TYPE.BUNDLE
+    TYPE.PARTITION = File.TYPE.BUNDLE
+    TYPE.SOURCE = File.TYPE.SOURCE
+    TYPE.SREPO = File.TYPE.SREPO
+    TYPE.UPSTREAM = File.TYPE.UPSTREAM
+    TYPE.REMOTE = File.TYPE.REMOTE
+    TYPE.REMOTEPARTITION = File.TYPE.REMOTEPARTITION
 
-    TYPE.MANIFEST = 'manifest'
-    TYPE.DOC = 'doc'
-    TYPE.EXTRACT = 'extract'
-    TYPE.STORE = 'store'
+    TYPE.MANIFEST = File.TYPE.MANIFEST
+    TYPE.DOC = File.TYPE.DOC
+    TYPE.EXTRACT = File.TYPE.EXTRACT
+    TYPE.STORE = File.TYPE.STORE
 
     def __init__(self, db, query=None):
 

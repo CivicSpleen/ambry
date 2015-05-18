@@ -1017,11 +1017,8 @@ class BuildBundle(Bundle):
 
             if cache and not cache.has(cache_key):
                 self.log("Putting: {}".format(cache_key))
-                cache.put(
-                    fn,
-                    cache_key,
-                    metadata=dict(
-                        vname=self.identity.vname))
+                cache.put(fn,cache_key,metadata=dict(vname=self.identity.vname))
+
 
     @property
     def dependencies(self):
@@ -1045,12 +1042,10 @@ class BuildBundle(Bundle):
 
         # Remove the sqlite journal files, if they exists
         files = [
-            self.database.path +
-            "-wal",
-            self.database.path +
-            "-shm",
-            self.database.path +
-            "-journal"]
+            self.database.path +"-wal",
+            self.database.path +"-shm",
+            self.database.path +"-journal"]
+
         for f in files:
             if os.path.exists(f):
                 self.log("Removing {}".format(f))

@@ -2104,6 +2104,27 @@ event.listen(Partition, 'before_update', Partition.before_update)
 class File(Base, SavableMixin, LinkableMixin):
     __tablename__ = 'files'
 
+    TYPE = Constant()
+    TYPE.BUNDLE = LocationRef.LOCATION.LIBRARY
+    TYPE.PARTITION = LocationRef.LOCATION.PARTITION
+    TYPE.SOURCE = LocationRef.LOCATION.SOURCE
+    TYPE.SREPO = LocationRef.LOCATION.SREPO
+    TYPE.UPSTREAM = LocationRef.LOCATION.UPSTREAM
+    TYPE.REMOTE = LocationRef.LOCATION.REMOTE
+    TYPE.REMOTEPARTITION = LocationRef.LOCATION.REMOTEPARTITION
+
+    TYPE.MANIFEST = 'manifest'
+    TYPE.DOC = 'doc'
+    TYPE.EXTRACT = 'extract'
+    TYPE.STORE = 'store'
+    TYPE.DOWNLOAD = 'download'
+
+    PROCESS = Constant()
+    PROCESS.MODIFIED = 'modified'
+    PROCESS.UNMODIFIED = 'unmodified'
+    PROCESS.DOWNLOADED = 'downloaded'
+    PROCESS.CACHED = 'cached'
+
     oid = SAColumn('f_id', Integer, primary_key=True, nullable=False)
     path = SAColumn('f_path', Text, nullable=False)
     ref = SAColumn('f_ref', Text, index=True, nullable=False)
