@@ -8,11 +8,12 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 from __future__ import print_function
 import logging
 import argparse
-
 import os.path
+
 from ambry.run import get_runconfig
 import ambry._meta
 from ..util import get_logger
+
 
 # The Bundle's get_runconfig ( in Bundle:config ) will use this if it is set. It gets set
 # by the CLI when the user assigns a specific configuration to use instead
@@ -47,9 +48,10 @@ def fatal(template, *args, **kwargs):
         # When the error string is a template
 
         global_logger.critical(
-            template.replace('{','{{').replace('}','}}').format(*args, **kwargs))
+            template.replace('{', '{{').replace('}', '}}').format(*args, **kwargs))
 
     sys.exit(1)
+
 
 def warn(template, *args, **kwargs):
     global command
@@ -222,7 +224,7 @@ def _print_info(l, ident, list_partitions=False):
 
     if ident.partitions:
 
-        if len(ident.partitions) == 1 :
+        if len(ident.partitions) == 1:
 
             ds_ident = l.resolve(ident.partition.vid, location=None)
 
@@ -271,26 +273,49 @@ def _print_bundle_info(bundle=None, ident=None):
         prt('Created   : {}', process.get('dbcreated', ''))
         prt('Prepared  : {}', process.get('prepared', ''))
         prt('Built     : {}', process.get('built', ''))
-        prt('Build time: {}',
-            str(round(float(process['buildtime']),
-                      2)) + 's' if process.get('buildtime',
-                                               False) else '')
+        prt('Build time: {}', ('%ss' % round(float(process['buildtime']), 2))) if process.get('buildtime') else ''
 
 
-def main(argsv=None, ext_logger=None):
-    import ambry._meta
-    import os
-
+def get_parser():
+    # import ambry._meta
     parser = argparse.ArgumentParser(prog='ambry', description='Ambry {}. Management interface for ambry, libraries and'
                                                                ' repositories. '.format(ambry._meta.__version__))
 
-    parser.add_argument('-l','--library',dest='library_name',default="default",help="Name of library, from the library secton of the config")
-    parser.add_argument('-c','--config',default=os.getenv(AMBRY_CONFIG_ENV_VAR),action='append',help="Path to a run config file. Alternatively, set the AMBRY_CONFIG env var")
-    parser.add_argument('--single-config',default=False,action="store_true",help="Load only the config file specified")
-    parser.add_argument('-E','--exceptions',default=False,action="store_true",help="Show full exception trace on all exceptions")
+    parser.add_argument('-l', '--library', dest='library_name', default="default",
+                        help="Name of library, from the library secton of the config")
+    parser.add_argument('-c', '--config', default=os.getenv(AMBRY_CONFIG_ENV_VAR), action='append',
+                        help="Path to a run config file. Alternatively, set the AMBRY_CONFIG env var")
+    parser.add_argument('--single-config', default=False, action="store_true",
+                        help="Load only the config file specified")
+    parser.add_argument('-E', '--exceptions', default=False, action="store_true",
+                        help="Show full exception trace on all exceptions")
 
     cmd = parser.add_subparsers(title='commands', help='command help')
 
+    from .library import library_parser
+    from .warehouse import warehouse_parser
+    from .remote import remote_parser
+    from test import test_parser
+    from config import config_parser
+    from ckan import ckan_parser
+    from source import source_parser
+    from bundle import bundle_parser
+    from root import root_parser
+    
+    library_parser(cmd)
+    warehouse_parser(cmd)
+    ckan_parser(cmd)
+    source_parser(cmd)
+    remote_parser(cmd)
+    test_parser(cmd)
+    config_parser(cmd)
+    bundle_parser(cmd)
+    root_parser(cmd)
+
+    return parser
+
+
+def main(argsv=None, ext_logger=None):
     from .library import library_parser, library_command
     from .warehouse import warehouse_command, warehouse_parser
     from .remote import remote_parser, remote_command
@@ -302,15 +327,7 @@ def main(argsv=None, ext_logger=None):
     from root import root_command, root_parser
     from ..dbexceptions import ConfigurationError
 
-    library_parser(cmd)
-    warehouse_parser(cmd)
-    ckan_parser(cmd)
-    source_parser(cmd)
-    remote_parser(cmd)
-    test_parser(cmd)
-    config_parser(cmd)
-    bundle_parser(cmd)
-    root_parser(cmd)
+    parser = get_parser()
 
     args = parser.parse_args()
 
