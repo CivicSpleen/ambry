@@ -32,6 +32,7 @@ class Metadata(object):
         :return:
         """
 
+
         self._top = self
         self._path = path
 

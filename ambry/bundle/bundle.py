@@ -490,11 +490,9 @@ class DbBundleBase(Bundle):
 
         if "documentation" in d['meta']:
             d['meta']['documentation']['readme'] = markdown.markdown(
-                self.sub_template(
-                    d['meta']['documentation']['readme'] if d['meta']['documentation']['readme'] else ''))
+                self.sub_template( d['meta']['documentation']['readme'] if d['meta']['documentation']['readme'] else ''))
             d['meta']['documentation']['main'] = markdown.markdown(
-                self.sub_template(
-                    d['meta']['documentation']['main'] if d['meta']['documentation']['main'] else ''))
+                self.sub_template(  d['meta']['documentation']['main'] if d['meta']['documentation']['main'] else ''))
 
         d['meta']['resolved_dependencies'] = self.get_value_group('rdep')
 
@@ -728,8 +726,6 @@ class BuildBundle(Bundle):
     def metadata(self):
         from ambry.bundle.meta import Top
 
-        return Top(path=self.bundle_dir)
-
         t = Top(path=self.bundle_dir)
         t.load_all()
 
@@ -873,8 +869,6 @@ class BuildBundle(Bundle):
         md.documentation.processed = md.about.processed.text
         md.documentation.summary = md.about.summary.text
 
-
-
         md.write_to_dir(write_all=True)
 
         # Reload some of the values from bundle.yaml into the database
@@ -909,10 +903,6 @@ class BuildBundle(Bundle):
             except NotFoundError:
                 self.error("Can't expand sources; didn't find source partition '{}'".format(self.SOURCE_TERMS))
 
-
-
-
-
     def rewrite_readme(self):
 
         tf = self.filesystem.path(self.README_FILE_TEMPLATE)
@@ -920,9 +910,8 @@ class BuildBundle(Bundle):
             with open(self.filesystem.path(tf)) as fi:
                 rmf = self.filesystem.path(self.README_FILE)
                 with open(self.filesystem.path(rmf), 'wb') as fo:
-                    in_text = fi.read()
-                    in_text_sub = self.sub_template(in_text)
-                    fo.write(in_text_sub.encode('utf-8'))
+                    in_text = self.metadata.documentation.readme
+                    fo.write(in_text.encode('utf-8'))
 
     def write_doc_html(self):
         import markdown
