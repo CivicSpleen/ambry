@@ -51,7 +51,7 @@ warehouse:
 
     sqlite: 'sqlite:////tmp/ambry-manifest-test/sqlite_warehouse.db'
     spatialite: 'spatialite:////tmp/ambry-manifest-test/spatialite_warehouse.db'
-    postgres1: postgis://user:user@warehouse2/manifest_test
+    postgres1: postgis://manifest_test:manifest_test@localhost/manifest_test
 
 services:
   dstk:

@@ -18,6 +18,15 @@ before_install:
 install:
   - travis_retry pip install -r requirements.txt
   - travis_retry python setup.py develop
+
+# postgres database creation
+before_script:
+  - psql -c 'create database manifest_test;' -U postgres
+  - psql -c "create user manifest_test with password 'manifest_test';" -U postgres
+  - psql -c 'grant all on database manifest_test to manifest_test' -U postgres
+  - psql -c 'create extension postgis;' -U postgres -d manifest_test
+  - psql -c 'create extension postgis_topology;' -U postgres -d manifest_test
+
 # command to run tests
 script: 
     - ambry config install
