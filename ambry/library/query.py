@@ -106,8 +106,12 @@ class Resolver(object):
                     # Also need to set the location in the dataset, or the location
                     # filtering may fail later.
                     lrc = LocationRef.LOCATION
-                    d_f_type = { lrc.REMOTEPARTITION: lrc.REMOTE,lrc.PARTITION: lrc.LIBRARY}.get( f.type_, None)
-                    out[d.vid].locations.set(d_f_type)
+                    d_f_type = { lrc.REMOTEPARTITION: lrc.REMOTE, lrc.PARTITION: lrc.LIBRARY}.get( f.type_, f.type_)
+                    try:
+                        out[d.vid].locations.set(d_f_type)
+                    except:
+                        print d.vid, f.type_, d_f_type
+                        raise
 
             else:
 

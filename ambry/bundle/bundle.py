@@ -1196,10 +1196,7 @@ class BuildBundle(Bundle):
                 self.fatal(
                     ("Can't build this version. Library {} has version {} of {}"
                      " which is less than or equal this version {}").format(
-                        self.library.database.dsn,
-                        b.on.revision,
-                        b.fqname,
-                        self.identity.on.revision))
+                        self.library.database.dsn,b.on.revision,b.fqname,self.identity.on.revision))
                 return False
 
         except Exception:
@@ -1207,6 +1204,12 @@ class BuildBundle(Bundle):
 
         if not self.metadata.about.access:
             raise ConfigurationError("about.access must be set to the name of a remote")
+
+        if not self.metadata.about.title:
+            raise ConfigurationError("Must set a title in about.title")
+
+        if not self.metadata.about.summary:
+            raise ConfigurationError("Must set a summary in about.summary")
 
         return True
 
@@ -1327,6 +1330,11 @@ class BuildBundle(Bundle):
             self._revise_schema()
 
         self.schema.move_revised_schema()
+
+        for t in self.schema.tables:
+            if not bool(t.description.strip()):
+                raise ConfigurationError("No title ( Description of id column ) set for table: {} ".format(t.name))
+
 
         self.update_configuration()
 

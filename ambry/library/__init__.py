@@ -1404,7 +1404,7 @@ class Library(object):
 
         s.commit()
 
-        self.mark_updated(vid=w.uid)
+        self.mark_updated(vid=store.ref)
 
 
         return store

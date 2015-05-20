@@ -32,6 +32,9 @@ class DocCache(object):
 
         import string
 
+        if '_key' in kwargs and kwargs['_key'] is None:
+            del kwargs['_key']
+
         if '_key' in kwargs and kwargs['_key']:
             key = kwargs['_key']
             del kwargs['_key']
@@ -100,7 +103,6 @@ class DocCache(object):
         key, args, kwargs = self._munge_key(*args, **kwargs)
 
         if key in self._cache:
-
             del self._cache[key]
 
     def library_info(self):
@@ -206,6 +208,8 @@ class DocCache(object):
         cached, or at least the bundles used in this manifest
 
         """
+
+        raise NotImplementedError()
 
         from ambry.identity import ObjectNumber
 

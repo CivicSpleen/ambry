@@ -503,7 +503,6 @@ class Warehouse(object):
     def digest_manifest(self, manifest, force=None):
         """Digest manifest into a list of commands for the installer."""
 
-
         commands = []
 
         commands.append( ('about',manifest.title,manifest.summary['summary_text']))
@@ -544,6 +543,8 @@ class Warehouse(object):
                         partitions.append(index)
 
                     except ResolutionError:
+                        # Usually because the partition specified as the index isn't really an index; its a
+                        # warehouse table
                         it_command = ('indexed_table', table, index, partitions, section.doc )
 
                 else:
@@ -576,18 +577,6 @@ class Warehouse(object):
                          manifests=[manifest.uid],
                          sql_formatted=section.content['html']),
                         force))
-
-            elif tag == 'extract':
-
-                d = section.content
-                doc = manifest.doc_for(section)
-                if doc:
-                    d['doc'] = doc.content['html']
-
-                extract_path = os.path.join('extracts', d['rpath'])
-
-                # self.wlibrary.files.install_extract()
-                commands.append(('extract', extract_path, manifest.uid, d))
 
             elif tag == 'include':
                 from .manifest import Manifest
@@ -663,10 +652,6 @@ class Warehouse(object):
                 name, sql, data, force = command_set
 
                 self.install_view(name, sql, data=data)
-
-            elif command == 'extract':
-                extract_path, m_uid, d = command_set
-                self.wlibrary.files.install_extract(extract_path, m_uid, d)
 
             elif command == 'indexed_table':
                 table_name, index_partition, partitions, doc = command_set
@@ -859,9 +844,10 @@ class Warehouse(object):
             orig_table = installed_table = self.orm_table_by_name(index_partition)
 
 
-
         indexes = set()
 
+        # The comment after '--' ensures that if the table names changes, the SQL will change and
+        # the view will be re-installed.
         sql = "SELECT * FROM {} -- indexed on {} \n".format(installed_table.name, index_partition)
 
         for p_name in partitions:
@@ -906,6 +892,8 @@ class Warehouse(object):
 
     def build_sample(self, t):
 
+        self.logger.info("Build sample for table: {}".format(t.name))
+
         if t.type == 'table':
             name = t.data['installed_names'][0]
         else:
@@ -923,10 +911,9 @@ class Warehouse(object):
 
         t.data['sample'] = sample
 
-        v = self.database.connection.execute(
-            'SELECT count(*) FROM "{}"'.format(name)).fetchone()
-
-        t.data['count'] = int(v[0])
+        # Really would like to have a count, but it is way too slow on large tables
+        #v = self.database.connection.execute('SELECT count(*) FROM "{}"'.format(name)).fetchone()
+        #t.data['count'] = int(v[0])
 
     def build_schema(self, t):
 
@@ -1068,7 +1055,7 @@ class Warehouse(object):
                     t.add_installed_name(dt.name)
                     s.add(t)
 
-            if (t.type == 'table' and t.installed) or t.type in ('view', 'mview'):
+            if (t.type == 'table' and t.installed) or t.type in ('view', 'mview', 'indexed'):
                 if 'sample' not in t.data or not t.data['sample']:
                     self.build_sample(t)
                     s.add(t)
@@ -1169,8 +1156,7 @@ class Warehouse(object):
         t = self.orm_table_by_name(name)
 
         if t and t.data.get('sql') == sql:
-            self.logger.info(
-                "Skipping view {}; SQL hasn't changed".format(name))
+            self.logger.info("Skipping view {}; SQL hasn't changed".format(name))
             return
         else:
             self.logger.info('Installing view {}'.format(name))
@@ -1178,7 +1164,6 @@ class Warehouse(object):
         data = data if data else {}
 
         data = data if data else {}
-
 
         data['sql'] = sql
         data['updated'] = time.time()
@@ -1430,12 +1415,10 @@ class Warehouse(object):
                     self.logger.info("Dropped table: {}".format(table_name))
 
                 except NoSuchTableError:
-                    self.logger.info(
-                        "Table does not exist (a): {}".format(table_name))
+                    self.logger.info("Table does not exist (a): {}".format(table_name))
 
                 except ProgrammingError:
-                    self.logger.info(
-                        "Table does not exist (b): {}".format(table_name))
+                    self.logger.info("Table does not exist (b): {}".format(table_name))
 
             self.library.database.remove_partition(dataset.partition)
 
@@ -1448,8 +1431,7 @@ class Warehouse(object):
             self.logger.info('Removing bundle {}'.format(dataset.vname))
             self.library.database.remove_bundle(b)
         else:
-            self.logger.error(
-                "Failed to find partition or bundle by name '{}'".format(name))
+            self.logger.error("Failed to find partition or bundle by name '{}'".format(name))
 
     def run_sql(self, sql_text):
 

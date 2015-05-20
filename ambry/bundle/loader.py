@@ -203,6 +203,21 @@ class LoaderBundle(BuildBundle):
 
         self.metadata.write_to_dir()
 
+    def meta_load_socrata(self):
+        """Load Socrata metadata from a URL, specified in the 'meta' source"""
+        import json
+
+        meta = self.filesystem.download('meta')
+
+        with open(meta) as f:
+            d = json.load(f)
+
+        md = self.metadata
+        md.about.title = d['name']
+        md.about.summary = d['description']
+
+        md.write_to_dir()
+
     def meta(self):
         from collections import defaultdict
         from ..util.intuit import Intuiter
@@ -352,8 +367,6 @@ class LoaderBundle(BuildBundle):
         self.schema.add_table(table_name)
 
         self.schema.update_from_intuiter(table_name, intuiter)
-
-
 
     def build_modify_row(self, row_gen, p, source, row):
         """

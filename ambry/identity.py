@@ -1226,6 +1226,8 @@ class Locations(object):
 
     def set(self, code, revision=None, version=None):
 
+
+
         uc_code = code.upper()
 
         # In warehouses, there are many other file types that are not
