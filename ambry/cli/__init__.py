@@ -47,8 +47,7 @@ def fatal(template, *args, **kwargs):
     except KeyError:
         # When the error string is a template
 
-        global_logger.critical(
-            template.replace('{', '{{').replace('}', '}}').format(*args, **kwargs))
+        global_logger.critical(template.replace('{', '{{').replace('}', '}}').format(*args, **kwargs))
 
     sys.exit(1)
 
@@ -277,9 +276,8 @@ def _print_bundle_info(bundle=None, ident=None):
 
 
 def get_parser():
-    # import ambry._meta
-    parser = argparse.ArgumentParser(prog='ambry', description='Ambry {}. Management interface for ambry, libraries and'
-                                                               ' repositories. '.format(ambry._meta.__version__))
+    parser = argparse.ArgumentParser(prog='ambry', description='Ambry {}. Management interface for ambry, libraries '
+                                                               'and repositories. '.format(ambry._meta.__version__))
 
     parser.add_argument('-l', '--library', dest='library_name', default="default",
                         help="Name of library, from the library secton of the config")
@@ -333,8 +331,7 @@ def main(argsv=None, ext_logger=None):
 
     if args.single_config:
         if args.config is None or len(args.config) > 1:
-            raise Exception(
-                "--single_config can only be specified with one -c")
+            raise Exception("--single_config can only be specified with one -c")
         else:
             rc_path = args.config
     elif args.config is not None and len(args.config) == 1:
@@ -360,7 +357,7 @@ def main(argsv=None, ext_logger=None):
         global_logger = ext_logger
     else:
         name = "{}.{}".format(args.command, args.subcommand)
-        global_logger = get_logger(name, template="%(levelname)s: %(message)s")
+        global_logger = get_logger(name, file_name='/tmp/%s' % name, template="%(levelname)s: %(message)s")
 
     global_logger.setLevel(logging.INFO)
 

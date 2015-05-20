@@ -63,7 +63,6 @@ def _get_logger(name, file_name=None, stream=None, template=None, clear=False, p
             handlers.append(logging.StreamHandler(stream=stream))
 
         if file_name is not None:
-
             if os.path.isdir(os.path.dirname(file_name)):
                 handlers.append(logging.FileHandler(file_name))
             else:
@@ -528,17 +527,10 @@ def include_representer(dumper, data):
 
 class AttrDict(OrderedDict):
     def __init__(self, *argz, **kwz):
-
         super(AttrDict, self).__init__(*argz, **kwz)
 
     def __setitem__(self, k, v):
-        super(
-            AttrDict,
-            self).__setitem__(
-            k,
-            AttrDict(v) if isinstance(
-                v,
-                Mapping) else v)
+        super(AttrDict, self).__setitem__(k, AttrDict(v) if isinstance(v, Mapping) else v)
 
     def __getattr__(self, k):
         if not (k.startswith('__') or k.startswith('_OrderedDict__')):
@@ -604,7 +596,6 @@ class AttrDict(OrderedDict):
         return root
 
     def update_flat(self, val):
-
         if isinstance(val, AttrDict):
             val = val.flatten()
         for k, v in val:
@@ -684,14 +675,12 @@ class AttrDict(OrderedDict):
 
         d = self
 
-
         if map_view is not None:
             map_view.inner = d
             d = map_view
 
         try:
-            yaml.safe_dump(d, stream,
-                       default_flow_style=False, indent=4, encoding='utf-8')
+            yaml.safe_dump(d, stream, default_flow_style=False, indent=4, encoding='utf-8')
         except RepresenterError:
             import pprint
 
