@@ -68,3 +68,17 @@ Example
 .. code-block:: bash
 
     $ python setup.py test --verbosity=2 --failfast
+    
+Coverage 
+--------
+
+To test with coverage::
+
+    $ coverage run setup.py test
+    $ coverage html
+    
+Then, open htmlcov/index.html in a browser.
+
+    
+
+
