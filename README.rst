@@ -60,8 +60,8 @@ Test command options
 --------------------
 
 ```
-  --verbosity - verbosity of the tests, 1 by default.
-  --failfast - if given, stop testing on first fail.
+--verbosity - verbosity of the tests, 1 by default.
+--failfast - if given, stop testing on first fail.
 ```
 
 Example
