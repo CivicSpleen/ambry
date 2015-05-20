@@ -448,6 +448,35 @@ about:
         for x in t.about.groups:
             self.assertIn(str(x), ['Group 1', 'Group 2'])
 
+    def test_doc(self):
+
+        yaml_config = """
+about:
+    access: null
+    footnote: "More about: {{about.title}}"
+    grain: null
+    license: license
+    processed: null
+    rights: rights
+    source: null
+    space: California
+    subject: subject
+    summary: summary
+    time: 2012
+    title: "{{about.space}} in {{about.time}}"
+    """
+
+
+        t1 = Top(yaml.load(yaml_config))
+
+        self.assertEqual('<p>More about: California in 2012</p>', t1.about.footnote.html)
+
+
+
+
+
+
+
 
 def suite():
     suite = unittest.TestSuite()

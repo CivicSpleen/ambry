@@ -8,6 +8,10 @@ from flask import Response
 
 import jinja2.tests
 
+from ..util import get_logger
+
+logger = get_logger(__name__)
+
 ##
 # These are in later versions of jinja, but we need them in earlier ones.
 if 'equalto' not in jinja2.tests.TESTS:
@@ -156,14 +160,12 @@ def tc_obj(ref):
     from . import renderer
     from ambry.dbexceptions import NotFoundError
 
-
     dc = renderer().doc_cache
 
     try:
         b, t, c = deref_tc_ref(ref)
     except NotFoundError:
         return None
-
 
     try:
         table = dc.table(str(t))
@@ -628,6 +630,7 @@ class Renderer(object):
 
     def bundle_search(self,  terms):
         """Incremental search, search as you type."""
+        from ..dbexceptions import NotFoundError
 
         from geoid.civick import GVid
 
@@ -645,7 +648,12 @@ class Renderer(object):
 
         for result in sorted(init_results.values(), key=lambda e: e.score, reverse=True):
 
-            d = self.doc_cache.dataset(result.vid)
+            try:
+                d = self.doc_cache.dataset(result.vid)
+            except NotFoundError:
+                logger.error("Failed to find dataset {}".format(result.vid))
+                continue
+
 
             d['partition_count'] = len(result.partitions)
             d['partitions'] = {}

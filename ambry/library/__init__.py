@@ -1312,7 +1312,9 @@ class Library(object):
         if clean:
             self.files.query.type(Dataset.LOCATION.SOURCE).delete()
 
+
         for ident in self.source._dir_list().values():
+
             try:
 
                 path = ident.bundle_path

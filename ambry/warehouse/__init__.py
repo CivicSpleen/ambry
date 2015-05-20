@@ -537,15 +537,26 @@ class Warehouse(object):
                 if section.content['args'].get('index', None) and section.content['args'].get('table', None):
                     index = section.content['args']['index']
                     table = section.content['args']['table']
+                    where = section.content['args']['where']
 
                     try:
-                        it_command = ('indexed_table', table, resolve_partition(index), partitions, section.doc )
+                        it_command = ('indexed_table',
+                                      dict(table_name = table,
+                                           index = resolve_partition(index),
+                                           partitions = partitions,
+                                           where = where,
+                                           doc = section.doc ))
                         partitions.append(index)
 
                     except ResolutionError:
                         # Usually because the partition specified as the index isn't really an index; its a
                         # warehouse table
-                        it_command = ('indexed_table', table, index, partitions, section.doc )
+                        it_command = ('indexed_table',
+                                      dict(table_name = table,
+                                           index = index,
+                                           partitions = partitions,
+                                           where = where,
+                                           doc = section.doc ) )
 
                 else:
                     index, table = None, None
@@ -654,9 +665,8 @@ class Warehouse(object):
                 self.install_view(name, sql, data=data)
 
             elif command == 'indexed_table':
-                table_name, index_partition, partitions, doc = command_set
-
-                self.install_indexed_table(table_name, index_partition, partitions, doc)
+                # Command_set is a dict, and the keys happen to match with the arg list
+                self.install_indexed_table(**(command_set[0]))
 
 
         return installed_partitions, installed_tables
@@ -823,16 +833,22 @@ class Warehouse(object):
         p.database.close()
         return installed_tables, p
 
-    def install_indexed_table(self, table_name, index_partition, partitions, doc):
-        """ Create a new view that combines a set of partition tables with an index
-        :param table_name:
-        :param index_partition:
+    def install_indexed_table(self, table_name, index, partitions, where, doc):
+        """
+        Create a new view that combines a set of partition tables with an index
+
+        :param table:
+        :param index:
+        :param partitions:
+        :param where:
+        :param doc:
         :return:
         """
+        import sqlparse
 
         try:
             try:
-                ip_ident = self.wlibrary.resolve(index_partition).partition
+                ip_ident = self.wlibrary.resolve(index).partition
             except AttributeError:
                 raise ResolutionError()
 
@@ -841,14 +857,14 @@ class Warehouse(object):
             orig_table = ip.table
 
         except ResolutionError:
-            orig_table = installed_table = self.orm_table_by_name(index_partition)
+            orig_table = installed_table = self.orm_table_by_name(index)
 
 
         indexes = set()
 
         # The comment after '--' ensures that if the table names changes, the SQL will change and
         # the view will be re-installed.
-        sql = "SELECT * FROM {} -- indexed on {} \n".format(installed_table.name, index_partition)
+        sql = "SELECT * FROM {} -- indexed on {} \n".format(installed_table.name, index)
 
         for p_name in partitions:
 
@@ -881,6 +897,16 @@ class Warehouse(object):
                     indexes.add((installed_table.name, col_a.altname))
 
                 indexes.add((p_table.name, col_b.altname))
+
+        if where:
+            # FIXME: Really lightweigth injection prevention. For the most part, we don't care much, since there isn't
+            # any private data in a warehouse database, but we do want to prevent dropping tables, etc.
+            where = where.split(';',1)[0]
+            sql += " WHERE {}  ".format(where)
+
+            # One more sanitization
+            sql  = sqlparse.split(sql)[0]
+
 
         for table, col in indexes:
             self.create_index(table, [col])
@@ -919,6 +945,7 @@ class Warehouse(object):
 
         from ..orm import Column, Table, Column
         from ..identity import ObjectNumber
+
 
         s = self.library.database.session
 
@@ -1678,8 +1705,7 @@ def database_config(db, base_dir=''):
         # which is hard to manage reliably. So, fixcommon problems.
 
         if parts.netloc or (path and path[0] != '/'):
-            raise ConfigurationError(
-                'DSN Parse error. For Sqlite and Sptialite, the DSN should have 3 or 4 slashes')
+            raise ConfigurationError('DSN Parse error. For Sqlite and Sptialite, the DSN should have 3 or 4 slashes')
 
         if path:
             path = path[1:]
@@ -1690,21 +1716,13 @@ def database_config(db, base_dir=''):
     if scheme == 'sqlite':
         config = dict(
             service='sqlite',
-            database=dict(
-                dbname=os.path.join(
-                    base_dir,
-                    path),
-                driver='sqlite'))
+            database=dict(dbname=os.path.join(base_dir,path), driver='sqlite'))
 
     elif scheme == 'spatialite':
 
         config = dict(
             service='spatialite',
-            database=dict(
-                dbname=os.path.join(
-                    base_dir,
-                    path),
-                driver='spatialite'))
+            database=dict(dbname=os.path.join(base_dir,path),driver='spatialite'))
 
     elif scheme == 'postgres' or scheme == 'postgresql':
         config = dict(service='postgres',

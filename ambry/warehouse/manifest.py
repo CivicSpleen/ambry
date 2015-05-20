@@ -380,9 +380,7 @@ class Manifest(object):
     def _process_mview(self, section):
 
         if not section.args.strip():
-            raise ParseError(
-                'No name specified for view at {}'.format(
-                    section.file_line))
+            raise ParseError('No name specified for view at {}'.format( section.file_line))
 
         t = sqlparse.format('\n'.join(section.lines),reindent=True,keyword_case='upper')
 
@@ -411,20 +409,12 @@ class Manifest(object):
         import sqlparse.tokens
 
         if not section.args.strip():
-            raise ParseError(
-                'No name specified for view at {}'.format(
-                    section.file_line))
+            raise ParseError('No name specified for view at {}'.format(section.file_line))
 
-        t = sqlparse.format(
-            '\n'.join(
-                section.lines),
-            reindent=True,
-            keyword_case='upper')
+        t = sqlparse.format('\n'.join( section.lines),reindent=True,keyword_case='upper')
 
         if not t.strip():
-            raise ParseError(
-                'No sql specified for view at {}'.format(
-                    section.file_line))
+            raise ParseError('No sql specified for view at {}'.format(section.file_line))
 
         tc_names = set()  # table and column names
 
@@ -435,8 +425,7 @@ class Manifest(object):
                 if tok.ttype in (sqlparse.tokens.Name, sqlparse.tokens.String.Symbol):
                     tc_names.add(str(tok).strip('"'))
 
-        return dict(text=t, html=self.pygmentize_sql(t),
-                    name=section.args.strip(), tc_names=list(tc_names))
+        return dict(text=t, html=self.pygmentize_sql(t), name=section.args.strip(), tc_names=list(tc_names))
 
     def _process_extract(self, section):
 
@@ -479,11 +468,13 @@ class Manifest(object):
         return dict(path=path)
 
     def _process_partitions(self, section):
+        import shlex
 
         parser = ThrowingArgumentParser(prog='partitions')
 
         parser.add_argument('-t', '--table', help="Name of table to join partitions on")
         parser.add_argument('-i', '--index', help="Index for the table")
+        parser.add_argument('-w', '--where', help="Where clause for the table. ")
 
         partitions = []
 
@@ -499,7 +490,8 @@ class Manifest(object):
 
         self.partitions = partitions
 
-        return dict(partitions=partitions, args = vars(parser.parse_args(section.args.split())))
+        # The args are split with shlex so that quoted strings will be maintained as a single entry
+        return dict(partitions=partitions, args = vars(parser.parse_args(shlex.split(section.args))))
 
     def add_bundles(self, library):
         """Add bundle information when a Library is available."""
@@ -617,12 +609,7 @@ class Manifest(object):
             return None, tokens
 
         if tokens[i + 1][0] != tp2:
-            raise ParseError(
-                "Expected {}, got {}".format(
-                    tp2,
-                    tokens[
-                        i +
-                        1][1]))
+            raise ParseError("Expected {}, got {}".format( tp2, tokens[i + 1][1]))
 
         return tokens[i + 1], tokens[:i] + tokens[i + 2:]
 
@@ -670,7 +657,6 @@ class Manifest(object):
             #
             # except (TypeError, ValueError):
             #     where = None
-
 
 
             return dict(partition=partition,

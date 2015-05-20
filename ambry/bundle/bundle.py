@@ -220,10 +220,9 @@ class Bundle(object):
         except KeyError as e:
             import json
 
-            self.error(
-                "Failed to substitute template in {}. Key Error: {}".format(self.identity,e))
-            self.error(
-                "Available keys are:\n {}".format(json.dumps(d,indent=4)))
+            self.error("Failed to substitute template in {}. Key Error: {}".format(self.identity,e))
+
+            self.error("Available keys are:\n {}".format(json.dumps(d,indent=4)))
             return t
 
     @property
@@ -416,12 +415,7 @@ class DbBundleBase(Bundle):
         t.identity = self.identity.ident_dict
         t.names = self.identity.names_dict
 
-        # The first one it to create the substitution contest, and the second is the actual
-        # metadata
-        t2 = Top(context=t.dict)
-        t2.load_rows(rows)
-        t2.identity = self.identity.ident_dict
-        t2.names = self.identity.names_dict
+
         return t2
 
     def _info(self, identity=None):
@@ -489,8 +483,6 @@ class DbBundleBase(Bundle):
         )
 
         if "documentation" in d['meta']:
-            d['meta']['documentation']['readme'] = markdown.markdown(
-                self.sub_template( d['meta']['documentation']['readme'] if d['meta']['documentation']['readme'] else ''))
             d['meta']['documentation']['main'] = markdown.markdown(
                 self.sub_template(  d['meta']['documentation']['main'] if d['meta']['documentation']['main'] else ''))
 
@@ -612,8 +604,6 @@ class BuildBundle(Bundle):
     SCHEMA_OLD_FILE = 'schema-old.csv'
     CODE_FILE = 'codes.csv'
 
-    README_FILE = 'README.md'
-    README_FILE_TEMPLATE = 'meta/README.md.template'
     DOC_FILE = 'meta/documentation.md'
     DOC_HTML = 'meta/documentation.html'
 
@@ -729,7 +719,7 @@ class BuildBundle(Bundle):
         t = Top(path=self.bundle_dir)
         t.load_all()
 
-        return Top(path=self.bundle_dir, context=t.dict)
+        return t
 
     @property
     @memoize
@@ -855,13 +845,8 @@ class BuildBundle(Bundle):
 
         self.update_source()
 
-        # The main doc is subbed on the fly, but the README has to be a real
-        # file, since it is displayed in github
-        self.rewrite_readme()
-
         self.write_doc_html()
 
-        md.documentation.readme = read_file(self.README_FILE)
         md.documentation.main = self.sub_template(read_file(self.DOC_FILE))
         md.documentation.title = md.about.title.text
         md.documentation.summary = md.about.summary.text
@@ -902,16 +887,6 @@ class BuildBundle(Bundle):
 
             except NotFoundError:
                 self.error("Can't expand sources; didn't find source partition '{}'".format(self.SOURCE_TERMS))
-
-    def rewrite_readme(self):
-
-        tf = self.filesystem.path(self.README_FILE_TEMPLATE)
-        if os.path.exists(tf):
-            with open(self.filesystem.path(tf)) as fi:
-                rmf = self.filesystem.path(self.README_FILE)
-                with open(self.filesystem.path(rmf), 'wb') as fo:
-                    in_text = self.metadata.documentation.readme
-                    fo.write(in_text.encode('utf-8'))
 
     def write_doc_html(self):
         import markdown
