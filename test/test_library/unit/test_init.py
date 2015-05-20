@@ -9,11 +9,13 @@ import fudge
 from sqlalchemy.exc import OperationalError
 
 from ambry.bundle import DbBundle
-from ambry.dbexceptions import NotFoundError, DatabaseError
+from ambry.dbexceptions import ConfigurationError, NotFoundError, DatabaseError
 from ambry.library import Library, _new_library
 from ambry.library.database import LibraryDb
 from ambry.library.files import Files
 from ambry.orm import File
+from ambry import warehouse
+from ambry.warehouse.manifest import Manifest
 
 from test.test_library.asserts import assert_spec
 from test.test_library.factories import DatasetFactory, ConfigFactory,\
@@ -552,3 +554,147 @@ class LibraryTest(unittest.TestCase):
             all_ = self.query(File).all()
             self.assertEquals(len(all_), 1)
         self.assertEquals(all_[0].ref, file2.ref)
+
+    # .warehouse tests
+    def test_raises_NotFoundError_if_store_not_found(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib.store = fudge.Fake().expects_call().returns(None)
+
+        # testing
+        with self.assertRaises(NotFoundError):
+            lib.warehouse('uid')
+
+    def test_creates_new_warehouse_and_returns_it(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(warehouse.database_config, ['db', 'base_dir'])
+        assert_spec(warehouse.new_warehouse, ['config', 'elibrary', 'logger'])
+
+        uid = 'ref2'
+        path = 'the-path'
+        FileFactory(type_=Files.TYPE.STORE, ref=uid, path=path)
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        # testing
+        fudge.patch_object(
+            warehouse,
+            'database_config',
+            fudge.Fake().expects_call().with_args(path).returns({}))
+
+        # Returning value of the fake new_warehouse is not valid warehouse, but it does not matter here.
+        fudge.patch_object(
+            warehouse,
+            'new_warehouse',
+            fudge.Fake().expects_call().returns('WAREHOUSE'))
+
+        ret = lib.warehouse(uid)
+        self.assertEquals(ret, 'WAREHOUSE')
+
+        fudge.verify()
+
+    # .manifests property tests
+    def test_returns_list_with_all_manifests(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        FileFactory(type_=Files.TYPE.MANIFEST)
+        FileFactory(type_=Files.TYPE.MANIFEST)
+        FileFactory(type_=Files.TYPE.STORE)
+
+        # testing
+        manifests = lib.manifests
+        self.assertEquals(len(manifests), 2)
+        self.assertEquals(manifests[0].type_, Files.TYPE.MANIFEST)
+        self.assertEquals(manifests[1].type_, Files.TYPE.MANIFEST)
+
+    # .manifest tests
+    def test_returns_pair_of_none(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        # testing
+        manifest, content = lib.manifest('the-uid')
+        self.assertIsNone(manifest)
+        self.assertIsNone(content)
+
+    def test_returns_manifest_and_its_content(self):
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        uid = 'uid'
+        FileFactory(type_=Files.TYPE.MANIFEST, ref=uid, content='manifest1')
+
+        # testing
+        manifest, content = lib.manifest(uid)
+        self.assertIsInstance(manifest, File)
+        self.assertIsInstance(content, Manifest)
+
+    # .remove_manifest tests
+    def test_raises_NotFoundError_if_manifest_not_found(self):
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        # testing
+        with self.assertRaises(NotFoundError):
+            lib.remove_manifest('uid')
+
+    def test_deletes_found_manifest(self):
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        uid = 'uid'
+        FileFactory(type_=Files.TYPE.MANIFEST, ref=uid, content='manifest1')
+
+        # testing
+        self.assertEquals(len(self.query(File).all()), 1)
+        lib.remove_manifest(uid)
+        self.assertEquals(len(self.query(File).all()), 0)
+
+    # .locate tests
+    # TODO:
+
+    # .dep tests
+    # TODO:
+
+    # ._get_dependencies tests
+    def test_raises_ConfigurationError_if_bundle_is_empty(self):
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        self.assertIsNone(lib._bundle)
+
+        # testing
+        with self.assertRaises(ConfigurationError):
+            lib._get_dependencies()
+
+    # .new_files property tests
+    def test_generates_new_installed_files(self):
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        # add two installed files with new state.
+        FileFactory(type_=Files.TYPE.BUNDLE, state='new')
+        FileFactory(type_=Files.TYPE.PARTITION, state='new')
+
+        # add not installed
+        FileFactory(type_=Files.TYPE.STORE, state='new')
+
+        # add with another state
+        FileFactory(type_=Files.TYPE.BUNDLE)
+
+        # testing
+        new_files_gen = lib.new_files
+
+        # is generator
+        self.assertTrue(hasattr(new_files_gen, 'next'))
+        new_files = [x for x in new_files_gen]
+        self.assertEquals(len(new_files), 2)
+        self.assertEquals(new_files[0].state, 'new')
+        self.assertEquals(new_files[1].state, 'new')
+
+    # .sync_library tests
+    # TODO:
