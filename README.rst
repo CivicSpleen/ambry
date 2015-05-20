@@ -37,7 +37,7 @@ Now you can create the environment.
 
 More about creating conda virtual environments: http://conda.pydata.org/docs/faq.html#env-creating
 
-After setting up anmry, you can use conda to install gdal
+After setting up ambry, you can use conda to install gdal
 
 .. code-block:: bash
 
