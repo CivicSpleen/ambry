@@ -5,7 +5,7 @@ Created on Jun 30, 2012
 """
 
 import unittest
-import os.path
+import os
 
 from bundles.testbundle.bundle import Bundle
 from ambry.run import get_runconfig
@@ -38,8 +38,9 @@ class Test(TestBase):
                                  RunConfig.USER_ACCOUNTS))
 
         # Delete the whole test tree every run.
-        if os.path.exists(self.rc.group('filesystem').root):
-            rmtree(self.rc.group('filesystem').root)
+        test_folder = self.rc.group('filesystem').root
+        while os.path.exists(test_folder):
+            rmtree(test_folder)
 
         self.mf = os.path.join(os.path.dirname(manifests.__file__), 'test.ambry')
 
@@ -48,8 +49,13 @@ class Test(TestBase):
 
     def tearDown(self):
         from ambry.library import clear_libraries
+        from ambry.database.relational import close_all_connections
+
+        close_all_connections()
 
         if self.waho:
+            self.waho.database.enable_delete = True
+            self.waho.database.delete()
             self.waho.close()
 
         # new_library() caches the library
@@ -93,19 +99,6 @@ class Test(TestBase):
 
         return self.get_warehouse(l, name)
 
-    def test_manifest_install(self):
-        """
-        Install test manifest and check the database for the table
-        """
-        self.waho = self._default_warehouse(self.EXAMPLE.CONF_DB_SQLITE)
-        mf = Manifest(self.mf, get_logger('TL'))
-
-        self.waho.install_manifest(mf)
-        tst = (mfile.path for mfile in self.waho.manifests)
-
-        self.assertIn(mf.path, tst)
-
-
     def test_manifest(self):
         """
         Load the manifest and convert it to a string to check the round-trip
@@ -134,11 +127,7 @@ class Test(TestBase):
         Create postgres test DB
         """
 
-        # FIXME: Neet to figure out how to do this in a flexible way that can run on
-        # Travis-CI
-        return
-
-        self._test_manifest_install(self.EXAMPLE.CONF_DB_POSTGRES)
+        self.waho = self._default_warehouse(self.EXAMPLE.CONF_DB_POSTGRES)
 
     def test_dbobj_create_from_manifest(self):
         """
@@ -292,26 +281,16 @@ WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
         self.assertEquals(name, self.waho.name)
         self.assertEquals(url, self.waho.url)
 
-    def test_cache(self):
-        self.waho = self._default_warehouse()
-        self.assertIsNotNone(self.waho.cache)
-
-    def test_dict(self):
-        self.waho = self._default_warehouse()
-        self.assertIsInstance(self.waho.dict, dict)
-
-    def test_get(self):
+    def test_return_type(self):
         from ambry.identity import Identity
 
         self.waho = self._default_warehouse()
+
+        self.assertIsNotNone(self.waho.cache)
+        self.assertIsInstance(self.waho.dict, dict)
         self.assertIsInstance(
             self.waho.get('ambry-djitnip4ju001-0.0.1~djItnip4ju001'),
             Identity)
-
-    def test_has(self):
-        self.waho = self._default_warehouse()
-        # FIXME: no idea how to test
-        self.assertTrue(self.waho.has(self.waho.bundle.identity))
 
     def test_partitions_list(self):
         self.waho = self._default_warehouse()
@@ -324,27 +303,30 @@ WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
         self.assertIn('source-dataset-subset-variation-geot2-0.0.1~piEGPXmDC8001001', s)
         self.assertIn('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8003001', s)
 
+        tst = (mfile.path for mfile in self.waho.manifests)
+
+        self.assertIn(mf.path, tst)
+
     def test_info(self):
         # FIXME: for details look in warehouse.info()
         return
         self.waho = self._default_warehouse()
         self.waho.info()
 
-    # def test_extract(self):
-    #     l = self.get_library()
-    #     l.put_bundle(self.bundle)
-    #     self.waho = self.get_warehouse(l, self.EXAMPLE.CONF_DB_SQLITE, delete=False)
-    #     # cache = new_cache('s3://warehouse.sandiegodata.org/test', run_config = get_runconfig())
-    #     self.waho.extract_all(force=True)
+    def _test_extract(self):
+        l = self.get_library()
+        l.put_bundle(self.bundle)
+        self.waho = self.get_warehouse(l, self.EXAMPLE.CONF_DB_SQLITE, delete=False)
+        self.waho.create()
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+        # cache = new_cache('s3://warehouse.sandiegodata.org/test', run_config = get_runconfig())
+        self.waho.extract_all(force=True)
 
-    def test_load_local(self):
-        pass
-
-    def test_load_insert(self):
-        pass
-
-    def test_remove(self):
-        pass
+    def _test_has(self):
+        self.waho = self._default_warehouse()
+        # FIXME: no idea how to test
+        self.assertTrue(self.waho.has(self.waho.bundle.identity))
 
 
 def suite():
