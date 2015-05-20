@@ -14,6 +14,7 @@ You can setup Ambry as a normal package, but the geographic library, GDAL, is re
 Ambry installation won't produce geo databases. The best way to get GDAL installed is with Anaconda.
 
 First, install miniconda, ( python 2.7 )
+
 .. code-block:: bash
 
     $ wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
@@ -55,10 +56,17 @@ Running the ambry tests
     $ pip install -r requirements/dev.txt
     $ python setup.py test
 
-Test command options:
+Test command options
+--------------------
+
+```
   --verbosity - verbosity of the tests, 1 by default.
   --failfast - if given, stop testing on first fail.
+```
 
-Examples:
+Example
+-------
+
 .. code-block:: bash
+
     $ python setup.py test --verbosity=2 --failfast
