@@ -56,8 +56,7 @@ Running the ambry tests
     $ pip install -r requirements/dev.txt
     $ python setup.py test
 
-Test command options
---------------------
+Test command options::
 
     --verbosity - verbosity of the tests, 1 by default.
     --failfast - if given, stop testing on first fail.
