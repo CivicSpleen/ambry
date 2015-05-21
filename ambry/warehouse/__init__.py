@@ -585,8 +585,7 @@ class Warehouse(object):
                          tc_names=section.content['tc_names'],
                          summary=section.doc.get('summary_text','') if section.doc else '',
                          doc=section.doc,
-                         manifests=[manifest.uid],
-                         sql_formatted=section.content['html']),
+                         manifests=[manifest.uid]),
                         force))
 
             elif tag == 'include':
