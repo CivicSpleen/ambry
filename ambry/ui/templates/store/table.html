@@ -59,12 +59,7 @@
     {% endfor %}
 </table>
 </div>
-{% if t.sql_formatted -%}
-<h2> SQL </h2>
-<div class="codehilite " >
-    {{t.sql_formatted}}
-</div>
-{% endif -%}
+
 
 {% if t.sample -%}
 <h2> Sample Data <small>{{t.sample|length}} of {{t.count}} records</small></h2>
@@ -83,6 +78,13 @@
     {% endfor -%}
 </table>
 
+{% endif -%}
+
+{% if t.sql -%}
+<h2> SQL </h2>
+<div class="codehilite " >
+    {{format_sql(t.sql)}}
+</div>
 {% endif -%}
 
 {% endblock %}

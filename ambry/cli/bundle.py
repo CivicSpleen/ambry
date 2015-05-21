@@ -163,6 +163,10 @@ def bundle_parser(cmd):
     sp.set_defaults(subsubcommand='dump')
 
     #
+    sp = asp.add_parser('doc', help='Display some of the bundle documentation')
+    sp.set_defaults(subsubcommand='doc')
+
+    #
     sp = asp.add_parser('schema', help='Print the schema')
     sp.set_defaults(subsubcommand='schema')
 
@@ -595,6 +599,10 @@ def bundle_config(args, b, st, rc):
 
     elif args.subsubcommand == 'scrape':
         return bundle_config_scrape(args, b, st, rc)
+
+    elif args.subsubcommand == 'doc':
+        f = "{:10s} {}"
+        prt(f, 'title', b.metadata.about.title)
 
     else:
         err("Unknown subsubcommand for 'config' subcommand: {}".format(args))

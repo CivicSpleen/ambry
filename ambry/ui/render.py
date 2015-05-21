@@ -260,6 +260,21 @@ class JSONEncoder(FlaskJSONEncoder):
         # return FlaskJSONEncoder.default(self, o)
 
 
+def format_sql(sql):
+    from pygments import highlight
+    from  pygments.lexers.sql import SqlLexer
+    from pygments.formatters import HtmlFormatter
+    import sqlparse
+
+    return highlight(sqlparse.format(sql, reindent=True, keyword_case='upper'), SqlLexer(), HtmlFormatter())
+
+
+@property
+def pygmentize_css(self):
+    from pygments.formatters import HtmlFormatter
+
+    return HtmlFormatter(style='manni').get_style_defs('.highlight')
+
 class Renderer(object):
 
     def __init__(self, content_type='html', session = {}, blueprints=None):
@@ -337,6 +352,7 @@ class Renderer(object):
             return wrapper
 
         return {
+            'format_sql': format_sql,
             'pretty_time': pretty_time,
             'from_root': lambda x: x,
             'bundle_path': bundle_path,

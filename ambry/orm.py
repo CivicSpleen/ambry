@@ -1257,21 +1257,21 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
             protos.update({ c.fk_vid:c for c in t.columns if c.fk_vid })
             protos.update({ c.proto_vid:c for c in t.columns if c.proto_vid})
 
-            protos = { str(ObjectNumber.parse(n).rev(None)):c for n, c in protos.items() } # Remove revisions
-
             # HACK: The numbering in the proto dataset changes, so we have to make substitutions
             if 'c00104002' in protos:
                 protos['c00109003'] = protos['c00104002']
                 del protos['c00104002']
+
+            protos = { str(ObjectNumber.parse(n).rev(None)):c for n, c in protos.items() } # Remove revisions
 
             return protos
 
         protos_s = protos(self)
         protos_o = protos(other)
 
-        inter =   set(protos_s.keys())  & set(protos_o.keys())
+        inter =  set(protos_s.keys())  & set(protos_o.keys())
 
-        return [ (protos_s[n], protos_o[n])  for n in inter ]
+        return list(set( (protos_s[n], protos_o[n])  for n in inter ) )
 
 
     @property

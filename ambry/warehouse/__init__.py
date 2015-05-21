@@ -862,9 +862,8 @@ class Warehouse(object):
 
         indexes = set()
 
-        # The comment after '--' ensures that if the table names changes, the SQL will change and
-        # the view will be re-installed.
-        sql = "SELECT * FROM {} -- indexed on {} \n".format(installed_table.name, index)
+
+        sql = 'SELECT * FROM "{}" '.format(installed_table.name)
 
         for p_name in partitions:
 
@@ -882,6 +881,8 @@ class Warehouse(object):
 
             link_map =  orig_table.link_columns(p.table)
 
+            clauses = []
+
             for col_a, col_b in link_map:
 
                 if col_a.id_ == col_b.id_:
@@ -891,12 +892,16 @@ class Warehouse(object):
                     self.logger.error('Link column datatypes differ! {} ({}) != {} ({})'
                                       .format(col_a.datatype,col_a.name, col_b.datatype, col_b.name))
 
-                sql +=  'LEFT JOIN {} ON "{}" = "{}" \n ' .format( p_table.name, col_a.altname, col_b.altname)
+                clauses.append('"{}" = "{}"'.format(col_a.altname, col_b.altname))
 
                 if installed_table.type != 'view':
                     indexes.add((installed_table.name, col_a.altname))
 
                 indexes.add((p_table.name, col_b.altname))
+
+            if clauses:
+                sql += 'LEFT JOIN "{}" ON  {} '.format(p_table.name, " AND ".join(clauses) )
+
 
         if where:
             # FIXME: Really lightweigth injection prevention. For the most part, we don't care much, since there isn't
@@ -906,6 +911,7 @@ class Warehouse(object):
 
             # One more sanitization
             sql  = sqlparse.split(sql)[0]
+
 
 
         for table, col in indexes:
@@ -951,9 +957,7 @@ class Warehouse(object):
 
         self.logger.info("Building schema for table: {}/{}".format(t.vid, t.name))
 
-        #s.query(Column).filter(Column.vid == t.vid).delete()
-
-        t.columns = [] # Select all of the columns. Overwriting would be better, but want to use Table.add_column
+        t.columns = [] # Deletes all of the columns. Overwriting would be better, but want to use Table.add_column
 
         # Have to re-fetch the session, in order to get the "SET search_path" run again on postgres,
         # which apparently gets cleared in the commit()
@@ -984,10 +988,12 @@ class Warehouse(object):
                     orig_column.data['col_datatype'] = Column.convert_python_type(type(v),col_name)
                     d = orig_column.dict
 
+                    if d['name'] and d['altname']:
+                        d['name'], d['altname'] = d['altname'], d['name']
+
                     d['description'] = "{}; {}".format(orig_table.description,d['description'])
 
-                # Coudn't split the col name, probl b/c the user added it in
-                # SQL
+                # Coudn't split the col name, probl b/c the user added it in SQL
                 except ValueError:
                     d = dict(name=col_name)
 
@@ -1120,8 +1126,7 @@ class Warehouse(object):
         data['updated'] = time.time()
 
         if drop:
-            self.database.connection.execute(
-                'DROP TABLE IF EXISTS "{}"'.format(name))
+            self.database.connection.execute('DROP TABLE IF EXISTS "{}"'.format(name))
 
         if not data:
             return False
@@ -1179,6 +1184,7 @@ class Warehouse(object):
         assert name
         assert sql
         from sqlalchemy.exc import OperationalError
+        import sqlparse
 
         t = self.orm_table_by_name(name)
 

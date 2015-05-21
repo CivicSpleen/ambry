@@ -416,7 +416,7 @@ class DbBundleBase(Bundle):
         t.names = self.identity.names_dict
 
 
-        return t2
+        return t
 
     def _info(self, identity=None):
         """Return a nested, ordered dict  of information about the bundle."""

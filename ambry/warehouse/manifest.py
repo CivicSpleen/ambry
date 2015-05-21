@@ -8,9 +8,7 @@ import re
 import sqlparse
 # import markdown
 # from ..util import memoize
-from pygments import highlight
-from pygments.lexers import PythonLexer
-from pygments.formatters import HtmlFormatter
+
 import argparse
 from ..dbexceptions import ConfigurationError
 
@@ -220,12 +218,6 @@ class Manifest(object):
 
         return None
 
-    def pygmentize_sql(self, c):
-        return highlight(c, PythonLexer(), HtmlFormatter())
-
-    @property
-    def css(self):
-        return HtmlFormatter(style='manni').get_style_defs('.highlight')
 
     def make_item(self, sections, tag, i, args):
         """Creates a new entry in sections, which will later have lines
@@ -401,7 +393,6 @@ class Manifest(object):
 
         return dict(
             text=t,
-            html=self.pygmentize_sql(t),
             name=section.args.strip(),
             tc_names=list(tc_names))
 
@@ -425,7 +416,7 @@ class Manifest(object):
                 if tok.ttype in (sqlparse.tokens.Name, sqlparse.tokens.String.Symbol):
                     tc_names.add(str(tok).strip('"'))
 
-        return dict(text=t, html=self.pygmentize_sql(t), name=section.args.strip(), tc_names=list(tc_names))
+        return dict(text=t, name=section.args.strip(), tc_names=list(tc_names))
 
     def _process_extract(self, section):
 

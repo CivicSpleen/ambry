@@ -778,7 +778,12 @@ class Schema(object):
                     p = self.bundle.library.get('civicknowledge.com-proto-proto_terms').partition
                     pt_map = {row['name']: dict(row) for row in p.rows}
 
-                pt_row = pt_map[c.proto_vid]
+
+                try:
+                    pt_row = pt_map[c.proto_vid]
+                except KeyError:
+                    self.bundle.error("Proto vid for {}.{} is not defined: {} ".format(c.table.name, c.name, c.proto_vid))
+                    continue
 
                 c.data['orig_proto_vid'] = c.proto_vid
                 c.proto_vid = pt_row['obj_number']
