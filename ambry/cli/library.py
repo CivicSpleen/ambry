@@ -298,6 +298,10 @@ def library_push(args, l, config):
 
             bp = l.resolve(ref)
 
+            if not bp:
+                err("Failed to resolve file ref to bundle {} ".format(ref))
+                continue
+
             b = l.bundle(bp.vid)
 
             remote_name = b.metadata.about.access
