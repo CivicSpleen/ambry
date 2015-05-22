@@ -438,11 +438,7 @@ class LibraryDb(object):
                 SAConfig.d_vid == ROOT_CONFIG_NAME_V).one()
 
         except NoResultFound:
-            o = SAConfig(
-                group=group,
-                key=key,
-                d_vid=ROOT_CONFIG_NAME_V,
-                value=value)
+            o = SAConfig(group=group,key=key,d_vid=ROOT_CONFIG_NAME_V,value=value)
 
         o.value = value
         s.merge(o)
@@ -457,10 +453,8 @@ class LibraryDb(object):
 
         try:
 
-            c = s.query(SAConfig).filter(
-                SAConfig.group == group,
-                SAConfig.key == key,
-                SAConfig.d_vid == ROOT_CONFIG_NAME_V).first()
+            c = s.query(SAConfig).filter(SAConfig.group == group,SAConfig.key == key,
+                                         SAConfig.d_vid == ROOT_CONFIG_NAME_V).first()
 
             return c
         except:

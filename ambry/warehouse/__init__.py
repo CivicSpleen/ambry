@@ -362,6 +362,11 @@ class Warehouse(object):
 
         d['manifests'] = {mf.ref: mf.dict for mf in self.library.manifests}
 
+        indexes = list(set([ fi  for p in d['partitions'].values() for fi in p['foreign_indexes']
+                             if p.get('foreign_indexes', False)]))
+
+        d['foreign_indexes'] = indexes
+
         return d
 
     @property

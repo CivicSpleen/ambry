@@ -25,6 +25,7 @@
             <th>id</th>
             <th>Name</th>
             <th>Description</th>
+            <th>Indexes</th>
             <th>Installed Names</th>
             <th>Extracts</th>
         </tr>
@@ -35,7 +36,16 @@
             <td>{{t.name}}</td>
             <td><strong>{%if t.source_partition -%}
             <a href="{{bundle_path(t.d_vid)}}">{{t.source_partition.vname}}</a></p>
-            {% endif -%}</strong>{{t.description if t.description  else ''}}</td>
+            {% endif -%}</strong>{{t.description if t.description  else ''}}
+            </td>
+            <td>{% if t.foreign_indexes  %}
+                <ul>
+                {% for fi in t.foreign_indexes  %}
+                    <li>{{ fi }}</li>
+                {% endfor %}
+                </ul>
+                {% endif %}
+                </td>
             <td><ul>{% for n in t.installed_names -%}
                 <li>{{n}}</li>
                 {% endfor -%}</ul>

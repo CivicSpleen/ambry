@@ -43,6 +43,9 @@ class Bundle(object):
             multi = False
             test = False
 
+        self._errors = []
+        self._warnings = []
+
         self.run_args = vars(null_args())
 
     def __del__(self):
@@ -165,12 +168,9 @@ class Bundle(object):
     def set_value(self, group, key, value):
 
         with self.session as s:
-            return self.database.set_config_value(
-                self.dataset.vid,
-                group,
-                key,
-                value,
-                session=s)
+            return self.database.set_config_value( self.dataset.vid, group, key, value, session=s)
+
+
 
     def get_value(self, group, key, default=None):
         """Get a config value using the current bundle's configuration
@@ -183,7 +183,6 @@ class Bundle(object):
             return v
 
     def get_value_group(self, group):
-
         return self.database.get_config_group(group, d_vid=self.dataset.vid)
 
     def _dep_cb(self, library, key, name, resolved_bundle):
@@ -287,6 +286,8 @@ class Bundle(object):
         :param message:  Log message.
 
         """
+        if message not in self._errors:
+            self._errors.append(message)
         self.logger.error(message)
 
     def warn(self, message):
@@ -295,6 +296,9 @@ class Bundle(object):
         :param message:  Log message.
 
         """
+        if message not in self._warnings:
+            self._warnings.append(message)
+
         self.logger.warn(message)
 
     def fatal(self, message):
@@ -1128,6 +1132,12 @@ class BuildBundle(Bundle):
 
         self.log('---- Pre-Prepare ----')
 
+        if self.is_prepared:
+            self.log("Bundle has already been prepared")
+            # raise ProcessError("Bundle has already been prepared")
+
+            return False
+
         if self.metadata.build.get('requirements', False):
             from ..util.packages import install
             import sys
@@ -1156,11 +1166,6 @@ class BuildBundle(Bundle):
                     self.log("Installing required package: {}->{}".format(k, v))
                     install(python_dir, k, v)
 
-        if self.is_prepared:
-            self.log("Bundle has already been prepared")
-            # raise ProcessError("Bundle has already been prepared")
-
-            return False
 
         try:
             from ..orm import Dataset
@@ -1294,7 +1299,7 @@ class BuildBundle(Bundle):
         from ..library.database import ROOT_CONFIG_NAME_V
 
         with self.session:
-            self.set_value('process', 'prepared', datetime.now().isoformat())
+
 
             # At this point, we have a dataset vid, which we didn't have when the dbcreated values was
             # set, so we can reset the value with to get it into the process
@@ -1304,16 +1309,20 @@ class BuildBundle(Bundle):
 
             self._revise_schema()
 
-        self.schema.move_revised_schema()
 
         for t in self.schema.tables:
             if not bool(t.description.strip()):
-                raise ConfigurationError("No title ( Description of id column ) set for table: {} ".format(t.name))
+                self.error("No title ( Description of id column ) set for table: {} ".format(t.name))
 
+        if self._errors:
+            self.set_build_state('failed/prepare')
+            return False
 
         self.update_configuration()
 
         self.write_config_to_bundle()
+
+        self.schema.move_revised_schema()
 
         self.set_build_state('prepared')
 
@@ -1321,8 +1330,7 @@ class BuildBundle(Bundle):
 
     @property
     def is_prepared(self):
-        return (self.database.exists()
-                and not self.run_args.get('rebuild', False)
+        return (self.database.exists() and not self.run_args.get('rebuild', False)
                 and self.get_value('process', 'prepared', False))
 
     def prepare_main(self):
@@ -1336,8 +1344,10 @@ class BuildBundle(Bundle):
         if self.pre_prepare():
             self.log("---- Preparing ----")
             if self.prepare_main():
-                self.post_prepare()
-                self.log("---- Done Preparing ----")
+                if self.post_prepare():
+                    self.log("---- Done Preparing ----")
+                else:
+                    self.log("---- Post-prepare exited with failure ----")
             else:
                 self.log("---- Prepare exited with failure ----")
         else:
@@ -1385,7 +1395,6 @@ class BuildBundle(Bundle):
         from time import time
 
         with self.session:
-            self.set_value('process', 'built', datetime.now().isoformat())
             self.set_value('process', 'buildtime', time() - self._build_time)
 
             self.post_build_finalize()
@@ -1404,7 +1413,6 @@ class BuildBundle(Bundle):
 
             self.post_build_test()
 
-            self.set_value('process', 'last', datetime.now().isoformat())
             self.set_build_state('built')
 
         self.close()
@@ -1604,7 +1612,8 @@ class BuildBundle(Bundle):
     def set_build_state(self, state):
         from datetime import datetime
 
-        if state not in ('cleaned', 'meta'):
+        if state not in ('cleaned', 'meta'): # If it is cleaned, the DB is deleted, so this isn't necessary
+            self.set_value('process', state, datetime.now().isoformat())
             self.set_value('process', 'state', state)
             self.set_value('process', 'last', datetime.now().isoformat())
 
@@ -1625,10 +1634,15 @@ class BuildBundle(Bundle):
         if self.pre_build():
             self.log("---- Build ---")
             if self.build_main():
-                self.post_build()
-                self.log("---- Done Building ---")
-                self.log("Bundle DB at: {}".format(self.database.dsn))
-                r = True
+                if self.post_build():
+                    self.log("---- Done Building ---")
+                    self.log("Bundle DB at: {}".format(self.database.dsn))
+                    r = True
+                else:
+                    self.log("---- Post-build failed ---")
+                    self.log("Bundle DB at: {}".format(self.database.dsn))
+                    r = False
+
             else:
                 self.log("---- Build exited with failure ---")
                 r = False
@@ -1737,7 +1751,7 @@ class BuildBundle(Bundle):
         from time import time
 
         with self.session:
-            self.set_value('process', 'updated', datetime.now().isoformat())
+            self.set_build_state('updated')
             self.set_value('process', 'updatetime', time() - self._update_time)
             self.update_configuration()
 
@@ -1749,7 +1763,6 @@ class BuildBundle(Bundle):
 
             self.write_config_to_bundle()
 
-            self.set_value('process', 'last', datetime.now().isoformat())
             self.set_build_state('updated')
 
         self.close()
@@ -1828,7 +1841,6 @@ class BuildBundle(Bundle):
     def post_install(self):
         from datetime import datetime
 
-        self.set_value('process', 'installed', datetime.now().isoformat())
         self.set_build_state('installed')
 
         return True

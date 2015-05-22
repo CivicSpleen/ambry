@@ -264,6 +264,63 @@ class ExcelRowGenerator(RowGenerator):
         self.segment = segment
         self.workbook = None
 
+    def make_datetime_caster(self):
+        """Make a date caster function that can convert dates from this workbook. This is required
+        because dates in Excel workbooks are stupid. """
+
+        from xlrd import open_workbook
+
+        wb = open_workbook(self.file_name)
+        datemode = wb.datemode
+
+
+        def excel_date(v):
+            from xlrd import xldate_as_tuple
+            import datetime
+
+            try:
+                year, month, day, hour, minute, second = xldate_as_tuple(float(v), datemode)
+                return datetime.datetime(year, month, day, hour, minute, second)
+            except ValueError:
+                # Could be actually a string, not a float. Because Excel dates are completel broken.
+                from  dateutil import parser
+                try:
+                    return parser.parse(v)
+                except ValueError:
+                    return None
+
+
+        return excel_date
+
+
+    def make_date_caster(self):
+        """Make a date caster function that can convert dates from this workbook. This is required
+        because dates in Excel workbooks are stupid. """
+
+        from xlrd import open_workbook
+
+        wb = open_workbook(self.file_name)
+        datemode = wb.datemode
+
+        def excel_date(v):
+            from xlrd import xldate_as_tuple
+            import datetime
+
+            try:
+
+                year, month, day, hour, minute, second = xldate_as_tuple(float(v), datemode)
+                return datetime.date(year, month, day)
+            except ValueError:
+                # Could be actually a string, not a float. Because Excel dates are completel broken.
+                from  dateutil import parser
+
+                try:
+                    return parser.parse(v).date()
+                except ValueError:
+                    return None
+
+        return excel_date
+
     def _yield_rows(self):
         from xlrd import open_workbook
         from xlrd.biffh import XLRDError

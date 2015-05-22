@@ -104,6 +104,9 @@ def bundle_command(args, rc):
         warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
         debug.listen()
 
+    ##
+    ## Run the phases
+    ##
     try:
         for phase in phases:
             getf(phase)(args, b, st, rc)
@@ -124,6 +127,17 @@ def bundle_command(args, rc):
     finally:
         import lockfile
         from sqlalchemy.exc import InvalidRequestError
+
+        if b._warnings:
+            warn(" ==== WARNINGS ===")
+            for warning in b._warnings:
+                warn(warning)
+
+        if b._errors:
+            err(" ==== ERRORS ===")
+            for error in b._errors:
+                err(error)
+
         try:
             if b:
                 try:

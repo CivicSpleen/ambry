@@ -428,7 +428,8 @@ class LoaderBundle(BuildBundle):
                 errors = ins.insert(d)
 
                 if errors:
-                   self.error("Casting error for {}: {}".format(source_name, errors))
+                    errors_str = '; '.join([ "{}: {}".format(k,v) for k,v in errors.items() ])
+                    self.error("Casting error for {}, table {}: {}".format(source_name, p.table.name, errors_str))
 
 
     def build(self):
