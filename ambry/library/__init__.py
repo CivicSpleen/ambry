@@ -1030,7 +1030,7 @@ class Library(object):
                 identity = dsid
 
             try:
-                file_ = self.files.query.installed.ref(identity.vid).one
+                file_ = self.files.query.installed.ref(identity.vid).state('new').one
             except:
                 print 'Failed for ', identity.vid
                 raise

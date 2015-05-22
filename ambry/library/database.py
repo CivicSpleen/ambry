@@ -294,6 +294,11 @@ class LibraryDb(object):
                     raise Exception("Couldn't create directory " + dir_)
 
     def drop(self):
+        """ Drop all of the tables in the database
+
+        :return:
+        :raise Exception:
+        """
         from sqlalchemy.exc import NoSuchTableError, ProgrammingError, OperationalError
 
         if not self.enable_delete:
@@ -306,7 +311,7 @@ class LibraryDb(object):
             return
 
 
-        # Tables and partitions can have a cyclic rlationship.
+        # Tables and partitions can have a cyclic relationship.
         # Prob should be handled with a cascade on relationship.
         try:
             self.session.query(Table).update({Table.p_vid: None})
@@ -315,13 +320,7 @@ class LibraryDb(object):
             self._session.rollback()
             pass
 
-        library_tables = [Config, ColumnStat, File, Code, Partition, Column, Table, Dataset]
-
-        for table in library_tables:
-
-            table.__table__.drop(self.engine, checkfirst=True)
-
-        self.commit()
+            self.metadata.drop_all(self.engine)
 
     def __del__(self):
         pass
@@ -411,11 +410,7 @@ class LibraryDb(object):
         from ..database.inserter import ValueInserter
         from sqlalchemy.schema import Table
 
-        table = Table(
-            table_name,
-            self.metadata,
-            autoload=True,
-            autoload_with=self.engine)
+        table = Table(table_name,self.metadata,autoload=True,autoload_with=self.engine)
 
         return ValueInserter(self, None, table, **kwargs)
 
