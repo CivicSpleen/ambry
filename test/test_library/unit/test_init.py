@@ -1,23 +1,30 @@
 # -*- coding: utf-8 -*-
 
+import csv
 import os
+from StringIO import StringIO
 from tempfile import mkdtemp
 import unittest
+
+from sqlite3 import DatabaseError as SqliteDatabaseError
+
+from ckcache.multi import AltReadCache
 
 import fudge
 from fudge.inspector import arg
 
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, IntegrityError
 from sqlalchemy.orm.exc import NoResultFound
 
 from ambry.bundle import DbBundle
 from ambry.dbexceptions import ConfigurationError, NotFoundError,\
-    DatabaseError, DependencyError
+    DatabaseError, DependencyError, ConflictError
 from ambry.identity import Identity
 from ambry.library import Library, _new_library
 from ambry.library.database import LibraryDb
 from ambry.library.files import Files
-from ambry.orm import File
+from ambry.orm import File, Dataset
+from ambry.source import SourceTree
 from ambry import warehouse
 from ambry.warehouse.manifest import Manifest
 
@@ -101,6 +108,7 @@ class LibraryTest(unittest.TestCase):
     def tearDown(self):
         fudge.clear_expectations()
         fudge.clear_calls()
+        self.sqlite_db.close()
         try:
             os.remove(SQLITE_DATABASE)
         except OSError:
@@ -267,6 +275,66 @@ class LibraryTest(unittest.TestCase):
         ret = lib._get_bundle_by_cache_key('cache_key1')
         self.assertFalse(ret)
 
+    def test_logs_DatabaseError(self):
+        # prepare state
+
+        lib = Library(self.cache, self.sqlite_db)
+
+        lib._create_bundle = fudge.Fake()\
+            .expects_call()\
+            .raises(SqliteDatabaseError)
+        lib.logger.error = fudge.Fake().expects_call()
+
+        fake_get = fudge.Fake().expects_call().returns('/bundle-path')
+        fake_exists = fudge.Fake().expects_call().returns(True)
+
+        # testing
+        with fudge.patched_context(os.path, 'exists', fake_exists):
+            with fudge.patched_context(AltReadCache, 'get', fake_get):
+                with self.assertRaises(SqliteDatabaseError):
+                    lib._get_bundle_by_cache_key('cache_key1')
+        fudge.verify()
+
+    def test_logs_AttributeError(self):
+        # prepare state
+
+        lib = Library(self.cache, self.sqlite_db)
+
+        lib._create_bundle = fudge.Fake()\
+            .expects_call()\
+            .raises(AttributeError)
+        lib.logger.error = fudge.Fake().expects_call()
+
+        fake_get = fudge.Fake().expects_call().returns('/bundle-path')
+        fake_exists = fudge.Fake().expects_call().returns(True)
+
+        # testing
+        with fudge.patched_context(os.path, 'exists', fake_exists):
+            with fudge.patched_context(AltReadCache, 'get', fake_get):
+                with self.assertRaises(AttributeError):
+                    lib._get_bundle_by_cache_key('cache_key1')
+        fudge.verify()
+
+    def test_logs_OperationalError(self):
+        # prepare state
+
+        lib = Library(self.cache, self.sqlite_db)
+
+        lib._create_bundle = fudge.Fake()\
+            .expects_call()\
+            .raises(OperationalError('select 1;', [], 'a'))
+        lib.logger.error = fudge.Fake().expects_call()
+
+        fake_get = fudge.Fake().expects_call().returns('/bundle-path')
+        fake_exists = fudge.Fake().expects_call().returns(True)
+
+        # testing
+        with fudge.patched_context(os.path, 'exists', fake_exists):
+            with fudge.patched_context(AltReadCache, 'get', fake_get):
+                with self.assertRaises(SqliteDatabaseError):
+                    lib._get_bundle_by_cache_key('cache_key1')
+        fudge.verify()
+
     # .has tests
     def test_returns_true_if_dataset_exists_in_the_cache(self):
         # prepare state
@@ -324,8 +392,9 @@ class LibraryTest(unittest.TestCase):
 
         ds2 = DatasetFactory()
         table2 = TableFactory(dataset=ds2)
-        self.assertIn(table1, lib.tables)
-        self.assertIn(table2, lib.tables)
+        tables = lib.tables_no_columns
+        self.assertIn(table1, tables)
+        self.assertIn(table2, tables)
 
     # .table tests
     def test_returns_table_found_by_vid(self):
@@ -346,6 +415,16 @@ class LibraryTest(unittest.TestCase):
         assert table1.id_ != table1.vid
 
         self.assertEquals(lib.table(table1.id_), table1)
+
+    def test_raises_NotFoundError_if_table_not_found(self):
+        print('\nTODO: .first() does not raise NoResultFound. See .table() method.\n')
+        # FIXME: what is the proper behaviour? Raising or returning None?
+        # Assuming returning None, because it's production code.
+        self.sqlite_db.create_tables()
+        lib = Library(self.cache, self.sqlite_db)
+
+        # testing
+        self.assertIsNone(lib.table('vid'))
 
     # .derived_tables tests
     def test_returns_tables_found_by_proto_vid(self):
@@ -982,4 +1061,293 @@ class LibraryTest(unittest.TestCase):
         self.assertTrue(raised)
 
     # .sync_library tests
+    @fudge.patch('os.walk')
+    def test_removes_bundles_and_partitions_from_db(self, fake_walk):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib.cache = fudge.Fake().has_attr(cache_dir='fake')
+        fake_walk.expects_call()\
+            .returns([])
+        FileFactory(type_=Files.TYPE.BUNDLE)
+        FileFactory(type_=Files.TYPE.PARTITION)
+
+        # testing
+        lib.sync_library(clean=True)
+        self.assertEquals(self.query(File).all(), [])
+
+    def test_logs_failed_to_open_bundle(self):
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib.cache = fudge.Fake().has_attr(cache_dir='fake')
+        dirpath1 = 'dirpath'
+        dirnames1 = ['dir1', 'dir2']
+        filenames1 = ['file1.db', 'file2']
+        walk_return = [(dirpath1, dirnames1, filenames1)]
+        lib._create_bundle = fudge.Fake()\
+            .expects_call()\
+            .with_args(arg.contains('file1.db'))
+        lib.logger.error = fudge.Fake()\
+            .expects_call()\
+            .with_args(arg.contains('Failed to open bundle'))
+
+        fake_walk = fudge.Fake().expects_call()\
+            .returns(walk_return)
+
+        # testing
+        with fudge.patched_context(os, 'walk', fake_walk):
+            lib.sync_library()
+        fudge.verify()
+
+    def test_installs_found_bundles(self):
+
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(
+            Library.put_bundle,
+            ['self', 'bundle', 'source', 'install_partitions', 'file_state', 'commit'])
+        assert_spec(
+            Library.put_partition,
+            ['self', 'partition', 'source', 'file_state', 'commit'])
+        assert_spec(
+            Library._create_bundle,
+            ['self', 'path'])
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib.cache = fudge.Fake()\
+            .has_attr(repo_id='repo-id', cache_dir='cache-dir')
+
+        # mocking os.walk
+        dirpath1 = 'dirpath'
+        dirnames1 = ['dir1', 'dir2']
+        filenames1 = ['file1.db', 'file2']
+        walk_return = [(dirpath1, dirnames1, filenames1)]
+        fake_walk = fudge.Fake().expects_call()\
+            .returns(walk_return)
+
+        # mocking _create_bundle
+        # TODO: Create BundleFactory and use it here
+        class FakePartitions(list):
+            count = 1
+            identity = {}
+
+        fake_identity = fudge.Fake().has_attr(is_bundle=True, vname='vname')
+
+        class FakeBundle(object):
+            identity = fake_identity
+            partitions = FakePartitions('abc')  # It is wrong partitions, but it does not matter here.
+
+            def close(self):
+                pass
+
+        fake_bundle1 = FakeBundle()
+        lib._create_bundle = fudge.Fake()\
+            .expects_call()\
+            .with_args(arg.contains('file1.db'))\
+            .returns(fake_bundle1)
+
+        lib.put_bundle = fudge.Fake().expects_call()
+        lib.put_partition = fudge.Fake().expects_call()
+
+        # testing
+        with fudge.patched_context(os, 'walk', fake_walk):
+            ret = lib.sync_library()
+            self.assertEquals(ret, [fake_bundle1])
+        fudge.verify()
+
+    # .sync_remotes tests
     # TODO:
+
+    # .sync_source tests
+    def test_deletes_all_sources_from_db(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db, source_dir='the-dir')
+
+        FileFactory(type_=Dataset.LOCATION.SOURCE)
+        fake_source = fudge.Fake()\
+            .expects('_dir_list')\
+            .returns({})
+
+        # testing
+        with fudge.patched_context(Library, 'source', fake_source):
+            lib.sync_source(clean=True)
+            self.assertEquals(self.query(File).all(), [])
+
+    # .sync_source_dir tests
+    def test_installs_dataset_identity(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        ds1 = DatasetFactory()
+        self.sqlite_db.install_dataset_identity = fudge.Fake()\
+            .expects_call()\
+            .with_args(arg.passes_test(lambda x: x.vid == ds1.vid))
+
+        # testing
+        with fudge.patched_context(Library, 'source', fudge.Fake().is_a_stub()):
+            with fudge.patched_context(Library, 'files', fudge.Fake().is_a_stub()):
+                lib.sync_source_dir(ds1.identity, 'the-path')
+                fudge.verify()
+
+    def test_rollbacks_library_database_on_ConflictError(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        ds1 = DatasetFactory()
+        self.sqlite_db.install_dataset_identity = fudge.Fake('install_dataset_identity')\
+            .expects_call()\
+            .raises(ConflictError('msg'))
+        self.sqlite_db.rollback = fudge.Fake('rollback')\
+            .expects_call()
+
+        # testing
+        with fudge.patched_context(Library, 'source', fudge.Fake().is_a_stub()):
+            with fudge.patched_context(Library, 'files', fudge.Fake().is_a_stub()):
+                lib.sync_source_dir(ds1.identity, 'the-path')
+                fudge.verify()
+
+    def test_rollbacks_library_database_on_IntegrityError(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        ds1 = DatasetFactory()
+        self.sqlite_db.install_dataset_identity = fudge.Fake('install_dataset_identity')\
+            .expects_call()\
+            .raises(IntegrityError('select 1;', [], 'a'))
+        self.sqlite_db.rollback = fudge.Fake('rollback')\
+            .expects_call()
+
+        # testing
+        with fudge.patched_context(Library, 'source', fudge.Fake().is_a_stub()):
+            with fudge.patched_context(Library, 'files', fudge.Fake().is_a_stub()):
+                lib.sync_source_dir(ds1.identity, 'the-path')
+                fudge.verify()
+
+    def test_installs_bundle_source(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(
+            SourceTree.bundle,
+            ['self', 'path', 'buildbundle_ok'])
+        assert_spec(
+            Files.install_bundle_source,
+            ['self', 'bundle', 'source', 'commit'])
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        ds1 = DatasetFactory()
+        self.sqlite_db.install_dataset_identity = fudge.Fake('install_dataset_identity')\
+            .is_a_stub()
+
+        fake_bundle = fudge.Fake('bundle').is_a_stub()
+        fake_source = fudge.Fake('source')\
+            .expects('bundle')\
+            .returns(fake_bundle)
+
+        fake_files = fudge.Fake()\
+            .expects('install_bundle_source')\
+            .with_args(fake_bundle, fake_source, commit=True)
+
+        # testing
+
+        with fudge.patched_context(Library, 'source', fake_source):
+            with fudge.patched_context(Library, 'files', fake_files):
+                lib.sync_source_dir(ds1.identity, 'the-path')
+                fudge.verify()
+
+    # .sync_warehouse tests
+    # TODO:
+
+    # .sync_warehouses tests
+    def test_synces_all_warehouses(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib.warehouse = fudge.Fake('warehouse').expects_call()
+        lib.sync_warehouse = fudge.Fake('sync_warehouse').expects_call()
+        FileFactory(type_=Files.TYPE.STORE)
+        FileFactory(type_=Files.TYPE.STORE)
+
+        # testing
+        lib.sync_warehouses()
+        fudge.verify()
+
+    # .warehouse_cache property tests
+    def test_contains_warehouse_cache(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._warehouse_cache = 'THE-CACHE'
+
+        # testing
+        self.assertEquals(lib.warehouse_cache, 'THE-CACHE')
+
+    # ._gen_schema test
+    def test_returns_dump_of_the_schema(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        # testing
+        ret = lib._gen_schema()
+
+        # it's a generator
+        self.assertTrue(hasattr(ret, 'next'))
+
+    # .schema_as_csv tests
+    def test_returns_content_of_the_csv(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        def my_gen():
+            # first yield header
+            yield ['table', 'col1', 'col2']
+            for i in range(10):
+                # now yield rows
+                yield {'col1': str(i), 'col2': str(i), 'table': 'table%s' % i}
+
+        lib._gen_schema = fudge.Fake().expects_call().calls(my_gen)
+
+        # testing
+        ret = lib.schema_as_csv()
+        schema_reader = csv.reader(StringIO(ret))
+        header = schema_reader.next()
+        self.assertEquals(header, ['table', 'col1', 'col2'])
+
+    # .info property tests
+    def test_contains_verbose_info_string(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        # testing
+        info = lib.info
+        self.assertIn('Library', info)
+        self.assertIn('Database', info)
+        self.assertIn('Cache', info)
+        self.assertIn('Remotes', info)
+
+    # .dict property tests
+    def test_contains_dict_with_library_info(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        # testing
+        ret = lib.dict
+        self.assertIn('name', ret)
+        self.assertIn('database', ret)
+        # TODO: enhance
+
+    # .summary_dict property tests
+    def test_contains_summary_dict(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        # testing
+        ret = lib.summary_dict
+        self.assertIn('name', ret)
+        self.assertIn('database', ret)
+        self.assertIn('cache', ret)
+
+    # .schema_dict property tests
+    def test_contains_dict_with_tables(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        ds1 = DatasetFactory()
+        table1 = TableFactory(dataset=ds1)
+
+        # testing
+        dct = lib.schema_dict
+        self.assertIn(table1.vid, dct)
