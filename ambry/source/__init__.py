@@ -50,16 +50,10 @@ class SourceTree(object):
             try:
                 bundle = self.bundle(file_.path)
             except ImportError as e:
-                self.logger.info(
-                    "Failed to load bundle from {}: {}".format(
-                        file_.path,
-                        e))
+                self.logger.info("Failed to load bundle from {}: {}".format(file_.path,e))
                 continue
             except Exception as e:
-                self.logger.info(
-                    "Failed to load bundle from {}: {}".format(
-                        file_.path,
-                        e))
+                self.logger.info("Failed to load bundle from {}: {}".format(file_.path,e))
                 continue
 
             if ck not in datasets:
@@ -167,14 +161,12 @@ class SourceTree(object):
                     ident.vid).first
 
                 if not f:
-                    raise NotFoundError(
-                        "Didn't find a source bundle for term: {} ".format(term))
+                    raise NotFoundError("Didn't find a source bundle for term: {} ".format(term))
 
                 sources = [f]
 
             else:
-                raise NotFoundError(
-                    "Didn't find a source bundle for term: {} ".format(term))
+                raise NotFoundError( "Didn't find a source bundle for term: {} ".format(term))
 
         else:
             sources = all_sources.values()
@@ -273,9 +265,7 @@ class SourceTree(object):
             datasets = {}
 
         if not os.path.exists(self.base_dir):
-            raise ConfigurationError(
-                "Could not find source directory: {}".format(
-                    self.base_dir))
+            raise ConfigurationError("Could not find source directory: {}".format(self.base_dir))
 
         # Walk the subdirectory for the files to build, and
         # add all of their dependencies
@@ -289,8 +279,9 @@ class SourceTree(object):
                 try:
                     bundle = BuildBundle(root)
                 except:
-                    print 'ERROR: Failed to open bundle dir={}'.format(root)
-                    raise
+                    self.logger.error('ERROR: Failed to open bundle dir={}'.format(root))
+                    continue
+
 
                 ident = bundle.identity
 
