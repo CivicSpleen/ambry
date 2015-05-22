@@ -5,11 +5,15 @@ from tempfile import mkdtemp
 import unittest
 
 import fudge
+from fudge.inspector import arg
 
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm.exc import NoResultFound
 
 from ambry.bundle import DbBundle
-from ambry.dbexceptions import ConfigurationError, NotFoundError, DatabaseError
+from ambry.dbexceptions import ConfigurationError, NotFoundError,\
+    DatabaseError, DependencyError
+from ambry.identity import Identity
 from ambry.library import Library, _new_library
 from ambry.library.database import LibraryDb
 from ambry.library.files import Files
@@ -264,7 +268,15 @@ class LibraryTest(unittest.TestCase):
         self.assertFalse(ret)
 
     # .has tests
-    # TODO:
+    def test_returns_true_if_dataset_exists_in_the_cache(self):
+        # prepare state
+        ds1 = DatasetFactory()
+        lib = Library(self.cache, self.sqlite_db)
+        lib.cache = fudge.Fake().expects('has').returns(True)
+
+        # testing
+        self.assertTrue(lib.has(ds1.vid))
+        fudge.verify()
 
     # .get tests
     def test_raises_NotFoundError_on_dataset_resolve_fail(self):
@@ -540,6 +552,14 @@ class LibraryTest(unittest.TestCase):
         self.assertIsInstance(ret, File)
         self.assertEquals(ret.oid, file1.oid)
 
+    def test_returns_store_file_by_path(self):
+        lib = Library(self.cache, self.sqlite_db)
+        path = 'the-path'
+        file1 = FileFactory(type_=Files.TYPE.STORE, path=path)
+        ret = lib.store(path)
+        self.assertIsInstance(ret, File)
+        self.assertEquals(ret.oid, file1.oid)
+
     # .remove_store tests
     def test_removes_store(self):
         # prepare state
@@ -554,6 +574,24 @@ class LibraryTest(unittest.TestCase):
             all_ = self.query(File).all()
             self.assertEquals(len(all_), 1)
         self.assertEquals(all_[0].ref, file2.ref)
+
+    def test_logs_error_and_deletes_store_if_warehouse_not_found(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        ref = 'ref1'
+        FileFactory(type_=Files.TYPE.STORE, ref=ref)
+        lib.logger.error = fudge.Fake('error')\
+            .expects_call()\
+            .with_args(arg.contains('Didn\'t find warehouse'))
+
+        lib.warehouse = fudge.Fake('warehouse')\
+            .expects_call()\
+            .raises(NotFoundError('FakeNotFound'))
+
+        # testing
+        lib.remove_store(ref)
+        self.assertEquals(self.query(File).all(), [])
+        fudge.verify()
 
     # .warehouse tests
     def test_raises_NotFoundError_if_store_not_found(self):
@@ -655,10 +693,180 @@ class LibraryTest(unittest.TestCase):
         self.assertEquals(len(self.query(File).all()), 0)
 
     # .locate tests
-    # TODO:
+    def test_returns_pair_of_nones_if_ident_resolve_failed(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        ref = 'ref1'
+        FileFactory(type_=Files.TYPE.MANIFEST, ref=ref, content='manifest1')
+
+        # testing
+        ident, location = lib.locate(ref)
+        self.assertIsNone(ident)
+        self.assertIsNone(location)
+
+    def test_returns_ident_and_cache_if_ident_is_cached(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        fake_cache = fudge.Fake('cache').expects('has').returns(True)
+        lib.cache = fake_cache
+
+        ds1 = DatasetFactory()
+
+        # testing
+        ret1, ret2 = lib.locate(ds1.identity)
+        fudge.verify()
+        self.assertIsInstance(ret1, Identity)
+        self.assertEquals(ret1.vid, ds1.vid)
+        self.assertEquals(ret2, fake_cache)
+
+    def test_returns_ident_and_remote_location_if_ident_is_not_cached(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib.cache = fudge.Fake('cache').expects('has').returns(False)
+
+        # also, remote have to contain ident.
+        remote1 = fudge.Fake()\
+            .has_attr(priority=1)\
+            .expects('has')\
+            .returns(True)
+
+        lib._remotes = {
+            'remote1': remote1}
+        ds1 = DatasetFactory()
+
+        # testing
+        ret1, ret2 = lib.locate(ds1.identity)
+        fudge.verify()
+        self.assertIsInstance(ret1, Identity)
+        self.assertEquals(ret1.vid, ds1.vid)
+        self.assertEquals(ret2, remote1)
+
+    def test_returns_remote_location_with_lowest_priority(self):
+        print('\nTODO: what is the reason about low priority?\n')
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib.cache = fudge.Fake('cache').expects('has').returns(False)
+
+        # also, remote have to contain ident.
+        remote1 = fudge.Fake()\
+            .has_attr(priority=5)
+
+        remote2 = fudge.Fake()\
+            .has_attr(priority=3)
+
+        remote3 = fudge.Fake()\
+            .has_attr(priority=1)\
+            .expects('has')\
+            .returns(True)
+
+        lib._remotes = {
+            'remote1': remote1,
+            'remote2': remote2,
+            'remote3': remote3}
+        ds1 = DatasetFactory()
+
+        # testing
+        ret1, ret2 = lib.locate(ds1.identity)
+        fudge.verify()
+        self.assertIsInstance(ret1, Identity)
+        self.assertEquals(ret1.vid, ds1.vid)
+        self.assertEquals(ret2, remote3)
+
+    def test_returns_ident_and_none_if_location_not_found(self):
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib.cache = fudge.Fake('cache').expects('has').returns(False)
+        lib._remotes = {}
+        ds1 = DatasetFactory()
+
+        # testing
+        ret1, ret2 = lib.locate(ds1.identity)
+        fudge.verify()
+        self.assertIsInstance(ret1, Identity)
+        self.assertEquals(ret1.vid, ds1.vid)
+        self.assertIsNone(ret2)
+
+    # .locate_one test
+    # @unittest.skip('.pop() on tuple returned by locate()? Is it highest or lowest?')
+    def test_returns_ident_with_highest_priority_location(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib.cache = fudge.Fake('cache').expects('has').returns(False)
+        lib._remotes = {}
+        ds1 = DatasetFactory()
+
+        # testing
+        lib.locate_one(ds1.identity)
+        fudge.verify()
+
+        # TODO: enhance after .locate_one or .locate tests.
 
     # .dep tests
-    # TODO:
+    def test_raises_DependencyError_if_name_not_found_in_dependencies(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._dependencies = {'dep1': {}}
+
+        # testing
+        raised = False
+        try:
+            lib.dep('dep1')
+        except DependencyError as exc:
+            raised = True
+            self.assertIn('No dependency', exc.message)
+        self.assertTrue(raised)
+
+    def test_raises_DependencyError_if_object_ref_not_found(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._dependencies = {'dep1': 'dep1ref'}
+        lib.get = fudge.Fake().expects_call().raises(NoResultFound('msg'))
+
+        # testing
+        raised = False
+        try:
+            lib.dep('dep1')
+        except DependencyError as exc:
+            raised = True
+            self.assertIn('Failed to get dependency', exc.message)
+        self.assertTrue(raised)
+
+    def test_returns_found_dependency(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._dependencies = {'dep1': 'dep1ref'}
+        # Note: Going to return wrong dependency. But it does not matter here.
+        # TODO: change return value to match the return value of the .get() method (bundle?).
+        lib.get = fudge.Fake().expects_call().returns('DEPENDENCY')
+
+        # testing
+        ret = lib.dep('dep1')
+        self.assertEquals(ret, 'DEPENDENCY')
+
+    # .dependencies property tests
+    def test_contains_cached_dependencies(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._dependencies = {'dep1': 'dep1ref'}
+
+        # testing
+        deps = lib.dependencies
+        self.assertEquals(deps, {'dep1': 'dep1ref'})
+
+    def test_caches_found_dependencies(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._dependencies = {}
+        lib._get_dependencies = fudge.Fake().expects_call().returns({'dep1': 'dep1ref'})
+
+        # testing
+        deps = lib.dependencies
+        self.assertEquals(deps, {'dep1': 'dep1ref'})
+        self.assertEquals(lib._dependencies, {'dep1': 'dep1ref'})
 
     # ._get_dependencies tests
     def test_raises_ConfigurationError_if_bundle_is_empty(self):
@@ -670,6 +878,68 @@ class LibraryTest(unittest.TestCase):
         # testing
         with self.assertRaises(ConfigurationError):
             lib._get_dependencies()
+
+    def test_returns_empty_dict_is_bundle_has_no_dependencies(self):
+        # TODO: Create BundleFactory and use it here
+        class FakeMetadata(object):
+            dependencies = {}
+
+        class FakeBundle(object):
+            metadata = FakeMetadata()
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._bundle = FakeBundle()
+
+        # testing
+        ret = lib._get_dependencies()
+        self.assertEquals(ret, {})
+
+    def test_returns_dict_with_resolved_dependencies_identities(self):
+        # TODO: Create BundleFactory and use it here
+        ds1 = DatasetFactory()
+        ds2 = DatasetFactory()
+
+        class FakeMetadata(object):
+            dependencies = {'dataset1': ds1.vid, 'dataset2': ds2.vid}
+
+        class FakeBundle(object):
+            metadata = FakeMetadata()
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._bundle = FakeBundle()
+
+        # testing
+        ret = lib._get_dependencies()
+        self.assertIn('dataset1', ret)
+        self.assertIn('dataset2', ret)
+
+        self.assertEquals(ret['dataset1'].vid, ds1.vid)
+        self.assertEquals(ret['dataset2'].vid, ds2.vid)
+
+    # .check_dependencies tests
+    def test_returns_empty_dict_if_all_dependencies_exist(self):
+        ds1 = DatasetFactory()
+        ds2 = DatasetFactory()
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._dependencies = {'dataset1': ds1.vid, 'dataset2': ds2.vid}
+
+        # testing
+        ret = lib.check_dependencies(download=False)
+        self.assertEquals(ret, {})
+
+    def test_raises_NotFoundError_if_resolve_failed(self):
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._dependencies = {'dataset1': 'missed-vid'}
+
+        # testing
+        with self.assertRaises(NotFoundError):
+            lib.check_dependencies(download=False)
 
     # .new_files property tests
     def test_generates_new_installed_files(self):
@@ -695,6 +965,21 @@ class LibraryTest(unittest.TestCase):
         self.assertEquals(len(new_files), 2)
         self.assertEquals(new_files[0].state, 'new')
         self.assertEquals(new_files[1].state, 'new')
+
+    # .push tests
+    def test_raises_exception_if_upstream_is_empty(self):
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        # testing
+        raised = False
+        try:
+            lib.push(None)
+        except Exception as exc:
+            raised = True
+            self.assertIn('without defining a upstream.', exc.message)
+        self.assertTrue(raised)
 
     # .sync_library tests
     # TODO:
