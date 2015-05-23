@@ -413,7 +413,7 @@ class LoaderBundle(BuildBundle):
 
         for col in header:
             if col not in columns:
-                self.error("Header column '{}' not in table {} for  {}".format(col, p.table.name, source_name))
+                self.warn("Header column '{}' not in table {} for  {}".format(col, p.table.name, source_name))
 
         with p.inserter() as ins:
             for row in row_gen:

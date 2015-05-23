@@ -382,31 +382,3 @@ class Files(object):
 
         return f
 
-    def install_extract(self, path, source, d, commit=True):
-        """Create a references for an extract.
-
-        The extract hasn't been extracted yet, so there is no content,
-        hash, etc.
-
-        """
-
-        f = self.query.path(path).type(self.TYPE.EXTRACT).one_maybe
-
-        if f:
-            # This interacts with marking it 'deletable' in install_manifest
-            f.state = 'installed'
-            self.merge(f)
-            return f
-
-        return self.new_file(
-            commit=commit,
-            merge=True,
-            path=path,
-            group=self.TYPE.MANIFEST,
-            ref=path,
-            state='installed',
-            type_=self.TYPE.EXTRACT,
-            data=d,
-
-            source_url=source
-        )

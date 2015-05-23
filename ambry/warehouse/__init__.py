@@ -362,10 +362,18 @@ class Warehouse(object):
 
         d['manifests'] = {mf.ref: mf.dict for mf in self.library.manifests}
 
-        indexes = list(set([ fi  for p in d['partitions'].values() for fi in p['foreign_indexes']
+        indexes_vids = list(set([ fi  for p in d['partitions'].values() for fi in p['foreign_indexes']
                              if p.get('foreign_indexes', False)]))
 
-        d['foreign_indexes'] = indexes
+        d['foreign_indexes'] = {}
+        for vid in indexes_vids:
+
+            try:
+                p = self.elibrary.partition(vid)
+
+                d['foreign_indexes'][vid] = p.vname
+            except:
+                pass
 
         return d
 
@@ -854,7 +862,7 @@ class Warehouse(object):
             try:
                 ip_ident = self.wlibrary.resolve(index).partition
             except AttributeError:
-                raise ResolutionError()
+                raise ResolutionError("Failed to resolve: {} ".format(index))
 
             ip = self.partition(ip_ident.vid)
             installed_table = self.installed_table(ip.table.vid, ip.vid)
@@ -863,9 +871,10 @@ class Warehouse(object):
         except ResolutionError:
             orig_table = installed_table = self.orm_table_by_name(index)
 
+        if not installed_table:
+            raise ResolutionError("Failed to resolve: {} ".format(index))
 
         indexes = set()
-
 
         sql = 'SELECT * FROM "{}" '.format(installed_table.name)
 
@@ -886,6 +895,9 @@ class Warehouse(object):
             link_map =  orig_table.link_columns(p.table)
 
             clauses = []
+
+            if not link_map:
+                self.logger.error("Partition '{}' has no linkable columns with index '{}'".format(p_name, orig_table.name))
 
             for col_a, col_b in link_map:
 
@@ -908,8 +920,9 @@ class Warehouse(object):
 
 
         if where:
-            # FIXME: Really lightweigth injection prevention. For the most part, we don't care much, since there isn't
-            # any private data in a warehouse database, but we do want to prevent dropping tables, etc.
+            # FIXME: Really lightweight injection prevention. For the most part, we don't care much,
+            # since there isn't any private data in a warehouse database, but we do want to prevent
+            # dropping tables, etc.
             where = where.split(';',1)[0]
             sql += " WHERE {}  ".format(where)
 
@@ -1188,7 +1201,6 @@ class Warehouse(object):
         assert name
         assert sql
         from sqlalchemy.exc import OperationalError
-        import sqlparse
 
         t = self.orm_table_by_name(name)
 
@@ -1281,8 +1293,6 @@ class Warehouse(object):
             del data['type']
         else:
             t.type = type_
-
-
 
         if data and 'summary' in data:
             t.description = data['summary']

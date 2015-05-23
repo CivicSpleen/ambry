@@ -454,24 +454,6 @@ select 'Loading CSV file','{path}';
         diff = time.clock() - start
         return count, diff
 
-    def index_for_search(self, vid, topic, keywords):
-        """
-        Add a search document to the full-text search index.
-
-        :param vid: Versioned ID for the object. Should be a dataset, partition table or column
-        :param topic: A text document or description.
-        :param keywords: A list of keywords
-        :return:
-        """
-
-    def search(self, topic, keywords):
-        """Search the full text search index.
-
-        :param topic:
-        :param keywords:
-        :return:
-
-        """
 
 
 class BundleLockContext(object):
@@ -654,34 +636,6 @@ class SqliteWarehouseDatabase(SqliteDatabase, SqliteAttachmentMixin):
 
     pass
 
-
-class SqliteMemoryDatabase(SqliteDatabase, SqliteAttachmentMixin):
-
-    def __init__(self):
-        """"""
-
-        super(SqliteMemoryDatabase, self).__init__(None, memory=True)
-
-    def query(self, *args, **kwargs):
-        """Convience function for self.connection.execute()"""
-        from sqlalchemy.exc import OperationalError
-        from ..dbexceptions import QueryError
-
-        if isinstance(args[0], basestring):
-            fd = {x: x for x in self._attachments}
-            args = list(args)
-            first = args.pop(0)
-            args = [first.format(**fd), ] + args
-
-        try:
-            return self.connection.execute(*args, **kwargs)
-        except OperationalError as e:
-            raise QueryError(
-                "Error while executing {} in database {} ({}): {}".format(
-                    args,
-                    self.dsn,
-                    type(self),
-                    e.message))
 
 
 class BuildBundleDb(SqliteBundleDatabase):

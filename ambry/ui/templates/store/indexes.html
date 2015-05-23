@@ -1,0 +1,40 @@
+
+
+
+<h2>Tables, By Index</h2>
+{%  for vid, vname in  s.foreign_indexes.items() %}
+<h2><a href="{{ partition_path(vid)}}">{{ vname }}</a></h2>
+<table  class="table table-hover table-condensed" >
+    <tr>
+        <th>id</th>
+        <th>Name</th>
+        <th>Description</th>
+        <th>Installed Names</th>
+        <th>Extracts</th>
+    </tr>
+{% for t in s.tables.values()|selectattr('type','equalto','table')|sort(attribute='source_partition')-%}
+    {% if t.installed and vid in t.foreign_indexes-%}
+        <tr>
+        <td><a href="{{store_table_path(s.uid, t.vid)}}">{{t.vid}}</a></td>
+        <td>{{t.name}}</td>
+        <td><strong>{%if t.source_partition -%}
+        <a href="{{bundle_path(t.d_vid)}}">{{t.source_partition.vname}}</a></p>
+        {% endif -%}</strong>{{t.description if t.description  else ''}}
+        </td>
+        <td><ul>{% for n in t.installed_names -%}
+            <li>{{n}}</li>
+            {% endfor -%}</ul>
+        </td>
+
+        <td>
+            {% for format in extractors(t) -%}
+            <button type="button">
+            <a href="{{extract_url(s.uid,  t.vid, format)}}">{{format}}</a>
+            </button>
+            {% endfor -%}
+        </td>
+        </tr>
+    {% endif -%}
+{% endfor %}
+</table>
+{%  endfor  %}

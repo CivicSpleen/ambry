@@ -177,6 +177,7 @@ class DocCache(object):
         pass
 
     def warehouse(self, vid):
+
         return self.cache(lambda vid: self.library.warehouse(vid).dict, vid)
 
     def manifest(self, vid):

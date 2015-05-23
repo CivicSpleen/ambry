@@ -91,11 +91,7 @@ def _new_library(config):
                 database=database,
                 name = config['_name'] if '_name' in config else 'NONE',
                 remotes=remotes,
-                require_upload=config.get('require_upload', None),
-                source_dir = source_dir,
-                host = host,
-                port = port,
-                urlhost=config.get('urlhost', None))
+                source_dir = source_dir)
 
     return l
 
@@ -152,12 +148,8 @@ class Library(object):
     configurable = ('warehouse_url')
 
     def __init__(self, cache, database,
-                 name=None, remotes=None,
-                 source_dir = None,
-                 require_upload=False,
-                 doc_cache = None,
-                 warehouse_cache = None,
-                 host=None, port=None, urlhost = None):
+                 name=None, remotes=None, source_dir = None,
+                 doc_cache = None, warehouse_cache = None):
 
         '''Libraries are constructed on the root cache name for the library.
         If the cache does not exist, it will be created.
@@ -182,11 +174,8 @@ class Library(object):
 
         self._database = database
         self._bundle = None # Set externally in bundle.library()
-        self.host = host
-        self.port = port
-        self.urlhost = urlhost if urlhost else ( '{}:{}'.format(self.host,self.port) if self.port else self.host)
+
         self.dep_cb = None# Callback for dependency resolution
-        self.require_upload = require_upload
         self._dependencies = None
         self._remotes = remotes
 
@@ -208,8 +197,7 @@ class Library(object):
 
     def clone(self):
 
-        return self.__class__(self.cache, self.database.clone(),
-                              self.require_upload,  self.host, self.port)
+        return self.__class__(self.cache, self.database.clone())
 
     def _create_bundle(self, path):
         from ..bundle.bundle import DbBundle
@@ -1095,6 +1083,7 @@ class Library(object):
     def mark_updated(self, o=None, vid=None, key=None):
         """Mark an object as recently updated, for instance to clear
         the doc_cache"""
+
 
         self.doc_cache.remove(vid, _key=key)
 
