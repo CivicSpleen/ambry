@@ -306,8 +306,7 @@ class SourceTree(object):
                 if bundle.is_built:
                     datasets[ck].locations.set(LocationRef.LOCATION.SOURCE)
                 else:
-                    datasets[ck].locations.set(
-                        LocationRef.LOCATION.SOURCE.lower())
+                    datasets[ck].locations.set(LocationRef.LOCATION.SOURCE.lower())
 
                 datasets[ck].bundle_path = root
 

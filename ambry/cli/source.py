@@ -12,11 +12,11 @@ from ..cli import load_bundle, _print_bundle_list
 import os
 
 
-def source_command(args, rc):
+def source_command(args, rc, reset_lib=False):
     from ..library import new_library
     from . import global_logger
 
-    l = new_library(rc.library(args.name))
+    l = new_library(rc.library(args.name), reset=reset_lib)
     l.logger = global_logger
 
     st = l.source

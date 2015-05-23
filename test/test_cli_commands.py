@@ -50,12 +50,12 @@ class Test(TestCLIMixin, TestLoggingFileHandlerMixin, TestBase):
         self.updateRC()
         args = self.format_args('library', 'sync', '-s')
         print '== %s' % args
-        library.library_command(args, self.rc)
+        library.library_command(args, self.rc, reset_lib=True)
 
-        args = self.format_args('list')
+        args = self.format_args('list', '-s')
         print '== %s' % args
         root.root_command(args, self.rc)
 
         args = self.format_args('source', 'buildable', '-Fvid')
         print '== %s' % args
-        source.source_command(args, self.rc)
+        source.source_command(args, self.rc, reset_lib=True)

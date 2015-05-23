@@ -40,7 +40,6 @@ class Metadata(object):
         self._loaded = set()
         self._context = context
 
-
         if self._synonyms is not None:
 
             # Convert paths to tuples

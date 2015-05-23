@@ -860,8 +860,7 @@ class LibraryDb(object):
 
             if ck not in datasets:
                 datasets[ck] = d.identity
-                datasets[ck].summary = self.get_bundle_value(
-                    d.vid,'config','about.title')
+                datasets[ck].summary = self.get_bundle_value(d.vid, 'config', 'about.title')
 
             # Adding the file to the identity gets us the bundle state and
             # modification time.
@@ -869,8 +868,8 @@ class LibraryDb(object):
                 if not p:
 
                     datasets[ck].add_file(f)
-                    datasets[ck].bundle_state = f.state if (
-                        f.state and not datasets[ck].bundle_state) else datasets[ck].bundle_state
+                    datasets[ck].bundle_state = f.state if (f.state and not datasets[ck].bundle_state) \
+                        else datasets[ck].bundle_state
 
                 else:
                     p.identity.add_file(f)

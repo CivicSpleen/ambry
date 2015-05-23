@@ -195,6 +195,52 @@ class Test(TestCLIMixin, TestLoggingFileHandlerMixin, TestBase):
 
         print out
 
+    def test_library_info(self):
+        output = self.cmd('library info')
+        keys = ['Library Info', 'Database:', 'Cache:', 'Doc Cache:', 'Whs Cache:', 'Remotes:']
+        for key in keys:
+            self.assertIn(key, output)
+
+    def test_library_config(self):
+        pass
+
+    def test_library_new(self):
+        pass
+
+    def test_library_files(self):
+        pass
+
+    def test_library_push(self):
+        pass
+
+    def test_library_drop(self):
+        pass
+
+    def test_library_clean(self):
+        pass
+
+    def test_library_purge(self):
+        pass
+
+    def test_library_sync(self):
+        pass
+
+    def test_library_get(self):
+        pass
+
+    def test_library_open(self):
+        pass
+
+    def test_library_remove(self):
+        pass
+
+    def test_library_schema(self):
+        pass
+
+    def test_library_config(self):
+        pass
+
+
 
 def suite():
     test_suite = unittest.TestSuite()

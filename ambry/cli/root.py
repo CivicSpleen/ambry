@@ -183,9 +183,7 @@ def root_list(args, l, rc):
     if locations:
         idents = [ident for ident in idents if ident.locations.has(locations)]
 
-    _print_bundle_list(idents,
-                       fields=fields,
-                       show_partitions=args.partitions)
+    _print_bundle_list(idents, fields=fields, show_partitions=args.partitions)
 
 
 def root_info(args, l, rc):

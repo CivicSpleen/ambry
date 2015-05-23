@@ -106,11 +106,11 @@ def library_parser(cmd):
     whsp.add_argument('term', type=str, nargs='?', help='Var=Value')
 
 
-def library_command(args, rc):
+def library_command(args, rc, reset_lib=False):
     from ..library import new_library
     from . import global_logger
 
-    l = new_library(rc.library(args.library_name))
+    l = new_library(rc.library(args.library_name), reset=reset_lib)
 
     l.logger = global_logger
 
