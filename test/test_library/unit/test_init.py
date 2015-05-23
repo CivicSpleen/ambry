@@ -6,6 +6,10 @@ from StringIO import StringIO
 from tempfile import mkdtemp
 import unittest
 
+from boto.exception import S3ResponseError
+
+import ckcache
+
 from sqlite3 import DatabaseError as SqliteDatabaseError
 
 from ckcache.multi import AltReadCache
@@ -26,6 +30,7 @@ from ambry.library.files import Files
 from ambry.orm import File, Dataset
 from ambry.source import SourceTree
 from ambry import warehouse
+from ambry import util
 from ambry.warehouse.manifest import Manifest
 
 from test.test_library.asserts import assert_spec
@@ -45,6 +50,7 @@ class NewLibraryTest(unittest.TestCase):
         self.sqlite_db.create_tables()
 
     def tearDown(self):
+        self.sqlite_db.close()
         try:
             os.remove(SQLITE_DATABASE)
         except OSError:
@@ -74,6 +80,74 @@ class NewLibraryTest(unittest.TestCase):
             'upstream': 'upstream'}
         with self.assertRaises(DeprecationWarning):
             _new_library(config)
+
+    def test_logs_S3ResponseError(self):
+        fake_s3 = fudge.Fake('s3').has_attr(bucket='bucket1')
+
+        config = {
+            'database': {
+                'driver': 'sqlite',
+                'dbname': 'test_init1_unused.db',
+            },
+            'filesystem': 'http://example.com',
+            'remotes': {'s3': fake_s3},
+            'root': 'UNUSED?'}
+
+        fake_new_cache = fudge.Fake()\
+            .expects_call().returns(fudge.Fake().is_a_stub())\
+            .next_call().raises(S3ResponseError('status', 'reason'))
+
+        fake_logger = fudge.Fake('logger')\
+            .expects('error').with_args(arg.contains('Failed to init'))
+
+        # get_logger need 3 return values, first for the LibraryDb constructor logger, second
+        # for the _new_library logger, third for Library constructor.
+        fake_get_logger = fudge.Fake('get_logger')\
+            .expects_call().returns(fudge.Fake().is_a_stub())\
+            .next_call().returns(fake_logger)\
+            .next_call().returns(fudge.Fake().is_a_stub())
+
+        with fudge.patched_context(ckcache, 'new_cache', fake_new_cache):
+            with fudge.patched_context(util, 'get_logger', fake_get_logger):
+                _new_library(config)
+
+    def test_separates_host_and_port(self):
+
+        config = {
+            'database': {
+                'driver': 'sqlite',
+                'dbname': 'test_init1_unused.db',
+            },
+            'filesystem': 'http://example.com',
+            'host': 'localhost:8080',
+            'root': 'UNUSED?'}
+
+        fake_new_cache = fudge.Fake()\
+            .expects_call().returns(fudge.Fake().is_a_stub())\
+
+        with fudge.patched_context(ckcache, 'new_cache', fake_new_cache):
+            lib = _new_library(config)
+            self.assertEquals(lib.host, 'localhost')
+            self.assertEquals(lib.port, '8080')
+
+    def test_uses_80_port_if_not_given(self):
+
+        config = {
+            'database': {
+                'driver': 'sqlite',
+                'dbname': 'test_init1_unused.db',
+            },
+            'filesystem': 'http://example.com',
+            'host': 'localhost',
+            'root': 'UNUSED?'}
+
+        fake_new_cache = fudge.Fake()\
+            .expects_call().returns(fudge.Fake().is_a_stub())\
+
+        with fudge.patched_context(ckcache, 'new_cache', fake_new_cache):
+            lib = _new_library(config)
+            self.assertEquals(lib.host, 'localhost')
+            self.assertEquals(lib.port, 80)
 
 
 class LibraryTest(unittest.TestCase):
@@ -114,8 +188,22 @@ class LibraryTest(unittest.TestCase):
         except OSError:
             pass
 
+    # .__init__ tests
+    def test_raises_ConfigurationError_if_cache_not_given(self):
+        cache = None
+        with self.assertRaises(ConfigurationError):
+            Library(cache, self.sqlite_db)
+
     # .clone tests
-    # TODO:
+    def test_returns_cloned_library(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db, host='localhost', port='8080')
+
+        # testing
+        cloned = lib.clone()
+        self.assertIsNot(cloned, lib)
+        self.assertIsInstance(cloned, Library)
+        self.assertEquals(lib.cache, cloned.cache)
 
     # ._create_bundle tests
     def test_returns_existing_bundle(self):
@@ -236,6 +324,32 @@ class LibraryTest(unittest.TestCase):
         lib.warehouse_url = 'http://example.com'
         fudge.verify()
 
+    def test_synchronizes_store_warehouses(self):
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        # create stores
+        FileFactory(type_=Files.TYPE.STORE)
+        FileFactory(type_=Files.TYPE.STORE)
+
+        warehouse1 = fudge.Fake('warehouse1').is_a_stub()
+        warehouse2 = fudge.Fake('warehouse2').is_a_stub()
+
+        fake_warehouse = fudge.Fake('warehouse')\
+            .expects_call().returns(warehouse1)\
+            .next_call().returns(warehouse2)
+
+        fake_sync_warehouse = fudge.Fake('sync_warehouse')\
+            .expects_call().with_args(warehouse1)\
+            .next_call().with_args(warehouse2)
+
+        # testing
+        with fudge.patched_context(Library, 'warehouse', fake_warehouse):
+            with fudge.patched_context(Library, 'sync_warehouse', fake_sync_warehouse):
+                lib.warehouse_url = 'http://example.com'
+        fudge.verify()
+
     # .put_bundle tests
     # TODO:
 
@@ -243,29 +357,79 @@ class LibraryTest(unittest.TestCase):
     # TODO:
 
     # .remove tests
-    # TODO:
+    def test_removes_bundle_from_database_and_cache(self):
+        # prepare state.
+        # create datasets for bundles
+        lib = Library(self.cache, self.sqlite_db)
+        ds1 = DatasetFactory(version='0.0.1')
+        ds1_vid = ds1.vid
+        self.sqlite_db.session.commit()
+        bundle = [x for x in lib.list_bundles(locations=None)][0]
+        fake_cache = fudge.Fake()\
+            .expects('remove')\
+            .with_args(bundle.identity.cache_key, propagate=True)
+
+        # test
+        with fudge.patched_context(lib, 'cache', fake_cache):
+            lib.remove(bundle)
+
+        # was deleted from database
+        self.assertEquals(self.query(Dataset).filter_by(vid=ds1_vid).all(), [])
+        # was deleted from cache
+        # TODO: implement
+        fudge.verify()
 
     # .list tests
     # TODO:
 
     # .list_bundles tests
-    def test_returns_last_versions_only(self):
+    def test_returns_last_revision_only(self):
         # prepare state.
         lib = Library(self.cache, self.sqlite_db)
 
         # create datasets for bundles
-        ds1 = DatasetFactory(version='0.0.1')
-        ds2 = DatasetFactory(version='0.0.1')
+        ds1 = DatasetFactory(revision=1)
+        ds2 = DatasetFactory(id_=ds1.id_, revision=2)
         ds1_vid = ds1.vid
         ds2_vid = ds2.vid
         self.sqlite_db.session.commit()
 
         # test
         bundles = [x for x in lib.list_bundles(locations=None)]
+        self.assertEquals(len(bundles), 1)
+        vids = [x.dataset.vid for x in bundles]
+        self.assertIn(ds1_vid, vids)
+        self.assertNotIn(ds2_vid, vids)
+
+    def test_returns_all_revisions(self):
+        # prepare state.
+        lib = Library(self.cache, self.sqlite_db)
+
+        # create datasets for bundles
+        ds1 = DatasetFactory(revision=1)
+        ds2 = DatasetFactory(id_=ds1.id_, revision=2)
+        ds1_vid = ds1.vid
+        ds2_vid = ds2.vid
+        self.sqlite_db.session.commit()
+
+        # test
+        bundles = [x for x in lib.list_bundles(locations=None, last_version_only=False)]
         self.assertEquals(len(bundles), 2)
         vids = [x.dataset.vid for x in bundles]
         self.assertIn(ds1_vid, vids)
         self.assertIn(ds2_vid, vids)
+
+    # .path tests
+    def test_returns_cache_path_by_key(self):
+
+        # prepare state.
+        cache = fudge.Fake().expects('path').returns('the-path')
+        lib = Library(cache, self.sqlite_db)
+
+        # testing
+        ret = lib.path('cache-key')
+        self.assertEquals(ret, 'the-path')
+        fudge.verify()
 
     # ._get_bundle_by_cache_key
     @fudge.patch('ckcache.multi.AltReadCache.get')
@@ -336,14 +500,33 @@ class LibraryTest(unittest.TestCase):
         fudge.verify()
 
     # .has tests
-    def test_returns_true_if_dataset_exists_in_the_cache(self):
+    def test_asks_cache_about_dataset(self):
         # prepare state
         ds1 = DatasetFactory()
         lib = Library(self.cache, self.sqlite_db)
-        lib.cache = fudge.Fake().expects('has').returns(True)
+        ds_ident = lib.resolve(ds1.vid)
+        lib.cache = fudge.Fake()\
+            .expects('has')\
+            .with_args(ds_ident.cache_key)\
+            .returns(True)
 
         # testing
         self.assertTrue(lib.has(ds1.vid))
+        fudge.verify()
+
+    def test_asks_cache_about_partition(self):
+        # prepare state
+        ds1 = DatasetFactory()
+        partition1 = PartitionFactory(dataset=ds1)
+        lib = Library(self.cache, self.sqlite_db)
+        ds_ident = lib.resolve(partition1.vid)
+        lib.cache = fudge.Fake()\
+            .expects('has')\
+            .with_args(ds_ident.partition.cache_key)\
+            .returns(True)
+
+        # testing
+        self.assertTrue(lib.has(partition1.vid))
         fudge.verify()
 
     # .get tests
@@ -771,6 +954,21 @@ class LibraryTest(unittest.TestCase):
         lib.remove_manifest(uid)
         self.assertEquals(len(self.query(File).all()), 0)
 
+    # .find tests
+    @unittest.skip('AttributeError: \'LibraryDb\' object has no attribute \'find\'')
+    def test_finds_in_the_db(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        fake_find = fudge.Fake()\
+            .expects_call()\
+            .with_args('FAKE_QUERY')\
+            .returns('FAKE_RETURN')
+
+        # testing
+        with fudge.patched_context(self.sqlite_db, 'find', fake_find):
+            ret = lib.find('FAKE_QUERY')
+            self.assertEquals(ret, 'FAKE_RETURN')
+
     # .locate tests
     def test_returns_pair_of_nones_if_ident_resolve_failed(self):
         # prepare state
@@ -923,8 +1121,21 @@ class LibraryTest(unittest.TestCase):
         lib.get = fudge.Fake().expects_call().returns('DEPENDENCY')
 
         # testing
-        ret = lib.dep('dep1')
+        ret = lib.dep('dep1', dep_cb=fake_cb)
         self.assertEquals(ret, 'DEPENDENCY')
+
+    def test_calls_dependency_callback(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._dependencies = {'dep1': 'dep1ref'}
+        lib.dep_cb = fudge.Fake('dep_cb').expects_call()
+        # Note: Going to return wrong dependency. But it does not matter here.
+        # TODO: change return value to match the return value of the .get() method (bundle?).
+        lib.get = fudge.Fake().expects_call().returns('DEPENDENCY')
+
+        # testing
+        lib.dep('dep1')
+        fudge.verify()
 
     # .dependencies property tests
     def test_contains_cached_dependencies(self):
@@ -997,6 +1208,23 @@ class LibraryTest(unittest.TestCase):
         self.assertEquals(ret['dataset1'].vid, ds1.vid)
         self.assertEquals(ret['dataset2'].vid, ds2.vid)
 
+    def test_raises_DependencyError_if_dependency_resolve_failed(self):
+        # TODO: Create BundleFactory and use it here
+
+        class FakeMetadata(object):
+            dependencies = {'missed-dep': 'missed-dep'}
+
+        class FakeBundle(object):
+            metadata = FakeMetadata()
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._bundle = FakeBundle()
+
+        # testing
+        with self.assertRaises(DependencyError):
+            lib._get_dependencies()
+
     # .check_dependencies tests
     def test_returns_empty_dict_if_all_dependencies_exist(self):
         ds1 = DatasetFactory()
@@ -1019,6 +1247,43 @@ class LibraryTest(unittest.TestCase):
         # testing
         with self.assertRaises(NotFoundError):
             lib.check_dependencies(download=False)
+
+    def test_gets_bundle_and_raises_NotFoundError_on_faile(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(Library.get, ['self', 'ref', 'remote', 'force', 'cb', 'location'])
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._dependencies = {'dataset1': 'vid1'}
+        fake_get = fudge.Fake()\
+            .expects_call()\
+            .with_args('vid1', cb=arg.any())\
+            .returns(None)
+
+        # testing
+        with fudge.patched_context(lib, 'get', fake_get):
+            with self.assertRaises(NotFoundError):
+                lib.check_dependencies(download=True)
+
+    # .source property tests
+    def test_returns_source_tree(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(
+            SourceTree.__init__,
+            ['self', 'base_dir', 'library', 'logger'])
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib.source_dir = 'the-dir'
+
+        fake_init = fudge.Fake('init')\
+            .expects_call()\
+            .with_args(lib.source_dir, lib, lib.logger)
+
+        # testing
+        with fudge.patched_context(SourceTree, '__init__', fake_init):
+            source = lib.source
+            self.assertIsInstance(source, SourceTree)
 
     # .new_files property tests
     def test_generates_new_installed_files(self):
@@ -1173,6 +1438,48 @@ class LibraryTest(unittest.TestCase):
             lib.sync_source(clean=True)
             self.assertEquals(self.query(File).all(), [])
 
+    def test_synces_all_identities(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db, source_dir='the-dir')
+        ds1 = DatasetFactory()
+
+        fake_source = fudge.Fake()\
+            .expects('_dir_list')\
+            .returns({'ident1': ds1.identity})
+        fake_sync = fudge.Fake('sync_source_dir')\
+            .expects_call()\
+            .with_args(
+                arg.passes_test(lambda x: x.vid == ds1.vid),
+                ds1.identity.bundle_path)
+
+        # testing
+        with fudge.patched_context(Library, 'source', fake_source):
+            with fudge.patched_context(Library, 'sync_source_dir', fake_sync):
+                lib.sync_source()
+
+    def test_logs_all_errors_while_syncing(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db, source_dir='the-dir')
+        ds1 = DatasetFactory()
+
+        fake_source = fudge.Fake()\
+            .expects('_dir_list')\
+            .returns({'ident1': ds1.identity})
+
+        fake_sync = fudge.Fake('sync_source_dir')\
+            .expects_call()\
+            .raises(Exception('My fake exc'))
+
+        fake_logger = fudge.Fake('logger')\
+            .expects('error')\
+            .with_args(arg.contains('Failed to sync'))
+
+        # testing
+        with fudge.patched_context(Library, 'source', fake_source):
+            with fudge.patched_context(Library, 'sync_source_dir', fake_sync):
+                with fudge.patched_context(lib, 'logger', fake_logger):
+                    lib.sync_source()
+
     # .sync_source_dir tests
     def test_installs_dataset_identity(self):
         # prepare state
@@ -1243,6 +1550,40 @@ class LibraryTest(unittest.TestCase):
         fake_files = fudge.Fake()\
             .expects('install_bundle_source')\
             .with_args(fake_bundle, fake_source, commit=True)
+
+        # testing
+
+        with fudge.patched_context(Library, 'source', fake_source):
+            with fudge.patched_context(Library, 'files', fake_files):
+                lib.sync_source_dir(ds1.identity, 'the-path')
+                fudge.verify()
+
+    def test_rollbacks_database_on_IntegrityError_raised_while_bundle_installing(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(
+            SourceTree.bundle,
+            ['self', 'path', 'buildbundle_ok'])
+        assert_spec(
+            Files.install_bundle_source,
+            ['self', 'bundle', 'source', 'commit'])
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        ds1 = DatasetFactory()
+        self.sqlite_db.install_dataset_identity = fudge.Fake('install_dataset_identity')\
+            .is_a_stub()
+
+        fake_bundle = fudge.Fake('bundle').is_a_stub()
+        fake_source = fudge.Fake('source')\
+            .expects('bundle')\
+            .returns(fake_bundle)
+
+        fake_files = fudge.Fake()\
+            .expects('install_bundle_source')\
+            .raises(IntegrityError('select 1;', [], 'a'))
+
+        self.sqlite_db.rollback = fudge.Fake('rollback')\
+            .expects_call()
 
         # testing
 
