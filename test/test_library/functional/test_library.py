@@ -6,9 +6,9 @@ Created on Jun 30, 2012
 import unittest
 import os.path
 import logging
-from test_base import TestBase  # Must be first ambry import to get logger set to internal logger.
+from test.test_base import TestBase  # Must be first ambry import to get logger set to internal logger.
 
-from  bundles.testbundle.bundle import Bundle
+from test.bundles.testbundle.bundle import Bundle
 from ambry.run import  get_runconfig, RunConfig
 
 import ambry.util
@@ -27,9 +27,9 @@ class Test(TestBase):
 
         super(Test, self).setUp()  #
 
-        import bundles.testbundle.bundle
+        import test.bundles.testbundle.bundle
 
-        self.bundle_dir = os.path.dirname(bundles.testbundle.bundle.__file__)
+        self.bundle_dir = os.path.dirname(test.bundles.testbundle.bundle.__file__)
         self.rc = get_runconfig((os.path.join(self.bundle_dir, 'library-test-config.yaml'),
                                  os.path.join(self.bundle_dir, 'bundle.yaml'),
                                  RunConfig.USER_ACCOUNTS))
@@ -835,12 +835,3 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         print e('births with mother source cdph')
         print e('births with mother in California by tracts')
         print e('births with mother with birth in California by tracts')
-
-def suite():
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite
-
-
-if __name__ == "__main__":
-    unittest.TextTestRunner().run(suite())
