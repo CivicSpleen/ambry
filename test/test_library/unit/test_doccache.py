@@ -1,40 +1,56 @@
 # -*- coding: utf-8 -*-
-
+import os
 import unittest
 
 import fudge
 
 from ambry.library.doccache import DocCache
+from test.test_library.factories import FileFactory
+from ambry.library.database import LibraryDb
+
+SQLITE_DATABASE = 'test_library_test_init.db'
 
 
 class DocCacheTest(unittest.TestCase):
 
     def setUp(self):
-        self.fake_library = fudge.Fake().is_a_stub()
+        self.sqlite_db = LibraryDb(driver='sqlite', dbname=SQLITE_DATABASE)
+        self.sqlite_db.enable_delete = True
+        self.sqlite_db.create_tables()
+        FileFactory._meta.sqlalchemy_session = self.sqlite_db.session
 
         # use cache with dict instead of DictCache
-        self.fake_library._doc_cache = False
+        self.cache = {'key1': 'val1'}  # TODO: use valid cache
+        from ambry.library import Library
+        self.lib = Library(self.cache, self.sqlite_db, host='localhost', port='8080')
+
+    def tearDown(self):
+        self.sqlite_db.close()
+        try:
+            os.remove(SQLITE_DATABASE)
+        except OSError:
+            pass
 
     # _munge_key tests
     def test_uses_given_key_and_deletes_it_from_kwargs(self):
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         key, args, kwargs = dc._munge_key(_key='my-key')
         self.assertIn('my-key', key)
         self.assertNotIn('_key', kwargs)
 
     def test_uses_given_key_to_create_prefix(self):
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         key, args, kwargs = dc._munge_key(_key='my-key')
         self.assertEquals('m/y/my-key', key)
 
     def test_adds_given_prefix_to_the_key_and_deletes_prefix_from_kwargs(self):
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         key, args, kwargs = dc._munge_key(_key='my-key', _key_prefix='prefix')
         self.assertEquals('prefix/m/y/my-key', key)
         self.assertNotIn('_key_prefix', kwargs)
 
     def test_uses_argument_names_to_create_key(self):
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         key, args, kwargs = dc._munge_key('arg1', 'arg2')
         self.assertEquals('a/r/arg1_arg2', key)
 
@@ -44,7 +60,7 @@ class DocCacheTest(unittest.TestCase):
         self.assertIn('arg2', args)
 
     def test_uses_optional_argument_names_to_create_key(self):
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         key, args, kwargs = dc._munge_key(kwarg1='kwarg1', kwarg2='kwarg2')
         self.assertEquals('k/w/kwarg1_kwarg2', key)
 
@@ -54,14 +70,14 @@ class DocCacheTest(unittest.TestCase):
         self.assertIn('kwarg2', kwargs)
 
     def test_uses_upper_prefixes(self):
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         dc.prefix_upper = True
         key, args, kwargs = dc._munge_key(_key='TheKey')
         self.assertEquals('_/T/_The_Key', key)
 
     # .cache tests
     def test_adds_return_value_to_the_cache_if_cache_is_empty(self):
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         self.assertEquals(dc._cache, {})
         dc.cache(sorted, [1, 2], reverse=True)
 
@@ -70,7 +86,7 @@ class DocCacheTest(unittest.TestCase):
 
     # .cache tests
     def test_adds_return_value_to_the_cache_if_cache_is_ignored(self):
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         dc.ignore_cache = True
 
         # cache is empty
@@ -88,7 +104,7 @@ class DocCacheTest(unittest.TestCase):
         self.assertEquals(dc._cache[key], [2, 1])
 
     def test_returns_value_from_cache(self):
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
 
         key = dc._munge_key([1, 2], reverse=True)[0]
         dc._cache[key] = [3, 2, 1]
@@ -102,19 +118,19 @@ class DocCacheTest(unittest.TestCase):
     def test_cleans_dictcache(self, fake_clean):
         fake_clean.expects_call()
         # force cache to use DictCache
-        self.fake_library._doc_cache = True
-        dc = DocCache(self.fake_library)
+        self.lib._doc_cache = True
+        dc = DocCache(self.lib)
         dc.clean()
 
     def test_cleans_dictionary(self):
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         dc._cache = {'a': 'b'}
         dc.clean()
         self.assertEquals(dc._cache, {})
 
     # .remove tests
     def test_removes_given_call_from_cache(self):
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
 
         key = dc._munge_key([1, 2], reverse=True)[0]
         dc._cache[key] = [2, 1]
@@ -125,7 +141,7 @@ class DocCacheTest(unittest.TestCase):
     # .compiled_times tests
     @unittest.skip('Is times deque deprecated?')
     def test_returns_times_sorted_by_time(self):
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
 
         dc.cache(sorted, [1, 2], reverse=True)
         dc.cache(sorted, [1, 2], reverse=True)
@@ -142,21 +158,20 @@ class DocCacheTest(unittest.TestCase):
 
     # .library_info tests
     def test_adds_library_info_to_the_cache(self):
-        self.fake_library.summary_dict = {'a': 'b'}
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         dc.library_info()
         self.assertIn('l/i/library_info', dc._cache)
-        self.assertEquals(dc._cache['l/i/library_info'], self.fake_library.summary_dict)
+        self.assertEquals(dc._cache['l/i/library_info'], self.lib.summary_dict)
 
     # .bundle_index tests
     def test_adds_bundle_index_to_the_cache(self):
-        self.fake_library.versioned_datasets = lambda: ['a', 'b']
-        dc = DocCache(self.fake_library)
+        self.lib.versioned_datasets = lambda: ['a', 'b']
+        dc = DocCache(self.lib)
         dc.bundle_index()
         self.assertIn('b/u/bundle_index', dc._cache)
         self.assertEquals(
             dc._cache['b/u/bundle_index'],
-            self.fake_library.versioned_datasets())
+            self.lib.versioned_datasets())
 
     # .dataset tests
     def test_adds_dataset_call_to_the_cache(self):
@@ -166,9 +181,9 @@ class DocCacheTest(unittest.TestCase):
                 'title': 'title1',
                 'summary': 'summary1'}
 
-        self.fake_library.dataset = lambda x: FakeDataset()
+        self.lib.dataset = lambda x: FakeDataset()
 
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         dc.dataset('vid')
         # TODO: is using _key_prefix as key suffix valid behaviour?
         self.assertIn('ds/v/i/vidds', dc._cache)
@@ -180,9 +195,9 @@ class DocCacheTest(unittest.TestCase):
         class FakeBundle(object):
             summary_dict = {'a': 'b'}
 
-        self.fake_library.bundle = lambda x: FakeBundle()
+        self.lib.bundle = lambda x: FakeBundle()
 
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         dc.bundle_summary('vid')
 
         # TODO: is using _key_prefix as key suffix valid behaviour?
@@ -195,9 +210,9 @@ class DocCacheTest(unittest.TestCase):
         class FakeBundle(object):
             dict = {'a': 'b'}
 
-        self.fake_library.bundle = lambda x: FakeBundle()
+        self.lib.bundle = lambda x: FakeBundle()
 
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         dc.bundle('vid')
 
         self.assertIn('v/i/vid', dc._cache)
@@ -209,9 +224,9 @@ class DocCacheTest(unittest.TestCase):
         class FakePartition(object):
             dict = {'a': 'b'}
 
-        self.fake_library.partition = lambda x: FakePartition()
+        self.lib.partition = lambda x: FakePartition()
 
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         dc.partition('vid')
 
         self.assertIn('v/i/vid', dc._cache)
@@ -223,9 +238,9 @@ class DocCacheTest(unittest.TestCase):
         class FakeTable(object):
             nonull_col_dict = {'a': 'b'}
 
-        self.fake_library.table = lambda x: FakeTable()
+        self.lib.table = lambda x: FakeTable()
 
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         dc.table('vid')
 
         self.assertIn('v/i/vid', dc._cache)
@@ -236,9 +251,9 @@ class DocCacheTest(unittest.TestCase):
         class FakeWarehouse(object):
             dict = {'a': 'b'}
 
-        self.fake_library.warehouse = lambda x: FakeWarehouse()
+        self.lib.warehouse = lambda x: FakeWarehouse()
 
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         dc.warehouse('vid')
 
         self.assertIn('v/i/vid', dc._cache)
@@ -252,9 +267,9 @@ class DocCacheTest(unittest.TestCase):
         def fake_manifest(vid):
             return '', FakeManifest()
 
-        self.fake_library.manifest = fake_manifest
+        self.lib.manifest = fake_manifest
 
-        dc = DocCache(self.fake_library)
+        dc = DocCache(self.lib)
         dc.manifest('vid')
 
         self.assertIn('v/i/vid', dc._cache)
@@ -268,20 +283,27 @@ class DocCacheTest(unittest.TestCase):
                 self.id_ = id_
                 self.vid = vid
 
-        self.fake_library.tables_no_columns = [
+        tables_no_columns = [
             FakeTable('1', 'vid1'),
             FakeTable('2', 'vid2'),
             FakeTable('3', 'vid3'),
             FakeTable('3', 'vid4')]
 
-        dc = DocCache(self.fake_library)
-        dc.table_version_map()
+        dc = DocCache(self.lib)
 
-        self.assertIn('t/a/table_version_map', dc._cache)
-        self.assertIn('1', dc._cache['t/a/table_version_map'])
-        self.assertIn('2', dc._cache['t/a/table_version_map'])
-        self.assertIn('3', dc._cache['t/a/table_version_map'])
+        with fudge.patched_context(self.lib, 'tables_no_columns', tables_no_columns):
+            dc.table_version_map()
 
-        self.assertEquals(dc._cache['t/a/table_version_map']['1'], ['vid1'])
-        self.assertEquals(dc._cache['t/a/table_version_map']['2'], ['vid2'])
-        self.assertEquals(dc._cache['t/a/table_version_map']['3'], ['vid3', 'vid4'])
+            self.assertIn('t/a/table_version_map', dc._cache)
+            self.assertIn('1', dc._cache['t/a/table_version_map'])
+            self.assertIn('2', dc._cache['t/a/table_version_map'])
+            self.assertIn('3', dc._cache['t/a/table_version_map'])
+
+            self.assertEquals(dc._cache['t/a/table_version_map']['1'], ['vid1'])
+            self.assertEquals(dc._cache['t/a/table_version_map']['2'], ['vid2'])
+            self.assertEquals(dc._cache['t/a/table_version_map']['3'], ['vid3', 'vid4'])
+
+    # .put_manifest tests
+    @unittest.skip('No one uses that method. Is it deprecated?')
+    def test_puts_manifest(self):
+        pass

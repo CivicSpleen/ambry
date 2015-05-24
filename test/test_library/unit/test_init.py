@@ -749,8 +749,10 @@ class LibraryTest(unittest.TestCase):
         lib = Library(self.cache, self.sqlite_db)
 
         # testing
-        with self.assertRaises(NotFoundError):
-            lib.partition('the-vid')
+        # hide log message
+        with fudge.patched_context(lib, 'logger', fudge.Fake().is_a_stub()):
+            with self.assertRaises(NotFoundError):
+                lib.partition('the-vid')
 
     # .dataset_partitions tests
     def test_returns_given_dataset_partitions(self):
@@ -1123,7 +1125,7 @@ class LibraryTest(unittest.TestCase):
         lib.get = fudge.Fake().expects_call().returns('DEPENDENCY')
 
         # testing
-        ret = lib.dep('dep1', dep_cb=fake_cb)
+        ret = lib.dep('dep1')
         self.assertEquals(ret, 'DEPENDENCY')
 
     def test_calls_dependency_callback(self):
