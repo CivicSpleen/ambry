@@ -74,11 +74,6 @@ class LibraryDbTest(unittest.TestCase):
             .filter_by(**filter_kwargs)
         assert query.first() is None
 
-    @unittest.skip('Will implement it just before merge.')
-    def test_initialization_raises_exception_if_driver_not_found(self):
-        with self.assertRaises(ValueError):
-            LibraryDb(driver='1')
-
     def test_initialization_populates_port(self):
         db = LibraryDb(driver='postgres', port=5232)
         self.assertIn('5232', db.dsn)
@@ -444,11 +439,6 @@ class LibraryDbTest(unittest.TestCase):
 
         ds1 = DatasetFactory()
         PartitionFactory(dataset=ds1)
-        self.sqlite_db.session.commit()
-
-    @unittest.skip('Uncomment and implement.')
-    def test_creates_code_table(self):
-        # CodeFactory()
         self.sqlite_db.session.commit()
 
     def test_creates_columnstat_table(self):
