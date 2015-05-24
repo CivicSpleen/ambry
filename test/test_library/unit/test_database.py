@@ -8,12 +8,12 @@ import fudge
 from fudge.inspector import arg
 
 from sqlalchemy.engine.reflection import Inspector
-from sqlalchemy.exc import IntegrityError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
 from sqlalchemy.orm.query import Query
 
 from ambry.library.database import LibraryDb, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME
 from ambry.orm import Dataset, Config, Partition, File, Column, ColumnStat, Table
-from ambry.dbexceptions import ConflictError
+from ambry.dbexceptions import ConflictError, DatabaseError
 from ambry.database.inserter import ValueInserter
 
 from test.test_library.factories import DatasetFactory, ConfigFactory,\
@@ -39,6 +39,8 @@ class LibraryDbTest(unittest.TestCase):
         library_db_file = os.path.join(self.test_temp_dir, 'test_database.db')
         self.sqlite_db = LibraryDb(driver='sqlite', dbname=library_db_file)
         self.sqlite_db.enable_delete = True
+        self.sqlite_db.create_tables()
+        self.sqlite_db.commit()
 
         # each factory requires db session. Populate all of them here, because we know the session.
         DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
@@ -195,7 +197,6 @@ class LibraryDbTest(unittest.TestCase):
         self.assertFalse(db.exists())
 
     def test_returns_false_if_dataset_does_not_exist(self):
-        self.sqlite_db.create_tables()
         query = "SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)
         self.assertIsNone(self.sqlite_db.connection.execute(query).fetchone())
         ret = self.sqlite_db.exists()
@@ -220,7 +221,6 @@ class LibraryDbTest(unittest.TestCase):
     def test_returns_true_if_root_config_dataset_exists(self):
         # first assert signatures of the functions we are going to mock did not change.
         # prepare state
-        self.sqlite_db.create_tables()
         root_config_ds = DatasetFactory()
         root_config_ds.vid = ROOT_CONFIG_NAME_V
         self.sqlite_db.session.commit()
@@ -231,7 +231,6 @@ class LibraryDbTest(unittest.TestCase):
 
     # clean tests
     def test_clean_deletes_all_instances(self):
-        self.sqlite_db.create_tables()
 
         conf1 = ConfigFactory()
         ds1 = DatasetFactory()
@@ -265,6 +264,26 @@ class LibraryDbTest(unittest.TestCase):
 
         for model, kwargs in models:
             self._assert_does_not_exist(model, **kwargs)
+
+    def test_raises_DatabaseError_if_deleting_failed_with_OperationalError(self):
+
+        fake_session = fudge.Fake()\
+            .expects('query')\
+            .raises(OperationalError('select 1;', [], 'a'))
+
+        with fudge.patched_context(self.sqlite_db, '_session', fake_session):
+            with self.assertRaises(DatabaseError):
+                self.sqlite_db.clean()
+
+    def test_raises_DatabaseError_if_deleting_failed_with_IntegrityError(self):
+
+        fake_session = fudge.Fake()\
+            .expects('query')\
+            .raises(IntegrityError('select 1;', [], 'a'))
+
+        with fudge.patched_context(self.sqlite_db, '_session', fake_session):
+            with self.assertRaises(DatabaseError):
+                self.sqlite_db.clean()
 
     # .create tests
     def test_creates_new_database(self):
@@ -384,21 +403,18 @@ class LibraryDbTest(unittest.TestCase):
 
     # .create_tables test
     def test_creates_dataset_table(self):
-        self.sqlite_db.create_tables()
 
         # Now all tables are created. Can we use ORM to create datasets?
         DatasetFactory()
         self.sqlite_db.session.commit()
 
     def test_creates_config_table(self):
-        self.sqlite_db.create_tables()
 
         # Now all tables are created. Can we use ORM to create configs?
         ConfigFactory(key='a', value='b')
         self.sqlite_db.session.commit()
 
     def test_creates_table_table(self):
-        self.sqlite_db.create_tables()
 
         # Now all tables are created. Can we use ORM to create datasets?
         ds1 = DatasetFactory()
@@ -407,7 +423,6 @@ class LibraryDbTest(unittest.TestCase):
         self.sqlite_db.session.commit()
 
     def test_creates_column_table(self):
-        self.sqlite_db.create_tables()
 
         # Now all tables are created. Can we use ORM to create columns?
 
@@ -422,12 +437,10 @@ class LibraryDbTest(unittest.TestCase):
         self.sqlite_db.session.commit()
 
     def test_creates_file_table(self):
-        self.sqlite_db.create_tables()
         FileFactory()
         self.sqlite_db.session.commit()
 
     def test_creates_partition_table(self):
-        self.sqlite_db.create_tables()
 
         ds1 = DatasetFactory()
         PartitionFactory(dataset=ds1)
@@ -435,12 +448,10 @@ class LibraryDbTest(unittest.TestCase):
 
     @unittest.skip('Uncomment and implement.')
     def test_creates_code_table(self):
-        self.sqlite_db.create_tables()
         # CodeFactory()
         self.sqlite_db.session.commit()
 
     def test_creates_columnstat_table(self):
-        self.sqlite_db.create_tables()
         self.sqlite_db.session.commit()
         ColumnStatFactory()
         self.sqlite_db.session.commit()
@@ -448,7 +459,6 @@ class LibraryDbTest(unittest.TestCase):
     # ._add_config_root
     def test_creates_new_root_config(self):
         # prepare state
-        self.sqlite_db.create_tables()
         datasets = self.query(Dataset).all()
         self.assertEquals(len(datasets), 0)
 
@@ -464,7 +474,6 @@ class LibraryDbTest(unittest.TestCase):
         assert_spec(self.sqlite_db.close_session, ['self'])
 
         # prepare state
-        self.sqlite_db.create_tables()
         DatasetFactory(id_=ROOT_CONFIG_NAME, vid=ROOT_CONFIG_NAME)
         self.sqlite_db.session.commit()
         self.sqlite_db.close_session = fudge.Fake('close_session').expects_call()
@@ -475,7 +484,6 @@ class LibraryDbTest(unittest.TestCase):
 
     # ._clean_config_root tests
     def tests_resets_instance_fields(self):
-        self.sqlite_db.create_tables()
         ds = DatasetFactory()
         ds.id_ = ROOT_CONFIG_NAME
         ds.name = 'name'
@@ -503,14 +511,11 @@ class LibraryDbTest(unittest.TestCase):
     # TODO: ValueInserter does not work without bundle. Fix it.
     @unittest.skip('ValueInserter requires bundle, but inserter method gives None instead.')
     def test_returns_value_inserter(self):
-        self.sqlite_db.create_tables()
         ret = self.sqlite_db.inserter('datasets')
         self.assertIsInstance(ret, ValueInserter)
 
     # set_config_value tests
     def test_creates_new_config_if_config_does_not_exists(self):
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         group = 'group-1'
         key = 'key-1'
         value = 'value-1'
@@ -518,8 +523,6 @@ class LibraryDbTest(unittest.TestCase):
         self._assert_exists(Config, group=group, key=key, value=value)
 
     def test_changes_existing_config(self):
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         group = 'group-1'
         key = 'key-1'
         value = 'value-1'
@@ -537,8 +540,6 @@ class LibraryDbTest(unittest.TestCase):
 
     # get_config_value tests
     def test_returns_config(self):
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         group = 'group-1'
         key = 'key-1'
         value = 'value-1'
@@ -552,14 +553,10 @@ class LibraryDbTest(unittest.TestCase):
         self.assertEquals(ret.value, value)
 
     def test_returns_none_if_config_does_not_exist(self):
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         ret = self.sqlite_db.get_config_value('group1', 'key1')
         self.assertIsNone(ret)
 
     def test_returns_none_if_config_query_failed(self):
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         fake_filter = fudge.Fake()\
             .expects_call()\
             .raises(Exception('MyFakeException'))
@@ -569,8 +566,6 @@ class LibraryDbTest(unittest.TestCase):
 
     # get_config_group tests
     def test_returns_dict_with_key_and_values(self):
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         group1 = 'group-1'
         key1 = 'key-1'
         value1 = 'value-1'
@@ -595,8 +590,6 @@ class LibraryDbTest(unittest.TestCase):
         self.assertEquals(ret[key2], value2)
 
     def test_returns_empty_dict_if_group_does_not_exist(self):
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
 
         group1 = 'group-1'
         self._assert_does_not_exist(Config, group=group1)
@@ -604,10 +597,20 @@ class LibraryDbTest(unittest.TestCase):
         ret = self.sqlite_db.get_config_group(group1)
         self.assertEquals(ret, {})
 
+    def test_returns_empty_dict_on_any_error(self):
+        # TODO: it is a bad idea to catch all errors without logging. Refactor.
+
+        group1 = 'group-1'
+        fake_session = fudge.Fake()\
+            .expects('query')\
+            .raises(Exception('My fake exception'))
+
+        with fudge.patched_context(self.sqlite_db, '_session', fake_session):
+            ret = self.sqlite_db.get_config_group(group1)
+            self.assertEquals(ret, {})
+
     # .get_config_rows tests
     def test_returns_config_config_with_key_splitted_by_commas(self):
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         group1 = 'config'
         key1 = '1.2.3.5.6'
 
@@ -627,8 +630,6 @@ class LibraryDbTest(unittest.TestCase):
         self.assertEquals(value, config1.value)
 
     def test_returns_process_with_key_splitted_by_commas(self):
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         group1 = 'process'
         key1 = '1.2.3.5.6'
 
@@ -650,8 +651,6 @@ class LibraryDbTest(unittest.TestCase):
     # .get_bundle_value
     def test_returns_config_value(self):
         # TODO: Strange method. Isn't .get_config().value the same?
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         group = 'group-1'
         key = 'key-1'
         value = 'value-1'
@@ -668,16 +667,12 @@ class LibraryDbTest(unittest.TestCase):
 
     def test_returns_none_if_config_does_not_exists(self):
         # TODO: Strange method. Isn't .get_config().value the same?
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         group = 'group-1'
         key = 'key-1'
         self.assertIsNone(self.sqlite_db.get_bundle_value(ROOT_CONFIG_NAME_V, group, key))
 
     # get_bundle_values
     def test_returns_configs_of_the_group(self):
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         group = 'group-1'
         key1 = 'key-1'
         value1 = 'value-1'
@@ -701,18 +696,26 @@ class LibraryDbTest(unittest.TestCase):
         self.assertIn(value2, values)
 
     def test_returns_empty_list_if_group_configs_do_not_exists(self):
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         group = 'group-1'
 
         self.assertEquals(
             self.sqlite_db.get_bundle_values(ROOT_CONFIG_NAME_V, group),
             [])
 
+    def test_returns_None_on_any_value_retrieve_error(self):
+        # TODO: catching all errors without logging is bad idea. Refactor.
+        group = 'group-1'
+
+        fake_session = fudge.Fake()\
+            .expects('query')\
+            .raises(Exception('My fake exception'))
+
+        with fudge.patched_context(self.sqlite_db, '_session', fake_session):
+            ret = self.sqlite_db.get_bundle_values(ROOT_CONFIG_NAME_V, group)
+            self.assertIsNone(ret, {})
+
     # .config_values property tests
     def test_contains_dict_with_groups_keys_and_values(self):
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         group = 'group-1'
         key1 = 'key-1'
         value1 = 'value-1'
@@ -756,13 +759,10 @@ class LibraryDbTest(unittest.TestCase):
         fudge.verify()
 
     def test_contains_empty_dict(self):
-        self.sqlite_db.create_tables()
-        self.sqlite_db.commit()
         self.assertEquals(self.sqlite_db.config_values, {})
 
     # .install_dataset_identity tests
     def tests_installs_new_dataset_identity(self):
-        self.sqlite_db.create_tables()
 
         class FakeIdentity(object):
             dict = {
@@ -781,7 +781,6 @@ class LibraryDbTest(unittest.TestCase):
         # TODO: test other fields
 
     def tests_raises_ConflictError_exception_if_save_failed(self):
-        self.sqlite_db.create_tables()
         fake_commit = fudge.Fake('commit')\
             .expects_call()\
             .raises(IntegrityError('a', 'a', 'a'))
@@ -805,8 +804,6 @@ class LibraryDbTest(unittest.TestCase):
     # .mark_table_installed tests
     def test_marks_table_as_installed(self):
         # prepare state
-        self.sqlite_db.create_tables()
-        self.sqlite_db.session.commit()
 
         ds1 = DatasetFactory()
         table1 = TableFactory(dataset=ds1)
@@ -821,9 +818,6 @@ class LibraryDbTest(unittest.TestCase):
     # .mark_partition_installed tests
     def test_marks_partition_as_installed(self):
         # prepare state
-        self.sqlite_db.create_tables()
-        self.sqlite_db.session.commit()
-
         ds1 = DatasetFactory()
         partition1 = PartitionFactory(dataset=ds1)
         assert partition1.installed is None
@@ -850,9 +844,6 @@ class LibraryDbTest(unittest.TestCase):
     # .delete_dataset_colstats tests
     def test_deletes_column_stat(self):
         # prepare state
-        self.sqlite_db.create_tables()
-        self.sqlite_db.session.commit()
-
         colstat1 = ColumnStatFactory()
 
         # save id to get rid of ObjectDeletedError.
@@ -871,11 +862,10 @@ class LibraryDbTest(unittest.TestCase):
         assert_spec(self.sqlite_db.delete_dataset_colstats, ['self', 'dvid'])
 
         # prepare state.
-        self.sqlite_db.create_tables()
-        self.sqlite_db.session.commit()
-
         ds1 = DatasetFactory()
         fake_delete = fudge.Fake().expects_call()
+
+        # testing
         with fudge.patched_context(LibraryDb, 'delete_dataset_colstats', fake_delete):
             self.sqlite_db.remove_dataset(ds1.vid)
         fudge.verify()
@@ -883,9 +873,6 @@ class LibraryDbTest(unittest.TestCase):
     def test_removes_dataset(self):
 
         # prepare state.
-        self.sqlite_db.create_tables()
-        self.sqlite_db.session.commit()
-
         ds1 = DatasetFactory()
         ds1_vid = ds1.vid
 
@@ -900,8 +887,6 @@ class LibraryDbTest(unittest.TestCase):
     def test_removes_partition_and_stat(self):
 
         # prepare state
-        self.sqlite_db.create_tables()
-        self.sqlite_db.session.commit()
 
         ds1 = DatasetFactory()
         table1 = TableFactory(dataset=ds1)
@@ -930,9 +915,6 @@ class LibraryDbTest(unittest.TestCase):
     def test_returns_table(self):
 
         # prepare state
-        self.sqlite_db.create_tables()
-        self.sqlite_db.session.commit()
-
         ds1 = DatasetFactory()
         table1 = TableFactory(dataset=ds1)
 
@@ -947,9 +929,6 @@ class LibraryDbTest(unittest.TestCase):
     def test_dict_with_all_tables(self):
 
         # prepare state
-        self.sqlite_db.create_tables()
-        self.sqlite_db.session.commit()
-
         ds1 = DatasetFactory()
         table1 = TableFactory(dataset=ds1)
 
@@ -968,8 +947,6 @@ class LibraryDbTest(unittest.TestCase):
     # .all_vids tests
     def test_returns_all_datasets_and_partitions(self):
         # prepare state
-        self.sqlite_db.create_tables()
-        self.sqlite_db.session.commit()
 
         ds1 = DatasetFactory()
         table1 = TableFactory(dataset=ds1)
@@ -990,8 +967,6 @@ class LibraryDbTest(unittest.TestCase):
     @unittest.skip('raises `AttributeError: type object \'Dataset\' has no attribute \'location\'` error.')
     def test_returns_dict_with_library_datasets(self):
         # prepare state
-        self.sqlite_db.create_tables()
-        self.sqlite_db.session.commit()
 
         ds1 = DatasetFactory(location=Dataset.LOCATION.LIBRARY)
         ds2 = DatasetFactory(location=Dataset.LOCATION.LIBRARY)
