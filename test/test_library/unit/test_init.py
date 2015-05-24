@@ -27,7 +27,7 @@ from ambry.identity import Identity
 from ambry.library import Library, _new_library
 from ambry.library.database import LibraryDb
 from ambry.library.files import Files
-from ambry.orm import File, Dataset
+from ambry.orm import File, Dataset, Partition
 from ambry.source import SourceTree
 from ambry import warehouse
 from ambry import util
@@ -36,7 +36,7 @@ from ambry.warehouse.manifest import Manifest
 from test.test_library.asserts import assert_spec
 from test.test_library.factories import DatasetFactory, ConfigFactory,\
     TableFactory, ColumnFactory, FileFactory, PartitionFactory, CodeFactory,\
-    ColumnStatFactory
+    ColumnStatFactory, WarehouseFactory
 
 
 SQLITE_DATABASE = 'test_library_test_init.db'
@@ -187,6 +187,8 @@ class LibraryTest(unittest.TestCase):
             os.remove(SQLITE_DATABASE)
         except OSError:
             pass
+
+        WarehouseFactory.clean()
 
     # .__init__ tests
     def test_raises_ConfigurationError_if_cache_not_given(self):
@@ -1593,7 +1595,106 @@ class LibraryTest(unittest.TestCase):
                 fudge.verify()
 
     # .sync_warehouse tests
-    # TODO:
+    def test_installs_datastore(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(
+            Files.install_data_store,
+            ['self', 'w', 'name', 'title', 'summary', 'cache', 'url', 'commit'])
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+
+        warehouse1 = WarehouseFactory(
+            database=self.sqlite_db)
+
+        fake_install = fudge.Fake('install_data_store').expects_call()\
+            .with_args(
+                warehouse1, name=warehouse1.name, title=warehouse1.title,
+                url={}, summary=warehouse1.summary)
+
+        # testing
+
+        with fudge.patched_context(Files, 'install_data_store', fake_install):
+            lib.sync_warehouse(warehouse1)
+
+    def test_links_store_and_partitions(self):
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        self.sqlite_db.commit()
+
+        # add partition to the library
+        l_partition1 = PartitionFactory()
+
+        warehouse1 = WarehouseFactory(
+            database=self.sqlite_db)
+
+        # add partitions to the warehouse library
+        PartitionFactory._meta.sqlalchemy_session = warehouse1.library.database.session
+        w_partition1 = PartitionFactory()
+
+        fake_store = fudge.Fake()\
+            .expects('link_partition')\
+            .with_args(l_partition1)
+
+        fake_install = fudge.Fake('install_data_store').expects_call().returns(fake_store)
+
+        fake_partition = fudge.Fake('Library.partition()')\
+            .expects_call()\
+            .with_args(w_partition1.vid)\
+            .returns(l_partition1)
+
+        # fake link_store for both - dataset and partition.
+        fake_link = fudge.Fake('link_store')\
+            .expects_call()\
+            .with_args(fake_store)\
+            .next_call()\
+            .with_args(fake_store)\
+
+        # testing
+
+        with fudge.patched_context(Files, 'install_data_store', fake_install):
+            with fudge.patched_context(lib, 'partition', fake_partition):
+                with fudge.patched_context(Partition, 'link_store', fake_link):
+                    with fudge.patched_context(Dataset, 'link_store', fake_link):
+                        lib.sync_warehouse(warehouse1)
+        fudge.verify()
+
+    def test_links_manifests(self):
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        self.sqlite_db.commit()
+
+        # add partition to the library
+        local_manifest = FileFactory(type_=Files.TYPE.MANIFEST, data={})
+
+        warehouse1 = WarehouseFactory(
+            database=self.sqlite_db)
+
+        # add manifests to the warehouse library
+        FileFactory._meta.sqlalchemy_session = warehouse1.library.database.session
+        FileFactory(type_=Files.TYPE.MANIFEST)
+
+        fake_store = fudge.Fake().is_a_stub()
+        fake_install = fudge.Fake('install_data_store').expects_call().returns(fake_store)
+
+        # fake link_store for both - dataset and partition.
+        fake_link = fudge.Fake('link_store')\
+            .expects_call()\
+            .with_args(fake_store)\
+            .next_call()\
+            .with_args(fake_store)\
+
+        fake_install_manifest = fudge.Fake().expects_call().returns(local_manifest)
+
+        # testing
+
+        with fudge.patched_context(Files, 'install_data_store', fake_install):
+            with fudge.patched_context(Files, 'install_manifest', fake_install_manifest):
+                with fudge.patched_context(File, 'link_store', fake_link):
+                    lib.sync_warehouse(warehouse1)
+        fudge.verify()
 
     # .sync_warehouses tests
     def test_synces_all_warehouses(self):

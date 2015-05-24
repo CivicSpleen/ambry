@@ -1,13 +1,20 @@
 # -*- coding: utf-8 -*-
+import os
 
 import factory
 from factory.alchemy import SQLAlchemyModelFactory
 
+from ambry.library.database import LibraryDb
+from ambry.library import Library
 from ambry.library.files import Files
+from ambry.warehouse import Warehouse
 from ambry.orm import Dataset, Config, Table, Column, File, Partition, Code, ColumnStat
 from ambry.library.database import ROOT_CONFIG_NAME
 
-# TODO: move to the orm tests dir
+WAREHOUSE_LIBRARY_DB_FILE = 'warehouse-lib-db.db'
+WAREHOUSE_REMOTE_LIBRARY_DB_FILE = 'warehouse-remote-lib-db.db'
+
+# TODO: move orm factories to the orm tests dir
 
 
 def _drop_entity(vid):
@@ -400,3 +407,55 @@ class ColumnStatFactory(SQLAlchemyModelFactory):
         assert partition.d_vid == dataset.vid
 
         return True
+
+
+class WarehouseFactory(factory.Factory):
+    # TODO: try to upgrade sqlite to use multiple inmemory files\
+    # - http://www.sqlite.org/changes.html#version_3_7_13
+    _databases_to_close = []
+
+    class Meta:
+        model = Warehouse
+
+    @classmethod
+    def _prepare(cls, create, **kwargs):
+        # shortcut for sqlalchemy session.
+        assert 'database' in kwargs, 'Database is required for Warehouse.'
+
+        cache = {'key1': 'val1'}  # TODO: convert to valid cache
+        if not kwargs.get('wlibrary'):
+            wlibrary_db = LibraryDb(
+                driver='sqlite',
+                dbname=WAREHOUSE_LIBRARY_DB_FILE)
+            wlibrary_db.enable_delete = True
+            wlibrary_db.create_tables()
+            wlibrary = Library(cache, wlibrary_db)
+            kwargs['wlibrary'] = wlibrary
+            cls._databases_to_close.append(wlibrary_db)
+
+        if not kwargs.get('elibrary'):
+            elibrary_db = LibraryDb(
+                driver='sqlite',
+                dbname=WAREHOUSE_REMOTE_LIBRARY_DB_FILE)
+            elibrary_db.enable_delete = True
+            elibrary_db.create_tables()
+            elibrary = Library(cache, elibrary_db)
+            kwargs['elibrary'] = elibrary
+            cls._databases_to_close.append(wlibrary_db)
+
+        return super(WarehouseFactory, cls)._prepare(create, **kwargs)
+
+    @classmethod
+    def clean(cls):
+        """ deletes all filed created while constructing warehouse. """
+        for db in cls._databases_to_close:
+            db.close()
+        try:
+            os.remove(WAREHOUSE_LIBRARY_DB_FILE)
+        except OSError:
+            pass
+
+        try:
+            os.remove(WAREHOUSE_REMOTE_LIBRARY_DB_FILE)
+        except OSError:
+            pass
