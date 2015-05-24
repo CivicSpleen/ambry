@@ -21,6 +21,8 @@ from test.test_library.asserts import assert_spec
 BUNDLES_DIR_PREFIX = 'test_library_test_search_bundles'
 DOC_CACHE_DIR_PREFIX = 'test_library_test_search_doc_cache'
 
+SQLITE_DATABASE = 'test_library_test_search.db'
+
 
 class SearchResultTest(unittest.TestCase):
 
@@ -49,7 +51,6 @@ class SearchTest(unittest.TestCase):
         shutil.rmtree(cls.doc_cache)
 
     def setUp(self):
-        SQLITE_DATABASE = 'test_library_test_search.db'
         self.sqlite_db = LibraryDb(driver='sqlite', dbname=SQLITE_DATABASE)
         self.sqlite_db.enable_delete = True
         self.sqlite_db.create_tables()
@@ -62,6 +63,15 @@ class SearchTest(unittest.TestCase):
         self.lib = Library(
             self.__class__.cache, self.sqlite_db,
             doc_cache=doc_cache)
+
+    def tearDown(self):
+        fudge.clear_expectations()
+        fudge.clear_calls()
+        self.sqlite_db.close()
+        try:
+            os.remove(SQLITE_DATABASE)
+        except OSError:
+            pass
 
     # helpers
     def _get_cache(self):
