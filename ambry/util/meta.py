@@ -230,15 +230,6 @@ class Metadata(object):
     def yaml(self):
         return self._term_values.dump()
 
-    def html(self):
-
-        out = ''
-
-        for name, group in self._members.items():
-
-            out += getattr(self, name).html()
-
-        return out
 
     def _repr_html_(self):
         """Adapts html() to IPython."""
@@ -281,6 +272,19 @@ class Metadata(object):
                 d[file_] = []
 
             d[file_].append(m)
+
+        return d
+
+    def groups_by_altfile(self):
+        """Returns a map of the files defined in groups, and the groups that
+        define those files. Unlike groups_by_file, there is only one alt-file per group"""
+        from collections import OrderedDict
+
+        d = {}
+
+        for name, m in self._members.items():
+            if m._altfile:
+                d[m._altfile] = m
 
         return d
 
@@ -382,15 +386,21 @@ class Group(object):
     _parent = None
     _top = None
 
-    def __init__(self, file=None, to_rows=True):
+    def __init__(self, file=None,  altfile = None,  to_rows=True):
+        """
+
+        :param file:  Relative file path to yaml file where data for section is read and written.
+        :param alt_file: If it exists, an alternate file where data can be stored. Usually a CSV file.
+        :param to_rows: ? Unused?
+        :return:
+        """
 
         self._members = {
             name: attr for name,
-            attr in type(self).__dict__.items() if isinstance(
-                attr,
-                Term) and not name.startswith('_')}
+            attr in type(self).__dict__.items() if isinstance(attr,Term) and not name.startswith('_')}
 
         self._file = file
+        self._altfile = altfile
         self._to_rows = to_rows
 
     def init_descriptor(self, key, top):
@@ -448,13 +458,8 @@ class Group(object):
 
         return object.__setattr__(self, attr, value)
 
-    def html(self):
 
-        return ''
 
-    def _repr_html_(self):
-        """Adapts html() to IPython."""
-        return self.html()
 
 
 class DictGroup(Group, collections.MutableMapping):
@@ -543,20 +548,7 @@ class DictGroup(Group, collections.MutableMapping):
         else:
             self.set({key: value})
 
-    def html(self):
-        out = ''
 
-        for name, m in self._members.items():
-
-            ti = self.get_term_instance(name)
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
-
-        return """
-<h2 class="{cls}">{title}</h2>
-<table class="{cls}">
-{out}</table>
-""" .format(title=self._key.title(), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
-            out=out)
 
 
 class TypedDictGroup(DictGroup):
@@ -729,17 +721,7 @@ class ListGroup(Group, collections.MutableSequence):
     def reformat(self, v):
         raise NotImplementedError()
 
-    def html(self):
-        out = ''
 
-        for ti in self:
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
-
-        return """
-<table class="{cls}">
-{out}</table>
-""" .format(title=self._key.title(), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
-            out=out)
 
 
 class Term(object):
@@ -805,8 +787,7 @@ class Term(object):
     def after_set(self):
         pass
 
-    def html(self):
-        return ""
+
 
 # For ScalarTerm.text()
 # from http://stackoverflow.com/a/925630/1144479
@@ -924,9 +905,6 @@ class ScalarTerm(Term):
         return self.get() is None
 
 
-
-
-
 class DictTerm(Term, collections.MutableMapping):
 
     """A term that contains a dict of sub-parts
@@ -983,7 +961,10 @@ class DictTerm(Term, collections.MutableMapping):
 
         tv = self._parent._term_values[self._key]
 
-        assert tv is not None
+        if not tv:
+            self._parent._term_values[self._key] = {}
+            tv = self._parent._term_values[self._key]
+
 
         return tv
 
@@ -1016,7 +997,10 @@ class DictTerm(Term, collections.MutableMapping):
         self.set_row(key, value)
 
     def __delitem__(self, key):
-        return self._term_values.__delitem__(key)
+        try:
+            return self._term_values.__delitem__(key)
+        except KeyError:
+            pass # From the external interface, DictTerms always appear to have keys, even when they really dont.
 
     def __len__(self):
         return self._term_values.__len__()
@@ -1049,18 +1033,6 @@ class DictTerm(Term, collections.MutableMapping):
 
         return self._term_values.to_dict()
 
-    def html(self):
-        out = ''
-
-        for name, m in self._members.items():
-            ti = self.get_term_instance(name)
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
-
-        return """
-<table class="{cls}">
-{out}</table>
-""" .format(title=str(self._key), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
-            out=out)
 
     def set(self, d):
 
@@ -1075,8 +1047,6 @@ class DictTerm(Term, collections.MutableMapping):
 
         self._term_values[k] = v
 
-        # if k in self._term_values and self._term_values[k] is None and self._store_none_map[k] is False:
-        #    del self._term_values[k]
 
     def get(self):
         return self

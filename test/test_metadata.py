@@ -472,8 +472,75 @@ about:
         self.assertEqual('<p>More about: California in 2012</p>', t1.about.footnote.html)
 
 
+    def test_alt_file(self):
+
+        yaml_config = """
+about:
+    access: null
+    footnote: "More about: {{about.title}}"
+    grain: null
+    license: license
+    processed: null
+    rights: rights
+    source: null
+    space: California
+    subject: subject
+    summary: summary
+    time: 2012
+    title: "{{about.space}} in {{about.time}}"
+sources:
+    perf_sum:
+        description: Performance Summary
+        row_spec:
+            data_end_line: null
+            data_start_line: 3
+            header_comment_lines:
+            - 0
+            header_lines:
+            - 1
+            - 2
+        segment: 1
+        url: http://ds.civicknowledge.org.s3.amazonaws.com/calqualitycare.org/Public%20Reports%202014Q3.xlsx
+    experience:
+        description: Patient Experience
+        row_spec:
+            data_end_line: null
+            data_start_line: 3
+            header_comment_lines:
+            - 0
+            header_lines:
+            - 1
+            - 2
+        segment: 2
+        url: http://ds.civicknowledge.org.s3.amazonaws.com/calqualitycare.org/Public%20Reports%202014Q3.xlsx
+    """
+
+        d = tempfile.mkdtemp('metadata-test')
+
+        t1 = Top(yaml.load(yaml_config))
+
+        t1.write_to_dir(d)
 
 
+        print "Wrote to ", d
+
+        from ambry.bundle.sources import SourcesFile
+
+        sf_file = os.path.join(d, 'sources.csv')
+
+        sf = SourcesFile(sf_file, t1)
+
+        sf.write()
+
+        t2 = Top(yaml.load(yaml_config))
+
+        sf2 = SourcesFile(sf_file, t2)
+        sf2.read()
+
+        print t2.dump()
+
+
+        #shutil.rmtree(d)
 
 
 

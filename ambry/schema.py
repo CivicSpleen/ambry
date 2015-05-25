@@ -8,7 +8,7 @@ from collections import OrderedDict, defaultdict
 
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import Column
-
+from util import memoize
 
 PROTO_TERMS = 'civicknowledge.com-proto-proto_terms'
 
@@ -750,6 +750,17 @@ class Schema(object):
 
                     self.add_column(t, name, **d)
 
+    @property
+    @memoize
+    def prototype_map(self):
+
+        pt = self.bundle.library.get(PROTO_TERMS).partition
+
+        self.bundle.log("Loading protos from {}".format(pt.identity.fqname))
+        pt_map = {row['name']: dict(row) for row in pt.rows}
+
+        return pt_map
+
     def expand_column_prototypes(self):
         """Find values for the proto_vid that are in the proto_terms dataset, and expand them into column vids
 
@@ -763,8 +774,6 @@ class Schema(object):
         q = (self.bundle.database.session.query(Column)
              .filter(Column.proto_vid != None).filter(Column.proto_vid != ''))
 
-        pt = self.bundle.library.get(PROTO_TERMS).partition
-        pt_map = None
 
         # Group expanded columns by souce table, to create sql indexes for the sets of columns
         # pointing ot the same ambry index dataset
@@ -783,9 +792,7 @@ class Schema(object):
                 # If the proto_vid isn't a valid number, it is probably a proto string, from
                 # the proto_terms table.
 
-                if not pt_map:
-                    self.bundle.log("Loading protos from {}".format(pt.identity.fqname))
-                    pt_map = {row['name']: dict(row) for row in pt.rows}
+                pt_map = self.prototype_map
 
                 try:
                     pt_row = pt_map[c.proto_vid]
@@ -810,6 +817,7 @@ class Schema(object):
 
                 if index_partition:
                     try:
+                        # FIXME! Should use library.column() instead
                         ip = self.bundle.library.get(index_partition).partition
                     except NotFoundError:
                         self.bundle.error("Failed to get index '{}' while trying to check index coverage"

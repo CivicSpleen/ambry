@@ -908,10 +908,17 @@ class Warehouse(object):
                     self.logger.error('Link column datatypes differ! {} ({}) != {} ({})'
                                       .format(col_a.datatype,col_a.name, col_b.datatype, col_b.name))
 
-                clauses.append('"{}" = "{}"'.format(col_a.altname, col_b.altname))
+                # Should not need to do this, but it looks like there are some partitions where the
+                # name and the alt name aren't set right. The longer of the two names is the
+                # on that is prefixed with the column vid
+                longest_name = max(col_a.altname, col_a.name, key=len)
+
+                clauses.append('"{}" = "{}"'.format(longest_name, col_b.altname))
 
                 if installed_table.type != 'view':
                     indexes.add((installed_table.name, col_a.altname))
+
+
 
                 indexes.add((p_table.name, col_b.altname))
 
@@ -928,8 +935,6 @@ class Warehouse(object):
 
             # One more sanitization
             sql  = sqlparse.split(sql)[0]
-
-
 
         for table, col in indexes:
             self.create_index(table, [col])

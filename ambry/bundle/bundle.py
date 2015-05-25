@@ -611,6 +611,8 @@ class BuildBundle(Bundle):
     DOC_FILE = 'meta/documentation.md'
     DOC_HTML = 'meta/documentation.html'
 
+    SOURCES_FILE = 'meta/sources.csv'
+
     # Partition where to get a map from source domains to full name
     SOURCE_TERMS = 'civicknowledge.com-terms-sources'
 
@@ -808,6 +810,31 @@ class BuildBundle(Bundle):
 
         return identity
 
+    def read_sources(self):
+        """Read the sources file into the metadata, if it exists"""
+
+        sf_fn = self.filesystem.path(self.SOURCES_FILE)
+
+        if os.path.exists(sf_fn):
+            from sources import SourcesFile
+
+            sf = SourcesFile(sf_fn, self.metadata)
+
+            sf.read()
+
+    def write_sources(self):
+        """Read the sources file into the metadata, if it exists"""
+
+        sf_fn = self.filesystem.path(self.SOURCES_FILE)
+
+        if len(self.metadata.sources.keys()) > 0:
+            from sources import SourcesFile
+
+            sf = SourcesFile(sf_fn, self.metadata)
+
+            sf.write()
+
+
     def update_configuration(self, identity=None, rewrite_database=True):
         # Re-writes the bundle.yaml file, with updates to the identity and partitions
         # sections.
@@ -818,8 +845,7 @@ class BuildBundle(Bundle):
         if len(md.errors) > 0:
             self.error("Metadata errors in {}".format(md._path))
             for k, v in md.errors.items():
-                self.error(
-                    "    {} = {}".format('.'.join([str(x) for x in k if x]), v))
+                self.error( "    {} = {}".format('.'.join([str(x) for x in k if x]), v))
             raise Exception("Metadata errors: {}".format(md.errors))
 
         if not identity:
@@ -1182,6 +1208,8 @@ class BuildBundle(Bundle):
         except Exception:
             raise
 
+        self.read_sources()
+
         if not self.metadata.about.access:
             raise ConfigurationError("about.access must be set to the name of a remote")
 
@@ -1299,8 +1327,6 @@ class BuildBundle(Bundle):
         from ..library.database import ROOT_CONFIG_NAME_V
 
         with self.session:
-
-
             # At this point, we have a dataset vid, which we didn't have when the dbcreated values was
             # set, so we can reset the value with to get it into the process
             # configuration group.
@@ -1326,6 +1352,8 @@ class BuildBundle(Bundle):
 
         self.set_build_state('prepared')
 
+        self.write_sources()
+
         return True
 
     @property
@@ -1341,6 +1369,8 @@ class BuildBundle(Bundle):
     def do_prepare(self):
         """This method runs pre_, main and post_ prepare methods."""
 
+        r = True
+
         if self.pre_prepare():
             self.log("---- Preparing ----")
             if self.prepare_main():
@@ -1348,12 +1378,13 @@ class BuildBundle(Bundle):
                     self.log("---- Done Preparing ----")
                 else:
                     self.log("---- Post-prepare exited with failure ----")
+                    r = False
             else:
                 self.log("---- Prepare exited with failure ----")
+                r = False
         else:
             self.log("---- Skipping prepare ---- ")
 
-        r = True
 
         return r
 
@@ -1371,7 +1402,8 @@ class BuildBundle(Bundle):
 
         with self.session:
             if not self.get_value('process', 'prepared', False):
-                raise ProcessError("Build called before prepare completed")
+                self.error("Build called before prepare completed")
+                return False
 
             self._build_time = time()
 
@@ -1629,7 +1661,9 @@ class BuildBundle(Bundle):
     def do_build(self):
 
         if not self.is_prepared:
-            self.do_prepare()
+            if not self.do_prepare():
+                self.log("Prepare failed; skipping build")
+                return False
 
         if self.pre_build():
             self.log("---- Build ---")

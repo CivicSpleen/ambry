@@ -603,6 +603,28 @@ class Library(object):
             except NoResultFound:
                 raise NotFoundError("Did not find table ref {} in library {}".format(vid, self.database.dsn))
 
+    def column(self, vid):
+
+        from ..orm import Table, Column
+        from sqlalchemy.orm.exc import NoResultFound
+        from ..dbexceptions import NotFoundError
+
+        try:
+            return (self.database.session.query(Column).filter(Column.vid == vid).one())
+        except NoResultFound:
+            # Ths vid is actually an id, so we take the latest one
+            try:
+                t = (self.database.session.query(Column)
+                     .filter(Column.id_ == vid).order_by(Column.vid.desc()).first())
+
+                if not t:
+                    raise NoResultFound
+
+                return t
+
+            except NoResultFound:
+                raise NotFoundError("Did not find Column ref {} in library {}".format(vid, self.database.dsn))
+
 
     def derived_tables(self, proto_vid):
         """Tables with the given proto_vid"""

@@ -160,63 +160,9 @@ class LoaderBundle(BuildBundle):
             raise Exception("Unknown source file extension: '{}' for file '{}' from source {} "
                             .format(ext, file_name, source_name))
 
-    def make_table_for_source(self, source_name):
 
-        source = self.metadata.sources[source_name]
 
-        table_name = source.table if source.table else source_name
 
-        table_desc = source.description if source.description else "Table generated from {}".format(source.url)
-
-        table = self.schema.add_table(table_name, description=table_desc)
-
-        self.schema.add_column(table, 'id', datatype='integer', description=table_desc, is_primary_key=True)
-
-        self.log("Created table {}".format(table.name))
-
-        if source.grain:
-            with self.session:
-                if 'grain' in table.data and table.data['grain'] != source.grain:
-                    raise BuildBundle("Table '{}' has grain '{}' conflicts with source '{}' grain of '{}'"
-                                      .format(table_name, table.data['grain'], source_name, source.grain))
-
-                table.data['grain'] = source.grain
-
-        return self.schema.table(table_name)  # The session in 'if source.grain' may expire table, so refresh
-
-    def meta_set_row_specs(self, row_intuitier_class=RowSpecIntuiter):
-        """
-        Run the row intuiter, which tries to figure out where the header and data lines are.
-
-        :param row_intuitier_class: A RowSpecIntuiter class
-        :return:
-        """
-
-        for source_name in self.metadata.sources:
-            source = self.metadata.sources.get(source_name)
-
-            rg = self.row_gen_for_source(source_name)
-
-            ri = row_intuitier_class(rg).intuit()
-
-            source.row_spec = ri
-
-        self.metadata.write_to_dir()
-
-    def meta_load_socrata(self):
-        """Load Socrata metadata from a URL, specified in the 'meta' source"""
-        import json
-
-        meta = self.filesystem.download('meta')
-
-        with open(meta) as f:
-            d = json.load(f)
-
-        md = self.metadata
-        md.about.title = d['name']
-        md.about.summary = d['description']
-
-        md.write_to_dir()
 
     def meta(self):
         from collections import defaultdict
@@ -351,6 +297,95 @@ class LoaderBundle(BuildBundle):
 
         return True
 
+    def meta_create_table(self, table_name, *args, **kwargs):
+
+        table = self.schema.add_table(table_name, *args, **kwargs)
+
+        self.schema.add_column(table, 'id', datatype='integer', description=kwargs.get('description'),
+                               is_primary_key=True)
+
+        # Get extra colum names from the build metadata.
+        ec_all = dict(self.metadata.build.get('extra_columns',{}).get('all', {}))
+        ec_table = dict(self.metadata.build.get('extra_columns', {}).get(table_name, {}))
+
+        extras = dict(ec_all.items() + ec_table.items())
+
+        pt_map = self.schema.prototype_map
+
+        for name, proto_name in extras.items():
+
+            try:
+                proto = pt_map[proto_name]
+            except KeyError:
+                self.error("Extra column '{}' for table '{}' has unknown proto name: '{}' "
+                           .format(name, table_name, proto_name))
+                continue
+
+            proto_column = self.library.column(proto['vid'])
+
+            self.schema.add_column(table, name, datatype=proto_column.datatype,
+                                   description=proto_column.description,
+                                   proto_vid = proto_name)
+
+
+        return table
+
+    def make_table_for_source(self, source_name):
+
+        source = self.metadata.sources[source_name]
+
+        table_name = source.table if source.table else source_name
+
+        table_desc = source.description or source.title or  "Table generated from {}".format(source.url)
+
+        table = self.meta_create_table(table_name, description=table_desc)
+
+        self.log("Created table {}".format(table.name))
+
+        if source.grain:
+            with self.session:
+                if 'grain' in table.data and table.data['grain'] != source.grain:
+                    raise BuildBundle("Table '{}' has grain '{}' conflicts with source '{}' grain of '{}'"
+                                      .format(table_name, table.data['grain'], source_name, source.grain))
+
+                table.data['grain'] = source.grain
+
+        return self.schema.table(table_name)  # The session in 'if source.grain' may expire table, so refresh
+
+    def meta_set_row_specs(self, row_intuitier_class=RowSpecIntuiter):
+        """
+        Run the row intuiter, which tries to figure out where the header and data lines are.
+
+        :param row_intuitier_class: A RowSpecIntuiter class
+        :return:
+        """
+
+        for source_name in self.metadata.sources:
+            source = self.metadata.sources.get(source_name)
+
+            rg = self.row_gen_for_source(source_name)
+
+            ri = row_intuitier_class(rg).intuit()
+
+            source.row_spec = ri
+
+        self.metadata.write_to_dir()
+
+    def meta_load_socrata(self):
+        """Load Socrata metadata from a URL, specified in the 'meta' source"""
+        import json
+
+        meta = self.filesystem.download('meta')
+
+        with open(meta) as f:
+            d = json.load(f)
+
+        md = self.metadata
+        md.about.title = d['name']
+        md.about.summary = d['description']
+
+        md.write_to_dir()
+
     def meta_intuit_table(self, table_name, row_gen):
         """Create a table ( but don't write the schema ) based on the values returned from a row generator"""
 
@@ -364,7 +399,7 @@ class LoaderBundle(BuildBundle):
 
         intuiter.dump(self.filesystem.build_path('{}-raw-rows.csv'.format(table_name)))
 
-        self.schema.add_table(table_name)
+        self.meta_create_table(table_name)
 
         self.schema.update_from_intuiter(table_name, intuiter)
 
@@ -378,7 +413,15 @@ class LoaderBundle(BuildBundle):
         :param row: A dict of the row
         :return:
         """
-        pass
+
+        # If the table has an empty year, and the soruce has a time that converts to an int,
+        # set the time as a year.
+        if not row.get('year', False) and source.time:
+            try:
+                row['year'] = int(source.time)
+            except ValueError:
+                pass
+
 
     def build_from_source(self, source_name):
 
@@ -430,6 +473,8 @@ class LoaderBundle(BuildBundle):
                 if errors:
                     errors_str = '; '.join([ "{}: {}".format(k,v) for k,v in errors.items() ])
                     self.error("Casting error for {}, table {}: {}".format(source_name, p.table.name, errors_str))
+
+        p.close()
 
 
     def build(self):

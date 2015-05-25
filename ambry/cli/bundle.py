@@ -109,7 +109,11 @@ def bundle_command(args, rc):
     ##
     try:
         for phase in phases:
-            getf(phase)(args, b, st, rc)
+            r = getf(phase)(args, b, st, rc)
+
+            if r == False:
+                break
+
             b.close()
 
     except DependencyError as e:

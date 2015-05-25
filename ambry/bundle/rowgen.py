@@ -337,6 +337,7 @@ class ExcelRowGenerator(RowGenerator):
 
         self.workbook = wb
 
+
         s = wb.sheets()[self.segment if self.segment else 0]
 
         for i in range(0, s.nrows):
