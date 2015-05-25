@@ -27,8 +27,14 @@
     </button>
     {% endfor -%}
 </div>{% endif %}
-
-<h2>Schema <small><button type="button"><a href="{{ t.vid }}.csv">csv</a></button></small></h2>
+<div></div>{% for format in extractors(t) -%}
+            <small><button type="button">
+            <a href="{{extract_url(s.uid,  t.vid, format)}}">{{format}}</a>
+            </button></small>
+            {% endfor -%}
+<h2>Schema</h2>
+<small><button type="button"><a href="{{ t.vid }}.csv">Schema CSV</a></button></small>
+</div>
 <div>
 <table class="table table-striped table-bordered table-condensed">
     <tr>
