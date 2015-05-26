@@ -317,6 +317,7 @@ class LibraryDb(object):
             self.session.commit()
         except (ProgrammingError, OperationalError): # Table doesn't exist.
             self._session.rollback()
+
             pass
 
         self.metadata.drop_all(self.engine)

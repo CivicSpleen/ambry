@@ -357,7 +357,7 @@ def main(argsv=None, ext_logger=None):
         global_logger = ext_logger
     else:
         name = "{}.{}".format(args.command, args.subcommand)
-        global_logger = get_logger(name, file_name='/tmp/%s' % name, template="%(levelname)s: %(message)s")
+        global_logger = get_logger(name,  template="%(levelname)s: %(message)s")
 
     global_logger.setLevel(logging.INFO)
 

@@ -76,6 +76,8 @@ def _get_logger(name, file_name=None, stream=None, template=None, clear=False, p
 
         logger_init.add(name)
 
+
+
     return logger
 
 

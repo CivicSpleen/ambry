@@ -189,6 +189,7 @@ class Library(object):
         self.logger = get_logger(__name__)
         self.logger.setLevel(logging.DEBUG)
 
+
         self.needs_update = False
 
         self.bundles = weakref.WeakValueDictionary()
@@ -1192,6 +1193,7 @@ class Library(object):
         from collections import defaultdict
         from boto.exception import S3ResponseError
 
+
         if clean:
             for remote_name, remote in remotes.items():
                 self.files.query.type((Files.TYPE.PARTITION, Files.TYPE.BUNDLE)).source_url(remote.repo_id).delete()
@@ -1244,7 +1246,6 @@ class Library(object):
                     continue
 
                 if self.cache.has(cache_key):  # This is just for reporting.
-
                     self.logger.info("Remote {} has: {}".format(remote.repo_id, cache_key))
 
                 else:
@@ -1278,7 +1279,7 @@ class Library(object):
                     self.logger.error("Failed to put bundle {}: {}".format(cache_key, e))
                     b.close()
                     raise
-                    continue
+
 
                 self.database.commit()
                 self.database.close()
