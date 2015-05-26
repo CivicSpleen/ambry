@@ -66,8 +66,6 @@ def library_parser(cmd):
     sp.add_argument('-w', '--warehouses', default=False, action="store_true", help='Re-synchronize warehouses')
     sp.add_argument('-F', '--bundle-list', help='File of bundle VIDs. Sync only VIDs listed in this file')
 
-    sp = asp.add_parser('info', help='Display information about the library')
-    sp.set_defaults(subcommand='info')
 
     sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. '
                                     'Possible download the file from the remote library')
@@ -261,15 +259,6 @@ def library_remove(args, l, config):
         l.database.commit()
 
 
-def library_info(args, l, config, list_all=False):
-    prt("Library Info")
-    prt("Name:      {}", args.library_name)
-    prt("Database:  {}", l.database.dsn)
-    prt("Cache:     {}", l.cache)
-    prt("Doc Cache: {}", l._doc_cache)
-    prt("Whs Cache: {}", l.warehouse_cache)
-    prt("Remotes:   {}", ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
-
 
 def library_push(args, l, config):
     from ..orm import Dataset
@@ -309,6 +298,10 @@ def library_push(args, l, config):
                 continue
 
             bp = l.resolve(ref)
+
+            if not bp:
+                err("Failed to resolve file ref to bundle {} ".format(ref))
+                continue
 
             b = l.bundle(bp.vid)
 

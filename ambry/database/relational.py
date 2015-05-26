@@ -498,8 +498,7 @@ class RelationalDatabase(DatabaseInterface):
         from sqlalchemy.orm.exc import NoResultFound
 
         if group == 'identity' and d_vid != ROOT_CONFIG_NAME_V:
-            raise ValueError(
-                "Can't set identity group from this interface. Use the dataset")
+            raise ValueError("Can't set identity group from this interface. Use the dataset")
 
         key = key.strip('_')
 
@@ -516,15 +515,31 @@ class RelationalDatabase(DatabaseInterface):
         session.merge(o)
         session.commit()
 
+    def clear_config_value(self, d_vid, group, key, session=None):
+        from ambry.orm import Config as SAConfig
+        from ..library.database import ROOT_CONFIG_NAME_V
+        from sqlalchemy.orm.exc import NoResultFound
+
+        if group == 'identity' and d_vid != ROOT_CONFIG_NAME_V:
+            raise ValueError("Can't set identity group from this interface. Use the dataset")
+
+        key = key.strip('_')
+
+        session = self.session if not session else session
+
+        o = session.query(SAConfig).filter(SAConfig.group == group,
+                                           SAConfig.key == key,
+                                           SAConfig.d_vid == d_vid).delete()
+
+        session.commit()
+
     def get_config_value(self, d_vid, group, key):
         from ambry.orm import Config as SAConfig
 
         key = key.strip('_')
 
-        return self.session.query(SAConfig).filter(
-            SAConfig.group == group,
-            SAConfig.key == key,
-            SAConfig.d_vid == d_vid).first()
+        return self.session.query(SAConfig).filter(SAConfig.group == group,
+                                                   SAConfig.key == key,SAConfig.d_vid == d_vid).first()
 
     def get_config_group(self, group, d_vid):
         from ambry.orm import Config as SAConfig

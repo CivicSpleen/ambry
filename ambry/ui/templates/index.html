@@ -12,12 +12,12 @@
 
 {% include 'search/single_form.html' -%}
 
-<div id="loading" class="spinner">
-    Loading...
-</div>
 
 <div class = "row top-buffer">
     <div class="col-md-8 col-md-offset-2">
+        <div id="loading" class="spinner-loader">
+        Loading...
+        </div>
         <div id="dataset-results">
             <div class="panel panel-info">
                 <div class="panel-heading">
@@ -50,7 +50,7 @@
 {% block tailjs %}
     {{ super() }}
     <script>
-    $('.toc_title').tooltip()
+
     $('#search-inputs').searchbox({
       url: '/search/bundle',
       param: 'term',

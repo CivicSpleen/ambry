@@ -27,9 +27,15 @@
     </button>
     {% endfor -%}
 </div>{% endif %}
-
+<div></div>{% for format in extractors(t) -%}
+            <small><button type="button">
+            <a href="{{extract_url(s.uid,  t.vid, format)}}">{{format}}</a>
+            </button></small>
+            {% endfor -%}
 <h2>Schema</h2>
-
+<small><button type="button"><a href="{{ t.vid }}.csv">Schema CSV</a></button></small>
+</div>
+<div>
 <table class="table table-striped table-bordered table-condensed">
     <tr>
         <th>#</th>
@@ -58,13 +64,8 @@
     </tr>
     {% endfor %}
 </table>
-
-{% if t.sql_formatted -%}
-<h2> SQL </h2>
-<div class="codehilite " >
-    {{t.sql_formatted}}
 </div>
-{% endif -%}
+
 
 {% if t.sample -%}
 <h2> Sample Data <small>{{t.sample|length}} of {{t.count}} records</small></h2>
@@ -77,12 +78,19 @@
     {% for row in t.sample[1:] %}
         <tr>
             {% for c in row %}
-                <td>{% if c == "<type 'buffer'>" %}BLOB{%else%}{{c}}{%endif%}</td>
+                <td>{% if c == "<type 'buffer'>" %}BLOB{%else%}{{ c if c != None else '' }}{%endif%}</td>
             {% endfor -%}
         </tr>
     {% endfor -%}
 </table>
 
+{% endif -%}
+
+{% if t.sql -%}
+<h2> SQL </h2>
+<div class="codehilite " >
+    {{format_sql(t.sql)}}
+</div>
 {% endif -%}
 
 {% endblock %}

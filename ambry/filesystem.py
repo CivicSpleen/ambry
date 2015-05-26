@@ -379,25 +379,68 @@ class BundleFilesystem(Filesystem):
         finally:
             self.rm_rf(tmpdir)
 
-    def download(self, url, test_f=None, unzip=False):
-        """Context manager to download a file, return it for us, and delete it
-        when done.
+    def _record_file(self, url, out_file, process = File.PROCESS.DOWNLOADED):
+        from ambry.util import md5_for_file
+        from time import time
+        from sqlalchemy.orm.exc import NoResultFound
+        from os import stat
 
-        url may also be a key for the sources metadata
+        # Create a file record of the download
+        try:
+            fr = (self.bundle.database.session.query(File)
+                  .filter(File.path == url).filter(File.ref == str(self.bundle.identity.vid))
+                  .filter(File.type_ == File.TYPE.DOWNLOAD).one() )
+        except NoResultFound:
+            self.bundle.database.session.rollback()
+            fr = None
 
+        content_hash = md5_for_file(out_file)
 
-        Will store the downloaded file into the cache defined
-        by filesystem.download
+        stat = os.stat(out_file)
 
+        if fr:
+            if content_hash != fr.hash:
+                fr.modified = stat.st_mtime
+                fr.hash = content_hash
+                fr.process = File.PROCESS.MODIFIED
+            else:
+                fr.process = File.PROCESS.UNMODIFIED
+        else:
+            fr = File(path=url,
+                      ref=str(self.bundle.identity.vid),
+                      type=File.TYPE.DOWNLOAD,
+                      modified= int(stat.st_mtime),
+                      size = stat.st_size,
+                      hash=content_hash,
+                      process=process,
+                      source_url=url,
+                      data=dict()
+            )
+
+        fr.data['last_download'] = time()
+        self.bundle.database.session.merge(fr)
+        self.bundle.database.session.commit()
+
+    def download(self, url, test_f=None, unzip=False, force = False):
+        """ Download a file
+
+        :param url:
+        :param test_f:
+        :param unzip:
+        :param force: If true, ignore the cache. Required to force a check for changes to the remote file.
+        :return:
         """
 
         import tempfile
         import urlparse
         import urllib2
         import urllib
+        from orm import File
+
 
         cache = self.get_cache_by_name('downloads')
         parsed = urlparse.urlparse(str(url))
+        source_entry = None
 
         # If the URL doesn't parse as a URL, then it is a name of a source.
         if not parsed.scheme and url in self.bundle.metadata.sources:
@@ -435,7 +478,7 @@ class BundleFilesystem(Filesystem):
         else:
             use_hash = True
 
-        # file_path = parsed.netloc+'/'+urllib.quote_plus(parsed.path.replace('/','_'),'_')
+
         file_path = os.path.join(parsed.netloc, parsed.path.strip('/'))
 
         # S3 has time in the query, so it never caches
@@ -478,24 +521,20 @@ class BundleFilesystem(Filesystem):
                 cached_file = cache.get(file_path)
                 size = os.stat(cached_file).st_size if cached_file else None
 
-                if cached_file and size:
+                if cached_file and size and not force:
 
                     out_file = cached_file
 
                     if test_f and not test_f(out_file):
                         cache.remove(file_path, True)
-                        raise DownloadFailedError(
-                            "Cached Download didn't pass test function " +
-                            url)
+                        raise DownloadFailedError("Cached Download didn't pass test function " +url)
+
+                    process = File.PROCESS.CACHED
 
                 else:
 
                     self.bundle.log("Downloading " + url)
-                    self.bundle.log(
-                        "  --> " +
-                        cache.path(
-                            file_path,
-                            missing_ok=True))
+                    self.bundle.log("  --> " +cache.path( file_path, missing_ok=True))
 
                     resp = urllib2.urlopen(url)
                     # headers = resp.info()  # @UnusedVariable
@@ -514,6 +553,9 @@ class BundleFilesystem(Filesystem):
                     if test_f and not test_f(out_file):
                         cache.remove(file_path, propagate=True)
                         raise DownloadFailedError("Download didn't pass test function " + url)
+
+                    process = File.PROCESS.DOWNLOADED
+
                 break
 
             except KeyboardInterrupt:
@@ -538,11 +580,7 @@ class BundleFilesystem(Filesystem):
                 excpt = e
 
             except Exception as e:
-                self.bundle.error(
-                    "Unexpected download error '" +
-                    str(e) +
-                    "' when downloading " +
-                    str(url))
+                self.bundle.error("Unexpected download error '" +str(e) + "' when downloading " +str(url))
                 cache.remove(file_path, propagate=True)
                 raise
 
@@ -551,6 +589,8 @@ class BundleFilesystem(Filesystem):
 
         if excpt:
             raise excpt
+
+        self._record_file(url, out_file, process)
 
         if unzip:
 
