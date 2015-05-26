@@ -215,8 +215,7 @@ class LibraryDb(object):
                 if self.driver in ('postgres', 'postgis') and self._schema:
                     self.connection.execute("SET search_path TO {}".format( self._schema))
 
-                rows = self.connection.execute(
-                    "SELECT * FROM datasets WHERE d_vid = '{}' "
+                rows = self.connection.execute("SELECT * FROM datasets WHERE d_vid = '{}' "
                     .format(ROOT_CONFIG_NAME_V)).fetchone()
 
             except ProgrammingError as e:
@@ -320,7 +319,7 @@ class LibraryDb(object):
             self._session.rollback()
             pass
 
-            self.metadata.drop_all(self.engine)
+        self.metadata.drop_all(self.engine)
 
     def __del__(self):
         pass

@@ -275,19 +275,6 @@ class Metadata(object):
 
         return d
 
-    def groups_by_altfile(self):
-        """Returns a map of the files defined in groups, and the groups that
-        define those files. Unlike groups_by_file, there is only one alt-file per group"""
-        from collections import OrderedDict
-
-        d = {}
-
-        for name, m in self._members.items():
-            if m._altfile:
-                d[m._altfile] = m
-
-        return d
-
     def load_from_dir(self, path, group=None):
         """Load groups from specified files."""
         import os
@@ -386,7 +373,7 @@ class Group(object):
     _parent = None
     _top = None
 
-    def __init__(self, file=None,  altfile = None,  to_rows=True):
+    def __init__(self, file=None, to_rows=True):
         """
 
         :param file:  Relative file path to yaml file where data for section is read and written.
@@ -400,7 +387,6 @@ class Group(object):
             attr in type(self).__dict__.items() if isinstance(attr,Term) and not name.startswith('_')}
 
         self._file = file
-        self._altfile = altfile
         self._to_rows = to_rows
 
     def init_descriptor(self, key, top):

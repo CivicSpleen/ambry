@@ -184,7 +184,7 @@ class Top(Metadata):
     process = Process(file='bundle.yaml')
     external_documentation = ExtDoc(file='bundle.yaml')
 
-    sources = Sources(file='meta/build.yaml', altfile='meta/sources.csv')
+    sources = Sources(file='meta/build.yaml')
 
     dependencies = Dependencies(file='meta/build.yaml')
     build = Build(file='meta/build.yaml')

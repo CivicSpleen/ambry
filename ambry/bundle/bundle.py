@@ -1427,7 +1427,8 @@ class BuildBundle(Bundle):
         from time import time
 
         with self.session:
-            self.set_value('process', 'buildtime', time() - self._build_time)
+            if self._build_time:
+                self.set_value('process', 'buildtime', time() - self._build_time)
 
             self.post_build_finalize()
 

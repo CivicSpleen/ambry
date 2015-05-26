@@ -260,7 +260,7 @@ class Library(object):
     ## Storing
     ##
 
-    def put_bundle(self, bundle, source=None, install_partitions=True, file_state='installed', commit=True):
+    def put_bundle(self, bundle, source=None, install_partitions=True, file_state='installed', commit=True, force = False):
         """Install the records for the dataset, tables, columns and possibly
         partitions. Does not install file references """
 
