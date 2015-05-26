@@ -57,6 +57,7 @@ Running the ambry tests
 
 Test command options:
 
+.. code-block:: 
   --verbosity - verbosity of the tests, 1 by default.
   --failfast - if given, stop testing on first fail.
 
