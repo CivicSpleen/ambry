@@ -745,10 +745,11 @@ class Warehouse(object):
 
         b = self.elibrary.get(dataset_ident)
 
-        # dataset = self.wlibrary.database.install_bundle_dataset(b)
+        self.wlibrary.database.install_bundle_dataset(b)
 
         # This one gets the ref from the bundle
         p = b.partitions.get(dataset_ident.partition)
+
 
         if not p:
             raise NotFoundError("Did not find partition '{}' in bundle".format(p_vid))
@@ -759,6 +760,7 @@ class Warehouse(object):
         orm_p = (self.elibrary.database.session.query(Partition)
                  .options(noload('*'), joinedload('table').joinedload('columns'))
                  .filter(Partition.vid == p.identity.vid).one())
+
 
         self.wlibrary.database.session.merge(orm_p)
         self.wlibrary.database.session.commit()
