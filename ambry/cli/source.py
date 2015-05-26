@@ -20,7 +20,7 @@ def source_command(args, rc):
     l.logger = global_logger
 
     st = l.source
-
+    print args
     globals()['source_' + args.subcommand](args, l, st, rc)
 
 

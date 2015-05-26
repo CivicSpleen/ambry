@@ -5,27 +5,30 @@ Created on Jun 30, 2012
 """
 
 import unittest
-import os.path
+import os
 
 from bundles.testbundle.bundle import Bundle
 from ambry.run import get_runconfig
 from ambry.warehouse.manifest import Manifest
 from test_base import TestBase
 from ambry.util import get_logger, Constant
+from ambry.orm import Config
+import manifests
 
 
 class Test(TestBase):
     EXAMPLE = Constant()
-    EXAMPLE.TABLE_NAME = 'geot1'
     EXAMPLE.CONF_DB_SQLITE = 'sqlite'
     EXAMPLE.CONF_DB_POSTGRES = 'postgres1'
 
     def setUp(self):
         import bundles.testbundle.bundle
         from ambry.run import RunConfig
-        import manifests
+
         import configs
         from shutil import rmtree
+
+        super(Test, self).setUp()
 
         self.bundle_dir = os.path.dirname(bundles.testbundle.bundle.__file__)
         self.config_dir = os.path.dirname(configs.__file__)
@@ -34,24 +37,33 @@ class Test(TestBase):
                                  os.path.join(self.bundle_dir, 'bundle.yaml'),
                                  RunConfig.USER_ACCOUNTS))
 
-        self.copy_or_build_bundle()
-
-        self.bundle = Bundle()
+        # Delete the whole test tree every run.
+        test_folder = self.rc.group('filesystem').root
+        if os.path.exists(test_folder):
+            rmtree(test_folder)
 
         self.mf = os.path.join(os.path.dirname(manifests.__file__), 'test.ambry')
 
-        # Delete the whole test tree every run.
-        if os.path.exists(self.rc.group('filesystem').root):
-            rmtree(self.rc.group('filesystem').root)
-
-        with open(self.mf) as f:
-            self.m_contents = f.read()
+        self.bundle = Bundle()
+        self.waho = None
 
     def tearDown(self):
-        pass
+        from ambry.library import clear_libraries
+        from ambry.database.relational import close_all_connections
+
+        close_all_connections()
+
+        if self.waho:
+            self.waho.database.enable_delete = True
+            self.waho.database.delete()
+            self.waho.close()
+
+        # new_library() caches the library
+        clear_libraries()
 
     def resolver(self, name):
-        if name == self.bundle.identity.name or name == self.bundle.identity.vname:
+        if (name == self.bundle.identity.name
+           or name == self.bundle.identity.vname):
             return self.bundle
         else:
             return False
@@ -59,6 +71,9 @@ class Test(TestBase):
     def get_library(self, name='default'):
         """Clear out the database before the test run"""
         from ambry.library import new_library
+
+        # create database
+        self.copy_or_build_bundle()
 
         config = self.rc.library(name)
         l = new_library(config, reset=True)
@@ -84,80 +99,172 @@ class Test(TestBase):
 
         return self.get_warehouse(l, name)
 
-    def _test_manifest_install(self, name):
-        """
-        Install test manifest and check the database for the table
-        """
-        test_table = 'geot1'
-        test_table_name = 'config'
-
-        waho = self._default_warehouse(name)
-        mf = Manifest(self.mf, get_logger('TL'))
-
-        waho.install_manifest(mf)
-        tst = (mfile.path for mfile in waho.manifests)
-
-        # because of problems with the session!!! FIXME
-        # doing some tests here
-        self.assertIn(mf.path, tst)
-        self.assertIn(test_table, (t.name for t in waho.tables))
-        self.assertEqual(test_table, waho.orm_table_by_name(test_table).name)
-        self.assertTrue(waho.has_table(test_table_name))
-
-        # TODO: test here
-        # install_material_view
-        # install_view
-        # install_table
-        # install_partition
-        # augmented_table_name
-        # bundles
-        # close
-
-        waho.clean()
-        self.assertFalse(waho.has_table(test_table_name))
-
-        waho.delete()
-        self.assertFalse(waho.database.exists())
-        self.assertFalse(waho.wlibrary.database.exists())
-        waho.create()
-        self.assertTrue(waho.database.exists())
-        self.assertTrue(waho.wlibrary.database.exists())
-
-    def test_sqlite_install(self):
-        """
-        Install manifest with sqlite
-        """
-        self._test_manifest_install(self.EXAMPLE.CONF_DB_SQLITE)
-
-    def test_postgres_install(self):
-        """
-        Install manifest with postgres
-        """
-
-        # FIXME: Need to figure out how to do this in a flexible way that can run on
-        # Travis-CI
-        return
-
-        # self._test_manifest_install(self.EXAMPLE.CONF_DB_POSTGRES)
-
     def test_manifest(self):
         """
         Load the manifest and convert it to a string to check the round-trip
         """
 
+        m_contents = None
+
+        with open(self.mf) as f:
+            m_contents = f.read()
         mf = Manifest(self.mf, get_logger('TL'))
 
-        orig_mf = self.m_contents.replace('\n', '').strip()
+        orig_mf = m_contents.replace('\n', '').strip()
         conv_mf = str(mf).replace('\n', '').strip()
 
         self.assertEqual(orig_mf, conv_mf)
 
-    def test_extract(self):
-        l = self.get_library()
-        l.put_bundle(self.bundle)
-        waho = self.get_warehouse(l, self.EXAMPLE.CONF_DB_SQLITE, delete=False)
-        # cache = new_cache('s3://warehouse.sandiegodata.org/test', run_config = get_runconfig())
-        waho.extract_all(force=True)
+    def test_extract_table(self):
+        """
+        Extract data from table to file
+        """
+        from ambry.dbexceptions import NotFoundError
+
+        test_table = 'geot1'
+        test_view = 'test_view'
+        test_mview = 'test_mview'
+
+        self.waho = self._default_warehouse()
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+        tb = self.waho.tables.next()
+
+        # test installed table
+        self.waho.extract_table(tb.vid, 'csv')
+        # test view
+        self.waho.extract_table(test_view, 'csv')
+        # + letter case
+        self.waho.extract_table(test_mview, 'CsV')
+
+        self.waho.extract_table(test_table, 'csv')
+
+        self.waho.extract_table(test_table, 'json')
+
+        try:
+            import osgeo
+        except ImportError:
+            pass
+        else:
+            self.waho.extract_table(test_table, 'shapefile')
+            self.waho.extract_table(test_table, 'geojson')
+            self.waho.extract_table(test_table, 'kml')
+
+        self.assertRaises(NotFoundError, self.waho.extract_table, 'blabla')
+
+    def test_remove(self):
+        """
+        Remove partition or bundle
+        """
+        from sqlalchemy.exc import OperationalError, ProgrammingError
+        self.waho = self._default_warehouse()
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+
+        # remove bundle
+        self.waho.remove('d000')
+        try:
+            self.waho.remove('d000')
+        except AttributeError:
+            pass
+
+        # # remove partition
+        self.waho.remove('piEGPXmDC8001001')
+        try:
+            self.waho.remove('piEGPXmDC8003001')
+        except ProgrammingError:
+            pass
+        except OperationalError:
+            pass
+
+    def test_load_insert(self):
+        """
+        Load data from one table to another
+        """
+
+        self.waho = self._default_warehouse()
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+
+        p = self.bundle.partitions.find(name='source-dataset-subset-variation-tthree')
+
+        self.waho.load_local(p, 'tthree', 'piEGPXmDC8003001_tthree')
+
+    def test_has(self):
+        """
+        Does warehouse has partition
+        """
+        self.waho = self._default_warehouse()
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+
+        self.assertTrue(self.waho.has('source-dataset-subset-variation-tthree-0.0.1'))
+
+
+    def test_postgres_dbcreate(self):
+        """
+        Create postgres test DB
+        """
+
+        self.waho = self._default_warehouse(self.EXAMPLE.CONF_DB_POSTGRES)
+
+    def test_dbobj_create_from_manifest(self):
+        """
+        Test creating tables, views, mviews, indexs and executing custom sql
+        """
+        from sqlalchemy.exc import OperationalError
+
+        test_table = 'geot1'
+        test_view = 'test_view'
+        test_mview = 'test_mview'
+        augmented_table_name = 'piEGPXmDC8002_geot1'
+
+        self.waho = self._default_warehouse()
+
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+
+        all_tbvw = (t.name for t in self.waho.tables)
+
+        # tables
+        self.assertIn(test_table, all_tbvw)
+        self.assertEqual(test_table, self.waho.orm_table_by_name(test_table).name)
+        self.assertTrue(self.waho.has_table(Config.__tablename__))
+
+        # views
+        self.assertIn(test_view, all_tbvw)
+        self.assertIn(test_mview, all_tbvw)
+
+        self.assertEqual('view', self.waho.orm_table_by_name(test_view).type)
+        self.assertEqual('mview', self.waho.orm_table_by_name(test_mview).type)
+
+        # augmented_table_name test
+        self.assertEqual(
+            augmented_table_name,
+            self.waho.orm_table_by_name(augmented_table_name).name)
+
+        # indexs
+        self.assertRaises(
+            OperationalError,
+            self.waho.run_sql,
+            'Create index test_index on files (f_id)')
+
+        # SQL
+        self.assertTrue(self.waho.has_table('sql_test'))
+
+    def test_clean(self):
+        self.waho = self._default_warehouse()
+        self.waho.clean()
+        self.assertFalse(self.waho.has_table(Config.__tablename__))
+
+    def test_delete_create_db(self):
+        self.waho = self._default_warehouse()
+        self.waho.delete()
+        self.assertFalse(self.waho.database.exists())
+        self.assertFalse(self.waho.wlibrary.database.exists())
+        self.waho.create()
+        self.assertTrue(self.waho.database.exists())
+        self.assertTrue(self.waho.wlibrary.database.exists())
 
     def test_manifest_parser(self):
         lines = [
@@ -230,77 +337,60 @@ WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
 
         for t in r[0].tokens:
             if isinstance(t, sqlparse.sql.IdentifierList):
-                # for i in t.get_identifiers():
-                #     pass
-                t.get_identifiers()
-
-    def test_exists(self):
-        """
-        Test the existence of the database
-        """
-        waho = self._default_warehouse()
-        self.assertTrue(waho.exists())
+                for i in t.get_identifiers():
+                    pass
 
     def test_meta(self):
         """
         Test meta
         """
-        waho = self._default_warehouse()
+        self.waho = self._default_warehouse()
         title = 'my title'
         summary = 'my summary'
         name = 'my name '
         url = 'http://www.example.com'
 
-        waho.title = title
-        waho.summary = summary
-        waho.name = name
-        waho.url = url
+        self.waho.title = title
+        self.waho.summary = summary
+        self.waho.name = name
+        self.waho.url = url
 
-        self.assertEquals(title, waho.title)
-        self.assertEquals(summary, waho.summary)
-        self.assertEquals(name, waho.name)
-        self.assertEquals(url, waho.url)
+        self.assertEquals(title, self.waho.title)
+        self.assertEquals(summary, self.waho.summary)
+        self.assertEquals(name, self.waho.name)
+        self.assertEquals(url, self.waho.url)
 
-    def test_cache(self):
-        waho = self._default_warehouse()
-        self.assertIsNotNone(waho.cache)
+    def test_return_type(self):
+        from ambry.identity import Identity
 
-    def test_dict(self):
-        waho = self._default_warehouse()
-        self.assertIsInstance(waho.dict, dict)
+        self.waho = self._default_warehouse()
 
-    def test_load_local(self):
-        pass
+        self.assertIsNotNone(self.waho.cache)
+        self.assertIsInstance(self.waho.dict, dict)
+        self.assertIsInstance(
+            self.waho.get('ambry-djitnip4ju001-0.0.1~djItnip4ju001'),
+            Identity)
 
-    def test_load_insert(self):
-        pass
+    def test_partitions_list(self):
+        self.waho = self._default_warehouse()
+        mf = Manifest(self.mf, get_logger('TL'))
 
-    def test_remove(self):
-        # delete all from wlibrary
-        pass
+        self.waho.install_manifest(mf)
+        s = [str(c) for c in self.waho.list()]
 
-    def test_run_sql(self):
-        # + create_table
-        pass
+        self.assertIn('source-dataset-subset-variation-geot1-0.0.1~piEGPXmDC8002001', s)
+        self.assertIn('source-dataset-subset-variation-geot2-0.0.1~piEGPXmDC8001001', s)
+        self.assertIn('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8003001', s)
 
-    def test_get(self):
-        pass
+        tst = (mfile.path for mfile in self.waho.manifests)
 
-    def test_has(self):
-        pass
-
-    def test_list(self):
-        pass
-
-    def test_info(self):
-        pass
+        self.assertIn(mf.path, tst)
 
 
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
     return suite
-
 
 if __name__ == "__main__":
     unittest.TextTestRunner().run(suite())

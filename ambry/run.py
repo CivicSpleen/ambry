@@ -96,8 +96,7 @@ class RunConfig(object):
                     pass  # Empty files will produce a type error
 
         if not loaded:
-            raise ConfigurationError(
-                "Failed to load any config from: {}".format(files))
+            raise ConfigurationError("Failed to load any config from: {}".format(files))
 
         object.__setattr__(self, 'config', config)
         object.__setattr__(self, 'files', files)

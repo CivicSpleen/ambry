@@ -240,7 +240,6 @@ def root_info(args, l, rc):
         # fatal("Could not find bundle file for '{}'".format(ident.path))
         pass
 
-
     # Always list partitions if there are 10 or fewer. If more, defer to the partitions flag
     list_partitions = args.partitions if len(ident.partitions) > 10 else True
 

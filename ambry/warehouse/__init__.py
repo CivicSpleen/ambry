@@ -181,13 +181,13 @@ class Warehouse(object):
         s = self.database.session
 
         try:
-            ds = s.query(Dataset).filter( Dataset.id_ == self.vid).order_by(Dataset.revision.desc()).one()
+            ds = s.query(Dataset).filter(Dataset.id_ == self.vid).order_by(Dataset.revision.desc()).one()
         except NoResultFound:
             from ..identity import Identity
 
-            ident = Identity.from_dict(dict(id=self.vid,revision=1,source='ambry',dataset=self.vid))
+            ident = Identity.from_dict(dict(id=self.vid, revision=1, source='ambry', dataset=self.vid))
 
-            ds = Dataset(data=dict(dsn=self.dsn),creator='ambry',fqname=ident.fqname,**ident.dict)
+            ds = Dataset(data=dict(dsn=self.dsn), creator='ambry', fqname=ident.fqname, **ident.dict)
 
             s.add(ds)
 
@@ -199,8 +199,8 @@ class Warehouse(object):
 
     def clean(self):
 
-        self.wlibrary.clean() # Deletes everything from all tables.
-        self.database.clean() # For sqlite, just deleted the database file.
+        self.wlibrary.clean()  # Deletes everything from all tables.
+        self.database.clean()  # For sqlite, just deleted the database file.
 
     def delete(self):
         self.database.enable_delete = True
@@ -342,8 +342,6 @@ class Warehouse(object):
     def dict(self):
         """Return information about the warehouse as a dictionary."""
 
-        from ambry.warehouse.manifest import Manifest
-
         from ambry.util import filter_url
 
         d = {}
@@ -380,10 +378,8 @@ class Warehouse(object):
     @property
     def manifests(self):
         """Return the parsed manifests that have been installed."""
-        from .manifest import Manifest
 
         return self.library.files.query.type(self.FILE_TYPE.MANIFEST).all
-
 
     @property
     def bundles(self):
@@ -470,15 +466,13 @@ class Warehouse(object):
         if not p_vid:
             # Return all of the installed tables
             return (self.library.database.session.query(Table).filter(Table.proto_vid == table.vid)
-             .filter(Table.type == 'installed').all() )
+                    .filter(Table.type == 'installed').all())
         else:
             return (self.library.database.session.query(Table)
                     .filter(Table.proto_vid == table.vid)
                     .filter(Table.type == 'installed')
                     .filter(Table.p_vid == p_vid)
-                    .one() )
-
-
+                    .one())
 
     @property
     def tables(self):
@@ -518,7 +512,7 @@ class Warehouse(object):
 
         commands = []
 
-        commands.append( ('about',manifest.title,manifest.summary['summary_text']))
+        commands.append(('about', manifest.title, manifest.summary['summary_text']))
 
         # First pass
         for line, section in manifest.sorted_sections:
@@ -526,8 +520,8 @@ class Warehouse(object):
             tag = section.tag
 
             if tag in ('partitions', 'sql', 'index', 'mview', 'view'):
-                self.logger.info("== Processing manifest '{}' section '{}' at line {}" .format(
-                        manifest.path,section.tag,section.linenumber))
+                self.logger.info("== Processing manifest '{}' section '{}' at line {}".format(
+                                 manifest.path, section.tag, section.linenumber))
 
             def resolve_partition(pd):
 
@@ -544,7 +538,7 @@ class Warehouse(object):
 
             if tag == 'partitions':
 
-                partitions = [ p['partition'] for p in section.content['partitions']]
+                partitions = [p['partition'] for p in section.content['partitions']]
 
                 it_command = None
                 if section.content['args'].get('index', None) and section.content['args'].get('table', None):
@@ -617,7 +611,7 @@ class Warehouse(object):
         # The inputs commands most often will come from digest_manifest(), but they could also come
         # from an outside process, which is why this code is split from diget_manifest()
 
-        from ..dbexceptions import NotFoundError, ConfigurationError
+        from ..dbexceptions import NotFoundError
         from ..orm import Partition
 
         installed_partitions = []
@@ -642,7 +636,7 @@ class Warehouse(object):
                 try:
                     tables, p = self.install_partition(partition.vid)
                 except NotFoundError as e:
-                    self.logger.error("Failed to install partition {}: {}".format(partition,e))
+                    self.logger.error("Failed to install partition {}: {}".format(partition, e))
 
                     continue
 
@@ -665,7 +659,7 @@ class Warehouse(object):
 
             elif command == 'index':
                 name, table, columns = command_set
-                self.create_index( table, columns, name = name)
+                self.create_index(table, columns, name=name)
 
             elif command == 'mview':
                 name, sql, data, force = command_set
@@ -739,10 +733,10 @@ class Warehouse(object):
         from sqlalchemy.exc import OperationalError
         from sqlalchemy import inspect
         from ..dbexceptions import NotFoundError
-        from ..orm import Partition, Column
+        from ..orm import Partition
         from sqlalchemy.orm import joinedload, noload
 
-        ## Get records of the dataset, bundle and partition
+        # Get records of the dataset, bundle and partition
 
         dataset_ident = self.elibrary.resolve(p_vid)
 
@@ -751,7 +745,7 @@ class Warehouse(object):
 
         b = self.elibrary.get(dataset_ident)
 
-        dataset = self.wlibrary.database.install_bundle_dataset(b)
+        # dataset = self.wlibrary.database.install_bundle_dataset(b)
 
         # This one gets the ref from the bundle
         p = b.partitions.get(dataset_ident.partition)
@@ -759,12 +753,12 @@ class Warehouse(object):
         if not p:
             raise NotFoundError("Did not find partition '{}' in bundle".format(p_vid))
 
-        ## Copy the partition, table and columns from the source library to the
-        ## warehouse library
+        # Copy the partition, table and columns from the source library to the
+        # warehouse library
 
         orm_p = (self.elibrary.database.session.query(Partition)
                  .options(noload('*'), joinedload('table').joinedload('columns'))
-                 .filter(Partition.vid == p.identity.vid).one() )
+                 .filter(Partition.vid == p.identity.vid).one())
 
         self.wlibrary.database.session.merge(orm_p)
         self.wlibrary.database.session.commit()
@@ -773,7 +767,7 @@ class Warehouse(object):
 
         assert len(orm_p.table.columns) == len(p.table.columns), "Didn't install all the columsn from '{}'".format(p.identity.vname)
 
-        self.elibrary.get(dataset_ident.partition) # This one downloads the partition database.
+        self.elibrary.get(dataset_ident.partition)  # This one downloads the partition database.
 
         self.library.files.install_partition_file(p, self.elibrary.database.dsn)
 
@@ -785,7 +779,7 @@ class Warehouse(object):
 
         for source_table_name in p.tables:
 
-            if not source_table_name in tables_in_partition: # Ignore system tables
+            if source_table_name not in tables_in_partition:  # Ignore system tables
                 continue
 
             try:
@@ -808,7 +802,7 @@ class Warehouse(object):
                 # Copy the data to the destination table
 
                 self.elibrary.get(p.vid)  # ensure it is local
-                itn = self.load_local(p,source_table_name,dest_table_name,where)
+                itn = self.load_local(p, source_table_name, dest_table_name, where)
 
                 t_vid = p.get_table(source_table_name).vid
                 w_table = self.library.table(t_vid)
@@ -816,15 +810,16 @@ class Warehouse(object):
                 # Create a table entry for the name of the table with the partition in it,
                 # and link it to the main table record.
                 proto_vid = w_table.vid
-                self.install_table(dest_table_name,alt_name=alias,data=dict(), type_='installed',
-                                   proto_vid=proto_vid, p_vid = p.vid)
+                self.install_table(dest_table_name, alt_name=alias,
+                                   data=dict(), type_='installed',
+                                   proto_vid=proto_vid, p_vid=p.vid)
 
                 # Link the table name and the alias
-                self.install_table_alias(dest_table_name,alias,proto_vid=proto_vid, p_vid = p.vid)
+                self.install_table_alias(dest_table_name, alias, proto_vid=proto_vid, p_vid=p.vid)
 
-                self.library.database.mark_table_installed(p.get_table(source_table_name).vid,itn)
+                self.library.database.mark_table_installed(p.get_table(source_table_name).vid, itn)
 
-                assert self.augmented_table_name(p.identity,source_table_name)[0] == itn
+                assert self.augmented_table_name(p.identity, source_table_name)[0] == itn
 
                 w_table.data['source_partition'] = p.identity.dict
 
@@ -837,7 +832,7 @@ class Warehouse(object):
                 installed_tables.append(w_table.name)
 
             except OperationalError as e:
-                self.logger.error("Failed to install table '{}': {}".format(source_table_name,e))
+                self.logger.error("Failed to install table '{}': {}".format(source_table_name, e))
                 raise
 
         self.library.database.mark_partition_installed(p.identity.vid)
@@ -887,12 +882,12 @@ class Warehouse(object):
             try:
                 p_table = self.installed_table(p.table.vid, p.vid)
             except AttributeError:
-                self.logger.error("p: "+str(p.dict))
+                self.logger.error("p: " + str(p.dict))
                 self.logger.error(p_name)
                 self.logger.error(p_ident)
                 raise
 
-            link_map =  orig_table.link_columns(p.table)
+            link_map = orig_table.link_columns(p.table)
 
             clauses = []
 
@@ -943,7 +938,6 @@ class Warehouse(object):
 
         self.install_view(table_name, sql, data=dict(), type_='indexed', doc=doc)
 
-
     def build_sample(self, t):
 
         self.logger.info("Build sample for table: {}".format(t.name))
@@ -970,8 +964,7 @@ class Warehouse(object):
         #t.data['count'] = int(v[0])
 
     def build_schema(self, t):
-
-        from ..orm import Column, Table, Column
+        from ..orm import Column
         from ..identity import ObjectNumber
 
 
@@ -985,7 +978,6 @@ class Warehouse(object):
         # which apparently gets cleared in the commit()
         s = self.library.database.session
         t = self.library.table(t.vid)
-
 
         sql = 'SELECT * FROM "{}" LIMIT 1'.format(t.name)
 
@@ -1007,7 +999,7 @@ class Warehouse(object):
 
                     orig_column = orig_table.column(c_id)
 
-                    orig_column.data['col_datatype'] = Column.convert_python_type(type(v),col_name)
+                    orig_column.data['col_datatype'] = Column.convert_python_type(type(v), col_name)
                     d = orig_column.dict
 
                     if d['name'] and d['altname']:
@@ -1031,11 +1023,11 @@ class Warehouse(object):
                     # keys
                     pass
 
-                #if d.get('altname', False):
+                # if d.get('altname', False):
                 #    d['name'], d['altname'] = d['altname'], d['name']
 
-                if not 'datatype' in d:
-                    d['datatype'] = Column.convert_python_type(type(v),col_name)
+                if 'datatype' not in d:
+                    d['datatype'] = Column.convert_python_type(type(v), col_name)
 
                 t.add_column(**d)
 
@@ -1068,16 +1060,17 @@ class Warehouse(object):
                 col_names = '*'
 
                 if len(installed_tables) == 1:
-                    sql = 'SELECT {} FROM "{}" '.format(col_names,installed_tables[0].name)
+                    sql = 'SELECT {} FROM "{}" '.format(col_names, installed_tables[0].name)
 
                 else:
 
                     sql = "SELECT {} FROM ({}) as subquery ".format(
-                        col_names,' UNION '.join(' SELECT * FROM "{}" '.format(table.name)
-                                       for table in installed_tables)
+                        col_names, ' UNION '.join(' SELECT * FROM "{}" '.format(table.name)
+                                                  for table in installed_tables)
                     )
 
-                self.install_view(t_vid,sql,data=dict(),type_='alias',proto_vid=t_vid)
+                self.install_view(t_vid, sql, data=dict(),
+                                  type_='alias', proto_vid=t_vid)
 
     def post_install(self):
         """Perform operations after the manifest install, such as creating
@@ -1098,7 +1091,7 @@ class Warehouse(object):
             t = self.orm_table(t_vid)
             # Get the table definition that columns are linked to
             if t.type == 'table' and t.installed:
-                self.install_table( t_vid,data=dict(type='alias',proto_vid=t_vid))
+                self.install_table(t_vid, data=dict(type='alias', proto_vid=t_vid))
 
         s = self.library.database.session
 
@@ -1200,7 +1193,7 @@ class Warehouse(object):
 
         return False
 
-    def install_view(self, name, sql, type_='view', proto_vid=None, p_vid = None, data=None, doc=None ):
+    def install_view(self, name, sql, type_='view', proto_vid=None, p_vid=None, data=None, doc=None):
         import time
 
         assert name
@@ -1224,7 +1217,7 @@ class Warehouse(object):
 
         data['sample'] = None
 
-        sqls = [ self.drop_view_sql.format(name=name), self.create_view_sql.format(name=name, sql=sql)]
+        sqls = [self.drop_view_sql.format(name=name), self.create_view_sql.format(name=name, sql=sql)]
 
         try:
             for sql in sqls:
@@ -1233,7 +1226,7 @@ class Warehouse(object):
 
             # Creates the table library record
 
-            t = self.install_table( name, data=data, type_=type_, proto_vid=proto_vid, p_vid = p_vid, doc=doc)
+            t = self.install_table(name, data=data, type_=type_, proto_vid=proto_vid, p_vid=p_vid, doc=doc)
             self.build_schema(t)
 
         except Exception as e:
@@ -1246,12 +1239,13 @@ class Warehouse(object):
 
             raise
 
-    def install_table_alias(self, table_name, alias, proto_vid=None, p_vid = None):
+    def install_table_alias(self, table_name, alias, proto_vid=None, p_vid=None):
         """Install a view that allows referencing a table by another name."""
-        self.install_view(alias, "SELECT * FROM \"{}\" ".format(table_name),data=dict(),
-                          type_='alias', proto_vid=proto_vid, p_vid=p_vid)
+        self.install_view(alias, "SELECT * FROM \"{}\" ".format(table_name),
+                          data=dict(), type_='alias', proto_vid=proto_vid, p_vid=p_vid)
 
-    def install_table(self, name, alt_name=None,  type_='view', proto_vid=None, p_vid = None, data=None, doc=None):
+    def install_table(self, name, alt_name=None, type_='view', proto_vid=None,
+                      p_vid=None, data=None, doc=None):
         """Install a view, mview or alias as a Table record.
 
         Real tables are copied
@@ -1268,7 +1262,7 @@ class Warehouse(object):
         try:
             from sqlalchemy.orm import lazyload
 
-            q = (s.query(Table).filter(Table.d_vid == self.vid,Table.name == name) .options(lazyload('columns')))
+            q = (s.query(Table).filter(Table.d_vid == self.vid, Table.name == name).options(lazyload('columns')))
 
             t = q.one()
 
@@ -1330,15 +1324,14 @@ class Warehouse(object):
         s.merge(t)
         s.commit()
 
-        self.elibrary.mark_updated(vid=t.vid) #clear doc_cache
+        self.elibrary.mark_updated(vid=t.vid)  # clear doc_cache
 
         return t
 
-    def load_local(self,partition,source_table_name,dest_table_name,where=None):
-        return self.load_insert(partition,source_table_name,dest_table_name,where=where)
+    def load_local(self, partition, source_table_name, dest_table_name, where=None):
+        return self.load_insert(partition, source_table_name, dest_table_name, where=where)
 
-    def load_insert(self,partition,source_table_name,dest_table_name,where=None):
-        from ..database.inserter import ValueInserter
+    def load_insert(self, partition, source_table_name, dest_table_name, where=None):
         from sqlalchemy import Table, MetaData
         from sqlalchemy.dialects.postgresql.base import BYTEA
         import psycopg2
@@ -1359,12 +1352,14 @@ class Warehouse(object):
         self.logger.info('populate_table {}'.format(source_table_name))
 
         dest_metadata = MetaData()
-        dest_table = Table(dest_table_name,dest_metadata,autoload=True,autoload_with=self.database.engine)
+        dest_table = Table(dest_table_name, dest_metadata, autoload=True,
+                           autoload_with=self.database.engine)
 
         insert_statement = dest_table.insert()
 
         source_metadata = MetaData()
-        source_table = Table(source_table_name,source_metadata,autoload=True,autoload_with=partition.database.engine)
+        source_table = Table(source_table_name, source_metadata, autoload=True,
+                             autoload_with=partition.database.engine)
 
         if replace:
             insert_statement = insert_statement.prefix_with('OR REPLACE')
@@ -1372,9 +1367,9 @@ class Warehouse(object):
         cols = [
             ' {} AS "{}" '.format(
                 c[0].name if c[0].name != 'geometry' else 'AsText(geometry)',
-                c[1].name) for c in zip(source_table.columns,dest_table.columns)]
+                c[1].name) for c in zip(source_table.columns, dest_table.columns)]
 
-        select_statement = " SELECT {} FROM {} ".format(','.join(cols),source_table.name)
+        select_statement = " SELECT {} FROM {} ".format(','.join(cols), source_table.name)
 
         if where:
             select_statement += " WHERE " + where
@@ -1390,7 +1385,7 @@ class Warehouse(object):
         import re
 
         # For Psycopg's mogrify(), we need %(var)s parameters, not :var
-        insert_statement = re.sub(r':([\w_-]+)',r'%(\1)s',str(insert_statement))
+        insert_statement = re.sub(r':([\w_-]+)', r'%(\1)s', str(insert_statement))
 
         conn = self.database.engine.raw_connection()
 
@@ -1453,7 +1448,7 @@ class Warehouse(object):
 
         if dataset.partition:
             b = LibraryDbBundle(self.library.database, dataset.vid)
-            p = b.partitions.find(id_=dataset.partition.vid)
+            p = b.partitions.get(id_=dataset.partition.vid)
             self.logger.info(
                 "Dropping tables in partition {}".format(
                     p.identity.vname))
@@ -1523,14 +1518,14 @@ class Warehouse(object):
 
         return table, meta
 
-    def create_index(self, table, columns, name = None):
+    def create_index(self, table, columns, name=None):
 
         from sqlalchemy.exc import OperationalError, ProgrammingError
 
         if not name:
-            name = '_'.join([table]+columns)
+            name = '_'.join([table] + columns)
 
-        sql = 'CREATE INDEX {} ON "{}" ({})'.format(name,table,','.join(columns))
+        sql = 'CREATE INDEX {} ON "{}" ({})'.format(name, table, ','.join(columns))
 
         try:
             self.database.connection.execute(sql)
@@ -1546,7 +1541,6 @@ class Warehouse(object):
     def _to_vid(self, partition):
         from ..partition import PartitionBase
         from ..identity import Identity
-        from ..dbexceptions import NotFoundError
 
         if isinstance(partition, basestring):
             dsid = self.elibrary.resolve(partition)
@@ -1619,56 +1613,10 @@ class Warehouse(object):
 
         return sorted(idents, key=lambda x: x.fqname)
 
-    def info(self):
-        config = self.config.to_dict()
-
-        if 'password' in config['database']:
-            del config['database']['password']
-        return config
-
     ##
     # Extracts
     ###
 
-    def extract_all(self, force=False):
-        """Generate the extracts and return a struture listing the extracted
-        files."""
-
-        from .extractors import new_extractor
-        from ..util import md5_for_file
-
-        # Get the URL to the root. The public_utl arg only affects S3, and
-        # gives a URL without a signature.
-        self.cache.path('', missing_ok=True, public_url=True)
-
-        extracts = []
-
-        # Generate the file etracts
-
-        for f in self.library.files.query.type('manifest').type('extract').all:
-
-            t = self.orm_table_by_name(f.data['table'])
-
-            if (t and t.data.get('updated') and f.modified and int(t.data.get('updated')) > f.modified) \
-                    or (not f.modified):
-                force = True
-
-            ex = new_extractor(f.data.get('format'), self, self.cache, force=force)
-
-            e = ex.extract(f.data['table'], self.cache, f.path)
-
-            extracts.append(e)
-
-            if e.time:
-                f.modified = e.time
-
-                if os.path.exists(e.abs_path):
-                    f.hash = md5_for_file(e.abs_path)
-                    f.size = os.path.getsize(e.abs_path)
-
-                self.library.files.merge(f)
-
-        return extracts
 
     def extract_table(self, tid, content_type='csv'):
         from .extractors import new_extractor
@@ -1684,7 +1632,7 @@ class Warehouse(object):
 
         e = new_extractor(content_type, self, self.cache.subcache('extracts'))
 
-        ref = t.name if t.type in ('view', 'mview', 'indexed') else t.vid
+        ref = t.name if t.type in ('view', 'mview', 'indexed', 'installed') else t.vid
 
         ee = e.extract(ref, '{}.{}'.format(tid, content_type), t.data.get('updated', None))
 
@@ -1708,7 +1656,7 @@ class Warehouse(object):
 
         ref = t.name if t.type in ('view', 'mview', 'indexed') else t.vid
 
-        return e.stream(ref, '{}.{}'.format(tid, content_type) )
+        return e.stream(ref, '{}.{}'.format(tid, content_type))
 
 
 def database_config(db, base_dir=''):

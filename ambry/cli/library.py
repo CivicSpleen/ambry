@@ -163,6 +163,7 @@ def library_drop(args, l, config):
     prt("Drop tables")
     l.database.enable_delete = True
     l.database.drop()
+    warn("Drop tables for %s" % l.database.dbname)
 
 
 def library_clean(args, l, config):
@@ -444,9 +445,9 @@ def library_open(args, l, config):
 
 def library_sync(args, l, config):
     """Synchronize the remotes and the upstream to a local library database."""
+    l.logger.info('args: %s' % args)
 
-    all = args.all or not (
-        args.library or args.remote or args.source or args.json or args.warehouses)
+    all = args.all or not (args.library or args.remote or args.source or args.json or args.warehouses)
 
     vids = None
 
