@@ -56,9 +56,11 @@ Running the ambry tests
     $ python setup.py test
 
 Test command options:
+
   --verbosity - verbosity of the tests, 1 by default.
   --failfast - if given, stop testing on first fail.
 
 Examples:
 .. code-block:: bash
+
     $ python setup.py test --verbosity=2 --failfast
