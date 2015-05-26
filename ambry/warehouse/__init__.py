@@ -1396,7 +1396,7 @@ class Warehouse(object):
 
         if dataset.partition:
             b = LibraryDbBundle(self.library.database, dataset.vid)
-            p = b.partitions.find(id_=dataset.partition.vid)
+            p = b.partitions.get(id_=dataset.partition.vid)
             self.logger.info(
                 "Dropping tables in partition {}".format(
                     p.identity.vname))
@@ -1564,57 +1564,10 @@ class Warehouse(object):
 
         return sorted(idents, key=lambda x: x.fqname)
 
-    # FIXME: fix or delete ?
-    def info(self):
-        config = self.config.to_dict()
-
-        if 'password' in config['database']:
-            del config['database']['password']
-        return config
-
     ##
     # Extracts
     ###
 
-    def extract_all(self, force=False):
-        """Generate the extracts and return a struture listing the extracted
-        files."""
-
-        from .extractors import new_extractor
-        from ..util import md5_for_file
-
-        # Get the URL to the root. The public_utl arg only affects S3, and
-        # gives a URL without a signature.
-        self.cache.path('', missing_ok=True, public_url=True)
-
-        extracts = []
-
-        # Generate the file etracts
-
-        for f in self.library.files.query.type('manifest').type('extract').all:
-
-            t = self.orm_table_by_name(f.data['table'])
-
-            if (t and t.data.get('updated') and f.modified and int(t.data.get('updated')) > f.modified) \
-                    or (not f.modified):
-                force = True
-
-            ex = new_extractor(f.data.get('format'), self, self.cache, force=force)
-
-            e = ex.extract(f.data['table'], self.cache, f.path)
-
-            extracts.append(e)
-
-            if e.time:
-                f.modified = e.time
-
-                if os.path.exists(e.abs_path):
-                    f.hash = md5_for_file(e.abs_path)
-                    f.size = os.path.getsize(e.abs_path)
-
-                self.library.files.merge(f)
-
-        return extracts
 
     def extract_table(self, tid, content_type='csv'):
         from .extractors import new_extractor
@@ -1630,7 +1583,7 @@ class Warehouse(object):
 
         e = new_extractor(content_type, self, self.cache.subcache('extracts'))
 
-        ref = t.name if t.type in ('view', 'mview', 'indexed') else t.vid
+        ref = t.name if t.type in ('view', 'mview', 'indexed', 'installed') else t.vid
 
         ee = e.extract(ref, '{}.{}'.format(tid, content_type), t.data.get('updated', None))
 
