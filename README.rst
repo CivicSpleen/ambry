@@ -62,6 +62,7 @@ Test command options:
   --failfast - if given, stop testing on first fail.
 
 Examples:
+
 .. code-block:: bash
 
     $ python setup.py test --verbosity=2 --failfast
