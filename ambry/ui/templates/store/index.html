@@ -31,6 +31,9 @@
         <li role="presentation">
             <a href="#indexes-tab" aria-controls="indexes" role="tab" data-toggle="tab">Indexes</a>
         </li>
+        <li role="presentation">
+            <a href="#stats-tab" aria-controls="stats" role="tab" data-toggle="tab">Stats</a>
+        </li>
     </ul>
 
   <!-- Tab panes -->
@@ -43,6 +46,9 @@
         </div>
         <div role="tabpanel" class="tab-pane" id="indexes-tab">
             {% include 'store/indexes.html' -%}
+        </div>
+        <div role="tabpanel" class="tab-pane" id="stats-tab">
+            {% include 'store/stats.html' -%}
         </div>
 
     </div>

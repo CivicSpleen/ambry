@@ -527,6 +527,29 @@ class Renderer(object):
         store['manifests'] = {
             uid: self.doc_cache.manifest(uid) for uid in store['manifests']}
 
+        # Count tables and columns. The columns are only counted when that are in a partition
+        # table, but the tables are also counted if they are indexed
+        table_count = 0
+        column_count = 0
+        indexed_table_count = 0
+        indexed_column_count = 0
+
+        for table, data in store['tables'].items():
+            if data['type'] == "table":
+                table_count += 1
+                column_count += len(data['columns'])
+
+            if data['type'] == "indexed":
+                indexed_table_count += 1
+                indexed_column_count += len(data['columns'])
+
+        store['counts'] = dict(
+            table_count = table_count,
+            column_count = column_count,
+            indexed_table_count = indexed_table_count,
+            indexed_column_count = indexed_column_count
+        )
+
         return self.render(template, s=store, **self.cc())
 
     def store_table(self, uid, tid):

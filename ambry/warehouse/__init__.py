@@ -315,15 +315,6 @@ class Warehouse(object):
     def name(self, v):
         return self._meta_set('name', v)
 
-    @property
-    def url(self):
-        """Url of the management application for the warehouse."""
-        return self._meta_get('url')
-
-    @url.setter
-    def url(self, v):
-
-        return self._meta_set('url', v)
 
     @property
     def dsn(self):
@@ -350,9 +341,7 @@ class Warehouse(object):
             if k in self.configurable:
                 d[k] = v
 
-        d['dsn'] = filter_url(
-            self.database.dsn,
-            password=None)  # remove the password
+        d['dsn'] = filter_url(self.database.dsn,password=None)  # remove the password
 
         d['tables'] = {t.vid: t.nonull_col_dict for t in self.library.tables}
 
