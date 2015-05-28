@@ -926,10 +926,7 @@ class Column(Base):
 
         if not self.datatype:
             from dbexceptions import ConfigurationError
-            raise Exception("Column '{}' has no datatype".format(self.name))
-            raise ConfigurationError(
-                "Column '{}' has no datatype".format(
-                    self.name))
+            raise ConfigurationError("Column '{}' has no datatype".format(self.name))
 
         try:
             return self.types[self.datatype][2]
@@ -992,16 +989,21 @@ class Column(Base):
         :return:
 
         """
-        x = {
-            p.key: getattr(self,p.key) for p in self.__mapper__.attrs if p.key not in (
-                'table','stats','_codes')}
+        d = {p.key: getattr(self,p.key) for p in self.__mapper__.attrs
+             if p.key not in ('table','stats','_codes', 'data')}
 
-        if not x:
+        if not d:
             raise Exception(self.__dict__)
 
-        x['schema_type'] = self.schema_type
+        d['schema_type'] = self.schema_type
 
-        return x
+        if self.data:
+            # Copy data fields into top level dict, but don't overwrite existind values.
+            for k, v in self.data.items() :
+                if k not in d and k not in ('table','stats','_codes', 'data'):
+                    d[k] = v
+
+        return d
 
     @property
     def nonull_dict(self):
@@ -1016,7 +1018,10 @@ class Column(Base):
     def insertable_dict(self):
         """Like dict, but properties have the table prefix, so it can be
         inserted into a row."""
-        x = {('c_' + k).strip('_'): v for k, v in self.dict.items()}
+
+        d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs if p.key not in ('table', 'stats', '_codes')}
+
+        x = {('c_' + k).strip('_'): v for k, v in d.items()}
 
         return x
 
@@ -1092,7 +1097,6 @@ class Column(Base):
                   value=value,
                   description=description, data=data)
 
-
         self.codes.append(cd)
 
         return cd
@@ -1101,6 +1105,9 @@ class Column(Base):
     def before_insert(mapper, conn, target):
         """event.listen method for Sqlalchemy to set the seqience_id for this
         object and create an ObjectNumber value for the id_"""
+
+        #from identity import ObjectNumber
+        #assert not target.fk_vid or not ObjectNumber.parse(target.fk_vid).revision
 
         if target.sequence_id is None:
             # In case this happens in multi-process mode
@@ -1224,6 +1231,8 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
             if c in ('geometry', 'wkt', 'wkb', 'lat'):
                 d['is_geo'] = True
 
+        d['foreign_indexes'] =  list(set([c.data['index'].split(":")[0] for c in self.columns if c.data.get('index',False)]))
+
         return d
 
     @property
@@ -1255,21 +1264,21 @@ class Table(Base, LinkableMixin, DataPropertyMixin):
             protos.update({ c.fk_vid:c for c in t.columns if c.fk_vid })
             protos.update({ c.proto_vid:c for c in t.columns if c.proto_vid})
 
-            protos = { str(ObjectNumber.parse(n).rev(None)):c for n, c in protos.items() } # Remove revisions
-
             # HACK: The numbering in the proto dataset changes, so we have to make substitutions
             if 'c00104002' in protos:
                 protos['c00109003'] = protos['c00104002']
                 del protos['c00104002']
+
+            protos = { str(ObjectNumber.parse(n).rev(None)):c for n, c in protos.items() } # Remove revisions
 
             return protos
 
         protos_s = protos(self)
         protos_o = protos(other)
 
-        inter =   set(protos_s.keys())  & set(protos_o.keys())
+        inter =  set(protos_s.keys())  & set(protos_o.keys())
 
-        return [ (protos_s[n], protos_o[n])  for n in inter ]
+        return list(set( (protos_s[n], protos_o[n])  for n in inter ) )
 
 
     @property
@@ -1474,38 +1483,18 @@ Columns:
     def add_id_column(self):
         self.add_column(name='id',datatype='integer',is_primary_key = True, description = self.description)
 
-    def column(self, name_or_id, default=None):
-        from sqlalchemy.sql import or_
-        import sqlalchemy.orm.session
-        from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
-        from dbexceptions import NotFoundError, MultipleFoundError
+    def column(self, ref, default=None):
+        from dbexceptions import NotFoundError
 
-        s = sqlalchemy.orm.session.Session.object_session(self)
+        # AFAIK, all of the columns in the relationship will get loaded if any one is accessed,
+        # so iterating over the collection only involved one SELECT.
 
-        if not s: # No session, so can't find a column.
-            return None
+        for c in self.columns:
+            if str(ref) == c.name or str(ref) == c.id_ or str(ref) == c.vid:
+                return c
 
-
-        q = (s.query(Column)
-             .filter(or_(Column.id_ == name_or_id, Column.name == name_or_id))
-             .filter(Column.t_vid == self.vid))
-
-        try:
-            if not default is None:
-                try:
-                    return q.one()
-                except:
-                    return default
-            else:
-                try:
-                    return q.one()
-                except MultipleResultsFound:
-                    raise MultipleFoundError(
-                        ("Got more than one result for query for column: '{}' "
-                         " In table {} ({})").format(name_or_id,self.vid,self.name))
-
-        except NoResultFound:
-            raise NotFoundError("Failed to find column '{}' in table '{}' ".format(name_or_id,self.name))
+        raise NotFoundError("Failed to find column '{}' in table '{}' for ref: '{}' "
+                            .format(ref,self.name, ref))
 
     @property
     def primary_key(self):
@@ -1955,9 +1944,10 @@ class Partition(Base, LinkableMixin):
                 'years': d['time_coverage'],
                 'min': min(all_years) if all_years else None,
                 'max': max(all_years) if all_years else None,
-
-
             }
+
+        d['foreign_indexes'] = list(set([c.data['index'].split(':')[0] for c in self.table.columns
+                                 if c.data.get('index', False)]))
 
         return d
 
@@ -2101,6 +2091,27 @@ event.listen(Partition, 'before_update', Partition.before_update)
 
 class File(Base, SavableMixin, LinkableMixin):
     __tablename__ = 'files'
+
+    TYPE = Constant()
+    TYPE.BUNDLE = LocationRef.LOCATION.LIBRARY
+    TYPE.PARTITION = LocationRef.LOCATION.PARTITION
+    TYPE.SOURCE = LocationRef.LOCATION.SOURCE
+    TYPE.SREPO = LocationRef.LOCATION.SREPO
+    TYPE.UPSTREAM = LocationRef.LOCATION.UPSTREAM
+    TYPE.REMOTE = LocationRef.LOCATION.REMOTE
+    TYPE.REMOTEPARTITION = LocationRef.LOCATION.REMOTEPARTITION
+
+    TYPE.MANIFEST = 'manifest'
+    TYPE.DOC = 'doc'
+    TYPE.EXTRACT = 'extract'
+    TYPE.STORE = 'store'
+    TYPE.DOWNLOAD = 'download'
+
+    PROCESS = Constant()
+    PROCESS.MODIFIED = 'modified'
+    PROCESS.UNMODIFIED = 'unmodified'
+    PROCESS.DOWNLOADED = 'downloaded'
+    PROCESS.CACHED = 'cached'
 
     oid = SAColumn('f_id', Integer, primary_key=True, nullable=False)
     path = SAColumn('f_path', Text, nullable=False)

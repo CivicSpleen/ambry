@@ -32,7 +32,10 @@ class DocCache(object):
 
         import string
 
-        if '_key' in kwargs:
+        if '_key' in kwargs and kwargs['_key'] is None:
+            del kwargs['_key']
+
+        if '_key' in kwargs and kwargs['_key']:
             key = kwargs['_key']
             del kwargs['_key']
         else:
@@ -113,10 +116,7 @@ class DocCache(object):
         return self.cache(lambda: self.library.summary_dict, _key='library_info')
 
     def bundle_index(self):
-
-        return self.cache(
-            lambda: self.library.versioned_datasets(),
-            _key='bundle_index')
+        return self.cache(lambda: self.library.versioned_datasets(),_key='bundle_index')
 
     def table_index(self):
         pass
@@ -145,7 +145,6 @@ class DocCache(object):
 
             return d
 
-
         return self.cache(lambda vid: dict_and_summary(vid),vid,_key_prefix='ds')
 
     def bundle_summary(self, vid):
@@ -164,12 +163,21 @@ class DocCache(object):
         return self.cache(lambda vid: self.library.partition(vid).dict, vid)
 
     def table(self, vid):
-        return self.cache(lambda vid: self.library.table(vid).nonull_col_dict,vid)
+
+        def table(vid):
+            t = self.library.table(vid).nonull_col_dict
+
+            t['foreign_indexes'] = list(set([c['index'].split(':')[0] for c in t['columns'].values() if c.get('index', False) ]))
+
+            return t
+
+        return self.cache(lambda vid: table(vid),vid)
 
     def table_schema(self, vid):
         pass
 
     def warehouse(self, vid):
+
         return self.cache(lambda vid: self.library.warehouse(vid).dict, vid)
 
     def manifest(self, vid):
@@ -209,6 +217,8 @@ class DocCache(object):
         cached, or at least the bundles used in this manifest
 
         """
+
+        raise NotImplementedError()
 
         from ambry.identity import ObjectNumber
 

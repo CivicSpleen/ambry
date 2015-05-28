@@ -8,7 +8,9 @@ from collections import OrderedDict, defaultdict
 
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import Column
+from util import memoize
 
+PROTO_TERMS = 'civicknowledge.com-proto-proto_terms'
 
 def _clean_flag(in_flag):
     if in_flag is None or in_flag == '0':
@@ -287,6 +289,8 @@ class Schema(object):
     @classmethod
     def validate_column(cls, table, column, warnings, errors):
 
+        from identity import ObjectNumber
+
         # Postgres doesn't allow size modifiers on Text fields.
         if column.datatype == Column.DATATYPE_TEXT and column.size:
             warnings.append(
@@ -314,6 +318,9 @@ class Schema(object):
             except ValueError:
                 errors.append((table.name, column.name,
                                "Bad default value '{}' for type '{}' (V)".format(column.default, column.datatype)))
+
+        if column.fk_vid and ObjectNumber.parse(column.fk_vid).revision:
+            errors.append((table.name, column.name, "Foreign key can't have a revision number"))
 
     @classmethod
     def translate_type(cls, driver, table, column):
@@ -743,6 +750,17 @@ class Schema(object):
 
                     self.add_column(t, name, **d)
 
+    @property
+    @memoize
+    def prototype_map(self):
+
+        pt = self.bundle.library.get(PROTO_TERMS).partition
+
+        self.bundle.log("Loading protos from {}".format(pt.identity.fqname))
+        pt_map = {row['name']: dict(row) for row in pt.rows}
+
+        return pt_map
+
     def expand_column_prototypes(self):
         """Find values for the proto_vid that are in the proto_terms dataset, and expand them into column vids
 
@@ -756,7 +774,6 @@ class Schema(object):
         q = (self.bundle.database.session.query(Column)
              .filter(Column.proto_vid != None).filter(Column.proto_vid != ''))
 
-        pt_map = None
 
         # Group expanded columns by souce table, to create sql indexes for the sets of columns
         # pointing ot the same ambry index dataset
@@ -766,37 +783,83 @@ class Schema(object):
 
             try:
                 ObjectNumber.parse(c.proto_vid)
-                # Its all good.
+                # Its all good. The proto_vid is an Object, not a name.
+
+                continue # Explicit, but not necessary.
 
             except NotObjectNumberError:
-                if not pt_map:
-                    p = self.bundle.library.get('civicknowledge.com-proto-proto_terms').partition
 
-                    pt_map = {row['name']: dict(row) for row in p.rows}
+                # If the proto_vid isn't a valid number, it is probably a proto string, from
+                # the proto_terms table.
 
-                pt_row = pt_map[c.proto_vid]
+                pt_map = self.prototype_map
+
+                try:
+                    pt_row = pt_map[c.proto_vid]
+                except KeyError:
+                    self.bundle.error("Proto vid for {}.{} is not defined: {} ".format(c.table.name, c.name, c.proto_vid))
+                    continue
 
                 c.data['orig_proto_vid'] = c.proto_vid
                 c.proto_vid = pt_row['obj_number']
 
-                if pt_row['index_partition']:
+                if c.datatype != pt_row['datatype']:
+                    self.bundle.error(("Column datatype for {}.{} doesn't match prototype: "
+                                              "{} != {} ").format(c.table.name, c.name, c.datatype, pt_row['datatype']))
+
+
+                # At this point, we've converted the proto_vid from a proto_term string to an Object NUmber,
+                # now we can link up an index if it is defined. If the index parition exists, then
+                # we look for the new proto-vid object number in the table of the index partition,
+                # and connect the foreign keys if there is a match.
+
+                index_partition = pt_row['index_partition']
+
+                if index_partition:
                     try:
-                        ip = self.bundle.library.get(pt_row['index_partition']).partition
+                        # FIXME! Should use library.column() instead
+                        ip = self.bundle.library.get(index_partition).partition
                     except NotFoundError:
-                        self.bundle.error(("Failed to get index '{}' while trying to expand proto_id for column"
-                        " {}.{} ").format(pt_row['index_partition'], c.table.name, c.name ))
+                        self.bundle.error("Failed to get index '{}' while trying to check index coverage"
+                                          .format(index_partition, c.table.name, c.name ))
                         continue
 
                     for ipc in ip.table.columns:
 
                         if ipc.proto_vid == c.proto_vid:
                             c.fk_vid = ipc.id_
-                            c.data['index'] = "{}:{}".format(str(ip.identity.vname), ipc.name)
-                            self.bundle.log("expand_column_prototype: {} {} -> {}.{}".format(
-                                c.table.name, c.name,
+                            c.data['index'] = "{}".format(str(ip.identity.vid))
+                            c.data['index_name'] = "{}:{}".format(str(ip.identity.vname), ipc.name)
+
+                            self.bundle.log("expand_column_prototype: {}.{} -> {}.{}".format(c.table.name, c.name,
                                 str(ip.identity.vname), ipc.name))
 
                             table_cols[ip.identity.vid].add(c.vid)
+
+        # Now check that for each table, the table has columns that link to all of the  link column in the index.
+        for t in self.tables:
+
+            indexes = set([ c.data['index'].split(':')[0] for c in t.columns if 'index' in c.data and c.data['index']])
+
+            for index in indexes:
+                try:
+                    ip = self.bundle.library.get(index).partition
+                except NotFoundError:
+                    self.bundle.error(("Failed to get index '{}' while trying to expand proto_id for column"
+                                       " {}.{} ").format(index, c.table.name, c.name))
+                    continue
+
+                index_columns =  set([ str(c.id_) for c in ip.table.columns if c.name != 'id'])
+
+                link_columns =  set([ str(a.id_) for a,b  in ip.table.link_columns(t) ])
+
+                diff = index_columns.difference(link_columns)
+
+                if diff:
+                    missing_cols = ', '.join(ip.table.column(c).name for c in diff)
+                    self.bundle.warn('Table {} does not cover all of the index values for index {}; missing {}'
+                                     .format(t.name, ip.vname, missing_cols)  )
+
 
     def process_proto_vid(self, pvid):
         """Lookup protovids to ensure they are sensible, and convert names to the proto_vid"""

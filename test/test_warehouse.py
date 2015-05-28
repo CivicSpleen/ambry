@@ -39,7 +39,7 @@ class Test(TestBase):
 
         # Delete the whole test tree every run.
         test_folder = self.rc.group('filesystem').root
-        while os.path.exists(test_folder):
+        if os.path.exists(test_folder):
             rmtree(test_folder)
 
         self.mf = os.path.join(os.path.dirname(manifests.__file__), 'test.ambry')
@@ -115,12 +115,91 @@ class Test(TestBase):
 
         self.assertEqual(orig_mf, conv_mf)
 
-    def test_sqlite_dbcreate(self):
+    def test_extract_table(self):
         """
-        Create sqlite test DB
+        Extract data from table to file
+        """
+        from ambry.dbexceptions import NotFoundError
+
+        test_table = 'geot1'
+        test_view = 'test_view'
+        test_mview = 'test_mview'
+
+        self.waho = self._default_warehouse()
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+        tb = self.waho.tables.next()
+
+        # test installed table
+        self.waho.extract_table(tb.vid, 'csv')
+        # test view
+        self.waho.extract_table(test_view, 'csv')
+        # + letter case
+        self.waho.extract_table(test_mview, 'CsV')
+
+        self.waho.extract_table(test_table, 'csv')
+
+        self.waho.extract_table(test_table, 'json')
+
+        try:
+            import osgeo
+        except ImportError:
+            pass
+        else:
+            self.waho.extract_table(test_table, 'shapefile')
+            self.waho.extract_table(test_table, 'geojson')
+            self.waho.extract_table(test_table, 'kml')
+
+        self.assertRaises(NotFoundError, self.waho.extract_table, 'blabla')
+
+    def test_remove(self):
+        """
+        Remove partition or bundle
+        """
+        from sqlalchemy.exc import OperationalError, ProgrammingError
+        self.waho = self._default_warehouse()
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+
+        # remove bundle
+        self.waho.remove('d000')
+        try:
+            self.waho.remove('d000')
+        except AttributeError:
+            pass
+
+        # # remove partition
+        self.waho.remove('piEGPXmDC8001001')
+        try:
+            self.waho.remove('piEGPXmDC8003001')
+        except ProgrammingError:
+            pass
+        except OperationalError:
+            pass
+
+    def test_load_insert(self):
+        """
+        Load data from one table to another
+        """
+
+        self.waho = self._default_warehouse()
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+
+        p = self.bundle.partitions.find(name='source-dataset-subset-variation-tthree')
+
+        self.waho.load_local(p, 'tthree', 'piEGPXmDC8003001_tthree')
+
+    def test_has(self):
+        """
+        Does warehouse has partition
         """
         self.waho = self._default_warehouse()
-        self.assertTrue(self.waho.exists())
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+
+        self.assertTrue(self.waho.has('source-dataset-subset-variation-tthree-0.0.1'))
+
 
     def test_postgres_dbcreate(self):
         """
@@ -306,27 +385,6 @@ WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
         tst = (mfile.path for mfile in self.waho.manifests)
 
         self.assertIn(mf.path, tst)
-
-    def test_info(self):
-        # FIXME: for details look in warehouse.info()
-        return
-        self.waho = self._default_warehouse()
-        self.waho.info()
-
-    def _test_extract(self):
-        l = self.get_library()
-        l.put_bundle(self.bundle)
-        self.waho = self.get_warehouse(l, self.EXAMPLE.CONF_DB_SQLITE, delete=False)
-        self.waho.create()
-        mf = Manifest(self.mf, get_logger('TL'))
-        self.waho.install_manifest(mf)
-        # cache = new_cache('s3://warehouse.sandiegodata.org/test', run_config = get_runconfig())
-        self.waho.extract_all(force=True)
-
-    def _test_has(self):
-        self.waho = self._default_warehouse()
-        # FIXME: no idea how to test
-        self.assertTrue(self.waho.has(self.waho.bundle.identity))
 
 
 def suite():

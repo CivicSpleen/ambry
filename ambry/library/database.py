@@ -215,8 +215,7 @@ class LibraryDb(object):
                 if self.driver in ('postgres', 'postgis') and self._schema:
                     self.connection.execute("SET search_path TO {}".format( self._schema))
 
-                rows = self.connection.execute(
-                    "SELECT * FROM datasets WHERE d_vid = '{}' "
+                rows = self.connection.execute("SELECT * FROM datasets WHERE d_vid = '{}' "
                     .format(ROOT_CONFIG_NAME_V)).fetchone()
 
             except ProgrammingError as e:
@@ -294,6 +293,11 @@ class LibraryDb(object):
                     raise Exception("Couldn't create directory " + dir_)
 
     def drop(self):
+        """ Drop all of the tables in the database
+
+        :return:
+        :raise Exception:
+        """
         from sqlalchemy.exc import NoSuchTableError, ProgrammingError, OperationalError
 
         if not self.enable_delete:
@@ -306,22 +310,17 @@ class LibraryDb(object):
             return
 
 
-        # Tables and partitions can have a cyclic rlationship.
+        # Tables and partitions can have a cyclic relationship.
         # Prob should be handled with a cascade on relationship.
         try:
             self.session.query(Table).update({Table.p_vid: None})
             self.session.commit()
         except (ProgrammingError, OperationalError): # Table doesn't exist.
             self._session.rollback()
+
             pass
 
-        library_tables = [Config, ColumnStat, File, Code, Partition, Column, Table, Dataset]
-
-        for table in library_tables:
-
-            table.__table__.drop(self.engine, checkfirst=True)
-
-        self.commit()
+        self.metadata.drop_all(self.engine)
 
     def __del__(self):
         pass
@@ -411,11 +410,7 @@ class LibraryDb(object):
         from ..database.inserter import ValueInserter
         from sqlalchemy.schema import Table
 
-        table = Table(
-            table_name,
-            self.metadata,
-            autoload=True,
-            autoload_with=self.engine)
+        table = Table(table_name,self.metadata,autoload=True,autoload_with=self.engine)
 
         return ValueInserter(self, None, table, **kwargs)
 
@@ -438,11 +433,7 @@ class LibraryDb(object):
                 SAConfig.d_vid == ROOT_CONFIG_NAME_V).one()
 
         except NoResultFound:
-            o = SAConfig(
-                group=group,
-                key=key,
-                d_vid=ROOT_CONFIG_NAME_V,
-                value=value)
+            o = SAConfig(group=group,key=key,d_vid=ROOT_CONFIG_NAME_V,value=value)
 
         o.value = value
         s.merge(o)
@@ -457,10 +448,8 @@ class LibraryDb(object):
 
         try:
 
-            c = s.query(SAConfig).filter(
-                SAConfig.group == group,
-                SAConfig.key == key,
-                SAConfig.d_vid == ROOT_CONFIG_NAME_V).first()
+            c = s.query(SAConfig).filter(SAConfig.group == group,SAConfig.key == key,
+                                         SAConfig.d_vid == ROOT_CONFIG_NAME_V).first()
 
             return c
         except:

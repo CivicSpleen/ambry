@@ -92,11 +92,7 @@ def _new_library(config):
                 database=database,
                 name=config['_name'] if '_name' in config else 'NONE',
                 remotes=remotes,
-                require_upload=config.get('require_upload', None),
-                source_dir=source_dir,
-                host=host,
-                port=port,
-                urlhost=config.get('urlhost', None))
+                source_dir = source_dir)
 
     return l
 
@@ -153,12 +149,8 @@ class Library(object):
     configurable = ('warehouse_url')
 
     def __init__(self, cache, database,
-                 name=None, remotes=None,
-                 source_dir=None,
-                 require_upload=False,
-                 doc_cache=None,
-                 warehouse_cache=None,
-                 host=None, port=None, urlhost=None):
+                 name=None, remotes=None, source_dir = None,
+                 doc_cache = None, warehouse_cache = None):
 
         '''Libraries are constructed on the root cache name for the library.
         If the cache does not exist, it will be created.
@@ -182,12 +174,9 @@ class Library(object):
         self.source_dir = source_dir
 
         self._database = database
-        self._bundle = None  # Set externally in bundle.library()
-        self.host = host
-        self.port = port
-        self.urlhost = urlhost if urlhost else ('{}:{}'.format(self.host, self.port) if self.port else self.host)
-        self.dep_cb = None  # Callback for dependency resolution
-        self.require_upload = require_upload
+        self._bundle = None # Set externally in bundle.library()
+
+        self.dep_cb = None# Callback for dependency resolution
         self._dependencies = None
         self._remotes = remotes
 
@@ -200,6 +189,7 @@ class Library(object):
         self.logger = get_logger(__name__)
         self.logger.setLevel(logging.DEBUG)
 
+
         self.needs_update = False
 
         self.bundles = weakref.WeakValueDictionary()
@@ -208,8 +198,7 @@ class Library(object):
 
     def clone(self):
 
-        return self.__class__(self.cache, self.database.clone(),
-                              self.require_upload, self.host, self.port)
+        return self.__class__(self.cache, self.database.clone())
 
     def _create_bundle(self, path):
         from ..bundle.bundle import DbBundle
@@ -272,12 +261,14 @@ class Library(object):
     ## Storing
     ##
 
-    def put_bundle(self, bundle, source=None, install_partitions=True, file_state='installed', commit=True):
+    def put_bundle(self, bundle, source=None, install_partitions=True, file_state='installed', commit=True, force = False):
         """Install the records for the dataset, tables, columns and possibly
         partitions. Does not install file references """
 
-        if not self.database.install_bundle(bundle):
+        if not force and self.files.query.ref(bundle.identity.vid).type(Files.TYPE.BUNDLE).one_maybe:
             return self.cache.path(bundle.identity.cache_key), False
+
+        self.database.install_bundle(bundle)
 
         if source is None:
             source = self.cache.repo_id
@@ -301,6 +292,8 @@ class Library(object):
             self.search.commit()
 
         self.mark_updated(vid=bundle.identity.vid)
+        self.mark_updated(key="bundle_index")
+        self.mark_updated(key="library_info")
 
         return self.cache.path(bundle.identity.cache_key), installed
 
@@ -588,10 +581,39 @@ class Library(object):
         except NoResultFound:
             # Ths vid is actually an id, so we take the latest one
             try:
-                return (self.database.session.query(Table)
+                t =  (self.database.session.query(Table)
                         .filter(Table.id_ == vid).order_by(Table.vid.desc()).first())
+
+                if not t:
+                    raise NoResultFound
+
+                return t
+
             except NoResultFound:
                 raise NotFoundError("Did not find table ref {} in library {}".format(vid, self.database.dsn))
+
+    def column(self, vid):
+
+        from ..orm import Table, Column
+        from sqlalchemy.orm.exc import NoResultFound
+        from ..dbexceptions import NotFoundError
+
+        try:
+            return (self.database.session.query(Column).filter(Column.vid == vid).one())
+        except NoResultFound:
+            # Ths vid is actually an id, so we take the latest one
+            try:
+                t = (self.database.session.query(Column)
+                     .filter(Column.id_ == vid).order_by(Column.vid.desc()).first())
+
+                if not t:
+                    raise NoResultFound
+
+                return t
+
+            except NoResultFound:
+                raise NotFoundError("Did not find Column ref {} in library {}".format(vid, self.database.dsn))
+
 
     def derived_tables(self, proto_vid):
         """Tables with the given proto_vid"""
@@ -998,7 +1020,7 @@ class Library(object):
                 identity = dsid
 
             try:
-                file_ = self.files.query.installed.ref(identity.vid).one
+                file_ = self.files.query.installed.ref(identity.vid).state('new').one
             except:
                 print 'Failed for ', identity.vid
                 raise
@@ -1059,13 +1081,14 @@ class Library(object):
     # Synchronize
     #
 
-    def mark_updated(self, o=None, vid=None):
+    def mark_updated(self, o=None, vid=None, key=None):
         """Mark an object as recently updated, for instance to clear
         the doc_cache"""
 
-        self.doc_cache.remove(vid)
 
-    def sync_library(self, clean=False):
+        self.doc_cache.remove(vid, _key=key)
+
+    def sync_library(self, clean = False):
         '''Rebuild the database from the bundles that are already installed
         in the repository cache'''
 
@@ -1170,6 +1193,7 @@ class Library(object):
         from collections import defaultdict
         from boto.exception import S3ResponseError
 
+
         if clean:
             for remote_name, remote in remotes.items():
                 self.files.query.type((Files.TYPE.PARTITION, Files.TYPE.BUNDLE)).source_url(remote.repo_id).delete()
@@ -1222,13 +1246,17 @@ class Library(object):
                     continue
 
                 if self.cache.has(cache_key):  # This is just for reporting.
-
                     self.logger.info("Remote {} has: {}".format(remote.repo_id, cache_key))
 
                 else:
                     self.logger.info("Remote {} sync: {}".format(remote.repo_id, cache_key))
 
-                b = self._get_bundle_by_cache_key(cache_key)
+                try:
+                    b = self._get_bundle_by_cache_key(cache_key)
+                except S3ResponseError as e:
+                    self.logger.error("Failed to get {} from {} : {} ".format(cache_key, remote, e))
+                    continue
+
 
                 if not b:
                     self.logger.error("Failed to fetch bundle for {} ".format(cache_key))
@@ -1251,11 +1279,15 @@ class Library(object):
                     self.logger.error("Failed to put bundle {}: {}".format(cache_key, e))
                     b.close()
                     raise
-                    continue
+
 
                 self.database.commit()
                 self.database.close()
                 b.close()
+
+        self.mark_updated(key="bundle_index")
+        self.mark_updated(key="library_info")
+
 
     def sync_source(self, clean=False):
         """Rebuild the database from the bundles that are already installed
@@ -1263,7 +1295,9 @@ class Library(object):
         if clean:
             self.files.query.type(Dataset.LOCATION.SOURCE).delete()
 
+
         for ident in self.source._dir_list().values():
+
             try:
 
                 path = ident.bundle_path
@@ -1285,6 +1319,7 @@ class Library(object):
             self.database.commit()
 
         except (ConflictError, IntegrityError) as e:
+            self.logger.error(e)
             self.database.rollback()
             pass
 
@@ -1295,7 +1330,8 @@ class Library(object):
             bundle.close()
             self.database.commit()
 
-        except IntegrityError:
+        except IntegrityError as e:
+            self.logger.error(e)
             self.database.rollback()
             pass
 
@@ -1347,7 +1383,7 @@ class Library(object):
 
         s.commit()
 
-        self.mark_updated(vid=w.uid)
+        self.mark_updated(vid=store.ref)
 
         return store
 
