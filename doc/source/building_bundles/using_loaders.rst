@@ -1,9 +1,12 @@
-.. _build_schema:
+.. _using_loaders:
+
+
+Loader Classes
+==============
+
 
 The Loaders are subclasses of :py:class:`ambry.bundle.BuildBundle` that are tailored for loading datasets from CSV, Excel and Shapefile files.  These classes provide many special features to reduce the cload required to create a good bundle. 
 
-Loader Classes
-**************
 
 The loader classes introduce a few new objects and use additional configuration. The new objects are:
 
@@ -61,7 +64,6 @@ Todo
 * mangle_column_name()
 * build_modify_row()
 * Running Bambry info
-* protoschemas
 * column_map
 * Run bambry info -P -S
 

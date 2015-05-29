@@ -115,7 +115,7 @@ def config_install(args, rc):
     # Set the key-value entries.
     if edit_args:
         key, value = edit_args.split('=')
-        
+
         value = value.strip()
         key = key.strip()
         key_parts = key.split('.')
