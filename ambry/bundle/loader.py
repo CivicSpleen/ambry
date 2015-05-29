@@ -489,7 +489,6 @@ class LoaderBundle(BuildBundle):
 
 class CsvBundle(LoaderBundle):
     """A Bundle variant for loading CSV files"""
-
     pass
 
 
@@ -500,25 +499,6 @@ class ExcelBuildBundle(CsvBundle):
 class TsvBuildBundle(CsvBundle):
     delimiter = '\t'
 
-    def __init__(self, bundle_dir=None):
-        """
-        """
-
-        super(TsvBuildBundle, self).__init__(bundle_dir)
-
-    def get_source(self, source):
-        """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
-        and look in the source store cache """
-
-        if not source:
-            source = self.metadata.sources.keys()[0]
-
-        fn = self.filesystem.download(source)
-
-        if fn.endswith('.zip'):
-            fn = self.filesystem.unzip(fn)
-
-        return fn
 
 
 class GeoBuildBundle(LoaderBundle):

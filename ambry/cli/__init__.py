@@ -295,14 +295,12 @@ def get_parser():
     from .remote import remote_parser
     from test import test_parser
     from config import config_parser
-    from ckan import ckan_parser
     from source import source_parser
     from bundle import bundle_parser
     from root import root_parser
     
     library_parser(cmd)
     warehouse_parser(cmd)
-    ckan_parser(cmd)
     source_parser(cmd)
     remote_parser(cmd)
     test_parser(cmd)
@@ -319,7 +317,6 @@ def main(argsv=None, ext_logger=None):
     from .remote import remote_parser, remote_command
     from test import test_parser, test_command
     from config import config_parser, config_command
-    from ckan import ckan_parser, ckan_command
     from source import source_command, source_parser
     from bundle import bundle_command, bundle_parser
     from root import root_command, root_parser
@@ -345,7 +342,6 @@ def main(argsv=None, ext_logger=None):
         'warehouse': warehouse_command,
         'remote': remote_command,
         'test': test_command,
-        'ckan': ckan_command,
         'source': source_command,
         'config': config_command,
         'root': root_command,

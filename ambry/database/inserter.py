@@ -326,8 +326,7 @@ class ValueInserter(ValueWriter):
 
         except (KeyboardInterrupt, SystemExit):
             if self.bundle:
-                self.bundle.log(
-                    "Processing keyboard interrupt or system exist")
+                self.bundle.log("Processing keyboard interrupt or system exist")
             else:
                 print "Processing keyboard interrupt or system exist"
             self.rollback()
