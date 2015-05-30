@@ -1212,10 +1212,7 @@ class Locations(object):
 
     def __init__(self, ident=None):
         self.ident = ident
-        self._locations = {
-            code: LocationRef(code) for name,
-            code in vars(
-                LocationRef.LOCATION).items()}
+        self._locations = {code: LocationRef(code) for name, code in vars(LocationRef.LOCATION).items()}
 
     def __str__(self):
         return ''.join([str(self._locations[code]) for code in self.order])
@@ -1225,6 +1222,8 @@ class Locations(object):
         return tuple((c for c, v in self._locations.items() if v.code))
 
     def set(self, code, revision=None, version=None):
+
+
 
         uc_code = code.upper()
 

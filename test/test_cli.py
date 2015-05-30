@@ -30,7 +30,8 @@ class TestLoggingMixin(object):
     logging_handler_class = logging.StreamHandler
     logging_handler_args = None
     logging_handler_kwargs = None
-    logging_dir = None
+    logging_dir = '/tmp'
+    logging_level = logging.DEBUG
     output = None
 
     def setUp(self):
@@ -60,16 +61,26 @@ class TestLoggingMixin(object):
 
         output = StringIO()
 
-        ch = self.get_logging_handler()
-        ch.setFormatter(formatter)
-        ch.setLevel(logging.DEBUG)
-        logger._stream = ch.stream
+        logging_handler = self.get_logging_handler()
+        logging_handler.setFormatter(formatter)
+        logging_handler.setLevel(self.logging_level)
+        logger._stream = logging_handler.stream
 
-        logger.addHandler(ch)
+        logger.addHandler(logging_handler)
 
-        self.logging_handler = ch
+        self.logging_handler = logging_handler
 
         return output, logger
+
+
+class TestLoggingFileHandlerMixin(TestLoggingMixin):
+    logging_handler_class = logging.FileHandler
+
+    def get_logging_handler_args(self, *args):
+        return [os.path.join(self.get_logging_dir(), '%s.log' % self.logger_name)]
+
+    def get_logging_dir(self):
+        return self.logging_dir
 
 
 class TestCLIMixin(object):
@@ -117,19 +128,10 @@ class TestCLIMixin(object):
                     root=self.test_dir,
                     source=os.path.dirname(bundles.__file__)
                 ))
-
         return out_config
 
 
-class Test(TestCLIMixin, TestLoggingMixin, TestBase):
-    logging_handler_class = logging.FileHandler
-
-    def get_logging_handler_args(self, *args):
-        return [os.path.join(self.get_logging_dir(), '%s.log' % self.logger_name)]
-
-    def get_logging_dir(self):
-        return self.test_dir
-
+class Test(TestCLIMixin, TestLoggingFileHandlerMixin, TestBase):
     def cmd(self, *args):
 
         args = shlex.split(' '.join(args))
@@ -192,6 +194,52 @@ class Test(TestCLIMixin, TestLoggingMixin, TestBase):
         out = c("list -Fvid")
 
         print out
+
+    def test_library_info(self):
+        output = self.cmd('library info')
+        keys = ['Library Info', 'Database:', 'Cache:', 'Doc Cache:', 'Whs Cache:', 'Remotes:']
+        for key in keys:
+            self.assertIn(key, output)
+
+    def test_library_config(self):
+        pass
+
+    def test_library_new(self):
+        pass
+
+    def test_library_files(self):
+        pass
+
+    def test_library_push(self):
+        pass
+
+    def test_library_drop(self):
+        pass
+
+    def test_library_clean(self):
+        pass
+
+    def test_library_purge(self):
+        pass
+
+    def test_library_sync(self):
+        pass
+
+    def test_library_get(self):
+        pass
+
+    def test_library_open(self):
+        pass
+
+    def test_library_remove(self):
+        pass
+
+    def test_library_schema(self):
+        pass
+
+    def test_library_config(self):
+        pass
+
 
 
 def suite():

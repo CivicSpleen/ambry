@@ -104,9 +104,16 @@ def bundle_command(args, rc):
         warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
         debug.listen()
 
+    ##
+    ## Run the phases
+    ##
     try:
         for phase in phases:
-            getf(phase)(args, b, st, rc)
+            r = getf(phase)(args, b, st, rc)
+
+            if r == False:
+                break
+
             b.close()
 
     except DependencyError as e:
@@ -124,6 +131,17 @@ def bundle_command(args, rc):
     finally:
         import lockfile
         from sqlalchemy.exc import InvalidRequestError
+
+        if b._warnings:
+            warn(" ==== WARNINGS ===")
+            for warning in b._warnings:
+                warn(warning)
+
+        if b._errors:
+            err(" ==== ERRORS ===")
+            for error in b._errors:
+                err(error)
+
         try:
             if b:
                 try:
@@ -161,6 +179,10 @@ def bundle_parser(cmd):
     #
     sp = asp.add_parser('dump', help='dump the configuration')
     sp.set_defaults(subsubcommand='dump')
+
+    #
+    sp = asp.add_parser('doc', help='Display some of the bundle documentation')
+    sp.set_defaults(subsubcommand='doc')
 
     #
     sp = asp.add_parser('schema', help='Print the schema')
@@ -595,6 +617,10 @@ def bundle_config(args, b, st, rc):
 
     elif args.subsubcommand == 'scrape':
         return bundle_config_scrape(args, b, st, rc)
+
+    elif args.subsubcommand == 'doc':
+        f = "{:10s} {}"
+        prt(f, 'title', b.metadata.about.title)
 
     else:
         err("Unknown subsubcommand for 'config' subcommand: {}".format(args))

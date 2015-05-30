@@ -765,13 +765,9 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         l = self.get_library()
 
-        print l.info
-
         self.assertEqual(0, len(l.database.session.query(Code).all()))
 
         r = l.put_bundle(self.bundle)
-
-        print self.bundle.database.dsn
 
         b = l.bundle(self.bundle.identity.vid)
 
