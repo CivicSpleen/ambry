@@ -122,11 +122,13 @@ def config_install(args, rc):
         e = d
         for k in key_parts:
             k = k.strip()
-            if k == key_parts[-1]:
+            print k, str(key_parts[-1])
+            if str(k) == str(key_parts[-1]):
                 e[k] = value
-
             else:
+                
                 e = e[k]
+                
 
     if args.root:
         d['filesystem']['root'] = args.root
