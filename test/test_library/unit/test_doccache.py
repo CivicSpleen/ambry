@@ -4,9 +4,10 @@ import unittest
 
 import fudge
 
-from ambry.library.doccache import DocCache
 from test.test_library.factories import FileFactory
+from ambry.library import Library
 from ambry.library.database import LibraryDb
+from ambry.library.doccache import DocCache
 
 SQLITE_DATABASE = 'test_library_test_init.db'
 
@@ -21,8 +22,7 @@ class DocCacheTest(unittest.TestCase):
 
         # use cache with dict instead of DictCache
         self.cache = {'key1': 'val1'}  # TODO: use valid cache
-        from ambry.library import Library
-        self.lib = Library(self.cache, self.sqlite_db, host='localhost', port='8080')
+        self.lib = Library(self.cache, self.sqlite_db)
 
     def tearDown(self):
         self.sqlite_db.close()
@@ -84,7 +84,6 @@ class DocCacheTest(unittest.TestCase):
         # reverted list is in the cache.
         self.assertIn([2, 1], dc._cache.values())
 
-    # .cache tests
     def test_adds_return_value_to_the_cache_if_cache_is_ignored(self):
         dc = DocCache(self.lib)
         dc.ignore_cache = True
@@ -236,7 +235,9 @@ class DocCacheTest(unittest.TestCase):
     def test_adds_table_to_the_cache(self):
 
         class FakeTable(object):
-            nonull_col_dict = {'a': 'b'}
+            nonull_col_dict = {
+                'a': 'b',
+                'columns': {}}
 
         self.lib.table = lambda x: FakeTable()
 

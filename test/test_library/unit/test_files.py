@@ -427,48 +427,6 @@ class FilesTest(unittest.TestCase):
         manifest.uid = '1'
         all_files.install_manifest(manifest, warehouse=warehouse)
 
-    # .install_extract tests
-    def test_saves_extract_to_db(self):
-
-        path = '/path1'
-        source = 'http://example.com'
-        d = {'a': 'b'}
-
-        query = self.sqlite_db.session.query(File)
-        all_files = Files(self.sqlite_db, query=query)
-        new_f = all_files.install_extract(path, source, d)
-
-        installed = all_files.all[0]
-
-        self.assertEquals(installed.path, path)
-        self.assertEquals(installed.ref, path)
-        self.assertEquals(installed.type_, Files.TYPE.EXTRACT)
-        self.assertEquals(installed.data, d)
-        self.assertEquals(installed.source_url, source)
-
-        # the same file was returned.
-        self.assertEquals(new_f.path, installed.path)
-        self.assertEquals(new_f.ref, installed.ref)
-        self.assertEquals(new_f.type_, installed.type_)
-
-    def test_merges_installed_extract(self):
-
-        path = '/path1'
-        source = 'http://example.com'
-        d = {'a': 'b'}
-
-        FileFactory(path=path, type_=Files.TYPE.EXTRACT)
-
-        query = self.sqlite_db.session.query(File)
-        all_files = Files(self.sqlite_db, query=query)
-        all_files.merge = fudge.Fake().expects_call()
-        updated_f = all_files.install_extract(path, source, d)
-
-        updated = all_files.all[0]
-        self.assertEquals(updated.path, path)
-        self.assertEquals(updated.state, 'installed')
-        self.assertEquals(updated, updated_f)
-
     # .check_query tests
     def test_check_query_raises_object_state_error_if_query_is_empty(self):
         db = None

@@ -146,6 +146,7 @@ class TableFactory(SQLAlchemyModelFactory):
 
         kwargs['d_vid'] = dataset.vid
         kwargs['d_id'] = dataset.id_
+        kwargs['dataset'] = dataset
         return super(TableFactory, cls)._prepare(create, **kwargs)
 
     @classmethod
@@ -208,6 +209,7 @@ class ColumnFactory(SQLAlchemyModelFactory):
 
         kwargs['t_vid'] = table.vid
         kwargs['t_id'] = table.id_
+        kwargs['table'] = table
 
         dataset = cls._meta.sqlalchemy_session.query(Dataset).filter_by(vid=table.d_vid).one()
         kwargs['d_vid'] = dataset.vid
