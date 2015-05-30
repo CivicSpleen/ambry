@@ -79,7 +79,9 @@ class NewLibraryTest(unittest.TestCase):
             'filesystem': 'http://example.com',
             'upstream': 'upstream'}
         with self.assertRaises(DeprecationWarning):
-            _new_library(config)
+            # prevent sqlite db file creation.
+            with fudge.patched_context(LibraryDb, 'create', fudge.Fake().is_a_stub()):
+                _new_library(config)
 
     def test_logs_S3ResponseError(self):
         fake_s3 = fudge.Fake('s3').has_attr(bucket='bucket1')
@@ -109,7 +111,9 @@ class NewLibraryTest(unittest.TestCase):
 
         with fudge.patched_context(ckcache, 'new_cache', fake_new_cache):
             with fudge.patched_context(util, 'get_logger', fake_get_logger):
-                _new_library(config)
+                # prevent sqlite db file creation.
+                with fudge.patched_context(LibraryDb, 'create', fudge.Fake().is_a_stub()):
+                    _new_library(config)
 
     def test_separates_host_and_port(self):
 
@@ -126,9 +130,11 @@ class NewLibraryTest(unittest.TestCase):
             .expects_call().returns(fudge.Fake().is_a_stub())\
 
         with fudge.patched_context(ckcache, 'new_cache', fake_new_cache):
-            lib = _new_library(config)
-            self.assertEquals(lib.host, 'localhost')
-            self.assertEquals(lib.port, '8080')
+            # prevent sqlite db file creation.
+            with fudge.patched_context(LibraryDb, 'create', fudge.Fake().is_a_stub()):
+                lib = _new_library(config)
+                self.assertEquals(lib.host, 'localhost')
+                self.assertEquals(lib.port, '8080')
 
     def test_uses_80_port_if_not_given(self):
 
@@ -145,9 +151,11 @@ class NewLibraryTest(unittest.TestCase):
             .expects_call().returns(fudge.Fake().is_a_stub())\
 
         with fudge.patched_context(ckcache, 'new_cache', fake_new_cache):
-            lib = _new_library(config)
-            self.assertEquals(lib.host, 'localhost')
-            self.assertEquals(lib.port, 80)
+            # prevent sqlite db file creation.
+            with fudge.patched_context(LibraryDb, 'create', fudge.Fake().is_a_stub()):
+                lib = _new_library(config)
+                self.assertEquals(lib.host, 'localhost')
+                self.assertEquals(lib.port, 80)
 
 
 class LibraryTest(unittest.TestCase):
