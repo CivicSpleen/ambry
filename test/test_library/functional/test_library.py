@@ -351,10 +351,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
     def test_s3_push(self):
         """Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent"""
-        '''
-        @unittest.skipIf(mylib.__version__ < (1, 3),
-                 "not supported in this library version")
-        '''
 
         # FIXME: unused root?
         root = self.rc.group('filesystem').root
