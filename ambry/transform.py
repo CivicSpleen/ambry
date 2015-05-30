@@ -221,9 +221,7 @@ class CensusTransform(BasicTransform):
             # Unicode, et al, is $#^#% horrible, so we're punting and using XML encoding,
             # which we will claim is to make the name appear correctly in web
             # pages.
-            f = lambda v: v.strip().decode('latin1').encode(
-                'ascii',
-                'xmlcharrefreplace')
+            f = lambda v: v.strip().decode('latin1').encode('ascii','xmlcharrefreplace')
 
         if column.default and column.default.strip():
             if column.datatype == 'text' or column.datatype == 'varchar':
@@ -239,15 +237,8 @@ class CensusTransform(BasicTransform):
             default = None
 
         f = (
-            lambda v,
-            column=column,
-            f=f,
-            default=default,
-            defaults_f=self.census_defaults: defaults_f(
-                v,
-                column,
-                default,
-                f))
+            lambda v,column=column,f=f,default=default,
+            defaults_f=self.census_defaults: defaults_f(v,column,default,f))
 
         # Strip test values, but not numbers
         f = lambda v, f=f: f(v.strip()) if isinstance(v, basestring) else f(v)
@@ -401,11 +392,7 @@ def parse_time(name, v):
     elif isinstance(v, datetime.time):
         return v
     else:
-        raise CastingError(
-            name,
-            v,
-            "Expected datetime.time or basestring, got '{}'".format(
-                type(v)))
+        raise CastingError(name, v,"Expected datetime.time or basestring, got '{}'".format(type(v)))
 
 
 def parse_datetime(name, v):
@@ -417,19 +404,11 @@ def parse_datetime(name, v):
         try:
             return dp.parse(v)
         except ValueError as e:
-            raise CastingError(
-                name,
-                v,
-                "Failed to parse time for value '{}': {}".format(
-                    v,
-                    e.message))
+            raise CastingError(name, v,"Failed to parse time for value '{}': {}".format(
+                    v,e.message))
         except TypeError as e:
-            raise CastingError(
-                name,
-                v,
-                "Failed to parse time for value '{}': {}".format(
-                    v,
-                    e.message))
+            raise CastingError(name,v,"Failed to parse time for value '{}': {}".format(
+                    v,e.message))
     elif isinstance(v, datetime.datetime):
         return v
     else:
@@ -451,56 +430,6 @@ class CasterTransformBuilder(object):
 
     def add_type(self, t):
         self.custom_types[t.__name__] = t
-
-    def makeListTransform(self):
-        raise NotImplementedError("Needs to be fixed")
-#         import uuid
-#         import datetime
-#         f_name = "row_transform_" + str(uuid.uuid4()).replace('-', '')
-#
-#
-#
-#         o = """
-# def {}(row):
-#
-#     raise NotImplementedError()
-#
-#     stripped_num = lambda x: x.strip() if isinstance(x, basestring) else x
-#     is_not_nothing = lambda x: True if x!='' and x != None else False
-#
-#     try:
-#         return [
-# """.format(f_name)
-#
-#         for i, (name, type_) in enumerate(self.types):
-#             if i != 0:
-#                 o += ',\n'
-#
-#             if type_ == float or type_ == int:
-#                 o += "{type}(row[{i}]) if is_not_nothing(stripped_num(row[{i}])) else None".format(
-#                     type=type_.__name__,
-#                     i=i)
-#             else:
-#                 o += "{type}(row[{i}].strip()) if is_not_nothing(row[{i}]) else None".format(
-#                     type=type_.__name__,
-#                     i=i)
-#
-#         names = ','.join(["('{}',{})".format(name, type_.__name__)
-#                          for name, type_ in self.types])
-#
-#         o += """
-#         ]
-#     except ValueError as e:
-#         for i,(name,type_) in  enumerate( [{names}] ):
-#             try:
-#                 type_(row[i].strip()) if row[i] else None
-#             except ValueError:
-#                 raise ValueError(
-#                     "Failed to convert value '{{}}' in field '{{}}' to '{{}}'".format(row[i], name,type_.__name__))
-#         raise
-# """.format(names=names)
-#
-#         return f_name, o
 
     def makeDictTransform(self):
         import uuid
@@ -605,14 +534,16 @@ class CasterTransformBuilder(object):
 
             try:
                 return f[1](d), {}
-            except CastingError:
-
+            except CastingError as e:
+                print e
                 do = {}
                 cast_errors = {}
 
                 for k, v in d.items():
                     try:
                         do[k] = f[2][k](v)
+                    except KeyError:
+                        cast_errors[k] = v
                     except CastingError:
 
                         do[k + '_code'] = v

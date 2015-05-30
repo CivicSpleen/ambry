@@ -9,13 +9,17 @@ from ..util.meta import *
 
 class About(DictGroup):
     title = ScalarTerm()
+    subject = ScalarTerm()
     summary = ScalarTerm()
     space = ScalarTerm()
     time = ScalarTerm()
+    grain = ScalarTerm()
     access = ScalarTerm(store_none=False)
     # Internal, Private, Controlled, Restrcted, Registered, Licensed, Public
     license = ScalarTerm(store_none=False)
+    rights = ScalarTerm(store_none=False)
     tags = ListTerm(store_none=False)
+    groups = ListTerm(store_none=False)
     source = ScalarTerm(store_none=False) # A text statement about the source of the data
     footnote = ScalarTerm(store_none=False) # A footnote entry
     processed = ScalarTerm(store_none=False) # A statement about how the data were processed.

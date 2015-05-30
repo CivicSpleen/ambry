@@ -277,23 +277,17 @@ class ValueInserter(ValueWriter):
         try:
             cast_errors = None
 
-            if isinstance(values, dict):
 
-                if self.caster:
-                    d, cast_errors = self.caster(values)
-
-                else:
-                    d = dict((k.lower().replace(' ', '_'), v)
-                             for k, v in values.items())
-
-                if self.skip_none:
-                    d = {
-                        k: d[k] if k in d and d[k] is not None else v for k,
-                                                                          v in self.null_row.items()}
+            if self.caster:
+                d, cast_errors = self.caster(values)
 
             else:
-                raise DeprecationWarning(
-                    "Inserting lists is no longer supported")
+                d = dict((k.lower().replace(' ', '_'), v)
+                         for k, v in values.items())
+
+            if self.skip_none:
+                d = { k: d[k] if k in d and d[k] is not None else v for k, v in self.null_row.items()}
+
 
             if self.update_size:
                 for i, col_name in enumerate(self.sizable_fields):
@@ -302,6 +296,7 @@ class ValueInserter(ValueWriter):
                             len(str(d[col_name])) if d[col_name] else 0, self._max_lengths[i])
                     except UnicodeEncodeError:
                         # Unicode is a PITA
+
                         pass
 
             if self.row_id is not None:

@@ -8,6 +8,9 @@ Loader Classes
 The Loaders are subclasses of :py:class:`ambry.bundle.BuildBundle` that are tailored for loading datasets from CSV, Excel and Shapefile files.  These classes provide many special features to reduce the cload required to create a good bundle. 
 
 
+Process Overview
+****************
+
 The loader classes introduce a few new objects and use additional configuration. The new objects are:
 
 * The :py:class:`ambry.bundle.loader.LoaderBundle` base class
@@ -54,10 +57,28 @@ When using a Loader, the dataset specified by the source entry will get loaded i
 
 Due to the breadth of the ``sources`` configuration, most Loader bundles only require two methods to be implemented in the bundle :py:meth:`mangle_column_name`, to alter file header names into schema column name, and :py:meth:`build_modify_row` to alter each row before insertin into the partition, but usually only for setting the ``gvid`` column to a geographic geoid based on other values in the row. In many cases, neither of these methods are required, and the Loader bundle has a nearly empty :file:`bundle.py` file.
  
+Configuring Sources
+*******************
+ 
+The easiest way to get these links is to run :command:`bambry config scrape`. This will extract the links from the pages specified by ``external_documentation.download`` and ``external_documentation.dataset``, looking for PDF, CSV and XLS files. It will dump the links in the proper formats for the ``sources`` and ``external_documentation`` sections. XLS and CSV files will go in the sources section, while PDF files will go in the external_documentation section. 
+
+You can often just copy these into the configuration. The sources go into the ``sources`` section in the :file:`meta/build.yaml` file. You can also copy in the exteral_documentation values, but it's usually better to only copy the most important ones, since users will usually prefer to use the links from the original page, rather than from the Ambry documentation. 
+
+Intuiting Rows
+**************
+
+The Row Intuiter reads each of the sources and tries to determine which lines are header and data. This is only really important for Excel files, where there are often multiple headers and leading comment or title lines. 
+
+ .. code-block:: bash
+
+     $ bambry prepare --clean 
+     $ bambry run  .... 
+ 
+ 
 Todo
 ****
 
-
+* Configuring the Sources
 * Tutorial process
 * Intuit, raw row, and specd-row reports. 
 * Meta phase/. Run meta_set_row_specs()

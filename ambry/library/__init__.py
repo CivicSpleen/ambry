@@ -1246,6 +1246,7 @@ class Library(object):
                 vid = str(b.identity.vid)
 
                 if vids and vid not in vids:
+                    b.close()
                     continue
 
                 try:

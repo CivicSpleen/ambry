@@ -62,10 +62,7 @@ If you will be building from one or more CSV, Excel or TSV files, edit the :file
 
 The next step is to configure the :ref:`Loader with sources and start creating metadata. <using_loaders>`
 
-Sources
-*******
 
-The Loader classes work off of files defined in the  ``sources`` metadata, stored in the file :file:`meta/build.yaml`. ``Sources`` is a dictionary, so the first level is the key for each entry, then the keys of the entry. A new bundle should have one named ``example``. 
 
 
 

@@ -115,8 +115,7 @@ class LoaderBundle(BuildBundle):
 
         return p
 
-
-    def row_gen_for_source(self, source_name):
+    def row_gen_for_source(self, source_name, use_row_spec = True):
         from os.path import split, splitext
 
         source = self.metadata.sources[source_name]
@@ -138,7 +137,7 @@ class LoaderBundle(BuildBundle):
 
             ext = self.row_gen_ext_map.get(ext, ext)
 
-        if source.row_spec.dict:
+        if source.row_spec.dict and use_row_spec:
             rs = source.row_spec.dict
         else:
             rs = {}
@@ -159,9 +158,6 @@ class LoaderBundle(BuildBundle):
         else:
             raise Exception("Unknown source file extension: '{}' for file '{}' from source {} "
                             .format(ext, file_name, source_name))
-
-
-
 
 
     def meta(self):
@@ -363,13 +359,27 @@ class LoaderBundle(BuildBundle):
         for source_name in self.metadata.sources:
             source = self.metadata.sources.get(source_name)
 
-            rg = self.row_gen_for_source(source_name)
+            rg = self.row_gen_for_source(source_name, use_row_spec = False)
 
             ri = row_intuitier_class(rg).intuit()
 
+            print source_name, ri
+
+            if len(ri['header_comment_lines']) > 30:
+                self.error("Too many lines in rowspec.header_comment_lines ({}) for source {}; skipping rowspec"
+                            .format(len(ri['header_comment_lines']), source_name))
+                continue
+
+            if len(ri['header_lines']) > 10:
+                self.error("Too many lines in rowspec.header_lines ({}) for source {}; skipping rowspec"
+                            .format(len(ri['header_lines']), source_name))
+                continue
+
             source.row_spec = ri
 
+        self.write_sources()
         self.metadata.write_to_dir()
+
 
     def meta_load_socrata(self):
         """Load Socrata metadata from a URL, specified in the 'meta' source"""
@@ -421,7 +431,6 @@ class LoaderBundle(BuildBundle):
                 row['year'] = int(source.time)
             except ValueError:
                 pass
-
 
     def build_from_source(self, source_name):
 
