@@ -17,6 +17,7 @@ class Config(Base):
     __tablename__ = 'config'
 
     d_vid = SAColumn('co_d_vid', String(16), primary_key=True)
+    type = SAColumn('co_type', String(200), primary_key=True)
     group = SAColumn('co_group', String(200), primary_key=True)
     key = SAColumn('co_key', String(200), primary_key=True)
 

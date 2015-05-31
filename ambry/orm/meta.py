@@ -24,8 +24,6 @@ class About(DictGroup):
     footnote = ScalarTerm(store_none=False) # A footnote entry
     processed = ScalarTerm(store_none=False) # A statement about how the data were processed.
 
-
-
 class Documentation(DictGroup):
     readme = ScalarTerm()
     main = ScalarTerm()
@@ -35,31 +33,10 @@ class Documentation(DictGroup):
     title = ScalarTerm(store_none=False)  # expanded from about.title
     summary = ScalarTerm(store_none=False)  # expanded from about.summary
 
-
-
 class Coverage(DictGroup):
     geo = ListTerm()
     grain = ListTerm()
     time = ListTerm()
-
-
-class ContactTerm(DictTerm):
-    name = ScalarTerm(store_none=False)
-    org = ScalarTerm(store_none=False)
-    email = ScalarTerm(store_none=False)
-    url = ScalarTerm(store_none=False)
-
-    def __nonzero__(self):
-        return bool(self.name or self.email or self.url)
-
-    def __bool__(self):
-        return self.__nonzero__()
-
-
-class Contact(DictGroup):
-    """ """
-    creator = ContactTerm()
-    maintainer = ContactTerm()
 
 
 class Identity(DictGroup):
@@ -84,50 +61,6 @@ class Names(DictGroup):
     vname = ScalarTerm()
 
 
-class RowSpecDictTerm(DictTerm):
-    data_start_line = ScalarTerm()
-    data_end_line = ScalarTerm()
-    header_lines = ListTerm()
-    header_comment_lines = ListTerm()
-
-
-class SourceTerm(DictTerm):
-    """A term that describes a source file for constructing a partition"""
-
-    url = ScalarTerm()
-    title = ScalarTerm(store_none=False)  # Title for use in table.
-    description = ScalarTerm(store_none=False)
-    dd_url = ScalarTerm(store_none=False)  # Data Dictitionary URL
-    file = ScalarTerm(store_none=False)  # A name or regex to extract from a multi-file ZIP
-    filetype = ScalarTerm(store_none=False)
-    # For the LoaderBundle, use this file type ( file extensino ) rather than from the url
-
-    segment = ScalarTerm(store_none=False)  # Specify a sub-component of the file, like a sheet in an excel workbook.
-    comment = ScalarTerm(store_none=False)  # Just a comment
-    is_loadable = ScalarTerm(store_none=False)  # If false, ignore in auto-loading
-    time = ScalarTerm(store_none=False)  # Specify a time component, usually a year.
-    space = ScalarTerm(store_none=False)  # Specify a space component
-    grain = ScalarTerm(store_none=False)  # Specify a grain component
-    table = ScalarTerm(store_none=False)  # For auto imports, name of table to load into.
-    conversion = ScalarTerm(store_none=False)  # An alternate URL or regular expression for a file in the source store
-    foreign_key = ScalarTerm(store_none=False)  # ID of the foreign key for the table.
-    row_spec = RowSpecDictTerm(store_none=False)
-    # Spec for non data rows. 'start' for first line of data, 'header' for sclar/list of header lines
-
-    row_data = DictTerm(store_none=False)  # A dict of values that are added to every row of the table.
-
-    def __nonzero__(self):
-        return bool(self.url or self.file or self.description or self.dd_url)
-
-    def __bool__(self):
-        return self.__nonzero__()
-
-
-class Sources(TypedDictGroup):
-    """References to source URLS"""
-    _proto = SourceTerm()
-
-
 class Dependencies(VarDictGroup):
     """Bundle dependencies"""
 
@@ -136,60 +69,55 @@ class Build(VarDictGroup):
     """Build parameters"""
 
 
-class Extract(VarDictGroup):
-    """Extract parameters"""
-
-
-class Views(VarDictGroup):
-    """Extract parameters"""
-
-
-class Process(VarDictGroup):
-    """Process data. Build times, etc."""
-
-
 class ExtDocTerm(DictTerm):
     url = ScalarTerm()
     title = ScalarTerm()
     description = ScalarTerm()
     source = ScalarTerm()
 
-
 class ExtDoc(TypedDictGroup):
     """External Documentation"""
     _proto = ExtDocTerm()  # Reusing
 
 
-class VersonTerm(DictTerm):
+class ContactTerm(DictTerm):
+    role = ScalarTerm(store_none=False)
+    name = ScalarTerm(store_none=False)
+    org = ScalarTerm(store_none=False)
+    email = ScalarTerm(store_none=False)
+    url = ScalarTerm(store_none=False)
+
+    def __nonzero__(self):
+        return bool(self.name or self.email or self.url)
+
+    def __bool__(self):
+        return self.__nonzero__()
+
+class Contact(DictGroup):
+    """ """
+    _proto = ContactTerm()
+
+
+class VersonTerm(TypedDictGroup):
     """Version Description"""
     version = ScalarTerm()
     date = ScalarTerm()
     description = ScalarTerm(store_none=False)
 
-
 class Versions(TypedDictGroup):
     """Names that are generated from the identity"""
     _proto = VersonTerm()
-
 
 class Top(StructuredPropertyTree):
     _non_term_file = 'meta/build.yaml'
 
     about = About()
     identity = Identity()
-    names = Names()
-    contact_source = Contact()
-    contact_bundle = Contact()
-    versions = Versions()
-    process = Process()
-    external_documentation = ExtDoc()
-
-    sources = Sources()
-
     dependencies = Dependencies()
+    external_documentation = ExtDoc()
     build = Build()
-    views = Views()
-
+    contacts = Contact()
+    versions = Versions()
+    names = Names()
     documentation = Documentation()
-
     coverage = Coverage()

@@ -285,53 +285,6 @@ class SavableMixin(object):
     def save(self):
         self.session.commit()
 
-
-class LinkableMixin(object):
-
-    """A mixin for creating acessors to link between objects with references in
-    the .dataproperty Should probably be a descriptor, but I don't feel like
-    fighting with it."""
-
-    # _get_link_array(self, name, clz, id_column):
-    # _append_link(self, name, object_id):
-    # _remove_link(self, name, object_id):
-
-    def _get_link_array(self, name, clz, id_column):
-        """
-        name: the name of the link, a key in the data property
-        clz: Sqlalchemy ORM class for the foreign object
-        id_column, the Sqlalchemy property, from the clz classs, that hpolds the stored id value for the object.
-        """
-        from sqlalchemy.orm import object_session
-
-        id_values = self.data.get(name, [])
-
-        if not id_values:
-            return []
-
-        return object_session(self).query(clz).filter(id_column.in_(id_values)).all()
-
-    def _append_link(self, name, object_id):
-        """
-        name: the name of the link, a key in the data property
-        o: the object being linked. If none, no back link is made
-        object_id: the object identitifer that is stored in the data property
-        """
-        if not name in self.data:
-            self.data[name] = []
-
-        if not object_id in self.data[name]:
-            self.data[name] = self.data[name] + [object_id]
-
-    def _remove_link(self, name, object_id):
-        """For linking manifests to stores."""
-        if not name in self.data:
-            return
-
-        if self.data[name] and object_id in self.data[name]:
-            self.data[name] = self.data[name].remove(object_id)
-
-
 class DataPropertyMixin(object):
 
     """A Mixin for appending a value into a list in the data field."""
@@ -345,7 +298,6 @@ class DataPropertyMixin(object):
             self.data[sub_prop] = self.data[sub_prop] + [value]
 
 # Sould have things derived from this, once there are test cases for it.
-# Actually, this is a mixin.
 
 
 class DictableMixin(object):
@@ -359,12 +311,7 @@ class DictableMixin(object):
         from sqlalchemy.orm.attributes import InstrumentedAttribute
         import inspect
 
-        return dict(
-            inspect.getmembers(
-                self.__class__,
-                lambda x: isinstance(
-                    x,
-                    InstrumentedAttribute)))
+        return dict(inspect.getmembers(self.__class__,lambda x: isinstance(x,InstrumentedAttribute)))
 
     def __repr__(self):
         return "<{}: {}>".format(type(self), self.dict)

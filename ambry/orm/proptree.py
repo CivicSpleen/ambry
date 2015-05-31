@@ -6,6 +6,8 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 
+
+
 from collections import Mapping, OrderedDict, MutableMapping, MutableSequence
 import copy
 from . import MetadataError
@@ -132,6 +134,40 @@ class StructuredPropertyTree(object):
 
     The structure consists of a collection of top level groups, each of this has a collection
     of inner terms. Some terms are Scalars, while other terms can hold lists or dicts.
+
+    The StructuredPropertyTree is subclassed in meta.py and given Group properties. The Groups are subclassed to have
+    Term properties. The terms can be acessed as keys, and the values are read from and written to the database as Config
+    records with the type value set to 'metadata'
+
+    So in a call like:
+        ds = library.dataset(...)
+        title = ds.metadata.about.title
+
+    The value for title comes from a Config record with these values:
+        type = 'metadata'
+        group = 'about'
+        key = 'title'
+
+    The value is stored in the Config records as JSON.
+
+    In a call like:
+        ds = library.dataset(...)
+        title = ds.metadata.external_documentation.dataset.url
+
+    The config record has a two part key:
+        type = 'metadata'
+        group = 'external_documentation'
+        key = 'dataset.url'
+
+    In the current metadata schema, key have a maximum of two parts, but it is possible to have keys of any depth.
+
+    Other things to note:
+
+    - If a declared proptery value does not exist in the database, fetching it returns None
+    - If the property is not declared ( as with top level keys in TypedDictGroup ) a KeyError is thrown.
+    - If a value is set to None, the COnfig record for the associated key is deleted.
+
+
     """
 
     _members = None
@@ -233,7 +269,24 @@ class StructuredPropertyTree(object):
 
 class Group(object):
     """A group of terms. Groups are descriptors, so when they are acessed, as class variables, the
-    return an object that is linked to the class object that contains them. """
+    return an object that is linked to the class object that contains them.
+
+    Groups are linked to the group property in config records. Accessing a metadata group loads the whole group
+    from the database.
+
+    So,
+        ds = library.dataset(...)
+        ident = ds.metadata.identity
+
+    Will load all of the Config items that have a type='metadata' and group='identity'. The group itself doesn't
+    exist in the database.
+
+    Group subclass objects create Config records when they are set, and return None when one is referenced that does not
+    exist. The group will delete Config records when the correcsponding key is deleted or set to None; the database
+    does not store Config records with None values
+
+
+    """
 
     _key = None
     _fqkey = None
@@ -275,13 +328,13 @@ class Group(object):
         """Create an instance object"""
         o = copy.copy(self)
         o.init_instance(parent)
+
         return o
 
     def __set__(self, instance, v):
         '''Called when a whole group is set'''
 
         assert isinstance(v, dict)
-
         o = self.get_group_instance(instance)
         o.set(v)
 
@@ -304,7 +357,22 @@ class Group(object):
         return object.__setattr__(self, attr, value)
 
 class DictGroup(Group,MutableMapping):
-    """A group that holds key/value pairs."""
+    """A group that holds key/value pairs.
+
+    The identity group is a dict group, with single values under the group:
+
+        identity:
+            dataset: dataset
+            id: diEGPXmDC8
+            revision: 1
+
+    These terms are mapped to two-part configs:
+
+        identity.dataset
+        identity.id
+        identity.revision
+
+    """
 
     def init_descriptor(self, key, top):
         super(DictGroup, self).init_descriptor(key, top)
@@ -381,9 +449,32 @@ class TypedDictGroup(DictGroup):
     """A DictGroup where the term structure is constrained, but they keys are
     not.
 
-    There must be one term, named 'proto', to set the type of the terms.
+    There must be one term, named 'proto', to set the type of the terms. Only works with DictTerms
 
-    Only works with DictTerms
+    The external_documentation metadata is a TypedDictTerm:
+
+        external_documentation:
+            dataset:
+                description: IQI Dataset Page
+                source: null
+                title: IQI Dataset Page
+                url: http://www.oshpd.ca.gov/HID/Products/PatDischargeData/AHRQ/iqi-imi_overview.html
+            download:
+                description: Web page that links to the source files.
+                source: null
+                title: Download Page
+                url: http://example.com
+
+
+    Each inner block is a DictTerm, but the keys ( 'dataset' and 'docnload' ) are not defined by the schema.
+
+    These entries will be mapped to three-part config records:
+
+        external_documentation.dataset.description
+        external_documentation.dataset.source
+        ...
+        external_documentation.download.description
+
 
     """
 
@@ -427,7 +518,22 @@ class TypedDictGroup(DictGroup):
 
 class VarDictGroup(DictGroup):
 
-    """A Dict group that doesnt' use terms to enforce a structure."""
+    """A Dict group that doesnt' use terms to enforce a structure. It has top level  keys and values that
+    are defined by the user.
+
+    Dependencies are a var dict group:
+
+        dependencies:
+            requests: requests
+            beautifulsoup: bs4
+
+    These entries are stores as two-part configs:
+
+        dependencies.requests
+        dependencies.beautifulsoup
+
+
+    """
 
     def __getattr__(self, name):
         import copy
@@ -445,95 +551,6 @@ class VarDictGroup(DictGroup):
 
     def __setitem__(self, key, value):
         self._term_values[key] = value
-
-class ListGroup(Group, MutableSequence):
-
-    """A group that holds a list of DictTerms."""
-
-    def __init__(self, file=None):
-        super(ListGroup, self).__init__()
-
-    def init_descriptor(self, key, top):
-        super(ListGroup, self).init_descriptor(key, top)
-
-        if '_proto' not in dir(self):
-            raise AttributeError("TypeDictGroup must have a _proto Term")
-
-        proto = type(self).__dict__['_proto']  # Avoids __get___?
-
-        proto.init_descriptor('_proto', self._top)
-
-    @property
-    def _term_values(self):
-        # This only works after being instantiated in __get__, which sets
-        # _parent
-
-        if self._key not in self._parent._term_values:
-            self._parent._term_values[self._key] = []
-
-        return self._parent._term_values[self._key]
-
-    def get_term_instance(self, key):
-
-        if '_proto' not in dir(self):
-            raise AttributeError("TypeDictGroup must have a _proto Term")
-
-        o = copy.copy(self._proto)
-        o.init_instance(self)
-        o._key = key
-        return o
-
-    def __set__(self, instance, v):
-        assert isinstance(v, list)
-
-        instance._term_values[self._key] = []
-
-        o = self.get_group_instance(instance)
-
-        o.set(v)
-
-    def insert(self, index, value):
-        self.__setitem__(index, value)
-
-    def __getitem__(self, index):
-
-        self.ensure_index(index)
-
-        o = self.get_term_instance(index)
-        return o.get()
-
-    def __setitem__(self, index, value):
-
-        self.ensure_index(index)
-        o = self.get_term_instance(index)
-
-        o.set(value)
-
-    def __delitem__(self, index):
-        return self._term_values.__delitem__(index)
-
-    def __len__(self):
-        return self._term_values.__len__()
-
-    def __iter__(self):
-        return self._term_values.__iter__()
-
-    def set(self, d):
-
-        for index, value in enumerate(d):
-            self.__setitem__(index, value)
-
-
-    def ensure_index(self, index):
-        """Ensure the index is in the list by possibly expanding the array."""
-        if index >= len(self._term_values):
-            o = self.get_term_instance(index)
-
-            to_add = (index - len(self._term_values) + 1)
-
-            self._parent._term_values[self._key] += ([o.null_entry()] * to_add)
-
-        assert len(self._parent._term_values[self._key]) > index
 
 class Term(object):
     """A single term in a group."""
@@ -869,7 +886,7 @@ class ListTerm(Term):
         instance._term_values[self._key] = list(v)
 
     def set(self, v):
-
+        print "-->", self._fqkey
         self.__set__(self._parent, v)
 
     def get(self):

@@ -107,9 +107,50 @@ views: {}
     def tearDown(self):
         pass
 
-    def test_basic(self):
+    def test_dict_group(self):
+
+
         from ambry.orm.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
-            VarDictGroup, DictGroup, DictTerm, ListGroup
+            VarDictGroup, DictGroup, DictTerm, ListTerm
+        from ambry.util import AttrDict
+
+        class TestDictTerm1(DictTerm):
+            sterm = ScalarTerm()
+            lterm = ListTerm()
+
+        class TestDictTerm2(DictTerm):
+            sterm = ScalarTerm()
+            lterm = ListTerm()
+            dterm = TestDictTerm1()
+
+        class TestDictGroup(DictGroup):
+            dterm1 = TestDictTerm2()
+
+        class TestTop(StructuredPropertyTree):
+            dictgroup = TestDictGroup()
+
+        t = TestTop()
+
+        t.dictgroup.dterm1.sterm = 'sterm'
+        t.dictgroup.dterm1.lterm = [1,2,3]
+        t.dictgroup.dterm1.dterm.sterm = 'sterm'
+        t.dictgroup.dterm1.dterm.lterm = [1, 2, 3]
+
+        self.assertEquals(t.dictgroup.dterm1.sterm, 'sterm')
+        self.assertEquals(list(t.dictgroup.dterm1.lterm), [1,2,3])
+        self.assertEquals(t.dictgroup.dterm1.dterm.sterm , 'sterm')
+        self.assertEquals(list(t.dictgroup.dterm1.dterm.lterm) , [1, 2, 3])
+
+        self.assertEquals(t.dictgroup.dterm1.dict,
+                          {'lterm': [1, 2, 3], 'sterm': 'sterm', 'dterm': {'sterm': 'sterm', 'lterm': [1, 2, 3]}})
+
+        self.assertEquals(t.dictgroup.dterm1.dterm.dict,{'sterm': 'sterm', 'lterm': [1, 2, 3]})
+
+
+
+    def x_test_basic(self):
+        from ambry.orm.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
+            VarDictGroup, DictGroup, DictTerm
         from ambry.util import AttrDict
 
         class TestDictTerm(DictTerm):
@@ -117,8 +158,7 @@ views: {}
             dterm2 = ScalarTerm()
             unset_term = ScalarTerm()
 
-        class TestListGroup(ListGroup):
-            _proto = TestDictTerm()
+
 
         class TestGroup(DictGroup):
             term = ScalarTerm()
@@ -131,7 +171,6 @@ views: {}
         class TestTop(StructuredPropertyTree):
             group = TestGroup()
             tdgroup = TestTDGroup()
-            lgroup = TestListGroup()
             vdgroup = VarDictGroup()
 
         tt = TestTop()
@@ -168,15 +207,6 @@ views: {}
         self.assertEquals('y',tt.group.term2)
 
         #
-        # List Group
-
-        tt.lgroup.append({'dterm1': 'dterm1'})
-        tt.lgroup.append({'dterm2': 'dterm2'})
-
-        self.assertEquals('dterm2', tt.lgroup[1]['dterm2'])
-        self.assertEquals('dterm1', tt.lgroup[0]['dterm1'])
-
-        #
         # TypedDictGroup
 
         tt.tdgroup.foo.dterm1 = 'foo.dterm1'
@@ -191,232 +221,6 @@ views: {}
 
         tt.vdgroup.k1['v1'] = 'v1'
         tt.vdgroup.k1.v2 = 'v2'
-
-
-    def test_metadata(self):
-        d = dict(
-            about=dict(
-                title='title',
-                subject='subject',
-                rights='rights',
-                summary='Summary',
-                tags='Foobotom'
-            ),
-            contact_bundle=dict(
-                creator=dict(
-                    name='Name',
-                    email='Email',
-                    bingo='bingo'
-                )
-            ),
-            # These are note part of the defined set, so aren't converted to terms
-            build=dict(
-                foo='foo',
-                bar='bar'
-            )
-
-        )
-
-        top = Top(d)
-
-        self.assertIn(('contact_bundle', 'creator', 'bingo'), top.errors)
-
-        self.assertIn('creator', top.contact_bundle.keys())
-        self.assertNotIn('url', dict(top.contact_bundle.creator))
-        self.assertEqual('Email', top.contact_bundle.creator.email)
-
-        top.sources.foo.url = 'url'
-        top.sources.bar.description = 'description'
-
-    def test_metadata_TypedDictGroup(self):
-        from ambry.orm.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
-            DictTerm
-
-        class TestDictTerm(DictTerm):
-            dterm1 = ScalarTerm()
-            dterm2 = ScalarTerm()
-            unset_term = ScalarTerm()
-
-        class TestTDGroup(TypedDictGroup):
-            _proto = TestDictTerm()
-
-        class TestTop(StructuredPropertyTree):
-            group = TestTDGroup()
-
-        config_str = """
-group:
-    item1:
-        dterm1: dterm1
-        dterm2: dterm2
-"""
-
-        result_str = (config_str + '        unset_term: null').strip('\n')
-
-        top = TestTop(yaml.load(config_str))
-
-        self.assertEquals(result_str, top.dump().strip('\n'))
-
-        self.assertEquals('dterm1', top.group.item1.dterm1)
-        self.assertEquals('dterm1', top.group.item1['dterm1'])
-
-    @unittest.skip("demonstrating skipping")
-    def test_rows(self):
-        t1 = Top(yaml.load(self.yaml_config))
-
-        self.assertEquals(['foo', 'baz'], t1.build.keys())
-        self.assertEquals('bar', t1.build.foo)
-        self.assertEquals('bar', t1.build['foo'])
-
-        self.assertIn('google', t1.sources.keys())
-        self.assertIn('yahoo', t1.sources.keys())
-        self.assertEquals('http://yahoo.com', t1.sources.yahoo.url)
-
-        t2 = Top()
-
-        t2.load_rows(t1.rows)
-
-        self.assertEquals(self.yaml_config.strip(' \n'), t2.dump().strip(' \n'))
-
-    @unittest.skip("")
-    def test_read_write(self):
-        d = tempfile.mkdtemp('metadata-test')
-
-        t1 = Top(yaml.load(self.yaml_config))
-
-        t1.write_to_dir(d)
-
-        t2 = Top()
-        t2.load_from_dir(d)
-
-        self.assertEquals(self.yaml_config.strip(' \n'), t2.dump().strip(' \n'))
-
-        # Test lazy loading.
-        t3 = Top(path=d)
-        self.assertTrue('license', t3.about.license)
-        self.assertTrue('creator.email', t3.contact_bundle.creator.email)
-        self.assertTrue(1, t3.nonterm.a)
-
-        t3.write_to_dir(d)
-
-        t4 = Top()
-        t4.load_from_dir(d)
-
-        self.assertEquals(self.yaml_config.strip(' \n'), t4.dump().strip(' \n'))
-
-        # Check that load from dir strips out erroneous terms
-        # This depends on write_to_dur not checking and stripping these values.
-
-        t5 = Top(path=d)
-        t5.load_all()
-
-        t5._term_values.about.foobar = 'foobar'
-        t5._term_values.sources.foobar = 'foobar'
-        t5._term_values.contact_bundle.creator.foobar = 'foobar'
-
-        t5.write_to_dir(d)
-
-        t52 = Top(path=d)
-        t52.load_all()
-
-        self.assertEquals(self.yaml_config.strip(' \n'), t52.dump().strip(' \n'))
-
-        self.assertEquals(3, len(t52.errors))
-        self.assertIn(('contact_bundle', 'creator', 'foobar'), t52.errors.keys())
-
-        # Does it handle missing files?
-
-        os.remove(os.path.join(d, 'meta/build.yaml'))
-
-        t6 = Top()
-        t6.load_from_dir(d)
-
-        shutil.rmtree(d)
-
-        t7 = Top(path=d)
-        t7.load_all()
-
-    def test_assignment(self):
-        from ambry.identity import Identity
-
-        t1 = Top(yaml.load(self.yaml_config))
-
-        self.assertEquals(self.yaml_config.strip(' \n'), t1.dump().strip(' \n'))
-
-        idnt = Identity.from_dict(dict(t1.identity))
-
-        idd = idnt.ident_dict
-        idd['variation'] = 'v2'
-
-        t1.identity = idd
-
-        self.assertEquals('v2', t1.identity.variation)
-
-
-
-    def test_links(self):
-        t = Top(yaml.load(self.yaml_config))
-
-        t.contact_bundle.creator.name = 'Bob Bobson'
-
-        self.assertEquals('Bob Bobson', t.contact_bundle.creator.name)
-
-        idd = dict(t.identity)
-
-        t.identity = idd
-
-    def test_errors(self):
-        # Check that the invalid fields are removed.
-
-        yaml_config = """
-about:
-    maintainer: maintainer
-    homepage: homepage
-    foo: bar
-    license: license
-    rights: rights
-    subject: subject
-    url: url"""
-
-        t1 = Top(yaml.load(yaml_config))
-
-        yc2 = yaml.load(t1.dump(keys=['about']))
-
-        self.assertIn('rights', yc2['about'])
-        self.assertNotIn('author', yc2['about'])
-        self.assertNotIn('url', yc2['about'])
-        self.assertEquals('', t1.about.summary)
-
-        self.assertIn(('about', 'foo', None), t1.errors)
-
-
-
-    def test_list(self):
-        t = Top(yaml.load(self.yaml_config))
-        for x in t.about.groups:
-            self.assertIn(str(x), ['Group 1', 'Group 2'])
-
-    def test_doc(self):
-
-        yaml_config = """
-about:
-    access: null
-    footnote: "More about: {{about.title}}"
-    grain: null
-    license: license
-    processed: null
-    rights: rights
-    source: null
-    space: California
-    subject: subject
-    summary: summary
-    time: 2012
-    title: "{{about.space}} in {{about.time}}"
-    """
-
-
-        t1 = Top(yaml.load(yaml_config))
-
-        self.assertEqual('<p>More about: California in 2012</p>', t1.about.footnote.html)
 
 
 
