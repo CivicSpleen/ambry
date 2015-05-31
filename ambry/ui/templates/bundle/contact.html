@@ -6,7 +6,12 @@
     {% elif e.name -%}{{e.name}}
     {% elif e.email -%}<a href="mailto:{{e.email}}">{{e.email}}</a>{% endif -%}
     {% if e.name or e.email -%},{%endif%}
-    {% if e.url -%}<a href="{{e.url}}">{{e.url}}</a>{% endif -%}
+    {% if e.org -%}
+        {% if e.url -%}<a href="{{e.url}}">{{e.org}}</a>{% else %}{{ e.org }}{% endif -%}
+    {% else %}
+        {% if e.url -%}<a href="{{e.url}}">{{e.url}}</a>{% endif -%}
+    {%endif%}
+
     </dd>
 {% endmacro %}
 {% set cb = b.meta.contact_bundle %}

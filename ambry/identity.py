@@ -1005,9 +1005,7 @@ class DatasetNumber(ObjectNumber):
         return PartitionNumber(self, partition_number)
 
     def __str__(self):
-        return (ObjectNumber.TYPE.DATASET +
-                self._ds_str() +
-                ObjectNumber._rev_str(self.revision))
+        return (ObjectNumber.TYPE.DATASET + self._ds_str() + ObjectNumber._rev_str(self.revision))
 
 
 class TableNumber(ObjectNumber):
@@ -1225,6 +1223,8 @@ class Locations(object):
         return tuple((c for c, v in self._locations.items() if v.code))
 
     def set(self, code, revision=None, version=None):
+
+
 
         uc_code = code.upper()
 

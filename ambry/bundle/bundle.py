@@ -7,8 +7,8 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 import logging
-
 import os
+
 from ..filesystem import BundleFilesystem
 from ..schema import Schema
 from ..partitions import Partitions
@@ -43,6 +43,9 @@ class Bundle(object):
             multi = False
             test = False
 
+        self._errors = []
+        self._warnings = []
+
         self.run_args = vars(null_args())
 
     def __del__(self):
@@ -54,7 +57,8 @@ class Bundle(object):
     def close(self):
         """Close the bundle database and all partition databases, committing
         and closing any sessions and connections."""
-        from ..dbexceptions import NotFoundError, DatabaseMissingError
+        from ambry.orm import DatabaseMissingError
+        from ambry.orm import NotFoundError
 
         self.partitions.close()
 
@@ -128,7 +132,7 @@ class Bundle(object):
     @property
     def database(self):
         """The database object for the bundle."""
-        from ..dbexceptions import DatabaseMissingError
+        from ambry.orm import DatabaseMissingError
 
         if self._database is None:
             raise DatabaseMissingError('Database has not been set')
@@ -165,12 +169,9 @@ class Bundle(object):
     def set_value(self, group, key, value):
 
         with self.session as s:
-            return self.database.set_config_value(
-                self.dataset.vid,
-                group,
-                key,
-                value,
-                session=s)
+            return self.database.set_config_value( self.dataset.vid, group, key, value, session=s)
+
+
 
     def get_value(self, group, key, default=None):
         """Get a config value using the current bundle's configuration
@@ -183,7 +184,6 @@ class Bundle(object):
             return v
 
     def get_value_group(self, group):
-
         return self.database.get_config_group(group, d_vid=self.dataset.vid)
 
     def _dep_cb(self, library, key, name, resolved_bundle):
@@ -216,14 +216,13 @@ class Bundle(object):
         try:
             # This should not be necessary, but it handles old templates that get substituted with Jina format
             # titles and such.
-            return t.format(**d)
+            return unicode(t).format(**d)
         except KeyError as e:
             import json
 
-            self.error(
-                "Failed to substitute template in {}. Key Error: {}".format(self.identity,e))
-            self.error(
-                "Available keys are:\n {}".format(json.dumps(d,indent=4)))
+            self.error("Failed to substitute template in {}. Key Error: {}".format(self.identity,e))
+
+            self.error("Available keys are:\n {}".format(json.dumps(d,indent=4)))
             return t
 
     @property
@@ -288,6 +287,8 @@ class Bundle(object):
         :param message:  Log message.
 
         """
+        if message not in self._errors:
+            self._errors.append(message)
         self.logger.error(message)
 
     def warn(self, message):
@@ -296,6 +297,9 @@ class Bundle(object):
         :param message:  Log message.
 
         """
+        if message not in self._warnings:
+            self._warnings.append(message)
+
         self.logger.warn(message)
 
     def fatal(self, message):
@@ -403,7 +407,7 @@ class DbBundleBase(Bundle):
     @property
     @memoize
     def metadata(self):
-        from ..bundle.meta import Top
+        from ambry.orm.meta import Top
 
         ds = self.get_dataset()
 
@@ -416,13 +420,8 @@ class DbBundleBase(Bundle):
         t.identity = self.identity.ident_dict
         t.names = self.identity.names_dict
 
-        # The first one it to create the substitution contest, and the second is the actual
-        # metadata
-        t2 = Top(context=t.dict)
-        t2.load_rows(rows)
-        t2.identity = self.identity.ident_dict
-        t2.names = self.identity.names_dict
-        return t2
+
+        return t
 
     def _info(self, identity=None):
         """Return a nested, ordered dict  of information about the bundle."""
@@ -489,12 +488,8 @@ class DbBundleBase(Bundle):
         )
 
         if "documentation" in d['meta']:
-            d['meta']['documentation']['readme'] = markdown.markdown(
-                self.sub_template(
-                    d['meta']['documentation']['readme'] if d['meta']['documentation']['readme'] else ''))
             d['meta']['documentation']['main'] = markdown.markdown(
-                self.sub_template(
-                    d['meta']['documentation']['main'] if d['meta']['documentation']['main'] else ''))
+                self.sub_template(  d['meta']['documentation']['main'] if d['meta']['documentation']['main'] else ''))
 
         d['meta']['resolved_dependencies'] = self.get_value_group('rdep')
 
@@ -574,10 +569,9 @@ class LibraryDbBundle(DbBundleBase):
 
     def get_dataset(self):
         """Return the dataset."""
-        from sqlalchemy.orm import noload
         from sqlalchemy.orm.exc import NoResultFound
         from sqlalchemy.exc import OperationalError
-        from ..dbexceptions import NotFoundError
+        from ambry.orm import NotFoundError
 
         from ambry.orm import Dataset
 
@@ -585,7 +579,7 @@ class LibraryDbBundle(DbBundleBase):
             return self.database.session.query(Dataset).filter(Dataset.vid == self._dataset_id).one()
 
         except NoResultFound:
-            from ..dbexceptions import NotFoundError
+            from ambry.orm import NotFoundError
 
             raise NotFoundError("Failed to find dataset for id {} in {} ".format(self._dataset_id, self.database.dsn))
 
@@ -614,10 +608,10 @@ class BuildBundle(Bundle):
     SCHEMA_OLD_FILE = 'schema-old.csv'
     CODE_FILE = 'codes.csv'
 
-    README_FILE = 'README.md'
-    README_FILE_TEMPLATE = 'meta/README.md.template'
     DOC_FILE = 'meta/documentation.md'
     DOC_HTML = 'meta/documentation.html'
+
+    SOURCES_FILE = 'meta/sources.csv'
 
     # Partition where to get a map from source domains to full name
     SOURCE_TERMS = 'civicknowledge.com-terms-sources'
@@ -667,7 +661,7 @@ class BuildBundle(Bundle):
         """Return the dataset."""
         from sqlalchemy.exc import OperationalError
         from sqlalchemy.orm.exc import NoResultFound
-        from ..dbexceptions import NotFoundError
+        from ambry.orm import NotFoundError
 
         from ambry.orm import Dataset
 
@@ -726,14 +720,12 @@ class BuildBundle(Bundle):
     @property
     @memoize
     def metadata(self):
-        from ambry.bundle.meta import Top
-
-        return Top(path=self.bundle_dir)
+        from ambry.orm.meta import Top
 
         t = Top(path=self.bundle_dir)
         t.load_all()
 
-        return Top(path=self.bundle_dir, context=t.dict)
+        return t
 
     @property
     @memoize
@@ -799,9 +791,6 @@ class BuildBundle(Bundle):
         self.prepare()
         self.close()
 
-        # Now, update this version to be one more.
-        self.identity()
-
         identity.on.revision = prior_version + 1
 
         identity = Identity.from_dict(identity.ident_dict)
@@ -821,6 +810,31 @@ class BuildBundle(Bundle):
 
         return identity
 
+    def read_sources(self):
+        """Read the sources file into the metadata, if it exists"""
+
+        sf_fn = self.filesystem.path(self.SOURCES_FILE)
+
+        if os.path.exists(sf_fn):
+            from sources import SourcesFile
+
+            sf = SourcesFile(sf_fn, self.metadata)
+
+            sf.read()
+
+    def write_sources(self):
+        """Read the sources file into the metadata, if it exists"""
+
+        sf_fn = self.filesystem.path(self.SOURCES_FILE)
+
+        if len(self.metadata.sources.keys()) > 0:
+            from sources import SourcesFile
+
+            sf = SourcesFile(sf_fn, self.metadata)
+
+            sf.write()
+
+
     def update_configuration(self, identity=None, rewrite_database=True):
         # Re-writes the bundle.yaml file, with updates to the identity and partitions
         # sections.
@@ -831,8 +845,7 @@ class BuildBundle(Bundle):
         if len(md.errors) > 0:
             self.error("Metadata errors in {}".format(md._path))
             for k, v in md.errors.items():
-                self.error(
-                    "    {} = {}".format('.'.join([str(x) for x in k if x]), v))
+                self.error( "    {} = {}".format('.'.join([str(x) for x in k if x]), v))
             raise Exception("Metadata errors: {}".format(md.errors))
 
         if not identity:
@@ -862,21 +875,14 @@ class BuildBundle(Bundle):
 
         self.update_source()
 
-        # The main doc is subbed on the fly, but the README has to be a real
-        # file, since it is displayed in github
-        self.rewrite_readme()
-
         self.write_doc_html()
 
-        md.documentation.readme = read_file(self.README_FILE)
         md.documentation.main = self.sub_template(read_file(self.DOC_FILE))
         md.documentation.title = md.about.title.text
         md.documentation.summary = md.about.summary.text
         md.documentation.source = md.about.source.text
         md.documentation.processed = md.about.processed.text
         md.documentation.summary = md.about.summary.text
-
-
 
         md.write_to_dir(write_all=True)
 
@@ -893,7 +899,8 @@ class BuildBundle(Bundle):
                 self.database.rewrite_dataset()
 
     def update_source(self):
-        from ..dbexceptions import NotFoundError
+        from ambry.orm import NotFoundError
+
         if not bool(self.metadata.contact_source.creator):
 
             source_domain = self.identity.source
@@ -912,19 +919,6 @@ class BuildBundle(Bundle):
             except NotFoundError:
                 self.error("Can't expand sources; didn't find source partition '{}'".format(self.SOURCE_TERMS))
 
-
-
-
-
-    def rewrite_readme(self):
-
-        tf = self.filesystem.path(self.README_FILE_TEMPLATE)
-        if os.path.exists(tf):
-            with open(self.filesystem.path(tf)) as fi:
-                rmf = self.filesystem.path(self.README_FILE)
-                with open(self.filesystem.path(rmf), 'w') as fo:
-                    fo.write(self.sub_template(fi.read()))
-
     def write_doc_html(self):
         import markdown
         import ambry.support as sdir
@@ -941,9 +935,11 @@ class BuildBundle(Bundle):
         if os.path.exists(df):
             with open(df) as dfo:
                 with open(self.filesystem.path(hdf), 'w') as hdfo:
-                    html = html_template.format(
-                        content=markdown.markdown(self.sub_template(dfo.read())))
-                    hdfo.write(html)
+                    in_text = dfo.read()
+                    in_text_sub = self.sub_template(in_text)
+                    md = markdown.markdown(in_text_sub)
+                    html = unicode(html_template).format(content=md)
+                    hdfo.write(html.encode("utf-8"))
 
     def sources(self):
         """Iterate over the sources.
@@ -1027,11 +1023,8 @@ class BuildBundle(Bundle):
 
             if cache and not cache.has(cache_key):
                 self.log("Putting: {}".format(cache_key))
-                cache.put(
-                    fn,
-                    cache_key,
-                    metadata=dict(
-                        vname=self.identity.vname))
+                cache.put(fn,cache_key,metadata=dict(vname=self.identity.vname))
+
 
     @property
     def dependencies(self):
@@ -1055,12 +1048,10 @@ class BuildBundle(Bundle):
 
         # Remove the sqlite journal files, if they exists
         files = [
-            self.database.path +
-            "-wal",
-            self.database.path +
-            "-shm",
-            self.database.path +
-            "-journal"]
+            self.database.path +"-wal",
+            self.database.path +"-shm",
+            self.database.path +"-journal"]
+
         for f in files:
             if os.path.exists(f):
                 self.log("Removing {}".format(f))
@@ -1168,6 +1159,12 @@ class BuildBundle(Bundle):
 
         self.log('---- Pre-Prepare ----')
 
+        if self.is_prepared:
+            self.log("Bundle has already been prepared")
+            # raise ProcessError("Bundle has already been prepared")
+
+            return False
+
         if self.metadata.build.get('requirements', False):
             from ..util.packages import install
             import sys
@@ -1193,36 +1190,35 @@ class BuildBundle(Bundle):
                     self.log(
                         "Required package already installed: {}->{}".format(k, v))
                 except ImportError:
-                    self.log(
-                        "Installing required package: {}->{}".format(k, v))
+                    self.log("Installing required package: {}->{}".format(k, v))
                     install(python_dir, k, v)
 
-        if self.is_prepared:
-            self.log("Bundle has already been prepared")
-            # raise ProcessError("Bundle has already been prepared")
-
-            return False
 
         try:
             from ..orm import Dataset
 
-            b = self.library.resolve(
-                self.identity.id_,
-                location=[
-                    Dataset.LOCATION.LIBRARY])
+            b = self.library.resolve(self.identity.id_,location=[ Dataset.LOCATION.LIBRARY])
 
             if b and b.on.revision >= self.identity.on.revision and not self.run_args.force:
                 self.fatal(
                     ("Can't build this version. Library {} has version {} of {}"
                      " which is less than or equal this version {}").format(
-                        self.library.database.dsn,
-                        b.on.revision,
-                        b.fqname,
-                        self.identity.on.revision))
+                        self.library.database.dsn,b.on.revision,b.fqname,self.identity.on.revision))
                 return False
 
         except Exception:
             raise
+
+        self.read_sources()
+
+        if not self.metadata.about.access:
+            raise ConfigurationError("about.access must be set to the name of a remote")
+
+        if not self.metadata.about.title:
+            raise ConfigurationError("Must set a title in about.title")
+
+        if not self.metadata.about.summary:
+            raise ConfigurationError("Must set a summary in about.summary")
 
         return True
 
@@ -1265,7 +1261,7 @@ class BuildBundle(Bundle):
                 self.schema.read_codes()
 
     def prepare(self):
-        from ..dbexceptions import NotFoundError
+        from ambry.orm import NotFoundError
 
         # with self.session: # This will create the database if it doesn't
         # exist, but it will be empty
@@ -1328,12 +1324,9 @@ class BuildBundle(Bundle):
 
     def post_prepare(self):
         """Set a marker in the database that it is already prepared."""
-        from datetime import datetime
         from ..library.database import ROOT_CONFIG_NAME_V
 
         with self.session:
-            self.set_value('process', 'prepared', datetime.now().isoformat())
-
             # At this point, we have a dataset vid, which we didn't have when the dbcreated values was
             # set, so we can reset the value with to get it into the process
             # configuration group.
@@ -1342,20 +1335,30 @@ class BuildBundle(Bundle):
 
             self._revise_schema()
 
-        self.schema.move_revised_schema()
+
+        for t in self.schema.tables:
+            if not bool(t.description.strip()):
+                self.error("No title ( Description of id column ) set for table: {} ".format(t.name))
+
+        if self._errors:
+            self.set_build_state('failed/prepare')
+            return False
 
         self.update_configuration()
 
         self.write_config_to_bundle()
 
+        self.schema.move_revised_schema()
+
         self.set_build_state('prepared')
+
+        self.write_sources()
 
         return True
 
     @property
     def is_prepared(self):
-        return (self.database.exists()
-                and not self.run_args.get('rebuild', False)
+        return (self.database.exists() and not self.run_args.get('rebuild', False)
                 and self.get_value('process', 'prepared', False))
 
     def prepare_main(self):
@@ -1366,17 +1369,22 @@ class BuildBundle(Bundle):
     def do_prepare(self):
         """This method runs pre_, main and post_ prepare methods."""
 
+        r = True
+
         if self.pre_prepare():
             self.log("---- Preparing ----")
             if self.prepare_main():
-                self.post_prepare()
-                self.log("---- Done Preparing ----")
+                if self.post_prepare():
+                    self.log("---- Done Preparing ----")
+                else:
+                    self.log("---- Post-prepare exited with failure ----")
+                    r = False
             else:
                 self.log("---- Prepare exited with failure ----")
+                r = False
         else:
             self.log("---- Skipping prepare ---- ")
 
-        r = True
 
         return r
 
@@ -1394,7 +1402,8 @@ class BuildBundle(Bundle):
 
         with self.session:
             if not self.get_value('process', 'prepared', False):
-                raise ProcessError("Build called before prepare completed")
+                self.error("Build called before prepare completed")
+                return False
 
             self._build_time = time()
 
@@ -1414,12 +1423,11 @@ class BuildBundle(Bundle):
         """After the build, update the configuration with the time required for
         the build, then save the schema back to the tables, if it was revised
         during the build."""
-        from datetime import datetime
         from time import time
 
         with self.session:
-            self.set_value('process', 'built', datetime.now().isoformat())
-            self.set_value('process', 'buildtime', time() - self._build_time)
+            if self._build_time:
+                self.set_value('process', 'buildtime', time() - self._build_time)
 
             self.post_build_finalize()
 
@@ -1437,7 +1445,6 @@ class BuildBundle(Bundle):
 
             self.post_build_test()
 
-            self.set_value('process', 'last', datetime.now().isoformat())
             self.set_build_state('built')
 
         self.close()
@@ -1501,7 +1508,7 @@ class BuildBundle(Bundle):
             places = list(self.library.search.search_identifiers(term))
 
             if not places:
-                raise BuildError("Failed to find space identifier '{}' in full text identifier search".format(space))
+                raise BuildError("Failed to find space identifier '{}' in full text identifier search".format(term))
 
             score, gvid, type, name = places[0]
 
@@ -1626,7 +1633,8 @@ class BuildBundle(Bundle):
 
     @property
     def build_state(self):
-        from ..dbexceptions import DatabaseMissingError, NotFoundError
+        from ambry.orm import DatabaseMissingError
+        from ambry.orm import NotFoundError
 
         try:
             c = self.get_value('process', 'state')
@@ -1637,7 +1645,8 @@ class BuildBundle(Bundle):
     def set_build_state(self, state):
         from datetime import datetime
 
-        if state not in ('cleaned', 'meta'):
+        if state not in ('cleaned', 'meta'): # If it is cleaned, the DB is deleted, so this isn't necessary
+            self.set_value('process', state, datetime.now().isoformat())
             self.set_value('process', 'state', state)
             self.set_value('process', 'last', datetime.now().isoformat())
 
@@ -1653,15 +1662,22 @@ class BuildBundle(Bundle):
     def do_build(self):
 
         if not self.is_prepared:
-            self.do_prepare()
+            if not self.do_prepare():
+                self.log("Prepare failed; skipping build")
+                return False
 
         if self.pre_build():
             self.log("---- Build ---")
             if self.build_main():
-                self.post_build()
-                self.log("---- Done Building ---")
-                self.log("Bundle DB at: {}".format(self.database.dsn))
-                r = True
+                if self.post_build():
+                    self.log("---- Done Building ---")
+                    self.log("Bundle DB at: {}".format(self.database.dsn))
+                    r = True
+                else:
+                    self.log("---- Post-build failed ---")
+                    self.log("Bundle DB at: {}".format(self.database.dsn))
+                    r = False
+
             else:
                 self.log("---- Build exited with failure ---")
                 r = False
@@ -1766,11 +1782,10 @@ class BuildBundle(Bundle):
             raise e
 
     def post_update(self):
-        from datetime import datetime
         from time import time
 
         with self.session:
-            self.set_value('process', 'updated', datetime.now().isoformat())
+            self.set_build_state('updated')
             self.set_value('process', 'updatetime', time() - self._update_time)
             self.update_configuration()
 
@@ -1782,7 +1797,6 @@ class BuildBundle(Bundle):
 
             self.write_config_to_bundle()
 
-            self.set_value('process', 'last', datetime.now().isoformat())
             self.set_build_state('updated')
 
         self.close()
@@ -1832,8 +1846,11 @@ class BuildBundle(Bundle):
             library = self.library
 
             self.log("Install   {} to  library {}".format(self.identity.name,library.database.dsn))
-            dest = library.put_bundle(self, install_partitions=False, file_state = 'new')
-            self.log("Installed {}".format(dest[0]))
+            dest = library.put_bundle(self, install_partitions=False, file_state = 'new', force = True)
+            if dest[1]:
+                self.log("Installed {}".format(dest[0]))
+            else:
+                self.log("Previously Installed {}".format(dest[0]))
 
             for partition in self.partitions:
                 # Skip files that don't exist, but not if the partition is a reference to an
@@ -1856,9 +1873,7 @@ class BuildBundle(Bundle):
         return True
 
     def post_install(self):
-        from datetime import datetime
 
-        self.set_value('process', 'installed', datetime.now().isoformat())
         self.set_build_state('installed')
 
         return True

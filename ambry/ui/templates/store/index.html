@@ -17,71 +17,42 @@
 
 {% block body %}
 
+<div role="tabpanel">
 
-<div class="col-md-12">
-    <h2>Tables</h2>
-    <table  class="table table-hover table-condensed" >
-        <tr>
-            <th>id</th>
-            <th>Name</th>
-            <th>Description</th>
-            <th>Installed Names</th>
-            <th>Extracts</th>
-        </tr>
-    {% for t in s.tables.values()|selectattr('type','equalto','table')|sort(attribute='source_partition')-%}
-        {% if t.installed -%}
-            <tr>
-            <td><a href="{{store_table_path(s.uid, t.vid)}}">{{t.vid}}</a></td>
-            <td>{{t.name}}</td>
-            <td><strong>{%if t.source_partition -%}
-            <a href="{{bundle_path(t.d_vid)}}">{{t.source_partition.vname}}</a></p>
-            {% endif -%}</strong>{{t.description if t.description  else ''}}</td>
-            <td><ul>{% for n in t.installed_names -%}
-                <li>{{n}}</li>
-                {% endfor -%}</ul>
-            </td>
+  <!-- Nav tabs -->
+    <ul class="nav nav-tabs" role="tablist">
 
-            <td>
-                {% for format in extractors(t) -%}
-                <button type="button">
-                <a href="{{extract_url(s.uid,  t.vid, format)}}">{{format}}</a>
-                </button>
-                {% endfor -%}
-            </td>
-            </tr>
-        {% endif -%}
-    {% endfor %}
-    </table>
-</div>
+        <li role="presentation"  class="active">
+            <a href="#tables-tab" aria-controls="tables" role="tab" data-toggle="tab">Tables</a>
+        </li>
+        <li role="presentation">
+            <a href="#views-tab" aria-controls="views" role="tab" data-toggle="tab">Views</a>
+        </li>
+        <li role="presentation">
+            <a href="#indexes-tab" aria-controls="indexes" role="tab" data-toggle="tab">Indexes</a>
+        </li>
+        <li role="presentation">
+            <a href="#stats-tab" aria-controls="stats" role="tab" data-toggle="tab">Stats</a>
+        </li>
+    </ul>
 
-<div class="col-md-12">
-    <h2>Views and MViews</h2>
-    <table  class="table table-hover table-condensed" >
-        <tr>
-            <th>id</th>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
+  <!-- Tab panes -->
+    <div class="tab-content">
+        <div role="tabpanel" class="tab-pane active" id="tables-tab">
+            {% include 'store/tables.html' -%}
+        </div>
+        <div role="tabpanel" class="tab-pane" id="views-tab">
+            {% include 'store/views.html' -%}
+        </div>
+        <div role="tabpanel" class="tab-pane" id="indexes-tab">
+            {% include 'store/indexes.html' -%}
+        </div>
+        <div role="tabpanel" class="tab-pane" id="stats-tab">
+            {% include 'store/stats.html' -%}
+        </div>
 
-            {% if s.url -%}<th>Extracts</th>{% endif -%}
-        </tr>
-    {% for t in s.tables.values()|selectattr('type','isin',['view', 'mview','indexed']) -%}
-        <tr>
-        <td><a href="{{store_table_path(s.uid,t.vid)}}">{{t.vid}}</a></td>
-        <td>{{t.name}}</td>
-        <td>{{t.type}}</td>
-        <td>{{t.description if t.description  else ''}}</td>
+    </div>
 
-        <td>
-            {% for format in extractors(t) -%}
-            <button type="button">
-            <a href="{{extract_url(s.uid, t.name, format)}}">{{format}}</a>
-            </button>
-            {% endfor -%}
-        </td>
-        </tr>
-    {% endfor %}
-    </table>
 </div>
 
 {% endblock %}

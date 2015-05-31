@@ -15,14 +15,13 @@ import ambry
 import ambry.util
 from ambry.util import temp_file_name
 from ..identity import  Identity
-from ambry.orm import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat
+from ambry.orm import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat, NotFoundError, ConflictError
 
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError
 
 
-ROOT_CONFIG_NAME = 'd000'
-ROOT_CONFIG_NAME_V = 'd000001'
+
 
 
 class LibraryDb(object):
@@ -30,16 +29,7 @@ class LibraryDb(object):
     """Represents the Sqlite database that holds metadata for all installed
     bundles."""
 
-    # Database connection information
-    Dbci = namedtuple('Dbc', 'dsn_template sql')
 
-    DBCI = {
-        'postgis': Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}', sql='support/configuration-pg.sql'),
-        'postgres': Dbci(dsn_template='postgresql+psycopg2://{user}:{password}@{server}{colon_port}/{name}', sql='support/configuration-pg.sql'),  # Stored in the ambry module.
-        'sqlite': Dbci(dsn_template='sqlite:///{name}', sql='support/configuration-sqlite.sql'),
-        'spatialite': Dbci(dsn_template='sqlite:///{name}', sql='support/configuration-sqlite.sql'),
-        'mysql': Dbci(dsn_template='mysql://{user}:{password}@{server}{colon_port}/{name}', sql='support/configuration-sqlite.sql')
-    }
 
     def __init__(self, driver=None, server=None, dbname=None,
                  username=None, password=None, port=None, **kwargs):
@@ -49,23 +39,11 @@ class LibraryDb(object):
         self.username = username
         self.password = password
 
-        if port:
-            self.colon_port = ':' + str(port)
-        else:
-            self.colon_port = ''
 
-        self.dsn_template = self.DBCI[self.driver].dsn_template
-        self.dsn = self.dsn_template.format(
-            user=self.username,
-            password=self.password,
-            server=self.server,
-            name=self.dbname,
-            colon_port=self.colon_port)
 
-        self.Session = None
-        self._session = None
-        self._engine = None
-        self._connection = None
+
+
+
 
         self._partition_collection = []
 
@@ -84,216 +62,13 @@ class LibraryDb(object):
     # Sqlalchemy connection, engine, session, metadata
     ##
 
-    @property
-    def engine(self):
-        """return the SqlAlchemy engine for this database."""
-        from sqlalchemy import create_engine
-        from ..database.sqlite import _on_connect_update_sqlite_schema
-        from sqlalchemy.pool import AssertionPool
-        from sqlalchemy.pool import NullPool
-
-        if not self._engine:
-
-            # There appears to be a problem related to connection pooling on Linux + Postgres, where
-            # multiprocess runs will throw exceptions when the Datasets table record can't be
-            # found. It looks like connections are losing the setting for the search path to the
-            # library schema.
-            # Disabling connection pooling solves the problem.
-            self._engine = create_engine( self.dsn,poolclass=NullPool, echo=False)
-
-            # Easier than constructing the pool
-            self._engine.pool._use_threadlocal = True
-
-            from sqlalchemy import event
-
-            if self.driver == 'sqlite':
-                event.listen(self._engine, 'connect', _pragma_on_connect)
-                #event.listen(self._engine, 'connect', _on_connect_update_schema)
-                _on_connect_update_sqlite_schema(self.connection, None)
-
-        return self._engine
-
-    @property
-    def connection(self):
-        """Return an SqlAlchemy connection."""
-        if not self._connection:
-            self._connection = self.engine.connect()
-
-            if self.driver in ['postgres', 'postgis']:
-                self._connection.execute("SET search_path TO library")
-
-
-        return self._connection
-
-    @property
-    def session(self):
-        """Return a SqlAlchemy session."""
-        from sqlalchemy.orm import sessionmaker
-
-        if not self.Session:
-            self.Session = sessionmaker(bind=self.engine, expire_on_commit = False)
-
-        if not self._session:
-            self._session = self.Session()
-            # set the search path
-
-        if self.driver in ('postgres', 'postgis') and self._schema:
-            self._session.execute("SET search_path TO {}".format(self._schema))
-
-
-        return self._session
-
-    def close(self):
-
-        self.close_session()
-
-        self.close_connection()
-
-        if self._engine:
-            self._engine.dispose()
-
-    def close_session(self):
-
-        if self._session:
-            self._session.close()
-            # self._session.bind.dispose()
-            self._session = None
-
-    def close_connection(self):
-        if self._connection:
-            self._connection.close()
-            self._connection = None
-
-    def commit(self):
-        try:
-            self.session.commit()
-            self.session.expunge_all() # Clear any cached object in the session.
-            self.session.expire_all()
-            # self.close_session()
-        except Exception as e:
-            #self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))
-            raise
-
-    def rollback(self):
-        self.session.rollback()
-        # self.close_session()
-
-    @property
-    def metadata(self):
-        """Return an SqlAlchemy MetaData object, bound to the engine."""
-
-        from sqlalchemy import MetaData
-
-        metadata = MetaData(bind=self.engine, schema=self._schema)
-
-        metadata.reflect(self.engine)
-
-        return metadata
-
-    @property
-    def inspector(self):
-        from sqlalchemy.engine.reflection import Inspector
-
-        return Inspector.from_engine(self.engine)
-
-    ##
-    ## Creation and Existence
-    ##
-
-    def exists(self):
-        from sqlalchemy.exc import ProgrammingError, OperationalError
-
-        if self.driver == 'sqlite' and not os.path.exists(self.dbname):
-            return False
-
-        self.engine
-
-        try:
-            try:
-            # Since we are using the connection, rather than the session, need to
-            # explicitly set the search path.
-                if self.driver in ('postgres', 'postgis') and self._schema:
-                    self.connection.execute("SET search_path TO {}".format( self._schema))
-
-                rows = self.connection.execute(
-                    "SELECT * FROM datasets WHERE d_vid = '{}' "
-                    .format(ROOT_CONFIG_NAME_V)).fetchone()
-
-            except ProgrammingError as e:
-                # This happens when the datasets table doesnt exist
-                rows = False
-
-            if not rows:
-                return False
-            else:
-                return True
-        except Exception as e:
-            # What is the more specific exception here?
-
-            return False
-        finally:
-            self.close_connection()
-
-    def clean(self, add_config_root=True):
-        from sqlalchemy.exc import OperationalError, IntegrityError
-        from ..dbexceptions import DatabaseError
-
-        s = self.session
-
-        try:
-            s.query(Config).delete()
-            s.query(ColumnStat).delete()
-            s.query(File).delete()
-            s.query(Code).delete()
-            s.query(Column).delete()
-            s.query(Table).update({Table.p_vid: None}) # Prob should be handled with a cascade on relationship. 
-            s.query(Partition).delete()
-            s.query(Table).delete()
-            s.query(Dataset).delete()
-        except (OperationalError, IntegrityError) as e:
-            # Tables dont exist?
-            raise DatabaseError("Failed to data records from {}: {}".format(self.dsn, str(e)))
-
-        if add_config_root:
-            self._add_config_root()
-
-        self.commit()
-
-    def create(self):
-        """Create the database from the base SQL."""
-
-        if not self.exists():
-
-            self._create_path()
-
-            self.enable_delete = True
-
-            self.create_tables()
-            self._add_config_root()
-
-            return True
-
-        return False
-
-    def _create_path(self):
-        """Create the path to hold the database, if one wwas specified."""
-
-        if self.driver == 'sqlite':
-
-            dir_ = os.path.dirname(self.dbname)
-
-            if dir_ and not os.path.exists(dir_):
-                try:
-                    # MUltiple process may try to make, so it could already
-                    # exist
-                    os.makedirs(dir_)
-                except Exception as e:  # @UnusedVariable
-                    pass
-
-                if not os.path.exists(dir_):
-                    raise Exception("Couldn't create directory " + dir_)
 
     def drop(self):
+        """ Drop all of the tables in the database
+
+        :return:
+        :raise Exception:
+        """
         from sqlalchemy.exc import NoSuchTableError, ProgrammingError, OperationalError
 
         if not self.enable_delete:
@@ -306,259 +81,32 @@ class LibraryDb(object):
             return
 
 
-        # Tables and partitions can have a cyclic rlationship.
+        # Tables and partitions can have a cyclic relationship.
         # Prob should be handled with a cascade on relationship.
         try:
             self.session.query(Table).update({Table.p_vid: None})
             self.session.commit()
         except (ProgrammingError, OperationalError): # Table doesn't exist.
             self._session.rollback()
+
             pass
 
-        library_tables = [Config, ColumnStat, File, Code, Partition, Column, Table, Dataset]
-
-        for table in library_tables:
-
-            table.__table__.drop(self.engine, checkfirst=True)
-
-        self.commit()
+        self.metadata.drop_all(self.engine)
 
     def __del__(self):
         pass
 
-    def clone(self):
-        return self.__class__(self.driver,self.server,self.dbname,self.username,self.password)
 
-    def create_tables(self):
-
-        from sqlalchemy.exc import OperationalError
-        tables = [ Dataset,Config,Table,Column,Partition,File,Code,ColumnStat]
-
-        try:
-            self.drop()
-        except OperationalError:
-            pass
-
-        orig_schemas = {}
-
-        for table in tables:
-            try:
-                it = table.__table__
-            # stored_partitions, file_link are already tables.
-            except AttributeError:
-                it = table
-
-            # These schema shenanigans are almost certainly wrong.
-            # But they are expedient. For Postgres, it puts the library
-            # tables in the Library schema.
-            if self._schema:
-                orig_schemas[it] = it.schema
-                it.schema = self._schema
-
-            it.create(bind=self.engine)
-            self.commit()
-
-        # We have to put the schemas back because when installing to a warehouse.
-        # the same library classes can be used to access a Sqlite database, which
-        # does not handle schemas.
-        if self._schema:
-
-            for it, orig_schema in orig_schemas.items():
-                it.schema = orig_schema
-
-    def _add_config_root(self):
-        from sqlalchemy.orm.exc import NoResultFound
-
-        try:
-
-            self.session.query(Dataset).filter(
-                Dataset.vid == ROOT_CONFIG_NAME).one()
-            self.close_session()
-        except NoResultFound:
-            o = Dataset(
-                id=ROOT_CONFIG_NAME,
-                name=ROOT_CONFIG_NAME,
-                vname=ROOT_CONFIG_NAME_V,
-                fqname='datasetroot-0.0.0~' + ROOT_CONFIG_NAME_V,
-                cache_key=ROOT_CONFIG_NAME,
-                version='0.0.0',
-                source=ROOT_CONFIG_NAME,
-                dataset=ROOT_CONFIG_NAME,
-                creator=ROOT_CONFIG_NAME,
-                revision=1,
-            )
-            self.session.add(o)
-            self.commit()
-
-    def _clean_config_root(self):
-        """Hack need to clean up some installed databases."""
-
-        ds = self.session.query(Dataset).filter(
-            Dataset.id_ == ROOT_CONFIG_NAME).one()
-
-        ds.id_ = ROOT_CONFIG_NAME
-        ds.name = ROOT_CONFIG_NAME
-        ds.vname = ROOT_CONFIG_NAME_V
-        ds.source = ROOT_CONFIG_NAME
-        ds.dataset = ROOT_CONFIG_NAME
-        ds.creator = ROOT_CONFIG_NAME
-        ds.revision = 1
-
-        self.session.merge(ds)
-        self.commit()
 
     def inserter(self, table_name, **kwargs):
         from ..database.inserter import ValueInserter
         from sqlalchemy.schema import Table
 
-        table = Table(
-            table_name,
-            self.metadata,
-            autoload=True,
-            autoload_with=self.engine)
+        table = Table(table_name,self.metadata,autoload=True,autoload_with=self.engine)
 
         return ValueInserter(self, None, table, **kwargs)
 
-    ##
-    # Configuration values
-    ##
 
-    def set_config_value(self, group, key, value):
-        """Set a configuration value in the database."""
-        from ambry.orm import Config as SAConfig
-        from sqlalchemy.exc import IntegrityError, ProgrammingError
-        from sqlalchemy.orm.exc import NoResultFound
-
-        s = self.session
-
-        try:
-            o = s.query(SAConfig).filter(
-                SAConfig.group == group,
-                SAConfig.key == key,
-                SAConfig.d_vid == ROOT_CONFIG_NAME_V).one()
-
-        except NoResultFound:
-            o = SAConfig(
-                group=group,
-                key=key,
-                d_vid=ROOT_CONFIG_NAME_V,
-                value=value)
-
-        o.value = value
-        s.merge(o)
-
-        self.commit()
-
-    def get_config_value(self, group, key):
-
-        from ambry.orm import Config as SAConfig
-
-        s = self.session
-
-        try:
-
-            c = s.query(SAConfig).filter(
-                SAConfig.group == group,
-                SAConfig.key == key,
-                SAConfig.d_vid == ROOT_CONFIG_NAME_V).first()
-
-            return c
-        except:
-            return None
-
-    def get_config_group(self, group, d_vid=ROOT_CONFIG_NAME_V):
-
-        from ambry.orm import Config as SAConfig
-
-        s = self.session
-
-        try:
-            d = {}
-            for row in s.query(SAConfig).filter(SAConfig.group == group, SAConfig.d_vid == d_vid).all():
-                d[row.key] = row.value
-            return d
-
-        except:
-            return {}
-
-    def get_config_rows(self, d_vid):
-        """Return configuration in a form that can be used to reconstitute a
-        Metadataobject Returns all of the rows for a dataset.
-
-        This is distinct from get_config_value, which returns the value
-        for the library.
-
-        """
-        from ambry.orm import Config as SAConfig
-        from sqlalchemy import or_
-
-        rows = []
-
-        for r in self.session.query(SAConfig).filter(or_(SAConfig.group == 'config', SAConfig.group == 'process'),
-                                                     SAConfig.d_vid == d_vid).all():
-
-            parts = r.key.split('.', 3)
-
-            if r.group == 'process':
-                parts = ['process'] + parts
-
-            cr = ((parts[0] if len(parts) > 0 else None,
-                   parts[1] if len(parts) > 1 else None,
-                   parts[2] if len(parts) > 2 else None
-                   ), r.value)
-
-            rows.append(cr)
-
-        return rows
-
-    def get_bundle_value(self, dvid, group, key):
-
-        from ambry.orm import Config as SAConfig
-
-        s = self.session
-
-        try:
-            c = s.query(SAConfig).filter(SAConfig.group == group,
-                                         SAConfig.key == key,
-                                         SAConfig.d_vid == dvid).first()
-
-            return c.value
-        except:
-            return None
-
-    def get_bundle_values(self, dvid, group):
-        """Get an entire group of bundle values."""
-
-        from ambry.orm import Config as SAConfig
-
-        s = self.session
-
-        try:
-            return s.query(SAConfig).filter(
-                SAConfig.group == group,
-                SAConfig.d_vid == dvid).all()
-        except:
-            return None
-
-    @property
-    def config_values(self):
-
-        from ambry.orm import Config as SAConfig
-
-        s = self.session
-
-        d = {}
-
-        for config in s.query(SAConfig).filter(SAConfig.d_vid == ROOT_CONFIG_NAME_V).all():
-            d[(str(config.group), str(config.key))] = config.value
-
-        return d
-
-    def _mark_update(self, o=None, vid=None):
-
-        import datetime
-
-        self.set_config_value('activity','change',datetime.datetime.utcnow().isoformat())
 
     ##
     # Install and remove bundles and partitions
@@ -915,16 +463,3 @@ class LibraryDb(object):
 
 
 
-
-
-def _pragma_on_connect(dbapi_con, con_record):
-    """ISSUE some Sqlite pragmas when the connection is created."""
-
-    #dbapi_con.execute('PRAGMA foreign_keys = ON;')
-    # Not clear that there is a performance improvement.
-
-    dbapi_con.execute('PRAGMA journal_mode = WAL')
-    dbapi_con.execute('PRAGMA synchronous = OFF')
-    dbapi_con.execute('PRAGMA temp_store = MEMORY')
-    dbapi_con.execute('PRAGMA cache_size = 500000')
-    dbapi_con.execute('pragma foreign_keys=ON')

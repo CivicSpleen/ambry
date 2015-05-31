@@ -284,7 +284,7 @@ class SqliteDatabase(RelationalDatabase):
         which uses os.path.exists."""
 
         if not os.path.exists(self.path) and check_exists and not self.memory:
-            from ..dbexceptions import DatabaseMissingError
+            from ambry.orm import DatabaseMissingError
 
             raise DatabaseMissingError(
                 "Trying to make a connection to a sqlite database " +
@@ -454,24 +454,6 @@ select 'Loading CSV file','{path}';
         diff = time.clock() - start
         return count, diff
 
-    def index_for_search(self, vid, topic, keywords):
-        """
-        Add a search document to the full-text search index.
-
-        :param vid: Versioned ID for the object. Should be a dataset, partition table or column
-        :param topic: A text document or description.
-        :param keywords: A list of keywords
-        :return:
-        """
-
-    def search(self, topic, keywords):
-        """Search the full text search index.
-
-        :param topic:
-        :param keywords:
-        :return:
-
-        """
 
 
 class BundleLockContext(object):
@@ -561,51 +543,9 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin, SqliteDatabase):
         RelationalBundleDatabaseMixin._init(self, bundle)
         super(SqliteBundleDatabase, self).__init__(dbname, **kwargs)
 
-    def _on_create_connection(self, connection):
-        """Called from get_connection() to update the database."""
-        super(SqliteBundleDatabase, self)._on_create_connection(connection)
 
-        _on_connect_update_sqlite_schema(
-            connection,
-            None)  # in both _conn and _engine.
 
-    def _on_create_engine(self, engine):
-        """Called just after the engine is created."""
-        from sqlalchemy import event
-        # from functools import partial
 
-        super(SqliteBundleDatabase, self)._on_create_engine(engine)
-
-        # Note! May need to turn this on for DbBundle Databases when they are loading
-        # old bundles.
-        # event.listen(self._engine, 'connect',
-        # _on_connect_update_sqlite_schema)  # in both _conn and _engine.
-
-        event.listen(engine, 'connect', _on_connect_bundle)
-
-        # event.listen(engine, 'begin', _on_begin_bundle)
-
-    def update_schema(self):
-        """Manually update the schema.
-
-        This is called when bundles are installed in the library becase
-        that use doesn't involve connections, so the _on_create calls
-        dont get used.
-
-        """
-        _on_connect_update_sqlite_schema(self.connection, None)  # in both _conn and _engine.
-
-    def create(self):
-
-        self.require_path()
-
-        SqliteDatabase._create(self)  # Creates the database file
-
-        if RelationalDatabase._create(self):
-
-            RelationalBundleDatabaseMixin._create(self)
-
-            self.post_create()
 
     @property
     def has_session(self):
@@ -655,35 +595,6 @@ class SqliteWarehouseDatabase(SqliteDatabase, SqliteAttachmentMixin):
     pass
 
 
-class SqliteMemoryDatabase(SqliteDatabase, SqliteAttachmentMixin):
-
-    def __init__(self):
-        """"""
-
-        super(SqliteMemoryDatabase, self).__init__(None, memory=True)
-
-    def query(self, *args, **kwargs):
-        """Convience function for self.connection.execute()"""
-        from sqlalchemy.exc import OperationalError
-        from ..dbexceptions import QueryError
-
-        if isinstance(args[0], basestring):
-            fd = {x: x for x in self._attachments}
-            args = list(args)
-            first = args.pop(0)
-            args = [first.format(**fd), ] + args
-
-        try:
-            return self.connection.execute(*args, **kwargs)
-        except OperationalError as e:
-            raise QueryError(
-                "Error while executing {} in database {} ({}): {}".format(
-                    args,
-                    self.dsn,
-                    type(self),
-                    e.message))
-
-
 class BuildBundleDb(SqliteBundleDatabase):
 
     """For Bundle databases when they are being built, and the path is computed
@@ -696,166 +607,6 @@ class BuildBundleDb(SqliteBundleDatabase):
 def _on_begin_bundle(dbapi_con):
 
     dbapi_con.execute("BEGIN")
-
-
-def _on_connect_bundle(dbapi_con, con_record):
-    """ISSUE some Sqlite pragmas when the connection is created.
-
-    Bundles have different parameters because they are more likely to be
-    accessed concurrently.
-
-    """
-
-    # NOTE ABOUT journal_mode = WAL: it improves concurrency, but has some downsides.
-    # See http://sqlite.org/wal.html
-
-    try:
-        # Can't change journal mode in a transaction.
-        dbapi_con.execute('COMMIT')
-    except:
-        pass
-
-    try:
-        dbapi_con.execute('PRAGMA journal_mode = WAL')
-        dbapi_con.execute('PRAGMA page_size = 8192')
-        dbapi_con.execute('PRAGMA temp_store = MEMORY')
-        dbapi_con.execute('PRAGMA cache_size = 50000')
-        dbapi_con.execute('PRAGMA foreign_keys = OFF')
-    except Exception:
-        global_logger.error("Exception in {} ".format(dbapi_con))
-        raise
-
-    # dbapi_con.execute('PRAGMA busy_timeout = 10000')
-    # dbapi_con.execute('PRAGMA synchronous = OFF')
-
-
-def _on_connect_update_sqlite_schema(conn, con_record):
-    """Perform on-the-fly schema updates based on the user version"""
-    from sqlalchemy.exc import OperationalError
-
-    version = conn.execute('PRAGMA user_version').fetchone()[0]
-    if version:
-        version = int(version)
-
-    def maybe_exec(s):
-        try:
-            conn.execute(s)
-        except Exception as e:
-
-            pass
-
-    # Some files have version of 0 because the version was not set.
-    if version > 10:
-        if version < 14:
-
-            raise Exception(
-                "There should not be any files of less than version 14 in existence. Got: {}".format(version))
-
-        if version < 15:
-
-            try:
-                conn.execute('ALTER TABLE datasets ADD COLUMN d_cache_key VARCHAR(200);')
-            except:
-                pass
-
-            try:
-                conn.execute('ALTER TABLE partitions ADD COLUMN p_cache_key VARCHAR(200);')
-            except:
-                pass
-
-        if version < 16:
-            try:
-                conn.execute('ALTER TABLE tables ADD COLUMN t_universe VARCHAR(200);')
-            except Exception:
-                pass
-
-        if version < 17:
-
-            try:
-                conn.execute('ALTER TABLE partitions ADD COLUMN p_ref VARCHAR(200);')
-            except:
-                pass
-
-        if version < 18:
-
-            try:
-                conn.execute('ALTER TABLE files ADD COLUMN f_content BLOB;')
-            except:
-                pass
-
-        if version < 19:
-
-            try:
-                conn.execute('ALTER TABLE columns ADD COLUMN c_start;')
-            except:
-                pass
-
-        if version < 20:
-
-            try:
-                conn.execute('ALTER TABLE columns ADD COLUMN c_proto_vid;')
-                conn.execute('ALTER TABLE tables ADD COLUMN t_proto_vid;')
-                conn.execute('ALTER TABLE columns ADD COLUMN c_fk_vid;')
-            except:
-                pass
-
-        if version < 21:
-            try:
-                conn.execute("ALTER TABLE tables ADD COLUMN t_type VARCHAR(20) DEFAULT 'table'; ")
-            except Exception:
-                pass
-
-        if version < 22:
-            from ..orm import Code
-
-            try:
-                Code.__table__.create(bind=conn.engine)
-            except Exception:
-                pass
-
-        if version < 23:
-
-            try:
-                conn.execute('ALTER TABLE columns ADD COLUMN c_derivedfrom VARCHAR(200)')
-
-            except OperationalError:
-
-                pass
-
-        if version < 24:
-
-            try:
-                from ..orm import SearchDoc
-                SearchDoc.__table__.create(bind=conn.engine)
-            except OperationalError:
-                pass
-            except ImportError:  # SearchDoc object was removed
-                pass
-
-        if version < 25:
-            from ..orm import ColumnStat
-
-            try:
-                ColumnStat.__table__.create(bind=conn.engine)
-            except OperationalError:
-                pass
-
-        if version < 27:
-            maybe_exec('ALTER TABLE colstats ADD COLUMN cs_lom VARCHAR(6)')
-
-        if version < 28:
-
-            maybe_exec('ALTER TABLE columns ADD COLUMN c_d_vid VARCHAR(20)')
-            maybe_exec('ALTER TABLE colstats ADD COLUMN cs_d_vid VARCHAR(20)')
-            maybe_exec('ALTER TABLE codes ADD COLUMN cd_d_vid VARCHAR(20)')
-
-        if version < 29:
-            maybe_exec('ALTER TABLE tables ADD COLUMN t_p_vid VARCHAR(20)')
-
-    if version < SqliteDatabase.SCHEMA_VERSION:
-        conn.execute('PRAGMA user_version = {}'.format( SqliteDatabase.SCHEMA_VERSION))
-
-
 
 def insert_or_ignore(table, columns):
     return ("""INSERT OR IGNORE INTO {table} ({columns}) VALUES ({values})""".format(

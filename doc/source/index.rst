@@ -18,7 +18,8 @@ Contents:
     building_bundles/index
     about/index
     cli/index
-    warehouse/index    
+    warehouse/index   
+    design/index 
 
 Indices and tables
 ==================
@@ -26,4 +27,4 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-
+* :ref:`doctest`

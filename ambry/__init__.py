@@ -21,7 +21,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from _meta import *
 
 from ambry.util import memoize
-import ambry.library as _l
+
 
 
 @memoize
@@ -33,5 +33,6 @@ def config():
 
 @memoize
 def library(name='default'):
+    import ambry.library as _l
     """Return the default library for this installation."""
     return _l.new_library(config().library(name))

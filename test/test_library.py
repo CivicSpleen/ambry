@@ -157,7 +157,7 @@ class Test(TestBase):
     def test_simple_install(self):
 
         from ambry.orm import Dataset, Partition, Table, Column, ColumnStat, Code, Config, File
-        from ambry.dbexceptions import NotFoundError
+        from ambry.orm import NotFoundError
 
         l = self.get_library()
         ldsq = l.database.session.query
@@ -765,13 +765,9 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         l = self.get_library()
 
-        print l.info
-
         self.assertEqual(0, len(l.database.session.query(Code).all()))
 
         r = l.put_bundle(self.bundle)
-
-        print self.bundle.database.dsn
 
         b = l.bundle(self.bundle.identity.vid)
 

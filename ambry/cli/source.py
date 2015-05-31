@@ -6,10 +6,10 @@ included in this distribution as LICENSE.txt
 """
 
 import shutil
+import os
 
 from ..cli import prt, fatal, warn
 from ..cli import load_bundle, _print_bundle_list
-import os
 
 
 def source_command(args, rc):
@@ -168,7 +168,7 @@ def source_get(args, l, st, rc):
     from ..orm import Dataset
 
     for term in args.terms:
-        from ..dbexceptions import ConflictError
+        from ambry.orm import ConflictError
 
         if term.startswith('http'):
             prt("Loading bundle from {}".format(term))
@@ -228,8 +228,8 @@ def source_new(args, l, st, rc):
     from ..identity import NumberServer
     from requests.exceptions import HTTPError
     from ..bundle.bundle import BuildBundle
-    from ambry.bundle.meta import Top
-    from ..dbexceptions import ConflictError
+    from ambry.orm.meta import Top
+    from ambry.orm import ConflictError
 
     d = vars(args)
     d['revision'] = 1
@@ -255,10 +255,7 @@ def source_new(args, l, st, rc):
             d['id'] = str(ns.next())
             prt("Got number from number server: {}".format(d['id']))
         except HTTPError as e:
-            warn(
-                "Failed to get number from number server. Config = {}: {}".format(
-                    nsconfig,
-                    e.message))
+            warn("Failed to get number from number server. Config = {}: {}".format( nsconfig,e.message))
             warn("Using self-generated number. "
                  "There is no problem with this, but they are longer than centrally generated numbers.")
             d['id'] = str(DatasetNumber())
@@ -338,7 +335,6 @@ def source_new(args, l, st, rc):
     # shutil.copy(p('README.md'),bundle_dir)
     shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta'))
     shutil.copy(p('documentation.md'), os.path.join(bundle_dir, 'meta'))
-    shutil.copy(p('README.md.template'), os.path.join(bundle_dir, 'meta'))
 
     try:
         l.sync_source_dir(b.identity, bundle_dir)

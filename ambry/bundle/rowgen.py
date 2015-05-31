@@ -30,6 +30,13 @@ class RowGenerator(object):
                  header_mangler=None):
         """
 
+        :param file:
+        :param data_start_line: The line number ( zero indexed ) that is the first line of data
+        :param data_end_line:  The line number of the last line of data.
+        :param header_lines: A list of lines that are combined to be the header.
+        :param header_comment_lines: A list of lines that are combined into a header comment
+        :param header_mangler: A Function that transforms the header.
+        :return:
         """
 
         self.file_name = file
@@ -69,7 +76,7 @@ class RowGenerator(object):
     @property
     def raw_row_gen(self):
         """Generate all rows from the underlying source, with no consideration
-        for wether the row is data, header or comment """
+        for whether the row is data, header or comment """
         if self._raw_row_gen is None:
             self._raw_row_gen = self._yield_rows()
             self.line_number = 0
@@ -91,6 +98,7 @@ class RowGenerator(object):
     @property
     def unmangled_header(self):
         if not self._unmangled_header:
+
             self.get_header()
 
         return self._unmangled_header
@@ -105,6 +113,7 @@ class RowGenerator(object):
         self.reset()
         row = None
 
+        i = 0
         while self.line_number < self.data_start_line:
 
             row = self.raw_row_gen.next()
@@ -114,6 +123,11 @@ class RowGenerator(object):
 
             if self.line_number in self.header_comment_lines:
                 header_comments.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
+
+            i += 1
+
+            assert i < 8 or  self.line_number, 'The _yield_rows() method must increment self.line_number'
+
 
         self.put_row = row
 
@@ -152,6 +166,9 @@ class RowGenerator(object):
         if self.header_mangler:
             self._unmangled_header = list(self.header)
             self._header = self.header_mangler(self.header)
+        else:
+            self._unmangled_header = self._header = self.header
+
 
         return self._header
 
@@ -247,6 +264,63 @@ class ExcelRowGenerator(RowGenerator):
         self.segment = segment
         self.workbook = None
 
+    def make_datetime_caster(self):
+        """Make a date caster function that can convert dates from this workbook. This is required
+        because dates in Excel workbooks are stupid. """
+
+        from xlrd import open_workbook
+
+        wb = open_workbook(self.file_name)
+        datemode = wb.datemode
+
+
+        def excel_date(v):
+            from xlrd import xldate_as_tuple
+            import datetime
+
+            try:
+                year, month, day, hour, minute, second = xldate_as_tuple(float(v), datemode)
+                return datetime.datetime(year, month, day, hour, minute, second)
+            except ValueError:
+                # Could be actually a string, not a float. Because Excel dates are completel broken.
+                from  dateutil import parser
+                try:
+                    return parser.parse(v)
+                except ValueError:
+                    return None
+
+
+        return excel_date
+
+
+    def make_date_caster(self):
+        """Make a date caster function that can convert dates from this workbook. This is required
+        because dates in Excel workbooks are stupid. """
+
+        from xlrd import open_workbook
+
+        wb = open_workbook(self.file_name)
+        datemode = wb.datemode
+
+        def excel_date(v):
+            from xlrd import xldate_as_tuple
+            import datetime
+
+            try:
+
+                year, month, day, hour, minute, second = xldate_as_tuple(float(v), datemode)
+                return datetime.date(year, month, day)
+            except ValueError:
+                # Could be actually a string, not a float. Because Excel dates are completel broken.
+                from  dateutil import parser
+
+                try:
+                    return parser.parse(v).date()
+                except ValueError:
+                    return None
+
+        return excel_date
+
     def _yield_rows(self):
         from xlrd import open_workbook
         from xlrd.biffh import XLRDError
@@ -262,6 +336,7 @@ class ExcelRowGenerator(RowGenerator):
             wb = open_workbook(self.file_name)
 
         self.workbook = wb
+
 
         s = wb.sheets()[self.segment if self.segment else 0]
 
@@ -284,6 +359,32 @@ class ExcelRowGenerator(RowGenerator):
                 values.append(s.cell(row_num, col).value)
 
         return values
+
+class GeneratorRowGenerator(RowGenerator):
+    """A RowGenerator that is constructed on a function that returns a raw row generator function
+
+    The first line generated must be the header
+    """
+
+    def __init__(self, raw_row_gen_f, header_mangler=None):
+        """
+
+        :param raw_row_gen_f: A raw row generator function
+        :param header_mangler: A function to alter the list of header values
+        :return:
+        """
+
+        self.rrg_f = raw_row_gen_f
+
+        super(GeneratorRowGenerator, self).__init__(None, data_start_line=2, data_end_line=None, header_lines=[0],
+                                                header_comment_lines=None, header_mangler=header_mangler)
+
+    def _yield_rows(self):
+
+        for i, line in enumerate(self.rrg_f()):
+            self.line_number = i
+            yield line
+
 
 
 class RowSpecIntuiter(object):
@@ -347,7 +448,9 @@ class RowSpecIntuiter(object):
             is_header_comment_line(i,row)
         """
 
+
         self.row_gen.reset()
+
         for row in self.row_gen.raw_row_gen:
 
             i = self.row_gen.line_number
@@ -369,6 +472,7 @@ class RowSpecIntuiter(object):
 
             elif self.data_start_line and not self.data_end_line:
                 if not is_dl:
+                    print 'END DL', is_dl, i, row
                     self.data_end_line = i
 
         return dict(

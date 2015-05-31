@@ -68,7 +68,7 @@ def _on_connect_geo(dbapi_con, con_record):
     """ISSUE some Sqlite pragmas when the connection is created."""
     from ..util import RedirectStdStreams
     from sqlite import _on_connect_bundle as ocb
-    from ..dbexceptions import DatabaseError
+    from ambry.orm import DatabaseError
     from pysqlite2.dbapi2 import OperationalError
 
     ocb(dbapi_con, con_record)

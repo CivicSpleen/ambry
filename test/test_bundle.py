@@ -237,7 +237,7 @@ class Test(TestBase):
             self.assertEquals(int(m.hexdigest()[:14], 16), table.row_hash(row))
 
     def test_partition(self):
-        from ambry.dbexceptions import ConflictError
+        from ambry.orm import ConflictError
         from ambry.identity import PartitionNameQuery
 
         self.bundle.clean()
