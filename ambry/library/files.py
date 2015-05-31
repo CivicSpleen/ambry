@@ -132,6 +132,10 @@ class Files(object):
 
         return self
 
+    def group(self, v):
+        self._check_query()
+        self._query = self._query.filter(File.group == v)
+        return self
 
     def source_url(self, v):
         self._check_query()
