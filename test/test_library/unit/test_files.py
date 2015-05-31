@@ -217,26 +217,16 @@ class FilesTest(unittest.TestCase):
         self.assertEquals(new_f.source_url, 'http://example.com')
 
     # .merge tests
-    @unittest.skip('Where is Files().merge method? And why it is used in files.py?')
-    def test_adds_given_file_to_collection(self):
-        query = self.sqlite_db.session.query(File)
-        all_files = Files(self.sqlite_db, query=query)
-
-        f1 = FileFactory()
-        all_files.merge(f1, commit='collect')
-        self.assertEquals(len(all_files._collection), 1)
-        self.assertIn(f1.insertable_dict, all_files._collection)
-
-    @unittest.skip('Where is Files().merge method? And why it is used in files.py?')
     def test_saves_given_file_to_db(self):
         query = self.sqlite_db.session.query(File)
         all_files = Files(self.sqlite_db, query=query)
-
-        self.assertEquals(len(all_files._collection), 0)
-        f1 = File(oid=1, path='/path1')
+        f1 = File(
+            oid=1, path='/path1',
+            type=File.TYPE.PARTITION, source_url='http://example.com')
         all_files.merge(f1)
+        self.sqlite_db.session.commit()
         self.assertEquals(len(all_files.all), 1)
-        self.assertIn(f1, all_files.all)
+        self.assertEquals(f1.oid, all_files.all[0].oid)
 
     # .install_bundle tests
     def test_saves_bundle_to_db(self):
@@ -266,27 +256,11 @@ class FilesTest(unittest.TestCase):
         self.assertEquals(new_f.type_, installed.type_)
 
     # .install_partition tests
-    @unittest.skip('What is partition.database?')
-    def test_saves_partition_to_db(self):
-
-        partition1 = PartitionFactory()
-        cache = fudge.Fake().has_attr(repo_id='1')
-
-        query = self.sqlite_db.session.query(File)
-        all_files = Files(self.sqlite_db, query=query)
-        new_f = all_files.install_partition_file(partition1, cache)
-
-        installed = all_files.all[0]
-        self.assertEquals(installed.path, partition1.database.path)
-        self.assertEquals(installed.group, cache.repo_id)
-        self.assertEquals(installed.ref, partition1.identity.vid)
-        self.assertEquals(installed.type_, Files.TYPE.PARTITION)
-        self.assertEquals(installed.data, {})
-        self.assertEquals(installed.source_url, None)
-        self.assertEquals(new_f, installed)
+    # TODO: do not use PartitionFactory here. It requres ambry.partition.BasePartition
+    # subclass (SqlitePartition for ex.).
 
     # .install_bundle_source tests
-    @unittest.skip('source can not be null.')
+    @unittest.skip('Is `source` unused parameter?')
     def test_saves_bundle_source_to_db(self):
         identity = fudge.Fake('identity').has_attr(vid='1')
         bundle = fudge.Fake('bundle').has_attr(
@@ -500,12 +474,3 @@ class FilesTest(unittest.TestCase):
         source = StringIO('')
         with self.assertRaises(ValueError):
             f1._process_source_content(path, source=source)
-
-
-def suite():
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(FilesTest))
-    return suite
-
-if __name__ == '__main__':
-    unittest.TextTestRunner().run(suite())

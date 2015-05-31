@@ -137,24 +137,6 @@ class DocCacheTest(unittest.TestCase):
         dc.remove([1, 2], reverse=True)
         self.assertNotIn(key, dc._cache)
 
-    # .compiled_times tests
-    @unittest.skip('Is times deque deprecated?')
-    def test_returns_times_sorted_by_time(self):
-        dc = DocCache(self.lib)
-
-        dc.cache(sorted, [1, 2], reverse=True)
-        dc.cache(sorted, [1, 2], reverse=True)
-        dc.cache(sorted, [1, 2, 3], reverse=False)
-
-        dc.times[0].time = 0.1
-        dc.times[1].time = 0.5
-        dc.times[2].time = 0.3
-
-        ret = dc.compiled_times()
-        self.assertEquals(ret[0].time, 0.5)
-        self.assertEquals(ret[1].time, 0.3)
-        self.assertEquals(ret[2].time, 0.1)
-
     # .library_info tests
     def test_adds_library_info_to_the_cache(self):
         dc = DocCache(self.lib)

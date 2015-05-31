@@ -916,7 +916,7 @@ class LibraryDbTest(unittest.TestCase):
     # .tables tests
     @unittest.skip(
         '.tables() method raises TypeError: list indices must be integers exception and seems unused.')
-    def test_dict_with_all_tables(self):
+    def test_returns_dict_with_all_tables(self):
 
         # prepare state
         ds1 = DatasetFactory()
