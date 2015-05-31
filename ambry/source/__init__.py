@@ -99,11 +99,7 @@ class SourceTree(object):
 
         # The [:-3] converts a vid to an id: we don't want version numbers
         # here.
-        all_sources = {
-            f.ref[
-                :-
-                3]: f for f in l.files.query.type(
-                l.files.TYPE.SOURCE).all}
+        all_sources = {f.ref[:-3]: f for f in l.files.query.type(l.files.TYPE.SOURCE).all}
 
         def deps_for_sources(sources):
             """Get dependencies for a set of sources, which may be a subset of
@@ -526,11 +522,7 @@ class SourceTree(object):
 
         b.update_configuration()
 
-        p = lambda x: os.path.join(
-            os.path.dirname(__file__),
-            '..',
-            'support',
-            x)
+        p = lambda x: os.path.join(os.path.dirname(__file__),'..','support',x)
         shutil.copy(p('bundle.py'), bundle_dir)
 
         shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta'))
