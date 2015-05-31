@@ -30,7 +30,8 @@ def get_version(source=os.path.abspath('../../ambry/_meta.py')):
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('../../ambry'))
+sys.path.insert(0, os.path.abspath('../..'))
+
 
 # -- General configuration ------------------------------------------------
 
@@ -61,7 +62,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Ambry'
-copyright = u'2014, Eric Busboom'
+copyright = u'2015, Civic Knowledge'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -322,8 +323,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'ambry', u'Ambry Documentation',
-     [u'Eric Busboom'], 1)
+    ('index', 'ambry', u'Ambry Documentation', [u'Eric Busboom'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -337,8 +337,7 @@ man_pages = [
 # dir menu entry, description, category)
 texinfo_documents = [
     ('index', 'Ambry', u'Ambry Documentation',
-     u'Eric Busboom', 'Ambry', 'One line description of project.',
-     'Miscellaneous'),
+     u'Eric Busboom', 'Ambry', 'One line description of project.', 'Miscellaneous'),
 ]
 
 # Documents to append as an appendix to all manuals.

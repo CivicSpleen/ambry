@@ -386,7 +386,7 @@ class Test(TestBase):
 
     def test_bundle_build(self):
 
-        from ambry.dbexceptions import ConflictError
+        from ambry.orm import ConflictError
 
         bundle = Bundle()
 

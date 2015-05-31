@@ -7,8 +7,8 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 import logging
-
 import os
+
 from ..filesystem import BundleFilesystem
 from ..schema import Schema
 from ..partitions import Partitions
@@ -57,7 +57,8 @@ class Bundle(object):
     def close(self):
         """Close the bundle database and all partition databases, committing
         and closing any sessions and connections."""
-        from ..dbexceptions import NotFoundError, DatabaseMissingError
+        from ambry.orm import DatabaseMissingError
+        from ambry.orm import NotFoundError
 
         self.partitions.close()
 
@@ -131,7 +132,7 @@ class Bundle(object):
     @property
     def database(self):
         """The database object for the bundle."""
-        from ..dbexceptions import DatabaseMissingError
+        from ambry.orm import DatabaseMissingError
 
         if self._database is None:
             raise DatabaseMissingError('Database has not been set')
@@ -406,7 +407,7 @@ class DbBundleBase(Bundle):
     @property
     @memoize
     def metadata(self):
-        from ..bundle.meta import Top
+        from ambry.orm.meta import Top
 
         ds = self.get_dataset()
 
@@ -568,10 +569,9 @@ class LibraryDbBundle(DbBundleBase):
 
     def get_dataset(self):
         """Return the dataset."""
-        from sqlalchemy.orm import noload
         from sqlalchemy.orm.exc import NoResultFound
         from sqlalchemy.exc import OperationalError
-        from ..dbexceptions import NotFoundError
+        from ambry.orm import NotFoundError
 
         from ambry.orm import Dataset
 
@@ -579,7 +579,7 @@ class LibraryDbBundle(DbBundleBase):
             return self.database.session.query(Dataset).filter(Dataset.vid == self._dataset_id).one()
 
         except NoResultFound:
-            from ..dbexceptions import NotFoundError
+            from ambry.orm import NotFoundError
 
             raise NotFoundError("Failed to find dataset for id {} in {} ".format(self._dataset_id, self.database.dsn))
 
@@ -661,7 +661,7 @@ class BuildBundle(Bundle):
         """Return the dataset."""
         from sqlalchemy.exc import OperationalError
         from sqlalchemy.orm.exc import NoResultFound
-        from ..dbexceptions import NotFoundError
+        from ambry.orm import NotFoundError
 
         from ambry.orm import Dataset
 
@@ -720,7 +720,7 @@ class BuildBundle(Bundle):
     @property
     @memoize
     def metadata(self):
-        from ambry.bundle.meta import Top
+        from ambry.orm.meta import Top
 
         t = Top(path=self.bundle_dir)
         t.load_all()
@@ -899,7 +899,8 @@ class BuildBundle(Bundle):
                 self.database.rewrite_dataset()
 
     def update_source(self):
-        from ..dbexceptions import NotFoundError
+        from ambry.orm import NotFoundError
+
         if not bool(self.metadata.contact_source.creator):
 
             source_domain = self.identity.source
@@ -1260,7 +1261,7 @@ class BuildBundle(Bundle):
                 self.schema.read_codes()
 
     def prepare(self):
-        from ..dbexceptions import NotFoundError
+        from ambry.orm import NotFoundError
 
         # with self.session: # This will create the database if it doesn't
         # exist, but it will be empty
@@ -1323,7 +1324,6 @@ class BuildBundle(Bundle):
 
     def post_prepare(self):
         """Set a marker in the database that it is already prepared."""
-        from datetime import datetime
         from ..library.database import ROOT_CONFIG_NAME_V
 
         with self.session:
@@ -1423,7 +1423,6 @@ class BuildBundle(Bundle):
         """After the build, update the configuration with the time required for
         the build, then save the schema back to the tables, if it was revised
         during the build."""
-        from datetime import datetime
         from time import time
 
         with self.session:
@@ -1634,7 +1633,8 @@ class BuildBundle(Bundle):
 
     @property
     def build_state(self):
-        from ..dbexceptions import DatabaseMissingError, NotFoundError
+        from ambry.orm import DatabaseMissingError
+        from ambry.orm import NotFoundError
 
         try:
             c = self.get_value('process', 'state')
@@ -1782,7 +1782,6 @@ class BuildBundle(Bundle):
             raise e
 
     def post_update(self):
-        from datetime import datetime
         from time import time
 
         with self.session:
@@ -1874,7 +1873,6 @@ class BuildBundle(Bundle):
         return True
 
     def post_install(self):
-        from datetime import datetime
 
         self.set_build_state('installed')
 

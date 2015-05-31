@@ -88,7 +88,7 @@ def root_parser(cmd):
 def root_command(args, rc):
     from ..library import new_library
     from . import global_logger
-    from ambry.dbexceptions import DatabaseError
+    from ambry.orm import DatabaseError
 
     try:
         l = new_library(rc.library(args.library_name))
@@ -190,7 +190,8 @@ def root_list(args, l, rc):
 
 def root_info(args, l, rc):
     from ..cli import _print_info, err, fatal, prt
-    from ..dbexceptions import NotFoundError, ConfigurationError
+    from ..dbexceptions import ConfigurationError
+    from ambry.orm import NotFoundError
     import ambry
 
     locations = filter(bool, [args.library, args.remote, args.source])
@@ -314,7 +315,7 @@ def root_sync(args, l, config):
 
 def root_search(args, l, config):
     # This will fetch the data, but the return values aren't quite right
-    from ambry.dbexceptions import NotFoundError
+    from ambry.orm import NotFoundError
 
     term = ' '.join(args.term)
 

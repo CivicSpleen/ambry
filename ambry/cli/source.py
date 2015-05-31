@@ -6,10 +6,10 @@ included in this distribution as LICENSE.txt
 """
 
 import shutil
+import os
 
 from ..cli import prt, fatal, warn
 from ..cli import load_bundle, _print_bundle_list
-import os
 
 
 def source_command(args, rc):
@@ -168,7 +168,7 @@ def source_get(args, l, st, rc):
     from ..orm import Dataset
 
     for term in args.terms:
-        from ..dbexceptions import ConflictError
+        from ambry.orm import ConflictError
 
         if term.startswith('http'):
             prt("Loading bundle from {}".format(term))
@@ -228,8 +228,8 @@ def source_new(args, l, st, rc):
     from ..identity import NumberServer
     from requests.exceptions import HTTPError
     from ..bundle.bundle import BuildBundle
-    from ambry.bundle.meta import Top
-    from ..dbexceptions import ConflictError
+    from ambry.orm.meta import Top
+    from ambry.orm import ConflictError
 
     d = vars(args)
     d['revision'] = 1

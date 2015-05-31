@@ -7,7 +7,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from collections import OrderedDict, defaultdict
 
 from ambry.dbexceptions import ConfigurationError
-from ambry.orm import Column
+from ambry.orm import Column, NotFoundError
 from util import memoize
 
 PROTO_TERMS = 'civicknowledge.com-proto-proto_terms'

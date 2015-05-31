@@ -7,10 +7,11 @@ import os
 import shutil
 import tempfile
 import unittest
+
 import yaml
 
 from test_base import TestBase
-from ambry.bundle.meta import Top
+from ambry.orm.meta import Top
 
 
 class Test(TestBase):
@@ -87,10 +88,6 @@ names:
     name: name
     vid: vid
     vname: vname
-nonterm:
-    a: 1
-    b: 2
-    c: 3
 process: {}
 sources:
     google:
@@ -111,7 +108,7 @@ views: {}
         pass
 
     def test_basic(self):
-        from ambry.bundle.meta import Metadata, ScalarTerm, TypedDictGroup, \
+        from ambry.orm.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
             VarDictGroup, DictGroup, DictTerm, ListGroup
         from ambry.util import AttrDict
 
@@ -131,7 +128,7 @@ views: {}
         class TestTDGroup(TypedDictGroup):
             _proto = TestDictTerm()
 
-        class TestTop(Metadata):
+        class TestTop(StructuredPropertyTree):
             group = TestGroup()
             tdgroup = TestTDGroup()
             lgroup = TestListGroup()
@@ -166,6 +163,10 @@ views: {}
         self.assertEquals(['dterm1', 'unset_term', 'dterm2'], tt.group.dterm.keys())
         self.assertEquals(['dterm1', '', 'dterm2'], tt.group.dterm.values())
 
+        tt.group = dict(term='x',term2='y')
+        self.assertEquals('x',tt.group.term)
+        self.assertEquals('y',tt.group.term2)
+
         #
         # List Group
 
@@ -191,6 +192,7 @@ views: {}
         tt.vdgroup.k1['v1'] = 'v1'
         tt.vdgroup.k1.v2 = 'v2'
 
+
     def test_metadata(self):
         d = dict(
             about=dict(
@@ -211,24 +213,8 @@ views: {}
             build=dict(
                 foo='foo',
                 bar='bar'
-            ),
-            partitions=[
-                dict(
-                    name='foo',
-                    grain='bar'
-                ),
-                dict(
-                    time='foo',
-                    space='bar'
-                ),
-                dict(
-                    name='name',
-                    time='time',
-                    space='space',
-                    grain='grain',
-                    segment=0,
-                ),
-            ]
+            )
+
         )
 
         top = Top(d)
@@ -238,15 +224,12 @@ views: {}
         self.assertIn('creator', top.contact_bundle.keys())
         self.assertNotIn('url', dict(top.contact_bundle.creator))
         self.assertEqual('Email', top.contact_bundle.creator.email)
-        self.assertIn('name', top.partitions[0])
-        self.assertIn('space', top.partitions[2])
-        self.assertNotIn('space', top.partitions[0])
-        self.assertEquals('foo', top.partitions[0]['name'])
+
         top.sources.foo.url = 'url'
         top.sources.bar.description = 'description'
 
     def test_metadata_TypedDictGroup(self):
-        from ambry.util.meta import Metadata, ScalarTerm, TypedDictGroup, \
+        from ambry.orm.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
             DictTerm
 
         class TestDictTerm(DictTerm):
@@ -257,7 +240,7 @@ views: {}
         class TestTDGroup(TypedDictGroup):
             _proto = TestDictTerm()
 
-        class TestTop(Metadata):
+        class TestTop(StructuredPropertyTree):
             group = TestTDGroup()
 
         config_str = """
@@ -276,6 +259,7 @@ group:
         self.assertEquals('dterm1', top.group.item1.dterm1)
         self.assertEquals('dterm1', top.group.item1['dterm1'])
 
+    @unittest.skip("demonstrating skipping")
     def test_rows(self):
         t1 = Top(yaml.load(self.yaml_config))
 
@@ -293,6 +277,7 @@ group:
 
         self.assertEquals(self.yaml_config.strip(' \n'), t2.dump().strip(' \n'))
 
+    @unittest.skip("")
     def test_read_write(self):
         d = tempfile.mkdtemp('metadata-test')
 
@@ -366,42 +351,7 @@ group:
 
         self.assertEquals('v2', t1.identity.variation)
 
-    def test_forced_format(self):
-        yaml_config = """
-external_documentation:
-    foodoc1:
-        description: description
-        title: title1
-        url: url1
-    foodoc2:
-        description: description2
-    foodoc3:
-        title: title3
-"""
 
-        Top(yaml.load(yaml_config))
-
-        yaml_config = """
-partitions:
--   name: source-dataset-subset-variation-tthree
-    table: tthree
--   format: geo
-    name: source-dataset-subset-variation-geot1-geo
-    table: geot1
--   format: geo
-    name: source-dataset-subset-variation-geot2-geo
-    table: geot2
--   grain: missing
-    name: source-dataset-subset-variation-tone-missing
-    table: tone
--   name: source-dataset-subset-variation-tone
-    table: tone
--   format: csv
-    name: source-dataset-subset-variation-csv-csv-1
-    segment: 1
-    table: csv """
-
-        Top(yaml.load(yaml_config))
 
     def test_links(self):
         t = Top(yaml.load(self.yaml_config))
@@ -438,10 +388,7 @@ about:
 
         self.assertIn(('about', 'foo', None), t1.errors)
 
-        t1 = Top(yaml.load(yaml_config), synonyms={'about.foo': 'about.summary'})
 
-        self.assertEquals('bar', t1.about.summary)
-        self.assertNotIn(('about', 'foo', None), t1.errors)
 
     def test_list(self):
         t = Top(yaml.load(self.yaml_config))

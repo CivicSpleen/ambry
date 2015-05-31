@@ -131,7 +131,7 @@ class Test(TestBase):
     """
 
     def test_metadata(self):
-        from ambry.bundle.meta import Metadata, ScalarTerm, TypedDictGroup, \
+        from ambry.orm.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
             VarDictGroup, DictGroup, DictTerm, ListGroup
 
         import yaml
@@ -153,7 +153,7 @@ class Test(TestBase):
         class TestTDGroup(TypedDictGroup):
             _proto = TestDictTerm()
 
-        class TestTop(Metadata):
+        class TestTop(StructuredPropertyTree):
             group = TestGroup()
             tdgroup = TestTDGroup()
             lgroup = TestListGroup()
@@ -296,7 +296,7 @@ class Test(TestBase):
         # print t3.dump()
 
     def test_metadata_TypedDictGroup(self):
-        from ambry.util.meta import Metadata, ScalarTerm, TypedDictGroup, \
+        from ambry.orm.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
             DictTerm
 
         import yaml
@@ -309,7 +309,7 @@ class Test(TestBase):
         class TestTDGroup(TypedDictGroup):
             _proto = TestDictTerm()
 
-        class TestTop(Metadata):
+        class TestTop(StructuredPropertyTree):
             group = TestTDGroup()
 
         config_str = """

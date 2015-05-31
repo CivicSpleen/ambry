@@ -15,8 +15,8 @@ import logging
 from collections import OrderedDict, defaultdict
 
 import yaml
-from flo import *  # Legacy; should convert clients to direct import
 
+from flo import *  # Legacy; should convert clients to direct import
 
 logger_init = set()
 
@@ -640,7 +640,7 @@ class AttrDict(OrderedDict):
         from StringIO import StringIO
         from ..orm import MutationList, MutationDict
         from yaml.representer import RepresenterError
-        from meta import _ScalarTermS, _ScalarTermU
+        from ambry.orm.meta import _ScalarTermS, _ScalarTermU
 
         yaml.representer.SafeRepresenter.add_representer(
             MapView, yaml.representer.SafeRepresenter.represent_dict)
@@ -702,7 +702,8 @@ class AttrDict(OrderedDict):
 
 
 class MapView(collections.MutableMapping):
-    """A group that holds key/value pairs."""
+    """A map that provides a limited view on an underlying, inner map. Iterating over the
+    view retrns only the keys specified in the keys argument. """
 
     _inner = None
     _keys = None

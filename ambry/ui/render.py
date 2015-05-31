@@ -100,7 +100,7 @@ def table_path(b, t):
 
 
 def proto_vid_path(pvid):
-    from ambry.dbexceptions import NotFoundError
+    from ambry.orm import NotFoundError
 
     try:
         b, t, c = deref_tc_ref(pvid)
@@ -114,7 +114,7 @@ def proto_vid_path(pvid):
 def deref_tc_ref(ref):
     """Given a column or table, vid or id, return the object."""
     from ambry.identity import ObjectNumber
-    from ambry.dbexceptions import NotFoundError
+    from ambry.orm import NotFoundError
 
     on = ObjectNumber.parse(ref)
 
@@ -158,7 +158,7 @@ def deref_tc_ref(ref):
 def tc_obj(ref):
     """Return an object for a table or column."""
     from . import renderer
-    from ambry.dbexceptions import NotFoundError
+    from ambry.orm import NotFoundError
 
     dc = renderer().doc_cache
 
@@ -669,7 +669,7 @@ class Renderer(object):
 
     def bundle_search(self,  terms):
         """Incremental search, search as you type."""
-        from ..dbexceptions import NotFoundError
+        from ambry.orm import NotFoundError
 
         from geoid.civick import GVid
 

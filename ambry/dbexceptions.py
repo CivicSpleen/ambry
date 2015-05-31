@@ -50,16 +50,6 @@ class FilesystemError(BundleError):
     """Missing file, etc."""
 
 
-class NotFoundError(BundleError):
-
-    """Failed to find resource."""
-
-
-class MultipleFoundError(BundleError):
-
-    """Found multiple when only one was expected."""
-
-
 class DependencyError(Exception):
 
     """Required bundle dependencies not satisfied."""
@@ -85,11 +75,6 @@ class QueryError(BundleError):
     """Error while executing a query."""
 
 
-class ConflictError(BundleError):
-
-    """Conflict with existing resource."""
-
-
 class SyncError(BundleError):
 
     """Could not sync a resource."""
@@ -105,17 +90,6 @@ class FatalError(BundleError):
 
     """A Fatal Bundle Error, generated in testing instead of a system exit."""
 
-
-class DatabaseError(BundleError):
-
-    """A general database error."""
-
-
-class DatabaseMissingError(DatabaseError):
-
-    """A general database error."""
-
-
 class GeoError(Exception):
 
     """General error doing geographic processing."""
@@ -124,3 +98,6 @@ class GeoError(Exception):
 class BuildError(Exception):
 
     """General error while building a bundle."""
+
+
+

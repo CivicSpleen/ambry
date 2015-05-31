@@ -1,12 +1,20 @@
 
-
-from test_base import  TestBase
-from ambry.orm import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat
+import unittest
+import tempfile
+import uuid
+from ambry.orm import Column
+from ambry.orm import Partition
+from ambry.orm import Table
+from ambry.orm import Dataset
+from ambry.orm import Config
+from ambry.orm import File
+from ambry.orm import Code
+from ambry.orm import ColumnStat
 from sqlalchemy.orm import sessionmaker
 from ambry.identity import DatasetNumber, PartitionNumber
 from sqlalchemy.exc import IntegrityError
 
-class Test(TestBase):
+class Test(unittest.TestCase):
 
 
     def setUp(self):
@@ -14,7 +22,19 @@ class Test(TestBase):
 
         super(Test,self).setUp()
 
+        self.uuid = str(uuid.uuid4())
+        self.tmpdir = tempfile.mkdtemp(self.uuid)
+
+        self.delete_tmpdir = True
+
         self.dsn = "sqlite:///{}/test.db".format(self.tmpdir)
+
+        # Make an array of dataset numbers, so we can refer to them with a single integer
+        self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
+
+    def create_db(self):
+        """Create a database outside of the orm.database.Database object"""
+        from sqlalchemy import create_engine
 
         self.engine = create_engine(self.dsn, echo=False)
 
@@ -28,7 +48,7 @@ class Test(TestBase):
 
         self.delete_tmpdir = False
 
-        self.dn = [ str(DatasetNumber(x, 5)) for x in range(1,5)]
+
 
     def create_tables(self):
         tables = [Dataset,Config,Table,Column,File,Partition,Code,ColumnStat]
@@ -37,7 +57,7 @@ class Test(TestBase):
             table.__table__.create(bind=self.engine)
 
     def new_dataset(self, n):
-        return Dataset(vid=self.dn[n], source='source', dataset='dataset', creator='eric@busboom.org' )
+        return Dataset(vid=self.dn[n], source='source', dataset='dataset' )
 
     def new_table(self, ds, n):
         t =  Table(ds, sequence_id = n, name = 'table{}'.format(n))
@@ -55,9 +75,62 @@ class Test(TestBase):
 
         t_vids = sorted(t.id_ for t in ds.tables)
 
-        return Partition(ds, sequence_id=n, t_id = t_vids[n])
+        return Partition(ds, sequence_id=n, t_id=t_vids[n])
 
-    def test_basic(self):
+    def dump_datasets(self, db):
+        import sys
+        from subprocess import check_output
+
+        print check_output('sqlite3 {} "SELECT * FROM datasets" '.format(db.path), stderr=sys.stderr, shell=True)
+
+    def test_dataset_basic(self):
+        """Basic operations on datasets"""
+
+        from ambry.orm.database import Database
+        from ambry.orm import ConflictError
+        from ambry.identity import DatasetNumber
+
+        db = Database(self.dsn)
+        db.open()
+
+        ##
+        ## Creating and conflicts
+        ##
+        db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
+        db.new_dataset(vid=self.dn[1], source='source', dataset='dataset')
+
+        with self.assertRaises(ConflictError):
+            db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
+
+        dn = DatasetNumber(100)
+
+        ##
+        ## datasets() gets datasets, and latest give id instead of vid
+        ##
+        db.new_dataset(vid=str(dn.rev(5)), source='a', dataset='dataset')
+        db.new_dataset(vid=str(dn.rev(1)), source='a', dataset='dataset')
+        db.new_dataset(vid=str(dn.rev(3)), source='a', dataset='dataset')
+        db.new_dataset(vid=str(dn.rev(4)), source='a', dataset='dataset')
+
+        ds = db.dataset(str(dn.rev(5)))
+        self.assertEquals(str(dn.rev(5)), ds.vid)
+
+        ds = db.dataset(str(dn.rev(3)))
+        self.assertEquals(str(dn.rev(3)), ds.vid)
+
+        ds = db.dataset(str(dn.rev(None)))
+        self.assertEquals(str(dn.rev(5)), ds.vid)
+
+        db.new_dataset(vid=str(dn.rev(6)), source='a', dataset='dataset')
+
+        ds = db.dataset(str(dn.rev(None)))
+        self.assertEquals(str(dn.rev(6)), ds.vid)
+
+        db.close()
+
+
+
+    def x_test_basic(self):
 
         self.session.add(self.new_dataset(0))
 

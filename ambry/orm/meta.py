@@ -4,7 +4,7 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ..util.meta import *
+from proptree import *
 
 
 class About(DictGroup):
@@ -172,24 +172,24 @@ class Versions(TypedDictGroup):
     _proto = VersonTerm()
 
 
-class Top(Metadata):
+class Top(StructuredPropertyTree):
     _non_term_file = 'meta/build.yaml'
 
-    about = About(file='bundle.yaml')
-    identity = Identity(file='bundle.yaml')
-    names = Names(file='bundle.yaml')
-    contact_source = Contact(file='bundle.yaml')
-    contact_bundle = Contact(file='bundle.yaml')
-    versions = Versions(file='bundle.yaml')
-    process = Process(file='bundle.yaml')
-    external_documentation = ExtDoc(file='bundle.yaml')
+    about = About()
+    identity = Identity()
+    names = Names()
+    contact_source = Contact()
+    contact_bundle = Contact()
+    versions = Versions()
+    process = Process()
+    external_documentation = ExtDoc()
 
-    sources = Sources(file='meta/build.yaml')
+    sources = Sources()
 
-    dependencies = Dependencies(file='meta/build.yaml')
-    build = Build(file='meta/build.yaml')
-    views = Views(file='meta/build.yaml')
+    dependencies = Dependencies()
+    build = Build()
+    views = Views()
 
-    documentation = Documentation(file='meta/doc.yaml')
+    documentation = Documentation()
 
-    coverage = Coverage(file='meta/coverage.yaml')
+    coverage = Coverage()

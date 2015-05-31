@@ -14,7 +14,7 @@ from ambry.dbexceptions import ConfigurationError, NotFoundError, DependencyErro
 # bundle when the bundle instantiates the logger.
 import logging
 
-from ambry.orm import Dataset
+from ambry.orm import Dataset, DatabaseError, NotFoundError, ConflictError
 from ..identity import LocationRef, Identity
 from ..util import memoize
 

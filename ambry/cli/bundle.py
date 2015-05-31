@@ -321,7 +321,7 @@ def bundle_parser(cmd):
 
 def bundle_info(args, b, st, rc):
     import textwrap
-    from ..dbexceptions import DatabaseMissingError
+    from ambry.orm import DatabaseMissingError
 
     indent = "    "
 

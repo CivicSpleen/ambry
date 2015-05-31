@@ -84,7 +84,7 @@ class SourceTree(object):
         from ..orm import Dataset
         from ..identity import Identity
         from collections import defaultdict
-        from ..dbexceptions import NotFoundError
+        from ambry.orm import NotFoundError
 
         l = self.library
 
@@ -400,11 +400,12 @@ class SourceTree(object):
         from ..source.repository import new_repository
         from ..identity import DatasetNumber, Identity
         from ..identity import NumberServer
-        from ambry.bundle.meta import Top
+        from ambry.orm.meta import Top
         from ..bundle.bundle import BuildBundle
 
         from requests.exceptions import HTTPError
-        from ..dbexceptions import ConflictError, ConfigurationError, SyncError
+        from ..dbexceptions import ConfigurationError, SyncError
+        from ambry.orm import ConflictError
         import shutil
 
         if not repo_dir:

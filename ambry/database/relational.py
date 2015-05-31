@@ -6,29 +6,16 @@ included in this distribution as LICENSE.txt
 
 """
 
-from . import DatabaseInterface  # @UnresolvedImport
-# from .inserter import ValueInserter
-# import os
-# import logging
-from ambry.util import get_logger  # , memoize
-# from ..database.inserter import SegmentedInserter, SegmentInserterFactory
+
+from ambry.util import get_logger
 from contextlib import contextmanager
 import atexit
 import weakref
-# import pdb
 
 global_logger = get_logger(__name__)
 # global_logger.setLevel(logging.DEBUG)
 
-from sqlalchemy.dialects import registry
-registry.register(
-    "spatialite",
-    "ambry.database.dialects.spatialite",
-    "SpatialiteDialect")
-registry.register(
-    "postgis",
-    "ambry.database.dialects.postgis",
-    "PostgisDialect")
+
 
 connections = dict()
 
@@ -40,11 +27,7 @@ def close_connections_at_exit():
         conn = conn_ref()
 
         if conn:
-            global_logger.debug(
-                "Closing connection {}: {}. From: {} ".format(
-                    id(conn),
-                    dsn,
-                    where))
+            global_logger.debug("Closing connection {}: {}. From: {} ".format(id(conn),dsn,where))
             conn.close()
 
         del connections[id_]
@@ -60,7 +43,7 @@ def close_all_connections():
     close_connections_at_exit()
 
 
-class RelationalDatabase(DatabaseInterface):
+class RelationalDatabase(object):
 
     """Represents a Sqlite database."""
 
@@ -225,7 +208,8 @@ class RelationalDatabase(DatabaseInterface):
                 table.drop(self.engine, checkfirst=True)
 
     def delete(self):
-        from ..dbexceptions import DatabaseMissingError
+        from ambry.orm import DatabaseMissingError
+
         try:
             self.drop()
         except DatabaseMissingError:
@@ -481,7 +465,7 @@ class RelationalDatabase(DatabaseInterface):
 
             for c in table.columns:
 
-                # HACK! Sqlalchemy seek spatialte GEOMETRY types
+                # HACK! Sqlalchemy sees spatialte GEOMETRY types
                 # as NUMERIC
 
                 if c.name == 'geometry':
@@ -621,7 +605,7 @@ class RelationalBundleDatabaseMixin(object):
         """Return the dataset."""
 
         from sqlalchemy.exc import OperationalError
-        from ..dbexceptions import NotFoundError
+        from ambry.orm import NotFoundError
 
         from ambry.orm import Dataset
 
