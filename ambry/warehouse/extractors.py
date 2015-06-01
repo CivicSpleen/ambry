@@ -50,6 +50,7 @@ class Extractor(object):
 
         self.warehouse = warehouse
         self.database = self.warehouse.database
+
         self.cache = cache
         self.force = force
         self.hash = None
@@ -60,8 +61,11 @@ class Extractor(object):
     def extract(self, table, rel_path, update_time=None):
         import time
 
-        e = ExtractEntry(False,rel_path,self.cache.path(self.mangle_path(rel_path),missing_ok=True),
-            (table,self.__class__))
+        e = ExtractEntry(False,
+                         rel_path,
+                         self.cache.path(
+                             self.mangle_path(rel_path),
+                             missing_ok=True), (table, self.__class__))
 
         force = self.force
 
@@ -85,8 +89,8 @@ class Extractor(object):
         e.extracted = True
         return e
 
-    def stream(self, table, rel_path, update_time = None):
-        return self._stream(table, rel_path, None )
+    def stream(self, table, rel_path, update_time=None):
+        return self._stream(table, rel_path, None)
 
 
 class CsvExtractor(Extractor):
@@ -101,7 +105,6 @@ class CsvExtractor(Extractor):
         return True
 
     def _extract(self, table, rel_path, metadata):
-
         import unicodecsv
 
         rel_path = self.mangle_path(rel_path)
@@ -133,7 +136,7 @@ class CsvExtractor(Extractor):
 
             for i, row in enumerate(row_gen):
                 if i == 0:
-                    w.writerow(row.keys()) # Only works on OrderedDict and RowsProxy!
+                    w.writerow(row.keys())  # Only works on OrderedDict and RowsProxy!
 
                 w.writerow(row)
 
@@ -190,7 +193,7 @@ class OgrExtractor(Extractor):
     is_geo = True
 
     def __init__(self, warehouse, cache, force=False):
-        import ogr # In the initializer b/c it is an optional dependency
+        import ogr  # In the initializer b/c it is an optional dependency
 
         super(OgrExtractor, self).__init__(warehouse, cache, force=force)
 
@@ -216,9 +219,9 @@ class OgrExtractor(Extractor):
             'FLOAT': ogr.OFTReal,
         }
 
-
     def geometry_type(self, database, table):
-        """Return the name of the most common geometry type and the coordinate
+        """
+        Return the name of the most common geometry type and the coordinate
         dimensions."""
         ce = database.connection.execute
 
