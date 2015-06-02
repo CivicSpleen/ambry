@@ -12,7 +12,8 @@ from ambry.run import get_runconfig
 from ambry.warehouse.manifest import Manifest
 from test_base import TestBase
 from ambry.util import get_logger, Constant
-from ambry.orm import Config, NotFoundError
+from ambry.orm import Config
+from ambry.orm.exc import NotFoundError
 import manifests
 
 

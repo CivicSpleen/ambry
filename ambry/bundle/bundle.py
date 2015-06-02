@@ -57,8 +57,8 @@ class Bundle(object):
     def close(self):
         """Close the bundle database and all partition databases, committing
         and closing any sessions and connections."""
-        from ambry.orm import DatabaseMissingError
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import DatabaseMissingError
+        from ambry.orm.exc import NotFoundError
 
         self.partitions.close()
 
@@ -132,7 +132,7 @@ class Bundle(object):
     @property
     def database(self):
         """The database object for the bundle."""
-        from ambry.orm import DatabaseMissingError
+        from ambry.orm.exc import DatabaseMissingError
 
         if self._database is None:
             raise DatabaseMissingError('Database has not been set')
@@ -407,7 +407,7 @@ class DbBundleBase(Bundle):
     @property
     @memoize
     def metadata(self):
-        from ambry.orm.meta import Top
+        from ambry.metadata.meta import Top
 
         ds = self.get_dataset()
 
@@ -571,7 +571,7 @@ class LibraryDbBundle(DbBundleBase):
         """Return the dataset."""
         from sqlalchemy.orm.exc import NoResultFound
         from sqlalchemy.exc import OperationalError
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import NotFoundError
 
         from ambry.orm import Dataset
 
@@ -579,7 +579,7 @@ class LibraryDbBundle(DbBundleBase):
             return self.database.session.query(Dataset).filter(Dataset.vid == self._dataset_id).one()
 
         except NoResultFound:
-            from ambry.orm import NotFoundError
+            from ambry.orm.exc import NotFoundError
 
             raise NotFoundError("Failed to find dataset for id {} in {} ".format(self._dataset_id, self.database.dsn))
 
@@ -661,7 +661,7 @@ class BuildBundle(Bundle):
         """Return the dataset."""
         from sqlalchemy.exc import OperationalError
         from sqlalchemy.orm.exc import NoResultFound
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import NotFoundError
 
         from ambry.orm import Dataset
 
@@ -720,7 +720,7 @@ class BuildBundle(Bundle):
     @property
     @memoize
     def metadata(self):
-        from ambry.orm.meta import Top
+        from ambry.metadata.meta import Top
 
         t = Top(path=self.bundle_dir)
         t.load_all()
@@ -899,7 +899,7 @@ class BuildBundle(Bundle):
                 self.database.rewrite_dataset()
 
     def update_source(self):
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import NotFoundError
 
         if not bool(self.metadata.contact_source.creator):
 
@@ -1261,7 +1261,7 @@ class BuildBundle(Bundle):
                 self.schema.read_codes()
 
     def prepare(self):
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import NotFoundError
 
         # with self.session: # This will create the database if it doesn't
         # exist, but it will be empty
@@ -1633,8 +1633,8 @@ class BuildBundle(Bundle):
 
     @property
     def build_state(self):
-        from ambry.orm import DatabaseMissingError
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import DatabaseMissingError
+        from ambry.orm.exc import NotFoundError
 
         try:
             c = self.get_value('process', 'state')

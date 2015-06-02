@@ -138,7 +138,7 @@ def get_extract(wid, tid, ct):
     """Return an extract for a table."""
 
     from os.path import basename, dirname
-    from ambry.orm import NotFoundError
+    from ambry.orm.exc import NotFoundError
     from flask import Response
 
 
@@ -167,7 +167,7 @@ def get_sample(wid, tid, ct):
     """Return an extract for a table."""
 
     # from os.path import basename, dirname
-    from ambry.orm import NotFoundError
+    from ambry.orm.exc import NotFoundError
 
     try:
         warehouse(wid).extract_table(tid, content_type='json')

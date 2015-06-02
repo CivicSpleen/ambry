@@ -52,45 +52,23 @@ class Dataset(Base):
 
     path = None  # Set by the LIbrary and other queries.
 
-    tables = relationship("Table",backref='dataset',cascade="delete, delete-orphan")
+    tables = relationship("Table",backref='dataset',cascade="save-update, delete, delete-orphan")
 
     partitions = relationship("Partition",backref='dataset',cascade="delete, delete-orphan")
 
-    configs = relationship('Config', backref='dataset', cascade="delete, delete-orphan",
-                           primaryjoin="Config.d_vid == Dataset.vid ", foreign_keys="Config.d_vid")
+    configs = relationship('Config', backref='dataset', cascade="all, delete-orphan")
 
-    files = relationship('File', backref='dataset', cascade="delete, delete-orphan",
-                         primaryjoin="File.ref == Dataset.vid ", foreign_keys="File.ref")
+    files = relationship('File', backref='dataset', cascade="all, delete-orphan")
 
-    #__table_args__ = (
-    #    UniqueConstraint('d_vid', 'd_location', name='u_vid_location'),
-    #    UniqueConstraint('d_fqname', 'd_location', name='u_fqname_location'),
-    #    UniqueConstraint('d_cache_key', 'd_location', name='u_cache_location'),
-    #)
 
-    def __init__(self, **kwargs):
-        self.id = kwargs.get("oid", kwargs.get("id", None))
-        self.vid = str(kwargs.get("vid", None))
-        # Deprecated?
-        self.location = kwargs.get("location", self.LOCATION.LIBRARY)
-        self.name = kwargs.get("name", None)
-        self.vname = kwargs.get("vname", None)
-        self.fqname = kwargs.get("fqname", None)
-        self.cache_key = kwargs.get("cache_key", None)
-        self.source = kwargs.get("source", None)
-        self.dataset = kwargs.get("dataset", None)
-        self.subset = kwargs.get("subset", None)
-        self.variation = kwargs.get("variation", None)
-        self.btime = kwargs.get("btime", None)
-        self.bspace = kwargs.get("bspace", None)
-        self.revision = kwargs.get("revision", None)
-        self.version = kwargs.get("version", None)
 
+    def __init__(self, *args, **kwargs):
+
+        super(Dataset, self).__init__(*args, **kwargs)
 
         if self.vid and not self.id:
             self.revision = ObjectNumber.parse(self.vid).revision
             self.id = str(ObjectNumber.parse(self.vid).rev(None))
-
 
         if not self.id:
             dn = DatasetNumber(None, self.revision)
@@ -119,21 +97,63 @@ class Dataset(Base):
 
         assert self.vid[0] == 'd'
 
-    def __repr__(self):
-        return """<datasets: id={} vid={} name={} source={} ds={} ss={} var={} rev={}>""".format(
-            self.id,
-            self.vid,
-            self.name,
-            self.source,
-            self.dataset,
-            self.subset,
-            self.variation,
-            self.revision)
-
     @property
     def identity(self):
         from ..identity import Identity
         return Identity.from_dict(self.dict)
+
+    @property
+    def config(self ):
+        return ConfigAccessor(self)
+
+    def table(self, ref):
+        # AFAIK, all of the columns in the relationship will get loaded if any one is accessed,
+        # so iterating over the collection only involves one SELECT.
+
+        from exc import NotFoundError
+
+        for t in self.tables:
+            if str(ref) == t.name or str(ref) == t.id or str(ref) == t.vid:
+                return t
+
+        raise NotFoundError("Failed to find table for ref '{}' in dataset '{}'".format(ref, self.name))
+
+    def add_table(self, name, add_id=False, **kwargs):
+        '''Add a table to the schema, or update it it already exists.
+
+        If updating, will only update data.
+        '''
+        from . import Table
+        from exc import NotFoundError
+
+        try:
+            table = self.table(name)
+            extant = True
+        except NotFoundError:
+            extant = False
+            table = Table(d_id = self.id, d_vid = self.vid, name = name,
+                          sequence_id = len(self.tables)+1)
+
+        # Update possibly extant data
+        table.data = dict( (table.data.items() if table.data else []) + kwargs.get('data', {}).items() )
+
+        for key, value in kwargs.items():
+
+            if not key:
+                continue
+            if key[0] != '_' and key not in ['vid', 'id', 'id_', 'd_id', 'name', 'sequence_id', 'table', 'column', 'data']:
+                setattr(table, key, value)
+
+        if add_id:
+            table.add_id_column()
+
+        if not extant:
+            self.tables.append(table)
+        else:
+            from sqlalchemy.orm import object_session
+            object_session(self).merge(table)
+
+        return table
 
     @property
     def dict(self):
@@ -161,16 +181,65 @@ class Dataset(Base):
 
         return d
 
-    def config(self,  key, group = 'config'):
-        from sqlalchemy.orm import object_session
-        s = object_session(self)
-        return (s.query(Config)
-              .filter(Config.d_vid == self.vid)
-              .filter(Config.group == group )
-              .filter(Config.key == key )
-              .one())
+    def __repr__(self):
+        return """<datasets: id={} vid={} name={} source={} ds={} ss={} var={} rev={}>""".format(
+            self.id,
+            self.vid,
+            self.name,
+            self.source,
+            self.dataset,
+            self.subset,
+            self.variation,
+            self.revision)
 
-    def get_config_rows(self, d_vid):
+
+class ConfigAccessor(object):
+
+    def __init__(self, dataset):
+
+        self.dataset = dataset
+
+    @property
+    def process(self):
+        """Access process configuarion values as attributes
+
+        >>> db = Database(self.dsn)
+        >>> db.open()
+        >>> ds = db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
+        >>> ds.process.build.foo = [1,2,3,4]
+        >>> ds.process.build.bar = [5,6,7,8]
+        """
+
+        from config import ConfigGroupAccessor
+
+        return ConfigGroupAccessor(self, 'process')
+
+    @property
+    def meta(self):
+        """Access process configuarion values as attributes. See self.process
+        for a usage example"""
+
+        from config import ConfigGroupAccessor
+
+        return ConfigGroupAccessor(self.dataset, 'metadata')
+
+    @property
+    def build(self):
+        """Access build configuarion values as attributes. See self.process
+            for a usage example"""
+        from config import ConfigGroupAccessor
+
+        return ConfigGroupAccessor(self.dataset, 'buildstate')
+
+    @property
+    def library(self):
+        """Access library configuration values as attributes. The library config
+         is really only relevant tot eh root dataset. See self.process for a usage example"""
+        from config import ConfigGroupAccessor
+
+        return ConfigGroupAccessor(self.dataset, 'library')
+
+    def rows(self):
         """Return configuration in a form that can be used to reconstitute a
         Metadata object. Returns all of the rows for a dataset.
 
@@ -184,7 +253,7 @@ class Dataset(Base):
         rows = []
 
         for r in self.session.query(SAConfig).filter(or_(SAConfig.group == 'config', SAConfig.group == 'process'),
-                                                     SAConfig.d_vid == d_vid).all():
+                                                     SAConfig.d_vid == self.dataset.vid).all():
 
             parts = r.key.split('.', 3)
 
@@ -199,3 +268,4 @@ class Dataset(Base):
             rows.append(cr)
 
         return rows
+

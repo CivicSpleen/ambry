@@ -6,31 +6,26 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 __docformat__ = 'restructuredtext en'
 
-import sqlalchemy
-from sqlalchemy import orm
+
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
 from sqlalchemy import  Text, String, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import text
-import sqlalchemy.orm
-
 
 from ambry.identity import TableNumber,  ObjectNumber
-from ambry.orm import NotFoundError, Column, File
+from ambry.orm import Column
+from ambry.orm.exc import NotFoundError
 from . import Base, MutationDict, JSONEncodedObj
-
-
 
 class Table(Base):
     __tablename__ = 'tables'
 
     vid = SAColumn('t_vid', String(20), primary_key=True)
-    id_ = SAColumn('t_id', String(20), primary_key=False)
+    id = SAColumn('t_id', String(20), primary_key=False)
     d_id = SAColumn('t_d_id', String(20))
     d_vid = SAColumn('t_d_vid',String(20),ForeignKey('datasets.d_vid'),index=True)
-    # This is a freign key, but is not declared as such
-    p_vid = SAColumn('t_p_vid', String(20), index=True, nullable=True)
+
     sequence_id = SAColumn('t_sequence_id', Integer, nullable=False)
     name = SAColumn('t_name', String(200), nullable=False)
     altname = SAColumn('t_altname', Text)
@@ -45,90 +40,21 @@ class Table(Base):
     data = SAColumn('t_data', MutationDict.as_mutable(JSONEncodedObj))
 
     __table_args__ = (
-        #ForeignKeyConstraint([d_vid, d_location], ['datasets.d_vid', 'datasets.d_location']),
         UniqueConstraint('t_sequence_id', 't_d_vid', name='_uc_tables_1'),
         UniqueConstraint('t_name', 't_d_vid', name='_uc_tables_2'),
     )
 
     columns = relationship(Column, backref='table', order_by="asc(Column.sequence_id)",
-                           cascade="merge, delete, delete-orphan", lazy='joined')
+                           cascade="all, delete-orphan", lazy='joined')
 
+    def __init__(self,  **kwargs):
 
-    def __init__(self, dataset, **kwargs):
-
-        assert 'proto' not in kwargs
-
-        self.sequence_id = kwargs.get("sequence_id", None)
-        self.name = kwargs.get("name", None)
-        self.vname = kwargs.get("vname", None)
-        self.altname = kwargs.get("altname", None)
-        self.description = kwargs.get("description", None)
-        self.universe = kwargs.get("universe", None)
-        self.keywords = kwargs.get("keywords", None)
-        self.type = kwargs.get("type", 'table')
-        self.proto_vid = kwargs.get("proto_vid")
-        self.data = kwargs.get("data", None)
-
-        self.d_id = dataset.id_
-        self.d_vid = dataset.vid
-
-        don = ObjectNumber.parse(dataset.vid)
-        ton = TableNumber(don, self.sequence_id)
-
-        self.vid = str(ton)
-        self.id_ = str(ton.rev(None))
-
-        if self.name:
-            self.name = self.mangle_name(self.name, kwargs.get('preserve_case',False))
-
-        self.init_on_load()
-
-    @property
-    def dict(self):
-        d = {
-            k: v for k,
-            v in self.__dict__.items() if k in [
-                'id_','vid','d_id','d_vid','sequence_id','name','altname','vname','description','universe','keywords',
-                'installed','proto_vid','type','codes']}
-
-        if self.data:
-            for k in self.data:
-                assert k not in d, "Value '{}' is a table field and should not be in data ".format(k)
-                d[k] = self.data[k]
-
-        d['is_geo'] = False
-
-        for c in self.columns:
-            if c in ('geometry', 'wkt', 'wkb', 'lat'):
-                d['is_geo'] = True
-
-        d['foreign_indexes'] =  list(set([c.data['index'].split(":")[0] for c in self.columns if c.data.get('index',False)]))
-
-        return d
-
-    @property
-    def nonull_dict(self):
-        return {k: v for k, v in self.dict.items() if v and k not in 'codes'}
-
-    @property
-    def nonull_col_dict(self):
-
-        tdc = {}
-
-        for c in self.columns:
-            tdc[c.id_] = c.nonull_dict
-            tdc[c.id_]['codes'] = {cd.key: cd.dict for cd in c.codes}
-
-        td = self.nonull_dict
-        td['columns'] = tdc
-
-        return td
+        super(Table, self).__init__(**kwargs)
 
     def link_columns(self, other):
         """Return columns that can be used to link another table to this one"""
 
         def protos(t):
-
 
             protos = {}
 
@@ -151,83 +77,6 @@ class Table(Base):
 
         return list(set( (protos_s[n], protos_o[n])  for n in inter ) )
 
-
-    @property
-    def insertable_dict(self):
-        x = {('t_' + k).strip('_'): v for k, v in self.dict.items()}
-
-        if not 't_vid' in x or not x['t_vid']:
-            raise ValueError("Must have vid set: {} ".format(x))
-
-        return x
-
-    # For linking tables to manifests
-    @property
-    def linked_files(self):
-        return self._get_link_array('files', File, File.ref)
-
-    def link_file(self, f):
-        return self._append_link('files', f.ref)
-
-    def delink_file(self, f):
-        return self._remove_link('files', f.ref)
-
-    @property
-    def info(self):
-
-        x =  """
------- Table: {name} ------
-id   : {id_}
-vid  : {vid}
-name : {name}
-Columns:
-""".format(**self.dict)
-
-        for c in self.columns:
-            # ['id','vid','sequence_id', 't_vid', 'name', 'description', 'keywords', 'datatype', 'size', 'is_primary_kay', 'data']}
-
-            x += "   {sequence_id:3d} {name:12s} {schema_type:8s} {description}\n".format(
-                **c.dict)
-
-        return x
-
-
-    @orm.reconstructor
-    def init_on_load(self):
-        self._or_validator = None
-        self._and_validator = None
-        self._null_row = None
-        self._row_hasher = None
-
-    @staticmethod
-    def before_insert(mapper, conn, target):
-        """event.listen method for Sqlalchemy to set the seqience_id for this
-        object and create an ObjectNumber value for the id_"""
-        if target.sequence_id is None:
-            sql = text(
-                '''SELECT max(t_sequence_id)+1 FROM tables WHERE t_d_id = :did''')
-
-            max_id, = conn.execute(sql, did=target.d_id).fetchone()
-
-            if not max_id:
-                max_id = 1
-
-            target.sequence_id = max_id
-
-        Table.before_update(mapper, conn, target)
-
-    @staticmethod
-    def before_update(mapper, conn, target):
-        """Set the Table ID based on the dataset number and the sequence number
-        for the table."""
-        if isinstance(target, Column):
-            raise TypeError('Got a column instead of a table')
-
-        if target.id_ is None:
-            dataset_id = ObjectNumber.parse(target.d_id)
-            target.id_ = str(TableNumber(dataset_id, target.sequence_id))
-
-
     @staticmethod
     def mangle_name(name, preserve_case=False):
         import re
@@ -245,90 +94,58 @@ Columns:
     def oid(self):
         return TableNumber(self.d_id, self.sequence_id)
 
+    def column(self, ref):
+        # AFAIK, all of the columns in the relationship will get loaded if any one is accessed,
+        # so iterating over the collection only involves one SELECT.
+
+        for c in self.columns:
+            if str(ref) == c.name or str(ref) == c.id or str(ref) == c.vid:
+                return c
+
+        raise NotFoundError("Failed to find column '{}' in table '{}' for ref: '{}' ".format(ref, self.name, ref))
+
     def add_column(self, name, **kwargs):
         """Add a column to the table, or update an existing one."""
 
-        import sqlalchemy.orm.session
-
-
-        s = sqlalchemy.orm.session.Session.object_session(self)
-
-        assert s, "Can't create column with this method unless the table has a session"
-
-        name = Column.mangle_name(name)
-
-        if not kwargs.get('fast', False):
-            try:
-                row = self.column(name)
-            except NotFoundError:
-                row = None
-        else:
-            row = None
-
-        if row:
+        try:
+            c = self.column(name)
             extant = True
-
-        else:
-            row = Column(self, name=name, **kwargs)
+        except NotFoundError:
+            c = Column(t_vid=self.vid, sequence_id=len(self.columns), name=name, datatype='varchar')
             extant = False
 
-        if kwargs.get('data', False):
-            row.data = dict(row.data.items() + kwargs['data'].items())
+        # Update possibly existing data
+        c.data = dict((c.data.items() if c.data else []) + kwargs.get('data', {}).items())
 
         for key, value in kwargs.items():
 
-            excludes = ['d_id', 't_id', 'name', 'schema_type', 'data']
-
-            # Proto is the name of the object.
-            if key == 'proto' and isinstance(value, basestring):
-                key = 'proto_vid'
-
-            if extant:
-                excludes.append('sequence_id')
-
-            if key[0] != '_' and key not in excludes:
+            if key[0] != '_' and key not in ['t_vid', 'name',  'sequence_id', 'data']:
                 try:
-                    setattr(row, key, value)
+                    setattr(c, key, value)
                 except AttributeError:
-                    raise AttributeError(
-                        "Column record has no attribute {}".format(key))
+                    raise AttributeError("Column record has no attribute {}".format(key))
 
-            if isinstance(value, basestring) and len(value) == 0:
-                if key == 'is_primary_key':
-                    value = False
-                    setattr(row, key, value)
+            if key == 'is_primary_key' and isinstance(value, basestring) and len(value) == 0:
+                value = False
+                setattr(c, key, value)
 
         # If the id column has a description and the table does not, add it to
         # the table.
-        if row.name == 'id' and row.is_primary_key and not self.description:
-            self.description = row.description
-            s.merge(self)
+        if c.name == 'id' and c.is_primary_key and not self.description:
+            self.description = c.description
 
-        if extant:
-            row = s.merge(row)
+        if not extant:
+            self.columns.append(c)
         else:
-            s.add(row)
+            from sqlalchemy.orm import object_session
 
-        if kwargs.get('commit', True):
-            s.commit()
+            object_session(self).merge(c)
 
-        return row
+        return c
 
-    def add_id_column(self):
-        self.add_column(name='id',datatype='integer',is_primary_key = True, description = self.description)
-
-    def column(self, ref, default=None):
-
-
-        # AFAIK, all of the columns in the relationship will get loaded if any one is accessed,
-        # so iterating over the collection only involved one SELECT.
-
-        for c in self.columns:
-            if str(ref) == c.name or str(ref) == c.id_ or str(ref) == c.vid:
-                return c
-
-        raise NotFoundError("Failed to find column '{}' in table '{}' for ref: '{}' "
-                            .format(ref,self.name, ref))
+    def add_id_column(self, description=None):
+        self.add_column(name='id',datatype='integer',is_primary_key = True,
+                        description = self.description if not description else description)
 
     @property
     def primary_key(self):
@@ -401,22 +218,6 @@ Columns:
         )
 
     @property
-    def null_row(self):
-        if self._null_row is None:
-            self._null_row = []
-            for col in self.columns:
-                if col.is_primary_key:
-                    v = None
-                elif col.default:
-                    v = col.default
-                else:
-                    v = None
-
-                self._null_row.append(v)
-
-        return self._null_row
-
-    @property
     def null_dict(self):
         if self._null_row is None:
             self._null_row = {}
@@ -443,94 +244,6 @@ Columns:
 
         return [c.name for c in self.columns]
 
-    def _get_validator(self, and_join=True):
-        """Return a lambda function that, when given a row to this table,
-        returns true or false to indicate the validitity of the row.
-
-        :param and_join: If true, join multiple column validators with AND, other
-        wise, OR
-        :type and_join: Bool
-
-        :rtype: a `LibraryDb` object
-
-        """
-
-        f = prior = lambda row: True
-        first = True
-        for i, col in enumerate(self.columns):
-
-            if col.data.get('mandatory', False):
-                default_value = col.default
-                index = i
-
-                if and_join:
-                    f = lambda row, default_value=default_value, index=index, prior=prior: prior(
-                        row) and str(row[index]) != str(default_value)
-                elif first:
-                    # OR joins would either need the initial F to be 'false',
-                    # or just don't use it
-                    f = lambda row, default_value=default_value, index=index: str(
-                        row[index]) != str(default_value)
-                else:
-                    f = lambda row, default_value=default_value, index=index, prior=prior: prior(
-                        row) or str(row[index]) != str(default_value)
-
-                prior = f
-                first = False
-
-        return f
-
-    def validate_or(self, values):
-
-        if self._or_validator is None:
-            self._or_validator = self._get_validator(and_join=False)
-
-        return self._or_validator(values)
-
-    def validate_and(self, values):
-
-        if self._and_validator is None:
-            self._and_validator = self._get_validator(and_join=True)
-
-        return self._and_validator(values)
-
-    def _get_hasher(self):
-        """Return a  function to generate a hash for the row."""
-        import hashlib
-
-        # Try making the hash set from the columns marked 'hash'
-        indexes = [i for i, c in enumerate(self.columns) if
-                   c.data.get('hash', False) and not c.is_primary_key]
-
-        # Otherwise, just use everything by the primary key.
-        if len(indexes) == 0:
-            indexes = [
-                i for i,
-                c in enumerate(
-                    self.columns) if not c.is_primary_key]
-
-        def hasher(values):
-            m = hashlib.md5()
-            for index in indexes:
-                x = values[index]
-                try:
-                    m.update(
-                        x.encode('utf-8') +
-                        '|')  # '|' is so 1,23,4 and 12,3,4 aren't the same
-                except:
-                    m.update(str(x) + '|')
-            return int(m.hexdigest()[:14], 16)
-
-        return hasher
-
-    def row_hash(self, values):
-        """Calculate a hash from a database row."""
-
-        if self._row_hasher is None:
-            self._row_hasher = self._get_hasher()
-
-        return self._row_hasher(values)
-
     @property
     def caster(self):
         """Returns a function that takes a row that can be indexed by positions
@@ -544,10 +257,93 @@ Columns:
 
         return bdr
 
-    def add_installed_name(self, name):
-        self._append_string_to_list('installed_names', name)
+    @property
+    def dict(self):
+        d = {
+            k: v for k,
+                     v in self.__dict__.items() if k in [
+                'id', 'vid', 'd_id', 'd_vid', 'sequence_id', 'name', 'altname', 'vname', 'description', 'universe',
+            'keywords',
+                'installed', 'proto_vid', 'type', 'codes']}
 
+        if self.data:
+            for k in self.data:
+                assert k not in d, "Value '{}' is a table field and should not be in data ".format(k)
+                d[k] = self.data[k]
+
+        d['is_geo'] = False
+
+        for c in self.columns:
+            if c in ('geometry', 'wkt', 'wkb', 'lat'):
+                d['is_geo'] = True
+
+        d['foreign_indexes'] = list(
+            set([c.data['index'].split(":")[0] for c in self.columns if c.data.get('index', False)]))
+
+        return d
+
+    @property
+    def nonull_dict(self):
+        return {k: v for k, v in self.dict.items() if v and k not in 'codes'}
+
+    @property
+    def nonull_col_dict(self):
+
+        tdc = {}
+
+        for c in self.columns:
+            tdc[c.id] = c.nonull_dict
+            tdc[c.id]['codes'] = {cd.key: cd.dict for cd in c.codes}
+
+        td = self.nonull_dict
+        td['columns'] = tdc
+
+        return td
+
+    @property
+    def insertable_dict(self):
+        x = {('t_' + k).strip('_'): v for k, v in self.dict.items()}
+
+        if not 't_vid' in x or not x['t_vid']:
+            raise ValueError("Must have vid set: {} ".format(x))
+
+        return x
+
+    @staticmethod
+    def before_insert(mapper, conn, target):
+        """event.listen method for Sqlalchemy to set the seqience_id for this
+        object and create an ObjectNumber value for the id"""
+        if target.sequence_id is None:
+            sql = text('''SELECT max(t_sequence_id)+1 FROM tables WHERE t_d_id = :did''')
+
+            max_id, = conn.execute(sql, did=target.d_id).fetchone()
+
+            if not max_id:
+                max_id = 1
+
+            target.sequence_id = max_id
+
+        Table.before_update(mapper, conn, target)
+
+    @staticmethod
+    def before_update(mapper, conn, target):
+        """Set the Table ID based on the dataset number and the sequence number
+        for the table."""
+
+        target.name = Table.mangle_name(target.name)
+
+        if isinstance(target, Column):
+            raise TypeError('Got a column instead of a table')
+
+        if target.id is None:
+            dataset_id = ObjectNumber.parse(target.d_id)
+            target.id = str(TableNumber(dataset_id, target.sequence_id))
+
+        if target.vid is None:
+            dataset_id = ObjectNumber.parse(target.d_vid)
+            target.vid = str(TableNumber(dataset_id, target.sequence_id))
 
 
 event.listen(Table, 'before_insert', Table.before_insert)
 event.listen(Table, 'before_update', Table.before_update)
+

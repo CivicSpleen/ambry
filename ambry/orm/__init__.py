@@ -4,10 +4,8 @@ dataset, partitions, configuration, tables and columns.
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
-from ambry.dbexceptions import BundleError
 
 __docformat__ = 'restructuredtext en'
-
 
 import json
 
@@ -15,7 +13,6 @@ import sqlalchemy
 from sqlalchemy import event
 from sqlalchemy import  BigInteger
 from sqlalchemy import Text
-
 from sqlalchemy.types import TypeDecorator, TEXT, UserDefinedType
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.mutable import Mutable
@@ -27,8 +24,6 @@ Base = declarative_base()
 from sqlalchemy.dialects import registry
 registry.register("spatialite","ambry.orm.dialects.spatialite", "SpatialiteDialect")
 registry.register("postgis", "ambry.orm.dialects.postgis", "PostgisDialect")
-
-import ambry.dbexceptions
 
 # http://stackoverflow.com/a/23175518/1144479
 # SQLAlchemy does not map BigInt to Int by default on the sqlite dialect.
@@ -99,7 +94,6 @@ class JSONEncoder(json.JSONEncoder):
     the type."""
 
     def default(self, o):
-        from ambry.identity import Identity
 
         try:
             return o.dict
@@ -297,8 +291,18 @@ class DataPropertyMixin(object):
         if value and not value in self.data[sub_prop]:
             self.data[sub_prop] = self.data[sub_prop] + [value]
 
-# Sould have things derived from this, once there are test cases for it.
+class LoadPropertiesMixin(object):
 
+    def load_properties(self, args, kwargs):
+        for p in self.__mapper__.attrs:
+            if p.key in kwargs:
+                setattr(self, p.key, kwargs[p.key])
+                del kwargs[p.key]
+
+        if self.data:
+            self.data.update(kwargs)
+
+# Sould have things derived from this, once there are test cases for it.
 
 class DictableMixin(object):
 
@@ -307,14 +311,28 @@ class DictableMixin(object):
             setattr(self, k, v)
 
     @property
-    def dict(self):
+    def record_dict(self):
         from sqlalchemy.orm.attributes import InstrumentedAttribute
         import inspect
 
         return dict(inspect.getmembers(self.__class__,lambda x: isinstance(x,InstrumentedAttribute)))
 
-    def __repr__(self):
-        return "<{}: {}>".format(type(self), self.dict)
+        # Alternative?
+        # return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs}
+
+    @property
+    def dict(self):
+
+        d = self.record_dict
+
+        # Move the values in the data attribute into the top level.
+        if 'data' in d and d['data']:
+            for k in self.data:
+                assert k not in d # Data items can't overlap attributes
+                d[k] = self.data[k]
+
+        return d
+
 
 def _clean_flag(in_flag):
 
@@ -323,34 +341,6 @@ def _clean_flag(in_flag):
 
     return bool(in_flag)
 
-
-class DatabaseError(BundleError):
-
-    """A general database error."""
-
-
-class NotFoundError(DatabaseError):
-
-    """Failed to find resource."""
-
-
-class MultipleFoundError(DatabaseError):
-
-    """Found multiple when only one was expected."""
-
-
-class DatabaseMissingError(DatabaseError):
-
-    """A general database error."""
-
-
-class ConflictError(BundleError):
-
-    """Conflict with existing resource."""
-
-class MetadataError(BundleError):
-
-    """Conflict with existing resource."""
 
 from ambry.orm.code import Code
 from ambry.orm.column import Column

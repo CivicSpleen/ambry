@@ -1,0 +1,6 @@
+name,title,table,segment,time,space,grain,start_line,end_line,comment_lines,header_lines,description,url
+sc09,,saipe,,2009,,,3,564,"0,1",2,State and County Estimates for 2009,http://www.census.gov/did/www/saipe/downloads/estmod09/est09ALL.xls
+sc10,,saipe,,2010,,,3,3198,"0,1",2,State and County Estimates for 2010,http://www.census.gov/did/www/saipe/downloads/estmod10/est10ALL.xls
+sc11,,saipe,,2011,,,3,3198,"0,1",2,State and County Estimates for 2011,http://www.census.gov/did/www/saipe/downloads/estmod11/est11ALL.xls
+sc12,,saipe,,2012,,,3,,"0,1",2,State and County Estimates for 2012,http://www.census.gov/did/www/saipe/downloads/estmod12/est12ALL.xls
+sc13,,saipe,,2013,,,4,,"0,1,2",3,State and County Estimates for 2013,http://www.census.gov/did/www/saipe/downloads/estmod13/est13ALL.xls

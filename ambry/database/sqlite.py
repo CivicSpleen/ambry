@@ -284,7 +284,7 @@ class SqliteDatabase(RelationalDatabase):
         which uses os.path.exists."""
 
         if not os.path.exists(self.path) and check_exists and not self.memory:
-            from ambry.orm import DatabaseMissingError
+            from ambry.orm.exc import DatabaseMissingError
 
             raise DatabaseMissingError(
                 "Trying to make a connection to a sqlite database " +

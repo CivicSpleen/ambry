@@ -131,7 +131,7 @@ class Test(TestBase):
     """
 
     def test_metadata(self):
-        from ambry.orm.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
+        from ambry.metadata.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
             VarDictGroup, DictGroup, DictTerm, ListGroup
 
         import yaml
@@ -296,7 +296,7 @@ class Test(TestBase):
         # print t3.dump()
 
     def test_metadata_TypedDictGroup(self):
-        from ambry.orm.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
+        from ambry.metadata.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
             DictTerm
 
         import yaml

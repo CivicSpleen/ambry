@@ -199,7 +199,7 @@ class CodeCastErrorHandler(object):
 
     def finish(self):
         """Add all of the codes to the codes table."""
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import NotFoundError
 
         schema = self.inserter.bundle.schema
 

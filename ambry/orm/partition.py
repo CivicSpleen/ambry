@@ -19,9 +19,6 @@ from . import Base, MutationDict, JSONEncodedObj, BigIntegerType
 from ambry.identity import  Identity, PartitionNumber, ObjectNumber, PartialPartitionName, PartitionIdentity
 from ambry.orm.columnstat import ColumnStat
 from ambry.orm.dataset import Dataset
-from ambry.orm.file import File
-
-__author__ = 'eric'
 
 
 class Partition(Base):
@@ -60,9 +57,6 @@ class Partition(Base):
     # For the primary table for the partition. There is one per partition, but a table
     # can be primary in multiple partitions.
     table = relationship('Table', backref='partitions', foreign_keys='Partition.t_vid')
-
-    warehouse_tables = relationship('Table', backref='source_partition', foreign_keys='Table.p_vid',
-                                    primaryjoin="Partition.vid == Table.p_vid")
 
     stats = relationship(ColumnStat, backref='partition', cascade="delete, delete-orphan")
 

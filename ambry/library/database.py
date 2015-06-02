@@ -15,7 +15,8 @@ import ambry
 import ambry.util
 from ambry.util import temp_file_name
 from ..identity import  Identity
-from ambry.orm import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat, NotFoundError, ConflictError
+from ambry.orm import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat, ConflictError
+from ambry.orm.exc import NotFoundError, ConflictError
 
 from collections import namedtuple
 from sqlalchemy.exc import IntegrityError

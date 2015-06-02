@@ -177,7 +177,7 @@ def library_purge(args, l, config):
 
 
 def library_remove(args, l, config):
-    from ambry.orm import NotFoundError
+    from ambry.orm.exc import NotFoundError
 
     cache_keys = set()
     refs = set()

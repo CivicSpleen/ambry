@@ -157,7 +157,7 @@ class Test(TestBase):
     def test_simple_install(self):
 
         from ambry.orm import Dataset, Partition, Table, Column, ColumnStat, Code, Config, File
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import NotFoundError
 
         l = self.get_library()
         ldsq = l.database.session.query

@@ -208,7 +208,7 @@ class RelationalDatabase(object):
                 table.drop(self.engine, checkfirst=True)
 
     def delete(self):
-        from ambry.orm import DatabaseMissingError
+        from ambry.orm.exc import DatabaseMissingError
 
         try:
             self.drop()
@@ -605,7 +605,7 @@ class RelationalBundleDatabaseMixin(object):
         """Return the dataset."""
 
         from sqlalchemy.exc import OperationalError
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import NotFoundError
 
         from ambry.orm import Dataset
 

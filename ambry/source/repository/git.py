@@ -237,7 +237,7 @@ class GitShellService(object):
 
     def clone(self, url, dir_=None):
         import os
-        from ambry.orm import ConflictError
+        from ambry.orm.exc import ConflictError
 
         dir_ = self.dir_ if not dir_ else dir_
 

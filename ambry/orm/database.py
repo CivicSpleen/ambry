@@ -226,7 +226,7 @@ class Database(object):
 
     def clean(self, add_config_root=True):
         from sqlalchemy.exc import OperationalError, IntegrityError
-        from ambry.orm import DatabaseError
+        from ambry.orm.exc import DatabaseError
 
         s = self.session
 
@@ -332,7 +332,6 @@ class Database(object):
                 version='0.0.0',
                 source=ROOT_CONFIG_NAME,
                 dataset=ROOT_CONFIG_NAME,
-                creator=ROOT_CONFIG_NAME,
                 revision=1,
             )
             self.session.add(o)
@@ -349,118 +348,11 @@ class Database(object):
         ds.vname = ROOT_CONFIG_NAME_V
         ds.source = ROOT_CONFIG_NAME
         ds.dataset = ROOT_CONFIG_NAME
-        ds.creator = ROOT_CONFIG_NAME
         ds.revision = 1
 
         self.session.merge(ds)
         self.commit()
 
-    ##
-    # Configuration values
-    ##
-
-    def set_config_value(self, group, key, value):
-        """Set a configuration value in the database."""
-        from ambry.orm import Config as SAConfig
-        from sqlalchemy.exc import IntegrityError, ProgrammingError
-        from sqlalchemy.orm.exc import NoResultFound
-
-        s = self.session
-
-        try:
-            o = s.query(SAConfig).filter(
-                SAConfig.group == group,
-                SAConfig.key == key,
-                SAConfig.d_vid == ROOT_CONFIG_NAME_V).one()
-
-        except NoResultFound:
-            o = SAConfig(group=group, key=key, d_vid=ROOT_CONFIG_NAME_V, value=value)
-
-        o.value = value
-        s.merge(o)
-
-        self.commit()
-
-    def get_config_value(self, group, key):
-
-        from ambry.orm import Config as SAConfig
-
-        s = self.session
-
-        try:
-
-            c = s.query(SAConfig).filter(SAConfig.group == group, SAConfig.key == key,
-                                         SAConfig.d_vid == ROOT_CONFIG_NAME_V).first()
-
-            return c
-        except:
-            return None
-
-    def get_config_group(self, group, d_vid=ROOT_CONFIG_NAME_V):
-
-        from ambry.orm import Config as SAConfig
-
-        s = self.session
-
-        try:
-            d = {}
-            for row in s.query(SAConfig).filter(SAConfig.group == group, SAConfig.d_vid == d_vid).all():
-                d[row.key] = row.value
-            return d
-
-        except:
-            return {}
-
-
-
-    def get_bundle_value(self, dvid, group, key):
-
-        from ambry.orm import Config as SAConfig
-
-        s = self.session
-
-        try:
-            c = s.query(SAConfig).filter(SAConfig.group == group,
-                                         SAConfig.key == key,
-                                         SAConfig.d_vid == dvid).first()
-
-            return c.value
-        except:
-            return None
-
-    def get_bundle_values(self, dvid, group):
-        """Get an entire group of bundle values."""
-
-        from ambry.orm import Config as SAConfig
-
-        s = self.session
-
-        try:
-            return s.query(SAConfig).filter(
-                SAConfig.group == group,
-                SAConfig.d_vid == dvid).all()
-        except:
-            return None
-
-    @property
-    def config_values(self):
-
-        from ambry.orm import Config as SAConfig
-
-        s = self.session
-
-        d = {}
-
-        for config in s.query(SAConfig).filter(SAConfig.d_vid == ROOT_CONFIG_NAME_V).all():
-            d[(str(config.group), str(config.key))] = config.value
-
-        return d
-
-    def _mark_update(self, o=None, vid=None):
-
-        import datetime
-
-        self.set_config_value('activity', 'change', datetime.datetime.utcnow().isoformat())
 
     ##
     ## Base Object Access
@@ -483,9 +375,16 @@ class Database(object):
             self.session.commit()
             return ds
         except IntegrityError as e:
-            from . import ConflictError
+            from ambry.orm.exc import ConflictError
+
             self.session.rollback()
             raise ConflictError("Can't create dataset '{}'; one probably already exists: {} ".format(str(ds), e))
+
+    @property
+    def root_dataset(self):
+        """Return the root dataset, which hold configuration values for the library"""
+
+        return self.dataset(ROOT_CONFIG_NAME_V)
 
     def dataset(self, ref):
         """Return a dataset, given a vid or id
@@ -497,7 +396,7 @@ class Database(object):
         """
 
         from sqlalchemy.orm.exc import NoResultFound
-        from . import NotFoundError
+        from ambry.orm.exc import NotFoundError
 
         try:
             return (self.session.query(Dataset).filter(Dataset.vid == str(ref)).one())
@@ -507,6 +406,8 @@ class Database(object):
                         .order_by(Dataset.revision.desc()).first())
             except NoResultFound:
                 raise NotFoundError("No partition in library for vid : {} ".format(ref))
+
+
 
 
 def _pragma_on_connect(dbapi_con, con_record):
@@ -555,7 +456,7 @@ def _on_connect_bundle(dbapi_con, con_record):
 def _on_connect_update_sqlite_schema(conn, con_record):
     """Perform on-the-fly schema updates based on the user version"""
     from sqlalchemy.exc import OperationalError
-    from ambry.orm import DatabaseError
+    from ambry.orm.exc import DatabaseError
 
     version = conn.execute('PRAGMA user_version').fetchone()[0]
     if version:

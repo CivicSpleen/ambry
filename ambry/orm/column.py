@@ -40,20 +40,18 @@ class Column(Base):
     d_vid = SAColumn('c_d_vid', String(20), ForeignKey('datasets.d_vid'), nullable=False, index=True)
     t_id = SAColumn('c_t_id', String(20))
     name = SAColumn('c_name', Text)
+    fqname = SAColumn('c_fqname', Text) # Name with the vid prefix
     altname = SAColumn('c_altname', Text)
     datatype = SAColumn('c_datatype', Text)
     size = SAColumn('c_size', Integer)
-    start = SAColumn('c_start', Integer)
     width = SAColumn('c_width', Integer)
     sql = SAColumn('c_sql', Text)
-    precision = SAColumn('c_precision', Integer)
-    flags = SAColumn('c_flags', Text)
+    summary = SAColumn('c_summary', Text)
     description = SAColumn('c_description', Text)
     keywords = SAColumn('c_keywords', Text)
-    measure = SAColumn('c_measure', Text)
+
     units = SAColumn('c_units', Text)
     universe = SAColumn('c_universe', Text)
-    scale = SAColumn('c_scale', Real)
 
     # Reference to a column that provides an example of how this column should
     # be used.
@@ -64,13 +62,16 @@ class Column(Base):
 
     # A column vid, or possibly an equation, describing how this column was
     # created from other columns.
-    derivedfrom = SAColumn('c_derivedfrom', String(200))
+    derivedfrom = SAColumn('c_derivedfrom', String(20))
+
+    # ids of columns used for computing ratios, rates and densities
+    numerator = SAColumn('c_numerator', String(20))
+    denominator = SAColumn('c_denominator', String(20))
 
     data = SAColumn('c_data', MutationDict.as_mutable(JSONEncodedObj))
 
     is_primary_key = SAColumn('c_is_primary_key', Boolean, default=False)
 
-    unique_constraints = SAColumn('c_unique_constraints', Text)
     indexes = SAColumn('c_indexes', Text)
     uindexes = SAColumn('c_uindexes', Text)
     default = SAColumn('c_default', Text)
@@ -126,35 +127,9 @@ class Column(Base):
         DATATYPE_BLOB: (sqlalchemy.types.LargeBinary, buffer, 'BLOB')
     }
 
-    def __init__(self, table=None, **kwargs):
+    def __init__(self,  **kwargs):
 
-
-        self.sequence_id = kwargs.get("sequence_id", len(table.columns) + 1 if table else None)
-
-        self.name = kwargs.get("name", None)
-        self.altname = kwargs.get("altname", None)
-        self.is_primary_key = _clean_flag(kwargs.get("is_primary_key", False))
-        self.datatype = kwargs.get("datatype", None)
-        self.size = kwargs.get("size", None)
-        self.precision = kwargs.get("precision", None)
-        self.start = kwargs.get("start", None)
-        self.width = kwargs.get("width", None)
-        self.sql = kwargs.get("sql", None)
-        self.flags = kwargs.get("flags", None)
-        self.description = kwargs.get("description", None)
-        self.keywords = kwargs.get("keywords", None)
-        self.measure = kwargs.get("measure", None)
-        self.units = kwargs.get("units", None)
-        self.universe = kwargs.get("universe", None)
-        self.scale = kwargs.get("scale", None)
-        self.fk_vid = kwargs.get("fk_vid", kwargs.get("foreign_key", None))
-        self.proto_vid = kwargs.get("proto_vid", kwargs.get("proto", None))
-        self.derivedfrom = kwargs.get("derivedfrom", None)
-        self.data = kwargs.get("data", None)
-
-        # the table_name attribute is not stored. It is only for
-        # building the schema, linking the columns to tables.
-        self.table_name = kwargs.get("table_name", None)
+        super(Column, self).__init__(**kwargs)
 
         assert self.sequence_id is not None
 
@@ -166,14 +141,6 @@ class Column(Base):
         self.fk_vid = self.fk_vid or None
         self.proto_vid = self.proto_vid or None
         self.derivedfrom = self.derivedfrom or None
-
-        if table:
-            self.t_id = table.id_
-            self.t_vid = table.vid
-            ton = ObjectNumber.parse(table.vid)
-            con = ColumnNumber(ton, self.sequence_id)
-            self.vid = str(con)
-            self.id = str(con.rev(None))
 
 
     def type_is_int(self):
@@ -428,8 +395,7 @@ class Column(Base):
         if target.sequence_id is None:
             # In case this happens in multi-process mode
             conn.execute("BEGIN IMMEDIATE")
-            sql = text(
-                '''SELECT max(c_sequence_id)+1 FROM columns WHERE c_t_id = :tid''')
+            sql = text('''SELECT max(c_sequence_id)+1 FROM columns WHERE c_t_id = :tid''')
 
             max_id, = conn.execute(sql, tid=target.t_id).fetchone()
 
@@ -445,20 +411,15 @@ class Column(Base):
         """Set the column id number based on the table number and the sequence
         id for the column."""
 
-        if target.id_ is None:
+        target.name = Column.mangle_name(target.name)
 
-            if target.table:
-                table_on = ObjectNumber.parse(target.table.vid)
-            else:
-                table_on = ObjectNumber.parse(target.t_vid)
-
-            if not target.vid:
-                target.vid = str(ColumnNumber(table_on, target.sequence_id))
-
-            if not target.id_:
-                target.id_ = str(ColumnNumber(table_on, target.sequence_id).rev(None))
-
+        ton = ObjectNumber.parse(target.t_vid)
+        con = ColumnNumber(ton, target.sequence_id)
+        target.id=str(ton.rev(None))
+        target.vid = str(con)
+        target.id = str(con.rev(None))
         target.d_vid = str(ObjectNumber.parse(target.t_vid).as_dataset)
+
 
     def __repr__(self):
         return "<column: {}, {}>".format(self.name, self.vid)

@@ -640,7 +640,7 @@ class AttrDict(OrderedDict):
         from StringIO import StringIO
         from ..orm import MutationList, MutationDict
         from yaml.representer import RepresenterError
-        from ambry.orm.meta import _ScalarTermS, _ScalarTermU
+        from ambry.metadata.meta import _ScalarTermS, _ScalarTermU
 
         yaml.representer.SafeRepresenter.add_representer(
             MapView, yaml.representer.SafeRepresenter.represent_dict)

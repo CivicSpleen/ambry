@@ -62,19 +62,7 @@ class Code(Base):
                 # and these don't have associated class properties.
                 continue
 
-    @property
-    def dict(self):
 
-        d = { p.key: getattr( self,p.key)
-             for p in self.__mapper__.attrs if p.key not in ('data','column','table')
-        }
-
-        if self.data:
-            for k in self.data:
-                assert k not in d
-                d[k] = self.data[k]
-
-        return d
 
     @property
     def insertable_dict(self):

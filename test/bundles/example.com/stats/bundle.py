@@ -57,7 +57,7 @@ class Bundle(BuildBundle):
                 yield prefix_headers + row.keys(), [None] * len(prefix_headers) + row.values()
 
     def meta(self):
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import NotFoundError
 
         self.prepare()
         table_name = 'stats'

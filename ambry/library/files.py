@@ -370,7 +370,7 @@ class Files(object):
             whf = self.query.path(warehouse.database.dsn).type(self.TYPE.STORE).one_maybe
 
             if not whf:
-                from ambry.orm import NotFoundError
+                from ambry.orm.exc import NotFoundError
 
                 raise NotFoundError(
                     "No record for database with dsn: '{}'".format(

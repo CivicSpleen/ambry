@@ -3,15 +3,9 @@ Created on Aug 31, 2012
 
 @author: eric
 """
-import os
-import shutil
-import tempfile
 import unittest
 
-import yaml
-
 from test_base import TestBase
-from ambry.orm.meta import Top
 
 
 class Test(TestBase):
@@ -110,9 +104,7 @@ views: {}
     def test_dict_group(self):
 
 
-        from ambry.orm.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
-            VarDictGroup, DictGroup, DictTerm, ListTerm
-        from ambry.util import AttrDict
+        from ambry.metadata.meta import StructuredPropertyTree, ScalarTerm, DictGroup, DictTerm, ListTerm
 
         class TestDictTerm1(DictTerm):
             sterm = ScalarTerm()
@@ -149,7 +141,7 @@ views: {}
 
 
     def x_test_basic(self):
-        from ambry.orm.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
+        from ambry.metadata.meta import StructuredPropertyTree, ScalarTerm, TypedDictGroup, \
             VarDictGroup, DictGroup, DictTerm
         from ambry.util import AttrDict
 

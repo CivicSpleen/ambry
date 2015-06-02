@@ -7,7 +7,8 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from collections import OrderedDict, defaultdict
 
 from ambry.dbexceptions import ConfigurationError
-from ambry.orm import Column, NotFoundError
+from ambry.orm import Column
+from ambry.orm.exc import NotFoundError
 from util import memoize
 
 PROTO_TERMS = 'civicknowledge.com-proto-proto_terms'
@@ -131,16 +132,7 @@ class Schema(object):
         except sqlalchemy.orm.exc.NoResultFound:
             raise NotFoundError("No table for name_or_id: '{}'".format(name_or_id))
 
-    def table(self, name_or_id, session=None):
-        '''Return an orm.Table object, from either the id or name. This is the cleaa method version
-        of get_table_from_database'''
 
-        if session is None:
-            session = self.bundle.database.session
-
-        return Schema.get_table_from_database(self.bundle.database, name_or_id,
-                                              session=session,
-                                              d_vid=self.bundle.identity.vid)
 
     def column(self, table, column_name):
 
@@ -150,66 +142,7 @@ class Schema(object):
 
         return None
 
-    def add_table(self, name, add_id=False, **kwargs):
-        '''Add a table to the schema, or update it it already exists.
 
-        If updating, will only update data.
-        '''
-        from orm import Table
-        from dbexceptions import NotFoundError
-
-        if not self.table_sequence:
-            self.table_sequence = len(self.tables) + 1
-
-        name = Table.mangle_name(name)
-
-        in_data = kwargs.get('data', {})
-
-        col_data = {k.replace('d_', '', 1): v for k, v in kwargs.items() if k.startswith('d_')}
-
-        if not kwargs.get('fast', False):
-            try:
-                row = self.table(name)
-            except NotFoundError:
-                row = None
-        else:
-            row = None
-
-        if row:
-            extant = True
-            row.data = dict(row.data.items() + col_data.items() + in_data.items())
-            self.col_sequence = len(row.columns)
-
-        else:
-            extant = False
-            row = Table(self.dataset,
-                        name=name,
-                        sequence_id=self.table_sequence,
-                        data=dict(col_data.items() + in_data.items()))
-
-            self.table_sequence += 1
-            self.col_sequence = 1
-            self.max_col_id = {}
-
-        for key, value in kwargs.items():
-            # Why aren't we just setting values thorugh the constructor? Because there are a bunch of values in
-            # the kwargs that aren't meant for the table constructor?
-            if not key:
-                continue
-            if key[0] != '_' and key not in ['id', 'id_', 'd_id', 'name', 'sequence_id', 'table', 'column']:
-                setattr(row, key, value)
-
-        self._seen_tables[name] = row
-
-        if extant:
-            self.bundle.database.session.merge(row)
-        else:
-            self.bundle.database.session.add(row)
-
-        if add_id:
-            self.add_column(row, 'id', datatype='integer', is_primary_key=True)
-
-        return row
 
     def add_column(self, table, name, **kwargs):
         '''Add a column to the schema'''
@@ -1139,168 +1072,6 @@ class Schema(object):
             o[row['table']][row['seq'] - 1] = row
 
         return o
-
-    def as_text(self, table, pad='    '):
-        import textwrap
-
-        g = self._dump_gen(self, table_name=table)
-
-        # header = g.next()
-        g.next()
-
-        rows = [['#', 'Id', 'Column', 'Type', 'Size', 'Description']]
-
-        def fill(row, sizes):
-            return [str(cell).ljust(size) for cell, size in zip(row, sizes)]
-
-        out = "### {} table\n".format(table.title())
-
-        for row in g:
-
-            if 'size' not in row or row['size'] is None:
-                row['size'] = ''
-
-            rows.append([row['seq'], row['id'], row['column'], row['type'].title(), row['size'], row['description']])
-
-        desc_wrap = 40
-
-        sizes = [0] * len(rows[0])
-        for row in rows:
-            for i, cell in enumerate(row):
-                sizes[i] = max(sizes[i], len(str(cell)))
-
-        sizes[-1] = desc_wrap
-
-        out += pad + '  '.join(fill(rows.pop(0), sizes)) + '\n'
-
-        lines = pad + '-+'.join(['-' * size for size in sizes]) + '\n'
-        out += lines
-
-        for row in rows:
-
-            # Handling the wrapping of the description is tricky. 
-            if row[-1]:
-                drows = textwrap.wrap(row[-1], desc_wrap)  # Put in the first row of the wrapped desc
-                row[-1] = drows.pop(0)
-            else:
-                drows = []
-
-            join_str = '  '
-
-            out += pad + join_str.join(fill(row, sizes)) + '\n'
-
-            # Now add in all of the other rows. 
-            if drows:
-                row.pop()  # Get rid of the desc, so we can get the length of the padding for subsequent rows.
-                dsizes = list(sizes)
-                dsizes.pop()
-                desc_pad = ' ' * len(pad + join_str.join(fill(row, dsizes)))
-                for desc in drows:
-                    out += desc_pad + join_str + desc + "\n"
-
-                    # out += lines
-
-        return out
-
-    def as_orm(self):
-        """Return a string that holds the schema represented as Sqlalchemy
-        classess"""
-
-        def write_file():
-            return """
-import sqlalchemy
-from sqlalchemy import orm
-from sqlalchemy import event
-from sqlalchemy import Column as SAColumn, Integer, Boolean
-from sqlalchemy import Float as Real,  Text, ForeignKey
-from sqlalchemy.orm import relationship, backref, deferred
-from sqlalchemy.types import TypeDecorator, TEXT, PickleType
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.ext.mutable import Mutable
-
-Base = declarative_base()
-
-"""
-
-        def write_class(table):
-            return """
-class {name}(Base):
-    __tablename__ = '{tablelc}'
-""".format(name=table.name.capitalize(), tablelc=table.name.lower())
-
-        def write_fields(table):
-            import re
-
-            o = ""
-            for col in table.columns:
-                opts = []
-                optstr = ''
-
-                if col.is_primary_key:
-                    opts.append("primary_key=True")
-
-                if col.foreign_key:
-                    raise NotImplemented("Foreign keys are now column vid references.")
-                    # opts.append("ForeignKey('{tablelc}')".format(
-                    #     tableuc=col.foreign_key.capitalize(), tablelc=col.foreign_key))
-
-                if len(opts):
-                    optstr = ',' + ','.join(opts)
-
-                o += "    {column} = SAColumn('{column}',sqlalchemy.types.{type}{options})\n".format(
-                    column=col.name, type=col.sqlalchemy_type.__name__, options=optstr)
-
-            for col in table.columns:
-                if col.foreign_key:
-                    rel_name = re.sub('_id$', '', col.name)
-
-                    t = """
-    {rel_name}=relationship(\"{that_table_uc}\",
-       foreign_keys=[{column}],
-       backref=backref('{this_table}_{rel_name}', 
-                       order_by='{that_table_lc}'))
-"""
-                    # t = "    {rel_name}=relationship(\"{that_table_uc}\")\n"
-
-                    o += t.format(
-                        column=col.name,
-                        that_table_uc=col.foreign_key.capitalize(),
-                        that_table_lc=col.foreign_key.lower(),
-                        this_table=table.name,
-                        rel_name=rel_name
-                    )
-
-            return o
-
-        def write_init(table):
-            o = "    def __init__(self,**kwargs):\n"
-            for col in table.columns:
-                o += "        self.{column} = kwargs.get(\"{column}\",None)\n".format(column=col.name)
-
-            return o
-
-        out = write_file()
-        for table in self.tables:
-            out += write_class(table)
-            out += "\n"
-            out += write_fields(table)
-            out += "\n"
-            out += write_init(table)
-            out += "\n\n"
-
-        return out
-
-    def write_orm(self):
-        """Writes the ORM file to the lib directory, which is automatically added to the
-        import path by the Bundle"""
-        import os
-
-        lib_dir = self.bundle.filesystem.path('lib')
-        if not os.path.exists(lib_dir):
-            os.makedirs(lib_dir)
-
-        with open(os.path.join(lib_dir, 'orm.py'), 'w') as f:
-            f.write(self.as_orm())
 
     def write_codes(self):
 

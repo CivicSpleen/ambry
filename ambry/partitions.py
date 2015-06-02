@@ -11,7 +11,7 @@ from identity import PartitionIdentity, PartitionNameQuery, PartialPartitionName
 
 from sqlalchemy.orm.exc import NoResultFound
 # from util.typecheck import accepts, returns
-from ambry.orm import ConflictError
+from ambry.orm.exc import ConflictError
 from util import Constant
 
 
@@ -286,7 +286,7 @@ class Partitions(object):
         try:
             ops = self._find_orm(pnq).all()
         except NoResultFound:
-            from ambry.orm import NotFoundError
+            from ambry.orm.exc import NotFoundError
 
             raise NotFoundError(
                 "Failed to find partition for '{}' ".format(
@@ -389,7 +389,7 @@ class Partitions(object):
             try:
                 table = q.one()
             except:
-                from ambry.orm import NotFoundError
+                from ambry.orm.exc import NotFoundError
 
                 raise NotFoundError('Failed to find table for name or id: {}'.format(pname.table))
         else:

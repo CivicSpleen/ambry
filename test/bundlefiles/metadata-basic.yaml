@@ -1,0 +1,107 @@
+about:
+    access: restricted
+    footnote: null
+    grain: hispital
+    groups:
+      - health
+      - california
+    license: ckdbl
+    processed: null
+    rights: public
+    source: null
+    space: California
+    subject: null
+    summary: The Inpatient Mortality Indicators (IMIs) are a subset of the AHRQ quality
+        indicators that measure in-hospital mortality. They include medical conditions
+        and procedures for which mortality rates may vary significantly across institutions.
+        Evidence suggests that high mortality may be associated with deficiencies
+        in the quality of hospital care provided.
+    tags: []
+    time: null
+    title: Inpatient Mortality Indicators
+contacts:
+    creator:
+        email: eric@sandiegodata.org
+        name: Eric Busboom
+        url: http://www.sandiegodata.org
+    maintainer:
+        email: eric@sandiegodata.org
+        name: Eric Busboom
+        url: http://www.sandiegodata.org
+    source:
+        org: Office of Statewide Health Planning and Development
+        url: http://oshpd.ca.gov/
+    analyst:
+        org: Office of Statewide Health Planning and Development
+        name: Bob Bobson
+        email: bbobson@example.com
+external_documentation:
+    ahrq_spec:
+        description: AHRQ Sepcification for the Inpatient Quality Indicators
+        source: null
+        title: Inpatient Quality Indicators Technical Specifications - Version 4.5,
+            May 2013
+        url: http://www.qualityindicators.ahrq.gov/Modules/IQI_TechSpec.aspx
+    dataset:
+        description: IQI Dataset Page
+        source: null
+        title: IQI Dataset Page
+        url: http://www.oshpd.ca.gov/HID/Products/PatDischargeData/AHRQ/iqi-imi_overview.html
+    download:
+        description: Web page that links to the source files.
+        source: null
+        title: Download Page
+        url: http://example.com
+identity:
+    bspace: null
+    btime: null
+    dataset: iqi
+    id: d03p
+    revision: 7
+    source: oshpd.ca.gov
+    subset: mortality
+    type: null
+    variation: null
+    version: 0.0.7
+names:
+    fqname: oshpd.ca.gov-iqi-mortality-0.0.7~d03p007
+    name: oshpd.ca.gov-iqi-mortality
+    vid: d03p007
+    vname: oshpd.ca.gov-iqi-mortality-0.0.7
+build:
+    key1: value1
+    key2: value2
+    key3:
+        - value3.1
+        - value3.2
+requirements:
+    xlrd: xlrd
+dependencies:
+    counties: census.gov-index-counties
+    facility_index: oshpd.ca.gov-facilities-index-facilities_index-2010e2014
+    facility_info: oshpd.ca.gov-facilities-index-facilities
+versions:
+    2:
+        date: '2015-04-12T15:49:55.077036'
+        description: Adding coverage
+        version: 0.0.2
+    3:
+        date: '2015-04-16T21:41:02.843045'
+        description: Adding space and time
+        version: 0.0.3
+    4:
+        date: '2015-04-27T18:10:22.946391'
+        description: Setting new access remotes
+        version: 0.0.4
+    5:
+        date: '2015-05-16T20:02:38.588076'
+        description: Adding oshpd_id
+        version: 0.0.5
+    6:
+        date: '2015-05-21T13:14:39.674411'
+        description: Improving protos
+        version: 0.0.6
+    7:
+        date: '2015-05-22T20:55:27.792145'
+        description: Yet more work on indexes and protos
+        version: 0.0.7

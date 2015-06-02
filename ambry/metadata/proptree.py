@@ -10,7 +10,8 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 from collections import Mapping, OrderedDict, MutableMapping, MutableSequence
 import copy
-from . import MetadataError
+from ambry.orm.exc import MetadataError
+
 
 class AttrDict(OrderedDict):
     def __init__(self, *argz, **kwz):
@@ -100,7 +101,6 @@ class AttrDict(OrderedDict):
 
         yaml.representer.SafeRepresenter.add_representer(
             MutationList, yaml.representer.SafeRepresenter.represent_list)
-
 
         yaml.representer.SafeRepresenter.add_representer(
             _ScalarTermS, yaml.representer.SafeRepresenter.represent_str)

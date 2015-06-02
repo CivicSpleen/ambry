@@ -600,7 +600,7 @@ class Warehouse(object):
         # The inputs commands most often will come from digest_manifest(), but they could also come
         # from an outside process, which is why this code is split from diget_manifest()
 
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import NotFoundError
         from ..orm import Partition
 
         installed_partitions = []
@@ -721,7 +721,7 @@ class Warehouse(object):
 
         from sqlalchemy.exc import OperationalError
         from sqlalchemy import inspect
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import NotFoundError
         from ..orm import Partition
         from sqlalchemy.orm import joinedload, noload
 
@@ -1611,7 +1611,7 @@ class Warehouse(object):
 
     def extract_table(self, tid, content_type='csv'):
         from .extractors import new_extractor
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import NotFoundError
 
         t = self.orm_table(tid)  # For installed tables
 
@@ -1633,7 +1633,7 @@ class Warehouse(object):
         """Return a generator function that can yield rows, and can be passed to a Flask Response object
         to stream a file """
         from .extractors import new_extractor
-        from ambry.orm import NotFoundError
+        from ambry.orm.exc import NotFoundError
 
         t = self.orm_table(tid)  # For installed tables
 
