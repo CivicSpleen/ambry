@@ -20,10 +20,10 @@
         <div class="search-result-partition">
 
             {% if p.table.description %}
-            <h3><a href="{{partition_path(b,p)}}">{{p.table.description}}</a>
+            <h3><a href="{{partition_path(p.vid)}}">{{p.table.description}}</a>
                 <small><p>{{p.vid}} {{p.name}}</p></small></h3>
             {% else %}
-            <h3><a href="{{partition_path(b,p)}}">{{p.name}}</a></h3>
+            <h3><a href="{{partition_path(p.vid)}}">{{p.name}}</a></h3>
             {% endif %}
 
             {%if p.geo_coverage and p.geo_coverage.names%}

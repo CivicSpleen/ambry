@@ -198,15 +198,16 @@ def partition_path(b, p=None):
         from ambry.identity import ObjectNumber, NotObjectNumberError
 
         p = b
-
+        on = ObjectNumber.parse(p)
         try:
-            on = ObjectNumber.parse(p)
             b = str(on.as_dataset)
-        except NotObjectNumberError:
-            return '#'
         except AttributeError:
             b = str(on)
             raise
+        except NotObjectNumberError:
+            return '#'
+        
+    return "/bundles/{}/partitions/{}.html".format(resolve(b), resolve(p))
 
 
 def manifest_path(m):
