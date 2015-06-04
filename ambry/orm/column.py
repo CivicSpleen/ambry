@@ -36,6 +36,7 @@ class Column(Base):
     vid = SAColumn('c_vid', String(20), primary_key=True)
     id_ = SAColumn('c_id', String(20))
     sequence_id = SAColumn('c_sequence_id', Integer)
+    is_primary_key = SAColumn('c_is_primary_key', Boolean, default=False)
     t_vid = SAColumn('c_t_vid',String(20),ForeignKey('tables.t_vid'), nullable=False, index=True)
     d_vid = SAColumn('c_d_vid', String(20), ForeignKey('datasets.d_vid'), nullable=False, index=True)
     t_id = SAColumn('c_t_id', String(20))
@@ -68,14 +69,13 @@ class Column(Base):
     numerator = SAColumn('c_numerator', String(20))
     denominator = SAColumn('c_denominator', String(20))
 
-    data = SAColumn('c_data', MutationDict.as_mutable(JSONEncodedObj))
-
-    is_primary_key = SAColumn('c_is_primary_key', Boolean, default=False)
-
     indexes = SAColumn('c_indexes', Text)
     uindexes = SAColumn('c_uindexes', Text)
+
     default = SAColumn('c_default', Text)
     illegal_value = SAColumn('c_illegal_value', Text)
+
+    data = SAColumn('c_data', MutationDict.as_mutable(JSONEncodedObj))
 
     codes = relationship(Code, backref='column',order_by="asc(Code.key)", cascade="save-update, delete, delete-orphan")
 
@@ -85,6 +85,8 @@ class Column(Base):
         UniqueConstraint( 'c_sequence_id','c_t_vid', name='_uc_columns_1'),
     )
 
+    DATATYPE_CHAR = 'char'
+    DATATYPE_VARCHAR = 'varchar'
     DATATYPE_TEXT = 'text'
     DATATYPE_INTEGER = 'integer'
     DATATYPE_INTEGER64 = 'integer64'
@@ -95,15 +97,14 @@ class Column(Base):
     DATATYPE_TIME = 'time'
     DATATYPE_TIMESTAMP = 'timestamp'
     DATATYPE_DATETIME = 'datetime'
+    DATATYPE_BLOB = 'blob'
+
     DATATYPE_POINT = 'point'  # Spatalite, sqlite extensions for geo
     DATATYPE_LINESTRING = 'linestring'  # Spatalite, sqlite extensions for geo
     DATATYPE_POLYGON = 'polygon'  # Spatalite, sqlite extensions for geo
-    # Spatalite, sqlite extensions for geo
-    DATATYPE_MULTIPOLYGON = 'multipolygon'
+
+    DATATYPE_MULTIPOLYGON = 'multipolygon' # Spatalite, sqlite extensions for geo
     DATATYPE_GEOMETRY = 'geometry'  # Spatalite, sqlite extensions for geo
-    DATATYPE_CHAR = 'char'
-    DATATYPE_VARCHAR = 'varchar'
-    DATATYPE_BLOB = 'blob'
 
     types = {
         # Sqlalchemy, Python, Sql,
@@ -142,35 +143,22 @@ class Column(Base):
         self.proto_vid = self.proto_vid or None
         self.derivedfrom = self.derivedfrom or None
 
-
     def type_is_int(self):
-        return self.datatype in (
-            Column.DATATYPE_INTEGER,
-            Column.DATATYPE_INTEGER64)
+        return self.datatype in ( Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64)
 
     def type_is_text(self):
-        return self.datatype in (
-            Column.DATATYPE_TEXT,
-            Column.DATATYPE_CHAR,
-            Column.DATATYPE_VARCHAR)
+        return self.datatype in ( Column.DATATYPE_TEXT, Column.DATATYPE_CHAR, Column.DATATYPE_VARCHAR)
 
     def type_is_geo(self):
         return self.datatype in (
-            Column.DATATYPE_POINT,
-            Column.DATATYPE_LINESTRING,
-            Column.DATATYPE_POLYGON,
-            Column.DATATYPE_MULTIPOLYGON,
-            Column.DATATYPE_GEOMETRY)
+            Column.DATATYPE_POINT, Column.DATATYPE_LINESTRING,
+            Column.DATATYPE_POLYGON, Column.DATATYPE_MULTIPOLYGON, Column.DATATYPE_GEOMETRY)
 
     def type_is_gvid(self):
         return 'gvid' in self.name
 
     def type_is_time(self):
-        return self.datatype in (
-            Column.DATATYPE_TIME,
-            Column.DATATYPE_TIMESTAMP,
-            Column.DATATYPE_DATETIME,
-            Column.DATATYPE_DATE)
+        return self.datatype in (Column.DATATYPE_TIME, Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE )
 
     @property
     def sqlalchemy_type(self):
@@ -211,7 +199,7 @@ class Column(Base):
     def schema_type(self):
 
         if not self.datatype:
-            from dbexceptions import ConfigurationError
+            from exc import ConfigurationError
             raise ConfigurationError("Column '{}' has no datatype".format(self.name))
 
         try:
@@ -324,16 +312,6 @@ class Column(Base):
         except TypeError:
             raise TypeError(
                 'Trying to mangle name with invalid type of: ' + str(type(name)))
-
-    @property
-    def fq_name(self):
-        """Fully Qualified Name.
-
-        A column Name with the column id as a prefix
-
-        """
-        return "{}_{}".format(self.id_, self.name)
-
 
 
     @property

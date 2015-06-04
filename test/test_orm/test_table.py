@@ -60,7 +60,7 @@ class Test(unittest.TestCase):
 
         t1 = db.dataset(ds.vid).table('table1')
 
-        t1.add_column('col1')
+        t1.add_column('col1', description='foobar')
 
         db.commit()
 
