@@ -20,7 +20,7 @@ from ambry.identity import DatasetNumber
 from ambry.identity import  ObjectNumber
 from ambry.orm.config import Config
 from ambry.orm.file import File
-
+from sqlalchemy.orm import object_session
 
 class Dataset(Base):
     __tablename__ = 'datasets'
@@ -59,7 +59,6 @@ class Dataset(Base):
     configs = relationship('Config', backref='dataset', cascade="all, delete-orphan")
 
     files = relationship('File', backref='dataset', cascade="all, delete-orphan")
-
 
 
     def __init__(self, *args, **kwargs):
@@ -150,10 +149,29 @@ class Dataset(Base):
         if not extant:
             self.tables.append(table)
         else:
-            from sqlalchemy.orm import object_session
+
             object_session(self).merge(table)
 
         return table
+
+    def bsfile(self, name):
+        """Return a Build Source file ref, creating a new one if the one requested does not exist"""
+        from sqlalchemy.orm.exc import NoResultFound
+
+        try:
+            fr = (object_session(self).query(File)
+                .filter(File.d_vid == self.vid)
+                .filter(File.major_type == File.MAJOR_TYPE.BUILDSOURCE)
+                .filter(File.minor_type == name).one())
+        except NoResultFound:
+            fr = File(d_vid = self.vid,
+                      major_type = File.MAJOR_TYPE.BUILDSOURCE,
+                      minor_type = name,
+                      path = name,
+                      source = 'fs')
+            object_session(self).add(fr)
+
+        return fr
 
     @property
     def dict(self):

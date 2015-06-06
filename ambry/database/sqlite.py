@@ -411,7 +411,6 @@ class SqliteDatabase(RelationalDatabase):
         import time
         import subprocess
         # import uuid
-        from ..util import temp_file_name
         # import os
 
         if isinstance(a, PartitionInterface):
@@ -573,7 +572,7 @@ class SqliteBundleDatabase(RelationalBundleDatabaseMixin, SqliteDatabase):
             table. The name or Id of the table
 
         """
-        from ambry.schema import Schema
+        from ambry.bundle.schema import Schema
 
         table = Schema.get_table_from_database(source_db, table_name)
 

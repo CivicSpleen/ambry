@@ -43,10 +43,6 @@ def testzip(self):
 zipfile.ZipFile.testzip = testzip
 
 
-class DownloadFailedError(Exception):
-    pass
-
-
 class FileRef(File):
     """Extends the File orm class with awareness of the filsystem."""
 
@@ -70,40 +66,10 @@ class FileRef(File):
         self.bundle.database.session.commit()
 
 
-class Filesystem(object):
-    def __init__(self, config):
-        self.config = config
-
-    def get_cache_by_name(self, name):
-        from dbexceptions import ConfigurationError
-        from ckcache import new_cache
-
-        config = self.config.filesystem(name)
-
-        if not config:
-            raise ConfigurationError('No filesystem cache by name of {}'.format(name))
-
-        return new_cache(config)
-
-    @classmethod
-    def find_f(cls, config, key, value):
-        """Find a filesystem entry where the key `key` equals `value`"""
-
-    @classmethod
-    def rm_rf(cls, d):
-
-        if not os.path.exists(d):
-            return
-
-        for path in (os.path.join(d, f) for f in os.listdir(d)):
-            if os.path.isdir(path):
-                cls.rm_rf(path)
-            else:
-                os.unlink(path)
-        os.rmdir(d)
 
 
-class BundleFilesystem(Filesystem):
+
+class BundleFilesystem(object):
     BUILD_DIR = 'build'
     META_DIR = 'meta'
 
@@ -421,188 +387,6 @@ class BundleFilesystem(Filesystem):
         self.bundle.database.session.merge(fr)
         self.bundle.database.session.commit()
 
-    def download(self, url, test_f=None, unzip=False, force = False):
-        """ Download a file
-
-        :param url:
-        :param test_f:
-        :param unzip:
-        :param force: If true, ignore the cache. Required to force a check for changes to the remote file.
-        :return:
-        """
-
-        import tempfile
-        import urlparse
-        import urllib2
-        import urllib
-        from orm import File
-
-
-        cache = self.get_cache_by_name('downloads')
-        parsed = urlparse.urlparse(str(url))
-        source_entry = None
-
-        # If the URL doesn't parse as a URL, then it is a name of a source.
-        if not parsed.scheme and url in self.bundle.metadata.sources:
-
-            source_entry = self.bundle.metadata.sources.get(url)
-
-            # If a conversion exists, load it, otherwize, get the original URL
-            if source_entry.conversion:
-                url = source_entry.conversion
-            else:
-                url = source_entry.url
-            parsed = urlparse.urlparse(str(url))
-
-        if parsed.scheme == 'file' or not parsed.scheme:
-            return parsed.path
-
-        elif parsed.scheme == 's3':
-            # To keep the rest of the code simple, we'll use the S# cache to generate a signed URL, then
-            # download that through the normal process.
-            from ckcache import new_cache, parse_cache_string
-
-            bucket = parsed.netloc.strip('/')
-
-            cache_url = "s3://{}".format(bucket)
-
-            config = parse_cache_string(cache_url)
-
-            config['account'] = self.config.account(bucket)
-
-            s3cache = new_cache(config)
-
-            url = s3cache.path(urllib.unquote_plus(parsed.path.strip('/')))
-            parsed = urlparse.urlparse(str(url))
-            use_hash = False
-        else:
-            use_hash = True
-
-
-        file_path = os.path.join(parsed.netloc, parsed.path.strip('/'))
-
-        # S3 has time in the query, so it never caches
-        if use_hash and parsed.query:
-            import hashlib
-
-            hash = hashlib.sha224(parsed.query).hexdigest()
-            file_path = os.path.join(file_path, hash)
-
-        file_path = file_path.strip('/')
-
-        # We download to a temp file, then move it into place when
-        # done. This allows the code to detect and correct partial
-        # downloads.
-        download_path = os.path.join(tempfile.gettempdir(), file_path + ".download")
-
-        def test_zip_file(f):
-            if not os.path.exists(f):
-                raise Exception("Test zip file does not exist: {} ".format(f))
-
-            try:
-                with zipfile.ZipFile(f) as zf:
-                    return zf.testzip() is None
-            except zipfile.BadZipfile:
-                return False
-
-        if test_f == 'zip':
-            test_f = test_zip_file
-
-        for attempts in range(3):
-
-            if attempts > 0:
-                self.bundle.error("Retrying download of {}".format(url))
-
-            out_file = None
-            excpt = None
-
-            try:
-
-                cached_file = cache.get(file_path)
-                size = os.stat(cached_file).st_size if cached_file else None
-
-                if cached_file and size and not force:
-
-                    out_file = cached_file
-
-                    if test_f and not test_f(out_file):
-                        cache.remove(file_path, True)
-                        raise DownloadFailedError("Cached Download didn't pass test function " +url)
-
-                    process = File.PROCESS.CACHED
-
-                else:
-
-                    self.bundle.log("Downloading " + url)
-                    self.bundle.log("  --> " +cache.path( file_path, missing_ok=True))
-
-                    resp = urllib2.urlopen(url)
-                    # headers = resp.info()  # @UnusedVariable
-                    resp.info()
-
-                    if resp.getcode() is not None and resp.getcode() != 200:
-                        raise DownloadFailedError("Failed to download {}: code: {} ".format(url, resp.getcode()))
-
-                    try:
-                        out_file = cache.put(resp, file_path)
-                    except:
-                        self.bundle.error("Caught exception, deleting download file")
-                        cache.remove(file_path, propagate=True)
-                        raise
-
-                    if test_f and not test_f(out_file):
-                        cache.remove(file_path, propagate=True)
-                        raise DownloadFailedError("Download didn't pass test function " + url)
-
-                    process = File.PROCESS.DOWNLOADED
-
-                break
-
-            except KeyboardInterrupt:
-                print "\nRemoving Files! \n Wait for deletion to complete! \n"
-                cache.remove(file_path, propagate=True)
-                raise
-            except DownloadFailedError as e:
-                self.bundle.error("Failed:  " + str(e))
-                excpt = e
-            except IOError as e:
-                self.bundle.error("Failed to download " + url + " to " + file_path + " : " + str(e))
-                excpt = e
-            except urllib.ContentTooShortError as e:
-                self.bundle.error("Content too short for " + url)
-                excpt = e
-            except zipfile.BadZipfile as e:
-                # Code that uses the yield value -- like th filesystem.unzip method
-                # can throw exceptions that will propagate to here. Unexpected, but very useful.
-                # We should probably create a FileNotValueError, but I'm lazy.
-                self.bundle.error("Got an invalid zip file for " + url)
-                cache.remove(file_path, propagate=True)
-                excpt = e
-
-            except Exception as e:
-                self.bundle.error("Unexpected download error '" +str(e) + "' when downloading " +str(url))
-                cache.remove(file_path, propagate=True)
-                raise
-
-        if download_path and os.path.exists(download_path):
-            os.remove(download_path)
-
-        if excpt:
-            raise excpt
-
-        self._record_file(url, out_file, process)
-
-        if unzip:
-
-            if isinstance(unzip, bool):
-                return self.unzip(out_file)
-            elif unzip == 'dir':
-                return self.unzip_dir(out_file)
-            else:
-                return self.unzip_dir(out_file, regex=unzip)
-
-        else:
-            return out_file
 
     def read_csv(self, f, key=None):
         """Read a CSV into a dictionary of dicts or list of dicts.
@@ -664,26 +448,6 @@ class BundleFilesystem(Filesystem):
 
         return out
 
-    def download_shapefile(self, url):
-        """Downloads a shapefile, unzips it, and returns the .shp file path."""
-        import os
-        import re
-
-        zip_file = self.download(url)
-
-        if not zip_file or not os.path.exists(zip_file):
-            raise Exception("Failed to download: {} ".format(url))
-
-        file_ = None
-
-        for file_ in self.unzip_dir(zip_file, regex=re.compile('.*\.shp$')):
-            pass  # Should only be one
-
-        if not file_ or not os.path.exists(file_):
-            raise Exception(
-                "Failed to unzip {} and get .shp file ".format(zip_file))
-
-        return file_
 
     def load_yaml(self, *args):
         """Load a yaml file from the bundle file system. Arguments are passed to self.path()

@@ -3,8 +3,7 @@
 One of three degrees of enforcement may be specified by passing
 the 'debug' keyword argument to the decorator:
     0 -- NONE:   No type-checking. Decorators disabled.
- #!python
--- MEDIUM: Print warning message to stderr. (Default)
+    1 -- MEDIUM: Print warning message to stderr. (Default)
     2 -- STRONG: Raise TypeError with message.
 If 'debug' is not passed to the decorator, the default level is used.
 

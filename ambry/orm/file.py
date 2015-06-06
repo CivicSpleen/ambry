@@ -19,6 +19,17 @@ from . import Base, MutationDict, JSONEncodedObj, BigIntegerType, DictableMixin
 class File(Base, DictableMixin):
     __tablename__ = 'files'
 
+    MAJOR_TYPE = Constant()
+    MAJOR_TYPE.BUILDSOURCE = 'bs'
+
+    BSFILE = Constant
+    BSFILE.BUILD = 'build_bundle'
+    BSFILE.BUILDMETA = 'build_meta'
+    BSFILE.META = 'bundle_meta'
+    BSFILE.SCHEMA = 'schema'
+    BSFILE.COLMAP = 'column_map'
+    BSFILE.SOURCES = 'sources'
+
     TYPE = Constant()
     TYPE.BUNDLE = LocationRef.LOCATION.LIBRARY
     TYPE.PARTITION = LocationRef.LOCATION.PARTITION
@@ -46,6 +57,8 @@ class File(Base, DictableMixin):
     major_type = SAColumn('f_major_type', Text, nullable=False, index=True)
     minor_type = SAColumn('f_minor_type', Text, nullable=False, index=True)
 
+    mime_type = SAColumn('f_mime_type', Text)
+
     source = SAColumn('f_source', Text, nullable=False)
 
     state = SAColumn('f_state', Text)
@@ -53,7 +66,7 @@ class File(Base, DictableMixin):
     modified = SAColumn('f_modified', Integer)
     size = SAColumn('f_size', BigIntegerType)
 
-    content = SAColumn('f_content', Binary)
+    contents = SAColumn('f_contents', Binary)
 
     data = SAColumn('f_data', MutationDict.as_mutable(JSONEncodedObj))
 
@@ -66,4 +79,3 @@ class File(Base, DictableMixin):
 
     def __repr__(self):
         return "<file: {}; {}/{}>".format(self.path, self.major_type, self.minor_type)
-

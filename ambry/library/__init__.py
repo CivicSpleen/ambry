@@ -7,14 +7,14 @@ of the bundles that have been installed into it.
 
 import os.path
 
-from ambry.dbexceptions import ConfigurationError, NotFoundError, DependencyError
+from ambry.dbexceptions import ConfigurationError, DependencyError
 
 
 # Setup a default logger. The logger is re-assigned by the
 # bundle when the bundle instantiates the logger.
 import logging
 
-from ambry.orm import Dataset, NotFoundError, ConflictError
+from ambry.orm import Dataset
 from ambry.orm.exc import DatabaseError, NotFoundError, ConflictError
 from ..identity import LocationRef, Identity
 from ..util import memoize
@@ -576,7 +576,7 @@ class Library(object):
 
     def column(self, vid):
 
-        from ..orm import Table, Column
+        from ..orm import Column
         from sqlalchemy.orm.exc import NoResultFound
         from ..dbexceptions import NotFoundError
 
@@ -1076,7 +1076,6 @@ class Library(object):
 
         from ..orm import Dataset
         from .files import Files
-        from database import ROOT_CONFIG_NAME_V
         from ..dbexceptions import ConflictError
 
         assert Files.TYPE.BUNDLE == Dataset.LOCATION.LIBRARY
@@ -1403,7 +1402,7 @@ class Library(object):
         return self._search
 
     def _gen_schema(self):
-        from ..schema import Schema
+        from ambry.bundle.schema import Schema
 
         return Schema._dump_gen(self)
 

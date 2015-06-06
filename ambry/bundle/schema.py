@@ -9,7 +9,7 @@ from collections import OrderedDict, defaultdict
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import Column
 from ambry.orm.exc import NotFoundError
-from util import memoize
+from ambry.util import memoize
 
 PROTO_TERMS = 'civicknowledge.com-proto-proto_terms'
 

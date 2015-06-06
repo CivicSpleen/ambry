@@ -10,7 +10,7 @@ import logging
 import os
 
 from ..filesystem import BundleFilesystem
-from ..schema import Schema
+from ambry.bundle.schema import Schema
 from ..partitions import Partitions
 from ..util import get_logger
 from ..dbexceptions import ConfigurationError, ProcessError
@@ -816,7 +816,7 @@ class BuildBundle(Bundle):
         sf_fn = self.filesystem.path(self.SOURCES_FILE)
 
         if os.path.exists(sf_fn):
-            from sources import SourcesFile
+            from ambry.bundle.sources import SourcesFile
 
             sf = SourcesFile(sf_fn, self.metadata)
 
@@ -828,7 +828,7 @@ class BuildBundle(Bundle):
         sf_fn = self.filesystem.path(self.SOURCES_FILE)
 
         if len(self.metadata.sources.keys()) > 0:
-            from sources import SourcesFile
+            from ambry.bundle.sources import SourcesFile
 
             sf = SourcesFile(sf_fn, self.metadata)
 

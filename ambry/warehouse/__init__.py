@@ -1,9 +1,10 @@
 from __future__ import absolute_import
+
+from ckcache import Cache
+
 from ..library import Library
 from ..library.database import LibraryDb
-from ckcache import Cache
 from ..database import new_database
-import os
 from ..util import Constant, memoize
 from ambry.util import init_log_rate
 from ..library.files import Files
@@ -407,7 +408,7 @@ class Warehouse(object):
         in stalled in the database
 
         """
-        from ..schema import Schema
+        from ambry.bundle.schema import Schema
 
         assert identity.is_partition
 

@@ -1,6 +1,4 @@
-"""
-
-The RowGenerator reads a file and yields rows, handling simple headers in CSV
+"""The RowGenerator reads a file and yields rows, handling simple headers in CSV
 files, and complex headers with receeding comments in Excel files.
 
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
