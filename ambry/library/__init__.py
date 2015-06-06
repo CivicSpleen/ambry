@@ -1024,6 +1024,7 @@ class Library(object):
         in the repository cache'''
 
         assert Files.TYPE.BUNDLE == Dataset.LOCATION.LIBRARY
+        assert Files.TYPE.PARTITION == Dataset.LOCATION.PARTITION
 
         if clean:
             self.files.query.type(Files.TYPE.BUNDLE).delete()
