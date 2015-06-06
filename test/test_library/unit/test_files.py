@@ -168,14 +168,9 @@ class FilesTest(unittest.TestCase):
 
     # .type tests
     def test_returns_files_instance_with_query_filtered_by_given_type(self):
-        self._assert_filtered_by('type_', ['type1', 'type2'], files_method='type', filter_by='type1')
-
-    # TODO: check for in
-
-    # .group tests
-    @unittest.skip('group field removed from File. Delete Files.group too.')
-    def test_returns_files_instance_with_query_filtered_by_given_group(self):
-        self._assert_filtered_by('group', ['group1', 'group2'], filter_by='group1')
+        self._assert_filtered_by(
+            'type_', ['type1', 'type2'],
+            files_method='type', filter_by='type1')
 
     # .source_url tests
     def test_returns_files_instance_with_query_filtered_by_given_source_url(self):
@@ -260,7 +255,6 @@ class FilesTest(unittest.TestCase):
     # subclass (SqlitePartition for ex.).
 
     # .install_bundle_source tests
-    @unittest.skip('Is `source` unused parameter?')
     def test_saves_bundle_source_to_db(self):
         identity = fudge.Fake('identity').has_attr(vid='1')
         bundle = fudge.Fake('bundle').has_attr(
@@ -274,13 +268,11 @@ class FilesTest(unittest.TestCase):
 
         installed = all_files.all[0]
         self.assertEquals(installed.path, bundle.bundle_dir)
-        self.assertEquals(installed.group, source.base_dir)
         self.assertEquals(installed.ref, bundle.identity.vid)
         self.assertEquals(installed.type_, Files.TYPE.SOURCE)
         self.assertEquals(installed.data, {})
         self.assertEquals(installed.hash, None)
         self.assertEquals(installed.priority, None)
-        self.assertEquals(installed.source_url, None)
 
         # the same file returned
         self.assertEquals(new_f.path, installed.path)

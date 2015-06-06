@@ -285,8 +285,3 @@ class DocCacheTest(unittest.TestCase):
             self.assertEquals(dc._cache['t/a/table_version_map']['1'], ['vid1'])
             self.assertEquals(dc._cache['t/a/table_version_map']['2'], ['vid2'])
             self.assertEquals(dc._cache['t/a/table_version_map']['3'], ['vid3', 'vid4'])
-
-    # .put_manifest tests
-    @unittest.skip('No one uses that method. Is it deprecated?')
-    def test_puts_manifest(self):
-        pass

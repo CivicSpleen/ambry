@@ -11,10 +11,10 @@ from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
 from sqlalchemy.orm.query import Query
 
+from ambry.dbexceptions import ConflictError, DatabaseError, NotFoundError
+from ambry.identity import DatasetNumber, ObjectNumber, PartitionNumber
 from ambry.library.database import LibraryDb, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME
 from ambry.orm import Dataset, Config, Partition, File, Column, ColumnStat, Table
-from ambry.dbexceptions import ConflictError, DatabaseError
-from ambry.database.inserter import ValueInserter
 
 from test.test_library.factories import DatasetFactory, ConfigFactory,\
     TableFactory, ColumnFactory, PartitionFactory,\
@@ -397,6 +397,14 @@ class LibraryDbTest(unittest.TestCase):
         self.assertEquals(db.password, new_db.password)
 
     # .create_tables test
+    def test_ignores_OperationalError_while_droping(self):
+        self.sqlite_db.drop()
+        fake_drop = fudge.Fake()\
+            .expects_call()\
+            .raises(OperationalError('select 1;', [], 'a'))
+        with fudge.patched_context(self.sqlite_db, 'drop', fake_drop):
+            self.sqlite_db.create_tables()
+
     def test_creates_dataset_table(self):
 
         # Now all tables are created. Can we use ORM to create datasets?
@@ -496,13 +504,6 @@ class LibraryDbTest(unittest.TestCase):
         self.assertEquals(ds.dataset, ROOT_CONFIG_NAME)
         self.assertEquals(ds.creator, ROOT_CONFIG_NAME)
         self.assertEquals(ds.revision, 1)
-
-    # .inserter test
-    # TODO: ValueInserter does not work without bundle. Fix it.
-    @unittest.skip('ValueInserter requires bundle, but inserter method gives None instead.')
-    def test_returns_value_inserter(self):
-        ret = self.sqlite_db.inserter('datasets')
-        self.assertIsInstance(ret, ValueInserter)
 
     # set_config_value tests
     def test_creates_new_config_if_config_does_not_exists(self):
@@ -792,7 +793,7 @@ class LibraryDbTest(unittest.TestCase):
             self.sqlite_db.install_dataset_identity(FakeIdentity(), overwrite=True)
 
     # .mark_table_installed tests
-    def test_marks_table_as_installed(self):
+    def test_marks_table_found_by_vid_as_installed(self):
         # prepare state
 
         ds1 = DatasetFactory()
@@ -801,6 +802,19 @@ class LibraryDbTest(unittest.TestCase):
 
         # test
         self.sqlite_db.mark_table_installed(table1.vid)
+        self.assertEqual(
+            self.query(Table).filter_by(vid=table1.vid).one().installed,
+            'y')
+
+    def test_marks_table_found_by_name_as_installed(self):
+        # prepare state
+
+        ds1 = DatasetFactory()
+        table1 = TableFactory(dataset=ds1)
+        assert table1.installed is None
+
+        # test
+        self.sqlite_db.mark_table_installed(table1.name)
         self.assertEqual(
             self.query(Table).filter_by(vid=table1.vid).one().installed,
             'y')
@@ -819,17 +833,16 @@ class LibraryDbTest(unittest.TestCase):
             'y')
 
     # .remove_bundle tests
-    @unittest.skip('Where is Library.get_id definition?')
-    def test_removes_all_partitions(self):
-        pass
+    def test_removes_dataset_of_the_bundle(self):
+        ds1 = DatasetFactory()
+        ds1_vid = ds1.vid
+        fake_bundle = fudge.Fake('bundle').has_attr(identity=ds1.identity)
 
-    @unittest.skip('Where is Library.get_id definition?')
-    def test_deletes_dataset_colstats(test):
-        pass
-
-    @unittest.skip('Where is Library.get_id definition?')
-    def test_deletes_dataset(test):
-        pass
+        # test
+        self.sqlite_db.remove_bundle(fake_bundle)
+        self.assertEquals(
+            self.query(Dataset).filter_by(vid=ds1_vid).all(),
+            [])
 
     # .delete_dataset_colstats tests
     def test_deletes_column_stat(self):
@@ -898,7 +911,44 @@ class LibraryDbTest(unittest.TestCase):
         self.assertEquals(colstat_query.all(), [], 'ColumnStat instance was not deleted.')
 
     # .get tests
-    # TODO:
+    def test_parses_string_with_vid_and_returns_dataset_identity(self):
+        ds1 = DatasetFactory()
+
+        ret = self.sqlite_db.get(ds1.vid)
+        self.assertEquals(ret.vid, ds1.vid)
+
+    def test_returns_identity_of_dataset_found_by_dataset_number(self):
+        ds1 = DatasetFactory()
+        ds_number = ObjectNumber.parse(ds1.vid)
+        assert isinstance(ds_number, DatasetNumber)
+
+        ret = self.sqlite_db.get(ds_number)
+        self.assertEquals(ret.vid, ds1.vid)
+
+    def test_returns_identity_of_dataset_found_by_partition_number(self):
+        ds1 = DatasetFactory()
+        partition1 = PartitionFactory(dataset=ds1)
+        part_number = ObjectNumber.parse(partition1.vid)
+        assert isinstance(part_number, PartitionNumber)
+
+        ret = self.sqlite_db.get(part_number)
+        self.assertEquals(ret.vid, ds1.vid)
+        self.assertIn(partition1.vid, ret.partitions)
+
+    def test_raises_NotFoundError_if_dataset_not_found(self):
+        # build dataset but do not save it. Need to get valid vid.
+        ds1 = DatasetFactory.build()
+        vid = ds1.vid
+
+        # assert it was not saved
+        assert self.sqlite_db.session.query(Dataset).all() == []
+
+        with self.assertRaises(NotFoundError):
+            self.sqlite_db.get(vid)
+
+    def test_raises_ValueError_if_wrong_vid_given(self):
+        with self.assertRaises(ValueError):
+            self.sqlite_db.get(1)
 
     # .get_table tests
 
@@ -914,9 +964,7 @@ class LibraryDbTest(unittest.TestCase):
         self.assertEquals(ret.vid, table1.vid)
 
     # .tables tests
-    @unittest.skip(
-        '.tables() method raises TypeError: list indices must be integers exception and seems unused.')
-    def test_returns_dict_with_all_tables(self):
+    def test_returns_all_tables(self):
 
         # prepare state
         ds1 = DatasetFactory()
@@ -927,10 +975,13 @@ class LibraryDbTest(unittest.TestCase):
 
         # testing
         ret = self.sqlite_db.tables()
-        self.assertIsInstance(ret, dict)
-        self.assertIn(table1.name, ret)
-        self.assertIn(table2.name, ret)
+        names = [x.name for x in ret]
+        vids = [x.vid for x in ret]
+        self.assertIn(table1.name, names)
+        self.assertIn(table2.name, names)
 
+        self.assertIn(table1.vid, vids)
+        self.assertIn(table2.vid, vids)
     # .list tests
     # TODO:
 
@@ -954,7 +1005,6 @@ class LibraryDbTest(unittest.TestCase):
         self.assertIn(partition2.vid, ret)
 
     # .datasets tests
-    @unittest.skip('raises `AttributeError: type object \'Dataset\' has no attribute \'location\'` error.')
     def test_returns_dict_with_library_datasets(self):
         # prepare state
 
@@ -965,7 +1015,7 @@ class LibraryDbTest(unittest.TestCase):
         # testing
         ret = self.sqlite_db.datasets()
         self.assertIsInstance(ret, dict)
-        self.assertEquals(len(ret.keys()), 2)
+        self.assertEquals(len(ret.keys()), 3)
         self.assertIn(ds1.vid, ret)
         self.assertIn(ds2.vid, ret)
         self.assertIn(ds3.vid, ret)

@@ -44,6 +44,7 @@ BUNDLES_DIR_PREFIX = 'test_library_test_init_bundles'
 
 
 class NewLibraryTest(unittest.TestCase):
+    """ tests _new_library """
     def setUp(self):
         self.sqlite_db = LibraryDb(driver='sqlite', dbname=SQLITE_DATABASE)
         self.sqlite_db.enable_delete = True
@@ -114,50 +115,6 @@ class NewLibraryTest(unittest.TestCase):
                 # prevent sqlite db file creation.
                 with fudge.patched_context(LibraryDb, 'create', fudge.Fake().is_a_stub()):
                     _new_library(config)
-
-    @unittest.skip('host and port are never used.')
-    def test_separates_host_and_port(self):
-
-        config = {
-            'database': {
-                'driver': 'sqlite',
-                'dbname': 'test_init1_unused.db',
-            },
-            'filesystem': 'http://example.com',
-            'host': 'localhost:8080',
-            'root': 'UNUSED?'}
-
-        fake_new_cache = fudge.Fake()\
-            .expects_call().returns(fudge.Fake().is_a_stub())\
-
-        with fudge.patched_context(ckcache, 'new_cache', fake_new_cache):
-            # prevent sqlite db file creation.
-            with fudge.patched_context(LibraryDb, 'create', fudge.Fake().is_a_stub()):
-                lib = _new_library(config)
-                self.assertEquals(lib.host, 'localhost')
-                self.assertEquals(lib.port, '8080')
-
-    @unittest.skip('host and port are never used.')
-    def test_uses_80_port_if_not_given(self):
-
-        config = {
-            'database': {
-                'driver': 'sqlite',
-                'dbname': 'test_init1_unused.db',
-            },
-            'filesystem': 'http://example.com',
-            'host': 'localhost',
-            'root': 'UNUSED?'}
-
-        fake_new_cache = fudge.Fake()\
-            .expects_call().returns(fudge.Fake().is_a_stub())\
-
-        with fudge.patched_context(ckcache, 'new_cache', fake_new_cache):
-            # prevent sqlite db file creation.
-            with fudge.patched_context(LibraryDb, 'create', fudge.Fake().is_a_stub()):
-                lib = _new_library(config)
-                self.assertEquals(lib.host, 'localhost')
-                self.assertEquals(lib.port, 80)
 
 
 class LibraryTest(unittest.TestCase):
@@ -676,15 +633,11 @@ class LibraryTest(unittest.TestCase):
         self.assertIn(table2, derived_tables)
         self.assertNotIn(table3, derived_tables)
 
-    @unittest.skip('.all() method of query never raises NoResultFound error.')
-    def test_raises_NotFoundError_if_tables_not_found(self):
+    def test_returns_empty_list_tables_not_found(self):
         # prepare state
         self.sqlite_db.create_tables()
         lib = Library(self.cache, self.sqlite_db)
-
-        # testing
-        with self.assertRaises(NotFoundError):
-            lib.derived_tables('1')
+        self.assertEquals(lib.derived_tables('1'), [])
 
     # .dataset tests
     def test_returns_dataset_by_given_vid(self):
@@ -1005,21 +958,6 @@ class LibraryTest(unittest.TestCase):
         lib.remove_manifest(uid)
         self.assertEquals(len(self.query(File).all()), 0)
 
-    # .find tests
-    @unittest.skip('AttributeError: \'LibraryDb\' object has no attribute \'find\'')
-    def test_finds_in_the_db(self):
-        # prepare state
-        lib = Library(self.cache, self.sqlite_db)
-        fake_find = fudge.Fake()\
-            .expects_call()\
-            .with_args('FAKE_QUERY')\
-            .returns('FAKE_RETURN')
-
-        # testing
-        with fudge.patched_context(self.sqlite_db, 'find', fake_find):
-            ret = lib.find('FAKE_QUERY')
-            self.assertEquals(ret, 'FAKE_RETURN')
-
     # .locate tests
     def test_returns_pair_of_nones_if_ident_resolve_failed(self):
         # prepare state
@@ -1117,21 +1055,6 @@ class LibraryTest(unittest.TestCase):
         self.assertIsInstance(ret1, Identity)
         self.assertEquals(ret1.vid, ds1.vid)
         self.assertIsNone(ret2)
-
-    # .locate_one test
-    # @unittest.skip('.pop() on tuple returned by locate()? Is it highest or lowest?')
-    def test_returns_ident_with_highest_priority_location(self):
-        # prepare state
-        lib = Library(self.cache, self.sqlite_db)
-        lib.cache = fudge.Fake('cache').expects('has').returns(False)
-        lib._remotes = {}
-        ds1 = DatasetFactory()
-
-        # testing
-        lib.locate_one(ds1.identity)
-        fudge.verify()
-
-        # TODO: enhance after .locate_one or .locate tests.
 
     # .dep tests
     def test_raises_DependencyError_if_name_not_found_in_dependencies(self):
@@ -1377,10 +1300,6 @@ class LibraryTest(unittest.TestCase):
         self.assertTrue(raised)
 
     # .sync_library tests
-    @unittest.skip(
-        'File "ambry/library/__init__.py", line 1101, in sync_library'
-        'assert Files.TYPE.PARTITION == Dataset.LOCATION.PARTITION'
-        'AssertionError')
     @fudge.patch('os.walk')
     def test_removes_bundles_and_partitions_from_db(self, fake_walk):
         # prepare state
@@ -1395,10 +1314,6 @@ class LibraryTest(unittest.TestCase):
         lib.sync_library(clean=True)
         self.assertEquals(self.query(File).all(), [])
 
-    @unittest.skip(
-        'File "ambry/library/__init__.py", line 1101, in sync_library'
-        'assert Files.TYPE.PARTITION == Dataset.LOCATION.PARTITION'
-        'AssertionError')
     def test_logs_failed_to_open_bundle(self):
 
         # prepare state
@@ -1424,9 +1339,6 @@ class LibraryTest(unittest.TestCase):
                 lib.sync_library()
         fudge.verify()
 
-    @unittest.skip(
-        'File "ambry/library/__init__.py", line 1101, in sync_library'
-        'assert Files.TYPE.PARTITION == Dataset.LOCATION.PARTITION')
     def test_installs_found_bundles(self):
 
         # first assert signatures of the functions we are going to mock did not change.
@@ -1484,7 +1396,20 @@ class LibraryTest(unittest.TestCase):
         fudge.verify()
 
     # .sync_remotes tests
-    # TODO:
+    def test_logs_all_s3_errors(self):
+        fake_remote1 = fudge.Fake().expects('list').raises(S3ResponseError('status', 'reason'))
+        fake_remote2 = fudge.Fake().expects('list').raises(S3ResponseError('status', 'reason'))
+        lib = Library(self.cache, self.sqlite_db, source_dir='the-dir')
+
+        fake_error = fudge.Fake('error')\
+            .expects_call()\
+            .with_args(arg.contains('Failed to get list from'))\
+            .next_call()\
+            .with_args(arg.contains('Failed to get list from'))
+        lib._remotes = {'rem-1': fake_remote1, 'rem-2': fake_remote2}
+
+        with fudge.patched_context(lib.logger, 'error', fake_error):
+            lib.sync_remotes()
 
     # .sync_source tests
     def test_deletes_all_sources_from_db(self):
@@ -1759,6 +1684,42 @@ class LibraryTest(unittest.TestCase):
                     lib.sync_warehouse(warehouse1)
         fudge.verify()
 
+    def test_links_remote_manifest_partitions(self):
+
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        self.sqlite_db.commit()
+
+        # add partition to the library
+        local_manifest = FileFactory(type_=Files.TYPE.MANIFEST, data={})
+
+        warehouse1 = WarehouseFactory(
+            database=self.sqlite_db)
+
+        # add manifests to the warehouse library
+        FileFactory._meta.sqlalchemy_session = warehouse1.library.database.session
+        FileFactory(type_=Files.TYPE.MANIFEST)
+
+        fake_store = fudge.Fake().is_a_stub()
+        fake_install = fudge.Fake('install_data_store').expects_call().returns(fake_store)
+
+        # fake link_store for both - dataset and partition.
+        fake_link = fudge.Fake('link_store')\
+            .expects_call()\
+            .with_args(fake_store)\
+            .next_call()\
+            .with_args(fake_store)\
+
+        fake_install_manifest = fudge.Fake().expects_call().returns(local_manifest)
+
+        # testing
+
+        with fudge.patched_context(Files, 'install_data_store', fake_install):
+            with fudge.patched_context(Files, 'install_manifest', fake_install_manifest):
+                with fudge.patched_context(File, 'link_store', fake_link):
+                    lib.sync_warehouse(warehouse1)
+        fudge.verify()
+
     # .sync_warehouses tests
     def test_synces_all_warehouses(self):
         # prepare state
@@ -1824,6 +1785,15 @@ class LibraryTest(unittest.TestCase):
         self.assertIn('Cache', info)
         self.assertIn('Remotes', info)
 
+    def test_contains_remotes(self):
+        # prepare state
+        lib = Library(self.cache, self.sqlite_db)
+        lib._remotes = {'remote1': 'the-remote'}
+
+        # testing
+        info = lib.info
+        self.assertIn('the-remote', info)
+
     # .dict property tests
     def test_contains_dict_with_library_info(self):
         # prepare state
@@ -1833,7 +1803,6 @@ class LibraryTest(unittest.TestCase):
         ret = lib.dict
         self.assertIn('name', ret)
         self.assertIn('database', ret)
-        # TODO: enhance
 
     # .summary_dict property tests
     def test_contains_summary_dict(self):

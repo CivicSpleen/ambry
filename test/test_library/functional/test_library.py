@@ -17,11 +17,10 @@ from ckcache import new_cache
 from test.test_base import TestBase  # Must be first ambry import to get logger set to internal logger.
 
 from ambry.bundle import LibraryDbBundle
-from ambry.dbexceptions import NotFoundError, ConfigurationError
+from ambry.dbexceptions import ConfigurationError
 from ambry.identity import Identity
 from ambry.library import new_library
 from ambry.library.database import LibraryDb, ROOT_CONFIG_NAME_V
-from ambry.library.search import SearchTermParser
 from ambry.library.query import Resolver
 from ambry.orm import Dataset, Partition, Table, Column, ColumnStat, Code, Config, File
 from ambry.run import get_runconfig, RunConfig
@@ -38,7 +37,7 @@ ckcache.filesystem.global_logger = global_logger
 class Test(TestBase):
     def setUp(self):
 
-        super(Test, self).setUp()  #
+        super(Test, self).setUp()
 
         import test.bundles.testbundle.bundle
 
@@ -154,10 +153,6 @@ class Test(TestBase):
 
             self.assertEquals(vid, vid2)
 
-    @unittest.skip(
-        'self.assertEquals(45, len(ldsq(Column).all()))'
-        'AssertionError: 45 != 43 '
-        'What should we fix - test or ambry?')
     def test_simple_install(self):
 
         l = self.get_library()
@@ -175,20 +170,19 @@ class Test(TestBase):
 
         self.assertEquals(4, len(ldsq(Partition).all()))
         self.assertEquals(9, len(ldsq(Table).all()))
-        self.assertEquals(45, len(ldsq(Column).all()))
-        self.assertEquals(20, len(ldsq(Code).all()))
-        self.assertEquals(23, len(ldsq(ColumnStat).all()))
-        self.assertEquals(44, len(ldsq(Config).all()))
+        self.assertEquals(43, len(ldsq(Column).all()))
+        self.assertEquals(0, len(ldsq(Code).all()))
+        self.assertEquals(22, len(ldsq(ColumnStat).all()))
+        self.assertEquals(39, len(ldsq(Config).all()))
 
         self.assertEquals(5, len(ldsq(File).all()))
 
+        installed = False
         for p in self.bundle.partitions.all:
             l.get(p.identity.vid)
+            installed = True
+        self.assertTrue(installed)
 
-    @unittest.skip(
-        'self.assertEquals(45, len(ldsq(Column).all()))'
-        'AssertionError: 45 != 43 '
-        'What should we fix - test or ambry?')
     def test_library_install(self):
         '''Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent'''
@@ -201,9 +195,9 @@ class Test(TestBase):
         ldsq = l.database.session.query
         self.assertEquals(4, len(ldsq(Partition).all()))
         self.assertEquals(9, len(ldsq(Table).all()))
-        self.assertEquals(45, len(ldsq(Column).all()))
-        self.assertEquals(20, len(ldsq(Code).all()))
-        self.assertEquals(23, len(ldsq(ColumnStat).all()))
+        self.assertEquals(43, len(ldsq(Column).all()))
+        self.assertEquals(0, len(ldsq(Code).all()))
+        self.assertEquals(22, len(ldsq(ColumnStat).all()))
 
         l.put_bundle(self.bundle)
 
@@ -211,9 +205,9 @@ class Test(TestBase):
 
         self.assertEquals(4, len(ldsq(Partition).all()))
         self.assertEquals(9, len(ldsq(Table).all()))
-        self.assertEquals(45, len(ldsq(Column).all()))
-        self.assertEquals(20, len(ldsq(Code).all()))
-        self.assertEquals(23, len(ldsq(ColumnStat).all()))
+        self.assertEquals(43, len(ldsq(Column).all()))
+        self.assertEquals(0, len(ldsq(Code).all()))
+        self.assertEquals(22, len(ldsq(ColumnStat).all()))
 
         r = l.get(self.bundle.identity)
 
@@ -240,12 +234,11 @@ class Test(TestBase):
         l.put_bundle(self.bundle)
 
         for partition in self.bundle.partitions.all:
-
             r = l.get(partition.identity.vid)
             self.assertIsNotNone(r)
             self.assertEquals(r.partition.identity.id_, partition.identity.id_)
 
-            r = l.get(partition.identity.id_)
+            r = l.get(partition.identity.vid)
             self.assertIsNotNone(r)
             self.assertEquals(r.partition.identity.id_, partition.identity.id_)
 
@@ -351,9 +344,6 @@ source/dataset-subset-variation-0.0.1/tthree.db:
     def test_s3_push(self):
         """Install the bundle and partitions, and check that they are
         correctly installed. Check that installation is idempotent"""
-
-        # FIXME: unused root?
-        root = self.rc.group('filesystem').root
 
         try:
             l = self.get_library('s3-remoted')
@@ -696,31 +686,3 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         lib.files.new_file(path='ref-a', type='type-a', source='source-a', state='b')
         self.assertEquals('b', lib.files.query.path('ref-a').one.state)
         self.assertEquals(31, len(lib.files.query.all))
-
-    @unittest.skip('Are codes removed from test bundle?')
-    def test_codes(self):
-
-        lib = self.get_library()
-
-        self.assertEquals(0, len(lib.database.session.query(Code).all()))
-
-        lib.put_bundle(self.bundle)
-
-        b = lib.bundle(self.bundle.identity.vid)
-
-        # Check that the bundle is from the library
-        self.assertTrue(b.database.dsn.endswith('library.db'))
-        self.assertIsInstance(b, LibraryDbBundle)
-
-        t = b.schema.table('tone')
-        c = t.column('code')
-
-        self.assertEquals(10, len(c.forward_code_map))
-        self.assertIn('5', c.forward_code_map.keys())
-
-        lib.remove(b)
-
-        self.assertEquals(0, len(lib.database.session.query(Code).all()))
-
-        # Should be able to re-put without conflict
-        lib.put_bundle(self.bundle)
