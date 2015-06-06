@@ -132,11 +132,6 @@ class Files(object):
 
         return self
 
-    def group(self, v):
-        self._check_query()
-        self._query = self._query.filter(File.group == v)
-        return self
-
     def source_url(self, v):
         self._check_query()
         self._query = self._query.filter(File.source_url == v)
@@ -149,17 +144,16 @@ class Files(object):
     @property
     def installed(self):
         self._check_query()
-        self._query = self._query.filter(or_(File.type_ == self.TYPE.BUNDLE, File.type_ == self.TYPE.PARTITION))
+        self._query = self._query.filter(
+            or_(File.type_ == self.TYPE.BUNDLE, File.type_ == self.TYPE.PARTITION))
         return self
 
-    def new_file(self,  commit = True, **kwargs):
+    def new_file(self,  commit=True, **kwargs):
         """If merge is 'collect', the files will be added to the collection,
         for later insertion."""
-        from sqlalchemy.exc import IntegrityError
 
         if 'oid' in kwargs:
             del kwargs['oid']
-
 
         f = File(**kwargs)
 
@@ -183,10 +177,6 @@ class Files(object):
             f.modified = f.modified if f.modified else None
             f.size = f.size if f.size else None
 
-        # Debugging code. Kill on sight.
-        #for i in self.db.session.identity_map.items():
-        #    print i
-
         f = self.db.session.merge(f)
 
         if commit:
@@ -194,12 +184,9 @@ class Files(object):
 
         self.db._mark_update()
 
-
         return f
 
-
-
-    def install_bundle_file(self,bundle,source,commit=True,state='installed'):
+    def install_bundle_file(self, bundle, source, commit=True, state='installed'):
         """Mark a bundle file as having been installed in the library."""
 
         ident = bundle.identity
@@ -214,7 +201,7 @@ class Files(object):
             data=None,
             source_url=source)
 
-    def install_partition_file(self,partition,source,commit=True,state='installed'):
+    def install_partition_file(self, partition, source, commit=True, state='installed'):
         """Mark a partition file as having been installed in the library."""
 
         ident = partition.identity
@@ -229,7 +216,6 @@ class Files(object):
             data=None,
             source_url=source)
 
-
     def install_bundle_source(self, bundle, source, commit=True):
         """Set a reference a bundle source."""
 
@@ -243,16 +229,15 @@ class Files(object):
             data=None,
             hash=None,
             priority=None,
-            source_url='localhost', )
+            source_url='localhost')
 
-    def install_data_store(self, w,name=None, title=None, summary=None,cache=None, url=None, commit=True):
+    def install_data_store(self, w, name=None, title=None, summary=None,
+                           cache=None, url=None, commit=True):
         """A reference for a data store, such as a warehouse or a file
         store."""
 
         assert bool(w.dsn)
         assert bool(w.uid)
-
-
 
         kw = dict(commit=commit,
                   path=w.dsn,
@@ -265,9 +250,7 @@ class Files(object):
                       summary=summary,
                       cache=cache,
                       url=url,
-                      db_class=w.database_class,
-
-                  ),
+                      db_class=w.database_class),
                   source_url=w.dsn)
 
         f = self.new_file(**kw)
@@ -342,7 +325,6 @@ class Files(object):
     def install_manifest(self, manifest, warehouse=None, commit=True):
         """Store a references to, and content for, a manifest."""
 
-
         try:
             # manifest if a real Manifest object
 
@@ -385,4 +367,3 @@ class Files(object):
             self.db.commit()
 
         return f
-
