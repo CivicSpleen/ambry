@@ -817,7 +817,7 @@ class Warehouse(object):
                 # Link the table name and the alias
                 self.install_table_alias(dest_table_name, alias, proto_vid=proto_vid, p_vid=p.vid)
 
-                self.library.database.mark_table_installed(p.get_table(source_table_name).vid, itn)
+                self.library.database.mark_table_installed(p.get_table(source_table_name).vid)
 
                 assert self.augmented_table_name(p.identity, source_table_name)[0] == itn
 

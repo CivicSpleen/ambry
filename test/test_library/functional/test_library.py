@@ -170,7 +170,7 @@ class Test(TestBase):
 
         self.assertEquals(4, len(ldsq(Partition).all()))
         self.assertEquals(9, len(ldsq(Table).all()))
-        self.assertEquals(43, len(ldsq(Column).all()))
+        self.assertEquals(45, len(ldsq(Column).all()))
         self.assertEquals(0, len(ldsq(Code).all()))
         self.assertEquals(22, len(ldsq(ColumnStat).all()))
         self.assertEquals(39, len(ldsq(Config).all()))
@@ -195,7 +195,7 @@ class Test(TestBase):
         ldsq = l.database.session.query
         self.assertEquals(4, len(ldsq(Partition).all()))
         self.assertEquals(9, len(ldsq(Table).all()))
-        self.assertEquals(43, len(ldsq(Column).all()))
+        self.assertEquals(45, len(ldsq(Column).all()))
         self.assertEquals(0, len(ldsq(Code).all()))
         self.assertEquals(22, len(ldsq(ColumnStat).all()))
 
@@ -205,7 +205,7 @@ class Test(TestBase):
 
         self.assertEquals(4, len(ldsq(Partition).all()))
         self.assertEquals(9, len(ldsq(Table).all()))
-        self.assertEquals(43, len(ldsq(Column).all()))
+        self.assertEquals(45, len(ldsq(Column).all()))
         self.assertEquals(0, len(ldsq(Code).all()))
         self.assertEquals(22, len(ldsq(ColumnStat).all()))
 
