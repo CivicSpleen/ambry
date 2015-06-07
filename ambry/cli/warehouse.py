@@ -337,7 +337,7 @@ def warehouse_test(args, w, config):
 
     b = w.bundle
 
-    t = b.schema.add_table('test_table')
+    t = b.schema.new_table('test_table')
     t.add_column('test_column', datatype='integer')
 
     for t in b.schema.tables:

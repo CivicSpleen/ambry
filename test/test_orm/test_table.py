@@ -54,7 +54,7 @@ class Test(unittest.TestCase):
         db.open()
 
         ds = db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
-        ds.add_table('table1')
+        ds.new_table('table1')
 
         db.commit()
 

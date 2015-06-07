@@ -559,7 +559,7 @@ class Partitions(object):
         # Create the table from the information in the data frame.
         with self.bundle.session:
             sch = self.bundle.schema
-            t = sch.add_table(table)
+            t = sch.new_table(table)
 
             if frame.index.name:
                 id_name = frame.index.name

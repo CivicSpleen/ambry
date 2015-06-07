@@ -75,15 +75,9 @@ class Schema(object):
     def read(self):
         """Read a CSV file, in a particular format, to generate the schema"""
         from ..orm.file import File
+        import re
 
         bsfile = self.bundle.dataset.bsfile(File.BSFILE.SCHEMA)
-
-        for row in bsfile.dict_row_reader:
-            print row
-
-        return
-
-        import re
 
         t = None
 
@@ -96,89 +90,255 @@ class Schema(object):
 
         extant_tables = [t.name for t in self.tables]
 
-        reader = None
+        for row in bsfile.dict_row_reader:
 
-        with self.bundle.session:
-            for row in reader:
+            line_no += 1
 
-                line_no += 1
+            if not row.get('column', False) and not row.get('table', False):
+                continue
 
-                if not row.get('column', False) and not row.get('table', False):
-                    continue
+            # Probably best not to have unicode in column names and descriptions.
+            row = {k: str(v).decode('utf8', 'ignore').encode('ascii', 'ignore').strip() for k, v in row.items()}
 
-                row = {k: str(v).decode('utf8', 'ignore').encode('ascii', 'ignore').strip()
-                       for k, v in row.items()}
+            if row['table'] and row['table'] != last_table:
+                new_table = True
+                last_table = row['table']
 
-                if row['table'] and row['table'] != last_table:
-                    new_table = True
-                    last_table = row['table']
+            if new_table and row['table']:
 
-                if new_table and row['table']:
+                if row['table'] in extant_tables:
+                    errors.append((row['table'], None, "Table already exists"))
+                    return warnings, errors
 
-                    if row['table'] in extant_tables:
-                        errors.append((row['table'], None, "Table already exists"))
-                        return warnings, errors
+                try:
+                    table_row = dict(**row)
+                    del table_row[ 'type']  # The field is really for columns, and means something different for tables
 
-                    try:
-                        table_row = dict(**row)
-                        del table_row[
-                            'type']  # The field is really for columns, and means something different for tables
+                    t = self.bundle.dataset.new_table(row['table'], **table_row)
 
-                        t = self.add_table(row['table'], **table_row)
-                    except Exception as e:
-                        errors.append((None, None, " Failed to add table: {}. Row={}. Exception={}".format(row['table'],
-                                                                                                           dict(row),
-                                                                                                           e)))
-                        return warnings, errors
+                except Exception as e:
+                    errors.append((None, None, " Failed to add table: {}. Row={}. Exception={}"
+                                   .format(row['table'],dict(row),e)))
+                    return warnings, errors
 
-                    new_table = False
+                new_table = False
 
-                # Ensure that the default doesnt get quotes if it is a number.
-                if row.get('default', False):
-                    try:
-                        default = int(row['default'])
-                    except:
-                        default = row['default']
-                else:
-                    default = None
+            # Ensure that the default doesnt get quotes if it is a number.
+            if row.get('default', False):
+                try:
+                    default = int(row['default'])
+                except:
+                    default = row['default']
+            else:
+                default = None
 
-                if not row.get('column', False):
-                    raise ConfigurationError("Row error: no column on line {}".format(line_no))
-                if not row.get('table', False):
-                    raise ConfigurationError("Row error: no table on line {}".format(line_no))
-                if not row.get('type', False):
-                    raise ConfigurationError("Row error: no type on line {}".format(line_no))
+            if not row.get('column', False):
+                raise ConfigurationError("Row error: no column on line {}".format(line_no))
+            if not row.get('table', False):
+                raise ConfigurationError("Row error: no table on line {}".format(line_no))
+            if not row.get('type', False):
+                raise ConfigurationError("Row error: no type on line {}".format(line_no))
 
-                indexes = [row['table'] + '_' + c for c in row.keys() if (re.match('i\d+', c) and _clean_flag(row[c]))]
-                uindexes = [row['table'] + '_' + c for c in row.keys() if
-                            (re.match('ui\d+', c) and _clean_flag(row[c]))]
-                uniques = [row['table'] + '_' + c for c in row.keys() if (re.match('u\d+', c) and _clean_flag(row[c]))]
+            indexes = [row['table'] + '_' + c for c in row.keys() if (re.match('i\d+', c) and _clean_flag(row[c]))]
+            uindexes = [row['table'] + '_' + c for c in row.keys() if
+                        (re.match('ui\d+', c) and _clean_flag(row[c]))]
+            uniques = [row['table'] + '_' + c for c in row.keys() if (re.match('u\d+', c) and _clean_flag(row[c]))]
 
-                datatype = row['type'].strip().lower()
+            datatype = row['type'].strip().lower()
 
-                width = _clean_int(row.get('width', None))
-                size = _clean_int(row.get('size', None))
-                start = _clean_int(row.get('start', None))
+            width = _clean_int(row.get('width', None))
+            size = _clean_int(row.get('size', None))
+            start = _clean_int(row.get('start', None))
 
-                data = {k.replace('d_', '', 1): v for k, v in row.items() if k.startswith('d_')}
+            data = {k.replace('d_', '', 1): v for k, v in row.items() if k.startswith('d_')}
 
-                description = row.get('description', '').strip().encode('utf-8')
+            description = row.get('description', '').strip().encode('utf-8')
 
-                col = self.add_column(
-                    t, row['column'], sequence_id=row.get('seq', None),
-                    is_primary_key=True if row.get('is_pk', False) else False,
-                    fk_vid=row['is_fk'] if row.get('is_fk', False) else None, description=description,
-                    datatype=datatype, proto_vid=row.get('proto_vid'), derivedfrom=row.get('derivedfrom'),
-                    unique_constraints=','.join(uniques), indexes=','.join(indexes), uindexes=','.join(uindexes),
-                    default=default, size=size, start=start, width=width, data=data,
-                    sql=row.get('sql'), precision=int(row['precision']) if row.get('precision', False) else None,
-                    scale=float(row['scale']) if row.get('scale', False) else None, flags=row.get('flags', None),
-                    keywords=row.get('keywords'), measure=row.get('measure'), units=row.get('units', None),
-                    universe=row.get('universe'), commit=False)
+            col = t.add_column(row['column'],
+                is_primary_key=True if row.get('is_pk', False) else False,
+                fk_vid=row['is_fk'] if row.get('is_fk', False) else None, description=description,
+                datatype=datatype, proto_vid=row.get('proto_vid'), derivedfrom=row.get('derivedfrom'),
+                unique_constraints=','.join(uniques), indexes=','.join(indexes), uindexes=','.join(uindexes),
+                default=default, size=size, start=start, width=width, data=data,
+                sql=row.get('sql'), precision=int(row['precision']) if row.get('precision', False) else None,
+                scale=float(row['scale']) if row.get('scale', False) else None, flags=row.get('flags', None),
+                keywords=row.get('keywords'), measure=row.get('measure'), units=row.get('units', None),
+                universe=row.get('universe'), commit=False)
 
-                if col:
-                    self.validate_column(t, col, warnings, errors)
+            if col:
+                self.validate_column(t, col, warnings, errors)
+
         return warnings, errors
+
+    def write(self, f=None):
+        import unicodecsv as csv
+        from StringIO import StringIO
+
+        if f is None:
+            f = StringIO()
+
+        g = self._dump_gen(self)
+
+        try:
+            header = g.next()
+        except StopIteration:
+            # No schema file at all!
+            return
+
+        w = csv.DictWriter(f, header, encoding='utf-8')
+        w.writeheader()
+        last_table = None
+        for row in g:
+
+            # Blank row to seperate tables.
+            if last_table and row['table'] != last_table:
+                w.writerow({})
+
+            w.writerow(row)
+
+            last_table = row['table']
+
+        if isinstance(f, StringIO):
+            return f.getvalue()
+
+    @staticmethod
+    def _dump_gen(self, table_name=None):
+        """Yield schema row for use in exporting the schema to other
+        formats
+
+        """
+
+        # Collect indexes
+        indexes = {}
+
+        # Sets the order of the fields
+        all_opt_col_fields = ["size", "precision", "scale", "default", "start", "width",
+                              "description", "sql", "flags", "keywords",
+                              "measure", "units", "universe", 'proto_vid', "derivedfrom"]
+
+        # Collects what fields actually exist
+        opt_fields_set = set()
+
+        all_opt_table_fields = ["keywords", "universe"]
+
+        if table_name:
+            tables = [table for table in self.tables if table.name == table_name]
+        else:
+            tables = self.tables
+
+        data_fields = set()
+        # Need to get all of the indexes figured out first, since there are a variable number of indexes.
+        for table in tables:
+
+            if table.proto_vid:
+                opt_fields_set.add("proto_vid")
+
+            for field in all_opt_table_fields:
+
+                v = getattr(table, field)
+                if v and field not in opt_fields_set:
+                    opt_fields_set.add(field)
+
+            for col in table.columns:
+
+                if col.proto_vid:
+                    opt_fields_set.add("proto_vid")
+
+                for index_set in [col.indexes, col.uindexes, col.unique_constraints]:
+                    if not index_set:
+                        continue  # HACK. This probably should not happen
+
+                    for idx in index_set.split(','):
+
+                        idx = idx.replace(table.name + '_', '')
+                        if idx not in indexes:
+                            indexes[idx] = set()
+
+                        indexes[idx].add(col)
+
+                for field in all_opt_col_fields:
+
+                    v = getattr(col, field)
+                    if v and field not in opt_fields_set:
+                        opt_fields_set.add(field)
+
+                for k, v in col.data.items():
+                    data_fields.add(k)
+
+                    # also add data columns for the table
+
+            for k, v in table.data.items():
+                data_fields.add(k)
+
+        data_fields = sorted(data_fields)
+
+        # Put back into same order as in all_opt_col_fields
+        opt_col_fields = [field for field in all_opt_col_fields if field in opt_fields_set]
+
+        indexes = OrderedDict(sorted(indexes.items(), key=lambda t: t[0]))
+
+        first = True
+
+        for table in tables:
+
+            for col in table.columns:
+                row = OrderedDict()
+                row['table'] = table.name
+                row['seq'] = col.sequence_id
+                row['column'] = col.name
+                row['is_pk'] = 1 if col.is_primary_key else ''
+                row['is_fk'] = col.fk_vid if col.fk_vid else None
+                row['id'] = None
+                row['type'] = col.datatype.upper() if col.datatype else None
+
+                for idx, s in indexes.items():
+                    if idx:
+                        row[idx] = 1 if col in s else None
+
+                for field in opt_col_fields:
+                    row[field] = getattr(col, field)
+
+                if col.is_primary_key:
+                    # For the primary key, the data comes from the table.
+                    for k in data_fields:
+                        row['d_' + k] = table.data.get(k, None)
+
+                    # In CSV files the table description is stored as the description of the
+                    # id column
+                    if not col.description and table.description:
+                        col.description = table.description
+
+                else:
+                    for k in data_fields:
+                        row['d_' + k] = col.data.get(k, None)
+
+                row['description'] = col.description
+
+                # The primary key is special. It is always first and it always exists,
+                # so it can hold the id of the table instead. ( The columns's id field is not first,
+                # but the column record for the tables id field is first.
+                if row['is_pk']:
+                    row['id'] = table.id_
+                    if table.proto_vid:
+                        row['proto_vid'] = table.proto_vid
+
+                    for field in all_opt_table_fields:
+
+                        v = getattr(table, field)
+
+                        if v and field in opt_fields_set:
+                            row[field] = v
+
+                else:
+                    row['id'] = col.id_
+                    if col.proto_vid:
+                        row['proto_vid'] = col.proto_vid
+
+                if first:
+                    first = False
+                    yield row.keys()
+
+                yield row
 
     @classmethod
     def get_table_from_database(cls, db, name_or_id, session=None, d_vid=None):
@@ -209,7 +369,6 @@ class Schema(object):
             raise NotFoundError("No table for name_or_id: '{}'".format(name_or_id))
 
 
-
     def remove_table(self, table_name):
         from ..orm import Table, Column
         from sqlalchemy.orm.exc import NoResultFound
@@ -231,7 +390,6 @@ class Schema(object):
 
         if table_name in self._seen_tables:
             del self._seen_tables[table_name]
-
 
 
     @classmethod
@@ -713,10 +871,8 @@ class Schema(object):
                                 size=size,
                                 is_primary_key=c['primary_key'] != 0)
 
-    def write(self):
-        '''Write the schema back to the schema file'''
-        with open(self.bundle.filesystem.path('meta', self.bundle.SCHEMA_FILE), 'w') as f:
-            self.as_csv(f)
+
+
 
     def copy_table(self, in_table, out_table_name=None):
         '''Copy a table schema into this schema
@@ -743,175 +899,8 @@ class Schema(object):
 
             return table
 
-    @staticmethod
-    def _dump_gen(self, table_name=None):
-        """Yield schema row for use in exporting the schema to other
-        formats
 
-        """
 
-        # Collect indexes
-        indexes = {}
-
-        # Sets the order of the fields
-        all_opt_col_fields = ["size", "precision", "scale", "default", "start", "width",
-                              "description", "sql", "flags", "keywords",
-                              "measure", "units", "universe", 'proto_vid', "derivedfrom"]
-
-        # Collects what fields actually exist
-        opt_fields_set = set()
-
-        all_opt_table_fields = ["keywords", "universe"]
-
-        if table_name:
-            tables = [table for table in self.tables if table.name == table_name]
-        else:
-            tables = self.tables
-
-        data_fields = set()
-        # Need to get all of the indexes figured out first, since there are a variable number of indexes.
-        for table in tables:
-
-            if table.proto_vid:
-                opt_fields_set.add("proto_vid")
-
-            for field in all_opt_table_fields:
-
-                v = getattr(table, field)
-                if v and field not in opt_fields_set:
-                    opt_fields_set.add(field)
-
-            for col in table.columns:
-
-                if col.proto_vid:
-                    opt_fields_set.add("proto_vid")
-
-                for index_set in [col.indexes, col.uindexes, col.unique_constraints]:
-                    if not index_set:
-                        continue  # HACK. This probably should not happen
-
-                    for idx in index_set.split(','):
-
-                        idx = idx.replace(table.name + '_', '')
-                        if idx not in indexes:
-                            indexes[idx] = set()
-
-                        indexes[idx].add(col)
-
-                for field in all_opt_col_fields:
-
-                    v = getattr(col, field)
-                    if v and field not in opt_fields_set:
-                        opt_fields_set.add(field)
-
-                for k, v in col.data.items():
-                    data_fields.add(k)
-
-                    # also add data columns for the table
-
-            for k, v in table.data.items():
-                data_fields.add(k)
-
-        data_fields = sorted(data_fields)
-
-        # Put back into same order as in all_opt_col_fields
-        opt_col_fields = [field for field in all_opt_col_fields if field in opt_fields_set]
-
-        indexes = OrderedDict(sorted(indexes.items(), key=lambda t: t[0]))
-
-        first = True
-
-        for table in tables:
-
-            for col in table.columns:
-                row = OrderedDict()
-                row['table'] = table.name
-                row['seq'] = col.sequence_id
-                row['column'] = col.name
-                row['is_pk'] = 1 if col.is_primary_key else ''
-                row['is_fk'] = col.fk_vid if col.fk_vid else None
-                row['id'] = None
-                row['type'] = col.datatype.upper() if col.datatype else None
-
-                for idx, s in indexes.items():
-                    if idx:
-                        row[idx] = 1 if col in s else None
-
-                for field in opt_col_fields:
-                    row[field] = getattr(col, field)
-
-                if col.is_primary_key:
-                    # For the primary key, the data comes from the table. 
-                    for k in data_fields:
-                        row['d_' + k] = table.data.get(k, None)
-
-                    # In CSV files the table description is stored as the description of the
-                    # id column
-                    if not col.description and table.description:
-                        col.description = table.description
-
-                else:
-                    for k in data_fields:
-                        row['d_' + k] = col.data.get(k, None)
-
-                row['description'] = col.description
-
-                # The primary key is special. It is always first and it always exists,
-                # so it can hold the id of the table instead. ( The columns's id field is not first,
-                # but the column record for the tables id field is first.
-                if row['is_pk']:
-                    row['id'] = table.id_
-                    if table.proto_vid:
-                        row['proto_vid'] = table.proto_vid
-
-                    for field in all_opt_table_fields:
-
-                        v = getattr(table, field)
-
-                        if v and field in opt_fields_set:
-                            row[field] = v
-
-                else:
-                    row['id'] = col.id_
-                    if col.proto_vid:
-                        row['proto_vid'] = col.proto_vid
-
-                if first:
-                    first = False
-                    yield row.keys()
-
-                yield row
-
-    def as_csv(self, f=None):
-        import unicodecsv as csv
-        from StringIO import StringIO
-
-        if f is None:
-            f = StringIO()
-
-        g = self._dump_gen(self)
-
-        try:
-            header = g.next()
-        except StopIteration:
-            # No schema file at all!
-            return
-
-        w = csv.DictWriter(f, header, encoding='utf-8')
-        w.writeheader()
-        last_table = None
-        for row in g:
-
-            # Blank row to seperate tables. 
-            if last_table and row['table'] != last_table:
-                w.writerow({})
-
-            w.writerow(row)
-
-            last_table = row['table']
-
-        if isinstance(f, StringIO):
-            return f.getvalue()
 
 
     def write_codes(self):

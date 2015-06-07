@@ -80,7 +80,7 @@ def copy_schema(schema, path, table_name=None, fmt='shapefile', logger=None):
 
         schema.remove_table(table_name)
 
-        table = schema.add_table(table_name)
+        table = schema.new_table(table_name)
 
         if logger:
             logger("Creating table in schema: {}".format(table_name))

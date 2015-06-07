@@ -131,7 +131,7 @@ class GeoPartition(SqlitePartition):
         # Then make the new arg
         #
 
-        t = self.bundle.schema.add_table(table_name)
+        t = self.bundle.schema.new_table(table_name)
 
         ot = self.table
 

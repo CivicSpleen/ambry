@@ -125,7 +125,7 @@ class Dataset(Base):
 
         raise NotFoundError("Failed to find table for ref '{}' in dataset '{}'".format(ref, self.name))
 
-    def add_table(self, name, add_id=False, **kwargs):
+    def new_table(self, name, add_id=False, **kwargs):
         '''Add a table to the schema, or update it it already exists.
 
         If updating, will only update data.
@@ -157,7 +157,6 @@ class Dataset(Base):
         if not extant:
             self.tables.append(table)
         else:
-
             object_session(self).merge(table)
 
         return table

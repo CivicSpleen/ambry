@@ -71,12 +71,12 @@ class Test(TestBase):
 
         with self.bundle.session:
             s = self.bundle.schema
-            s.add_table('table 1', altname='alt name a')
-            s.add_table('table 2', altname='alt name b')
+            s.new_table('table 1', altname='alt name a')
+            s.new_table('table 2', altname='alt name b')
 
-            self.assertRaises(Exception, s.add_table, ('table 1', ))
+            self.assertRaises(Exception, s.new_table, ('table 1', ))
 
-            t = s.add_table('table 3', altname='alt name')
+            t = s.new_table('table 3', altname='alt name')
 
             s.add_column(t, 'col 1', altname='altname1')
             s.add_column(t, 'col 2', altname='altname2')
@@ -97,7 +97,7 @@ class Test(TestBase):
         # Try with a nested session, b/c we need to test it somewhere ... 
         with self.bundle.session:
             with self.bundle.session:
-                t = s.add_table('table 4', altname='alt name')
+                t = s.new_table('table 4', altname='alt name')
 
                 s.add_column(t, 'col 1', altname='altname1')
                 s.add_column(t, 'col 2', altname='altname2')
@@ -111,18 +111,18 @@ class Test(TestBase):
             s = self.bundle.schema
             s.clean()
 
-            t1 = s.add_table('table1')
+            t1 = s.new_table('table1')
 
             s.add_column(t1, name='col1', datatype=Column.DATATYPE_REAL)
             s.add_column(t1, name='col2', datatype=Column.DATATYPE_INTEGER)
             s.add_column(t1, name='col3', datatype=Column.DATATYPE_TEXT)
 
-            t2 = s.add_table('table2')
+            t2 = s.new_table('table2')
             s.add_column(t2, name='col1')
             s.add_column(t2, name='col2')
             s.add_column(t2, name='col3')
 
-            t3 = s.add_table('table3')
+            t3 = s.new_table('table3')
             s.add_column(t3, name='col1', datatype=Column.DATATYPE_REAL)
             s.add_column(t3, name='col2', datatype=Column.DATATYPE_INTEGER)
             s.add_column(t3, name='col3', datatype=Column.DATATYPE_TEXT)
@@ -136,7 +136,7 @@ class Test(TestBase):
         with self.bundle.session:
             s = self.bundle.schema
 
-            t = s.add_table('table3')
+            t = s.new_table('table3')
             s.add_column(t, name='col1', datatype=Column.DATATYPE_INTEGER, default=-1, illegal_value='999')
             s.add_column(t, name='col2', datatype=Column.DATATYPE_TEXT)
             s.add_column(t, name='col3', datatype=Column.DATATYPE_REAL)

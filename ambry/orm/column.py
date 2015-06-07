@@ -34,7 +34,7 @@ class Column(Base):
     __tablename__ = 'columns'
 
     vid = SAColumn('c_vid', String(20), primary_key=True)
-    id_ = SAColumn('c_id', String(20))
+    id = SAColumn('c_id', String(20))
     sequence_id = SAColumn('c_sequence_id', Integer)
     is_primary_key = SAColumn('c_is_primary_key', Boolean, default=False)
     t_vid = SAColumn('c_t_vid',String(20),ForeignKey('tables.t_vid'), nullable=False, index=True)

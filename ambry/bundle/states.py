@@ -158,6 +158,7 @@ class StateMachine(object):
             self._bundle.schema.read()
         except Exception as e:
             self.error(e.message)
+            raise
             return False
 
         return True
@@ -185,7 +186,6 @@ class StateMachine(object):
 
         md.identity = identity.ident_dict
         md.names = identity.names_dict
-
 
         # Ensure there is an entry for every revision, if only to nag the maintainer to fill it in.
         # for i in range(1, md.identity.revision+1):

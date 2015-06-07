@@ -295,7 +295,7 @@ class LoaderBundle(BuildBundle):
 
     def meta_create_table(self, table_name, *args, **kwargs):
 
-        table = self.schema.add_table(table_name, *args, **kwargs)
+        table = self.schema.new_table(table_name, *args, **kwargs)
 
         self.schema.add_column(table, 'id', datatype='integer', description=kwargs.get('description'),
                                is_primary_key=True)

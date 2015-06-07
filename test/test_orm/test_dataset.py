@@ -108,9 +108,9 @@ class Test(unittest.TestCase):
 
         ds = db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
 
-        ds.add_table('table1')
-        ds.add_table('table2', description='table2', data=dict(a=1,b=2,c=3))
-        ds.add_table('table3', description='table3')
+        ds.new_table('table1')
+        ds.new_table('table2', description='table2', data=dict(a=1,b=2,c=3))
+        ds.new_table('table3', description='table3')
 
         db.commit()
 
@@ -121,8 +121,8 @@ class Test(unittest.TestCase):
         db.commit()
 
         ds = db.dataset(ds.vid) # Refresh the memory object
-        ds.add_table('table2', data=dict(b=22))
-        ds.add_table('table3', description='table3-description')
+        ds.new_table('table2', data=dict(b=22))
+        ds.new_table('table3', description='table3-description')
 
         db.commit()
 

@@ -81,6 +81,26 @@ class Test(TestBase):
         self.dump_database('config', db)
 
 
+    def test_prepare(self):
+        from test import bundlefiles
+        from os.path import dirname
+        from fs.opener import fsopendir
+
+        db = self.new_database()
+
+        b = Bundle(self.new_db_dataset(), None, fsopendir("mem://"))
+
+        source_fs = fsopendir(dirname(bundlefiles.__file__))
+
+        b.builder.sync(source_fs)  # Loads the files from directory
+
+        b.sync()  # This will sync the files back to the bundle's source dir
+
+        b.prepare()
+
+        self.dump_database('tables', db)
+        self.dump_database('columns', db)
+
 
 def suite():
     import unittest

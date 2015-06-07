@@ -67,7 +67,7 @@ class Bundle(BuildBundle):
             try:
                 self.schema.table(table_name)
             except NotFoundError:
-                self.schema.add_table(table_name, add_id=True)
+                self.schema.new_table(table_name, add_id=True)
 
             header, row = self.gen_rows(as_dict=False).next()
 
