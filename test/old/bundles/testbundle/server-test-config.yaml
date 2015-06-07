@@ -1,0 +1,98 @@
+library:
+  
+    writer:
+        filesystem: writer
+        database: writer
+        upstream:
+          host: localhost
+          port: 7979
+          upstream: remote
+
+    local:
+        filesystem: local
+        database: local
+
+
+    reader:
+        filesystem: reader
+        database: reader  
+        remotes:
+          - http://localhost:7979
+          
+    default:
+        filesystem: server
+        database: server  
+        host: localhost:7979
+        remotes:
+          - '{root}/remote'
+
+    s3-remote:
+        filesystem: server
+        database: server
+        host: localhost:7979
+        remotes:
+          - s3:devtest.sandiegodata.org/library-test#compress
+
+
+database:
+  
+    writer:
+        dbname: '{root}/writer.db'
+        driver: sqlite  
+        
+    reader:
+        dbname: '{root}/reader.db'
+        driver: sqlite  
+
+    local:
+        dbname: '{root}/local.db'
+        driver: sqlite
+
+    server:
+        dbname: '{root}/server.db'
+        driver: sqlite  
+
+filesystem:
+
+    root: '/tmp/server'
+    local:
+        dir: '{root}/local'
+
+    writer:
+        dir: '{root}/writer'
+        
+    reader:
+        dir: '{root}/reader'
+        
+    server:
+        dir: '/tmp/server/server'
+   
+
+    rrc-fs:
+      dir: '/tmp/server/remote'
+
+    rrc:
+      url: http://localhost:7979
+
+    remote:
+      prefix: server-test
+      bucket: devtest.sandiegodata.org
+      account: devtest.sandiegodata.org
+      upstream:
+        size: 2000
+        dir: /tmp/server/s3cache
+            
+downloads:
+    dir: '{root}/downloads'
+
+extracts: 
+    dir: '{root}/extracts'
+
+sourcerepo:
+  dir: '{root}/bundles'
+
+  default:
+    service: github
+    org: clarinova-data
+    account: clarinova-data
+        

@@ -1,0 +1,87 @@
+# Configuration for a library that is backed by a remote library
+
+library:
+    default:
+      filesystem: default
+      database: default
+      documentation: '/tmp/library-test/doc_cache'
+
+    # Used to seperate tests that do or dont have a remote. 
+    local-remoted:
+      remotes:
+        - '{root}/remote-cache-1'
+        - '{root}/remote-cache-2'
+        - '{root}/remote-cache-3'
+      filesystem: default
+      database: default
+      documentation: '/tmp/library-test/doc_cache'
+
+    s3-remoted:
+      remotes:
+        - 's3://devtest.sandiegodata.org/s3-remote#compress'
+      filesystem: default
+      database: default
+      documentation: '/tmp/library-test/doc_cache'
+
+    http-remoted:
+      remotes:
+        - 'http://devtest.sandiegodata.org/s3-remote' # No #compress, since on reads compression is handled auto
+      filesystem: default
+      database: default
+      documentation: '/tmp/library-test/doc_cache'
+
+    upstreamed:
+        documentation: '/tmp/library-test/doc_cache'
+        filesystem: default
+        database: default
+        upstream:
+          options: [compress]
+          prefix: library-test
+          bucket: devtest.sandiegodata.org
+          account: devtest.sandiegodata.org
+
+
+database:
+    default:
+        dbname: '{root}/library.db'
+        driver: sqlite  
+
+filesystem:
+  warehouses: '{root}/warehouses'
+  root: /tmp/library-test
+
+  default:
+      dir: '{root}/cache-l1'
+      size: 50
+      upstream:
+        dir: '{root}/cache-l2'
+        options: [compress]
+  test:
+    dir: '{root}/library/local'
+    size: 200000
+  test2:
+    dir: '{root}/library/local'
+    size: 200000
+    upstream:
+        dir: '{root}/library/s3-l2'
+        options: [compress]
+      
+  s3:
+      dir: '{root}/library/s3-l1'
+      size: 5  
+      upstream:
+        dir: '{root}/library/s3-l2'
+        size: 5   
+        options: [compress]
+        upstream:
+          bucket: devtest.sandiegodata.org
+          prefix: /test/s3-l3/
+          account: devtest.sandiegodata.org
+
+      
+downloads:
+    dir: '{root}/downloads'
+
+extracts: 
+    dir: '{root}/extracts'
+        

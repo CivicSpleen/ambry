@@ -1,0 +1,69 @@
+
+database:
+    default:
+        dbname: '{root}/library.db'
+        driver: sqlite
+    data_builder:
+        dbname: gala
+        driver: postgres
+        password: data-builder
+        server: warehouse2
+        username: data-builder
+
+filesystem:
+    root: '/tmp/ambry-manifest-test'
+    default: '{root}/library'
+    downloads: '{root}/cache/downloads'
+    python: '{root}/cache/python'
+    extracts: '{root}/cache/extracts'
+    analysis: '{root}/source/analysis'
+    build: '{root}/build'
+    source: '{root}/library/source'
+    warehouses: '{root}/warehouses'
+
+library:
+    default:
+        database: default
+        filesystem: default
+        remotes:
+          - http://s3.sandiegodata.org/library
+
+
+
+warehouse:
+    health:
+        database: 'sqlite:////tmp/health.db'
+        title: Health Warehouse
+        name: health
+        local_cache: /tmp/health_cache
+    education:
+        database: 'sqlite:////tmp/education.db'
+        title: education warehouse
+        name: education
+        summary: This is a BS summary
+        local_cache: /tmp/ambry-whtest/health_cache
+
+    sqlite: 'sqlite:////tmp/ambry-manifest-test/sqlite_warehouse.db'
+    spatialite: 'spatialite:////tmp/ambry-manifest-test/spatialite_warehouse.db'
+    postgres1: postgis://manifest_test:manifest_test@localhost/manifest_test
+
+services:
+  dstk:
+      url: ec2-54-89-212-167.compute-1.amazonaws.com
+      type: dstk
+
+servers:
+  documentation:
+      host: localhost
+      port: 5001
+      library: default
+      #warehouse: sqlite:////tmp/ambry-clitest/warehouse/test_manifests/manifest_test.db
+
+  numbers:
+    host: localhost
+    port: 5002
+    unregistered_key: 8f73cc64-ebd5-4dcc-b498-c61ccb0ca4cf
+    cache: /tmp/ambry-clitest/doc-cache
+    redis:
+      host: redis
+      port: 6379

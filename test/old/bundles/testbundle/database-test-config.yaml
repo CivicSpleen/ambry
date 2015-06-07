@@ -1,0 +1,15 @@
+
+database:
+  
+    sqlite:
+        dbname: '/tmp/dbtest/sqlite.db'
+        driver: sqlite  
+        
+    sqlite-warehouse:
+        class: warehouse
+        dbname: '/tmp/dbtest/warehouse.db'
+        driver: sqlite  
+        
+ 
+
+        

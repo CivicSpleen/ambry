@@ -1,0 +1,39 @@
+# Configuration for a library that is backed by a remote library
+
+
+
+sourcerepo:
+  dir: '{root}/bundles'
+  
+  default:
+    service: github
+    org: clarinova-data
+    account: clarinova-data
+
+library:
+    default:
+      filesystem: default
+      database: default
+      upstream:
+          options: [compress]
+          prefix: library-test
+          bucket: devtest.sandiegodata.org
+          account: devtest.sandiegodata.org
+
+
+    # Used to seperate tests that do or dont have a remote.
+    default-remote:
+      remote:
+        host: localhost
+        port: 7979
+      filesystem: default
+      database: default
+
+database:
+    default:
+        dbname: '{root}/library.db'
+        driver: sqlite
+
+filesystem:
+  root: /tmp/test-source
+  default: '{root}/cache-l1'
