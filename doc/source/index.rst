@@ -18,7 +18,8 @@ Contents:
     building_bundles/index
     about/index
     cli/index
-    warehouse/index    
+    warehouse/index   
+    design/index 
 
 Indices and tables
 ==================

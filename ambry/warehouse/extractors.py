@@ -133,7 +133,7 @@ class CsvExtractor(Extractor):
 
             for i, row in enumerate(row_gen):
                 if i == 0:
-                    w.writerow(row.keys())
+                    w.writerow(row.keys()) # Only works on OrderedDict and RowsProxy!
 
                 w.writerow(row)
 

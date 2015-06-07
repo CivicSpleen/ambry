@@ -4,7 +4,7 @@ address-parser==0.0.1
 boto==2.38.0
 ckcache>=0.1.5
 decorator==3.4.2
-Flask-Compress==1.2.0
+Flask-Compress>=1.2.0
 Flask==0.10.1
 Flask-Session==0.1.1
 geoid>=0.0.9
@@ -35,3 +35,4 @@ unicodecsv==0.12.0
 Werkzeug==0.10.4
 whoosh==2.7.0
 xlrd==0.9.3
+psycopg2==2.6

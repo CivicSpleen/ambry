@@ -12,15 +12,15 @@ from ..cli import load_bundle, _print_bundle_list
 import os
 
 
-def source_command(args, rc):
+def source_command(args, rc, reset_lib=False):
     from ..library import new_library
     from . import global_logger
 
-    l = new_library(rc.library(args.name))
+    l = new_library(rc.library(args.name), reset=reset_lib)
     l.logger = global_logger
 
     st = l.source
-
+    print args
     globals()['source_' + args.subcommand](args, l, st, rc)
 
 
@@ -255,10 +255,7 @@ def source_new(args, l, st, rc):
             d['id'] = str(ns.next())
             prt("Got number from number server: {}".format(d['id']))
         except HTTPError as e:
-            warn(
-                "Failed to get number from number server. Config = {}: {}".format(
-                    nsconfig,
-                    e.message))
+            warn("Failed to get number from number server. Config = {}: {}".format( nsconfig,e.message))
             warn("Using self-generated number. "
                  "There is no problem with this, but they are longer than centrally generated numbers.")
             d['id'] = str(DatasetNumber())
@@ -338,7 +335,6 @@ def source_new(args, l, st, rc):
     # shutil.copy(p('README.md'),bundle_dir)
     shutil.copy(p('schema.csv'), os.path.join(bundle_dir, 'meta'))
     shutil.copy(p('documentation.md'), os.path.join(bundle_dir, 'meta'))
-    shutil.copy(p('README.md.template'), os.path.join(bundle_dir, 'meta'))
 
     try:
         l.sync_source_dir(b.identity, bundle_dir)

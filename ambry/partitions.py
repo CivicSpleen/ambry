@@ -319,7 +319,7 @@ class Partitions(object):
         elif pnq.vname is not NameQuery.ANY:
             q = q.filter(OrmPartition.vname == pnq.vname)
         elif pnq.name is not NameQuery.ANY:
-            q = q.filter(OrmPartition.name == pnq.name)
+            q = q.filter(OrmPartition.name == str(pnq.name))
         else:
             if pnq.time is not NameQuery.ANY:
                 q = q.filter(OrmPartition.time == pnq.time)
@@ -428,11 +428,15 @@ class Partitions(object):
 
         # This code must have the session established in the context be active.
 
-
         assert table
 
+        if isinstance(table, str):
+            from orm import Table
+            session = self.bundle.database.session
+            table = session.query(Table).filter(Table.name == table).first()
+
         op = OrmPartition(self.bundle.get_dataset(), t_id=table.id_,
-            data=data,state=Partitions.STATE.NEW,**d)
+                          data=data, state=Partitions.STATE.NEW, **d)
 
         if memory:
             from random import randint
@@ -523,7 +527,7 @@ class Partitions(object):
         if partition:
             return partition, True
 
-        partition = self._new_partition(ppn,tables=tables, data=data,create=create)
+        partition = self._new_partition(ppn, tables=tables, data=data, create=create)
 
         return partition, False
 

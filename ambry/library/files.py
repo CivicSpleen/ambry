@@ -7,25 +7,24 @@
 from ..orm import File
 from sqlalchemy.sql import or_
 from ..util import Constant
-from ..identity import LocationRef
 import os
 
 
 class Files(object):
 
     TYPE = Constant()
-    TYPE.BUNDLE = LocationRef.LOCATION.LIBRARY
-    TYPE.PARTITION = LocationRef.LOCATION.PARTITION
-    TYPE.SOURCE = LocationRef.LOCATION.SOURCE
-    TYPE.SREPO = LocationRef.LOCATION.SREPO
-    TYPE.UPSTREAM = LocationRef.LOCATION.UPSTREAM
-    TYPE.REMOTE = LocationRef.LOCATION.REMOTE
-    TYPE.REMOTEPARTITION = LocationRef.LOCATION.REMOTEPARTITION
+    TYPE.BUNDLE = File.TYPE.BUNDLE
+    TYPE.PARTITION = File.TYPE.PARTITION
+    TYPE.SOURCE = File.TYPE.SOURCE
+    TYPE.SREPO = File.TYPE.SREPO
+    TYPE.UPSTREAM = File.TYPE.UPSTREAM
+    TYPE.REMOTE = File.TYPE.REMOTE
+    TYPE.REMOTEPARTITION = File.TYPE.REMOTEPARTITION
 
-    TYPE.MANIFEST = 'manifest'
-    TYPE.DOC = 'doc'
-    TYPE.EXTRACT = 'extract'
-    TYPE.STORE = 'store'
+    TYPE.MANIFEST = File.TYPE.MANIFEST
+    TYPE.DOC = File.TYPE.DOC
+    TYPE.EXTRACT = File.TYPE.EXTRACT
+    TYPE.STORE = File.TYPE.STORE
 
     def __init__(self, db, query=None):
 
@@ -85,6 +84,12 @@ class Files(object):
     def query(self):
         return Files(self.db, self.db.session.query(File))
 
+    def merge(self, f):
+        self.db.session.merge(f)
+
+    def commit(self, f):
+        self.db.session.commit()
+
     #
     # Filters
     #
@@ -127,7 +132,6 @@ class Files(object):
 
         return self
 
-
     def source_url(self, v):
         self._check_query()
         self._query = self._query.filter(File.source_url == v)
@@ -140,17 +144,16 @@ class Files(object):
     @property
     def installed(self):
         self._check_query()
-        self._query = self._query.filter(or_(File.type_ == self.TYPE.BUNDLE, File.type_ == self.TYPE.PARTITION))
+        self._query = self._query.filter(
+            or_(File.type_ == self.TYPE.BUNDLE, File.type_ == self.TYPE.PARTITION))
         return self
 
-    def new_file(self,  commit = True, **kwargs):
+    def new_file(self,  commit=True, **kwargs):
         """If merge is 'collect', the files will be added to the collection,
         for later insertion."""
-        from sqlalchemy.exc import IntegrityError
 
         if 'oid' in kwargs:
             del kwargs['oid']
-
 
         f = File(**kwargs)
 
@@ -174,10 +177,6 @@ class Files(object):
             f.modified = f.modified if f.modified else None
             f.size = f.size if f.size else None
 
-        # Debugging code. Kill on sight.
-        #for i in self.db.session.identity_map.items():
-        #    print i
-
         f = self.db.session.merge(f)
 
         if commit:
@@ -185,12 +184,9 @@ class Files(object):
 
         self.db._mark_update()
 
-
         return f
 
-
-
-    def install_bundle_file(self,bundle,source,commit=True,state='installed'):
+    def install_bundle_file(self, bundle, source, commit=True, state='installed'):
         """Mark a bundle file as having been installed in the library."""
 
         ident = bundle.identity
@@ -205,7 +201,7 @@ class Files(object):
             data=None,
             source_url=source)
 
-    def install_partition_file(self,partition,source,commit=True,state='installed'):
+    def install_partition_file(self, partition, source, commit=True, state='installed'):
         """Mark a partition file as having been installed in the library."""
 
         ident = partition.identity
@@ -220,7 +216,6 @@ class Files(object):
             data=None,
             source_url=source)
 
-
     def install_bundle_source(self, bundle, source, commit=True):
         """Set a reference a bundle source."""
 
@@ -234,16 +229,15 @@ class Files(object):
             data=None,
             hash=None,
             priority=None,
-            source_url=None, )
+            source_url='localhost')
 
-    def install_data_store(self, w,name=None, title=None, summary=None,cache=None, url=None, commit=True):
+    def install_data_store(self, w, name=None, title=None, summary=None,
+                           cache=None, url=None, commit=True):
         """A reference for a data store, such as a warehouse or a file
         store."""
 
         assert bool(w.dsn)
         assert bool(w.uid)
-
-
 
         kw = dict(commit=commit,
                   path=w.dsn,
@@ -256,9 +250,7 @@ class Files(object):
                       summary=summary,
                       cache=cache,
                       url=url,
-                      db_class=w.database_class,
-
-                  ),
+                      db_class=w.database_class),
                   source_url=w.dsn)
 
         f = self.new_file(**kw)
@@ -333,7 +325,6 @@ class Files(object):
     def install_manifest(self, manifest, warehouse=None, commit=True):
         """Store a references to, and content for, a manifest."""
 
-
         try:
             # manifest if a real Manifest object
 
@@ -376,32 +367,3 @@ class Files(object):
             self.db.commit()
 
         return f
-
-    def install_extract(self, path, source, d, commit=True):
-        """Create a references for an extract.
-
-        The extract hasn't been extracted yet, so there is no content,
-        hash, etc.
-
-        """
-
-        f = self.query.path(path).type(self.TYPE.EXTRACT).one_maybe
-
-        if f:
-            # This interacts with marking it 'deletable' in install_manifest
-            f.state = 'installed'
-            self.merge(f)
-            return f
-
-        return self.new_file(
-            commit=commit,
-            merge=True,
-            path=path,
-            group=self.TYPE.MANIFEST,
-            ref=path,
-            state='installed',
-            type_=self.TYPE.EXTRACT,
-            data=d,
-
-            source_url=source
-        )

@@ -1,0 +1,7 @@
+build: {}
+dependencies: {}
+sources:
+    example:
+        description: random data
+        url: http://public.source.civicknowledge.com.s3.amazonaws.com/example.com/random.csv
+views: {}

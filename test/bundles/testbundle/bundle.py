@@ -73,7 +73,7 @@ class Bundle(BuildBundle):
 
     def build_small(self):
         p = self.partitions.find_or_new_db(table='tthree')
-        table = p.table
+        # table = p.table
 
         field_gen = self.fields3
 
@@ -81,7 +81,6 @@ class Bundle(BuildBundle):
             for i in range(5000):
                 row = {f[0]: f[1]() for f in field_gen}
                 ins.insert(row)
-
         return True
 
     def build(self):
@@ -107,28 +106,23 @@ class Bundle(BuildBundle):
                 ins.insert({ 'tone_id':None,'text':"str"+str(i),'integer':i,'float':i})
 
     def build_db_inserter_codes(self):
-        from collections import defaultdict
-        from ambry.database.inserter import CodeCastErrorHandler
-        p = self.partitions.find_or_new_db(table='coding')
-        table = p.table
-
-        def yield_rows():
-
-            field_gen = self.fields3
-
-            for i in range(10000):
-                row = {f[0]: f[1]() for f in field_gen}
-
-                if i % 51 == 0:
-                    row['integer'] = chr(65 + (i / 51 % 26))
-
-                if i % 13 == 0:
-                    row['date'] = chr(65+(i/13 % 26))
-
-                yield row
-
-
-
+        self.partitions.find_or_new_db(table='coding')
+        # p = self.partitions.find_or_new_db(table='coding')
+        # table = p.table
+        #
+        # def yield_rows():
+        #     field_gen = self.fields3
+        #
+        #     for i in range(10000):
+        #         row = {f[0]: f[1]() for f in field_gen}
+        #
+        #         if i % 51 == 0:
+        #             row['integer'] = chr(65 + (i / 51 % 26))
+        #
+        #         if i % 13 == 0:
+        #             row['date'] = chr(65 + (i / 13 % 26))
+        #
+        #         yield row
 
     def build_db_inserter(self):
         
