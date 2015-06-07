@@ -42,13 +42,8 @@ class Schema(object):
 
         self.bundle = bundle  # COuld also be a partition
 
-        # the value for a Partition will be a PartitionNumber, and
-        # for the schema, we want the dataset number
-        if not isinstance(self.bundle, Bundle):
-            raise Exception("Can only construct schema on a Bundle")
-
-        self.d_id = self.bundle.identity.id_
-        self.d_vid = self.bundle.identity.vid
+        self.d_id = self.bundle.dataset.id
+        self.d_vid = self.bundle.dataset.vid
 
         self._seen_tables = {}
         self.table_sequence = None
@@ -61,38 +56,6 @@ class Schema(object):
         # build should be re-run
         self.new_code_tables = False
 
-        self._dataset = None
-
-    @property
-    def dataset(self):
-        '''Initialize the identity, creating a dataset record, 
-        from the bundle.yaml file'''
-        from sqlalchemy.orm.util import object_state
-
-        if self._dataset and object_state(self._dataset).detached:
-            self._dataset = None
-
-        if not self._dataset:
-            self._dataset = self.bundle.get_dataset()
-
-        return self._dataset
-
-    def clean(self):
-        '''Delete all tables and columns. 
-        WARNING! This will also delete partitions, since partitions can depend on tables
-        '''
-
-        from ambry.orm import Table, Column, Partition
-
-        self._seen_tables = {}
-        self.table_sequence = None
-        self.max_col_id = {}
-
-        with self.bundle.session as s:
-            s.query(Partition).delete()
-            s.query(Column).delete()
-            s.query(Table).delete()
-
     @property
     def tables(self):
         '''Return a list of tables for this bundle'''
@@ -100,15 +63,128 @@ class Schema(object):
 
         from ambry.orm import Table
 
-        q = self.bundle.database.session.query(Table).filter(Table.d_vid == self.d_vid)
+        return self.bundle.dataset.tables
 
-        return q.all()
+    @property
+    def columns(self):
+        '''Return a list of table columns for this bundle'''
+        from ambry.orm import Column
+
+        return self.bundle.database.session.query(Column).all()
+
+    def read(self):
+        """Read a CSV file, in a particular format, to generate the schema"""
+        from ..orm.file import File
+
+        bsfile = self.bundle.dataset.bsfile(File.BSFILE.SCHEMA)
+
+        for row in bsfile.dict_row_reader:
+            print row
+
+        return
+
+        import re
+
+        t = None
+
+        new_table = True
+        last_table = None
+        line_no = 1  # Accounts for file header. Data starts on line 2
+
+        errors = []
+        warnings = []
+
+        extant_tables = [t.name for t in self.tables]
+
+        reader = None
+
+        with self.bundle.session:
+            for row in reader:
+
+                line_no += 1
+
+                if not row.get('column', False) and not row.get('table', False):
+                    continue
+
+                row = {k: str(v).decode('utf8', 'ignore').encode('ascii', 'ignore').strip()
+                       for k, v in row.items()}
+
+                if row['table'] and row['table'] != last_table:
+                    new_table = True
+                    last_table = row['table']
+
+                if new_table and row['table']:
+
+                    if row['table'] in extant_tables:
+                        errors.append((row['table'], None, "Table already exists"))
+                        return warnings, errors
+
+                    try:
+                        table_row = dict(**row)
+                        del table_row[
+                            'type']  # The field is really for columns, and means something different for tables
+
+                        t = self.add_table(row['table'], **table_row)
+                    except Exception as e:
+                        errors.append((None, None, " Failed to add table: {}. Row={}. Exception={}".format(row['table'],
+                                                                                                           dict(row),
+                                                                                                           e)))
+                        return warnings, errors
+
+                    new_table = False
+
+                # Ensure that the default doesnt get quotes if it is a number.
+                if row.get('default', False):
+                    try:
+                        default = int(row['default'])
+                    except:
+                        default = row['default']
+                else:
+                    default = None
+
+                if not row.get('column', False):
+                    raise ConfigurationError("Row error: no column on line {}".format(line_no))
+                if not row.get('table', False):
+                    raise ConfigurationError("Row error: no table on line {}".format(line_no))
+                if not row.get('type', False):
+                    raise ConfigurationError("Row error: no type on line {}".format(line_no))
+
+                indexes = [row['table'] + '_' + c for c in row.keys() if (re.match('i\d+', c) and _clean_flag(row[c]))]
+                uindexes = [row['table'] + '_' + c for c in row.keys() if
+                            (re.match('ui\d+', c) and _clean_flag(row[c]))]
+                uniques = [row['table'] + '_' + c for c in row.keys() if (re.match('u\d+', c) and _clean_flag(row[c]))]
+
+                datatype = row['type'].strip().lower()
+
+                width = _clean_int(row.get('width', None))
+                size = _clean_int(row.get('size', None))
+                start = _clean_int(row.get('start', None))
+
+                data = {k.replace('d_', '', 1): v for k, v in row.items() if k.startswith('d_')}
+
+                description = row.get('description', '').strip().encode('utf-8')
+
+                col = self.add_column(
+                    t, row['column'], sequence_id=row.get('seq', None),
+                    is_primary_key=True if row.get('is_pk', False) else False,
+                    fk_vid=row['is_fk'] if row.get('is_fk', False) else None, description=description,
+                    datatype=datatype, proto_vid=row.get('proto_vid'), derivedfrom=row.get('derivedfrom'),
+                    unique_constraints=','.join(uniques), indexes=','.join(indexes), uindexes=','.join(uindexes),
+                    default=default, size=size, start=start, width=width, data=data,
+                    sql=row.get('sql'), precision=int(row['precision']) if row.get('precision', False) else None,
+                    scale=float(row['scale']) if row.get('scale', False) else None, flags=row.get('flags', None),
+                    keywords=row.get('keywords'), measure=row.get('measure'), units=row.get('units', None),
+                    universe=row.get('universe'), commit=False)
+
+                if col:
+                    self.validate_column(t, col, warnings, errors)
+        return warnings, errors
 
     @classmethod
     def get_table_from_database(cls, db, name_or_id, session=None, d_vid=None):
         '''Return the orm.Table record from the bundle schema '''
-        from dbexceptions import NotFoundError
-        from ambry.orm import Table
+        from ambry.orm.exc import NotFoundError
+        from ambry.orm.table import Table
 
         import sqlalchemy.orm.exc
         from sqlalchemy.sql import or_, and_
@@ -134,64 +210,8 @@ class Schema(object):
 
 
 
-    def column(self, table, column_name):
-
-        for c in table:
-            if c.name == column_name:
-                return c
-
-        return None
-
-
-
-    def add_column(self, table, name, **kwargs):
-        '''Add a column to the schema'''
-        from dbexceptions import ConfigurationError
-
-        # Make sure that the columnumber is monotonically increasing
-        # when it is specified, and is one more than the last one if not.
-
-        if table.name not in self.max_col_id:
-
-            if len(table.columns) == 0:
-                self.max_col_id[table.name] = 0
-            elif len(table.columns) == 1:
-                self.max_col_id[table.name] = table.columns[0].sequence_id
-            else:
-                self.max_col_id[table.name] = max(*[c.sequence_id for c in table.columns])
-
-        try:
-            int(kwargs['sequence_id'])
-        except (TypeError, KeyError):
-            pass  # Value is None, probably.
-        except ValueError:
-            raise ConfigurationError("Sequence id value '{}' is not an integer in table '{}' col '{}'"
-                                     .format(kwargs['sequence_id'], table.name, name))
-
-        # sequence_id = int(kwargs['sequence_id']) \
-        # if 'sequence_id' in kwargs and kwargs['sequence_id'] is not None else None
-        try:
-            sequence_id = int(kwargs.get('sequence_id', None))
-        except TypeError:
-            sequence_id = None
-
-        if sequence_id is None:
-            sequence_id = self.max_col_id[table.name] + 1
-
-        elif sequence_id <= self.max_col_id[table.name]:
-
-            raise ConfigurationError("Column '{}' specifies column number '{}', but last number in table '{}' is {}"
-                                     .format(name, sequence_id, table.name, self.max_col_id[table.name]))
-
-        self.max_col_id[table.name] = sequence_id
-        kwargs['sequence_id'] = sequence_id
-
-        c = table.add_column(name, **kwargs)
-
-        return c
-
     def remove_table(self, table_name):
-        from orm import Table, Column
+        from ..orm import Table, Column
         from sqlalchemy.orm.exc import NoResultFound
 
         s = self.bundle.database.session
@@ -212,17 +232,12 @@ class Schema(object):
         if table_name in self._seen_tables:
             del self._seen_tables[table_name]
 
-    @property
-    def columns(self):
-        '''Return a list of tables for this bundle'''
-        from ambry.orm import Column
 
-        return self.bundle.database.session.query(Column).all()
 
     @classmethod
     def validate_column(cls, table, column, warnings, errors):
 
-        from identity import ObjectNumber
+        from ..identity import ObjectNumber
 
         # Postgres doesn't allow size modifiers on Text fields.
         if column.datatype == Column.DATATYPE_TEXT and column.size:
@@ -326,7 +341,7 @@ class Schema(object):
         from sqlalchemy import MetaData, UniqueConstraint, Index, text
         from sqlalchemy import Column as SAColumn
         from sqlalchemy import Table as SATable
-        from dbexceptions import NotFoundError
+        from ..orm.exc import NotFoundError
 
 
         if use_fq_col_names:
@@ -496,134 +511,13 @@ class Schema(object):
 
         return bdr
 
-    def schema_from_file(self, file_, progress_cb=None, fast=False):
-
-        if not progress_cb:
-            progress_cb = self.bundle.init_log_rate(N=20)
-
-        return self._schema_from_file(file_, progress_cb, fast=fast)
-
-    def _schema_from_file(self, file_, progress_cb=None, fast=False):
-        """Read a CSV file, in a particular format, to generate the schema"""
-        import csv
-        import re
-
-        file_.seek(0)
-
-        if not progress_cb:
-            def progress_cb():
-                pass
-
-        reader = csv.DictReader(file_)
-
-        t = None
-
-        new_table = True
-        last_table = None
-        line_no = 1  # Accounts for file header. Data starts on line 2
-
-        errors = []
-        warnings = []
-
-        extant_tables = [t.name for t in self.tables]
-
-        with self.bundle.session:
-            for row in reader:
-
-                line_no += 1
-
-                if not row.get('column', False) and not row.get('table', False):
-                    continue
-
-                row = {k: str(v).decode('utf8', 'ignore').encode('ascii', 'ignore').strip()
-                       for k, v in row.items()}
-
-                if row['table'] and row['table'] != last_table:
-                    new_table = True
-                    last_table = row['table']
-
-                if new_table and row['table']:
-
-                    progress_cb("Add schema table: {}".format(row['table']))
-
-                    if row['table'] in extant_tables:
-                        errors.append((row['table'], None, "Table already exists"))
-                        return warnings, errors
-
-                    try:
-                        table_row = dict(**row)
-                        del table_row[
-                            'type']  # The field is really for columns, and means something different for tables
-
-                        t = self.add_table(row['table'], fast=fast, **table_row)
-                    except Exception as e:
-                        errors.append((None, None, " Failed to add table: {}. Row={}. Exception={}".format(row['table'],
-                                                                                                           dict(row),
-                                                                                                           e)))
-                        return warnings, errors
-
-                    new_table = False
-
-                # Ensure that the default doesnt get quotes if it is a number.
-                if row.get('default', False):
-                    try:
-                        default = int(row['default'])
-                    except:
-                        default = row['default']
-                else:
-                    default = None
-
-                if not row.get('column', False):
-                    raise ConfigurationError("Row error: no column on line {}".format(line_no))
-                if not row.get('table', False):
-                    raise ConfigurationError("Row error: no table on line {}".format(line_no))
-                if not row.get('type', False):
-                    raise ConfigurationError("Row error: no type on line {}".format(line_no))
-
-                indexes = [row['table'] + '_' + c for c in row.keys() if (re.match('i\d+', c) and _clean_flag(row[c]))]
-                uindexes = [row['table'] + '_' + c for c in row.keys() if
-                            (re.match('ui\d+', c) and _clean_flag(row[c]))]
-                uniques = [row['table'] + '_' + c for c in row.keys() if (re.match('u\d+', c) and _clean_flag(row[c]))]
-
-                datatype = row['type'].strip().lower()
-
-                width = _clean_int(row.get('width', None))
-                size = _clean_int(row.get('size', None))
-                start = _clean_int(row.get('start', None))
-
-                if width and width > 0:
-                    illegal_value = '9' * width
-                else:
-                    illegal_value = None
-
-                data = {k.replace('d_', '', 1): v for k, v in row.items() if k.startswith('d_')}
-
-                description = row.get('description', '').strip().encode('utf-8')
-
-                # progress_cb("Column: {}".format(row['column']))
-
-                col = self.add_column(
-                    t, row['column'], sequence_id=row.get('seq', None),
-                    is_primary_key=True if row.get('is_pk', False) else False,
-                    fk_vid=row['is_fk'] if row.get('is_fk', False) else None, description=description,
-                    datatype=datatype, proto_vid=row.get('proto_vid'), derivedfrom=row.get('derivedfrom'),
-                    unique_constraints=','.join(uniques), indexes=','.join(indexes), uindexes=','.join(uindexes),
-                    default=default, illegal_value=illegal_value, size=size, start=start, width=width, data=data,
-                    sql=row.get('sql'), precision=int(row['precision']) if row.get('precision', False) else None,
-                    scale=float(row['scale']) if row.get('scale', False) else None, flags=row.get('flags', None),
-                    keywords=row.get('keywords'), measure=row.get('measure'), units=row.get('units', None),
-                    universe=row.get('universe'), commit=False, fast=fast)  # Don't check if the column exists
-
-                if col:
-                    self.validate_column(t, col, warnings, errors)
-        return warnings, errors
 
     def expand_table_prototypes(self):
         """Look for tables that have prototypes, get the original table, and expand the
         local definition to include all of the prototypes's columns"""
-        from orm import Table
-        from dbexceptions import NotFoundError
-        from identity import ObjectNumber
+        from ..orm import Table
+        from ..orm.exc import NotFoundError
+        from ..identity import ObjectNumber
 
         q = self.bundle.database.session.query(Table).filter(Table.proto_vid != None)
 
@@ -699,10 +593,10 @@ class Schema(object):
 
         :return:
         """
-        from orm import Column
-        from identity import ObjectNumber, NotObjectNumberError
+        from ..orm import Column
+        from ..identity import ObjectNumber, NotObjectNumberError
         from collections import defaultdict
-        from dbexceptions import NotFoundError
+        from ..orm.exc import NotFoundError
 
         q = (self.bundle.database.session.query(Column)
              .filter(Column.proto_vid != None).filter(Column.proto_vid != ''))
@@ -794,14 +688,6 @@ class Schema(object):
                                      .format(t.name, ip.vname, missing_cols)  )
 
 
-    def process_proto_vid(self, pvid):
-        """Lookup protovids to ensure they are sensible, and convert names to the proto_vid"""
-        from identity import ObjectNumber
-
-        on = ObjectNumber.parse(pvid)
-
-        print pvid, on
-
     def extract_schema(self, db):
         '''Extract an Ambry schema from a database and create it in this bundle '''
 
@@ -827,37 +713,10 @@ class Schema(object):
                                 size=size,
                                 is_primary_key=c['primary_key'] != 0)
 
-    def write_schema(self):
+    def write(self):
         '''Write the schema back to the schema file'''
         with open(self.bundle.filesystem.path('meta', self.bundle.SCHEMA_FILE), 'w') as f:
             self.as_csv(f)
-
-    def move_revised_schema(self):
-        """Move the revised schema file into place, saving the old one"""
-        import filecmp
-        import shutil
-        import os
-        from functools import partial
-
-        # Some original import files don't have a schema, particularly
-        # imported Shapefiles
-        fsp = partial(self.bundle.filesystem.path, 'meta')
-        fsbp = partial(self.bundle.filesystem.build_path)
-        sb = self.bundle
-
-        if os.path.exists(fsp(sb.SCHEMA_FILE)):
-
-            try:
-                if not filecmp.cmp(fsp(sb.SCHEMA_FILE), fsbp(sb.SCHEMA_OLD_FILE)):
-                    shutil.copy(fsp(sb.SCHEMA_FILE), fsbp(sb.SCHEMA_OLD_FILE))
-            except OSError:  # hopefully only a file not found error
-                pass
-
-            try:
-                if not filecmp.cmp(fsbp(sb.SCHEMA_REVISED_FILE), fsp(sb.SCHEMA_FILE)):
-                    shutil.copy(fsbp(sb.SCHEMA_REVISED_FILE), fsp(sb.SCHEMA_FILE))
-            except OSError:  # hopefully only a file not found error
-                pass
 
     def copy_table(self, in_table, out_table_name=None):
         '''Copy a table schema into this schema
@@ -1054,24 +913,6 @@ class Schema(object):
         if isinstance(f, StringIO):
             return f.getvalue()
 
-    def as_struct(self):
-        class GrowingList(list):  # http://stackoverflow.com/a/4544699/1144479
-            def __setitem__(self, index, value):
-                if index >= len(self):
-                    self.extend([None] * (index + 1 - len(self)))
-                list.__setitem__(self, index, value)
-
-        o = defaultdict(GrowingList)
-
-        g = self._dump_gen(self)
-
-        # header = g.next()
-        g.next()
-
-        for row in g:
-            o[row['table']][row['seq'] - 1] = row
-
-        return o
 
     def write_codes(self):
 
@@ -1101,8 +942,7 @@ class Schema(object):
     def read_codes(self):
         """Read codes from a codes.csv file back into the schema"""
         import csv
-        from dbexceptions import NotFoundError
-
+        from ..orm.exc import NotFoundError
 
         with  open(self.bundle.filesystem.path('meta', self.bundle.CODE_FILE), 'r') as f:
 
@@ -1202,32 +1042,6 @@ class Schema(object):
         # use the cached schema object rather than the ones we just updated. 
         self.bundle.database.session.expire_all()
 
-    def extract_columns(self, extract_table, extra_columns=None):
-
-        et = self.table(extract_table)
-
-        if not et:
-            raise Exception("Didn't find extract table {}".format(extract_table))
-
-        lines = []
-        for col in et.columns:
-            if col.sql:
-                sql = col.sql
-            else:
-                sql = col.name
-
-            lines.append("CAST({sql} AS {type}) AS {col}".format(sql=sql, col=col.name, type=col.schema_type))
-
-        if extra_columns:
-            lines = lines + extra_columns
-
-        return ',\n'.join(lines)
-
-    def extract_query(self, source_table, extract_table, extra_columns=None):
-
-        st = self.table(source_table)
-
-        return "SELECT {} FROM {}".format(self.extract_columns(self, extract_table, extra_columns), st.name)
 
     #
     # Updating Schemas
@@ -1307,22 +1121,3 @@ class Schema(object):
 
         self.update_from_intuiter(table_name, intuit, descriptions=descriptions)
 
-    def _revise_schema(self):
-        """Write the schema from the database back to a file.
-
-        If the schema template exists, overwrite the main schema file.
-        If it does not exist, use the revised file
-
-        """
-
-        self.update_configuration()
-
-        sf_out = self.filesystem.build_path(self.SCHEMA_REVISED_FILE)
-
-        # Need to expire the unmanaged cache, or the regeneration of the schema may
-        # use the cached schema object rather than the ones we just updated, if the schem objects
-        # have alread been loaded.
-        self.database.session.expire_all()
-
-        with open(sf_out, 'w') as f:
-            self.schema.as_csv(f)

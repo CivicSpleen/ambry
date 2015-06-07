@@ -33,9 +33,6 @@ def _get_logger(name, file_name=None, stream=None, template=None, propagate=Fals
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
 
-    if propagate is not None:
-        logger.propagate = propagate
-
     if not template:
         template = "%(name)s %(process)s %(levelname)s %(message)s"
 
@@ -50,6 +47,7 @@ def _get_logger(name, file_name=None, stream=None, template=None, propagate=Fals
     logger.addHandler(handler)
 
     return logger
+
 
 def install_test_logger(test_file_name):
     def test_get_logger(name, file_name=None, stream=None, template=None, clear=False, propagate=False):

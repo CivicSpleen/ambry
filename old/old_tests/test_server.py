@@ -6,9 +6,11 @@ Created on Aug 31, 2012
 
 import unittest
 import os.path
-import logging 
+import logging
+
 import ambry.util
-from  bundles.testbundle.bundle import Bundle
+from test.old import bundles
+from  test.old.bundles.testbundle import Bundle
 from ambry.run import  get_runconfig, RunConfig
 from test_base import  TestBase
 from ambry.library.query import QueryCommand
@@ -22,7 +24,6 @@ logging.captureWarnings(True)
 class Test(TestBase):
  
     def setUp(self):
-        import bundles.testbundle.bundle
 
         rm_rf('/tmp/server')
 
@@ -214,7 +215,6 @@ class Test(TestBase):
         from ambry.client.rest import RemoteLibrary
         from ambry.cache import new_cache
         from ambry.util import md5_for_file
-        from ambry.identity import Identity
 
         config = self.start_server()
         l = new_library(config)

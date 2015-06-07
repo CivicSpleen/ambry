@@ -29,6 +29,7 @@ class File(Base, DictableMixin):
     BSFILE.SCHEMA = 'schema'
     BSFILE.COLMAP = 'column_map'
     BSFILE.SOURCES = 'sources'
+    BSFILE.DOC = 'documentation'
 
     TYPE = Constant()
     TYPE.BUNDLE = LocationRef.LOCATION.LIBRARY
@@ -89,6 +90,18 @@ class File(Base, DictableMixin):
             return msgpack.unpackb(self.contents)
         else:
             return self.contents
+
+    @property
+    def dict_row_reader(self):
+        """Unpacks message pack rows into a srtream of dicts"""
+
+        rows = self.unpacked_contents
+        header = rows.pop(0)
+
+        for row in rows:
+            yield dict(zip(header, row))
+
+
 
     def update_contents(self, contents):
         """Update the contents and set the hash and modification time"""

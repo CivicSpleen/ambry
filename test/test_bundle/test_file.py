@@ -1,23 +1,13 @@
-
 import unittest
-import tempfile
-import uuid
-from ambry.orm import Column
-from ambry.orm import Partition
-from ambry.orm import Table
-from ambry.orm import Dataset
-from ambry.orm import Config
+
 from ambry.orm import File
-from ambry.orm import Code
-from ambry.orm import ColumnStat
-from sqlalchemy.orm import sessionmaker
-from ambry.identity import DatasetNumber, PartitionNumber
-from sqlalchemy.exc import IntegrityError
+from ambry.identity import DatasetNumber
+from test import bundlefiles
+
 
 class Test(unittest.TestCase):
 
     def setUp(self):
-        from sqlalchemy import create_engine
 
         super(Test,self).setUp()
 
@@ -29,8 +19,6 @@ class Test(unittest.TestCase):
 
 
     def dump_database(self, db, table):
-        import sys
-        from subprocess import check_output
 
         for row in db.connection.execute("SELECT * FROM {}".format(table)):
             print row
@@ -129,7 +117,6 @@ class Test(unittest.TestCase):
         from os.path import dirname
         from test import bundlefiles
         from ambry.bundle.files import BuildSourceFileAccessor
-        from ambry.util import AttrDict
 
         dn = str(DatasetNumber(1, 1))
 

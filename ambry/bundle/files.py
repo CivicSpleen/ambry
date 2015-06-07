@@ -225,6 +225,7 @@ class StringSourceFile(BuildSourceFile):
 file_info_map = {
     File.BSFILE.BUILD : ('bundle.py',StringSourceFile),
     File.BSFILE.BUILDMETA: ('meta.py',StringSourceFile),
+    File.BSFILE.DOC: ('documentation.md',StringSourceFile),
     File.BSFILE.META: ('bundle.yaml',DictBuildSourceFile),
     File.BSFILE.SCHEMA: ('schema.csv',RowBuildSourceFile),
     File.BSFILE.COLMAP: ('column_map.csv',RowBuildSourceFile),

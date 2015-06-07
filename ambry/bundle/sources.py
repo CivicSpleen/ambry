@@ -8,7 +8,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from collections import OrderedDict
 
-class SourcesFile(object):
+class SourceFilesAcessor(object):
 
     header = (
         ("name","name"),
@@ -26,10 +26,9 @@ class SourcesFile(object):
         ("url", "url")
     )
 
-    def __init__(self, path, metadata):
+    def __init__(self, bundle):
 
-        self._path = path
-        self._metadata = metadata
+        self._bundle = bundle
 
     def read(self):
         """ Read the source file and write it into the metadata
@@ -128,7 +127,8 @@ class SourcesFile(object):
             r.writerows(rows)
 
 
-
+    def check_dependencies(self):
+        pass
 
 
 

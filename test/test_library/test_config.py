@@ -1,8 +1,5 @@
-
-
 from test.test_base import TestBase
 
-from ambry.bundle import Bundle
 
 class Test(TestBase):
 
@@ -17,14 +14,11 @@ class Test(TestBase):
         return get_runconfig(bf_dir(name))
 
     def test_run_config_filesystem(self):
-        from ambry.run import get_runconfig
-        import os
-        from test import bundlefiles
 
         self.rc = self.get_rc()
 
-        self.assertEquals('/tmp/cache/downloads', self.rc.filesystem('downloads'))
-        self.assertEquals('/tmp/cache/extracts', self.rc.filesystem('extracts'))
+        self.assertEquals('/tmp/test/downloads', self.rc.filesystem('downloads'))
+        self.assertEquals('/tmp/test/extracts', self.rc.filesystem('extracts'))
 
     def test_run_config_library(self):
 

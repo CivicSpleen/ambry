@@ -4,7 +4,7 @@ Created on Jun 22, 2012
 @author: eric
 """
 
-# Monkey patch loggin, because I really don't understand logging
+# Monkey patch logging, because I really don't understand logging
 
 import unittest
 from ambry.identity import *
@@ -14,12 +14,9 @@ from ambry.util import install_test_logger
 
 from ambry.orm import Database, Dataset
 
-ambry.util.get_logger = install_test_logger('/tmp/ambry-test.log')
+# ambry.util.get_logger = install_test_logger('/tmp/ambry-test.log')
 
 
-global_logger = ambry.util.get_logger(__name__)
-global_logger.setLevel(logging.DEBUG)
-logging.captureWarnings(True)
 
 
 class TestBase(unittest.TestCase):

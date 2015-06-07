@@ -12,7 +12,7 @@ class Test(TestBase):
 
         db = self.new_database()
 
-        b = Bundle(self.new_db_dataset())
+        b = Bundle(self.new_db_dataset(), None, None)
 
         self.assertFalse(inspect(b._dataset).detached)
 
@@ -27,7 +27,7 @@ class Test(TestBase):
 
         db = self.new_database()
 
-        b = Bundle(self.new_db_dataset())
+        b = Bundle(self.new_db_dataset(), None, None)
 
         sm = b.builder
 
@@ -48,9 +48,9 @@ class Test(TestBase):
         from fs.opener import fsopendir
 
         mem_fs = fsopendir("/tmp/foobar/")  # fsopendir("mem://")
-        b = Bundle(self.new_db_dataset())
+        b = Bundle(self.new_db_dataset(), None, mem_fs)
 
-        b.sync(mem_fs)
+        b.sync()
 
     # TODO Setup a Mock to check that the b.clean() process run through all of its states
     def test_clean(self):
@@ -58,11 +58,9 @@ class Test(TestBase):
 
         db = self.new_database()
 
-        b = Bundle(self.new_db_dataset())
+        b = Bundle(self.new_db_dataset(), None, fsopendir("mem://"))
 
-        mem_fs = fsopendir("/tmp/foobar/")  # fsopendir("mem://")
-
-        b.source_files(mem_fs).sync()
+        b.sync()
 
         b.clean()
 

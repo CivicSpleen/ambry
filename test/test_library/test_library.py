@@ -1,8 +1,6 @@
-
-
+from test import bundlefiles
 from test.test_base import TestBase
 
-from ambry.bundle import Bundle
 
 class Test(TestBase):
 
@@ -15,7 +13,6 @@ class Test(TestBase):
             return os.path.join(os.path.dirname(bundlefiles.__file__), fn)
 
         return get_runconfig(bf_dir('ambry.yaml'))
-
 
     def test_library(self):
         from ambry.library import new_library
@@ -34,10 +31,11 @@ class Test(TestBase):
 
         b.builder.sync(source_fs) # Loads the files from directory
 
-        b.sync() # This will sync them back to the bundle's source dir
+        b.sync() # This will sync the files back to the bundle's source dir
+
+        b.prepare()
 
         self.dump_database('config', l._db)
-
 
 
 def suite():

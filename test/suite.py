@@ -7,10 +7,8 @@ import unittest
 
 import test_bundle
 import test_library
-import test_identity
-import test_metadata
+from test.old import test_metadata, test_warehouse, test_identity
 import test_warehouse
-
 
 suite = unittest.TestSuite()
 suite.addTests(test_identity.suite())

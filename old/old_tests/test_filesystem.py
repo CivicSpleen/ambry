@@ -4,10 +4,10 @@ Created on Aug 31, 2012
 @author: eric
 """
 import unittest
-from bundles.testbundle.bundle import Bundle
-from ambry.run import RunConfig
-from test_base import TestBase
 import os
+
+from test.old.bundles.testbundle import Bundle
+from test_base import TestBase
 from ambry.run import RunConfig
 
 

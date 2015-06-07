@@ -120,19 +120,24 @@ class StateMachine(object):
         r = True
 
         if self.pre_prepare():
+            self.state = self.STATES.PREPARING
             self.log("---- Preparing ----")
             if self.prepare_main():
+                self.state = self.STATES.PREPARED
                 if self.post_prepare():
                     self.log("---- Done Preparing ----")
                 else:
+                    self.set_error_state()
                     self.log("---- Post-prepare exited with failure ----")
                     r = False
             else:
+                self.set_error_state()
                 self.log("---- Prepare exited with failure ----")
                 r = False
         else:
             self.log("---- Skipping prepare ---- ")
 
+        self._bundle.dataset.commit()
         return r
 
     def prepare_main(self):
@@ -143,64 +148,85 @@ class StateMachine(object):
     def prepare(self):
         from ambry.orm.exc import NotFoundError
 
-        # with self.session: # This will create the database if it doesn't
-        # exist, but it will be empty
-        if not self.database.exists():
-            self.log("Creating bundle database")
-            try:
-                self.database.create()
-            except:
-                self.error(
-                    "Failed to create database: {} ".format(self.database.dsn))
-                raise
-        else:
-            self.log("Bundle database already exists")
+        try:
+            self._bundle.sources.check_dependencies()
+        except NotFoundError as e:
+            self.error(e.message)
+            return False
 
         try:
-            self.library.check_dependencies()
-        except NotFoundError as e:
-            self.fatal(e.message)
+            self._bundle.schema.read()
+        except Exception as e:
+            self.error(e.message)
+            return False
 
-        if self.run_args and self.run_args.get('rebuild', False):
-            with self.session:
-                self.rebuild_schema()
-        else:
-            self._prepare_load_schema(fast=self.run_args.get('fast', False))
+        return True
+
+    def pre_prepare(self):
+        """"""
 
         return True
 
     def post_prepare(self):
-        """Set a marker in the database that it is already prepared."""
-        from ..library.database import ROOT_CONFIG_NAME_V
+        """"""
 
-        with self.session:
-            # At this point, we have a dataset vid, which we didn't have when the dbcreated values was
-            # set, so we can reset the value with to get it into the process
-            # configuration group.
-            root_db_created = self.database.get_config_value(ROOT_CONFIG_NAME_V, 'process', 'dbcreated')
-            self.set_value('process', 'dbcreated', root_db_created.value)
-
-            self._revise_schema()
-
-        for t in self.schema.tables:
+        for t in self._bundle.schema.tables:
             if not bool(t.description.strip()):
                 self.error("No title ( Description of id column ) set for table: {} ".format(t.name))
 
-        if self._errors:
-            self.set_build_state('failed/prepare')
-            return False
+        return  True
 
-        self.update_configuration()
+    def prepare_update_configuration(self, identity=None, rewrite_database=True):
+        # Re-writes the bundle.yaml file, with updates to the identity and partitions
+        # sections.
 
-        self.write_config_to_bundle()
+        if not identity:
+            identity = self.identity
 
-        self.schema.move_revised_schema()
+        md.identity = identity.ident_dict
+        md.names = identity.names_dict
 
-        self.set_build_state('prepared')
 
-        self.write_sources()
+        # Ensure there is an entry for every revision, if only to nag the maintainer to fill it in.
+        # for i in range(1, md.identity.revision+1):
+        # md.versions[i]
+        #    if i == md.identity.revision:
+        #        md.versions[i].version = md.identity.version
 
-        return True
+        # Load the documentation
+
+        def read_file(fn):
+            try:
+                with open(self.filesystem.path(fn)) as f:
+                    return f.read()
+            except IOError:
+                return ''
+
+        self.update_source()
+
+        self.write_doc_html()
+
+        md.documentation.main = self.sub_template(read_file(self.DOC_FILE))
+        md.documentation.title = md.about.title.text
+        md.documentation.summary = md.about.summary.text
+        md.documentation.source = md.about.source.text
+        md.documentation.processed = md.about.processed.text
+        md.documentation.summary = md.about.summary.text
+
+        md.write_to_dir(write_all=True)
+
+        # Reload some of the values from bundle.yaml into the database
+        # configuration
+
+        if rewrite_database:
+            if self.database.exists():
+
+                if self.config.build.get('dependencies'):
+                    for k, v in self.config.build.get('dependencies').items():
+                        self.set_value('odep', k, v)
+
+                self.database.rewrite_dataset()
+
 
     ##
     ## Build
@@ -493,20 +519,7 @@ class StateMachine(object):
     #######
     #######
 
-    def write_config_to_bundle(self):
-        """Write  the config into the database."""
-        exclude_keys = ('names', 'identity')
 
-        self.metadata.load_all()
-
-        for row in self.metadata.rows:
-
-            if row[0][0] in exclude_keys:
-                continue
-
-            k = '.'.join([str(x) for x in row[0] if x])
-
-            self.set_value('config', k, row[1])
 
 
     def clear_states(self):

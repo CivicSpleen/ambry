@@ -10,15 +10,18 @@ from ..util import get_logger
 
 class Bundle(object):
 
-    def __init__(self, dataset, fs=None):
+    def __init__(self, dataset, library, fs=None):
         import logging
         from states import StateMachine
 
         self._dataset = dataset
+        self._library = library
         self._logger = None
+
         self._log_level = logging.INFO
         self._fs = fs
         self._state_machine_class = StateMachine
+        self._errors = []
 
     @property
     def dataset(self):
@@ -30,13 +33,20 @@ class Bundle(object):
         return self._dataset
 
     @property
+    def identity(self):
+        return self.dataset.identity
+
+    @property
     def schema(self):
         """Return the Schema acessor"""
-        pass
+        from schema import Schema
+        return Schema(self)
 
     @property
     def sources(self):
         """Return the Sources acessor"""
+        from sources import SourceFilesAcessor
+        return SourceFilesAcessor(self)
 
     @property
     def metadata(self):
@@ -56,19 +66,11 @@ class Bundle(object):
     def logger(self):
         """The bundle logger."""
         import sys
-        import os
 
         if not self._logger:
 
-            try:
-                ident = self.identity
-                template = "%(levelname)s " + ident.sname + " %(message)s"
-
-                if self.run_args.multi > 1:
-                    template = "%(levelname)s " + ident.sname + " %(process)s %(message)s"
-
-            except:
-                template = "%(message)s"
+            ident = self.identity
+            template = "%(levelname)s " + ident.sname + " %(message)s"
 
             self._logger = get_logger(__name__, template=template, stream=sys.stdout)
 

@@ -3,7 +3,7 @@ environment:
     category: development
 
 filesystem:
-    root: '/tmp'
+    root: '/tmp/test'
     downloads: '{root}/downloads'
     extracts: '{root}/extracts'
     python: '{root}/python'
