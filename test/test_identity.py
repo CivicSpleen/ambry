@@ -492,16 +492,6 @@ class Test(TestBase):
         p = bp.find_or_new(table = 'tone',time = 't1', space='s2')
         self.assertEquals('source-dataset-subset-variation-tone-t1-s2-0.0.1~piEGPXmDC8002001', p.identity.fqname)
 
-        p = bp.find_or_new_geo(table = 'tone',time='t2', space='s1')
-
-        p = bp.find_or_new_geo(table = 'tone',time = 't2', space='s1')
-
-        # Which it is depends on whether GDAL is installed.
-        self.assertIn(p.identity.fqname,[
-            'source-dataset-subset-variation-tone-t2-s1-geo-0.0.1~piEGPXmDC8003001',
-            'source-dataset-subset-variation-tone-t2-s1-0.0.1~piEGPXmDC8003001' ]
-        )
-
         # Ok! Build!
         bundle.close()
         bundle = Bundle()
