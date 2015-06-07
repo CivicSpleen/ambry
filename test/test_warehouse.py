@@ -115,13 +115,14 @@ class Test(TestBase):
 
         self.assertEqual(orig_mf, conv_mf)
 
+    @unittest.skip('.')
     def test_extract_table(self):
         """
         Extract data from table to file
         """
         from ambry.dbexceptions import NotFoundError
 
-        test_table = 'geot1'
+        test_table = 'tthree'
         test_view = 'test_view'
         test_mview = 'test_mview'
 
@@ -171,7 +172,7 @@ class Test(TestBase):
         # # remove partition
         self.waho.remove('piEGPXmDC8001001')
         try:
-            self.waho.remove('piEGPXmDC8003001')
+            self.waho.remove('piEGPXmDC8001001')
         except ProgrammingError:
             pass
         except OperationalError:
@@ -188,7 +189,7 @@ class Test(TestBase):
 
         p = self.bundle.partitions.find(name='source-dataset-subset-variation-tthree')
 
-        self.waho.load_local(p, 'tthree', 'piEGPXmDC8003001_tthree')
+        self.waho.load_local(p, 'tthree', 'piEGPXmDC8001001_tthree')
 
     def test_has(self):
         """
@@ -219,10 +220,10 @@ class Test(TestBase):
         """
         from sqlalchemy.exc import OperationalError
 
-        test_table = 'geot1'
+        test_table = 'tthree'
         test_view = 'test_view'
         test_mview = 'test_mview'
-        augmented_table_name = 'piEGPXmDC8002_geot1'
+        augmented_table_name = 'piEGPXmDC8001001_tthree'
 
         self.waho = self._default_warehouse()
 
@@ -383,9 +384,7 @@ WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
         self.waho.install_manifest(mf)
         s = [str(c) for c in self.waho.list()]
 
-        self.assertIn('source-dataset-subset-variation-geot1-0.0.1~piEGPXmDC8002001', s)
-        self.assertIn('source-dataset-subset-variation-geot2-0.0.1~piEGPXmDC8001001', s)
-        self.assertIn('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8003001', s)
+        self.assertIn('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8001001', s)
 
         tst = (mfile.path for mfile in self.waho.manifests)
 

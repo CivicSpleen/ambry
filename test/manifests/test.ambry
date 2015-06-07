@@ -7,13 +7,13 @@ UID: m5PJKUrX0U
 
 PARTITIONS:
 source-dataset-subset-variation-tthree
-source-dataset-subset-variation-geot1
-source-dataset-subset-variation-geot2
+
+
 
 VIEW: test_view
 
 SELECT *
-FROM "piEGPXmDC8003001_tthree"
+FROM "piEGPXmDC8001001_tthree"
 
 DOC:
 
@@ -23,7 +23,7 @@ second sentence, to make the documentation longer, and to see if the code for ex
 MVIEW: test_mview
 
 SELECT *
-FROM "piEGPXmDC8003001_tthree"
+FROM "piEGPXmDC8001001_tthree"
 
 SQL: sqlite
 Create table sql_test as

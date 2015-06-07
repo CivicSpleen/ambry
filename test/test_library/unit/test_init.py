@@ -263,36 +263,7 @@ class LibraryTest(unittest.TestCase):
         config_value = lib._meta_get('?no-such-key?')
         self.assertIsNone(config_value)
 
-    # .warehouse_url property tests
-    def test_contains_warehouse_url(self):
-        # first assert signatures of the functions we are going to mock did not change.
-        assert_spec(Library._meta_get, ['self', 'key'])
-
-        # prepare state
-        lib = Library(self.cache, self.sqlite_db)
-        lib._meta_get = fudge.Fake()\
-            .expects_call()\
-            .with_args('warehouse_url')\
-            .returns('http://example.com')
-
-        # testing
-        self.assertEquals(lib.warehouse_url, 'http://example.com')
-
-    # .warehouse_url setter tests
-    def test_sets_meta_config(self):
-        # first assert signatures of the functions we are going to mock did not change.
-        assert_spec(Library._meta_set, ['self', 'key', 'value'])
-
-        # prepare state
-        lib = Library(self.cache, self.sqlite_db)
-        lib._meta_set = fudge.Fake('_meta_set')\
-            .expects_call()\
-            .with_args('warehouse_url', 'http://example.com')
-
-        # testing
-        lib.warehouse_url = 'http://example.com'
-        fudge.verify()
-
+    @unittest.skip('The warehouse url attribute was removed')
     def test_synchronizes_store_warehouses(self):
 
         # prepare state
@@ -1595,8 +1566,7 @@ class LibraryTest(unittest.TestCase):
 
         fake_install = fudge.Fake('install_data_store').expects_call()\
             .with_args(
-                warehouse1, name=warehouse1.name, title=warehouse1.title,
-                url={}, summary=warehouse1.summary)\
+                warehouse1, name=warehouse1.name, title=warehouse1.title, summary=warehouse1.summary)\
             .returns(FileFactory(type_=Files.TYPE.STORE))
 
         # testing

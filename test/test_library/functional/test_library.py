@@ -160,7 +160,7 @@ class Test(TestBase):
 
         bdsq = self.bundle.database.session.query
 
-        self.assertEquals(4, len(bdsq(Partition).all()))
+        self.assertEquals(2, len(bdsq(Partition).all()))
 
         r = l.put_bundle(self.bundle, install_partitions=True)
 
@@ -168,14 +168,14 @@ class Test(TestBase):
         self.assertTrue(r is not False)
         self.assertEquals(self.bundle.identity.sname, r.identity.sname)
 
-        self.assertEquals(4, len(ldsq(Partition).all()))
+        self.assertEquals(2, len(ldsq(Partition).all()))
         self.assertEquals(9, len(ldsq(Table).all()))
         self.assertEquals(45, len(ldsq(Column).all()))
-        self.assertEquals(0, len(ldsq(Code).all()))
-        self.assertEquals(22, len(ldsq(ColumnStat).all()))
-        self.assertEquals(39, len(ldsq(Config).all()))
+        self.assertEquals(20, len(ldsq(Code).all()))
+        self.assertEquals(14, len(ldsq(ColumnStat).all()))
+        self.assertEquals(43, len(ldsq(Config).all()))
 
-        self.assertEquals(5, len(ldsq(File).all()))
+        self.assertEquals(3, len(ldsq(File).all()))
 
         installed = False
         for p in self.bundle.partitions.all:
@@ -193,21 +193,21 @@ class Test(TestBase):
         l.put_bundle(self.bundle)
 
         ldsq = l.database.session.query
-        self.assertEquals(4, len(ldsq(Partition).all()))
+        self.assertEquals(2, len(ldsq(Partition).all()))
         self.assertEquals(9, len(ldsq(Table).all()))
         self.assertEquals(45, len(ldsq(Column).all()))
-        self.assertEquals(0, len(ldsq(Code).all()))
-        self.assertEquals(22, len(ldsq(ColumnStat).all()))
+        self.assertEquals(20, len(ldsq(Code).all()))
+        self.assertEquals(14, len(ldsq(ColumnStat).all()))
 
         l.put_bundle(self.bundle)
 
         l.put_bundle(self.bundle)
 
-        self.assertEquals(4, len(ldsq(Partition).all()))
+        self.assertEquals(2, len(ldsq(Partition).all()))
         self.assertEquals(9, len(ldsq(Table).all()))
         self.assertEquals(45, len(ldsq(Column).all()))
-        self.assertEquals(0, len(ldsq(Code).all()))
-        self.assertEquals(22, len(ldsq(ColumnStat).all()))
+        self.assertEquals(20, len(ldsq(Code).all()))
+        self.assertEquals(14, len(ldsq(ColumnStat).all()))
 
         r = l.get(self.bundle.identity)
 
@@ -256,7 +256,7 @@ class Test(TestBase):
         self.assertTrue(r is not False)
         self.assertEquals(r.identity.id_, r.identity.id_)
 
-        self.assertEquals(5, len(l.files.query.state('new').all))
+        self.assertEquals(3, len(l.files.query.state('new').all))
 
         for remote_name, remote in l.remotes.items():
             remote.clean()
@@ -294,14 +294,10 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
             out_string = """source/dataset-subset-variation-0.0.1.db:
   caches: [/tmp/library-test/remote-cache-2]
-source/dataset-subset-variation-0.0.1/geot1.db:
-  caches: [/tmp/library-test/remote-cache-3]
-source/dataset-subset-variation-0.0.1/geot2.db:
-  caches: [/tmp/library-test/remote-cache-1]
 source/dataset-subset-variation-0.0.1/tone/missing.db:
-  caches: [/tmp/library-test/remote-cache-1]
+  caches: [/tmp/library-test/remote-cache-3]
 source/dataset-subset-variation-0.0.1/tthree.db:
-  caches: [/tmp/library-test/remote-cache-2]
+  caches: [/tmp/library-test/remote-cache-1]
 """
 
         self.assertEquals(
@@ -510,8 +506,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
         self.assertEquals('source-dataset-subset-variation-0.0.1~diEGPXmDC8001', str(result))
 
         ip, result = r.resolve_ref_one('source/dataset-subset-variation-0.0.1/tthree.db')
-        self.assertEquals(
-            'source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8003001',
+        self.assertEquals('source-dataset-subset-variation-tthree-0.0.1~piEGPXmDC8001001',
             str(result.partition))
 
         # Now in the library, which has a slightly different interface.
