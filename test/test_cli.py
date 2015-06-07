@@ -4,45 +4,56 @@ For developing these tests, you can run in the same environment as these tests b
 env variable:
 
     export AMBRY_CONFIG=
-
-
 """
+import logging
+import os
+import shutil
+import sys
+import shlex
+import subprocess
 import unittest
-from test_base import  TestBase
-from bundles.testbundle.bundle import Bundle
-from ambry.run import  RunConfig
 
-from ambry.util import memoize
+from StringIO import StringIO
 
-class Test(TestBase):
+import bundles
+import configs
+from ambry.run import RunConfig
+from test_base import TestBase
 
-    test_dir = None
+# from ambry.util import memoize
+
+
+class TestLoggingMixin(object):
+    logger = None
+    logger_name = 'test_cli'
+    logging_handler = None
+    logging_handler_class = logging.StreamHandler
+    logging_handler_args = None
+    logging_handler_kwargs = None
+    logging_dir = '/tmp'
+    logging_level = logging.DEBUG
+    output = None
 
     def setUp(self):
-        import os
-        from ambry.run import  get_runconfig
-
-        super(Test, self).setUp()
-
-        #self.test_dir = tempfile.mkdtemp(prefix='test_cli_')
-        self.test_dir = '/tmp/test_cli'
-
-        self.reset()
-
+        super(TestLoggingMixin, self).setUp()
         self.output, self.logger = self.setup_logging()
 
-    def tearDown(self):
+    def get_logging_handler(self):
+        return self.logging_handler_class(*self.get_logging_handler_args(), **self.get_logging_handler_kwargs())
 
-        self.output.close()
+    def get_logging_handler_args(self, *args):
+        return (self.logging_handler_args or []) + list(args)
 
+    def get_logging_handler_kwargs(self, **kwargs):
+        handler_kwargs = self.logging_handler_kwargs or {}
+        handler_kwargs.update(kwargs)
+        return handler_kwargs
+
+    def get_logging_dir(self):
+        return self.logging_dir or '/var/log'
 
     def setup_logging(self):
-        from StringIO import StringIO
-        import logging
-        import ambry.cli
-        import sys
-
-        logger = logging.getLogger('test_cli')
+        logger = logging.getLogger(self.logger_name)
 
         template = "%(name)s %(levelname)s %(message)s"
 
@@ -50,23 +61,44 @@ class Test(TestBase):
 
         output = StringIO()
 
-        ch = logging.StreamHandler(stream=output)
+        logging_handler = self.get_logging_handler()
+        logging_handler.setFormatter(formatter)
+        logging_handler.setLevel(self.logging_level)
+        logger._stream = logging_handler.stream
 
-        ch.setFormatter(formatter)
-        ch.setLevel(logging.DEBUG)
-        logger._stream = ch.stream
+        logger.addHandler(logging_handler)
 
-        logger.addHandler(ch)
-
-        self.logging_handler = ch
+        self.logging_handler = logging_handler
 
         return output, logger
 
 
-    def reset(self):
-        from ambry.run import  get_runconfig
-        import os, tempfile, shutil
+class TestLoggingFileHandlerMixin(TestLoggingMixin):
+    logging_handler_class = logging.FileHandler
 
+    def get_logging_handler_args(self, *args):
+        return [os.path.join(self.get_logging_dir(), '%s.log' % self.logger_name)]
+
+    def get_logging_dir(self):
+        return self.logging_dir
+
+
+class TestCLIMixin(object):
+    config_file = None
+    library = None
+    rc = None
+    test_dir = '/tmp/test_cli'
+
+    def setUp(self):
+        super(TestCLIMixin, self).setUp()
+        self.reset()
+
+    def tearDown(self):
+        super(TestCLIMixin, self).tearDown()
+        self.output.close()
+
+    def reset(self):
+        from ambry.run import get_runconfig
 
         if os.path.exists(self.test_dir):
             shutil.rmtree(self.test_dir)
@@ -74,55 +106,39 @@ class Test(TestBase):
         os.makedirs(self.test_dir)
 
         self.config_file = self.new_config_file()
-
-        self.rc = get_runconfig((self.config_file,RunConfig.USER_ACCOUNTS))
-
+        self.rc = get_runconfig((self.config_file, RunConfig.USER_ACCOUNTS))
         self.library = self.get_library()
 
-    def get_library(self, name = 'default'):
+    def get_library(self, name='default'):
         """Clear out the database before the test run"""
         from ambry.library import new_library
 
         config = self.rc.library(name)
-
-        l =  new_library(config, reset = True)
-
-        return l
+        return new_library(config, reset=True)
 
     def new_config_file(self):
-        """Copy the config file into place. """
-        import os
-        import configs
-        import bundles
-
-        config_source = os.path.join(os.path.dirname(configs.__file__),'clitest.yaml')
+        """Copy the config file into place."""
+        config_source = os.path.join(os.path.dirname(configs.__file__), 'clitest.yaml')
         out_config = os.path.join(self.test_dir, 'config.yaml')
 
-        with open(config_source,'r') as f_in:
-            with open(out_config,'w') as f_out:
+        with open(config_source, 'r') as f_in:
+            with open(out_config, 'w') as f_out:
                 s = f_in.read()
                 f_out.write(s.format(
                     root=self.test_dir,
                     source=os.path.dirname(bundles.__file__)
                 ))
-
         return out_config
 
+
+class Test(TestCLIMixin, TestLoggingFileHandlerMixin, TestBase):
     def cmd(self, *args):
 
-        from ambry.cli import main
-        import subprocess
-        import shlex
-
         args = shlex.split(' '.join(args))
-
-
-        args = [  '-c',self.config_file ] + list(args)
-
-        args = ['python','-mambry.cli'] + args
-        #print "=== Execute: ", " ".join(args)
+        args = [sys.executable, '-mambry.cli'] + ['-c', self.config_file] + list(args)
+        print(' '.join(args))
         try:
-            s=subprocess.check_output(args)
+            s = subprocess.check_output(args)
         except subprocess.CalledProcessError as e:
             print "ERROR: ", e
             print e.output
@@ -131,47 +147,35 @@ class Test(TestBase):
         return s
 
     def assertInFile(self, s, fn):
-
         with open(fn) as f:
             return self.assertIn(s, '\n'.join(f.readlines()))
 
-
     def test_basic(self):
-
         c = self.cmd
 
         self.assertIn('sqlite:////tmp/test_cli/library.db', c('library', 'info'))
         self.assertIn('Database:  sqlite:////tmp/test_cli/library.db', c('library', 'info'))
 
-
     def test_sync_build(self):
-        import os
-        from subprocess import CalledProcessError
-
         self.reset()
 
         c = self.cmd
 
         c('info')
-
-        c('library','info')
-
+        c('library', 'info')
         c('library drop')
-
         c('library sync -s')
 
         # Check that we have the example bundles, but not the built library
-        self.assertIn('S     dIjqPRbrGq001',c('list'))
+        self.assertIn('dIjqPRbrGq001', c('list'))
         self.assertNotIn('LS    d00H003', c('list'))
         self.assertIn('example.com-simple-0.1.3', c('list'))
         self.assertIn('example.com-random-0.0.2', c('list'))
 
-        buildable = [ x.strip() for x in c('source buildable -Fvid').splitlines() ]
+        buildable = [x.strip() for x in c('source buildable -Fvid').splitlines()]
 
         for vid in buildable:
-
             c('bundle -d {} build --clean --install '.format(vid))
-
 
         # Now it should show up in the list.
         self.assertIn('LS     dHSyDm4MNR002     example.com-random-0.0.2', c('list'))
@@ -179,9 +183,8 @@ class Test(TestBase):
         c('library push')
 
         # Can't rebuild an installed library.
-        with self.assertRaises(CalledProcessError):
+        with self.assertRaises(subprocess.CalledProcessError):
             c('bundle -d dHSyDm4MNR002 prepare --clean ')
-
 
     # Broken
     def test_library(self):
@@ -192,10 +195,58 @@ class Test(TestBase):
 
         print out
 
+    def test_library_info(self):
+        output = self.cmd('library info')
+        keys = ['Library Info', 'Database:', 'Cache:', 'Doc Cache:', 'Whs Cache:', 'Remotes:']
+        for key in keys:
+            self.assertIn(key, output)
+
+    def test_library_config(self):
+        pass
+
+    def test_library_new(self):
+        pass
+
+    def test_library_files(self):
+        pass
+
+    def test_library_push(self):
+        pass
+
+    def test_library_drop(self):
+        pass
+
+    def test_library_clean(self):
+        pass
+
+    def test_library_purge(self):
+        pass
+
+    def test_library_sync(self):
+        pass
+
+    def test_library_get(self):
+        pass
+
+    def test_library_open(self):
+        pass
+
+    def test_library_remove(self):
+        pass
+
+    def test_library_schema(self):
+        pass
+
+    def test_library_config(self):
+        pass
+
+
+
 def suite():
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite
-      
+    test_suite = unittest.TestSuite()
+    test_suite.addTest(unittest.makeSuite(Test))
+    return test_suite
+
+
 if __name__ == "__main__":
     unittest.TextTestRunner().run(suite())

@@ -51,9 +51,7 @@ class RunConfig(object):
     USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
 
     try:
-        DIR_CONFIG = os.path.join(
-            os.getcwd(),
-            'ambry.yaml')  # In webservers, there is no cwd
+        DIR_CONFIG = os.path.join(os.getcwd(), 'ambry.yaml')  # In webservers, there is no cwd
     except OSError:
         DIR_CONFIG = None
 
@@ -98,8 +96,7 @@ class RunConfig(object):
                     pass  # Empty files will produce a type error
 
         if not loaded:
-            raise ConfigurationError(
-                "Failed to load any config from: {}".format(files))
+            raise ConfigurationError("Failed to load any config from: {}".format(files))
 
         object.__setattr__(self, 'config', config)
         object.__setattr__(self, 'files', files)

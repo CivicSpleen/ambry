@@ -1,6 +1,9 @@
 # Configuration for the CLI unit test
 # Normally, the '{root}' bit is substituted in RunConfig, but for testing
 # these are substituted when the file is copied into the test directory
+environment:
+    category: development
+
 database:
     default:
         dbname: '{root}/library.db'
@@ -40,3 +43,6 @@ datarepo:
       database: 
         dbname: '{root}/warehouse/sqlite.db'
         driver: spatialite
+environment:
+    category: development
+    class: development

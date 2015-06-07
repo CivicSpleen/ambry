@@ -22,7 +22,7 @@ class Metadata(object):
     _path = None
     _synonyms = None
 
-    def __init__(self, d=None, path=None, synonyms=None, context=None):
+    def __init__(self, d=None, path=None, synonyms=None):
         """ Object heirarchy for holding metadata.
 
         :param d:  Initial dict of values.
@@ -38,8 +38,6 @@ class Metadata(object):
         self._term_values = AttrDict()
         self._errors = {}
         self._loaded = set()
-        self._context = context
-
 
         if self._synonyms is not None:
 
@@ -231,16 +229,6 @@ class Metadata(object):
     def yaml(self):
         return self._term_values.dump()
 
-    def html(self):
-
-        out = ''
-
-        for name, group in self._members.items():
-
-            out += getattr(self, name).html()
-
-        return out
-
     def _repr_html_(self):
         """Adapts html() to IPython."""
         return self.html()
@@ -319,7 +307,7 @@ class Metadata(object):
 
         # Didn't find the group we intended to load, so try the non term file.
         if n_loaded == 0 and group is not None:
-            if (hasattr(self, '_non_term_file')):
+            if hasattr(self, '_non_term_file'):
                 fn = os.path.join(path, self._non_term_file)
                 self._term_values.update_yaml(fn)
 
@@ -384,12 +372,17 @@ class Group(object):
     _top = None
 
     def __init__(self, file=None, to_rows=True):
+        """
+
+        :param file:  Relative file path to yaml file where data for section is read and written.
+        :param alt_file: If it exists, an alternate file where data can be stored. Usually a CSV file.
+        :param to_rows: ? Unused?
+        :return:
+        """
 
         self._members = {
             name: attr for name,
-            attr in type(self).__dict__.items() if isinstance(
-                attr,
-                Term) and not name.startswith('_')}
+            attr in type(self).__dict__.items() if isinstance(attr,Term) and not name.startswith('_')}
 
         self._file = file
         self._to_rows = to_rows
@@ -448,14 +441,6 @@ class Group(object):
             raise AttributeError("No such term: {} ".format(attr))
 
         return object.__setattr__(self, attr, value)
-
-    def html(self):
-
-        return ''
-
-    def _repr_html_(self):
-        """Adapts html() to IPython."""
-        return self.html()
 
 
 class DictGroup(Group, collections.MutableMapping):
@@ -543,21 +528,6 @@ class DictGroup(Group, collections.MutableMapping):
             self.set({key: {subkey: value}})
         else:
             self.set({key: value})
-
-    def html(self):
-        out = ''
-
-        for name, m in self._members.items():
-
-            ti = self.get_term_instance(name)
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
-
-        return """
-<h2 class="{cls}">{title}</h2>
-<table class="{cls}">
-{out}</table>
-""" .format(title=self._key.title(), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
-            out=out)
 
 
 class TypedDictGroup(DictGroup):
@@ -730,18 +700,6 @@ class ListGroup(Group, collections.MutableSequence):
     def reformat(self, v):
         raise NotImplementedError()
 
-    def html(self):
-        out = ''
-
-        for ti in self:
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
-
-        return """
-<table class="{cls}">
-{out}</table>
-""" .format(title=self._key.title(), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
-            out=out)
-
 
 class Term(object):
     """A single term in a group."""
@@ -806,8 +764,6 @@ class Term(object):
     def after_set(self):
         pass
 
-    def html(self):
-        return ""
 
 # For ScalarTerm.text()
 # from http://stackoverflow.com/a/925630/1144479
@@ -830,6 +786,7 @@ class _ScalarTermS(str):
 
     def __init__(self, string, jinja_sub):
         ob = super(_ScalarTermS, self).__init__(string)
+
         self.jinja_sub = jinja_sub
         return ob
 
@@ -887,11 +844,18 @@ class ScalarTerm(Term):
 
         def jinja_sub(st):
 
-            if  self._top._context and isinstance(st, basestring):
+            if isinstance(st, basestring):
                 from jinja2 import Template
 
                 try:
-                    return Template(st).render(**(self._top._context))
+                    import json
+                    for i in range(5):  # Only do 5 recursive substitutions.
+
+                        st = Template(st).render(**self._top.dict)
+                        if '{{' not in st:
+                            break
+
+                    return st
                 except Exception as e:
                     raise ValueError("Failed to render jinja template for metadata value '{}': {}".format(st, e))
 
@@ -915,9 +879,6 @@ class ScalarTerm(Term):
 
     def is_empty(self):
         return self.get() is None
-
-
-
 
 
 class DictTerm(Term, collections.MutableMapping):
@@ -976,7 +937,9 @@ class DictTerm(Term, collections.MutableMapping):
 
         tv = self._parent._term_values[self._key]
 
-        assert tv is not None
+        if not tv:
+            self._parent._term_values[self._key] = {}
+            tv = self._parent._term_values[self._key]
 
         return tv
 
@@ -1009,7 +972,10 @@ class DictTerm(Term, collections.MutableMapping):
         self.set_row(key, value)
 
     def __delitem__(self, key):
-        return self._term_values.__delitem__(key)
+        try:
+            return self._term_values.__delitem__(key)
+        except KeyError:
+            pass # From the external interface, DictTerms always appear to have keys, even when they really dont.
 
     def __len__(self):
         return self._term_values.__len__()
@@ -1042,19 +1008,6 @@ class DictTerm(Term, collections.MutableMapping):
 
         return self._term_values.to_dict()
 
-    def html(self):
-        out = ''
-
-        for name, m in self._members.items():
-            ti = self.get_term_instance(name)
-            out += "<tr><td>{}</td><td>{}</td></tr>\r\n".format(ti._key, ti.html())
-
-        return """
-<table class="{cls}">
-{out}</table>
-""" .format(title=str(self._key), cls='ambry_meta_{} ambry_meta_{}'.format(type(self).__name__.lower(), self._key),
-            out=out)
-
     def set(self, d):
 
         for k, v in d.items():
@@ -1067,9 +1020,6 @@ class DictTerm(Term, collections.MutableMapping):
             return
 
         self._term_values[k] = v
-
-        # if k in self._term_values and self._term_values[k] is None and self._store_none_map[k] is False:
-        #    del self._term_values[k]
 
     def get(self):
         return self

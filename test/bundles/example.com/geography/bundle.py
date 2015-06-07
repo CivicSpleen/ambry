@@ -1,11 +1,11 @@
-'''
-'''
+"""
+"""
 
 from ambry.bundle.loader import GeoBuildBundle
 
 
 class Bundle(GeoBuildBundle):
-    ''' '''
+    """ """
 
     def build(self):
         super(Bundle, self).build()

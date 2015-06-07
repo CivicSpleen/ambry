@@ -6,11 +6,11 @@ Created on Oct 9, 2012
 
 
 class TestCommon(object):
-    '''
+    """
     classdocs
-    '''
+    """
 
     def __init__(self, params):
-        '''
+        """
         Constructor
-        '''
+        """
