@@ -1,8 +1,8 @@
 .. _bundle_creating:
 
-=====================
 Creating a New Bundle
 =====================
+
 
 How to create a new bundle. 
 

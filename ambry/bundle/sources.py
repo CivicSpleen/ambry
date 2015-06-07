@@ -19,7 +19,8 @@ class SourcesFile(object):
         ("comment_lines", "row_spec.header_comment_lines"),
         ("header_lines", "row_spec.header_lines"),
         ("description", "description"),
-        ("url", "url")
+        ("url", "url"),
+        ("ref", "ref")
     )
 
     def __init__(self, path, metadata):
@@ -47,6 +48,7 @@ class SourcesFile(object):
 
                 s = self._metadata.sources[row['name']]
 
+                name = row['name']
                 del row['name']
 
                 for k, v in row.items():
@@ -80,6 +82,11 @@ class SourcesFile(object):
                             s.row_spec[k] = v
                         elif k in s.row_spec:
                             del s.row_spec[k]
+
+                if row.get('ref',False):
+                    # If the source has a ref, then it is also a dependency
+                    self._metadata.dependencies[name] = row['ref']
+
 
 
     def write(self):

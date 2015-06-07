@@ -492,7 +492,6 @@ class Test(TestBase):
         p = bp.find_or_new(table = 'tone',time = 't1', space='s2')
         self.assertEquals('source-dataset-subset-variation-tone-t1-s2-0.0.1~piEGPXmDC8002001', p.identity.fqname)
 
-
         # Ok! Build!
         bundle.close()
         bundle = Bundle()

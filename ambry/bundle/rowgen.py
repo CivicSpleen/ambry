@@ -448,7 +448,9 @@ class RowSpecIntuiter(object):
             is_header_comment_line(i,row)
         """
 
+
         self.row_gen.reset()
+
         for row in self.row_gen.raw_row_gen:
 
             i = self.row_gen.line_number
@@ -470,6 +472,7 @@ class RowSpecIntuiter(object):
 
             elif self.data_start_line and not self.data_end_line:
                 if not is_dl:
+                    print 'END DL', is_dl, i, row
                     self.data_end_line = i
 
         return dict(

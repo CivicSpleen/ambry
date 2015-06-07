@@ -513,14 +513,4 @@ def library_unknown(args, l, config):
     fatal(args)
 
 
-def library_test(args, l, config):
-    term = 'Alabama city New Hope'
 
-    for t in range(len(term)):
-
-        for i, (score, gvid, name) in enumerate(l.search.search_identifiers(term[:t])):
-
-            if i == 0:
-                print chr(27) + "[2J" + chr(27) + "[H"
-
-            print score, gvid, name

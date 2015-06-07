@@ -732,6 +732,8 @@ class ObjectNumber(object):
         # if isinstance(on_str, unicode):
         #     dataset = on_str.encode('ascii')
 
+        assert isinstance(on_str, basestring)
+
         type_ = on_str[0]
         on_str = on_str[1:]
 

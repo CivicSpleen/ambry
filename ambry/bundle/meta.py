@@ -94,7 +94,8 @@ class RowSpecDictTerm(DictTerm):
 class SourceTerm(DictTerm):
     """A term that describes a source file for constructing a partition"""
 
-    url = ScalarTerm()
+    url = ScalarTerm(store_none=False) # URL to a source file
+    ref = ScalarTerm(store_none=False) # reference to a partition
     title = ScalarTerm(store_none=False)  # Title for use in table.
     description = ScalarTerm(store_none=False)
     dd_url = ScalarTerm(store_none=False)  # Data Dictitionary URL

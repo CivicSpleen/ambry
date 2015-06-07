@@ -26,7 +26,10 @@ class SqlitePartition(PartitionBase):
     _id_class = SqlitePartitionIdentity
     _db_class = PartitionDb
 
-    STATS_MAX = 1324657 # Maximum number of records used for computing full stats.
+    # Maximum number of records used for computing full stats. Its a funny number so we can detect when the
+    # stats are limited.
+    STATS_MAX = 1324657
+
 
     def __init__(self, bundle, record, memory=False, **kwargs):
 

@@ -39,15 +39,7 @@ class Bundle(BuildBundle):
                   ('code', partial(random.randint, 0, 10))
                   ]
 
-        return [
-            ('id', lambda: None),
-            ('text', partial(random.choice,
-                             ['chocolate', 'strawberry', 'vanilla'])),
-            ('integer', partial(random.randint, 0, 500)),
-            ('float', random.random),
-            ('extra', lambda: None),
-            ('extra2', lambda: None),
-        ]
+
 
     @property
     def fields3(self):
@@ -103,22 +95,7 @@ class Bundle(BuildBundle):
 
     def build_db_inserter_codes(self):
         self.partitions.find_or_new_db(table='coding')
-        # p = self.partitions.find_or_new_db(table='coding')
-        # table = p.table
-        #
-        # def yield_rows():
-        #     field_gen = self.fields3
-        #
-        #     for i in range(10000):
-        #         row = {f[0]: f[1]() for f in field_gen}
-        #
-        #         if i % 51 == 0:
-        #             row['integer'] = chr(65 + (i / 51 % 26))
-        #
-        #         if i % 13 == 0:
-        #             row['date'] = chr(65 + (i / 13 % 26))
-        #
-        #         yield row
+
 
     def build_db_inserter(self):
         
@@ -151,9 +128,6 @@ class Bundle(BuildBundle):
                 cast_row, cast_errors = caster(row)
                 ins.insert(cast_row)
                 lr()
-
-
-
 
 
 
