@@ -213,9 +213,7 @@ class Partitions(object):
         from sqlalchemy import or_
 
         q = (self.bundle.database.session.query(OrmPartition)
-             .filter(or_(
-                 OrmPartition.id_ == str(id_).encode('ascii'),
-                 OrmPartition.vid == str(id_).encode('ascii')
+             .filter(or_(OrmPartition.id_ == str(id_).encode('ascii'),OrmPartition.vid == str(id_).encode('ascii')
              )))
 
         return q.first()
@@ -610,139 +608,8 @@ class Partitions(object):
 
         return p
 
-    def new_geo_partition(
-            self,
-            clean=False,
-            tables=None,
-            data=None,
-            shape_file=None,
-            logger=None,
-            **kwargs):
-        # from sqlalchemy.orm.exc import NoResultFound
 
-        try:
-            import gdal
 
-            p, found = self._find_or_new(kwargs, format='geo')
-
-            if found:
-                raise ConflictError(
-                    "Partition {} alread exists".format(
-                        p.name))
-
-            if shape_file:
-                p.database.close()
-
-                p.load_shapefile(shape_file, logger=logger)
-
-        except ImportError:
-            self.bundle.log("GDAL not installed; using non geo database")
-            p, found = self._find_or_new(kwargs)
-
-            if found:
-                raise ConflictError(
-                    "Partition {} alread exists".format(
-                        p.name))
-
-            if shape_file:
-                from dbexceptions import RequirementError
-                raise RequirementError(
-                    "GDAL is not installed, so can't load a shapefile")
-
-        return p
-
-    def find_or_new_geo(self, clean=False, tables=None, data=None,
-                        create=False, shape_file=None, **kwargs):
-        """Find a partition identified by pid, and if it does not exist, create
-        it.
-
-        Args:
-            pid A partition Identity
-            tables String or array of tables to copy form the main partition
-
-        """
-
-        try:
-            import gdal
-
-            p, _ = self._find_or_new(kwargs, clean=False, tables=None,
-                                     data=None, create=True, format='geo')
-
-            if shape_file:
-                p.load_shapefile(shape_file)
-
-        except ImportError:
-            self.bundle.log("GDAL not installed; using non geo database")
-
-            p, _ = self._find_or_new(
-                kwargs, clean=False, tables=None, data=None, create=True)
-
-            if shape_file:
-                from dbexceptions import RequirementError
-                raise RequirementError(
-                    "GDAL is not installed, so can't load a shapefile")
-
-        return p
-
-    def find_or_new_hdf(self, clean=False, tables=None, data=None, create=False, **kwargs):
-        """
-        :param clean:
-        :param tables:
-        :param data:
-        :param create:
-        :param kwargs:
-        :return:
-        """
-
-        raise NotImplementedError()
-
-        # p, _ = self._find_or_new(kwargs, clean=False, tables=None, data=None, create=True, format='hdf')
-        #
-        # return p
-
-    def new_memory_partition(self, tables=None, data=None, **kwargs):
-        """Find a partition identified by pid, and if it does not exist, create
-        it.
-
-        Args:
-            pid A partition Identity
-            tables String or array of tables to copy form the main partition
-
-        """
-
-        # from partition.sqlite import SqlitePartition
-        from partition import partition_classes
-
-        ppn = PartialPartitionName(**kwargs)
-
-        if tables:
-            tables = set(tables)
-
-        if ppn.table:
-            if not tables:
-                tables = set()
-
-            tables.add(ppn.table)
-
-        op = self._new_orm_partition(
-            ppn,
-            tables=tables,
-            data=data,
-            memory=True)
-
-        cls = partition_classes().partition_by_format[
-            kwargs.get(
-                'format',
-                'db')]
-
-        p = cls(self.bundle, op, memory=True, **kwargs)
-
-        if tables:
-            p.create_with_tables(tables)
-        else:
-            p.create()
-
-        return p
 
     def delete(self, partition):
         from ambry.orm import Partition as OrmPartition
@@ -762,44 +629,4 @@ class Partitions(object):
 
         return out
 
-    def _repr_html_(self):
-        from identity import PartitionName
 
-        active_parts = set()
-
-        # Find out which of the name parts are being used, particularly
-        # time, space, grain
-        for p in self.all:
-            active_parts |= set(p.name.partital_dict.keys())
-
-        cols = ['Id', 'Vid', 'Name', 'VName']
-
-        for np, _, _ in PartitionName._name_parts:
-            if np in active_parts:
-                cols.append(np.title())
-
-        rows = ["<tr>" +
-                ''.join(['<th>{}</th>'.format(c) for c in cols]) +
-                "</tr>"]
-
-        for p in self.all:
-            cols = []
-            d = p.name.partital_dict
-
-            cols.append(p.identity.id_)
-            cols.append(p.identity.vid)
-            cols.append(p.identity.sname)
-            cols.append(p.identity.vname)
-
-            for np, _, _ in PartitionName._name_parts:
-
-                if np not in active_parts:
-                    continue
-
-                cols.append(d[np] if np in d else '')
-
-            rows.append("<tr>" +
-                        ''.join(['<td>{}</td>'.format(c) for c in cols]) +
-                        "</tr>")
-
-        return "<table>\n" + "\n".join(rows) + "\n</table>"

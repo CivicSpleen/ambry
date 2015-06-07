@@ -315,15 +315,6 @@ class Warehouse(object):
     def name(self, v):
         return self._meta_set('name', v)
 
-    @property
-    def url(self):
-        """Url of the management application for the warehouse."""
-        return self._meta_get('url')
-
-    @url.setter
-    def url(self, v):
-
-        return self._meta_set('url', v)
 
     @property
     def dsn(self):
@@ -350,9 +341,7 @@ class Warehouse(object):
             if k in self.configurable:
                 d[k] = v
 
-        d['dsn'] = filter_url(
-            self.database.dsn,
-            password=None)  # remove the password
+        d['dsn'] = filter_url(self.database.dsn,password=None)  # remove the password
 
         d['tables'] = {t.vid: t.nonull_col_dict for t in self.library.tables}
 
@@ -745,10 +734,11 @@ class Warehouse(object):
 
         b = self.elibrary.get(dataset_ident)
 
-        # dataset = self.wlibrary.database.install_bundle_dataset(b)
+        self.wlibrary.database.install_bundle_dataset(b)
 
         # This one gets the ref from the bundle
         p = b.partitions.get(dataset_ident.partition)
+
 
         if not p:
             raise NotFoundError("Did not find partition '{}' in bundle".format(p_vid))
@@ -759,6 +749,7 @@ class Warehouse(object):
         orm_p = (self.elibrary.database.session.query(Partition)
                  .options(noload('*'), joinedload('table').joinedload('columns'))
                  .filter(Partition.vid == p.identity.vid).one())
+
 
         self.wlibrary.database.session.merge(orm_p)
         self.wlibrary.database.session.commit()

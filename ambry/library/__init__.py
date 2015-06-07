@@ -138,9 +138,6 @@ def clear_libraries():
 
 class Library(object):
 
-    # Names of exernally configurable values.
-    configurable = ('warehouse_url')
-
     def __init__(self, cache, database,
                  name=None, remotes=None, source_dir=None,
                  doc_cache=None, warehouse_cache=None):
@@ -234,22 +231,6 @@ class Library(object):
         except AttributeError:
             return None
 
-    @property
-    def warehouse_url(self):
-        """URL to pass on to warehouses"""
-        return self._meta_get('warehouse_url')
-
-    @warehouse_url.setter
-    def warehouse_url(self, v):
-        r = self._meta_set('warehouse_url', v)
-
-        for sf in self.stores:
-            s = self.store(sf.ref)
-            w = self.warehouse(s.ref)
-            self.logger.info("Setting URL for {}".format(s.path))
-            self.sync_warehouse(w)
-
-        return r
 
     #
     # Storing
@@ -1186,6 +1167,7 @@ class Library(object):
                 vid = str(b.identity.vid)
 
                 if vids and vid not in vids:
+                    b.close()
                     continue
 
                 try:
@@ -1251,9 +1233,8 @@ class Library(object):
         """Create a reference to the warehouse and link all
         of the partitions to it. """
 
-        w.url = self.warehouse_url
 
-        store = self.files.install_data_store(w, name=w.name, title=w.title, url=w.url, summary=w.summary)
+        store = self.files.install_data_store(w, name=w.name, title=w.title,  summary=w.summary)
 
         s = self.database.session
 

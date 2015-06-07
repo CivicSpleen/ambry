@@ -1,5 +1,9 @@
 .. _design_collections:
 
+Collections
+===========
+
+
 Collections group together paritions with SQL views on those partitions to provide alternate ways to acess data. Collections are important for joinging multiple partitions together, restricting the records returned in extracts, altering the titles of dataset columns, and many other use cases. 
 
 A collection is composed of: 

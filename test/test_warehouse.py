@@ -205,8 +205,13 @@ class Test(TestBase):
         """
         Create postgres test DB
         """
+        from sqlalchemy.exc import OperationalError
 
-        self.waho = self._default_warehouse(self.EXAMPLE.CONF_DB_POSTGRES)
+        try:
+            self.waho = self._default_warehouse(self.EXAMPLE.CONF_DB_POSTGRES)
+        except OperationalError as e:
+            self.skipTest("No postgres database, probably")
+
 
     def test_dbobj_create_from_manifest(self):
         """
