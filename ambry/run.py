@@ -181,6 +181,7 @@ class RunConfig(object):
     def _sub_strings(self, e, subs):
         """Substitute keys in the dict e with functions defined in subs."""
 
+
         iters = 0
         while iters < 100:
             sub_count = 0
@@ -217,40 +218,14 @@ class RunConfig(object):
 
     def filesystem(self, name, missing_is_dir=False):
 
-        try:
-            e = self.group_item('filesystem', name)
-        except ConfigurationError:
-
-            if missing_is_dir:
-                e = dict(dir=name)
-            else:
-                raise
-
         fs = self.group('filesystem')
-        root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
 
-        # If the value is a string, rather than a dict, it is for a
-        # FsCache. Re-write it to be the expected type.
+        e = self.group_item('filesystem', name)
 
-        if isinstance(e, basestring):
-            import urlparse
+        # Substititue in any of the other items in the filesystem group.
+        # this is particularly useful for the 'root' value
+        return  e.format(**fs)
 
-            parts = urlparse.urlparse(e)
-
-            if not parts.scheme:
-                e = dict(dir=e)
-            else:
-                from ckcache import parse_cache_string
-
-                e = parse_cache_string(e, root_dir)
-
-        e = self._sub_strings(e, {
-            'upstream': lambda k, v: self.filesystem(v),
-            'account': lambda k, v: self.account(v),
-            'dir': lambda k, v: v.format(root=root_dir)
-        })
-
-        return e
 
     def service(self, name):
         """For configuring the client side of services."""
@@ -333,54 +308,24 @@ class RunConfig(object):
 
         for name, remote in pairs:
 
-            if not isinstance(remote, basestring):
-                r[str(name)] = remote
-            else:
+            if  isinstance(remote, basestring):
                 r[str(name)] = parse_cache_string(remote, root_dir)
+            else:
+                r[str(name)] = remote
 
         return r
 
-    def datarepo(self, name):
-        e = self.group_item('datarepo', name)
-
-        return self._sub_strings(e, {
-            'filesystem': lambda k, v: self.filesystem(v)
-        })
-
-    def library(self, name):
-        e = self.group_item('library', name)
+    def library(self):
+        e = self.config['library']
 
         fs = self.group('filesystem')
-        root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
 
-        if 'source' not in e:
-            e['source'] = fs.get('source', None)
+        return dict(
+            database=e.get('database','').format(**fs),
+            warehouse=e.get('warehouse', '').format(**fs),
+            remotes= self.remotes(e.get('remotes', {}))
+        )
 
-        e = self._sub_strings(e, {
-            'filesystem': lambda k, v: self.filesystem(v, missing_is_dir=True),
-            'database': lambda k, v: self.database(v, missing_is_dsn=True),
-            'account': lambda k, v: self.account(v),
-            'cdn': lambda k, v: self.account(v),
-            'source': lambda k, v: v.format(root=root_dir)
-        })
-
-        # This block will expand the remotes from strings to full configuration.
-        # this willget converted again in the library to cache objects.
-        if 'remotes' in e:
-            e['remotes'] = self.remotes(e['remotes'])  # Convert from dict or list to dict
-
-            e['remotes'] = {name: self._sub_strings(remote, {
-                'account': lambda k, v: self.account(v),
-                'source': lambda k, v: v.format(root=root_dir)
-            }) for name, remote in e['remotes'].items() if isinstance(remote, dict)}
-
-        e['_name'] = name
-        e['root'] = root_dir
-
-        if 'warehouses' not in e:
-            e['warehouses'] = self.filesystem('warehouses')
-
-        return e
 
     def warehouse(self, name):
         from warehouse import database_config
@@ -452,31 +397,7 @@ class RunConfig(object):
             pass  # Already a dict b/c converted from string
         return e
 
-    def python_dir(self):
 
-        fs = self.group('filesystem')
-
-        if 'python' not in fs:
-            return None
-
-        root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
-
-        python_dir = fs['python'].format(root=root_dir)
-
-        return python_dir
-
-    def filesystem_path(self, name):
-
-        fs = self.group('filesystem')
-
-        if name not in fs:
-            return None
-
-        root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
-
-        path = fs[name].format(root=root_dir)
-
-        return path
 
     @property
     def dict(self):
@@ -548,27 +469,3 @@ def import_file(filename):
 
     return imp.load_module(modname, file_, filename, data)
 
-
-if __name__ == '__main__':
-    """When bambry is run, this routine will load the bundle module from a file
-    wire it into the namespace and run it with the arguments passed into
-    bambry."""
-    import sys
-
-    args = list(sys.argv)
-
-    bundle_file = sys.argv[1]
-
-    if not os.path.exists(os.path.join(os.getcwd(), 'bundle.yaml')):
-        print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file, " \
-                             "so it isn't a bundle file. Did you mean to run 'cli'?".format(os.getcwd())
-        sys.exit(1)
-
-    # Import the bundle file from the
-    rp = os.path.realpath(os.path.join(os.getcwd(), bundle_file))
-    mod = import_file(rp)
-
-    dir_ = os.path.dirname(rp)
-    b = mod.Bundle(dir_)
-
-    b.run(args[2:])

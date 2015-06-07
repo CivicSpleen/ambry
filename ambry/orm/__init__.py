@@ -342,6 +342,7 @@ def _clean_flag(in_flag):
     return bool(in_flag)
 
 
+
 from ambry.orm.code import Code
 from ambry.orm.column import Column
 from ambry.orm.file import File
@@ -350,4 +351,6 @@ from ambry.orm.table import Table
 from ambry.orm.config import Config
 from ambry.orm.dataset import Dataset
 from ambry.orm.columnstat import ColumnStat
-
+from ambry.orm.colmap import ColumnMap
+from ambry.orm.source import DataSource
+from ambry.orm.database import Database

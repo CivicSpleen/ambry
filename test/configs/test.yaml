@@ -29,12 +29,6 @@ library:
           - http://s3.sandiegodata.org/library
 
 
-    client:
-      filesystem: default
-      database: default
-      remotes:
-      - http://localhost:7979
-
 
 warehouse:
     health:

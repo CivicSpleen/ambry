@@ -7,7 +7,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 import os
 
 
-from . import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat
+from . import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat, ColumnMap, DataSource
 from collections import namedtuple
 from ..util import get_logger
 
@@ -62,7 +62,6 @@ class Database(object):
             return True
 
         return False
-
 
     def _create_path(self):
         """Create the path to hold the database, if one wwas specified."""
@@ -222,8 +221,6 @@ class Database(object):
         self.session.rollback()
         # self.close_session()
 
-
-
     def clean(self, add_config_root=True):
         from sqlalchemy.exc import OperationalError, IntegrityError
         from ambry.orm.exc import DatabaseError
@@ -249,8 +246,6 @@ class Database(object):
 
         self.commit()
 
-
-
     @property
     def metadata(self):
         """Return an SqlAlchemy MetaData object, bound to the engine."""
@@ -269,8 +264,6 @@ class Database(object):
 
         return Inspector.from_engine(self.engine)
 
-
-
     def clone(self):
         return self.__class__(self.driver, self.server, self.dbname, self.username, self.password)
 
@@ -281,7 +274,7 @@ class Database(object):
 
         from sqlalchemy.exc import OperationalError
 
-        tables = [Dataset, Config, Table, Column, Partition, File, Code, ColumnStat]
+        tables = [Dataset, Config, Table, Column, Partition, File, Code, ColumnStat, ColumnMap, DataSource]
 
         try:
             self.drop()
@@ -373,6 +366,7 @@ class Database(object):
         try:
             self.session.add(ds)
             self.session.commit()
+            ds._database = self
             return ds
         except IntegrityError as e:
             from ambry.orm.exc import ConflictError
@@ -399,14 +393,18 @@ class Database(object):
         from ambry.orm.exc import NotFoundError
 
         try:
-            return (self.session.query(Dataset).filter(Dataset.vid == str(ref)).one())
+            ds =  (self.session.query(Dataset).filter(Dataset.vid == str(ref)).one())
         except NoResultFound:
             try:
-                return (self.session.query(Dataset).filter(Dataset.id == str(ref))
+                ds =  (self.session.query(Dataset).filter(Dataset.id == str(ref))
                         .order_by(Dataset.revision.desc()).first())
             except NoResultFound:
                 raise NotFoundError("No partition in library for vid : {} ".format(ref))
 
+        if ds:
+            ds._database = self
+
+        return ds
 
 
 

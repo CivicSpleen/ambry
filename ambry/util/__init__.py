@@ -21,65 +21,35 @@ from flo import *  # Legacy; should convert clients to direct import
 logger_init = set()
 
 
-def get_logger(name, file_name=None, stream=None, template=None, clear=False, propagate=False):
-    return _get_logger(name, file_name=file_name, stream=stream, template=template, clear=clear, propagate=propagate)
+def get_logger(name, file_name=None, stream=None, template=None, propagate=False):
+    return _get_logger(name, file_name=file_name, stream=stream, template=template, propagate=propagate)
 
 
-def _get_logger(name, file_name=None, stream=None, template=None, clear=False, propagate=False):
+def _get_logger(name, file_name=None, stream=None, template=None, propagate=False):
     """Get a logger by name.
-
-    if file_name is specified, and the dirname() of the file_name
-    exists, it will write to that file. If the dirname dies not exist,
-    it will silently ignre it.
 
     """
 
     logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
 
     if propagate is not None:
         logger.propagate = propagate
 
-    if clear:
-        logger.handlers = []
+    if not template:
+        template = "%(name)s %(process)s %(levelname)s %(message)s"
 
-    # To list all loggers: logging.Logger.manager.loggerDict
+    formatter = logging.Formatter(template)
 
-    if name not in logger_init:
+    if not file_name and not stream:
+        stream = sys.stdout
 
-        for handler in logger.handlers:
-            logger.removeHandler(handler)
+    handler = logging.StreamHandler(stream=stream)
+    handler.setFormatter(formatter)
 
-        if not template:
-            template = "%(name)s %(process)s %(levelname)s %(message)s"
-
-        formatter = logging.Formatter(template)
-
-        if not file_name and not stream:
-            stream = sys.stdout
-
-        handlers = []
-
-        if stream is not None:
-            handlers.append(logging.StreamHandler(stream=stream))
-
-        if file_name is not None:
-            if os.path.isdir(os.path.dirname(file_name)):
-                handlers.append(logging.FileHandler(file_name))
-            else:
-                print("ERROR: Can't open log file {}".format(file_name))
-
-        for ch in handlers:
-            ch.setFormatter(formatter)
-            logger.addHandler(ch)
-
-        logger.setLevel(logging.INFO)
-
-        logger_init.add(name)
-
-
+    logger.addHandler(handler)
 
     return logger
-
 
 def install_test_logger(test_file_name):
     def test_get_logger(name, file_name=None, stream=None, template=None, clear=False, propagate=False):
@@ -598,8 +568,10 @@ class AttrDict(OrderedDict):
         return root
 
     def update_flat(self, val):
+
         if isinstance(val, AttrDict):
             val = val.flatten()
+
         for k, v in val:
             dst = self
             for slug in k[:-1]:

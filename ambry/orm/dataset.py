@@ -18,7 +18,6 @@ from . import Base, MutationDict, JSONEncodedObj
 
 from ambry.identity import DatasetNumber
 from ambry.identity import  ObjectNumber
-from ambry.orm.config import Config
 from ambry.orm.file import File
 from sqlalchemy.orm import object_session
 
@@ -50,7 +49,7 @@ class Dataset(Base):
 
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 
-    path = None  # Set by the LIbrary and other queries.
+    path = None  # Set by the Library and other queries.
 
     tables = relationship("Table",backref='dataset',cascade="save-update, delete, delete-orphan")
 
@@ -60,6 +59,12 @@ class Dataset(Base):
 
     files = relationship('File', backref='dataset', cascade="all, delete-orphan")
 
+    colmaps = relationship('ColumnMap', backref='dataset', cascade="all, delete-orphan")
+
+    sources = relationship('DataSource', backref='dataset', cascade="all, delete-orphan")
+
+
+    _database = None # Reference to the database, when dataset is retrieved from
 
     def __init__(self, *args, **kwargs):
 
@@ -95,6 +100,9 @@ class Dataset(Base):
             self.version = str(self.identity.version)
 
         assert self.vid[0] == 'd'
+
+    def commit(self):
+        self._database.commit()
 
     @property
     def identity(self):
@@ -230,7 +238,7 @@ class ConfigAccessor(object):
 
         from config import ConfigGroupAccessor
 
-        return ConfigGroupAccessor(self, 'process')
+        return ConfigGroupAccessor(self.dataset, 'process')
 
     @property
     def meta(self):
@@ -243,7 +251,7 @@ class ConfigAccessor(object):
 
     @property
     def build(self):
-        """Access build configuarion values as attributes. See self.process
+        """Access build configuration values as attributes. See self.process
             for a usage example"""
         from config import ConfigGroupAccessor
 
@@ -252,7 +260,7 @@ class ConfigAccessor(object):
     @property
     def library(self):
         """Access library configuration values as attributes. The library config
-         is really only relevant tot eh root dataset. See self.process for a usage example"""
+         is really only relevant to the root dataset. See self.process for a usage example"""
         from config import ConfigGroupAccessor
 
         return ConfigGroupAccessor(self.dataset, 'library')

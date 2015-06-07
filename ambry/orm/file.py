@@ -62,17 +62,47 @@ class File(Base, DictableMixin):
     source = SAColumn('f_source', Text, nullable=False)
 
     state = SAColumn('f_state', Text)
-    hash = SAColumn('f_hash', Text)
+    hash = SAColumn('f_hash', Text) # Hash of the contents
     modified = SAColumn('f_modified', Integer)
     size = SAColumn('f_size', BigIntegerType)
-
     contents = SAColumn('f_contents', Binary)
+
+    source_hash = SAColumn('f_source_hash', Text)  # Hash of the source_file
 
     data = SAColumn('f_data', MutationDict.as_mutable(JSONEncodedObj))
 
     __table_args__ = (
         UniqueConstraint('f_d_vid', 'f_path', 'f_major_type', 'f_minor_type',  name='u_ref_path'),
     )
+
+    @property
+    def unpacked_contents(self):
+        """
+        :return:
+        """
+
+        import msgpack
+
+        if self.mime_type == 'text/plain':
+            return self.contents
+        elif self.mime_type == 'application/msgpack':
+            return msgpack.unpackb(self.contents)
+        else:
+            return self.contents
+
+    def update_contents(self, contents):
+        """Update the contents and set the hash and modification time"""
+        import hashlib
+        import time
+
+        self.contents = contents
+        self.hash = hashlib.md5(self.contents).hexdigest()
+        self.modified = time.time()
+        self.size = len(self.contents)
+
+    @property
+    def has_contents(self):
+        return self.size > 0
 
     def __init__(self,  **kwargs):
         super(File, self).__init__( **kwargs)

@@ -1307,3 +1307,22 @@ class Schema(object):
 
         self.update_from_intuiter(table_name, intuit, descriptions=descriptions)
 
+    def _revise_schema(self):
+        """Write the schema from the database back to a file.
+
+        If the schema template exists, overwrite the main schema file.
+        If it does not exist, use the revised file
+
+        """
+
+        self.update_configuration()
+
+        sf_out = self.filesystem.build_path(self.SCHEMA_REVISED_FILE)
+
+        # Need to expire the unmanaged cache, or the regeneration of the schema may
+        # use the cached schema object rather than the ones we just updated, if the schem objects
+        # have alread been loaded.
+        self.database.session.expire_all()
+
+        with open(sf_out, 'w') as f:
+            self.schema.as_csv(f)

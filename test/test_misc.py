@@ -65,3 +65,5 @@ class Test(TestBase):
 
         self.assertEquals('1990/2013', compress_years(
             expand_to_years(compress_years(mixed))))
+
+

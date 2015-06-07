@@ -23,11 +23,16 @@ larget schema files, such as those in the US Census.
 # Revised BSD License, included in this distribution as LICENSE.txt
 
 from ambry.orm import File
+import hashlib
+import time
 
 class FileTypeError(Exception):
     """Bad file type"""
 
 class BuildSourceFile(object):
+
+    file_to_record = 'ftr'
+    record_to_file = 'rtf'
 
     def __init__(self, dataset, filesystem, file_const):
         """
@@ -41,6 +46,69 @@ class BuildSourceFile(object):
         self._fs = filesystem
         self._file_const = file_const
 
+    def exists(self):
+        return self._fs.exists(file_name(self._file_const))
+
+    @property
+    def record(self):
+        return self._dataset.bsfile(self._file_const)
+
+    def fs_modtime(self):
+        import time
+        from fs.errors import ResourceNotFoundError
+
+        fn_path = file_name(self._file_const)
+
+        try:
+            info = self._fs.getinfokeys(fn_path, "modified_time")
+            return time.mktime(info['modified_time'].timetuple())
+        except ResourceNotFoundError:
+            return None
+
+    def fs_hash(self):
+        from ambry.util import md5_for_file
+
+        if not self.exists():
+            return None
+
+        fn_path = file_name(self._file_const)
+        with self._fs.open(fn_path) as f:
+            return md5_for_file(f)
+
+
+    def sync_dir(self):
+        """ Report on which direction a syncironizaion should be done.
+        :return:
+        """
+
+        if self.exists() and not self.record.size:
+            # The fs exists, but the record is empty
+            return self.file_to_record
+        elif self.record.size and not self.exists():
+            # Record exists, but not the FS
+            return self.record_to_file
+
+        if self.record.modified > self.fs_modtime():
+            # Record is newer
+            return self.record_to_file
+
+        elif self.fs_modtime() > self.record.modified:
+            # Filesystem is newer
+            return self.file_to_record
+
+        return None
+
+    def sync(self):
+
+        if self.sync_dir() == self.file_to_record:
+            self.fs_to_record()
+            return self.file_to_record
+        elif self.sync_dir() == self.record_to_file:
+            self.record_to_fs()
+            return self.record_to_file
+
+        return None
+
     def fs_to_record(self):
         """Load a file in the filesystem into the file record"""
         raise NotImplementedError
@@ -49,17 +117,6 @@ class BuildSourceFile(object):
         """Create a filesystem file from a File"""
         raise NotImplementedError
 
-    def set_size_mod(self, file_rec, fn_path):
-        from ambry.util import md5_for_file
-        from fs.errors import NoSysPathError
-        info = self._fs.getinfokeys(fn_path, "modified_time", "size")
-
-        file_rec.modified = info['modified_time']
-        file_rec.size = info['size']
-        try:
-            file_rec.hash = md5_for_file(self._fs.getsyspath(fn_path))
-        except NoSysPathError:
-            pass
 
 class RowBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
@@ -67,26 +124,25 @@ class RowBuildSourceFile(BuildSourceFile):
     def fs_to_record(self):
         """Load a file in the filesystem into the file record"""
         import unicodecsv as csv
-        from StringIO import StringIO
-        import msgpack
 
-        sio = StringIO()
+        import msgpack
 
         fn_path = file_name(self._file_const)
 
-        with self._fs.open(fn_path) as f:
-            for row in csv.reader(f):
-                sio.write(msgpack.packb(row))
-
         fr = self._dataset.bsfile(self._file_const)
-        fr.contents = sio.getvalue()
+        fr.path = fn_path
+        with self._fs.open(fn_path) as f:
+            fr.update_contents(msgpack.packb([row for row in csv.reader(f)]))
 
-        self.set_size_mod( fr, fn_path)
+        fr.mime_type = 'application/msgpack'
+        fr.source_hash = self.fs_hash()
+
+        fr.modified = self.fs_modtime()
 
     def record_to_fs(self):
         """Create a filesystem file from a File"""
         import unicodecsv as csv
-        from StringIO import StringIO
+
         import msgpack
 
         fr = self._dataset.bsfile(self._file_const)
@@ -94,9 +150,8 @@ class RowBuildSourceFile(BuildSourceFile):
         fn_path = file_name(self._file_const)
 
         with self._fs.open(fn_path, 'wb') as f:
-            unpacker = msgpack.Unpacker(StringIO(fr.contents))
             w = csv.writer(f)
-            for row in unpacker:
+            for row in msgpack.unpackb(fr.contents):
                 w.writerow(row)
 
 
@@ -106,25 +161,24 @@ class DictBuildSourceFile(BuildSourceFile):
     def fs_to_record(self):
         """Load a file in the filesystem into the file record"""
 
-        from StringIO import StringIO
         import msgpack
-
-        sio = StringIO()
 
         fn_path = file_name(self._file_const)
         fr = self._dataset.bsfile(self._file_const)
-
+        fr.path = fn_path
         if fn_path.endswith('.yaml'):
             import yaml
 
             with self._fs.open(fn_path) as f:
-                sio.write(msgpack.packb(yaml.load(f)))
-            fr.mime_type = 'application/yaml'
+                fr.update_contents(msgpack.packb(yaml.load(f)))
+            fr.mime_type = 'application/msgpack'
         else:
             raise FileTypeError("Unknown file type for : %s" % fn_path)
 
-        fr.contents = sio.getvalue()
-        self.set_size_mod(fr, fn_path)
+
+        fr.source_hash = self.fs_hash()
+
+        fr.modified = self.fs_modtime()
 
     def record_to_fs(self):
         """Create a filesystem file from a File"""
@@ -150,13 +204,14 @@ class StringSourceFile(BuildSourceFile):
 
         fn_path = file_name(self._file_const)
         fr = self._dataset.bsfile(self._file_const)
+        fr.path = fn_path
 
         with self._fs.open(fn_path) as f:
-            fr.contents = unicode(f.read())
+            fr.update_contents(unicode(f.read()))
 
         fr.mime_type = 'text/plain'
-
-        self.set_size_mod(fr, fn_path)
+        fr.source_hash = self.fs_hash()
+        fr.modified = self.fs_modtime()
 
     def record_to_fs(self):
         """Create a filesystem file from a File"""
@@ -197,3 +252,21 @@ class BuildSourceFileAccessor(object):
         bsfile = fc(self._dataset, self._fs, const_name)
 
         return bsfile
+
+    def sync(self):
+
+        syncs = []
+
+        for file_const, (file_name, clz) in  file_info_map.items():
+            f = self.file(file_const)
+            syncs.append((file_const,f.sync()))
+
+        return syncs
+
+    def sync_dirs(self):
+        return [ (file_const, self.file(file_const).sync_dir() )
+                 for file_const, (file_name, clz) in  file_info_map.items() ]
+
+
+
+

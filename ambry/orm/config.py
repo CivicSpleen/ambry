@@ -55,7 +55,10 @@ class ConfigTypeGroupAccessor(object):
 
     def __getattr__(self, k):
 
-        return self._configs[k].value
+        try:
+            return self._configs[k].value
+        except KeyError:
+            return None
 
     def __setattr__(self, k, v):
         """Maps attributes to values.
@@ -74,6 +77,12 @@ class ConfigTypeGroupAccessor(object):
                                 key = k, value = v)
                 self._configs[k] = config
                 self._session.add(config)
+
+    def __getitem__(self, item):
+        return self.__getattr__(item)
+
+    def __setitem__(self, key, value):
+        self.__setattr__(key, value)
 
 
     def __iter__(self):
@@ -97,6 +106,10 @@ class ConfigGroupAccessor(object):
         self._dataset = dataset
         self._type_name = type_name
 
+    def clean(self):
+        for config in [ config for config in self._dataset.configs if config.type == self._type_name]:
+            self._dataset.configs.remove(config)
+
     def __getattr__(self, k):
 
         return ConfigTypeGroupAccessor(self._dataset, self._type_name, k)
@@ -106,5 +119,6 @@ class ConfigGroupAccessor(object):
             return super(ConfigGroupAccessor, self).__setattr__(k, v)
         else:
             raise AttributeError("Can't set groups in ConfigGroupAccessor")
+
 
 
