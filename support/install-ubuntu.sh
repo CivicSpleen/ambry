@@ -25,19 +25,21 @@ fi
 
 pip install -U pip
 
+# The pip upgrade moved pip from /usr/bun/pip to /usr/local/bin/pip, but the localtion gets cached somewhere
+# in the shell, so the bare 'pip' calls can fail.
 
 # This package allows Sqlalchemy to load the spatialite shared object to provide
 # Spatialite services.
-pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
+/usr/local/bin/pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
 ###
 ### Install Ambry
 ###
 
 if [ ! -z "$is_dev" ]; then
-    pip install -e "git+https://github.com/CivicKnowledge/ambry.git@develop#egg=ambry"
+    /usr/local/bin/pip install -e "git+https://github.com/CivicKnowledge/ambry.git@develop#egg=ambry"
 else
-    pip install "git+https://github.com/CivicKnowledge/ambry.git"
+    /usr/local/bin/pip install "git+https://github.com/CivicKnowledge/ambry.git"
 fi
 
 ambry config install # Installs a development config

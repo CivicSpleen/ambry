@@ -24,11 +24,12 @@ RUN dpkg-reconfigure locales
 # Spatialite services.
 RUN pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
-RUN pip install git+https://github.com/CivicKnowledge/ambry.git
-RUN pip install git+https://github.com/CivicKnowledge/ambrydoc.git
+#RUN pip install git+https://github.com/CivicKnowledge/ambry.git
+RUN pip install ambry
+
 
 VOLUME /var/ambry
 RUN mkdir -p /var/ambry/source
 RUN ambry config install
 
-RUN ambry library sync -r
+RUN ambry sync
