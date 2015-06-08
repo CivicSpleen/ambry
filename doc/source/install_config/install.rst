@@ -11,6 +11,7 @@ Ambry is a complex package that has dependencies on a lot of other code, some of
 * `Windows`_
 * `Vagrant`_
 * `Docker`_
+* `Python Virtualenv`_
 
 
 ********
@@ -95,15 +96,15 @@ If you've created a fresh Ubuntu install, you'll probably also have to update an
 Follow up with :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
    
 
-*************
+*******
 Windows
-*************
+*******
 
 For Windows, you can probably use the "Easy Way" installation: install Anaconda first, then Ambry. If that doesn't work, try Vagrant or Docker. 
 
-*************
+*******
 Vagrant
-*************
+*******
 
 To setup Ambry in Vagrant, `install vagrant <http://docs.vagrantup.com/v2/installation/index.html>`_, then get the source code. The Vagrant environment is inside the source distribution, and share's the host's source directory, so the Vagrant installation is a good way to develop on Windows while running in Ubuntu. 
 
@@ -127,9 +128,9 @@ When the build is done, ssh to the box.
 Then, follow the instrictions at :ref:`install-post-install` to create your configuration files and check the integrity of the installation. 
   
 
-*************
+******
 Docker
-*************
+******
    
 A Dockerfile for a basic docker image is available in: :file:`support/ambry-docker`. To build it, run:
 
@@ -143,35 +144,52 @@ When that is finished, you can run the image with:
 
     $ docker run -i -t ambry bin/bash
 
+*****************
+Python Virtualenv
+*****************
+
+Installing into a python virtual environment is fairly easy. 
+
+First, make your virtualenv:
+
+.. code-block:: bash
+    $ virtualenv ambry
+    $ cd ambry
+    $ source bin/activate
+
+Then clone and setup Ambry
+
+.. code-block:: bash
+
+    $ mkvirtualenv ambry # This should cd to your new virtual env directory
+    $ git clone https://github.com/CivicKnowledge/ambry.git
+    $ cd ambry
+    $ python setup.py develop 
+
+
 .. _install-post-install:
 
 *************
 Post Install
 *************
   
-After installing Ambry and its dependencies, you can check that the installation worked correctly with:
-   
+After installation, you can setup and customize the configuation. See: :ref:`configuration`. But the first thing you'll probably want to do is create the configuration file and check the Ambry version. To create the configuration file: 
+
+.. code-block:: bash
+    
+    $ ambry config install  
+
+Then, check the version and file locations: 
+
 .. code-block:: bash
     
     $ ambry info 
-    Version:  0.3.420
-    Root dir: /home/eric/ambry
-    Source :  /home/eric/ambry/source
-    Configs:  ['/home/eric/.ambry.yaml', '/home/eric/.ambry-accounts.yaml']
-
-    $ ambry library info 
-    Library Info
-    Name:     default
-    Database: sqlite:////home/eric/ambry/library.db
-    Cache:    FsCache: dir=/home/eric/ambry/library upstream=(None)
-    Remotes:  FsCompressionCache: upstream=(HttpCache: url=http://s3.sandiegodata.org/library/)
-
-After installation, you can customize the configuation. See: :ref:`configuration`
-
-
-
-
-
-
-
-
+    Version:   0.3.865, development
+    Root dir:  /Users/eric/proj/virt/ambry-master/data
+    Source :   /Users/eric/proj/virt/ambry-master/data/source
+    Configs:   ['/Users/eric/proj/virt/ambry-master/.ambry.yaml', '/Users/eric/.ambry-accounts.yaml']
+    Library:   sqlite:////Users/eric/proj/virt/ambry-master/data/library.db
+    Cache:     /Users/eric/proj/virt/ambry-master/data/library
+    Doc Cache: /Users/eric/proj/virt/ambry-master/data/library/_doc
+    Whs Cache: /Users/eric/proj/virt/ambry-master/data/warehouses
+    Remotes:   census, sdrdl, restricted, system, private, public

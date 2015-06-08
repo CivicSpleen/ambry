@@ -1437,6 +1437,9 @@ class Warehouse(object):
 
         dataset = self.wlibrary.resolve(name)
 
+        if not dataset:
+            self.logger.error("Failed to find partition or bundle by name '{}'".format(name))
+
         if dataset.partition:
             b = LibraryDbBundle(self.library.database, dataset.vid)
             p = b.partitions.get(id_=dataset.partition.vid)
@@ -1461,15 +1464,12 @@ class Warehouse(object):
             self.library.database.remove_partition(dataset.partition)
 
         elif dataset:
-
             b = LibraryDbBundle(self.library.database, dataset.vid)
             for p in b.partitions:
                 self.remove(p.identity.vname)
 
             self.logger.info('Removing bundle {}'.format(dataset.vname))
             self.library.database.remove_bundle(b)
-        else:
-            self.logger.error("Failed to find partition or bundle by name '{}'".format(name))
 
     def run_sql(self, sql_text):
 
@@ -1549,6 +1549,7 @@ class Warehouse(object):
         elif isinstance(partition, Identity):
             pid = partition.vid
         else:
+            # FIXIT: why partition, not vid?
             pid = partition
 
         return pid
@@ -1563,7 +1564,7 @@ class Warehouse(object):
             did = partition.as_dataset().vid
         else:
             from ..identity import ObjectNumber
-
+            # FIXIT: fix or remove. My be use ObjectNumber.parse()
             did = str(ObjectNumber(str(partition)).dataset)
 
         return did
@@ -1645,7 +1646,7 @@ class Warehouse(object):
 
         e = new_extractor(content_type, self, self.cache.subcache('extracts'))
 
-        ref = t.name if t.type in ('view', 'mview', 'indexed') else t.vid
+        ref = t.name if t.type in ('view', 'mview', 'indexed', 'installed') else t.vid
 
         return e.stream(ref, '{}.{}'.format(tid, content_type))
 
