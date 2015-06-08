@@ -153,6 +153,29 @@ class Test(TestBase):
 
         self.assertRaises(NotFoundError, self.waho.extract_table, 'blabla')
 
+    def test_stream_table(self):
+        """
+        Stream data from table to file
+        """
+        from ambry.dbexceptions import NotFoundError
+
+        test_view = 'test_view'
+        test_mview = 'test_mview'
+
+        self.waho = self._default_warehouse()
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+        tb = self.waho.tables.next()
+
+        # test installed table
+        self.waho.stream_table(tb.vid, 'csv')
+        # test view
+        self.waho.stream_table(test_view, 'csv')
+        # + letter case
+        self.waho.stream_table(test_mview, 'CsV')
+
+        self.assertRaises(NotFoundError, self.waho.stream_table, 'blabla')
+
     def test_remove(self):
         """
         Remove partition or bundle
@@ -169,7 +192,10 @@ class Test(TestBase):
         except AttributeError:
             pass
 
-        # # remove partition
+        # remove partition
+        self.waho.run_sql('drop table piEGPXmDC8002001_geot1')
+        self.waho.remove('piEGPXmDC8002001')
+
         self.waho.remove('piEGPXmDC8001001')
         try:
             self.waho.remove('piEGPXmDC8001001')
@@ -200,7 +226,7 @@ class Test(TestBase):
         self.waho.install_manifest(mf)
 
         self.assertTrue(self.waho.has('source-dataset-subset-variation-tthree-0.0.1'))
-
+        self.assertFalse(self.waho.has('test'))
 
     def test_postgres_dbcreate(self):
         """
@@ -368,14 +394,124 @@ WHERE geo.sumlevel = 150 AND geo.state = 6 and geo.county = 73
 
     def test_return_type(self):
         from ambry.identity import Identity
+        from ambry.warehouse import NullLogger
 
         self.waho = self._default_warehouse()
 
         self.assertIsNotNone(self.waho.cache)
+
         self.assertIsInstance(self.waho.dict, dict)
         self.assertIsInstance(
             self.waho.get('ambry-djitnip4ju001-0.0.1~djItnip4ju001'),
             Identity)
+
+        # always pass
+        self.assertFalse(self.waho.cache.has('test'))
+        self.assertRaises(NotImplementedError,
+                          self.waho._ogr_args,
+                          'source-dataset-subset-variation-geot1')
+
+
+        lg = NullLogger()
+        lg.progress(0, 100)
+        lg.log('test log message')
+        lg.info('test info message')
+        lg.error('test error message')
+
+    def test_augmented_table_name(self):
+        from ambry.partition import PartitionBase
+
+        self.waho = self._default_warehouse()
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+        partition = self.waho.partitions.next()
+        identity = partition.identity
+        # without geo no grain, so add it
+        identity.grain = 'test'
+
+        basepart = self.bundle.partitions.all[0]
+        self.assertEqual(basepart.d_vid,
+                         self.waho._partition_to_dataset_vid(basepart))
+
+        name, alias = self.waho.augmented_table_name(identity, 'geot1')
+        self.assertEqual('piEGPXmDC8003001_geot1_test', name)
+        self.assertEqual('piEGPXmDC8003_geot1_test', alias)
+
+    def test_to_vid(self):
+        from ambry.warehouse import ResolutionError
+        self.waho = self._default_warehouse()
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+        partition = self.waho.partitions.next()
+        basepart = self.bundle.partitions.all[0]
+
+        self.assertEqual(self.waho._to_vid(partition), partition)
+        self.assertEqual(self.waho._to_vid(basepart), basepart.vid)
+        self.assertEqual(self.waho._to_vid(partition.identity), partition.vid)
+        self.assertRaises(ResolutionError, self.waho._to_vid, basepart.d_vid)
+        self.assertRaises(ResolutionError, self.waho._to_vid, 'testerror')
+
+    def test_create_index(self):
+        from sqlalchemy.exc import OperationalError, ProgrammingError
+
+        self.waho = self._default_warehouse()
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+        self.waho.create_index('files', ['f_process'], 'test_files_index')
+        self.waho.create_index('files', ['f_process'])
+
+        try:
+            self.waho.create_index('files', ['f_process'])
+        except ProgrammingError:
+            pass
+        except OperationalError:
+            pass
+
+    def test_create_table(self):
+        from sqlalchemy.exc import OperationalError, ProgrammingError
+
+        self.waho = self._default_warehouse()
+        mf = Manifest(self.mf, get_logger('TL'))
+        self.waho.install_manifest(mf)
+        partition = self.waho.partitions.next()
+        # test logger write index_exists
+        self.waho.create_table(partition, partition.table.name)
+
+    def test_database_config(self):
+        from ambry.warehouse import new_warehouse
+        from ambry.warehouse.sqlite import SqliteWarehouse
+        from ambry.dbexceptions import ConfigurationError
+
+        self.waho = self._default_warehouse()
+        l = self.get_library()
+        l.put_bundle(self.bundle)
+        self.assertIsInstance(
+            # plus added for test
+            new_warehouse('sqlite+:///' + self.waho.database.path, l),
+            SqliteWarehouse)
+
+        self.assertRaises(ConfigurationError, new_warehouse, 'sqlite:test', l)
+        self.assertRaises(ValueError, new_warehouse, 'test:test', l)
+
+    def test_warehouse_logger(self):
+        import logging
+        from ambry.warehouse import Logger
+        self.waho = self._default_warehouse()
+        lgr = logging.getLogger('test_logger')
+
+        lgr.setLevel(logging.DEBUG)
+        ch = logging.FileHandler('/tmp/test_logger.log')
+        ch.setLevel(logging.DEBUG)
+        lgr.addHandler(ch)
+
+        lg = Logger(lgr, self.waho.logger.lr)
+        lg.progress(0, 100, 'some message')
+        lg.log('test log message')
+        lg.info('test info message')
+        lg.error('test error message')
+        lg.copy('a', 'b')
+        lg.fatal('test error message')
+        lg.warn('test error message')
 
     def test_partitions_list(self):
         self.waho = self._default_warehouse()
