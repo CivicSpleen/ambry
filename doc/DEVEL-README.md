@@ -17,6 +17,7 @@ manually for each new cloned repo:
     $ cp support/pre-commit.sh .git/hooks/pre-commit
     $ chmod 775 .git/hooks/pre-commit
 
+
 To run tests:
 
     $ git clone https://github.com/<githubid>/ambry.git
