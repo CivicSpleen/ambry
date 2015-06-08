@@ -115,30 +115,7 @@ class LoaderBundle(BuildBundle):
 
         return p
 
-    def get_source(self, source):
-        """Check for saved source"""
-        import os
-
-        # If the file we are given isn't actually a CSV file, we might have manually
-        # converted it to a CSV and put it in the source store.
-        if not fn.lower().endswith('.csv'):
-            cache = self.filesystem.source_store
-
-            if cache:
-                bare_fn, ext = os.path.splitext(os.path.basename(fn))
-
-                fn_ck = self.source_store_cache_key(bare_fn + ".csv")
-
-                if cache.has(fn_ck):
-                    if not self.filesystem.download_cache.has(fn_ck):
-                        with cache.get_stream(fn_ck) as s:
-                            self.filesystem.download_cache.put(s, fn_ck)
-
-                    return self.filesystem.download_cache.path(fn_ck)
-
-        return fn
-
-    def row_gen_for_source(self, source_name):
+    def row_gen_for_source(self, source_name, use_row_spec = True):
         from os.path import split, splitext
 
         source = self.metadata.sources[source_name]
@@ -160,9 +137,7 @@ class LoaderBundle(BuildBundle):
 
             ext = self.row_gen_ext_map.get(ext, ext)
 
-        print '!!!!', ext, source.filetype
-
-        if source.row_spec.dict:
+        if source.row_spec.dict and use_row_spec:
             rs = source.row_spec.dict
         else:
             rs = {}
@@ -184,48 +159,6 @@ class LoaderBundle(BuildBundle):
             raise Exception("Unknown source file extension: '{}' for file '{}' from source {} "
                             .format(ext, file_name, source_name))
 
-    def make_table_for_source(self, source_name):
-
-        source = self.metadata.sources[source_name]
-
-        table_name = source.table if source.table else source_name
-
-        table_desc = source.description if source.description else "Table generated from {}".format(source.url)
-
-        table = self.schema.add_table(table_name, description=table_desc)
-
-        self.schema.add_column(table, 'id', datatype='integer', description=table_desc, is_primary_key=True)
-
-        self.log("Created table {}".format(table.name))
-
-        if source.grain:
-            with self.session:
-                if 'grain' in table.data and table.data['grain'] != source.grain:
-                    raise BuildBundle("Table '{}' has grain '{}' conflicts with source '{}' grain of '{}'"
-                                      .format(table_name, table.data['grain'], source_name, source.grain))
-
-                table.data['grain'] = source.grain
-
-        return self.schema.table(table_name)  # The session in 'if source.grain' may expire table, so refresh
-
-    def meta_set_row_specs(self, row_intuitier_class=RowSpecIntuiter):
-        """
-        Run the row intuiter, which tries to figure out where the header and data lines are.
-
-        :param row_intuitier_class: A RowSpecIntuiter class
-        :return:
-        """
-
-        for source_name in self.metadata.sources:
-            source = self.metadata.sources.get(source_name)
-
-            rg = self.row_gen_for_source(source_name)
-
-            ri = row_intuitier_class(rg).intuit()
-
-            source.row_spec = ri
-
-        self.metadata.write_to_dir()
 
     def meta(self):
         from collections import defaultdict
@@ -236,7 +169,6 @@ class LoaderBundle(BuildBundle):
 
         # A proto terms map, for setting grains
         pt = self.library.get('civicknowledge.com-proto-proto_terms').partition
-        {r['name']: r['obj_number'] for r in pt.rows}
 
         self.database.create()
 
@@ -286,7 +218,7 @@ class LoaderBundle(BuildBundle):
 
                 rg = self.row_gen_for_source(source_name)
 
-                intuiter.iterate(rg, 2000)
+                intuiter.iterate(rg, 5000)
 
             self.schema.update_from_intuiter(table_name, intuiter)
 
@@ -298,7 +230,7 @@ class LoaderBundle(BuildBundle):
                 w = csv.writer(f)
 
                 for i, row in enumerate(rrg):
-                    if i > 50:
+                    if i > 100:
                         break
 
                     w.writerow(list(row))
@@ -312,7 +244,7 @@ class LoaderBundle(BuildBundle):
                 w.writerow(rg.header)
 
                 for i, row in enumerate(rg):
-                    if i > 50:
+                    if i > 100:
                         break
 
                     w.writerow(list(row))
@@ -338,19 +270,17 @@ class LoaderBundle(BuildBundle):
             # Don't add the columns that are already mapped.
             mapped_domain = set(item['col'] for item in col_map.values())
 
-            # TODO: do we need this loop here?
-            for table_name, sources in tables.items():
-                rg = self.row_gen_for_source(source_name)
+            rg = self.row_gen_for_source(source_name)
 
-                header = rg.header  # Also sets unmangled_header
+            header = rg.header  # Also sets unmangled_header
 
-                descs = [x.replace('\n', '; ') for x in (rg.unmangled_header if rg.unmangled_header else header)]
+            descs = [x.replace('\n', '; ') for x in (rg.unmangled_header if rg.unmangled_header else header)]
 
-                for col_name, desc in zip(header, descs):
-                    k = col_name.strip()
+            for col_name, desc in zip(header, descs):
+                k = col_name.strip()
 
-                    if k not in col_map and col_name not in mapped_domain:
-                        col_map[k] = dict(header=k, col='')
+                if k not in col_map and col_name not in mapped_domain:
+                    col_map[k] = dict(header=k, col='')
 
             # Write back out
             with open(self.col_map_fn, 'w') as f:
@@ -359,7 +289,129 @@ class LoaderBundle(BuildBundle):
                 w.writeheader()
                 for k in sorted(col_map.keys()):
                     w.writerow(col_map[k])
+
+
         return True
+
+    def meta_create_table(self, table_name, *args, **kwargs):
+
+        table = self.schema.add_table(table_name, *args, **kwargs)
+
+        self.schema.add_column(table, 'id', datatype='integer', description=kwargs.get('description'),
+                               is_primary_key=True)
+
+        # Get extra colum names from the build metadata.
+        ec_all = dict(self.metadata.build.get('extra_columns',{}).get('all', {}))
+        ec_table = dict(self.metadata.build.get('extra_columns', {}).get(table_name, {}))
+
+        extras = dict(ec_all.items() + ec_table.items())
+
+        pt_map = self.schema.prototype_map
+
+        for name, proto_name in extras.items():
+
+            try:
+                proto = pt_map[proto_name]
+            except KeyError:
+                self.error("Extra column '{}' for table '{}' has unknown proto name: '{}' "
+                           .format(name, table_name, proto_name))
+                continue
+
+            proto_column = self.library.column(proto['vid'])
+
+            self.schema.add_column(table, name, datatype=proto_column.datatype,
+                                   description=proto_column.description,
+                                   proto_vid = proto_name)
+
+
+        return table
+
+    def make_table_for_source(self, source_name):
+
+        source = self.metadata.sources[source_name]
+
+        table_name = source.table if source.table else source_name
+
+        table_desc = source.description or source.title or  "Table generated from {}".format(source.url)
+
+        table = self.meta_create_table(table_name, description=table_desc)
+
+        self.log("Created table {}".format(table.name))
+
+        if source.grain:
+            with self.session:
+                if 'grain' in table.data and table.data['grain'] != source.grain:
+                    raise BuildBundle("Table '{}' has grain '{}' conflicts with source '{}' grain of '{}'"
+                                      .format(table_name, table.data['grain'], source_name, source.grain))
+
+                table.data['grain'] = source.grain
+
+        return self.schema.table(table_name)  # The session in 'if source.grain' may expire table, so refresh
+
+    def meta_set_row_specs(self, row_intuitier_class=RowSpecIntuiter):
+        """
+        Run the row intuiter, which tries to figure out where the header and data lines are.
+
+        :param row_intuitier_class: A RowSpecIntuiter class
+        :return:
+        """
+
+        for source_name in self.metadata.sources:
+            source = self.metadata.sources.get(source_name)
+
+            rg = self.row_gen_for_source(source_name, use_row_spec = False)
+
+            ri = row_intuitier_class(rg).intuit()
+
+            print source_name, ri
+
+            if len(ri['header_comment_lines']) > 30:
+                self.error("Too many lines in rowspec.header_comment_lines ({}) for source {}; skipping rowspec"
+                            .format(len(ri['header_comment_lines']), source_name))
+                continue
+
+            if len(ri['header_lines']) > 10:
+                self.error("Too many lines in rowspec.header_lines ({}) for source {}; skipping rowspec"
+                            .format(len(ri['header_lines']), source_name))
+                continue
+
+            source.row_spec = ri
+
+        self.write_sources()
+        self.metadata.write_to_dir()
+
+
+    def meta_load_socrata(self):
+        """Load Socrata metadata from a URL, specified in the 'meta' source"""
+        import json
+
+        meta = self.filesystem.download('meta')
+
+        with open(meta) as f:
+            d = json.load(f)
+
+        md = self.metadata
+        md.about.title = d['name']
+        md.about.summary = d['description']
+
+        md.write_to_dir()
+
+    def meta_intuit_table(self, table_name, row_gen):
+        """Create a table ( but don't write the schema ) based on the values returned from a row generator"""
+
+        from ambry.util.intuit import Intuiter
+
+        self.prepare()
+
+        intuiter = Intuiter()
+
+        intuiter.iterate(row_gen, 10000)
+
+        intuiter.dump(self.filesystem.build_path('{}-raw-rows.csv'.format(table_name)))
+
+        self.meta_create_table(table_name)
+
+        self.schema.update_from_intuiter(table_name, intuiter)
 
     def build_modify_row(self, row_gen, p, source, row):
         """
@@ -371,7 +423,14 @@ class LoaderBundle(BuildBundle):
         :param row: A dict of the row
         :return:
         """
-        pass
+
+        # If the table has an empty year, and the soruce has a time that converts to an int,
+        # set the time as a year.
+        if not row.get('year', False) and source.time:
+            try:
+                row['year'] = int(source.time)
+            except ValueError:
+                pass
 
     def build_from_source(self, source_name):
 
@@ -380,22 +439,33 @@ class LoaderBundle(BuildBundle):
         if source.is_loadable is False:
             return
 
+        source._name = source_name # for build_from_row_gen
+
         p = self.build_create_partition(source_name)
 
         self.log("Loading source '{}' into partition '{}'".format(source_name, str(p.identity.name)))
+
+        row_gen = self.row_gen_for_source(source_name)
+
+        return self.build_from_row_gen(row_gen, p, source = source)
+
+
+    def build_from_row_gen(self, row_gen, p, source = None):
 
         lr = self.init_log_rate(print_rate=5)
 
         columns = [c.name for c in p.table.columns]
 
-        row_gen = self.row_gen_for_source(source_name)
-
         header = row_gen.header
+
+        if source and getattr(source,'_name', False):
+            source_name = 'source '+getattr(source,'_name')
+        else:
+            source_name = 'partition '+str(p.identity.name)
 
         for col in header:
             if col not in columns:
-                self.error("Header column '{}' not in table {} for source {}"
-                           .format(col, p.table.name, source_name))
+                self.warn("Header column '{}' not in table {} for  {}".format(col, p.table.name, source_name))
 
         with p.inserter() as ins:
             for row in row_gen:
@@ -410,7 +480,11 @@ class LoaderBundle(BuildBundle):
                 errors = ins.insert(d)
 
                 if errors:
-                    self.error("Casting error for {}: {}".format(source_name, errors))
+                    errors_str = '; '.join([ "{}: {}".format(k,v) for k,v in errors.items() ])
+                    self.error("Casting error for {}, table {}: {}".format(source_name, p.table.name, errors_str))
+
+        p.close()
+
 
     def build(self):
         for source_name in self.metadata.sources:
@@ -424,7 +498,6 @@ class LoaderBundle(BuildBundle):
 
 class CsvBundle(LoaderBundle):
     """A Bundle variant for loading CSV files"""
-
     pass
 
 
@@ -435,25 +508,6 @@ class ExcelBuildBundle(CsvBundle):
 class TsvBuildBundle(CsvBundle):
     delimiter = '\t'
 
-    def __init__(self, bundle_dir=None):
-        """
-        """
-
-        super(TsvBuildBundle, self).__init__(bundle_dir)
-
-    def get_source(self, source):
-        """Get the source file. If the file does not end in a CSV file, replace it with a CSV extension
-        and look in the source store cache """
-
-        if not source:
-            source = self.metadata.sources.keys()[0]
-
-        fn = self.filesystem.download(source)
-
-        if fn.endswith('.zip'):
-            fn = self.filesystem.unzip(fn)
-
-        return fn
 
 
 class GeoBuildBundle(LoaderBundle):

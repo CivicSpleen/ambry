@@ -104,9 +104,16 @@ def bundle_command(args, rc):
         warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
         debug.listen()
 
+    ##
+    ## Run the phases
+    ##
     try:
         for phase in phases:
-            getf(phase)(args, b, st, rc)
+            r = getf(phase)(args, b, st, rc)
+
+            if r == False:
+                break
+
             b.close()
 
     except DependencyError as e:
@@ -124,6 +131,17 @@ def bundle_command(args, rc):
     finally:
         import lockfile
         from sqlalchemy.exc import InvalidRequestError
+
+        if b._warnings:
+            warn(" ==== WARNINGS ===")
+            for warning in b._warnings:
+                warn(warning)
+
+        if b._errors:
+            err(" ==== ERRORS ===")
+            for error in b._errors:
+                err(error)
+
         try:
             if b:
                 try:
@@ -161,6 +179,10 @@ def bundle_parser(cmd):
     #
     sp = asp.add_parser('dump', help='dump the configuration')
     sp.set_defaults(subsubcommand='dump')
+
+    #
+    sp = asp.add_parser('doc', help='Display some of the bundle documentation')
+    sp.set_defaults(subsubcommand='doc')
 
     #
     sp = asp.add_parser('schema', help='Print the schema')
@@ -303,6 +325,18 @@ def bundle_info(args, b, st, rc):
 
     indent = "    "
 
+    def hprt(k):
+        prt(u"-----{:s}-----",format(k))
+
+    def lprt(k,*v):
+        prt(u"{:10s}: {}".format(k,*v))
+
+    def wprt(k, *v):
+        prt(u"{:20.20s}: {}".format(k, *v))
+
+    def iprt(k,*v):
+        prt(indent+u"{:10s}: {}".format(k,*v))
+
     if args.dep:
         #
         # Get the dependency and then re-run to display it.
@@ -321,15 +355,15 @@ def bundle_info(args, b, st, rc):
     else:
         from ambry.util.datestimes import compress_years
 
-        b.log("----Info: ".format(b.identity.sname))
-        b.log("VID  : " + b.identity.vid)
-        b.log("Name : " + b.identity.sname)
-        b.log("VName: " + b.identity.vname)
-        b.log("DB   : " + b.database.path)
+        lprt('Title', b.metadata.about.title)
+        lprt('Summary', b.metadata.about.summary)
+        lprt("VID", b.identity.vid)
+        lprt("VName", b.identity.vname)
+        lprt("DB",b.database.path)
 
-        b.log('Geo cov   : ' + str(list(b.metadata.coverage.geo)))
-        b.log('Grain cov : ' + str(list(b.metadata.coverage.grain)))
-        b.log('Time cov  : ' + compress_years(b.metadata.coverage.time))
+        lprt('Geo cov', str(list(b.metadata.coverage.geo)))
+        lprt('Grain cov', str(list(b.metadata.coverage.grain)))
+        lprt('Time cov', compress_years(b.metadata.coverage.time))
 
         if b.database.exists():
 
@@ -340,23 +374,21 @@ def bundle_info(args, b, st, rc):
             from ambry.library.database import ROOT_CONFIG_NAME_V
             root_db_created = b.database.get_config_value(ROOT_CONFIG_NAME_V, 'process', 'dbcreated')
 
-            b.log('Created   : ' + process.get('dbcreated', root_db_created.value))
-            b.log('Prepared  : ' + process.get('prepared', ''))
-            b.log('Built     : ' + process.get('built', ''))
+            lprt('Created', process.get('dbcreated', root_db_created.value))
+            lprt('Prepared', process.get('prepared', ''))
+            lprt('Built ', process.get('built', ''))
 
             if process.get('buildtime', False):
-                b.log('Build time: ' +
-                      str(round(float(process['buildtime']), 2)) +
-                      's')
+                lprt('Build time', str(round(float(process['buildtime']), 2)) +'s')
 
-            b.log("Parts: {}".format(b.partitions.count))
+            lprt("Parts", b.partitions.count)
 
-            b.log("---- Partitions ---")
+            hprt("Partitions")
             for i, partition in enumerate(b.partitions):
-                b.log(indent + partition.identity.sname)
+                lprt(indent,partition.identity.sname)
 
-                if i > 10:
-                    b.log("    ... and {} more".format(b.partitions.count - 10))
+                if i > 6:
+                    lprt(indent, "... and {} more".format(b.partitions.count - 6))
                     break
 
         if b.metadata.dependencies:
@@ -372,40 +404,33 @@ def bundle_info(args, b, st, rc):
                 deps = None
 
         if deps:
-            b.log("---- Dependencies ---")
+            hprt("Dependencies")
             for k, v in deps:
-                b.log("{}: {}".format(k, v))
+                lprt(k,v)
 
         if args.stats or args.partitions:
             for p in b.partitions.all:
-                b.log("--- Partition {}: ".format(p.identity))
+                hprt("Partition {}".format(p.identity))
                 if args.partitions:
                     p.record.data
 
                     def bl(k, v):
-                        b.log(indent + "{:7s}: {}".format(k, p.record.data.get(v, '')))
+                        lprt(k, p.record.data.get(v, ''))
 
-
-                    b.log(indent + "# Rows : {}".format(p.record.count))
+                    lprt('# Rows', p.record.count)
                     bl('g cov', 'geo_coverage')
                     bl('g grain', 'geo_grain')
                     bl('t cov', 'time_coverage')
                 if args.stats:
                     wrapper = textwrap.TextWrapper()
 
-                    b.log(indent + "Stats: ")
-                    b.log(
-                        indent +
-                        "{:20.20s} {:>7s} {:>7s} {:>10s} {:70s}" .format(
-                            "Col name",
-                            "Count",
-                            'Uniq',
-                            'Mean',
-                            'Sample Values'))
+                    lprt("Stats",'')
+                    wprt('Col Name', "{:>7s} {:>7s} {:>10s} {:70s}" .format(
+                            "Count",'Uniq','Mean', 'Sample Values'))
                     for col_name, s in p.stats.__dict__.items():
 
                         if s.uvalues:
-                            vals = (u'\n' + u' ' * 84).join(wrapper.wrap(u','.join(s.uvalues.keys()[:5])))
+                            vals = (u'\n' + u' ' * 49).join(wrapper.wrap(u','.join(s.uvalues.keys()[:5])))
                         elif 'values' in s.hist:
 
                             parts = u' ▁▂▃▄▅▆▇▉'
@@ -421,9 +446,7 @@ def bundle_info(args, b, st, rc):
                         else:
                             vals = ''
 
-                        b.log(
-                            indent + u"{:20.20s} {:7s} {:7s} {:10s} {:70s}". format(
-                                col_name,
+                        wprt(col_name, u"{:>7s} {:>7s} {:>10s} {:70s}". format(
                                 str(s.count) if s.count else '',
                                 str(s.nuniques) if s.nuniques else '',
                                 '{:10.2e}'.format(s.mean) if s.mean else '',
@@ -595,6 +618,10 @@ def bundle_config(args, b, st, rc):
 
     elif args.subsubcommand == 'scrape':
         return bundle_config_scrape(args, b, st, rc)
+
+    elif args.subsubcommand == 'doc':
+        f = "{:10s} {}"
+        prt(f, 'title', b.metadata.about.title)
 
     else:
         err("Unknown subsubcommand for 'config' subcommand: {}".format(args))

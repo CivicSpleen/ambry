@@ -8,6 +8,10 @@ from flask import Response
 
 import jinja2.tests
 
+from ..util import get_logger
+
+logger = get_logger(__name__)
+
 ##
 # These are in later versions of jinja, but we need them in earlier ones.
 if 'equalto' not in jinja2.tests.TESTS:
@@ -96,14 +100,21 @@ def table_path(b, t):
 
 
 def proto_vid_path(pvid):
-    b, t, c = deref_tc_ref(pvid)
+    from ambry.dbexceptions import NotFoundError
 
-    return table_path(str(b), str(t))
+    try:
+        b, t, c = deref_tc_ref(pvid)
+
+        return table_path(str(b), str(t))
+
+    except NotFoundError:
+        return '#'
 
 
 def deref_tc_ref(ref):
     """Given a column or table, vid or id, return the object."""
     from ambry.identity import ObjectNumber
+    from ambry.dbexceptions import NotFoundError
 
     on = ObjectNumber.parse(ref)
 
@@ -126,6 +137,13 @@ def deref_tc_ref(ref):
 
         tm = dc.table_version_map()
 
+
+        if not str(t) in tm:
+            # This happens when the the referenced table is in a bundle that is not installed,
+            # often because it is private or restricted
+            raise NotFoundError('Table {} not in table_version_map'.format(str(t)))
+
+
         t_vid = reversed(sorted(tm.get(str(t)))).next()
 
         t = ObjectNumber.parse(t_vid)
@@ -140,12 +158,24 @@ def deref_tc_ref(ref):
 def tc_obj(ref):
     """Return an object for a table or column."""
     from . import renderer
-
-    b, t, c = deref_tc_ref(ref)
+    from ambry.dbexceptions import NotFoundError
 
     dc = renderer().doc_cache
 
-    table = dc.table(str(t))
+    try:
+        b, t, c = deref_tc_ref(ref)
+    except NotFoundError:
+        return None
+
+    try:
+        table = dc.table(str(t))
+    except NotFoundError:
+
+        # This can happen when the table reference has a version id in it, and that version is not available.
+        # So, try it again without the version
+        from ambry.identity import ObjectNumber
+
+        table = dc.table(str(ObjectNumber.parse(str(t)).rev(None)))
 
     if c:
 
@@ -165,15 +195,19 @@ def tc_obj(ref):
 
 def partition_path(b, p=None):
     if p is None:
-        from ambry.identity import ObjectNumber
+        from ambry.identity import ObjectNumber, NotObjectNumberError
 
         p = b
-        on = ObjectNumber.parse(p)
+
         try:
+            on = ObjectNumber.parse(p)
             b = str(on.as_dataset)
         except AttributeError:
             b = str(on)
             raise
+        except NotObjectNumberError:
+            return '#'
+
     return "/bundles/{}/partitions/{}.html".format(resolve(b), resolve(p))
 
 
@@ -229,6 +263,21 @@ class JSONEncoder(FlaskJSONEncoder):
 
         # return FlaskJSONEncoder.default(self, o)
 
+
+def format_sql(sql):
+    from pygments import highlight
+    from  pygments.lexers.sql import SqlLexer
+    from pygments.formatters import HtmlFormatter
+    import sqlparse
+
+    return highlight(sqlparse.format(sql, reindent=True, keyword_case='upper'), SqlLexer(), HtmlFormatter())
+
+
+@property
+def pygmentize_css(self):
+    from pygments.formatters import HtmlFormatter
+
+    return HtmlFormatter(style='manni').get_style_defs('.highlight')
 
 class Renderer(object):
 
@@ -307,6 +356,7 @@ class Renderer(object):
             return wrapper
 
         return {
+            'format_sql': format_sql,
             'pretty_time': pretty_time,
             'from_root': lambda x: x,
             'bundle_path': bundle_path,
@@ -321,21 +371,12 @@ class Renderer(object):
             'tc_obj': tc_obj,
             'extract_url': extract_url,
             'db_download_url': db_download_url,
-            'bundle_sort': lambda l,
-                                  key: sorted(
-                l,
-                key=lambda x: x['identity'][key])}
+            'bundle_sort': lambda l, key: sorted(l,key=lambda x: x['identity'][key])}
 
     def render(self, template, *args, **kwargs):
 
         if self.content_type == 'json':
-            return Response(
-                dumps(
-                    dict(
-                        **kwargs),
-                    cls=JSONEncoder,
-                    indent=4),
-                mimetype='application/json')
+            return Response(dumps(dict(**kwargs),cls=JSONEncoder,indent=4), mimetype='application/json')
 
         else:
             return template.render(*args, **kwargs)
@@ -490,11 +531,32 @@ class Renderer(object):
         store['manifests'] = {
             uid: self.doc_cache.manifest(uid) for uid in store['manifests']}
 
+        # Count tables and columns. The columns are only counted when that are in a partition
+        # table, but the tables are also counted if they are indexed
+        table_count = 0
+        column_count = 0
+        indexed_table_count = 0
+        indexed_column_count = 0
+
+        for table, data in store['tables'].items():
+            if data['type'] == "table":
+                table_count += 1
+                column_count += len(data['columns'])
+
+            if data['type'] == "indexed":
+                indexed_table_count += 1
+                indexed_column_count += len(data['columns'])
+
+        store['counts'] = dict(
+            table_count = table_count,
+            column_count = column_count,
+            indexed_table_count = indexed_table_count,
+            indexed_column_count = indexed_column_count
+        )
+
         return self.render(template, s=store, **self.cc())
 
     def store_table(self, uid, tid):
-
-        template = self.env.get_template('store/table.html')
 
         # Copy so we don't modify the cached version
         store = dict(self.doc_cache.warehouse(uid).items())
@@ -505,7 +567,47 @@ class Renderer(object):
         del store['manifests']
         del store['tables']
 
-        return self.render(template, s=store, t=t, **self.cc())
+        if self.content_type == 'csv':
+
+            def yield_csv():
+                import unicodecsv
+                from ambry.util.flo import StringQueue
+
+                h = [ 'seq_id', 'vid', 'datatype',  'column_name', 'alt_name',  'description',
+                      'user_column_name', 'user_description' ]
+
+                f = StringQueue()
+
+                w = unicodecsv.writer(f)
+
+                w.writerow(h)
+                yield f.read()
+
+                for c in sorted(t['columns'].values(), key =  lambda c: c['sequence_id'] ):
+
+                    w.writerow([
+                        c['sequence_id'],
+                        c['vid'],
+                        c['datatype'],
+                        c['name'],
+                        c['altname'],
+                        c.get('description',''),
+                        c.get('user_column_name', ''),
+                        c.get('user_description', ''),
+                    ])
+
+                    yield f.read()  # Returns everything previously written
+
+            return Response(yield_csv(), mimetype='text/csv',
+                            headers = {"Content-Disposition": "attachment; filename=table-{}.csv".format(t['vid']) })
+
+
+        else:
+            template = self.env.get_template('store/table.html')
+
+            return self.render(template, s=store, t=t, **self.cc())
+
+
 
     def info(self, app_config, run_config):
 
@@ -567,15 +669,11 @@ class Renderer(object):
             # results.append({"label":name, "value":gvid})
             results.append({"label": name})
 
-        return Response(
-            dumps(
-                results,
-                cls=JSONEncoder,
-                indent=4),
-            mimetype='application/json')
+        return Response(dumps(results,cls=JSONEncoder,indent=4),mimetype='application/json')
 
     def bundle_search(self,  terms):
         """Incremental search, search as you type."""
+        from ..dbexceptions import NotFoundError
 
         from geoid.civick import GVid
 
@@ -593,7 +691,12 @@ class Renderer(object):
 
         for result in sorted(init_results.values(), key=lambda e: e.score, reverse=True):
 
-            d = self.doc_cache.dataset(result.vid)
+            try:
+                d = self.doc_cache.dataset(result.vid)
+            except NotFoundError:
+                logger.error("Failed to find dataset {}".format(result.vid))
+                continue
+
 
             d['partition_count'] = len(result.partitions)
             d['partitions'] = {}

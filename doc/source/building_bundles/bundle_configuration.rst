@@ -28,7 +28,17 @@ If there are additional pages associated with the dataset, set ``external_docume
 
 If there is a seperate page or PDF for the dataset documentation, set it in ``external_documentation.documentation``, but remove the section if this information does not exist, or already exists on the ``external_documentation.dataset`` page. 
 
-The Title and Summary can usually be coppied directlry from the ``external_documentation.dataset`` page, but if not, they should be written carefully, as they are used to describe the dataset thoughout the dataset's documentation. 
+The Title and Summary can usually be copied directly from the ``external_documentation.dataset`` page, but if not, they should be written carefully, as they are used to describe the dataset thoughout the dataset's documentation. 
+
+Fill in other  ``about`` entries as appropriate: 
+
+- about.license: 'public' if there is no declared license, otherwise the name or, better a URL, to the license. 
+- about.processed: A statement about how the data were processed, if there were substantial changes from the original sources
+- about.footnote: A statement about unusual interpretations or meaning of the dataset, or anything else that would be approprate in a footnote. 
+- about.time: A year or year range that the dataset covers. Seperate start and end years with a '/'
+- about.space: The name of the state or county that the data cover, or "US" for national data. Must be a term that returns a hit from the search function :command:`ambry search -I`
+- about.access: A name of a repote library where the built bundle will be uploaded. Usually "public"
+
 
 Source and Documentation Links
 ******************************
@@ -43,11 +53,16 @@ You can often just copy these into the configuration. The sources go into the ``
 Select Bundle Class
 *******************
 
-:py:mod:`ambry.bundle.loader`
+If you will be building from one or more CSV, Excel or TSV files, edit the :file:`bundle.py` to change the base class to one from :py:mod:`ambry.bundle.loader`.
 
 - :py:class:`ambry.bundle.loader.CsvBundle`
 - :py:class:`ambry.bundle.loader.TsvBuildBundle`
 - :py:class:`ambry.bundle.loader.ExcelBuildBundle`
 - :py:class:`ambry.bundle.loader.GeoBuildBundle`
+
+The next step is to configure the :ref:`Loader with sources and start creating metadata. <using_loaders>`
+
+
+
 
 

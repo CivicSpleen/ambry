@@ -66,8 +66,6 @@ def library_parser(cmd):
     sp.add_argument('-w', '--warehouses', default=False, action="store_true", help='Re-synchronize warehouses')
     sp.add_argument('-F', '--bundle-list', help='File of bundle VIDs. Sync only VIDs listed in this file')
 
-    sp = asp.add_parser('info', help='Display information about the library')
-    sp.set_defaults(subcommand='info')
 
     sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. '
                                     'Possible download the file from the remote library')
@@ -106,11 +104,11 @@ def library_parser(cmd):
     whsp.add_argument('term', type=str, nargs='?', help='Var=Value')
 
 
-def library_command(args, rc):
+def library_command(args, rc, reset_lib=False):
     from ..library import new_library
     from . import global_logger
 
-    l = new_library(rc.library(args.library_name))
+    l = new_library(rc.library(args.library_name), reset=reset_lib)
 
     l.logger = global_logger
 
@@ -165,6 +163,7 @@ def library_drop(args, l, config):
     prt("Drop tables")
     l.database.enable_delete = True
     l.database.drop()
+    warn("Drop tables for %s" % l.database.dbname)
 
 
 def library_clean(args, l, config):
@@ -260,16 +259,6 @@ def library_remove(args, l, config):
         l.database.commit()
 
 
-def library_info(args, l, config, list_all=False):
-    prt("Library Info")
-    prt("Name:      {}", args.library_name)
-    prt("Database:  {}", l.database.dsn)
-    prt("Cache:     {}", l.cache)
-    prt("Doc Cache: {}", l._doc_cache)
-    prt("Whs Cache: {}", l.warehouse_cache)
-    prt("Remotes:   {}", ', '.join([str(r)
-                                    for r in l.remotes]) if l.remotes else '')
-
 
 def library_push(args, l, config):
     from ..orm import Dataset
@@ -309,6 +298,10 @@ def library_push(args, l, config):
                 continue
 
             bp = l.resolve(ref)
+
+            if not bp:
+                err("Failed to resolve file ref to bundle {} ".format(ref))
+                continue
 
             b = l.bundle(bp.vid)
 
@@ -452,9 +445,9 @@ def library_open(args, l, config):
 
 def library_sync(args, l, config):
     """Synchronize the remotes and the upstream to a local library database."""
+    l.logger.info('args: %s' % args)
 
-    all = args.all or not (
-        args.library or args.remote or args.source or args.json or args.warehouses)
+    all = args.all or not (args.library or args.remote or args.source or args.json or args.warehouses)
 
     vids = None
 
@@ -520,14 +513,4 @@ def library_unknown(args, l, config):
     fatal(args)
 
 
-def library_test(args, l, config):
-    term = 'Alabama city New Hope'
 
-    for t in range(len(term)):
-
-        for i, (score, gvid, name) in enumerate(l.search.search_identifiers(term[:t])):
-
-            if i == 0:
-                print chr(27) + "[2J" + chr(27) + "[H"
-
-            print score, gvid, name

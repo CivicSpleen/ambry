@@ -39,15 +39,7 @@ class Bundle(BuildBundle):
                   ('code', partial(random.randint, 0, 10))
                   ]
 
-        return [
-            ('id', lambda: None),
-            ('text', partial(random.choice,
-                             ['chocolate', 'strawberry', 'vanilla'])),
-            ('integer', partial(random.randint, 0, 500)),
-            ('float', random.random),
-            ('extra', lambda: None),
-            ('extra2', lambda: None),
-        ]
+
 
     @property
     def fields3(self):
@@ -73,7 +65,7 @@ class Bundle(BuildBundle):
 
     def build_small(self):
         p = self.partitions.find_or_new_db(table='tthree')
-        table = p.table
+        # table = p.table
 
         field_gen = self.fields3
 
@@ -81,14 +73,9 @@ class Bundle(BuildBundle):
             for i in range(5000):
                 row = {f[0]: f[1]() for f in field_gen}
                 ins.insert(row)
-
         return True
 
     def build(self):
-
-
-        self.log("=== Build geo")
-        self.build_geo()
 
         self.log("=== Build db, using an inserter")
         self.build_db_inserter()
@@ -107,27 +94,7 @@ class Bundle(BuildBundle):
                 ins.insert({ 'tone_id':None,'text':"str"+str(i),'integer':i,'float':i})
 
     def build_db_inserter_codes(self):
-        from collections import defaultdict
-        from ambry.database.inserter import CodeCastErrorHandler
-        p = self.partitions.find_or_new_db(table='coding')
-        table = p.table
-
-        def yield_rows():
-
-            field_gen = self.fields3
-
-            for i in range(10000):
-                row = {f[0]: f[1]() for f in field_gen}
-
-                if i % 51 == 0:
-                    row['integer'] = chr(65 + (i / 51 % 26))
-
-                if i % 13 == 0:
-                    row['date'] = chr(65+(i/13 % 26))
-
-                yield row
-
-
+        self.partitions.find_or_new_db(table='coding')
 
 
     def build_db_inserter(self):
@@ -161,26 +128,6 @@ class Bundle(BuildBundle):
                 cast_row, cast_errors = caster(row)
                 ins.insert(cast_row)
                 lr()
-
-    def build_geo(self):
-        # Create other types of partitions.
-        geot2 = self.partitions.find_or_new_geo(table='geot2')
-
-        with geot2.database.inserter() as ins:
-            for lat in range(10):
-                for lon in range(10):
-                    ins.insert({'name': "POINT({} {})".format(lon, lat),
-                                'wkt': "POINT({} {})".format(lon, lat)})
-
-        # Create other types of partitions.
-        geot1 = self.partitions.find_or_new_geo(table='geot1')
-
-        with geot1.database.inserter() as ins:
-            for lat in range(10):
-                for lon in range(10):
-                    ins.insert({'name': str(lon) + ';' + str(lat), 'lon': lon,
-                                'lat': lat})
-
 
 
 

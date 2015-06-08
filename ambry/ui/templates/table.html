@@ -9,6 +9,11 @@
     <p>From: <strong>{{b.meta.about.title+',' if b.meta.about.title else '' }}</strong>
         <a href="{{bundle_path(b)}}">{{b.identity.fqname}}</a>.
         </p>
+
+    {%  if t.foreign_indexes %}
+        <p>Indexes: {{ t.foreign_indexes|join(', ')  }}</p>
+    {%  endif %}
+
 {% endblock %}
 
 {% block body %}
