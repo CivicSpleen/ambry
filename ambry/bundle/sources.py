@@ -4,6 +4,9 @@ Class to read and write the sources.csv file to into and out of the metadata.
 
 from collections import OrderedDict
 
+class NoData(Exception):
+    pass
+
 class SourcesFile(object):
 
     header = (
@@ -29,7 +32,7 @@ class SourcesFile(object):
         self._metadata = metadata
 
     def read(self):
-        """ Read the source file and write it into the metadata
+        """ Read the source file and store it into the metadata
 
         :return:
         """
@@ -40,9 +43,16 @@ class SourcesFile(object):
         self._metadata.sources = {}
 
         with open(self._path) as f:
-            r = csv.DictReader(f)
 
-            for row in r:
+            if not f:
+                raise NoData()
+
+            try:
+                r = csv.DictReader(f)
+            except TypeError:
+                raise NoData()
+
+            for i, row in enumerate(r):
 
                 row = {m.get(k, k) : v for k,v in row.items()}
 
@@ -87,10 +97,13 @@ class SourcesFile(object):
                     # If the source has a ref, then it is also a dependency
                     self._metadata.dependencies[name] = row['ref']
 
+            if i == 0:
+                raise NoData
+
 
 
     def write(self):
-
+        """Write the sources file from the metadata"""
         m = OrderedDict([ (v,k) for k, v in self.header])
 
         header = [x[0] for x in self.header]

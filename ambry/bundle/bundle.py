@@ -612,6 +612,7 @@ class BuildBundle(Bundle):
     DOC_HTML = 'meta/documentation.html'
 
     SOURCES_FILE = 'meta/sources.csv'
+    BUILD_CONFIG = 'meta/build.yaml'
 
     # Partition where to get a map from source domains to full name
     SOURCE_TERMS = 'civicknowledge.com-terms-sources'
@@ -809,6 +810,29 @@ class BuildBundle(Bundle):
         md.write_to_dir()
 
         return identity
+
+    def resolve_sources(self):
+        """Resolve a conflict between the sources section of the build.yaml file and the source.csv file
+        by comparing last modification times. """
+
+        # This is a TOTAL HACK. The sources metadata should be removed, and will be in a future version.
+
+        from ambry.util import is_newer
+        from sources import NoData
+
+        # If the sources file is newer, read it into the metadata, and write out the metadata
+
+        if is_newer(self.filesystem.path(self.SOURCES_FILE), self.filesystem.path(self.BUILD_CONFIG)):
+            try:
+                self.read_sources()
+                self.log("Loading {} into {} ".format(self.SOURCES_FILE, self.BUILD_CONFIG))
+                self.update_configuration()
+            except NoData:
+                self.log("Writing {} file, since it does not exist".format(self.SOURCES_FILE))
+                self.write_sources()
+        elif is_newer(self.filesystem.path(self.BUILD_CONFIG), self.filesystem.path(self.SOURCES_FILE)):
+            self.log("Loading {} into {} ".format( self.BUILD_CONFIG, self.SOURCES_FILE))
+            self.write_sources()
 
     def read_sources(self):
         """Read the sources file into the metadata, if it exists"""
@@ -1208,7 +1232,7 @@ class BuildBundle(Bundle):
         except Exception:
             raise
 
-        self.read_sources()
+        self.resolve_sources()
 
         if not self.metadata.about.access:
             raise ConfigurationError("about.access must be set to the name of a remote")
@@ -1279,6 +1303,8 @@ class BuildBundle(Bundle):
             self.library.check_dependencies()
         except NotFoundError as e:
             self.fatal(e.message)
+
+        self.resolve_sources()
 
         if self.run_args and self.run_args.get('rebuild', False):
             with self.session:

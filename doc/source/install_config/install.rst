@@ -144,6 +144,8 @@ When that is finished, you can run the image with:
 
     $ docker run -i -t ambry bin/bash
 
+The resulting Docker image will have
+
 *****************
 Python Virtualenv
 *****************
@@ -157,11 +159,10 @@ First, make your virtualenv:
     $ cd ambry
     $ source bin/activate
 
-Then clone and setup Ambry
+Then clone and setup Ambry:
 
 .. code-block:: bash
 
-    $ mkvirtualenv ambry # This should cd to your new virtual env directory
     $ git clone https://github.com/CivicKnowledge/ambry.git
     $ cd ambry
     $ python setup.py develop 

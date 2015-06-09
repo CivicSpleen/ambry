@@ -172,6 +172,8 @@ class LoaderBundle(BuildBundle):
 
         self.database.create()
 
+        self.resolve_sources()
+
         tables = defaultdict(set)
 
         # First, load in the protoschema, to get prefix columns for each table.

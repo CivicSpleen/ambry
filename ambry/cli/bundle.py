@@ -689,11 +689,18 @@ def bundle_config_scrape(args, b, st, rc):
             fn = base
             ext = 'html'
 
+        try: # Yaml adds a lot of junk to encode unicode.
+            fn = str(fn)
+            url = str(url)
+            text=str(text)
+        except UnicodeDecodeError:
+            pass
+
         # xlsm is a bug that adss 'm' to the end of the url. No idea.
         if ext.lower() in ('zip', 'csv', 'xls', 'xlsx', 'xlsm', 'txt'):
             d['sources'][fn] = dict(
                 url=url,
-                description=text
+                description=text,
             )
         elif ext.lower() in ('pdf', 'html'):
             d['external_documentation'][fn] = dict(

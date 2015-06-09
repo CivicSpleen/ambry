@@ -25,7 +25,8 @@ RUN dpkg-reconfigure locales
 RUN pip install git+https://github.com/clarinova/pysqlite.git#egg=pysqlite
 
 #RUN pip install git+https://github.com/CivicKnowledge/ambry.git
-RUN pip install ambry
+
+RUN pip install ambry #kicker1
 
 
 VOLUME /var/ambry

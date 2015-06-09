@@ -1423,6 +1423,43 @@ def print_yaml(o):
 # There is probably another function in Ambry that does this, but I can't
 # remember where.
 
+def newer_file(p1, p2):
+    """Return the pathnames as a tuple  with the newer file in position 0, or the first if they are the same """
+    from os.path  import getmtime, exists
+
+    t1 = getmtime(p1) if exists(p1) else 0
+    t2 = getmtime(p2) if exists(p2) else 0
+
+    if t2 > t1:
+        return p2,p1
+    else:
+        return p1,p2
+
+
+def is_newer(p1, p2):
+    """Return true if the first file is newer than the second """
+    from os.path  import getmtime, exists
+
+    t1 = getmtime(p1) if exists(p1) else 0
+    t2 = getmtime(p2) if exists(p2) else 0
+
+    if t1 > t2:
+        return True
+    else:
+        return False
+
+def older_file(p1, p2):
+    """Return the pathnames as tuple with the older file in position 0, or the first if they are the same """
+    from os.path  import getmtime, exists
+
+    t1 = getmtime(p1) if exists(p1) else 0
+    t2 = getmtime(p2) if exists(p2) else 0
+
+    if t1 <= t2 :
+        return p1, p2
+    else:
+        return p2, p1
+
 
 def qualified_class_name(o):
     module = o.__class__.__module__

@@ -10,7 +10,7 @@ A quick guide to using Ambry
 
     Creating a new bundle <creating>
     Configuring metadata <bundle_configuration>
-    Setup sources with a loader <using_loaders>
+    Setup sources with a loader <configuring_sources>
     Build the schema <build_schema>
     Process checklist <checklist>
     Build the example bundles <building_examples>
