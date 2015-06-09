@@ -14,13 +14,31 @@ In the USDA example, many of the datasets have two-charaster state names, and th
 
 After editing the column map delete the :file:`build/schema.csv` file and re-run :command:`bambry meta --clean`. Deleting the file ensures that the tables are properly re-generated with the new column names. 
 
-At this point, you should be able to run :command:`bambry meta --clean` and have the build complete. ( If you get a "Failed to find space identifier 'US' " error, run :command:`ambry search -I` to build the geographic identifier index )
 
 Editing Schemas
 ================
 
 Once the table schema is created, you can edit the :file:`build/schema.csv` file. The most likely things that will need to be changed are the descriptions
 
+
+At this point, you should be able to run :command:`bambry meta --clean` and have the build complete, although it will complete with Cast errors. ( If you get a "Failed to find space identifier 'US' " error, run :command:`ambry search -I` to build the geographic identifier index )
+
+These cast errors look like:
+
+.. code-block:: 
+    ERROR:  ==== ERRORS ===
+    ERROR: Casting error for source farm_output, table farm_output: crops_all: Crops; total_output: Total output; total_farm_input: Total farm input; livestock_and_products_1_all: Livestock and products; total_factor_productivity_tfp: Total factor productivity (TFP); labor_all: Labor; intermediate_goods_all: Intermediate goods; capital_all: Capital
+    ERROR: Casting error for source farm_output, table farm_output: intermediate_goods_other_intermediate: Other intermediate; intermediate_goods_pesticides: Pesticides; livestock_and_products_1_poultry_and_eggs: Poultry and eggs;
+
+These errors are a bit har to parse,  but the gist of it is that for the source farm_output, table farm_output, these columns could not be set to the values: 
+
+- crops_all: Crops
+- total_output: Total output 
+- total_farm_input: Total farm input
+- livestock_and_products_1_all: Livestock and products
+- etc. 
+
+A little investigation into the schema file reveals that the `crops_all` column, and the others, are type REAL, while the value provided to them is a string. 
 
 
 
