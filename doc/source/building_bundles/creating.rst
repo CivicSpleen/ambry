@@ -3,7 +3,6 @@
 Creating a New Bundle
 =====================
 
-
 How to create a new bundle. 
 
 .. important::
@@ -12,23 +11,31 @@ How to create a new bundle.
 
 .. note::
 
-    This discussion will create a bundle in for the ``example.com`` source, which you can get by cloning the `example.com repository from Github <https://github.com/CivicKnowledge/example-bundles>`_
+    This discussion will create a bundle in for the ``example.com`` source, which you can get by cloning the `example.com repository from Github <https://github.com/CivicKnowledge/example-bundles>`_ To distinguish the completed example from the one we'll build in the tutorial, the completed bundle is called `agg_product-demo`.
     
-
 First, you will want to have a source repository in your source directory. To find your source directory, run :command:`ambry info`. The first directory level in the source directory is for repositories, so you'll usually want to start from cloning a repository into that directory. In that repository, you'll create the bundle with the ``ambry source new`` command, specifying, at least, the domain name of the source, and a name of a dataset. 
 
 For this example, we will use the "Agricultural Productivity in the U.S." data from the US Department of Agriculture's Economic Research Service. The first bits of information you will need to get are the name of the dataset and the source name of the organization that published the data. You should consult the `Google Spreadsheet list of soruces. <https://docs.google.com/spreadsheets/d/1NPTHNv73Edd4QNc3jy9ektTR2P9QdxoTDz7oY7UmRJg/edit?usp=sharing>`_ and use one of the names in the ``Domain`` column, but if one does not exist, just use a sensible part of the organization's domain name. In this case, the name for the USDA ERS is `ers.usda.gov`, and our dataset will be called ``agg_product``
 
 .. code-block:: bash
 
-    $ cd ~/ambry/source/example-bundles # Assuming you cloned the example-bundles repo
-    $ ambry source new -s ers.usda.gov -d agg_product
+    # Go to the source directory and clone the demo bundle
+    
+    $ source_dir=$(ambry info | grep Source | awk -F: '{print $2}') # Find your source directory from the config
+    $ cd $source_dir
+    $ git clone https://github.com/CivicKnowledge/example-bundles.git
+    
+    # Create the bundle
+    
+    $ cd example-bundles
+    $ ambry source new -s ers.usda.gov -d agg_product -kself
+    $ cd ers.usda.gov/agg_product
 
 .. important::
 
     Every call to :command:`ambry source new` calls a number server to get a unique dataset number. While the 
     number space for unregistered calls is huge, it is preferable to use the local space if you will be 
-    testing the creating of bundles.
+    testing the creation of bundles.
     
     Use the option ``-n`` or  ``--dry-run`` to self generate a dataset number or set the ``self`` key::
 
@@ -38,19 +45,13 @@ For this example, we will use the "Agricultural Productivity in the U.S." data f
 
 There are many other parts of the bundle name you can set when creating a bundle, but only the source and dataset name are required. You can also set: 
 
-* ``subset``. A minor name, for when there are many logical parts in a large dataset. 
-* ``time``. An ISO date string to indicate the year or year range that distinguishes this dataset from others, as, for instance, the American COmmunity Survey
-* ``space``. A spatial extend name, usually a US state abbreviation. 
-* ``variation``. A variation name, most frequently "orig", for datasets that import data and make no other changes. 
+* ``-b`` ``subset``. A minor name, for when there are many logical parts in a large dataset. 
+* ``-t`` ``time``. An ISO date string to indicate the year or year range that distinguishes this dataset from others, as, for instance, the American COmmunity Survey
+* ``-p`` ``space``. A spatial extend name, usually a US state abbreviation. 
+* ``-v`` ``variation``. A variation name, most frequently "orig", for datasets that import data and make no other changes. 
 
 Run the :command:`ambry source new -h` command to see all of the options. 
 
-After generating the bundle source, the command will tell you where the bundle was generated. It's usually a sub-directory of the current directory named after the source and dataset name:
-
-.. code-block:: bash
-
-    $ cd ~/ambry/source
-    $ ambry source new -s edd.ca.gov -d empindus
     Installing: ers.usda.gov-agg_product-0.0.1 
     CREATED: ers.usda.gov-agg_product-0.0.1~d0elTsAucL001, .../source/example-bundles/ers.usda.gov/agg_product
     
