@@ -20,27 +20,19 @@ Editing Schemas
 
 Once the table schema is created, you can edit the :file:`build/schema.csv` file. The most likely things that will need to be changed are the descriptions
 
+At this point, you should be able to run :command:`bambry build --clean` and have the build complete, although it will complete with Cast errors. ( If you get a "Failed to find space identifier 'US' " error, run :command:`ambry search -I` to build the geographic identifier index )
 
-At this point, you should be able to run :command:`bambry meta --clean` and have the build complete, although it will complete with Cast errors. ( If you get a "Failed to find space identifier 'US' " error, run :command:`ambry search -I` to build the geographic identifier index )
+.. code-block:: bash
 
-These cast errors look like:
+    $ bambry build --clean 
 
-.. code-block:: 
-    ERROR:  ==== ERRORS ===
-    ERROR: Casting error for source farm_output, table farm_output: crops_all: Crops; total_output: Total output; total_farm_input: Total farm input; livestock_and_products_1_all: Livestock and products; total_factor_productivity_tfp: Total factor productivity (TFP); labor_all: Labor; intermediate_goods_all: Intermediate goods; capital_all: Capital
-    ERROR: Casting error for source farm_output, table farm_output: intermediate_goods_other_intermediate: Other intermediate; intermediate_goods_pesticides: Pesticides; livestock_and_products_1_poultry_and_eggs: Poultry and eggs;
+When this completes, you can view your bundle data:
 
-These errors are a bit har to parse,  but the gist of it is that for the source farm_output, table farm_output, these columns could not be set to the values: 
+.. code-block:: bash
 
-- crops_all: Crops
-- total_output: Total output 
-- total_farm_input: Total farm input
-- livestock_and_products_1_all: Livestock and products
-- etc. 
-
-A little investigation into the schema file reveals that the `crops_all` column, and the others, are type REAL, while the value provided to them is a string. 
-
-
+    $ sqlite3 build/ers.usda.gov/agg_product-0.0.1/farm_output.db
+    sqlite> select * from farm_output limit 2; 1|1948|0.393974971552671|0.452369564170535|0.516754543840232|0.530573943902273|0.144858275521033|0.37928796099577|0.510986437586835|0.443768859084032|0.137418832051219|0.330545858608854|0.373015356981542|0.166380139270261|0.186495305587978|0.940423999602609|1.14439225308512|0.616195743106905|0.782837063702015|1.33275857019168|0.548270308784581|4.1331588594473|3.19858100270404|4.69171707094048|0.450013465364225|0.485693383111727|0.729238661712037|0.348322411055621|0.0442563697143416|0.470092130416624|0.279300837388794|0.418933344660654 2|1949|0.392209606959556|0.465019029142635|0.55293933815759|0.554340408107555|0.165486847101891|0.36723885206368|0.438895301364365|0.408050463546692|0.1314243995979|0.372555008132277|0.329373784883303|0.175732208692112|0.180102182093474|0.963639368531656|1.16678526296638|0.72626883895094|0.81716997345204|1.33731653886684|0.593194566554745|4.03355028116729|2.97175222248167|4.66688160805454|0.476314733474816|0.514910716393866|0.807311374641467|0.378178175023767|0.0530408279199408|0.469768899452822|0.32647450693304|0.407008700316161
+    sqlite>
 
 Column Prototypes
 ================

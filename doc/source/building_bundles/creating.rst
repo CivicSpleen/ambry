@@ -29,6 +29,10 @@ For this example, we will use the "Agricultural Productivity in the U.S." data f
     
     $ cd example-bundles
     $ ambry source new -s ers.usda.gov -d agg_product -kself
+    
+    Installing: ers.usda.gov-agg_product-0.0.1 
+    CREATED: ers.usda.gov-agg_product-0.0.1~d0elTsAucL001, .../source/example-bundles/ers.usda.gov/agg_product
+    
     $ cd ers.usda.gov/agg_product
 
 .. important::
@@ -52,9 +56,6 @@ There are many other parts of the bundle name you can set when creating a bundle
 
 Run the :command:`ambry source new -h` command to see all of the options. 
 
-    Installing: ers.usda.gov-agg_product-0.0.1 
-    CREATED: ers.usda.gov-agg_product-0.0.1~d0elTsAucL001, .../source/example-bundles/ers.usda.gov/agg_product
-    
 
 .. important::
 
