@@ -32,7 +32,7 @@ Fill in other  ``about`` entries as appropriate:
 - about.footnote: A statement about unusual interpretations or meaning of the dataset, or anything else that would be approprate in a footnote. 
 - about.time: A year or year range that the dataset covers. Seperate start and end years with a '/'
 - about.space: The name of the state or county that the data cover, or "US" for national data. Must be a term that returns a hit from the search function :command:`ambry search -I`
-- about.access: A name of a repote library where the built bundle will be uploaded. Usually "public"
+- about.access: A name of a remote library where the built bundle will be uploaded. Usually "public"
 
 For the USDA example, here are the parts of the :file:`bundle.yaml` that are changed from the default values: 
 
@@ -53,6 +53,14 @@ For the USDA example, here are the parts of the :file:`bundle.yaml` that are cha
             description: Overview of the dataset, with links to the data files. 
             title: Overview and Download Page
             url: http://www.ers.usda.gov/data-products/agricultural-productivity-in-the-us.aspx
+
+
+Other Documentation
+*******************
+
+While most of the documentation for a dataset is provided by the dataset source, there is also documentation that the bundle author can add to the bundle.
+
+The :file:`meta/documentation.md` is the place to put information about the dataset that is not covered in an external document, such as errors covered in conversion, modificatons made to the dataset in conversion, or information that was provided by the source in email, for which there is no URL. 
 
 
 Select Bundle Class

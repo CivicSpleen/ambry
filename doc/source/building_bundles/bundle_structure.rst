@@ -1,4 +1,4 @@
-.. _bundle_structure_toplevel:
+.. _bundle_structure:
 
 Bundle Structure
 ================

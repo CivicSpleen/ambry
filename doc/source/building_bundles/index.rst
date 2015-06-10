@@ -11,10 +11,15 @@ A quick guide to using Ambry
     Creating a new bundle <creating>
     Configuring metadata <bundle_configuration>
     Setup sources with a loader <configuring_sources>
-    Build the schema <build_schema>
-    Process checklist <checklist>
-    Build the example bundles <building_examples>
-    Overview of the bundle structure <bundle_structure>
+    Build the schema <configure_schema>
+    Build the bundle <build_bundle>
+    Testing and review <testing_bundles>
+    
+Other Guides
+************
+
+- :ref:`Build the example bundles <building_examples>`
+- :ref:`Overview of the bundle structure <bundle_structure>`
     
     
     

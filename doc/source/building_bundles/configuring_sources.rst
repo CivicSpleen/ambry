@@ -1,9 +1,13 @@
 .. _configuring_sources:
 
+
+Configuring Sources
+===================
+
 In the :ref:`last section <configure_bundle>` we created a new bundle and  set the basic metadata. Now we can configure sources and use the Loader class to create tables and load them with data. 
 
 Source File Entries
-===================
+*******************
 
 Once you've setup the basic metadata, and in particular, set the download and/or dataset values, you can set the source URLS. These are references to the source files that will be loaded into the bundle. 
 
@@ -36,7 +40,8 @@ Note that for this example, the :command:`bambry config scrape` reported all of 
 
 
 Creating Metadata
-=================
+*****************
+
 
 For the USDA agricultural productivity example bundle, you can now use the bundle to create the tables, using the ``meta`` phase, with the command :command:`bambry meta --clean`
 
@@ -71,13 +76,16 @@ The :file:`meta/schema.csv` is the main schema, with records of all of the table
 Iif you are following along with the example, open up a few of those files , and you will notice that they are filled with tables named `table` with a number, and the column names are similarly generic. We'll have to do more exploration, using the files that have been added to the :file:`build` directory, which hold samples of the data from the source files. First, let's present the core objects in the ``meta`` phase, then look at how to fix these problems. 
 
 Loader Classes
-==============
+**************
+
+
 
 The Loaders are subclasses of :py:class:`ambry.bundle.BuildBundle` that are tailored for loading datasets from CSV, Excel and Shapefile files.  These classes provide many special features to reduce the effort required to create a good bundle. 
 
 
 Process Overview
-****************
+----------------
+
 
 The loader classes introduce a few new objects and use additional configuration. The new objects are:
 
@@ -128,7 +136,7 @@ Due to the breadth of the ``sources`` configuration, most Loader bundles only re
  
 
 Using Sources to Alter Tables and Columns
-=========================================
+*****************************************
 
 With a basic understanding of the row specs and intuiters, we can setup the sources configuration to get the right data into our bundle. For the USDA agricultural productivity example bundle, after running :command:`bambry meta` you'll have pre and post row generator sample data from all of the sources. The :file:`build` directory wil have, among a lot of other similar files: 
 
@@ -181,7 +189,7 @@ Now, look in :file:`build/table01-specd-rows.csv`, and you will see that the dat
     It is easier to edit a single row spec in the :file:`meta/build.yaml` file, but with more than 5 or 6 sources, using  :file:`meta/sources.csv` is easier. 
  
 Complex Tables
-==============
+**************
 
 For the USDA agricultural productivity example bundle, many of the files are unusually complex; they have an additional table of data after the first. See, for example, :file:`build/table03-raw-rows.csv`. The main table ends at line 54, there there is a second table that starts at line 55. This is a very unusual case, it can be handled with an additional source entry and row spec. Here is a new record you can add to `sources` that will access the table03 file again, but take the second table, rather than the first: 
 
@@ -204,7 +212,7 @@ For the USDA agricultural productivity example bundle, many of the files are unu
 After running :command:`bambry meta --clean` again, the :file:`build` directory will have a :file:`build/table03_growth-specd-rows.csv` file that confirms that the new source entry has extracted the second table. 
 
 Selecting Segments
-==================
+******************
 
 There is another complexity in this dataset. Table 1, for Farm Output, has two worksheets. By default, a source loads the first worksheet, but we can select other worksheets with the `segements` value. Copy the record for table01 to a new table, give it a new name, and set a `segment` value of 1. ( Segments are 0 based ) 
 
@@ -246,6 +254,6 @@ When building Ambry bundles, getting all of the metadata right isn't just import
 
     In the `sources` metadata version of the file, the key to each sources entry is mapped to the `name` column in the spreadsheet version. The metadata keys have to be unique, because they are keys in a dictionary, but the `name` column value doesn't have to be unique. Regardless, the two versions of the file have to match up. So, if you set the key or the `name` column, but no value for `table`, the data schema will have a table based on the name. If you set a 'table' value, mutiple sources can be loaded into a single table. 
     
-In the next section we will :ref:`configure the schema <build_schema>` and buld the bundle.
+In the next section we will :ref:`configure the schema <configure_schema>` and buld the bundle.
     
     
