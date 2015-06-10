@@ -3,7 +3,7 @@
 Building Bundles
 ================
 
-A quick guide to using Ambry
+A quick guide to building an AMbry bundle
 
 .. toctree::
     :maxdepth: 1
