@@ -19,7 +19,6 @@ from sqlalchemy.exc import OperationalError, IntegrityError
 
 from sqlite3 import DatabaseError as SqliteDatabaseError
 
-from boto.exception import S3ResponseError
 
 from ckcache.multi import AltReadCache, MultiCache
 
@@ -43,6 +42,8 @@ libraries = {}
 def _new_library(config):
     from database import LibraryDb
     from ckcache import new_cache
+
+    from boto.exception import S3ResponseError
 
     cache = new_cache(config['filesystem'])
 
