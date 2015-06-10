@@ -12,7 +12,9 @@ A quick guide to using Ambry
     Configuring metadata <bundle_configuration>
     Setup sources with a loader <configuring_sources>
     Build the schema <configure_schema>
+    Customizing the Loader <custom_loader>
     Build the bundle <build_bundle>
+    
     Testing and review <testing_bundles>
     
 Other Guides

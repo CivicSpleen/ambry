@@ -49,7 +49,6 @@ Review that the Title and summary are set, and that the partitions you expect ar
     
 Check that the VARCHAR columns have the values you expect, and that the count and uniq value are in the right range. 
 
-
 Writing Tests
 =============
 
