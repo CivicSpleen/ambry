@@ -85,7 +85,7 @@ class LoaderBundle(BuildBundle):
     def mangle_header(self, header):
         """
         Transform the header as it comes from the raw row generator into a column name
-        
+
         :param header: List of column names
         :return: List of column names
         """

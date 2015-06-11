@@ -309,7 +309,6 @@ def root_sync(args, l, config):
     l.logger.info("==== Sync Remotes")
     l.sync_remotes()
 
-
 def root_search(args, l, config):
     # This will fetch the data, but the return values aren't quite right
     from ambry.dbexceptions import NotFoundError

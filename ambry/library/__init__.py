@@ -582,6 +582,7 @@ class Library(object):
         return self.database.session.query(Table).filter(Table.proto_vid == proto_vid).all()
 
     def dataset(self, vid):
+
         try:
             return self.database.session.query(Dataset).filter(Dataset.vid == vid).one()
         except NoResultFound:
