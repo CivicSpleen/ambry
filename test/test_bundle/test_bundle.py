@@ -1,6 +1,6 @@
 
 
-from test.test_base import TestBase
+from test.test_base import TestBundle
 
 from ambry.bundle import Bundle
 
