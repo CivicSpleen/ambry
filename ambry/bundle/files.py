@@ -100,14 +100,19 @@ class BuildSourceFile(object):
 
     def sync(self):
 
-        if self.sync_dir() == self.file_to_record:
-            self.fs_to_record()
-            return self.file_to_record
-        elif self.sync_dir() == self.record_to_file:
-            self.record_to_fs()
-            return self.record_to_file
+        from time import time
+        sd = self.sync_dir()
 
-        return None
+        if  sd == self.file_to_record:
+            self.fs_to_record()
+        elif sd == self.record_to_file:
+            self.record_to_fs()
+        else:
+            return None
+
+        self._dataset.config.sync[self._file_const][sd] = time()
+        return sd
+
 
     def fs_to_record(self):
         """Load a file in the filesystem into the file record"""
@@ -221,12 +226,54 @@ class StringSourceFile(BuildSourceFile):
         with self._fs.open(file_name(self._file_const), 'wb') as f:
             f.write(fr.contents)
 
+class MetadataFile(DictBuildSourceFile):
+
+    def record_to_objects(self):
+        """Create config records to match the file metadata"""
+        from ..util import AttrDict
+
+        fr = self._dataset.bsfile(self._file_const)
+
+        contents = fr.unpacked_contents
+
+        ad = AttrDict(contents)
+
+        # Get time that filessystem was synchronized to the File record.
+        # Maybe use this to avoid overwriting configs that changed by bundle program.
+        # fs_sync_time = self._dataset.config.sync[self._file_const][self.file_to_record]
+
+        for key, value in ad.flatten():
+            if value:
+                self._dataset.config.metadata[key[0]]['.'.join(str(x) for x in key[1:])] = value
+
+        self._dataset._database.commit()
+
+        return ad
+
+    def object_to_record(self):
+        pass
+
+class PythonSourceFile(StringSourceFile):
+
+    def import_file(self):
+        """Add the filesystem to the Python sys path with an import hook, then import
+        to file as Python"""
+
+        import sys
+        from fs.expose.importhook import FSImportHook
+
+        sys.meta_path.append(FSImportHook(self._fs))
+
+        mod = __import__('bundle')
+
+        return mod
+
 
 file_info_map = {
-    File.BSFILE.BUILD : ('bundle.py',StringSourceFile),
-    File.BSFILE.BUILDMETA: ('meta.py',StringSourceFile),
+    File.BSFILE.BUILD : ('bundle.py',PythonSourceFile),
+    File.BSFILE.BUILDMETA: ('meta.py',PythonSourceFile),
     File.BSFILE.DOC: ('documentation.md',StringSourceFile),
-    File.BSFILE.META: ('bundle.yaml',DictBuildSourceFile),
+    File.BSFILE.META: ('bundle.yaml',MetadataFile),
     File.BSFILE.SCHEMA: ('schema.csv',RowBuildSourceFile),
     File.BSFILE.COLMAP: ('column_map.csv',RowBuildSourceFile),
     File.BSFILE.SOURCES: ('sources.csv',RowBuildSourceFile)

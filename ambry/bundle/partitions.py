@@ -7,13 +7,12 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 # import os
 
-from identity import PartitionIdentity, PartitionNameQuery, PartialPartitionName, NameQuery  # , PartitionName
+from ..identity import PartitionIdentity, PartitionNameQuery, PartialPartitionName, NameQuery  # , PartitionName
 
 from sqlalchemy.orm.exc import NoResultFound
 # from util.typecheck import accepts, returns
 from ambry.orm.exc import ConflictError
-from util import Constant
-
+from ..util import Constant, Proxy, memoize
 
 class Partitions(object):
 
@@ -50,10 +49,10 @@ class Partitions(object):
 
         from ambry.orm import Partition as OrmPartition
         from ambry.identity import PartitionNumber
-        from identity import PartitionIdentity
+        from ..identity import PartitionIdentity
         from sqlalchemy import or_
 
-        from partition import new_partition
+        from ..partition import new_partition
 
         session = self.bundle.database.session
 
@@ -310,7 +309,7 @@ class Partitions(object):
 
         pnq = pnq.with_none()
 
-        q = self.bundle.database.session.query(OrmPartition)
+        q = self.bundle.dataset._database.session.query(OrmPartition)
 
         if pnq.fqname is not NameQuery.ANY:
             q = q.filter(OrmPartition.fqname == pnq.fqname)
@@ -342,13 +341,10 @@ class Partitions(object):
                     tr = self.bundle.schema.table(pnq.table)
 
                     if not tr:
-                        raise ValueError(
-                            "Didn't find table named {} in {} bundle path = {}".format(
-                                pnq.table,
-                                pnq.vname,
-                                self.bundle.database.path))
+                        raise ValueError("Didn't find table named {} in {} bundle path = {}".format(
+                                pnq.table, pnq.vname, self.bundle.database.path))
 
-                    q = q.filter(OrmPartition.t_id == tr.id_)
+                    q = q.filter(OrmPartition.t_vid == tr.vid)
 
         ds = self.bundle.dataset
 
@@ -368,8 +364,7 @@ class Partitions(object):
         from ambry.orm import Partition as OrmPartition, Table
         from sqlalchemy.exc import IntegrityError
 
-        assert isinstance(pname, PartialPartitionName), "Expected PartialPartitionName, got {}".format(
-            type(pname))
+        assert isinstance(pname, PartialPartitionName), "Expected PartialPartitionName, got {}".format(type(pname))
 
         if tables and not isinstance(tables, (list, tuple, set)):
             raise ValueError(
@@ -430,16 +425,15 @@ class Partitions(object):
         assert table
 
         if isinstance(table, str):
-            from orm import Table
+            from ..orm import Table
             session = self.bundle.database.session
             table = session.query(Table).filter(Table.name == table).first()
 
-        op = OrmPartition(self.bundle.get_dataset(), t_id=table.id_,
-                          data=data, state=Partitions.STATE.NEW, **d)
+        op = OrmPartition(self.bundle.get_dataset(), t_id=table.id_, data=data, state=Partitions.STATE.NEW, **d)
 
         if memory:
             from random import randint
-            from identity import ObjectNumber
+            from ..identity import ObjectNumber
             op.dataset = self.bundle.get_dataset()
             op.table = table
             op.set_ids(randint(100000, ObjectNumber.PARTMAXVAL))
@@ -473,13 +467,11 @@ class Partitions(object):
     def _new_partition(self,ppn,tables=None,data=None,clean=False,create=True):
         """Creates a new OrmPartition record."""
 
-        assert isinstance(ppn, PartialPartitionName), "Expected PartialPartitionName, got {}".format(
-            type(ppn))
+        assert isinstance(ppn, PartialPartitionName), "Expected PartialPartitionName, got {}".format(type(ppn))
 
-        with self.bundle.session:  # as s:
-            op = self._new_orm_partition(ppn, tables=tables, data=data)
+        op = self._new_orm_partition(ppn, tables=tables, data=data)
 
-            fqname = op.fqname
+        fqname = op.fqname
 
         partition = self.find(PartitionNameQuery(fqname=fqname))
 
@@ -530,8 +522,8 @@ class Partitions(object):
 
         return partition, False
 
-    def new_partition(self, clean=False, tables=None, data=None, **kwargs):
-        return self.new_db_partition(clean=clean,tables=tables,data=data,**kwargs)
+    def new_partition(self,  data=None, **kwargs):
+        return PartitionProxy(self.bundle, self.bundle.dataset.new_partition(data=data,**kwargs))
 
     def find_or_new(self, clean=False, tables=None, data=None, **kwargs):
         return self.find_or_new_db(tables=tables,clean=clean,data=data,**kwargs)
@@ -553,7 +545,7 @@ class Partitions(object):
 
         """
 
-        from orm import Column
+        from ..orm import Column
         # from dbexceptions import ConfigurationError
 
         # Create the table from the information in the data frame.
@@ -588,7 +580,6 @@ class Partitions(object):
                     d[pk_name] = i
 
                     ins.insert(d)
-
         return p
 
     def find_or_new_db(self, clean=False, tables=None, data=None, **kwargs):
@@ -609,9 +600,6 @@ class Partitions(object):
 
         return p
 
-
-
-
     def delete(self, partition):
         from ambry.orm import Partition as OrmPartition
 
@@ -629,5 +617,24 @@ class Partitions(object):
             out += str(p.identity.sname) + "\n"
 
         return out
+
+class PartitionProxy(Proxy):
+
+
+    def __init__(self, bundle, obj):
+        super(PartitionProxy, self).__init__(obj)
+        self._bundle = bundle
+
+    def clean(self):
+        """Remove all built files and return the partition to a newly-created state"""
+
+    def database(self):
+        """Returns self, to deal with old bundles that has a direct reference to their database. """
+        return self
+
+    def inserter(self):
+        from etl.partition import Inserter, new_partition_data_file
+
+        return Inserter(self.table, new_partition_data_file(self._bundle.) )
 
 

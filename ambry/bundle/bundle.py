@@ -10,7 +10,7 @@ from ..util import get_logger
 
 class Bundle(object):
 
-    def __init__(self, dataset, library, fs=None):
+    def __init__(self, dataset, library, source_fs=None, build_fs=None):
         import logging
         from states import StateMachine
 
@@ -19,9 +19,16 @@ class Bundle(object):
         self._logger = None
 
         self._log_level = logging.INFO
-        self._fs = fs
+        self._source_fs = source_fs
+        self._build_fs = build_fs
         self._state_machine_class = StateMachine
         self._errors = []
+
+    def cast_to_subclass(self):
+        from ambry.orm import File
+        mod = self.source_files.file(File.BSFILE.BUILD).import_file()
+        return mod.Bundle(self._dataset, self._library, self._source_fs)
+
 
     @property
     def dataset(self):
@@ -43,6 +50,12 @@ class Bundle(object):
         return Schema(self)
 
     @property
+    def partitions(self):
+        """Return the Schema acessor"""
+        from partitions import Partitions
+        return Partitions(self)
+
+    @property
     def sources(self):
         """Return the Sources acessor"""
         from sources import SourceFilesAcessor
@@ -51,6 +64,7 @@ class Bundle(object):
     @property
     def metadata(self):
         """Return the Metadata acessor"""
+        return self.dataset.config.metadata
 
     @property
     def builder(self):
@@ -58,9 +72,10 @@ class Bundle(object):
 
         return self._state_machine_class(self)
 
-    def source_files(self, fs):
+    @property
+    def source_files(self):
         from files import BuildSourceFileAccessor
-        return BuildSourceFileAccessor(self.dataset, fs)
+        return BuildSourceFileAccessor(self.dataset, self._source_fs)
 
     @property
     def logger(self):
@@ -126,14 +141,29 @@ class Bundle(object):
     #
 
     def sync(self):
-        if not self._fs:
+        """
+        Synchronize with filesystem files.
+        :return: True if the synchronization succeedes
+        """
+        if not self._source_fs:
             from ..dbexceptions import ConfigurationError
             raise ConfigurationError("Can't sync bundle without a configured filesystem")
 
-        return self.builder.sync(self._fs)
+        return self.builder.sync()
 
     def clean(self):
+        """
+        Remove all objects generated synchronized files.
+        :return:
+        """
         return self.builder.do_clean()
 
     def prepare(self):
+        """Create objects from schonized files and prepare the bundle for building"""
+
         return self.builder.do_prepare()
+
+    def build(self):
+        """Create objects from schonized files and prepare the bundle for building"""
+
+        return self.builder.do_build()

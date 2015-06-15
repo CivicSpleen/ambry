@@ -8,8 +8,7 @@ __docformat__ = 'restructuredtext en'
 
 from collections import MutableMapping
 
-from sqlalchemy import Column as SAColumn
-from sqlalchemy import  Text, String, ForeignKey
+from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, Integer, event
 
 from . import Base, JSONAlchemy
 
@@ -23,6 +22,7 @@ class Config(Base):
     key = SAColumn('co_key', String(200), primary_key=True)
 
     value = SAColumn('co_value', JSONAlchemy(Text()))
+    modified = SAColumn('co_modified', Integer())
 
     @property
     def dict(self):
@@ -30,6 +30,23 @@ class Config(Base):
 
     def __repr__(self):
         return "<config: {},{},{} = {}>".format(self.d_vid,self.group,self.key,self.value)
+
+    @staticmethod
+    def before_insert(mapper, conn, target):
+        Config.before_update(mapper, conn, target)
+
+    @staticmethod
+    def before_update(mapper, conn, target):
+        from time import time
+        from sqlalchemy.orm import object_session
+
+        if object_session(target).is_modified(target, include_collections=False):
+            target.modified = time()
+
+
+event.listen(Config, 'before_insert', Config.before_insert)
+event.listen(Config, 'before_update', Config.before_update)
+
 
 class ConfigTypeGroupAccessor(object):
 
@@ -41,6 +58,8 @@ class ConfigTypeGroupAccessor(object):
         self._group_name = group_name
 
         self._session = object_session(dataset)
+
+        assert self._session, "Dataset has no session"
 
         self._configs = {}
 
@@ -111,7 +130,6 @@ class ConfigGroupAccessor(object):
             self._dataset.configs.remove(config)
 
     def __getattr__(self, k):
-
         return ConfigTypeGroupAccessor(self._dataset, self._type_name, k)
 
     def __setattr__(self, k, v):
@@ -120,5 +138,9 @@ class ConfigGroupAccessor(object):
         else:
             raise AttributeError("Can't set groups in ConfigGroupAccessor")
 
+    def __getitem__(self, item):
+        return self.__getattr__(item)
 
+    def __setitem__(self, key, value):
+        self.__setattr__(key, value)
 

@@ -268,6 +268,10 @@ class Database(object):
         return self.__class__(self.driver, self.server, self.dbname, self.username, self.password)
 
     def drop(self):
+
+        # Should close connection before table drop to avoid hanging in postgres.
+        # http://docs.sqlalchemy.org/en/rel_0_8/faq.html#metadata-schema
+
         pass
 
     def create_tables(self):

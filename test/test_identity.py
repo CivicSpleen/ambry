@@ -8,18 +8,11 @@ import unittest
 
 from test_base import TestBase
 from ambry.identity import *
-from test.old.bundles.testbundle import Bundle
-
 
 class Test(TestBase):
     def setUp(self):
 
         super(Test, self).setUp()
-
-        self.copy_or_build_bundle()
-
-        self.bundle = Bundle()
-        self.bundle_dir = self.bundle.bundle_dir
 
     def tearDown(self):
         pass
@@ -384,142 +377,6 @@ class Test(TestBase):
         self.assertEquals('source.com-foobar-orig', ip.sname)
         self.assertIsNone(ip.vname)
 
-    def test_bundle_build(self):
-
-        from ambry.orm.exc import ConflictError
-
-        bundle = Bundle()
-
-        # Need to clear the library, or the Bundle's pre_prepare
-        # will cancel the build if this version is already installed
-        bundle.library.purge()
-
-        bundle.exit_on_fatal = False
-        bundle.clean()
-        bundle.database.create()
-        bundle.prepare()
-
-        bp = bundle.partitions
-
-
-        with bundle.session:
-            bp._new_orm_partition(PartialPartitionName(table = 'tone', time = 't1', space='s1'))
-            bp._new_orm_partition(PartialPartitionName(table = 'tone', time = 't1', space='s2'))
-            bp._new_orm_partition(PartialPartitionName(table = 'tone', time = 't1', space=None))
-            bp._new_orm_partition(PartialPartitionName(table = 'tone', time = 't2', space='s1'))
-            bp._new_orm_partition(PartialPartitionName(table = 'tone', time = 't2', space='s2'))
-            bp._new_orm_partition(PartialPartitionName(table = 'tone', time = 't2', space=None))
-
-        with self.assertRaises(ConflictError):
-            with bundle.session:
-                bp._new_orm_partition(PartialPartitionName(table = 'tone',time = 't1', space='s1'))
-
-        pnq = PartitionNameQuery(table = 'tone', time=NameQuery.ANY, space='s1')
-
-        names = [p.vname
-                 for p in bp._find_orm(pnq).all()]
-
-
-        self.assertEqual({u'source-dataset-subset-variation-tone-t1-s1-0.0.1',
-                          u'source-dataset-subset-variation-tone-t2-s1-0.0.1'},
-                         set(names))
-
-        names = [p.vname
-                 for p in bp._find_orm(PartitionNameQuery(space=NameQuery.ANY)).all()]
-
-        self.assertEqual(6, len(names))
-
-        names = [p.vname
-                 for p in bp._find_orm(PartitionNameQuery(table = 'tone',time='t1',space=NameQuery.ANY)).all()]
-
-        self.assertEqual({'source-dataset-subset-variation-tone-t1-s2-0.0.1',
-                              'source-dataset-subset-variation-tone-t1-0.0.1',
-                              'source-dataset-subset-variation-tone-t1-s1-0.0.1'},
-                         set(names))
-
-        names = [p.vname
-                 for p in bp._find_orm(PartitionNameQuery(table = 'tone',time='t1',space=NameQuery.NONE)).all()]
-
-        self.assertEqual({'source-dataset-subset-variation-tone-t1-0.0.1'},
-                         set(names))
-
-        # Start over, use a higher level function to create the partitions
-
-        bundle.close()  # Or you'll get an OperationalError
-        bundle = Bundle()
-        bundle.exit_on_fatal = False
-        bundle.clean()
-        bundle.database.create()
-        bundle.prepare()
-        bp = bundle.partitions
-
-        bp._new_partition(PartialPartitionName(table = 'tone',time = 't1', space='s1'))
-        self.assertEquals(1, len(bp.all))
-
-        bp._new_partition(PartialPartitionName(table = 'tone',time = 't1', space='s2'))
-        self.assertEquals(2, len(bp.all))
-
-        bp._new_partition(PartialPartitionName(table = 'tone',time = 't1', space=None))
-        bp._new_partition(PartialPartitionName(table = 'tone',time = 't2', space='s1'))
-        bp._new_partition(PartialPartitionName(table = 'tone',time = 't2', space='s2'))
-        bp._new_partition(PartialPartitionName(table = 'tone',time = 't2', space=None))
-        self.assertEquals(6, len(bp.all))
-
-        names = [p.vname
-                 for p in bp._find_orm(PartitionNameQuery(time='t1', space=NameQuery.ANY)).all()]
-
-        self.assertEqual({'source-dataset-subset-variation-tone-t1-s2-0.0.1',
-                              'source-dataset-subset-variation-tone-t1-0.0.1',
-                              'source-dataset-subset-variation-tone-t1-s1-0.0.1'},
-                         set(names))
-
-        # Start over, use a higher level function to create the partitions
-        bundle.close()
-        bundle = Bundle()
-        bundle.exit_on_fatal = False
-        bundle.clean()
-        bundle.database.create()
-        bundle.prepare()
-        bp = bundle.partitions
-
-        p = bp.new_db_partition(table = 'tone',time = 't1', space='s1')
-        self.assertEquals('source-dataset-subset-variation-tone-t1-s1-0.0.1~piEGPXmDC8001001', p.identity.fqname)
-
-        p = bp.find_or_new(table = 'tone',time = 't1', space='s2')
-        self.assertEquals('source-dataset-subset-variation-tone-t1-s2-0.0.1~piEGPXmDC8002001', p.identity.fqname)
-
-        # Duplicate
-        p = bp.find_or_new(table = 'tone',time = 't1', space='s2')
-        self.assertEquals('source-dataset-subset-variation-tone-t1-s2-0.0.1~piEGPXmDC8002001', p.identity.fqname)
-
-        p = bp.find_or_new_geo(table = 'tone',time='t2', space='s1')
-
-        p = bp.find_or_new_geo(table = 'tone',time = 't2', space='s1')
-
-        # Which it is depends on whether GDAL is installed.
-        self.assertIn(p.identity.fqname,[
-            'source-dataset-subset-variation-tone-t2-s1-geo-0.0.1~piEGPXmDC8003001',
-            'source-dataset-subset-variation-tone-t2-s1-0.0.1~piEGPXmDC8003001' ]
-        )
-
-        # Ok! Build!
-        bundle.close()
-        bundle = Bundle()
-        bundle.exit_on_fatal = False
-
-        bundle.clean()
-        bundle.pre_prepare()
-        bundle.prepare()
-        bundle.post_prepare()
-        bundle.pre_build()
-        bundle.build_db_inserter_codes()
-        bundle.post_build()
-
-        self.assertEquals('diEGPXmDC8001', bundle.identity.vid)
-        self.assertEquals('source-dataset-subset-variation', bundle.identity.sname)
-        self.assertEquals('source-dataset-subset-variation-0.0.1', bundle.identity.vname)
-        self.assertEquals('source-dataset-subset-variation-0.0.1~diEGPXmDC8001', bundle.identity.fqname)
-
     # TODO: This test should run against a number server setup locally, not the main server.
     def x_test_number_service(self):
         # For this test, setup these access keys in the
@@ -610,6 +467,23 @@ class Test(TestBase):
         #     'revision': 1,
         #     'version': '0.0.1'
         # }
+
+    def test_partitial_name(self):
+
+        from ambry.identity import PartialPartitionName, Name
+        from itertools import combinations
+
+        name_parts = [ 'table',  'time', 'space', 'grain', 'format', 'segment']
+
+        ds_name =  Name(source='source', dataset='dataset')
+
+        for s in list(combinations(name_parts, 3)):
+            p =  PartialPartitionName(**dict(zip(s,s)))
+            print p.promote(ds_name).dict
+
+
+
+
 
 
 def suite():

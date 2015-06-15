@@ -14,11 +14,11 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import text
 
 from ambry.identity import TableNumber,  ObjectNumber
-from ambry.orm import Column
+from ambry.orm import Column, DictableMixin
 from ambry.orm.exc import NotFoundError
 from . import Base, MutationDict, JSONEncodedObj
 
-class Table(Base):
+class Table(Base, DictableMixin):
     __tablename__ = 'tables'
 
     vid = SAColumn('t_vid', String(20), primary_key=True)
@@ -154,6 +154,8 @@ class Table(Base):
                 return c
         return None
 
+
+
     def get_fixed_regex(self):
         """Using the size values for the columns for the table, construct a
         regular expression to  parsing a fixed width file."""
@@ -248,7 +250,7 @@ class Table(Base):
     def caster(self):
         """Returns a function that takes a row that can be indexed by positions
         which returns a new row with all of the values cast to schema types."""
-        from ambry.transform import CasterTransformBuilder
+        from ambry.bundle.etl.transform import CasterTransformBuilder
 
         bdr = CasterTransformBuilder()
 

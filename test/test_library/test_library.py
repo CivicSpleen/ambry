@@ -1,6 +1,5 @@
-from test import bundlefiles
-from test.test_base import TestBase
 
+from test.test_base import TestBase
 
 class Test(TestBase):
 

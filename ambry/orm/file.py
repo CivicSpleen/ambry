@@ -101,8 +101,6 @@ class File(Base, DictableMixin):
         for row in rows:
             yield dict(zip(header, row))
 
-
-
     def update_contents(self, contents):
         """Update the contents and set the hash and modification time"""
         import hashlib

@@ -14,9 +14,6 @@ from ambry.util import install_test_logger
 
 from ambry.orm import Database, Dataset
 
-# ambry.util.get_logger = install_test_logger('/tmp/ambry-test.log')
-
-
 
 
 class TestBase(unittest.TestCase):
@@ -43,6 +40,16 @@ class TestBase(unittest.TestCase):
             db = self._db
 
         return db.new_dataset(**self.ds_params(n))
+
+    def copy_bundle_files(self, source, dest):
+        from ambry.bundle.files import file_info_map
+        from fs.errors import ResourceNotFoundError
+
+        for const_name, (path, clz) in file_info_map.items():
+            try:
+                dest.setcontents(path, source.getcontents(path))
+            except ResourceNotFoundError:
+                pass
 
     def dump_database(self, table, db=None):
 

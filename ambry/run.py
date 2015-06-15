@@ -453,19 +453,3 @@ def mp_run(mp_run_args):
         print '==========^^^ MP Run Exception: {} pid = {} ==========='.format(args, os.getpid())
         raise
 
-
-def import_file(filename):
-    """"""
-    import imp
-
-    (path, name) = os.path.split(filename)
-    (name, _) = os.path.splitext(name)
-    (_, modname) = os.path.split(path)
-
-    # To avoid 'Parent module not found' warnings
-    modname = modname.replace('.', '_')
-
-    (file_, filename, data) = imp.find_module(name, [path])
-
-    return imp.load_module(modname, file_, filename, data)
-

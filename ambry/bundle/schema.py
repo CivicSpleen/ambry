@@ -65,6 +65,10 @@ class Schema(object):
 
         return self.bundle.dataset.tables
 
+    def table(self,ref):
+        from sqlalchemy.orm import object_session
+        return self.bundle._dataset.table(ref)
+
     @property
     def columns(self):
         '''Return a list of table columns for this bundle'''
@@ -633,15 +637,13 @@ class Schema(object):
                     t_meta, table = self.bundle.schema.get_table_meta(t.name)  # @UnusedVariable
                     table.create(bind=self.bundle.database.engine)
 
-    def caster(self, table_name):
+    def caster(self, table):
         """Return a caster for a table. This is like orm.Table.caster, but it will use special caster types
         defined in the schema"""
 
-        from ambry.transform import CasterTransformBuilder
+        from ambry.bundle.etl.transform import DictTransform
 
-        table = self.table(table_name)
-
-        bdr = CasterTransformBuilder()
+        bdr = DictTransform()
 
         for c in table.columns:
 

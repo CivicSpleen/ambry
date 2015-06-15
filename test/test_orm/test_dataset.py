@@ -2,20 +2,12 @@
 import unittest
 import tempfile
 import uuid
-from ambry.orm import Column
-from ambry.orm import Partition
-from ambry.orm import Table
 from ambry.orm import Dataset
-from ambry.orm import Config
-from ambry.orm import File
-from ambry.orm import Code
-from ambry.orm import ColumnStat
-from sqlalchemy.orm import sessionmaker
-from ambry.identity import DatasetNumber, PartitionNumber
-from sqlalchemy.exc import IntegrityError
+from ambry.identity import DatasetNumber
 
-class Test(unittest.TestCase):
+from test.test_base import TestBase
 
+class Test(TestBase):
 
     def setUp(self):
         from sqlalchemy import create_engine
@@ -34,15 +26,6 @@ class Test(unittest.TestCase):
         # Make an array of dataset numbers, so we can refer to them with a single integer
         self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
 
-    def new_dataset(self, n):
-        return Dataset(vid=self.dn[n], source='source', dataset='dataset' )
-
-    def dump_database(self, db, table):
-        import sys
-        from subprocess import check_output
-
-        for row in db.connection.execute("SELECT * FROM {}".format(table)):
-            print row
 
     def test_dataset_basic(self):
         """Basic operations on datasets"""
@@ -129,6 +112,25 @@ class Test(unittest.TestCase):
         self.assertEqual(22, db.dataset(ds.vid).table('table2').data['b'])
         self.assertEqual('table3-description', db.dataset(ds.vid).table('table3').description)
 
+    def test_partitions(self):
+        from ambry.orm.database import Database
+
+        db = Database(self.dsn)
+        db.open()
+
+        ds = db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
+
+        t = ds.new_table('table2')
+
+        p = ds.new_partition(t, time=1)
+        p = ds.new_partition(t, time=2)
+        p = ds.new_partition(t, time=3)
+
+        db.commit()
+
+        self.assertEqual(3, len(ds.partitions))
+
+        self.dump_database('partitions', db)
 
 def suite():
     suite = unittest.TestSuite()

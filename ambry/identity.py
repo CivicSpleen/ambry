@@ -353,6 +353,8 @@ class PartialPartitionName(Name):
 
     """For specifying a PartitionName within the context of a bundle."""
 
+    FORMAT='default'
+
     time = None
     space = None
     table = None
@@ -370,12 +372,8 @@ class PartialPartitionName(Name):
 
     def promote(self, name):
         """Promote to a PartitionName by combining with a bundle Name."""
-        from partition import name_class_from_format_name
 
-        cls = name_class_from_format_name(self.format)
-
-        return cls(**dict(name.dict.items() +
-                          self.dict.items()))
+        return PartitionName(**dict(name.dict.items() + self.dict.items()))
 
     def is_valid(self):
         pass
@@ -765,54 +763,25 @@ class ObjectNumber(object):
             on_str = on_str[ds_lengths[0]:]
 
             if type_ == cls.TYPE.DATASET:
-                return DatasetNumber(
-                    dataset,
-                    revision=revision,
-                    assignment_class=assignment_class)
+                return DatasetNumber( dataset,revision=revision,assignment_class=assignment_class)
 
             elif type_ == cls.TYPE.TABLE:
                 table = int(ObjectNumber.base62_decode(on_str))
-                return TableNumber(
-                    DatasetNumber(
-                        dataset,
-                        assignment_class=assignment_class),
-                    table,
-                    revision=revision)
+                return TableNumber( DatasetNumber(dataset,assignment_class=assignment_class), table,revision=revision)
 
             elif type_ == cls.TYPE.PARTITION:
                 partition = int(ObjectNumber.base62_decode(on_str))
-                return PartitionNumber(
-                    DatasetNumber(
-                        dataset,
-                        assignment_class=assignment_class),
-                    partition,
-                    revision=revision)
+                return PartitionNumber(DatasetNumber(dataset,assignment_class=assignment_class),partition,revision=revision)
 
             elif type_ == cls.TYPE.COLUMN:
-                table = int(
-                    ObjectNumber.base62_decode(
-                        on_str[
-                            0:cls.DLEN.TABLE]))
-                column = int(
-                    ObjectNumber.base62_decode(
-                        on_str[
-                            cls.DLEN.TABLE:]))
+                table = int(ObjectNumber.base62_decode(on_str[ 0:cls.DLEN.TABLE]))
+                column = int(ObjectNumber.base62_decode( on_str[cls.DLEN.TABLE:]))
 
-                return ColumnNumber(
-                    TableNumber(
-                        DatasetNumber(
-                            dataset,
-                            assignment_class=assignment_class),
-                        table),
-                    column,
-                    revision=revision)
-
+                return ColumnNumber(TableNumber(DatasetNumber( dataset,assignment_class=assignment_class), table),
+                                    column,revision=revision)
             else:
-                raise NotObjectNumberError(
-                    'Unknown type character: ' +
-                    on_str[0] +
-                    ' in ' +
-                    str(on_str))
+                raise NotObjectNumberError('Unknown type character: ' +on_str[0] + ' in ' + str(on_str))
+
         except Base62DecodeError as e:
             raise NotObjectNumberError("Unknown character:  " + str(e))
 
@@ -1727,11 +1696,7 @@ class PartitionIdentity(Identity):
 
         """
 
-        from partition import identity_class_from_format_name
-
-        ic = identity_class_from_format_name(d.get('format', 'db'))
-
-        name = ic._name_class(**d)
+        name = PartitionIdentity._name_class(**d)
 
         if 'id' in d and 'revision' in d:
             # The vid should be constructed from the id and the revision
@@ -1742,24 +1707,14 @@ class PartitionIdentity(Identity):
             raise ValueError("Must have id and revision, or vid")
 
         try:
-            return ic(name, on)
+            return PartitionIdentity(name, on)
         except TypeError as e:
             raise TypeError(
                 "Failed to make identity from \n{}\n: {}".format(
                     d,
                     e.message))
 
-    @classmethod
-    def new_subclass(cls, name, object_number):
 
-        from partition import identity_class_from_format_name, name_class_from_format_name
-
-        nc = name_class_from_format_name(name.format)
-        ic = identity_class_from_format_name(name.format)
-
-        nname = nc(**name.dict)
-
-        return ic(nname, object_number)
 
     @property
     def table(self):

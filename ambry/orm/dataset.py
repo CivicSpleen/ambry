@@ -6,8 +6,6 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 __docformat__ = 'restructuredtext en'
 
-
-
 from sqlalchemy import Column as SAColumn, Integer
 from sqlalchemy import  String
 from sqlalchemy.orm import relationship
@@ -63,8 +61,7 @@ class Dataset(Base):
 
     sources = relationship('DataSource', backref='dataset', cascade="all, delete-orphan")
 
-
-    _database = None # Reference to the database, when dataset is retrieved from
+    _database = None # Reference to the database, when dataset is retrieved from a database object
 
     def __init__(self, *args, **kwargs):
 
@@ -161,6 +158,30 @@ class Dataset(Base):
 
         return table
 
+    def new_partition(self, table, **kwargs):
+        '''
+        '''
+        from . import Partition
+        from ..identity import PartialPartitionName
+
+        # Create the basic partition record, with a sequence ID.
+
+        if isinstance(table, basestring):
+            table = self.table(table)
+
+        p = Partition(
+            sequence_id = len(self.partitions)+1, # First guess; concurrent access could invalidate later.
+            t_vid = table.vid,
+            table_name = table.name,
+            **kwargs
+        )
+
+        object_session(self).add(p)
+
+        self.partitions.append(p)
+
+        return p
+
     def bsfile(self, name):
         """Return a Build Source file ref, creating a new one if the one requested does not exist"""
         from sqlalchemy.orm.exc import NoResultFound
@@ -240,7 +261,7 @@ class ConfigAccessor(object):
         return ConfigGroupAccessor(self.dataset, 'process')
 
     @property
-    def meta(self):
+    def metadata(self):
         """Access process configuarion values as attributes. See self.process
         for a usage example"""
 
@@ -255,6 +276,13 @@ class ConfigAccessor(object):
         from config import ConfigGroupAccessor
 
         return ConfigGroupAccessor(self.dataset, 'buildstate')
+
+    @property
+    def sync(self):
+        """Access sync configuration values as attributes. See self.process for a usage example"""
+        from config import ConfigGroupAccessor
+
+        return ConfigGroupAccessor(self.dataset, 'sync')
 
     @property
     def library(self):
@@ -293,4 +321,3 @@ class ConfigAccessor(object):
             rows.append(cr)
 
         return rows
-

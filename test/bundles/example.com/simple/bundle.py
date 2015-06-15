@@ -1,14 +1,10 @@
 """
 """
 
-from ambry.bundle import BuildBundle
+from ambry.bundle import Bundle
 
-
-class Bundle(BuildBundle):
+class Bundle(Bundle):
     """ """
-
-    def __init__(self, directory=None):
-        super(Bundle, self).__init__(directory)
 
     def build(self):
         import uuid
@@ -19,7 +15,7 @@ class Bundle(BuildBundle):
             p = self.partitions.new_partition(table=table)
             p.clean()
 
-            with p.database.inserter() as ins:
+            with p.inserter() as ins:
                 for i in range(10000):
                     row = dict()
 
@@ -61,7 +57,3 @@ class Bundle(BuildBundle):
         print "R", self.metadata.about.processed
         print "H", self.metadata.about.processed.html
         print "T", self.metadata.about.processed.text
-        
-        
-                        
-        

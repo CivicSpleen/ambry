@@ -315,10 +315,10 @@ class DictableMixin(object):
         from sqlalchemy.orm.attributes import InstrumentedAttribute
         import inspect
 
-        return dict(inspect.getmembers(self.__class__,lambda x: isinstance(x,InstrumentedAttribute)))
+        #return dict(inspect.getmembers(self.__class__,lambda x: isinstance(x,InstrumentedAttribute)))
 
         # Alternative?
-        # return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs}
+        return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs}
 
     @property
     def dict(self):
@@ -330,6 +330,7 @@ class DictableMixin(object):
             for k in self.data:
                 assert k not in d # Data items can't overlap attributes
                 d[k] = self.data[k]
+
 
         return d
 

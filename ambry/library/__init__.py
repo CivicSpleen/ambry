@@ -83,7 +83,7 @@ class Library(object):
             ds.config.library.source_dir.dir = source_dir
             self.commit()
 
-        return Bundle(ds, self, fs=fsopendir(source_dir))
+        return Bundle(ds, self, source_fs=fsopendir(source_dir))
 
     ##
     ## Storing

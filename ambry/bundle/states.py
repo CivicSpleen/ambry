@@ -37,10 +37,10 @@ class StateMachine(object):
     ## Source Synced
     ##
 
-    def sync(self, source_fs):
+    def sync(self):
 
         ds = self._bundle.dataset
-        self._bundle.source_files(source_fs).sync()
+        self._bundle.source_files.sync()
 
         self.state = self.STATES.SYNCED
 
@@ -93,7 +93,7 @@ class StateMachine(object):
         if ds.bsfile(File.BSFILE.COLMAP).has_contents:
             self._bundle.dataset.colmaps[:] = []
 
-        ds.config.meta.clean()
+        ds.config.metadata.clean()
         ds.config.build.clean()
         ds.config.process.clean()
 
@@ -111,8 +111,7 @@ class StateMachine(object):
 
     @property
     def is_prepared(self):
-        return (self.database.exists() and not self.run_args.get('rebuild', False)
-                and self.get_value('process', 'prepared', False))
+        return bool(self._bundle.dataset.config.build.state.prepared)
 
     def do_prepare(self):
         """This method runs pre_, main and post_ prepare methods."""
@@ -147,6 +146,7 @@ class StateMachine(object):
 
     def prepare(self):
         from ambry.orm.exc import NotFoundError
+        from ambry.orm import File
 
         try:
             self._bundle.sources.check_dependencies()
@@ -161,11 +161,12 @@ class StateMachine(object):
             raise
             return False
 
+        self._bundle.source_files.file(File.BSFILE.META).record_to_objects()
+
         return True
 
     def pre_prepare(self):
         """"""
-
         return True
 
     def post_prepare(self):
@@ -227,7 +228,6 @@ class StateMachine(object):
 
                 self.database.rewrite_dataset()
 
-
     ##
     ## Build
     ##
@@ -235,11 +235,7 @@ class StateMachine(object):
     @property
     def is_built(self):
         """Return True is the bundle has been built."""
-
-        if not self.database.exists():
-            return False
-
-        return bool(self.get_value('process', 'built', False)) or self.get_value('process', 'updated', False)
+        return bool(self._bundle.dataset.config.build.state.built)
 
     def do_build(self):
 
@@ -248,9 +244,11 @@ class StateMachine(object):
                 self.log("Prepare failed; skipping build")
                 return False
 
+        self.state = self.STATES.BUILDING
         if self.pre_build():
             self.log("---- Build ---")
             if self.build_main():
+                self.state = self.STATES.BUILT
                 if self.post_build():
                     self.log("---- Done Building ---")
                     self.log("Bundle DB at: {}".format(self.database.dsn))
@@ -258,13 +256,16 @@ class StateMachine(object):
                 else:
                     self.log("---- Post-build failed ---")
                     self.log("Bundle DB at: {}".format(self.database.dsn))
+                    self.set_error_state()
                     r = False
 
             else:
                 self.log("---- Build exited with failure ---")
+                self.set_error_state()
                 r = False
         else:
             self.log("---- Skipping Build ---- ")
+            self.set_error_state()
             r = False
 
         return r
@@ -274,26 +275,19 @@ class StateMachine(object):
         from time import time
         import sys
 
-        if not self.database.exists():
-            raise ProcessError("Database does not exist yet. Was the 'prepare' step run?")
 
-        if self.is_built and not self.run_args.get('force', False):
-            self.log("Bundle is already built. Skipping  ( Use --clean  or --force to force build ) ")
+        if self.is_built:
+            self.error("Bundle is already built. Skipping  ( Use --clean  or --force to force build ) ")
             return False
 
-        with self.session:
-            if not self.get_value('process', 'prepared', False):
-                self.error("Build called before prepare completed")
-                return False
+        if not self.is_prepared:
+            self.error("Build called before prepare completed")
+            return False
 
-            self._build_time = time()
 
-        python_dir = self.config.python_dir()
-
-        if python_dir and python_dir not in sys.path:
-            sys.path.append(python_dir)
-
-        self.close()
+        #python_dir = self.config.python_dir()
+        #if python_dir and python_dir not in sys.path:
+        #    sys.path.append(python_dir)
 
         return True
 
@@ -303,7 +297,6 @@ class StateMachine(object):
     def build_main(self):
         """This is the methods that is actually called in do_build; it
         dispatches to developer created prepare() methods."""
-        self.set_build_state('building')
         return self.build()
 
     def post_build(self):

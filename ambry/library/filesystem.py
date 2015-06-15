@@ -25,8 +25,7 @@ class LibraryFilesystem():
         p = self._config.filesystem(name)
 
         if args:
-            p =  join(p, *args)
-
+            p = join(p, *args)
 
         if not isdir(p):
             makedirs(p)

@@ -1,19 +1,20 @@
 about:
     access: test
-    footnote: null
-    grain: null
+    footnote: This is a footnote
+    grain: demo
     groups:
     - Examples
     license: other-open
     processed: Packaged for [Ambry](http://ambry.io) by {{contact_bundle.creator.org}}
     rights: null
     source: '{{contact_source.creator.org}}'
-    space: null
-    subject: null
+    space: California
+    subject: demo
     summary: This is a short summary of the data bundle, from {{contact_source.creator.org}}
     tags:
     - example
-    time: null
+    - demo
+    time: 2010
     title: Simple Example Bundle
 contact_bundle:
     creator:
@@ -49,7 +50,6 @@ names:
     name: example.com-simple
     vid: dfY0NJscai003
     vname: example.com-simple-0.1.3
-process: {}
 versions:
     1:
         date: null
@@ -63,3 +63,17 @@ versions:
         date: null
         description: null
         version: 0.1.3
+build:
+    key1: value1
+    dict1:
+        key1: value1
+        key2: value2
+        dict2:
+            key1: value1
+            key2: value2
+            dict3:
+                key1: value1
+                key2: value2
+dependencies: {}
+requirements:
+    xlrd: xlrd

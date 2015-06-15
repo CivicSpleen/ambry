@@ -1,6 +1,6 @@
 
 
-from test.test_base import TestBundle
+from test.test_base import TestBase
 
 from ambry.bundle import Bundle
 
@@ -83,18 +83,20 @@ class Test(TestBase):
 
     def test_prepare(self):
         from test import bundlefiles
-        from os.path import dirname
+        from os.path import dirname, join
+
         from fs.opener import fsopendir
 
         db = self.new_database()
 
-        b = Bundle(self.new_db_dataset(), None, fsopendir("mem://"))
-
+        mem_fs = fsopendir("mem://")
         source_fs = fsopendir(dirname(bundlefiles.__file__))
 
-        b.builder.sync(source_fs)  # Loads the files from directory
+        self.copy_bundle_files(source_fs, mem_fs)
 
-        b.sync()  # This will sync the files back to the bundle's source dir
+        b = Bundle(self.new_db_dataset(), None, mem_fs)
+
+        b.sync()
 
         b.prepare()
 

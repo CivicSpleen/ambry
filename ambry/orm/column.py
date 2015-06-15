@@ -50,7 +50,7 @@ class Column(Base):
     summary = SAColumn('c_summary', Text)
     description = SAColumn('c_description', Text)
     keywords = SAColumn('c_keywords', Text)
-
+    caster = SAColumn('c_caster', Text)
     units = SAColumn('c_units', Text)
     universe = SAColumn('c_universe', Text)
 
