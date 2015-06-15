@@ -111,8 +111,6 @@ class Dataset(Base):
         return ConfigAccessor(self)
 
     def table(self, ref):
-        # AFAIK, all of the columns in the relationship will get loaded if any one is accessed,
-        # so iterating over the collection only involves one SELECT.
 
         from exc import NotFoundError
 

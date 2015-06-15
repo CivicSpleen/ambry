@@ -24,7 +24,7 @@ class Name(object):
 
     """The Name part of an identity."""
 
-    PATH_EXTENSION = '.db'
+
     NAME_PART_SEP = '-'
 
     # Name, Default Value, Is Optional
@@ -265,7 +265,7 @@ class Name(object):
     def cache_key(self):
         """The name in a form suitable for use as a cache-key"""
         try:
-            return self.path + self.PATH_EXTENSION
+            return self.path
         except TypeError:
             raise TypeError(
                 "self.path is invalild: '{}', '{}'".format(str(self.path), type(self.path)))

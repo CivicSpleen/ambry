@@ -19,7 +19,7 @@ class Test(TestBase):
     def setUp(self):
         from fs.opener import fsopendir
 
-        self.fs = fsopendir('mem://')
+        self.fs = fsopendir('/tmp/test/')
 
     def test_csv(self):
         from ambry.bundle.etl.partition import new_partition_data_file
@@ -53,12 +53,12 @@ class Test(TestBase):
 
         return eval("lambda row: [{}]".format(','.join(funcs)))
 
-    @unittest.skip('Timing test')
+    #@unittest.skip('Timing test')
     def test_csv_time(self):
         """Time writing rows with a PartitionDataFile.
 
         """
-        from ambry.bundle.etl.partition import new_partition_data_file
+        from ambry.bundle.etl.partition import new_partition_data_file, PartitionMsgpackDataFile
 
         fs = self.fs
 
@@ -99,7 +99,7 @@ class Test(TestBase):
         for i in range(100):
             data.append([ str(randdata(schema[i][1])) for i in range(ncols)])
 
-        cdf = new_partition_data_file(fs, 'foo.csv')
+        cdf = new_partition_data_file(fs, 'foo.msg')
 
         import time
         n = 30000

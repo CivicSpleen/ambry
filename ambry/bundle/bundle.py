@@ -27,7 +27,7 @@ class Bundle(object):
     def cast_to_subclass(self):
         from ambry.orm import File
         mod = self.source_files.file(File.BSFILE.BUILD).import_file()
-        return mod.Bundle(self._dataset, self._library, self._source_fs)
+        return mod.Bundle(self._dataset, self._library, self._source_fs, self._build_fs)
 
 
     @property
@@ -35,7 +35,8 @@ class Bundle(object):
         from sqlalchemy import inspect
 
         if inspect(self._dataset).detached:
-            self._dataset = self._dataset._database.dataset(self._dataset.vid)
+            vid = self._dataset.vid
+            self._dataset = self._dataset._database.dataset(vid)
 
         return self._dataset
 

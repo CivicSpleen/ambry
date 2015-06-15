@@ -8,7 +8,8 @@ Revised BSD License, included in this distribution as LICENSE.txt
 def new_partition_data_file(fs, path):
 
     ext_map = {
-        PartitionCsvDataFile.EXTENSION : PartitionCsvDataFile
+        PartitionCsvDataFile.EXTENSION : PartitionCsvDataFile,
+        PartitionMsgpackDataFile.EXTENSION: PartitionMsgpackDataFile
     }
 
     from os.path import split, splitext, join
@@ -18,7 +19,6 @@ def new_partition_data_file(fs, path):
 
     if not fs.exists(dn):
         fs.makedir(dn, recursive=True)
-
 
     if not ext:
         ext = '.csv'
@@ -73,6 +73,13 @@ class PartitionDataFile(object):
         """Return the size of the file, in data rows"""
         return NotImplementedError()
 
+    @property
+    def munged_path(self):
+        if self._path.endswith(self.EXTENSION):
+            return self._path
+        else:
+            return self._path+self.EXTENSION
+
 class PartitionCsvDataFile(PartitionDataFile):
     """An accessor for files that hold Partition Data"""
 
@@ -86,14 +93,15 @@ class PartitionCsvDataFile(PartitionDataFile):
         self._reader = None
         self._writer = None
 
+
+
     @property
     def writer(self):
         import unicodecsv as csv
 
         if not self._writer:
             self.close()
-            self._file = self._fs.open(self._path, mode = 'wb', buffering=1*1024*1024)
-
+            self._file = self._fs.open(self.munged_path, mode = 'wb', buffering=1*1024*1024)
             self._writer = csv.writer(self._file)
 
         return self._writer
@@ -104,7 +112,7 @@ class PartitionCsvDataFile(PartitionDataFile):
 
         if not self._reader:
             self.close()
-            self._file = self._fs.open(self._path, mode='rb')
+            self._file = self._fs.open(self.munged_path, mode='rb')
             self._reader = csv.reader(self._file)
 
         return self._reader
@@ -182,19 +190,113 @@ class PartitionCsvDataFile(PartitionDataFile):
         """Return the size of the file, in data rows"""
         return NotImplementedError()
 
+class PartitionMsgpackDataFile(PartitionDataFile):
+    """A reader and writer for Partition files in MessagePack format, which is about 60%  faster than unicode
+     csv writing, and slightly faster than plain csv. """
+
+    EXTENSION = '.msg'
+
+    def __init__(self, fs, path):
+
+        super(PartitionMsgpackDataFile, self).__init__(fs, path)
+
+        self._file = None
+        self._reader = None
+        self._writer = None
+
+
+
+    def close(self):
+        """
+        Release resources
+
+        :return:
+        """
+
+        self._nrows = 0
+        if self._file:
+            self._file.close()
+
+    def insert(self, row):
+        """
+        Add a row to the file. The first row must be a tuple or list, containing the header, to set the order of
+        the fields, while subsequent rows can be lists or dicts.
+
+        :param row:
+        :return:
+        """
+
+        import msgpack
+
+        if not self._file:
+            self._file = self._fs.open(self.munged_path, mode='wb')
+
+        if self._nrows == 0: # Save the header
+            assert isinstance(row, (list, tuple))
+            self._header = list(row)
+
+        if isinstance(row, (list, tuple)):
+            self._file.write(msgpack.packb(row))
+        else:
+            # Assume the row has a map interface, and write out the row in the order of the
+            # column names provided in the header
+            self._file.write(msgpack.packb([row.get(k,None) for k in self._header]))
+
+        self._nrows += 1
+
+    @property
+    def rows(self):
+        """Generate rows from the file"""
+
+        import msgpack
+
+        with self._fs.open(self.munged_path, mode='wb') as f:
+            unpacker = msgpack.Unpacker(f)
+
+            for i, row in enumerate(unpacker):
+                if i == 0:
+                    self._header = row
+                self._nrows  = 1
+                yield row
+
+    @property
+    def dict_rows(self):
+        """Generate rows from the file"""
+
+        for i,row in enumerate(self.rows):
+            if i == 0:
+                continue
+
+            yield dict(zip(self._header, row))
+
+    def clean(self):
+        """Remove all of the rows in the file"""
+
+        self.close()
+        self._fs.remove(self._path)
+
+    @property
+    def size(self):
+        """Return the size of the file, in data rows"""
+        return NotImplementedError()
+
 
 class Inserter(object):
 
     def __init__(self, table, datafile):
         self._table = table
         self.datafile = datafile
-
         self._header = [ c.name for c in self._table.columns ]
 
         self.datafile.insert(self._header) # The header is always inserted first
 
+        self.row_num = 1
+
     def insert(self, row):
         from sqlalchemy.engine.result import RowProxy
+
+        if not row.get('id', False): # conflicts with passing in lists
+            row['id'] = self.row_num
 
         # Convert dicts to lists in the order of the header
         if isinstance(row, dict):
@@ -207,6 +309,7 @@ class Inserter(object):
             raise Exception("Don't know what the row is")
 
         self.datafile.insert(row)
+        self.row_num += 1
 
     def __enter__(self):
         return self

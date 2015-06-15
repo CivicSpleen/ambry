@@ -14,10 +14,13 @@ class Test(TestBase):
         db = self.new_database()
 
         mem_fs = fsopendir("mem://")
+        build_fs = fsopendir("mem://")
 
         self.copy_bundle_files(fsopendir(join(dirname(bundles.__file__), 'example.com', 'simple')), mem_fs)
 
-        return Bundle(self.new_db_dataset(), None, mem_fs)
+
+
+        return Bundle(self.new_db_dataset(), None, source_fs = mem_fs, build_fs =  build_fs)
 
     def test_simple_prepare(self):
         """Build the simple bundle"""
@@ -61,8 +64,13 @@ class Test(TestBase):
         b = b.cast_to_subclass()
         b.prepare()
 
+        self.dump_database('tables')
+
         b.build()
 
+        print list(b._build_fs.walkfiles())
+
+        print b._build_fs.getcontents('/source/dataset-0.0.2/example.csv')
 
 def suite():
     import unittest

@@ -166,7 +166,7 @@ class Database(object):
         from sqlalchemy.orm import sessionmaker
 
         if not self.Session:
-            self.Session = sessionmaker(bind=self.engine, expire_on_commit=False)
+            self.Session = sessionmaker(bind=self.engine, expire_on_commit=True)
 
         if not self._session:
             self._session = self.Session()
@@ -210,8 +210,8 @@ class Database(object):
     def commit(self):
         try:
             self.session.commit()
-            self.session.expunge_all()  # Clear any cached object in the session.
-            self.session.expire_all()
+            #self.session.expunge_all()  # Clear any cached object in the session.
+            #self.session.expire_all()
             # self.close_session()
         except Exception as e:
             # self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))

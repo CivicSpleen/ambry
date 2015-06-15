@@ -523,7 +523,10 @@ class Partitions(object):
         return partition, False
 
     def new_partition(self,  data=None, **kwargs):
-        return PartitionProxy(self.bundle, self.bundle.dataset.new_partition(data=data,**kwargs))
+        p = self.bundle.dataset.new_partition(data=data,**kwargs)
+        self.bundle.dataset.commit()
+
+        return PartitionProxy(self.bundle, p)
 
     def find_or_new(self, clean=False, tables=None, data=None, **kwargs):
         return self.find_or_new_db(tables=tables,clean=clean,data=data,**kwargs)
@@ -635,6 +638,6 @@ class PartitionProxy(Proxy):
     def inserter(self):
         from etl.partition import Inserter, new_partition_data_file
 
-        return Inserter(self.table, new_partition_data_file(self._bundle.) )
+        assert bool(self._bundle._build_fs)
 
-
+        return Inserter(self.table, new_partition_data_file(self._bundle._build_fs, self.cache_key) )
