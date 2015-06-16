@@ -3,6 +3,11 @@
 Bundle Process Tutorials
 ========================
 
+.. important::
+
+    Be sure to follow the :ref:`install <install>` and :ref:`configure <configuration>` guides before starting the tutorial. In particular, you will need to set your email and name in the :file:`$HOME/.ambry-accounts.yaml` file. 
+
+
 Overview of Simple Bundles
 **************************
 
