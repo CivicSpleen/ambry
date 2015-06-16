@@ -350,7 +350,7 @@ Often, the data from a source file need to be altered before commiting it to a p
     
 In this bundle, most of the process is controlled but the :class:`CsvBundle` loader and the methods alter the values or rows as they are added to the partition. 
 
-* :method:`int_caster` and :method:`real_caster` are attached to columns in :file:`schema.csv`, and are called on a cell in a row to cast or alter the value. 
-* :method:`build_modify_row` is called on a whole row, so it can be used to make large changes to the row, such as looking up the value in one column to create another column. 
+* :meth:`int_caster` and :meth:`real_caster` are attached to columns in :file:`schema.csv`, and are called on a cell in a row to cast or alter the value. 
+* :meth:`build_modify_row` is called on a whole row, so it can be used to make large changes to the row, such as looking up the value in one column to create another column. 
 
 These are just the simplest bundles. For a more comprehensive tutorial for creating a more complex bundle, see :ref:`build a new bundle tutorial <creating>`.
