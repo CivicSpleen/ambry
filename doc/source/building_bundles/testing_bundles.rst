@@ -50,7 +50,7 @@ Review that the Title and summary are set, and that the partitions you expect ar
 Check that the VARCHAR columns have the values you expect, and that the count and uniq value are in the right range. 
 
 Writing Tests
-=============
+*************
 
 Bundles should have some test to ensure that the bundle built correctly. Typically, the test will get a partition, convert it to a PANDAS data frame, compute statistics, and assert the results. For instance: 
 

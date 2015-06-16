@@ -1,5 +1,4 @@
-.. custom_loader:
-
+.. _custom_loader:
 
 Modifying the Loader
 ====================

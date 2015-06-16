@@ -299,6 +299,7 @@ class LibraryDb(object):
         :return:
         :raise Exception:
         """
+        from ambry.dbexceptions import DatabaseError
         from sqlalchemy.exc import NoSuchTableError, ProgrammingError, OperationalError
 
         if not self.enable_delete:
@@ -318,6 +319,11 @@ class LibraryDb(object):
         except (ProgrammingError, OperationalError):
             # Table doesn't exist.
             self._session.rollback()
+
+        try:
+            self.clean()
+        except DatabaseError:
+            pass # maybe database doesn't exist yet.
 
         self.metadata.drop_all(self.engine)
 

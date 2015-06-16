@@ -94,7 +94,7 @@ def root_command(args, rc):
         l = new_library(rc.library(args.library_name))
         l.logger = global_logger
     except DatabaseError as e:
-        warn("No library: {}".format(e))
+        fatal("No library: {}".format(e))
         l = None
 
     globals()['root_' + args.subcommand](args, l, rc)

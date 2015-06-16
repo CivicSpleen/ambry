@@ -4,7 +4,7 @@
 Configuring Sources
 ===================
 
-In the :ref:`last section <configure_bundle>` we created a new bundle and  set the basic metadata. Now we can configure sources and use the Loader class to create tables and load them with data. 
+In the :ref:`last section <bundle_configuration>` we created a new bundle and  set the basic metadata. Now we can configure sources and use the Loader class to create tables and load them with data. 
 
 Source File Entries
 *******************

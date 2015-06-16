@@ -155,6 +155,7 @@ Installing into a python virtual environment is fairly easy.
 First, make your virtualenv:
 
 .. code-block:: bash
+
     $ virtualenv ambry
     $ cd ambry
     $ source bin/activate

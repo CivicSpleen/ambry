@@ -1,4 +1,4 @@
-.. _bundle_creating:
+.. _creating:
 
 Creating a New Bundle
 =====================
@@ -73,5 +73,5 @@ There are a few special types of bundles that you can designate with the ``varia
 * ``cross`` specifies that the bundle is a crosswalk, which connects other datasets, usually two other indexes. 
 
 
-Now, you've got a new bundle, and you've verified that it can build. The next step is to :ref:`update the configuration and code. <configure_bundle>`
+Now, you've got a new bundle, and you've verified that it can build. The next step is to :ref:`update the configuration and code. <bundle_configuration>`
 

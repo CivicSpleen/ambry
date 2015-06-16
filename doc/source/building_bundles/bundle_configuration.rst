@@ -1,4 +1,4 @@
-.. _configure_bundle:
+.. _bundle_configuration:
 
 Configure a Bundle
 ==================

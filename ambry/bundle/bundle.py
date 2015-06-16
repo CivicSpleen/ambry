@@ -940,7 +940,8 @@ class BuildBundle(Bundle):
                     self.error("Failed to find source domain '{}' in {}".format(source_domain,self.SOURCE_TERMS))
 
             except NotFoundError:
-                self.error("Can't expand sources; didn't find source partition '{}'".format(self.SOURCE_TERMS))
+                self.error("Can't expand sources; didn't find source partition '{}'. You probably need to run 'ambry sync'"
+                           .format(self.SOURCE_TERMS))
 
     def write_doc_html(self):
         import markdown

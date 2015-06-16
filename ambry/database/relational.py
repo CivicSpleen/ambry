@@ -40,11 +40,7 @@ def close_connections_at_exit():
         conn = conn_ref()
 
         if conn:
-            global_logger.debug(
-                "Closing connection {}: {}. From: {} ".format(
-                    id(conn),
-                    dsn,
-                    where))
+            global_logger.debug("Closing connection {}: {}. From: {} ".format(id(conn),dsn,where))
             conn.close()
 
         del connections[id_]
@@ -418,8 +414,7 @@ class RelationalDatabase(DatabaseInterface):
             self.close_session()
 
         if self._connection:
-            global_logger.debug(
-                'Closing connection: {} for {}'.format(id(self._connection), self.dsn))
+            global_logger.debug('Closing connection: {} for {}'.format(id(self._connection), self.dsn))
 
             self._connection.close()
             self._connection = None
