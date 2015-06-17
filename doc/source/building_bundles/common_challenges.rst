@@ -13,6 +13,7 @@ Complex Source Files
 * `Multiple sheets in an Excel file`_
 * `Nulls or other illegal characters`_
 * `Character Encoding`_
+* `Tabs or Commas or Excel? Forcing a file type`_
 
 
 Multiple files in a zip file
@@ -86,5 +87,25 @@ Many datasets are encoded in a non-ascii encoding, sometimes using characters th
         url: http://data.medicare.gov/views/bg9k-emty/files/K2mijv-Kwa3BxIvmpxh3ZYiFHcn_15Cd4WbvhBb9m3s?filename=HHCompare_Revised_FlatFiles.zip
 
     
+Tabs or Commas or Excel? Forcing a file type
+--------------------------------------------
+
+.. versionadded:: 0.3.953
+
+The row generator will automatically select the comma character for a field delimiter if the extension of the file is ``.csv``, or a tab ( `\t` ) if the extension is ``.tsv``, or excel for ``.xls``. If the file does not have a file extension that properly triggers the right behavior in the row generator, you can force the file type with the ``filetype`` value in the source.
+
+Here is an example where the file has a ``.txt`` extension, but is actually a CSV file. 
+
+.. code-block:: yaml
+
+    puf_10_northb:
+        description: Public Discharge Data, Public Use File 2010
+        file: Northb_lbl.txt
+        filetype: csv
+        table: pdd_puf
+        time: 2010
+        url: s3://.../.../Public10.zip
+
+
 
 
