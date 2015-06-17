@@ -52,6 +52,7 @@ class SourcesFile(object):
             except TypeError:
                 raise NoData()
 
+            i = None
             for i, row in enumerate(r):
 
                 row = {m.get(k, k) : v for k,v in row.items()}

@@ -125,14 +125,24 @@ class LoaderBundle(BuildBundle):
 
         return p
 
+    def line_mangler(self, source, l):
+        """
+        Override this function to alter each line of a source file, just before it is passed into a Delimited file
+        reader in the DelimitedRowGenerator
+        :param l:
+        :return:
+        """
+
     def row_gen_for_source(self, source_name, use_row_spec = True):
         from os.path import split, splitext
+        from functools import partial
 
         source = self.metadata.sources[source_name]
 
         fn = self.filesystem.download(source_name)
 
-        if fn.endswith('.zip'):
+        # The second clause handles cases where the filename is part of the query: http://example.com/download?file=foo.zip
+        if fn.endswith('.zip') or source.url.endswith('zip'):
             sub_file = source.file
             fn = self.filesystem.unzip(fn, regex=sub_file)
 
@@ -152,15 +162,22 @@ class LoaderBundle(BuildBundle):
         else:
             rs = {}
 
+        if source.encoding:
+            rs['encoding'] = source.encoding
+
         if source.segment:
             rs['segment'] = source.segment
 
         rs['header_mangler'] = lambda header: self.mangle_header(header)
 
+        line_mangler = partial(self.line_mangler,  source)
+
         if ext == 'csv':
             from rowgen import DelimitedRowGenerator
-
-            return DelimitedRowGenerator(fn, **rs)
+            return DelimitedRowGenerator(fn, line_mangler = line_mangler, **rs)
+        if ext == 'tsv':
+            from rowgen import DelimitedRowGenerator
+            return DelimitedRowGenerator(fn, line_mangler = line_mangler, delimiter='\t', **rs)
         elif ext == 'xls':
             from rowgen import ExcelRowGenerator
 
@@ -168,7 +185,6 @@ class LoaderBundle(BuildBundle):
         else:
             raise Exception("Unknown source file extension: '{}' for file '{}' from source {} "
                             .format(ext, file_name, source_name))
-
 
     def meta(self):
         from collections import defaultdict

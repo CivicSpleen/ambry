@@ -100,6 +100,7 @@ class SourceTerm(DictTerm):
     description = ScalarTerm(store_none=False)
     dd_url = ScalarTerm(store_none=False)  # Data Dictitionary URL
     file = ScalarTerm(store_none=False)  # A name or regex to extract from a multi-file ZIP
+    encoding = ScalarTerm(store_none=False)  # Encoding name for the UnicodeCsv file reader, usuallly 'utf8' or 'latin-1'
     filetype = ScalarTerm(store_none=False)
     # For the LoaderBundle, use this file type ( file extensino ) rather than from the url
 

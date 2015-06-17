@@ -7,6 +7,9 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
+from ambry.dbexceptions import BuildError
+class RowGeneratorError(BuildError):
+    pass
 
 class RowGenerator(object):
     file_name = None
@@ -28,6 +31,7 @@ class RowGenerator(object):
 
     def __init__(self, file, data_start_line=None, data_end_line=None, header_lines=None, header_comment_lines=None,
                  header_mangler=None):
+
         """
 
         :param file:
@@ -113,16 +117,28 @@ class RowGenerator(object):
         self.reset()
         row = None
 
+        def decode(x):
+            if isinstance(x, unicode):
+                return x.encode('ascii', 'ignore')
+            elif isinstance(x, str):
+                return x
+            else:
+                return str(x)
+
         i = 0
         while self.line_number < self.data_start_line:
 
             row = self.raw_row_gen.next()
 
-            if self.line_number in self.header_lines:
-                headers.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
+            try:
+                if self.line_number in self.header_lines:
+                    headers.append([ decode(x) for x in row])
 
-            if self.line_number in self.header_comment_lines:
-                header_comments.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
+                if self.line_number in self.header_comment_lines:
+                    header_comments.append([decode(x) for x in row])
+            except UnicodeDecodeError as e:
+
+                raise RowGeneratorError("Failed to decode '{}': {} ".format(row, e))
 
             i += 1
 
@@ -223,17 +239,33 @@ class DelimitedRowGenerator(RowGenerator):
     delimiter = None
 
     def __init__(self, file, data_start_line=None, data_end_line=None, header_lines=None, header_comment_lines=None,
-                 header_mangler=None, delimiter=','):
+                 header_mangler=None, line_mangler=None , delimiter=',', encoding='utf-8'):
+        """
+
+        :param file:
+        :param data_start_line:
+        :param data_end_line:
+        :param header_lines:
+        :param header_comment_lines:
+        :param header_mangler:
+        :param line_mangler: A function that returns an altered line for each line in the input file, before
+        passing the line into the CV reader
+        :param delimiter: File delimiter, passed to the CSV reader.
+        :param encoding:  Encoding to pass to the UnicodeCsv reader
+        :return:
+        """
 
         super(DelimitedRowGenerator, self).__init__(
             file, data_start_line=data_start_line, data_end_line=data_end_line, header_lines=header_lines,
             header_comment_lines=header_comment_lines, header_mangler=header_mangler)
 
+        self.encoding = encoding
         self.delimiter = delimiter
+        self.line_mangler = line_mangler
 
     def get_csv_reader(self, f, sniff=False):
-        # import unicodecsv as csv
-        import csv
+        import unicodecsv as csv
+        #import csv
 
         if sniff:
             dialect = csv.Sniffer().sniff(f.read(5000))
@@ -243,7 +275,15 @@ class DelimitedRowGenerator(RowGenerator):
 
         delimiter = self.delimiter if self.delimiter else ','
 
-        return csv.reader(f, delimiter=delimiter, dialect=dialect)
+        if self.line_mangler:
+
+            def lm():
+                for l in f:
+                    yield self.line_mangler(l)
+
+            return csv.reader( lm(), delimiter=delimiter, dialect=dialect, encoding=self.encoding)
+        else:
+            return csv.reader(f, delimiter=delimiter, dialect=dialect, encoding=self.encoding)
 
     def _yield_rows(self):
 
