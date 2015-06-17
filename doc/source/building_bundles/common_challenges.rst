@@ -54,6 +54,8 @@ When importing an Excel spreadsheet, it is common for the file to have multiple 
 Nulls or other illegal characters
 ---------------------------------
 
+.. versionadded:: 0.3.953
+
 If a source file has a fomatting error that a row generator class considers illegal, such as embedded nulls, you can intercept the file and clean it before it enters the row generator by overriding the :meth:`line_mangler` method in a Loader bundle: 
 
 .. code-block:: python
@@ -69,6 +71,8 @@ If a source file has a fomatting error that a row generator class considers ille
 
 Character Encoding 
 ------------------
+
+.. versionadded:: 0.3.953
 
 Many datasets are encoded in a non-ascii encoding, sometimes using characters that cause the :class:`DelimitedRowGenerator` row generator to choke. If so, you can explicitly set the encoding for a source with the ``encoding`` value.
 
