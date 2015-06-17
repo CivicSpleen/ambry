@@ -14,8 +14,8 @@ Overview of Simple Bundles
 This short tutorial on :ref:`building the example bundles <building_examples>` presents the simplest bundle structures and the commands used to build and install them. 
 
 
-Packagaing USDA data
-********************
+Packagaing USDA Data Example
+****************************
 
 This is a more involved tutorial that covers the entire process of creating a new data bundle from a real data source. 
 
@@ -30,7 +30,8 @@ This is a more involved tutorial that covers the entire process of creating a ne
 Other Guides
 ************
 
-:ref:`Overview of the bundle structure <bundle_structure>`
+- :ref:`Solving common challenges <common_challenges>`
+- :ref:`Overview of the bundle structure <bundle_structure>`
     
     
     

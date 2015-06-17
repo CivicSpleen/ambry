@@ -417,9 +417,7 @@ class Search(object):
         # from whoosh.index import create_in, open_dir
 
         if not self._identifier_index:
-            self._identifier_index = self.get_or_new_index(
-                IdentifierSchema,
-                self.i_index_dir)
+            self._identifier_index = self.get_or_new_index(IdentifierSchema,self.i_index_dir)
 
         return self._identifier_index
 

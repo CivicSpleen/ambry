@@ -9,14 +9,17 @@ Created on Jun 22, 2012
 import ambry.util
 from ambry.util import install_test_logger
 
-ambry.util.get_logger = install_test_logger('/tmp/ambry-test.log')
+from ambry.util import patch_file_open
+
+#patch_file_open() # Patch opening of files to debug file descriptor exhaustion
+
+#ambry.util.get_logger = install_test_logger('/tmp/ambry-test.log')
 
 import unittest
 from  bundles.testbundle.bundle import Bundle
 from ambry.identity import *
 import time, logging
 import ambry.util
-
 
 global_logger = ambry.util.get_logger(__name__)
 global_logger.setLevel(logging.DEBUG)

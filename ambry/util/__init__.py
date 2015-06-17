@@ -394,9 +394,7 @@ def patch_file_open():
             all_fds = count_open_fds()
 
             print(
-                "### {} OPENING {} ( {} total )###".format(
-                    len(openfiles), str(
-                        self.x), all_fds))
+                "### {} OPENING {} ( {} total )###".format(len(openfiles), str(self.x), all_fds))
             oldfile.__init__(self, *args, **kwargs)
 
             openfiles.add(self)
