@@ -18,8 +18,6 @@ class Test(TestBase):
 
         self.copy_bundle_files(fsopendir(join(dirname(bundles.__file__), 'example.com', 'simple')), mem_fs)
 
-
-
         return Bundle(self.new_db_dataset(), None, source_fs = mem_fs, build_fs =  build_fs)
 
     def test_simple_prepare(self):
@@ -62,19 +60,28 @@ class Test(TestBase):
         b = self.setup_bundle()
         b.sync()
         b = b.cast_to_subclass()
-        b.prepare()
+        self.assertEquals('synced',b.state)
+        b.do_prepare()
+        self.assertEquals('prepared', b.state)
+        b.do_build()
 
-        self.dump_database('tables')
+        for p in b.dataset.partitions:
+            print p.time_coverage
+            print p.space_coverage
 
-        b.build()
+        self.assertEqual(3, len(b.dataset.partitions))
+        self.assertEqual(1, len(b.dataset.tables))
 
-        print list(b._build_fs.walkfiles())
+        c = b._build_fs.getcontents(list(b._build_fs.walkfiles())[0])
 
-        print b._build_fs.getcontents('/source/dataset-0.0.2/example.csv')
+        self.assertEquals(6001,len(c.splitlines()))
+
+        self.assertEquals(39, len(b.dataset.stats))
+
+        self.assertEquals('built', b.state )
 
 def suite():
     import unittest
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
     return suite
-

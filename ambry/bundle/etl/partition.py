@@ -93,8 +93,6 @@ class PartitionCsvDataFile(PartitionDataFile):
         self._reader = None
         self._writer = None
 
-
-
     @property
     def writer(self):
         import unicodecsv as csv
@@ -204,8 +202,6 @@ class PartitionMsgpackDataFile(PartitionDataFile):
         self._reader = None
         self._writer = None
 
-
-
     def close(self):
         """
         Release resources
@@ -283,14 +279,27 @@ class PartitionMsgpackDataFile(PartitionDataFile):
 
 class Inserter(object):
 
-    def __init__(self, table, datafile):
-        self._table = table
+    def __init__(self, partition, datafile):
+        self._partition = partition
+        self._table = partition.table
         self.datafile = datafile
         self._header = [ c.name for c in self._table.columns ]
 
         self.datafile.insert(self._header) # The header is always inserted first
 
         self.row_num = 1
+
+        self._stats = self.make_stats()
+
+    def make_stats(self):
+        from stats import Stats
+
+        stats = Stats()
+
+        for i,c in enumerate(self._table.columns):
+            stats.add(i,c)
+
+        return stats
 
     def insert(self, row):
         from sqlalchemy.engine.result import RowProxy
@@ -308,16 +317,32 @@ class Inserter(object):
         else:
             raise Exception("Don't know what the row is")
 
-        self.datafile.insert(row)
+        self.datafile.insert(self._stats.process(row))
         self.row_num += 1
 
+    def close(self):
+        pass
+
     def __enter__(self):
+
+        self._partition.state = self._partition.STATES.BUILDING
+        self._partition._bundle.dataset.commit()
         return self
 
     def __exit__(self, type_, value, traceback):
-        if type_ != GeneratorExit:
+
+        if type_ and type_ != GeneratorExit:
+            self._partition.state = self._partition.STATES.ERROR
+            self._partition._bundle.dataset.commit()
             return False
+
+        self._partition.state = self._partition.STATES.BUILT
 
         self.close()
 
+        self._partition.set_stats(self._stats.stats())
+
+        self._partition.set_coverage(self._stats.stats())
+
+        self._partition._bundle.dataset.commit()
         return True

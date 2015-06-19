@@ -8,12 +8,9 @@ Created on Jun 22, 2012
 
 import unittest
 from ambry.identity import *
-import time, logging
-import ambry.util
-from ambry.util import install_test_logger
+
 
 from ambry.orm import Database, Dataset
-
 
 
 class TestBase(unittest.TestCase):

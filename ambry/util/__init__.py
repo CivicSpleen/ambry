@@ -1,6 +1,6 @@
 """Misc support code.
 
-Copyright (c) 2013 Clarinova. This file is licensed under the terms of
+Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of
 the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
@@ -20,10 +20,8 @@ from flo import *  # Legacy; should convert clients to direct import
 
 logger_init = set()
 
-
 def get_logger(name, file_name=None, stream=None, template=None, propagate=False):
     return _get_logger(name, file_name=file_name, stream=stream, template=template, propagate=propagate)
-
 
 def _get_logger(name, file_name=None, stream=None, template=None, propagate=False):
     """Get a logger by name.
@@ -47,28 +45,6 @@ def _get_logger(name, file_name=None, stream=None, template=None, propagate=Fals
     logger.addHandler(handler)
 
     return logger
-
-
-def install_test_logger(test_file_name):
-    def test_get_logger(name, file_name=None, stream=None, template=None, clear=False, propagate=False):
-        """A quiet logger used for testing. """
-
-        import logging
-
-        logger = logging.getLogger(name)
-        hdlr = logging.FileHandler(test_file_name)
-        formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-        hdlr.setFormatter(formatter)
-        logger.addHandler(hdlr)
-        logger.setLevel(logging.DEBUG)
-
-        return logger
-
-    return test_get_logger
-
-
-def clear_logger(name):
-    logger_init.remove(name)
 
 
 def rm_rf(d):

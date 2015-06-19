@@ -640,4 +640,4 @@ class PartitionProxy(Proxy):
 
         assert bool(self._bundle._build_fs)
 
-        return Inserter(self.table, new_partition_data_file(self._bundle._build_fs, self.cache_key) )
+        return Inserter(self, new_partition_data_file(self._bundle._build_fs, self.cache_key) )

@@ -504,10 +504,8 @@ class CsvBundle(LoaderBundle):
 class ExcelBuildBundle(CsvBundle):
     pass
 
-
 class TsvBuildBundle(CsvBundle):
     delimiter = '\t'
-
 
 
 class GeoBuildBundle(LoaderBundle):

@@ -79,8 +79,6 @@ class Column(Base):
 
     codes = relationship(Code, backref='column',order_by="asc(Code.key)", cascade="save-update, delete, delete-orphan")
 
-    stats = relationship(ColumnStat, backref='column', cascade="delete, delete-orphan")
-
     __table_args__ = (
         UniqueConstraint( 'c_sequence_id','c_t_vid', name='_uc_columns_1'),
     )
@@ -146,6 +144,13 @@ class Column(Base):
     def type_is_int(self):
         return self.datatype in ( Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64)
 
+    def type_is_real(self):
+        return self.datatype in ( Column.REAL, Column.FLOAT)
+
+    def type_is_number(self):
+        return self.datatype in ( Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64,
+                                  Column.DATATYPE_NUMERIC, Column.DATATYPE_REAL, Column.DATATYPE_FLOAT)
+
     def type_is_text(self):
         return self.datatype in ( Column.DATATYPE_TEXT, Column.DATATYPE_CHAR, Column.DATATYPE_VARCHAR)
 
@@ -158,7 +163,11 @@ class Column(Base):
         return 'gvid' in self.name
 
     def type_is_time(self):
-        return self.datatype in (Column.DATATYPE_TIME, Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE )
+        return self.datatype in (Column.DATATYPE_TIME, Column.DATATYPE_TIMESTAMP)
+
+    def type_is_date(self):
+        return self.datatype in (Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE )
+
 
     @property
     def sqlalchemy_type(self):

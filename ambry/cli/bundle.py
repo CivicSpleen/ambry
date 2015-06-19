@@ -442,6 +442,7 @@ def bundle_info(args, b, st, rc):
                                     return ''.join(parts[int(round(x / fraction))] for x in nums)
                                 else:
                                     return ''
+
                             vals = sparks(int(x[1]) for x in s.hist['values'])
                         else:
                             vals = ''
