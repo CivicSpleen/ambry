@@ -815,7 +815,6 @@ class BuildBundle(Bundle):
         """Resolve a conflict between the sources section of the build.yaml file and the source.csv file
         by comparing last modification times. """
 
-        # This is a TOTAL HACK. The sources metadata should be removed, and will be in a future version.
 
         from ambry.util import is_newer
         from sources import NoData

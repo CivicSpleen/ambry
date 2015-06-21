@@ -30,7 +30,7 @@ This is a more involved tutorial that covers the entire process of creating a ne
 Other Guides
 ************
 
-- :ref:`Solving common challenges <common_challenges>`
+- :ref:`Solving common challenges and resolving errors<common_challenges>`
 - :ref:`Overview of the bundle structure <bundle_structure>`
     
     

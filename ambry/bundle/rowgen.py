@@ -264,8 +264,8 @@ class DelimitedRowGenerator(RowGenerator):
         self.line_mangler = line_mangler
 
     def get_csv_reader(self, f, sniff=False):
-        import unicodecsv as csv
-        #import csv
+        import unicodecsv
+        import csv
 
         if sniff:
             dialect = csv.Sniffer().sniff(f.read(5000))
@@ -277,13 +277,18 @@ class DelimitedRowGenerator(RowGenerator):
 
         if self.line_mangler:
 
-            def lm():
+            def lm(f):
                 for l in f:
                     yield self.line_mangler(l)
 
-            return csv.reader( lm(), delimiter=delimiter, dialect=dialect, encoding=self.encoding)
+            f = lm(f)
+
+        if self.encoding in (None, 'ascii', 'unknown'):
+            return csv.reader(f, delimiter=delimiter, dialect=dialect)
         else:
-            return csv.reader(f, delimiter=delimiter, dialect=dialect, encoding=self.encoding)
+            return unicodecsv.reader(f, delimiter=delimiter, dialect=dialect, encoding=self.encoding)
+
+
 
     def _yield_rows(self):
 
@@ -329,9 +334,7 @@ class ExcelRowGenerator(RowGenerator):
                 except ValueError:
                     return None
 
-
         return excel_date
-
 
     def make_date_caster(self):
         """Make a date caster function that can convert dates from this workbook. This is required
@@ -447,7 +450,7 @@ class RowSpecIntuiter(object):
         self.lines = []
         self.lengths = defaultdict(int)
 
-        # Get the non-numm length of all of the rows, then find the midpoint between the min a max
+        # Get the non-num length of all of the rows, then find the midpoint between the min a max
         # We'll use that for the break point between comments and data / header.
         for i, row in enumerate(row_gen):
             if i > 100:
@@ -459,7 +462,10 @@ class RowSpecIntuiter(object):
 
             self.lengths[lng] += 1
 
-        self.mid_length = (min(self.lengths.keys()) + max(self.lengths.keys())) / 2
+        if self.lengths:
+            self.mid_length = (min(self.lengths.keys()) + max(self.lengths.keys())) / 2
+        else:
+            self.mid_length = 0
 
     def non_nulls(self, row):
         """Return the non-empty values from a row"""
@@ -488,7 +494,6 @@ class RowSpecIntuiter(object):
             is_header_comment_line(i,row)
         """
 
-
         self.row_gen.reset()
 
         for row in self.row_gen.raw_row_gen:
@@ -512,7 +517,7 @@ class RowSpecIntuiter(object):
 
             elif self.data_start_line and not self.data_end_line:
                 if not is_dl:
-                    print 'END DL', is_dl, i, row
+
                     self.data_end_line = i
 
         return dict(
@@ -521,6 +526,3 @@ class RowSpecIntuiter(object):
             header_comment_lines=self.header_comments,
             header_lines=self.header
         )
-
-
-

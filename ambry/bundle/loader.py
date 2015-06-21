@@ -142,7 +142,7 @@ class LoaderBundle(BuildBundle):
         fn = self.filesystem.download(source_name)
 
         # The second clause handles cases where the filename is part of the query: http://example.com/download?file=foo.zip
-        if fn.endswith('.zip') or source.url.endswith('zip'):
+        if fn.endswith('.zip') or source.url.endswith('zip') or source.urlfiletype == 'zip':
             sub_file = source.file
             fn = self.filesystem.unzip(fn, regex=sub_file)
 
@@ -351,7 +351,6 @@ class LoaderBundle(BuildBundle):
                                    description=proto_column.description,
                                    proto_vid = proto_name)
 
-
         return table
 
     def make_table_for_source(self, source_name):
@@ -390,8 +389,6 @@ class LoaderBundle(BuildBundle):
             rg = self.row_gen_for_source(source_name, use_row_spec = False)
 
             ri = row_intuitier_class(rg).intuit()
-
-            print source_name, ri
 
             if len(ri['header_comment_lines']) > 30:
                 self.error("Too many lines in rowspec.header_comment_lines ({}) for source {}; skipping rowspec"

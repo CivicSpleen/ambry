@@ -4,6 +4,11 @@
 Configuring Sources
 ===================
 
+.. seealso:: 
+
+    :ref:`Solving common challenges and errors<common_challenges>`
+
+
 In the :ref:`last section <bundle_configuration>` we created a new bundle and  set the basic metadata. Now we can configure sources and use the Loader class to create tables and load them with data. 
 
 Source File Entries
@@ -151,10 +156,16 @@ In our example, the  :file:`build/table01-raw-rows.csv` file starts with 5 lines
 
 When the command finishes, it will have updated both the `sources` section of :file:`meta/build.yaml` and the spreadsheet version in :file:`meta/sources.csv`
 
+
 .. important::
     The `sources` section of :file:`meta/build.yaml` has the same information as :file:`meta/sources.csv`. Ambry will replace the older of the two with the data from the one that has change most recently. To clear out the sources, you'll need to remove all of the records from both. Its a poor design, and doesn't work right all of the time, so you may have to delete all of one, the other, or both to get changes to propagate. Or try re-running :command:`bambry meta --clean` or :command:`bambry prepare`
     
 The row intuiter often gets the `data_end_line` wrong. Often it's just best to delete that value, but for the USDA example, the value is guessed correctly, and it is the seperation between two different tables in the same file, which we will deal with later. 
+
+.. important::
+    If your file is a normal CSV file, with the header on line 1, you don't need to run :command:`bambry run meta_set_row_specs`, and you **don't even need the row_spec section.** Just ignore it and the Row Generator will assume the header is on line 1. 
+    
+    Always check the results of :command:`bambry run meta_set_row_specs` with the file. The intuiter often guesses wrong. 
 
 The Row Intuiter does a pretty good job, but doesn't always get everything right. In our example, the row intuiter guessed these values for table01:
 

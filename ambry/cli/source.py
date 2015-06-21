@@ -198,7 +198,7 @@ def source_get(args, l, st, rc):
 def source_number(args, l, st, rc):
     from ..identity import NumberServer
 
-    nsconfig = rc.group('numbers')
+    nsconfig = rc.service('numbers')
 
     if args.key:
         nsconfig['key'] = args.key

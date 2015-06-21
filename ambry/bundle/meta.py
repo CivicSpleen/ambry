@@ -101,7 +101,8 @@ class SourceTerm(DictTerm):
     dd_url = ScalarTerm(store_none=False)  # Data Dictitionary URL
     file = ScalarTerm(store_none=False)  # A name or regex to extract from a multi-file ZIP
     encoding = ScalarTerm(store_none=False)  # Encoding name for the UnicodeCsv file reader, usuallly 'utf8' or 'latin-1'
-    filetype = ScalarTerm(store_none=False)
+    filetype = ScalarTerm(store_none=False) # Force the extension of the file  that the Row Generator processed
+    urlfiletype = ScalarTerm(store_none=False) # Force extension of url, usually forced to 'zip'
     # For the LoaderBundle, use this file type ( file extensino ) rather than from the url
 
     segment = ScalarTerm(store_none=False)  # Specify a sub-component of the file, like a sheet in an excel workbook.
