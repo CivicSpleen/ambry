@@ -80,7 +80,6 @@ class Test(TestBase):
 
         self.dump_database('config', db)
 
-
     def test_prepare(self):
         from test import bundlefiles
         from os.path import dirname, join

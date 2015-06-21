@@ -11,3 +11,4 @@
 "example",10,"bg_gvid",,,"VARCHAR",,"A Blockgroup gvid reference"
 "example",11,"year",,,"INTEGER",,"A Year"
 "example",12,"date",,,"DATE",,"A Date"
+"example",13,"time",,,"TIME",,"A Time"

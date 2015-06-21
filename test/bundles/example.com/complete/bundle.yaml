@@ -15,7 +15,7 @@ about:
     - example
     - demo
     time: 2010
-    title: Simple Example Bundle
+    title: A More Complete Example Bundle
 contact_bundle:
     creator:
         email: bob@bob.com
@@ -37,7 +37,7 @@ external_documentation:
 identity:
     bspace: null
     btime: null
-    dataset: simple
+    dataset: complete
     id: dfY0NJscai
     revision: 3
     source: example.com

@@ -49,9 +49,9 @@ class Dataset(Base):
 
     path = None  # Set by the Library and other queries.
 
-    tables = relationship("Table",backref='dataset',cascade="save-update, delete, delete-orphan")
+    tables = relationship("Table",backref='dataset',cascade="all, delete-orphan")
 
-    partitions = relationship("Partition",backref='dataset',cascade="delete, delete-orphan")
+    partitions = relationship("Partition",backref='dataset',cascade="all, delete-orphan")
 
     configs = relationship('Config', backref='dataset', cascade="all, delete-orphan")
 
@@ -60,6 +60,8 @@ class Dataset(Base):
     colmaps = relationship('ColumnMap', backref='dataset', cascade="all, delete-orphan")
 
     sources = relationship('DataSource', backref='dataset', cascade="all, delete-orphan")
+
+    codes = relationship('Code', backref='dataset', cascade="all, delete-orphan")
 
     _database = None # Reference to the database, when dataset is retrieved from a database object
 
@@ -179,6 +181,16 @@ class Dataset(Base):
         self.partitions.append(p)
 
         return p
+
+    def partition(self, ref):
+
+        from exc import NotFoundError
+
+        for p in self.partitions:
+            if str(ref) == p.name or str(ref) == p.id or str(ref) == p.vid:
+                return p
+
+        raise NotFoundError("Failed to find partition for ref '{}' in dataset '{}'".format(ref, self.name))
 
     def bsfile(self, name):
         """Return a Build Source file ref, creating a new one if the one requested does not exist"""

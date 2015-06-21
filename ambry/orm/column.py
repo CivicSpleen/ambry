@@ -53,6 +53,7 @@ class Column(Base):
     caster = SAColumn('c_caster', Text)
     units = SAColumn('c_units', Text)
     universe = SAColumn('c_universe', Text)
+    lom = SAColumn('c_lom', String(1))
 
     # Reference to a column that provides an example of how this column should
     # be used.

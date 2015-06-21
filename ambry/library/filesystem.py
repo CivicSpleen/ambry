@@ -47,3 +47,7 @@ class LibraryFilesystem():
 
     def build(self, *args):
         return self._compose('build',args)
+
+    def search(self, *args):
+        """For file-based search systems, like Whoosh"""
+        return self._compose('search',args)

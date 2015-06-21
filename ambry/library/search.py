@@ -41,16 +41,17 @@ class SearchResult(object):
 
         return self.b_score + (log(self.p_score) if self.p_score else 0)
 
-
 class Search(object):
     def __init__(self, library):
+        from fs.opener import fsopendir
 
         self.library = library
 
-        self.cache = self.library._doc_cache
+        self.root_dir = fsopendir(self.library._fs.search()).getsyspath('/')
 
-        self.d_index_dir = self.cache.path('search/dataset', propagate=False, missing_ok=True)
-        self.i_index_dir = self.cache.path('search/identifiers', propagate=False, missing_ok=True)
+        self.d_index_dir = os.path.join(self.root_dir, 'datasets')
+        self.i_index_dir = os.path.join(self.root_dir, 'identifiers')
+
         self._dataset_index = None
         self._dataset_writer = None
         self._identifier_index = None
@@ -74,8 +75,8 @@ class Search(object):
 
             else:
                 index = open_dir(dir)
-        except:
-            self.library.logger.error("Failed to open search index at: '{}' ".format(dir))
+        except Exception as e:
+            self.library.logger.error("Failed to open search index at: '{}': {} ".format(dir, e))
             raise
 
 

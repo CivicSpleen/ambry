@@ -10,12 +10,14 @@ filesystem:
     documentation: '{root}/doc'
     build: '{root}/build'
     source: '{root}/source'
+    search: '{root}/search'
 
 library:
   database: sqlite://
   warehouse: sqlite://
   remotes:
-  - '{root}/remote'
+    test: '{root}/test-remote'
+    example: '{root}/example-remote'
 
 numbers:
     host: numbers.ambry.io

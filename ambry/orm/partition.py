@@ -64,6 +64,7 @@ class Partition(Base, DictableMixin):
 
     space_coverage = SAColumn('f_scov', MutationList.as_mutable(JSONEncodedObj))
     time_coverage = SAColumn('f_tcov', MutationList.as_mutable(JSONEncodedObj))
+    grain_coverage = SAColumn('f_gcov', MutationList.as_mutable(JSONEncodedObj))
 
     installed = SAColumn('p_installed', String(100))
 
@@ -75,7 +76,7 @@ class Partition(Base, DictableMixin):
     # can be primary in multiple partitions.
     table = relationship('Table', backref='partitions', foreign_keys='Partition.t_vid')
 
-    stats = relationship(ColumnStat, backref='partition', cascade="delete, delete-orphan")
+    stats = relationship(ColumnStat, backref='partition', cascade="all, delete-orphan")
 
     @property
     def identity(self):
@@ -134,9 +135,30 @@ class Partition(Base, DictableMixin):
 
         return cs
 
-    def set_coverage(self, stats):
-        """"Extract time space and grain coverage from the stats"""
+    def parse_gvid_or_place(self, gvid_or_place):
+        from geoid.civick import GVid
 
+        try:
+
+            return GVid.parse(gvid_or_place)
+        except KeyError:
+
+            places = list(self._bundle._library.search.search_identifiers(gvid_or_place))
+
+            if not places:
+                from ..dbexceptions import BuildError
+                self._bundle.error(
+                    ("Failed to find space identifier '{}' in full text identifier search  for partition '{}'")
+                        .format(gvid_or_place, str(self.identity)))
+                return None
+
+            score, gvid, typ, name = places[0]
+
+            return GVid.parse(gvid)
+
+    def set_coverage(self, stats):
+        """"Extract time space and grain coverage from the stats and store them in the partition"""
+        from ambry.util.datestimes import expand_to_years
         from geoid.util import isimplify, simplify
         from geoid.civick import GVid
         from dateutil import parser
@@ -145,19 +167,56 @@ class Partition(Base, DictableMixin):
 
         scov = set()
         tcov = set()
+        grains = set()
 
         for i, c in enumerate(self.table.columns):
             if sd[i].is_gvid:
-                scov |= set(str(x) for x in isimplify(GVid.parse(gvid) for gvid in sd[i].uniques))
+                scov |= set(x for x in isimplify(GVid.parse(gvid) for gvid in sd[i].uniques))
+                grains |= set(GVid.parse(gvid).summarize() for gvid in sd[i].uniques)
             elif sd[i].is_year:
                 tcov |= set(int(x) for x in sd[i].uniques)
             elif sd[i].is_date:
                 tcov |= set(parser.parse(x).year if isinstance(x,basestring) else x.year for x in sd[i].uniques)
 
-        self.space_coverage = sorted(scov)
+        ## Space Coverage
+
+        if 'source_data' in self.data:
+            for source_name, source in self.data['source_data'].items():
+                if 'space' in source:
+                    scov.add(self.parse_gvid_or_place(source['space']))
+
+        if self.identity.space:  # And from the partition name
+            scov.add(self.parse_gvid_or_place(self.identity.space))
+
+        # For geo_coverage, only includes the higher level summary levels, counties, states, places and urban areas
+        self.space_coverage = sorted([str(x) for x in scov if bool(x) and x.sl in (10, 40, 50, 60, 160, 400)])
+
+        ## Time Coverage
+
+        # From the source
+        # If there was a time value in the source that this partition was created from, then
+        # add it to the years.
+        if 'source_data' in self.data:
+            for source_name, source in self.data['source_data'].items():
+                if 'time' in source:
+                    for year in expand_to_years(source['time']):
+                        tcov.add(year)
+
+        # From the partition name
+        if self.identity.name.time:
+            for year in expand_to_years(self.identity.name.time):
+                tcov.add(year)
+
         self.time_coverage = sorted(tcov)
 
+        ## Grains
 
+        if 'source_data' in self.data:
+            for source_name, source in self.data['source_data'].items():
+                if 'grain' in source:
+                    grains.add(source['grain'])
+
+        self.grain_coverage = sorted(str(g) for g in grains if g)
 
     @property
     def stats(self):
@@ -180,125 +239,9 @@ class Partition(Base, DictableMixin):
 
         return Bunch(cols)
 
-    def compile_geo_coverage(self):
-        """Compile GVIDs for the geographic coverage and grain of the
-        partition."""
 
-        from geoid import civick
-        from geoid.util import isimplify
 
-        p_s = self.database.session
 
-        geo_cols = []
-        table_name = self.table.name
-        for c in self.table.columns:
-            if 'gvid' in c.name:
-                geo_cols.append(c.name)
-
-        geoids = set()
-
-        for gc in geo_cols:
-            for row in p_s.execute("SELECT DISTINCT {} FROM {}".format(gc, table_name)):
-                gvid = civick.GVid.parse(row[0])
-                if gvid:
-                    geoids.add(gvid)
-
-        # If there is source data ( from the sources metadata in the build set in the loader in build_create_partition)
-        # then use the time and space values as additional geo and time
-        # information.
-
-        extra_spaces = []
-        extra_grain = None
-
-        if 'source_data' in self.record.data:
-            for source_name, source in self.record.data['source_data'].items():
-                if 'space' in source:
-                    extra_spaces.append((source_name, source['space']))
-
-                if 'grain' in source:
-                    extra_grain = source['grain']
-
-        if self.identity.space:  # And from the partition name
-            extra_spaces.append(('pname', self.identity.space))
-
-        for source_name, space in extra_spaces:
-            try:
-                civick.GVid.parse(space)
-                # g = civick.GVid.parse(space)
-            except KeyError:
-
-                places = list(self.bundle.library.search.search_identifiers(space))
-
-                if not places:
-                    from ..dbexceptions import BuildError
-
-                    raise BuildError(
-                        ("Failed to find space identifier '{}' in full text identifier search"
-                         " for partition '{}' and source name '{}'").format(
-                            space, str(self.identity), source_name))
-
-                score, gvid, typ, name = places[0]
-
-                self.bundle.log(
-                    "Resolving space '{}' from source '{}' to {}/{}".format(space, source_name, name, gvid))
-
-                geoids.add(civick.GVid.parse(gvid))
-
-        coverage = isimplify(geoids)
-        grain = set(g.summarize() for g in geoids)
-
-        if extra_grain:
-            grain.add(extra_grain)
-
-        # For geo_coverage, only includes the higher level summary levels,
-        # counties, states, places and urban areas
-        self.record.data['geo_coverage'] = sorted(
-            [str(x) for x in coverage if bool(x) and x.sl in (10, 40, 50, 60, 160, 400)])
-        self.record.data['geo_grain'] = sorted([str(x) for x in grain])
-
-        # Now add the geo and time coverage specified in the table. These values for space and time usually are
-        # specified in the sources metadata, and are copied into the
-
-        s = self.bundle.database.session
-        s.merge(self.record)
-        s.commit()
-
-    def compile_time_coverage(self):
-        from ambry.util.datestimes import expand_to_years
-
-        date_cols = []
-        years = set()
-        table_name = self.table.name
-        for c in self.table.columns:
-            if 'year' in c.name:
-                date_cols.append(c.name)
-
-        p_s = self.database.session
-
-        # From the table
-        for dc in date_cols:
-            for row in p_s.execute("SELECT DISTINCT {} FROM {}".format(dc, table_name)):
-                years.add(row[0])
-
-        # From the source
-        # If there was a time value in the source that this partition was created from, then
-        # add it to the years.
-        if 'source_data' in self.record.data:
-            for source_name, source in self.record.data['source_data'].items():
-                if 'time' in source:
-                    for year in expand_to_years(source['time']):
-                        years.add(year)
-
-        # From the partition name
-        if self.identity.name.time:
-            for year in expand_to_years(self.identity.name.time):
-                years.add(year)
-
-        self.record.data['time_coverage'] = list(years)
-
-        s = self.bundle.database.session
-        s.merge(self.record)
-        s.commit()
 
     def build_sample(self):
 

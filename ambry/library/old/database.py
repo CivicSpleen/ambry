@@ -22,9 +22,6 @@ from collections import namedtuple
 from sqlalchemy.exc import IntegrityError
 
 
-
-
-
 class LibraryDb(object):
 
     """Represents the Sqlite database that holds metadata for all installed
@@ -39,12 +36,6 @@ class LibraryDb(object):
         self.dbname = dbname
         self.username = username
         self.password = password
-
-
-
-
-
-
 
         self._partition_collection = []
 

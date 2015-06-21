@@ -311,6 +311,20 @@ class Table(Base, DictableMixin):
 
         return x
 
+    def update_from_stats(self, stats):
+        """Update columns based on partition statistics"""
+
+        sd = dict(stats)
+
+        for i, c in enumerate(self.columns):
+            stat = sd[i]
+
+            if stat.size and stat.size > c.size:
+                c.size = stat.size
+
+            c.lom = stat.lom
+
+
     @staticmethod
     def before_insert(mapper, conn, target):
         """event.listen method for Sqlalchemy to set the seqience_id for this

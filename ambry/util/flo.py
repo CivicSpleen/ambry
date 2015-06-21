@@ -207,6 +207,18 @@ class MetadataFlo(object):
         else:
             return self.o.readlines()
 
+    def __iter__(self):
+        return self.o.__iter__()
+
+    def next(self):
+
+        line = self.readline()
+
+        if line:
+            return line
+        else:
+            return None
+
     def write(self, d):
         self.o.write(d)
 

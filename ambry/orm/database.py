@@ -25,7 +25,7 @@ scheme_map = {'postgis': 'postgresql+psycopg2', 'spatialite': 'sqlite' }
 
 class Database(object):
 
-    def __init__(self, dsn):
+    def __init__(self, dsn, echo = False):
         from ..util import parse_url_to_dict
 
         self.dsn = dsn
@@ -40,6 +40,7 @@ class Database(object):
         self._engine = None
         self._connection = None
         self._schema = None
+        self._echo = echo
 
         self.logger = get_logger(__name__)
 
@@ -139,7 +140,7 @@ class Database(object):
             # Easier than constructing the pool
             # self._engine.pool._use_threadlocal = True
 
-            self._engine = create_engine(self.dsn, echo=False)
+            self._engine = create_engine(self.dsn, echo=self._echo)
 
             if self.driver == 'sqlite':
                 event.listen(self._engine, 'connect', _pragma_on_connect)
@@ -384,11 +385,12 @@ class Database(object):
 
         return self.dataset(ROOT_CONFIG_NAME_V)
 
-    def dataset(self, ref):
+    def dataset(self, ref, load_all=False):
         """Return a dataset, given a vid or id
 
         :param ref: Vid or id  for a dataset. If an id is provided, will it will return the one with the
         largest revision number
+        :param load_all: Use a query that eagerly loads everything.
         :return: :class:`ambry.orm.Dataset`
 
         """
@@ -410,6 +412,20 @@ class Database(object):
 
         return ds
 
+    def copy_dataset(self, ds):
+
+        # Makesure everything we want to copy is loaded
+        ds.tables
+        ds.partitions
+        ds.files
+        ds.configs
+        ds.stats
+        ds.codes
+
+        self.session.merge(ds)
+        self.session.commit()
+
+        return self.dataset(ds.vid)
 
 
 def _pragma_on_connect(dbapi_con, con_record):

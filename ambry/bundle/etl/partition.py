@@ -17,7 +17,7 @@ def new_partition_data_file(fs, path):
     dn, file_ext = split(path)
     fn, ext = splitext(file_ext)
 
-    if not fs.exists(dn):
+    if fs and not fs.exists(dn):
         fs.makedir(dn, recursive=True)
 
     if not ext:
@@ -27,7 +27,6 @@ def new_partition_data_file(fs, path):
 
 class PartitionDataFile(object):
     """An accessor for files that hold Partition Data"""
-
 
     def __init__(self, fs, path):
         """
@@ -58,6 +57,13 @@ class PartitionDataFile(object):
         :return:
         """
         return NotImplementedError()
+
+    @property
+    def path(self):
+        return self._path
+
+    def open(self, *args, **kwargs):
+        return self._fs.open(self.munged_path, *args, **kwargs)
 
     @property
     def rows(self):
@@ -93,25 +99,48 @@ class PartitionCsvDataFile(PartitionDataFile):
         self._reader = None
         self._writer = None
 
-    @property
-    def writer(self):
+    def openr(self):
+        """Open for reading"""
+        if self._file:
+            self._file.close()
+
+        self._file = self._fs.open(self.munged_path, mode='rb')
+
+        return self._file
+
+    def openw(self):
+        """Open for writing"""
+
+        if self._file:
+            self._file.close()
+
+        self._file = self._fs.open(self.munged_path, mode='wb', buffering=1 * 1024 * 1024)
+
+        return self._file
+
+    def writer(self, stream=None):
         import unicodecsv as csv
 
         if not self._writer:
-            self.close()
-            self._file = self._fs.open(self.munged_path, mode = 'wb', buffering=1*1024*1024)
-            self._writer = csv.writer(self._file)
+
+
+            if not stream:
+                stream = self.openw()
+
+            self._writer = csv.writer(stream)
 
         return self._writer
 
-    @property
-    def reader(self):
+    def reader(self, stream = None):
         import unicodecsv as csv
 
         if not self._reader:
-            self.close()
-            self._file = self._fs.open(self.munged_path, mode='rb')
-            self._reader = csv.reader(self._file)
+
+            if not stream:
+                stream = self.openw()
+
+
+            self._reader = csv.reader(stream)
 
         return self._reader
 
@@ -142,11 +171,11 @@ class PartitionCsvDataFile(PartitionDataFile):
             self._header = list(row)
 
         if isinstance(row, (list, tuple)):
-            self.writer.writerow(row)
+            self.writer().writerow(row)
         else:
             # Assume the row has a map interface, and write out the row in the order of the
             # column names provided in the header
-            self.writer.writerow([row.get(k,None) for k in self._header])
+            self.writer().writerow([row.get(k,None) for k in self._header])
 
         self._nrows += 1
 
@@ -187,6 +216,7 @@ class PartitionCsvDataFile(PartitionDataFile):
     def size(self):
         """Return the size of the file, in data rows"""
         return NotImplementedError()
+
 
 class PartitionMsgpackDataFile(PartitionDataFile):
     """A reader and writer for Partition files in MessagePack format, which is about 60%  faster than unicode
@@ -321,7 +351,12 @@ class Inserter(object):
         self.row_num += 1
 
     def close(self):
-        pass
+
+        self._partition.state = self._partition.STATES.BUILT
+        self._partition.set_stats(self._stats.stats())
+        self._partition.set_coverage(self._stats.stats())
+        self._partition.table.update_from_stats(self._stats.stats())
+        self._partition._bundle.dataset.commit()
 
     def __enter__(self):
 
@@ -336,13 +371,6 @@ class Inserter(object):
             self._partition._bundle.dataset.commit()
             return False
 
-        self._partition.state = self._partition.STATES.BUILT
-
         self.close()
 
-        self._partition.set_stats(self._stats.stats())
-
-        self._partition.set_coverage(self._stats.stats())
-
-        self._partition._bundle.dataset.commit()
         return True

@@ -12,7 +12,7 @@ def new_library(config=None):
     from ..orm import Database
     from .filesystem import LibraryFilesystem
     from boto.exception import S3ResponseError  # the ckcache lib should return its own exception
-
+    from search import Search
     if config is None:
         from ..run import get_runconfig
         config = get_runconfig()
@@ -22,7 +22,7 @@ def new_library(config=None):
     for name, remote in config.library().get('remotes', {}).items():
 
         try:
-            remotes[name] = new_cache(remote)
+            remotes[name] = new_cache(remote, config.filesystem('root'))
         except S3ResponseError as e:
             from ..util import get_logger
 
@@ -40,7 +40,8 @@ def new_library(config=None):
     l = Library(database=db,
                 filesystem = lfs,
                 warehouse = warehouse,
-                remotes=remotes)
+                remotes=remotes
+                )
 
     return l
 
@@ -55,6 +56,9 @@ class Library(object):
         self._fs = filesystem
         self._warehouse = warehouse
         self._remotes = remotes
+        self._search = None
+
+        self.logger = get_logger(__name__)
 
     def commit(self):
         self._db.commit()
@@ -85,64 +89,78 @@ class Library(object):
 
         return Bundle(ds, self, source_fs=fsopendir(source_dir))
 
+    def partition(self, ref):
+        from ambry.identity import ObjectNumber
+
+        on = ObjectNumber.parse(ref)
+        ds_on = on.as_dataset
+
+        ds = self._db.dataset(ds_on) # Could do it in on SQL query, but this is easier.
+
+        return ds.partition(ref)
+
     ##
     ## Storing
     ##
 
-    def put_bundle(self, bundle, source=None, install_partitions=True, file_state='installed', commit=True,
-                   force=False):
-        """Install the records for the dataset, tables, columns and possibly
-        partitions. Does not install file references """
+    def install_to_remote(self,b):
+        import tempfile
+        from ambry.orm.database import Database
+        from ambry.util import copy_file_or_flo
 
-        if not force and self.files.query.ref(bundle.identity.vid).type(Files.TYPE.BUNDLE).one_maybe:
-            return self.cache.path(bundle.identity.cache_key), False
+        try:
+            td = tempfile.mkdtemp()
 
-        self.database.install_bundle(bundle)
+            db = Database('sqlite:////{}/{}.db'.format(td, b.identity.vid))
+            print "Using: ", db.path
+            db.open()
 
-        if source is None:
-            source = self.cache.repo_id
+            ds = db.copy_dataset(b.dataset)
 
-        installed = self.files.install_bundle_file(bundle, source, commit=commit, state=file_state)
+            remote = self.remote(b.metadata.about.access)
 
-        if install_partitions:
-            for p in bundle.partitions.all:
-                self.put_partition(p, source, commit=commit, file_state=file_state)
+            remote.put(db.path, b.identity.cache_key + ".db")
 
-        # Copy the file in if we don't have it already
-        if not self.cache.has(bundle.identity.cache_key):
-            self.cache.put(bundle.database.path, bundle.identity.cache_key)
+            for p in b.partitions:
+                with remote.put_stream(p.datafile().munged_path) as f:
+                    copy_file_or_flo(p.datafile().open('rb'), f)
 
-        if self._doc_cache:
-            self.search.index_dataset(bundle, force=True)
+        finally:
+            from shutil import rmtree
 
-            for partition in bundle.partitions:
-                self.search.index_partition(partition, force=True)
+            rmtree(td)
 
-            self.search.commit()
+    def stream_partition(self, ref):
+        """Yield rows of a partition"""
+        from ambry.bundle.partitions import PartitionProxy
 
-        self.mark_updated(vid=bundle.identity.vid)
-        self.mark_updated(key="bundle_index")
-        self.mark_updated(key="library_info")
+        p_orm = self.partition(ref)
 
-        return self.cache.path(bundle.identity.cache_key), installed
+        b = self.bundle(p_orm.d_vid)
 
-    def put_partition(self, partition, source=None, file_state='installed', commit=True):
-        """Install the record and file reference for the partition """
+        p = PartitionProxy(b, p_orm)
 
-        if source is None:
-            source = self.cache.repo_id
+        remote = self.remote(p.dataset.config.metadata.about.access)
 
-        installed = self.files.install_partition_file(partition, source, commit=commit, state=file_state)
+        with remote.get_stream(p.datafile().munged_path) as f:
 
-        # Ref partitions use the file of an earlier version, so there is no file to install
-        if not self.cache.has(partition.identity.cache_key) and os.path.exists(partition.database.path):
-            self.cache.put(partition.database.path, partition.identity.cache_key)
+            reader = p.datafile().reader(f)
 
-        return self.cache.path(partition.identity.cache_key), installed
+            header = reader.next()
+
+            for a,b in  zip(header, (c.name for c in p.table.columns)):
+                if a != b:
+                    raise Exception("Partition header {} is different from column name {}".format(a,b))
+
+            for row in reader:
+                yield row
+
 
     def remove(self, bundle):
         '''Remove a bundle from the library, and delete the configuration for
         it from the library database'''
+
+        raise NotImplementedError
 
         self.database.remove_bundle(bundle)
 
@@ -150,3 +168,13 @@ class Library(object):
 
         self.cache.remove(bundle.identity.cache_key, propagate=True)
 
+    @property
+    def search(self):
+        from search import Search
+        if not self._search:
+            self._search = Search(self)
+
+        return self._search
+
+    def remote(self,name):
+        return self._remotes[name]

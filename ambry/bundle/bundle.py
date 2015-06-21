@@ -19,6 +19,8 @@ class Bundle(object):
         self._library = library
         self._logger = None
 
+        assert bool(library)
+
         self._log_level = logging.INFO
         self._source_fs = source_fs
         self._build_fs = build_fs

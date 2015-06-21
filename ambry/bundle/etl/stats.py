@@ -46,11 +46,11 @@ class StatSet(object):
         elif column.type_is_number():
             lom = StatSet.LOM.INTERVAL
 
-
         self.column_name = column.name
         self.lom = lom
         self.n = 0
         self.counts = Counter()
+        self.size = None
         self.stats = livestats.LiveStats() #runstats.Statistics()
 
         self.bin_min = None
@@ -64,6 +64,8 @@ class StatSet(object):
         from math import sqrt
 
         self.n += 1
+
+        self.size = max(self.size, len(str(v)))
 
         if self.lom == self.LOM.NOMINAL or self.lom == self.LOM.ORDINAL:
             if self.is_time or self.is_date:
