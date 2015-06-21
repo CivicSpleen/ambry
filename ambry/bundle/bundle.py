@@ -71,15 +71,13 @@ class Bundle(object):
         return self.dataset.config.metadata
 
     @property
-    def builder(self):
-        """Return the build state machine"""
-
-        return self._state_machine_class(self)
-
-    @property
     def source_files(self):
         from files import BuildSourceFileAccessor
         return BuildSourceFileAccessor(self.dataset, self._source_fs)
+
+    @property
+    def source_fs(self):
+        return self._source_fs
 
     @property
     def logger(self):

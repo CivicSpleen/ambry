@@ -4,24 +4,7 @@ from ambry.bundle import Bundle
 
 class Test(TestBase):
 
-    def setup_bundle(self, name):
-        from test import bundles
-        from os.path import dirname, join
-        from fs.opener import fsopendir
-        from ambry.library import new_library
 
-        rc = self.get_rc()
-
-        self.library = new_library(rc)
-
-        self.db = self.library._db
-
-        mem_fs = fsopendir("mem://")
-        build_fs = fsopendir("mem://")
-
-        self.copy_bundle_files(fsopendir(join(dirname(bundles.__file__), 'example.com', name)), mem_fs)
-
-        return Bundle(self.new_db_dataset(), self.library, source_fs = mem_fs, build_fs =  build_fs)
 
     def test_simple_prepare(self):
         """Build the simple bundle"""
@@ -38,13 +21,13 @@ class Test(TestBase):
 
         self.assertTrue(len(b.dataset.configs) == 10)
 
-        self.assertFalse(b.builder.is_prepared)
-        self.assertFalse(b.builder.is_built)
+        self.assertFalse(b.is_prepared)
+        self.assertFalse(b.is_built)
 
-        b.prepare()
+        b.do_prepare()
 
-        self.assertTrue(b.builder.is_prepared)
-        self.assertFalse(b.builder.is_built)
+        self.assertTrue(b.is_prepared)
+        self.assertFalse(b.is_built)
 
         self.assertTrue(len(b.dataset.configs) > 10)
 
@@ -55,13 +38,16 @@ class Test(TestBase):
         self.assertTrue(len(b.dataset.tables) == 1 )
         self.assertEqual('example', b.dataset.tables[0].name)
 
-        self.assertEqual([u'id', u'uuid', u'int', u'float'],  [ c.name for c in b.dataset.tables[0].columns ] )
+        self.assertEqual([u'id', u'uuid', u'int', u'float', u'categorical', u'ordinal',
+                          u'gaussian', u'triangle', u'exponential', u'bg_gvid', u'year', u'date'],
+                         [ c.name for c in b.dataset.tables[0].columns ] )
 
 
     def test_simple_build(self):
         """Build the simple bundle"""
 
         b = self.setup_bundle('simple')
+
         b.sync()
         b = b.cast_to_subclass()
         self.assertEquals('synced',b.state)
@@ -161,8 +147,8 @@ class Test(TestBase):
 
         p = l.partition(list(b.partitions)[0].vid)
 
-        for row in l.stream_partition(p.vid):
-            print row
+        self.assertEqual(500, len(list(l.stream_partition(p.vid))))
+
 
 def suite():
     import unittest

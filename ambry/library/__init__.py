@@ -112,7 +112,7 @@ class Library(object):
             td = tempfile.mkdtemp()
 
             db = Database('sqlite:////{}/{}.db'.format(td, b.identity.vid))
-            print "Using: ", db.path
+
             db.open()
 
             ds = db.copy_dataset(b.dataset)

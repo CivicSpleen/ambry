@@ -18,40 +18,38 @@ class Test(TestBase):
         db = self.new_database()
         ds = self.new_db_dataset(db, n=0)
 
-        ds.config.meta.identity.foo = [1,2,3,4]
-        ds.config.meta.identity.bar = [5,6,7,8]
-        ds.config.meta.identity.bar = ['a','b','c','d']
+        ds.config.metadata.identity.foo = [1,2,3,4]
+        ds.config.metadata.identity.bar = [5,6,7,8]
+        ds.config.metadata.identity.bar = ['a','b','c','d']
         db.commit()
 
         ds = db.dataset(self.dn[0]) # need to refresh dataset after commit
 
-        self.assertItemsEqual([1, 2, 3, 4], list(ds.config.meta.identity.foo))
-        self.assertItemsEqual(['a','b','c','d'], list(ds.config.meta.identity.bar))
+        self.assertItemsEqual([1, 2, 3, 4], list(ds.config.metadata.identity.foo))
+        self.assertItemsEqual(['a','b','c','d'], list(ds.config.metadata.identity.bar))
 
-        self.assertEquals(2,len(ds.config.meta.identity))
+        self.assertEquals(2,len(ds.config.metadata.identity))
 
-        self.assertItemsEqual(['foo','bar'], [v for v in ds.config.meta.identity] )
+        self.assertItemsEqual(['foo','bar'], [v for v in ds.config.metadata.identity] )
 
-        self.assertItemsEqual([1, 2, 3, 4], dict(ds.config.meta.identity.items())['foo'])
-        self.assertItemsEqual(['a', 'b', 'c', 'd'], dict(ds.config.meta.identity.items())['bar'])
+        self.assertItemsEqual([1, 2, 3, 4], dict(ds.config.metadata.identity.items())['foo'])
+        self.assertItemsEqual(['a', 'b', 'c', 'd'], dict(ds.config.metadata.identity.items())['bar'])
 
         self.assertEquals('<config: d000000001001,identity,foo = [1, 2, 3, 4]>',
-                          str(dict(ds.config.meta.identity.records())['foo']))
+                          str(dict(ds.config.metadata.identity.records())['foo']))
 
-        self.assertEquals('metadata', dict(ds.config.meta.identity.records())['foo'].dict['type'])
-
-        with self.assertRaises(AttributeError):
-            ds.config.meta = 'foo'
+        self.assertEquals('metadata', dict(ds.config.metadata.identity.records())['foo'].dict['type'])
 
         with self.assertRaises(AttributeError):
-            ds.config.meta.identity = [1,2,3]
+            ds.config.metadata = 'foo'
 
         with self.assertRaises(AttributeError):
-            ds.config.meta.identity._dataset = None
+            ds.config.metadata.identity = [1,2,3]
+
+        with self.assertRaises(AttributeError):
+            ds.config.metadata.identity._dataset = None
 
 
-    def test_assignment(self):
-        pass
 
 def suite():
     import unittest

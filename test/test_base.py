@@ -42,9 +42,7 @@ class TestBase(unittest.TestCase):
     def new_dataset(self, n=1):
         return Dataset(**self.ds_params(n))
 
-    def new_db_dataset(self, db=None, n=1):
-        if db is None:
-            db = self.db
+    def new_db_dataset(self, db, n=1):
 
         return db.new_dataset(**self.ds_params(n))
 
@@ -71,6 +69,45 @@ class TestBase(unittest.TestCase):
         db.open()
 
         return db
+
+    def setup_bundle(self, name):
+        """Configure a bundle from existing sources"""
+        from test import bundles
+        from os.path import dirname, join
+        from fs.opener import fsopendir
+        from ambry.library import new_library
+        from ambry.bundle import Bundle
+
+        rc = self.get_rc()
+
+        self.library = new_library(rc)
+
+        self.db = self.library._db
+
+        mem_fs = fsopendir("mem://")
+        build_fs = fsopendir("mem://")
+
+        self.copy_bundle_files(fsopendir(join(dirname(bundles.__file__), 'example.com', name)), mem_fs)
+
+        return Bundle(self.new_db_dataset(self.db), self.library, source_fs=mem_fs, build_fs=build_fs)
+
+    def new_bundle(self):
+        """Configure a bundle from existing sources"""
+
+        from fs.opener import fsopendir
+        from ambry.library import new_library
+        from ambry.bundle import Bundle
+
+        rc = self.get_rc()
+
+        self.library = new_library(rc)
+
+        self.db = self.library._db
+
+        mem_fs = fsopendir("mem://")
+        build_fs = fsopendir("mem://")
+
+        return Bundle(self.new_db_dataset(self.db), self.library, source_fs=mem_fs, build_fs=build_fs)
 
     def tearDown(self):
         pass

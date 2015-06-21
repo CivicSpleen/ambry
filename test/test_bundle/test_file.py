@@ -41,7 +41,7 @@ class Test(unittest.TestCase):
         dn = str(DatasetNumber(1, 1))
 
         source_fs = fsopendir(dirname(bundlefiles.__file__))
-        mem_fs = fsopendir("/tmp/foobar/") # fsopendir("mem://")
+        mem_fs = fsopendir("mem://")
 
         db = Database(self.dsn)
         db.open()
