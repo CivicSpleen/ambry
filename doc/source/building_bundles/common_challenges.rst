@@ -115,9 +115,10 @@ Here is an example where the file has a ``.txt`` extension, but is actually a CS
         time: 2010
         url: s3://.../.../Public10.zip
 
-
 ZIP Urls without a ZIP Extension
 --------------------------------
+
+.. versionadded:: 0.3.956
 
 If a URL for a zip file doesn't end with `.zip`it may not be unzipped properly. You can force  the URL to be interpreted with `.zip` with the `urlfiletype` value
 
