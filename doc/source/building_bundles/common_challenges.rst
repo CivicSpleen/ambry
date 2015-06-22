@@ -134,7 +134,6 @@ If a URL for a zip file doesn't end with `.zip`it may not be unzipped properly. 
         url: https://data.medicare.gov/views/bg9k-emty/files/mCHhGYGNCpKUrsgtlt7YLwUxGS-LYOYkJBzBM7uzKlM?filename=Physician_Compare_Databases.zip&content_type=application%2Fzip%3B%20charset%3Dbinary
     
 
-
 Exceptions
 **********
 
