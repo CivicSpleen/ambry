@@ -6,20 +6,21 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 __docformat__ = 'restructuredtext en'
 
-from collections import MutableMapping
-
 from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, Integer, event
 
 from . import Base, JSONAlchemy
+
 
 class Config(Base):
 
     __tablename__ = 'config'
 
-    d_vid = SAColumn('co_d_vid', String(16),ForeignKey('datasets.d_vid'), primary_key=True,index=True)
-    type = SAColumn('co_type', String(200), primary_key=True)
-    group = SAColumn('co_group', String(200), primary_key=True)
-    key = SAColumn('co_key', String(200), primary_key=True)
+    id = SAColumn(Integer, primary_key=True, autoincrement=True)
+    d_vid = SAColumn('co_d_vid', String(16), ForeignKey('datasets.d_vid'), index=True)
+    type = SAColumn('co_type', String(200))  # DEPRECATED:
+    group = SAColumn('co_group', String(200))  # FIXME: convert to boolean is_group
+    key = SAColumn('co_key', String(200))
+    parent_id = SAColumn(Integer, ForeignKey('config.id'), nullable=True)
 
     value = SAColumn('co_value', JSONAlchemy(Text()))
     modified = SAColumn('co_modified', Integer())
@@ -29,7 +30,7 @@ class Config(Base):
         return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs}
 
     def __repr__(self):
-        return "<config: {},{},{} = {}>".format(self.d_vid,self.group,self.key,self.value)
+        return '<config: {},{},{} = {}>'.format(self.d_vid, self.group, self.key, self.value)
 
     @staticmethod
     def before_insert(mapper, conn, target):
