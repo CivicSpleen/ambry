@@ -102,7 +102,6 @@ class RowGenerator(object):
     @property
     def unmangled_header(self):
         if not self._unmangled_header:
-
             self.get_header()
 
         return self._unmangled_header
@@ -144,7 +143,6 @@ class RowGenerator(object):
 
             assert i < 8 or  self.line_number, 'The _yield_rows() method must increment self.line_number'
 
-
         self.put_row = row
 
         if self.line_number == self.data_start_line:
@@ -184,7 +182,6 @@ class RowGenerator(object):
             self._header = self.header_mangler(self.header)
         else:
             self._unmangled_header = self._header = self.header
-
 
         return self._header
 
@@ -239,7 +236,7 @@ class DelimitedRowGenerator(RowGenerator):
     delimiter = None
 
     def __init__(self, file, data_start_line=None, data_end_line=None, header_lines=None, header_comment_lines=None,
-                 header_mangler=None, line_mangler=None , delimiter=',', encoding='utf-8'):
+                 header_mangler=None, line_mangler=None, row_mangler = None, delimiter=',', encoding='utf-8'):
         """
 
         :param file:
@@ -262,6 +259,7 @@ class DelimitedRowGenerator(RowGenerator):
         self.encoding = encoding
         self.delimiter = delimiter
         self.line_mangler = line_mangler
+        self.row_mangler = row_mangler
 
     def get_csv_reader(self, f, sniff=False):
         import unicodecsv
@@ -279,7 +277,7 @@ class DelimitedRowGenerator(RowGenerator):
 
             def lm(f):
                 for l in f:
-                    yield self.line_mangler(l)
+                    yield self.line_mangler(self, l)
 
             f = lm(f)
 
@@ -287,8 +285,6 @@ class DelimitedRowGenerator(RowGenerator):
             return csv.reader(f, delimiter=delimiter, dialect=dialect)
         else:
             return unicodecsv.reader(f, delimiter=delimiter, dialect=dialect, encoding=self.encoding)
-
-
 
     def _yield_rows(self):
 
@@ -298,6 +294,24 @@ class DelimitedRowGenerator(RowGenerator):
                 self.line_number = i
                 yield row
 
+    def __iter__(self):
+        """Generate rows for a source file. The source value must be specified in the sources config"""
+
+        self.get_header()
+
+        for row in self.raw_row_gen:
+
+            if self.data_end_line and self.line_number >= self.data_end_line:
+                break
+
+            if self.put_row:
+                yield self.put_row
+                self.put_row = None
+
+            if self.row_mangler:
+                row = self.row_mangler(self, row)
+
+            yield row
 
 class ExcelRowGenerator(RowGenerator):
     def __init__(self, file, data_start_line=None, data_end_line=None, header_lines=None, header_comment_lines=None,
@@ -380,7 +394,6 @@ class ExcelRowGenerator(RowGenerator):
 
         self.workbook = wb
 
-
         s = wb.sheets()[self.segment if self.segment else 0]
 
         for i in range(0, s.nrows):
@@ -425,6 +438,31 @@ class GeneratorRowGenerator(RowGenerator):
     def _yield_rows(self):
 
         for i, line in enumerate(self.rrg_f()):
+            self.line_number = i
+            yield line
+
+class IteratorRowGenerator(RowGenerator):
+    """A RowGenerator that is constructed on an iterator
+
+    The first line generated must be the header
+    """
+
+    def __init__(self, raw_row_iter, header_mangler=None):
+        """
+
+        :param raw_row_gen_f: A raw row generator function
+        :param header_mangler: A function to alter the list of header values
+        :return:
+        """
+
+        self.rrg_i = raw_row_iter
+
+        super(GeneratorRowGenerator, self).__init__(None, data_start_line=2, data_end_line=None, header_lines=[0],
+                                                header_comment_lines=None, header_mangler=header_mangler)
+
+    def _yield_rows(self):
+
+        for i, line in enumerate(self.rrg_i):
             self.line_number = i
             yield line
 
@@ -526,3 +564,4 @@ class RowSpecIntuiter(object):
             header_comment_lines=self.header_comments,
             header_lines=self.header
         )
+

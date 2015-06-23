@@ -334,9 +334,12 @@ class SqlitePartition(PartitionBase):
 
         for gc in geo_cols:
             for row in p_s.execute("SELECT DISTINCT {} FROM {}".format(gc, table_name)):
-                gvid = civick.GVid.parse(row[0])
-                if gvid:
-                    geoids.add(gvid)
+                try:
+                    gvid = civick.GVid.parse(row[0])
+                    if gvid:
+                        geoids.add(gvid)
+                except KeyError: # Usually, got a summary level that Geoid doesn't support.
+                    pass
 
         # If there is source data ( from the sources metadata in the build set in the loader in build_create_partition)
         # then use the time and space values as additional geo and time

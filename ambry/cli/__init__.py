@@ -34,8 +34,10 @@ def prt(template, *args, **kwargs):
 def err(template, *args, **kwargs):
     global global_logger
 
-    global_logger.error(template.format(*args, **kwargs))
-
+    try:
+        global_logger.error(template.format(*args, **kwargs))
+    except:
+        print("ERROR, and Failed to log error: ", template, args, kwargs)
 
 def fatal(template, *args, **kwargs):
     import sys

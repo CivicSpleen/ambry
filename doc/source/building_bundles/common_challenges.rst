@@ -70,7 +70,7 @@ If a source file has a fomatting error that a row generator class considers ille
 
     class Bundle(CsvBundle):
     
-        def line_mangler(self, source, l):
+        def line_mangler(self, source, row_gen, l):
 
             return l.replace('\0', '')
 

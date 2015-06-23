@@ -125,13 +125,26 @@ class LoaderBundle(BuildBundle):
 
         return p
 
-    def line_mangler(self, source, l):
+    def line_mangler(self, source, row_gen, l):
         """
         Override this function to alter each line of a source file, just before it is passed into a Delimited file
         reader in the DelimitedRowGenerator
         :param l:
         :return:
         """
+
+        return l
+
+    def row_mangler(self, source, row_gen, row):
+        """
+        Override this function to alter each row of a source file, just after it is passed out of a Delimited file
+        reader in the DelimitedRowGenerator
+        :param row:
+        :return:
+        """
+
+        return row
+
 
     def row_gen_for_source(self, source_name, use_row_spec = True):
         from os.path import split, splitext
@@ -171,10 +184,11 @@ class LoaderBundle(BuildBundle):
         rs['header_mangler'] = lambda header: self.mangle_header(header)
 
         line_mangler = partial(self.line_mangler,  source)
+        row_mangler = partial(self.row_mangler, source)
 
         if ext == 'csv':
             from rowgen import DelimitedRowGenerator
-            return DelimitedRowGenerator(fn, line_mangler = line_mangler, **rs)
+            return DelimitedRowGenerator(fn, line_mangler = line_mangler, row_mangler = row_mangler, **rs)
         if ext == 'tsv':
             from rowgen import DelimitedRowGenerator
             return DelimitedRowGenerator(fn, line_mangler = line_mangler, delimiter='\t', **rs)
@@ -317,7 +331,6 @@ class LoaderBundle(BuildBundle):
                 w.writeheader()
                 for k in sorted(col_map.keys()):
                     w.writerow(col_map[k])
-
 
         return True
 
@@ -494,7 +507,12 @@ class LoaderBundle(BuildBundle):
 
         with p.inserter() as ins:
             for row in row_gen:
-                assert len(row) == len(header), '{} != {}'
+
+                if len(row) != len(header):
+                    self.error("Header length does not match row length for source {}: {} != {}\nheader: {}\nrow: {}"
+                               .format(source_name, len(row), len(header), header, row))
+                    raise Exception
+
 
                 lr(str(p.identity.name))
 
