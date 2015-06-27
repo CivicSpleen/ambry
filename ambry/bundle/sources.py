@@ -23,7 +23,8 @@ class SourcesFile(object):
         ("header_lines", "row_spec.header_lines"),
         ("description", "description"),
         ("url", "url"),
-        ("ref", "ref")
+        ("ref", "ref"),
+        ("filetype", "filetype"),
     )
 
     def __init__(self, path, metadata):

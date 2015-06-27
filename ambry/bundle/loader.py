@@ -139,12 +139,11 @@ class LoaderBundle(BuildBundle):
         """
         Override this function to alter each row of a source file, just after it is passed out of a Delimited file
         reader in the DelimitedRowGenerator
-        :param row:
+        :param row:-
         :return:
         """
 
         return row
-
 
     def row_gen_for_source(self, source_name, use_row_spec = True):
         from os.path import split, splitext

@@ -30,7 +30,7 @@ def expand_to_years(dates):
         pass
 
     try:
-        dates = dates.upper()  # Ambry tends to lowercase things
+        dates = str(dates).upper()  # Ambry tends to lowercase things
         parts = dates.replace('E', '/').split('/')  # / is in std; ambry uses 'e' to be compat with urls.
 
         rparts = []

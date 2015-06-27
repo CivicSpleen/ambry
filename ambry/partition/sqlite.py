@@ -340,6 +340,9 @@ class SqlitePartition(PartitionBase):
                         geoids.add(gvid)
                 except KeyError: # Usually, got a summary level that Geoid doesn't support.
                     pass
+                except ValueError: # Usually, got a summary level that Geoid doesn't support.
+                    self.bundle.warn("When compiling geocoverage, failed to parse for gvid: {} in table {} col {}"
+                                     .format(row[0], gc, table_name))
 
         # If there is source data ( from the sources metadata in the build set in the loader in build_create_partition)
         # then use the time and space values as additional geo and time
@@ -377,8 +380,7 @@ class SqlitePartition(PartitionBase):
 
                 score, gvid, typ, name = places[0]
 
-                self.bundle.log(
-                    "Resolving space '{}' from source '{}' to {}/{}".format(space, source_name, name, gvid))
+                self.bundle.log("Resolving space '{}' from source '{}' to {}/{}".format(space, source_name, name, gvid))
 
                 geoids.add(civick.GVid.parse(gvid))
 
@@ -521,10 +523,6 @@ class SqlitePartition(PartitionBase):
         except StopIteration:
             return None  # No records, so no dataframe.
             # raise Exception("Select failed: {}".format("SELECT * FROM {}".format(self.get_table().name)))
-
-
-
-
 
     @property
     def dict(self):
