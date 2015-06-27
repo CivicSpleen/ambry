@@ -109,6 +109,7 @@ class StandardError(object):
 
         return (d[0]*100, d[1]*100)
 
+
 class AmbrySEDataFrame(pd.DataFrame):
     """Augment a dataframe with setters that handle percentage and StandardError columns"""
 
