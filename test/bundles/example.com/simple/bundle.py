@@ -43,4 +43,5 @@ class Bundle(Bundle):
                 row['bg_gvid'] = str(civick.Blockgroup(1,rc(counties),rc(tracts),rc(bgs)))
                 ins.insert(row)
 
+
         return True

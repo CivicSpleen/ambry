@@ -113,7 +113,6 @@ class BuildSourceFile(object):
         self._dataset.config.sync[self._file_const][sd] = time()
         return sd
 
-
     def fs_to_record(self):
         """Load a file in the filesystem into the file record"""
         raise NotImplementedError
@@ -255,18 +254,21 @@ class MetadataFile(DictBuildSourceFile):
 
 class PythonSourceFile(StringSourceFile):
 
-    def import_file(self):
+    def import_bundle_class(self):
         """Add the filesystem to the Python sys path with an import hook, then import
         to file as Python"""
 
         import sys
         from fs.expose.importhook import FSImportHook
 
-        sys.meta_path.append(FSImportHook(self._fs))
+        #sys.meta_path.append(FSImportHook(self._fs))
+        #mod = __import__('bundle')
 
-        mod = __import__('bundle')
+        context = {}
 
-        return mod
+        exec self._dataset.bsfile(self._file_const).contents in context
+
+        return  context['Bundle']
 
 
 file_info_map = {

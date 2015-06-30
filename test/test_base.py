@@ -26,6 +26,7 @@ class TestBase(unittest.TestCase):
 
         self.db = None
 
+
     def ds_params(self, n ):
         return dict(vid=self.dn[n], source='source', dataset='dataset')
 
@@ -76,7 +77,7 @@ class TestBase(unittest.TestCase):
         from os.path import dirname, join
         from fs.opener import fsopendir
         from ambry.library import new_library
-        from ambry.bundle import Bundle
+        import yaml
 
         rc = self.get_rc()
 
@@ -84,12 +85,21 @@ class TestBase(unittest.TestCase):
 
         self.db = self.library._db
 
-        mem_fs = fsopendir("mem://")
-        build_fs = fsopendir("mem://")
+        mem_fs = fsopendir("mem://{}/source".format(name))
+        build_fs = fsopendir("mem://{}/build".format(name))
+
+        assert mem_fs.isdirempty('/')
+        assert build_fs.isdirempty('/')
 
         self.copy_bundle_files(fsopendir(join(dirname(bundles.__file__), 'example.com', name)), mem_fs)
 
-        return Bundle(self.new_db_dataset(self.db), self.library, source_fs=mem_fs, build_fs=build_fs)
+        b =  self.library.new_from_bundle_config(yaml.load(mem_fs.getcontents('bundle.yaml')))
+
+        print '!!!!', name, b.identity.vid
+
+        b.set_file_system(source_fs=mem_fs, build_fs=build_fs)
+
+        return b
 
     def new_bundle(self):
         """Configure a bundle from existing sources"""

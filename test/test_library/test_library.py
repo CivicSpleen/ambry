@@ -3,8 +3,6 @@ from test.test_base import TestBase
 
 class Test(TestBase):
 
-
-
     def test_library(self):
         from ambry.library import new_library
         from fs.opener import fsopendir
@@ -21,10 +19,8 @@ class Test(TestBase):
 
         # TODO. DOesn't actually test anything yet.
 
-
 def suite():
     import unittest
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(Test))
     return suite
-

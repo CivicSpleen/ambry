@@ -55,6 +55,7 @@ class Test(TestBase):
         self.assertEquals('prepared', b.state)
         b.do_build()
 
+
         self.assertEquals([2000, 2001, 2002], b.dataset.partitions[0].time_coverage)
         self.assertEquals([u'0O0101', u'0O0102'], b.dataset.partitions[0].space_coverage)
         self.assertEquals([u'2qZZZZZZZZZZ'],b.dataset.partitions[0].grain_coverage)
@@ -106,8 +107,6 @@ class Test(TestBase):
 
     def test_db_copy(self):
         from ambry.orm.database import Database
-        from ambry.util import copy_file_or_flo
-        import os
 
         b = self.test_simple_build()
         l = b._library

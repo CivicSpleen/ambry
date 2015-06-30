@@ -12,6 +12,5 @@ suite = unittest.TestSuite()
 suite.addTests(test_bundle.suite())
 suite.addTests(test_file.suite())
 
-
 if __name__ == '__main__':
     unittest.TextTestRunner().run(suite)

@@ -42,6 +42,7 @@ def _get_logger(name, file_name=None, stream=None, template=None, propagate=Fals
     handler = logging.StreamHandler(stream=stream)
     handler.setFormatter(formatter)
 
+    logger.handlers = []
     logger.addHandler(handler)
 
     return logger
