@@ -113,6 +113,8 @@ class CsvExtractor(Extractor):
 
         header_map = { c.name:c.altname for c in table.columns }
 
+        print '!!!! EXTRACT', header_map
+
         with self.cache.put_stream(rel_path, metadata=metadata) as stream:
             w = unicodecsv.writer(stream)
 
@@ -134,9 +136,14 @@ class CsvExtractor(Extractor):
 
         row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table_name))
 
-        table = self.warehouse.orm_table_by_name(table_name)
+        # Because there are inconsistencies in column names
+        def shrink_name(c):
 
-        header_map = {c.name: c.altname for c in table.columns}
+            if c.startswith('c') and '_' in c:
+                _,name = c.split('_', 1)
+                return name
+            else:
+                return c
 
         def yield_rows():
             f = StringQueue()
@@ -146,7 +153,8 @@ class CsvExtractor(Extractor):
             for i, row in enumerate(row_gen):
                 if i == 0:
                     if self.alt_header:
-                        w.writerow( header_map.get(c,c) for c in row.keys())
+                        print row.keys()
+                        w.writerow( shrink_name(c) for c in row.keys())
                     else:
                         w.writerow(row.keys())
 

@@ -141,7 +141,6 @@ def get_extract(wid, tid, ct):
     from ambry.dbexceptions import NotFoundError
     from flask import Response
 
-
     if ct == 'csv':
 
         row_gen = warehouse(wid).stream_table(tid, content_type=ct)
