@@ -1621,7 +1621,7 @@ class Warehouse(object):
         if not t:
             raise NotFoundError("Didn't get table for '{}' ".format(tid))
 
-        e = new_extractor(content_type, self, self.cache.subcache('extracts'))
+        e = new_extractor(content_type, self, self.cache.subcache('extracts'), force = True)
 
         ref = t.name if t.type in ('view', 'mview', 'indexed', 'installed') else t.vid
 
@@ -1643,7 +1643,7 @@ class Warehouse(object):
         if not t:
             raise NotFoundError("Didn't get table for '{}' ".format(tid))
 
-        e = new_extractor(content_type, self, self.cache.subcache('extracts'))
+        e = new_extractor(content_type, self, self.cache.subcache('extracts'), force = True)
 
         ref = t.name if t.type in ('view', 'mview', 'indexed') else t.vid
 

@@ -512,7 +512,6 @@ class LoaderBundle(BuildBundle):
                                .format(source_name, len(row), len(header), header, row))
                     raise Exception
 
-
                 lr(str(p.identity.name))
 
                 d = dict(zip(header, row))

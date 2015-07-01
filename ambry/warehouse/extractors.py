@@ -27,14 +27,14 @@ class ExtractEntry(object):
             self.data)
 
 
-def new_extractor(format, warehouse, cache, force=False):
+def new_extractor(format, warehouse, cache, force=False, alt_header = True):
 
     ex_class = extractors.get(format.lower(), False)
 
     if not ex_class:
         raise ValueError("Unknown format: {} ".format(format))
 
-    return ex_class(warehouse, cache, force=force)
+    return ex_class(warehouse, cache, force=force, alt_header = alt_header)
 
 
 def get_extractors(t):
@@ -46,13 +46,14 @@ class Extractor(object):
 
     is_geo = False
 
-    def __init__(self, warehouse, cache, force=False):
+    def __init__(self, warehouse, cache, force=False, alt_header = True):
 
         self.warehouse = warehouse
         self.database = self.warehouse.database
         self.cache = cache
         self.force = force
         self.hash = None
+        self.alt_header = alt_header
 
     def mangle_path(self, rel_path):
         return rel_path
@@ -93,38 +94,49 @@ class CsvExtractor(Extractor):
 
     mime = 'text/csv'
 
-    def __init__(self, warehouse, cache, force=False):
-        super(CsvExtractor, self).__init__(warehouse, cache, force=force)
+    def __init__(self, warehouse, cache, force=False, alt_header = True):
+        super(CsvExtractor, self).__init__(warehouse, cache, force=force, alt_header=alt_header)
 
     @classmethod
     def can_extract(cls, t):
         return True
 
-    def _extract(self, table, rel_path, metadata):
+    def _extract(self, table_name, rel_path, metadata):
 
         import unicodecsv
 
         rel_path = self.mangle_path(rel_path)
 
-        row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table))
+        row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table_name))
+
+        table = self.warehouse.orm_table_by_name(table_name)
+
+        header_map = { c.name:c.altname for c in table.columns }
 
         with self.cache.put_stream(rel_path, metadata=metadata) as stream:
             w = unicodecsv.writer(stream)
 
             for i, row in enumerate(row_gen):
                 if i == 0:
-                    w.writerow(row.keys())
+                    if self.alt_header:
+                        w.writerow( header_map.get(c,c) for c in row.keys())
+                    else:
+                        w.writerow(row.keys())
 
                 w.writerow(row)
 
         return True, self.cache.path(rel_path)
 
-    def _stream(self, table, rel_path, metadata):
+    def _stream(self, table_name, rel_path, metadata):
         """Return a generator that yields from the CSV data. Give to Flask to stream output. """
         import unicodecsv
         from ambry.util.flo import StringQueue
 
-        row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table))
+        row_gen = self.warehouse.database.connection.execute("SELECT * FROM {}".format(table_name))
+
+        table = self.warehouse.orm_table_by_name(table_name)
+
+        header_map = {c.name: c.altname for c in table.columns}
 
         def yield_rows():
             f = StringQueue()
@@ -133,7 +145,10 @@ class CsvExtractor(Extractor):
 
             for i, row in enumerate(row_gen):
                 if i == 0:
-                    w.writerow(row.keys()) # Only works on OrderedDict and RowsProxy!
+                    if self.alt_header:
+                        w.writerow( header_map.get(c,c) for c in row.keys())
+                    else:
+                        w.writerow(row.keys())
 
                 w.writerow(row)
 
@@ -146,8 +161,8 @@ class JsonExtractor(Extractor):
 
     mime = 'application/json'
 
-    def __init__(self, warehouse, cache, force=False):
-        super(JsonExtractor, self).__init__(warehouse, cache, force=force)
+    def __init__(self, warehouse, cache, force=False, alt_header = True):
+        super(JsonExtractor, self).__init__(warehouse, cache, force=force, alt_header = alt_header)
 
     @classmethod
     def can_extract(cls, t):
