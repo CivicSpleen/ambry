@@ -50,8 +50,6 @@ def library_parser(cmd):
     sp = asp.add_parser('clean', help='Remove all entries from the library database')
     sp.set_defaults(subcommand='clean')
 
-    sp = asp.add_parser('purge', help='Remove all entries from the library database and delete all files')
-    sp.set_defaults(subcommand='purge')
 
     sp = asp.add_parser('sync', help='Synchronize the local directory, upstream and remote with the library')
     sp.set_defaults(subcommand='sync')
@@ -90,19 +88,9 @@ def library_parser(cmd):
     sp.add_argument('-s', '--source', default=False, action="store_true", help='Remove the source record')
     sp.add_argument('terms', type=str, nargs=argparse.REMAINDER, help='Name or ID of the bundle or partition to remove')
 
-    sp = asp.add_parser('schema', help='Dump the schema for a bundle')
-    sp.set_defaults(subcommand='schema')
-    sp.add_argument('term', type=str, help='Query term')
-    sp.add_argument('-p', '--pretty', default=False, action="store_true", help='pretty, formatted output')
-    group = sp.add_mutually_exclusive_group()
-    group.add_argument('-y', '--yaml', default='csv', dest='format', action='store_const', const='yaml')
-    group.add_argument('-j', '--json', default='csv', dest='format', action='store_const', const='json')
-    group.add_argument('-c', '--csv', default='csv', dest='format', action='store_const', const='csv')
-
     whsp = asp.add_parser('config', help='Configure varibles')
     whsp.set_defaults(subcommand='config')
     whsp.add_argument('term', type=str, nargs='?', help='Var=Value')
-
 
 def library_command(args, rc):
     from ..library import new_library
@@ -119,46 +107,6 @@ def library_init(args, l, config):
     l.database.create()
 
 
-def library_backup(args, l, config):
-    import tempfile
-
-    if args.file:
-        backup_file = args.file
-        is_temp = False
-    else:
-        tfn = tempfile.NamedTemporaryFile(delete=False)
-        tfn.close()
-
-        backup_file = tfn.name + ".db"
-        is_temp = True
-
-    if args.date:
-        from datetime import datetime
-
-        date = datetime.now().strftime('%Y%m%dT%H%M')
-        parts = backup_file.split('.')
-        if len(parts) >= 2:
-            backup_file = '.'.join(parts[:-1] + [date] + parts[-1:])
-        else:
-            backup_file = backup_file + '.' + date
-
-    prt('{}: Starting backup', backup_file)
-
-    l.database.dump(backup_file)
-
-    if args.cache:
-        dest_dir = l.cache.put(
-            backup_file, '_/{}'.format(os.path.basename(backup_file)))
-        is_temp = True
-    else:
-        dest_dir = backup_file
-
-    if is_temp:
-        os.remove(backup_file)
-
-    prt("{}: Backup complete", dest_dir)
-
-
 def library_drop(args, l, config):
     prt("Drop tables")
     l.database.enable_delete = True
@@ -169,12 +117,6 @@ def library_drop(args, l, config):
 def library_clean(args, l, config):
     prt("Clean tables")
     l.database.clean()
-
-
-def library_purge(args, l, config):
-    prt("Purge library")
-    l.purge()
-
 
 def library_remove(args, l, config):
     from ambry.orm.exc import NotFoundError
@@ -346,52 +288,6 @@ def library_push(args, l, config):
             remote.store_list()
 
 
-def library_files(args, l, config):
-    from ..identity import LocationRef
-
-    if args.file_state == 'all':
-        files_ = l.files.query.all
-    else:
-        files_ = (l.files.query.state(args.file_state)
-                  .type((LocationRef.LOCATION.LIBRARY, LocationRef.LOCATION.PARTITION))).all
-
-    if len(files_):
-        prt("-- Display {} files", args.file_state)
-        for f in files_:
-            prt("{0:14s} {1:4s} {2:6s} {3}",f.ref,f.state,f.type_, f.path)
-
-
-def library_schema(args, l, config):
-    from ambry.bundle import DbBundle
-
-    # This will fetch the data, but the return values aren't quite right
-    r = l.get(args.term, cb=Progressor().progress)
-
-    abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
-    b = DbBundle(abs_path)
-
-    if args.format == 'csv':
-        b.schema.as_csv()
-    elif args.format == 'json':
-        import json
-
-        s = b.schema.as_struct()
-        if args.pretty:
-            print(json.dumps(s, sort_keys=True, indent=4, separators=(',', ': ')))
-        else:
-            print(json.dumps(s))
-    elif args.format == 'yaml':
-        import yaml
-
-        s = b.schema.as_struct()
-        if args.pretty:
-            print(yaml.dump(s, indent=4, default_flow_style=False))
-        else:
-            print(yaml.dump(s))
-    else:
-        raise Exception("Unknown format")
-
-
 def library_get(args, l, config):
     ident = l.resolve(args.term)
 
@@ -426,21 +322,6 @@ def library_get(args, l, config):
 
     return b
 
-
-def library_open(args, l, config):
-    # This will fetch the data, but the return values aren't quite right
-
-    r = library_get(args, l, config)
-
-    if r:
-        if r.partition:
-            abs_path = os.path.join(
-                l.cache.cache_dir,
-                r.partition.identity.cache_key)
-        else:
-            abs_path = os.path.join(l.cache.cache_dir, r.identity.cache_key)
-
-        os.execlp('sqlite3', 'sqlite3', abs_path)
 
 
 def library_sync(args, l, config):
@@ -480,32 +361,6 @@ def library_sync(args, l, config):
         l.sync_warehouses()
 
 
-def library_config(args, l, config):
-    from ..dbexceptions import ConfigurationError
-
-    if args.term:
-
-        parts = args.term.split('=', 1)
-
-        var = parts.pop(0)
-        val = parts.pop(0) if parts else None
-
-        if var not in l.configurable:
-            raise ConfigurationError(
-                "Value {} is not configurable. Must be one of: {}".format(
-                    args.var,
-                    l.configurable))
-
-        if val:
-            setattr(l, var, val)
-        elif not val and '=' in args.term:
-            setattr(l, var, None)
-        else:
-            print getattr(l, var)
-
-    else:
-        for e in l.database.get_config_group('library'):
-            print e
 
 
 def library_unknown(args, l, config):

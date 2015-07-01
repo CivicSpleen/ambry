@@ -86,26 +86,8 @@ def warehouse_parser(cmd):
     whsp.add_argument('-n', '--name', help='Set the name of the database')
     whsp.add_argument('-c','--clean',default=False,action='store_true',help='Recreate the database before installation')
     whsp.add_argument('-D','--dir',default='',help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
-
     whsp.add_argument('term', type=str, help='Name of bundle or partition')
 
-    whsp = whp.add_parser('extract',help='Extract files or documentation to a cache')
-    whsp.set_defaults(subcommand='extract')
-
-    whsp.add_argument('-f','--files-only',default=False,action='store_true',help='Only extract the extract files')
-    whsp.add_argument('-d','--doc-only',default=False,action='store_true',help='Only extract the documentation files')
-
-
-    whsp = whp.add_parser('parse',help='Parse a manifest')
-    whsp.set_defaults(subcommand='parse')
-    whsp.add_argument('term', type=str, help='Name of bundle or partition')
-
-    whsp.add_argument('-F', '--force', default=False, action='store_true',              help='Force re-creation of files that already exist')
-    whsp.add_argument('-D','--dir',default='',help='Set directory, instead of configured Warehouse filesystem dir, for relative paths')
-
-    whsp = whp.add_parser('config', help='Configure varibles')
-    whsp.set_defaults(subcommand='config')
-    whsp.add_argument('term', type=str, nargs='?', help='Var=Value')
 
     whsp = whp.add_parser('remove',help='Remove a bundle or partition from a warehouse')
     whsp.set_defaults(subcommand='remove')
@@ -113,9 +95,6 @@ def warehouse_parser(cmd):
 
     whsp = whp.add_parser('connect', help='Test connection to a warehouse')
     whsp.set_defaults(subcommand='connect')
-
-    whsp = whp.add_parser('info', help='Configuration information')
-    whsp.set_defaults(subcommand='info')
 
     whsp = whp.add_parser('clean',help='Remove all of the contents from the warehouse')
     whsp.set_defaults(subcommand='clean')
@@ -139,17 +118,7 @@ def warehouse_parser(cmd):
     group.add_argument('-d', '--delete')
     whsp.add_argument('-p', '--password')
 
-    whsp = whp.add_parser('list', help='List the datasets in the warehouse')
-    whsp.set_defaults(subcommand='list')
-    whsp.add_argument('term',type=str,nargs='?',help='Name of bundle, to list partitions')
-    group = whsp.add_mutually_exclusive_group()
-    group.add_argument('-m','--manifests',action='store_true',help='List manifests')
-    group.add_argument('-d','--databases',action='store_true',help='List Databases')
-    group.add_argument('-p','--partitions',action='store_true',help='List partitions')
 
-    whsp = whp.add_parser('doc',help='Generate documentation and open an browser')
-    whsp.set_defaults(subcommand='doc')
-    whsp.add_argument('-c', '--clean')
 
 
 def warehouse_info(args, w, config):
@@ -245,18 +214,6 @@ def warehouse_users(args, w, config):
     # w.configure_default_users()
 
 
-def warehouse_list(args, w, config):
-
-    # l = w.library
-
-    if not args.term:
-        _print_bundle_list(w.list(), fields=['vid', 'vname'], show_partitions=False)
-
-    else:
-        raise NotImplementedError()
-        # d, p = l.get_ref(args.term)
-        # _print_info(l, d, p, list_partitions=True)
-
 
 def warehouse_install(args, w, config):
     from ambry.warehouse.manifest import Manifest
@@ -278,17 +235,6 @@ def warehouse_install(args, w, config):
     w.elibrary.sync_warehouse(w)
 
     w.close()
-
-
-def warehouse_extract(args, w, config):
-
-    w.logger.info("Extracting to: {}".format(w.cache))
-
-    extracts = w.extract(force=args.force)
-
-    for extract in extracts:
-        print extract
-
 
 def warehouse_config(args, w, config):
     from ..dbexceptions import ConfigurationError
@@ -313,34 +259,3 @@ def warehouse_config(args, w, config):
         for e in w.library.database.get_config_group('warehouse'):
             print e
 
-
-def warehouse_parse(args, w, config):
-    from ambry.warehouse.manifest import Manifest
-    from . import global_logger
-
-    m = Manifest(args.term, logger = global_logger)
-
-    for line_no,section  in m.sorted_sections:
-        print str(section)
-        print
-
-        if section.tag == 'partitions':
-            partions = section.content['partitions']
-            index = section.content.get('index',None)
-            table = section.content.get('table', None)
-
-
-def warehouse_test(args, w, config):
-
-    print w.dsn
-    print w.library.database.dsn
-
-    b = w.bundle
-
-    t = b.schema.new_table('test_table')
-    t.add_column('test_column', datatype='integer')
-
-    for t in b.schema.tables:
-        print '----', t.name
-        for c in t.columns:
-            print '    ', c.name

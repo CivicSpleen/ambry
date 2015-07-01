@@ -38,7 +38,6 @@ class Partition(Base, DictableMixin):
     STATES.INSTALLING = 'installing'
     STATES.INSTALLED = 'installed'
 
-
     sequence_id = SAColumn('p_sequence_id', Integer)
     vid = SAColumn('p_vid', String(20), primary_key=True, nullable=False)
     id = SAColumn('p_id', String(20), nullable=False)
@@ -163,6 +162,7 @@ class Partition(Base, DictableMixin):
         from geoid.civick import GVid
         from dateutil import parser
 
+
         sd = dict(stats)
 
         scov = set()
@@ -181,8 +181,8 @@ class Partition(Base, DictableMixin):
         ## Space Coverage
 
         if 'source_data' in self.data:
+
             for source_name, source in self.data['source_data'].items():
-                if 'space' in source:
                     scov.add(self.parse_gvid_or_place(source['space']))
 
         if self.identity.space:  # And from the partition name

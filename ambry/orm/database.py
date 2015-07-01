@@ -412,6 +412,15 @@ class Database(object):
 
         return ds
 
+    def datasets(self):
+        """
+        Return all datasets
+
+        :return:
+        """
+
+        return self.session.query(Dataset).filter(Dataset.vid != ROOT_CONFIG_NAME_V).all()
+
     def copy_dataset(self, ds):
 
         # Makesure everything we want to copy is loaded
