@@ -110,6 +110,7 @@ class Versions(TypedDictGroup):
 
 class Top(StructuredPropertyTree):
     _non_term_file = 'meta/build.yaml'
+    _type = 'metadata'  # used in the Config.type
 
     about = About()
     identity = Identity()
@@ -117,7 +118,7 @@ class Top(StructuredPropertyTree):
     external_documentation = ExtDoc()
     build = Build()
     contacts = Contact()
-    versions = Versions()
+    #versions = Versions()
     names = Names()
     documentation = Documentation()
     coverage = Coverage()
