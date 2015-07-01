@@ -18,20 +18,12 @@
 <div >
     {{t.get('doc',{}).html}}
 </div>
-
-{% if s.url -%}<div>
-
-    {% for format in extractors(t) -%}
-    <button type="button">
-    <a href="{{extract_url(s.url, s.uid, t.vid if t.type=='table' else t.name, format)}}">{{format}}</a>
-    </button>
-    {% endfor -%}
-</div>{% endif %}
-<div></div>{% for format in extractors(t) -%}
+{% for format in extractors(t) -%}
             <small><button type="button">
             <a href="{{extract_url(s.uid,  t.vid, format)}}">{{format}}</a>
             </button></small>
-            {% endfor -%}
+
+{% endfor -%}
 <h2>Schema</h2>
 <small><button type="button"><a href="{{ t.vid }}.csv">Schema CSV</a></button></small>
 </div>
