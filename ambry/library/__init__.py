@@ -60,8 +60,25 @@ class Library(object):
 
         self.logger = get_logger(__name__)
 
+    @property
+    def database(self):
+        return self._db
+
+    @property
+    def remotes(self):
+        return self._remotes
+
+    def remote(self,name):
+        return self._remotes[name]
+
     def commit(self):
         self._db.commit()
+
+    def datasets(self):
+        """Return all datasets"""
+
+        return self._db.datasets()
+
 
     def new_bundle(self,**kwargs):
         """Create a new bundle, with the same arguments as creating a new dataset"""
@@ -71,6 +88,31 @@ class Library(object):
         self._db.commit()
 
         return self.bundle(ds.vid)
+
+    def new_from_bundle_config(self, config):
+        """
+        Create a new bundle, or link to an existing one, based on the identity in config data.
+
+
+        :param config: A Dict form of a bundle.yaml file
+        :return:
+        """
+
+        from ..identity import Identity
+        from ..bundle import Bundle
+
+        identity = Identity.from_dict(config['identity'])
+
+        ds  = self._db.dataset(identity.vid)
+
+        if not ds:
+            ds = self._db.dataset(identity.name)
+
+        if not ds:
+            ds = self._db.new_dataset(**identity.dict)
+
+        return Bundle(ds, self)
+
 
     def bundle(self, ref):
         """Return a bundle build on a dataset, with the given vid or id reference"""
@@ -155,7 +197,6 @@ class Library(object):
             for row in reader:
                 yield row
 
-
     def remove(self, bundle):
         '''Remove a bundle from the library, and delete the configuration for
         it from the library database'''
@@ -176,5 +217,3 @@ class Library(object):
 
         return self._search
 
-    def remote(self,name):
-        return self._remotes[name]

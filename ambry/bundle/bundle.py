@@ -27,11 +27,26 @@ class Bundle(object):
 
         self._errors = []
 
-    def cast_to_subclass(self):
-        from ambry.orm import File
-        mod = self.source_files.file(File.BSFILE.BUILD).import_file()
-        return mod.Bundle(self._dataset, self._library, self._source_fs, self._build_fs)
+    def set_file_system(self, source_fs=None, build_fs=None):
+        """Set the source file filesystem and/or build  file system"""
 
+        if source_fs:
+            self._source_fs = source_fs
+
+        if build_fs:
+            self._build_fs = build_fs
+
+    def cast_to_subclass(self):
+        """
+        Load the bundle file from the database to get the derived bundle class,
+        then return a new bundle built on that class
+
+        :return:
+        """
+        from ambry.orm import File
+        bsf = self.source_files.file(File.BSFILE.BUILD)
+        clz = bsf.import_bundle_class()
+        return clz(self._dataset, self._library, self._source_fs, self._build_fs)
 
     @property
     def dataset(self):
@@ -84,7 +99,6 @@ class Bundle(object):
         """The bundle logger."""
         import sys
 
-
         if not self._logger:
 
             ident = self.identity
@@ -98,7 +112,6 @@ class Bundle(object):
 
     def log(self, message, **kwargs):
         """Log the messsage."""
-
         self.logger.info(message)
 
     def error(self, message):
@@ -109,6 +122,7 @@ class Bundle(object):
         """
         if message not in self._errors:
             self._errors.append(message)
+
         self.logger.error(message)
 
     def warn(self, message):
@@ -139,7 +153,6 @@ class Bundle(object):
 
             raise FatalError(message)
 
-
     ##
     ## Build Process
     ##
@@ -156,7 +169,6 @@ class Bundle(object):
     STATES.FINALIZED = 'finalized'
     STATES.INSTALLING = 'installing'
     STATES.INSTALLED = 'installed'
-
 
     ##
     ## Source Synced
@@ -372,6 +384,7 @@ class Bundle(object):
 
         self.state = self.STATES.BUILDING
         if self.pre_build():
+
             self.log("---- Build ---")
             if self.build_main():
                 self.state = self.STATES.BUILT

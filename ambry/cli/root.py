@@ -38,13 +38,10 @@ def root_parser(cmd):
     sp = cmd.add_parser('info', help='Information about a bundle or partition')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='info')
-    sp.add_argument('-l', '--library', default=False, action="store_const", const=lr.LIBRARY,
-                    help='Search only the library')
-    sp.add_argument('-r', '--remote', default=False, action="store_const", const=lr.REMOTE,
-                    help='Search only the remote')
-    sp.add_argument('-s', '--source', default=False, action="store_const", const=lr.SOURCE,
-                    help='Search only the source')
-    sp.add_argument('-p', '--partitions', default=False, action="store_true", help="Show partitions")
+    group = sp.add_mutually_exclusive_group()
+    group.add_argument('-l', '--library', default=False, action="store_true", help='Information about the library')
+    group.add_argument('-r', '--remote', default=False, action="store_true", help='Information about the remotes')
+    group.add_argument('-b', '--bundle', default=False, action="store_true", help='Information about a bundle')
     sp.add_argument('term', type=str, nargs='?', help='Name or ID of the bundle or partition')
 
     sp = cmd.add_parser('meta', help='Dump the metadata for a bundle')
@@ -91,10 +88,13 @@ def root_command(args, rc):
     from ambry.orm.exc import DatabaseError
 
     try:
-        l = new_library(rc.library(args.library_name))
+        l = new_library(rc)
         l.logger = global_logger
     except DatabaseError as e:
         warn("No library: {}".format(e))
+        l = None
+    except Exception as e:
+        warn("Failed to instantiate library: {}".format(e))
         l = None
 
     globals()['root_' + args.subcommand](args, l, rc)
@@ -194,14 +194,14 @@ def root_info(args, l, rc):
     from ambry.orm.exc import NotFoundError
     import ambry
 
-    locations = filter(bool, [args.library, args.remote, args.source])
+    locations = filter(bool, [args.library, args.remote])
 
     if not locations:
         locations = default_locations
 
     if not args.term:
         prt("Version:   {}, {}",ambry._meta.__version__, rc.environment.category)
-        prt("Root dir:  {}",rc.filesystem('root')['dir'])
+        prt("Root dir:  {}",rc.filesystem('root'))
 
         try:
             if l.source:
@@ -209,13 +209,8 @@ def root_info(args, l, rc):
         except (ConfigurationError, AttributeError):
             prt("Source :   No source directory")
 
-
         prt("Configs:   {}",rc.dict['loaded'])
-
         prt("Library:   {}", l.database.dsn)
-        prt("Cache:     {}", l.cache)
-        prt("Doc Cache: {}", l._doc_cache)
-        prt("Whs Cache: {}", l.warehouse_cache)
         prt("Remotes:   {}", ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
 
         return
@@ -224,7 +219,6 @@ def root_info(args, l, rc):
         fatal("No library, probably due to a configuration error")
 
     ident = l.resolve(args.term, location=locations)
-
 
     if not ident:
         fatal("Failed to find record for: {}", args.term)
@@ -245,64 +239,6 @@ def root_info(args, l, rc):
     list_partitions = args.partitions if len(ident.partitions) > 10 else True
 
     _print_info(l, ident, list_partitions=list_partitions)
-
-
-def root_meta(args, l, rc):
-    ident = l.resolve(args.term)
-
-    if not ident:
-        fatal("Failed to find record for: {}", args.term)
-        return
-
-    b = l.get(ident.vid)
-
-    meta = b.metadata
-
-    if not args.key:
-        # Return all of the rows
-        if args.yaml:
-            print meta.yaml
-
-        elif args.json:
-            print meta.json
-
-        elif args.key:
-            for row in meta.rows:
-                print '.'.join([e for e in row[0] if e]) + '=' + str(row[1] if row[1] else '')
-        else:
-            print meta.yaml
-
-    else:
-
-        v = None
-        from ..util import AttrDict
-
-        o = AttrDict()
-        count = 0
-
-        for row in meta.rows:
-            k = '.'.join([e for e in row[0] if e])
-            if k.startswith(args.key):
-                v = row[1]
-                o.unflatten_row(row[0], row[1])
-                count += 1
-
-        if count == 1:
-            print v
-
-        else:
-            if args.yaml:
-                print o.dump()
-
-            elif args.json:
-                print o.json()
-
-            elif args.rows:
-                for row in o.flatten():
-                    print '.'.join([e for e in row[0] if e]) + '=' + str(row[1] if row[1] else '')
-
-            else:
-                print o.dump()
 
 
 def root_sync(args, l, config):
@@ -404,11 +340,9 @@ def root_doc(args, l, rc):
     from logging import FileHandler
     import webbrowser
 
-
     cache_dir = l._doc_cache.path('', missing_ok=True)
 
     app_config['port'] = args.port if args.port else 8085
-
 
     file_handler = FileHandler(os.path.join(cache_dir, "web.log"))
     file_handler.setLevel(logging.WARNING)

@@ -11,154 +11,30 @@ from ..cli import prt, fatal, warn, err
 
 
 def bundle_command(args, rc):
-    import os
-    from ..run import import_file
-    from ..dbexceptions import DependencyError
+
     from ..library import new_library
     from . import global_logger
-    from ..identity import LocationRef
-
-    l = new_library(rc.library(args.library_name))
+    l = new_library(rc)
     l.logger = global_logger
 
-    if not args.bundle_dir:
-        bundle_file = os.path.join(os.getcwd(), 'bundle.py')
-
-    else:
-        st = l.source
-        ident = l.resolve(args.bundle_dir, location=LocationRef.LOCATION.SOURCE)
-
-        if ident:
-            bundle_file = os.path.join(ident.bundle_path, 'bundle.py')
-
-            if not os.path.exists(bundle_file):
-                # The bundle exists in the source repo, but is not local
-                fatal(
-                    "Ghost bundle {}; in library but not in source tree".format(
-                        ident.vname))
-
-        elif args.bundle_dir == '-':
-            # Run run for each line of input
-            import sys
-
-            for line in sys.stdin.readlines():
-                args.bundle_dir = line.strip()
-                prt('====== {}', args.bundle_dir)
-                bundle_command(args, rc)
-
-            return
-
-        elif args.bundle_dir[0] != '/':
-            bundle_file = os.path.join(os.getcwd(), args.bundle_dir, 'bundle.py')
-
-        else:
-            bundle_file = os.path.join(args.bundle_dir, 'bundle.py')
-
-    if not os.path.exists(bundle_file):
-        fatal("Bundle code file does not exist: {}".format(bundle_file))
-
-    bundle_dir = os.path.dirname(bundle_file)
-
-    config_file = os.path.join(bundle_dir, 'bundle.yaml')
-
-    if not os.path.exists(config_file):
-        fatal("Bundle config file does not exist: {}".format(bundle_file))
-
-    # Import the bundle file from the
-    rp = os.path.realpath(bundle_file)
-    mod = import_file(rp)
-
-    dir_ = os.path.dirname(rp)
-    b = mod.Bundle(dir_)
-
-    # In case the bundle lock is hanging around from a previous run
-    b.database.break_lock()
-
-    b.set_args(args)
-
-    b.library = l
-
-    def getf(f):
-        return globals()['bundle_' + f]
-
-    ph = {
-        'meta': ['clean'],
-        'prepare': ['clean'],
-        'build': ['clean', 'prepare'],
-        'update': ['clean', 'prepare'],
-        'install': ['clean', 'prepare', 'build']
-    }
-
-    phases = []
-
-    if hasattr(args, 'clean') and args.clean:
-        # If the clean arg is set, then we need to run  clean, and all of the
-        # earlier build phases.
-
-        phases += ph[args.subcommand]
-
-    phases.append(args.subcommand)
 
     if args.debug:
         from ..util import debug
         warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
         debug.listen()
 
-    ##
-    ## Run the phases
-    ##
-    try:
-        for phase in phases:
-            r = getf(phase)(args, b, st, rc)
+    globals()['bundle_' + args.subcommand](args, l, rc)
 
-            if r == False:
-                break
 
-            b.close()
-
-    except DependencyError as e:
-        if b:
-            st.set_bundle_state(b.identity, 'error:dependency')
-        fatal("{}: Phase {} failed: {}", b.identity.name, phase, e.message)
-    except Exception as e:
-
-        l.close()
-        if b:
-            err("{}: Phase {} failed: {}", b.identity.name, phase, e)
-            b.close()
-            st.set_bundle_state(b.identity, 'error:' + phase)
-        raise
-    finally:
-        import lockfile
-        from sqlalchemy.exc import InvalidRequestError
-
-        if b._warnings:
-            warn(" ==== WARNINGS ===")
-            for warning in b._warnings:
-                warn(warning)
-
-        if b._errors:
-            err(" ==== ERRORS ===")
-            for error in b._errors:
-                err(error)
-
-        try:
-            if b:
-                try:
-                    b.close()
-                except InvalidRequestError:
-                    pass
-
-        except lockfile.NotMyLock as e:
-            warn("Got logging error: {}".format(str(e)))
 
 
 def bundle_parser(cmd):
     import multiprocessing
+    import argparse
 
     parser = cmd.add_parser('bundle', help='Manage bundle files')
     parser.set_defaults(command='bundle')
-    parser.add_argument('-d', '--bundle-dir', required=False, help='Path to the bundle .py file')
+
     parser.add_argument('-D', '--debug', required=False, default=False, action="store_true",
                         help='URS1 signal will break to interactive prompt')
     parser.add_argument('-t', '--test', default=False, action="store_true",
@@ -168,42 +44,49 @@ def bundle_parser(cmd):
 
     sub_cmd = parser.add_subparsers(title='commands', help='command help')
 
+
+    sp = sub_cmd.add_parser('new', help='Create a new bundle')
+    sp.set_defaults(subcommand='new')
+    sp.set_defaults(revision=1)  # Needed in Identity.name_parts
+    sp.add_argument('-s', '--source', required=True, help='Source, usually a domain name')
+    sp.add_argument('-d', '--dataset', required=True, help='Name of the dataset')
+    sp.add_argument('-b', '--subset', default=None, help='Name of the subset')
+    sp.add_argument('-t', '--time', default=None, help='Time period. Use ISO Time intervals where possible. ')
+    sp.add_argument('-p', '--space', default=None, help='Spatial extent name')
+    sp.add_argument('-v', '--variation', default=None, help='Name of the variation')
+    sp.add_argument('-c', '--creator', required=False, help='Id of the creator')
+    sp.add_argument('-n', '--dryrun', action="store_true", default=False, help='Dry run')
+    sp.add_argument('-k', '--key', help='Number server key. Use \'self\' for a random, self-generated key.')
+    sp.add_argument('args', nargs=argparse.REMAINDER)  # Get everything else.
+
+    #
+    # Config sub commands
+
     command_p = sub_cmd.add_parser('config', help='Operations on the bundle configuration file')
     command_p.set_defaults(subcommand='config')
 
     asp = command_p.add_subparsers(title='Config subcommands', help='Subcommand for operations on a bundle file')
 
+    # config rewrite
     sp = asp.add_parser('rewrite', help='Re-write the bundle file, updating the formatting')
     sp.set_defaults(subsubcommand='rewrite')
 
-    #
-    sp = asp.add_parser('dump', help='dump the configuration')
-    sp.set_defaults(subsubcommand='dump')
-
-    #
+    # config doc
     sp = asp.add_parser('doc', help='Display some of the bundle documentation')
     sp.set_defaults(subsubcommand='doc')
 
-    #
-    sp = asp.add_parser('schema', help='Print the schema')
-    sp.set_defaults(subsubcommand='schema')
 
-    #
+    # config incver
     sp = asp.add_parser('incver', help='Increment the version number')
     sp.set_defaults(subsubcommand='incver')
     sp.add_argument('-m', '--message', default=False, help="Message ")
 
-    #
+    # config newnum
     sp = asp.add_parser('newnum', help='Get a new dataset number')
     sp.set_defaults(subsubcommand='newnum')
     sp.add_argument('-k', '--key', default=False, help="Set the number server key, or 'self' for self assignment ")
 
-    #
-    sp = asp.add_parser('s3urls', help='Add all of the URLS below an S3 prefix as sources. ')
-    sp.set_defaults(subsubcommand='s3urls')
-    sp.add_argument('term', type=str, nargs=1, help='S3url with buckets and prefix')
-
-    #
+    # config scrape
     sp = asp.add_parser('scrape',
                         help='Scrape all of the links from the page references in external_documentation.download')
     sp.set_defaults(subsubcommand='scrape')
@@ -710,34 +593,140 @@ def bundle_config_scrape(args, b, st, rc):
     print yaml.dump(d, default_flow_style=False)
 
 
-def bundle_config_s3urls(args, b, st, rc):
-    # TODO: Where is cache package?
-    from ..cache import new_cache
-    import urllib
-    import os
-    import binascii
-
-    cache = new_cache(urllib.unquote_plus(args.term[0]), run_config=rc)
-
-    def has_url(url):
-        for k, v in b.metadata.sources.items():
-
-            if v and v.url == url:
-                return True
-
-        else:
-            return False
-
-    for e, v in cache.list().items():
-
-        url = cache.s3path(e)
-        if not has_url(url):
-            rand_name = binascii.b2a_hex(os.urandom(6))
-            b.metadata.sources[rand_name].url = url
-            prt("Adding: {}".format(url))
-
-    b.metadata.write_to_dir()
 
 
 def bundle_repopulate(args, b, st, rc):
     return b.repopulate()
+
+
+def root_meta(args, l, rc):
+    ident = l.resolve(args.term)
+
+    if not ident:
+        fatal("Failed to find record for: {}", args.term)
+        return
+
+    b = l.get(ident.vid)
+
+    meta = b.metadata
+
+    if not args.key:
+        # Return all of the rows
+        if args.yaml:
+            print meta.yaml
+
+        elif args.json:
+            print meta.json
+
+        elif args.key:
+            for row in meta.rows:
+                print '.'.join([e for e in row[0] if e]) + '=' + str(row[1] if row[1] else '')
+        else:
+            print meta.yaml
+
+    else:
+
+        v = None
+        from ..util import AttrDict
+
+        o = AttrDict()
+        count = 0
+
+        for row in meta.rows:
+            k = '.'.join([e for e in row[0] if e])
+            if k.startswith(args.key):
+                v = row[1]
+                o.unflatten_row(row[0], row[1])
+                count += 1
+
+        if count == 1:
+            print v
+
+        else:
+            if args.yaml:
+                print o.dump()
+
+            elif args.json:
+                print o.json()
+
+            elif args.rows:
+                for row in o.flatten():
+                    print '.'.join([e for e in row[0] if e]) + '=' + str(row[1] if row[1] else '')
+
+            else:
+                print o.dump()
+
+def bundle_new(args, l, rc):
+    """Clone one or more registered source packages ( via sync ) into the
+    source directory."""
+    from ..identity import DatasetNumber, Identity
+    from ..identity import NumberServer
+    from requests.exceptions import HTTPError
+    from ambry.orm.exc import ConflictError
+    import os
+
+    d = vars(args)
+    d['revision'] = 1
+
+    d['btime'] = d.get('time', None)
+    d['bspace'] = d.get('space', None)
+
+    if args.dryrun or args.key in ('rand', 'self'):
+
+        prt("Using self-generated id")
+
+        d['id'] = str(DatasetNumber())
+
+    else:
+        try:
+
+            nsconfig = rc.service('numbers')
+            if args.key:
+                nsconfig['key'] = args.key
+
+            ns = NumberServer(**nsconfig)
+
+            d['id'] = str(ns.next())
+            prt("Got number from number server: {}".format(d['id']))
+        except HTTPError as e:
+            warn("Failed to get number from number server. Config = {}: {}".format( nsconfig,e.message))
+            warn("Using self-generated number. "
+                 "There is no problem with this, but they are longer than centrally generated numbers.")
+            d['id'] = str(DatasetNumber())
+
+    try:
+        ambry_account = rc.group('accounts').get('ambry', {})
+    except:
+        ambry_account = None
+
+    if not ambry_account:
+        fatal("Failed to get an accounts.ambry entry from the configuration. ( It's usually in {}. ) ".format(
+                rc.USER_ACCOUNTS))
+
+    if not ambry_account.get('name') or not ambry_account.get('email'):
+        from ambry.run import RunConfig as rc
+
+        fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
+
+    ident = Identity.from_dict(d)
+
+    return Bundle(self.new_db_dataset(self.db), self.library, source_fs=mem_fs, build_fs=build_fs)
+
+    metadata.identity = ident.ident_dict
+    metadata.names = ident.names_dict
+    metadata.write_to_dir(write_all=True)
+
+    # Now that the bundle has an identity, we can load the config through the
+    # bundle.
+
+    b.metadata.contact_bundle.creator.email = ambry_account.get('email')
+    b.metadata.contact_bundle.creator.name = ambry_account.get('name')
+    b.metadata.contact_bundle.creator.url = ambry_account.get('url', '')
+    b.metadata.contact_bundle.creator.org = ambry_account.get('org', '')
+
+    b.update_configuration()
+
+
+
+
+
