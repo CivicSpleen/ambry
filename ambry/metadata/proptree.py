@@ -429,16 +429,17 @@ class Group(object):
         raise NotImplementedError()
 
     def set(self, d):
-        raise NotImplementedError(type(self)) # Can't change the groups at the top level.
+        raise NotImplementedError(type(self))  # Can't change the groups at the top level.
 
     def __setattr__(self, attr, value):
         # Allows access to set _key, _member, etc
         if attr not in dir(self):
-            raise AttributeError("No such term: {} ".format(attr))
+            raise AttributeError("Group does not have such term: {} ".format(attr))
 
         return object.__setattr__(self, attr, value)
 
-class DictGroup(Group,MutableMapping):
+
+class DictGroup(Group, MutableMapping):
     """A group that holds key/value pairs.
 
     The identity group is a dict group, with single values under the group:
@@ -500,7 +501,7 @@ class DictGroup(Group,MutableMapping):
     def __setitem__(self, key, value):
 
         if key not in self._members:
-            raise AttributeError("No such term in {}: {}. Has: {}"
+            raise AttributeError('DictGroup does not have such term in {}: {}. Use one from: {}'
                                  .format(self._key, key, [key for key in self._members.keys()]))
 
         o = self.get_term_instance(key)
@@ -937,7 +938,7 @@ class DictTerm(Term, MutableMapping):
     def __getitem__(self, key):
 
         if key not in dir(self):
-            raise AttributeError("11No such term: {} ".format(key))
+            raise AttributeError('DictTerm does not have such term: {} '.format(key))
 
         o = self.get_term_instance(key)
 
