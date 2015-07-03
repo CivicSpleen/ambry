@@ -108,6 +108,56 @@ class TopTest(TestBase):
         self.assertEquals(new_top.about.time, '15:55')  # TODO: How to convert time?
         self.assertEquals(new_top.about.title, 'Inpatient Mortality Indicators')
 
+    def test_identity_fields(self):
+        """ Test identity group of the metadata config. """
+        expected_fields = [
+            'bspace',
+            'btime',
+            'dataset',
+            'id',
+            'revision',
+            'source',
+            'subset',
+            'type',
+            'variation',
+            'version',
+        ]
+
+        self._assert_fields_match(expected_fields, Top().identity)
+
+    def test_identity_fields_values(self):
+        """ Test contacts group fields of the metadata config. """
+        # Test both - setting and saving to db.
+        top = Top()
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        top.link_config(db.session, dataset)
+
+        top.identity.bspace = 'b-space'
+        top.identity.btime = 'b-time'
+        top.identity.dataset = dataset.vid
+        top.identity.id = dataset.id
+        top.identity.revision = '7'
+        top.identity.source = 'example.com'
+        top.identity.subset = 'mortality'
+        top.identity.type = '?'
+        top.identity.variation = '1'
+        top.identity.version = '0.0.7'
+
+        # build from db and check
+        new_top = Top()
+        new_top.build_from_db(dataset)
+        self.assertEquals(new_top.identity.bspace, 'b-space')
+        self.assertEquals(new_top.identity.btime, 'b-time')
+        self.assertEquals(new_top.identity.dataset, dataset.vid)
+        self.assertEquals(new_top.identity.id, dataset.id)
+        self.assertEquals(new_top.identity.revision, '7')
+        self.assertEquals(new_top.identity.source, 'example.com')
+        self.assertEquals(new_top.identity.subset, 'mortality')
+        self.assertEquals(new_top.identity.type, '?')
+        self.assertEquals(new_top.identity.variation, '1')
+        self.assertEquals(new_top.identity.version, '0.0.7')
+
     def test_contacts_fields(self):
         """ Test contacts group of the metadata config. """
         expected_fields = [
@@ -119,7 +169,7 @@ class TopTest(TestBase):
 
         self._assert_fields_match(expected_fields, Top().contacts)
 
-    def test_contacts_fields_vlaues(self):
+    def test_contacts_fields_values(self):
         """ Test contacts group fields of the metadata config. """
         # Test both - setting and saving to db.
         top = Top()
