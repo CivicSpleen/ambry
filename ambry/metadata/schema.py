@@ -118,7 +118,7 @@ class Versions(TypedDictGroup):
 
 class Top(StructuredPropertyTree):
     _non_term_file = 'meta/build.yaml'
-    _type = 'metadata'  # used in the Config.type
+    _type = 'metadata'  # used in the Config.type while storing in the db.
 
     about = About()
     identity = Identity()
