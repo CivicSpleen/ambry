@@ -20,16 +20,16 @@ from flo import *  # Legacy; should convert clients to direct import
 
 logger_init = set()
 
-def get_logger(name, file_name=None, stream=None, template=None, propagate=False):
-    return _get_logger(name, file_name=file_name, stream=stream, template=template, propagate=propagate)
+def get_logger(name, file_name=None, stream=None, template=None, propagate=False, level=logging.INFO):
+    return _get_logger(name, file_name=file_name, stream=stream, template=template, propagate=propagate, level=level)
 
-def _get_logger(name, file_name=None, stream=None, template=None, propagate=False):
+def _get_logger(name, file_name=None, stream=None, template=None, propagate=False, level=logging.INFO):
     """Get a logger by name.
 
     """
 
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(level)
 
     if not template:
         template = "%(name)s %(process)s %(levelname)s %(message)s"
