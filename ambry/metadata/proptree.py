@@ -15,7 +15,8 @@ from sqlalchemy.orm import object_session
 from ambry.orm.config import Config
 from ambry.orm.exc import MetadataError
 
-logger = logging.getLogger(__name__)
+from ambry.util import get_logger
+logger = get_logger(__name__, level=logging.DEBUG)
 
 
 class AttrDict(OrderedDict):
@@ -217,6 +218,8 @@ class StructuredPropertyTree(object):
                     raise MetadataError("Undeclared group: {} ".format(k))
 
     def build_from_db(self, dataset):
+        logger.debug(
+            'Building property tree from db. dataset: {}, type: {}'.format(dataset.vid, self._type))
         session = object_session(dataset)
 
         # optimization to use only one db hit.
@@ -413,7 +416,7 @@ class Group(object):
     def __set__(self, instance, v):
         '''Called when a whole group is set'''
 
-        assert isinstance(v, dict)
+        assert isinstance(v, dict), 'Dictionary is required to set the whole group.'
         o = self.get_group_instance(instance)
         o.set(v)
 
@@ -678,7 +681,7 @@ class Term(object):
             self._config = session.query(Config)\
                 .filter_by(
                     parent_id=self._parent._config.id, d_vid=dataset.vid,
-                    type=self._top._type)\
+                    type=self._top._type, key=self._key)\
                 .one()
             if self._config.value != self.get():
                 # sync db value with term value.

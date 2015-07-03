@@ -7,17 +7,17 @@ Revised BSD License, included in this distribution as LICENSE.txt
 __docformat__ = 'restructuredtext en'
 
 from sqlalchemy import Column as SAColumn, Integer
-from sqlalchemy import  String
-from sqlalchemy.orm import relationship
+from sqlalchemy import String
+from sqlalchemy.orm import relationship, object_session
 from ..util import Constant
 from ..identity import LocationRef
 
 from . import Base, MutationDict, JSONEncodedObj
 
 from ambry.identity import DatasetNumber
-from ambry.identity import  ObjectNumber
+from ambry.identity import ObjectNumber
 from ambry.orm.file import File
-from sqlalchemy.orm import object_session
+
 
 class Dataset(Base):
     __tablename__ = 'datasets'
@@ -274,10 +274,10 @@ class ConfigAccessor(object):
     def metadata(self):
         """Access process configuarion values as attributes. See self.process
         for a usage example"""
-
-        from config import ConfigGroupAccessor
-
-        return ConfigGroupAccessor(self.dataset, 'metadata')
+        from ambry.metadata.schema import Top  # cross-module import
+        top = Top()
+        top.build_from_db(self.dataset)
+        return top
 
     @property
     def build(self):
