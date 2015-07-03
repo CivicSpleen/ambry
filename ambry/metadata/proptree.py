@@ -1022,7 +1022,7 @@ class ListTerm(Term):
         self.__set__(self._parent, v)
 
     def get(self):
-        return self
+        return self._term_values
 
     def null_entry(self):
         return []

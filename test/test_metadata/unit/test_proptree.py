@@ -1,13 +1,7 @@
 # -*- coding: utf-8 -*-
 import unittest
 
-from ambry.metadata.schema import Top
-
-from ambry.orm import Config
-
-from test.test_base import TestBase
-
-from ambry.metadata.proptree import AttrDict, StructuredPropertyTree, ScalarTerm, Group, DictGroup
+from ambry.metadata.proptree import AttrDict, StructuredPropertyTree, DictGroup, ScalarTerm, ListTerm
 
 
 class AttrDictTest(unittest.TestCase):
@@ -37,3 +31,42 @@ class ScalarTermTest(unittest.TestCase):
             tree.group1.term1 = 'value3'
         except ValueError as exc:
             self.assertIn('is not valid value', exc.message)
+
+
+class ListTermTest(unittest.TestCase):
+
+    def test_converts_scalar_value_to_list(self):
+
+        # TODO: find the way how to test terms without creating tree.
+        class Group1(DictGroup):
+            terms1 = ListTerm()
+
+        class Tree(StructuredPropertyTree):
+            group1 = Group1()
+
+        tree = Tree()
+        tree.group1.terms1 = 'value1'
+        self.assertEquals(tree.group1.terms1, ['value1'])
+
+        # test iteration
+        tested = False
+        for e in tree.group1.terms1:
+            self.assertEquals(e, 'value1')
+            tested = True
+        self.assertTrue(tested)
+
+    def test_replaces_stored_list_on_assign(self):
+
+        # TODO: find the way how to test terms without creating tree.
+        class Group1(DictGroup):
+            terms1 = ListTerm()
+
+        class Tree(StructuredPropertyTree):
+            group1 = Group1()
+
+        tree = Tree()
+        tree.group1.terms1 = ['value1']
+        self.assertEquals(tree.group1.terms1, ['value1'])
+
+        tree.group1.terms1 = ['value2', 'value3']
+        self.assertEquals(tree.group1.terms1, ['value2', 'value3'])
