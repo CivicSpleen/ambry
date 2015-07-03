@@ -99,9 +99,11 @@ class ContactTerm(DictTerm):
         return self.__nonzero__()
 
 
-class Contact(DictGroup):
-    """ """
-    _proto = ContactTerm()
+class Contacts(DictGroup):
+    creator = ContactTerm()
+    maintainer = ContactTerm()
+    source = ContactTerm()
+    analyst = ContactTerm()
 
 
 class VersonTerm(TypedDictGroup):
@@ -125,7 +127,7 @@ class Top(StructuredPropertyTree):
     dependencies = Dependencies()
     external_documentation = ExtDoc()
     build = Build()
-    contacts = Contact()
+    contacts = Contacts()
     # versions = Versions()
     names = Names()
     documentation = Documentation()

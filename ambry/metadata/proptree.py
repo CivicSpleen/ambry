@@ -402,7 +402,11 @@ class Group(object):
         self._top = parent._top
 
     def get_term_instance(self, key):
-        m = self._members[key]
+        try:
+            m = self._members[key]
+        except KeyError:
+            # TODO: Is it really attribute error?
+            raise AttributeError('{} group does not have {} member'.format(self, key))
         o = copy.copy(m)
         o.init_instance(self)
         return o
@@ -434,7 +438,7 @@ class Group(object):
     def __setattr__(self, attr, value):
         # Allows access to set _key, _member, etc
         if attr not in dir(self):
-            raise AttributeError("Group does not have such term: {} ".format(attr))
+            raise AttributeError('{} group does not have {} term'.format(self, attr))
 
         return object.__setattr__(self, attr, value)
 
@@ -1078,4 +1082,10 @@ def _set_by_path(prop_tree, path, config):
         group = getattr(group, name)
     setattr(group, key, config.value)
     term = getattr(group, key)
-    term._term._config = config
+
+    # FIXME: Make all the terms to store config the same way.
+    if hasattr(term, '_term'):
+        # ScalarTermS and ScalarTermU case
+        term._term._config = config
+    else:
+        term._config = config
