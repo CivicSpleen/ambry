@@ -5,12 +5,18 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-
-
-
-from collections import Mapping, OrderedDict, MutableMapping, MutableSequence
+from collections import Mapping, OrderedDict, MutableMapping
 import copy
+import logging
+
+from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.orm import object_session
+
+from ambry.orm.config import Config
 from ambry.orm.exc import MetadataError
+
+from ambry.util import get_logger
+logger = get_logger(__name__, level=logging.INFO)
 
 
 class AttrDict(OrderedDict):
@@ -53,10 +59,8 @@ class AttrDict(OrderedDict):
                 dst.append((k, v))
         return dst
 
-
     def flatten(self, path=tuple()):
         return self.flatten_dict(self, path=path)
-
 
     def to_dict(self):
         root = {}
@@ -128,6 +132,7 @@ class AttrDict(OrderedDict):
         if isinstance(stream, StringIO):
             return stream.getvalue()
 
+
 class StructuredPropertyTree(object):
     """A structure of dictionaries and lists that can have a defined "schema" that
     restricts what keys objects can have
@@ -135,9 +140,9 @@ class StructuredPropertyTree(object):
     The structure consists of a collection of top level groups, each of this has a collection
     of inner terms. Some terms are Scalars, while other terms can hold lists or dicts.
 
-    The StructuredPropertyTree is subclassed in meta.py and given Group properties. The Groups are subclassed to have
-    Term properties. The terms can be acessed as keys, and the values are read from and written to the database as Config
-    records with the type value set to 'metadata'
+    The StructuredPropertyTree is subclassed in meta.py and given Group properties. The Groups
+    are subclassed to have Term properties. The terms can be acessed as keys, and the values are read
+    from and written to the database as Config records with the type value set to 'metadata'
 
     So in a call like:
         ds = library.dataset(...)
@@ -159,14 +164,14 @@ class StructuredPropertyTree(object):
         group = 'external_documentation'
         key = 'dataset.url'
 
-    In the current metadata schema, key have a maximum of two parts, but it is possible to have keys of any depth.
+    In the current metadata schema, key have a maximum of two parts, but it is possible
+    to have keys of any depth.
 
     Other things to note:
 
     - If a declared proptery value does not exist in the database, fetching it returns None
     - If the property is not declared ( as with top level keys in TypedDictGroup ) a KeyError is thrown.
     - If a value is set to None, the COnfig record for the associated key is deleted.
-
 
     """
 
@@ -194,6 +199,7 @@ class StructuredPropertyTree(object):
         self._term_values = AttrDict()
 
         self.register_members()
+        self._config = None  # appropriate orm.config.Config instance
 
         self.set(d)
 
@@ -211,7 +217,62 @@ class StructuredPropertyTree(object):
                 else:
                     raise MetadataError("Undeclared group: {} ".format(k))
 
+    def build_from_db(self, dataset):
+        logger.debug(
+            'Building property tree from db. dataset: {}, type: {}'.format(dataset.vid, self._type))
+        session = object_session(dataset)
 
+        # optimization to use only one db hit.
+        configs = session.query(Config)\
+            .filter_by(d_vid=dataset.vid, type=self._type)\
+            .all()
+
+        configs_map = {x.id: x for x in configs}
+
+        for config in configs:
+            if not config.parent_id:
+                # Skip root config
+                self._config = config
+                continue
+
+            if config.group:
+                # Skip all groups
+                continue
+
+            # value found, populate.
+            # FIXME: Populate settings without looking for path.
+            path = _get_path(configs_map, self, config)
+            _set_by_path(self, path, config)
+
+        # tree is bound after build from db.
+        self.link_config(session, dataset)
+
+    def is_bound(self):
+        """ Returns True if poperty tree is bound to the db. Otherwise returns False. """
+        return self._config is not None
+
+    def link_config(self, session, dataset):
+        logger.debug(
+            'Binding top level config to the db. dataset: {}, type: {}'.format(dataset.vid, self._type))
+
+        try:
+            # finding existing config
+            self._config = session.query(Config)\
+                .filter_by(
+                    parent_id=None, d_vid=dataset.vid,
+                    type=self._type)\
+                .one()
+            logger.debug(
+                'Existing top level config bound. config: {}'.format(self._config))
+        except NoResultFound:
+            # does not exist, create new one.
+            self._config = Config(
+                d_vid=dataset.vid, type=self._top._type,
+                parent_id=None)
+            session.add(self._config)
+            session.commit()
+            logger.debug(
+                'New top level config created and bound. config: {}'.format(self._config))
 
     def register_members(self):
         """Collect the names of the class member and convert them to object
@@ -222,7 +283,7 @@ class StructuredPropertyTree(object):
 
         """
 
-        self._members = { name: attr for name, attr in type(self).__dict__.items() if isinstance(attr,Group)}
+        self._members = {name: attr for name, attr in type(self).__dict__.items() if isinstance(attr, Group)}
 
         for name, m in self._members.items():
             m.init_descriptor(name, self)
@@ -254,9 +315,6 @@ class StructuredPropertyTree(object):
         """For records that are not defined as terms, either add it to the
         errors list."""
 
-        path = '.'.join([str(x)
-                        for x in (group, term, sub_term) if x is not None])
-
         self._errors[(group, term, sub_term)] = value
 
     def dump(self, stream=None, map_view=None, keys=None):
@@ -267,24 +325,24 @@ class StructuredPropertyTree(object):
 
         return self._term_values.dump(stream, map_view=map_view)
 
+
 class Group(object):
     """A group of terms. Groups are descriptors, so when they are acessed, as class variables, the
     return an object that is linked to the class object that contains them.
 
-    Groups are linked to the group property in config records. Accessing a metadata group loads the whole group
-    from the database.
+    Groups are linked to the group property in config records. Accessing a metadata group loads
+    the whole group from the database.
 
     So,
         ds = library.dataset(...)
         ident = ds.metadata.identity
 
-    Will load all of the Config items that have a type='metadata' and group='identity'. The group itself doesn't
-    exist in the database.
+    Will load all of the Config items that have a type='metadata' and group='identity'. The group
+    itself doesn't exist in the database.
 
-    Group subclass objects create Config records when they are set, and return None when one is referenced that does not
-    exist. The group will delete Config records when the correcsponding key is deleted or set to None; the database
-    does not store Config records with None values
-
+    Group subclass objects create Config records when they are set, and return None when one is
+    referenced that does not exist. The group will delete Config records when the correcsponding key
+    is deleted or set to None; the database does not store Config records with None values
 
     """
 
@@ -299,13 +357,38 @@ class Group(object):
     def __init__(self):
         """ """
 
-        self._members = { name: attr for name,  attr in type(self).__dict__.items()
-                          if isinstance(attr,Term) and not name.startswith('_')}
+        self._members = {name: attr for name,  attr in type(self).__dict__.items()
+                          if isinstance(attr, Term) and not name.startswith('_')}
 
         self._parent = None
         self._top = None
         self._key = None
+        self._config = None  # appropriate orm.config.Config instance of the group
 
+    def update_config(self):
+        """ Updates or creates config of that term. Requires tree bount to db. """
+        dataset = self._top._config.dataset
+        session = object_session(self._top._config)
+        logger.debug(
+            'Updating group config. dataset: {}, type: {}, key: {}'.format(dataset.vid, self._top._type, self._key))
+
+        try:
+            self._config = session.query(Config)\
+                .filter_by(
+                    parent_id=self._parent._config.id, d_vid=dataset.vid,
+                    group=self._key, type=self._top._type)\
+                .one()
+            logger.debug(
+                'Existing group config linked. config: {}'.format(self._config))
+        except NoResultFound:
+            # does not exist, create new one.
+            self._config = Config(
+                d_vid=dataset.vid, type=self._top._type,
+                parent_id=self._parent._config.id, key=self._key, group=self._key)
+            session.add(self._config)
+            session.commit()
+            logger.debug(
+                'New group config created and linked. config: {}'.format(self._config))
 
     def init_descriptor(self, key, top):
         self._key = key
@@ -319,7 +402,11 @@ class Group(object):
         self._top = parent._top
 
     def get_term_instance(self, key):
-        m = self._members[key]
+        try:
+            m = self._members[key]
+        except KeyError:
+            # TODO: Is it really attribute error?
+            raise AttributeError('{} group does not have {} member'.format(self, key))
         o = copy.copy(m)
         o.init_instance(self)
         return o
@@ -328,13 +415,12 @@ class Group(object):
         """Create an instance object"""
         o = copy.copy(self)
         o.init_instance(parent)
-
         return o
 
     def __set__(self, instance, v):
         '''Called when a whole group is set'''
 
-        assert isinstance(v, dict)
+        assert isinstance(v, dict), 'Dictionary is required to set the whole group.'
         o = self.get_group_instance(instance)
         o.set(v)
 
@@ -347,16 +433,17 @@ class Group(object):
         raise NotImplementedError()
 
     def set(self, d):
-        raise NotImplementedError(type(self)) # Can't change the groups at the top level.
+        raise NotImplementedError(type(self))  # Can't change the groups at the top level.
 
     def __setattr__(self, attr, value):
         # Allows access to set _key, _member, etc
         if attr not in dir(self):
-            raise AttributeError("No such term: {} ".format(attr))
+            raise AttributeError('{} group does not have {} term'.format(self, attr))
 
         return object.__setattr__(self, attr, value)
 
-class DictGroup(Group,MutableMapping):
+
+class DictGroup(Group, MutableMapping):
     """A group that holds key/value pairs.
 
     The identity group is a dict group, with single values under the group:
@@ -418,7 +505,7 @@ class DictGroup(Group,MutableMapping):
     def __setitem__(self, key, value):
 
         if key not in self._members:
-            raise AttributeError("No such term in {}: {}. Has: {}"
+            raise AttributeError('DictGroup does not have such term in {}: {}. Use one from: {}'
                                  .format(self._key, key, [key for key in self._members.keys()]))
 
         o = self.get_term_instance(key)
@@ -536,7 +623,6 @@ class VarDictGroup(DictGroup):
     """
 
     def __getattr__(self, name):
-        import copy
 
         if name.startswith('_'):
             raise AttributeError
@@ -552,6 +638,7 @@ class VarDictGroup(DictGroup):
     def __setitem__(self, key, value):
         self._term_values[key] = value
 
+
 class Term(object):
     """A single term in a group."""
 
@@ -563,8 +650,9 @@ class Term(object):
     _default = None
     _members = None
     _link_on_null = None
+    _constraint = None
 
-    def __init__(self, store_none=True, link_on_null=None, default=None):
+    def __init__(self, store_none=True, link_on_null=None, default=None, constraint=None):
 
         self._members = { name: attr for name, attr in type(self).__dict__.items()
                           if isinstance(attr, Term)}
@@ -572,16 +660,53 @@ class Term(object):
         self._store_none = store_none
         self._default = default
         self._link_on_null = link_on_null
+        self._constraint = constraint or []
+        self._config = None  # Config instance of the term.
 
     def init_descriptor(self, key, top):
         assert(key is not None)
         self._key = key
 
-
     def init_instance(self, parent):
         self._parent = parent
         self._top = parent._top
         self._fqkey = self._parent._fqkey + '.' + self._key
+
+    def update_config(self):
+        """ Creates or updates db config of the term. Requires bound to db tree. """
+        dataset = self._top._config.dataset
+        session = object_session(self._top._config)
+        logger.debug(
+            u'Updating term config. dataset: {}, type: {}, key: {}, value: {}'.format(
+                dataset, self._top._type, self._key, self.get()))
+
+        if not self._parent._config:
+            self._parent.update_config()
+
+        try:
+            # finding existing config
+            self._config = session.query(Config)\
+                .filter_by(
+                    parent_id=self._parent._config.id, d_vid=dataset.vid,
+                    type=self._top._type, key=self._key)\
+                .one()
+            if self._config.value != self.get():
+                # sync db value with term value.
+                self._config.value = self.get()
+                session.merge(self._config)
+                session.commit()
+            logger.debug(
+                u'Existing config bound to the term. config: {}'.format(self._config))
+        except NoResultFound:
+            # does not exist, create new one.
+            self._config = Config(
+                d_vid=dataset.vid, type=self._top._type,
+                parent_id=self._parent._config.id, key=self._key,
+                value=self.get())
+            session.add(self._config)
+            session.commit()
+            logger.debug(
+                u'New config created and bound to the term. config: {}'.format(self._config))
 
     def null_entry(self):
         raise NotImplementedError("Not implemented by {}".format(type(self)))
@@ -616,26 +741,31 @@ class Term(object):
 # from http://stackoverflow.com/a/925630/1144479
 from HTMLParser import HTMLParser
 
+
 class MLStripper(HTMLParser):
+
     def __init__(self):
         self.reset()
         self.fed = []
+
     def handle_data(self, d):
         self.fed.append(d)
+
     def get_data(self):
         return ''.join(self.fed)
 
+
 class _ScalarTermS(str):
     """A scalar term for extension for  strings, with support for Jinja substitutions"""
-    def __new__(cls, string, jinja_sub):
+
+    def __new__(cls, string, jinja_sub, term):
         ob = super(_ScalarTermS, cls).__new__(cls, string)
         return ob
 
-    def __init__(self, string, jinja_sub):
-        ob = super(_ScalarTermS, self).__init__(string)
-
+    def __init__(self, string, jinja_sub, term):
+        super(_ScalarTermS, self).__init__(string)
         self.jinja_sub = jinja_sub
-        return ob
+        self._term = term
 
     @property
     def html(self):
@@ -651,17 +781,18 @@ class _ScalarTermS(str):
         s = MLStripper()
         s.feed(self.html)
         return s.get_data()
+
 
 class _ScalarTermU(unicode):
     """A scalar term for extension for unicode, with support for Jinja substitutions"""
-    def __new__(cls, string, jinja_sub):
+    def __new__(cls, string, jinja_sub, term):
         ob = super(_ScalarTermU, cls).__new__(cls, string)
         return ob
 
-    def __init__(self, string, jinja_sub):
-        ob = super(_ScalarTermU, self).__init__(string)
+    def __init__(self, string, jinja_sub, term):
+        super(_ScalarTermU, self).__init__(string)
         self.jinja_sub = jinja_sub
-        return ob
+        self._term = term
 
     @property
     def html(self):
@@ -676,14 +807,19 @@ class _ScalarTermU(unicode):
         s = MLStripper()
         s.feed(self.html)
         return s.get_data()
+
 
 class ScalarTerm(Term):
 
     """A Term that can only be a string or number."""
 
     def set(self, v):
-        print "-->", self._fqkey
+        logger.debug(u'set term: {} = {}'.format(self._fqkey, v))
+        if self._constraint and v not in self._constraint:
+            raise ValueError(u'{} is not valid value. Use one from {}.'.format(v, self._constraint))
         self._parent._term_values[self._key] = v
+        if self._top.is_bound():
+            self.update_config()
 
     def get(self):
 
@@ -695,28 +831,25 @@ class ScalarTerm(Term):
                 from jinja2 import Template
 
                 try:
-                    import json
-
-                    for i in range(5): # Only do 5 recursive substitutions.
-                        st =  Template(st).render(**(self._top.dict))
-                        if not '{{' in st:
+                    for i in range(5):  # Only do 5 recursive substitutions.
+                        st = Template(st).render(**(self._top.dict))
+                        if '{{' not in st:
                             break
-
                     return st
                 except Exception as e:
-                    raise ValueError("Failed to render jinja template for metadata value '{}': {}".format(st, e))
+                    raise ValueError(
+                        "Failed to render jinja template for metadata value '{}': {}".format(st, e))
 
             return st
 
         if isinstance(st, str):
-            return _ScalarTermS(st, jinja_sub)
+            return _ScalarTermS(st, jinja_sub, self)
         elif isinstance(st, unicode):
-            return _ScalarTermU(st, jinja_sub)
+            return _ScalarTermU(st, jinja_sub, self)
         elif st is None:
-            return _ScalarTermS('', jinja_sub)
+            return _ScalarTermS('', jinja_sub, self)
         else:
             return st
-
 
     def null_entry(self):
         return None
@@ -726,6 +859,7 @@ class ScalarTerm(Term):
 
     def is_empty(self):
         return self.get() is None
+
 
 class DictTerm(Term, MutableMapping):
 
@@ -745,7 +879,7 @@ class DictTerm(Term, MutableMapping):
 
         assert(self._key is not None)
 
-        self._store_none_map = { name: m._store_none for name, m in self._members.items()}
+        self._store_none_map = {name: m._store_none for name, m in self._members.items()}
 
     def get_term_instance(self, key):
         m = self._members[key]
@@ -808,7 +942,7 @@ class DictTerm(Term, MutableMapping):
     def __getitem__(self, key):
 
         if key not in dir(self):
-            raise AttributeError("No such term: {} ".format(key))
+            raise AttributeError('DictTerm does not have such term: {} '.format(key))
 
         o = self.get_term_instance(key)
 
@@ -828,7 +962,8 @@ class DictTerm(Term, MutableMapping):
         try:
             return self._term_values.__delitem__(key)
         except KeyError:
-            pass # From the external interface, DictTerms always appear to have keys, even when they really dont.
+            # From the external interface, DictTerms always appear to have keys, even when they really dont.
+            pass
 
     def __len__(self):
         return self._term_values.__len__()
@@ -869,6 +1004,7 @@ class DictTerm(Term, MutableMapping):
     def is_empty(self):
         return all([v is None for v in self._term_values.values()])
 
+
 class ListTerm(Term):
 
     """A Term that is always a list.
@@ -886,11 +1022,11 @@ class ListTerm(Term):
         instance._term_values[self._key] = list(v)
 
     def set(self, v):
-        print "-->", self._fqkey
+        logger.debug(u'set list term: {} = {}'.format(self._fqkey, v))
         self.__set__(self._parent, v)
 
     def get(self):
-        return self
+        return self._term_values
 
     def null_entry(self):
         return []
@@ -921,3 +1057,35 @@ class ListTerm(Term):
 
     def __iter__(self):
         return iter(self._term_values)
+
+
+def _get_path(configs_map, prop_tree, config_instance):
+    """ Returns path of the config in the tree. """
+    if config_instance.parent_id is None:
+        # root node found
+        return ''
+    parent = configs_map[config_instance.parent_id]
+    return '{}.{}'.format(_get_path(configs_map, prop_tree, parent), config_instance.key)
+
+
+def _set_by_path(prop_tree, path, config):
+    """ Sets value by given path. """
+    logger.debug('Setting {} to {}'.format(path, config.value))
+
+    group = prop_tree
+    parts = path.split('.')
+    path, key = parts[0:-1], parts[-1]
+
+    for name in path:
+        if not name:
+            continue
+        group = getattr(group, name)
+    setattr(group, key, config.value)
+    term = getattr(group, key)
+
+    # FIXME: Make all the terms to store config the same way.
+    if hasattr(term, '_term'):
+        # ScalarTermS and ScalarTermU case
+        term._term._config = config
+    else:
+        term._config = config

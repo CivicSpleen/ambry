@@ -4,7 +4,8 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from .proptree import *
+from .proptree import DictGroup, VarDictGroup, TypedDictGroup,\
+    ScalarTerm, ListTerm, DictTerm, StructuredPropertyTree
 
 
 class About(DictGroup):
@@ -14,24 +15,27 @@ class About(DictGroup):
     space = ScalarTerm()
     time = ScalarTerm()
     grain = ScalarTerm()
-    access = ScalarTerm(store_none=False)
-    # Internal, Private, Controlled, Restrcted, Registered, Licensed, Public
+    access = ScalarTerm(
+        store_none=False,
+        constraint=['internal', 'private', 'controlled', 'restricted', 'registered', 'licensed', 'public'])
     license = ScalarTerm(store_none=False)
     rights = ScalarTerm(store_none=False)
     tags = ListTerm(store_none=False)
     groups = ListTerm(store_none=False)
-    source = ScalarTerm(store_none=False) # A text statement about the source of the data
-    footnote = ScalarTerm(store_none=False) # A footnote entry
-    processed = ScalarTerm(store_none=False) # A statement about how the data were processed.
+    source = ScalarTerm(store_none=False)  # A text statement about the source of the data
+    footnote = ScalarTerm(store_none=False)  # A footnote entry
+    processed = ScalarTerm(store_none=False)  # A statement about how the data were processed.
+
 
 class Documentation(DictGroup):
     readme = ScalarTerm()
     main = ScalarTerm()
     source = ScalarTerm(store_none=False)  # Expanded from about.source
-    footnote = ScalarTerm(store_none=False) # Expanded from about.footnote
+    footnote = ScalarTerm(store_none=False)  # Expanded from about.footnote
     processed = ScalarTerm(store_none=False)  # expanded from about.processed
     title = ScalarTerm(store_none=False)  # expanded from about.title
     summary = ScalarTerm(store_none=False)  # expanded from about.summary
+
 
 class Coverage(DictGroup):
     geo = ListTerm()
@@ -75,6 +79,7 @@ class ExtDocTerm(DictTerm):
     description = ScalarTerm()
     source = ScalarTerm()
 
+
 class ExtDoc(TypedDictGroup):
     """External Documentation"""
     _proto = ExtDocTerm()  # Reusing
@@ -93,9 +98,12 @@ class ContactTerm(DictTerm):
     def __bool__(self):
         return self.__nonzero__()
 
-class Contact(DictGroup):
-    """ """
-    _proto = ContactTerm()
+
+class Contacts(DictGroup):
+    creator = ContactTerm()
+    maintainer = ContactTerm()
+    source = ContactTerm()
+    analyst = ContactTerm()
 
 
 class VersonTerm(TypedDictGroup):
@@ -104,20 +112,23 @@ class VersonTerm(TypedDictGroup):
     date = ScalarTerm()
     description = ScalarTerm(store_none=False)
 
+
 class Versions(TypedDictGroup):
     """Names that are generated from the identity"""
     _proto = VersonTerm()
 
+
 class Top(StructuredPropertyTree):
     _non_term_file = 'meta/build.yaml'
+    _type = 'metadata'  # used in the Config.type while storing in the db.
 
     about = About()
     identity = Identity()
     dependencies = Dependencies()
     external_documentation = ExtDoc()
     build = Build()
-    contacts = Contact()
-    versions = Versions()
+    contacts = Contacts()
+    # versions = Versions()
     names = Names()
     documentation = Documentation()
     coverage = Coverage()
