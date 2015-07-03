@@ -5,7 +5,6 @@ of the bundles that have been installed into it.
 # Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
 
-
 def new_library(config=None):
 
     from ckcache import new_cache
@@ -37,9 +36,10 @@ def new_library(config=None):
     db = Database(config.library()['database'])
     warehouse = None
 
-    l = Library(database=db,
-                filesystem = lfs,
-                warehouse = warehouse,
+    l = Library(config=config,
+                database=db,
+                filesystem=lfs,
+                warehouse=warehouse,
                 remotes=remotes
                 )
 
@@ -48,9 +48,10 @@ def new_library(config=None):
 
 class Library(object):
 
-    def __init__(self,database,filesystem, warehouse, remotes ):
+    def __init__(self,config, database,filesystem, warehouse, remotes ):
         from ..util import get_logger
 
+        self._config = config
         self._db = database
         self._db.open()
         self._fs = filesystem
@@ -74,25 +75,37 @@ class Library(object):
     def commit(self):
         self._db.commit()
 
+    @property
     def datasets(self):
         """Return all datasets"""
-
         return self._db.datasets()
 
+    def new_bundle(self,assignment_class = None, **kwargs):
+        """
+        Create a new bundle, with the same arguments as creating a new dataset
 
-    def new_bundle(self,**kwargs):
-        """Create a new bundle, with the same arguments as creating a new dataset"""
+        :param assignment_class: String. assignment class to use for fetching a number, if one
+        is not specified in kwargs
+        :param kwargs:
+        :return:
+        """
+
         from ..bundle import Bundle
+
+        if not ('id' in kwargs and bool(kwargs['id'])) or assignment_class is not None:
+            kwargs['id'] = self.number(assignment_class)
 
         ds = self._db.new_dataset(**kwargs)
         self._db.commit()
 
-        return self.bundle(ds.vid)
+        b =  self.bundle(ds.vid)
+        b.state = Bundle.STATES.NEW
+        self._db.commit()
+        return b
 
     def new_from_bundle_config(self, config):
         """
         Create a new bundle, or link to an existing one, based on the identity in config data.
-
 
         :param config: A Dict form of a bundle.yaml file
         :return:
@@ -103,7 +116,7 @@ class Library(object):
 
         identity = Identity.from_dict(config['identity'])
 
-        ds  = self._db.dataset(identity.vid)
+        ds = self._db.dataset(identity.vid)
 
         if not ds:
             ds = self._db.dataset(identity.name)
@@ -113,14 +126,17 @@ class Library(object):
 
         return Bundle(ds, self)
 
-
     def bundle(self, ref):
         """Return a bundle build on a dataset, with the given vid or id reference"""
 
         from ..bundle import Bundle
         from fs.opener import fsopendir
+        from ..orm.dataset import Dataset
 
-        ds = self._db.dataset(ref)
+        if isinstance(ref, Dataset ):
+            ds = ref
+        else:
+            ds = self._db.dataset(ref)
 
         source_dir = ds.config.library.source_dir.dir
 
@@ -130,6 +146,14 @@ class Library(object):
             self.commit()
 
         return Bundle(ds, self, source_fs=fsopendir(source_dir))
+
+    @property
+    def bundles(self):
+        """Return all datasets"""
+
+        for ds in self.datasets:
+            yield self.bundle(ds)
+
 
     def partition(self, ref):
         from ambry.identity import ObjectNumber
@@ -208,6 +232,77 @@ class Library(object):
         self.mark_updated(vid=bundle.identity.vid)
 
         self.cache.remove(bundle.identity.cache_key, propagate=True)
+
+    def number(self, assignment_class=None, namespace = 'd'):
+        """
+        Return a new number.
+
+        :param assignment_class: Determines the length of the number. Possible values are 'authority' (3 characters) ,
+            'registered' (5) , 'unregistered' (7)  and 'self' (9). Self assigned numbers are random and acquired locally,
+            while the other assignment classes use the number server defined in the configuration. If None,
+            then look in the number server configuration for one of the class keys, starting
+            with the longest class and working to the shortest.
+        :param namespace: The namespace character, the first character in the number. Can be one of 'd', 'x' or 'b'
+        :return:
+        """
+        from requests.exceptions import HTTPError
+        from ..identity import NumberServer, DatasetNumber
+        from ..dbexceptions import ConfigurationError
+
+        if assignment_class=='self':
+            # When 'self' is explicit, don't look for number server config
+            return str(DatasetNumber())
+
+        elif assignment_class is None:
+
+            try:
+                nsconfig = self._config.service('numbers')
+
+            except ConfigurationError:
+                # A missing configuration is equivalent to 'self'
+                self.logger.error("No number server configuration; returning self assigned number")
+                return str(DatasetNumber())
+
+            for assignment_class in ('self', 'unregistered', 'registered', 'authority'):
+                if assignment_class+'-key' in nsconfig:
+                    break
+
+            # For the case where the number configuratoin references a self-assigned key
+            if assignment_class == 'self':
+                return str(DatasetNumber())
+
+        else:
+            try:
+                nsconfig = self._config.service('numbers')
+
+            except ConfigurationError:
+                raise ConfigurationError("No number server configuration")
+
+            if assignment_class + '-key' not in nsconfig:
+                raise ConfigurationError('Assignment class {} not number server config'.format(assignment_class))
+
+        try:
+
+            key = nsconfig[assignment_class + '-key']
+            config = {
+                'key': key,
+                'host': nsconfig['host'],
+                'port': nsconfig.get('port',80)
+            }
+
+            ns = NumberServer(**config)
+
+            n  = str(ns.next())
+            self.logger.info("Got number from number server: {}".format(n))
+
+        except HTTPError as e:
+            self.logger.error("Failed to get number from number server for key: {}".format(key, e.message))
+            self.logger.error("Using self-generated number. "
+                 "There is no problem with this, but they are longer than centrally generated numbers.")
+            n = str(DatasetNumber())
+
+        return n
+
 
     @property
     def search(self):

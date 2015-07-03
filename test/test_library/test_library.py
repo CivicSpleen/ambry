@@ -1,10 +1,11 @@
 
 from test.test_base import TestBase
+from ambry.library import new_library
 
 class Test(TestBase):
 
     def test_library(self):
-        from ambry.library import new_library
+
         from fs.opener import fsopendir
         from test import bundlefiles
         from os.path import dirname
@@ -18,6 +19,17 @@ class Test(TestBase):
         b = l.new_bundle(**self.ds_params(1))
 
         # TODO. DOesn't actually test anything yet.
+
+    def test_number(self):
+
+        l = new_library(self.get_rc())
+
+        print l.number()
+
+        b = l.new_bundle(source='source',dataset='dataset')
+
+        for b in l.bundles:
+            print b.identity.vname
 
 def suite():
     import unittest

@@ -203,6 +203,8 @@ def bundle_parser(cmd):
 
 
 def bundle_info(args, b, st, rc):
+    raise NotImplementedError()
+
     import textwrap
     from ambry.orm.exc import DatabaseMissingError
 
@@ -339,6 +341,8 @@ def bundle_info(args, b, st, rc):
 
 
 def bundle_clean(args, b, st, rc):
+    raise NotImplementedError()
+
     b.log("---- Cleaning ---")
     # Only clean the meta phases when it is explicityly specified.
     # b.clean(clean_meta=('meta' in phases))
@@ -347,6 +351,7 @@ def bundle_clean(args, b, st, rc):
 
 
 def bundle_meta(args, b, st, rc):
+    raise NotImplementedError()
 
     # The meta phase does not require a database, and should write files
     # that only need to be done once.
@@ -363,10 +368,13 @@ def bundle_meta(args, b, st, rc):
 
 
 def bundle_prepare(args, b, st, rc):
+    raise NotImplementedError()
     return b.do_prepare()
 
 
 def bundle_build(args, b, st, rc):
+    raise NotImplementedError()
+
     r = b.do_build()
 
     # Closing is generally important. In this case, if the bundle isn't closed, and the bundle is installed below,
@@ -380,6 +388,7 @@ def bundle_build(args, b, st, rc):
 
 
 def bundle_install(args, b, st, rc):
+    raise NotImplementedError()
 
     force = args.force
 
@@ -398,6 +407,7 @@ def bundle_install(args, b, st, rc):
 
 
 def bundle_run(args, b, st, rc):
+    raise NotImplementedError()
     import sys
 
     #
@@ -428,7 +438,7 @@ def bundle_run(args, b, st, rc):
 
 
 def bundle_update(args, b, st, rc):
-
+    raise NotImplementedError()
     if b.pre_update():
         b.log("---- Update ---")
         if b.update():
@@ -442,6 +452,8 @@ def bundle_update(args, b, st, rc):
 
 
 def bundle_config(args, b, st, rc):
+
+    raise NotImplementedError()
 
     if args.subsubcommand == 'rewrite':
         b.log("Rewriting the config file")
@@ -596,6 +608,7 @@ def bundle_config_scrape(args, b, st, rc):
 
 
 def bundle_repopulate(args, b, st, rc):
+    raise NotImplementedError()
     return b.repopulate()
 
 
@@ -659,40 +672,17 @@ def root_meta(args, l, rc):
 def bundle_new(args, l, rc):
     """Clone one or more registered source packages ( via sync ) into the
     source directory."""
-    from ..identity import DatasetNumber, Identity
-    from ..identity import NumberServer
-    from requests.exceptions import HTTPError
+
     from ambry.orm.exc import ConflictError
-    import os
 
-    d = vars(args)
-    d['revision'] = 1
-
-    d['btime'] = d.get('time', None)
-    d['bspace'] = d.get('space', None)
-
-    if args.dryrun or args.key in ('rand', 'self'):
-
-        prt("Using self-generated id")
-
-        d['id'] = str(DatasetNumber())
-
-    else:
-        try:
-
-            nsconfig = rc.service('numbers')
-            if args.key:
-                nsconfig['key'] = args.key
-
-            ns = NumberServer(**nsconfig)
-
-            d['id'] = str(ns.next())
-            prt("Got number from number server: {}".format(d['id']))
-        except HTTPError as e:
-            warn("Failed to get number from number server. Config = {}: {}".format( nsconfig,e.message))
-            warn("Using self-generated number. "
-                 "There is no problem with this, but they are longer than centrally generated numbers.")
-            d['id'] = str(DatasetNumber())
+    d = dict(
+         dataset= args.dataset,
+         revision=args.revision,
+         source=args.source,
+         bspace=args.space,
+         subset=args.subset,
+         btime=args.time,
+         variation=args.variation)
 
     try:
         ambry_account = rc.group('accounts').get('ambry', {})
@@ -708,23 +698,14 @@ def bundle_new(args, l, rc):
 
         fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
 
-    ident = Identity.from_dict(d)
+    try:
+        b = l.new_bundle(**d)
 
-    return Bundle(self.new_db_dataset(self.db), self.library, source_fs=mem_fs, build_fs=build_fs)
+    except ConflictError:
+        fatal("Can't create dataset; one with a conflicting name already exists")
 
-    metadata.identity = ident.ident_dict
-    metadata.names = ident.names_dict
-    metadata.write_to_dir(write_all=True)
+    print b.identity.fqname
 
-    # Now that the bundle has an identity, we can load the config through the
-    # bundle.
-
-    b.metadata.contact_bundle.creator.email = ambry_account.get('email')
-    b.metadata.contact_bundle.creator.name = ambry_account.get('name')
-    b.metadata.contact_bundle.creator.url = ambry_account.get('url', '')
-    b.metadata.contact_bundle.creator.org = ambry_account.get('org', '')
-
-    b.update_configuration()
 
 
 

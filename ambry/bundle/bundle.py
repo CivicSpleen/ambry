@@ -158,6 +158,7 @@ class Bundle(object):
     ##
 
     STATES = Constant()
+    STATES.NEW = 'new'
     STATES.SYNCED = 'synced'
     STATES.CLEANING = 'cleaning'
     STATES.CLEANED = 'cleaned'
@@ -620,6 +621,19 @@ class Bundle(object):
 
     #######
     #######
+
+    def field_row(self, fields):
+        """Return a list of values to match the fielsds values"""
+
+        row = self.dataset.row(fields)
+
+        for i, f in enumerate(fields):
+            if f == 'state':
+                row[i] = self.state
+
+
+        return row
+
 
     def clear_states(self):
         return self.dataset.config.build.clean()

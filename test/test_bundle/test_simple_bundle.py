@@ -136,6 +136,7 @@ class Test(TestBase):
             rmtree(td)
 
     def test_install(self):
+        """Test copying a bundle to a remote, then streaming it back"""
 
         b = self.test_simple_build()
         l = b._library

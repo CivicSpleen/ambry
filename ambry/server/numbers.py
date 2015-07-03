@@ -19,14 +19,18 @@ numbers:
 
 
 The key is a secret key that the client will use to assign an assignment class.
-The two classes are 'authoritative' and 'registered' Only central authority
+The two classes are 'authority' and 'registered' Only central authority
 operators ( like Clarinova ) should use the authoritative class. Other users can
 use the 'registered' class. Without a key and class assignment, the callers us
 the 'unregistered' class.
 
-Set the assignment class with the redis-cli:
+Set the key for the authority class with the redis-cli:
 
-    set assignment_class:this-is-a-long-uid-key authoritative
+    set assignment_class:this-is-a-long-uid-key authority
+
+For 'registered' users, use:
+
+    set assignment_class:this-is-a-long-uid-key registered
 
 There is only one uri to call:
 

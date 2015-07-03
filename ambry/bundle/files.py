@@ -258,12 +258,6 @@ class PythonSourceFile(StringSourceFile):
         """Add the filesystem to the Python sys path with an import hook, then import
         to file as Python"""
 
-        import sys
-        from fs.expose.importhook import FSImportHook
-
-        #sys.meta_path.append(FSImportHook(self._fs))
-        #mod = __import__('bundle')
-
         context = {}
 
         exec self._dataset.bsfile(self._file_const).contents in context
