@@ -645,8 +645,9 @@ class Term(object):
     _default = None
     _members = None
     _link_on_null = None
+    _constraint = None
 
-    def __init__(self, store_none=True, link_on_null=None, default=None):
+    def __init__(self, store_none=True, link_on_null=None, default=None, constraint=None):
 
         self._members = { name: attr for name, attr in type(self).__dict__.items()
                           if isinstance(attr, Term)}
@@ -654,6 +655,7 @@ class Term(object):
         self._store_none = store_none
         self._default = default
         self._link_on_null = link_on_null
+        self._constraint = constraint or []
         self._config = None  # Config instance of the term.
 
     def init_descriptor(self, key, top):
@@ -808,6 +810,8 @@ class ScalarTerm(Term):
 
     def set(self, v):
         logger.debug(u'set term: {} = {}'.format(self._fqkey, v))
+        if self._constraint and v not in self._constraint:
+            raise ValueError(u'{} is not valid value. Use one from {}.'.format(v, self._constraint))
         self._parent._term_values[self._key] = v
         if self._top.is_bound():
             self.update_config()
@@ -933,7 +937,7 @@ class DictTerm(Term, MutableMapping):
     def __getitem__(self, key):
 
         if key not in dir(self):
-            raise AttributeError("No such term: {} ".format(key))
+            raise AttributeError("11No such term: {} ".format(key))
 
         o = self.get_term_instance(key)
 

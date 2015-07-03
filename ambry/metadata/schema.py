@@ -14,8 +14,9 @@ class About(DictGroup):
     space = ScalarTerm()
     time = ScalarTerm()
     grain = ScalarTerm()
-    access = ScalarTerm(store_none=False)
-    # Internal, Private, Controlled, Restrcted, Registered, Licensed, Public
+    access = ScalarTerm(
+        store_none=False,
+        constraint=['internal', 'private', 'controlled', 'restricted', 'registered', 'licensed', 'public'])
     license = ScalarTerm(store_none=False)
     rights = ScalarTerm(store_none=False)
     tags = ListTerm(store_none=False)
