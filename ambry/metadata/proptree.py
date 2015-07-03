@@ -16,7 +16,7 @@ from ambry.orm.config import Config
 from ambry.orm.exc import MetadataError
 
 from ambry.util import get_logger
-logger = get_logger(__name__, level=logging.DEBUG)
+logger = get_logger(__name__, level=logging.INFO)
 
 
 class AttrDict(OrderedDict):
