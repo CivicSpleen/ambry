@@ -295,6 +295,9 @@ class StructuredPropertyTree(object):
 
             return self._term_values[k]
 
+    def __getitem__(self, key):
+        return self.__getattr__(key)
+
     @property
     def errors(self):
         return self._errors
