@@ -234,13 +234,9 @@ class Library(object):
         '''Remove a bundle from the library, and delete the configuration for
         it from the library database'''
 
-        raise NotImplementedError
+        bundle.remove()
+        self.database.remove_dataset(bundle.dataset)
 
-        self.database.remove_bundle(bundle)
-
-        self.mark_updated(vid=bundle.identity.vid)
-
-        self.cache.remove(bundle.identity.cache_key, propagate=True)
 
     def number(self, assignment_class=None, namespace = 'd'):
         """

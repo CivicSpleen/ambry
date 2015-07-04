@@ -81,6 +81,11 @@ def root_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='sync')
 
+    sp = cmd.add_parser('remove', help='Remove a bundle from the library')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='remove')
+    sp.add_argument('term', nargs='?', type=str, help='bundle reference')
+
 
 def root_command(args, rc):
     from ..library import new_library
@@ -315,3 +320,8 @@ def root_doc(args, l, rc):
 
     app.run(host=app_config['host'], port=int(app_config['port']), debug=args.debug)
 
+def root_remove(args, l, rc):
+
+    b = l.bundle(args.term)
+
+    l.remove(b)

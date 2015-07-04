@@ -257,6 +257,9 @@ class MetadataFile(DictBuildSourceFile):
 
         contents = fr.unpacked_contents
 
+        if not contents:
+            return
+
         ad = AttrDict(contents)
 
         # Get time that filessystem was synchronized to the File record.

@@ -134,8 +134,8 @@ class BuildPropertyTreeFromDatabaseTest(TestBase):
 
         # change and test
         assert top.is_bound()
+        vid_value_config = self.db.session.query(Config).filter_by(key='vid', type='metadata').one()
+        self.assertNotEquals(vid_value_config.value, 'vid-2')
         top.names.vid = 'vid-2'
-        vid_value_config = self.db.session.query(Config)\
-            .filter_by(key='vid', type='metadata')\
-            .one()
+        vid_value_config = self.db.session.query(Config).filter_by(key='vid', type='metadata').one()
         self.assertEquals(vid_value_config.value, 'vid-2')

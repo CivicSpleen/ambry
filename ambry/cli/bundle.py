@@ -145,10 +145,10 @@ def bundle_parser(cmd):
     command_p.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
     command_p.add_argument('-r', '--rebuild', default=False, action="store_true",
                            help='Rebuild the schema, but dont delete built files')
-    command_p.add_argument('-F', '--fast', default=False, action="store_true",
-                           help='Load the schema faster by not checking for extant columns')
     command_p.add_argument('-f', '--force', default=False, action="store_true",
                            help='Force build. ( --clean is usually preferred ) ')
+    command_p.add_argument('term', nargs='?', type=str, help='bundle reference')
+
     #
     # Build Command
     #
@@ -212,7 +212,6 @@ def bundle_parser(cmd):
                    help="Edit the schema")
     group.add_argument('-d', '--documentation', default=False, action='store_const', const=File.BSFILE.DOC, dest='file_const',
                    help="Edit the documentation")
-
     command_p.add_argument('term', nargs='?', type=str, help='bundle reference')
 
 def bundle_info(args, b, st, rc):
@@ -380,8 +379,12 @@ def bundle_meta(args, b, st, rc):
         b.log("---- Skipping Meta ---- ")
 
 
-def bundle_prepare(args, b, st, rc):
-    raise NotImplementedError()
+def bundle_prepare(args, l, rc):
+
+    ref, source = get_bundle_ref(l, args)
+    prt("Preparing ref {} from {}".format(ref, source))
+    b = l.bundle(ref)
+
     return b.do_prepare()
 
 
@@ -824,10 +827,14 @@ def bundle_edit(args, l, rc):
                 b.sync()
 
             elif command == 'build':
+                bc = b.cast_to_subclass()
                 if arg == 'p':
-                    b.prepare()
+                    bc.do_clean()
+                    bc.do_prepare()
+
                 elif arg == 'B':
-                    b.build()
+                    bc.do_clean()
+                    bc.do_build()
 
             elif command == 'unknown':
                 warn('Unknown command char: {} '.format(arg))

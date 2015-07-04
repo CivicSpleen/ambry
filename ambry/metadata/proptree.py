@@ -252,8 +252,7 @@ class StructuredPropertyTree(object):
         return self._config is not None
 
     def link_config(self, session, dataset):
-        logger.debug(
-            'Binding top level config to the db. dataset: {}, type: {}'.format(dataset.vid, self._type))
+        logger.debug('Binding top level config to the db. dataset: {}, type: {}'.format(dataset.vid, self._type))
 
         try:
             # finding existing config
@@ -294,6 +293,9 @@ class StructuredPropertyTree(object):
         else:
 
             return self._term_values[k]
+
+    def __getitem__(self, item):
+        return self.__getattr__(item)
 
     @property
     def errors(self):

@@ -31,6 +31,8 @@ class Test(TestBase):
 
         self.assertTrue(len(b.dataset.configs) > 10)
 
+        self.dump_database('config')
+
         self.assertEquals('Simple Example Bundle',b.metadata.about.title)
         self.assertEquals('Example Com', b.metadata.contact_source['creator.org'] )
         self.assertEquals([u'example', u'demo'], b.metadata.about.tags )

@@ -68,6 +68,8 @@ class Names(DictGroup):
 class Dependencies(VarDictGroup):
     """Bundle dependencies"""
 
+class Requirements(VarDictGroup):
+    """Python package dependencies"""
 
 class Build(VarDictGroup):
     """Build parameters"""
@@ -125,10 +127,10 @@ class Top(StructuredPropertyTree):
     about = About()
     identity = Identity()
     dependencies = Dependencies()
+    requirements = Requirements()
     external_documentation = ExtDoc()
     build = Build()
     contacts = Contacts()
-    # versions = Versions()
     names = Names()
     documentation = Documentation()
     coverage = Coverage()

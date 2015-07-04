@@ -193,8 +193,8 @@ class Bundle(object):
     def do_clean(self):
 
         self.state = self.STATES.CLEANING
-        if self.clean():
 
+        if self.clean():
             if self.post_clean():
                 self.log("---- Done Cleaning ----")
                 self.state = self.STATES.CLEANED
@@ -232,7 +232,7 @@ class Bundle(object):
         if ds.bsfile(File.BSFILE.COLMAP).has_contents:
             self.dataset.colmaps[:] = []
 
-        ds.config.metadata.clean()
+        #ds.config.metadata.clean()
         ds.config.build.clean()
         ds.config.process.clean()
 
@@ -618,6 +618,15 @@ class Bundle(object):
         r = self.library.resolve(self.identity.vid)
 
         return r is not None
+
+    ##
+    ##
+    ##
+
+    def remove(self):
+        """Delete resources associated with the bundle."""
+        pass # Remove files in the file system other resource.
+
 
     #######
     #######
