@@ -6,9 +6,8 @@ included in this distribution as LICENSE.txt
 
 """
 
-
 from ..cli import prt, fatal, warn, err
-
+from ..orm import File
 
 def bundle_command(args, rc):
 
@@ -17,7 +16,6 @@ def bundle_command(args, rc):
     l = new_library(rc)
     l.logger = global_logger
 
-
     if args.debug:
         from ..util import debug
         warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
@@ -25,8 +23,27 @@ def bundle_command(args, rc):
 
     globals()['bundle_' + args.subcommand](args, l, rc)
 
+def get_bundle_ref(l,args):
+    """ Use a variety of methods to determine which bundle to use
 
+    :param args:
+    :return:
+    """
+    import os
 
+    if args.term:
+        return (args.term, 'argument')
+    elif args.id:
+        return (args.id, '-i argument')
+    elif 'AMBRY_BUNDLE' in os.environ:
+        return (os.environ['AMBRY_BUNDLE'], 'environment')
+    else:
+        history = l.edit_history()
+
+        if history:
+            return (history[0].d_vid, 'history')
+
+    return None, None
 
 def bundle_parser(cmd):
     import multiprocessing
@@ -35,6 +52,7 @@ def bundle_parser(cmd):
     parser = cmd.add_parser('bundle', help='Manage bundle files')
     parser.set_defaults(command='bundle')
 
+    parser.add_argument('-i', '--id', required=False, help='Bundle ID')
     parser.add_argument('-D', '--debug', required=False, default=False, action="store_true",
                         help='URS1 signal will break to interactive prompt')
     parser.add_argument('-t', '--test', default=False, action="store_true",
@@ -43,7 +61,6 @@ def bundle_parser(cmd):
                         help='Run the build process on multiple processors, if the  method supports it')
 
     sub_cmd = parser.add_subparsers(title='commands', help='command help')
-
 
     sp = sub_cmd.add_parser('new', help='Create a new bundle')
     sp.set_defaults(subcommand='new')
@@ -74,7 +91,6 @@ def bundle_parser(cmd):
     # config doc
     sp = asp.add_parser('doc', help='Display some of the bundle documentation')
     sp.set_defaults(subsubcommand='doc')
-
 
     # config incver
     sp = asp.add_parser('incver', help='Increment the version number')
@@ -160,20 +176,13 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('install', help='Install bundles and partitions to the library')
     command_p.set_defaults(subcommand='install')
     command_p.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
-    command_p.add_argument(
-        '-l',
-        '--library',
-        help='Name of the library, defined in the config file')
-    command_p.add_argument(
-        '-f',
-        '--force',
-        default=False,
-        action="store_true",
-        help='Force storing the file')
+    command_p.add_argument('-l','--library',help='Name of the library, defined in the config file')
+    command_p.add_argument('-f' '--force', default=False,action="store_true",help='Force storing the file')
 
     #
     # run Command
     #
+
     command_p = sub_cmd.add_parser('run', help='Run a method on the bundle')
     command_p.set_defaults(subcommand='run')
     command_p.add_argument('method', metavar='Method', type=str, help='Name of the method to run')
@@ -186,21 +195,25 @@ def bundle_parser(cmd):
                                    help='Load data previously submitted to the library back into the build dir')
     command_p.set_defaults(subcommand='repopulate')
 
-    #
-    # Source Commands
-    #
 
-    command_p = sub_cmd.add_parser('commit', help='Commit the source')
-    command_p.set_defaults(subcommand='commit', command_group='source')
-    command_p.add_argument('-m', '--message', default=None, help='Git commit message')
+    command_p = sub_cmd.add_parser('edit', help='Edit a bundle file')
+    command_p.set_defaults(subcommand='edit')
 
-    command_p = sub_cmd.add_parser('push', help='Commit and push to the git origin')
-    command_p.set_defaults(subcommand='push', command_group='source')
-    command_p.add_argument('-m', '--message', default=None, help='Git commit message')
+    group = command_p.add_mutually_exclusive_group()
+    group.add_argument('-b', '--bundle',  default=False, action='store_const', const=File.BSFILE.BUILD, dest='file_const',
+                       help="Edit the code file")
+    group.add_argument('-m', '--meta', default=False, action='store_const', const=File.BSFILE.META, dest='file_const',
+                       help="Edit the metadata")
+    group.add_argument('-c', '--colmap', default=False, action='store_const', const=File.BSFILE.COLMAP, dest='file_const',
+                       help="Edit the column map")
+    group.add_argument('-r', '--sources', default=False, action='store_const', const=File.BSFILE.SOURCES, dest='file_const',
+                       help="Edit the sources")
+    group.add_argument('-s', '--schema', default=False, action='store_const', const=File.BSFILE.SCHEMA, dest='file_const',
+                   help="Edit the schema")
+    group.add_argument('-d', '--documentation', default=False, action='store_const', const=File.BSFILE.DOC, dest='file_const',
+                   help="Edit the documentation")
 
-    command_p = sub_cmd.add_parser('pull', help='Pull from the git origin')
-    command_p.set_defaults(subcommand='pull', command_group='source')
-
+    command_p.add_argument('term', nargs='?', type=str, help='bundle reference')
 
 def bundle_info(args, b, st, rc):
     raise NotImplementedError()
@@ -675,6 +688,7 @@ def bundle_new(args, l, rc):
 
     from ambry.orm.exc import ConflictError
 
+
     d = dict(
          dataset= args.dataset,
          revision=args.revision,
@@ -707,7 +721,119 @@ def bundle_new(args, l, rc):
     print b.identity.fqname
 
 
+file_const_map = dict(
+    b=File.BSFILE.BUILD,
+    d=File.BSFILE.DOC,
+    m=File.BSFILE.META,
+    s=File.BSFILE.SCHEMA,
+    c=File.BSFILE.COLMAP,
+    r=File.BSFILE.SOURCES)
 
 
+def bundle_edit(args, l, rc):
+    import sys, os
+    import subprocess
 
+    from ..util import getch
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
+    from Queue import Queue
+    import threading
 
+    ref, frm = get_bundle_ref(l,args)
+
+    prt('Editing bundle  {}, referenced from {}'.format(ref, frm))
+
+    b = l.bundle(ref)
+
+    prt("Found bundle {}".format(b.identity.fqname))
+
+    EDITOR = os.environ.get('EDITOR', 'vim')  # that easy!
+
+    b.sync()
+
+    prt('Commands: q=quit, {}'.format(  ', '.join( k+'='+v for k,v in file_const_map.items())))
+
+    def edit(const):
+
+        bf = b.source_files.file(const)
+        bf.prepare_to_edit()
+
+        file_path =  bf.path
+
+        prt("Editing {}".format(file_path))
+
+        _, ext = os.path.splitext(file_path)
+
+        if sys.platform.startswith('darwin'):
+            subprocess.call(('open', file_path))
+        elif os.name == 'nt':
+            os.startfile(file_path)
+        elif os.name == 'posix':
+            subprocess.call(('xdg-open', file_path))
+
+    if args.file_const:
+        edit(args.file_const)
+
+    queue = Queue()
+    class EditEventHandler(FileSystemEventHandler):
+        def on_modified(self, event):
+            queue.put(('change',event.src_path))
+
+    observer = Observer()
+    observer.schedule(EditEventHandler(), os.path.dirname(b.source_fs.getsyspath('/')))
+    observer.start()
+
+    # Thread to get commands from the user. Using a thread so that the char input can block on input
+    # and the main thread can still process change events.
+    def get_chars():
+        while True:
+            char = getch()
+
+            if char == 'q' or ord(char) == 3: # Crtl-c
+                queue.put(('quit', None))
+                break
+            if char in ('p','B'):
+                queue.put(('build', char))
+            elif char in file_const_map:
+                queue.put(('edit', file_const_map[char]))
+            else:
+                queue.put(('unknown', char))
+
+    get_chars_t = threading.Thread(target=get_chars)
+    get_chars_t.start()
+
+    # Look, in this thread, that executed the commands.
+    while True:
+        try:
+            command, arg = queue.get(True)
+
+            # On OS X Terminal, the printing moves the cursor down a lone, but not to the start, so these
+            # ANSI sequences fix the cursor positiing. No idea why ...
+            print "\033[0G\033[1F"
+
+            if command == 'quit':
+                observer.stop()
+                break
+
+            elif command == 'edit':
+                edit(arg)
+
+            elif command == 'change':
+                prt("Changed: {}".format(arg))
+                b.sync()
+
+            elif command == 'build':
+                if arg == 'p':
+                    b.prepare()
+                elif arg == 'B':
+                    b.build()
+
+            elif command == 'unknown':
+                warn('Unknown command char: {} '.format(arg))
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+
+    observer.join()
+    get_chars_t.join()

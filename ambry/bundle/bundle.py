@@ -77,8 +77,8 @@ class Bundle(object):
     @property
     def sources(self):
         """Return the Sources acessor"""
-        from sources import SourceFilesAcessor
-        return SourceFilesAcessor(self)
+        from sources import SourceFilesAccessor
+        return SourceFilesAccessor(self)
 
     @property
     def metadata(self):
@@ -631,9 +631,7 @@ class Bundle(object):
             if f == 'state':
                 row[i] = self.state
 
-
         return row
-
 
     def clear_states(self):
         return self.dataset.config.build.clean()
@@ -665,4 +663,7 @@ class Bundle(object):
 
         self.dataset.config.build.state.error = time()
 
+    def set_last_access(self, tag):
+        """Mark the time that this bundle was last accessed"""
 
+        self.dataset.config.build.access.last = tag

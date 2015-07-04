@@ -57,6 +57,8 @@ class Test(TestBase):
             self.assertIn('UNIQUE constraint failed', exc.message)
 
 
+
+
 def suite():
     import unittest
     suite = unittest.TestSuite()

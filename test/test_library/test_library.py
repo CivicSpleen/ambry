@@ -31,6 +31,8 @@ class Test(TestBase):
         for b in l.bundles:
             print b.identity.vname
 
+        print l.edit_history()
+
 def suite():
     import unittest
     suite = unittest.TestSuite()

@@ -8,7 +8,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 from collections import OrderedDict
 
-class SourceFilesAcessor(object):
+class SourceFilesAccessor(object):
 
     header = (
         ("name","name"),
@@ -83,7 +83,6 @@ class SourceFilesAcessor(object):
                             s.row_spec[k] = v
                         elif k in s.row_spec:
                             del s.row_spec[k]
-
 
     def write(self):
 

@@ -41,3 +41,4 @@ fs==0.5.2
 msgpack-python==0.4.6
 runstats
 tabulate
+watchdog

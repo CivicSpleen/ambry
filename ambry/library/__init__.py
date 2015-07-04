@@ -76,6 +76,11 @@ class Library(object):
         self._db.commit()
 
     @property
+    def root(self):
+        """Return the root dataset"""
+        return self._db.root_dataset
+
+    @property
     def datasets(self):
         """Return all datasets"""
         return self._db.datasets()
@@ -91,6 +96,7 @@ class Library(object):
         """
 
         from ..bundle import Bundle
+        from time import time
 
         if not ('id' in kwargs and bool(kwargs['id'])) or assignment_class is not None:
             kwargs['id'] = self.number(assignment_class)
@@ -100,6 +106,9 @@ class Library(object):
 
         b =  self.bundle(ds.vid)
         b.state = Bundle.STATES.NEW
+
+        b.set_last_access(Bundle.STATES.NEW)
+
         self._db.commit()
         return b
 
@@ -302,6 +311,16 @@ class Library(object):
             n = str(DatasetNumber())
 
         return n
+
+    def edit_history(self):
+        """Return config record information about the most recent bundle accesses and operations"""
+        from ..orm import Config
+
+        return (self._db.session.query(Config)
+                .filter(Config.type =='buildstate').filter(Config.group =='access').filter(Config.key =='last')
+                .order_by(Config.modified.desc())).all()
+
+
 
 
     @property
