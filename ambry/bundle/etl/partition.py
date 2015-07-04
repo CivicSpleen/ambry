@@ -37,6 +37,7 @@ class PartitionDataFile(object):
         """
 
         self._fs = fs
+
         self._path = path
         self._nrows = 0
         self._header = None
@@ -123,7 +124,6 @@ class PartitionCsvDataFile(PartitionDataFile):
 
         if not self._writer:
 
-
             if not stream:
                 stream = self.openw()
 
@@ -131,14 +131,14 @@ class PartitionCsvDataFile(PartitionDataFile):
 
         return self._writer
 
+
     def reader(self, stream = None):
         import unicodecsv as csv
 
         if not self._reader:
 
             if not stream:
-                stream = self.openw()
-
+                stream = self.openr()
 
             self._reader = csv.reader(stream)
 
@@ -185,7 +185,7 @@ class PartitionCsvDataFile(PartitionDataFile):
 
         self.close()
 
-        for i, row in enumerate(self.reader):
+        for i, row in enumerate(self.reader()):
             if i == 0:
                 self._header = row
             self._nrows  = 1
@@ -197,7 +197,7 @@ class PartitionCsvDataFile(PartitionDataFile):
 
         self.close()
 
-        for i, row in enumerate(self.reader):
+        for i, row in enumerate(self.reader()):
             if i == 0:
                 self._header = row
                 continue

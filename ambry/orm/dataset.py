@@ -83,6 +83,9 @@ class Dataset(Base):
             except ValueError as e:
                 raise ValueError('Could not parse id value; ' + e.message)
 
+        if not self.revision:
+            self.revision = 1
+
         if self.cache_key is None:
             self.cache_key = self.identity.cache_key
 
@@ -236,6 +239,19 @@ class Dataset(Base):
                 d[k] = self.data[k]
 
         return d
+
+    def row(self, fields):
+        """Return a row for fields, for CSV files, pretty printing, etc, give a set of fields to return"""
+
+        d = self.dict
+
+        row = [None] * len(fields)
+
+        for i,f in enumerate(fields):
+            if f in d:
+                row[i] = d[f]
+
+        return row
 
     def __repr__(self):
         return """<datasets: id={} vid={} name={} source={} ds={} ss={} var={} rev={}>""".format(

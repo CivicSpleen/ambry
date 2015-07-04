@@ -31,6 +31,8 @@ class Test(TestBase):
 
         self.assertTrue(len(b.dataset.configs) > 10)
 
+        self.dump_database('config')
+
         self.assertEquals('Simple Example Bundle',b.metadata.about.title)
         self.assertEquals('Example Com', b.metadata.contact_source['creator.org'] )
         self.assertEquals([u'example', u'demo'], b.metadata.about.tags )
@@ -136,6 +138,7 @@ class Test(TestBase):
             rmtree(td)
 
     def test_install(self):
+        """Test copying a bundle to a remote, then streaming it back"""
 
         b = self.test_simple_build()
         l = b._library

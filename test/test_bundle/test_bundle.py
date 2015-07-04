@@ -26,6 +26,20 @@ class Test(TestBase):
 
         self.assertTrue(bool(b.error_state))
 
+    def test_edit(self):
+
+        b = self.new_bundle()
+
+        fs = b.source_fs
+
+        print list(fs.listdir())
+
+        print b.source_files.build_file.prepare_to_edit()
+
+        print list(fs.listdir())
+
+        print b.source_files.build_file.path
+
 def suite():
     import unittest
     suite = unittest.TestSuite()

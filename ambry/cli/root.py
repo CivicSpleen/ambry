@@ -81,6 +81,11 @@ def root_parser(cmd):
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='sync')
 
+    sp = cmd.add_parser('remove', help='Remove a bundle from the library')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='remove')
+    sp.add_argument('term', nargs='?', type=str, help='bundle reference')
+
 
 def root_command(args, rc):
     from ..library import new_library
@@ -101,58 +106,24 @@ def root_command(args, rc):
 
 
 def root_list(args, l, rc):
-    from ..cli import _print_bundle_list
-    from ambry.warehouse.manifest import Manifest
+
+
     ##
     # Listing warehouses and collections is different
 
     if args.collection:
-
-        for f in l.manifests:
-
-            try:
-                m = Manifest(f.content)
-                print "{:10s} {:25s}| {}".format(m.uid, m.title, m.summary['summary_text'])
-            except Exception as e:
-                warn("Failed to parse manifest {}: {}".format(f.ref, e))
-                continue
-
-        return
+        #root_list_collections(args,l,rc)
+        pass
 
     if args.warehouse:
-
-        if args.plain:
-            fields = []
-        else:
-            fields = ['title', 'dsn', 'summary', 'url', 'cache']
-
-        format = '{:5s}{:10s}{}'
-
-        def _get(s, f):
-
-            if f == 'dsn':
-                f = 'path'
-
-            try:
-                return s.data[f] if f in s.data else getattr(s, f)
-            except AttributeError:
-                return ''
-
-        for s in l.stores:
-            print s.ref
-
-            for f in fields:
-                if _get(s, f):
-                    print format.format('', f, _get(s, f))
-        return
+        #root_list_collections(args, l, rc)
+        pass
     ##
     # The remainder are for listing bundles and partitions.
 
     if args.tables:
-        for table in l.tables:
-            print table.name, table.vid, table.dataset.identity.fqname
-
-        return
+        # root_list_tables(args, l, rc)
+        pass
 
     if args.plain:
         fields = ['vid']
@@ -166,26 +137,18 @@ def root_list(args, l, rc):
         if args.source:
             fields += ['status']
 
-    locations = filter(bool, [args.library, args.remote, args.source])
+    root_list_datasets(args, l, rc)
 
-    key = lambda ident: ident.vname
+def root_list_datasets(args, l, rc):
+    from tabulate import tabulate
 
-    if 'pcount' in fields:
-        with_partitions = True
-    else:
-        with_partitions = args.partitions
+    header = ['vid','vname','state','description']
+    records = []
 
-    idents = sorted(l.list(with_partitions=with_partitions).values(), key=key)
+    for b in l.bundles:
+        records.append(b.field_row(header))
 
-    if args.term:
-        idents = [ident for ident in idents if args.term in ident.fqname]
-
-    if locations:
-        idents = [ident for ident in idents if ident.locations.has(locations)]
-
-    _print_bundle_list(idents,
-                       fields=fields,
-                       show_partitions=args.partitions)
+    print tabulate(records, headers = header)
 
 
 def root_info(args, l, rc):
@@ -357,3 +320,8 @@ def root_doc(args, l, rc):
 
     app.run(host=app_config['host'], port=int(app_config['port']), debug=args.debug)
 
+def root_remove(args, l, rc):
+
+    b = l.bundle(args.term)
+
+    l.remove(b)

@@ -96,6 +96,10 @@ class File(Base, DictableMixin):
         """Unpacks message pack rows into a srtream of dicts"""
 
         rows = self.unpacked_contents
+
+        if not rows:
+            return
+
         header = rows.pop(0)
 
         for row in rows:

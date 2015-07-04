@@ -53,6 +53,25 @@ class BuildSourceFile(object):
     def record(self):
         return self._dataset.bsfile(self._file_const)
 
+    @property
+    def default(self):
+        """Return default contents"""
+        return file_default(self._file_const)
+
+    def prepare_to_edit(self):
+        """Ensure there is a file to edit, either by syncing to the filesystem or by installing the default"""
+
+        if not self.record.contents and not self.exists():
+            self._fs.setcontents(file_name(self._file_const), self.default)
+
+        self.sync()
+
+
+    @property
+    def path(self):
+        return self._fs.getsyspath(file_name(self._file_const))
+
+
     def fs_modtime(self):
         import time
         from fs.errors import ResourceNotFoundError
@@ -75,15 +94,15 @@ class BuildSourceFile(object):
         with self._fs.open(fn_path) as f:
             return md5_for_file(f)
 
-
     def sync_dir(self):
-        """ Report on which direction a syncironizaion should be done.
+        """ Report on which direction a synchronization should be done.
         :return:
         """
 
         if self.exists() and not self.record.size:
             # The fs exists, but the record is empty
             return self.file_to_record
+
         elif self.record.size and not self.exists():
             # Record exists, but not the FS
             return self.record_to_file
@@ -99,14 +118,17 @@ class BuildSourceFile(object):
         return None
 
     def sync(self):
+        """Synchronize between the file in the file system and the fiel record"""
 
         from time import time
         sd = self.sync_dir()
 
         if  sd == self.file_to_record:
             self.fs_to_record()
+
         elif sd == self.record_to_file:
             self.record_to_fs()
+
         else:
             return None
 
@@ -235,6 +257,9 @@ class MetadataFile(DictBuildSourceFile):
 
         contents = fr.unpacked_contents
 
+        if not contents:
+            return
+
         ad = AttrDict(contents)
 
         # Get time that filessystem was synchronized to the File record.
@@ -258,18 +283,11 @@ class PythonSourceFile(StringSourceFile):
         """Add the filesystem to the Python sys path with an import hook, then import
         to file as Python"""
 
-        import sys
-        from fs.expose.importhook import FSImportHook
-
-        #sys.meta_path.append(FSImportHook(self._fs))
-        #mod = __import__('bundle')
-
         context = {}
 
         exec self._dataset.bsfile(self._file_const).contents in context
 
-        return  context['Bundle']
-
+        return context['Bundle']
 
 file_info_map = {
     File.BSFILE.BUILD : ('bundle.py',PythonSourceFile),
@@ -289,11 +307,31 @@ def file_class(const):
     """Return the class for a file constant"""
     return file_info_map[const][1]
 
+def file_default(const):
+    """Return the default content for the file"""
+
+    import ambry.bundle.default_files as df
+    import os
+
+    path = os.path.join(os.path.dirname(df.__file__),  file_name(const))
+
+    with open(path) as f:
+        return f.read()
+
+
 class BuildSourceFileAccessor(object):
 
     def __init__(self, dataset, filesystem = None):
         self._dataset = dataset
         self._fs = filesystem
+
+    @property
+    def build_file(self):
+        return self.file(File.BSFILE.BUILD)
+
+    @property
+    def meta_file(self):
+        return self.file(File.BSFILE.META)
 
     def file(self, const_name):
 

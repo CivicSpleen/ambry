@@ -77,8 +77,8 @@ class Bundle(object):
     @property
     def sources(self):
         """Return the Sources acessor"""
-        from sources import SourceFilesAcessor
-        return SourceFilesAcessor(self)
+        from sources import SourceFilesAccessor
+        return SourceFilesAccessor(self)
 
     @property
     def metadata(self):
@@ -158,6 +158,7 @@ class Bundle(object):
     ##
 
     STATES = Constant()
+    STATES.NEW = 'new'
     STATES.SYNCED = 'synced'
     STATES.CLEANING = 'cleaning'
     STATES.CLEANED = 'cleaned'
@@ -192,8 +193,8 @@ class Bundle(object):
     def do_clean(self):
 
         self.state = self.STATES.CLEANING
-        if self.clean():
 
+        if self.clean():
             if self.post_clean():
                 self.log("---- Done Cleaning ----")
                 self.state = self.STATES.CLEANED
@@ -231,7 +232,7 @@ class Bundle(object):
         if ds.bsfile(File.BSFILE.COLMAP).has_contents:
             self.dataset.colmaps[:] = []
 
-        ds.config.metadata.clean()
+        #ds.config.metadata.clean()
         ds.config.build.clean()
         ds.config.process.clean()
 
@@ -618,8 +619,28 @@ class Bundle(object):
 
         return r is not None
 
+    ##
+    ##
+    ##
+
+    def remove(self):
+        """Delete resources associated with the bundle."""
+        pass # Remove files in the file system other resource.
+
+
     #######
     #######
+
+    def field_row(self, fields):
+        """Return a list of values to match the fielsds values"""
+
+        row = self.dataset.row(fields)
+
+        for i, f in enumerate(fields):
+            if f == 'state':
+                row[i] = self.state
+
+        return row
 
     def clear_states(self):
         return self.dataset.config.build.clean()
@@ -651,4 +672,7 @@ class Bundle(object):
 
         self.dataset.config.build.state.error = time()
 
+    def set_last_access(self, tag):
+        """Mark the time that this bundle was last accessed"""
 
+        self.dataset.config.build.access.last = tag

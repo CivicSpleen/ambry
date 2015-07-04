@@ -9,9 +9,7 @@ Created on Jun 22, 2012
 import unittest
 from ambry.identity import *
 
-
 from ambry.orm import Database, Dataset
-
 
 class TestBase(unittest.TestCase):
     def setUp(self):
@@ -25,7 +23,6 @@ class TestBase(unittest.TestCase):
         self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
 
         self.db = None
-
 
     def ds_params(self, n ):
         return dict(vid=self.dn[n], source='source', dataset='dataset')
@@ -93,9 +90,7 @@ class TestBase(unittest.TestCase):
 
         self.copy_bundle_files(fsopendir(join(dirname(bundles.__file__), 'example.com', name)), mem_fs)
 
-        b =  self.library.new_from_bundle_config(yaml.load(mem_fs.getcontents('bundle.yaml')))
-
-        print '!!!!', name, b.identity.vid
+        b = self.library.new_from_bundle_config(yaml.load(mem_fs.getcontents('bundle.yaml')))
 
         b.set_file_system(source_fs=mem_fs, build_fs=build_fs)
 

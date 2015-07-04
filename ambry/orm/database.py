@@ -421,6 +421,11 @@ class Database(object):
 
         return self.session.query(Dataset).filter(Dataset.vid != ROOT_CONFIG_NAME_V).all()
 
+    def remove_dataset(self,ds):
+
+        self.session.delete(ds)
+        self.session.commit()
+
     def copy_dataset(self, ds):
 
         # Makesure everything we want to copy is loaded
@@ -435,6 +440,8 @@ class Database(object):
         self.session.commit()
 
         return self.dataset(ds.vid)
+
+
 
 
 def _pragma_on_connect(dbapi_con, con_record):

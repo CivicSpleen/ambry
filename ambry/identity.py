@@ -1308,6 +1308,7 @@ class Identity(object):
                 name = cls._name_class(**d)
                 ident = cls(name, on)
             except TypeError as e:
+
                 raise TypeError("Failed to make identity from \n{}\n: {}".format(d, e.message))
 
         elif isinstance(on, PartitionNumber):
