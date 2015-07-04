@@ -83,7 +83,7 @@ class TopTest(TestBase):
         top.about.subject = 'Subject'
         top.about.summary = 'The Inpatient Mortality Indicators (IMIs) are a subset of...'
         top.about.tags = ['tag1', 'tag2']
-        top.about.time = '15:55'  # TODO: How to convert time?
+        top.about.time = '15:55'  # TODO: How to convert time?  ESB: You don't; it's usually an ISO duration, or integer year.
         top.about.title = 'Inpatient Mortality Indicators'
 
         # build from db and check
@@ -137,11 +137,11 @@ class TopTest(TestBase):
         top.identity.btime = 'b-time'
         top.identity.dataset = dataset.vid
         top.identity.id = dataset.id
-        top.identity.revision = '7'
+        top.identity.revision = 7
         top.identity.source = 'example.com'
         top.identity.subset = 'mortality'
         top.identity.type = '?'
-        top.identity.variation = '1'
+        top.identity.variation = 1
         top.identity.version = '0.0.7'
 
         # build from db and check
@@ -151,11 +151,11 @@ class TopTest(TestBase):
         self.assertEquals(new_top.identity.btime, 'b-time')
         self.assertEquals(new_top.identity.dataset, dataset.vid)
         self.assertEquals(new_top.identity.id, dataset.id)
-        self.assertEquals(new_top.identity.revision, '7')
+        self.assertEquals(new_top.identity.revision, 7)
         self.assertEquals(new_top.identity.source, 'example.com')
         self.assertEquals(new_top.identity.subset, 'mortality')
         self.assertEquals(new_top.identity.type, '?')
-        self.assertEquals(new_top.identity.variation, '1')
+        self.assertEquals(new_top.identity.variation, 1)
         self.assertEquals(new_top.identity.version, '0.0.7')
 
     def test_contacts_fields(self):

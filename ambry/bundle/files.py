@@ -266,9 +266,13 @@ class MetadataFile(DictBuildSourceFile):
         # Maybe use this to avoid overwriting configs that changed by bundle program.
         # fs_sync_time = self._dataset.config.sync[self._file_const][self.file_to_record]
 
-        for key, value in ad.flatten():
-            if value:
-                self._dataset.config.metadata[key[0]]['.'.join(str(x) for x in key[1:])] = value
+        self._dataset.config.metadata.set(ad)
+
+        #for key, value in ad.flatten():
+        #    if value:
+        #        key0 = key[0]
+        #        print self._dataset.config.metadata[key0]
+        #        self._dataset.config.metadata[key[0]]['.'.join(str(x) for x in key[1:])] = value
 
         self._dataset._database.commit()
 

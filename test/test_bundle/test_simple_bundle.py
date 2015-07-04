@@ -5,7 +5,6 @@ from ambry.bundle import Bundle
 class Test(TestBase):
 
 
-
     def test_simple_prepare(self):
         """Build the simple bundle"""
 

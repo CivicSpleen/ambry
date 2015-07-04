@@ -1,5 +1,6 @@
 about:
-    access: test
+    remote:
+    access: internal
     footnote: This is a footnote
     grain: county
     groups:
