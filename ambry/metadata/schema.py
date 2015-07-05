@@ -66,11 +66,16 @@ class Names(DictGroup):
     vname = ScalarTerm()
 
 
-class Dependencies(VarDictGroup):
+class Dependencies(DictGroup):
     """Bundle dependencies"""
+    counties = ScalarTerm()
+    facility_index = ScalarTerm()
+    facility_info = ScalarTerm()
+
 
 class Requirements(VarDictGroup):
-    """Python package dependencies"""
+    """Python package requirements"""
+
 
 class Build(VarDictGroup):
     """Build parameters"""

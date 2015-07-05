@@ -9,7 +9,6 @@ from collections import Mapping, OrderedDict, MutableMapping
 import copy
 import logging
 
-from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm import object_session
 
 from ambry.orm.config import Config
@@ -19,8 +18,6 @@ from ambry.util import get_logger
 
 logger = get_logger(__name__, level=logging.INFO)
 
-#import logging
-#logger.setLevel(logging.DEBUG)
 
 class AttrDict(OrderedDict):
     def __init__(self, *argz, **kwz):
@@ -255,26 +252,20 @@ class StructuredPropertyTree(object):
         return self._config is not None
 
     def link_config(self, session, dataset):
-        logger.debug('Binding top level config to the db. dataset: {}, type: {}'.format(dataset.vid, self._type))
+        logger.debug(
+            'Binding top level config to the db. dataset: {}, type: {}'.format(dataset.vid, self._type))
 
-        try:
-            # finding existing config
-            self._config = session.query(Config)\
-                .filter_by(
-                    parent_id=None, d_vid=dataset.vid,
-                    type=self._type)\
-                .one()
-            logger.debug(
-                'Existing top level config bound. config: {}'.format(self._config))
-        except NoResultFound:
-            # does not exist, create new one.
-            self._config = Config(
-                d_vid=dataset.vid, type=self._top._type,
-                parent_id=None)
-            session.add(self._config)
-            session.commit()
+        self._config, created = get_or_create(
+            session, Config,
+            parent_id=None, d_vid=dataset.vid,
+            type=self._type)
+
+        if created:
             logger.debug(
                 'New top level config created and bound. config: {}'.format(self._config))
+        else:
+            logger.debug(
+                'Existing top level config bound. config: {}'.format(self._config))
 
     def register_members(self):
         """Collect the names of the class member and convert them to object
@@ -371,29 +362,23 @@ class Group(object):
         self._config = None  # appropriate orm.config.Config instance of the group
 
     def update_config(self):
-        """ Updates or creates config of that term. Requires tree bount to db. """
+        """ Updates or creates config of that group. Requires tree bound to db. """
         dataset = self._top._config.dataset
         session = object_session(self._top._config)
         logger.debug(
             'Updating group config. dataset: {}, type: {}, key: {}'.format(dataset.vid, self._top._type, self._key))
 
-        try:
-            self._config = session.query(Config)\
-                .filter_by(
-                    parent_id=self._parent._config.id, d_vid=dataset.vid,
-                    group=self._key, type=self._top._type)\
-                .one()
-            logger.debug(
-                'Existing group config linked. config: {}'.format(self._config))
-        except NoResultFound:
-            # does not exist, create new one.
-            self._config = Config(
-                d_vid=dataset.vid, type=self._top._type,
-                parent_id=self._parent._config.id, key=self._key, group=self._key)
-            session.add(self._config)
-            session.commit()
+        self._config, created = get_or_create(
+            session, Config,
+            parent_id=self._parent._config.id, d_vid=dataset.vid,
+            group=self._key, key=self._key, type=self._top._type)
+
+        if created:
             logger.debug(
                 'New group config created and linked. config: {}'.format(self._config))
+        else:
+            logger.debug(
+                'Existing group config linked. config: {}'.format(self._config))
 
     def init_descriptor(self, key, top):
         self._key = key
@@ -643,6 +628,40 @@ class VarDictGroup(DictGroup):
     def __setitem__(self, key, value):
         self._term_values[key] = value
 
+        if self._top.is_bound():
+            self.update_config(key, value)
+
+    def update_config(self, key, value):
+        """ Creates or updates db config of the VarDictGroup. Requires bound to db tree. """
+        dataset = self._top._config.dataset
+        session = object_session(self._top._config)
+        logger.debug(
+            u'Updating VarDictGroup config. dataset: {}, type: {}, key: {}, value: {}'.format(
+                dataset, self._top._type, key, value))
+
+        if not self._parent._config:
+            self._parent.update_config()
+
+        # create or update group config
+        self._config, created = get_or_create(
+            session, Config,
+            d_vid=dataset.vid, type=self._top._type,
+            parent=self._parent._config, group=self._key,
+            key=self._key)
+
+        # create or update value config
+        config, created = get_or_create(
+            session, Config, parent=self._config, d_vid=dataset.vid,
+            type=self._top._type, key=key)
+
+        if config.value != value:
+            # sync db value with term value.
+            config.value = value
+            session.merge(config)
+            session.commit()
+            logger.debug(
+                u'Config bound to the VarDictGroup key updated. config: {}'.format(config))
+
 
 class Term(object):
     """A single term in a group."""
@@ -688,30 +707,22 @@ class Term(object):
         if not self._parent._config:
             self._parent.update_config()
 
-        try:
-            # finding existing config
-            self._config = session.query(Config)\
-                .filter_by(
-                    parent_id=self._parent._config.id, d_vid=dataset.vid,
-                    type=self._top._type, key=self._key)\
-                .one()
-            if self._config.value != self.get():
-                # sync db value with term value.
-                self._config.value = self.get()
-                session.merge(self._config)
-                session.commit()
-            logger.debug(
-                u'Existing config bound to the term. config: {}'.format(self._config))
-        except NoResultFound:
-            # does not exist, create new one.
-            self._config = Config(
-                d_vid=dataset.vid, type=self._top._type,
-                parent_id=self._parent._config.id, key=self._key,
-                value=self.get())
-            session.add(self._config)
+        self._config, created = get_or_create(
+            session, Config,
+            parent=self._parent._config, d_vid=dataset.vid,
+            type=self._top._type, key=self._key)
+
+        if self._config.value != self.get():
+            self._config.value = self.get()
+            session.merge(self._config)
             session.commit()
+
+        if created:
             logger.debug(
                 u'New config created and bound to the term. config: {}'.format(self._config))
+        else:
+            logger.debug(
+                u'Existing config bound to the term. config: {}'.format(self._config))
 
     def null_entry(self):
         raise NotImplementedError("Not implemented by {}".format(type(self)))
@@ -1097,4 +1108,27 @@ def _set_by_path(prop_tree, path, config):
     elif hasattr(term, '_config'):
         term._config = config
     else:
-       pass # the setting should have been handled by setattr(group, key, config.value)
+        pass  # the setting should have been handled by setattr(group, key, config.value)
+
+
+def get_or_create(session, model, **kwargs):
+    """ Get or create sqlalchemy instance.
+
+    Args:
+        session (Sqlalchemy session):
+        model (sqlalchemy model):
+        kwargs (dict): kwargs to lookup or create instance.
+
+    Returns:
+        Tuple: first element is found or created instance, second is boolean - True if instance created,
+            False if instance found.
+    """
+
+    instance = session.query(model).filter_by(**kwargs).first()
+    if instance:
+        return instance, False
+    else:
+        instance = model(**kwargs)
+        session.add(instance)
+        session.commit()
+        return instance, True

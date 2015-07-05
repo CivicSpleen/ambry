@@ -1,13 +1,7 @@
 # -*- coding: utf-8 -*-
-import unittest
-
 from ambry.metadata.schema import Top
 
-from ambry.orm import Config
-
 from test.test_base import TestBase
-
-from ambry.metadata.schema import About, Top
 
 
 class TopTest(TestBase):
@@ -157,6 +151,81 @@ class TopTest(TestBase):
         self.assertEquals(new_top.identity.type, '?')
         self.assertEquals(new_top.identity.variation, 1)
         self.assertEquals(new_top.identity.version, '0.0.7')
+
+    def test_dependencies_fields(self):
+        """ Test dependencies group of the metadata config. """
+        expected_fields = [
+            'counties',
+            'facility_index',
+            'facility_info',
+        ]
+
+        self._assert_fields_match(expected_fields, Top().dependencies)
+
+    def test_dependencies_fields_values(self):
+        """ Test Top.dependencies group fields of the metadata config. """
+        # Test both - setting and saving to db.
+        top = Top()
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        top.link_config(db.session, dataset)
+
+        top.dependencies.counties = 'census.gov-index-counties'
+        top.dependencies.facility_index = 'oshpd.ca.gov-facilities-index-facilities_index-2010e2014'
+        top.dependencies.facility_info = 'oshpd.ca.gov-facilities-index-facilities'
+
+        # build from db and check
+        new_top = Top()
+        new_top.build_from_db(dataset)
+        self.assertEquals(
+            new_top.dependencies.counties,
+            'census.gov-index-counties')
+        self.assertEquals(
+            new_top.dependencies.facility_index,
+            'oshpd.ca.gov-facilities-index-facilities_index-2010e2014')
+        self.assertEquals(
+            new_top.dependencies.facility_info,
+            'oshpd.ca.gov-facilities-index-facilities')
+
+    def test_requirements_fields(self):
+        """ Test requirements group of the metadata config. """
+        # requirements group allow any field
+        expected_fields = [
+            'xlrd',
+            'requests',
+            'suds',
+        ]
+        top = Top()
+        top.requirements.xlrd = 'xlrd'
+        top.requirements.requests = 'requests'
+        top.requirements.suds = 'suds'
+
+        self._assert_fields_match(expected_fields, Top().requirements)
+
+    def test_requirements_fields_values(self):
+        """ Test Top.requirements group fields of the metadata config. """
+        # Test both - setting and saving to db.
+        top = Top()
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        top.link_config(db.session, dataset)
+
+        top.requirements.xlrd = 'xlrd'
+        top.requirements.requests = 'requests'
+        top.requirements.suds = 'suds'
+
+        # build from db and check
+        new_top = Top()
+        new_top.build_from_db(dataset)
+        self.assertEquals(
+            new_top.requirements.xlrd,
+            'xlrd')
+        self.assertEquals(
+            new_top.requirements.requests,
+            'requests')
+        self.assertEquals(
+            new_top.requirements.suds,
+            'suds')
 
     def test_contacts_fields(self):
         """ Test contacts group of the metadata config. """
