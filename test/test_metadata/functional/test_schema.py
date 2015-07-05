@@ -84,19 +84,18 @@ class TopTest(TestBase):
         self.assertEquals(new_top.about.access, 'restricted')
         self.assertEquals(new_top.about.footnote, 'the-footnote')
         self.assertEquals(new_top.about.grain, 'hospital')
-
-        # FIXME: uncomment and fix.
-        # self.assertEquals(new_top.about.groups, ['health', 'california'])
+        self.assertEquals(new_top.about.groups, ['health', 'california'])
         self.assertEquals(new_top.about.license, 'ckdbl')
         self.assertEquals(new_top.about.processed, 'processed')
         self.assertEquals(new_top.about.rights, 'public')
         self.assertEquals(new_top.about.source, 'http://example.com')
         self.assertEquals(new_top.about.space, 'California')
         self.assertEquals(new_top.about.subject, 'Subject')
-        self.assertEquals(new_top.about.summary, 'The Inpatient Mortality Indicators (IMIs) are a subset of...')
+        self.assertEquals(
+            new_top.about.summary,
+            'The Inpatient Mortality Indicators (IMIs) are a subset of...')
 
-        # FIXME: fix and uncomment.
-        # self.assertEquals(new_top.about.tags, ['tag1', 'tag2'])
+        self.assertEquals(new_top.about.tags, ['tag1', 'tag2'])
         self.assertEquals(new_top.about.time, '15:55')  # TODO: How to convert time?
         self.assertEquals(new_top.about.title, 'Inpatient Mortality Indicators')
 

@@ -1036,6 +1036,8 @@ class ListTerm(Term):
             v = [v]
 
         instance._term_values[self._key] = list(v)
+        if self._top.is_bound():
+            self.update_config()
 
     def set(self, v):
         logger.debug(u'set list term: {} = {}'.format(self._fqkey, v))
