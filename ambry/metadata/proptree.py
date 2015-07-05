@@ -240,9 +240,7 @@ class StructuredPropertyTree(object):
                 continue
 
             # value found, populate.
-            # FIXME: Populate settings without looking for path.
-            path = _get_path(configs_map, self, config)
-            _set_by_path(self, path, config)
+            _set_value(configs_map, self, config)
 
         # tree is bound after build from db.
         self.link_config(session, dataset)
@@ -1077,38 +1075,51 @@ class ListTerm(Term):
         return iter(self._term_values)
 
 
-def _get_path(configs_map, prop_tree, config_instance):
-    """ Returns path of the config in the tree. """
-    if config_instance.parent_id is None:
-        # root node found
-        return ''
-    parent = configs_map[config_instance.parent_id]
-    return '{}.{}'.format(_get_path(configs_map, prop_tree, parent), config_instance.key)
+def _set_value(configs_map, prop_tree, config_instance):
+    """ Finds appropriate term in the prop_tree and sets it value from config_instance.
 
+    Args:
+        configs_map (dict): key is id of the config, value is Config instance (AKA cache of the configs)
+        prop_tree (PropertyDictTree): poperty tree to populate.
+        config_instance (Config):
 
-def _set_by_path(prop_tree, path, config):
-    """ Sets value by given path. """
-    logger.debug('Setting {} to {}'.format(path, config.value))
+    """
+
+    #
+    # collect path from the root to the value key. Do not include root and value config to the path.
+    #
+
+    path = []
+    path_elem = config_instance.parent
+
+    # TODO: use cached configs to walk.
+    while True:
+        if path_elem.parent is None:
+            break
+        path.insert(0, path_elem)
+        path_elem = path_elem.parent
+
+    #
+    # find appropriate group and populate matched term.
+    #
 
     group = prop_tree
-    parts = path.split('.')
-    path, key = parts[0:-1], parts[-1]
+    for elem in path:
+        group = getattr(group, elem.key)
 
-    for name in path:
-        if not name:
-            continue
-        group = getattr(group, name)
+    assert group._key == config_instance.parent.key
+    setattr(group, config_instance.key, config_instance.value)
 
-    setattr(group, key, config.value)
-
-    term = getattr(group, key)
-
+    #
+    # bind config to the term
+    #
     # FIXME: Make all the terms to store config the same way.
+    term = getattr(group, config_instance.key)
     if hasattr(term, '_term'):
         # ScalarTermS and ScalarTermU case
-        term._term._config = config
+        term._term._config = config_instance
     elif hasattr(term, '_config'):
-        term._config = config
+        term._config = config_instance
     else:
         pass  # the setting should have been handled by setattr(group, key, config.value)
 

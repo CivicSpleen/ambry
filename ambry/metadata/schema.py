@@ -15,10 +15,10 @@ class About(DictGroup):
     space = ScalarTerm()
     time = ScalarTerm()
     grain = ScalarTerm()
-    remote = ScalarTerm(store_none=False) # If empty, take the remote name from access
+    remote = ScalarTerm(store_none=False)  # If empty, take the remote name from access
     access = ScalarTerm(
         store_none=False,
-        constraint=['internal', 'private', 'controlled', 'restricted', 'registered', 'licensed', 'public','test'])
+        constraint=['internal', 'private', 'controlled', 'restricted', 'registered', 'licensed', 'public', 'test'])
     license = ScalarTerm(store_none=False)
     rights = ScalarTerm(store_none=False)
     tags = ListTerm(store_none=False)
