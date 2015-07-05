@@ -81,10 +81,6 @@ class Build(VarDictGroup):
     """Build parameters"""
 
 
-class Requirements(VarDictGroup):
-    """Requirements parameters"""
-
-
 class ExtDocTerm(DictTerm):
     url = ScalarTerm()
     title = ScalarTerm()
