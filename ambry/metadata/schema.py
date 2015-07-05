@@ -28,22 +28,6 @@ class About(DictGroup):
     processed = ScalarTerm(store_none=False)  # A statement about how the data were processed.
 
 
-class Documentation(DictGroup):
-    readme = ScalarTerm()
-    main = ScalarTerm()
-    source = ScalarTerm(store_none=False)  # Expanded from about.source
-    footnote = ScalarTerm(store_none=False)  # Expanded from about.footnote
-    processed = ScalarTerm(store_none=False)  # expanded from about.processed
-    title = ScalarTerm(store_none=False)  # expanded from about.title
-    summary = ScalarTerm(store_none=False)  # expanded from about.summary
-
-
-class Coverage(DictGroup):
-    geo = ListTerm()
-    grain = ListTerm()
-    time = ListTerm()
-
-
 class Identity(DictGroup):
     """ """
     dataset = ScalarTerm()
@@ -66,18 +50,19 @@ class Names(DictGroup):
     vname = ScalarTerm()
 
 
-class Dependencies(VarDictGroup):
+class Dependencies(DictGroup):
     """Bundle dependencies"""
+    counties = ScalarTerm()
+    facility_index = ScalarTerm()
+    facility_info = ScalarTerm()
+
 
 class Requirements(VarDictGroup):
-    """Python package dependencies"""
+    """Python package requirements"""
+
 
 class Build(VarDictGroup):
     """Build parameters"""
-
-
-class Requirements(VarDictGroup):
-    """Requirements parameters"""
 
 
 class ExtDocTerm(DictTerm):
@@ -113,7 +98,7 @@ class Contacts(DictGroup):
     analyst = ContactTerm()
 
 
-class VersonTerm(TypedDictGroup):
+class VersonTerm(DictTerm):
     """Version Description"""
     version = ScalarTerm()
     date = ScalarTerm()
@@ -137,5 +122,4 @@ class Top(StructuredPropertyTree):
     build = Build()
     contacts = Contacts()
     names = Names()
-    documentation = Documentation()
-    coverage = Coverage()
+    versions = Versions()
