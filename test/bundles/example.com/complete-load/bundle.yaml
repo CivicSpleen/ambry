@@ -11,12 +11,12 @@ about:
     source: '{{contact_source.creator.org}}'
     space: California
     subject: demo
-    summary: This is a short summary of the data bundle, from {{contact_source.creator.org}}
+    summary: A bundle to demonstrate loading data from source files, from {{contact_source.creator.org}}.
     tags:
     - example
     - demo
     time: 2010
-    title: A More Complete Example Bundle
+    title: A More Complete Example Bundle, For Loading
 contacts:
     creator:
         email: bob@bob.com
@@ -36,10 +36,10 @@ identity:
     bspace: null
     btime: null
     dataset: complete
-    id: d0complete
+    id: d00000load
     revision: 3
     source: example.com
-    subset: null
+    subset: load
     type: null
     variation: null
     version: 0.1.3

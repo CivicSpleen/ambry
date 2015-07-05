@@ -31,6 +31,14 @@ def get_bundle_ref(args,l):
     """
     import os
 
+    cwd_bundle = os.path.join(os.getcwd(), 'bundle.yaml')
+    if os.path.exists(cwd_bundle):
+        import yaml
+        with open(cwd_bundle) as f:
+            config =  yaml.load(f)
+            id_ = config['identity']['id']
+            return (id_, 'directory')
+
     try:
         if args.term:
          return (args.term, 'argument')
