@@ -82,6 +82,7 @@ class StatSet(object):
 
             if self.n < 5000:
                 self.counts[v] += 1
+
             elif self.n == 5000:
                 # If less than 1% are unique, assume that this number is actually an ordinal
                 if self.nuniques < 50:
@@ -92,7 +93,13 @@ class StatSet(object):
                     self.bin_max = self.stats.mean() + sqrt(self.stats.variance()) * 2
                     self.bin_width = (self.bin_max - self.bin_min) / self.num_bins
 
+                    for v, count in self.counts.items():
+                        if v >= self.bin_min and v <= self.bin_max:
+                            bin = int((v - self.bin_min) / self.bin_width)
+                            self.bins[bin] += count
+
                 self.counts = Counter()
+
             elif self.n > 5000 and v >= self.bin_min and v <= self.bin_max:
                 bin = int((v - self.bin_min) / self.bin_width)
                 self.bins[bin] += 1
@@ -170,6 +177,7 @@ class StatSet(object):
     def dict(self):
         """Return a  dict that can be passed into the ColumnStats constructor"""
         return dict(
+            lom = self.lom,
             count=self.n,
             uvalues=dict(self.counts.most_common(100)),
             nuniques=self.nuniques,

@@ -23,7 +23,7 @@ def bundle_command(args, rc):
 
     globals()['bundle_' + args.subcommand](args, l, rc)
 
-def get_bundle_ref(l,args):
+def get_bundle_ref(args,l):
     """ Use a variety of methods to determine which bundle to use
 
     :param args:
@@ -31,9 +31,13 @@ def get_bundle_ref(l,args):
     """
     import os
 
-    if args.term:
-        return (args.term, 'argument')
-    elif args.id:
+    try:
+        if args.term:
+         return (args.term, 'argument')
+    except AttributeError:
+        pass
+
+    if args.id:
         return (args.id, '-i argument')
     elif 'AMBRY_BUNDLE' in os.environ:
         return (os.environ['AMBRY_BUNDLE'], 'environment')
@@ -45,9 +49,21 @@ def get_bundle_ref(l,args):
 
     return None, None
 
+def using_bundle(args,l):
+
+    ref, frm = get_bundle_ref(args,l)
+
+    prt('Using bundle ref {}, referenced from {}'.format(ref, frm))
+
+    b = l.bundle(ref)
+
+    return b
+
 def bundle_parser(cmd):
     import multiprocessing
     import argparse
+
+    from ambry.bundle.files import BuildSourceFile
 
     parser = cmd.add_parser('bundle', help='Manage bundle files')
     parser.set_defaults(command='bundle')
@@ -92,6 +108,7 @@ def bundle_parser(cmd):
     sp = asp.add_parser('doc', help='Display some of the bundle documentation')
     sp.set_defaults(subsubcommand='doc')
 
+
     # config incver
     sp = asp.add_parser('incver', help='Increment the version number')
     sp.set_defaults(subsubcommand='incver')
@@ -108,9 +125,21 @@ def bundle_parser(cmd):
     sp.set_defaults(subsubcommand='scrape')
     sp.add_argument('-r', '--regex', default=False, help="Select entries where the UR matches the regular expression")
 
+
+    # config doc
+    command_p = sub_cmd.add_parser('dump', help="Dump records from the bundle database")
+    command_p.set_defaults(subcommand='dump')
+    group = command_p.add_mutually_exclusive_group()
+    group.add_argument('-c', '--configf', default=False, action="store_const", const = 'configs', dest='table',
+                            help='Dump configs')
+    group.add_argument('-f', '--files', default=False, action="store_const", const='files', dest='table',
+                            help='Dump files')
+    group.add_argument('-p', '--partitions', default=False, action="store_const", const='partitions', dest='table',
+                       help='Dump partitions')
+    command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
+
     # Info command
     command_p = sub_cmd.add_parser('info', help='Print information about the bundle')
-    command_p.set_defaults(subcommand='info')
     command_p.set_defaults(subcommand='info')
     command_p.add_argument('-s', '--schema', default=False, action="store_true",
                            help='Dump the schema as a CSV. The bundle must have been prepared')
@@ -119,6 +148,23 @@ def bundle_parser(cmd):
                            help='Also report column stats for partitions')
     command_p.add_argument('-P', '--partitions', default=False, action="store_true",
                            help='Also report partition details')
+
+    command_p.add_argument('term', nargs='?', type=str, help='Bundle source directory or file')
+
+    #
+    # Sync Command
+    #
+    command_p = sub_cmd.add_parser('sync', help='Sync with a source representation')
+    command_p.set_defaults(subcommand='sync')
+    group = command_p.add_mutually_exclusive_group()
+    group.add_argument('-s', '--from-source', default=False, action="store_const",
+                            const = BuildSourceFile.SYNC_DIR.FILE_TO_RECORD, dest='sync_dir',
+                            help='Force sync from source to database')
+    group.add_argument('-d', '--from-database', default=False, action="store_const",
+                            const=BuildSourceFile.SYNC_DIR.RECORD_TO_FILE, dest='sync_dir',
+                            help='Source sync from database to source')
+    command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
+
 
     #
     # Clean Command
@@ -214,53 +260,103 @@ def bundle_parser(cmd):
                    help="Edit the documentation")
     command_p.add_argument('term', nargs='?', type=str, help='bundle reference')
 
-def bundle_info(args, b, st, rc):
-    raise NotImplementedError()
 
-    import textwrap
-    from ambry.orm.exc import DatabaseMissingError
+    command_p = sub_cmd.add_parser('import', help='Import a source bundle. ')
+    command_p.set_defaults(subcommand='import')
+    command_p.add_argument('source', nargs='?', type=str, help='Bundle source directory or file')
 
-    indent = "    "
+def bundle_info(args, l, rc):
+    from  textwrap import wrap
+    from ambry.util.datestimes import compress_years
+    from tabulate import tabulate
 
-    def hprt(k):
-        prt(u"-----{:s}-----",format(k))
+    ref, frm = get_bundle_ref(args,l)
 
-    def lprt(k,*v):
-        prt(u"{:10s}: {}".format(k,*v))
+    b = l.bundle(ref)
 
-    def wprt(k, *v):
-        prt(u"{:20.20s}: {}".format(k, *v))
+    info = [list(), list()]
+    def inf(column,k,v):
+        info[column].append((k, v))
 
-    def iprt(k,*v):
-        prt(indent+u"{:10s}: {}".format(k,*v))
+    def color(v):
+        return "\033[1;34m{}\033[0m".format(v)
 
-    if args.dep:
-        #
-        # Get the dependency and then re-run to display it.
-        #
-        dep = b.library.dep(args.dep)
-        if not dep:
-            fatal("Didn't find dependency for {}".format(args.dep))
+    def trunc(v):
+        return v[:25] + (v[25:] and '..')
 
-        ns = vars(args)
-        ns['dep'] = None
+    def join(*sets):
 
-        bundle_info(args.__class__(**ns), dep, st, rc)
+        l = max(len(x) for x in sets)
 
-    elif args.schema:
-        b.schema.as_csv()
-    else:
-        from ambry.util.datestimes import compress_years
+        for i in range(l):
+            row = []
+            for set in sets:
+                try:
+                    row += [color(set[i][0]), set[i][1]]
+                except IndexError:
+                    row += [None, None]
+            yield row
 
-        lprt('Title', b.metadata.about.title)
-        lprt('Summary', b.metadata.about.summary)
-        lprt("VID", b.identity.vid)
-        lprt("VName", b.identity.vname)
-        lprt("DB",b.database.path)
 
-        lprt('Geo cov', str(list(b.metadata.coverage.geo)))
-        lprt('Grain cov', str(list(b.metadata.coverage.grain)))
-        lprt('Time cov', compress_years(b.metadata.coverage.time))
+    inf(0,'Title', trunc(b.metadata.about.title))
+    inf(0,'Summary', trunc(b.metadata.about.summary))
+    inf(0,"VID", b.identity.vid)
+    inf(0,"VName", b.identity.vname)
+
+    inf(1, 'Build State', b.dataset.config.build.state.current)
+    inf(1, 'Geo cov', str(list(b.metadata.coverage.geo)))
+    inf(1, 'Grain cov', str(list(b.metadata.coverage.grain)))
+    inf(1, 'Time cov', compress_years(b.metadata.coverage.time))
+
+    print '----'
+    print tabulate(join(*info), tablefmt='plain')
+
+    info = [list()]
+    inf(0, "Source FS",str(b.source_fs))
+    inf(0, "Build  FS", str(b.build_fs))
+
+    print '----'
+    print tabulate(join(info[0]), tablefmt='plain')
+
+    from ambry.bundle.etl.stats import text_hist
+    from textwrap import wrap
+    from terminaltables import  SingleTable, AsciiTable
+
+    for p in b.partitions:
+        rows = ['Column LOM Count Uniques Values'.split()]
+        for k, v in  p.stats_dict.items():
+
+            rows.append([
+                str(k), str(v.lom), str(v.count), str(v.nuniques),
+                text_hist(int(x) for x in v.hist) if v.lom == 'i' else (
+                    '\n'.join(wrap(', '.join(sorted(str(x) for x in v.uvalues.keys()[:10])), 50)))
+            ])
+
+        #print tabulate(row, tablefmt='plain')
+        print SingleTable(rows, title="Stats for "+str(p.identity.name)).table
+
+    if False:
+
+        wrapper = textwrap.TextWrapper()
+
+        lprt("Stats", '')
+        wprt('Col Name', "{:>7s} {:>7s} {:>10s} {:70s}".format(
+            "Count", 'Uniq', 'Mean', 'Sample Values'))
+        for col_name, s in p.stats.__dict__.items():
+
+            if s.uvalues:
+                vals = (u'\n' + u' ' * 49).join(wrapper.wrap(u','.join(s.uvalues.keys()[:5])))
+
+            wprt(col_name, u"{:>7s} {:>7s} {:>10s} {:70s}".format(
+                str(s.count) if s.count else '',
+                str(s.nuniques) if s.nuniques else '',
+                '{:10.2e}'.format(s.mean) if s.mean else '',
+                vals
+            ))
+
+    return
+
+    if False:
 
         if b.database.exists():
 
@@ -318,49 +414,28 @@ def bundle_info(args, b, st, rc):
                     bl('g cov', 'geo_coverage')
                     bl('g grain', 'geo_grain')
                     bl('t cov', 'time_coverage')
-                if args.stats:
-                    wrapper = textwrap.TextWrapper()
-
-                    lprt("Stats",'')
-                    wprt('Col Name', "{:>7s} {:>7s} {:>10s} {:70s}" .format(
-                            "Count",'Uniq','Mean', 'Sample Values'))
-                    for col_name, s in p.stats.__dict__.items():
-
-                        if s.uvalues:
-                            vals = (u'\n' + u' ' * 49).join(wrapper.wrap(u','.join(s.uvalues.keys()[:5])))
-                        elif 'values' in s.hist:
-
-                            parts = u' ▁▂▃▄▅▆▇▉'
-
-                            def sparks(nums):  # https://github.com/rory/ascii_sparks/blob/master/ascii_sparks.py
-                                nums = list(nums)
-                                fraction = max(nums) / float(len(parts) - 1)
-                                if fraction:
-                                    return ''.join(parts[int(round(x / fraction))] for x in nums)
-                                else:
-                                    return ''
-
-                            vals = sparks(int(x[1]) for x in s.hist['values'])
-                        else:
-                            vals = ''
-
-                        wprt(col_name, u"{:>7s} {:>7s} {:>10s} {:70s}". format(
-                                str(s.count) if s.count else '',
-                                str(s.nuniques) if s.nuniques else '',
-                                '{:10.2e}'.format(s.mean) if s.mean else '',
-                                vals
-                            ))
 
 
-def bundle_clean(args, b, st, rc):
-    raise NotImplementedError()
+def bundle_clean(args, l, rc):
+    from ambry.bundle import Bundle
+    b = using_bundle(args, l).cast_to_subclass()
+    b.do_clean()
+    b.set_last_access(Bundle.STATES.NEW)
 
-    b.log("---- Cleaning ---")
-    # Only clean the meta phases when it is explicityly specified.
-    # b.clean(clean_meta=('meta' in phases))
-    b.database.enable_delete = True
-    b.clean()
+def bundle_sync(args, l, rc):
+    from ambry.bundle import Bundle
+    from tabulate import tabulate
 
+    b = using_bundle(args,l).cast_to_subclass()
+
+    prt("Bundle source filesystem: {}".format(b.source_fs))
+    prt("Sync direction: {}".format(args.sync_dir if args.sync_dir else 'latest'))
+
+    syncs =  b.do_sync(args.sync_dir if args.sync_dir else None)
+
+    print tabulate(syncs, headers="Key Direction".split())
+
+    b.set_last_access(Bundle.STATES.SYNCED)
 
 def bundle_meta(args, b, st, rc):
     raise NotImplementedError()
@@ -380,27 +455,24 @@ def bundle_meta(args, b, st, rc):
 
 
 def bundle_prepare(args, l, rc):
-
-    ref, source = get_bundle_ref(l, args)
-    prt("Preparing ref {} from {}".format(ref, source))
-    b = l.bundle(ref)
-
-    return b.do_prepare()
+    from ambry.bundle import Bundle
+    b = using_bundle(args, l).cast_to_subclass()
+    b.do_prepare()
+    b.set_last_access(Bundle.STATES.PREPARED)
 
 
-def bundle_build(args, b, st, rc):
-    raise NotImplementedError()
+def bundle_build(args, l, rc):
+    from ambry.bundle import Bundle
+    b = using_bundle(args, l).cast_to_subclass()
+    if args.clean:
+        if not b.do_clean():
+            return False
 
-    r = b.do_build()
+        if not b.do_prepare():
+            return False
 
-    # Closing is generally important. In this case, if the bundle isn't closed, and the bundle is installed below,
-    # the config table won't have metadata. No idea why.
-    b.close()
-
-    if args.install:
-        bundle_install(args, b, st, rc)
-
-    return r
+    b.do_build(force = args.force)
+    b.set_last_access(Bundle.STATES.BUILT)
 
 
 def bundle_install(args, b, st, rc):
@@ -467,7 +539,9 @@ def bundle_update(args, b, st, rc):
         b.log("---- Skipping Update ---- ")
 
 
-def bundle_config(args, b, st, rc):
+def bundle_config(args, l, rc):
+
+
 
     raise NotImplementedError()
 
@@ -539,7 +613,72 @@ def bundle_config(args, b, st, rc):
         err("Unknown subsubcommand for 'config' subcommand: {}".format(args))
 
 
+def bundle_dump(args, l, rc):
+    import tabulate
+    import datetime
+
+
+    ref, frm = get_bundle_ref(args,l)
+
+    b = l.bundle(ref)
+
+    prt("Dumping configs for {}\n".format(b.identity.fqname))
+
+    def trunc(v,l):
+        return v[:l] + (v[l:] and '..')
+
+    if args.table == 'configs' or not args.table:
+
+        records = []
+        headers = 'Id Type Group Parent Key Value Modified'.split()
+        for row in b.dataset.configs:
+            records.append((
+                row.id,
+                row.type,
+                row.group,
+                row.parent_id,
+                row.key,
+                trunc(str(row.value), 22),
+                datetime.datetime.fromtimestamp(row.modified).isoformat(),)
+            )
+
+        records = sorted(records, key=lambda row: row[0])
+
+    elif args.table == 'files':
+
+        records = []
+        headers = 'Path Major Minor State Size Modified'.split()
+        for row in b.dataset.files:
+            records.append((
+                row.path,
+                row.major_type,
+                row.minor_type,
+                row.state,
+                row.size,
+                datetime.datetime.fromtimestamp(float(row.modified)).isoformat() if row.modified else ''
+                )
+            )
+        records = sorted(records, key=lambda row: (row[0], row[1], row[2]) )
+
+    elif args.table == 'partitions':
+
+        records = []
+        headers = 'Name Count'.split()
+        for row in b.dataset.partitions:
+            records.append((
+                row.name,
+                row.stats_dict.id.count
+            )
+            )
+        records = sorted(records, key=lambda row: (row[0]))
+
+    print tabulate.tabulate(records, headers = headers)
+
+    print
+
 def bundle_config_scrape(args, b, st, rc):
+
+    raise NotImplementedError
 
     from bs4 import BeautifulSoup
     import urllib2
@@ -724,6 +863,28 @@ def bundle_new(args, l, rc):
     print b.identity.fqname
 
 
+def bundle_import(args, l, rc):
+    from fs.opener import fsopendir
+    import yaml
+    from ambry.orm.exc import NotFoundError
+
+    fs = fsopendir(args.source)
+
+    config = yaml.load(fs.getcontents('bundle.yaml'))
+
+    bid =  config['identity']['id']
+
+    try:
+        b = l.bundle(bid)
+    except NotFoundError:
+        b = l.new_from_bundle_config(config)
+
+    b.set_file_system(source_url=args.source)
+
+    b.sync()
+
+    prt("Loaded bundle: {}".format(b.identity.fqname))
+
 file_const_map = dict(
     b=File.BSFILE.BUILD,
     d=File.BSFILE.DOC,
@@ -743,11 +904,7 @@ def bundle_edit(args, l, rc):
     from Queue import Queue
     import threading
 
-    ref, frm = get_bundle_ref(l,args)
-
-    prt('Editing bundle  {}, referenced from {}'.format(ref, frm))
-
-    b = l.bundle(ref)
+    b = using_bundle(args,l)
 
     prt("Found bundle {}".format(b.identity.fqname))
 

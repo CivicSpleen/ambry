@@ -274,11 +274,9 @@ class PartitionProxy(Proxy):
 
     def datafile(self):
         from etl.partition import new_partition_data_file
-        return new_partition_data_file(self._bundle._build_fs, self.cache_key)
+        return new_partition_data_file(self._bundle.build_fs, self.cache_key)
 
     def inserter(self):
         from etl.partition import Inserter
-
-        assert bool(self._bundle._build_fs)
 
         return Inserter(self, self.datafile() )

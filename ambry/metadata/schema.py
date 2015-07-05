@@ -18,7 +18,7 @@ class About(DictGroup):
     remote = ScalarTerm(store_none=False) # If empty, take the remote name from access
     access = ScalarTerm(
         store_none=False,
-        constraint=['internal', 'private', 'controlled', 'restricted', 'registered', 'licensed', 'public'])
+        constraint=['internal', 'private', 'controlled', 'restricted', 'registered', 'licensed', 'public','test'])
     license = ScalarTerm(store_none=False)
     rights = ScalarTerm(store_none=False)
     tags = ListTerm(store_none=False)

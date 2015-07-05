@@ -16,10 +16,11 @@ from ambry.orm.config import Config
 from ambry.orm.exc import MetadataError
 
 from ambry.util import get_logger
-import logging
+
 logger = get_logger(__name__, level=logging.INFO)
 
-logger.setLevel(logging.DEBUG)
+#import logging
+#logger.setLevel(logging.DEBUG)
 
 class AttrDict(OrderedDict):
     def __init__(self, *argz, **kwz):
@@ -1086,6 +1087,7 @@ def _set_by_path(prop_tree, path, config):
         group = getattr(group, name)
 
     setattr(group, key, config.value)
+
     term = getattr(group, key)
 
     # FIXME: Make all the terms to store config the same way.
@@ -1095,5 +1097,4 @@ def _set_by_path(prop_tree, path, config):
     elif hasattr(term, '_config'):
         term._config = config
     else:
-        # FIXME: This  may only work for DictGroups
-        group[key] = config.value
+       pass # the setting should have been handled by setattr(group, key, config.value)

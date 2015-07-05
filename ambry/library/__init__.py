@@ -69,8 +69,33 @@ class Library(object):
     def remotes(self):
         return self._remotes
 
-    def remote(self,name):
-        return self._remotes[name]
+    def remote(self,name_or_bundle):
+        from ..dbexceptions import ConfigurationError
+
+        fails = []
+
+        try:
+            return self._remotes[name_or_bundle]
+        except KeyError:
+            pass
+
+        try:
+            return self._remotes[name_or_bundle.metadata.about.access]
+        except AttributeError:
+            pass
+        except KeyError:
+            fails.append(name_or_bundle.metadata.about.access)
+
+        try:
+            return self._remotes[name_or_bundle.metadata.about.remote]
+        except AttributeError:
+            pass
+        except KeyError:
+            fails.append(name_or_bundle.metadata.about.access)
+
+        raise ConfigurationError('Failed to find remote for key values: {}'.format(fails))
+
+
 
     def commit(self):
         self._db.commit()
@@ -109,6 +134,9 @@ class Library(object):
 
         b.set_last_access(Bundle.STATES.NEW)
 
+        b.set_file_system(source_url=self._fs.source(ds.name),
+                          build_url=self._fs.build(ds.name))
+
         self._db.commit()
         return b
 
@@ -133,7 +161,15 @@ class Library(object):
         if not ds:
             ds = self._db.new_dataset(**identity.dict)
 
-        return Bundle(ds, self)
+        b =  Bundle(ds, self)
+
+        b.state = Bundle.STATES.NEW
+        b.set_last_access(Bundle.STATES.NEW)
+        b.set_file_system(source_url=self._fs.source(ds.name),
+                          build_url = self._fs.build(ds.name) )
+
+        return b
+
 
     def bundle(self, ref):
         """Return a bundle build on a dataset, with the given vid or id reference"""
@@ -141,20 +177,17 @@ class Library(object):
         from ..bundle import Bundle
         from fs.opener import fsopendir
         from ..orm.dataset import Dataset
+        from ..orm.exc import NotFoundError
 
         if isinstance(ref, Dataset ):
             ds = ref
         else:
             ds = self._db.dataset(ref)
 
-        source_dir = ds.config.library.source_dir.dir
+        if not ds:
+            raise NotFoundError("Failed to find dataset for ref: {}".format(ref))
 
-        if not source_dir:
-            source_dir = self._fs.source(ds.name)
-            ds.config.library.source_dir.dir = source_dir
-            self.commit()
-
-        return Bundle(ds, self, source_fs=fsopendir(source_dir))
+        return Bundle(ds, self)
 
     @property
     def bundles(self):
@@ -192,7 +225,7 @@ class Library(object):
 
             ds = db.copy_dataset(b.dataset)
 
-            remote = self.remote(b.metadata.about.access)
+            remote = self.remote(b)
 
             remote.put(db.path, b.identity.cache_key + ".db")
 
@@ -215,7 +248,7 @@ class Library(object):
 
         p = PartitionProxy(b, p_orm)
 
-        remote = self.remote(p.dataset.config.metadata.about.access)
+        remote = self.remote(b)
 
         with remote.get_stream(p.datafile().munged_path) as f:
 

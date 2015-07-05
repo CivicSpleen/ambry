@@ -75,7 +75,7 @@ class Partition(Base, DictableMixin):
     # can be primary in multiple partitions.
     table = relationship('Table', backref='partitions', foreign_keys='Partition.t_vid')
 
-    stats = relationship(ColumnStat, backref='partition', cascade="all, delete-orphan")
+    stats = relationship(ColumnStat, backref='partition', cascade="all, delete, delete-orphan")
 
     @property
     def identity(self):
@@ -162,7 +162,6 @@ class Partition(Base, DictableMixin):
         from geoid.civick import GVid
         from dateutil import parser
 
-
         sd = dict(stats)
 
         scov = set()
@@ -219,7 +218,7 @@ class Partition(Base, DictableMixin):
         self.grain_coverage = sorted(str(g) for g in grains if g)
 
     @property
-    def stats(self):
+    def stats_dict(self):
 
         class Bunch(object):
             """Dict and object access to properties"""
@@ -235,13 +234,9 @@ class Partition(Base, DictableMixin):
             def items(self):
                 return self.__dict__.items()
 
-        cols = {s.column.name: Bunch(s.dict) for s in self._stats}
+        cols = {s.column.name: Bunch(s.dict) for s in self.stats}
 
         return Bunch(cols)
-
-
-
-
 
     def build_sample(self):
 

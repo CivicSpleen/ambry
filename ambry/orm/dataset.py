@@ -200,6 +200,7 @@ class Dataset(Base):
         from sqlalchemy.orm.exc import NoResultFound
 
         try:
+
             fr = (object_session(self).query(File)
                 .filter(File.d_vid == self.vid)
                 .filter(File.major_type == File.MAJOR_TYPE.BUILDSOURCE)

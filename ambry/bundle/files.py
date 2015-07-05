@@ -25,14 +25,16 @@ larget schema files, such as those in the US Census.
 from ambry.orm import File
 import hashlib
 import time
+from ..util import Constant
 
 class FileTypeError(Exception):
     """Bad file type"""
 
 class BuildSourceFile(object):
 
-    file_to_record = 'ftr'
-    record_to_file = 'rtf'
+    SYNC_DIR = Constant()
+    SYNC_DIR.FILE_TO_RECORD = 'ftr'
+    SYNC_DIR.RECORD_TO_FILE = 'rtf'
 
     def __init__(self, dataset, filesystem, file_const):
         """
@@ -42,6 +44,9 @@ class BuildSourceFile(object):
         :param file_const: The BSFILE file contact
         :return:
         """
+
+        assert not isinstance(filesystem, basestring) # Old Datatypes are leaking through.
+
         self._dataset = dataset
         self._fs = filesystem
         self._file_const = file_const
@@ -66,11 +71,9 @@ class BuildSourceFile(object):
 
         self.sync()
 
-
     @property
     def path(self):
         return self._fs.getsyspath(file_name(self._file_const))
-
 
     def fs_modtime(self):
         import time
@@ -101,32 +104,40 @@ class BuildSourceFile(object):
 
         if self.exists() and not self.record.size:
             # The fs exists, but the record is empty
-            return self.file_to_record
+            return self.SYNC_DIR.FILE_TO_RECORD
 
         elif self.record.size and not self.exists():
             # Record exists, but not the FS
-            return self.record_to_file
+            return self.SYNC_DIR.RECORD_TO_FILE
 
         if self.record.modified > self.fs_modtime():
             # Record is newer
-            return self.record_to_file
+            return self.SYNC_DIR.RECORD_TO_FILE
 
         elif self.fs_modtime() > self.record.modified:
             # Filesystem is newer
-            return self.file_to_record
+            return self.SYNC_DIR.FILE_TO_RECORD
 
         return None
 
-    def sync(self):
+    def sync(self, force = None):
         """Synchronize between the file in the file system and the fiel record"""
 
         from time import time
-        sd = self.sync_dir()
 
-        if  sd == self.file_to_record:
+        if force:
+            sd = force
+        else:
+            sd = self.sync_dir()
+
+        if  sd == self.SYNC_DIR.FILE_TO_RECORD:
+
+            if force and not self.exists():
+                return None
+
             self.fs_to_record()
 
-        elif sd == self.record_to_file:
+        elif sd == self.SYNC_DIR.RECORD_TO_FILE:
             self.record_to_fs()
 
         else:
@@ -268,12 +279,6 @@ class MetadataFile(DictBuildSourceFile):
 
         self._dataset.config.metadata.set(ad)
 
-        #for key, value in ad.flatten():
-        #    if value:
-        #        key0 = key[0]
-        #        print self._dataset.config.metadata[key0]
-        #        self._dataset.config.metadata[key[0]]['.'.join(str(x) for x in key[1:])] = value
-
         self._dataset._database.commit()
 
         return ad
@@ -326,6 +331,7 @@ def file_default(const):
 class BuildSourceFileAccessor(object):
 
     def __init__(self, dataset, filesystem = None):
+        assert not isinstance(filesystem, basestring ) # Bundle fs changed from FS to URL; catch use of old values
         self._dataset = dataset
         self._fs = filesystem
 
@@ -345,13 +351,13 @@ class BuildSourceFileAccessor(object):
 
         return bsfile
 
-    def sync(self):
+    def sync(self, force = None):
 
         syncs = []
 
         for file_const, (file_name, clz) in  file_info_map.items():
             f = self.file(file_const)
-            syncs.append((file_const,f.sync()))
+            syncs.append((file_const,f.sync(force)))
 
         return syncs
 

@@ -26,8 +26,12 @@ class Bundle(Bundle):
 
         rc = random.choice
 
+
         with p.inserter() as ins:
-            for i in range(500):
+            
+            self.log("Building: {}ls -la".format(p.identity.name))
+            
+            for i in range(10000):
                 row = dict()
 
                 row['uuid'] = str(uuid.uuid4())

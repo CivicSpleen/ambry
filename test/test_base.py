@@ -82,17 +82,19 @@ class TestBase(unittest.TestCase):
 
         self.db = self.library._db
 
-        mem_fs = fsopendir("mem://{}/source".format(name))
-        build_fs = fsopendir("mem://{}/build".format(name))
+        source_url = "mem://{}/source".format(name)
+        build_url =  "mem://{}/build".format(name)
 
-        assert mem_fs.isdirempty('/')
-        assert build_fs.isdirempty('/')
+        assert fsopendir(source_url).isdirempty('/')
+        assert fsopendir(build_url).isdirempty('/')
 
-        self.copy_bundle_files(fsopendir(join(dirname(bundles.__file__), 'example.com', name)), mem_fs)
+        test_source_fs = fsopendir(join(dirname(bundles.__file__), 'example.com', name))
 
-        b = self.library.new_from_bundle_config(yaml.load(mem_fs.getcontents('bundle.yaml')))
+        config = yaml.load(test_source_fs.getcontents('bundle.yaml'))
+        b = self.library.new_from_bundle_config(config)
+        b.set_file_system(source_url=source_url, build_url=build_url)
 
-        b.set_file_system(source_fs=mem_fs, build_fs=build_fs)
+        self.copy_bundle_files( test_source_fs, b.source_fs)
 
         return b
 

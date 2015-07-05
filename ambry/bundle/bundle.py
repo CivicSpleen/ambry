@@ -8,11 +8,11 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 from ..util import get_logger
 from ..dbexceptions import ConfigurationError, ProcessError
-from ..util import Constant
+from ..util import Constant, memoize
 
 class Bundle(object):
 
-    def __init__(self, dataset, library, source_fs=None, build_fs=None):
+    def __init__(self, dataset, library, source_url=None, build_url=None):
         import logging
 
         self._dataset = dataset
@@ -22,19 +22,27 @@ class Bundle(object):
         assert bool(library)
 
         self._log_level = logging.INFO
-        self._source_fs = source_fs
-        self._build_fs = build_fs
 
         self._errors = []
 
-    def set_file_system(self, source_fs=None, build_fs=None):
+        self._source_url = source_url
+        self._build_url = build_url
+
+    def set_file_system(self, source_url=None, build_url=None):
         """Set the source file filesystem and/or build  file system"""
 
-        if source_fs:
-            self._source_fs = source_fs
+        assert isinstance(source_url, basestring) or source_url is  None
+        assert isinstance(build_url, basestring) or build_url is  None
 
-        if build_fs:
-            self._build_fs = build_fs
+        if source_url:
+            self._source_url = source_url
+            self.dataset.config.library.source.url = self._source_url
+            self.dataset.commit()
+
+        if build_url:
+            self._build_url = build_url
+            self.dataset.config.library.build.url = self._build_url
+            self.dataset.commit()
 
     def cast_to_subclass(self):
         """
@@ -46,7 +54,7 @@ class Bundle(object):
         from ambry.orm import File
         bsf = self.source_files.file(File.BSFILE.BUILD)
         clz = bsf.import_bundle_class()
-        return clz(self._dataset, self._library, self._source_fs, self._build_fs)
+        return clz(self._dataset, self._library, self._source_url, self._build_url)
 
     @property
     def dataset(self):
@@ -88,11 +96,32 @@ class Bundle(object):
     @property
     def source_files(self):
         from files import BuildSourceFileAccessor
-        return BuildSourceFileAccessor(self.dataset, self._source_fs)
+        return BuildSourceFileAccessor(self.dataset, self.source_fs)
 
     @property
+    @memoize
     def source_fs(self):
-        return self._source_fs
+        from fs.opener import fsopendir
+
+        source_url = self._source_url if self._source_url else self.dataset.config.library.source.url 
+        
+        if not source_url:
+            raise ConfigurationError('Must set source URL either in the constructor or the configuration')
+        
+        return fsopendir(source_url)
+
+    @property
+    @memoize
+    def build_fs(self):
+        from fs.osfs import OSFS
+        import os
+
+        build_url = self._build_url if self._build_url else self.dataset.config.library.build.url
+        
+        if not build_url:
+            raise ConfigurationError('Must set build URL either in the constructor or the configuration')
+
+        return OSFS(build_url, create = True)
 
     @property
     def logger(self):
@@ -175,14 +204,20 @@ class Bundle(object):
     ## Source Synced
     ##
 
-    def sync(self):
-
+    def do_sync(self, force = None):
         ds = self.dataset
-        self.source_files.sync()
+
+        syncs  = self.source_files.sync(force)
 
         self.state = self.STATES.SYNCED
 
         self.dataset.commit()
+
+        return syncs
+
+    def sync(self, force=None):
+
+        self.do_sync(force)
 
         return True
 
@@ -217,9 +252,15 @@ class Bundle(object):
     def clean(self):
         """Clean generated objects from the dataset, but only if there are File contents
          to regenerate them"""
-        from ambry.orm import File
+        from ambry.orm import Partition, ColumnStat, File
+        from sqlalchemy.orm import object_session
 
         ds = self.dataset
+        s = object_session(ds)
+
+        # FIXME. There is a problem with the cascades for ColumnStats that prevents them from beling deleted with the
+        # partitions. Probably, the are seen to be owed by the columns instead.
+        s.query(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
 
         self.dataset.partitions[:] = []
 
@@ -376,7 +417,7 @@ class Bundle(object):
         """Return True is the bundle has been built."""
         return bool(self.dataset.config.build.state.built)
 
-    def do_build(self):
+    def do_build(self, force = False):
 
         if not self.is_prepared:
             if not self.do_prepare():
@@ -384,7 +425,7 @@ class Bundle(object):
                 return False
 
         self.state = self.STATES.BUILDING
-        if self.pre_build():
+        if self.pre_build(force):
 
             self.log("---- Build ---")
             if self.build_main():
@@ -409,11 +450,11 @@ class Bundle(object):
         return r
 
     # Build the final package
-    def pre_build(self):
+    def pre_build(self, force = False):
         from time import time
         import sys
 
-        if self.is_built:
+        if self.is_built and not force:
             self.error("Bundle is already built. Skipping  ( Use --clean  or --force to force build ) ")
             return False
 
@@ -676,3 +717,4 @@ class Bundle(object):
         """Mark the time that this bundle was last accessed"""
 
         self.dataset.config.build.access.last = tag
+        self.dataset.commit()
