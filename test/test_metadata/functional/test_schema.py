@@ -28,10 +28,8 @@ class TopTest(TestBase):
             'external_documentation',
             'build',
             'contacts',
-            # versions',  # FIXME: uncomment and implement.
+            'versions',
             'names',
-            'documentation',
-            'coverage',
         ]
 
         self._assert_fields_match(expected_fields, Top())
@@ -200,7 +198,7 @@ class TopTest(TestBase):
         top.requirements.requests = 'requests'
         top.requirements.suds = 'suds'
 
-        self._assert_fields_match(expected_fields, Top().requirements)
+        self._assert_fields_match(expected_fields, top.requirements)
 
     def test_requirements_fields_values(self):
         """ Test Top.requirements group fields of the metadata config. """
@@ -227,6 +225,121 @@ class TopTest(TestBase):
             new_top.requirements.suds,
             'suds')
 
+    # Top().external_documentation tests
+    def test_external_documentation_fields(self):
+        """ Test external_documentation group of the metadata config. """
+        # requirements group allow any field
+        expected_fields = [
+            'url',
+            'title',
+            'description',
+            'source'
+        ]
+        self._assert_fields_match(expected_fields, Top().external_documentation.any_random_field)
+
+    def test_external_documentation_fields_values(self):
+        """ Test Top.external_documentation group fields of the metadata config. """
+        # Test both - setting and saving to db.
+        top = Top()
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        top.link_config(db.session, dataset)
+
+        top.external_documentation.any_field.url = 'http://example.com'
+        top.external_documentation.any_field.title = 'the-title'
+        top.external_documentation.any_field.description = 'the-description'
+        top.external_documentation.any_field.source = 'http://example.com'
+
+        # build from db and check
+        new_top = Top()
+        new_top.build_from_db(dataset)
+        self.assertEquals(
+            new_top.external_documentation.any_field.url,
+            'http://example.com')
+        self.assertEquals(
+            new_top.external_documentation.any_field.title,
+            'the-title')
+        self.assertEquals(
+            new_top.external_documentation.any_field.description,
+            'the-description')
+        self.assertEquals(
+            new_top.external_documentation.any_field.source,
+            'http://example.com')
+
+    def test_build_fields(self):
+        """ Test build group of the metadata config. """
+        # build group allows any field
+        expected_fields = [
+            'key1',
+            'key2',
+            'key3',
+        ]
+        top = Top()
+        top.build.key1 = 'value1'
+        top.build.key2 = 'value2'
+        top.build.key3 = 'value3'
+
+        self._assert_fields_match(expected_fields, top.build)
+
+    def test_build_fields_values(self):
+        """ Test Top().build group fields of the metadata config. """
+        # Test both - setting and saving to db.
+        top = Top()
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        top.link_config(db.session, dataset)
+
+        top.build.key1 = 'value1'
+        top.build.key2 = 'value2'
+        top.build.key3 = 'value3'
+
+        # build from db and check
+        new_top = Top()
+        new_top.build_from_db(dataset)
+        self.assertEquals(
+            new_top.build.key1,
+            'value1')
+        self.assertEquals(
+            new_top.build.key2,
+            'value2')
+        self.assertEquals(
+            new_top.build.key3,
+            'value3')
+
+    # Top().names tests
+    def test_names_fields(self):
+        """ Test Top().names group of the metadata config. """
+        expected_fields = [
+            'fqname',
+            'name',
+            'vid',
+            'vname',
+        ]
+
+        self._assert_fields_match(expected_fields, Top().names)
+
+    def test_names_fields_values(self):
+        """ Test Top().names group fields of the metadata config. """
+        # Test both - setting and saving to db.
+        top = Top()
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        top.link_config(db.session, dataset)
+
+        top.names.fqname = 'fq-name'
+        top.names.name = 'name'
+        top.names.vid = 'd001'
+        top.names.vname = 'vname'
+
+        # build from db and check
+        new_top = Top()
+        new_top.build_from_db(dataset)
+        self.assertEquals(new_top.names.fqname, 'fq-name')
+        self.assertEquals(new_top.names.name, 'name')
+        self.assertEquals(new_top.names.vid, 'd001')
+        self.assertEquals(new_top.names.vname, 'vname')
+
+    # Top().contacts tests
     def test_contacts_fields(self):
         """ Test contacts group of the metadata config. """
         expected_fields = [
@@ -261,4 +374,33 @@ class TopTest(TestBase):
         self.assertEquals(new_top.contacts.creator.email, 'c.test@example.com')
         self.assertEquals(new_top.contacts.creator.name, 'c-tester')
         self.assertEquals(new_top.contacts.creator.url, 'http://creator.example.com')
-        # FIXME: Test maintainer, source and analyst too.
+
+    # Top().versions tests
+    def test_versions_fields(self):
+        """ Test contacts group of the metadata config. """
+        expected_fields = [
+            'version',
+            'date',
+            'description',
+        ]
+
+        self._assert_fields_match(expected_fields, Top().versions.any_field)
+
+    def test_versions_fields_values(self):
+        """ Test Top().versions group fields of the metadata config. """
+        # Test both - setting and saving to db.
+        top = Top()
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        top.link_config(db.session, dataset)
+
+        top.versions['1'].date = '2015-04-12T15:49:55.077036'
+        top.versions['1'].description = 'Adding coverage'
+        top.versions['1'].version = '0.0.2'
+
+        # build from db and check
+        new_top = Top()
+        new_top.build_from_db(dataset)
+        self.assertEquals(new_top.versions['1'].date, '2015-04-12T15:49:55.077036')
+        self.assertEquals(new_top.versions['1'].description, 'Adding coverage')
+        self.assertEquals(new_top.versions['1'].version, '0.0.2')
