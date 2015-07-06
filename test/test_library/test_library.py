@@ -32,9 +32,3 @@ class Test(TestBase):
             print b.identity.vname
 
         print l.edit_history()
-
-def suite():
-    import unittest
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite
