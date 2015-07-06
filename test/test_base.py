@@ -114,7 +114,4 @@ class TestBase(unittest.TestCase):
         mem_fs = fsopendir("mem://")
         build_fs = fsopendir("mem://")
 
-        return Bundle(self.new_db_dataset(self.db), self.library, source_fs=mem_fs, build_fs=build_fs)
-
-    def tearDown(self):
-        pass
+        return Bundle(self.new_db_dataset(self.db), self.library, source_url=mem_fs, build_url=build_fs)
