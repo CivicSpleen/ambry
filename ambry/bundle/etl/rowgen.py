@@ -6,6 +6,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 
+
 class RowGenerator(object):
     file_name = None
 
@@ -218,7 +219,6 @@ class RowGenerator(object):
 
 
 class DelimitedRowGenerator(RowGenerator):
-    delimiter = None
 
     def __init__(self, file, data_start_line=None, data_end_line=None, header_lines=None, header_comment_lines=None,
                  header_mangler=None, delimiter=','):
@@ -229,27 +229,7 @@ class DelimitedRowGenerator(RowGenerator):
 
         self.delimiter = delimiter
 
-    def get_csv_reader(self, f, sniff=False):
-        # import unicodecsv as csv
-        import csv
 
-        if sniff:
-            dialect = csv.Sniffer().sniff(f.read(5000))
-            f.seek(0)
-        else:
-            dialect = None
-
-        delimiter = self.delimiter if self.delimiter else ','
-
-        return csv.reader(f, delimiter=delimiter, dialect=dialect)
-
-    def _yield_rows(self):
-
-        self.line_number = 0
-        with open(self.file_name, 'rU') as f:
-            for i, row in enumerate(self.get_csv_reader(f)):
-                self.line_number = i
-                yield row
 
 
 class ExcelRowGenerator(RowGenerator):
@@ -271,7 +251,6 @@ class ExcelRowGenerator(RowGenerator):
         wb = open_workbook(self.file_name)
         datemode = wb.datemode
 
-
         def excel_date(v):
             from xlrd import xldate_as_tuple
             import datetime
@@ -286,7 +265,6 @@ class ExcelRowGenerator(RowGenerator):
                     return parser.parse(v)
                 except ValueError:
                     return None
-
 
         return excel_date
 
@@ -319,44 +297,9 @@ class ExcelRowGenerator(RowGenerator):
 
         return excel_date
 
-    def _yield_rows(self):
-        from xlrd import open_workbook
-        from xlrd.biffh import XLRDError
-
-        try:
-            wb = open_workbook(self.file_name)
-        except XLRDError:
-            from zipfile import ZipFile
-            # Usually b/c the .xls file is XML, but not zipped.
-
-            self.file_name.replace('.xls', '.xml')
-
-            wb = open_workbook(self.file_name)
-
-        self.workbook = wb
 
 
-        s = wb.sheets()[self.segment if self.segment else 0]
 
-        for i in range(0, s.nrows):
-            self.line_number = i
-            yield self.srow_to_list(i, s)
-
-    def srow_to_list(self, row_num, s):
-        """Convert a sheet row to a list"""
-
-        values = []
-
-        for col in range(s.ncols):
-            if self.decode:
-                v = s.cell(row_num, col).value
-                if isinstance(v, basestring):
-                    v = self.decode(v)
-                values.append(v)
-            else:
-                values.append(s.cell(row_num, col).value)
-
-        return values
 
 class GeneratorRowGenerator(RowGenerator):
     """A RowGenerator that is constructed on a function that returns a raw row generator function

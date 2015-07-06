@@ -284,6 +284,43 @@ class Test(TestBase):
 
         row, errors =  ctb(['.',  'a',  '3',  0,  3])
 
+    def test_source_download(self):
+        """Down load all of the sources from the complete-load bundle and check the extracted files against the
+        declared MD5 sums. """
+
+        from ambry.util import md5_for_stream
+        from fs.opener import fsopendir
+
+        b = self.setup_bundle('complete-load')
+
+        b.do_clean()
+        b.do_sync()
+        b.do_prepare()
+
+        cache_fs = fsopendir('mem://')
+
+        self.assertEquals(14, len(b.dataset.sources))
+
+        for i, source in enumerate(b.dataset.sources):
+            fstor = source.download(cache_fs)
+
+            with fstor() as f:
+                self.assertEquals(source.hash, md5_for_stream(f))
+
+    def test_simple_download(self):
+
+        b = self.setup_bundle('complete-load')
+
+        b.do_clean()
+        b.do_sync()
+        b.do_prepare()
+
+        f = b.source('simple').download()
+
+        print f().read()
+
+
+
 
 def suite():
     suite = unittest.TestSuite()

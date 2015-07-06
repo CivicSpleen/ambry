@@ -806,6 +806,19 @@ def zip_dir(dir, file_):
             zf.write(f)
     return dir
 
+def md5_for_stream(f, block_size=2 ** 20):
+    import hashlib
+
+    md5 = hashlib.md5()
+
+    while True:
+        data = f.read(block_size)
+        if not data:
+            break
+
+        md5.update(data)
+
+        return md5.hexdigest()
 
 def md5_for_file(f, block_size=2 ** 20):
     """Generate an MD5 has for a possibly large file by breaking it into
@@ -821,6 +834,7 @@ def md5_for_file(f, block_size=2 ** 20):
             data = f.read(block_size)
             if not data:
                 break
+
             md5.update(data)
         return md5.hexdigest()
 

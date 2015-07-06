@@ -66,6 +66,11 @@ class Library(object):
         return self._db
 
     @property
+    def download_cache(self):
+        from fs.osfs import OSFS
+        return OSFS(self._fs.downloads())
+
+    @property
     def remotes(self):
         return self._remotes
 

@@ -298,6 +298,50 @@ class PythonSourceFile(StringSourceFile):
 
         return context['Bundle']
 
+class SourcesFile(RowBuildSourceFile):
+
+    def record_to_objects(self):
+        """Create config records to match the file metadata"""
+        from ..orm.source import DataSource
+
+        fr = self._dataset.bsfile(self._file_const)
+
+        contents = fr.unpacked_contents
+
+        if not contents:
+            return
+
+        # Zip transposes an array when in the form of a list of lists, so this transposes so each row starts with the heading
+        # and the rest of the row are the values for that row. The bool and filter return false when none of the values
+        # are non-empty. Then zip again to transpose to original form.
+
+        non_empty_rows = zip(*[ row for row in zip(*contents) if bool(filter(bool,row[1:])) ])
+
+        s = self._dataset._database.session
+
+        for i, row in enumerate(non_empty_rows):
+            if i == 0:
+                header = row
+            else:
+                d = dict(zip(header, row))
+
+                if 'table' in d:
+                    d['table_name'] = d['table']
+                    del d['table']
+
+
+
+                d['d_vid'] = self._dataset.vid
+
+                s.merge(DataSource(**d))
+
+
+        self._dataset._database.commit()
+
+
+    def object_to_record(self):
+        pass
+
 file_info_map = {
     File.BSFILE.BUILD : ('bundle.py',PythonSourceFile),
     File.BSFILE.BUILDMETA: ('meta.py',PythonSourceFile),
@@ -305,7 +349,7 @@ file_info_map = {
     File.BSFILE.META: ('bundle.yaml',MetadataFile),
     File.BSFILE.SCHEMA: ('schema.csv',RowBuildSourceFile),
     File.BSFILE.COLMAP: ('column_map.csv',RowBuildSourceFile),
-    File.BSFILE.SOURCES: ('sources.csv',RowBuildSourceFile)
+    File.BSFILE.SOURCES: ('sources.csv',SourcesFile)
 }
 
 def file_name(const):
@@ -326,6 +370,8 @@ def file_default(const):
 
     with open(path) as f:
         return f.read()
+
+
 
 
 class BuildSourceFileAccessor(object):

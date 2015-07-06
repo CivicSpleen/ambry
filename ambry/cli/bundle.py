@@ -149,6 +149,8 @@ def bundle_parser(cmd):
     # Info command
     command_p = sub_cmd.add_parser('info', help='Print information about the bundle')
     command_p.set_defaults(subcommand='info')
+    command_p.add_argument('-w', '--which', default=False, action="store_true",
+                           help='Report the reference of the bundles that will be accessed by other commands')
     command_p.add_argument('-s', '--schema', default=False, action="store_true",
                            help='Dump the schema as a CSV. The bundle must have been prepared')
     command_p.add_argument('-d', '--dep', default=False, help='Report information about a dependency')
@@ -179,6 +181,12 @@ def bundle_parser(cmd):
     #
     command_p = sub_cmd.add_parser('clean', help='Return bundle to state before build, prepare and extracts')
     command_p.set_defaults(subcommand='clean')
+
+    #
+    # Download Command
+    #
+    command_p = sub_cmd.add_parser('download', help='Download all of the soruce files and referenced bundles')
+    command_p.set_defaults(subcommand='download')
 
     #
     # Meta Command
@@ -280,6 +288,10 @@ def bundle_info(args, l, rc):
 
     ref, frm = get_bundle_ref(args,l)
 
+    if args.which:
+        prt('Will use bundle ref {}, referenced from {}'.format(ref, frm))
+        return
+
     b = l.bundle(ref)
 
     info = [list(), list()]
@@ -312,9 +324,13 @@ def bundle_info(args, l, rc):
     inf(0,"VName", b.identity.vname)
 
     inf(1, 'Build State', b.dataset.config.build.state.current)
-    inf(1, 'Geo cov', str(list(b.metadata.coverage.geo)))
-    inf(1, 'Grain cov', str(list(b.metadata.coverage.grain)))
-    inf(1, 'Time cov', compress_years(b.metadata.coverage.time))
+    try:
+        inf(1, 'Geo cov', str(list(b.metadata.coverage.geo)))
+        inf(1, 'Grain cov', str(list(b.metadata.coverage.grain)))
+        inf(1, 'Time cov', compress_years(b.metadata.coverage.time))
+    except KeyError:
+        pass
+
 
     print '----'
     print tabulate(join(*info), tablefmt='plain')
@@ -429,6 +445,12 @@ def bundle_clean(args, l, rc):
     b = using_bundle(args, l).cast_to_subclass()
     b.do_clean()
     b.set_last_access(Bundle.STATES.NEW)
+
+def bundle_download(args, l, rc):
+    from ambry.bundle import Bundle
+    b = using_bundle(args, l).cast_to_subclass()
+    b.download()
+    b.set_last_access(Bundle.STATES.DOWNLOADED)
 
 def bundle_sync(args, l, rc):
     from ambry.bundle import Bundle
@@ -876,7 +898,13 @@ def bundle_import(args, l, rc):
     import yaml
     from ambry.orm.exc import NotFoundError
 
-    fs = fsopendir(args.source)
+    if args.source:
+        soruce_dir = args.source
+    else:
+        import os
+        source_dir = os.getcwd()
+
+    fs = fsopendir(source_dir)
 
     config = yaml.load(fs.getcontents('bundle.yaml'))
 

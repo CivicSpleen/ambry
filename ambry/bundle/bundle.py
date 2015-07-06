@@ -82,12 +82,13 @@ class Bundle(object):
         from partitions import Partitions
         return Partitions(self)
 
-    @property
-    def sources(self):
-        """Return the Sources acessor"""
-        from sources import SourceFilesAccessor
-        return SourceFilesAccessor(self)
+    def source(self, name):
 
+        print self.dataset.source
+
+        source =  self.dataset.source_file(name)
+        source._cache_fs = self._library.download_cache
+        return source
     @property
     def metadata(self):
         """Return the Metadata acessor"""
@@ -189,6 +190,7 @@ class Bundle(object):
     STATES = Constant()
     STATES.NEW = 'new'
     STATES.SYNCED = 'synced'
+    STATES.DOWNLOADED = 'downloaded'
     STATES.CLEANING = 'cleaning'
     STATES.CLEANED = 'cleaned'
     STATES.PREPARING = 'preparing'
@@ -285,6 +287,13 @@ class Bundle(object):
         pass
         return True
 
+    def download(self):
+        """Download referenced source files and bundles. BUndles will be instlaled in the warehouse"""
+
+        for source in self.dataset.sources:
+            print source
+
+
     ##
     ## Prepare
     ##
@@ -329,7 +338,9 @@ class Bundle(object):
         from ambry.orm import File
 
         try:
-            self.sources.check_dependencies()
+            # Implement later ...
+            #self.sources.check_dependencies()
+            pass
         except NotFoundError as e:
             self.error(e.message)
             return False
@@ -342,6 +353,8 @@ class Bundle(object):
             return False
 
         self.source_files.file(File.BSFILE.META).record_to_objects()
+
+        self.source_files.file(File.BSFILE.SOURCES).record_to_objects()
 
         return True
 

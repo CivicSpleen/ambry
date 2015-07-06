@@ -195,6 +195,13 @@ class Dataset(Base):
 
         raise NotFoundError("Failed to find partition for ref '{}' in dataset '{}'".format(ref, self.name))
 
+    def source_file(self,name):
+        from source import DataSource
+        source =  (object_session(self).query(DataSource)
+                .filter(DataSource.name == name).filter(DataSource.d_vid == self.vid)).first()
+
+        return source
+
     def bsfile(self, name):
         """Return a Build Source file ref, creating a new one if the one requested does not exist"""
         from sqlalchemy.orm.exc import NoResultFound
