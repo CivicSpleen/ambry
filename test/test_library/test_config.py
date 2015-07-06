@@ -25,10 +25,3 @@ class Test(TestBase):
         self.rc = self.get_rc()
 
         print self.rc.library()
-
-def suite():
-    import unittest
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite
-

@@ -5,14 +5,17 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
+import unicodecsv as csv
+
+
 def new_partition_data_file(fs, path):
 
     ext_map = {
-        PartitionCsvDataFile.EXTENSION : PartitionCsvDataFile,
+        PartitionCsvDataFile.EXTENSION: PartitionCsvDataFile,
         PartitionMsgpackDataFile.EXTENSION: PartitionMsgpackDataFile
     }
 
-    from os.path import split, splitext, join
+    from os.path import split, splitext
 
     dn, file_ext = split(path)
     fn, ext = splitext(file_ext)
@@ -24,6 +27,7 @@ def new_partition_data_file(fs, path):
         ext = '.csv'
 
     return ext_map[ext](fs, path)
+
 
 class PartitionDataFile(object):
     """An accessor for files that hold Partition Data"""
@@ -120,7 +124,6 @@ class PartitionCsvDataFile(PartitionDataFile):
         return self._file
 
     def writer(self, stream=None):
-        import unicodecsv as csv
 
         if not self._writer:
 
@@ -131,9 +134,7 @@ class PartitionCsvDataFile(PartitionDataFile):
 
         return self._writer
 
-
-    def reader(self, stream = None):
-        import unicodecsv as csv
+    def reader(self, stream=None):
 
         if not self._reader:
 

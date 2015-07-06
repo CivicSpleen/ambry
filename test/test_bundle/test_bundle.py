@@ -27,10 +27,3 @@ class Test(TestBase):
         self.assertTrue(bool(b.error_state))
 
 
-
-def suite():
-    import unittest
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite
-

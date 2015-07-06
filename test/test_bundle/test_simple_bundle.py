@@ -1,15 +1,22 @@
+# -*- coding: utf-8 -*-
+
+import unittest
+
 from test.test_base import TestBase
 
-from ambry.bundle import Bundle
 
 class Test(TestBase):
 
     def test_filesystems(self):
 
         b = self.setup_bundle('simple')
-
-        print list(b.source_fs.listdir())
-
+        dir_list = list(b.source_fs.listdir())
+        self.assertIn('bundle.py', dir_list)
+        self.assertIn('sources.csv', dir_list)
+        self.assertIn('bundle.yaml', dir_list)
+        self.assertIn('column_map.csv', dir_list)
+        self.assertIn('schema.csv', dir_list)
+        self.assertIn('documentation.md', dir_list)
 
     def test_simple_prepare(self):
         """Build the simple bundle"""
@@ -18,8 +25,8 @@ class Test(TestBase):
 
         b.sync()  # This will sync the files back to the bundle's source dir
 
-        self.assertEquals(7,len(b.dataset.files))
-        file_names = [ f.path for f in b.dataset.files]
+        self.assertEquals(7, len(b.dataset.files))
+        file_names = [f.path for f in b.dataset.files]
 
         self.assertEqual([u'bundle.py', u'documentation.md', u'sources.csv', u'bundle.yaml',
                           u'build_meta', u'schema.csv', u'column_map.csv'], file_names)
@@ -36,19 +43,18 @@ class Test(TestBase):
 
         self.assertTrue(len(b.dataset.configs) > 10)
 
-        self.assertEquals('Simple Example Bundle',b.metadata.about.title)
-        self.assertEquals('Example Com', b.metadata.contacts.creator.org )
+        self.assertEquals('Simple Example Bundle', b.metadata.about.title)
+        self.assertEquals('Example Com', b.metadata.contacts.creator.org)
 
         # FIXME. This should work, but doesn't currenly, 20150704
-        #self.assertEquals([u'example', u'demo'], b.metadata.about.tags )
+        # self.assertEquals([u'example', u'demo'], b.metadata.about.tags )
 
-        self.assertTrue(len(b.dataset.tables) == 1 )
+        self.assertTrue(len(b.dataset.tables) == 1)
         self.assertEqual('example', b.dataset.tables[0].name)
 
         self.assertEqual([u'id', u'uuid', u'int', u'float', u'categorical', u'ordinal',
                           u'gaussian', u'triangle', u'exponential', u'bg_gvid', u'year', u'date'],
-                         [ c.name for c in b.dataset.tables[0].columns ] )
-
+                         [c.name for c in b.dataset.tables[0].columns])
 
     def test_simple_build(self):
         """Build the simple bundle"""
@@ -57,33 +63,32 @@ class Test(TestBase):
 
         b.sync()
         b = b.cast_to_subclass()
-        self.assertEquals('synced',b.state)
+        self.assertEquals('synced', b.state)
         b.do_prepare()
         self.assertEquals('prepared', b.state)
         b.do_build()
 
-
         self.assertEquals([2000, 2001, 2002], b.dataset.partitions[0].time_coverage)
         self.assertEquals([u'0O0101', u'0O0102'], b.dataset.partitions[0].space_coverage)
-        self.assertEquals([u'2qZZZZZZZZZZ'],b.dataset.partitions[0].grain_coverage)
+        self.assertEquals([u'2qZZZZZZZZZZ'], b.dataset.partitions[0].grain_coverage)
 
         self.assertEqual(1, len(b.dataset.partitions))
         self.assertEqual(1, len(b.dataset.tables))
 
         c = b.build_fs.getcontents(list(b.build_fs.walkfiles())[0])
 
-        self.assertEquals(501,len(c.splitlines()))
+        self.assertEquals(10001, len(c.splitlines()))
 
         self.assertEquals(12, len(b.dataset.stats))
 
-        self.assertEquals('built', b.state )
+        self.assertEquals('built', b.state)
 
         return b
 
     def test_complete_build(self):
         """Build the simple bundle"""
 
-        b = self.setup_bundle('complete')
+        b = self.setup_bundle('complete-build')
         b.sync()
         b = b.cast_to_subclass()
         self.assertEquals('synced', b.state)
@@ -142,6 +147,8 @@ class Test(TestBase):
             from shutil import rmtree
             rmtree(td)
 
+    @unittest.skip(
+        'TypeError: \'argument 1 must be an iterator\' - while building csv reader. Requires ckcache fix?')
     def test_install(self):
         """Test copying a bundle to a remote, then streaming it back"""
 
@@ -150,15 +157,6 @@ class Test(TestBase):
 
         l.install_to_remote(b)
 
-        remote = l.remote('test')
-
         p = l.partition(list(b.partitions)[0].vid)
 
         self.assertEqual(500, len(list(l.stream_partition(p.vid))))
-
-
-def suite():
-    import unittest
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite
