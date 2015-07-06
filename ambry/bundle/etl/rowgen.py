@@ -6,6 +6,88 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 
+class SourceRowGenerator(object):
+    """An Interator classs that returns rows from a soruce file, performing basic adaptaion
+    """
+
+    def __init__(self, file_name, source):
+        self._file_name = file_name
+        self._source = source
+
+    def next(self):
+        raise NotImplementedError
+
+    def __iter__(self):
+        return self
+
+class DelimitedSourceRowGenerator(SourceRowGenerator):
+    """
+    Generate rows from a comma or tab delimited text file.
+    """
+    def mangle_line(self, line):
+        return line
+
+    def generate_delimited_rows(self, file_name):
+
+        delimiter = '\t' if self._source == 'tsv' else ','
+        dialect = None
+
+        if self._source.encoding in (None, 'ascii', 'unknown'):
+            import csv
+
+            reader = lambda f: csv.reader(f, delimiter=delimiter, dialect=dialect)
+        else:
+            import unicodecsv
+
+            reader = lambda f: unicodecsv.reader(f, delimiter=delimiter, dialect=dialect, encoding=self._source.encoding)
+
+        self.line_number = 0
+        with open(file_name, 'rU') as f:
+            for i, row in enumerate(reader(self.mangle_line(l) for l in f)):
+                self.line_number = i
+                yield row
+
+class ExcelSourceRowGenerator(SourceRowGenerator):
+    """
+    Generator rows from an excel file.
+    """
+    @staticmethod
+    def srow_to_list(self, row_num, s):
+        """Convert a sheet row to a list"""
+
+        values = []
+
+        for col in range(s.ncols):
+            if decode:
+                v = s.cell(row_num, col).value
+                if isinstance(v, basestring):
+                    v = decode(v)
+                values.append(v)
+            else:
+                values.append(s.cell(row_num, col).value)
+
+        return values
+
+    def generate_xls_rows(file_name, segment, decode=None):
+        from xlrd import open_workbook
+        from xlrd.biffh import XLRDError
+
+        try:
+            wb = open_workbook(file_name)
+        except XLRDError:
+            from zipfile import ZipFile
+            # Usually b/c the .xls file is XML, but not zipped.
+
+            file_name = file_name.replace('.xls', '.xml')
+
+            wb = open_workbook(file_name)
+
+        s = wb.sheets()[segment if segment else 0]
+
+        for i in range(0, s.nrows):
+            yield ExcelSourceRowGenerator.srow_to_list(i, s)
+
+
 
 class RowGenerator(object):
     file_name = None

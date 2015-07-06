@@ -52,7 +52,7 @@ class Bundle(object):
         :return:
         """
         from ambry.orm import File
-        bsf = self.source_files.file(File.BSFILE.BUILD)
+        bsf = self.build_source_files.file(File.BSFILE.BUILD)
         clz = bsf.import_bundle_class()
         return clz(self._dataset, self._library, self._source_url, self._build_url)
 
@@ -83,19 +83,26 @@ class Bundle(object):
         return Partitions(self)
 
     def source(self, name):
-
-        print self.dataset.source
-
         source =  self.dataset.source_file(name)
         source._cache_fs = self._library.download_cache
         return source
+
+    @property
+    def sources(self):
+
+        for source in self.dataset.sources:
+            source._cache_fs = self._library.download_cache
+            yield source
+
     @property
     def metadata(self):
         """Return the Metadata acessor"""
         return self.dataset.config.metadata
 
     @property
-    def source_files(self):
+    def build_source_files(self):
+        """Return acessors to the build files"""
+
         from files import BuildSourceFileAccessor
         return BuildSourceFileAccessor(self.dataset, self.source_fs)
 
@@ -209,7 +216,7 @@ class Bundle(object):
     def do_sync(self, force = None):
         ds = self.dataset
 
-        syncs  = self.source_files.sync(force)
+        syncs  = self.build_source_files.sync(force)
 
         self.state = self.STATES.SYNCED
 
@@ -352,9 +359,9 @@ class Bundle(object):
             raise
             return False
 
-        self.source_files.file(File.BSFILE.META).record_to_objects()
+        self.build_source_files.file(File.BSFILE.META).record_to_objects()
 
-        self.source_files.file(File.BSFILE.SOURCES).record_to_objects()
+        self.build_source_files.file(File.BSFILE.SOURCES).record_to_objects()
 
         return True
 

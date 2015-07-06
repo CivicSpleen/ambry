@@ -13,6 +13,23 @@ from . import Base, MutationDict, MutationList, JSONEncodedObj
 
 from . import Base,  DictableMixin
 
+class DelayedOpen(object):
+
+    def __init__(self, source, fs, path, mode = 'r'):
+        self._source = source
+        self._fs = fs
+        self._path = path
+        self._mode = mode
+
+    def open(self, mode = None ):
+        return self._fs.open(self._path, mode if mode else self._mode )
+
+    def syspath(self):
+        return self._fs.getsyspath(self._path)
+
+    def rowgen(self):
+        return self._source.row_gen()
+
 class DataSource(Base, DictableMixin):
     """A source of data, such as a remote file or bundle"""
 
@@ -33,14 +50,16 @@ class DataSource(Base, DictableMixin):
     end_line = SAColumn('ds_end_line', INTEGER)
     comment_lines = SAColumn('ds_comment_lines', MutationList.as_mutable(JSONEncodedObj))
     header_lines = SAColumn('ds_header_lines', MutationList.as_mutable(JSONEncodedObj))
+    widths = SAColumn('ds_widths', MutationList.as_mutable(JSONEncodedObj))
     description = SAColumn('ds_description', Text)
     file = SAColumn('ds_file', Text)
-    urltype = SAColumn('ds_urltype', Text)
-    filetype = SAColumn('ds_filetype', Text)
+    urltype = SAColumn('ds_urltype', Text) # null or zip
+    filetype = SAColumn('ds_filetype', Text) # tsv, csv, fixed
+    encoding = SAColumn('ds_encoding', Text)
     url = SAColumn('ds_url', Text)
     ref = SAColumn('ds_ref', Text)
     hash = SAColumn('ds_hash', Text)
-
+    source_generator = SAColumn('ds_sourcegen', Text) # Classname of of the source row generator
 
     def get_filetype(self):
         from os.path import splitext
@@ -59,9 +78,11 @@ class DataSource(Base, DictableMixin):
         root, ext = splitext(parsed.path)
 
         if ext == '.zip':
-            root, ext = splitext(parsed.path)
+            parsed_path = parsed.path.replace('.zip','')
+            root, ext = splitext(parsed_path)
 
             return ext[1:]
+
         elif ext:
             return ext[1:]
 
@@ -90,7 +111,7 @@ class DataSource(Base, DictableMixin):
         """
         return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs }
 
-    def download(self, cache_fs = None):
+    def fetch(self, cache_fs = None):
         """Download the source and return a callable object that will open the file. """
 
         from fs.zipfs import ZipFS
@@ -111,7 +132,8 @@ class DataSource(Base, DictableMixin):
             fs = ZipFS(cache_fs.open(f, 'rb'))
             if not self.file:
                 first = walk_all(fs)[0]
-                fstor = lambda: fs.open(first)
+
+                fstor = DelayedOpen(self, fs, first, 'rU')
             else:
                 import re
 
@@ -121,80 +143,39 @@ class DataSource(Base, DictableMixin):
                         continue
 
                     if re.search(self.file, zip_fn):
-                        fstor = lambda: fs.open(zip_fn, 'rb')
+                        fstor = DelayedOpen( self,  fs,zip_fn, 'rb')
                         break
 
         else:
-            fstor = lambda: cache_fs.open(f, 'rb')
+            fstor = DelayedOpen(self, cache_fs, f, 'rb')
+
+        self._fstor = fstor
 
         return fstor
 
-    def row_gen(self):
+    def row_gen(self, fstor = None):
         """Return a Row Generator"""
+        import petl
 
+        gft = self.get_filetype()
 
-def generate_xls_rows(file_name, segment, decode=None):
-    from xlrd import open_workbook
-    from xlrd.biffh import XLRDError
+        if not fstor:
+            fstor = self._fstor
 
-    def srow_to_list(self, row_num, s):
-        """Convert a sheet row to a list"""
+        if gft == 'csv':
+            return petl.io.csv.fromcsv(fstor, self.encoding if self.encoding else None)
+        elif gft == 'tsv':
+            return petl.io.csv.fromtsv(fstor, self.encoding if self.encoding else None)
+        elif gft == 'fixed' or gft == 'txt':
+            from ambry.util.fixedwidth import fixed_width_iter
 
-        values = []
-
-        for col in range(s.ncols):
-            if decode:
-                v = s.cell(row_num, col).value
-                if isinstance(v, basestring):
-                    v = decode(v)
-                values.append(v)
-            else:
-                values.append(s.cell(row_num, col).value)
-
-        return values
-
-    try:
-        wb = open_workbook(file_name)
-    except XLRDError:
-        from zipfile import ZipFile
-        # Usually b/c the .xls file is XML, but not zipped.
-
-        file_name = file_name.replace('.xls', '.xml')
-
-        wb = open_workbook(file_name)
-
-    s = wb.sheets()[segment if segment else 0]
-
-    for i in range(0, s.nrows):
-        yield srow_to_list(i, s)
-
-
-
-def generate_delimited_rows(self, file_name):
-
-    if self.line_mangler:
-
-        def lm(f):
-            for l in f:
-                yield self.line_mangler(self, l)
-
-        f = lm(f)
-
-    delimiter = ','
-    dialect = None
-
-    if self.encoding in (None, 'ascii', 'unknown'):
-        import csv
-        reader =  lambda f:  csv.reader(f, delimiter=delimiter, dialect=dialect)
-    else:
-        import unicodecsv
-        reader =  lambda f: unicodecsv.reader(f, delimiter=delimiter, dialect=dialect, encoding=self.encoding)
-
-    self.line_number = 0
-    with open(file_name, 'rU') as f:
-        for i, row in enumerate( reader(f)):
-            self.line_number = i
-            yield row
+            return fixed_width_iter(fstor.open(), self.widths)
+        elif gft == 'xls':
+            return petl.io.xls.fromxls(fstor.syspath(), sheet=self.segment if self.segment else None)
+        elif gft == 'xlsx':
+            return petl.io.xlsx.fromxlsx(fstor.syspath(), sheet=self.segment if self.segment else None)
+        else:
+            raise ValueError("Unknown filetype: {} ".format(gft))
 
 def download(url, cache_fs):
     import urlparse
@@ -222,3 +203,4 @@ def download(url, cache_fs):
             copy_file_or_flo(r.raw, f)
 
     return cache_path
+

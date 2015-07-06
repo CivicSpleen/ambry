@@ -952,7 +952,7 @@ def bundle_edit(args, l, rc):
 
     def edit(const):
 
-        bf = b.source_files.file(const)
+        bf = b.build_source_files.file(const)
         bf.prepare_to_edit()
 
         file_path =  bf.path

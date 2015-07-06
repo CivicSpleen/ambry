@@ -283,3 +283,57 @@ class Test(TestBase):
         ctb.append('ni2', NaturalInt)
 
         row, errors =  ctb(['.',  'a',  '3',  0,  3])
+
+    def test_source_download(self):
+        """Down load all of the sources from the complete-load bundle and check the extracted files against the
+        declared MD5 sums. """
+
+        from ambry.util import md5_for_stream
+        from fs.opener import fsopendir
+
+        b = self.setup_bundle('complete-load')
+
+        b.do_clean()
+        b.do_sync()
+        b.do_prepare()
+
+        cache_fs = fsopendir('mem://')
+
+        self.assertEquals(14, len(b.dataset.sources))
+
+        for i, source in enumerate(b.sources):
+            print i, source.name
+
+            with source.fetch().open() as f:
+                self.assertEquals(source.hash, md5_for_stream(f))
+
+            for i, row in enumerate(source.fetch().rowgen()):
+                print row
+                if i > 3:
+                    break
+
+    def test_simple_download(self):
+
+        b = self.setup_bundle('complete-load')
+
+        b.do_clean()
+        b.do_sync()
+        b.do_prepare()
+
+        for i,row in enumerate(b.source('simple_fixed').fetch().rowgen()):
+            print row
+            if i > 3:
+                break
+
+        return
+
+        for i,row in enumerate(b.source('simple').fetch().rowgen()):
+            print row
+            if i > 3:
+                break
+
+
+
+
+
+

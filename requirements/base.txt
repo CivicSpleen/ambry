@@ -42,3 +42,5 @@ msgpack-python==0.4.6
 runstats
 tabulate
 watchdog
+petl
+openpyxl
