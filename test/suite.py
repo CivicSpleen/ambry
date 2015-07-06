@@ -4,9 +4,7 @@ Created on Oct 15, 2012
 @author: eric
 """
 import unittest
-
 import test_identity
-
 
 suite = unittest.TestSuite()
 suite.addTests(test_identity.suite())
@@ -24,6 +22,7 @@ suite.addTests(test_orm_suite)
 
 test_metadata_suite = test_loader.discover('test_metadata', top_level_dir='test')
 suite.addTests(test_metadata_suite)
+
 
 if __name__ == '__main__':
     unittest.TextTestRunner().run(suite)

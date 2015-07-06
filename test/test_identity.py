@@ -455,3 +455,9 @@ class Test(TestBase):
         for s in list(combinations(name_parts, 3)):
             p = PartialPartitionName(**dict(zip(s, s)))
             self.assertIn('name', p.promote(ds_name).dict)
+
+
+def suite():
+    suite = unittest.TestSuite()
+    suite.addTest(unittest.makeSuite(Test))
+    return suite
