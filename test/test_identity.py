@@ -287,10 +287,8 @@ class Test(TestBase):
 
         self.assertEquals(ident.fqname, iid.fqname)
 
-    @unittest.skip('Do no know what is valid behaviour - test or identity code.')
+
     def test_identity_from_dict(self):
-        from ambry.partition.sqlite import SqlitePartitionIdentity
-        from ambry.partition.geo import GeoPartitionIdentity
 
         name = Name(source='source.com', dataset='foobar', variation='orig', version='0.0.1')
         dataset_number = DatasetNumber(10000, 1, assignment_class='registered')
@@ -307,13 +305,9 @@ class Test(TestBase):
         self.assertEquals(ident.fqname, oident.fqname)
 
         ident = Identity.from_dict(pidict)
-        self.assertIsInstance(ident, SqlitePartitionIdentity)
-        self.assertEquals('source.com/foobar-orig-0.0.1.db', ident.cache_key)
 
-        pidict['format'] = 'geo'
-        ident = Identity.from_dict(pidict)
-        self.assertIsInstance(ident, GeoPartitionIdentity)
-        self.assertEquals('source.com/foobar-orig-0.0.1.geodb', ident.cache_key)
+        self.assertEquals('source.com/foobar-orig-0.0.1', ident.cache_key)
+
 
     def test_split(self):
         from semantic_version import Spec

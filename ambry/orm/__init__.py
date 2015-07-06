@@ -221,6 +221,9 @@ class MutationList(MutationObj, list):
         if isinstance(value, basestring):
             value = value.split(',')
 
+        if not value:
+            value = []
+
         self = MutationList((MutationObj.coerce(key, v) for v in value))
         self._key = key
         return self

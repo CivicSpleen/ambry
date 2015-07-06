@@ -111,8 +111,6 @@ class TestBase(unittest.TestCase):
 
         self.db = self.library._db
 
-        mem_fs = fsopendir("mem://")
-        build_fs = fsopendir("mem://")
 
         return Bundle(self.new_db_dataset(self.db), self.library, build_url='mem://', source_url = 'mem://')
 

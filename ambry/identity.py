@@ -333,13 +333,7 @@ class Name(object):
     def as_partition(self, **kwargs):
         """Return a PartitionName based on this name."""
 
-        from .partition import name_class_from_format_name
-
-        format = kwargs.get('format', 'db')
-
-        nc = name_class_from_format_name(format)
-
-        return nc(**dict(self.dict.items() + kwargs.items()))
+        return PartitionName(**dict(self.dict.items() + kwargs.items()))
 
     def as_namequery(self):
         return NameQuery(**self._dict(with_name=False))
@@ -1601,23 +1595,13 @@ class Identity(object):
 
         """
 
-        from partition import identity_class_from_format_name
-
-        assert isinstance(
-            self._name, Name), "Wrong type: {}".format(
-            type(
-                self._name))
-        assert isinstance(
-            self._on, DatasetNumber), "Wrong type: {}".format(
-            type(
-                self._on))
+        assert isinstance(self._name, Name), "Wrong type: {}".format(type(self._name))
+        assert isinstance(self._on, DatasetNumber), "Wrong type: {}".format(type(self._on))
 
         name = self._name.as_partition(**kwargs)
         on = self._on.as_partition(partition)
 
-        ic = identity_class_from_format_name(name.format)
-
-        return ic(name, on)
+        return PartitionIdentity(name, on)
 
     def add_partition(self, p):
         """Add a partition identity as a child of a dataset identity."""

@@ -114,7 +114,7 @@ class Bundle(object):
     @property
     @memoize
     def build_fs(self):
-        from fs.osfs import OSFS
+        from fs.opener import fsopendir
         import os
 
         build_url = self._build_url if self._build_url else self.dataset.config.library.build.url
@@ -122,7 +122,7 @@ class Bundle(object):
         if not build_url:
             raise ConfigurationError('Must set build URL either in the constructor or the configuration')
 
-        return OSFS(build_url, create = True)
+        return fsopendir(build_url)
 
     @property
     def logger(self):

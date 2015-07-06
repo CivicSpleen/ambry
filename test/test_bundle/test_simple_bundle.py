@@ -147,8 +147,7 @@ class Test(TestBase):
             from shutil import rmtree
             rmtree(td)
 
-    @unittest.skip(
-        'TypeError: \'argument 1 must be an iterator\' - while building csv reader. Requires ckcache fix?')
+
     def test_install(self):
         """Test copying a bundle to a remote, then streaming it back"""
 
@@ -159,4 +158,4 @@ class Test(TestBase):
 
         p = l.partition(list(b.partitions)[0].vid)
 
-        self.assertEqual(500, len(list(l.stream_partition(p.vid))))
+        self.assertEqual(10000, len(list(l.stream_partition(p.vid))))
