@@ -283,10 +283,3 @@ class Test(TestBase):
         ctb.append('ni2', NaturalInt)
 
         row, errors =  ctb(['.',  'a',  '3',  0,  3])
-
-
-def suite():
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite
-

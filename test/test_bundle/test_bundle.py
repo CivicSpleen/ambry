@@ -1,14 +1,11 @@
-
+# -*- coding: utf-8 -*-
 
 from test.test_base import TestBase
 
-from ambry.bundle import Bundle
 
 class Test(TestBase):
 
-
     def test_statemachine_states(self):
-        from time import sleep
 
         db = self.new_database()
 
@@ -39,10 +36,3 @@ class Test(TestBase):
         print list(fs.listdir())
 
         print b.source_files.build_file.path
-
-def suite():
-    import unittest
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite
-

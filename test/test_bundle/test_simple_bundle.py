@@ -2,6 +2,7 @@ from test.test_base import TestBase
 
 from ambry.bundle import Bundle
 
+
 class Test(TestBase):
 
     def test_filesystems(self):
@@ -155,10 +156,3 @@ class Test(TestBase):
         p = l.partition(list(b.partitions)[0].vid)
 
         self.assertEqual(500, len(list(l.stream_partition(p.vid))))
-
-
-def suite():
-    import unittest
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite

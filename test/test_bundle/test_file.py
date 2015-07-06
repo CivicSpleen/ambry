@@ -136,10 +136,3 @@ class Test(unittest.TestCase):
         #ad = AttrDict(ds.bsfile(File.BSFILE.META).unpacked_contents)
         #for x in  ad.flatten():
         #    print x
-
-
-def suite():
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite
-
