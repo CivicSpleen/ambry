@@ -130,7 +130,6 @@ class Name(object):
 
                         raise ValueError("Could not parse '{}' as a semantic version".format(version))
 
-
         if not version:
             version = str(sv.Version('0.0.0'))
 
