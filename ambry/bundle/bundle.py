@@ -56,6 +56,19 @@ class Bundle(object):
         clz = bsf.import_bundle_class()
         return clz(self._dataset, self._library, self._source_url, self._build_url)
 
+    def cast_to_metasubclass(self):
+        """
+        Load the bundle file from the database to get the derived bundle class,
+        then return a new bundle built on that class
+
+        :return:
+        """
+        from ambry.orm import File
+
+        bsf = self.build_source_files.file(File.BSFILE.BUILDMETA)
+        clz = bsf.import_bundle_class()
+        return clz(self._dataset, self._library, self._source_url, self._build_url)
+
     @property
     def dataset(self):
         from sqlalchemy import inspect
@@ -130,6 +143,63 @@ class Bundle(object):
             raise ConfigurationError('Must set build URL either in the constructor or the configuration')
 
         return fsopendir(build_url)
+
+    def do_meta_pipeline(self, source):
+
+        source = self.source(source) if isinstance(source, basestring) else source
+
+        pl = self.meta_pipeline(source)
+
+        self.edit_meta_pipeline(pl)
+
+        return pl
+
+    def meta_pipeline(self, source):
+        """Construct the ETL pipeline for the meta phase"""
+        from etl.pipeline import Pipeline, MergeHeader, MangleHeader, MapHeader
+
+        source = self.source(source) if isinstance(source, basestring) else source
+
+        return Pipeline(
+            source = source.fetch().source_pipe(),
+            coalesce_rows=MergeHeader(),
+            mangle_header=MangleHeader()
+        )
+
+    def edit_meta_pipeline(self, pipeline):
+        """"""
+
+        return pipeline
+
+    def do_build_pipeline(self, source):
+
+        source = self.source(source) if isinstance(source, basestring) else source
+
+        pl = self.build_pipeline(source)
+
+        self.edit_build_pipeline(pl)
+
+        return pl
+
+    def build_pipeline(self, source):
+        """Construct the ETL pipeline for the build phase"""
+
+        from etl.pipeline import Pipeline, MergeHeader, MangleHeader, MapHeader
+
+        if isinstance(source, basestring):
+            source = self.source(source)
+
+        return Pipeline(
+            source=source.fetch().source_pipe(),
+            coalesce_rows=MergeHeader(),
+            mangle_header=MangleHeader()
+        )
+
+    def edit_build_pipeline(self, pipeline):
+        """"""
+
+        return pipeline
+
 
     @property
     def logger(self):
@@ -213,10 +283,10 @@ class Bundle(object):
     ## Source Synced
     ##
 
-    def do_sync(self, force = None):
+    def do_sync(self, force = None, defaults = False):
         ds = self.dataset
 
-        syncs  = self.build_source_files.sync(force)
+        syncs  = self.build_source_files.sync(force, defaults)
 
         self.state = self.STATES.SYNCED
 
@@ -224,9 +294,14 @@ class Bundle(object):
 
         return syncs
 
-    def sync(self, force=None):
+    def sync(self, force=None, defaults = False):
+        """
 
-        self.do_sync(force)
+        :param force: Force a sync in one direction, either ftr or rtf.
+        :param defaults [False] If True and direction is rtf, write default source files
+        :return:
+        """
+        self.do_sync(force, defaults = defaults)
 
         return True
 
@@ -427,6 +502,20 @@ class Bundle(object):
                         self.set_value('odep', k, v)
 
                 self.database.rewrite_dataset()
+
+    ##
+    ## Meta
+    ##
+
+    def do_meta(self, force=False):
+
+        self.sync()
+
+        self.do_prepare()
+
+        self.meta()
+
+        self.sync()
 
     ##
     ## Build

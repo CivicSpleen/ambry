@@ -15,11 +15,13 @@ from . import Base,  DictableMixin
 
 class DelayedOpen(object):
 
-    def __init__(self, source, fs, path, mode = 'r'):
+    def __init__(self, source, fs, path, mode = 'r', from_cache = False):
         self._source = source
         self._fs = fs
         self._path = path
         self._mode = mode
+
+        self.from_cache = from_cache
 
     def open(self, mode = None ):
         return self._fs.open(self._path, mode if mode else self._mode )
@@ -27,8 +29,19 @@ class DelayedOpen(object):
     def syspath(self):
         return self._fs.getsyspath(self._path)
 
-    def rowgen(self):
+    def source_pipe(self):
         return self._source.row_gen()
+
+class SourceRowGen(object):
+    """Holds a reference to a source record """
+
+    def __init__(self, source, rowgen):
+        self.source = source
+        self._rowgen = rowgen
+
+    def __iter__(self):
+        for row in self._rowgen:
+            yield row
 
 class DataSource(Base, DictableMixin):
     """A source of data, such as a remote file or bundle"""
@@ -157,25 +170,48 @@ class DataSource(Base, DictableMixin):
         """Return a Row Generator"""
         import petl
 
+
         gft = self.get_filetype()
 
         if not fstor:
             fstor = self._fstor
 
         if gft == 'csv':
-            return petl.io.csv.fromcsv(fstor, self.encoding if self.encoding else None)
+            return SourceRowGen( self, petl.io.csv.fromcsv(fstor, self.encoding if self.encoding else None))
         elif gft == 'tsv':
-            return petl.io.csv.fromtsv(fstor, self.encoding if self.encoding else None)
+            return SourceRowGen( self, petl.io.csv.fromtsv(fstor, self.encoding if self.encoding else None))
         elif gft == 'fixed' or gft == 'txt':
             from ambry.util.fixedwidth import fixed_width_iter
 
-            return fixed_width_iter(fstor.open(), self.widths)
+            return SourceRowGen( self, fixed_width_iter(fstor.open(), self.widths))
         elif gft == 'xls':
-            return petl.io.xls.fromxls(fstor.syspath(), sheet=self.segment if self.segment else None)
+            return SourceRowGen( self, excel_iter(fstor.syspath(), self.segment ))
         elif gft == 'xlsx':
-            return petl.io.xlsx.fromxlsx(fstor.syspath(), sheet=self.segment if self.segment else None)
+            return SourceRowGen( self, excel_iter(fstor.syspath(), self.segment ))
         else:
             raise ValueError("Unknown filetype: {} ".format(gft))
+
+def excel_iter(file_name, segment):
+    from xlrd import open_workbook
+    from xlrd.biffh import XLRDError
+
+    def srow_to_list(row_num, s):
+        """Convert a sheet row to a list"""
+
+        values = []
+
+        for col in range(s.ncols):
+            values.append(s.cell(row_num, col).value)
+
+        return values
+
+    wb = open_workbook(file_name)
+
+    s = wb.sheets()[int(segment) if segment else 0]
+
+    for i in range(0, s.nrows):
+        yield srow_to_list(i, s)
+
 
 def download(url, cache_fs):
     import urlparse
@@ -204,3 +240,30 @@ def download(url, cache_fs):
 
     return cache_path
 
+def make_excel_date_caster(file_name):
+    """Make a date caster function that can convert dates from a particular workbook. This is required
+    because dates in Excel workbooks are stupid. """
+
+    from xlrd import open_workbook
+
+    wb = open_workbook(file_name)
+    datemode = wb.datemode
+
+    def excel_date(v):
+        from xlrd import xldate_as_tuple
+        import datetime
+
+        try:
+
+            year, month, day, hour, minute, second = xldate_as_tuple(float(v), datemode)
+            return datetime.date(year, month, day)
+        except ValueError:
+            # Could be actually a string, not a float. Because Excel dates are completely broken.
+            from  dateutil import parser
+
+            try:
+                return parser.parse(v).date()
+            except ValueError:
+                return None
+
+    return excel_date

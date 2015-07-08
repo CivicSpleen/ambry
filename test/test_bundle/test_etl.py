@@ -297,8 +297,6 @@ class Test(TestBase):
         b.do_sync()
         b.do_prepare()
 
-        cache_fs = fsopendir('mem://')
-
         self.assertEquals(14, len(b.dataset.sources))
 
         for i, source in enumerate(b.sources):
@@ -307,7 +305,7 @@ class Test(TestBase):
             with source.fetch().open() as f:
                 self.assertEquals(source.hash, md5_for_stream(f))
 
-            for i, row in enumerate(source.fetch().rowgen()):
+            for i, row in enumerate(source.fetch().source_pipe()):
                 print row
                 if i > 3:
                     break
@@ -320,20 +318,135 @@ class Test(TestBase):
         b.do_sync()
         b.do_prepare()
 
-        for i,row in enumerate(b.source('simple_fixed').fetch().rowgen()):
+        for i,row in enumerate(b.source('simple_fixed').fetch().source_pipe()):
             print row
             if i > 3:
                 break
 
-        return
-
-        for i,row in enumerate(b.source('simple').fetch().rowgen()):
+        for i,row in enumerate(b.source('simple').fetch().source_pipe()):
             print row
             if i > 3:
                 break
 
 
+    def test_etl_pipeline(self):
+        from ambry.bundle.etl.pipeline import MergeHeader, MangleHeader, Pipe, MapHeader, Pipeline, augment_pipeline
+        from ambry.bundle.etl.stats import Stats
+
+        b = self.setup_bundle('complete-load')
+
+        b.do_clean()
+        b.do_sync()
+        b.do_prepare()
+
+        pl = [
+            b.source('rent97').fetch().source_pipe(),
+            MergeHeader(),
+            MangleHeader(),
+            MapHeader({'gvid':'county','renter_cost_gt_30':'renter_cost'})
+        ]
+
+        last = reduce(lambda last, next: next.set_source_pipe(last), pl[1:], pl[0])
+
+        for i, row in enumerate(last):
+
+            if i == 0:
+                self.assertEqual(['id', 'county', 'renter_cost', 'renter_cost_gt_30_cv',
+                                  'owner_cost_gt_30_pct', 'owner_cost_gt_30_pct_cv'], row)
+            elif i ==1:
+                self.assertEqual(1.0, row[0])
+
+            if i > 5:
+                break
+
+        pl = Pipeline(
+            source = b.source('rent97').fetch().source_pipe(),
+            coalesce_rows= MergeHeader() ,
+            mangle_header= MangleHeader() ,
+            remap_to_table = MapHeader({'gvid': 'county', 'renter_cost_gt_30': 'renter_cost'})
+
+        )
+
+        class PrintRowGen(Pipe):
+
+            def __init__(self, count=10, columns=7):
+                self.columns = columns
+                self.count = count
+                self.rows = []
+
+            def __iter__(self):
+
+                for i, row in enumerate(self.source_pipe):
+
+                    append_row = [i]+row
+
+                    if i < self.count:
+                        self.rows.append(append_row[:self.columns])
+
+                    yield row
+
+            def __str__(self):
+                from tabulate import tabulate
+                from terminaltables import SingleTable
+
+                #return  SingleTable([[ str(x) for x in row] for row in self.rows] ).table
+                return 'print\n'+tabulate(self.rows, tablefmt="psql")
+
+        augment_pipeline(pl, PrintRowGen)
 
 
 
+        #['line_process', 'create_rows', 'coalesce_rows', 'mangle_header', 'normalize',
+        # 'remap_to_table', 'cast_columns', 'statistics', 'write_to_table']
 
+        for i, row in enumerate(pl()):
+
+            if i == 0:
+                self.assertEqual(['id', 'county', 'renter_cost', 'renter_cost_gt_30_cv',
+                                  'owner_cost_gt_30_pct', 'owner_cost_gt_30_pct_cv'], row)
+            elif i ==1:
+                self.assertEqual(1.0, row[0])
+
+            if i > 5:
+                break
+
+        print str(pl)
+
+
+    @unittest.skip('This test needs a source that has a  bad header.')
+    def test_mangle_header(self):
+
+        # FIXME.
+
+        from ambry.bundle.etl.pipeline import MangleHeader
+
+        rows = [
+            ['Header One',' ! Funky $ Chars','  Spaces ','1 foob ar'],
+            [1, 2, 3, 4],
+            [2, 4, 6, 8]
+
+        ]
+
+        for i, row in enumerate(MangleHeader(rows)):
+            if i == 0:
+                self.assertEqual(['header_one', '_funky_chars', 'spaces', '1_foob_ar'], row)
+
+    def test_complete_load_build(self):
+        """Build the simple bundle"""
+
+        b = self.setup_bundle('complete-load')
+        b.sync()
+        b = b.cast_to_subclass()
+        self.assertEquals('synced', b.state)
+        b.do_prepare()
+        self.assertEquals('prepared', b.state)
+        b.do_build()
+
+    def test_complete_load_meta(self):
+        """Build the simple bundle"""
+
+        b = self.setup_bundle('complete-load')
+        b.sync()
+        b = b.cast_to_metasubclass()
+
+        b.do_meta()

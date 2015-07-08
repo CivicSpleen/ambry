@@ -281,6 +281,14 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='import')
     command_p.add_argument('source', nargs='?', type=str, help='Bundle source directory or file')
 
+    command_p = sub_cmd.add_parser('export', help='Export a source bundle. ')
+    command_p.set_defaults(subcommand='export')
+    command_p.add_argument('-a', '--append', default=False, action="store_true", help='Append the source and bundle name to the path')
+    command_p.add_argument('-d', '--defaults', default=False, action="store_true",
+                           help='Write default files when there is no other content for file. ')
+
+    command_p.add_argument('source', nargs='?', type=str, help='Bundle source directory or file')
+
 def bundle_info(args, l, rc):
     from  textwrap import wrap
     from ambry.util.datestimes import compress_years
@@ -899,7 +907,7 @@ def bundle_import(args, l, rc):
     from ambry.orm.exc import NotFoundError
 
     if args.source:
-        soruce_dir = args.source
+        source_dir = args.source
     else:
         import os
         source_dir = os.getcwd()
@@ -920,6 +928,30 @@ def bundle_import(args, l, rc):
     b.sync()
 
     prt("Loaded bundle: {}".format(b.identity.fqname))
+
+def bundle_export(args, l, rc):
+    from fs.opener import fsopendir
+    import yaml
+    from ambry.orm.exc import NotFoundError
+
+    b = using_bundle(args,l)
+
+    if args.source:
+        source_dir = args.source
+    else:
+        import os
+        source_dir = os.getcwd()
+
+    if args.append:
+        source_dir = os.path.join(source_dir,b.identity.source_path)
+
+    fs = fsopendir(source_dir, create_dir = True)
+
+    b.set_file_system(source_url=source_dir)
+
+    b.sync(force='rtf', defaults = args.defaults)
+
+    prt("Exported bundle: {}".format(source_dir))
 
 file_const_map = dict(
     b=File.BSFILE.BUILD,

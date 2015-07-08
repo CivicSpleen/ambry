@@ -169,7 +169,7 @@ class RowBuildSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
         with self._fs.open(fn_path) as f:
-            fr.update_contents(msgpack.packb([row for row in csv.reader(f)]))
+            fr.update_contents(msgpack.packb([ [e if e.strip() != ''  else None for e in row] for row in csv.reader(f)]))
 
         fr.mime_type = 'application/msgpack'
         fr.source_hash = self.fs_hash()
@@ -186,10 +186,11 @@ class RowBuildSourceFile(BuildSourceFile):
 
         fn_path = file_name(self._file_const)
 
-        with self._fs.open(fn_path, 'wb') as f:
-            w = csv.writer(f)
-            for row in msgpack.unpackb(fr.contents):
-                w.writerow(row)
+        if fr.contents:
+            with self._fs.open(fn_path, 'wb') as f:
+                w = csv.writer(f)
+                for row in fr.unpacked_contents:
+                    w.writerow(row)
 
 
 class DictBuildSourceFile(BuildSourceFile):
@@ -227,10 +228,9 @@ class DictBuildSourceFile(BuildSourceFile):
 
         fn_path = file_name(self._file_const)
 
-        d = msgpack.unpackb(fr.contents)
-
-        with self._fs.open(fn_path, 'wb') as f:
-            yaml.dump(d, default_flow_style=False)
+        if fr.contents:
+            with self._fs.open(fn_path, 'wb') as f:
+                yaml.dump(fr.unpacked_contents, default_flow_style=False)
 
 
 class StringSourceFile(BuildSourceFile):
@@ -255,8 +255,9 @@ class StringSourceFile(BuildSourceFile):
 
         fr = self._dataset.bsfile(self._file_const)
 
-        with self._fs.open(file_name(self._file_const), 'wb') as f:
-            f.write(fr.contents)
+        if fr.contents:
+            with self._fs.open(file_name(self._file_const), 'wb') as f:
+                f.write(fr.contents)
 
 class MetadataFile(DictBuildSourceFile):
 
@@ -329,15 +330,11 @@ class SourcesFile(RowBuildSourceFile):
                     d['table_name'] = d['table']
                     del d['table']
 
-
-
                 d['d_vid'] = self._dataset.vid
 
                 s.merge(DataSource(**d))
 
-
         self._dataset._database.commit()
-
 
     def object_to_record(self):
         pass
@@ -397,13 +394,17 @@ class BuildSourceFileAccessor(object):
 
         return bsfile
 
-    def sync(self, force = None):
+    def sync(self, force = None, defaults = False):
 
         syncs = []
 
         for file_const, (file_name, clz) in  file_info_map.items():
             f = self.file(file_const)
-            syncs.append((file_const,f.sync(force)))
+
+            if defaults and force == f.SYNC_DIR.RECORD_TO_FILE and  not f.record.contents:
+                syncs.append((file_const, f.prepare_to_edit()))
+            else:
+                syncs.append((file_const,f.sync(force)))
 
         return syncs
 

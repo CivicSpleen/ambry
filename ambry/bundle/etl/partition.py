@@ -320,17 +320,6 @@ class Inserter(object):
 
         self.row_num = 1
 
-        self._stats = self.make_stats()
-
-    def make_stats(self):
-        from stats import Stats
-
-        stats = Stats()
-
-        for i,c in enumerate(self._table.columns):
-            stats.add(i,c)
-
-        return stats
 
     def insert(self, row):
         from sqlalchemy.engine.result import RowProxy
@@ -354,10 +343,13 @@ class Inserter(object):
     def close(self):
 
         self._partition.state = self._partition.STATES.BUILT
-        self._partition.set_stats(self._stats.stats())
-        self._partition.set_coverage(self._stats.stats())
-        self._partition.table.update_from_stats(self._stats.stats())
-        self._partition._bundle.dataset.commit()
+
+        # TODO: Delete once this is moved to somewhere else.
+        if False:
+            self._partition.set_stats(self._stats.stats())
+            self._partition.set_coverage(self._stats.stats())
+            self._partition.table.update_from_stats(self._stats.stats())
+            self._partition._bundle.dataset.commit()
 
     def __enter__(self):
 
@@ -375,3 +367,5 @@ class Inserter(object):
         self.close()
 
         return True
+
+

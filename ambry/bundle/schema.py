@@ -21,16 +21,16 @@ def _clean_flag(in_flag):
 
 
 def _clean_int(i):
-    if isinstance(i, int):
+
+    if i is None:
+        return None
+    elif isinstance(i, int):
         return i
     elif isinstance(i, basestring):
         if len(i) == 0:
             return None
 
         return int(i.strip())
-    elif i is None:
-        return None
-        # raise ValueError("Input must be convertable to an int. got:  ".str(i))
 
 
 class Schema(object):
@@ -102,7 +102,7 @@ class Schema(object):
                 continue
 
             # Probably best not to have unicode in column names and descriptions.
-            row = {k: str(v).decode('utf8', 'ignore').encode('ascii', 'ignore').strip() for k, v in row.items()}
+            #row = {k: str(v).decode('utf8', 'ignore').encode('ascii', 'ignore').strip() for k, v in row.items()}
 
             if row['table'] and row['table'] != last_table:
                 new_table = True

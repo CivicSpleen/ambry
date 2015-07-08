@@ -11,6 +11,7 @@ from ambry.util import Constant
 from collections import Counter
 from livestats import livestats
 from geoid import civick
+from pipeline import Pipe
 
 def text_hist(nums):
     parts = u' ▁▂▃▄▅▆▇▉'
@@ -59,6 +60,7 @@ class StatSet(object):
         self.bin_primer_count = 5000 # how many point to collect before creating hist bins
         self.num_bins = 16
         self.bins = [0] * self.num_bins
+
 
     def add(self, v):
         from math import sqrt
@@ -195,12 +197,10 @@ class StatSet(object):
 
 
 
-class Stats(object):
-    """Constructed on an interator, and an iterator itself, the Stats object reads
-    rows from the input iterator, processes the row, and yields it back out"""
+class Stats(Pipe):
+    """ Stats object reads rows from the input iterator, processes the row, and yields it back out"""
 
-    def __init__(self, itr=None):
-        self._itr = itr
+    def __init__(self):
 
         self._stats = []
         self._func = None
@@ -232,15 +232,14 @@ class Stats(object):
         return locals()['_process_row']
 
     def stats(self):
-
         return [ (i, self._stats[i]) for i, stat in enumerate(self._stats) if stat]
-
-    def __iter__(self):
-        return self
 
     def process(self, row):
         self._func(self._stats, row)
         return row
 
-    def __next__(self):
-        yield self.process(self._itr.next())
+    def __iter__(self):
+        for row in self.source_pipe:
+            yield self.process(row)
+
+
