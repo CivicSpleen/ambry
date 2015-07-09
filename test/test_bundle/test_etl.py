@@ -330,8 +330,9 @@ class Test(TestBase):
 
 
     def test_etl_pipeline(self):
-        from ambry.bundle.etl.pipeline import MergeHeader, MangleHeader, Pipe, MapHeader, Pipeline, augment_pipeline
+        from ambry.bundle.etl.pipeline import MergeHeader, MangleHeader, Pipe, MapHeader, Pipeline, PrintRows, augment_pipeline
         from ambry.bundle.etl.stats import Stats
+        from ambry.bundle.etl.intuit import TypeIntuiter
 
         b = self.setup_bundle('complete-load')
 
@@ -344,6 +345,7 @@ class Test(TestBase):
             MergeHeader(),
             MangleHeader(),
             MapHeader({'gvid':'county','renter_cost_gt_30':'renter_cost'})
+
         ]
 
         last = reduce(lambda last, next: next.set_source_pipe(last), pl[1:], pl[0])
@@ -362,42 +364,12 @@ class Test(TestBase):
         pl = Pipeline(
             source = b.source('rent97').fetch().source_pipe(),
             coalesce_rows= MergeHeader() ,
-            mangle_header= MangleHeader() ,
-            remap_to_table = MapHeader({'gvid': 'county', 'renter_cost_gt_30': 'renter_cost'})
-
+            type_intuit =  TypeIntuiter(),
+            mangle_header= MangleHeader(),
+            remap_to_table = MapHeader({'gvid': 'county', 'renter_cost_gt_30': 'renter_cost'}),
         )
 
-        class PrintRowGen(Pipe):
-
-            def __init__(self, count=10, columns=7):
-                self.columns = columns
-                self.count = count
-                self.rows = []
-
-            def __iter__(self):
-
-                for i, row in enumerate(self.source_pipe):
-
-                    append_row = [i]+row
-
-                    if i < self.count:
-                        self.rows.append(append_row[:self.columns])
-
-                    yield row
-
-            def __str__(self):
-                from tabulate import tabulate
-                from terminaltables import SingleTable
-
-                #return  SingleTable([[ str(x) for x in row] for row in self.rows] ).table
-                return 'print\n'+tabulate(self.rows, tablefmt="psql")
-
-        augment_pipeline(pl, PrintRowGen)
-
-
-
-        #['line_process', 'create_rows', 'coalesce_rows', 'mangle_header', 'normalize',
-        # 'remap_to_table', 'cast_columns', 'statistics', 'write_to_table']
+        augment_pipeline(pl, PrintRows)
 
         for i, row in enumerate(pl()):
 
@@ -411,7 +383,6 @@ class Test(TestBase):
                 break
 
         print str(pl)
-
 
     @unittest.skip('This test needs a source that has a  bad header.')
     def test_mangle_header(self):
@@ -450,3 +421,38 @@ class Test(TestBase):
         b = b.cast_to_metasubclass()
 
         b.do_meta()
+
+    def test_type_intuition(self):
+        from ambry.bundle.etl.pipeline import sink
+        from ambry.bundle.etl.intuit import TypeIntuiter
+
+        b = self.setup_bundle('process')
+
+        b.sync()
+        b = b.cast_to_subclass()
+        self.assertEquals('synced', b.state)
+        b.do_prepare()
+        self.assertEquals('prepared', b.state)
+
+        pl = sink(b.do_meta_pipeline('types1'))
+
+        print str(pl)
+
+        s = b.schema
+
+        t = b.dataset.new_table(pl.source.source.name)
+
+        from ambry.orm.column import Column
+
+        for c in pl.type_intuit[TypeIntuiter].columns:
+            t.add_column(c.header, datatype = Column.convert_python_type(c.resolved_type))
+
+        b.commit()
+
+        self.dump_database('columns')
+
+        from ambry.orm.file import File
+        b.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
+
+        print b.do_sync()
+

@@ -69,6 +69,9 @@ class Bundle(object):
         clz = bsf.import_bundle_class()
         return clz(self._dataset, self._library, self._source_url, self._build_url)
 
+    def commit(self):
+        return self.dataset.commit()
+
     @property
     def dataset(self):
         from sqlalchemy import inspect
@@ -145,7 +148,7 @@ class Bundle(object):
         return fsopendir(build_url)
 
     def do_meta_pipeline(self, source):
-
+        """COnstruct the meta pipeline. This method shold not be overridden; iverride meta_pipeline() instead. """
         source = self.source(source) if isinstance(source, basestring) else source
 
         pl = self.meta_pipeline(source)
@@ -157,17 +160,19 @@ class Bundle(object):
     def meta_pipeline(self, source):
         """Construct the ETL pipeline for the meta phase"""
         from etl.pipeline import Pipeline, MergeHeader, MangleHeader, MapHeader
+        from ambry.bundle.etl.intuit import TypeIntuiter
 
         source = self.source(source) if isinstance(source, basestring) else source
 
         return Pipeline(
             source = source.fetch().source_pipe(),
             coalesce_rows=MergeHeader(),
-            mangle_header=MangleHeader()
+            mangle_header=MangleHeader(),
+            type_intuit=TypeIntuiter(),
         )
 
     def edit_meta_pipeline(self, pipeline):
-        """"""
+        """Called after the meta pipeline is constructed, to allow per-pipeline modification."""
 
         return pipeline
 
@@ -289,7 +294,7 @@ class Bundle(object):
         syncs  = self.build_source_files.sync(force, defaults)
 
         self.state = self.STATES.SYNCED
-
+        self.log("---- Synchronized ----")
         self.dataset.commit()
 
         return syncs
@@ -427,15 +432,8 @@ class Bundle(object):
             self.error(e.message)
             return False
 
-        try:
-            self.schema.read()
-        except Exception as e:
-            self.error(e.message)
-            raise
-            return False
-
         self.build_source_files.file(File.BSFILE.META).record_to_objects()
-
+        self.build_source_files.file(File.BSFILE.SCHEMA).record_to_objects()
         self.build_source_files.file(File.BSFILE.SOURCES).record_to_objects()
 
         return True
@@ -452,56 +450,6 @@ class Bundle(object):
                 self.error("No title ( Description of id column ) set for table: {} ".format(t.name))
 
         return True
-
-    def prepare_update_configuration(self, identity=None, rewrite_database=True):
-        # Re-writes the bundle.yaml file, with updates to the identity and partitions
-        # sections.
-
-        if not identity:
-            identity = self.identity
-
-        md.identity = identity.ident_dict
-        md.names = identity.names_dict
-
-        # Ensure there is an entry for every revision, if only to nag the maintainer to fill it in.
-        # for i in range(1, md.identity.revision+1):
-        # md.versions[i]
-        #    if i == md.identity.revision:
-        #        md.versions[i].version = md.identity.version
-
-        # Load the documentation
-
-        def read_file(fn):
-            try:
-                with open(self.filesystem.path(fn)) as f:
-                    return f.read()
-            except IOError:
-                return ''
-
-        self.update_source()
-
-        self.write_doc_html()
-
-        md.documentation.main = self.sub_template(read_file(self.DOC_FILE))
-        md.documentation.title = md.about.title.text
-        md.documentation.summary = md.about.summary.text
-        md.documentation.source = md.about.source.text
-        md.documentation.processed = md.about.processed.text
-        md.documentation.summary = md.about.summary.text
-
-        md.write_to_dir(write_all=True)
-
-        # Reload some of the values from bundle.yaml into the database
-        # configuration
-
-        if rewrite_database:
-            if self.database.exists():
-
-                if self.config.build.get('dependencies'):
-                    for k, v in self.config.build.get('dependencies').items():
-                        self.set_value('odep', k, v)
-
-                self.database.rewrite_dataset()
 
     ##
     ## Meta
@@ -594,31 +542,6 @@ class Bundle(object):
 
         return True
 
-        with self.session:
-            if self._build_time:
-                self.set_value('process', 'buildtime', time() - self._build_time)
-
-            self.post_build_finalize()
-
-            if self.config.environment.category == 'development':
-                pass
-
-            self.update_configuration()
-            self._revise_schema()
-            self.schema.move_revised_schema()
-            self.post_build_write_partitions()
-            self.write_config_to_bundle()
-            self.post_build_geo_coverage()
-            self.post_build_time_coverage()
-            # self.schema.write_codes()
-
-            self.post_build_test()
-
-            self.set_build_state('built')
-
-        self.close()
-
-        return True
 
     ##
     ## Update

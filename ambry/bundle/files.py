@@ -284,7 +284,7 @@ class MetadataFile(DictBuildSourceFile):
 
         return ad
 
-    def object_to_record(self):
+    def objects_to_record(self):
         pass
 
 class PythonSourceFile(StringSourceFile):
@@ -336,15 +336,304 @@ class SourcesFile(RowBuildSourceFile):
 
         self._dataset._database.commit()
 
-    def object_to_record(self):
+    def objects_to_record(self):
         pass
+
+class SchemaFile(RowBuildSourceFile):
+
+    def record_to_objects(self):
+        """Create config records to match the file metadata"""
+
+        from ..orm.source import DataSource
+        from ..orm.file import File
+        from ambry.dbexceptions import ConfigurationError
+        import re
+
+        def _clean_int(i):
+
+            if i is None:
+                return None
+            elif isinstance(i, int):
+                return i
+            elif isinstance(i, basestring):
+                if len(i) == 0:
+                    return None
+
+                return int(i.strip())
+
+        bsfile = self._dataset.bsfile(self._file_const)
+
+        contents = bsfile.unpacked_contents
+
+        if not contents:
+            return
+
+        t = None
+
+        new_table = True
+        last_table = None
+        line_no = 1  # Accounts for file header. Data starts on line 2
+
+        errors = []
+        warnings = []
+
+        extant_tables = [t.name for t in self._dataset.tables]
+
+        for row in bsfile.dict_row_reader:
+
+            line_no += 1
+
+            if not row.get('column', False) and not row.get('table', False):
+                continue
+
+            # Probably best not to have unicode in column names and descriptions.
+            # row = {k: str(v).decode('utf8', 'ignore').encode('ascii', 'ignore').strip() for k, v in row.items()}
+
+            if row['table'] and row['table'] != last_table:
+                new_table = True
+                last_table = row['table']
+
+            if new_table and row['table']:
+
+                if row['table'] in extant_tables:
+                    errors.append((row['table'], None, "Table already exists"))
+                    return warnings, errors
+
+                try:
+                    table_row = dict(**row)
+                    del table_row['type']  # The field is really for columns, and means something different for tables
+
+                    t = self._dataset.new_table(row['table'], **table_row)
+
+                except Exception as e:
+                    errors.append((None, None, " Failed to add table: {}. Row={}. Exception={}"
+                                   .format(row['table'], dict(row), e)))
+                    return warnings, errors
+
+                new_table = False
+
+            # Ensure that the default doesnt get quotes if it is a number.
+            if row.get('default', False):
+                try:
+                    default = int(row['default'])
+                except:
+                    default = row['default']
+            else:
+                default = None
+
+            if not row.get('column', False):
+                raise ConfigurationError("Row error: no column on line {}".format(line_no))
+            if not row.get('table', False):
+                raise ConfigurationError("Row error: no table on line {}".format(line_no))
+            if not row.get('type', False):
+                raise ConfigurationError("Row error: no type on line {}".format(line_no))
+
+            indexes = [row['table'] + '_' + c for c in row.keys() if (re.match('i\d+', c) and _clean_flag(row[c]))]
+            uindexes = [row['table'] + '_' + c for c in row.keys() if
+                        (re.match('ui\d+', c) and _clean_flag(row[c]))]
+            uniques = [row['table'] + '_' + c for c in row.keys() if (re.match('u\d+', c) and _clean_flag(row[c]))]
+
+            datatype = row['type'].strip().lower()
+
+            width = _clean_int(row.get('width', None))
+            size = _clean_int(row.get('size', None))
+
+            data = {k.replace('d_', '', 1): v for k, v in row.items() if k.startswith('d_')}
+
+            description = row.get('description', '').strip().encode('utf-8')
+
+            col = t.add_column(row['column'],
+                               is_primary_key=True if row.get('is_pk', False) else False,
+                               fk_vid=row['is_fk'] if row.get('is_fk', False) else None, description=description,
+                               datatype=datatype, proto_vid=row.get('proto_vid'), derivedfrom=row.get('derivedfrom'),
+                               unique_constraints=','.join(uniques), indexes=','.join(indexes),
+                               uindexes=','.join(uindexes),
+                               default=default, size=size,  width=width, data=data,
+                               sql=row.get('sql'),
+                               scale=float(row['scale']) if row.get('scale', False) else None,
+                               flags=row.get('flags', None),
+                               keywords=row.get('keywords'), measure=row.get('measure'), units=row.get('units', None),
+                               universe=row.get('universe'), commit=False)
+
+            #if col:
+            #    self.validate_column(t, col, warnings, errors)
+
+        return warnings, errors
+
+
+    def _dump_gen(self):
+        """Yield schema row for use in exporting the schema to other
+        formats
+
+        """
+        from collections import OrderedDict
+
+        # Collect indexes
+        indexes = {}
+
+        # Sets the order of the fields
+        all_opt_col_fields = ["size",  "default",  "width",
+                              "description", "sql", "keywords",
+                               "units", "universe", 'proto_vid', "derivedfrom"]
+
+        # Collects what fields actually exist
+        opt_fields_set = set()
+
+        all_opt_table_fields = ["keywords", "universe"]
+
+        data_fields = set()
+        # Need to get all of the indexes figured out first, since there are a variable number of indexes.
+        for table in self._dataset.tables:
+
+
+            if table.proto_vid:
+                opt_fields_set.add("proto_vid")
+
+            for field in all_opt_table_fields:
+
+                v = getattr(table, field)
+                if v and field not in opt_fields_set:
+                    opt_fields_set.add(field)
+
+            for col in table.columns:
+
+                if col.proto_vid:
+                    opt_fields_set.add("proto_vid")
+
+                for index_set in [col.indexes, col.uindexes]:
+                    if not index_set:
+                        continue  # HACK. This probably should not happen
+
+                    for idx in index_set.split(','):
+
+                        idx = idx.replace(table.name + '_', '')
+                        if idx not in indexes:
+                            indexes[idx] = set()
+
+                        indexes[idx].add(col)
+
+                for field in all_opt_col_fields:
+
+                    v = getattr(col, field)
+                    if v and field not in opt_fields_set:
+                        opt_fields_set.add(field)
+
+                for k, v in col.data.items():
+                    data_fields.add(k)
+
+                    # also add data columns for the table
+
+            for k, v in table.data.items():
+                data_fields.add(k)
+
+        data_fields = sorted(data_fields)
+
+        # Put back into same order as in all_opt_col_fields
+        opt_col_fields = [field for field in all_opt_col_fields if field in opt_fields_set]
+
+        indexes = OrderedDict(sorted(indexes.items(), key=lambda t: t[0]))
+
+        first = True
+
+        for table in self._dataset.tables:
+
+            for col in table.columns:
+                row = OrderedDict()
+                row['table'] = table.name
+                row['seq'] = col.sequence_id
+                row['column'] = col.name
+                row['is_pk'] = 1 if col.is_primary_key else ''
+                row['is_fk'] = col.fk_vid if col.fk_vid else None
+                row['id'] = None
+                row['type'] = col.datatype.upper() if col.datatype else None
+
+                for idx, s in indexes.items():
+                    if idx:
+                        row[idx] = 1 if col in s else None
+
+                for field in opt_col_fields:
+                    row[field] = getattr(col, field)
+
+                if col.is_primary_key:
+                    # For the primary key, the data comes from the table.
+                    for k in data_fields:
+                        row['d_' + k] = table.data.get(k, None)
+
+                    # In CSV files the table description is stored as the description of the
+                    # id column
+                    if not col.description and table.description:
+                        col.description = table.description
+
+                else:
+                    for k in data_fields:
+                        row['d_' + k] = col.data.get(k, None)
+
+                row['description'] = col.description
+
+                # The primary key is special. It is always first and it always exists,
+                # so it can hold the id of the table instead. ( The columns's id field is not first,
+                # but the column record for the tables id field is first.
+                if row['is_pk']:
+                    row['id'] = table.id_
+                    if table.proto_vid:
+                        row['proto_vid'] = table.proto_vid
+
+                    for field in all_opt_table_fields:
+
+                        v = getattr(table, field)
+
+                        if v and field in opt_fields_set:
+                            row[field] = v
+
+                else:
+                    row['id'] = col.id
+                    if col.proto_vid:
+                        row['proto_vid'] = col.proto_vid
+
+                if first:
+                    first = False
+                    yield row.keys()
+
+                yield row
+
+    def objects_to_record(self):
+
+        import unicodecsv as csv
+        from StringIO import StringIO
+
+        f = StringIO()
+
+        g = self._dump_gen()
+
+        try:
+            header = g.next()
+        except StopIteration:
+            # No schema file at all!
+            return
+
+        w = csv.DictWriter(f, header, encoding='utf-8')
+        w.writeheader()
+        last_table = None
+        for row in g:
+
+            # Blank row to seperate tables.
+            if last_table and row['table'] != last_table:
+                w.writerow({})
+
+            w.writerow(row)
+
+            last_table = row['table']
+
+        print  f.getvalue()
+
+
 
 file_info_map = {
     File.BSFILE.BUILD : ('bundle.py',PythonSourceFile),
     File.BSFILE.BUILDMETA: ('meta.py',PythonSourceFile),
     File.BSFILE.DOC: ('documentation.md',StringSourceFile),
     File.BSFILE.META: ('bundle.yaml',MetadataFile),
-    File.BSFILE.SCHEMA: ('schema.csv',RowBuildSourceFile),
+    File.BSFILE.SCHEMA: ('schema.csv',SchemaFile),
     File.BSFILE.COLMAP: ('column_map.csv',RowBuildSourceFile),
     File.BSFILE.SOURCES: ('sources.csv',SourcesFile)
 }

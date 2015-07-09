@@ -9,7 +9,7 @@ __docformat__ = 'restructuredtext en'
 
 from sqlalchemy import Column as SAColumn
 from sqlalchemy import  Text, String, ForeignKey, INTEGER
-from . import Base, MutationDict, MutationList, JSONEncodedObj
+from . import  MutationList, JSONEncodedObj
 
 from . import Base,  DictableMixin
 
@@ -122,7 +122,8 @@ class DataSource(Base, DictableMixin):
         :return:
 
         """
-        return {p.key: getattr(self, p.key) for p in self.__mapper__.attrs }
+        from collections import OrderedDict
+        return OrderedDict( (p.key,getattr(self, p.key)) for p in self.__mapper__.attrs )
 
     def fetch(self, cache_fs = None):
         """Download the source and return a callable object that will open the file. """

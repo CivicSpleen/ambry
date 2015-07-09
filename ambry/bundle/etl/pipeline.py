@@ -30,8 +30,6 @@ class Pipe(object):
 
         return self
 
-
-
 class AddHeader(Pipe):
     """Adds a header to a row file that doesn't have one, by returning the header for the first row. """
 
@@ -192,7 +190,6 @@ class MergeHeader(Pipe):
     def __iter__(self):
         self.init()
 
-
         if len(self.header_lines) == 1 and self.header_lines[0] == 0:
             # This is the normal case, with the header on line 0, so skip all of the
             # checks
@@ -225,100 +222,32 @@ class MergeHeader(Pipe):
                 elif self.data_end_line and i>= self.data_end_line:
                     self.footers.append(row)
 
+class PrintRows(Pipe):
+    """A Pipe that collects rows that pass through and displays them as a table when the pipeline is printed. """
 
-class RowSpecIntuiter(object):
-    data_start_line = None
-    data_end_line = None
+    def __init__(self, count=10, columns=7):
+        self.columns = columns
+        self.count = count
+        self.rows = []
 
-    header = None
-    header_comments = None
+    def __iter__(self):
 
-    lines = None
+        for i, row in enumerate(self.source_pipe):
 
-    def __init__(self, row_gen):
-        from collections import defaultdict
+            append_row = [i] + list(row)
 
-        self.row_gen = row_gen
+            if i < self.count:
+                self.rows.append(append_row[:self.columns])
 
-        self.header = []
-        self.header_comments = []
+            yield row
 
-        self.lines = []
-        self.lengths = defaultdict(int)
+    def __str__(self):
+        from tabulate import tabulate
+        from terminaltables import SingleTable
 
-        # Get the non-numm length of all of the rows, then find the midpoint between the min a max
-        # We'll use that for the break point between comments and data / header.
-        for i, row in enumerate(row_gen):
-            if i > 100:
-                break
+        # return  SingleTable([[ str(x) for x in row] for row in self.rows] ).table
 
-            self.lines.append(row)
-
-            lng = len(self.non_nulls(row))  # Number of non-nulls
-
-            self.lengths[lng] += 1
-
-        self.mid_length = (min(self.lengths.keys()) + max(self.lengths.keys())) / 2
-
-    def non_nulls(self, row):
-        """Return the non-empty values from a row"""
-        return [col for col in row if bool(unicode(col).encode('ascii', 'replace').strip())]
-
-    def is_data_line(self, i, row):
-        """Return true if a line is a data row"""
-
-        return self.header and len(self.non_nulls(row)) > self.mid_length
-
-    def is_header_line(self, i, row):
-        """Return true if a row is part of the header"""
-
-        return not self.header and len(self.non_nulls(row)) > self.mid_length
-
-    def is_header_comment_line(self, i, row):
-        """Return true if a line is a header comment"""
-        return not self.header  # All of the lines before the header
-
-    def intuit(self):
-        """Classify the rows of an excel file as header, comment and start of data
-
-        Relies on definitions of methods of:
-            is_data_line(i,row)
-            is_header_line(i,row)
-            is_header_comment_line(i,row)
-        """
-
-        self.row_gen.reset()
-
-        for row in self.row_gen.raw_row_gen:
-
-            i = self.row_gen.line_number
-
-            is_dl = self.is_data_line(i, row)
-
-            if self.data_end_line:
-                continue
-            elif not self.data_start_line:
-
-                if is_dl:
-                    self.data_start_line = i
-
-                elif self.is_header_line(i, row):
-                    self.header.append(i)
-
-                elif self.is_header_comment_line(i, row):
-                    self.header_comments.append(i)
-
-            elif self.data_start_line and not self.data_end_line:
-                if not is_dl:
-                    print 'END DL', is_dl, i, row
-                    self.data_end_line = i
-
-        return dict(
-            data_start_line=self.data_start_line,
-            data_end_line=self.data_end_line,
-            header_comment_lines=self.header_comments,
-            header_lines=self.header
-        )
+        return 'print\n' + tabulate(self.rows[1:],self.rows[0], tablefmt="pipe")
 
 class PipelineSegment(list):
 
@@ -326,6 +255,22 @@ class PipelineSegment(list):
         list.__init__(self, args)
 
         self.name = name
+
+    def __getitem__(self, k):
+
+        import inspect
+
+        # Index by class
+        if inspect.isclass(k):
+
+            matches = filter(lambda e: isinstance(e, k), self)
+
+            if not matches:
+                raise IndexError("No entry for class: {}".format(k))
+
+            k = self.index(matches[0]) # Only return first index
+
+        return super(PipelineSegment, self).__getitem__(k)
 
     def append(self, x):
         self.insert(len(self),x)
@@ -340,13 +285,18 @@ class PipelineSegment(list):
             x.segment = self
         super(PipelineSegment, self).insert(i, x)
 
+    @property
+    def source(self):
+        return self[0].source
 
 from collections import OrderedDict, Mapping
 class Pipeline(OrderedDict):
     """Hold a defined collection of PipelineGroups, and when called, coalesce them into a single pipeline """
 
-    _groups_names = ['source', 'line_process', 'create_rows', 'coalesce_rows', 'mangle_header', 'normalize',
-                     'remap_to_table', 'cast_columns', 'statistics', 'write_to_table']
+    _groups_names = ['source', 'line_process', 'create_rows', 'row_intuit', 'coalesce_rows', 'mangle_header', 'normalize',
+                     'remap_to_table', 'type_intuit', 'cast_columns', 'statistics', 'write_to_table']
+
+
 
     def __init__(self, *args, **kwargs):
 
@@ -414,3 +364,13 @@ def augment_pipeline(pl, head_pipe = None, tail_pipe = None):
 
             if tail_pipe:
                 v.append(tail_pipe)
+
+def sink(pipeline):
+    """Drive a pipeline and discard the results. Used to run a meta pipeline, where the outputs are data
+    stored in the pipes, not the final set of rows. """
+
+    for row in pipeline():
+        pass
+
+    return pipeline
+

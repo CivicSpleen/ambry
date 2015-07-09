@@ -4,6 +4,7 @@ __author__ = 'eric'
 from collections import deque
 import datetime
 
+from pipeline import Pipe
 
 def test_float(v):
     # Fixed-width integer codes are actually strings.
@@ -102,7 +103,8 @@ tests = [
 
 
 class Column(object):
-    name = None
+    position = None
+    header = None
     type_counts = None
     type_ratios = None
     length = 0
@@ -116,6 +118,8 @@ class Column(object):
         self.type_counts[datetime.time] = 0
         self.type_counts[None] = 0
         self.strings = deque(maxlen=1000)
+        self.position = None
+        self.header = None
         self.count = 0
         self.length = 0
         self.date_successes = 0
@@ -180,6 +184,7 @@ class Column(object):
 
                 return type_
 
+    @property
     def resolved_type(self):
         """Return the type for the columns, and a flag to indicate that the
         column has codes."""
@@ -214,86 +219,112 @@ class Column(object):
             return num_type, False
 
 
-class Intuiter(object):
+class TypeIntuiter(Pipe):
     """Determine the types of rows in a table."""
     header = None
     counts = None
 
-    def __init__(self):
+    def __init__(self, skip_rows = 1):
         from collections import OrderedDict
 
         self._columns = OrderedDict()
+        self.skip_rows = skip_rows
+
+    def process_row(self, n, row):
+
+        if n == 0:
+            header = row
+            for i, value in enumerate(row):
+                if i not in header:
+                    self._columns[i] = Column()
+                    self._columns[i].position = i
+                    self._columns[i].header = value
+
+            return
+
+        if n < self.skip_rows:
+            return
+
+        try:
+            for i,value in enumerate(row):
+                if i not in self._columns:
+                    self._columns[i] = Column()
+                    self._columns[i].position = i
+
+                self._columns[i].test(value)
+
+        except Exception:
+            # This usually doesn't matter, since there are usually plenty of other rows to intuit from
+            # print 'Failed to add row: {}: {} {}'.format(row, type(e), e)
+            pass
+
+    def __iter__(self):
+
+        for i, row in enumerate(self.source_pipe):
+
+            self.process_row(i,row)
+
+            yield row
 
     def iterate(self, row_gen, max_n=None):
-
-        header = row_gen.header
-
-        unmangled_header = row_gen.unmangled_header
-
+        """
+        :param row_gen:
+        :param max_n:
+        :return:
+        """
 
         for n, row in enumerate(row_gen):
 
             if max_n and n > max_n:
                 return
 
-            try:
-                for col, desc, value in zip(header, unmangled_header, row):
-                    if col not in self._columns:
-                        self._columns[col] = Column()
-
-                    self._columns[col].test(value)
-                    self._columns[col].description = desc
-
-            except Exception:
-                # This usually doesn't matter, since there are usually plenty of other rows to intuit from
-                # print 'Failed to add row: {}: {} {}'.format(row, type(e), e)
-                pass
+            self.process_row(n, row)
 
     @property
     def columns(self):
 
         for k, v in self._columns.items():
-            v.name = k
+            v.position = k
 
             yield v
 
-    def dump(self, fn=None):
+    def __str__(self):
+        from tabulate import tabulate
+        from terminaltables import SingleTable
 
-        if fn:
+        # return  SingleTable([[ str(x) for x in row] for row in self.rows] ).table
 
-            import unicodecsv as csv
+        results = self.results_table()
 
-            try:
-                f = open(fn, 'w')
-                close = True
-            except TypeError:
-                f = fn
-                close = False
+        return 'Type Intuiter \n' + str(tabulate(results[1:],results[0], tablefmt="pipe"))
 
-            try:
-                w = csv.DictWriter(f, ("name length resolved_type has_codes count ints "
-                                       "floats strs nones datetimes dates times strvals".split()))
-                w.writeheader()
-                for d in self._dump():
-                    w.writerow(d)
-            finally:
-                if close:
-                    f.close()
+    def results_table(self):
 
-            return
+        fields = 'position header length resolved_type has_codes count ints floats strs nones datetimes dates times '.split()
 
-        else:
+        header = list(fields)
+        header[0] = '#'
+        header[2] = 'size'
+        header[4] = 'codes?'
+        header[10] = 'd/t'
 
-            return self._dump()
+        rows = list()
 
+        rows.append(header)
+
+        for d in self._dump():
+            rows.append([d[k] for k in fields])
+
+        return rows
 
     def _dump(self):
 
         for v in self.columns:
-            rt = v.resolved_type()
+            rt = v.resolved_type
 
             d = dict(
-                name=v.name,
+                position = v.position,
+                header=v.header,
                 length=v.length,
                 resolved_type=rt[0],
                 has_codes=rt[1],

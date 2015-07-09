@@ -23,7 +23,7 @@ import sqlalchemy.types as types
 
 from ..util import  memoize
 
-from . import Base, MutationDict, JSONEncodedObj, BigIntegerType, GeometryType, _clean_flag
+from . import Base, MutationDict, MutationList,  JSONEncodedObj, BigIntegerType, GeometryType, _clean_flag
 
 from ambry.orm.code import Code
 from ambry.orm.columnstat import ColumnStat
@@ -70,8 +70,8 @@ class Column(Base):
     numerator = SAColumn('c_numerator', String(20))
     denominator = SAColumn('c_denominator', String(20))
 
-    indexes = SAColumn('c_indexes', Text)
-    uindexes = SAColumn('c_uindexes', Text)
+    indexes = SAColumn('t_indexes', MutationList.as_mutable(JSONEncodedObj))
+    uindexes = SAColumn('t_uindexes', MutationList.as_mutable(JSONEncodedObj))
 
     default = SAColumn('c_default', Text)
     illegal_value = SAColumn('c_illegal_value', Text)

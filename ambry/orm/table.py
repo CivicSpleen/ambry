@@ -16,7 +16,7 @@ from sqlalchemy.sql import text
 from ambry.identity import TableNumber,  ObjectNumber
 from ambry.orm import Column, DictableMixin
 from ambry.orm.exc import NotFoundError
-from . import Base, MutationDict, JSONEncodedObj
+from . import Base, MutationDict, MutationList, JSONEncodedObj
 
 class Table(Base, DictableMixin):
     __tablename__ = 'tables'
@@ -37,6 +37,8 @@ class Table(Base, DictableMixin):
     proto_vid = SAColumn('t_proto_vid', String(20), index=True)
 
     installed = SAColumn('t_installed', String(100))
+
+
     data = SAColumn('t_data', MutationDict.as_mutable(JSONEncodedObj))
 
     __table_args__ = (

@@ -142,6 +142,8 @@ def bundle_parser(cmd):
                             help='Dump configs')
     group.add_argument('-f', '--files', default=False, action="store_const", const='files', dest='table',
                             help='Dump files')
+    group.add_argument('-s', '--sources', default=False, action="store_const", const='datasources', dest='table',
+                       help='Dump sources')
     group.add_argument('-p', '--partitions', default=False, action="store_const", const='partitions', dest='table',
                        help='Dump partitions')
     command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
@@ -216,6 +218,7 @@ def bundle_parser(cmd):
     #
     command_p = sub_cmd.add_parser('build', help='Build the data bundle and partitions')
     command_p.set_defaults(subcommand='build')
+    command_p.add_argument('-s', '--sync', default=False, action="store_true", help='Sync with build source files')
     command_p.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
     command_p.add_argument('-f', '--force', default=False, action="store_true",
                            help='Force build. ( --clean is usually preferred ) ')
@@ -501,7 +504,14 @@ def bundle_prepare(args, l, rc):
 
 def bundle_build(args, l, rc):
     from ambry.bundle import Bundle
-    b = using_bundle(args, l).cast_to_subclass()
+
+    b = using_bundle(args, l)
+
+    if args.sync:
+        b.do_sync()
+
+    b = b.cast_to_subclass()
+
     if args.clean:
         if not b.do_clean():
             return False
@@ -511,7 +521,6 @@ def bundle_build(args, l, rc):
 
     b.do_build(force = args.force)
     b.set_last_access(Bundle.STATES.BUILT)
-
 
 def bundle_install(args, b, st, rc):
     raise NotImplementedError()
@@ -655,7 +664,6 @@ def bundle_dump(args, l, rc):
     import tabulate
     import datetime
 
-
     ref, frm = get_bundle_ref(args,l)
 
     b = l.bundle(ref)
@@ -708,6 +716,19 @@ def bundle_dump(args, l, rc):
                 row.stats_dict.id.count
             )
             )
+        records = sorted(records, key=lambda row: (row[0]))
+
+    elif args.table == 'datasources':
+
+        headers = []
+        records = []
+        for i, row in enumerate(b.dataset.sources):
+            if not headers:
+                headers = row.keys()
+
+            records.append(row.values())
+
+
         records = sorted(records, key=lambda row: (row[0]))
 
     print tabulate.tabulate(records, headers = headers)
