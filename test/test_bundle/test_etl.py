@@ -406,6 +406,7 @@ class Test(TestBase):
         """Build the simple bundle"""
 
         b = self.setup_bundle('complete-load')
+
         b.sync()
         b = b.cast_to_subclass()
         self.assertEquals('synced', b.state)

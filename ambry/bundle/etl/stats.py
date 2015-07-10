@@ -13,8 +13,12 @@ from livestats import livestats
 from geoid import civick
 from pipeline import Pipe
 
-def text_hist(nums):
-    parts = u' ▁▂▃▄▅▆▇▉'
+def text_hist(nums, ascii = False):
+
+    if ascii:
+        parts = u' _.,,-=T#'
+    else:
+        parts = u' ▁▂▃▄▅▆▇▉'
 
     nums = list(nums)
     fraction = max(nums) / float(len(parts) - 1)
@@ -35,24 +39,35 @@ class StatSet(object):
 
     def __init__(self, column):
 
-        self.is_gvid = bool("gvid" in column.name)
-        self.is_year = bool("year" in column.name)
-        self.is_time = column.type_is_time()
-        self.is_date = column.type_is_date()
+        try:
+            # Try using column as an orm.Column
+            self.is_gvid = bool("gvid" in column.name)
+            self.is_year = bool("year" in column.name)
+            self.is_time = column.type_is_time()
+            self.is_date = column.type_is_date()
 
-        if column.is_primary_key or self.is_year or self.is_time or self.is_date:
+            self.flags = " G"[self.is_gvid]+" Y"[self.is_year]+" T"[self.is_time]+" D"[self.is_date]
+
+            if column.is_primary_key or self.is_year or self.is_time or self.is_date:
+                lom = StatSet.LOM.ORDINAL
+            elif column.type_is_text() or self.is_gvid:
+                lom = StatSet.LOM.NOMINAL
+            elif column.type_is_number():
+                lom = StatSet.LOM.INTERVAL
+
+            self.column_name = column.name
+        except AttributeError:
+            # Nope, assume it is a string
+            self.is_gvid = self.is_year = self.is_time = self.is_date = False
             lom = StatSet.LOM.ORDINAL
-        elif column.type_is_text() or self.is_gvid:
-            lom = StatSet.LOM.NOMINAL
-        elif column.type_is_number():
-            lom = StatSet.LOM.INTERVAL
+            self.column_name = column
+            self.flags = None
 
-        self.column_name = column.name
         self.lom = lom
         self.n = 0
         self.counts = Counter()
         self.size = None
-        self.stats = livestats.LiveStats() #runstats.Statistics()
+        self.stats = livestats.LiveStats([0.25, 0.5, 0.75]) #runstats.Statistics()
 
         self.bin_min = None
         self.bin_max = None
@@ -149,7 +164,8 @@ class StatSet(object):
     def p50(self):
         try:
             return self.stats.quantiles()[1][1]
-        except IndexError:
+        except IndexError as e:
+
             return None
 
     @property
@@ -178,40 +194,53 @@ class StatSet(object):
     @property
     def dict(self):
         """Return a  dict that can be passed into the ColumnStats constructor"""
-        return dict(
-            lom = self.lom,
-            count=self.n,
-            uvalues=dict(self.counts.most_common(100)),
-            nuniques=self.nuniques,
-            mean=self.mean,
-            std=self.stddev,
-            min=self.min,
-            p25=self.p25,
-            p50=self.p50,
-            p75=self.p75,
-            max=self.max,
-            skewness=self.skewness,
-            kurtosis=self.kurtosis,
-            hist=self.bins
+        from collections import OrderedDict
+        return OrderedDict([
+            ('name', self.column_name),
+            ('flags', self.flags),
+            ('lom',self.lom),
+            ('count',self.n),
+            ('nuniques',self.nuniques),
+            ('mean',self.mean),
+            ('std',self.stddev),
+            ('min',self.min),
+            ('p25',self.p25),
+            ('p50',self.p50),
+            ('p75',self.p75),
+            ('max',self.max),
+            ('skewness',self.skewness),
+            ('kurtosis',self.kurtosis),
+            ('hist',self.bins),
+            ('uvalues',dict(self.counts.most_common(100)) ) ]
         )
-
-
 
 class Stats(Pipe):
     """ Stats object reads rows from the input iterator, processes the row, and yields it back out"""
 
-    def __init__(self):
+    def __init__(self, table = None):
 
-        self._stats = []
+        self.table = table
+        self._stats = {}
         self._func = None
 
-    def add(self, i, column):
+    def add(self, column):
         """Determine the LOM from a ORM Column"""
 
-        if len(self._stats) <= i:
-            self._stats.extend([None]*(i-len(self._stats)+1))
 
-        self._stats[i] = StatSet(column)
+
+        # Try it as an orm.column, otherwise try to look up in a table,
+        # otherwise, as a string
+        try:
+            column.name
+            self._stats[column.name] = StatSet(column)
+        except AttributeError:
+
+            if self.table:
+                column = self.table.column(column)
+
+                self._stats[column.name] = StatSet(column)
+            else:
+                self._stats[column] = StatSet(column)
 
         # Doing it for every add() is less efficient, but it's insignificant time, and
         # it means we don't have to remember to call a the build phase before processing
@@ -221,9 +250,9 @@ class Stats(Pipe):
 
         parts = []
 
-        for i in range(len(self._stats)):
-            if self._stats[i] is not None:
-                parts.append("stats[{}].add(row[{}])".format(i,i))
+        for name in self._stats.keys():
+            if self._stats[name] is not None:
+                parts.append("stats['{name}'].add(row['{name}'])".format(name=name))
 
         f = 'def _process_row(stats, row):\n    {}'.format('\n    '.join(parts))
 
@@ -232,14 +261,42 @@ class Stats(Pipe):
         return locals()['_process_row']
 
     def stats(self):
-        return [ (i, self._stats[i]) for i, stat in enumerate(self._stats) if stat]
+        return [ (name, self._stats[name]) for name, stat in self._stats.items() ]
 
     def process(self, row):
         self._func(self._stats, row)
         return row
 
     def __iter__(self):
-        for row in self.source_pipe:
-            yield self.process(row)
+
+        itr = iter(self._source_pipe)
+
+        header = itr.next()
+
+        yield header
+
+        for c in header:
+            self.add(c)
+
+        for row in itr:
+            self.process(dict(zip(header,row)))
+
+            yield row
+
+    def __str__(self):
+        from tabulate import tabulate
+
+        rows = []
 
 
+        for name, stats in  self._stats.items():
+            stats_dict = stats.dict
+            del stats_dict["uvalues"]
+            stats_dict["hist"] = text_hist(stats_dict["hist"], True)
+            if not rows:
+                rows.append(stats_dict.keys())
+
+
+            rows.append(stats_dict.values())
+
+        return 'Statistics \n' + str(tabulate(rows[1:], rows[0], tablefmt="pipe"))

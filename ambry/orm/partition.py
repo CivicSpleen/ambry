@@ -126,13 +126,20 @@ class Partition(Base, DictableMixin):
 
         sd = dict(stats)
 
-        for i,c in enumerate(self.table.columns):
+        for c in  self.table.columns:
 
-            cs = ColumnStat(p_vid=self.vid, d_vid = self.d_vid, c_vid=c.vid, **sd[i].dict)
+            if not c.name in sd:
+
+                continue
+
+            d = sd[c.name].dict
+
+            del d['name']
+            del d['flags']
+            cs = ColumnStat(p_vid=self.vid, d_vid = self.d_vid, c_vid=c.vid, **d)
 
             self.stats.append(cs)
 
-        return cs
 
     def parse_gvid_or_place(self, gvid_or_place):
         from geoid.civick import GVid
@@ -168,14 +175,18 @@ class Partition(Base, DictableMixin):
         tcov = set()
         grains = set()
 
-        for i, c in enumerate(self.table.columns):
-            if sd[i].is_gvid:
-                scov |= set(x for x in isimplify(GVid.parse(gvid) for gvid in sd[i].uniques))
-                grains |= set(GVid.parse(gvid).summarize() for gvid in sd[i].uniques)
-            elif sd[i].is_year:
-                tcov |= set(int(x) for x in sd[i].uniques)
-            elif sd[i].is_date:
-                tcov |= set(parser.parse(x).year if isinstance(x,basestring) else x.year for x in sd[i].uniques)
+        for c in self.table.columns:
+            if not c.name in sd:
+                continue
+
+            if sd[c.name].is_gvid:
+                scov |= set(x for x in isimplify(GVid.parse(gvid) for gvid in sd[c.name].uniques))
+                grains |= set(GVid.parse(gvid).summarize() for gvid in sd[c.name].uniques)
+            elif sd[c.name].is_year:
+                tcov |= set(int(x) for x in sd[c.name].uniques)
+            elif sd[c.name].is_date:
+                tcov |= set(parser.parse(x).year if isinstance(x,basestring) else x.year for x in sd[c.name].uniques)
+
 
         ## Space Coverage
 

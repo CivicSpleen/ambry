@@ -191,9 +191,6 @@ class Bundle(object):
 
         from etl.pipeline import Pipeline, MergeHeader, MangleHeader, MapHeader
 
-        if isinstance(source, basestring):
-            source = self.source(source)
-
         return Pipeline(
             source=source.fetch().source_pipe(),
             coalesce_rows=MergeHeader(),
@@ -376,6 +373,8 @@ class Bundle(object):
 
     def download(self):
         """Download referenced source files and bundles. BUndles will be instlaled in the warehouse"""
+
+        raise NotImplementedError()
 
         for source in self.dataset.sources:
             print source

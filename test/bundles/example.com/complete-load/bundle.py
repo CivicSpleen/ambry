@@ -26,8 +26,6 @@ class Bundle(Bundle):
 
             pl = self.do_build_pipeline(source)
 
-
-
             for i, row in enumerate(pl()):
                 print source.name, i, row
 

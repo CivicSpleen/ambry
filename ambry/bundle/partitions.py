@@ -207,6 +207,8 @@ class Partitions(object):
 
         session.query(OrmPartition).delete()
 
+        return self
+
     def new_partition(self,  data=None, **kwargs):
         p = self.bundle.dataset.new_partition(data=data,**kwargs)
         self.bundle.dataset.commit()
@@ -263,6 +265,7 @@ class PartitionProxy(Proxy):
 
     def __init__(self, bundle, obj):
         super(PartitionProxy, self).__init__(obj)
+        self._partition = obj
         self._bundle = bundle
 
     def clean(self):
@@ -280,3 +283,21 @@ class PartitionProxy(Proxy):
         from etl.partition import Inserter
 
         return Inserter(self, self.datafile() )
+
+    def pipeline(self,**kwargs):
+        from ambry.bundle.etl.pipeline import Pipeline
+        from ambry.bundle.etl.stats import Stats
+
+        pl = Pipeline(**kwargs)
+        pl.statistics = Stats(self._partition.table)
+        pl.sink = self.inserter()
+
+        return pl
+
+    def run(self,**kwargs):
+        """Return a pipeline that inserts into the table in the partition"""
+
+        pl = self.pipeline(**kwargs)
+        pl()
+
+        return pl

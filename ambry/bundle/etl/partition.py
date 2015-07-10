@@ -6,7 +6,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 import unicodecsv as csv
-
+from ambry.bundle.etl.pipeline import  Pipe, Sink
 
 def new_partition_data_file(fs, path):
 
@@ -308,7 +308,7 @@ class PartitionMsgpackDataFile(PartitionDataFile):
         return NotImplementedError()
 
 
-class Inserter(object):
+class Inserter(Sink):
 
     def __init__(self, partition, datafile):
         self._partition = partition
@@ -319,7 +319,6 @@ class Inserter(object):
         self.datafile.insert(self._header) # The header is always inserted first
 
         self.row_num = 1
-
 
     def insert(self, row):
         from sqlalchemy.engine.result import RowProxy
@@ -337,19 +336,46 @@ class Inserter(object):
         else:
             raise Exception("Don't know what the row is")
 
-        self.datafile.insert(self._stats.process(row))
+
+        self.datafile.insert(row)
         self.row_num += 1
 
     def close(self):
 
         self._partition.state = self._partition.STATES.BUILT
 
-        # TODO: Delete once this is moved to somewhere else.
-        if False:
-            self._partition.set_stats(self._stats.stats())
-            self._partition.set_coverage(self._stats.stats())
-            self._partition.table.update_from_stats(self._stats.stats())
-            self._partition._bundle.dataset.commit()
+        self.datafile.close()
+
+        if self.pipeline:
+            from ambry.bundle.etl.stats import Stats
+            try:
+
+                stats = self.pipeline.statistics[Stats]
+
+                self._partition.set_stats(stats.stats())
+                self._partition.set_coverage(stats.stats())
+                self._partition.table.update_from_stats(stats.stats())
+                self._partition._bundle.dataset.commit()
+
+            except KeyError as e:
+                raise
+                pass # No stats in the pipeline.
+
+    def __call__(self, *args, **kwargs):
+
+        itr = iter(self._source_pipe)
+
+        header = itr.next()
+
+        self.__enter__()
+
+        for row in itr:
+            d = dict(zip(header, row))
+
+            self.insert(d)
+
+        self.close()
+
 
     def __enter__(self):
 
@@ -369,3 +395,5 @@ class Inserter(object):
         return True
 
 
+    def __str__(self):
+        return "Inserter table={} row={}".format(self._partition.table.name, self.row_num)

@@ -624,10 +624,6 @@ class SchemaFile(RowBuildSourceFile):
 
             last_table = row['table']
 
-        print  f.getvalue()
-
-
-
 file_info_map = {
     File.BSFILE.BUILD : ('bundle.py',PythonSourceFile),
     File.BSFILE.BUILDMETA: ('meta.py',PythonSourceFile),

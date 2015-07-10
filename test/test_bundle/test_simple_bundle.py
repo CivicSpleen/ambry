@@ -79,7 +79,7 @@ class Test(TestBase):
 
         self.assertEquals(10001, len(c.splitlines()))
 
-        self.assertEquals(12, len(b.dataset.stats))
+        self.assertEquals(11, len(b.dataset.stats))
 
         self.assertEquals('built', b.state)
 
@@ -113,7 +113,7 @@ class Test(TestBase):
 
         self.assertEquals(6001, len(c.splitlines()))
 
-        self.assertEquals(39, len(b.dataset.stats))
+        self.assertEquals(33, len(b.dataset.stats))
 
         self.assertEquals('built', b.state)
 

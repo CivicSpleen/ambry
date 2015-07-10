@@ -8,10 +8,12 @@ __docformat__ = 'restructuredtext en'
 
 
 from sqlalchemy import Column as SAColumn
-from sqlalchemy import  Text, String, ForeignKey, INTEGER
+from sqlalchemy import  Text, String, ForeignKey, INTEGER, UniqueConstraint
 from . import  MutationList, JSONEncodedObj
-
+from sqlalchemy.orm import relationship
+from scolumn import SourceColumn
 from . import Base,  DictableMixin
+
 
 class DelayedOpen(object):
 
@@ -48,8 +50,10 @@ class DataSource(Base, DictableMixin):
 
     __tablename__ = 'datasources'
 
-    d_vid = SAColumn('ds_d_vid', String(16), ForeignKey('datasets.d_vid'), nullable=False, primary_key=True)
-    name = SAColumn('ds_name', Text, primary_key=True)
+    id = SAColumn('ds_id', INTEGER, primary_key=True)
+
+    d_vid = SAColumn('ds_d_vid', String(16), ForeignKey('datasets.d_vid'), nullable=False)
+    name = SAColumn('ds_name', Text)
 
     t_vid = SAColumn('ds_t_vid', String(16), ForeignKey('tables.t_vid'), nullable=True)
 
@@ -72,7 +76,13 @@ class DataSource(Base, DictableMixin):
     url = SAColumn('ds_url', Text)
     ref = SAColumn('ds_ref', Text)
     hash = SAColumn('ds_hash', Text)
-    source_generator = SAColumn('ds_sourcegen', Text) # Classname of of the source row generator
+
+    __table_args__ = (
+        UniqueConstraint('ds_d_vid', 'ds_name', name='_uc_columns_1'),
+    )
+
+    columns = relationship(SourceColumn, backref='table', order_by="asc(SourceColumn.position)",
+                           cascade="all, delete-orphan", lazy='joined')
 
     def get_filetype(self):
         from os.path import splitext
@@ -113,6 +123,16 @@ class DataSource(Base, DictableMixin):
             return ext[1:]
 
         return None
+
+    def add_column(self, position, header,  datatype ):
+        pass
+
+        from scolumn import SourceColumn
+
+        self.columns.append(SourceColumn(
+            position = position,
+            header = header,
+        ))
 
     @property
     def dict(self):

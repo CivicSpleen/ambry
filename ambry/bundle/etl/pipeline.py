@@ -6,11 +6,14 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 class Pipe(object):
+    """A step in the pipeline"""
 
     _source_pipe = None
     _source = None
 
     segment = None # Set to the name of the segment
+    pipeline = None  # Set to the name of the segment
+
 
     @property
     def source(self):
@@ -29,6 +32,16 @@ class Pipe(object):
         self._source = source_pipe.source if source_pipe else None
 
         return self
+
+class Sink(Pipe):
+    """A final stage pipe, which consumes its input and produces no output rows"""
+
+    def __call__(self, *args, **kwargs):
+
+        while self._source_pipe.next():
+            pass
+
+
 
 class AddHeader(Pipe):
     """Adds a header to a row file that doesn't have one, by returning the header for the first row. """
@@ -229,15 +242,18 @@ class PrintRows(Pipe):
         self.columns = columns
         self.count = count
         self.rows = []
+        self.i = 0
 
     def __iter__(self):
 
         for i, row in enumerate(self.source_pipe):
-
+            self.i = i
             append_row = [i] + list(row)
 
             if i < self.count:
                 self.rows.append(append_row[:self.columns])
+
+
 
             yield row
 
@@ -247,13 +263,14 @@ class PrintRows(Pipe):
 
         # return  SingleTable([[ str(x) for x in row] for row in self.rows] ).table
 
-        return 'print\n' + tabulate(self.rows[1:],self.rows[0], tablefmt="pipe")
+        return 'print. {} rows total\n'.format(self.i) + tabulate(self.rows[1:],self.rows[0], tablefmt="pipe")
 
 class PipelineSegment(list):
 
-    def __init__(self, name, *args):
+    def __init__(self, pipeline, name, *args):
         list.__init__(self, args)
 
+        self.pipeline = pipeline
         self.name = name
 
     def __getitem__(self, k):
@@ -274,6 +291,11 @@ class PipelineSegment(list):
 
     def append(self, x):
         self.insert(len(self),x)
+        return self
+
+    def prepend(self, x):
+        self.insert(0, x)
+        return self
 
     def insert(self, i, x):
         import inspect
@@ -281,8 +303,10 @@ class PipelineSegment(list):
         if inspect.isclass(x):
             x = x()
 
-        if hasattr(x, 'segment'):
+        if isinstance(x, Pipe):
             x.segment = self
+            x.pipeline = self.pipeline
+
         super(PipelineSegment, self).insert(i, x)
 
     @property
@@ -294,13 +318,12 @@ class Pipeline(OrderedDict):
     """Hold a defined collection of PipelineGroups, and when called, coalesce them into a single pipeline """
 
     _groups_names = ['source', 'line_process', 'create_rows', 'row_intuit', 'coalesce_rows', 'mangle_header', 'normalize',
-                     'remap_to_table', 'type_intuit', 'cast_columns', 'statistics', 'write_to_table']
-
+                     'remap_to_table', 'type_intuit', 'cast_columns', 'statistics', 'write_to_table', 'sink']
 
 
     def __init__(self, *args, **kwargs):
 
-        super(Pipeline, self).__init__(*args, **kwargs)
+        super(Pipeline, self).__init__()
 
         for group_name in self._groups_names:
 
@@ -308,10 +331,17 @@ class Pipeline(OrderedDict):
             if not isinstance(gs, (list, tuple)):
                 gs = [gs]
 
-            self[group_name] =  PipelineSegment(group_name, *gs)
+            self[group_name] =  PipelineSegment(self, group_name, *gs)
 
     def __setitem__(self, k, v):
-        super(Pipeline, self).__setitem__(k, v)
+
+        # If the caller tries to set a pipeline segment with a pipe, translte
+        # the call to an append on the segment.
+
+        if isinstance(v, Pipe) or ( isinstance(v, type) and issubclass(v, Pipe)):
+            self[k].append(v)
+        else:
+            super(Pipeline, self).__setitem__(k, v)
 
     def __getattr__(self, k):
         if not (k.startswith('__') or k.startswith('_OrderedDict__')):
@@ -325,6 +355,10 @@ class Pipeline(OrderedDict):
 
         self[k] = v
 
+    def run(self):
+        return self.__call__()
+
+
     def __call__(self, *args, **kwargs):
 
         chain = []
@@ -337,12 +371,21 @@ class Pipeline(OrderedDict):
 
         chain = list(args) + chain
 
-        return reduce(lambda last, next: next.set_source_pipe(last), chain[1:], chain[0])
+        last = reduce(lambda last, next: next.set_source_pipe(last), chain[1:], chain[0])
+
+        if not self['sink']:
+            #Returns the iterator for the last stage, which, when called, iterates over the earleir stages
+
+            return last
+        else:
+            # Returns the call value of the last stage, which consumes all of the other stages.
+            return last()
 
     def __str__(self):
 
         out = []
         for segment_name in self._groups_names:
+
             for pipe in self[segment_name]:
                 out.append("-- {} {} ".format(segment_name, str(pipe)))
 

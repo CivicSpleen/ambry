@@ -7,7 +7,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 import os
 
 
-from . import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat, ColumnMap, DataSource
+from . import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat, DataSource, SourceColumn
 from collections import namedtuple
 from ..util import get_logger
 
@@ -279,7 +279,7 @@ class Database(object):
 
         from sqlalchemy.exc import OperationalError
 
-        tables = [Dataset, Config, Table, Column, Partition, File, Code, ColumnStat, ColumnMap, DataSource]
+        tables = [Dataset, Config, Table, Column, Partition, File, Code, ColumnStat, DataSource, SourceColumn]
 
         try:
             self.drop()

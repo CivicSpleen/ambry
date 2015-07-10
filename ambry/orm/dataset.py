@@ -57,7 +57,7 @@ class Dataset(Base):
 
     files = relationship('File', backref='dataset', cascade="all, delete-orphan")
 
-    colmaps = relationship('ColumnMap', backref='dataset', cascade="all, delete-orphan")
+    source_columns = relationship('SourceColumn', backref='dataset', cascade="all, delete-orphan")
 
     sources = relationship('DataSource', backref='dataset', cascade="all, delete-orphan")
 
