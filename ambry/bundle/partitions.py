@@ -298,6 +298,6 @@ class PartitionProxy(Proxy):
         """Return a pipeline that inserts into the table in the partition"""
 
         pl = self.pipeline(**kwargs)
-        pl()
+        pl.run()
 
         return pl

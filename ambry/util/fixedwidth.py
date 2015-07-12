@@ -46,5 +46,5 @@ def fixed_width_iter(flo, field_widths):
     parser = make_parser(int(w) for w in field_widths)
 
     for line in flo:
-        yield parser(line)
+        yield [ e.strip() for e in parser(line) ]
 

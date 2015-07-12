@@ -26,31 +26,12 @@ class File(Base, DictableMixin):
     BSFILE.BUILD = 'build_bundle'
     BSFILE.BUILDMETA = 'build_meta'
     BSFILE.META = 'bundle_meta'
+    BSFILE.SOURCESCHEMA = 'sourceschema'
     BSFILE.SCHEMA = 'schema'
     BSFILE.COLMAP = 'column_map'
     BSFILE.SOURCES = 'sources'
+    BSFILE.PARTITIONS = 'partitions'
     BSFILE.DOC = 'documentation'
-
-    TYPE = Constant()
-    TYPE.BUNDLE = LocationRef.LOCATION.LIBRARY
-    TYPE.PARTITION = LocationRef.LOCATION.PARTITION
-    TYPE.SOURCE = LocationRef.LOCATION.SOURCE
-    TYPE.SREPO = LocationRef.LOCATION.SREPO
-    TYPE.UPSTREAM = LocationRef.LOCATION.UPSTREAM
-    TYPE.REMOTE = LocationRef.LOCATION.REMOTE
-    TYPE.REMOTEPARTITION = LocationRef.LOCATION.REMOTEPARTITION
-
-    TYPE.MANIFEST = 'manifest'
-    TYPE.DOC = 'doc'
-    TYPE.EXTRACT = 'extract'
-    TYPE.STORE = 'store'
-    TYPE.DOWNLOAD = 'download'
-
-    PROCESS = Constant()
-    PROCESS.MODIFIED = 'modified'
-    PROCESS.UNMODIFIED = 'unmodified'
-    PROCESS.DOWNLOADED = 'downloaded'
-    PROCESS.CACHED = 'cached'
 
     id = SAColumn('id', Integer, primary_key=True)
     d_vid = SAColumn('f_d_vid', String(16), ForeignKey('datasets.d_vid'), nullable=False, index=True)

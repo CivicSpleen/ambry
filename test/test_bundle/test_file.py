@@ -97,10 +97,10 @@ class Test(unittest.TestCase):
         ds = db.dataset(dn)
 
         bsfa = BuildSourceFileAccessor(ds, source_fs)
-        # Report 5 files to sync from file to record
-        self.assertEquals(5, dict(bsfa.sync_dirs()).values().count('ftr'))
-        # Report did 5 syncs
-        self.assertEquals(5, dict(bsfa.sync()).values().count('ftr'))
+        # Report 4 files to sync from file to record
+        self.assertEquals(4, dict(bsfa.sync_dirs()).values().count('ftr'))
+        # Report did 4 syncs
+        self.assertEquals(4, dict(bsfa.sync()).values().count('ftr'))
         # Report non left to do.
         self.assertEquals(0, dict(bsfa.sync()).values().count('ftr'))
 

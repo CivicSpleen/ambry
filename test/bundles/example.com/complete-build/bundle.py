@@ -8,7 +8,6 @@ class Bundle(Bundle):
 
     def build(self):
 
-
         from ambry.bundle.etl.pipeline import Pipe, PrintRows
 
         class RandomSourcePipe(Pipe):
@@ -54,7 +53,6 @@ class Bundle(Bundle):
                         yield row.keys()
 
                     yield row.values()
-
 
         for j, space in enumerate(['nv', 'ut', 'ca']):
             p = self.partitions.new_partition(table='example', space=space, time=2010 + j)

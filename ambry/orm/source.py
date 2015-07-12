@@ -11,7 +11,8 @@ from sqlalchemy import Column as SAColumn
 from sqlalchemy import  Text, String, ForeignKey, INTEGER, UniqueConstraint
 from . import  MutationList, JSONEncodedObj
 from sqlalchemy.orm import relationship
-from scolumn import SourceColumn
+from source_table import SourceTable
+from table import Table
 from . import Base,  DictableMixin
 
 
@@ -54,11 +55,16 @@ class DataSource(Base, DictableMixin):
 
     d_vid = SAColumn('ds_d_vid', String(16), ForeignKey('datasets.d_vid'), nullable=False)
     name = SAColumn('ds_name', Text)
+    title = SAColumn('ds_title', Text)
+
+    st_id = SAColumn('ds_st_id',INTEGER, ForeignKey('sourcetables.st_id'), nullable=True)
+    source_table_name = SAColumn('ds_st_name', Text)
+    _source_table = relationship(SourceTable, backref='sources', cascade="all")
 
     t_vid = SAColumn('ds_t_vid', String(16), ForeignKey('tables.t_vid'), nullable=True)
+    dest_table_name = SAColumn('ds_dt_name', Text)
+    dest_table = relationship(Table, backref='soruces', cascade="all")
 
-    title = SAColumn('ds_title', Text)
-    table_name = SAColumn('ds_table_name', Text)
     segment = SAColumn('ds_segment', Text)
     time = SAColumn('ds_time', Text)
     space = SAColumn('ds_space', Text)
@@ -67,7 +73,6 @@ class DataSource(Base, DictableMixin):
     end_line = SAColumn('ds_end_line', INTEGER)
     comment_lines = SAColumn('ds_comment_lines', MutationList.as_mutable(JSONEncodedObj))
     header_lines = SAColumn('ds_header_lines', MutationList.as_mutable(JSONEncodedObj))
-    widths = SAColumn('ds_widths', MutationList.as_mutable(JSONEncodedObj))
     description = SAColumn('ds_description', Text)
     file = SAColumn('ds_file', Text)
     urltype = SAColumn('ds_urltype', Text) # null or zip
@@ -80,9 +85,6 @@ class DataSource(Base, DictableMixin):
     __table_args__ = (
         UniqueConstraint('ds_d_vid', 'ds_name', name='_uc_columns_1'),
     )
-
-    columns = relationship(SourceColumn, backref='table', order_by="asc(SourceColumn.position)",
-                           cascade="all, delete-orphan", lazy='joined')
 
     def get_filetype(self):
         from os.path import splitext
@@ -124,16 +126,6 @@ class DataSource(Base, DictableMixin):
 
         return None
 
-    def add_column(self, position, header,  datatype ):
-        pass
-
-        from scolumn import SourceColumn
-
-        self.columns.append(SourceColumn(
-            position = position,
-            header = header,
-        ))
-
     @property
     def dict(self):
         """A dict that holds key/values for all of the properties in the
@@ -143,7 +135,14 @@ class DataSource(Base, DictableMixin):
 
         """
         from collections import OrderedDict
-        return OrderedDict( (p.key,getattr(self, p.key)) for p in self.__mapper__.attrs )
+        return OrderedDict( (p.key,getattr(self, p.key)) for p in self.__mapper__.attrs
+                            if p.key not in ('_source_table', 'dest_table', 'd_vid', 't_vid','st_id', 'dataset', 'hash' ) )
+
+    def update(self, **kwargs):
+
+        for k, v in kwargs.items():
+            if hasattr(self, k):
+                setattr(self,k, v)
 
     def fetch(self, cache_fs = None):
         """Download the source and return a callable object that will open the file. """
@@ -211,6 +210,31 @@ class DataSource(Base, DictableMixin):
             return SourceRowGen( self, excel_iter(fstor.syspath(), self.segment ))
         else:
             raise ValueError("Unknown filetype: {} ".format(gft))
+
+
+    @property
+    def source_table(self):
+
+        if not self._source_table:
+            name = self.source_table_name if self.source_table_name else self.name
+            st =  self.dataset.source_table(name)
+            if not st:
+                st = self.dataset.new_source_table(name)
+
+            assert bool(st)
+
+            self._source_table = st
+
+        return self._source_table
+
+    @property
+    def column_map(self):
+        return self.source_table.column_map
+
+    @property
+    def widths(self):
+        return self.source_table.widths
+
 
 def excel_iter(file_name, segment):
     from xlrd import open_workbook

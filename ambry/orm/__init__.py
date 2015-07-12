@@ -359,6 +359,6 @@ from ambry.orm.table import Table
 from ambry.orm.config import Config
 from ambry.orm.dataset import Dataset
 from ambry.orm.columnstat import ColumnStat
-from ambry.orm.scolumn import SourceColumn
+from ambry.orm.source_table import SourceColumn, SourceTable
 from ambry.orm.source import DataSource
 from ambry.orm.database import Database

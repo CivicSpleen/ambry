@@ -336,7 +336,6 @@ class Inserter(Sink):
         else:
             raise Exception("Don't know what the row is")
 
-
         self.datafile.insert(row)
         self.row_num += 1
 
@@ -361,7 +360,7 @@ class Inserter(Sink):
                 raise
                 pass # No stats in the pipeline.
 
-    def __call__(self, *args, **kwargs):
+    def run(self, *args, **kwargs):
 
         itr = iter(self._source_pipe)
 

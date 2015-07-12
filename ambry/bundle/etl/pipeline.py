@@ -36,11 +36,11 @@ class Pipe(object):
 class Sink(Pipe):
     """A final stage pipe, which consumes its input and produces no output rows"""
 
-    def __call__(self, *args, **kwargs):
+    def run(self, count=None, *args, **kwargs):
 
-        while self._source_pipe.next():
-            pass
-
+        for i, row in  enumerate(self._source_pipe):
+            if count and i == count:
+                break
 
 
 class AddHeader(Pipe):
@@ -253,8 +253,6 @@ class PrintRows(Pipe):
             if i < self.count:
                 self.rows.append(append_row[:self.columns])
 
-
-
             yield row
 
     def __str__(self):
@@ -268,10 +266,14 @@ class PrintRows(Pipe):
 class PipelineSegment(list):
 
     def __init__(self, pipeline, name, *args):
-        list.__init__(self, args)
+        list.__init__(self)
 
         self.pipeline = pipeline
         self.name = name
+
+        for p in args:
+            self.append(p)
+
 
     def __getitem__(self, k):
 
@@ -317,13 +319,15 @@ from collections import OrderedDict, Mapping
 class Pipeline(OrderedDict):
     """Hold a defined collection of PipelineGroups, and when called, coalesce them into a single pipeline """
 
-    _groups_names = ['source', 'line_process', 'create_rows', 'row_intuit', 'coalesce_rows', 'mangle_header', 'normalize',
+    _groups_names = ['source', 'map_source', 'row_intuit', 'coalesce_rows', 'mangle_header', 'normalize',
                      'remap_to_table', 'type_intuit', 'cast_columns', 'statistics', 'write_to_table', 'sink']
 
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, partition = None, *args, **kwargs):
 
         super(Pipeline, self).__init__()
+
+        self.partition = partition
 
         for group_name in self._groups_names:
 
@@ -343,6 +347,24 @@ class Pipeline(OrderedDict):
         else:
             super(Pipeline, self).__setitem__(k, v)
 
+    def __getitem__(self, k):
+
+        import inspect
+
+        # Index by class. Looks through all of the segments for the first pipe with the given class
+        if inspect.isclass(k):
+
+            chain = self._collect()
+
+            matches = filter(lambda e: isinstance(e, k), chain)
+
+            if not matches:
+                raise IndexError("No entry for class: {}".format(k))
+
+            return matches[0]
+        else:
+            return super(Pipeline, self).__getitem__(k)
+
     def __getattr__(self, k):
         if not (k.startswith('__') or k.startswith('_OrderedDict__')):
             return self[k]
@@ -355,11 +377,7 @@ class Pipeline(OrderedDict):
 
         self[k] = v
 
-    def run(self):
-        return self.__call__()
-
-
-    def __call__(self, *args, **kwargs):
+    def _collect(self, args=None):
 
         chain = []
 
@@ -369,17 +387,25 @@ class Pipeline(OrderedDict):
         for group_name in self._groups_names:
             chain += self[group_name]
 
-        chain = list(args) + chain
+        chain = (list(args) if args else []) + chain
+
+        return chain
+
+    def run(self, *args, **kwargs):
+
+        chain = self._collect(args)
 
         last = reduce(lambda last, next: next.set_source_pipe(last), chain[1:], chain[0])
 
         if not self['sink']:
-            #Returns the iterator for the last stage, which, when called, iterates over the earleir stages
+            #Returns the iterator for the last stage, which, when iterated, iterates over the earleir stages
 
             return last
         else:
             # Returns the call value of the last stage, which consumes all of the other stages.
-            return last()
+
+            last.run()
+            return self
 
     def __str__(self):
 
@@ -401,7 +427,7 @@ def augment_pipeline(pl, head_pipe = None, tail_pipe = None):
     """
 
     for k, v in pl.items():
-        if len(v) > 0:
+        if v and len(v) > 0:
             if head_pipe and k != 'source': # Can't put anything before the source.
                 v.insert(0,head_pipe)
 
@@ -412,7 +438,7 @@ def sink(pipeline):
     """Drive a pipeline and discard the results. Used to run a meta pipeline, where the outputs are data
     stored in the pipes, not the final set of rows. """
 
-    for row in pipeline():
+    for row in pipeline.run():
         pass
 
     return pipeline

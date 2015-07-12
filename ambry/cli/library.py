@@ -96,7 +96,7 @@ def library_command(args, rc):
     from ..library import new_library
     from . import global_logger
 
-    l = new_library(rc.library(args.library_name))
+    l = new_library(rc)
 
     l.logger = global_logger
 
@@ -111,7 +111,7 @@ def library_drop(args, l, config):
     prt("Drop tables")
     l.database.enable_delete = True
     l.database.drop()
-    warn("Drop tables for %s" % l.database.dbname)
+
 
 
 def library_clean(args, l, config):

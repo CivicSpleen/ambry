@@ -26,7 +26,7 @@ class Bundle(Bundle):
 
             pl = self.do_build_pipeline(source)
 
-            for i, row in enumerate(pl()):
+            for i, row in enumerate(pl.run()):
                 print source.name, i, row
 
                 if i > 5:

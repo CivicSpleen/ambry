@@ -7,7 +7,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 import os
 
 
-from . import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat, DataSource, SourceColumn
+from . import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat, DataSource, SourceColumn, SourceTable
 from collections import namedtuple
 from ..util import get_logger
 
@@ -222,28 +222,40 @@ class Database(object):
         self.session.rollback()
         # self.close_session()
 
-    def clean(self, add_config_root=True):
-        from sqlalchemy.exc import OperationalError, IntegrityError
-        from ambry.orm.exc import DatabaseError
+    def clean(self, add_config_root=True, create=True):
 
-        s = self.session
+        for ds in self.datasets:
+            self.logger.info("Cleaning: {}".format(ds.name))
+            self.remove_dataset(ds)
+
+        self.remove_dataset(self.root_dataset)
+
+        self.create()
+
+        self.commit()
+
+    def drop(self):
+
+        # Should close connection before table drop to avoid hanging in postgres.
+        # http://docs.sqlalchemy.org/en/rel_0_8/faq.html#metadata-schema
+
+        for ds in self.datasets:
+            self.logger.info("Cleaning: {}".format(ds.name))
+            try:
+                self.remove_dataset(ds)
+            except:
+                pass
 
         try:
-            s.query(Config).delete()
-            s.query(ColumnStat).delete()
-            s.query(File).delete()
-            s.query(Code).delete()
-            s.query(Column).delete()
-            s.query(Table).update({Table.p_vid: None})  # Prob should be handled with a cascade on relationship.
-            s.query(Partition).delete()
-            s.query(Table).delete()
-            s.query(Dataset).delete()
-        except (OperationalError, IntegrityError) as e:
-            # Tables dont exist?
-            raise DatabaseError("Failed to data records from {}: {}".format(self.dsn, str(e)))
+            self.remove_dataset(self.root_dataset)
+        except:
+            pass
 
-        if add_config_root:
-            self._add_config_root()
+        self.metadata.drop_all()
+
+        self.commit()
+
+        self.create()
 
         self.commit()
 
@@ -268,18 +280,13 @@ class Database(object):
     def clone(self):
         return self.__class__(self.driver, self.server, self.dbname, self.username, self.password)
 
-    def drop(self):
 
-        # Should close connection before table drop to avoid hanging in postgres.
-        # http://docs.sqlalchemy.org/en/rel_0_8/faq.html#metadata-schema
-
-        pass
 
     def create_tables(self):
 
         from sqlalchemy.exc import OperationalError
 
-        tables = [Dataset, Config, Table, Column, Partition, File, Code, ColumnStat, DataSource, SourceColumn]
+        tables = [Dataset, Config, Table, Column, Partition, File, Code, ColumnStat, SourceColumn, SourceTable, DataSource]
 
         try:
             self.drop()
@@ -338,8 +345,7 @@ class Database(object):
     def _clean_config_root(self):
         """Hack need to clean up some installed databases."""
 
-        ds = self.session.query(Dataset).filter(
-            Dataset.id_ == ROOT_CONFIG_NAME).one()
+        ds = self.session.query(Dataset).filter(Dataset.id_ == ROOT_CONFIG_NAME).one()
 
         ds.id_ = ROOT_CONFIG_NAME
         ds.name = ROOT_CONFIG_NAME
@@ -412,6 +418,7 @@ class Database(object):
 
         return ds
 
+    @property
     def datasets(self):
         """
         Return all datasets

@@ -77,6 +77,7 @@ class Partition(Base, DictableMixin):
 
     stats = relationship(ColumnStat, backref='partition', cascade="all, delete, delete-orphan")
 
+
     @property
     def identity(self):
         """Return this partition information as a PartitionId."""
@@ -273,6 +274,30 @@ class Partition(Base, DictableMixin):
         s = self.bundle.database.session
         s.merge(self.record)
         s.commit()
+
+    @property
+    def row(self):
+        from collections import OrderedDict
+
+        # Use an Ordered Dict to make it friendly to creating CSV files.
+
+        d = OrderedDict([('table', self.table.name)] +
+                        [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
+                         if p.key not in ['sequence_id', 'vid', 'id', 'd_vid', 't_vid', 'min_key', 'max_key',
+                                          'installed', 'ref', 'count', 'state', 'data', 'space_coverage',
+                                          'time_coverage',
+                                          'grain_coverage', 'name', 'vname', 'fqname', 'cache_key']])
+
+        return d
+
+    def update(self, **kwargs):
+
+        if 'table' in kwargs:
+            del kwargs['table']  # In source_schema.csv, this is the name of the table, not the object
+
+        for k, v in kwargs.items():
+            if hasattr(self, k):
+                setattr(self, k, v)
 
     @staticmethod
     def before_insert(mapper, conn, target):

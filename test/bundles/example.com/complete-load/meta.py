@@ -1,5 +1,23 @@
 from ambry.bundle import Bundle
 
+from ambry.bundle.etl.pipeline import Sink
+from ambry.bundle.etl.intuit import TypeIntuiter
+
+class MakeSourceTable(Sink):
+    def run(self, *args, **kwargs):
+        super(MakeSourceTable, self).run(500)
+
+        ti = self.pipeline[TypeIntuiter]
+
+        if not self.source.st_id:
+
+            # Create the source table for matting.
+            for c in ti.columns:
+                self.source.source_table.add_column(c.position, source_header = c.header, dest_header = c.header,
+                                                    datatype=c.resolved_type)
+
+        self.source.dataset.commit()
+
 class Bundle(Bundle):
     """ """
 
@@ -12,15 +30,17 @@ class Bundle(Bundle):
         return Pipeline(
             source=source.fetch().source_pipe(),
             coalesce_rows=MergeHeader(),
-            mangle_header=MangleHeader()
+            mangle_header=MangleHeader(),
+            type_intuit=TypeIntuiter(),
+            sink=MakeSourceTable()
         )
 
     def meta(self):
 
-        pl = self.meta_pipeline('rent07')
+        for i, source in enumerate(self.sources):
 
-        for i, row in enumerate(pl()):
-            print row
+            #if source.name != 'rent07':
+            #    continue
 
-            if i > 5:
-                break
+            pl = self.do_meta_pipeline(source)
+            pl.run()
