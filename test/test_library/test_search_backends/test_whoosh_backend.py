@@ -68,12 +68,12 @@ class WhooshSearchBackendTest(TestBase):
 
 @unittest.skip('Not ready')
 class DatasetWhooshIndexTest(TestBase):
-def test_intializes_index(self):
-        rc = self.get_rc()
-        library = new_library(rc)
-        backend = WhooshSearchBackend(library)
-        self.assertIsNotNone(backend.dataset_index.index)
-        self.assertTrue(os.path.exists(backend.dataset_index.index_dir))
+    def test_intializes_index(self):
+            rc = self.get_rc()
+            library = new_library(rc)
+            backend = WhooshSearchBackend(library)
+            self.assertIsNotNone(backend.dataset_index.index)
+            self.assertTrue(os.path.exists(backend.dataset_index.index_dir))
 
     # reset tests
     # FIXME: Implement.
