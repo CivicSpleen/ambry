@@ -13,6 +13,7 @@ Complex Source Files
 * `Multiple files in a zip file`_
 * `Multiple sheets in an Excel file`_
 * `Nulls or other illegal characters`_
+* `Casting errors`_
 * `Character Encoding`_
 * `Tabs or Commas or Excel? Forcing a file type`_
 * `ZIP Urls without a ZIP Extension`_
