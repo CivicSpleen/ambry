@@ -251,6 +251,7 @@ class Column(Base):
         }
 
         for col_type, (sla_type, py_type, sql_type) in cls.types.items():
+
             if py_type == type_map.get(py_type_in, py_type_in):
                 if col_type == 'blob' and name and name.endswith('geometry'):
                     return cls.DATATYPE_GEOMETRY

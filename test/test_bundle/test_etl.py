@@ -19,7 +19,7 @@ class Test(TestBase):
     def setUp(self):
         from fs.opener import fsopendir
 
-        self.fs = fsopendir('/tmp/test/')
+        self.fs = fsopendir('mem://test')
 
     def test_csv(self):
         from ambry.bundle.etl.partition import new_partition_data_file
@@ -369,9 +369,10 @@ class Test(TestBase):
             remap_to_table = MapHeader({'gvid': 'county', 'renter_cost_gt_30': 'renter_cost'}),
         )
 
+
         augment_pipeline(pl, PrintRows)
 
-        for i, row in enumerate(pl()):
+        for i, row in enumerate(pl.run()):
 
             if i == 0:
                 self.assertEqual(['id', 'county', 'renter_cost', 'renter_cost_gt_30_cv',
@@ -406,6 +407,7 @@ class Test(TestBase):
         """Build the simple bundle"""
 
         b = self.setup_bundle('complete-load')
+
         b.sync()
         b = b.cast_to_subclass()
         self.assertEquals('synced', b.state)
@@ -414,7 +416,7 @@ class Test(TestBase):
         b.do_build()
 
     def test_complete_load_meta(self):
-        """Build the simple bundle"""
+        """"""
 
         b = self.setup_bundle('complete-load')
         b.sync()
@@ -422,9 +424,23 @@ class Test(TestBase):
 
         b.do_meta()
 
+        self.assertIn('position', b.source_fs.getcontents('source_schema.csv'))
+        self.assertIn('renter_cost_gt_30',b.source_fs.getcontents('source_schema.csv'))
+
+        #self.assertEquals(6, len(b.dataset.source_tables))
+
+        #print list(b.source_fs.listdir())
+        #print b.source_fs.getcontents('source_schema.csv')
+
+        s = b.source('rent07')
+
+        #print s.column_map
+
     def test_type_intuition(self):
         from ambry.bundle.etl.pipeline import sink
         from ambry.bundle.etl.intuit import TypeIntuiter
+        from ambry.orm.column import Column
+        import datetime
 
         b = self.setup_bundle('process')
 
@@ -436,23 +452,26 @@ class Test(TestBase):
 
         pl = sink(b.do_meta_pipeline('types1'))
 
-        print str(pl)
+        ti = pl.type_intuit[TypeIntuiter]
 
-        s = b.schema
+        ti_cols =  list(ti.columns)
+
+        self.assertEqual('int float string time date'.split(), [ e.header for e in ti_cols] )
+        self.assertEqual([int,float,str,datetime.time, datetime.date], [ e.resolved_type for e in ti_cols])
 
         t = b.dataset.new_table(pl.source.source.name)
-
-        from ambry.orm.column import Column
 
         for c in pl.type_intuit[TypeIntuiter].columns:
             t.add_column(c.header, datatype = Column.convert_python_type(c.resolved_type))
 
         b.commit()
 
-        self.dump_database('columns')
+        self.assertEqual('int float string time date'.split(), [c.name for c in b.dataset.tables[0].columns ])
+        self.assertEqual([u'integer', u'real', u'varchar', u'time', u'date'], [c.datatype for c in b.dataset.tables[0].columns])
 
         from ambry.orm.file import File
         b.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
 
-        print b.do_sync()
+        self.assertEqual(6, sum( e[1] == 'rtf' for e in b.do_sync() ))
+
 

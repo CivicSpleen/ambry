@@ -318,7 +318,11 @@ class Table(Base, DictableMixin):
 
         sd = dict(stats)
 
-        for i, c in enumerate(self.columns):
+        for c in self.columns:
+
+            if not c in sd:
+                continue
+
             stat = sd[i]
 
             if stat.size and stat.size > c.size:

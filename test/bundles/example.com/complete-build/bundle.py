@@ -7,29 +7,34 @@ class Bundle(Bundle):
     """ """
 
     def build(self):
-        import uuid
-        import random
-        from datetime import date
-        from geoid import civick
 
-        table = 'example'
+        from ambry.bundle.etl.pipeline import Pipe, PrintRows
 
-        categorical = ['red', 'blue', 'green', 'yellow', 'black']
-        year = range(2000,2003)
-        states = range(2)
-        counties = range(1,4)
-        tracts = range(1,6)
-        bgs = range(1, 6)
+        class RandomSourcePipe(Pipe):
 
-        for j, space in enumerate(['nv','ut','ca']):
-            p = self.partitions.new_partition(table=table, space=space, time = 2010+j)
-            p.clean()
+            def __init__(self, j, space):
+                self.j = j
+                self.space = space
 
-            rc = random.choice
+            def __iter__(self):
 
-            with p.inserter() as ins:
+                import uuid
+                import random
+                from datetime import date
+                from geoid import civick
+                from collections import OrderedDict
+
+                categorical = ['red', 'blue', 'green', 'yellow', 'black']
+                year = range(2000,2003)
+                states = range(2)
+                counties = range(1,4)
+                tracts = range(1,6)
+                bgs = range(1, 6)
+
+                rc = random.choice
+
                 for i in range(6000):
-                    row = dict()
+                    row = OrderedDict()
 
                     row['uuid'] = str(uuid.uuid4())
                     row['int'] = random.randint(0, 100)
@@ -39,10 +44,20 @@ class Bundle(Bundle):
                     row['gaussian'] = random.gauss(100,15)
                     row['triangle'] = random.triangular(500,1500,1000)
                     row['exponential'] = random.expovariate(.001)
-                    row['year'] = rc(year)-j
-                    row['date'] = date(rc(year)+j, random.randint(1,12), random.randint(1,28))
+                    row['year'] = rc(year)-self.j
+                    row['date'] = date(rc(year)+self.j, random.randint(1,12), random.randint(1,28))
 
                     row['bg_gvid'] = str(civick.Blockgroup(rc(states),rc(counties),rc(tracts),rc(bgs)))
-                    ins.insert(row)
+
+                    if i == 0:
+                        yield row.keys()
+
+                    yield row.values()
+
+        for j, space in enumerate(['nv', 'ut', 'ca']):
+            p = self.partitions.new_partition(table='example', space=space, time=2010 + j)
+            p.clean()
+
+            p.run(source=RandomSourcePipe(j,space))
 
         return True

@@ -57,7 +57,9 @@ class Dataset(Base):
 
     files = relationship('File', backref='dataset', cascade="all, delete-orphan")
 
-    colmaps = relationship('ColumnMap', backref='dataset', cascade="all, delete-orphan")
+    source_tables = relationship('SourceTable', backref='dataset', cascade="all, delete-orphan")
+
+    source_columns = relationship('SourceColumn', backref='dataset', cascade="all, delete-orphan")
 
     sources = relationship('DataSource', backref='dataset', cascade="all, delete-orphan")
 
@@ -195,12 +197,45 @@ class Dataset(Base):
 
         raise NotFoundError("Failed to find partition for ref '{}' in dataset '{}'".format(ref, self.name))
 
+    def new_source(self, name, **kwargs):
+        from source import DataSource
+
+        kwargs['d_vid'] = self.vid
+
+        source = DataSource(name=name, **kwargs)
+
+        object_session(self).add(source)
+
+        return source
+
     def source_file(self,name):
         from source import DataSource
         source =  (object_session(self).query(DataSource)
                 .filter(DataSource.name == name).filter(DataSource.d_vid == self.vid)).first()
 
         return source
+
+    def new_source_table(self,name):
+        from source_table import  SourceTable
+
+        extant = next(iter(e for e in self.source_tables if e.name == name), None)
+
+        if extant:
+            return extant
+
+        st = SourceTable(name=name, d_vid=self.vid)
+
+        self.source_tables.append(st)
+
+        return st
+
+    def source_table(self,name):
+
+        for st in self.source_tables:
+            if st.name == name:
+                return st
+
+        return None
 
     def bsfile(self, name):
         """Return a Build Source file ref, creating a new one if the one requested does not exist"""

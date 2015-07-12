@@ -77,6 +77,7 @@ class Partition(Base, DictableMixin):
 
     stats = relationship(ColumnStat, backref='partition', cascade="all, delete, delete-orphan")
 
+
     @property
     def identity(self):
         """Return this partition information as a PartitionId."""
@@ -126,13 +127,20 @@ class Partition(Base, DictableMixin):
 
         sd = dict(stats)
 
-        for i,c in enumerate(self.table.columns):
+        for c in  self.table.columns:
 
-            cs = ColumnStat(p_vid=self.vid, d_vid = self.d_vid, c_vid=c.vid, **sd[i].dict)
+            if not c.name in sd:
+
+                continue
+
+            d = sd[c.name].dict
+
+            del d['name']
+            del d['flags']
+            cs = ColumnStat(p_vid=self.vid, d_vid = self.d_vid, c_vid=c.vid, **d)
 
             self.stats.append(cs)
 
-        return cs
 
     def parse_gvid_or_place(self, gvid_or_place):
         from geoid.civick import GVid
@@ -168,14 +176,18 @@ class Partition(Base, DictableMixin):
         tcov = set()
         grains = set()
 
-        for i, c in enumerate(self.table.columns):
-            if sd[i].is_gvid:
-                scov |= set(x for x in isimplify(GVid.parse(gvid) for gvid in sd[i].uniques))
-                grains |= set(GVid.parse(gvid).summarize() for gvid in sd[i].uniques)
-            elif sd[i].is_year:
-                tcov |= set(int(x) for x in sd[i].uniques)
-            elif sd[i].is_date:
-                tcov |= set(parser.parse(x).year if isinstance(x,basestring) else x.year for x in sd[i].uniques)
+        for c in self.table.columns:
+            if not c.name in sd:
+                continue
+
+            if sd[c.name].is_gvid:
+                scov |= set(x for x in isimplify(GVid.parse(gvid) for gvid in sd[c.name].uniques))
+                grains |= set(GVid.parse(gvid).summarize() for gvid in sd[c.name].uniques)
+            elif sd[c.name].is_year:
+                tcov |= set(int(x) for x in sd[c.name].uniques)
+            elif sd[c.name].is_date:
+                tcov |= set(parser.parse(x).year if isinstance(x,basestring) else x.year for x in sd[c.name].uniques)
+
 
         ## Space Coverage
 
@@ -262,6 +274,30 @@ class Partition(Base, DictableMixin):
         s = self.bundle.database.session
         s.merge(self.record)
         s.commit()
+
+    @property
+    def row(self):
+        from collections import OrderedDict
+
+        # Use an Ordered Dict to make it friendly to creating CSV files.
+
+        d = OrderedDict([('table', self.table.name)] +
+                        [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
+                         if p.key not in ['sequence_id', 'vid', 'id', 'd_vid', 't_vid', 'min_key', 'max_key',
+                                          'installed', 'ref', 'count', 'state', 'data', 'space_coverage',
+                                          'time_coverage',
+                                          'grain_coverage', 'name', 'vname', 'fqname', 'cache_key']])
+
+        return d
+
+    def update(self, **kwargs):
+
+        if 'table' in kwargs:
+            del kwargs['table']  # In source_schema.csv, this is the name of the table, not the object
+
+        for k, v in kwargs.items():
+            if hasattr(self, k):
+                setattr(self, k, v)
 
     @staticmethod
     def before_insert(mapper, conn, target):

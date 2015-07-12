@@ -17,7 +17,6 @@ def test_float(v):
     except:
         return 0
 
-
 def test_int(v):
     # Fixed-width integer codes are actually strings.
     # if v and v[0] == '0' and len(v) > 1:
@@ -31,13 +30,11 @@ def test_int(v):
     except:
         return 0
 
-
 def test_string(v):
     if isinstance(v, basestring):
         return 1
     else:
         return 0
-
 
 def test_datetime(v):
     """Test for ISO datetime."""
@@ -57,7 +54,6 @@ def test_datetime(v):
             return 0
 
     return 1
-
 
 def test_time(v):
     if not isinstance(v, basestring):
@@ -184,8 +180,8 @@ class Column(object):
 
                 return type_
 
-    @property
-    def resolved_type(self):
+
+    def _resolved_type(self):
         """Return the type for the columns, and a flag to indicate that the
         column has codes."""
         import datetime
@@ -217,6 +213,14 @@ class Column(object):
             return num_type, True
         else:
             return num_type, False
+
+    @property
+    def resolved_type(self):
+        return self._resolved_type()[0]
+
+    @property
+    def has_codes(self):
+        return self._resolved_type()[1]
 
 
 class TypeIntuiter(Pipe):
@@ -320,14 +324,13 @@ class TypeIntuiter(Pipe):
     def _dump(self):
 
         for v in self.columns:
-            rt = v.resolved_type
 
             d = dict(
                 position = v.position,
                 header=v.header,
                 length=v.length,
-                resolved_type=rt[0],
-                has_codes=rt[1],
+                resolved_type=v.resolved_type,
+                has_codes=v.has_codes,
                 count=v.count,
                 ints=v.type_counts.get(int, None),
                 floats=v.type_counts.get(float, None),

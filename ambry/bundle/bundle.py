@@ -191,9 +191,6 @@ class Bundle(object):
 
         from etl.pipeline import Pipeline, MergeHeader, MangleHeader, MapHeader
 
-        if isinstance(source, basestring):
-            source = self.source(source)
-
         return Pipeline(
             source=source.fetch().source_pipe(),
             coalesce_rows=MergeHeader(),
@@ -356,6 +353,9 @@ class Bundle(object):
         if ds.bsfile(File.BSFILE.SOURCES).has_contents:
             self.dataset.sources[:] = []
 
+        if ds.bsfile(File.BSFILE.SOURCESCHEMA).has_contents:
+            self.dataset.source_tables[:] = []
+
         if ds.bsfile(File.BSFILE.SCHEMA).has_contents:
             self.dataset.tables[:] = []
 
@@ -376,6 +376,8 @@ class Bundle(object):
 
     def download(self):
         """Download referenced source files and bundles. BUndles will be instlaled in the warehouse"""
+
+        raise NotImplementedError()
 
         for source in self.dataset.sources:
             print source
@@ -433,8 +435,16 @@ class Bundle(object):
             return False
 
         self.build_source_files.file(File.BSFILE.META).record_to_objects()
-        self.build_source_files.file(File.BSFILE.SCHEMA).record_to_objects()
+        # SOURCES must come before SOURCESCHEMA, to create required source_tables.
+        # The SOURCESCHEMA r_to_o proess won't load columns for source tables that weren't created
+        # beforehand.
         self.build_source_files.file(File.BSFILE.SOURCES).record_to_objects()
+        self.build_source_files.file(File.BSFILE.SOURCESCHEMA).record_to_objects()
+        self.build_source_files.file(File.BSFILE.SCHEMA).record_to_objects()
+
+        self.commit()
+
+
 
         return True
 
@@ -456,15 +466,29 @@ class Bundle(object):
     ##
 
     def do_meta(self, force=False):
+        """
+        Synchronize with the files and run the meta pipeline, possibly creating new objects. Then, write the
+        objects back to file records and synchronize.
 
-        self.sync()
+        :param force:
+        :return:
+        """
+        from ambry.orm.file import File
+
+        self.do_sync()
 
         self.do_prepare()
 
+        self.log("---- Meta ---- ")
+
         self.meta()
 
-        self.sync()
+        self.build_source_files.file(File.BSFILE.META).objects_to_record()
+        self.build_source_files.file(File.BSFILE.SOURCESCHEMA).objects_to_record()
+        self.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
+        self.build_source_files.file(File.BSFILE.SOURCES).objects_to_record()
 
+        self.do_sync()
     ##
     ## Build
     ##

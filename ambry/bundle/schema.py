@@ -805,7 +805,8 @@ class Schema(object):
 
                 else:
 
-                    type_, has_codes = col.resolved_type()
+                    type_ = col.resolved_type()
+                    has_codes = col.has_codes
 
                     description = re.sub('[\r\n\s]+', ' ', col.description).strip() if col.description else ''
 
@@ -817,32 +818,5 @@ class Schema(object):
 
         self.write_schema()
 
-    def update_from_iterator(self, table_name, iterator, header=None,
-                             max_n=None, logger=None):
-        """
 
-        :param table_name:
-        :param iterator:
-        :param header: If list, a list of columns names. If an OrderedDict, the keys are the column
-        names, and the values are column descriptions.
-        :param max_n:
-        :param logger:
-        :return:
-        """
-        from util.intuit import Intuiter
-
-        from collections import OrderedDict
-
-        assert isinstance(header, (type(None), OrderedDict, list, tuple))
-
-        if header and isinstance(header, OrderedDict):
-            descriptions = header
-            header = header.keys()
-        else:
-            descriptions = None
-
-        intuit = Intuiter(header=header, logger=logger)
-        intuit.iterate(iterator, max_n=max_n)
-
-        self.update_from_intuiter(table_name, intuit, descriptions=descriptions)
 

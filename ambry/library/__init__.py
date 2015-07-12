@@ -113,7 +113,7 @@ class Library(object):
     @property
     def datasets(self):
         """Return all datasets"""
-        return self._db.datasets()
+        return self._db.datasets
 
     def new_bundle(self,assignment_class = None, **kwargs):
         """

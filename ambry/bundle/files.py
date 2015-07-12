@@ -168,8 +168,14 @@ class RowBuildSourceFile(BuildSourceFile):
 
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
+        rows = []
         with self._fs.open(fn_path) as f:
-            fr.update_contents(msgpack.packb([ [e if e.strip() != ''  else None for e in row] for row in csv.reader(f)]))
+            for row in csv.reader(f):
+                row = [e if e.strip() != ''  else None for e in row]
+                if any(bool(e) for e in row):
+                    rows.append(row)
+
+        fr.update_contents(msgpack.packb(rows))
 
         fr.mime_type = 'application/msgpack'
         fr.source_hash = self.fs_hash()
@@ -180,8 +186,6 @@ class RowBuildSourceFile(BuildSourceFile):
         """Create a filesystem file from a File"""
         import unicodecsv as csv
 
-        import msgpack
-
         fr = self._dataset.bsfile(self._file_const)
 
         fn_path = file_name(self._file_const)
@@ -191,7 +195,6 @@ class RowBuildSourceFile(BuildSourceFile):
                 w = csv.writer(f)
                 for row in fr.unpacked_contents:
                     w.writerow(row)
-
 
 class DictBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
@@ -326,15 +329,33 @@ class SourcesFile(RowBuildSourceFile):
             else:
                 d = dict(zip(header, row))
 
+                if 'widths' in d:
+                    del d['widths'] # Obsolete column in old spreadsheets.
+
                 if 'table' in d:
-                    d['table_name'] = d['table']
+                    d['dest_table_name'] = d['table']
                     del d['table']
+
+                if 'dest_table' in d:
+                    d['dest_table_name'] = d['dest_table']
+                    del d['dest_table']
+
+                if 'source_table' in d:
+                    d['source_table_name'] = d['source_table']
+                    del d['source_table']
 
                 d['d_vid'] = self._dataset.vid
 
-                s.merge(DataSource(**d))
+                ds = self._dataset.source_file(d['name'])
+                if ds:
+                    ds.update(**d)
+                else:
 
-        self._dataset._database.commit()
+                    ds = DataSource(**d)
+
+                s.merge(ds)
+
+            self._dataset._database.commit()
 
     def objects_to_record(self):
         pass
@@ -485,7 +506,6 @@ class SchemaFile(RowBuildSourceFile):
         # Need to get all of the indexes figured out first, since there are a variable number of indexes.
         for table in self._dataset.tables:
 
-
             if table.proto_vid:
                 opt_fields_set.add("proto_vid")
 
@@ -504,7 +524,7 @@ class SchemaFile(RowBuildSourceFile):
                     if not index_set:
                         continue  # HACK. This probably should not happen
 
-                    for idx in index_set.split(','):
+                    for idx in index_set:
 
                         idx = idx.replace(table.name + '_', '')
                         if idx not in indexes:
@@ -574,7 +594,7 @@ class SchemaFile(RowBuildSourceFile):
                 # so it can hold the id of the table instead. ( The columns's id field is not first,
                 # but the column record for the tables id field is first.
                 if row['is_pk']:
-                    row['id'] = table.id_
+                    row['id'] = table.id
                     if table.proto_vid:
                         row['proto_vid'] = table.proto_vid
 
@@ -624,8 +644,74 @@ class SchemaFile(RowBuildSourceFile):
 
             last_table = row['table']
 
-        print  f.getvalue()
+class SourceSchemaFile(RowBuildSourceFile):
 
+    def record_to_objects(self):
+        from ambry.dbexceptions import ConfigurationError
+        bsfile = self._dataset.bsfile(self._file_const)
+
+        failures = set()
+        for row in bsfile.dict_row_reader:
+            st = self._dataset.source_table(row['table'])
+
+            if not st:
+                st = self._dataset.new_source_table(row['table'])
+
+            del row['table']
+            st.add_column(**row) # Create or update
+
+        if failures:
+            raise ConfigurationError("Failed to load source schema, missing sources: {} ".format(failures))
+
+    def objects_to_record(self):
+
+        import msgpack
+        bsfile = self._dataset.bsfile(self._file_const)
+
+        rows = []
+        for table in self._dataset.source_tables:
+
+            for column in table.columns:
+                row = column.row
+                if not rows:
+                    rows.append(row.keys())
+
+                rows.append(row.values())
+
+        bsfile.mime_type = 'application/msgpack'
+        bsfile.update_contents(msgpack.packb(rows))
+
+        self._dataset._database.commit()
+
+class PartitionsFile(RowBuildSourceFile):
+
+    def record_to_objects(self):
+        from ambry.dbexceptions import ConfigurationError
+        bsfile = self._dataset.bsfile(self._file_const)
+
+        failures = set()
+        for row in bsfile.dict_row_reader:
+            self._dataset.new_partition(**row) # Create or update
+
+
+    def objects_to_record(self):
+
+        import msgpack
+        bsfile = self._dataset.bsfile(self._file_const)
+
+        rows = []
+        for table in self._dataset.partitions:
+            for column in table.columns:
+                row = column.row
+                if not rows:
+                    rows.append(row.keys())
+
+                rows.append(row.values())
+
+        bsfile.mime_type = 'application/msgpack'
+        bsfile.update_contents(msgpack.packb(rows))
+
+        self._dataset._database.commit()
 
 
 file_info_map = {
@@ -634,8 +720,9 @@ file_info_map = {
     File.BSFILE.DOC: ('documentation.md',StringSourceFile),
     File.BSFILE.META: ('bundle.yaml',MetadataFile),
     File.BSFILE.SCHEMA: ('schema.csv',SchemaFile),
-    File.BSFILE.COLMAP: ('column_map.csv',RowBuildSourceFile),
-    File.BSFILE.SOURCES: ('sources.csv',SourcesFile)
+    File.BSFILE.SOURCESCHEMA: ('source_schema.csv', SourceSchemaFile),
+    File.BSFILE.SOURCES: ('sources.csv',SourcesFile),
+    File.BSFILE.PARTITIONS: ('partitions.csv', PartitionsFile)
 }
 
 def file_name(const):

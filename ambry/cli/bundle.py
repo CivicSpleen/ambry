@@ -144,7 +144,9 @@ def bundle_parser(cmd):
                             help='Dump files')
     group.add_argument('-s', '--sources', default=False, action="store_const", const='datasources', dest='table',
                        help='Dump sources')
-    group.add_argument('-p', '--partitions', default=False, action="store_const", const='partitions', dest='table',
+    group.add_argument('-T', '--source_tables', default=False, action="store_const", const='sourcetables', dest='table',
+                       help='Dump source tables')
+    group.add_argument('-p', '--partitions', default=False, action="store_const", const='partitions', dest='partitions',
                        help='Dump partitions')
     command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
 
@@ -207,10 +209,9 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='prepare')
 
     command_p.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
-    command_p.add_argument('-r', '--rebuild', default=False, action="store_true",
-                           help='Rebuild the schema, but dont delete built files')
-    command_p.add_argument('-f', '--force', default=False, action="store_true",
-                           help='Force build. ( --clean is usually preferred ) ')
+    command_p.add_argument('-s', '--sync', default=False, action="store_true",
+                           help='Syncrhonize before building')
+
     command_p.add_argument('term', nargs='?', type=str, help='bundle reference')
 
     #
@@ -478,25 +479,32 @@ def bundle_sync(args, l, rc):
 
     b.set_last_access(Bundle.STATES.SYNCED)
 
-def bundle_meta(args, b, st, rc):
-    raise NotImplementedError()
+def bundle_meta(args, l, rc):
+    from ambry.bundle import Bundle
 
-    # The meta phase does not require a database, and should write files
-    # that only need to be done once.
-    if b.pre_meta():
-        b.log("---- Meta ----")
-        if b.meta():
-            b.post_meta()
-            b.log("---- Done Meta ----")
-        else:
-            b.log("---- Meta exited with failure ----")
-            return False
-    else:
-        b.log("---- Skipping Meta ---- ")
+    b = using_bundle(args, l).cast_to_metasubclass()
+
+    if args.clean:
+        b.do_clean()
+
+    b.do_sync()
+
+    # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
+    b = using_bundle(args, l).cast_to_metasubclass()
+    b.do_meta()
+    b.set_last_access(Bundle.STATES.META)
 
 
 def bundle_prepare(args, l, rc):
     from ambry.bundle import Bundle
+
+    if args.clean or args.sync:
+        b = using_bundle(args, l).cast_to_subclass()
+        if args.clean:
+            b.do_clean()
+        if args.sync:
+            b.do_sync()
+
     b = using_bundle(args, l).cast_to_subclass()
     b.do_prepare()
     b.set_last_access(Bundle.STATES.PREPARED)
@@ -505,12 +513,14 @@ def bundle_prepare(args, l, rc):
 def bundle_build(args, l, rc):
     from ambry.bundle import Bundle
 
-    b = using_bundle(args, l)
+    if args.clean or args.sync:
+        b = using_bundle(args, l).cast_to_subclass()
+        if args.clean:
+            b.do_clean()
+        if args.sync:
+            b.do_sync()
 
-    if args.sync:
-        b.do_sync()
-
-    b = b.cast_to_subclass()
+    b = using_bundle(args, l).cast_to_subclass()
 
     if args.clean:
         if not b.do_clean():
@@ -720,20 +730,39 @@ def bundle_dump(args, l, rc):
 
     elif args.table == 'datasources':
 
-        headers = []
         records = []
         for i, row in enumerate(b.dataset.sources):
-            if not headers:
-                headers = row.keys()
+            if not records:
+                records.append(row.dict.keys())
 
-            records.append(row.values())
+            records.append(row.dict.values())
+
+        # Transpose, remove empty columns, transpose back
+        records = zip(*[row for row in zip(*records) if bool(filter(bool, row[1:]))])
+
+        if records:
+            headers, records = records[0], records[1:]
+        else:
+            headers, records = [], []
+
+        records =  sorted(records, key=lambda row: (row[0]))
+
+    elif args.table == 'sourcetables':
 
 
-        records = sorted(records, key=lambda row: (row[0]))
+        records = []
+        for t in b.dataset.source_tables:
+            for c in t.columns:
+                if not records:
+                    records.append(c.row.keys())
+
+                records.append(c.row.values())
+
+        if records:
+            headers, records = records[0], records[1:]
+        headers = []
 
     print tabulate.tabulate(records, headers = headers)
-
-    print
 
 def bundle_config_scrape(args, b, st, rc):
 
@@ -952,8 +981,7 @@ def bundle_import(args, l, rc):
 
 def bundle_export(args, l, rc):
     from fs.opener import fsopendir
-    import yaml
-    from ambry.orm.exc import NotFoundError
+    import os
 
     b = using_bundle(args,l)
 

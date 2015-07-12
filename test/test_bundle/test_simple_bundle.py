@@ -14,7 +14,6 @@ class Test(TestBase):
         self.assertIn('bundle.py', dir_list)
         self.assertIn('sources.csv', dir_list)
         self.assertIn('bundle.yaml', dir_list)
-        self.assertIn('column_map.csv', dir_list)
         self.assertIn('schema.csv', dir_list)
         self.assertIn('documentation.md', dir_list)
 
@@ -25,13 +24,14 @@ class Test(TestBase):
 
         b.sync()  # This will sync the files back to the bundle's source dir
 
-        self.assertEquals(7, len(b.dataset.files))
+        self.assertEquals(8, len(b.dataset.files))
         file_names = [f.path for f in b.dataset.files]
 
-        self.assertEqual([u'bundle.py', u'documentation.md', u'sources.csv', u'bundle.yaml',
-                          u'build_meta', u'schema.csv', u'column_map.csv'], file_names)
 
-        self.assertEqual(14, len(b.dataset.configs))
+        self.assertEqual([u'sources.csv', u'bundle.py', u'sourceschema', u'build_meta', u'documentation.md',
+                          u'partitions', u'bundle.yaml', u'schema.csv'], file_names)
+
+        self.assertEqual(13, len(b.dataset.configs))
 
         self.assertFalse(b.is_prepared)
         self.assertFalse(b.is_built)
@@ -79,7 +79,7 @@ class Test(TestBase):
 
         self.assertEquals(10001, len(c.splitlines()))
 
-        self.assertEquals(12, len(b.dataset.stats))
+        self.assertEquals(11, len(b.dataset.stats))
 
         self.assertEquals('built', b.state)
 
@@ -113,7 +113,7 @@ class Test(TestBase):
 
         self.assertEquals(6001, len(c.splitlines()))
 
-        self.assertEquals(39, len(b.dataset.stats))
+        self.assertEquals(33, len(b.dataset.stats))
 
         self.assertEquals('built', b.state)
 
