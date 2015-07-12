@@ -49,10 +49,6 @@ class Table(Base, DictableMixin):
     columns = relationship(Column, backref='table', order_by="asc(Column.sequence_id)",
                            cascade="all, delete-orphan", lazy='joined')
 
-    def __init__(self,  **kwargs):
-
-        super(Table, self).__init__(**kwargs)
-
     def link_columns(self, other):
         """Return columns that can be used to link another table to this one"""
 

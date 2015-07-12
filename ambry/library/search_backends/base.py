@@ -1,4 +1,4 @@
-""""""
+# -*- coding: utf-8 -*-
 
 from math import log
 
@@ -24,8 +24,8 @@ class DatasetSearchResult(object):
 
 class IdentifierSearchResult(object):
     def __init__(self, score=None, vid=None, type=None, name=None):
-        assert score is not None, 'Score is require argument.'
-        assert vid and type and name, 'Vid, type and name are required arguments.'
+        assert score is not None, 'score argument requires value.'
+        assert vid and type and name, 'vid, type and name arguments require values.'
         self.score = score
         self.vid = vid
         self.type = type
@@ -33,9 +33,9 @@ class IdentifierSearchResult(object):
 
 
 class PartitionSearchResult(object):
-    def __init__(self):
-        # FIXME:
-        pass
+    def __init__(self, vid=None):
+        assert vid is not None, 'vid can not be None.'
+        self.vid = vid
 
 
 class BaseSearchBackend(object):
@@ -178,11 +178,59 @@ class BasePartitionIndex(BaseIndex):
 
     _schema = {
         'vid': 'id',
-        'bvid': 'id',
+        'bvid': 'id',  # FIXME: dataset_vid?
         'type': 'id',
         'title': 'ngramwords',
         'keywords': 'keyword',
         'doc': 'text'}
+
+    def _as_document(self, partition):
+        """ Converts given partition to the document indexed by backend. """
+
+        schema = ' '.join(
+            '{} {} {} {} {}'.format(
+                c.id_,
+                c.vid,
+                c.name,
+                c.altname,
+                c.description) for c in partition.table.columns)
+
+        values = ''
+
+        for stat in partition.stats:
+            if stat.uvalues:
+                values += ' '.join(stat.uvalues) + '\n'
+
+        # Re-calculate the summarization of grains, since the geoid 0.0.7 package had a bug where state level
+        # summaries had the same value as state-level allvals
+        def resum(g):
+            try:
+                return str(GVid.parse(g).summarize())
+            except KeyError:
+                return g
+
+        keywords = (
+            ' '.join(partition.data.get('geo_coverage', [])) + ' ' +
+            ' '.join([resum(g) for g in partition.data.get('geo_grain', [])]) + ' ' +
+            ' '.join(str(x) for x in partition.data.get('time_coverage', []))
+        )
+
+        doc_field = unicode(
+            values + ' ' + schema + ' '
+            u' '.join([
+                unicode(partition.identity.vid),
+                unicode(partition.identity.id_),
+                unicode(partition.identity.name),
+                unicode(partition.identity.vname)]))
+
+        document = dict(
+            vid=unicode(partition.identity.vid),
+            bvid=unicode(partition.identity.as_dataset().vid),
+            title=unicode(partition.table.description),
+            keywords=unicode(keywords),
+            doc=doc_field)
+
+        return document
 
 
 class BaseIdentifierIndex(BaseIndex):

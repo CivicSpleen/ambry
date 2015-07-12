@@ -1,10 +1,13 @@
 
 import os
 from collections import defaultdict
+from shutil import rmtree
 
 from whoosh.index import create_in, open_dir
-from whoosh.fields import Schema, TEXT, KEYWORD, ID, NGRAMWORDS, NGRAM  # , STORED, DATETIME
-from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIndex, BaseIdentifierIndex, BaseSearchBackend, IdentifierSearchResult, DatasetSearchResult
+from whoosh.fields import Schema, TEXT, KEYWORD, ID, NGRAMWORDS, NGRAM
+from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIndex,\
+    BaseIdentifierIndex, BaseSearchBackend, IdentifierSearchResult,\
+    DatasetSearchResult, PartitionSearchResult
 
 from whoosh import scoring
 from whoosh.qparser import QueryParser
@@ -29,12 +32,12 @@ class WhooshSearchBackend(BaseSearchBackend):
     def _get_dataset_index(self):
         """ Returns dataset index. """
         # returns initialized dataset index
-        return DatasetWhooshIndex(self)
+        return DatasetWhooshIndex(backend=self)
 
     def _get_partition_index(self):
         """ Returns partition index. """
         # FIXME:
-        pass
+        return PartitionWhooshIndex(backend=self)
 
     def _get_identifier_index(self):
         """ Returns identifier index. """
@@ -105,21 +108,11 @@ class WhooshSearchBackend(BaseSearchBackend):
             else:
                 return None
 
-        def per_type_terms(ttype, *terms):
-
-            terms = [x for x in terms if bool(x)]
-
-            if not terms:
-                return ''
-
-            return '( type:{} AND {} )'.format(ttype, ' AND '.join(terms))
-
         def bp_terms(*terms):
             return ' OR '.join([x for x in terms if bool(x)])
 
         cterms = bp_terms(
-            per_type_terms('dataset', kwd_term('keywords', b_keywords), kwd_term('doc', b_doc)),
-            per_type_terms('partition', kwd_term('keywords', p_keywords), kwd_term('doc', p_doc))
+            kwd_term('keywords', b_keywords), kwd_term('doc', b_doc)
         )
 
         # If the source is specified, it qualifies the whole query, if we don't pull it out, partitions
@@ -129,7 +122,7 @@ class WhooshSearchBackend(BaseSearchBackend):
         # FIXME. This doesn't work if the orig cterms does not include a bundle term.
         # So 'counties with counties source oshpd' is OK, but 'with counties source oshpd' fails
         if source:
-            cterms = ' (type:dataset AND keywords:{} ) AND {}'.format(source, cterms)
+            cterms = 'keywords:{} AND {}'.format(source, cterms)
 
         return cterms
 
@@ -223,7 +216,6 @@ class DatasetWhooshIndex(BaseDatasetIndex):
             raise
 
     def reset(self):
-        from shutil import rmtree
         if os.path.exists(self.index_dir):
             rmtree(self.index_dir)
         self.index = None
@@ -308,7 +300,6 @@ class IdentifierWhooshIndex(BaseIdentifierIndex):
             raise
 
     def reset(self):
-        from shutil import rmtree
         if os.path.exists(self.index_dir):
             rmtree(self.index_dir)
         self.index = None
@@ -377,4 +368,66 @@ class IdentifierWhooshIndex(BaseIdentifierIndex):
 
 
 class PartitionWhooshIndex(BasePartitionIndex):
-    pass
+
+    def __init__(self, backend=None):
+        super(self.__class__, self).__init__(backend=backend)
+
+        self.index_dir = os.path.join(self.backend.root_dir, 'partitions')
+        self.all_partitions = []  # FIXME: Implement.
+        try:
+            schema = self._get_generic_schema()
+            if not os.path.exists(self.index_dir):
+                os.makedirs(self.index_dir)
+                self.index = create_in(self.index_dir, schema)
+            else:
+                self.index = open_dir(self.index_dir)
+        except Exception as e:
+            logger.error('Failed to open search index at: {}: {}'.format(dir, e))
+            raise
+
+    def reset(self):
+        if os.path.exists(self.index_dir):
+            rmtree(self.index_dir)
+        self.index = None
+
+    def search(self, search_phrase, limit=None):
+        # FIXME: convert search_phrase from string to phrase
+        query_string = self.backend._make_query_from_terms(search_phrase)
+        schema = self._get_generic_schema()
+        parser = QueryParser('doc', schema=schema)
+        query = parser.parse(query_string)
+        with self.index.searcher() as searcher:
+            results = searcher.search(query, limit=limit)
+            for hit in results:
+                vid = hit.get('vid', False)
+                if vid:  # FIXME: why we are checking vid?
+                    yield PartitionSearchResult(vid=vid)
+
+    def _index_document(self, document, force=False):
+        """ Adds parition document to the index. """
+        # FIXME:
+        # if p.identity.vid in self.all_partitions and not force:
+        #    return
+
+        writer = self.index.writer()
+        writer.add_document(**document)
+        writer.commit()
+
+        # FIXME:
+        # self.all_partitions.add(p.identity.vid)
+
+    def _get_generic_schema(self):
+        """ Returns whoosh's generic schema. """
+        schema = Schema(
+            vid=ID(stored=True, unique=True),
+            bvid=ID(stored=True),  # dataset_vid? Convert if so.
+            type=ID(stored=True),  # FIXME: Type is unused because partitions and datasets separated.
+            title=NGRAMWORDS(),
+            keywords=KEYWORD,
+            doc=TEXT)  # Generated document for the core of the topic search
+        return schema
+
+    def _delete(self, identifier):
+        """ Deletes given identifier from index. """
+        # FIXME:
+        self.index.writer().delete_by_term('identifier', identifier)
