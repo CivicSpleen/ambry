@@ -23,9 +23,13 @@ class DatasetSearchResult(object):
 
 
 class IdentifierSearchResult(object):
-    def __init__(self):
-        # FIXME:
-        pass
+    def __init__(self, score=None, vid=None, type=None, name=None):
+        assert score is not None, 'Score is require argument.'
+        assert vid and type and name, 'Vid, type and name are required arguments.'
+        self.score = score
+        self.vid = vid
+        self.type = type
+        self.name = name
 
 
 class PartitionSearchResult(object):
@@ -74,7 +78,8 @@ class BaseIndex(object):
     Base class for full text search indexes implementations.
     """
 
-    def __init__(self, backend):
+    def __init__(self, backend=None):
+        assert backend is not None, 'backend is require argument.'
         self.backend = backend
 
     def index_one(self, instance):
@@ -188,3 +193,10 @@ class BaseIdentifierIndex(BaseIndex):
         'type': 'id',
         'name': 'ngram',
     }
+
+    def _as_document(self, identifier):
+        return {
+            'identifier': unicode(identifier['identifier']),
+            'type': unicode(identifier['type']),
+            'name': unicode(identifier['name'])
+        }

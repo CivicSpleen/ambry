@@ -1,9 +1,13 @@
 
 import os
+from collections import defaultdict
 
 from whoosh.index import create_in, open_dir
 from whoosh.fields import Schema, TEXT, KEYWORD, ID, NGRAMWORDS, NGRAM  # , STORED, DATETIME
-from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIndex, BaseIdentifierIndex, BaseSearchBackend
+from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIndex, BaseIdentifierIndex, BaseSearchBackend, IdentifierSearchResult, DatasetSearchResult
+
+from whoosh import scoring
+from whoosh.qparser import QueryParser
 
 from ambry.util import get_logger
 import logging
@@ -36,7 +40,7 @@ class WhooshSearchBackend(BaseSearchBackend):
         """ Returns identifier index. """
         # FIXME:
         # return IdentifierWhooshIndex(self)
-        return None
+        return IdentifierWhooshIndex(backend=self)
 
     def _make_query_from_terms(self, terms):
         """ Create a Whoosh query from decomposed search terms. """
@@ -227,16 +231,13 @@ class DatasetWhooshIndex(BaseDatasetIndex):
     def search(self, search_phrase, limit=None):
         # FIXME: convert search_phrase from string to phrase
         query_string = self.backend._make_query_from_terms(search_phrase)
-        from collections import defaultdict
-        from whoosh.qparser import QueryParser
         schema = self._get_generic_schema()
 
         parser = QueryParser('doc', schema=schema)
 
         query = parser.parse(query_string)
-        from ambry.library.search import SearchResult
 
-        datasets = defaultdict(SearchResult)
+        datasets = defaultdict(DatasetSearchResult)
 
         with self.index.searcher() as searcher:
 
@@ -286,12 +287,93 @@ class DatasetWhooshIndex(BaseDatasetIndex):
 
     def _delete(self, dataset_vid):
         """ Deletes given dataset from index. """
-        import pdb; pdb.set_trace()
         self.index.writer().delete_by_term('vid', dataset_vid)
 
 
 class IdentifierWhooshIndex(BaseIdentifierIndex):
-    pass
+
+    def __init__(self, backend=None):
+        super(self.__class__, self).__init__(backend=backend)
+        self.index_dir = os.path.join(self.backend.root_dir, 'identifiers')
+        self.all_identifiers = []  # FIXME: Implement.
+        try:
+            schema = self._get_generic_schema()
+            if not os.path.exists(self.index_dir):
+                os.makedirs(self.index_dir)
+                self.index = create_in(self.index_dir, schema)
+            else:
+                self.index = open_dir(self.index_dir)
+        except Exception as e:
+            logger.error('Failed to open search index at: {}: {}'.format(dir, e))
+            raise
+
+    def reset(self):
+        from shutil import rmtree
+        if os.path.exists(self.index_dir):
+            rmtree(self.index_dir)
+        self.index = None
+
+    def search(self, search_phrase, limit=None):
+        # FIXME: convert search_phrase from string to phrase
+        # query_string = self.backend._make_query_from_terms(search_phrase)
+        schema = self._get_generic_schema()
+        parser = QueryParser('name', schema=schema)
+        query = parser.parse(search_phrase)  # query_string)
+
+        class PosSizeWeighting(scoring.WeightingModel):
+
+            def __init__(self):
+                # FIXME: remove.
+                pass
+
+            def scorer(self, searcher, fieldname, text, qf=1):
+                return self.PosSizeScorer(searcher, fieldname, text, qf=qf)
+
+            class PosSizeScorer(scoring.BaseScorer):
+                def __init__(self, searcher, fieldname, text, qf=1):
+                    self.searcher = searcher
+                    self.fieldname = fieldname
+                    self.text = text
+                    self.qf = qf
+                    self.bmf25 = scoring.BM25F()
+
+                def max_quality(self):
+                    return 40
+
+                def score(self, matcher):
+                    poses = matcher.value_as('positions')
+                    return (2.0 / (poses[0] + 1) + 1.0 / (len(self.text) / 4 + 1) +
+                            self.bmf25.scorer(searcher, self.fieldname, self.text).score(matcher))
+
+        with self.index.searcher(weighting=PosSizeWeighting()) as searcher:
+            results = searcher.search(query, limit=limit)
+            for hit in results:
+                vid = hit.get('identifier', False)
+                if vid:
+                    yield IdentifierSearchResult(
+                        score=hit.score, vid=vid,
+                        type=hit.get('type', False),
+                        name=hit.get('name', ''))
+
+    def _index_document(self, identifier, force=False):
+        """ Adds identifier document to the index. """
+        writer = self.index.writer()
+        all_names = set([x['name'] for x in self.index.searcher().documents()])
+        if identifier['name'] not in all_names:
+            writer.add_document(**identifier)
+            writer.commit()
+
+    def _get_generic_schema(self):
+        """ Returns whoosh's generic schema. """
+        schema = Schema(
+            identifier=ID(stored=True),  # Partition versioned id
+            type=ID(stored=True),
+            name=NGRAM(phrase=True, stored=True, minsize=2, maxsize=8))
+        return schema
+
+    def _delete(self, identifier):
+        """ Deletes given identifier from index. """
+        self.index.writer().delete_by_term('identifier', identifier)
 
 
 class PartitionWhooshIndex(BasePartitionIndex):

@@ -7,7 +7,7 @@ from test.test_base import TestBase
 from ambry.library.search_backends.whoosh_backend import WhooshSearchBackend,\
     IdentifierWhooshIndex, DatasetWhooshIndex
 from ambry.library import new_library
-from ambry.library.search import SearchResult
+from ambry.library.search_backends.base import DatasetSearchResult, IdentifierSearchResult
 
 
 @unittest.skip('Not ready')
@@ -69,11 +69,11 @@ class WhooshSearchBackendTest(TestBase):
 @unittest.skip('Not ready')
 class DatasetWhooshIndexTest(TestBase):
     def test_intializes_index(self):
-            rc = self.get_rc()
-            library = new_library(rc)
-            backend = WhooshSearchBackend(library)
-            self.assertIsNotNone(backend.dataset_index.index)
-            self.assertTrue(os.path.exists(backend.dataset_index.index_dir))
+        rc = self.get_rc()
+        library = new_library(rc)
+        backend = WhooshSearchBackend(library)
+        self.assertIsNotNone(backend.dataset_index.index)
+        self.assertTrue(os.path.exists(backend.dataset_index.index_dir))
 
     # reset tests
     # FIXME: Implement.
@@ -94,7 +94,7 @@ class DatasetWhooshIndexTest(TestBase):
         self.assertIsInstance(found, dict)
         # FIXME: delete index after each tests.
         self.assertIn(dataset.vid, found)
-        self.assertIsInstance(found[0], SearchResult)
+        self.assertIsInstance(found[0], DatasetSearchResult)
 
     # _index_document tests
     def test_adds_dataset_document_to_the_index(self):
@@ -138,3 +138,82 @@ class DatasetWhooshIndexTest(TestBase):
         backend.dataset_index._delete(dataset.vid)
         all_docs = list(backend.dataset_index.index.searcher().documents())
         self.assertNotIn(dataset.vid, [x['vid'] for x in all_docs])
+
+
+@unittest.skip('Not ready')
+class IdentifierWhooshIndexTest(TestBase):
+
+    def test_intializes_index(self):
+        rc = self.get_rc()
+        library = new_library(rc)
+        backend = WhooshSearchBackend(library)
+        self.assertIsNotNone(backend.identifier_index.index)
+        self.assertTrue(os.path.exists(backend.identifier_index.index_dir))
+
+    # reset tests
+    # FIXME: Implement.
+
+    # search tests
+    def test_returns_found_identifier(self):
+        rc = self.get_rc()
+        library = new_library(rc)
+        backend = WhooshSearchBackend(library)
+
+        # add dataset to backend.
+        identifier = dict(
+            identifier='gvid', type='type',
+            name='name1')
+        backend.identifier_index.index_one(identifier)
+
+        # search for just added document.
+        found = list(backend.identifier_index.search('name1'))
+        self.assertIsInstance(found, list)
+        # FIXME: delete index after each tests.
+        names = [x.name for x in found]
+        self.assertIn('name1', names)
+        self.assertIsInstance(found[0], IdentifierSearchResult)
+
+    # _index_document tests
+    def test_adds_identifier_document_to_the_index(self):
+        rc = self.get_rc()
+        library = new_library(rc)
+        backend = WhooshSearchBackend(library)
+        identifier = dict(
+            identifier='gvid', type='type',
+            name='name1')
+        backend.identifier_index.index_one(identifier)
+
+        # search for just added document.
+        all_docs = list(backend.identifier_index.index.searcher().documents())
+        # FIXME: it breaks some times because index directory does not empty after tests
+        # self.assertEquals(len(all_docs), 1)
+        self.assertEquals(all_docs[0]['identifier'], 'gvid')
+        self.assertEquals(all_docs[0]['name'], 'name1')
+
+    # _get_generic_schema tests
+    def test_returns_whoosh_schema(self):
+        rc = self.get_rc()
+        library = new_library(rc)
+        backend = WhooshSearchBackend(library)
+        schema = backend.identifier_index._get_generic_schema()
+        self.assertItemsEqual(
+            ['identifier', 'name', 'type'],
+            schema.names())
+
+    # _delete tests
+    def _test_deletes_dataset_from_index(self):
+        # FIXME: is broken.
+        rc = self.get_rc()
+        library = new_library(rc)
+        backend = WhooshSearchBackend(library)
+        identifier = dict(
+            identifier='gvid', type='type',
+            name='name1')
+        backend.identifier_index.index_one(identifier)
+
+        # search for just added document.
+        all_docs = list(backend.dataset_index.index.searcher().documents())
+        self.assertIn('name1', [x['vid'] for x in all_docs])
+        backend.dataset_index._delete('name1')
+        all_docs = list(backend.identifier_index.index.searcher().documents())
+        self.assertNotIn('name1', [x['vid'] for x in all_docs])
