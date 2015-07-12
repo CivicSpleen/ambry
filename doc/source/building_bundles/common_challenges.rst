@@ -75,6 +75,23 @@ If a source file has a fomatting error that a row generator class considers ille
             return l.replace('\0', '')
 
 
+Casting errors
+--------------
+
+If there is a casting error in a specific column (for instance a column where an int is expected but something like 1234E is found), you have to define a caster to handle that (in your loader in bundle.py). Then assign the caster to that column in meta/schema.csv (insert the name of the caster function in the column "d_caster" for the data-row in question).
+
+A typical caster for this case is:
+
+.. code-block:: python
+    :emphasize-lines: 5
+    @staticmethod
+    def int_na_caster(v):
+        try:
+            return int(v)
+        except ValueError:
+            return None
+
+
 Character Encoding 
 ------------------
 

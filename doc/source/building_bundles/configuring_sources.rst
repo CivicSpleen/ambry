@@ -259,7 +259,7 @@ Here is a new sources block, with a segment entry, to extract the second workshe
 Choosing Table Names
 ********************
  
-When building Ambry bundles, getting all of the metadata right isn't just important, is almost the only important task. So, at this point you should change all of the source entry keys, ( or the `name` column in the spreadsheet version ) to have a simple name that is indicative of the data in the table, because the 'name' field will become the table name when the data is loaded. ( Unless you have set a seperate `table` value. ) For the USDA example, the dataset page has all of the information required to set sensible table names. ( If you are following along with the demo, just copy :file:`meta/sources.csv` from the `agg_product-demo` bundle into yours )
+When building Ambry bundles, getting all of the metadata right isn't just important, is almost the only important task. So, at this point you should change all of the source entry keys, ( or the `name` column in the spreadsheet version ) to have a simple name that is indicative of the data in the table, because the 'name' field will become the table name when the data is loaded. ( Unless you have set a separate `table` value. ) For the USDA example, the dataset page has all of the information required to set sensible table names. ( If you are following along with the demo, just copy :file:`meta/sources.csv` from the `agg_product-demo` bundle into yours )
 
 .. tip::
 
