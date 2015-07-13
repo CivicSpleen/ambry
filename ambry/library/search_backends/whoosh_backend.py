@@ -29,7 +29,6 @@ logger = get_logger(__name__, level=logging.DEBUG)
 class WhooshSearchBackend(BaseSearchBackend):
 
     def __init__(self, library):
-
         # each whoosh index requires root directory.
         self.root_dir = fsopendir(library._fs.search()).getsyspath('/')
         super(self.__class__, self).__init__(library)
@@ -47,10 +46,33 @@ class WhooshSearchBackend(BaseSearchBackend):
         """ Returns identifier index. """
         return IdentifierWhooshIndex(backend=self)
 
+    def _or_join(self, terms):
+
+        if isinstance(terms, (tuple, list)):
+            if len(terms) > 1:
+                return '(' + ' OR '.join(terms) + ')'
+            else:
+                return terms[0]
+        else:
+            return terms
+
+    def _and_join(self, terms):
+        if len(terms) > 1:
+            return ' AND '.join([self._or_join(t) for t in terms])
+        else:
+            return self._or_join(terms[0])
+
+    def _kwd_term(self, keyword, terms):
+        if terms:
+            return keyword + ':(' + self._and_join(terms) + ')'
+        else:
+            return None
+
 
 class DatasetWhooshIndex(BaseDatasetIndex):
 
-    def __init__(self, backend):
+    def __init__(self, backend=None):
+        assert backend is not None, 'backend can not be None'
         super(self.__class__, self).__init__(backend)
         self.index_dir = os.path.join(self.backend.root_dir, 'datasets')
         self.all_datasets = []  # FIXME: Implement.
@@ -66,6 +88,7 @@ class DatasetWhooshIndex(BaseDatasetIndex):
             raise
 
     def reset(self):
+        """ Resets index by removing index directory. """
         if os.path.exists(self.index_dir):
             rmtree(self.index_dir)
         self.index = None
@@ -79,6 +102,7 @@ class DatasetWhooshIndex(BaseDatasetIndex):
 
         Returns:
             list of DatasetSearchResult instances.
+
         """
         query_string = self._make_query_from_terms(search_phrase)
         schema = self._get_generic_schema()
@@ -145,45 +169,23 @@ class DatasetWhooshIndex(BaseDatasetIndex):
         if 'source' in terms:
             source = terms['source']
 
-        def or_join(terms):
-
-            if isinstance(terms, (tuple, list)):
-                if len(terms) > 1:
-                    return '(' + ' OR '.join(terms) + ')'
-                else:
-                    return terms[0]
-            else:
-                return terms
-
-        def and_join(terms):
-            if len(terms) > 1:
-                return ' AND '.join([or_join(t) for t in terms])
-            else:
-                return or_join(terms[0])
-
-        def kwd_term(keyword, terms):
-            if terms:
-                return keyword + ':(' + and_join(terms) + ')'
-            else:
-                return None
-
         cterms = None
         # FIXME: need more tests.
 
         if doc:
-            cterms = and_join(doc)
+            cterms = self.backend._and_join(doc)
 
         if keywords:
-            keywords_terms = 'keywords:(' + and_join(keywords) + ')'
+            keywords_terms = 'keywords:(' + self.backend._and_join(keywords) + ')'
             if cterms:
-                cterms = and_join(cterms, keywords_terms)
+                cterms = self.backend._and_join(cterms, keywords_terms)
             else:
                 cterms = keywords_terms
 
         if source:
             source_terms = 'keywords:{}'.format(source, cterms)
             if cterms:
-                cterms = and_join(cterms, source_terms)
+                cterms = self.backend._and_join(cterms, source_terms)
             else:
                 cterms = source_terms
 
@@ -457,37 +459,15 @@ class PartitionWhooshIndex(BasePartitionIndex):
         if frm_to:
             keywords.append(frm_to)
 
-        def or_join(terms):
-
-            if isinstance(terms, (tuple, list)):
-                if len(terms) > 1:
-                    return '(' + ' OR '.join(terms) + ')'
-                else:
-                    return terms[0]
-            else:
-                return terms
-
-        def and_join(terms):
-            if len(terms) > 1:
-                return ' AND '.join([or_join(t) for t in terms])
-            else:
-                return or_join(terms[0])
-
-        def kwd_term(keyword, terms):
-            if terms:
-                return keyword + ':(' + and_join(terms) + ')'
-            else:
-                return None
-
         cterms = None
         if doc:
-            cterms = or_join(doc)
+            cterms = self.backend._or_join(doc)
 
         if keywords:
             if cterms:
-                cterms = '{} AND {}'.format(cterms, kwd_term('keywords', keywords))
+                cterms = '{} AND {}'.format(cterms, self.backend._kwd_term('keywords', keywords))
             else:
-                cterms = kwd_term('keywords', keywords)
+                cterms = self.backend._kwd_term('keywords', keywords)
 
         return cterms
 
