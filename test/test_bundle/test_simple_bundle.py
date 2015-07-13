@@ -117,6 +117,17 @@ class Test(TestBase):
 
         self.assertEquals('built', b.state)
 
+    def test_complete_load(self):
+        """Build the simple bundle"""
+
+        b = self.setup_bundle('complete-load')
+        b.sync()
+        b = b.cast_to_metasubclass()
+        self.assertEquals('synced', b.state)
+        b.do_prepare()
+        self.assertEquals('prepared', b.state)
+        b.do_meta()
+
     def test_db_copy(self):
         from ambry.orm.database import Database
 

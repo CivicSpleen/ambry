@@ -29,6 +29,7 @@ class Table(Base, DictableMixin):
     sequence_id = SAColumn('t_sequence_id', Integer, nullable=False)
     name = SAColumn('t_name', String(200), nullable=False)
     altname = SAColumn('t_altname', Text)
+    summary = SAColumn('t_summary', Text)
     description = SAColumn('t_description', Text)
     universe = SAColumn('t_universe', String(200))
     keywords = SAColumn('t_keywords', Text)

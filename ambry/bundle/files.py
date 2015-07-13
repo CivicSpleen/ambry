@@ -216,7 +216,6 @@ class DictBuildSourceFile(BuildSourceFile):
         else:
             raise FileTypeError("Unknown file type for : %s" % fn_path)
 
-
         fr.source_hash = self.fs_hash()
 
         fr.modified = self.fs_modtime()
@@ -610,39 +609,36 @@ class SchemaFile(RowBuildSourceFile):
                     if col.proto_vid:
                         row['proto_vid'] = col.proto_vid
 
-                if first:
-                    first = False
-                    yield row.keys()
-
                 yield row
 
     def objects_to_record(self):
+        import msgpack
 
-        import unicodecsv as csv
-        from StringIO import StringIO
+        rows = []
 
-        f = StringIO()
-
-        g = self._dump_gen()
-
-        try:
-            header = g.next()
-        except StopIteration:
-            # No schema file at all!
-            return
-
-        w = csv.DictWriter(f, header, encoding='utf-8')
-        w.writeheader()
         last_table = None
-        for row in g:
+        for row in self._dump_gen():
+
+            if not rows:
+                rows.append(row.keys())
 
             # Blank row to seperate tables.
             if last_table and row['table'] != last_table:
-                w.writerow({})
+                rows.append([])
 
-            w.writerow(row)
+            rows.append(row.values())
 
             last_table = row['table']
+
+        # Transpose tric to remove empty columns
+        rows = zip(*[ row for row in zip(*rows) if bool(filter(bool,row[1:])) ])
+
+        bsfile = self._dataset.bsfile(self._file_const)
+
+        bsfile.mime_type = 'application/msgpack'
+        bsfile.update_contents(msgpack.packb(rows))
+
+        self._dataset._database.commit()
 
 class SourceSchemaFile(RowBuildSourceFile):
 

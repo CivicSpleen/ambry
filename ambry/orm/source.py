@@ -63,7 +63,7 @@ class DataSource(Base, DictableMixin):
 
     t_vid = SAColumn('ds_t_vid', String(16), ForeignKey('tables.t_vid'), nullable=True)
     dest_table_name = SAColumn('ds_dt_name', Text)
-    dest_table = relationship(Table, backref='soruces', cascade="all")
+    _dest_table = relationship(Table, backref='sources', cascade="all")
 
     segment = SAColumn('ds_segment', Text)
     time = SAColumn('ds_time', Text)
@@ -190,7 +190,6 @@ class DataSource(Base, DictableMixin):
         """Return a Row Generator"""
         import petl
 
-
         gft = self.get_filetype()
 
         if not fstor:
@@ -211,7 +210,6 @@ class DataSource(Base, DictableMixin):
         else:
             raise ValueError("Unknown filetype: {} ".format(gft))
 
-
     @property
     def source_table(self):
 
@@ -226,6 +224,20 @@ class DataSource(Base, DictableMixin):
             self._source_table = st
 
         return self._source_table
+
+    @property
+    def dest_table(self):
+        from exc import NotFoundError
+
+        if not self._dest_table:
+            name = self.dest_table_name if self.dest_table_name else self.name
+
+            try:
+                self._dest_table = self.dataset.table(name)
+            except NotFoundError:
+                self._dest_table = self.dataset.new_table(name)
+
+        return self._dest_table
 
     @property
     def column_map(self):

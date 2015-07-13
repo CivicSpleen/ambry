@@ -13,6 +13,7 @@ from sqlalchemy import event
 from sqlalchemy.orm import relationship
 
 from ..util import Constant
+from ..orm.column import Column
 
 
 from . import Base, MutationDict, JSONEncodedObj
@@ -40,6 +41,17 @@ class SourceColumn(Base):
         DATATYPE.DATETIME: datetime.datetime
     }
 
+    column_type_map = {
+        DATATYPE.INT: Column.DATATYPE_INTEGER,
+        DATATYPE.FLOAT: Column.DATATYPE_REAL,
+        DATATYPE.STRING: Column.DATATYPE_VARCHAR,
+        DATATYPE.DATE: Column.DATATYPE_DATE,
+        DATATYPE.TIME: Column.DATATYPE_TIME,
+        DATATYPE.DATETIME: Column.DATATYPE_DATETIME
+    }
+
+
+
     id = SAColumn('sc_id', Integer, primary_key=True)
 
     st_id = SAColumn('sc_st_id', Integer, ForeignKey('sourcetables.st_id'), nullable=False)
@@ -54,6 +66,7 @@ class SourceColumn(Base):
     datatype = SAColumn('sc_datatype', Text) # Basic data type, usually intuited
     valuetype = SAColumn('sc_valuetype', Text) # Describes the meaning of the value: state, county, address, etc.
 
+
     start = SAColumn('sc_start', Integer) # For fixed width, the column starting position
     width = SAColumn('sc_width', Integer) # for Fixed width, the field width
     size = SAColumn('sc_size', Integer)  # Max size of the column values, after conversion to strings.
@@ -66,6 +79,11 @@ class SourceColumn(Base):
     __table_args__ = (
         UniqueConstraint('sc_st_id','sc_source_header', name='_uc_sourcecolumns'),
     )
+
+    @property
+    def column_datatype(self):
+        """Return the data type using the values defined for the schema"""
+        return self.column_type_map[self.datatype]
 
     @staticmethod
     def mangle_name(name):
@@ -102,6 +120,9 @@ class SourceColumn(Base):
         for k, v in kwargs.items():
             if hasattr(self, k):
                 setattr(self, k, v)
+
+
+
 
 class SourceTable(Base):
     __tablename__ = 'sourcetables'
@@ -155,9 +176,11 @@ class SourceTable(Base):
 
     @property
     def widths(self):
-        widths =  [ int(c.width) for c in self.columns ]
+        widths =  [ c.width for c in self.columns ]
         if not  all( bool(e) for e in widths ):
             from ambry.dbexceptions import ConfigurationError
             raise ConfigurationError("The widths array for source table {} has zero or null entries ".format(self.name))
+
+        widths = [int(w) for w in widths]
 
         return widths

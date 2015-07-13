@@ -330,7 +330,8 @@ class Test(TestBase):
 
 
     def test_etl_pipeline(self):
-        from ambry.bundle.etl.pipeline import MergeHeader, MangleHeader, Pipe, MapHeader, Pipeline, PrintRows, augment_pipeline
+        from ambry.bundle.etl.pipeline import MergeHeader, MangleHeader, Pipe, MapHeader, Pipeline
+        from ambry.bundle.etl.pipeline import PrintRows, augment_pipeline, Sink
         from ambry.bundle.etl.stats import Stats
         from ambry.bundle.etl.intuit import TypeIntuiter
 
@@ -345,7 +346,6 @@ class Test(TestBase):
             MergeHeader(),
             MangleHeader(),
             MapHeader({'gvid':'county','renter_cost_gt_30':'renter_cost'})
-
         ]
 
         last = reduce(lambda last, next: next.set_source_pipe(last), pl[1:], pl[0])
@@ -366,13 +366,12 @@ class Test(TestBase):
             coalesce_rows= MergeHeader() ,
             type_intuit =  TypeIntuiter(),
             mangle_header= MangleHeader(),
-            remap_to_table = MapHeader({'gvid': 'county', 'renter_cost_gt_30': 'renter_cost'}),
+            remap_to_table = MapHeader({'gvid': 'county', 'renter_cost_gt_30': 'renter_cost'})
         )
-
 
         augment_pipeline(pl, PrintRows)
 
-        for i, row in enumerate(pl.run()):
+        for i, row in enumerate(pl.iter()):
 
             if i == 0:
                 self.assertEqual(['id', 'county', 'renter_cost', 'renter_cost_gt_30_cv',
@@ -383,7 +382,6 @@ class Test(TestBase):
             if i > 5:
                 break
 
-        print str(pl)
 
     @unittest.skip('This test needs a source that has a  bad header.')
     def test_mangle_header(self):
@@ -429,15 +427,45 @@ class Test(TestBase):
 
         #self.assertEquals(6, len(b.dataset.source_tables))
 
-        #print list(b.source_fs.listdir())
+        print list(b.source_fs.listdir())
         #print b.source_fs.getcontents('source_schema.csv')
 
         s = b.source('rent07')
 
         #print s.column_map
 
+    def test_complete_load_meta_rent07(self):
+        """"""
+
+        b = self.setup_bundle('complete-load')
+        b.sync()
+        b = b.cast_to_metasubclass()
+
+        b.do_meta('rent07')
+
+        # self.assertEquals(6, len(b.dataset.source_tables))
+
+        # Check the source schema file.
+        self.assertIn('renter_cost_gt_30', b.source_fs.getcontents('source_schema.csv'))
+        self.assertIn('rent,1,size,size,float,,,,,,',b.source_fs.getcontents('source_schema.csv'))
+        self.assertIn('rpeople,1,size,size,float,,,,,,', b.source_fs.getcontents('source_schema.csv'))
+
+        # Check a few random bits from the pipeline debugging output.
+        self.assertIn("| renter_cost_gt_30_cv    |     13 | <type 'float'>  |", b.build_fs.getcontents('pipeline/meta-rent07.txt'))
+        self.assertIn('|   1 |    1 | 0O0P01 |', b.build_fs.getcontents('pipeline/meta-rent07.txt'))
+
+        s = b.source('rent07')
+
+        # The schema file should have a schem in it.
+        schema_lines = b.source_fs.getcontents('schema.csv').splitlines()
+        self.assertEqual(9, len(schema_lines) )
+        self.assertIn('rent,4,renter_cost_gt_30,,c00000load01004,INTEGER,renter_cost_gt_30', schema_lines)
+
+        #self.dump_database('columns')
+
+
     def test_type_intuition(self):
-        from ambry.bundle.etl.pipeline import sink
+
         from ambry.bundle.etl.intuit import TypeIntuiter
         from ambry.orm.column import Column
         import datetime
@@ -450,7 +478,9 @@ class Test(TestBase):
         b.do_prepare()
         self.assertEquals('prepared', b.state)
 
-        pl = sink(b.do_meta_pipeline('types1'))
+        pl = b.do_meta_pipeline('types1').run()
+
+        self.assertTrue(bool(pl.source))
 
         ti = pl.type_intuit[TypeIntuiter]
 

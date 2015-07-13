@@ -10,24 +10,26 @@ class Bundle(Bundle):
     def build_pipeline(self, source):
         """Construct the ETL pipeline for the build phase"""
 
-        from ambry.bundle.etl.pipeline import Pipeline, MergeHeader, MangleHeader, MapHeader, augment_pipeline
+        from ambry.bundle.etl.pipeline import Pipeline, MergeHeader, MangleHeader, MapHeader, augment_pipeline, PrintRows
 
-        return Pipeline(
+        pl =  Pipeline(
             source=source.fetch().source_pipe(),
             coalesce_rows=MergeHeader(),
             mangle_header=MangleHeader()
         )
 
+        augment_pipeline(pl, PrintRows)
+
+        return pl
+
     def build(self):
 
         for i, source in enumerate(self.sources):
 
-            print i, source.name
+            print
+            print '===================================='
+            print source.dest_table_name
 
-            pl = self.do_build_pipeline(source)
-
-            for i, row in enumerate(pl.run()):
-                print source.name, i, row
-
-                if i > 5:
-                    break
+            #p = self.partitions.new_partition(table='example', space=space, time=2010 + j)
+            #p.clean()
+            #p.run()

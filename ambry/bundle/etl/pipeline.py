@@ -11,12 +11,14 @@ class Pipe(object):
     _source_pipe = None
     _source = None
 
+    partition = None # Set in the Pipeline
     segment = None # Set to the name of the segment
     pipeline = None  # Set to the name of the segment
 
 
     @property
     def source(self):
+
         return self._source
 
     @source.setter
@@ -25,20 +27,27 @@ class Pipe(object):
 
     @property
     def source_pipe(self):
+        assert bool(self._source_pipe)
         return self._source_pipe
 
     def set_source_pipe(self, source_pipe):
         self._source_pipe = source_pipe
         self._source = source_pipe.source if source_pipe else None
-
+        assert bool(self._source)
         return self
 
 class Sink(Pipe):
     """A final stage pipe, which consumes its input and produces no output rows"""
 
+    def __init__(self, count = 1000):
+        self._count = count
+
     def run(self, count=None, *args, **kwargs):
 
+        count = count if count else self._count
+
         for i, row in  enumerate(self._source_pipe):
+
             if count and i == count:
                 break
 
@@ -261,7 +270,11 @@ class PrintRows(Pipe):
 
         # return  SingleTable([[ str(x) for x in row] for row in self.rows] ).table
 
-        return 'print. {} rows total\n'.format(self.i) + tabulate(self.rows[1:],self.rows[0], tablefmt="pipe")
+        if self.rows:
+            return 'print. {} rows total\n'.format(self.i) + tabulate(self.rows[1:],self.rows[0], tablefmt="pipe")
+
+        else:
+            return ''
 
 class PipelineSegment(list):
 
@@ -319,15 +332,17 @@ from collections import OrderedDict, Mapping
 class Pipeline(OrderedDict):
     """Hold a defined collection of PipelineGroups, and when called, coalesce them into a single pipeline """
 
+    partition = None
+
     _groups_names = ['source', 'map_source', 'row_intuit', 'coalesce_rows', 'mangle_header', 'normalize',
-                     'remap_to_table', 'type_intuit', 'cast_columns', 'statistics', 'write_to_table', 'sink']
+                     'remap_to_table', 'type_intuit', 'cast_columns', 'statistics', 'last', 'write_to_table']
 
 
-    def __init__(self, partition = None, *args, **kwargs):
+    def __init__(self, partition = None,  *args, **kwargs):
 
         super(Pipeline, self).__init__()
 
-        self.partition = partition
+        super(Pipeline, self).__setattr__('partition', partition)
 
         for group_name in self._groups_names:
 
@@ -336,6 +351,17 @@ class Pipeline(OrderedDict):
                 gs = [gs]
 
             self[group_name] =  PipelineSegment(self, group_name, *gs)
+
+    @property
+    def file_name(self):
+
+        if self.partition:
+            s =  str(self.partition.name)+'-'
+        else:
+            s = ''
+
+        return s+self.source.source.name
+
 
     def __setitem__(self, k, v):
 
@@ -354,7 +380,7 @@ class Pipeline(OrderedDict):
         # Index by class. Looks through all of the segments for the first pipe with the given class
         if inspect.isclass(k):
 
-            chain = self._collect()
+            chain, last = self._collect()
 
             matches = filter(lambda e: isinstance(e, k), chain)
 
@@ -377,7 +403,7 @@ class Pipeline(OrderedDict):
 
         self[k] = v
 
-    def _collect(self, args=None):
+    def _collect(self):
 
         chain = []
 
@@ -385,27 +411,35 @@ class Pipeline(OrderedDict):
         # it on output.
 
         for group_name in self._groups_names:
-            chain += self[group_name]
+            for p in self[group_name]:
+                chain.append(p)
 
-        chain = (list(args) if args else []) + chain
-
-        return chain
-
-    def run(self, *args, **kwargs):
-
-        chain = self._collect(args)
+        for p in chain[1:]:
+            p.set_source_pipe(chain[0])
 
         last = reduce(lambda last, next: next.set_source_pipe(last), chain[1:], chain[0])
 
-        if not self['sink']:
-            #Returns the iterator for the last stage, which, when iterated, iterates over the earleir stages
+        return chain, last
 
-            return last
-        else:
-            # Returns the call value of the last stage, which consumes all of the other stages.
+    def run(self, count=None):
 
-            last.run()
-            return self
+        chain, last = self._collect()
+
+        sink = Sink(count = count)
+        sink.set_source_pipe(last)
+
+        sink.run()
+
+        return self
+
+    def iter(self):
+
+        chain, last = self._collect()
+
+        # Iterate over the last pipe, which will pull from all those before it.
+        for row in last:
+            yield row
+
 
     def __str__(self):
 
@@ -413,7 +447,7 @@ class Pipeline(OrderedDict):
         for segment_name in self._groups_names:
 
             for pipe in self[segment_name]:
-                out.append("-- {} {} ".format(segment_name, str(pipe)))
+                out.append(u"-- {} {} ".format(segment_name, unicode(pipe)))
 
         return '\n'.join(out)
 
@@ -434,12 +468,4 @@ def augment_pipeline(pl, head_pipe = None, tail_pipe = None):
             if tail_pipe:
                 v.append(tail_pipe)
 
-def sink(pipeline):
-    """Drive a pipeline and discard the results. Used to run a meta pipeline, where the outputs are data
-    stored in the pipes, not the final set of rows. """
-
-    for row in pipeline.run():
-        pass
-
-    return pipeline
 

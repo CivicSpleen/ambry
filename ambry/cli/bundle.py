@@ -855,62 +855,6 @@ def bundle_repopulate(args, b, st, rc):
     return b.repopulate()
 
 
-def root_meta(args, l, rc):
-    ident = l.resolve(args.term)
-
-    if not ident:
-        fatal("Failed to find record for: {}", args.term)
-        return
-
-    b = l.get(ident.vid)
-
-    meta = b.metadata
-
-    if not args.key:
-        # Return all of the rows
-        if args.yaml:
-            print meta.yaml
-
-        elif args.json:
-            print meta.json
-
-        elif args.key:
-            for row in meta.rows:
-                print '.'.join([e for e in row[0] if e]) + '=' + str(row[1] if row[1] else '')
-        else:
-            print meta.yaml
-
-    else:
-
-        v = None
-        from ..util import AttrDict
-
-        o = AttrDict()
-        count = 0
-
-        for row in meta.rows:
-            k = '.'.join([e for e in row[0] if e])
-            if k.startswith(args.key):
-                v = row[1]
-                o.unflatten_row(row[0], row[1])
-                count += 1
-
-        if count == 1:
-            print v
-
-        else:
-            if args.yaml:
-                print o.dump()
-
-            elif args.json:
-                print o.json()
-
-            elif args.rows:
-                for row in o.flatten():
-                    print '.'.join([e for e in row[0] if e]) + '=' + str(row[1] if row[1] else '')
-
-            else:
-                print o.dump()
 
 def bundle_new(args, l, rc):
     """Clone one or more registered source packages ( via sync ) into the

@@ -19,6 +19,7 @@ class Bundle(object):
         self._library = library
         self._logger = None
 
+
         assert bool(library)
 
         self._log_level = logging.INFO
@@ -151,6 +152,8 @@ class Bundle(object):
         """COnstruct the meta pipeline. This method shold not be overridden; iverride meta_pipeline() instead. """
         source = self.source(source) if isinstance(source, basestring) else source
 
+        assert bool(source)
+
         pl = self.meta_pipeline(source)
 
         self.edit_meta_pipeline(pl)
@@ -159,16 +162,16 @@ class Bundle(object):
 
     def meta_pipeline(self, source):
         """Construct the ETL pipeline for the meta phase"""
-        from etl.pipeline import Pipeline, MergeHeader, MangleHeader, MapHeader
+        from ambry.bundle.etl.pipeline import Pipeline, MergeHeader, MangleHeader, Sink
         from ambry.bundle.etl.intuit import TypeIntuiter
 
         source = self.source(source) if isinstance(source, basestring) else source
 
         return Pipeline(
-            source = source.fetch().source_pipe(),
+            source=source.fetch().source_pipe(),
             coalesce_rows=MergeHeader(),
             mangle_header=MangleHeader(),
-            type_intuit=TypeIntuiter(),
+            type_intuit=TypeIntuiter()
         )
 
     def edit_meta_pipeline(self, pipeline):
@@ -444,8 +447,6 @@ class Bundle(object):
 
         self.commit()
 
-
-
         return True
 
     def pre_prepare(self):
@@ -465,7 +466,7 @@ class Bundle(object):
     ## Meta
     ##
 
-    def do_meta(self, force=False):
+    def do_meta(self, source_name = None, force=False):
         """
         Synchronize with the files and run the meta pipeline, possibly creating new objects. Then, write the
         objects back to file records and synchronize.
@@ -481,7 +482,7 @@ class Bundle(object):
 
         self.log("---- Meta ---- ")
 
-        self.meta()
+        self.meta(source_name=source_name)
 
         self.build_source_files.file(File.BSFILE.META).objects_to_record()
         self.build_source_files.file(File.BSFILE.SOURCESCHEMA).objects_to_record()
@@ -489,6 +490,62 @@ class Bundle(object):
         self.build_source_files.file(File.BSFILE.SOURCES).objects_to_record()
 
         self.do_sync()
+
+    def meta_make_source_tables(self, pl):
+        from ambry.bundle.etl.intuit  import TypeIntuiter
+
+        ti = pl[TypeIntuiter]
+
+        source = pl.source.source
+
+        if not source.st_id:
+
+            for c in ti.columns:
+                source.source_table.add_column(c.position, source_header=c.header, dest_header=c.header,
+                                               datatype=c.resolved_type)
+
+    def meta_make_dest_tables(self, pl):
+        from ambry.orm.column import Column
+
+        source = pl.source.source
+        dest = pl.source.source.dest_table
+
+        for c in source.source_table.columns:
+
+            dest.add_column(name=c.dest_header, datatype =  c.column_datatype,
+                            derivedfrom=c.dest_header,
+                            summary=c.summary, description=c.description)
+
+    def meta_log_pipeline(self, pl):
+        """Write a report of the pipeline out to a file """
+        import os
+
+        self.build_fs.makedir('pipeline', allow_recreate=True)
+        self.build_fs.setcontents(os.path.join('pipeline','meta-'+pl.file_name+'.txt' ), unicode(pl), encoding='utf8')
+
+
+
+    def meta(self, source_name = None):
+        from ambry.bundle.etl.pipeline import PrintRows
+
+        for i, source in enumerate(self.sources):
+
+            if source_name and source.name != source_name:
+                self.logger.info("Skipping {} ( only running {} ) ".format(source.name, source_name))
+                continue
+
+            self.logger.info("Running meta for source: {} ".format(source.name))
+            pl = self.do_meta_pipeline(source)
+            pl.last.prepend(PrintRows)
+
+            pl.run()
+
+            self.meta_log_pipeline(pl)
+            self.meta_make_source_tables(pl)
+            self.meta_make_dest_tables(pl)
+
+        source.dataset.commit()
+
     ##
     ## Build
     ##
