@@ -200,9 +200,18 @@ class DatasetWhooshIndex(BaseDatasetIndex):
             doc=TEXT)  # Generated document for the core of the topic search
         return schema
 
-    def _delete(self, dataset_vid):
-        """ Deletes given dataset from index. """
-        self.index.writer().delete_by_term('vid', dataset_vid)
+    def _delete(self, vid=None):
+        """ Deletes given dataset from index.
+
+        Args:
+            vid (str): dataset vid.
+
+        """
+
+        assert vid is not None, 'vid argument can not be None.'
+        writer = self.index.writer()
+        writer.delete_by_term('vid', vid)
+        writer.commit()
 
 
 class IdentifierWhooshIndex(BaseIdentifierIndex):
@@ -283,9 +292,17 @@ class IdentifierWhooshIndex(BaseIdentifierIndex):
             name=NGRAM(phrase=True, stored=True, minsize=2, maxsize=8))
         return schema
 
-    def _delete(self, identifier):
-        """ Deletes given identifier from index. """
-        self.index.writer().delete_by_term('identifier', identifier)
+    def _delete(self, identifier=None):
+        """ Deletes given identifier from index.
+
+        Args:
+            identifier (str): identifier of the document to delete.
+
+        """
+        assert identifier is not None, 'identifier argument can not be None.'
+        writer = self.index.writer()
+        writer.delete_by_term('identifier', identifier)
+        writer.commit()
 
 
 class PartitionWhooshIndex(BasePartitionIndex):
@@ -480,13 +497,19 @@ class PartitionWhooshIndex(BasePartitionIndex):
         schema = Schema(
             vid=ID(stored=True, unique=True),
             bvid=ID(stored=True),  # dataset_vid? Convert if so.
-            type=ID(stored=True),  # FIXME: Type is unused because partitions and datasets separated.
             title=NGRAMWORDS(),
             keywords=KEYWORD,
             doc=TEXT)  # Generated document for the core of the topic search
         return schema
 
-    def _delete(self, identifier):
-        """ Deletes given identifier from index. """
-        # FIXME:
-        self.index.writer().delete_by_term('identifier', identifier)
+    def _delete(self, vid=None):
+        """ Deletes given partition with given vid from index.
+
+        Args:
+            vid (str): vid of the partition document to delete.
+
+        """
+        assert vid is not None, 'vid argument can not be None.'
+        writer = self.index.writer()
+        writer.delete_by_term('vid', vid)
+        writer.commit()
