@@ -5,7 +5,7 @@ In the :ref:`last section <configure_schema>` we configured the sources metadata
 Build the Bundles
 =================
 
-At this point, you should be able to run :command:`bambry build --clean` and have the build complete, although it will complete with Cast errors. ( If you get a "Failed to find space identifier 'US' " error, run :command:`ambry search -I` to build the geographic identifier index )
+At this point, you should be able to run :command:`bambry build --clean` and have the build complete, although it will complete with Cast errors. ( If you get a "Failed to find space identifier 'US' " error, run :command:`ambry search -R` to build the geographic identifier index )
 
 .. code-block:: bash
 
