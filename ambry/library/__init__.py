@@ -35,9 +35,7 @@ import weakref
 
 from files import Files
 
-
 libraries = {}
-
 
 def _new_library(config):
     from database import LibraryDb

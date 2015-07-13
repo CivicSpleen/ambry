@@ -368,7 +368,7 @@ class ExcelRowGenerator(RowGenerator):
                 year, month, day, hour, minute, second = xldate_as_tuple(float(v), datemode)
                 return datetime.date(year, month, day)
             except ValueError:
-                # Could be actually a string, not a float. Because Excel dates are completel broken.
+                # Could be actually a string, not a float. Because Excel dates are completely broken.
                 from  dateutil import parser
 
                 try:
