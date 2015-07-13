@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 
 from math import log
+import re
+
+from nltk.stem.lancaster import LancasterStemmer
 
 from sqlalchemy.orm import object_session
+from sqlalchemy.sql import text
 
 from geoid.civick import GVid
 
@@ -125,16 +129,15 @@ class BaseDatasetIndex(BaseIndex):
         """ Converts dataset to doc indexed by to FTS index. """
 
         # find tables.
-        execute = object_session(dataset).execute
+        execute = object_session(dataset).connection().execute
 
-        # FIXME: sanitize query.
-        query = """\
+        query = text("""
             SELECT t_name, c_name, c_description
             FROM columns
-            JOIN tables ON c_t_vid = t_vid WHERE t_d_vid = '{}' """.format(str(dataset.identity.vid))
+            JOIN tables ON c_t_vid = t_vid WHERE t_d_vid = :dataset_vid;""")
 
         columns = '\n'.join(
-            [' '.join(list(t)) for t in execute(query)])
+            [' '.join(list(t)) for t in execute(query, dataset_vid=str(dataset.identity.vid))])
 
         doc = u'\n'.join([unicode(x) for x in [dataset.config.metadata.about.title,
                                                dataset.config.metadata.about.summary,
@@ -301,9 +304,6 @@ class SearchTermParser(object):
 
     def __init__(self):
         # I have no idea which one to pick
-        from nltk.stem.lancaster import LancasterStemmer
-        import re
-
         mt = '|'.join(
             [r'\b' + x.upper() + r'\b' for x in self.marker_terms.keys()])
 
