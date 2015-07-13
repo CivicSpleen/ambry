@@ -4,10 +4,10 @@ import unittest
 
 from test.test_base import TestBase
 
-from ambry.library.search_backends.whoosh_backend import WhooshSearchBackend,\
-    IdentifierWhooshIndex, DatasetWhooshIndex
+from ambry.library.search_backends.whoosh_backend import WhooshSearchBackend
 from ambry.library import new_library
-from ambry.library.search_backends.base import DatasetSearchResult, IdentifierSearchResult, PartitionSearchResult
+from ambry.library.search_backends.base import DatasetSearchResult, IdentifierSearchResult,\
+    PartitionSearchResult
 from test.test_orm.factories import PartitionFactory
 
 
@@ -21,14 +21,6 @@ class WhooshSearchBackendTest(TestBase):
 
     def test_initializes_root_dir(self):
         self.assertEquals(self.backend.root_dir, self.library._fs.search() + '/')
-
-    def test_initializes_dataset_index(self):
-        self.assertIsInstance(self.backend.dataset_index, DatasetWhooshIndex)
-
-    # _expand_place_ids tests
-    def _test_expands_given_place_with_id(self):
-        # FIXME:
-        temp = self.backend._expand_place_ids('California')
 
 
 @unittest.skip('Not ready')
@@ -109,8 +101,7 @@ class DatasetWhooshIndexTest(TestBase):
             schema.names())
 
     # _delete tests
-    def _test_deletes_dataset_from_index(self):
-        # FIXME: is broken.
+    def test_deletes_dataset_from_index(self):
         db = self.new_database()
         dataset = self.new_db_dataset(db, n=0)
         self.backend.dataset_index.index_one(dataset)
@@ -118,7 +109,7 @@ class DatasetWhooshIndexTest(TestBase):
         # search just added document.
         all_docs = list(self.backend.dataset_index.index.searcher().documents())
         self.assertIn(dataset.vid, [x['vid'] for x in all_docs])
-        self.backend.dataset_index._delete(dataset.vid)
+        self.backend.dataset_index._delete(vid=dataset.vid)
         all_docs = list(self.backend.dataset_index.index.searcher().documents())
         self.assertNotIn(dataset.vid, [x['vid'] for x in all_docs])
 
@@ -181,19 +172,18 @@ class IdentifierWhooshIndexTest(TestBase):
             schema.names())
 
     # _delete tests
-    def _test_deletes_dataset_from_index(self):
-        # FIXME: is broken.
+    def test_deletes_identifier_from_index(self):
         identifier = dict(
             identifier='gvid', type='type',
             name='name1')
         self.backend.identifier_index.index_one(identifier)
 
-        # search just added document.
-        all_docs = list(self.backend.dataset_index.index.searcher().documents())
-        self.assertIn('name1', [x['vid'] for x in all_docs])
-        self.backend.dataset_index._delete('name1')
+        # find just added document.
         all_docs = list(self.backend.identifier_index.index.searcher().documents())
-        self.assertNotIn('name1', [x['vid'] for x in all_docs])
+        self.assertIn('gvid', [x['identifier'] for x in all_docs])
+        self.backend.identifier_index._delete(identifier='gvid')
+        all_docs = list(self.backend.identifier_index.index.searcher().documents())
+        self.assertNotIn('gvid', [x['identifier'] for x in all_docs])
 
 
 @unittest.skip('Not ready')
@@ -257,7 +247,7 @@ class PartitionWhooshIndexTest(TestBase):
     def test_returns_whoosh_schema(self):
         schema = self.backend.partition_index._get_generic_schema()
         self.assertItemsEqual(
-            ['bvid', 'doc', 'keywords', 'title', 'type', 'vid'],
+            ['bvid', 'doc', 'keywords', 'title', 'vid'],
             schema.names())
 
     # _make_query_from_terms tests
@@ -294,15 +284,17 @@ class PartitionWhooshIndexTest(TestBase):
             'help AND keywords:(beslan , farn AND beslan AND [2001 TO 2010])')
 
     # _delete tests
-    def _test_deletes_partition_from_index(self):
-        # FIXME: is broken.
+    def test_deletes_partition_from_index(self):
         db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
-        self.backend.dataset_index.index_one(dataset)
+        PartitionFactory._meta.sqlalchemy_session = db.session
+        partition1 = PartitionFactory()
+        db.session.commit()
+
+        self.backend.partition_index.index_one(partition1)
 
         # search just added document.
-        all_docs = list(self.backend.dataset_index.index.searcher().documents())
-        self.assertIn(dataset.vid, [x['vid'] for x in all_docs])
-        self.backend.dataset_index._delete(dataset.vid)
-        all_docs = list(self.backend.dataset_index.index.searcher().documents())
-        self.assertNotIn(dataset.vid, [x['vid'] for x in all_docs])
+        all_docs = list(self.backend.partition_index.index.searcher().documents())
+        self.assertIn(partition1.vid, [x['vid'] for x in all_docs])
+        self.backend.partition_index._delete(vid=partition1.vid)
+        all_docs = list(self.backend.partition_index.index.searcher().documents())
+        self.assertNotIn(partition1.vid, [x['vid'] for x in all_docs])
