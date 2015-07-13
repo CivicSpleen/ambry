@@ -117,7 +117,6 @@ class BaseDatasetIndex(BaseIndex):
 
     _schema = {
         'vid': 'id',
-        'type': 'id',
         'title': 'ngramwords',
         'keywords': 'keyword',
         'doc': 'text'}
@@ -128,11 +127,14 @@ class BaseDatasetIndex(BaseIndex):
         # find tables.
         execute = object_session(dataset).execute
 
-        # FIXME: use query args instead string formatting.
-        query = """SELECT t_name, c_name, c_description FROM columns
-                JOIN tables ON c_t_vid = t_vid WHERE t_d_vid = '{}' """.format(str(dataset.identity.vid))
+        # FIXME: sanitize query.
+        query = """\
+            SELECT t_name, c_name, c_description
+            FROM columns
+            JOIN tables ON c_t_vid = t_vid WHERE t_d_vid = '{}' """.format(str(dataset.identity.vid))
 
-        columns = '\n'.join([' '.join(list(t)) for t in execute(query)])
+        columns = '\n'.join(
+            [' '.join(list(t)) for t in execute(query)])
 
         doc = u'\n'.join([unicode(x) for x in [dataset.config.metadata.about.title,
                                                dataset.config.metadata.about.summary,
@@ -141,7 +143,7 @@ class BaseDatasetIndex(BaseIndex):
                                                dataset.identity.source,
                                                dataset.identity.name,
                                                dataset.identity.vname,
-                                               dataset.config.metadata.about.summary,  # FIXME: Is it valid replacement for documentation?
+                                               # bundle.metadata.documentation.main, # FIXME: Can't find such field in new implementation.
                                                columns]])
 
         # From the source, make a varity of combinations for keywords:
@@ -165,7 +167,6 @@ class BaseDatasetIndex(BaseIndex):
             list(dataset.config.metadata.about.time) + sources)
 
         document = dict(
-            type=u'dataset',
             vid=unicode(dataset.identity.vid),
             title=unicode(dataset.identity.name) + u' ' + unicode(dataset.config.metadata.about.title),
             doc=unicode(doc),
@@ -181,7 +182,6 @@ class BasePartitionIndex(BaseIndex):
     _schema = {
         'vid': 'id',
         'bvid': 'id',  # FIXME: dataset_vid?
-        'type': 'id',
         'title': 'ngramwords',
         'keywords': 'keyword',
         'doc': 'text'}
@@ -250,3 +250,134 @@ class BaseIdentifierIndex(BaseIndex):
             'type': unicode(identifier['type']),
             'name': unicode(identifier['name'])
         }
+
+
+class SearchTermParser(object):
+    """Decompose a search term in to conceptual parts, according to the Ambry search model."""
+    TERM = 0
+    QUOTEDTERM = 1
+    LOGIC = 2
+    MARKER = 3
+    YEAR = 4
+
+    types = {
+        TERM: 'TERM',
+        QUOTEDTERM: 'TERM',
+        LOGIC: 'LOGIC',
+        MARKER: 'MARKER',
+        YEAR: 'YEAR'
+    }
+
+    marker_terms = {
+        'about': 'about',
+        'in': ('coverage', 'grain'),
+        'by': 'grain',
+        'with': 'with',
+        'from': ('year', 'source'),
+        'to': 'year',
+        'source': 'source'}
+
+    by_terms = 'state county zip zcta tract block blockgroup place city cbsa msa'.split()
+
+    @staticmethod
+    def s_quotedterm(scanner, token):
+        return SearchTermParser.QUOTEDTERM, token.lower().strip()
+
+    @staticmethod
+    def s_term(scanner, token):
+        return SearchTermParser.TERM, token.lower().strip()
+
+    @staticmethod
+    def s_domainname(scanner, token):
+        return SearchTermParser.TERM, token.lower().strip()
+
+    @staticmethod
+    def s_markerterm(scanner, token):
+        return SearchTermParser.MARKER, token.lower().strip()
+
+    @staticmethod
+    def s_year(scanner, token):
+        return SearchTermParser.YEAR, int(token.lower().strip())
+
+    def __init__(self):
+        # I have no idea which one to pick
+        from nltk.stem.lancaster import LancasterStemmer
+        import re
+
+        mt = '|'.join(
+            [r'\b' + x.upper() + r'\b' for x in self.marker_terms.keys()])
+
+        self.scanner = re.Scanner([
+            (r'\s+', None),
+            (r"['\"](.*?)['\"]", self.s_quotedterm),
+            (mt.lower(), self.s_markerterm),
+            (mt, self.s_markerterm),
+            (r'19[789]\d|20[012]\d', self.s_year),  # From 1970 to 2029
+            (r'(?:[\w\-\.?])+', self.s_domainname),
+            (r'.+?\b', self.s_term),
+        ])
+
+        self.stemmer = LancasterStemmer()
+
+        self.by_terms = [self.stem(x) for x in self.by_terms]
+
+    def scan(self, s):
+        s = ' '.join(s.splitlines())  # make a single line
+        # Returns one item per line, but we only have one line
+        return self.scanner.scan(s)[0]
+
+    def stem(self, w):
+        return self.stemmer.stem(w)
+
+    def parse(self, s):
+
+        toks = self.scan(s)
+
+        # Assume the first term is ABOUT, if it is not marked with a marker.
+        if toks[0][0] == self.TERM or toks[0][0] == self.QUOTEDTERM:
+            toks = [(self.MARKER, 'about')] + toks
+
+        # Group the terms by their marker.
+        # last_marker = None
+        bymarker = []
+        for t in toks:
+            if t[0] == self.MARKER:
+                bymarker.append((t[1], []))
+            else:
+                bymarker[-1][1].append(t)
+
+        # Convert some of the markers based on their contents
+        comps = []
+        for t in bymarker:
+            t = list(t)
+            if t[0] == 'in' and len(t[1]) == 1 and isinstance(t[1][0][1], basestring) and self.stem(
+                    t[1][0][1]) in self.by_terms:
+                t[0] = 'by'
+
+            # If the from term isn't an integer, then it is really a source.
+            if t[0] == 'from' and len(t[1]) == 1 and t[1][0][0] != self.YEAR:
+                t[0] = 'source'
+
+            comps.append(t)
+
+        # Join all of the terms into single marker groups
+        groups = {marker: [] for marker, _ in comps}
+
+        for marker, terms in comps:
+            groups[marker] += [term for marker, term in terms]
+
+        for marker, terms in groups.items():
+
+            if len(terms) > 1:
+                if marker in 'in':
+                    groups[marker] = ' '.join(terms)
+                else:
+                    groups[marker] = '(' + ' OR '.join(terms) + ')'
+            elif len(terms) == 1:
+                groups[marker] = terms[0]
+            else:
+                pass
+
+        return groups
+
+

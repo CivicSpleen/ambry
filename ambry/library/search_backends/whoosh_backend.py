@@ -20,7 +20,7 @@ from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIn
     BaseIdentifierIndex, BaseSearchBackend, IdentifierSearchResult,\
     DatasetSearchResult, PartitionSearchResult
 
-from ambry.library.search import SearchTermParser  # FIXME: Move parser to the search_backend module.
+from ambry.library.search_backends.base import SearchTermParser
 from ambry.util import get_logger
 
 logger = get_logger(__name__, level=logging.DEBUG)
@@ -190,11 +190,10 @@ class DatasetWhooshIndex(BaseDatasetIndex):
         return cterms
 
     def _get_generic_schema(self):
-        """ Returns whoosh's generic schema. """
+        """ Returns whoosh's generic schema of the dataset. """
         schema = Schema(
             vid=ID(stored=True, unique=True),  # Object id
             bvid=ID(stored=True),  # bundle vid
-            type=ID(stored=True),
             title=NGRAMWORDS(),
             keywords=KEYWORD,  # Lists of coverage identifiers, ISO time values and GVIDs, source names, source abbrev
             doc=TEXT)  # Generated document for the core of the topic search
