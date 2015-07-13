@@ -33,9 +33,13 @@ class IdentifierSearchResult(object):
 
 
 class PartitionSearchResult(object):
-    def __init__(self, vid=None):
+    def __init__(self, dataset_vid=None, vid=None, score=None):
         assert vid is not None, 'vid can not be None.'
+        assert dataset_vid is not None, 'dataset_vid can not be None.'
+        assert score is not None, 'score can not be None.'
+        self.dataset_vid = dataset_vid
         self.vid = vid
+        self.score = score
 
 
 class BaseSearchBackend(object):
@@ -113,7 +117,6 @@ class BaseDatasetIndex(BaseIndex):
 
     _schema = {
         'vid': 'id',
-        'bvid': 'id',
         'type': 'id',
         'title': 'ngramwords',
         'keywords': 'keyword',
@@ -164,7 +167,6 @@ class BaseDatasetIndex(BaseIndex):
         document = dict(
             type=u'dataset',
             vid=unicode(dataset.identity.vid),
-            bvid=unicode(dataset.identity.vid),
             title=unicode(dataset.identity.name) + u' ' + unicode(dataset.config.metadata.about.title),
             doc=unicode(doc),
             keywords=u' '.join(unicode(x) for x in keywords)
@@ -210,9 +212,9 @@ class BasePartitionIndex(BaseIndex):
                 return g
 
         keywords = (
-            ' '.join(partition.data.get('geo_coverage', [])) + ' ' +
-            ' '.join([resum(g) for g in partition.data.get('geo_grain', [])]) + ' ' +
-            ' '.join(str(x) for x in partition.data.get('time_coverage', []))
+            ' '.join(partition.space_coverage) + ' ' +
+            ' '.join([resum(g) for g in partition.grain_coverage]) + ' ' +
+            ' '.join(str(x) for x in partition.time_coverage)
         )
 
         doc_field = unicode(
