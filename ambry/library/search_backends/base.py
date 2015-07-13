@@ -16,7 +16,7 @@ class DatasetSearchResult(object):
         self.vid = None
         self.b_score = 0
         self.p_score = 0
-        self.bundle_found = False
+        self.bundle_found = False  # FIXME: Find usage. If there is now such, remove.
         self.partitions = set()
 
     @property
@@ -27,6 +27,7 @@ class DatasetSearchResult(object):
 
 
 class IdentifierSearchResult(object):
+    """ Search result of the identifier search index. """
     def __init__(self, score=None, vid=None, type=None, name=None):
         assert score is not None, 'score argument requires value.'
         assert vid and type and name, 'vid, type and name arguments require values.'
@@ -37,7 +38,15 @@ class IdentifierSearchResult(object):
 
 
 class PartitionSearchResult(object):
+    """ Search result of the partition search index. """
     def __init__(self, dataset_vid=None, vid=None, score=None):
+        """ Initalizes partition search result fields.
+
+        Args:
+            dataset_vid (str): vid of the partition's dataset.
+            vid (str): partition vid.
+            score (int): score of the search result.
+        """
         assert vid is not None, 'vid can not be None.'
         assert dataset_vid is not None, 'dataset_vid can not be None.'
         assert score is not None, 'score can not be None.'
@@ -66,19 +75,19 @@ class BaseSearchBackend(object):
         self.identifier_index.reset()
 
     def _get_dataset_index(self):
-        """ Search index by given query. Return result list. """
+        """ Initializes and returns dataset index. """
         raise NotImplementedError(
             'subclasses of BaseSearchBackend must provide a _get_dataset_index() method')
 
     def _get_partition_index(self):
-        """ Search index by given query. Return result list. """
+        """ Initializes and returns partition index. """
         raise NotImplementedError(
-            'subclasses of BaseSearchBackend must provide a _get_dataset_index() method')
+            'subclasses of BaseSearchBackend must provide a _get_partition_index() method')
 
     def _get_identifier_index(self):
-        """ Search index by given query. Return result list. """
+        """ Initializes and returns identifier index. """
         raise NotImplementedError(
-            'subclasses of BaseSearchBackend must provide a _get_dataset_index() method')
+            'subclasses of BaseSearchBackend must provide a _get_identifier_index() method')
 
 
 class BaseIndex(object):
@@ -87,33 +96,61 @@ class BaseIndex(object):
     """
 
     def __init__(self, backend=None):
-        assert backend is not None, 'backend is require argument.'
+        """ Inializes index.
+
+        Args:
+            backend (BaseBackend subclass):
+
+        """
+        assert backend is not None, 'backend argument can not be None.'
         self.backend = backend
 
     def index_one(self, instance):
-        """ Index Ambry system object. """
+        """ Indexes exactly one object of the Ambry system.
+
+        Args:
+            instance (any): instance to index.
+
+        """
         doc = self._as_document(instance)
         self._index_document(doc)
 
     def index_many(self, instances, tick_f=None):
-        """ Index given instances. """
+        """ Index all given instances.
+
+        Args:
+            instances (list): instances to index.
+            tick_f (callable): FIXME:
+
+        """
+        # FIXME: Implement.
         pass
 
-    def search(self, query):
-        """ Search index by given query. Return result list. """
-        raise NotImplementedError('subclasses of BaseCache must provide a search() method')
+    def search(self, search_phrase):
+        """ Search index by given query. Return result list.
+
+        Args:
+            search_phrase (str or unicode):
+
+        """
+        raise NotImplementedError('subclasses of BaseIndex must provide a search() method')
 
     def all(self):
         """ Returns all documents of the index. """
         raise NotImplementedError('subclasses of BaseIndex must provide a all() method')
 
     def _index_document(self, document):
-        """ Add document to the index. """
-        raise NotImplementedError('subclasses of BaseIndex must provide a _index_document() method')
+        """ Adds document to the index.
+
+        Args:
+            document (dict):
+
+        """
+        raise NotImplementedError('subclasses of BaseIndex must provide an _index_document() method')
 
     def _as_document(self, instance):
         """ Converts ambry object to the document ready to add to index. """
-        raise NotImplementedError('subclasses of BaseIndex must provide a _as_document() method')
+        raise NotImplementedError('subclasses of BaseIndex must provide an _as_document() method')
 
 
 class BaseDatasetIndex(BaseIndex):
@@ -126,7 +163,15 @@ class BaseDatasetIndex(BaseIndex):
         'doc': 'text'}
 
     def _as_document(self, dataset):
-        """ Converts dataset to doc indexed by to FTS index. """
+        """ Converts dataset to document indexed by to FTS index.
+
+        Args:
+            dataset (orm.Dataset): dataset to convert.
+
+        Returns:
+            dict with structure matches to BaseDatasetIndex._schema.
+
+        """
 
         # find tables.
         execute = object_session(dataset).connection().execute
@@ -190,7 +235,15 @@ class BasePartitionIndex(BaseIndex):
         'doc': 'text'}
 
     def _as_document(self, partition):
-        """ Converts given partition to the document indexed by backend. """
+        """ Converts given partition to the document indexed by FTS backend.
+
+        Args:
+            partition (orm.Partition): partition to convert.
+
+        Returns:
+            dict with structure matches to BasePartitionIndex._schema.
+
+        """
 
         schema = ' '.join(
             '{} {} {} {} {}'.format(
@@ -248,6 +301,16 @@ class BaseIdentifierIndex(BaseIndex):
     }
 
     def _as_document(self, identifier):
+        """ Converts given identifier to the document indexed by FTS backend.
+
+        Args:
+            identifier (dict): identifier to convert. Dict contains at
+                least 'identifier', 'type' and 'name' keys.
+
+        Returns:
+            dict with structure matches to BaseIdentifierIndex._schema.
+
+        """
         return {
             'identifier': unicode(identifier['identifier']),
             'type': unicode(identifier['type']),
@@ -303,7 +366,6 @@ class SearchTermParser(object):
         return SearchTermParser.YEAR, int(token.lower().strip())
 
     def __init__(self):
-        # I have no idea which one to pick
         mt = '|'.join(
             [r'\b' + x.upper() + r'\b' for x in self.marker_terms.keys()])
 
@@ -379,5 +441,3 @@ class SearchTermParser(object):
                 pass
 
         return groups
-
-
