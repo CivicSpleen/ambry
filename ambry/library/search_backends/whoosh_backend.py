@@ -183,7 +183,8 @@ class DatasetWhooshIndex(BaseDatasetIndex):
                 cterms = keywords_terms
 
         if source:
-            source_terms = 'keywords:{}'.format(source, cterms)
+            # FIXME: test that.
+            source_terms = 'keywords:{} AND '.format(source, cterms)
             if cterms:
                 cterms = self.backend._and_join(cterms, source_terms)
             else:
@@ -244,10 +245,6 @@ class IdentifierWhooshIndex(BaseIdentifierIndex):
 
         class PosSizeWeighting(scoring.WeightingModel):
 
-            def __init__(self):
-                # FIXME: remove.
-                pass
-
             def scorer(self, searcher, fieldname, text, qf=1):
                 return self.PosSizeScorer(searcher, fieldname, text, qf=qf)
 
@@ -270,12 +267,11 @@ class IdentifierWhooshIndex(BaseIdentifierIndex):
         with self.index.searcher(weighting=PosSizeWeighting()) as searcher:
             results = searcher.search(query, limit=limit)
             for hit in results:
-                vid = hit.get('identifier', False)
-                if vid:
-                    yield IdentifierSearchResult(
-                        score=hit.score, vid=vid,
-                        type=hit.get('type', False),
-                        name=hit.get('name', ''))
+                vid = hit['identifier']
+                yield IdentifierSearchResult(
+                    score=hit.score, vid=vid,
+                    type=hit.get('type', False),
+                    name=hit.get('name', ''))
 
     def _index_document(self, identifier, force=False):
         """ Adds identifier document to the index. """
@@ -326,9 +322,14 @@ class PartitionWhooshIndex(BasePartitionIndex):
 
     def _from_to_as_term(self, frm, to):
         """ Turns from and to into the query format.
-        :param frm:
-        :param to:
-        :return:
+
+        Args:
+            frm (str): from year
+            to (str): to year
+
+        Returns:
+            Whoosh query str with years range.
+
         """
 
         # The wackiness with the conversion to int and str, and adding ' ', is because there
@@ -337,21 +338,17 @@ class PartitionWhooshIndex(BasePartitionIndex):
         from_year = ''
         to_year = ''
 
-        if frm:
+        def year_or_empty(prefix, year, suffix):
             try:
-                from_year = str(int(frm)) + ' '
-            except ValueError:
-                pass
-        else:
-            from_year = ''
+                return prefix + str(int(year)) + suffix
+            except (ValueError, TypeError):
+                return ''
+
+        if frm:
+            from_year = year_or_empty('', frm, ' ')
 
         if to:
-            try:
-                to_year = ' ' + str(int(to))
-            except ValueError:
-                pass
-        else:
-            to_year = ''
+            to_year = year_or_empty(' ', to, '')
 
         if bool(from_year) or bool(to_year):
             return '[{}TO{}]'.format(from_year, to_year)
