@@ -412,7 +412,8 @@ class PartitionWhooshIndex(BasePartitionIndex):
             if not first_type:
                 first_type = result.type
 
-            if result.type != first_type:  # Ignore ones that aren't the same type as the best match
+            if result.type != first_type:
+                # Ignore ones that aren't the same type as the best match
                 continue
 
             place_vids.append(result.vid)
@@ -426,7 +427,15 @@ class PartitionWhooshIndex(BasePartitionIndex):
             return terms
 
     def _make_query_from_terms(self, terms):
-        """ Returns a Whoosh query for partition created from decomposed search terms. """
+        """ Returns a Whoosh query for partition created from decomposed search terms.
+
+        Args:
+            terms (dict or str):
+
+        Returns:
+            str containing Whoosh query.
+
+        """
 
         if not isinstance(terms, dict):
             stp = SearchTermParser()
@@ -434,21 +443,20 @@ class PartitionWhooshIndex(BasePartitionIndex):
 
         keywords = list()
         doc = list()
-        source = None
 
         # The top level ( title, names, keywords, doc ) will get ANDed together
 
-        if terms.get('about', False):
+        if 'about' in terms:
             doc.append(terms['about'])
 
-        if terms.get('with', False):
+        if 'with' in terms:
             doc.append(terms['with'])
 
-        if terms.get('in', False):
+        if 'in' in terms:
             place_vids = self._expand_place_ids(terms['in'])
             keywords.append(place_vids)
 
-        if terms.get('by', False):
+        if 'by' in terms:
             keywords.append(terms['by'])
 
         frm_to = self._from_to_as_term(terms.get('from', None), terms.get('to', None))
