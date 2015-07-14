@@ -454,13 +454,13 @@ def bundle_info(args, l, rc):
 
 def bundle_clean(args, l, rc):
     from ambry.bundle import Bundle
-    b = using_bundle(args, l).cast_to_subclass()
+    b = using_bundle(args, l).cast_to_build_subclass()
     b.do_clean()
     b.set_last_access(Bundle.STATES.NEW)
 
 def bundle_download(args, l, rc):
     from ambry.bundle import Bundle
-    b = using_bundle(args, l).cast_to_subclass()
+    b = using_bundle(args, l).cast_to_build_subclass()
     b.download()
     b.set_last_access(Bundle.STATES.DOWNLOADED)
 
@@ -468,7 +468,7 @@ def bundle_sync(args, l, rc):
     from ambry.bundle import Bundle
     from tabulate import tabulate
 
-    b = using_bundle(args,l).cast_to_subclass()
+    b = using_bundle(args,l).cast_to_build_subclass()
 
     prt("Bundle source filesystem: {}".format(b.source_fs))
     prt("Sync direction: {}".format(args.sync_dir if args.sync_dir else 'latest'))
@@ -482,7 +482,7 @@ def bundle_sync(args, l, rc):
 def bundle_meta(args, l, rc):
     from ambry.bundle import Bundle
 
-    b = using_bundle(args, l).cast_to_metasubclass()
+    b = using_bundle(args, l).cast_to_meta_subclass()
 
     if args.clean:
         b.do_clean()
@@ -490,7 +490,7 @@ def bundle_meta(args, l, rc):
     b.do_sync()
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
-    b = using_bundle(args, l).cast_to_metasubclass()
+    b = using_bundle(args, l).cast_to_meta_subclass()
     b.do_meta()
     b.set_last_access(Bundle.STATES.META)
 
@@ -499,13 +499,13 @@ def bundle_prepare(args, l, rc):
     from ambry.bundle import Bundle
 
     if args.clean or args.sync:
-        b = using_bundle(args, l).cast_to_subclass()
+        b = using_bundle(args, l).cast_to_build_subclass()
         if args.clean:
             b.do_clean()
         if args.sync:
             b.do_sync()
 
-    b = using_bundle(args, l).cast_to_subclass()
+    b = using_bundle(args, l).cast_to_build_subclass()
     b.do_prepare()
     b.set_last_access(Bundle.STATES.PREPARED)
 
@@ -514,13 +514,13 @@ def bundle_build(args, l, rc):
     from ambry.bundle import Bundle
 
     if args.clean or args.sync:
-        b = using_bundle(args, l).cast_to_subclass()
+        b = using_bundle(args, l).cast_to_build_subclass()
         if args.clean:
             b.do_clean()
         if args.sync:
             b.do_sync()
 
-    b = using_bundle(args, l).cast_to_subclass()
+    b = using_bundle(args, l).cast_to_build_subclass()
 
     if args.clean:
         if not b.do_clean():
@@ -1045,7 +1045,7 @@ def bundle_edit(args, l, rc):
                 b.sync()
 
             elif command == 'build':
-                bc = b.cast_to_subclass()
+                bc = b.cast_to_build_subclass()
                 if arg == 'p':
                     bc.do_clean()
                     bc.do_prepare()

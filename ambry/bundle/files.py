@@ -630,15 +630,14 @@ class SchemaFile(RowBuildSourceFile):
 
             last_table = row['table']
 
-        # Transpose tric to remove empty columns
-        rows = zip(*[ row for row in zip(*rows) if bool(filter(bool,row[1:])) ])
+        # Transpose trick to remove empty columns
+        #rows = zip(*[ row for row in zip(*rows) if bool(filter(bool,row[1:])) ])
 
         bsfile = self._dataset.bsfile(self._file_const)
 
         bsfile.mime_type = 'application/msgpack'
         bsfile.update_contents(msgpack.packb(rows))
 
-        self._dataset._database.commit()
 
 class SourceSchemaFile(RowBuildSourceFile):
 

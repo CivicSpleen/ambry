@@ -407,7 +407,7 @@ class Test(TestBase):
         b = self.setup_bundle('complete-load')
 
         b.sync()
-        b = b.cast_to_subclass()
+        b = b.cast_to_build_subclass()
         self.assertEquals('synced', b.state)
         b.do_prepare()
         self.assertEquals('prepared', b.state)
@@ -418,7 +418,7 @@ class Test(TestBase):
 
         b = self.setup_bundle('complete-load')
         b.sync()
-        b = b.cast_to_metasubclass()
+        b = b.cast_to_meta_subclass()
 
         b.do_meta()
 
@@ -434,12 +434,33 @@ class Test(TestBase):
 
         #print s.column_map
 
+    def alt_bundle_dirs(self, root):
+
+        import glob, os
+
+        build_url = os.path.join(root,'build')
+        source_url = os.path.join(root,'source')
+
+        for base in (source_url, os.path.join(build_url, 'pipeline'), build_url):
+            for f in glob.glob(os.path.join(base, '*')):
+                if os.path.isfile(f):
+                    os.remove(f)
+                else:
+                    os.rmdir(f)
+
+        return build_url, source_url
+
     def test_complete_load_meta_rent07(self):
         """"""
 
-        b = self.setup_bundle('complete-load')
+        if False:
+            build_url, source_url = self.alt_bundle_dirs('/tmp/test/rent07')
+        else:
+            build_url = source_url = None
+
+        b = self.setup_bundle('complete-load', build_url = build_url, source_url = source_url)
         b.sync()
-        b = b.cast_to_metasubclass()
+        b = b.cast_to_meta_subclass()
 
         b.do_meta('rent07')
 
@@ -451,18 +472,30 @@ class Test(TestBase):
         self.assertIn('rpeople,1,size,size,float,,,,,,', b.source_fs.getcontents('source_schema.csv'))
 
         # Check a few random bits from the pipeline debugging output.
-        self.assertIn("| renter_cost_gt_30_cv    |     13 | <type 'float'>  |", b.build_fs.getcontents('pipeline/meta-rent07.txt'))
+        print  b.build_fs.getcontents('pipeline/meta-rent07.txt')
+
+        self.assertIn("| renter cost_gt_30_cv    |     13 | <type 'float'>  |", b.build_fs.getcontents('pipeline/meta-rent07.txt'))
         self.assertIn('|   1 |    1 | 0O0P01 |', b.build_fs.getcontents('pipeline/meta-rent07.txt'))
 
         s = b.source('rent07')
 
-        # The schema file should have a schem in it.
+        # The schema file should have a schema in it.
+
         schema_lines = b.source_fs.getcontents('schema.csv').splitlines()
-        self.assertEqual(9, len(schema_lines) )
-        self.assertIn('rent,4,renter_cost_gt_30,,c00000load01004,INTEGER,renter_cost_gt_30', schema_lines)
+        self.assertEqual(13, len(schema_lines) )
+        self.assertIn('rent,4,renter_cost_gt_30,,,c00000load01004,INTEGER,renter_cost_gt_30,', schema_lines)
 
-        #self.dump_database('columns')
+        import ambry
 
+        class TestBundle(ambry.bundle.Bundle):
+
+            def edit_pipeline(self, pl):
+
+                from ambry.bundle.etl.pipeline import PrintRows, augment_pipeline
+                pl.last = PrintRows(print_at='end')
+
+        b = b.cast_to_subclass(TestBundle)
+        b.do_build('rent')
 
     def test_type_intuition(self):
 
@@ -473,7 +506,7 @@ class Test(TestBase):
         b = self.setup_bundle('process')
 
         b.sync()
-        b = b.cast_to_subclass()
+        b = b.cast_to_build_subclass()
         self.assertEquals('synced', b.state)
         b.do_prepare()
         self.assertEquals('prepared', b.state)
@@ -504,4 +537,22 @@ class Test(TestBase):
 
         self.assertEqual(6, sum( e[1] == 'rtf' for e in b.do_sync() ))
 
+    def test_dimensions(self):
+        """"""
+        import ambry.bundle
 
+        class TestBundle(ambry.bundle.Bundle):
+
+            def edit_pipeline(self, pl):
+
+                from ambry.bundle.etl.pipeline import PrintRows, augment_pipeline
+
+                pl.last = PrintRows(print_at='end')
+
+        b = self.setup_bundle('dimensions')
+        b.sync()
+        b = b.cast_to_subclass(TestBundle)
+
+        b.do_meta()
+
+        print b.source_fs.getcontents('source_schema.csv')

@@ -244,14 +244,24 @@ class MergeHeader(Pipe):
                 elif self.data_end_line and i>= self.data_end_line:
                     self.footers.append(row)
 
+
+
 class PrintRows(Pipe):
     """A Pipe that collects rows that pass through and displays them as a table when the pipeline is printed. """
 
-    def __init__(self, count=10, columns=7):
+    def __init__(self, count=10, columns=7, print_at=None):
         self.columns = columns
         self.count = count
         self.rows = []
         self.i = 0
+
+        try:
+            self.print_at_row = int(print_at)
+            self.print_at_end = False
+        except:
+            self.print_at_row = None
+            self.print_at_end = bool(print_at)
+
 
     def __iter__(self):
 
@@ -262,7 +272,13 @@ class PrintRows(Pipe):
             if i < self.count:
                 self.rows.append(append_row[:self.columns])
 
+            if i == self.print_at_row:
+                print str(self)
+
             yield row
+
+        if self.print_at_end:
+            print str(self)
 
     def __str__(self):
         from tabulate import tabulate
@@ -275,6 +291,83 @@ class PrintRows(Pipe):
 
         else:
             return ''
+
+def make_partition_classifier(headers):
+    """Create a function to extract the partition classification values from a row. These values are used to select a
+    partition to write the row to """
+
+    from ambry.identity import PartialPartitionName
+
+    positions = []
+    terms = []
+
+    # Slow, but easy to understand ...
+    for h_term, n_term in [  ('_p_'+term,term) for term, _, _ in  PartialPartitionName._name_parts ]:
+        for i, header in headers:
+            if h_term == header:
+                positions.append(i)
+                terms.append(n_term)
+
+    code = ('f(row): name = PartialPartitionName(); {}; return name'
+            .format(','.join('name.'+term for term in terms)+'='+','.join('row[{}]'.format() )))
+
+    exec code
+    return locals()['f']
+
+class WriteToPartition(Pipe):
+    """ """
+
+    def __init__(self, partition):
+        self.headers = None
+
+        self.partition = partition
+        self.inserter = self.partition.inserter()
+
+    def __iter__(self):
+
+        for i, row in enumerate(self.source_pipe):
+            if i == 0:
+                self.headers = row
+
+            self.inserter.insert(row)
+
+            yield row
+
+    def __str__(self):
+        return repr(self)
+
+class WriteToSelectedPartition(Pipe):
+    """Writes to one of several partitions, depending on the contents of columns that selects a partition"""
+
+    def __init__(self):
+        self.headers = None
+
+        self.classifier = make_partition_classifier(self.headers)
+
+        self.inserters = {}
+
+    def __iter__(self):
+
+        for i, row in enumerate(self.source_pipe):
+            if i == 0:
+                self.header = row
+                yield row
+
+            pname = self.classifier(row)
+
+            inserter = self.inserter.get(pname, None)
+
+            if inserter is None:
+                p = self.bundle.partitions.new_partition(pname)
+                inserter = p.inserter()
+                self.inserters(pname, inserter)
+
+            inserter.insert(row)
+
+            yield row
+
+    def __str__(self):
+        return repr(self)
 
 class PipelineSegment(list):
 
@@ -332,17 +425,28 @@ from collections import OrderedDict, Mapping
 class Pipeline(OrderedDict):
     """Hold a defined collection of PipelineGroups, and when called, coalesce them into a single pipeline """
 
-    partition = None
+    bundle = None
 
-    _groups_names = ['source', 'map_source', 'row_intuit', 'coalesce_rows', 'mangle_header', 'normalize',
-                     'remap_to_table', 'type_intuit', 'cast_columns', 'statistics', 'last', 'write_to_table']
+    _groups_names = ['source',                  # The unadulterated dource file
+                     'first',                   # For callers to hijack the start of the process
+                     'source_row_intuit',       # (Meta only) Classify rows
+                     'source_coalesce_rows',    # Combine rows into a header according to classification
+                     'source_type_intuit',       # Classify the types of columns
+                     'source_map_header',       # Alter column names to names used in final table
+                     'dest_map_header',         # Change header names to be the same as used in the dest table
+                     'dest_cast_columns',       # Run casters to convert values, maybe create code columns.
+                     'dest_augment',            # Add dimension columns
+                     'dest_statistics',         # Compute statistics
+                     'last',                    # For callers to hijack the end of the process
+                     'write_to_table'           # Write the rows to the table.
+                     ]
 
 
-    def __init__(self, partition = None,  *args, **kwargs):
+    def __init__(self, bundle = None,  *args, **kwargs):
 
         super(Pipeline, self).__init__()
 
-        super(Pipeline, self).__setattr__('partition', partition)
+        super(Pipeline, self).__setattr__('bundle', bundle)
 
         for group_name in self._groups_names:
 
@@ -350,18 +454,48 @@ class Pipeline(OrderedDict):
             if not isinstance(gs, (list, tuple)):
                 gs = [gs]
 
-            self[group_name] =  PipelineSegment(self, group_name, *gs)
+            self[group_name] = PipelineSegment(self, group_name, *gs)
+
+    @property
+    def meta(self):
+        """Return a copy with only the PipeSegments that apply to the meta phase"""
+
+        exclude = [  'dest_map_header',  # Change header names to be the same as used in the dest table
+                     'dest_cast_columns',  # Run casters to convert values, maybe create code columns.
+                     'dest_augment',  # Add dimension columns
+                     'dest_statistics',  # Compute statistics
+                     'last',  # For callers to hijack the end of the process
+                     'write_to_table'  # Write the rows to the table.
+                     ]
+
+        kwargs = {}
+        pl = Pipeline(bundle = self.bundle)
+        for group_name, pl_segment in self.items():
+            if group_name in exclude:
+                continue
+            pl[group_name] = pl_segment
+
+        return pl
+
+    @property
+    def build(self):
+        """Return a copy with only the PipeSegments that apply to the build phase"""
+
+        exclude = [ 'source_row_intuit',  'source_type_intuit'  ]
+
+        kwargs = {}
+        pl = Pipeline(bundle=self.bundle)
+        for group_name, pl_segment in self.items():
+            if group_name in exclude:
+                continue
+            pl[group_name] = pl_segment
+
+        return pl
 
     @property
     def file_name(self):
 
-        if self.partition:
-            s =  str(self.partition.name)+'-'
-        else:
-            s = ''
-
-        return s+self.source.source.name
-
+        return self.source.source.name
 
     def __setitem__(self, k, v):
 
@@ -371,7 +505,10 @@ class Pipeline(OrderedDict):
         if isinstance(v, Pipe) or ( isinstance(v, type) and issubclass(v, Pipe)):
             self[k].append(v)
         else:
-            super(Pipeline, self).__setitem__(k, v)
+            if v is None or ( isinstance(v, list) and len(v) > 0 and v[0] is None ):
+                super(Pipeline, self).__setitem__(k,PipelineSegment(self,k))
+            else:
+                super(Pipeline, self).__setitem__(k, v)
 
     def __getitem__(self, k):
 
@@ -385,7 +522,7 @@ class Pipeline(OrderedDict):
             matches = filter(lambda e: isinstance(e, k), chain)
 
             if not matches:
-                raise IndexError("No entry for class: {}".format(k))
+                raise IndexError("No entry for class: {} in {}".format(k, chain))
 
             return matches[0]
         else:

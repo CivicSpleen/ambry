@@ -62,7 +62,7 @@ class Test(TestBase):
         b = self.setup_bundle('simple')
 
         b.sync()
-        b = b.cast_to_subclass()
+        b = b.cast_to_build_subclass()
         self.assertEquals('synced', b.state)
         b.do_prepare()
         self.assertEquals('prepared', b.state)
@@ -90,7 +90,7 @@ class Test(TestBase):
 
         b = self.setup_bundle('complete-build')
         b.sync()
-        b = b.cast_to_subclass()
+        b = b.cast_to_build_subclass()
         self.assertEquals('synced', b.state)
         b.do_prepare()
         self.assertEquals('prepared', b.state)
@@ -122,7 +122,7 @@ class Test(TestBase):
 
         b = self.setup_bundle('complete-load')
         b.sync()
-        b = b.cast_to_metasubclass()
+        b = b.cast_to_meta_subclass()
         self.assertEquals('synced', b.state)
         b.do_prepare()
         self.assertEquals('prepared', b.state)
