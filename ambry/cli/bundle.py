@@ -294,7 +294,6 @@ def bundle_parser(cmd):
     command_p.add_argument('source', nargs='?', type=str, help='Bundle source directory or file')
 
 def bundle_info(args, l, rc):
-    from  textwrap import wrap
     from ambry.util.datestimes import compress_years
     from tabulate import tabulate
 
@@ -354,9 +353,9 @@ def bundle_info(args, l, rc):
     print '----'
     print tabulate(join(info[0]), tablefmt='plain')
 
-    from ambry.bundle.etl.stats import text_hist
+    from ambry.etl import text_hist
     from textwrap import wrap
-    from terminaltables import  SingleTable, AsciiTable
+    from terminaltables import  SingleTable
 
     for p in b.partitions:
         rows = ['Column LOM Count Uniques Values'.split()]
@@ -925,7 +924,6 @@ def bundle_import(args, l, rc):
 
 def bundle_export(args, l, rc):
     from fs.opener import fsopendir
-    import os
 
     b = using_bundle(args,l)
 

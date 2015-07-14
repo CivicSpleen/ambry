@@ -1,5 +1,5 @@
-
 import unittest
+
 from test.test_base import TestBase
 
 
@@ -22,7 +22,7 @@ class Test(TestBase):
         self.fs = fsopendir('mem://test')
 
     def test_csv(self):
-        from ambry.bundle.etl.partition import new_partition_data_file
+        from ambry.etl.partition import new_partition_data_file
 
         data = []
         for i in range(10):
@@ -58,7 +58,7 @@ class Test(TestBase):
         """Time writing rows with a PartitionDataFile.
 
         """
-        from ambry.bundle.etl.partition import new_partition_data_file, PartitionMsgpackDataFile
+        from ambry.etl.partition import new_partition_data_file
 
         fs = self.fs
 
@@ -112,7 +112,7 @@ class Test(TestBase):
         print round(float(n)/(time.time() - s),3)
 
     def test_dict_caster(self):
-        from ambry.bundle.etl.transform import DictTransform, NaturalInt
+        from ambry.etl.transform import DictTransform, NaturalInt
         import datetime
 
         ctb = DictTransform()
@@ -202,7 +202,7 @@ class Test(TestBase):
         ctb({'int': '.', 'float': 'a', 'str': '3', 'ni1': 0, 'ni2': 3})
 
     def test_row_caster(self):
-        from ambry.bundle.etl.transform import ListTransform, NaturalInt
+        from ambry.etl.transform import ListTransform, NaturalInt
         import datetime
 
         ctb = ListTransform()
@@ -289,7 +289,6 @@ class Test(TestBase):
         declared MD5 sums. """
 
         from ambry.util import md5_for_stream
-        from fs.opener import fsopendir
 
         b = self.setup_bundle('complete-load')
 
@@ -330,10 +329,9 @@ class Test(TestBase):
 
 
     def test_etl_pipeline(self):
-        from ambry.bundle.etl.pipeline import MergeHeader, MangleHeader, Pipe, MapHeader, Pipeline
-        from ambry.bundle.etl.pipeline import PrintRows, augment_pipeline, Sink
-        from ambry.bundle.etl.stats import Stats
-        from ambry.bundle.etl.intuit import TypeIntuiter
+        from ambry.etl.pipeline import MergeHeader, MangleHeader, MapHeader, Pipeline
+        from ambry.etl.pipeline import PrintRows, augment_pipeline
+        from ambry.etl.intuit import TypeIntuiter
 
         b = self.setup_bundle('complete-load')
 
@@ -388,7 +386,7 @@ class Test(TestBase):
 
         # FIXME.
 
-        from ambry.bundle.etl.pipeline import MangleHeader
+        from ambry.etl.pipeline import MangleHeader
 
         rows = [
             ['Header One',' ! Funky $ Chars','  Spaces ','1 foob ar'],
@@ -491,7 +489,8 @@ class Test(TestBase):
 
             def edit_pipeline(self, pl):
 
-                from ambry.bundle.etl.pipeline import PrintRows, augment_pipeline
+                from ambry.etl.pipeline import PrintRows
+
                 pl.last = PrintRows(print_at='end')
 
         b = b.cast_to_subclass(TestBundle)
@@ -499,7 +498,7 @@ class Test(TestBase):
 
     def test_type_intuition(self):
 
-        from ambry.bundle.etl.intuit import TypeIntuiter
+        from ambry.etl.intuit import TypeIntuiter
         from ambry.orm.column import Column
         import datetime
 
@@ -511,7 +510,7 @@ class Test(TestBase):
         b.do_prepare()
         self.assertEquals('prepared', b.state)
 
-        pl = b.do_meta_pipeline('types1').run()
+        pl = b.do_pipeline('types1').run()
 
         self.assertTrue(bool(pl.source))
 
@@ -545,7 +544,7 @@ class Test(TestBase):
 
             def edit_pipeline(self, pl):
 
-                from ambry.bundle.etl.pipeline import PrintRows, augment_pipeline
+                from ambry.etl.pipeline import PrintRows
 
                 pl.last = PrintRows(print_at='end')
 

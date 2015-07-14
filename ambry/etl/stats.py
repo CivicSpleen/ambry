@@ -7,11 +7,13 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ambry.util import Constant
 from collections import Counter
+
 from livestats import livestats
-from geoid import civick
-from pipeline import Pipe
+
+from ambry.util import Constant
+from ambry.etl.pipeline import Pipe
+
 
 def text_hist(nums, ascii = False):
 

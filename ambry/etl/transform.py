@@ -328,7 +328,7 @@ class Transform(object):
         import dateutil.parser as dp
         import datetime
         from functools import partial
-        from ambry.bundle.etl.transform import parse_date, parse_time, parse_datetime
+        from ambry.etl.transform import parse_date, parse_time, parse_datetime
 
         return {{{}}}""".format(','.join("'{name}':{func}(caster, '{name}', row.get('{name}'))".format(i=i, name=name,func=v)
                                          for i,name,v in o))
@@ -338,7 +338,7 @@ class Transform(object):
         import dateutil.parser as dp
         import datetime
         from functools import partial
-        from ambry.bundle.etl.transform import parse_date, parse_time, parse_datetime
+        from ambry.etl.transform import parse_date, parse_time, parse_datetime
 
         return [{}]""".format(
             ','.join("{func}(caster, {i}, row[{i}])".format(i=i, name=name,func=v) for i, name, v in o))

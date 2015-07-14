@@ -8,7 +8,7 @@ class Bundle(Bundle):
     """ """
 
     def build(self):
-        from ambry.bundle.etl.pipeline import Pipe
+        from ambry.etl.pipeline import Pipe
 
         class RandomSourcePipe(Pipe):
 

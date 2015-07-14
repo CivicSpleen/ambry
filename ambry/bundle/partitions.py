@@ -7,12 +7,14 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 # import os
 
-from ..identity import PartitionIdentity, PartitionNameQuery, PartialPartitionName, NameQuery  # , PartitionName
-
 from sqlalchemy.orm.exc import NoResultFound
+
+from ..identity import PartitionIdentity, PartitionNameQuery, NameQuery  # , PartitionName
+
+
 # from util.typecheck import accepts, returns
-from ambry.orm.exc import ConflictError
-from ..util import Constant, Proxy, memoize
+from ..util import Constant, Proxy
+
 
 class Partitions(object):
 
@@ -276,17 +278,17 @@ class PartitionProxy(Proxy):
         return self
 
     def datafile(self):
-        from etl.partition import new_partition_data_file
+        from ambry.etl.partition import new_partition_data_file
         return new_partition_data_file(self._bundle.build_fs, self.cache_key)
 
     def inserter(self):
-        from etl.partition import Inserter
+        from ambry.etl.partition import Inserter
 
         return Inserter(self, self.datafile() )
 
     def pipeline(self,**kwargs):
-        from ambry.bundle.etl.pipeline import Pipeline
-        from ambry.bundle.etl.stats import Stats
+        from ambry.etl.pipeline import Pipeline
+        from ambry.etl import Stats
 
         pl = Pipeline(**kwargs)
         pl.statistics = Stats(self._partition.table)

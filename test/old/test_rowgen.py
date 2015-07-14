@@ -1,5 +1,5 @@
 from test_base import TestBase
-from ambry.bundle.etl.rowgen import DelimitedRowGenerator
+from ambry.etl import DelimitedRowGenerator
 from test.old import support
 
 
@@ -23,7 +23,7 @@ class Test(TestBase):
     def test_headers(self):
         from test import support
         from os.path import join, dirname
-        from ambry.bundle.etl.rowgen import DelimitedRowGenerator
+        from ambry.etl import DelimitedRowGenerator
 
         fn = lambda x: join(dirname(support.__file__), x)
 

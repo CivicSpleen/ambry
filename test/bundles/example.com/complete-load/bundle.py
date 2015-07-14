@@ -2,7 +2,6 @@
 """
 
 from ambry.bundle import Bundle
-from ambry.bundle.etl.pipeline import Pipe, augment_pipeline
 
 
 class Bundle(Bundle):

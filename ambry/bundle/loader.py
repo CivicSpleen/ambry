@@ -2,7 +2,7 @@
 """
 
 from ambry.bundle import BuildBundle
-from ambry.bundle.etl.rowgen import RowSpecIntuiter
+from ambry.etl import RowSpecIntuiter
 
 
 class LoaderBundle(BuildBundle):
@@ -148,11 +148,11 @@ class LoaderBundle(BuildBundle):
         rs['header_mangler'] = lambda header: self.mangle_header(header)
 
         if ext == 'csv':
-            from ambry.bundle.etl.rowgen import DelimitedRowGenerator
+            from ambry.etl import DelimitedRowGenerator
 
             return DelimitedRowGenerator(fn, **rs)
         elif ext == 'xls':
-            from ambry.bundle.etl.rowgen import ExcelRowGenerator
+            from ambry.etl import ExcelRowGenerator
 
             return ExcelRowGenerator(fn, **rs)
         else:

@@ -141,7 +141,6 @@ class Bundle(object):
     @memoize
     def build_fs(self):
         from fs.opener import fsopendir
-        import os
 
         build_url = self._build_url if self._build_url else self.dataset.config.library.build.url
         
@@ -164,8 +163,8 @@ class Bundle(object):
 
     def pipeline(self, source):
         """Construct the ETL pipeline for the meta phase"""
-        from ambry.bundle.etl.pipeline import Pipeline, MergeHeader, MangleHeader, Sink
-        from ambry.bundle.etl.intuit import TypeIntuiter
+        from ambry.etl.pipeline import Pipeline, MergeHeader, MangleHeader
+        from ambry.etl.intuit import TypeIntuiter
 
         source = self.source(source) if isinstance(source, basestring) else source
 
@@ -326,7 +325,7 @@ class Bundle(object):
     def clean(self):
         """Clean generated objects from the dataset, but only if there are File contents
          to regenerate them"""
-        from ambry.orm import Partition, ColumnStat, File
+        from ambry.orm import ColumnStat, File
         from sqlalchemy.orm import object_session
 
         ds = self.dataset
@@ -477,7 +476,7 @@ class Bundle(object):
         self.do_sync()
 
     def meta_make_source_tables(self, pl):
-        from ambry.bundle.etl.intuit  import TypeIntuiter
+        from ambry.etl.intuit import TypeIntuiter
 
         ti = pl[TypeIntuiter]
 
@@ -490,7 +489,6 @@ class Bundle(object):
                                                datatype=c.resolved_type)
 
     def meta_make_dest_tables(self, pl):
-        from ambry.orm.column import Column
 
         source = pl.source.source
         dest = pl.source.source.dest_table
@@ -510,7 +508,7 @@ class Bundle(object):
 
 
     def meta(self, source_name = None):
-        from ambry.bundle.etl.pipeline import PrintRows
+        from ambry.etl.pipeline import PrintRows
 
         for i, source in enumerate(self.sources):
 
@@ -573,8 +571,6 @@ class Bundle(object):
 
     # Build the final package
     def pre_build(self, force = False):
-        from time import time
-        import sys
 
         if self.is_built and not force:
             self.error("Bundle is already built. Skipping  ( Use --clean  or --force to force build ) ")
@@ -623,7 +619,6 @@ class Bundle(object):
         """After the build, update the configuration with the time required for
         the build, then save the schema back to the tables, if it was revised
         during the build."""
-        from time import time
 
         return True
 

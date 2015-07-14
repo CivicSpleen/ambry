@@ -6,7 +6,6 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 __docformat__ = 'restructuredtext en'
 
-
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
 from sqlalchemy import  Text, String, ForeignKey
@@ -16,7 +15,8 @@ from sqlalchemy.sql import text
 from ambry.identity import TableNumber,  ObjectNumber
 from ambry.orm import Column, DictableMixin
 from ambry.orm.exc import NotFoundError
-from . import Base, MutationDict, MutationList, JSONEncodedObj
+from . import Base, MutationDict, JSONEncodedObj
+
 
 class Table(Base, DictableMixin):
     __tablename__ = 'tables'
@@ -253,7 +253,7 @@ class Table(Base, DictableMixin):
     def caster(self):
         """Returns a function that takes a row that can be indexed by positions
         which returns a new row with all of the values cast to schema types."""
-        from ambry.bundle.etl.transform import CasterTransformBuilder
+        from ambry.etl.transform import CasterTransformBuilder
 
         bdr = CasterTransformBuilder()
 
