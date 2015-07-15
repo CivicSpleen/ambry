@@ -184,6 +184,7 @@ class IdentifierSQLiteIndexTest(TestBase):
         self.assertEquals(result, [])
 
 
+@unittest.skip('Not ready')
 class PartitionSQLiteIndexTest(TestBase):
 
     def setUp(self):
