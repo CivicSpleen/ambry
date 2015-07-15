@@ -9,6 +9,7 @@ from ambry.library import new_library
 from ambry.library.search_backends.base import DatasetSearchResult, IdentifierSearchResult,\
     PartitionSearchResult
 from test.test_orm.factories import PartitionFactory
+from sqlalchemy.sql.expression import text
 
 
 @unittest.skip('Not ready')
@@ -21,29 +22,11 @@ class DatasetSQLiteIndexTest(TestBase):
         self.backend = SQLiteSearchBackend(library)
 
     def test_initialises_index(self):
-
-        # dataset_index table created
-        query = """
-            SELECT name FROM sqlite_master WHERE type='table' AND name='dataset_index';
-        """
-        result = self.backend.library.database.connection.execute(query).fetchall()
-        self.assertEquals(result, [('dataset_index',)])
+        _assert_table_exists(self.backend, 'dataset_index')
 
     # reset tests
     def test_drops_dataset_index(self):
-        query = """
-            SELECT name FROM sqlite_master WHERE type='table' AND name='dataset_index';
-        """
-        # Table exists before drop.
-        result = self.backend.library.database.connection.execute(query).fetchall()
-        self.assertEquals(result, [('dataset_index',)])
-
-        # drop
-        self.backend.dataset_index.reset()
-
-        # table does not exist after drop
-        result = self.backend.library.database.connection.execute(query).fetchall()
-        self.assertEquals(result, [])
+        _assert_resets_index(self.backend, 'dataset_index')
 
     # search tests
     def test_returns_found_dataset(self):
@@ -90,7 +73,8 @@ class DatasetSQLiteIndexTest(TestBase):
 
         # search just added document.
         query = """
-            SELECT vid from dataset_index;
+            SELECT vid
+            FROM dataset_index;
         """
         result = self.backend.library.database.connection.execute(query).fetchall()
         self.assertEquals(result[0][0], dataset.vid)
@@ -102,7 +86,8 @@ class DatasetSQLiteIndexTest(TestBase):
         self.backend.dataset_index.index_one(dataset)
 
         query = """
-            SELECT vid from dataset_index
+            SELECT vid
+            FROM dataset_index
             WHERE vid = :vid;
         """
 
@@ -115,3 +100,137 @@ class DatasetSQLiteIndexTest(TestBase):
         # assert document is deleted.
         result = self.backend.library.database.connection.execute(query, vid=dataset.vid).fetchall()
         self.assertEquals(result, [])
+
+
+@unittest.skip('Not ready')
+class IdentifierSQLiteIndexTest(TestBase):
+
+    def setUp(self):
+        super(self.__class__, self).setUp()
+        rc = self.get_rc()
+        library = new_library(rc)
+        self.backend = SQLiteSearchBackend(library)
+
+    def test_initialises_index(self):
+        _assert_table_exists(self.backend, 'identifier_index')
+
+    # reset tests
+    def test_resets_identifier_index(self):
+        _assert_resets_index(self.backend, 'identifier_index')
+
+    # search tests
+    def test_returns_found_identifier(self):
+        # add identifier to the index.
+        identifier = dict(
+            identifier='gvid', type='type',
+            name='name1')
+        self.backend.identifier_index.index_one(identifier)
+
+        # assert it is added.
+        query = text("""
+            SELECT identifier
+            FROM identifier_index
+            WHERE identifier = :identifier;
+        """)
+
+        result = self.backend.library.database.connection.execute(query, identifier='gvid').fetchall()
+        self.assertEquals(result, [('gvid',)])
+
+        # search and found result.
+        found = list(self.backend.identifier_index.search('gvid'))
+        self.assertIsInstance(found[0], IdentifierSearchResult)
+        names = [x.name for x in found]
+        self.assertIn('name1', names)
+
+    # _index_document tests
+    def test_adds_identifier_document_to_the_index(self):
+        identifier = dict(
+            identifier='gvid', type='type',
+            name='name1')
+        self.backend.identifier_index.index_one(identifier)
+
+        # assert it is added.
+        query = text("""
+            SELECT identifier
+            FROM identifier_index
+            WHERE identifier = :identifier;
+        """)
+
+        result = self.backend.library.database.connection.execute(query, identifier='gvid').fetchall()
+        self.assertEquals(result, [('gvid',)])
+
+    # _delete tests
+    def test_deletes_identifier_from_index(self):
+        identifier = dict(
+            identifier='gvid', type='type',
+            name='name1')
+        self.backend.identifier_index.index_one(identifier)
+
+        # assert document exists.
+        query = text("""
+            SELECT identifier
+            FROM identifier_index
+            WHERE identifier = :identifier;
+        """)
+
+        result = self.backend.library.database.connection.execute(query, identifier='gvid').fetchall()
+        self.assertEquals(result, [('gvid',)])
+
+        # deleting
+        self.backend.identifier_index._delete(identifier='gvid')
+
+        # assert document is deleted.
+        result = self.backend.library.database.connection.execute(query, identifier='gvid').fetchall()
+        self.assertEquals(result, [])
+
+
+def _assert_resets_index(backend, index_name):
+    """ Resets index and asserts index table dropped.
+
+    Args:
+        backend (BaseSearchBackend subclass instance).
+        index_name (str): name of the index to reset.
+
+    Raises:
+        AssertionError if table does not exist before reset.
+        AssertionError if table exists after reset.
+
+    """
+
+    query = text("""
+        SELECT name
+        FROM sqlite_master
+        WHERE type='table' AND name=:index_name;
+    """)
+    execute = backend.library.database.connection.execute
+
+    # Table exists before drop.
+    result = execute(query, index_name=index_name).fetchall()
+    mismatch_msg = 'Inapropriate result found while looking for created {} index.'.format(index_name)
+    assert result == [(index_name,)], mismatch_msg
+
+    # drop
+    getattr(backend, index_name).reset()
+
+    # table does not exist after drop
+    result = execute(query, index_name=index_name).fetchall()
+    assert result == [], 'Inapropriate result found while looking for deleted {} index.'.format(index_name)
+
+
+def _assert_table_exists(backend, table_name):
+    """ Asserts that table with given name exists.
+
+    Args:
+        backend (BaseSearchBackend subclass instance).
+        table_name (str): name of the table to search.
+
+    Raises:
+        AssertionError if table does not exist.
+
+    """
+    query = """
+        select name from sqlite_master where type='table' and name=:table_name;
+    """
+    result = backend.library.database.connection.execute(query, table_name=table_name).fetchall()
+    mismatch_msg = 'Result mismatch while looking for {} table existance.'.format(table_name)
+    assert result == [(table_name,)], mismatch_msg
