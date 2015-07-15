@@ -181,6 +181,23 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
 
 class PartitionSQLiteIndex(BasePartitionIndex):
 
+    def __init__(self, backend=None):
+        assert backend is not None, 'backend argument can not be None.'
+        super(self.__class__, self).__init__(backend=backend)
+
+        logger.debug('sqlitesearch: creating partition FTS table.')
+
+        query = """\
+            CREATE VIRTUAL TABLE partition_index USING fts3(
+                vid VARCHAR(256) NOT NULL,
+                bvid VARCHAR(256) NOT NULL,
+                title TEXT,
+                keywords TEXT,
+                doc TEXT
+            );
+        """
+        self.backend.library.database.connection.execute(query)
+
     def search(self, search_phrase, limit=None):
         """ Finds partitions by search phrase.
 
@@ -191,13 +208,28 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         Generates:
             PartitionSearchResult instances.
         """
-        # TODO: Implement.
-        pass
+
+        raw_connection = self.backend.library.database.engine.raw_connection()
+        raw_connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
+
+        query = ("""
+            SELECT vid, bvid, rank(matchinfo(partition_index)) AS score
+            FROM partition_index
+            WHERE vid MATCH :part;
+        """)  # FIXME: order by rank.
+        results = self.backend.library.database.connection.execute(query, part=search_phrase).fetchall()
+        for result in results:
+            vid, dataset_vid, score = result
+            yield PartitionSearchResult(
+                vid=vid, dataset_vid=dataset_vid, score=score)
 
     def _index_document(self, document, force=False):
         """ Adds parition document to the index. """
-        # TODO: Implement.
-        pass
+        query = text("""
+            INSERT INTO partition_index(vid, bvid, title, keywords)
+            VALUES(:vid, :bvid, :title, :keywords);
+        """)
+        self.backend.library.database.connection.execute(query, **document)
 
     def reset(self):
         """ Drops index table. """
@@ -207,14 +239,17 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         self.backend.library.database.connection.execute(query)
 
     def _delete(self, vid=None):
-        """ Deletes given partition with given vid from index.
+        """ Deletes partition with given vid from index.
 
         Args:
             vid (str): vid of the partition document to delete.
 
         """
-        # TODO: Implement.
-        pass
+        query = text("""
+            DELETE FROM partition_index
+            WHERE vid = :vid;
+        """)
+        self.backend.library.database.connection.execute(query, vid=vid)
 
 
 def _make_rank_func(weights):

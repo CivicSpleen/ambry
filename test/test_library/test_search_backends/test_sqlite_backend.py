@@ -21,7 +21,7 @@ class DatasetSQLiteIndexTest(TestBase):
         library = new_library(rc)
         self.backend = SQLiteSearchBackend(library)
 
-    def test_initialises_index(self):
+    def test_initializes_index(self):
         _assert_table_exists(self.backend, 'dataset_index')
 
     # reset tests
@@ -111,7 +111,7 @@ class IdentifierSQLiteIndexTest(TestBase):
         library = new_library(rc)
         self.backend = SQLiteSearchBackend(library)
 
-    def test_initialises_index(self):
+    def test_initializes_index(self):
         _assert_table_exists(self.backend, 'identifier_index')
 
     # reset tests
@@ -181,6 +181,88 @@ class IdentifierSQLiteIndexTest(TestBase):
 
         # assert document is deleted.
         result = self.backend.library.database.connection.execute(query, identifier='gvid').fetchall()
+        self.assertEquals(result, [])
+
+
+class PartitionSQLiteIndexTest(TestBase):
+
+    def setUp(self):
+        super(self.__class__, self).setUp()
+        rc = self.get_rc()
+        library = new_library(rc)
+        self.backend = SQLiteSearchBackend(library)
+
+    def test_initializes_index(self):
+        _assert_table_exists(self.backend, 'partition_index')
+
+    # reset tests
+    def test_drops_dataset_index(self):
+        _assert_resets_index(self.backend, 'partition_index')
+
+    # search tests
+    def test_returns_found_partition(self):
+        # create partition and add it to the index to backend.
+        db = self.new_database()
+        PartitionFactory._meta.sqlalchemy_session = db.session
+        partition1 = PartitionFactory()
+        db.session.commit()
+
+        self.backend.partition_index.index_one(partition1)
+
+        # assert partition is added to index.
+        query = """
+            SELECT vid
+            FROM partition_index;
+        """
+        result = self.backend.library.database.connection.execute(query).fetchall()
+        self.assertEquals(result[0][0], partition1.vid)
+
+        # search and check found result.
+        found = list(self.backend.partition_index.search(partition1.vid))
+        self.assertIsInstance(found[0], PartitionSearchResult)
+        all_vids = [x.vid for x in found]
+        self.assertIn(partition1.vid, all_vids)
+
+    # _index_document tests
+    def test_adds_partition_document_to_the_index(self):
+        db = self.new_database()
+        PartitionFactory._meta.sqlalchemy_session = db.session
+        partition1 = PartitionFactory()
+        db.session.commit()
+
+        self.backend.partition_index.index_one(partition1)
+
+        # search just added document.
+        query = """
+            SELECT vid
+            FROM partition_index;
+        """
+        result = self.backend.library.database.connection.execute(query).fetchall()
+        self.assertEquals(result[0][0], partition1.vid)
+
+    # _delete tests
+    def test_deletes_partition_from_index(self):
+        db = self.new_database()
+        PartitionFactory._meta.sqlalchemy_session = db.session
+        partition1 = PartitionFactory()
+        db.session.commit()
+
+        self.backend.partition_index.index_one(partition1)
+
+        query = text("""
+            SELECT vid
+            FROM partition_index
+            WHERE vid = :vid;
+        """)
+
+        result = self.backend.library.database.connection.execute(query, vid=partition1.vid).fetchall()
+        self.assertEquals(result, [(partition1.vid,)])
+
+        # deleting
+        self.backend.partition_index._delete(vid=partition1.vid)
+
+        # assert document is deleted.
+        result = self.backend.library.database.connection.execute(query, vid=partition1.vid).fetchall()
         self.assertEquals(result, [])
 
 
