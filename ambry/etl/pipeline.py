@@ -5,6 +5,9 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
+class PipelineError(Exception):
+    pass
+
 class Pipe(object):
     """A step in the pipeline"""
 
@@ -62,6 +65,16 @@ class Pipe(object):
                 yield row
 
         self.finish()
+
+    def log(self, m):
+
+        if self.bundle:
+            self.bundle.logger.info(m)
+
+    def error(self, m):
+
+        if self.bundle:
+            self.bundle.logger.error(m)
 
 class Sink(Pipe):
     """A final stage pipe, which consumes its input and produces no output rows"""
@@ -762,7 +775,6 @@ class Pipeline(OrderedDict):
 
         for p in chain:
             p.bundle = self.bundle
-
 
         return chain, last
 

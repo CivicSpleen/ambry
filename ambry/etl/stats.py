@@ -123,7 +123,10 @@ class StatSet(object):
                 bin = int((v - self.bin_min) / self.bin_width)
                 self.bins[bin] += 1
 
-            self.stats.add(float(v))
+            try:
+                self.stats.add(float(v))
+            except ValueError:
+                self.counts[str(v)] += 1
         else:
             assert False, "Really should be one or the other ... "
 
@@ -224,14 +227,27 @@ class Stats(Pipe):
         self.table = table
         self._stats = {}
         self._func = None
+        self._func_code = None
         self.headers = None
 
-    def init(self):
+    def init(self, headers):
+
+        from pipeline import PipelineError
+
+        failures = []
 
         for c in self._source.dest_table.columns:
-            self.add(c, build = False)
 
-        self._func = self.build()
+            if not c.name in self.headers:
+                self.error("Stats failed to find table {} column {} in the headers for source {} "
+                           .format(self._source.dest_table.name, c.name , self.source.name))
+            else:
+
+                self.add(c, build = False)
+
+        self._func, self._func_code = self.build()
+
+
 
     def add(self, column, build = True):
         """Determine the LOM from a ORM Column"""
@@ -253,7 +269,7 @@ class Stats(Pipe):
         # Doing it for every add() is less efficient, but it's insignificant time, and
         # it means we don't have to remember to call the build phase before processing
         if self.build:
-            self._func = self.build()
+            self._func, self._func_code = self.build()
 
     def build(self):
 
@@ -263,23 +279,41 @@ class Stats(Pipe):
             if self._stats[name] is not None:
                 parts.append("stats['{name}'].add(row['{name}'])".format(name=name))
 
-        f = 'def _process_row(stats, row):\n    {}'.format('\n    '.join(parts))
+        if not parts:
+            from pipeline import PipelineError
+            raise PipelineError("Did not get any stats variables for table {} source {} "
+                           .format(self._source.dest_table.name , self.source.name))
 
-        exec f
+        code = 'def _process_row(stats, row):\n    {}'.format('\n    '.join(parts))
 
-        return locals()['_process_row']
+        exec code
+
+        f = locals()['_process_row']
+
+        return f, code
+
 
     def stats(self):
         return [ (name, self._stats[name]) for name, stat in self._stats.items() ]
 
     def process(self, row):
-        self._func(self._stats, row)
+        try:
+            self._func(self._stats, row)
+        except KeyError as e:
+            raise KeyError('Failed to find key in row. headers = "{}", code = "{}" '.format(self.headers, self._func_code))
+        except:
+            print '!!! headers = "{}", code = "{}" '.format(self.headers, self._func_code)
+            raise
+
         return row
 
     def process_header(self, row):
         """ """
-        self.init()
+
         self.headers = row
+
+        self.init(self.headers)
+
         return row
 
     def process_body(self, row):
@@ -302,4 +336,7 @@ class Stats(Pipe):
 
             rows.append(stats_dict.values())
 
-        return 'Statistics \n' + str(tabulate(rows[1:], rows[0], tablefmt="pipe"))
+        if rows:
+            return 'Statistics \n' + str(tabulate(rows[1:], rows[0], tablefmt="pipe"))
+        else:
+            return 'Statistics: None \n'

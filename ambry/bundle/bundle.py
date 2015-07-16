@@ -106,6 +106,10 @@ class Bundle(object):
 
     def source(self, name):
         source =  self.dataset.source_file(name)
+
+        if not source:
+            return None
+
         source._cache_fs = self._library.download_cache
         return source
 
@@ -155,6 +159,7 @@ class Bundle(object):
     def do_pipeline(self, source=None):
         """COnstruct the meta pipeline. This method shold not be overridden; iverride meta_pipeline() instead. """
         source = self.source(source) if isinstance(source, basestring) else source
+
 
         pl = self.pipeline(source)
 
@@ -616,7 +621,7 @@ class Bundle(object):
                                  .format(source.name, source.dest_table.name, table_name))
                 continue
 
-            self.logger.info("Running build for table: {} ".format(source.dest_table))
+            self.logger.info("Running build for table: {} ".format(source.dest_table.name))
 
             pl = self.do_pipeline(source).build_phase
 

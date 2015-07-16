@@ -408,6 +408,7 @@ class Test(TestBase):
 
     def test_complete_load_build(self):
         """Build the simple bundle"""
+        from ambry.etl import augment_pipeline, PrintRows
 
         b = self.setup_bundle('complete-load')
 
@@ -419,7 +420,12 @@ class Test(TestBase):
 
         b.do_meta()
 
-        b.do_build()
+        #b.do_build()
+
+        pl = b.do_pipeline('rent07').build_phase
+
+        pl.run()
+
 
     def test_complete_load_meta(self):
         """"""
@@ -482,15 +488,14 @@ class Test(TestBase):
         # Check a few random bits from the pipeline debugging output.
         print  b.build_fs.getcontents('pipeline/meta-rent07.txt')
 
-        self.assertIn("| renter cost_gt_30_cv    |     13 | <type 'float'>  |", b.build_fs.getcontents('pipeline/meta-rent07.txt'))
-        self.assertIn('|   1 |    1 | 0O0P01 |', b.build_fs.getcontents('pipeline/meta-rent07.txt'))
+        self.assertIn("| renter_cost_gt_30_cv    |     13 | <type 'float'>  |", b.build_fs.getcontents('pipeline/meta-rent07.txt'))
 
         s = b.source('rent07')
 
         # The schema file should have a schema in it.
 
         schema_lines = b.source_fs.getcontents('schema.csv').splitlines()
-        self.assertEqual(13, len(schema_lines) )
+        self.assertEqual(9, len(schema_lines) )
         self.assertIn('rent,4,renter_cost_gt_30,,,c00000load01004,INTEGER,renter_cost_gt_30,', schema_lines)
 
         import ambry
@@ -501,7 +506,7 @@ class Test(TestBase):
 
                 from ambry.etl.pipeline import PrintRows
 
-                pl.last = PrintRows(print_at='end')
+                pl.build_last = PrintRows(print_at='end')
 
         b = b.cast_to_subclass(TestBundle)
         b.do_build('rent')
@@ -520,7 +525,7 @@ class Test(TestBase):
         b.do_prepare()
         self.assertEquals('prepared', b.state)
 
-        pl = b.do_pipeline('types1').run()
+        pl = b.do_pipeline('types1').source_phase.run()
 
         self.assertTrue(bool(pl.source))
 
@@ -557,12 +562,12 @@ class Test(TestBase):
         b.do_prepare()
 
         pl = b.do_pipeline('dimensions').schema_phase
-        pl.last.append(Edit(delete = ['time','county','state'],
+        pl.build_last.append(Edit(delete = ['time','county','state'],
                             add={ "a": lambda e,r: r[4], "b": lambda e,r: r[1]},
                             edit = {'stusab': lambda e,v: v.lower(), 'county_name' : lambda e,v: v.upper() },
                             expand = { ('x','y') : lambda e, r: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
-        pl.last.append(PrintRows)
-        pl.last.prepend(PrintRows)
+        pl.build_last.append(PrintRows)
+        pl.build_last.prepend(PrintRows)
         # header: ['date', 'time', 'stusab', 'state', 'county', 'county_name']
 
         pl.run()
@@ -572,8 +577,8 @@ class Test(TestBase):
         # The PrintRows Pipes save the rows they print, so lets check that the before doesn't have the edited
         # row and the after does.
         row = [9, u'2002-03-21', u'la', u'MARIPOSA COUNTY, CALIFORNIA', u'43', u'09:11:40 PM', 21, 11]
-        self.assertNotIn(row, pl.last[0].rows)
-        self.assertIn(row, pl.last[2].rows)
+        self.assertNotIn(row, pl.build_last[0].rows)
+        self.assertIn(row, pl.build_last[2].rows)
 
     def test_sample_head(self):
         from ambry.etl.pipeline import Pipeline, Pipe, PrintRows, Sample, Head
