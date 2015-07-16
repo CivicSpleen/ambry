@@ -42,17 +42,6 @@ class Test(TestBase):
             self.assertEquals(sorted(data[0]), sorted(row.keys()))
             self.assertEquals(sorted(data[i]), sorted(row.values()))
 
-    def munger(self, schema):
-        """Create a function to call casters on a row. Using an eval is about 11% faster than
-        using a loop """
-
-        funcs = []
-
-        for name, t in schema:
-            funcs.append('cast_{}(row[{}])'.format(t.__name__, name))
-
-        return eval("lambda row: [{}]".format(','.join(funcs)))
-
     #@unittest.skip('Timing test')
     def test_csv_time(self):
         """Time writing rows with a PartitionDataFile.
@@ -70,8 +59,20 @@ class Test(TestBase):
         schema = [(i, types[i % 3]) for i in range(ncols)]
 
         #
-        # Two different munders, one uses a loop, one unrolls the loop in a lambda
-        row_munger1 =  self.munger(schema)
+        # Two different mungers, one uses a loop, one unrolls the loop in a lambda
+
+        def munger1(schema):
+            """Create a function to call casters on a row. Using an eval is about 11% faster than
+            using a loop """
+
+            funcs = []
+
+            for name, t in schema:
+                funcs.append('cast_{}(row[{}])'.format(t.__name__, name))
+
+            return eval("lambda row: [{}]".format(','.join(funcs)))
+
+        row_munger1 =  munger1(schema)
 
         def row_munger2(row):
             out = []
@@ -109,7 +110,15 @@ class Test(TestBase):
             row = row_munger1(row)
             cdf.insert(row)
 
-        print round(float(n)/(time.time() - s),3)
+        print "Munger 1", round(float(n)/(time.time() - s),3), 'rows/s'
+
+        s = time.time()
+        for i in range(n):
+            row = data[i % 100]
+            row = row_munger2(row)
+            cdf.insert(row)
+
+        print "Munger 2", round(float(n) / (time.time() - s), 3), 'rows/s'
 
     def test_dict_caster(self):
         from ambry.etl.transform import DictTransform, NaturalInt
@@ -327,7 +336,6 @@ class Test(TestBase):
             if i > 3:
                 break
 
-
     def test_etl_pipeline(self):
         from ambry.etl.pipeline import MergeHeader, MangleHeader, MapHeader, Pipeline
         from ambry.etl.pipeline import PrintRows, augment_pipeline
@@ -361,10 +369,10 @@ class Test(TestBase):
 
         pl = Pipeline(
             source = b.source('rent97').fetch().source_pipe(),
-            coalesce_rows= MergeHeader() ,
-            type_intuit =  TypeIntuiter(),
-            mangle_header= MangleHeader(),
-            remap_to_table = MapHeader({'gvid': 'county', 'renter_cost_gt_30': 'renter_cost'})
+            source_coalesce_rows= MergeHeader() ,
+            source_type_intuit =  TypeIntuiter(),
+            source_map_header= MangleHeader(),
+            dest_map_header = MapHeader({'gvid': 'county', 'renter_cost_gt_30': 'renter_cost'})
         )
 
         augment_pipeline(pl, PrintRows)
@@ -379,7 +387,6 @@ class Test(TestBase):
 
             if i > 5:
                 break
-
 
     @unittest.skip('This test needs a source that has a  bad header.')
     def test_mangle_header(self):
@@ -409,6 +416,9 @@ class Test(TestBase):
         self.assertEquals('synced', b.state)
         b.do_prepare()
         self.assertEquals('prepared', b.state)
+
+        b.do_meta()
+
         b.do_build()
 
     def test_complete_load_meta(self):
@@ -514,7 +524,7 @@ class Test(TestBase):
 
         self.assertTrue(bool(pl.source))
 
-        ti = pl.type_intuit[TypeIntuiter]
+        ti = pl.source_type_intuit[TypeIntuiter]
 
         ti_cols =  list(ti.columns)
 
@@ -523,35 +533,81 @@ class Test(TestBase):
 
         t = b.dataset.new_table(pl.source.source.name)
 
-        for c in pl.type_intuit[TypeIntuiter].columns:
+        for c in pl.source_type_intuit[TypeIntuiter].columns:
             t.add_column(c.header, datatype = Column.convert_python_type(c.resolved_type))
 
         b.commit()
 
-        self.assertEqual('int float string time date'.split(), [c.name for c in b.dataset.tables[0].columns ])
-        self.assertEqual([u'integer', u'real', u'varchar', u'time', u'date'], [c.datatype for c in b.dataset.tables[0].columns])
+        self.assertEqual('id int float string time date'.split(), [c.name for c in b.dataset.tables[0].columns ])
+        self.assertEqual([u'integer', u'integer', u'real', u'varchar', u'time', u'date'],
+                         [unicode(c.datatype) for c in b.dataset.tables[0].columns])
 
         from ambry.orm.file import File
         b.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
 
         self.assertEqual(6, sum( e[1] == 'rtf' for e in b.do_sync() ))
 
-    def test_dimensions(self):
-        """"""
-        import ambry.bundle
-
-        class TestBundle(ambry.bundle.Bundle):
-
-            def edit_pipeline(self, pl):
-
-                from ambry.etl.pipeline import PrintRows
-
-                pl.last = PrintRows(print_at='end')
+    def test_edit(self):
+        """Test the Edit pipe, for altering the structure of data"""
+        from dateutil.parser import parse
+        from ambry.etl.pipeline import PrintRows, Edit
 
         b = self.setup_bundle('dimensions')
-        b.sync()
-        b = b.cast_to_subclass(TestBundle)
+        b.do_sync()
+        b.do_prepare()
 
-        b.do_meta()
+        pl = b.do_pipeline('dimensions').schema_phase
+        pl.last.append(Edit(delete = ['time','county','state'],
+                            add={ "a": lambda e,r: r[4], "b": lambda e,r: r[1]},
+                            edit = {'stusab': lambda e,v: v.lower(), 'county_name' : lambda e,v: v.upper() },
+                            expand = { ('x','y') : lambda e, r: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
+        pl.last.append(PrintRows)
+        pl.last.prepend(PrintRows)
+        # header: ['date', 'time', 'stusab', 'state', 'county', 'county_name']
 
-        print b.source_fs.getcontents('source_schema.csv')
+        pl.run()
+
+        print str(pl)
+
+        # The PrintRows Pipes save the rows they print, so lets check that the before doesn't have the edited
+        # row and the after does.
+        row = [9, u'2002-03-21', u'la', u'MARIPOSA COUNTY, CALIFORNIA', u'43', u'09:11:40 PM', 21, 11]
+        self.assertNotIn(row, pl.last[0].rows)
+        self.assertIn(row, pl.last[2].rows)
+
+    def test_sample_head(self):
+        from ambry.etl.pipeline import Pipeline, Pipe, PrintRows, Sample, Head
+
+        class Source(Pipe):
+
+            def __iter__(self):
+
+                yield ['int','int']
+
+                for i in range(10000):
+                    yield([i,i])
+
+
+        # Sample
+        pl = Pipeline(
+            source=Source(),
+            source_first = Sample(est_length=10000),
+            source_last = PrintRows(count=50)
+        )
+
+        pl.run()
+
+        # head
+        self.assertIn([2, 7, 7],pl[PrintRows].rows)
+        self.assertIn([16, 2018, 2018], pl[PrintRows].rows)
+        self.assertIn([20, 9999, 9999], pl[PrintRows].rows)
+
+        pl = Pipeline(
+            source=Source(),
+            source_first=Head(10),
+            source_last=PrintRows(count=50)
+        )
+
+        pl.run()
+
+        self.assertEquals(11, len(pl[PrintRows].rows))

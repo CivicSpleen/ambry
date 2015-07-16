@@ -351,6 +351,7 @@ class Inserter(Sink):
             from ambry.etl import Stats
             try:
 
+                # Write the stats for this partition back into the partition
                 stats = self.pipeline.statistics[Stats]
 
                 self._partition.set_stats(stats.stats())

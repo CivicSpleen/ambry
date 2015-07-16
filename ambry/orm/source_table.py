@@ -50,8 +50,6 @@ class SourceColumn(Base):
         DATATYPE.DATETIME: Column.DATATYPE_DATETIME
     }
 
-
-
     id = SAColumn('sc_id', Integer, primary_key=True)
 
     st_id = SAColumn('sc_st_id', Integer, ForeignKey('sourcetables.st_id'), nullable=False)
@@ -65,7 +63,6 @@ class SourceColumn(Base):
 
     datatype = SAColumn('sc_datatype', Text) # Basic data type, usually intuited
     valuetype = SAColumn('sc_valuetype', Text) # Describes the meaning of the value: state, county, address, etc.
-
 
     start = SAColumn('sc_start', Integer) # For fixed width, the column starting position
     width = SAColumn('sc_width', Integer) # for Fixed width, the field width
@@ -147,7 +144,14 @@ class SourceTable(Base):
             return None
 
     def add_column(self, position, source_header, datatype, **kwargs):
-
+        """
+        Add a column to the source table.
+        :param position: Integer position of the column
+        :param source_header: Name fothe column, as it exists in the source file
+        :param datatype: Python datatype ( str, int, float, None ) for the column
+        :param kwargs:  Other source record args.
+        :return:
+        """
         c = self.column(source_header)
 
         if c:
@@ -173,6 +177,10 @@ class SourceTable(Base):
     @property
     def column_map(self):
         return { c.source_header: c.dest_header for c in self.columns }
+
+    @property
+    def column_index_map(self):
+        return {c.source_header: c.position for c in self.columns}
 
     @property
     def widths(self):

@@ -105,16 +105,19 @@ class Partitions(object):
         is equivalent to the vid ( with version information )
 
         """
-        from ambry.orm import Partition as OrmPartition
+        from ..orm import Partition as OrmPartition
         from sqlalchemy import or_
+        from ..identity import PartialPartitionName
 
         if isinstance(id_, PartitionIdentity):
             id_ = id_.id_
+        elif isinstance(id_, PartialPartitionName):
+            id_ = id_.promote(self.bundle.identity.name)
 
-        s = self.bundle.database.session
+        s = self.bundle.dataset._database.session
 
         q = (s.query(OrmPartition).filter(or_(
-                 OrmPartition.id_ == str(id_).encode('ascii'),
+                 OrmPartition.id == str(id_).encode('ascii'),
                  OrmPartition.vid == str(id_).encode('ascii')
              )))
 
@@ -126,8 +129,7 @@ class Partitions(object):
             orm_partition = None
 
         if not orm_partition:
-            q = (s.query(OrmPartition)
-                 .filter(OrmPartition.name == id_.encode('ascii')))
+            q = (s.query(OrmPartition).filter(OrmPartition.name == str(id_).encode('ascii')))
 
             try:
                 orm_partition = q.one()
@@ -211,7 +213,13 @@ class Partitions(object):
 
         return self
 
-    def new_partition(self,  data=None, **kwargs):
+    def new_partition(self, name = None, data=None, **kwargs):
+
+        from ambry.identity import PartialPartitionName
+
+        if name:
+            kwargs = { k:str(v) for k,v in name.dict.items() if k in [ e[0] for e in PartialPartitionName._name_parts] }
+
         p = self.bundle.dataset.new_partition(data=data,**kwargs)
         self.bundle.dataset.commit()
 
@@ -288,10 +296,10 @@ class PartitionProxy(Proxy):
 
     def pipeline(self,**kwargs):
         from ambry.etl.pipeline import Pipeline
-        from ambry.etl import Stats
+        from ambry.etl.stats import Stats
 
         pl = Pipeline(**kwargs)
-        pl.statistics = Stats(self._partition.table)
+        pl.dest_statistics = Stats(self._partition.table)
         pl.sink = self.inserter()
 
         return pl

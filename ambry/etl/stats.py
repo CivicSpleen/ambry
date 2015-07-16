@@ -123,7 +123,7 @@ class StatSet(object):
                 bin = int((v - self.bin_min) / self.bin_width)
                 self.bins[bin] += 1
 
-            self.stats.add(v)
+            self.stats.add(float(v))
         else:
             assert False, "Really should be one or the other ... "
 
@@ -224,11 +224,17 @@ class Stats(Pipe):
         self.table = table
         self._stats = {}
         self._func = None
+        self.headers = None
 
-    def add(self, column):
+    def init(self):
+
+        for c in self._source.dest_table.columns:
+            self.add(c, build = False)
+
+        self._func = self.build()
+
+    def add(self, column, build = True):
         """Determine the LOM from a ORM Column"""
-
-
 
         # Try it as an orm.column, otherwise try to look up in a table,
         # otherwise, as a string
@@ -245,8 +251,9 @@ class Stats(Pipe):
                 self._stats[column] = StatSet(column)
 
         # Doing it for every add() is less efficient, but it's insignificant time, and
-        # it means we don't have to remember to call a the build phase before processing
-        self._func = self.build()
+        # it means we don't have to remember to call the build phase before processing
+        if self.build:
+            self._func = self.build()
 
     def build(self):
 
@@ -269,27 +276,21 @@ class Stats(Pipe):
         self._func(self._stats, row)
         return row
 
-    def __iter__(self):
+    def process_header(self, row):
+        """ """
+        self.init()
+        self.headers = row
+        return row
 
-        itr = iter(self._source_pipe)
+    def process_body(self, row):
+        self.process(dict(zip(self.headers, row)))
 
-        header = itr.next()
-
-        yield header
-
-        for c in header:
-            self.add(c)
-
-        for row in itr:
-            self.process(dict(zip(header,row)))
-
-            yield row
+        return row
 
     def __str__(self):
         from tabulate import tabulate
 
         rows = []
-
 
         for name, stats in  self._stats.items():
             stats_dict = stats.dict

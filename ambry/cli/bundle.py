@@ -353,7 +353,7 @@ def bundle_info(args, l, rc):
     print '----'
     print tabulate(join(info[0]), tablefmt='plain')
 
-    from ambry.etl import text_hist
+    from ambry.etl.stats import text_hist
     from textwrap import wrap
     from terminaltables import  SingleTable
 
@@ -924,6 +924,7 @@ def bundle_import(args, l, rc):
 
 def bundle_export(args, l, rc):
     from fs.opener import fsopendir
+    import os
 
     b = using_bundle(args,l)
 

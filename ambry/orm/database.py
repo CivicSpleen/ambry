@@ -435,13 +435,15 @@ class Database(object):
 
     def copy_dataset(self, ds):
 
-        # Makesure everything we want to copy is loaded
+        # Make sure everything we want to copy is loaded
         ds.tables
         ds.partitions
         ds.files
         ds.configs
         ds.stats
         ds.codes
+        ds.source_tables
+        ds.source_columns
 
         self.session.merge(ds)
         self.session.commit()

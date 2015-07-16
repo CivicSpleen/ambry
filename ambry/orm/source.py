@@ -82,6 +82,8 @@ class DataSource(Base, DictableMixin):
     ref = SAColumn('ds_ref', Text)
     hash = SAColumn('ds_hash', Text)
 
+    generator = SAColumn('ds_generator', Text) # class name for a Pipe to generator rows
+
     __table_args__ = (
         UniqueConstraint('ds_d_vid', 'ds_name', name='_uc_columns_1'),
     )
@@ -143,6 +145,15 @@ class DataSource(Base, DictableMixin):
         for k, v in kwargs.items():
             if hasattr(self, k):
                 setattr(self,k, v)
+
+    def source_pipe(self, cache_fs=None):
+
+        if self.generator: # Get the source from the generator, not from a file.
+            import bundle
+            gen = eval(self.generator)
+            return gen(self)
+        else:
+            return self.fetch(cache_fs).source_pipe()
 
     def fetch(self, cache_fs = None):
         """Download the source and return a callable object that will open the file. """
@@ -241,7 +252,13 @@ class DataSource(Base, DictableMixin):
 
     @property
     def column_map(self):
+        """For each column, map from the source header ( column name ) to the destination header """
         return self.source_table.column_map
+
+    @property
+    def column_index_map(self):
+        """For each column, map from the source header ( column name ) to the column position ( index )  """
+        return self.source_table.column_index_map
 
     @property
     def widths(self):

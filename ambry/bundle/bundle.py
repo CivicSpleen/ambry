@@ -29,6 +29,9 @@ class Bundle(object):
         self._source_url = source_url
         self._build_url = build_url
 
+        self._pipeline_editor = None # A function that can be set to edit the pipeline, rather than overriding the method
+
+
     def set_file_system(self, source_url=None, build_url=None):
         """Set the source file filesystem and/or build  file system"""
 
@@ -149,11 +152,9 @@ class Bundle(object):
 
         return fsopendir(build_url)
 
-    def do_pipeline(self, source):
+    def do_pipeline(self, source=None):
         """COnstruct the meta pipeline. This method shold not be overridden; iverride meta_pipeline() instead. """
         source = self.source(source) if isinstance(source, basestring) else source
-
-        assert bool(source)
 
         pl = self.pipeline(source)
 
@@ -161,32 +162,50 @@ class Bundle(object):
 
         return pl
 
-    def pipeline(self, source):
-        """Construct the ETL pipeline for the meta phase"""
-        from ambry.etl.pipeline import Pipeline, MergeHeader, MangleHeader
+    def pipeline(self, source=None):
+        """Construct the ETL pipeline for all phases. Segments that are not used for the current phase
+        are filtered out later. """
+        from ambry.etl.pipeline import Pipeline, MergeHeader, MangleHeader, WriteToPartition
         from ambry.etl.intuit import TypeIntuiter
+        from ambry.etl.stats import Stats
 
-        source = self.source(source) if isinstance(source, basestring) else source
+        if source:
+            source = self.source(source) if isinstance(source, basestring) else source
+        else:
+            source = None
 
         return Pipeline(
-            bundle = self,
-            source=source.fetch().source_pipe(),    # The unadulterated dource file
-            first=None,                             # For callers to hijack the start of the process
-            source_row_intuit=None,                 # (Meta only) Classify rows
-            source_coalesce_rows=MergeHeader(),     # Combine rows into a header according to classification
-            source_type_intuit=TypeIntuiter(),      # Classify the types of columns
-            source_map_header=MangleHeader(),       # Alter column names to names used in final table
-            dest_map_header=None,                   # Change header names to be the same as used in the dest table
-            dest_cast_columns=None,                 # Run casters to convert values, maybe create code columns.
-            dest_augment=None,                      # Add dimension columns
-            dest_statistics=None,                   # Compute statistics
-            last=None,                              # For callers to hijack the end of the process
-            write_to_table=None,                    # Write the rows to the table.
-
+                bundle = self,
+                source=source.source_pipe() if source else None,
+                source_first=None,
+                source_row_intuit=None,
+                source_coalesce_rows=MergeHeader(),
+                source_type_intuit=TypeIntuiter(),
+                source_last=None,
+                write_source_schema=None,
+                schema_first=None,
+                source_map_header=MangleHeader(),
+                dest_map_header=None,
+                dest_cast_columns=None,
+                dest_augment=None,
+                schema_last=None,
+                write_dest_schema=None,
+                build_first=None,
+                dest_statistics=Stats(),
+                build_last=None,
+                write_to_table= WriteToPartition()
         )
+
+    def set_edit_pipeline(self, f):
+        """Set a function to edit the pipeline"""
+
+        self._pipeline_editor = f
 
     def edit_pipeline(self, pipeline):
         """Called after the meta pipeline is constructed, to allow per-pipeline modification."""
+
+        if self._pipeline_editor:
+            self._pipeline_editor(pipeline)
 
         return pipeline
 
@@ -468,10 +487,9 @@ class Bundle(object):
 
         self.meta(source_name=source_name)
 
-        self.build_source_files.file(File.BSFILE.META).objects_to_record()
+        self.build_source_files.file(File.BSFILE.SOURCES).objects_to_record()
         self.build_source_files.file(File.BSFILE.SOURCESCHEMA).objects_to_record()
         self.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
-        self.build_source_files.file(File.BSFILE.SOURCES).objects_to_record()
 
         self.do_sync()
 
@@ -506,8 +524,7 @@ class Bundle(object):
         self.build_fs.makedir('pipeline', allow_recreate=True)
         self.build_fs.setcontents(os.path.join('pipeline','meta-'+pl.file_name+'.txt' ), unicode(pl), encoding='utf8')
 
-
-    def meta(self, source_name = None):
+    def meta(self, source_name = None, phase = 'all'):
         from ambry.etl.pipeline import PrintRows
 
         for i, source in enumerate(self.sources):
@@ -517,14 +534,18 @@ class Bundle(object):
                 continue
 
             self.logger.info("Running meta for source: {} ".format(source.name))
-            pl = self.do_pipeline(source).meta
-            pl.last.prepend(PrintRows)
 
-            pl.run()
+            if phase in ('source','all'):
+                pl = self.do_pipeline(source).source_phase
+                pl.run()
 
-            self.meta_log_pipeline(pl)
-            self.meta_make_source_tables(pl)
-            self.meta_make_dest_tables(pl)
+                self.meta_log_pipeline(pl)
+                self.meta_make_source_tables(pl)
+                self.meta_make_dest_tables(pl)
+
+            if phase in ('schema','all'):
+                pl = self.do_pipeline(source).schema_phase
+                pl.run()
 
         source.dataset.commit()
 
@@ -597,7 +618,7 @@ class Bundle(object):
 
             self.logger.info("Running build for table: {} ".format(source.dest_table))
 
-            pl = self.do_pipeline(source).build
+            pl = self.do_pipeline(source).build_phase
 
             pl.run()
 

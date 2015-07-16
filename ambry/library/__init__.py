@@ -355,8 +355,6 @@ class Library(object):
                 .order_by(Config.modified.desc())).all()
 
 
-
-
     @property
     def search(self):
         from search import Search

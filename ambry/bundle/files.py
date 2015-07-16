@@ -294,12 +294,21 @@ class PythonSourceFile(StringSourceFile):
     def import_bundle_class(self):
         """Add the filesystem to the Python sys path with an import hook, then import
         to file as Python"""
+        import sys, imp
 
-        context = {}
+        bundle = imp.new_module('bundle')
 
-        exec self._dataset.bsfile(self._file_const).contents in context
+        sys.modules['bundle'] = bundle
 
-        return context['Bundle']
+        bf = self._dataset.bsfile(self._file_const)
+
+        if not bf.has_contents:
+            from ambry.bundle import Bundle
+            return Bundle
+
+        exec bf.contents in bundle.__dict__
+
+        return bundle.Bundle
 
 class SourcesFile(RowBuildSourceFile):
 
