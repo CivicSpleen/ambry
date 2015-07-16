@@ -90,14 +90,13 @@ class DatasetWhooshIndexTest(TestBase):
 
         # search just added document.
         all_docs = list(self.backend.dataset_index.index.searcher().documents())
-        self.assertEquals(all_docs[0]['type'], 'dataset')
         self.assertEquals(all_docs[0]['vid'], dataset.vid)
 
     # _get_generic_schema tests
     def test_returns_whoosh_schema(self):
         schema = self.backend.dataset_index._get_generic_schema()
         self.assertItemsEqual(
-            ['bvid', 'doc', 'keywords', 'title', 'type', 'vid'],
+            ['dataset_vid', 'doc', 'keywords', 'title', 'vid'],
             schema.names())
 
     # _delete tests
@@ -247,7 +246,7 @@ class PartitionWhooshIndexTest(TestBase):
     def test_returns_whoosh_schema(self):
         schema = self.backend.partition_index._get_generic_schema()
         self.assertItemsEqual(
-            ['bvid', 'doc', 'keywords', 'title', 'vid'],
+            ['dataset_vid', 'doc', 'keywords', 'title', 'vid'],
             schema.names())
 
     # _make_query_from_terms tests

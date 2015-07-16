@@ -93,6 +93,15 @@ class DatasetWhooshIndex(BaseDatasetIndex):
             rmtree(self.index_dir)
         self.index = None
 
+    def all(self):
+        """ Returns list with all indexed datasets. """
+        datasets = []
+        for dataset in self.index.searcher().documents():
+            res = DatasetSearchResult()
+            res.vid = dataset['vid']
+            datasets.append(res)
+        return datasets
+
     def search(self, search_phrase, limit=None):
         """ Finds datasets by search phrase.
 
@@ -196,7 +205,6 @@ class DatasetWhooshIndex(BaseDatasetIndex):
         """ Returns whoosh's generic schema of the dataset. """
         schema = Schema(
             vid=ID(stored=True, unique=True),  # Object id
-            bvid=ID(stored=True),  # bundle vid
             title=NGRAMWORDS(),
             keywords=KEYWORD,  # Lists of coverage identifiers, ISO time values and GVIDs, source names, source abbrev
             doc=TEXT)  # Generated document for the core of the topic search
@@ -360,6 +368,15 @@ class PartitionWhooshIndex(BasePartitionIndex):
             rmtree(self.index_dir)
         self.index = None
 
+    def all(self):
+        """ Returns list with all indexed partitions. """
+        partitions = []
+        # FIXME: Is score 1 or 0 here?
+        for partition in self.index.searcher().documents():
+            partitions.append(
+                PartitionSearchResult(dataset_vid=partition['dataset_vid'], vid=partition['vid'], score=0))
+        return partitions
+
     def search(self, search_phrase, limit=None):
         """ Finds partitions by search phrase.
 
@@ -369,6 +386,7 @@ class PartitionWhooshIndex(BasePartitionIndex):
 
         Generates:
             PartitionSearchResult instances.
+
         """
 
         query_string = self._make_query_from_terms(search_phrase)
@@ -379,7 +397,7 @@ class PartitionWhooshIndex(BasePartitionIndex):
             results = searcher.search(query, limit=limit)
             for hit in results:
                 yield PartitionSearchResult(
-                    vid=hit['vid'], dataset_vid=hit['bvid'], score=hit.score)
+                    vid=hit['vid'], dataset_vid=hit['dataset_vid'], score=hit.score)
 
     def _index_document(self, document, force=False):
         """ Adds parition document to the index. """
@@ -477,10 +495,10 @@ class PartitionWhooshIndex(BasePartitionIndex):
         return cterms
 
     def _get_generic_schema(self):
-        """ Returns whoosh's generic schema. """
+        """ Returns whoosh's generic schema of the partition document. """
         schema = Schema(
             vid=ID(stored=True, unique=True),
-            bvid=ID(stored=True),  # dataset_vid? Convert if so.
+            dataset_vid=ID(stored=True),  # dataset_vid? Convert if so.
             title=NGRAMWORDS(),
             keywords=KEYWORD,
             doc=TEXT)  # Generated document for the core of the topic search

@@ -190,7 +190,7 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         query = """\
             CREATE VIRTUAL TABLE partition_index USING fts3(
                 vid VARCHAR(256) NOT NULL,
-                bvid VARCHAR(256) NOT NULL,
+                dataset_vid VARCHAR(256) NOT NULL,
                 title TEXT,
                 keywords TEXT,
                 doc TEXT
@@ -213,7 +213,7 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         raw_connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
 
         query = ("""
-            SELECT vid, bvid, rank(matchinfo(partition_index)) AS score
+            SELECT vid, dataset_vid, rank(matchinfo(partition_index)) AS score
             FROM partition_index
             WHERE vid MATCH :part;
         """)  # FIXME: order by rank.
@@ -226,8 +226,8 @@ class PartitionSQLiteIndex(BasePartitionIndex):
     def _index_document(self, document, force=False):
         """ Adds parition document to the index. """
         query = text("""
-            INSERT INTO partition_index(vid, bvid, title, keywords)
-            VALUES(:vid, :bvid, :title, :keywords);
+            INSERT INTO partition_index(vid, dataset_vid, title, keywords)
+            VALUES(:vid, :dataset_vid, :title, :keywords);
         """)
         self.backend.library.database.connection.execute(query, **document)
 

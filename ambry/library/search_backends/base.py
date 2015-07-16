@@ -229,7 +229,7 @@ class BasePartitionIndex(BaseIndex):
 
     _schema = {
         'vid': 'id',
-        'bvid': 'id',  # FIXME: dataset_vid?
+        'dataset_vid': 'id',
         'title': 'ngramwords',
         'keywords': 'keyword',
         'doc': 'text'}
@@ -283,7 +283,7 @@ class BasePartitionIndex(BaseIndex):
 
         document = dict(
             vid=unicode(partition.identity.vid),
-            bvid=unicode(partition.identity.as_dataset().vid),
+            dataset_vid=unicode(partition.identity.as_dataset().vid),
             title=unicode(partition.table.description),
             keywords=unicode(keywords),
             doc=doc_field)

@@ -235,6 +235,9 @@ class PartitionFactory(SQLAlchemyModelFactory):
     fqname = factory.Sequence(lambda n: 'fqname-%03d' % n)
     format = 'db'
     cache_key = ''  # populates in the _prepare method
+    space_coverage = []
+    grain_coverage = []
+    time_coverage = []
 
     t_vid = ''  # populates in the _prepare method
     d_vid = ''  # populates in the _prepare method.
