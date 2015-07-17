@@ -19,6 +19,7 @@ class Bundle(object):
         self._library = library
         self._logger = None
 
+
         assert bool(library)
 
         self._log_level = logging.INFO
@@ -27,6 +28,9 @@ class Bundle(object):
 
         self._source_url = source_url
         self._build_url = build_url
+
+        self._pipeline_editor = None # A function that can be set to edit the pipeline, rather than overriding the method
+
 
     def set_file_system(self, source_url=None, build_url=None):
         """Set the source file filesystem and/or build  file system"""
@@ -44,7 +48,11 @@ class Bundle(object):
             self.dataset.config.library.build.url = self._build_url
             self.dataset.commit()
 
-    def cast_to_subclass(self):
+
+    def cast_to_subclass(self, clz):
+        return clz(self._dataset, self._library, self._source_url, self._build_url)
+
+    def cast_to_build_subclass(self):
         """
         Load the bundle file from the database to get the derived bundle class,
         then return a new bundle built on that class
@@ -53,10 +61,9 @@ class Bundle(object):
         """
         from ambry.orm import File
         bsf = self.build_source_files.file(File.BSFILE.BUILD)
-        clz = bsf.import_bundle_class()
-        return clz(self._dataset, self._library, self._source_url, self._build_url)
+        return self.cast_to_subclass(bsf.import_bundle_class())
 
-    def cast_to_metasubclass(self):
+    def cast_to_meta_subclass(self):
         """
         Load the bundle file from the database to get the derived bundle class,
         then return a new bundle built on that class
@@ -66,8 +73,7 @@ class Bundle(object):
         from ambry.orm import File
 
         bsf = self.build_source_files.file(File.BSFILE.BUILDMETA)
-        clz = bsf.import_bundle_class()
-        return clz(self._dataset, self._library, self._source_url, self._build_url)
+        return self.cast_to_subclass(bsf.import_bundle_class())
 
     def commit(self):
         return self.dataset.commit()
@@ -100,6 +106,10 @@ class Bundle(object):
 
     def source(self, name):
         source =  self.dataset.source_file(name)
+
+        if not source:
+            return None
+
         source._cache_fs = self._library.download_cache
         return source
 
@@ -138,7 +148,6 @@ class Bundle(object):
     @memoize
     def build_fs(self):
         from fs.opener import fsopendir
-        import os
 
         build_url = self._build_url if self._build_url else self.dataset.config.library.build.url
         
@@ -147,61 +156,63 @@ class Bundle(object):
 
         return fsopendir(build_url)
 
-    def do_meta_pipeline(self, source):
+    def do_pipeline(self, source=None):
         """COnstruct the meta pipeline. This method shold not be overridden; iverride meta_pipeline() instead. """
         source = self.source(source) if isinstance(source, basestring) else source
 
-        pl = self.meta_pipeline(source)
 
-        self.edit_meta_pipeline(pl)
+        pl = self.pipeline(source)
+
+        self.edit_pipeline(pl)
 
         return pl
 
-    def meta_pipeline(self, source):
-        """Construct the ETL pipeline for the meta phase"""
-        from etl.pipeline import Pipeline, MergeHeader, MangleHeader, MapHeader
-        from ambry.bundle.etl.intuit import TypeIntuiter
+    def pipeline(self, source=None):
+        """Construct the ETL pipeline for all phases. Segments that are not used for the current phase
+        are filtered out later. """
+        from ambry.etl.pipeline import Pipeline, MergeHeader, MangleHeader, WriteToPartition
+        from ambry.etl.intuit import TypeIntuiter
+        from ambry.etl.stats import Stats
 
-        source = self.source(source) if isinstance(source, basestring) else source
+        if source:
+            source = self.source(source) if isinstance(source, basestring) else source
+        else:
+            source = None
 
         return Pipeline(
-            source = source.fetch().source_pipe(),
-            coalesce_rows=MergeHeader(),
-            mangle_header=MangleHeader(),
-            type_intuit=TypeIntuiter(),
+                bundle = self,
+                source=source.source_pipe() if source else None,
+                source_first=None,
+                source_row_intuit=None,
+                source_coalesce_rows=MergeHeader(),
+                source_type_intuit=TypeIntuiter(),
+                source_last=None,
+                write_source_schema=None,
+                schema_first=None,
+                source_map_header=MangleHeader(),
+                dest_map_header=None,
+                dest_cast_columns=None,
+                dest_augment=None,
+                schema_last=None,
+                write_dest_schema=None,
+                build_first=None,
+                dest_statistics=Stats(),
+                build_last=None,
+                write_to_table= WriteToPartition()
         )
 
-    def edit_meta_pipeline(self, pipeline):
+    def set_edit_pipeline(self, f):
+        """Set a function to edit the pipeline"""
+
+        self._pipeline_editor = f
+
+    def edit_pipeline(self, pipeline):
         """Called after the meta pipeline is constructed, to allow per-pipeline modification."""
 
-        return pipeline
-
-    def do_build_pipeline(self, source):
-
-        source = self.source(source) if isinstance(source, basestring) else source
-
-        pl = self.build_pipeline(source)
-
-        self.edit_build_pipeline(pl)
-
-        return pl
-
-    def build_pipeline(self, source):
-        """Construct the ETL pipeline for the build phase"""
-
-        from etl.pipeline import Pipeline, MergeHeader, MangleHeader, MapHeader
-
-        return Pipeline(
-            source=source.fetch().source_pipe(),
-            coalesce_rows=MergeHeader(),
-            mangle_header=MangleHeader()
-        )
-
-    def edit_build_pipeline(self, pipeline):
-        """"""
+        if self._pipeline_editor:
+            self._pipeline_editor(pipeline)
 
         return pipeline
-
 
     @property
     def logger(self):
@@ -338,7 +349,7 @@ class Bundle(object):
     def clean(self):
         """Clean generated objects from the dataset, but only if there are File contents
          to regenerate them"""
-        from ambry.orm import Partition, ColumnStat, File
+        from ambry.orm import ColumnStat, File
         from sqlalchemy.orm import object_session
 
         ds = self.dataset
@@ -444,8 +455,6 @@ class Bundle(object):
 
         self.commit()
 
-
-
         return True
 
     def pre_prepare(self):
@@ -465,7 +474,7 @@ class Bundle(object):
     ## Meta
     ##
 
-    def do_meta(self, force=False):
+    def do_meta(self, source_name = None, force=False):
         """
         Synchronize with the files and run the meta pipeline, possibly creating new objects. Then, write the
         objects back to file records and synchronize.
@@ -481,14 +490,70 @@ class Bundle(object):
 
         self.log("---- Meta ---- ")
 
-        self.meta()
+        self.meta(source_name=source_name)
 
-        self.build_source_files.file(File.BSFILE.META).objects_to_record()
+        self.build_source_files.file(File.BSFILE.SOURCES).objects_to_record()
         self.build_source_files.file(File.BSFILE.SOURCESCHEMA).objects_to_record()
         self.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
-        self.build_source_files.file(File.BSFILE.SOURCES).objects_to_record()
 
         self.do_sync()
+
+    def meta_make_source_tables(self, pl):
+        from ambry.etl.intuit import TypeIntuiter
+
+        ti = pl[TypeIntuiter]
+
+        source = pl.source.source
+
+        if not source.st_id:
+
+            for c in ti.columns:
+                source.source_table.add_column(c.position, source_header=c.header, dest_header=c.header,
+                                               datatype=c.resolved_type)
+
+    def meta_make_dest_tables(self, pl):
+
+        source = pl.source.source
+        dest = pl.source.source.dest_table
+
+        for c in source.source_table.columns:
+
+            dest.add_column(name=c.dest_header, datatype =  c.column_datatype,
+                            derivedfrom=c.dest_header,
+                            summary=c.summary, description=c.description)
+
+    def meta_log_pipeline(self, pl):
+        """Write a report of the pipeline out to a file """
+        import os
+
+        self.build_fs.makedir('pipeline', allow_recreate=True)
+        self.build_fs.setcontents(os.path.join('pipeline','meta-'+pl.file_name+'.txt' ), unicode(pl), encoding='utf8')
+
+    def meta(self, source_name = None, phase = 'all'):
+        from ambry.etl.pipeline import PrintRows
+
+        for i, source in enumerate(self.sources):
+
+            if source_name and source.name != source_name:
+                self.logger.info("Skipping {} ( only running {} ) ".format(source.name, source_name))
+                continue
+
+            self.logger.info("Running meta for source: {} ".format(source.name))
+
+            if phase in ('source','all'):
+                pl = self.do_pipeline(source).source_phase
+                pl.run()
+
+                self.meta_log_pipeline(pl)
+                self.meta_make_source_tables(pl)
+                self.meta_make_dest_tables(pl)
+
+            if phase in ('schema','all'):
+                pl = self.do_pipeline(source).schema_phase
+                pl.run()
+
+        source.dataset.commit()
+
     ##
     ## Build
     ##
@@ -498,7 +563,7 @@ class Bundle(object):
         """Return True is the bundle has been built."""
         return bool(self.dataset.config.build.state.built)
 
-    def do_build(self, force = False):
+    def do_build(self, table_name = None, force=False):
 
         if not self.is_prepared:
             if not self.do_prepare():
@@ -509,7 +574,7 @@ class Bundle(object):
         if self.pre_build(force):
 
             self.log("---- Build ---")
-            if self.build_main():
+            if self.build_main(table_name):
                 self.state = self.STATES.BUILT
                 if self.post_build():
                     self.log("---- Done Building ---")
@@ -532,8 +597,6 @@ class Bundle(object):
 
     # Build the final package
     def pre_build(self, force = False):
-        from time import time
-        import sys
 
         if self.is_built and not force:
             self.error("Bundle is already built. Skipping  ( Use --clean  or --force to force build ) ")
@@ -549,20 +612,39 @@ class Bundle(object):
 
         return True
 
-    def build(self):
+    def build(self, table_name = None, source_name = None):
 
-        return False
+        for i, source in enumerate(self.sources):
 
-    def build_main(self):
+            if table_name and source.dest_table.name != table_name:
+                self.logger.info("Skipping source {}, table {} ( only running table {} ) "
+                                 .format(source.name, source.dest_table.name, table_name))
+                continue
+
+            self.logger.info("Running build for table: {} ".format(source.dest_table.name))
+
+            pl = self.do_pipeline(source).build_phase
+
+            pl.run()
+
+            self.build_post_build_source(pl)
+
+        source.dataset.commit()
+
+        return True
+
+    def build_post_build_source(self, pl):
+        pass
+
+    def build_main(self, table_name = None):
         """This is the methods that is actually called in do_build; it
         dispatches to developer created prepare() methods."""
-        return self.build()
+        return self.build(table_name = table_name)
 
     def post_build(self):
         """After the build, update the configuration with the time required for
         the build, then save the schema back to the tables, if it was revised
         during the build."""
-        from time import time
 
         return True
 

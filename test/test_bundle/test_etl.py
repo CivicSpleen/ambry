@@ -1,5 +1,5 @@
-
 import unittest
+
 from test.test_base import TestBase
 
 
@@ -22,7 +22,7 @@ class Test(TestBase):
         self.fs = fsopendir('mem://test')
 
     def test_csv(self):
-        from ambry.bundle.etl.partition import new_partition_data_file
+        from ambry.etl.partition import new_partition_data_file
 
         data = []
         for i in range(10):
@@ -42,23 +42,12 @@ class Test(TestBase):
             self.assertEquals(sorted(data[0]), sorted(row.keys()))
             self.assertEquals(sorted(data[i]), sorted(row.values()))
 
-    def munger(self, schema):
-        """Create a function to call casters on a row. Using an eval is about 11% faster than
-        using a loop """
-
-        funcs = []
-
-        for name, t in schema:
-            funcs.append('cast_{}(row[{}])'.format(t.__name__, name))
-
-        return eval("lambda row: [{}]".format(','.join(funcs)))
-
     #@unittest.skip('Timing test')
     def test_csv_time(self):
         """Time writing rows with a PartitionDataFile.
 
         """
-        from ambry.bundle.etl.partition import new_partition_data_file, PartitionMsgpackDataFile
+        from ambry.etl.partition import new_partition_data_file
 
         fs = self.fs
 
@@ -70,8 +59,20 @@ class Test(TestBase):
         schema = [(i, types[i % 3]) for i in range(ncols)]
 
         #
-        # Two different munders, one uses a loop, one unrolls the loop in a lambda
-        row_munger1 =  self.munger(schema)
+        # Two different mungers, one uses a loop, one unrolls the loop in a lambda
+
+        def munger1(schema):
+            """Create a function to call casters on a row. Using an eval is about 11% faster than
+            using a loop """
+
+            funcs = []
+
+            for name, t in schema:
+                funcs.append('cast_{}(row[{}])'.format(t.__name__, name))
+
+            return eval("lambda row: [{}]".format(','.join(funcs)))
+
+        row_munger1 =  munger1(schema)
 
         def row_munger2(row):
             out = []
@@ -109,10 +110,18 @@ class Test(TestBase):
             row = row_munger1(row)
             cdf.insert(row)
 
-        print round(float(n)/(time.time() - s),3)
+        print "Munger 1", round(float(n)/(time.time() - s),3), 'rows/s'
+
+        s = time.time()
+        for i in range(n):
+            row = data[i % 100]
+            row = row_munger2(row)
+            cdf.insert(row)
+
+        print "Munger 2", round(float(n) / (time.time() - s), 3), 'rows/s'
 
     def test_dict_caster(self):
-        from ambry.bundle.etl.transform import DictTransform, NaturalInt
+        from ambry.etl.transform import DictTransform, NaturalInt
         import datetime
 
         ctb = DictTransform()
@@ -202,7 +211,7 @@ class Test(TestBase):
         ctb({'int': '.', 'float': 'a', 'str': '3', 'ni1': 0, 'ni2': 3})
 
     def test_row_caster(self):
-        from ambry.bundle.etl.transform import ListTransform, NaturalInt
+        from ambry.etl.transform import ListTransform, NaturalInt
         import datetime
 
         ctb = ListTransform()
@@ -289,7 +298,6 @@ class Test(TestBase):
         declared MD5 sums. """
 
         from ambry.util import md5_for_stream
-        from fs.opener import fsopendir
 
         b = self.setup_bundle('complete-load')
 
@@ -328,11 +336,10 @@ class Test(TestBase):
             if i > 3:
                 break
 
-
     def test_etl_pipeline(self):
-        from ambry.bundle.etl.pipeline import MergeHeader, MangleHeader, Pipe, MapHeader, Pipeline, PrintRows, augment_pipeline
-        from ambry.bundle.etl.stats import Stats
-        from ambry.bundle.etl.intuit import TypeIntuiter
+        from ambry.etl.pipeline import MergeHeader, MangleHeader, MapHeader, Pipeline
+        from ambry.etl.pipeline import PrintRows, augment_pipeline
+        from ambry.etl.intuit import TypeIntuiter
 
         b = self.setup_bundle('complete-load')
 
@@ -345,7 +352,6 @@ class Test(TestBase):
             MergeHeader(),
             MangleHeader(),
             MapHeader({'gvid':'county','renter_cost_gt_30':'renter_cost'})
-
         ]
 
         last = reduce(lambda last, next: next.set_source_pipe(last), pl[1:], pl[0])
@@ -363,16 +369,15 @@ class Test(TestBase):
 
         pl = Pipeline(
             source = b.source('rent97').fetch().source_pipe(),
-            coalesce_rows= MergeHeader() ,
-            type_intuit =  TypeIntuiter(),
-            mangle_header= MangleHeader(),
-            remap_to_table = MapHeader({'gvid': 'county', 'renter_cost_gt_30': 'renter_cost'}),
+            source_coalesce_rows= MergeHeader() ,
+            source_type_intuit =  TypeIntuiter(),
+            source_map_header= MangleHeader(),
+            dest_map_header = MapHeader({'gvid': 'county', 'renter_cost_gt_30': 'renter_cost'})
         )
-
 
         augment_pipeline(pl, PrintRows)
 
-        for i, row in enumerate(pl.run()):
+        for i, row in enumerate(pl.iter()):
 
             if i == 0:
                 self.assertEqual(['id', 'county', 'renter_cost', 'renter_cost_gt_30_cv',
@@ -383,14 +388,12 @@ class Test(TestBase):
             if i > 5:
                 break
 
-        print str(pl)
-
     @unittest.skip('This test needs a source that has a  bad header.')
     def test_mangle_header(self):
 
         # FIXME.
 
-        from ambry.bundle.etl.pipeline import MangleHeader
+        from ambry.etl.pipeline import MangleHeader
 
         rows = [
             ['Header One',' ! Funky $ Chars','  Spaces ','1 foob ar'],
@@ -405,22 +408,31 @@ class Test(TestBase):
 
     def test_complete_load_build(self):
         """Build the simple bundle"""
+        from ambry.etl import augment_pipeline, PrintRows
 
         b = self.setup_bundle('complete-load')
 
         b.sync()
-        b = b.cast_to_subclass()
+        b = b.cast_to_build_subclass()
         self.assertEquals('synced', b.state)
         b.do_prepare()
         self.assertEquals('prepared', b.state)
-        b.do_build()
+
+        b.do_meta()
+
+        #b.do_build()
+
+        pl = b.do_pipeline('rent07').build_phase
+
+        pl.run()
+
 
     def test_complete_load_meta(self):
         """"""
 
         b = self.setup_bundle('complete-load')
         b.sync()
-        b = b.cast_to_metasubclass()
+        b = b.cast_to_meta_subclass()
 
         b.do_meta()
 
@@ -429,30 +441,95 @@ class Test(TestBase):
 
         #self.assertEquals(6, len(b.dataset.source_tables))
 
-        #print list(b.source_fs.listdir())
+        print list(b.source_fs.listdir())
         #print b.source_fs.getcontents('source_schema.csv')
 
         s = b.source('rent07')
 
         #print s.column_map
 
+    def alt_bundle_dirs(self, root):
+
+        import glob, os
+
+        build_url = os.path.join(root,'build')
+        source_url = os.path.join(root,'source')
+
+        for base in (source_url, os.path.join(build_url, 'pipeline'), build_url):
+            for f in glob.glob(os.path.join(base, '*')):
+                if os.path.isfile(f):
+                    os.remove(f)
+                else:
+                    os.rmdir(f)
+
+        return build_url, source_url
+
+    def test_complete_load_meta_rent07(self):
+        """"""
+
+        if False:
+            build_url, source_url = self.alt_bundle_dirs('/tmp/test/rent07')
+        else:
+            build_url = source_url = None
+
+        b = self.setup_bundle('complete-load', build_url = build_url, source_url = source_url)
+        b.sync()
+        b = b.cast_to_meta_subclass()
+
+        b.do_meta('rent07')
+
+        # self.assertEquals(6, len(b.dataset.source_tables))
+
+        # Check the source schema file.
+        self.assertIn('renter_cost_gt_30', b.source_fs.getcontents('source_schema.csv'))
+        self.assertIn('rent,1,size,size,float,,,,,,',b.source_fs.getcontents('source_schema.csv'))
+        self.assertIn('rpeople,1,size,size,float,,,,,,', b.source_fs.getcontents('source_schema.csv'))
+
+        # Check a few random bits from the pipeline debugging output.
+        print  b.build_fs.getcontents('pipeline/meta-rent07.txt')
+
+        self.assertIn("| renter_cost_gt_30_cv    |     13 | <type 'float'>  |", b.build_fs.getcontents('pipeline/meta-rent07.txt'))
+
+        s = b.source('rent07')
+
+        # The schema file should have a schema in it.
+
+        schema_lines = b.source_fs.getcontents('schema.csv').splitlines()
+        self.assertEqual(9, len(schema_lines) )
+        self.assertIn('rent,4,renter_cost_gt_30,,,c00000load01004,INTEGER,renter_cost_gt_30,', schema_lines)
+
+        import ambry
+
+        class TestBundle(ambry.bundle.Bundle):
+
+            def edit_pipeline(self, pl):
+
+                from ambry.etl.pipeline import PrintRows
+
+                pl.build_last = PrintRows(print_at='end')
+
+        b = b.cast_to_subclass(TestBundle)
+        b.do_build('rent')
+
     def test_type_intuition(self):
-        from ambry.bundle.etl.pipeline import sink
-        from ambry.bundle.etl.intuit import TypeIntuiter
+
+        from ambry.etl.intuit import TypeIntuiter
         from ambry.orm.column import Column
         import datetime
 
         b = self.setup_bundle('process')
 
         b.sync()
-        b = b.cast_to_subclass()
+        b = b.cast_to_build_subclass()
         self.assertEquals('synced', b.state)
         b.do_prepare()
         self.assertEquals('prepared', b.state)
 
-        pl = sink(b.do_meta_pipeline('types1'))
+        pl = b.do_pipeline('types1').source_phase.run()
 
-        ti = pl.type_intuit[TypeIntuiter]
+        self.assertTrue(bool(pl.source))
+
+        ti = pl.source_type_intuit[TypeIntuiter]
 
         ti_cols =  list(ti.columns)
 
@@ -461,17 +538,81 @@ class Test(TestBase):
 
         t = b.dataset.new_table(pl.source.source.name)
 
-        for c in pl.type_intuit[TypeIntuiter].columns:
+        for c in pl.source_type_intuit[TypeIntuiter].columns:
             t.add_column(c.header, datatype = Column.convert_python_type(c.resolved_type))
 
         b.commit()
 
-        self.assertEqual('int float string time date'.split(), [c.name for c in b.dataset.tables[0].columns ])
-        self.assertEqual([u'integer', u'real', u'varchar', u'time', u'date'], [c.datatype for c in b.dataset.tables[0].columns])
+        self.assertEqual('id int float string time date'.split(), [c.name for c in b.dataset.tables[0].columns ])
+        self.assertEqual([u'integer', u'integer', u'real', u'varchar', u'time', u'date'],
+                         [unicode(c.datatype) for c in b.dataset.tables[0].columns])
 
         from ambry.orm.file import File
         b.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
 
         self.assertEqual(6, sum( e[1] == 'rtf' for e in b.do_sync() ))
 
+    def test_edit(self):
+        """Test the Edit pipe, for altering the structure of data"""
+        from dateutil.parser import parse
+        from ambry.etl.pipeline import PrintRows, Edit
 
+        b = self.setup_bundle('dimensions')
+        b.do_sync()
+        b.do_prepare()
+
+        pl = b.do_pipeline('dimensions').schema_phase
+        pl.build_last.append(Edit(delete = ['time','county','state'],
+                            add={ "a": lambda e,r: r[4], "b": lambda e,r: r[1]},
+                            edit = {'stusab': lambda e,v: v.lower(), 'county_name' : lambda e,v: v.upper() },
+                            expand = { ('x','y') : lambda e, r: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
+        pl.build_last.append(PrintRows)
+        pl.build_last.prepend(PrintRows)
+        # header: ['date', 'time', 'stusab', 'state', 'county', 'county_name']
+
+        pl.run()
+
+        print str(pl)
+
+        # The PrintRows Pipes save the rows they print, so lets check that the before doesn't have the edited
+        # row and the after does.
+        row = [9, u'2002-03-21', u'la', u'MARIPOSA COUNTY, CALIFORNIA', u'43', u'09:11:40 PM', 21, 11]
+        self.assertNotIn(row, pl.build_last[0].rows)
+        self.assertIn(row, pl.build_last[2].rows)
+
+    def test_sample_head(self):
+        from ambry.etl.pipeline import Pipeline, Pipe, PrintRows, Sample, Head
+
+        class Source(Pipe):
+
+            def __iter__(self):
+
+                yield ['int','int']
+
+                for i in range(10000):
+                    yield([i,i])
+
+
+        # Sample
+        pl = Pipeline(
+            source=Source(),
+            source_first = Sample(est_length=10000),
+            source_last = PrintRows(count=50)
+        )
+
+        pl.run()
+
+        # head
+        self.assertIn([2, 7, 7],pl[PrintRows].rows)
+        self.assertIn([16, 2018, 2018], pl[PrintRows].rows)
+        self.assertIn([20, 9999, 9999], pl[PrintRows].rows)
+
+        pl = Pipeline(
+            source=Source(),
+            source_first=Head(10),
+            source_last=PrintRows(count=50)
+        )
+
+        pl.run()
+
+        self.assertEquals(11, len(pl[PrintRows].rows))

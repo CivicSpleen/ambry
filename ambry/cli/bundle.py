@@ -294,7 +294,6 @@ def bundle_parser(cmd):
     command_p.add_argument('source', nargs='?', type=str, help='Bundle source directory or file')
 
 def bundle_info(args, l, rc):
-    from  textwrap import wrap
     from ambry.util.datestimes import compress_years
     from tabulate import tabulate
 
@@ -354,9 +353,9 @@ def bundle_info(args, l, rc):
     print '----'
     print tabulate(join(info[0]), tablefmt='plain')
 
-    from ambry.bundle.etl.stats import text_hist
+    from ambry.etl.stats import text_hist
     from textwrap import wrap
-    from terminaltables import  SingleTable, AsciiTable
+    from terminaltables import  SingleTable
 
     for p in b.partitions:
         rows = ['Column LOM Count Uniques Values'.split()]
@@ -454,13 +453,13 @@ def bundle_info(args, l, rc):
 
 def bundle_clean(args, l, rc):
     from ambry.bundle import Bundle
-    b = using_bundle(args, l).cast_to_subclass()
+    b = using_bundle(args, l).cast_to_build_subclass()
     b.do_clean()
     b.set_last_access(Bundle.STATES.NEW)
 
 def bundle_download(args, l, rc):
     from ambry.bundle import Bundle
-    b = using_bundle(args, l).cast_to_subclass()
+    b = using_bundle(args, l).cast_to_build_subclass()
     b.download()
     b.set_last_access(Bundle.STATES.DOWNLOADED)
 
@@ -468,7 +467,7 @@ def bundle_sync(args, l, rc):
     from ambry.bundle import Bundle
     from tabulate import tabulate
 
-    b = using_bundle(args,l).cast_to_subclass()
+    b = using_bundle(args,l).cast_to_build_subclass()
 
     prt("Bundle source filesystem: {}".format(b.source_fs))
     prt("Sync direction: {}".format(args.sync_dir if args.sync_dir else 'latest'))
@@ -482,7 +481,7 @@ def bundle_sync(args, l, rc):
 def bundle_meta(args, l, rc):
     from ambry.bundle import Bundle
 
-    b = using_bundle(args, l).cast_to_metasubclass()
+    b = using_bundle(args, l).cast_to_meta_subclass()
 
     if args.clean:
         b.do_clean()
@@ -490,7 +489,7 @@ def bundle_meta(args, l, rc):
     b.do_sync()
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
-    b = using_bundle(args, l).cast_to_metasubclass()
+    b = using_bundle(args, l).cast_to_meta_subclass()
     b.do_meta()
     b.set_last_access(Bundle.STATES.META)
 
@@ -499,13 +498,13 @@ def bundle_prepare(args, l, rc):
     from ambry.bundle import Bundle
 
     if args.clean or args.sync:
-        b = using_bundle(args, l).cast_to_subclass()
+        b = using_bundle(args, l).cast_to_build_subclass()
         if args.clean:
             b.do_clean()
         if args.sync:
             b.do_sync()
 
-    b = using_bundle(args, l).cast_to_subclass()
+    b = using_bundle(args, l).cast_to_build_subclass()
     b.do_prepare()
     b.set_last_access(Bundle.STATES.PREPARED)
 
@@ -514,13 +513,13 @@ def bundle_build(args, l, rc):
     from ambry.bundle import Bundle
 
     if args.clean or args.sync:
-        b = using_bundle(args, l).cast_to_subclass()
+        b = using_bundle(args, l).cast_to_build_subclass()
         if args.clean:
             b.do_clean()
         if args.sync:
             b.do_sync()
 
-    b = using_bundle(args, l).cast_to_subclass()
+    b = using_bundle(args, l).cast_to_build_subclass()
 
     if args.clean:
         if not b.do_clean():
@@ -855,62 +854,6 @@ def bundle_repopulate(args, b, st, rc):
     return b.repopulate()
 
 
-def root_meta(args, l, rc):
-    ident = l.resolve(args.term)
-
-    if not ident:
-        fatal("Failed to find record for: {}", args.term)
-        return
-
-    b = l.get(ident.vid)
-
-    meta = b.metadata
-
-    if not args.key:
-        # Return all of the rows
-        if args.yaml:
-            print meta.yaml
-
-        elif args.json:
-            print meta.json
-
-        elif args.key:
-            for row in meta.rows:
-                print '.'.join([e for e in row[0] if e]) + '=' + str(row[1] if row[1] else '')
-        else:
-            print meta.yaml
-
-    else:
-
-        v = None
-        from ..util import AttrDict
-
-        o = AttrDict()
-        count = 0
-
-        for row in meta.rows:
-            k = '.'.join([e for e in row[0] if e])
-            if k.startswith(args.key):
-                v = row[1]
-                o.unflatten_row(row[0], row[1])
-                count += 1
-
-        if count == 1:
-            print v
-
-        else:
-            if args.yaml:
-                print o.dump()
-
-            elif args.json:
-                print o.json()
-
-            elif args.rows:
-                for row in o.flatten():
-                    print '.'.join([e for e in row[0] if e]) + '=' + str(row[1] if row[1] else '')
-
-            else:
-                print o.dump()
 
 def bundle_new(args, l, rc):
     """Clone one or more registered source packages ( via sync ) into the
@@ -1101,7 +1044,7 @@ def bundle_edit(args, l, rc):
                 b.sync()
 
             elif command == 'build':
-                bc = b.cast_to_subclass()
+                bc = b.cast_to_build_subclass()
                 if arg == 'p':
                     bc.do_clean()
                     bc.do_prepare()

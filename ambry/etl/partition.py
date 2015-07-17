@@ -6,7 +6,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 import unicodecsv as csv
-from ambry.bundle.etl.pipeline import  Pipe, Sink
+
+from ambry.etl.pipeline import Sink
+
 
 def new_partition_data_file(fs, path):
 
@@ -346,9 +348,10 @@ class Inserter(Sink):
         self.datafile.close()
 
         if self.pipeline:
-            from ambry.bundle.etl.stats import Stats
+            from ambry.etl import Stats
             try:
 
+                # Write the stats for this partition back into the partition
                 stats = self.pipeline.statistics[Stats]
 
                 self._partition.set_stats(stats.stats())

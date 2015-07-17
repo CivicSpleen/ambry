@@ -4,11 +4,8 @@ Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from collections import OrderedDict, defaultdict
-
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import Column
-from ambry.orm.exc import NotFoundError
 from ambry.util import memoize
 
 PROTO_TERMS = 'civicknowledge.com-proto-proto_terms'
@@ -28,7 +25,6 @@ class Schema(object):
     """
 
     def __init__(self, bundle):
-        from bundle import Bundle
 
         self.bundle = bundle  # COuld also be a partition
 
@@ -51,12 +47,9 @@ class Schema(object):
         '''Return a list of tables for this bundle'''
         # from ambry.orm import Table
 
-        from ambry.orm import Table
-
         return self.bundle.dataset.tables
 
     def table(self,ref):
-        from sqlalchemy.orm import object_session
         return self.bundle._dataset.table(ref)
 
     @property
@@ -375,7 +368,7 @@ class Schema(object):
         """Return a caster for a table. This is like orm.Table.caster, but it will use special caster types
         defined in the schema"""
 
-        from ambry.bundle.etl.transform import DictTransform
+        from ambry.etl.transform import DictTransform
 
         bdr = DictTransform()
 

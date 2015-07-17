@@ -4,7 +4,8 @@ __author__ = 'eric'
 from collections import deque
 import datetime
 
-from pipeline import Pipe
+from ambry.etl.pipeline import Pipe
+
 
 def test_float(v):
     # Fixed-width integer codes are actually strings.
@@ -294,7 +295,6 @@ class TypeIntuiter(Pipe):
 
     def __str__(self):
         from tabulate import tabulate
-        from terminaltables import SingleTable
 
         # return  SingleTable([[ str(x) for x in row] for row in self.rows] ).table
 

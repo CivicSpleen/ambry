@@ -63,7 +63,7 @@ class DataSource(Base, DictableMixin):
 
     t_vid = SAColumn('ds_t_vid', String(16), ForeignKey('tables.t_vid'), nullable=True)
     dest_table_name = SAColumn('ds_dt_name', Text)
-    dest_table = relationship(Table, backref='soruces', cascade="all")
+    _dest_table = relationship(Table, backref='sources', cascade="all")
 
     segment = SAColumn('ds_segment', Text)
     time = SAColumn('ds_time', Text)
@@ -81,6 +81,8 @@ class DataSource(Base, DictableMixin):
     url = SAColumn('ds_url', Text)
     ref = SAColumn('ds_ref', Text)
     hash = SAColumn('ds_hash', Text)
+
+    generator = SAColumn('ds_generator', Text) # class name for a Pipe to generator rows
 
     __table_args__ = (
         UniqueConstraint('ds_d_vid', 'ds_name', name='_uc_columns_1'),
@@ -144,6 +146,15 @@ class DataSource(Base, DictableMixin):
             if hasattr(self, k):
                 setattr(self,k, v)
 
+    def source_pipe(self, cache_fs=None):
+
+        if self.generator: # Get the source from the generator, not from a file.
+            import bundle
+            gen = eval(self.generator)
+            return gen(self)
+        else:
+            return self.fetch(cache_fs).source_pipe()
+
     def fetch(self, cache_fs = None):
         """Download the source and return a callable object that will open the file. """
 
@@ -190,7 +201,6 @@ class DataSource(Base, DictableMixin):
         """Return a Row Generator"""
         import petl
 
-
         gft = self.get_filetype()
 
         if not fstor:
@@ -211,7 +221,6 @@ class DataSource(Base, DictableMixin):
         else:
             raise ValueError("Unknown filetype: {} ".format(gft))
 
-
     @property
     def source_table(self):
 
@@ -228,8 +237,28 @@ class DataSource(Base, DictableMixin):
         return self._source_table
 
     @property
+    def dest_table(self):
+        from exc import NotFoundError
+
+        if not self._dest_table:
+            name = self.dest_table_name if self.dest_table_name else self.name
+
+            try:
+                self._dest_table = self.dataset.table(name)
+            except NotFoundError:
+                self._dest_table = self.dataset.new_table(name)
+
+        return self._dest_table
+
+    @property
     def column_map(self):
+        """For each column, map from the source header ( column name ) to the destination header """
         return self.source_table.column_map
+
+    @property
+    def column_index_map(self):
+        """For each column, map from the source header ( column name ) to the column position ( index )  """
+        return self.source_table.column_index_map
 
     @property
     def widths(self):

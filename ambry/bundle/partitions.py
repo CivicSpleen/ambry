@@ -7,12 +7,14 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 # import os
 
-from ..identity import PartitionIdentity, PartitionNameQuery, PartialPartitionName, NameQuery  # , PartitionName
-
 from sqlalchemy.orm.exc import NoResultFound
+
+from ..identity import PartitionIdentity, PartitionNameQuery, NameQuery  # , PartitionName
+
+
 # from util.typecheck import accepts, returns
-from ambry.orm.exc import ConflictError
-from ..util import Constant, Proxy, memoize
+from ..util import Constant, Proxy
+
 
 class Partitions(object):
 
@@ -103,16 +105,19 @@ class Partitions(object):
         is equivalent to the vid ( with version information )
 
         """
-        from ambry.orm import Partition as OrmPartition
+        from ..orm import Partition as OrmPartition
         from sqlalchemy import or_
+        from ..identity import PartialPartitionName
 
         if isinstance(id_, PartitionIdentity):
             id_ = id_.id_
+        elif isinstance(id_, PartialPartitionName):
+            id_ = id_.promote(self.bundle.identity.name)
 
-        s = self.bundle.database.session
+        s = self.bundle.dataset._database.session
 
         q = (s.query(OrmPartition).filter(or_(
-                 OrmPartition.id_ == str(id_).encode('ascii'),
+                 OrmPartition.id == str(id_).encode('ascii'),
                  OrmPartition.vid == str(id_).encode('ascii')
              )))
 
@@ -124,8 +129,7 @@ class Partitions(object):
             orm_partition = None
 
         if not orm_partition:
-            q = (s.query(OrmPartition)
-                 .filter(OrmPartition.name == id_.encode('ascii')))
+            q = (s.query(OrmPartition).filter(OrmPartition.name == str(id_).encode('ascii')))
 
             try:
                 orm_partition = q.one()
@@ -209,7 +213,13 @@ class Partitions(object):
 
         return self
 
-    def new_partition(self,  data=None, **kwargs):
+    def new_partition(self, name = None, data=None, **kwargs):
+
+        from ambry.identity import PartialPartitionName
+
+        if name:
+            kwargs = { k:str(v) for k,v in name.dict.items() if k in [ e[0] for e in PartialPartitionName._name_parts] }
+
         p = self.bundle.dataset.new_partition(data=data,**kwargs)
         self.bundle.dataset.commit()
 
@@ -276,20 +286,20 @@ class PartitionProxy(Proxy):
         return self
 
     def datafile(self):
-        from etl.partition import new_partition_data_file
+        from ambry.etl.partition import new_partition_data_file
         return new_partition_data_file(self._bundle.build_fs, self.cache_key)
 
     def inserter(self):
-        from etl.partition import Inserter
+        from ambry.etl.partition import Inserter
 
         return Inserter(self, self.datafile() )
 
     def pipeline(self,**kwargs):
-        from ambry.bundle.etl.pipeline import Pipeline
-        from ambry.bundle.etl.stats import Stats
+        from ambry.etl.pipeline import Pipeline
+        from ambry.etl.stats import Stats
 
         pl = Pipeline(**kwargs)
-        pl.statistics = Stats(self._partition.table)
+        pl.dest_statistics = Stats(self._partition.table)
         pl.sink = self.inserter()
 
         return pl

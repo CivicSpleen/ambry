@@ -60,41 +60,74 @@ class Test(TestBase):
         """Build the simple bundle"""
 
         b = self.setup_bundle('simple')
-
+        b.source_fs.remove('schema.csv')
         b.sync()
-        b = b.cast_to_subclass()
+
+        b = b.cast_to_build_subclass()
         self.assertEquals('synced', b.state)
         b.do_prepare()
         self.assertEquals('prepared', b.state)
+        b.do_meta()
+
+        def edit_pipeline(pl):
+            from ambry.etl.pipeline import PrintRows, LogRate
+
+            def prt(m):
+                print m
+
+            pl.build_last = [PrintRows(print_at='end'), LogRate(prt, 3000, '')]
+
+        b.set_edit_pipeline(edit_pipeline)
+
         b.do_build()
 
-        self.assertEquals([2000, 2001, 2002], b.dataset.partitions[0].time_coverage)
-        self.assertEquals([u'0O0101', u'0O0102'], b.dataset.partitions[0].space_coverage)
-        self.assertEquals([u'2qZZZZZZZZZZ'], b.dataset.partitions[0].grain_coverage)
+        self.assertEquals(1,len(b.dataset.partitions))
 
-        self.assertEqual(1, len(b.dataset.partitions))
-        self.assertEqual(1, len(b.dataset.tables))
-
-        c = b.build_fs.getcontents(list(b.build_fs.walkfiles())[0])
-
-        self.assertEquals(10001, len(c.splitlines()))
-
-        self.assertEquals(11, len(b.dataset.stats))
-
-        self.assertEquals('built', b.state)
+        self.assertEquals(4,len(b.dataset.source_columns))
 
         return b
 
     def test_complete_build(self):
         """Build the simple bundle"""
 
+        from geoid import civick, census
+
         b = self.setup_bundle('complete-build')
         b.sync()
-        b = b.cast_to_subclass()
+        b = b.cast_to_build_subclass()
         self.assertEquals('synced', b.state)
         b.do_prepare()
         self.assertEquals('prepared', b.state)
+
+        def edit_pipeline(pl):
+            from ambry.etl.pipeline import PrintRows, LogRate, Edit, WriteToSelectedPartition, WriteToPartition
+
+            def prt(m):
+                print m
+
+            # Converting to the cesus geoid b/c they are just numbers, and when used in a partition name,
+            # the names are lowercased, causing the case sensitive GVIDs to alias.
+            pl.dest_augment = Edit(
+                expand={
+                    ('_p_space', '_p_table') :
+                        lambda e,row: [civick.GVid.parse(row[10]).promote('county').convert(census), e._source.dest_table_name]
+                },
+                edit = {'triangle' : lambda e,v : 1},
+                add = ['id']
+            )
+
+            pl.build_last = [PrintRows( offset=5, print_at='end'), LogRate(prt, 3000,'')]
+
+            pl.write_to_table = WriteToPartition() # WriteToSelectedPartition()
+
+
+        b.set_edit_pipeline(edit_pipeline)
+
         b.do_build()
+
+        print list(b.build_fs.walkfiles())
+
+        return
 
         self.assertEquals([2000, 2001, 2002, 2010], b.dataset.partitions[0].time_coverage)
         self.assertEquals([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
@@ -116,6 +149,17 @@ class Test(TestBase):
         self.assertEquals(33, len(b.dataset.stats))
 
         self.assertEquals('built', b.state)
+
+    def test_complete_load(self):
+        """Build the simple bundle"""
+
+        b = self.setup_bundle('complete-load')
+        b.sync()
+        b = b.cast_to_meta_subclass()
+        self.assertEquals('synced', b.state)
+        b.do_prepare()
+        self.assertEquals('prepared', b.state)
+        b.do_meta()
 
     def test_db_copy(self):
         from ambry.orm.database import Database
@@ -156,6 +200,20 @@ class Test(TestBase):
 
         l.install_to_remote(b)
 
+        #self.dump_database('partitions')
+
         p = l.partition(list(b.partitions)[0].vid)
 
         self.assertEqual(10000, len(list(l.stream_partition(p.vid))))
+
+    def test_simple_meta(self):
+        """Build the simple bundle"""
+
+        b = self.setup_bundle('simple')
+        b.sync()  # This will sync the files back to the bundle's source dir
+
+        print list(b.source_fs.listdir())
+
+        for i in [u'bundle.yaml', u'schema.csv', u'documentation.md', u'bundle.py', u'sources.csv']:
+            pass
+

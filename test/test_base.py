@@ -68,11 +68,12 @@ class TestBase(unittest.TestCase):
 
         return db
 
-    def setup_bundle(self, name):
+    def setup_bundle(self, name, source_url = None, build_url = None):
         """Configure a bundle from existing sources"""
         from test import bundles
         from os.path import dirname, join
         from fs.opener import fsopendir
+        from fs.errors import ParentDirectoryMissingError
         from ambry.library import new_library
         import yaml
 
@@ -82,11 +83,20 @@ class TestBase(unittest.TestCase):
 
         self.db = self.library._db
 
-        source_url = "mem://{}/source".format(name)
-        build_url =  "mem://{}/build".format(name)
+        if not source_url:
+            source_url = "mem://{}/source".format(name)
 
-        assert fsopendir(source_url).isdirempty('/')
-        assert fsopendir(build_url).isdirempty('/')
+        if not build_url:
+            build_url =  "mem://{}/build".format(name)
+
+
+
+        try: # One fails for real directories, the other the mem:
+            assert fsopendir(source_url, create_dir = True).isdirempty('/')
+            assert fsopendir(build_url, create_dir = True).isdirempty('/')
+        except ParentDirectoryMissingError:
+            assert fsopendir(source_url).isdirempty('/')
+            assert fsopendir(build_url).isdirempty('/')
 
         test_source_fs = fsopendir(join(dirname(bundles.__file__), 'example.com', name))
 

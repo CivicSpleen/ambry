@@ -13,6 +13,7 @@ from sqlalchemy import event
 from sqlalchemy.orm import relationship
 
 from ..util import Constant
+from ..orm.column import Column
 
 
 from . import Base, MutationDict, JSONEncodedObj
@@ -38,6 +39,15 @@ class SourceColumn(Base):
         DATATYPE.DATE: datetime.date,
         DATATYPE.TIME: datetime.time,
         DATATYPE.DATETIME: datetime.datetime
+    }
+
+    column_type_map = {
+        DATATYPE.INT: Column.DATATYPE_INTEGER,
+        DATATYPE.FLOAT: Column.DATATYPE_REAL,
+        DATATYPE.STRING: Column.DATATYPE_VARCHAR,
+        DATATYPE.DATE: Column.DATATYPE_DATE,
+        DATATYPE.TIME: Column.DATATYPE_TIME,
+        DATATYPE.DATETIME: Column.DATATYPE_DATETIME
     }
 
     id = SAColumn('sc_id', Integer, primary_key=True)
@@ -66,6 +76,11 @@ class SourceColumn(Base):
     __table_args__ = (
         UniqueConstraint('sc_st_id','sc_source_header', name='_uc_sourcecolumns'),
     )
+
+    @property
+    def column_datatype(self):
+        """Return the data type using the values defined for the schema"""
+        return self.column_type_map[self.datatype]
 
     @staticmethod
     def mangle_name(name):
@@ -103,6 +118,9 @@ class SourceColumn(Base):
             if hasattr(self, k):
                 setattr(self, k, v)
 
+
+
+
 class SourceTable(Base):
     __tablename__ = 'sourcetables'
 
@@ -126,7 +144,14 @@ class SourceTable(Base):
             return None
 
     def add_column(self, position, source_header, datatype, **kwargs):
-
+        """
+        Add a column to the source table.
+        :param position: Integer position of the column
+        :param source_header: Name fothe column, as it exists in the source file
+        :param datatype: Python datatype ( str, int, float, None ) for the column
+        :param kwargs:  Other source record args.
+        :return:
+        """
         c = self.column(source_header)
 
         if c:
@@ -154,10 +179,16 @@ class SourceTable(Base):
         return { c.source_header: c.dest_header for c in self.columns }
 
     @property
+    def column_index_map(self):
+        return {c.source_header: c.position for c in self.columns}
+
+    @property
     def widths(self):
-        widths =  [ int(c.width) for c in self.columns ]
+        widths =  [ c.width for c in self.columns ]
         if not  all( bool(e) for e in widths ):
             from ambry.dbexceptions import ConfigurationError
             raise ConfigurationError("The widths array for source table {} has zero or null entries ".format(self.name))
+
+        widths = [int(w) for w in widths]
 
         return widths

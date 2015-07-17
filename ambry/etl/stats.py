@@ -7,11 +7,13 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-from ambry.util import Constant
 from collections import Counter
+
 from livestats import livestats
-from geoid import civick
-from pipeline import Pipe
+
+from ambry.util import Constant
+from ambry.etl.pipeline import Pipe
+
 
 def text_hist(nums, ascii = False):
 
@@ -121,7 +123,10 @@ class StatSet(object):
                 bin = int((v - self.bin_min) / self.bin_width)
                 self.bins[bin] += 1
 
-            self.stats.add(v)
+            try:
+                self.stats.add(float(v))
+            except ValueError:
+                self.counts[str(v)] += 1
         else:
             assert False, "Really should be one or the other ... "
 
@@ -222,11 +227,30 @@ class Stats(Pipe):
         self.table = table
         self._stats = {}
         self._func = None
+        self._func_code = None
+        self.headers = None
 
-    def add(self, column):
+    def init(self, headers):
+
+        from pipeline import PipelineError
+
+        failures = []
+
+        for c in self._source.dest_table.columns:
+
+            if not c.name in self.headers:
+                self.error("Stats failed to find table {} column {} in the headers for source {} "
+                           .format(self._source.dest_table.name, c.name , self.source.name))
+            else:
+
+                self.add(c, build = False)
+
+        self._func, self._func_code = self.build()
+
+
+
+    def add(self, column, build = True):
         """Determine the LOM from a ORM Column"""
-
-
 
         # Try it as an orm.column, otherwise try to look up in a table,
         # otherwise, as a string
@@ -243,8 +267,9 @@ class Stats(Pipe):
                 self._stats[column] = StatSet(column)
 
         # Doing it for every add() is less efficient, but it's insignificant time, and
-        # it means we don't have to remember to call a the build phase before processing
-        self._func = self.build()
+        # it means we don't have to remember to call the build phase before processing
+        if self.build:
+            self._func, self._func_code = self.build()
 
     def build(self):
 
@@ -254,40 +279,52 @@ class Stats(Pipe):
             if self._stats[name] is not None:
                 parts.append("stats['{name}'].add(row['{name}'])".format(name=name))
 
-        f = 'def _process_row(stats, row):\n    {}'.format('\n    '.join(parts))
+        if not parts:
+            from pipeline import PipelineError
+            raise PipelineError("Did not get any stats variables for table {} source {} "
+                           .format(self._source.dest_table.name , self.source.name))
 
-        exec f
+        code = 'def _process_row(stats, row):\n    {}'.format('\n    '.join(parts))
 
-        return locals()['_process_row']
+        exec code
+
+        f = locals()['_process_row']
+
+        return f, code
+
 
     def stats(self):
         return [ (name, self._stats[name]) for name, stat in self._stats.items() ]
 
     def process(self, row):
-        self._func(self._stats, row)
+        try:
+            self._func(self._stats, row)
+        except KeyError as e:
+            raise KeyError('Failed to find key in row. headers = "{}", code = "{}" '.format(self.headers, self._func_code))
+        except:
+            print '!!! headers = "{}", code = "{}" '.format(self.headers, self._func_code)
+            raise
+
         return row
 
-    def __iter__(self):
+    def process_header(self, row):
+        """ """
 
-        itr = iter(self._source_pipe)
+        self.headers = row
 
-        header = itr.next()
+        self.init(self.headers)
 
-        yield header
+        return row
 
-        for c in header:
-            self.add(c)
+    def process_body(self, row):
+        self.process(dict(zip(self.headers, row)))
 
-        for row in itr:
-            self.process(dict(zip(header,row)))
-
-            yield row
+        return row
 
     def __str__(self):
         from tabulate import tabulate
 
         rows = []
-
 
         for name, stats in  self._stats.items():
             stats_dict = stats.dict
@@ -299,4 +336,7 @@ class Stats(Pipe):
 
             rows.append(stats_dict.values())
 
-        return 'Statistics \n' + str(tabulate(rows[1:], rows[0], tablefmt="pipe"))
+        if rows:
+            return 'Statistics \n' + str(tabulate(rows[1:], rows[0], tablefmt="pipe"))
+        else:
+            return 'Statistics: None \n'

@@ -1,15 +1,15 @@
-"name","hash","title","dest_table","source_table","segment","time","space","grain","start_line","end_line","comment_lines","header_lines","widths","file","urltype","filetype","encoding","description","url"
-"altname","3723cb8f66fbfc6973e338a64668517f",,"altname",,,,,,,,,,,,,,,"Random data with alternate names","http://public.source.civicknowledge.com/example.com/sources/simple-example-altnames.csv"
-"namesu8","4b581a5617af9b532d50399bf1e753f3",,"names",,,,,,,,,,,,,,"utf8","CSV file with Unicode in UTF","http://public.source.civicknowledge.com/example.com/sources/unicode-utf8.csv"
-"multiexcel","e82baa3d19d0df8651e481b3df506a1c",,"rent","rent",1,,,,,,,,,,,,,"Multiple sheets in an Excel file","http://public.source.civicknowledge.com/example.com/sources/multisheet.xls"
-"rent07","5a6bee8a5da0727b865493aa13ca1ef8",,"rent","rent",,,,,,,,"3,4",,,,,,"Renter cost, Excel 2007 format","http://public.source.civicknowledge.com/example.com/sources/renter_cost_excel07.xlsx"
-"rent97","b9078d1e8a4d4829ae6c32084fabd795",,"rent","rent",,,,,,,,"3,4",,,,,,"Renter cost, Excel 97 format","http://public.source.civicknowledge.com/example.com/sources/renter_cost_excel97.xls"
-"rentcsv","31fd4f10428f421ecdf2f0cec031b68e",,"rent","rent",,,,,,,,"3,4",,,,,,"Renter cost, CSV format","http://public.source.civicknowledge.com/example.com/sources/renter_cost.csv"
-"renttab","2f8d8590f1156803c8ac45bba84b5f4d",,"rent","rent",,,,,,,,"3,4",,,,,,"Renter cost, Tab format","http://public.source.civicknowledge.com/example.com/sources/renter_cost.tsv"
-"rpeople","b8dbba8243d03d58b1862f1bac6d2756",,"rpeople",,,,,,,,,,,,,,,"People's names and a random number","http://public.source.civicknowledge.com/example.com/sources/random-names.csv"
-"csv_no_csv","e4732aa75d0e3f712653e718851f64b8",,"simple","simple1",,,,,,,,,,,,"csv",,"CSV file with wrong extension","http://public.source.civicknowledge.com/example.com/sources/simple-example.foo"
-"mz_no_zip","e4732aa75d0e3f712653e718851f64b8",,"simple","simple1",,,,,,,,,,"simple-example.csv","zip",,,"Multi-file Zipfile without zip extension","http://public.source.civicknowledge.com/example.com/sources/test_data.foo"
-"mz_with_zip","e4732aa75d0e3f712653e718851f64b8",,"simple","simple1",,,,,,,,,,"simple-example.csv",,,,"Multi-file Zipfile with zip extension","http://public.source.civicknowledge.com/example.com/sources/test_data.zip"
-"sf_zip","e4732aa75d0e3f712653e718851f64b8",,"simple","simple2",,,,,,,,,,,,,,"Single-file zipfile","http://public.source.civicknowledge.com/example.com/sources/simple-example.csv.zip"
-"simple","e4732aa75d0e3f712653e718851f64b8",,"simple","simple2",,1000,"california","numbers",,,,,,,,,,"Simple Random Data","http://public.source.civicknowledge.com/example.com/sources/simple-example.csv"
-"simple_fixed","e3a6062a0c8888287a448eaa01aa36ad",,"simple","simple2",,,,,,,,,"6,34,3,14",,,,,"Simple Random Data, fixed width format","http://public.source.civicknowledge.com/example.com/sources/simple-example.txt"
+name,hash,title,dest_table,source_table,segment,time,space,grain,start_line,end_line,comment_lines,header_lines,file,urltype,filetype,encoding,description,url
+altname,3723cb8f66fbfc6973e338a64668517f,,altname,,,,,,,,,,,,,,Random data with alternate names,http://public.source.civicknowledge.com/example.com/sources/simple-example-altnames.csv
+namesu8,4b581a5617af9b532d50399bf1e753f3,,names,,,,,,,,,,,,,utf8,CSV file with Unicode in UTF,http://public.source.civicknowledge.com/example.com/sources/unicode-utf8.csv
+multiexcel,e82baa3d19d0df8651e481b3df506a1c,,rent,rent,1,,,,,,,,,,,,Multiple sheets in an Excel file,http://public.source.civicknowledge.com/example.com/sources/multisheet.xls
+rent07,5a6bee8a5da0727b865493aa13ca1ef8,,rent,rent,,,,,,,,"3,4",,,,,"Renter cost, Excel 2007 format",http://public.source.civicknowledge.com/example.com/sources/renter_cost_excel07.xlsx
+rent97,b9078d1e8a4d4829ae6c32084fabd795,,rent,rent,,,,,,,,"3,4",,,,,"Renter cost, Excel 97 format",http://public.source.civicknowledge.com/example.com/sources/renter_cost_excel97.xls
+rentcsv,31fd4f10428f421ecdf2f0cec031b68e,,rent,rent,,,,,,,,"3,4",,,,,"Renter cost, CSV format",http://public.source.civicknowledge.com/example.com/sources/renter_cost.csv
+renttab,2f8d8590f1156803c8ac45bba84b5f4d,,rent,rent,,,,,,,,"3,4",,,,,"Renter cost, Tab format",http://public.source.civicknowledge.com/example.com/sources/renter_cost.tsv
+rpeople,b8dbba8243d03d58b1862f1bac6d2756,,rpeople,,,,,,,,,,,,,,People's names and a random number,http://public.source.civicknowledge.com/example.com/sources/random-names.csv
+csv_no_csv,e4732aa75d0e3f712653e718851f64b8,,simple,simple1,,,,,,,,,,,csv,,CSV file with wrong extension,http://public.source.civicknowledge.com/example.com/sources/simple-example.foo
+mz_no_zip,e4732aa75d0e3f712653e718851f64b8,,simple,simple1,,,,,,,,,simple-example.csv,zip,,,Multi-file Zipfile without zip extension,http://public.source.civicknowledge.com/example.com/sources/test_data.foo
+mz_with_zip,e4732aa75d0e3f712653e718851f64b8,,simple,simple1,,,,,,,,,simple-example.csv,,,,Multi-file Zipfile with zip extension,http://public.source.civicknowledge.com/example.com/sources/test_data.zip
+sf_zip,e4732aa75d0e3f712653e718851f64b8,,simple,simple2,,,,,,,,,,,,,Single-file zipfile,http://public.source.civicknowledge.com/example.com/sources/simple-example.csv.zip
+simple,e4732aa75d0e3f712653e718851f64b8,,simple,simple2,,1000,california,numbers,,,,,,,,,Simple Random Data,http://public.source.civicknowledge.com/example.com/sources/simple-example.csv
+simple_fixed,e3a6062a0c8888287a448eaa01aa36ad,,simple,simple2,,,,,,,,,,,,,"Simple Random Data, fixed width format",http://public.source.civicknowledge.com/example.com/sources/simple-example.txt

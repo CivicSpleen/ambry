@@ -1,0 +1,7 @@
+table,position,source_header,dest_header,datatype,valuetype,start,width,size,summary,description
+dimensions,0,date,date,date,,,,,,
+dimensions,1,time,time,time,,,,,,
+dimensions,2,stusab,stusab,str,,,,,,
+dimensions,3,state,state,int,,,,,,
+dimensions,4,county,county,int,,,,,,
+dimensions,5,county name,county name,str,,,,,,
