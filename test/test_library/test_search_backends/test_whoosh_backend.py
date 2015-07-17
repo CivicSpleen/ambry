@@ -29,8 +29,11 @@ class DatasetWhooshIndexTest(TestBase):
     def setUp(self):
         super(self.__class__, self).setUp()
         rc = self.get_rc()
-        library = new_library(rc)
-        self.backend = WhooshSearchBackend(library)
+        self.library = new_library(rc)
+
+        # we need clear index for each test
+        WhooshSearchBackend(self.library).dataset_index.reset()
+        self.backend = WhooshSearchBackend(self.library)
 
     def tearDown(self):
         super(self.__class__, self).tearDown()
@@ -50,8 +53,7 @@ class DatasetWhooshIndexTest(TestBase):
     def test_returns_found_dataset(self):
 
         # add dataset to backend.
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
         self.backend.dataset_index.index_one(dataset)
 
         # search just added document.
@@ -62,17 +64,14 @@ class DatasetWhooshIndexTest(TestBase):
 
     def test_extends_found_dataset_with_partitions(self):
 
-        # add dataset to backend.
-        db = self.new_database()
-
         # create and index some partitions
-        PartitionFactory._meta.sqlalchemy_session = db.session
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
 
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
         dataset.config.metadata.about.title = 'Test dataset'
         self.backend.dataset_index.index_one(dataset)
         partition1 = PartitionFactory(dataset=dataset, vname=dataset.vname)
-        db.session.commit()
+        self.library.database.session.commit()
         self.backend.partition_index.index_one(partition1)
 
         # search just added document.
@@ -84,12 +83,28 @@ class DatasetWhooshIndexTest(TestBase):
 
     # _index_document tests
     def test_adds_dataset_document_to_the_index(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
         self.backend.dataset_index.index_one(dataset)
 
         # search just added document.
         all_docs = list(self.backend.dataset_index.index.searcher().documents())
+        self.assertEquals(all_docs[0]['vid'], dataset.vid)
+
+    def test_replaces_document_in_the_index(self):
+        dataset = self.new_db_dataset(self.library.database, n=0)
+        doc = self.backend.dataset_index._as_document(dataset)
+        self.backend.dataset_index._index_document(doc)
+
+        # search just added document.
+        all_docs = list(self.backend.dataset_index.index.searcher().documents())
+        self.assertEquals(len(all_docs), 1)
+        self.assertEquals(all_docs[0]['vid'], dataset.vid)
+
+        # update
+        doc['doc'] = u'updated'
+        self.backend.dataset_index._index_document(doc, force=True)
+        all_docs = list(self.backend.dataset_index.index.searcher().documents(doc=u'updated'))
+        self.assertEquals(len(all_docs), 1)
         self.assertEquals(all_docs[0]['vid'], dataset.vid)
 
     # _get_generic_schema tests
@@ -101,8 +116,7 @@ class DatasetWhooshIndexTest(TestBase):
 
     # _delete tests
     def test_deletes_dataset_from_index(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
         self.backend.dataset_index.index_one(dataset)
 
         # search just added document.
@@ -113,16 +127,14 @@ class DatasetWhooshIndexTest(TestBase):
         self.assertNotIn(dataset.vid, [x['vid'] for x in all_docs])
 
     def test_returns_true_if_dataset_is_already_indexed(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
         self.backend.dataset_index.index_one(dataset)
 
         # search just added document.
         self.assertTrue(self.backend.dataset_index.is_indexed(dataset))
 
     def test_returns_false_if_dataset_is_not_indexed(self):
-        db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(self.library.database, n=0)
 
         # search just added document.
         self.assertFalse(self.backend.dataset_index.is_indexed(dataset))
@@ -222,8 +234,8 @@ class PartitionWhooshIndexTest(TestBase):
     def setUp(self):
         super(self.__class__, self).setUp()
         rc = self.get_rc()
-        library = new_library(rc)
-        self.backend = WhooshSearchBackend(library)
+        self.library = new_library(rc)
+        self.backend = WhooshSearchBackend(self.library)
 
     def tearDown(self):
         super(self.__class__, self).tearDown()
@@ -242,10 +254,9 @@ class PartitionWhooshIndexTest(TestBase):
     # search tests
     def test_returns_found_partition(self):
         # add dataset to backend.
-        db = self.new_database()
-        PartitionFactory._meta.sqlalchemy_session = db.session
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
         partition1 = PartitionFactory()
-        db.session.commit()
+        self.library.database.session.commit()
         self.backend.partition_index.index_one(partition1)
 
         # search just added document.
@@ -259,12 +270,11 @@ class PartitionWhooshIndexTest(TestBase):
         period_term = self.backend.partition_index._from_to_as_term('1978', '1979')
         self.assertEquals(period_term, '[1978 TO 1979]')
 
-    # _index_document tests
+    # .index_one tests
     def test_adds_partition_document_to_the_index(self):
-        db = self.new_database()
-        PartitionFactory._meta.sqlalchemy_session = db.session
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
         partition1 = PartitionFactory()
-        db.session.commit()
+        self.library.database.session.commit()
 
         self.backend.partition_index.index_one(partition1)
 
@@ -272,6 +282,25 @@ class PartitionWhooshIndexTest(TestBase):
         all_docs = list(self.backend.partition_index.index.searcher().documents())
         all_vids = [x['vid'] for x in all_docs]
         self.assertIn(partition1.vid, all_vids)
+
+    def test_replaces_partition_document_in_the_index(self):
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
+        partition1 = PartitionFactory()
+        self.library.database.session.commit()
+        doc = self.backend.partition_index._as_document(partition1)
+        self.backend.partition_index._index_document(doc)
+
+        # search just added document.
+        all_docs = list(self.backend.partition_index.index.searcher().documents())
+        all_vids = [x['vid'] for x in all_docs]
+        self.assertIn(partition1.vid, all_vids)
+
+        # update
+        doc['doc'] = u'updated'
+        self.backend.partition_index._index_document(doc, force=True)
+        all_docs = list(self.backend.partition_index.index.searcher().documents(doc=u'updated'))
+        self.assertEquals(len(all_docs), 1)
+        self.assertEquals(all_docs[0]['vid'], partition1.vid)
 
     # _get_generic_schema tests
     def test_returns_whoosh_schema(self):
@@ -315,10 +344,9 @@ class PartitionWhooshIndexTest(TestBase):
 
     # _delete tests
     def test_deletes_partition_from_index(self):
-        db = self.new_database()
-        PartitionFactory._meta.sqlalchemy_session = db.session
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
         partition1 = PartitionFactory()
-        db.session.commit()
+        self.library.database.session.commit()
 
         self.backend.partition_index.index_one(partition1)
 
@@ -331,19 +359,17 @@ class PartitionWhooshIndexTest(TestBase):
 
     # is_indexed test
     def test_returns_true_if_partition_is_already_indexed(self):
-        db = self.new_database()
-        PartitionFactory._meta.sqlalchemy_session = db.session
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
         partition1 = PartitionFactory()
-        db.session.commit()
+        self.library.database.session.commit()
 
         self.backend.partition_index.index_one(partition1)
 
         self.assertTrue(self.backend.partition_index.is_indexed(partition1))
 
     def test_returns_false_if_identifier_is_not_indexed(self):
-        db = self.new_database()
-        PartitionFactory._meta.sqlalchemy_session = db.session
+        PartitionFactory._meta.sqlalchemy_session = self.library.database.session
         partition1 = PartitionFactory()
-        db.session.commit()
+        self.library.database.session.commit()
 
         self.assertFalse(self.backend.partition_index.is_indexed(partition1))

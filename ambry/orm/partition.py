@@ -153,15 +153,13 @@ class Partition(Base, DictableMixin):
             places = list(self._bundle._library.search.search_identifiers(gvid_or_place))
 
             if not places:
-                from ..dbexceptions import BuildError
-                self._bundle.error(
-                    ("Failed to find space identifier '{}' in full text identifier search  for partition '{}'")
-                        .format(gvid_or_place, str(self.identity)))
+                err_msg = "Failed to find space identifier '{}' in full "\
+                    "text identifier search  for partition '{}'"\
+                    .format(gvid_or_place, str(self.identity))
+                self._bundle.error(err_msg)
                 return None
 
-            score, gvid, typ, name = places[0]
-
-            return GVid.parse(gvid)
+            return GVid.parse(places[0].vid)
 
     def set_coverage(self, stats):
         """"Extract time space and grain coverage from the stats and store them in the partition"""

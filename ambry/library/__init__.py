@@ -354,9 +354,6 @@ class Library(object):
                 .filter(Config.type =='buildstate').filter(Config.group =='access').filter(Config.key =='last')
                 .order_by(Config.modified.desc())).all()
 
-
-
-
     @property
     def search(self):
         from search import Search
@@ -364,4 +361,3 @@ class Library(object):
             self._search = Search(self)
 
         return self._search
-

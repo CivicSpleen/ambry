@@ -106,6 +106,8 @@ class AmbryReadyMixin(object):
     # Partition index tests.
     #
 
+    # test force add of dataset, partition and index.
+
 
 @unittest.skip('Not ready')
 class WhooshBackendTest(TestBase, AmbryReadyMixin):

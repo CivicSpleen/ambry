@@ -76,7 +76,6 @@ class DatasetWhooshIndex(BaseDatasetIndex):
         assert backend is not None, 'backend can not be None'
         super(self.__class__, self).__init__(backend)
         self.index_dir = os.path.join(self.backend.root_dir, 'datasets')
-        self.all_datasets = []  # FIXME: Implement.
         try:
             schema = self._get_generic_schema()
             if not os.path.exists(self.index_dir):
@@ -100,6 +99,7 @@ class DatasetWhooshIndex(BaseDatasetIndex):
         for dataset in self.index.searcher().documents():
             res = DatasetSearchResult()
             res.vid = dataset['vid']
+            res.b_score = 1
             datasets.append(res)
         return datasets
 
@@ -115,6 +115,7 @@ class DatasetWhooshIndex(BaseDatasetIndex):
 
         """
         query_string = self._make_query_from_terms(search_phrase)
+        self._parsed_query = query_string
         schema = self._get_generic_schema()
 
         parser = QueryParser('doc', schema=schema)
@@ -138,19 +139,14 @@ class DatasetWhooshIndex(BaseDatasetIndex):
         return datasets.values()
 
     def _index_document(self, document, force=False):
-        """ Adds document to the index. """
-        # FIXME:
-        #if document['dvid'] in self.all_datasets and not force:
-        #    # dataset already indexed.
-        #    return
+        """ Adds dataset document to the index. """
+        # Assuming document does not exist in the index, because existance is checked in the index_one method.
+        if force:
+            self._delete(vid=document['vid'])
 
         writer = self.index.writer()
         writer.add_document(**document)
         writer.commit()
-
-        #if force:
-        #    self.dataset_writer.delete_by_term( 'vid', unicode( bundle.identity.vid))
-        # self.all_datasets.add(bundle.identity.vid)
 
     def _make_query_from_terms(self, terms):
         """ Creates a Whoosh query for dataset from decomposed search terms.
@@ -236,7 +232,6 @@ class IdentifierWhooshIndex(BaseIdentifierIndex):
     def __init__(self, backend=None):
         super(self.__class__, self).__init__(backend=backend)
         self.index_dir = os.path.join(self.backend.root_dir, 'identifiers')
-        self.all_identifiers = []  # FIXME: Implement.
         try:
             schema = self._get_generic_schema()
             if not os.path.exists(self.index_dir):
@@ -254,6 +249,7 @@ class IdentifierWhooshIndex(BaseIdentifierIndex):
         self.index = None
 
     def search(self, search_phrase, limit=None):
+        self._parsed_query = search_phrase
         schema = self._get_generic_schema()
         parser = QueryParser('name', schema=schema)
         query = parser.parse(search_phrase)  # query_string)
@@ -329,7 +325,6 @@ class PartitionWhooshIndex(BasePartitionIndex):
         super(self.__class__, self).__init__(backend=backend)
 
         self.index_dir = os.path.join(self.backend.root_dir, 'partitions')
-        self.all_partitions = []  # FIXME: Implement.
         try:
             schema = self._get_generic_schema()
             if not os.path.exists(self.index_dir):
@@ -384,10 +379,9 @@ class PartitionWhooshIndex(BasePartitionIndex):
     def all(self):
         """ Returns list with all indexed partitions. """
         partitions = []
-        # FIXME: Is score 1 or 0 here?
         for partition in self.index.searcher().documents():
             partitions.append(
-                PartitionSearchResult(dataset_vid=partition['dataset_vid'], vid=partition['vid'], score=0))
+                PartitionSearchResult(dataset_vid=partition['dataset_vid'], vid=partition['vid'], score=1))
         return partitions
 
     def search(self, search_phrase, limit=None):
@@ -403,6 +397,7 @@ class PartitionWhooshIndex(BasePartitionIndex):
         """
 
         query_string = self._make_query_from_terms(search_phrase)
+        self._parsed_query = query_string
         schema = self._get_generic_schema()
         parser = QueryParser('doc', schema=schema)
         query = parser.parse(query_string)
@@ -420,25 +415,21 @@ class PartitionWhooshIndex(BasePartitionIndex):
 
     def _index_document(self, document, force=False):
         """ Adds parition document to the index. """
-        # FIXME:
-        # if p.identity.vid in self.all_partitions and not force:
-        #    return
+        if force:
+            self._delete(vid=document['vid'])
 
         writer = self.index.writer()
         writer.add_document(**document)
         writer.commit()
 
-        # FIXME:
-        # self.all_partitions.add(p.identity.vid)
-
     def _expand_place_ids(self, terms):
         """ Lookups all of the place identifiers to get gvids
 
         Args:
-            terms (FIXME:): terms to lookup
+            terms (str or unicode): terms to lookup
 
         Returns:
-            FIXME:
+            str or list: given terms if no identifiers found, otherwise list of identifiers.
         """
 
         place_vids = []

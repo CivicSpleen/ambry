@@ -58,8 +58,6 @@ class PartitionSearchResult(object):
 class BaseSearchBackend(object):
     """
     Base class for full text search backends implementations.
-
-    Subclasses must overwrite at least add_document. FIXME:
     """
 
     def __init__(self, library):
@@ -104,27 +102,34 @@ class BaseIndex(object):
         """
         assert backend is not None, 'backend argument can not be None.'
         self.backend = backend
+        self._parsed_query = None
 
-    def index_one(self, instance):
+    def index_one(self, instance, force=False):
         """ Indexes exactly one object of the Ambry system.
 
         Args:
             instance (any): instance to index.
+            force (boolean): if True replace document in the index.
 
+        Returns:
+            boolean: True if document added to index, False if document already exists in the index.
         """
-        doc = self._as_document(instance)
-        self._index_document(doc)
+        if not self.is_indexed(instance) and not force:
+            doc = self._as_document(instance)
+            self._index_document(doc, force=force)
+            return True
+        return False
 
     def index_many(self, instances, tick_f=None):
         """ Index all given instances.
 
         Args:
             instances (list): instances to index.
-            tick_f (callable): FIXME:
+            tick_f (callable): callable of one argument. Gets amount of indexed documents.
 
         """
-        # FIXME: Implement.
-        pass
+        for instance in instances:
+            self.index_one(instance)
 
     def search(self, search_phrase):
         """ Search index by given query. Return result list.
@@ -142,6 +147,11 @@ class BaseIndex(object):
     def is_indexed(self, instance):
         """ Returns True if instance is already indexed. Otherwise returns False. """
         raise NotImplementedError('subclasses of BaseIndex must provide an is_indexed() method')
+
+    def get_parsed_query(self):
+        """ Returns string with last query parsed. """
+        assert self._parsed_query is not None, 'Probably your forget to run search.'
+        return self._parsed_query
 
     def _index_document(self, document):
         """ Adds document to the index.

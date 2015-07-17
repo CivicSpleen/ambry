@@ -139,20 +139,21 @@ def root_list(args, l, rc):
 
     root_list_datasets(args, l, rc)
 
+
 def root_list_datasets(args, l, rc):
     from tabulate import tabulate
 
-    header = ['vid','vname','state','description']
+    header = ['vid', 'vname', 'state', 'description']
     records = []
 
     for b in l.bundles:
         records.append(b.field_row(header))
 
-    print tabulate(records, headers = header)
+    print tabulate(records, headers=header)
 
 
 def root_info(args, l, rc):
-    from ..cli import _print_info, err, fatal, prt
+    from ..cli import _print_info, prt
     from ..dbexceptions import ConfigurationError
     from ambry.orm.exc import NotFoundError
     import ambry
@@ -163,23 +164,23 @@ def root_info(args, l, rc):
         locations = default_locations
 
     if not args.term:
-        prt("Version:   {}, {}",ambry._meta.__version__, rc.environment.category)
-        prt("Root dir:  {}",rc.filesystem('root'))
+        prt('Version:   {}, {}', ambry._meta.__version__, rc.environment.category)
+        prt('Root dir:  {}', rc.filesystem('root'))
 
         try:
             if l.source:
-                prt("Source :   {}",l.source.base_dir)
+                prt('Source :   {}', l.source.base_dir)
         except (ConfigurationError, AttributeError):
-            prt("Source :   No source directory")
+            prt('Source :   No source directory')
 
-        prt("Configs:   {}",rc.dict['loaded'])
-        prt("Library:   {}", l.database.dsn)
-        prt("Remotes:   {}", ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
+        prt('Configs:   {}', rc.dict['loaded'])
+        prt('Library:   {}', l.database.dsn)
+        prt('Remotes:   {}', ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
 
         return
 
     if not l:
-        fatal("No library, probably due to a configuration error")
+        fatal('No library, probably due to a configuration error.')
 
     ident = l.resolve(args.term, location=locations)
 
@@ -240,7 +241,7 @@ def root_search(args, l, config):
 
         l.search.index_identifiers(records)
 
-        print "Reindexing docs"
+        print 'Reindexing docs'
         l.search.index_datasets(tick_f=tick)
 
         return
@@ -264,8 +265,9 @@ def root_search(args, l, config):
                 print x
 
         else:
-            for score, gvid, rtype, name in l.search.search_identifiers(term, limit=30):
-                print "{:6.2f} {:9s} {} {}".format(score, gvid, rtype, name)
+            for identifier in l.search.search_identifiers(term, limit=30):
+                print '{:6.2f} {:9s} {} {}'.format(
+                    identifier.score, identifier.vid, identifier.type, identifier.name)
 
     else:
 
@@ -277,26 +279,18 @@ def root_search(args, l, config):
                 print x, ds.name, ds.data.get('title')
 
         else:
-            if args.unparsed:
-                parsed = term
-            else:
-                parsed = l.search.make_query_from_terms(term)
+            print 'search for ', term
 
-            print "search for ", parsed
+            datasets = l.search.search_datasets(term)
 
-            datasets = l.search.search_datasets(parsed)
-
-            for result in sorted(datasets.values(), key=lambda e: e.score, reverse=True):
+            for result in sorted(datasets, key=lambda e: e.score, reverse=True):
                 ds = l.dataset(result.vid)
                 print result.score, result.vid, ds.name, ds.data.get('title'), list(result.partitions)[:5]
-
-
 
 
 def root_doc(args, l, rc):
 
     from ambry.ui import app, app_config
-    import ambry.ui.views as views
     import os
 
     import logging
@@ -319,6 +313,7 @@ def root_doc(args, l, rc):
         webbrowser.open("http://localhost:{}/".format(app_config['port']))
 
     app.run(host=app_config['host'], port=int(app_config['port']), debug=args.debug)
+
 
 def root_remove(args, l, rc):
 

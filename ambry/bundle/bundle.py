@@ -662,11 +662,10 @@ class Bundle(object):
             places = list(self.library.search.search_identifiers(term))
 
             if not places:
-                raise BuildError( "Failed to find space identifier '{}' in full text identifier search".format(term))
+                raise BuildError(
+                    "Failed to find space identifier '{}' in full text identifier search".format(term))
 
-            score, gvid, type, name = places[0]
-
-            return gvid
+            return places[0].vid
 
         if self.metadata.about.space:  # From the bundle metadata
             spaces.add(resolve(self.metadata.about.space))
@@ -699,7 +698,6 @@ class Bundle(object):
         self.metadata.coverage.grain = sorted(conv_grain(g) for g in grains)
 
         self.metadata.write_to_dir()
-
 
     def finalize(self):
         self.state = self.STATES.FINALIZED
