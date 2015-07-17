@@ -139,6 +139,10 @@ class BaseIndex(object):
         """ Returns all documents of the index. """
         raise NotImplementedError('subclasses of BaseIndex must provide a all() method')
 
+    def is_indexed(self, instance):
+        """ Returns True if instance is already indexed. Otherwise returns False. """
+        raise NotImplementedError('subclasses of BaseIndex must provide an is_indexed() method')
+
     def _index_document(self, document):
         """ Adds document to the index.
 

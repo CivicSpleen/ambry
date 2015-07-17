@@ -96,7 +96,7 @@ class DatasetWhooshIndexTest(TestBase):
     def test_returns_whoosh_schema(self):
         schema = self.backend.dataset_index._get_generic_schema()
         self.assertItemsEqual(
-            ['dataset_vid', 'doc', 'keywords', 'title', 'vid'],
+            ['vid', 'doc', 'keywords', 'title'],
             schema.names())
 
     # _delete tests
@@ -111,6 +111,21 @@ class DatasetWhooshIndexTest(TestBase):
         self.backend.dataset_index._delete(vid=dataset.vid)
         all_docs = list(self.backend.dataset_index.index.searcher().documents())
         self.assertNotIn(dataset.vid, [x['vid'] for x in all_docs])
+
+    def test_returns_true_if_dataset_is_already_indexed(self):
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        self.backend.dataset_index.index_one(dataset)
+
+        # search just added document.
+        self.assertTrue(self.backend.dataset_index.is_indexed(dataset))
+
+    def test_returns_false_if_dataset_is_not_indexed(self):
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+
+        # search just added document.
+        self.assertFalse(self.backend.dataset_index.is_indexed(dataset))
 
 
 @unittest.skip('Not ready')
@@ -183,6 +198,22 @@ class IdentifierWhooshIndexTest(TestBase):
         self.backend.identifier_index._delete(identifier='gvid')
         all_docs = list(self.backend.identifier_index.index.searcher().documents())
         self.assertNotIn('gvid', [x['identifier'] for x in all_docs])
+
+    def test_returns_true_if_identifier_is_already_indexed(self):
+        identifier = dict(
+            identifier='gvid', type='type',
+            name='name1')
+
+        self.backend.identifier_index.index_one(identifier)
+
+        # search just added document.
+        self.assertTrue(self.backend.identifier_index.is_indexed(identifier))
+
+    def test_returns_false_if_identifier_is_not_indexed(self):
+        identifier = dict(
+            identifier='gvid', type='type',
+            name='name1')
+        self.assertFalse(self.backend.identifier_index.is_indexed(identifier))
 
 
 @unittest.skip('Not ready')
@@ -297,3 +328,22 @@ class PartitionWhooshIndexTest(TestBase):
         self.backend.partition_index._delete(vid=partition1.vid)
         all_docs = list(self.backend.partition_index.index.searcher().documents())
         self.assertNotIn(partition1.vid, [x['vid'] for x in all_docs])
+
+    # is_indexed test
+    def test_returns_true_if_partition_is_already_indexed(self):
+        db = self.new_database()
+        PartitionFactory._meta.sqlalchemy_session = db.session
+        partition1 = PartitionFactory()
+        db.session.commit()
+
+        self.backend.partition_index.index_one(partition1)
+
+        self.assertTrue(self.backend.partition_index.is_indexed(partition1))
+
+    def test_returns_false_if_identifier_is_not_indexed(self):
+        db = self.new_database()
+        PartitionFactory._meta.sqlalchemy_session = db.session
+        partition1 = PartitionFactory()
+        db.session.commit()
+
+        self.assertFalse(self.backend.partition_index.is_indexed(partition1))

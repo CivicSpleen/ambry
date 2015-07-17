@@ -13,6 +13,7 @@ from whoosh.index import create_in, open_dir
 from whoosh.fields import Schema, TEXT, KEYWORD, ID, NGRAMWORDS, NGRAM
 from whoosh import scoring
 from whoosh.qparser import QueryParser
+from whoosh.query import Term
 
 from fs.opener import fsopendir
 
@@ -223,6 +224,12 @@ class DatasetWhooshIndex(BaseDatasetIndex):
         writer.delete_by_term('vid', vid)
         writer.commit()
 
+    def is_indexed(self, dataset):
+        """ Returns True if dataset is already indexed. Otherwise returns False. """
+        with self.index.searcher() as searcher:
+            result = searcher.search(Term('vid', dataset.vid))
+            return bool(result)
+
 
 class IdentifierWhooshIndex(BaseIdentifierIndex):
 
@@ -308,6 +315,12 @@ class IdentifierWhooshIndex(BaseIdentifierIndex):
         writer = self.index.writer()
         writer.delete_by_term('identifier', identifier)
         writer.commit()
+
+    def is_indexed(self, identifier):
+        """ Returns True if identifier is already indexed. Otherwise returns False. """
+        with self.index.searcher() as searcher:
+            result = searcher.search(Term('identifier', identifier['identifier']))
+            return bool(result)
 
 
 class PartitionWhooshIndex(BasePartitionIndex):
@@ -398,6 +411,12 @@ class PartitionWhooshIndex(BasePartitionIndex):
             for hit in results:
                 yield PartitionSearchResult(
                     vid=hit['vid'], dataset_vid=hit['dataset_vid'], score=hit.score)
+
+    def is_indexed(self, partition):
+        """ Returns True if partition is already indexed. Otherwise returns False. """
+        with self.index.searcher() as searcher:
+            result = searcher.search(Term('vid', partition.vid))
+            return bool(result)
 
     def _index_document(self, document, force=False):
         """ Adds parition document to the index. """
