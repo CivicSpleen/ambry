@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import os
-import unittest
 
 from test.test_base import TestBase
 
@@ -11,7 +10,6 @@ from ambry.library.search_backends.base import DatasetSearchResult, IdentifierSe
 from test.test_orm.factories import PartitionFactory
 
 
-@unittest.skip('Not ready')
 class WhooshSearchBackendTest(TestBase):
     def setUp(self):
         super(self.__class__, self).setUp()
@@ -23,7 +21,6 @@ class WhooshSearchBackendTest(TestBase):
         self.assertEquals(self.backend.root_dir, self.library._fs.search() + '/')
 
 
-@unittest.skip('Not ready')
 class DatasetWhooshIndexTest(TestBase):
 
     def setUp(self):
@@ -140,7 +137,6 @@ class DatasetWhooshIndexTest(TestBase):
         self.assertFalse(self.backend.dataset_index.is_indexed(dataset))
 
 
-@unittest.skip('Not ready')
 class IdentifierWhooshIndexTest(TestBase):
 
     def setUp(self):
@@ -228,7 +224,6 @@ class IdentifierWhooshIndexTest(TestBase):
         self.assertFalse(self.backend.identifier_index.is_indexed(identifier))
 
 
-@unittest.skip('Not ready')
 class PartitionWhooshIndexTest(TestBase):
 
     def setUp(self):
