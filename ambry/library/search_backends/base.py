@@ -2,6 +2,7 @@
 
 from math import log
 import re
+from pprint import pformat
 
 from nltk.stem.lancaster import LancasterStemmer
 
@@ -9,6 +10,10 @@ from sqlalchemy.orm import object_session
 from sqlalchemy.sql import text
 
 from geoid.civick import GVid
+from ambry.util import get_logger
+import logging
+
+logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 
 class DatasetSearchResult(object):
@@ -117,7 +122,9 @@ class BaseIndex(object):
         if not self.is_indexed(instance) and not force:
             doc = self._as_document(instance)
             self._index_document(doc, force=force)
+            logger.debug(u'{} indexed as\n {}'.format(instance.__class__, pformat(doc)))
             return True
+        logger.debug(u'{} already indexed.'.format(instance.__class__))
         return False
 
     def index_many(self, instances, tick_f=None):

@@ -23,8 +23,7 @@ from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIn
 
 from ambry.library.search_backends.base import SearchTermParser
 from ambry.util import get_logger
-
-logger = get_logger(__name__, level=logging.DEBUG)
+logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 
 class WhooshSearchBackend(BaseSearchBackend):
@@ -125,6 +124,7 @@ class DatasetWhooshIndex(BaseDatasetIndex):
         datasets = defaultdict(DatasetSearchResult)
 
         # collect all datasets
+        logger.debug('Searching datasets using `{}` query.'.format(query))
         with self.index.searcher() as searcher:
             results = searcher.search(query, limit=limit)
             for hit in results:
@@ -133,6 +133,7 @@ class DatasetWhooshIndex(BaseDatasetIndex):
                 datasets[vid].b_score += hit.score
 
         # extend datasets with partitions
+        logger.debug('Extending datasets with partitions.')
         for partition in self.backend.partition_index.search(search_phrase):
             datasets[partition.dataset_vid].p_score += partition.score
             datasets[partition.dataset_vid].partitions.add(partition.vid)
@@ -249,6 +250,7 @@ class IdentifierWhooshIndex(BaseIdentifierIndex):
         self.index = None
 
     def search(self, search_phrase, limit=None):
+        """ Finds identifier by search phrase. """
         self._parsed_query = search_phrase
         schema = self._get_generic_schema()
         parser = QueryParser('name', schema=schema)
@@ -401,6 +403,7 @@ class PartitionWhooshIndex(BasePartitionIndex):
         schema = self._get_generic_schema()
         parser = QueryParser('doc', schema=schema)
         query = parser.parse(query_string)
+        logger.debug('Searching partitions using `{}` query.'.format(query))
         with self.index.searcher() as searcher:
             results = searcher.search(query, limit=limit)
             for hit in results:
@@ -486,7 +489,6 @@ class PartitionWhooshIndex(BasePartitionIndex):
 
         if 'by' in terms:
             keywords.append(terms['by'])
-
         frm_to = self._from_to_as_term(terms.get('from', None), terms.get('to', None))
 
         if frm_to:

@@ -35,10 +35,6 @@ class AmbryReadyMixin(object):
         all_vids = [x.vid for x in datasets]
         self.assertIn(dataset.vid, all_vids)
 
-    def test_does_not_add_dataset_twice(self):
-        # FIXME:
-        pass
-
     def test_find_dataset_by_vid(self):
         db = self.new_database()
         dataset = self.new_db_dataset(db, n=0)
@@ -116,10 +112,25 @@ class WhooshBackendTest(TestBase, AmbryReadyMixin):
         super(self.__class__, self).setUp()
         rc = self.get_rc()
         self.library = new_library(rc)
+
+        # we need clean backend for test
+        WhooshSearchBackend(self.library).reset()
         self.backend = WhooshSearchBackend(self.library)
 
-    # partition add
     # FIXME: move all tests to the base method.
+    def test_does_not_add_dataset_twice(self):
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        self.backend.dataset_index.index_one(dataset)
+
+        datasets = self.backend.dataset_index.all()
+        self.assertEquals(len(datasets), 1)
+
+        self.backend.dataset_index.index_one(dataset)
+        datasets = self.backend.dataset_index.all()
+        self.assertEquals(len(datasets), 1)
+
+    # partition add
     def test_add_partition_to_the_index(self):
         db = self.new_database()
         dataset = self.new_db_dataset(db, n=0)
@@ -154,7 +165,7 @@ class WhooshBackendTest(TestBase, AmbryReadyMixin):
         PartitionFactory._meta.sqlalchemy_session = db.session
         partition = PartitionFactory(dataset=dataset)
         self.backend.partition_index.index_one(partition)
-        self._assert_finds_partition(partition, str(partition.identity.name))
+        self._assert_finds_partition(partition, unicode(partition.identity.name))
 
     def _test_find_partition_by_vname(self):
         # FIXME:
@@ -165,7 +176,16 @@ class WhooshBackendTest(TestBase, AmbryReadyMixin):
         self.backend.partition_index.index_one(partition)
         self._assert_finds_partition(partition, str(partition.identity.vname))
 
-    # FIXME: Add tests for some complex queries (by, with, from, to, etc...)
+    def test_find_by_years_range(self):
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        PartitionFactory._meta.sqlalchemy_session = db.session
+        partition = PartitionFactory(dataset=dataset, time_coverage=['1978', '1979'])
+        db.session.commit()
+        self.backend.partition_index.index_one(partition)
+        self._assert_finds_partition(partition, '* from 1978 to 1979')
+
+        # FIXME: Add tests for some complex queries (by, with, from, to, etc...)
 
 
 @unittest.skip('Not ready')

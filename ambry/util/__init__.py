@@ -30,6 +30,7 @@ def _get_logger(name, file_name=None, stream=None, template=None, propagate=Fals
 
     logger = logging.getLogger(name)
     logger.setLevel(level)
+    logger.propagate = propagate
 
     if not template:
         template = "%(name)s %(process)s %(levelname)s %(message)s"

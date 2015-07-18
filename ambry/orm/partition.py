@@ -48,7 +48,7 @@ class Partition(Base, DictableMixin):
     fqname = SAColumn('p_fqname',String(200),unique=True,nullable=False,index=True)
     cache_key = SAColumn('p_cache_key',String(200),unique=True,nullable=False,index=True)
     ref = SAColumn('p_ref', String(200), index=True)
-    time = SAColumn('p_time', String(20))
+    time = SAColumn('p_time', String(20))  # FIXME: add helptext
     table_name = SAColumn('p_table_name', String(50))
     space = SAColumn('p_space', String(50))
     grain = SAColumn('p_grain', String(50))
