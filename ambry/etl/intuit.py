@@ -187,8 +187,9 @@ class Column(object):
         column has codes."""
         import datetime
 
-        self.type_ratios = {test: float(
-            self.type_counts[test]) / float(self.count) for test, testf in tests + [(None, None)]}
+        self.type_ratios = {test: (float(self.type_counts[test]) / float(self.count)) if self.count else None
+                            for test, testf in tests + [(None, None)]}
+
 
         if self.type_ratios[str] > .2:
             return str, False

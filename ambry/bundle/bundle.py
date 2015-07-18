@@ -93,6 +93,10 @@ class Bundle(object):
         return self.dataset.identity
 
     @property
+    def library(self):
+        return self._library
+
+    @property
     def schema(self):
         """Return the Schema acessor"""
         from schema import Schema
@@ -111,6 +115,7 @@ class Bundle(object):
             return None
 
         source._cache_fs = self._library.download_cache
+        source._library = self._library
         return source
 
     @property
@@ -118,6 +123,7 @@ class Bundle(object):
 
         for source in self.dataset.sources:
             source._cache_fs = self._library.download_cache
+            source._library = self._library
             yield source
 
     @property
@@ -292,6 +298,9 @@ class Bundle(object):
     STATES.INSTALLING = 'installing'
     STATES.INSTALLED = 'installed'
 
+    # Other things that can be part of the 'last action'
+    STATES.INFO = 'info'
+
     ##
     ## Source Synced
     ##
@@ -343,6 +352,7 @@ class Bundle(object):
             self.set_error_state()
             r = False
 
+        self.set_last_access(Bundle.STATES.CLEANED)
         self.dataset.commit()
         return r
 
@@ -393,6 +403,18 @@ class Bundle(object):
         for source in self.dataset.sources:
             print source
 
+    def load_requirements(self):
+        """If there are python library requirements set, append the python dir
+        to the path."""
+
+        import sys
+
+        for module_name, pip_name in self.metadata.requirements.items():
+            self._library.install_packages(module_name, pip_name)
+
+        python_dir = self._library.filesystem.python()
+        sys.path.append(python_dir)
+
 
     ##
     ## Prepare
@@ -404,6 +426,8 @@ class Bundle(object):
 
     def do_prepare(self):
         """This method runs pre_, main and post_ prepare methods."""
+
+        self.load_requirements()
 
         r = True
 
@@ -425,7 +449,10 @@ class Bundle(object):
         else:
             self.log("---- Skipping prepare ---- ")
 
+        self.set_last_access(Bundle.STATES.PREPARED)
+
         self.dataset.commit()
+
         return r
 
     def prepare_main(self):
@@ -465,7 +492,7 @@ class Bundle(object):
         """"""
 
         for t in self.schema.tables:
-            if not bool(t.description.strip()):
+            if not bool(t.description):
                 self.error("No title ( Description of id column ) set for table: {} ".format(t.name))
 
         return True
@@ -474,7 +501,7 @@ class Bundle(object):
     ## Meta
     ##
 
-    def do_meta(self, source_name = None, force=False):
+    def do_meta(self, source_name = None, force=False, print_pipe=False):
         """
         Synchronize with the files and run the meta pipeline, possibly creating new objects. Then, write the
         objects back to file records and synchronize.
@@ -484,19 +511,23 @@ class Bundle(object):
         """
         from ambry.orm.file import File
 
+        self.load_requirements()
+
         self.do_sync()
 
         self.do_prepare()
 
         self.log("---- Meta ---- ")
 
-        self.meta(source_name=source_name)
+        self.meta(source_name=source_name, print_pipe=print_pipe)
 
         self.build_source_files.file(File.BSFILE.SOURCES).objects_to_record()
         self.build_source_files.file(File.BSFILE.SOURCESCHEMA).objects_to_record()
         self.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
 
         self.do_sync()
+
+        self.set_last_access(Bundle.STATES.SYNCED)
 
     def meta_make_source_tables(self, pl):
         from ambry.etl.intuit import TypeIntuiter
@@ -529,8 +560,10 @@ class Bundle(object):
         self.build_fs.makedir('pipeline', allow_recreate=True)
         self.build_fs.setcontents(os.path.join('pipeline','meta-'+pl.file_name+'.txt' ), unicode(pl), encoding='utf8')
 
-    def meta(self, source_name = None, phase = 'all'):
-        from ambry.etl.pipeline import PrintRows
+    def meta(self, source_name = None, print_pipe=False):
+        from ..etl import PrintRows, augment_pipeline
+
+        self.load_requirements()
 
         for i, source in enumerate(self.sources):
 
@@ -540,17 +573,18 @@ class Bundle(object):
 
             self.logger.info("Running meta for source: {} ".format(source.name))
 
-            if phase in ('source','all'):
-                pl = self.do_pipeline(source).source_phase
-                pl.run()
+            pl = self.do_pipeline(source).meta_phase
 
-                self.meta_log_pipeline(pl)
-                self.meta_make_source_tables(pl)
-                self.meta_make_dest_tables(pl)
+            augment_pipeline(pl, PrintRows)
 
-            if phase in ('schema','all'):
-                pl = self.do_pipeline(source).schema_phase
-                pl.run()
+            pl.run()
+
+            if print_pipe:
+                self.logger.info(pl)
+
+            self.meta_log_pipeline(pl)
+            self.meta_make_source_tables(pl)
+            self.meta_make_dest_tables(pl)
 
         source.dataset.commit()
 
@@ -563,7 +597,9 @@ class Bundle(object):
         """Return True is the bundle has been built."""
         return bool(self.dataset.config.build.state.built)
 
-    def do_build(self, table_name = None, force=False):
+    def do_build(self, table_name = None, force=False, print_pipe=False):
+
+        self.load_requirements()
 
         if not self.is_prepared:
             if not self.do_prepare():
@@ -574,7 +610,7 @@ class Bundle(object):
         if self.pre_build(force):
 
             self.log("---- Build ---")
-            if self.build_main(table_name):
+            if self.build(table_name, print_pipe=print_pipe):
                 self.state = self.STATES.BUILT
                 if self.post_build():
                     self.log("---- Done Building ---")
@@ -593,6 +629,7 @@ class Bundle(object):
             self.set_error_state()
             r = False
 
+        self.set_last_access(Bundle.STATES.BUILD)
         return r
 
     # Build the final package
@@ -612,21 +649,42 @@ class Bundle(object):
 
         return True
 
-    def build(self, table_name = None, source_name = None):
+    def build_log_pipeline(self, table_name, pl):
+        """Write a report of the pipeline out to a file """
+        import os
+
+        self.build_fs.makedir('pipeline', allow_recreate=True)
+        self.build_fs.setcontents(os.path.join('pipeline', 'build-' + table_name + '.txt'), unicode(pl),
+                                  encoding='utf8')
+
+    def build(self, table_name = None, source_name = None, print_pipe=False):
+        from ..etl import PrintRows, augment_pipeline
+        from collections import defaultdict
+
+        sources_for_table = defaultdict(set)
 
         for i, source in enumerate(self.sources):
+            sources_for_table[source.dest_table.name].add(source)
 
+        for table, sources in sources_for_table.items():
             if table_name and source.dest_table.name != table_name:
-                self.logger.info("Skipping source {}, table {} ( only running table {} ) "
-                                 .format(source.name, source.dest_table.name, table_name))
+                self.logger.info("Skipping sources {}, table {} ( only running table {} ) "
+                                 .format(','.join(s.name for s in sources), table, table_name))
                 continue
 
             self.logger.info("Running build for table: {} ".format(source.dest_table.name))
 
-            pl = self.do_pipeline(source).build_phase
+            pl = self.do_pipeline().build_phase
 
-            pl.run()
+            if print_pipe:
+                augment_pipeline(pl, PrintRows())
 
+            pl.run(source_pipes = [s.source_pipe() for s in sources])
+
+            if print_pipe:
+                self.logger.info(pl)
+
+            self.build_log_pipeline(table, pl)
             self.build_post_build_source(pl)
 
         source.dataset.commit()
@@ -634,13 +692,16 @@ class Bundle(object):
         return True
 
     def build_post_build_source(self, pl):
-        pass
 
-    def build_main(self, table_name = None):
-        """This is the methods that is actually called in do_build; it
-        dispatches to developer created prepare() methods."""
-        return self.build(table_name = table_name)
+        from ..etl import PartitionWriter
 
+        try:
+            for p, stats in pl[PartitionWriter].partitions:
+                self.logger.info("Finalizing partition {}".format(p.identity.name))
+                p.finalize(pl, stats)
+                pass
+        except IndexError:
+            self.error("Pipeline didn't have a PartitionWriters, won't try to finalize")
     def post_build(self):
         """After the build, update the configuration with the time required for
         the build, then save the schema back to the tables, if it was revised

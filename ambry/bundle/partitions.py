@@ -289,25 +289,24 @@ class PartitionProxy(Proxy):
         from ambry.etl.partition import new_partition_data_file
         return new_partition_data_file(self._bundle.build_fs, self.cache_key)
 
-    def inserter(self):
-        from ambry.etl.partition import Inserter
 
-        return Inserter(self, self.datafile() )
+    def finalize(self, pipeline, stats):
 
-    def pipeline(self,**kwargs):
-        from ambry.etl.pipeline import Pipeline
-        from ambry.etl.stats import Stats
+        from ambry.etl import Stats
 
-        pl = Pipeline(**kwargs)
-        pl.dest_statistics = Stats(self._partition.table)
-        pl.sink = self.inserter()
+        self._partition.state = self._partition.STATES.BUILT
 
-        return pl
+        try:
 
-    def run(self,**kwargs):
-        """Return a pipeline that inserts into the table in the partition"""
+            # Write the stats for this partition back into the partition
 
-        pl = self.pipeline(**kwargs)
-        pl.run()
+            self.set_stats(stats.stats())
+            self.set_coverage(stats.stats())
+            self.table.update_from_stats(stats.stats())
+            self._bundle.dataset.commit()
 
-        return pl
+        except KeyError as e:
+            raise
+            pass  # No stats in the pipeline.
+
+        self._partition.state = self._partition.STATES.FINALIZED

@@ -130,7 +130,6 @@ class Partition(Base, DictableMixin):
         for c in  self.table.columns:
 
             if not c.name in sd:
-
                 continue
 
             d = sd[c.name].dict

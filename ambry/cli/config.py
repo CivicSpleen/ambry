@@ -3,71 +3,47 @@ from ..cli import prt, fatal, warn, err
 
 
 def config_parser(cmd):
-    config_p = cmd.add_parser(
-        'config',
-        help='Install or display the configuration')
+    config_p = cmd.add_parser('config',help='Install or display the configuration')
     config_p.set_defaults(command='config')
 
-    asp = config_p.add_subparsers(
-        title='Config commands',
-        help='Configuration commands')
+    asp = config_p.add_subparsers(title='Config commands',help='Configuration commands')
 
     sp = asp.add_parser('install', help='Install a configuration file')
     sp.set_defaults(subcommand='install')
-    sp.add_argument(
-        '-t',
-        '--template',
-        default='devel',
-        help="Suffix of the configuration template. One of: 'devel', 'library', 'builder'. Default: 'devel' ")
+    sp.add_argument('-t','--template',default='devel',help="Suffix of the configuration template. One of: 'devel', 'library', 'builder'. Default: 'devel' ")
     sp.add_argument('-r', '--root', default=None, help="Set the root dir")
 
-    sp.add_argument(
-        '-R',
-        '--remote',
-        default=None,
-        help="Url of remote library")
-    sp.add_argument(
-        '-p',
-        '--print',
-        dest='prt',
-        default=False,
-        action='store_true',
-        help='Print, rather than save, the config file')
+    sp.add_argument('-R','--remote', default=None, help="Url of remote library")
+    sp.add_argument('-p','--print',dest='prt',default=False,action='store_true',help='Print, rather than save, the config file')
 
     group = sp.add_mutually_exclusive_group()
-    group.add_argument(
-        '-e',
-        '--edit',
-        default=False,
-        action='store_true',
-        help="Edit existing file")
-    group.add_argument(
-        '-f',
-        '--force',
-        default=False,
-        action='store_true',
-        help="Force using the default config; don't re-use the existing config")
+    group.add_argument('-e','--edit',default=False,action='store_true',help="Edit existing file")
+    group.add_argument('-f','--force',default=False,action='store_true',help="Force using the default config; don't re-use the existing config")
 
-    sp.add_argument(
-        'args',
-        nargs='*',
-        help='key=value entries')  # Get everything else.
+    sp.add_argument('args',nargs='*',help='key=value entries')  # Get everything else.
 
-    sp = asp.add_parser(
-        'value',
-        help='Return a configuration value, or all values if no key is specified')
+    sp = asp.add_parser('value',help='Return a configuration value, or all values if no key is specified')
     sp.set_defaults(subcommand='value')
-    sp.add_argument(
-        '-y',
-        '--yaml',
-        default=False,
-        action='store_true',
-        help="If no key is specified, return the while configuration as yaml")
+    sp.add_argument('-y','--yaml',default=False,action='store_true',help="If no key is specified, return the while configuration as yaml")
     sp.add_argument('key', nargs='*', help='Value key')  # Get everything else.
 
+    sp = asp.add_parser('password', help='Set a password for a service')
+    sp.set_defaults(subcommand='password')
+    group.add_argument('-d', '--delete', default=False, action='store_true', help="Delete the password")
+    sp.add_argument('service', metavar = 'service', nargs=1, help='Service name, usually a hostname')  # Get everything else.
+    sp.add_argument('username', metavar = 'username', nargs=1, help = 'username')
 
 def config_command(args, rc):
-    globals()['config_' + args.subcommand](args, rc)
+    from ..library import new_library
+    from . import global_logger
+
+    try:
+        l = new_library(rc)
+        l.logger = global_logger
+    except Exception as e:
+        warn("Failed to setup library: {} ".format(e))
+
+    globals()['config_' + args.subcommand](args, l, rc)
 
 
 def config_install(args, rc):
@@ -128,7 +104,6 @@ def config_install(args, rc):
             else:
                 
                 e = e[k]
-                
 
     if args.root:
         d['filesystem']['root'] = args.root
@@ -213,3 +188,25 @@ def config_value(args, rc):
             dump_key(None, subs)
     else:
         dump_key(args.key[0], subs)
+
+def config_password(args, l, rc):
+    """Set and delete passwords from the system keychain"""
+    from getpass import getpass
+    import keyring
+
+    if args.delete:
+        try:
+            keyring.delete_password(args.service[0], args.username[0])
+            prt("Password delete")
+        except keyring.errors.PasswordSetError as e:
+            fatal("Failed to delete password".format(e.message))
+    else:
+
+        p = getpass("Set password for service {}, user {} ".format(args.service[0], args.username[0]))
+
+        try:
+            keyring.set_password(args.service[0], args.username[0], p)
+            prt("Password stored sucessfully")
+        except keyring.errors.PasswordSetError as e:
+            fatal("Failed to store password".format(e.message))
+

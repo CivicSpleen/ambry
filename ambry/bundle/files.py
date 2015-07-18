@@ -35,6 +35,7 @@ class BuildSourceFile(object):
     SYNC_DIR = Constant()
     SYNC_DIR.FILE_TO_RECORD = 'ftr'
     SYNC_DIR.RECORD_TO_FILE = 'rtf'
+    SYNC_DIR.OBJECT_TO_FILE = 'otf'
 
     def __init__(self, dataset, filesystem, file_const):
         """
@@ -287,7 +288,14 @@ class MetadataFile(DictBuildSourceFile):
         return ad
 
     def objects_to_record(self):
-        pass
+        import yaml
+        fr = self._dataset.bsfile(self._file_const)
+
+        if fr.has_contents:
+            with self._fs.open(file_name(self._file_const), 'wb') as f:
+                yaml.dump(fr.unpacked_contents, f, default_flow_style=False, indent=4, encoding='utf-8')
+
+
 
 class PythonSourceFile(StringSourceFile):
 
@@ -469,7 +477,7 @@ class SchemaFile(RowBuildSourceFile):
 
             data = {k.replace('d_', '', 1): v for k, v in row.items() if k.startswith('d_')}
 
-            description = row.get('description', '').strip().encode('utf-8')
+            description = (row.get('description', '') or  '' ).strip().encode('utf-8')
 
             col = t.add_column(row['column'],
                                is_primary_key=True if row.get('is_pk', False) else False,
@@ -687,35 +695,6 @@ class SourceSchemaFile(RowBuildSourceFile):
 
         self._dataset._database.commit()
 
-class PartitionsFile(RowBuildSourceFile):
-
-    def record_to_objects(self):
-        from ambry.dbexceptions import ConfigurationError
-        bsfile = self._dataset.bsfile(self._file_const)
-
-        failures = set()
-        for row in bsfile.dict_row_reader:
-            self._dataset.new_partition(**row) # Create or update
-
-
-    def objects_to_record(self):
-
-        import msgpack
-        bsfile = self._dataset.bsfile(self._file_const)
-
-        rows = []
-        for table in self._dataset.partitions:
-            for column in table.columns:
-                row = column.row
-                if not rows:
-                    rows.append(row.keys())
-
-                rows.append(row.values())
-
-        bsfile.mime_type = 'application/msgpack'
-        bsfile.update_contents(msgpack.packb(rows))
-
-        self._dataset._database.commit()
 
 
 file_info_map = {
@@ -725,8 +704,7 @@ file_info_map = {
     File.BSFILE.META: ('bundle.yaml',MetadataFile),
     File.BSFILE.SCHEMA: ('schema.csv',SchemaFile),
     File.BSFILE.SOURCESCHEMA: ('source_schema.csv', SourceSchemaFile),
-    File.BSFILE.SOURCES: ('sources.csv',SourcesFile),
-    File.BSFILE.PARTITIONS: ('partitions.csv', PartitionsFile)
+    File.BSFILE.SOURCES: ('sources.csv',SourcesFile)
 }
 
 def file_name(const):
@@ -783,8 +761,16 @@ class BuildSourceFileAccessor(object):
 
             if defaults and force == f.SYNC_DIR.RECORD_TO_FILE and  not f.record.contents:
                 syncs.append((file_const, f.prepare_to_edit()))
+            elif force == f.SYNC_DIR.OBJECT_TO_FILE:
+                try:
+                    f.objects_to_record()
+                    syncs.append((file_const,f.sync(f.SYNC_DIR.RECORD_TO_FILE)))
+                except AttributeError:
+                    pass
+            elif force == f.SYNC_DIR.FILE_TO_RECORD:
+                syncs.append((file_const, f.sync(force)))
             else:
-                syncs.append((file_const,f.sync(force)))
+                syncs.append((file_const, f.sync()))
 
         return syncs
 

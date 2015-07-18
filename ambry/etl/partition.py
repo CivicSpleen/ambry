@@ -7,7 +7,7 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 import unicodecsv as csv
 
-from ambry.etl.pipeline import Sink
+from ambry.etl.pipeline import Sink, Pipe
 
 
 def new_partition_data_file(fs, path):
@@ -48,9 +48,18 @@ class PartitionDataFile(object):
         self._nrows = 0
         self._header = None
 
-    def insert(self, row):
+    def insert_body(self, row):
         """
         Add a row to the file
+
+        :param row:
+        :return:
+        """
+        return NotImplementedError()
+
+    def insert_header(self, row):
+        """
+        Add a header to the file. Skip it if the file already has data
 
         :param row:
         :return:
@@ -105,6 +114,7 @@ class PartitionCsvDataFile(PartitionDataFile):
         self._file = None
         self._reader = None
         self._writer = None
+        self._nrows = None
 
     def openr(self):
         """Open for reading"""
@@ -117,11 +127,19 @@ class PartitionCsvDataFile(PartitionDataFile):
 
     def openw(self):
         """Open for writing"""
+        from fs.errors import ResourceNotFoundError
 
         if self._file:
             self._file.close()
 
-        self._file = self._fs.open(self.munged_path, mode='wb', buffering=1 * 1024 * 1024)
+        try:
+            self._nrows = len(self._fs.getcontents(self.munged_path).splitlines())
+            mode = 'ab'
+        except ResourceNotFoundError:
+            self._nrows = 0
+            mode = 'wb'
+
+        self._file = self._fs.open(self.munged_path, mode=mode, buffering=1 * 1024 * 1024)
 
         return self._file
 
@@ -160,7 +178,23 @@ class PartitionCsvDataFile(PartitionDataFile):
         self._writer = None
         self._reader = None
 
-    def insert(self, row):
+    def insert_header(self, row):
+        """
+        Write the header, but only if the file is empty
+        :param row:
+        :return:
+        """
+
+        assert isinstance(row, (list, tuple))
+        self._header = list(row)
+
+        w = self.writer()
+
+        if self._nrows == 0:
+            w.writerow(row)
+
+
+    def insert_body(self, row):
         """
         Add a row to the file. The first row must be a tuple or list, containing the header, to set the order of
         the fields, while subsequent rows can be lists or dicts.
@@ -169,16 +203,16 @@ class PartitionCsvDataFile(PartitionDataFile):
         :return:
         """
 
-        if self._nrows == 0:
-            assert isinstance(row, (list, tuple))
-            self._header = list(row)
-
-        if isinstance(row, (list, tuple)):
-            self.writer().writerow(row)
-        else:
+        if not isinstance(row, (list, tuple)):
             # Assume the row has a map interface, and write out the row in the order of the
             # column names provided in the header
-            self.writer().writerow([row.get(k,None) for k in self._header])
+
+            row = [row.get(k, None) for k in self._header]
+
+        if row[0] is None:
+            row[0] = self._nrows
+
+        self.writer().writerow(row)
 
         self._nrows += 1
 
@@ -246,7 +280,7 @@ class PartitionMsgpackDataFile(PartitionDataFile):
         if self._file:
             self._file.close()
 
-    def insert(self, row):
+    def insert_body(self, row):
         """
         Add a row to the file. The first row must be a tuple or list, containing the header, to set the order of
         the fields, while subsequent rows can be lists or dicts.
@@ -310,92 +344,4 @@ class PartitionMsgpackDataFile(PartitionDataFile):
         return NotImplementedError()
 
 
-class Inserter(Sink):
 
-    def __init__(self, partition, datafile):
-        self._partition = partition
-        self._table = partition.table
-        self.datafile = datafile
-        self._header = [ c.name for c in self._table.columns ]
-
-        self.datafile.insert(self._header) # The header is always inserted first
-
-        self.row_num = 1
-
-    def insert(self, row):
-        from sqlalchemy.engine.result import RowProxy
-
-        if not row.get('id', False): # conflicts with passing in lists
-            row['id'] = self.row_num
-
-        # Convert dicts to lists in the order of the header
-        if isinstance(row, dict):
-            row = [ row.get(k,None) for k in self._header ]
-        elif isinstance(row, list):
-            pass
-        elif isinstance(row, RowProxy):
-            row = [ row.get(k,None) for k in self._header ]
-        else:
-            raise Exception("Don't know what the row is")
-
-        self.datafile.insert(row)
-        self.row_num += 1
-
-    def close(self):
-
-        self._partition.state = self._partition.STATES.BUILT
-
-        self.datafile.close()
-
-        if self.pipeline:
-            from ambry.etl import Stats
-            try:
-
-                # Write the stats for this partition back into the partition
-                stats = self.pipeline.statistics[Stats]
-
-                self._partition.set_stats(stats.stats())
-                self._partition.set_coverage(stats.stats())
-                self._partition.table.update_from_stats(stats.stats())
-                self._partition._bundle.dataset.commit()
-
-            except KeyError as e:
-                raise
-                pass # No stats in the pipeline.
-
-    def run(self, *args, **kwargs):
-
-        itr = iter(self._source_pipe)
-
-        header = itr.next()
-
-        self.__enter__()
-
-        for row in itr:
-            d = dict(zip(header, row))
-
-            self.insert(d)
-
-        self.close()
-
-
-    def __enter__(self):
-
-        self._partition.state = self._partition.STATES.BUILDING
-        self._partition._bundle.dataset.commit()
-        return self
-
-    def __exit__(self, type_, value, traceback):
-
-        if type_ and type_ != GeneratorExit:
-            self._partition.state = self._partition.STATES.ERROR
-            self._partition._bundle.dataset.commit()
-            return False
-
-        self.close()
-
-        return True
-
-
-    def __str__(self):
-        return "Inserter table={} row={}".format(self._partition.table.name, self.row_num)

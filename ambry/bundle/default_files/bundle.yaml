@@ -1,39 +1,28 @@
 about:
-    access: example
-    footnote: null
+    access: restricted
+    footnote: nll
     grain:
     groups:
     license: ckdbl
-    processed: null
+    processed:
     rights: public
-    source: null
-    space: California
-    subject: null
-    summary:
+    source:
+    space:
+    subject:
+    summary: Dataset Summary
     tags: []
-    time: null
-    title:
+    time:
+    title: Dataset Title
 contacts:
     creator:
-        email: eric@sandiegodata.org
-        name: Eric Busboom
-        url: http://www.sandiegodata.org
-    maintainer:
-        email: eric@sandiegodata.org
-        name: Eric Busboom
-        url: http://www.sandiegodata.org
-    source:
-        org: Office of Statewide Health Planning and Development
-        url: http://oshpd.ca.gov/
-    analyst:
-        org: Office of Statewide Health Planning and Development
+        email: bob@example.com
         name: Bob Bobson
-        email: bbobson@example.com
+        url: http://example.com
 external_documentation:
     dataset:
-        description: IQI Dataset Page
+        description: Web page the links to the dataset description
         source: null
-        title: IQI Dataset Page
+        title: Dataset Page
         url: http://example.com
     download:
         description: Web page that links to the source files.

@@ -176,7 +176,10 @@ def bundle_parser(cmd):
                             help='Force sync from source to database')
     group.add_argument('-d', '--from-database', default=False, action="store_const",
                             const=BuildSourceFile.SYNC_DIR.RECORD_TO_FILE, dest='sync_dir',
-                            help='Source sync from database to source')
+                            help='Source sync from database file records to source')
+    group.add_argument('-o', '--from-objects', default=False, action="store_const",
+                       const=BuildSourceFile.SYNC_DIR.OBJECT_TO_FILE, dest='sync_dir',
+                       help='Source sync from database objects to source')
     command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
 
 
@@ -199,8 +202,7 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='meta')
 
     command_p.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
-    command_p.add_argument('-f', '--fast', default=False, action="store_true",
-                           help='Load the schema faster by not checking for extant columns')
+    command_p.add_argument('-p', '--print_pipe', default=False, action="store_true", help='Print out the pipeline as it runs')
 
     #
     # Prepare Command
@@ -221,11 +223,11 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='build')
     command_p.add_argument('-s', '--sync', default=False, action="store_true", help='Sync with build source files')
     command_p.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
-    command_p.add_argument('-f', '--force', default=False, action="store_true",
-                           help='Force build. ( --clean is usually preferred ) ')
+
     command_p.add_argument('-i', '--install', default=False, action="store_true",
                            help='Install after building')
-    command_p.add_argument('-o', '--opt', action='append', help='Set options for the build phase')
+    command_p.add_argument('-p', '--print_pipe', default=False, action="store_true",
+                           help='Print out the pipeline as it runs')
 
     #
     # Update Command
@@ -296,6 +298,7 @@ def bundle_parser(cmd):
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
     from tabulate import tabulate
+    from ambry.bundle import Bundle
 
     ref, frm = get_bundle_ref(args,l)
 
@@ -304,6 +307,7 @@ def bundle_info(args, l, rc):
         return
 
     b = l.bundle(ref)
+    b.set_last_access(Bundle.STATES.INFO)
 
     info = [list(), list()]
     def inf(column,k,v):
@@ -485,14 +489,14 @@ def bundle_meta(args, l, rc):
 
     if args.clean:
         b.do_clean()
+        b.set_last_access(Bundle.STATES.CLEAN)
 
     b.do_sync()
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
     b = using_bundle(args, l).cast_to_meta_subclass()
-    b.do_meta()
+    b.do_meta(print_pipe=args.print_pipe)
     b.set_last_access(Bundle.STATES.META)
-
 
 def bundle_prepare(args, l, rc):
     from ambry.bundle import Bundle
@@ -501,12 +505,14 @@ def bundle_prepare(args, l, rc):
         b = using_bundle(args, l).cast_to_build_subclass()
         if args.clean:
             b.do_clean()
+
         if args.sync:
             b.do_sync()
 
+
     b = using_bundle(args, l).cast_to_build_subclass()
     b.do_prepare()
-    b.set_last_access(Bundle.STATES.PREPARED)
+
 
 
 def bundle_build(args, l, rc):
@@ -528,7 +534,7 @@ def bundle_build(args, l, rc):
         if not b.do_prepare():
             return False
 
-    b.do_build(force = args.force)
+    b.do_build(print_pipe=args.print_pipe)
     b.set_last_access(Bundle.STATES.BUILT)
 
 def bundle_install(args, b, st, rc):
@@ -550,9 +556,13 @@ def bundle_install(args, b, st, rc):
     return True
 
 
-def bundle_run(args, b, st, rc):
-    raise NotImplementedError()
+def bundle_run(args, l, rc):
+
     import sys
+
+    b = using_bundle(args, l).cast_to_meta_subclass()
+
+    b.load_requirements()
 
     #
     # Run a method on the bundle. Can be used for testing and development.
@@ -565,16 +575,7 @@ def bundle_run(args, b, st, rc):
         return
 
     if not callable(f):
-        raise TypeError(
-            "Got object for name '{}', but it isn't a function".format(
-                args.method))
-
-    # Install the python directory for Ambry builds so we can use bundle
-    # defined imports
-    python_dir = b.config.python_dir()
-
-    if python_dir and python_dir not in sys.path:
-        sys.path.append(python_dir)
+        raise TypeError("Got object for name '{}', but it isn't a function".format(args.method))
 
     r = f(*args.args)
 

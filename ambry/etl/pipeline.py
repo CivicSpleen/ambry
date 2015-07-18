@@ -79,8 +79,9 @@ class Pipe(object):
 class Sink(Pipe):
     """A final stage pipe, which consumes its input and produces no output rows"""
 
-    def __init__(self, count = 1000):
+    def __init__(self, count = None):
         self._count = count
+
 
     def run(self, count=None, *args, **kwargs):
 
@@ -140,7 +141,6 @@ class AddHeader(Pipe):
 
     def __init__(self, header):
         self._header = header
-
 
     def __iter__(self):
 
@@ -261,6 +261,7 @@ class MergeHeader(Pipe):
             self.footers = []
 
             self.initialized = True
+            self.i = 0
 
     def coalesce_headers(self):
         self.init()
@@ -308,23 +309,22 @@ class MergeHeader(Pipe):
 
             max_header_line = max(self.header_lines)
 
-            for i, row in enumerate(self._source_pipe):
+            for row in self._source_pipe:
 
-                if i < self.data_start_line:
-                    if i in self.header_lines:
+                if self.i < self.data_start_line:
+                    if self.i in self.header_lines:
                         self.headers.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
 
-                    if i in self.header_comment_lines:
+                    if self.i in self.header_comment_lines:
                         self.header_comments.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
 
-                    if i == max_header_line:
+                    if self.i == max_header_line:
                         yield self.coalesce_headers()
 
-                elif not self.data_end_line or i <= self.data_end_line:
-
+                elif not self.data_end_line or self.i <= self.data_end_line:
                      yield row
 
-                elif self.data_end_line and i>= self.data_end_line:
+                elif self.data_end_line and self.i>= self.data_end_line:
                     self.footers.append(row)
 
 class Edit(Pipe):
@@ -353,6 +353,7 @@ class Edit(Pipe):
         self.edit_header = None
         self.edit_row = None
         self.edit_functions = None  # Turn dict lookup into list lookup
+
 
     def process_header(self, row):
 
@@ -428,6 +429,11 @@ class PrintRows(Pipe):
         self.count = count
         self.rows = []
         self.i = 0
+        self.aug_header = None
+
+        # In multi-source, multi-run pipelines, used to reset the rows after finish, but allow getting rows
+        # externally.
+        self.reset = False
 
         try:
             self.print_at_row = int(print_at)
@@ -436,29 +442,39 @@ class PrintRows(Pipe):
             self.print_at_row = None
             self.print_at_end = bool(print_at)
 
+    def process_body(self, row):
+        orig_row = list(row)
 
-    def __iter__(self):
+        if self.reset:
+            self.reset = False
+            self.rows = []
+            self.i = 1
 
-        for i, row in enumerate(self.source_pipe):
-            orig_row = row[:]
+        if self.i < self.count:
 
-            if i == 0:# Append thecolumn number to the row header
-                row = [ '#'+str(j)+' '+c for j,c in enumerate(row )]
+            append_row = [self.i] + list(row)
 
-            self.i = i
-            append_row = [i] + list(row)
+            self.rows.append(append_row[self.offset:self.columns])
 
-            if i < self.count:
+        if self.i == self.print_at_row:
+            print str(self)
 
-                self.rows.append(append_row[self.offset:self.columns])
+        self.i += 1
 
-            if i == self.print_at_row:
-                print str(self)
+        return  orig_row
 
-            yield orig_row
+    def finish(self):
 
         if self.print_at_end:
             print str(self)
+
+        self.reset = True
+
+    def process_header(self, row):
+        self.headers = row
+        self.i += 1
+
+        return row
 
     def __str__(self):
         from tabulate import tabulate
@@ -466,24 +482,46 @@ class PrintRows(Pipe):
 
         # return  SingleTable([[ str(x) for x in row] for row in self.rows] ).table
 
+        aug_header = ['0'] + ['#' + str(j) + ' ' + c for j, c in enumerate(self.headers)]
+
         if self.rows:
-            return 'print. {} rows total\n'.format(self.i) + tabulate(self.rows[1:],self.rows[0], tablefmt="pipe")
-
+            return 'print. {} rows total\n'.format(self.i) + tabulate(self.rows,aug_header[self.offset:self.columns],
+                                                                      tablefmt="pipe")
         else:
-            return ''
+            return 'print. 0 rows'
 
-class WriteToPartition(Pipe):
+
+def make_table_map(table, headers):
+    """"Create a function to map from rows with the structure of the headers to the structure of the table. """
+
+    header_parts = {}
+    for i,h in enumerate(headers):
+        header_parts[h] = 'row[{}]'.format(i)
+
+    code = 'lambda row: [{}]'.format(','.join(header_parts.get(c.name,'None') for c in table.columns ))
+
+    return eval(code)
+
+class PartitionWriter(object):
+    """Marker class so the partitions can be retrieved after the pipeline finishes
+    """
+
+class WriteToPartition(Pipe, PartitionWriter):
     """ """
 
     def __init__(self, **kwargs):
+        from stats import Stats
+        self._kwargs = kwargs
+        self._table_map = None
+        self._datafile = None
 
-        self.kwargs = kwargs
+        self._stats = Stats()
 
     def init(self):
         from ..identity import PartialPartitionName
 
-        if self.kwargs:
-            pname = PartialPartitionName(**self.kwargs)
+        if self._kwargs:
+            pname = PartialPartitionName(**self._kwargs)
         else:
             pname = PartialPartitionName(table=self._source.dest_table_name)
 
@@ -494,81 +532,104 @@ class WriteToPartition(Pipe):
             p = self.bundle.partitions.new_partition(pname)
 
         self.partition = p
-        self.inserter = p.inserter()
+        self._datafile = p.datafile()
+
+        self._stats.set_source_pipe(self._source_pipe)
 
     def process_header(self, row):
         self.init() # Delayed because the _soruce isn't set at init time.
         self.headers = row
+        self._datafile.insert_header(row)
+        self._table_map = make_table_map(self.partition.table, self.headers)
+        self._stats.process_header(row)
         return row
 
     def process_body(self, row):
 
-        self.inserter.insert(dict(zip(self.headers, row)))
+        self._datafile.insert_body(self._table_map(row))
+        self._stats.process_body(row)
+        return row
+
+    def finish(self):
+        self._datafile.close()
+
+    @property
+    def partitions(self):
+        """Return the partition, in an generator file to match WriteToSelectedPartition"""
+        yield self.partition, self._stats
+
+    def __str__(self):
+        return repr(self)
+
+class WriteToSelectedPartition(Pipe, PartitionWriter):
+    """Writes to one of several partitions, depending on the contents of columns that selects a partition"""
+
+    def __init__(self, select_f):
+        """
+
+        :param select_f: A function which takes  source and a row and returns a PartialPartitionName
+        :return:
+        """
+
+        self._datafiles = {}
+        self.headers = None
+        self._select_f = select_f
+
+    def process_header(self, row):
+
+        self.headers = row # Can't write until the first row tells us what the partition is
+
+        return row
+
+    def process_body(self, row):
+        from stats import Stats
+
+        pname = self._select_f(self.source, row)
+
+        (p, table_mapper, datafile, stats) = self._datafiles.get(str(pname), (None, None, None, None))
+
+        if p is None:
+
+            p = self.bundle.partitions.partition(pname)
+            if not p:
+                p = self.bundle.partitions.new_partition(pname)
+
+            table_mapper = make_table_map(p.table, self.headers)
+            datafile = p.datafile()
+            stats = Stats()
+            stats.set_source_pipe(self._source_pipe)
+            stats.process_header(table_mapper(self.headers))
+
+            self._datafiles[str(pname)] = (p, table_mapper,datafile,stats)
+
+            datafile.insert_header(table_mapper(self.headers))
+
+        datafile.insert_body(table_mapper(row))
+        stats.process_body(table_mapper(row))
+
 
         return row
 
     def finish(self):
 
-        self.inserter.close()
+        for pname, (p, table_mapper, datafile, stats) in self._datafiles.items():
+            datafile.close()
+
+    @property
+    def partitions(self):
+        """Generate the partitions, so they can be manipulated after the pipeline completes"""
+        for pname, (p, table_mapper, datafile, stats) in self._datafiles.items():
+            yield p, stats
 
     def __str__(self):
-        return repr(self)
 
-def make_partition_classifier(headers):
-    """Create a function to extract the partition classification values from a row. These values are used to select a
-    partition to write the row to """
+        out = ""
 
-    from ambry.identity import PartialPartitionName
+        for p,s in self.partitions:
+            out += str(p.identity.name) + "\n" + str(s) + "\n"
 
-    positions = []
-    terms = []
+        return repr(self) + "\n" + out
 
-    # Slow, but easy to understand ...
-    for h_term, n_term in [  ('_p_'+term,term) for term, _, _ in  PartialPartitionName._name_parts ]:
-        for i, header in enumerate(headers):
-            if h_term == header:
-                positions.append(i)
-                terms.append(n_term)
-
-    code = ('def f(row): name = PartialPartitionName(); {}; return name'
-            .format(','.join('name.'+term for term in terms)+'='+','.join('row[{}]'.format(i) for i in positions )))
-
-    exec code in locals()
-    return locals()['f']
-
-class WriteToSelectedPartition(Pipe):
-    """Writes to one of several partitions, depending on the contents of columns that selects a partition"""
-
-    def __init__(self):
-
-        self.inserters = {}
-        self.headers = None
-        self.classifier = None
-
-    def process_header(self, row):
-        self.headers = row
-        self.classifier = make_partition_classifier(row)
-        return row
-
-    def process_body(self, row):
-
-        pname = self.classifier(row)
-
-        inserter = self.inserters.get(str(pname), None)
-
-        if inserter is None:
-            p = self.bundle.partitions.partition(pname)
-            if not p:
-                p = self.bundle.partitions.new_partition(pname)
-            inserter = p.inserter()
-            self.inserters[str(pname)] =  inserter
-
-        inserter.insert(dict(zip(self.headers, row)))
-
-        return row
-
-    def __str__(self):
-        return repr(self)
 
 class PipelineSegment(list):
 
@@ -580,7 +641,6 @@ class PipelineSegment(list):
 
         for p in args:
             self.append(p)
-
 
     def __getitem__(self, k):
 
@@ -659,7 +719,6 @@ class Pipeline(OrderedDict):
                         'dest_map_header',          # Change header names to be the same as used in the dest table
                         'dest_cast_columns',        # Run casters to convert values, maybe create code columns.
                         'dest_augment',             # Add dimension columns
-                        'dest_statistics',          # Compute statistics
                         'build_last',               # For callers to hijack the end of the process
                         'write_to_table'            # Write the rows to the table.
                      ]
@@ -708,6 +767,11 @@ class Pipeline(OrderedDict):
 
         return self._subset(self._build_groups)
 
+    @property
+    def meta_phase(self):
+        _meta_group_names = list( OrderedDict.fromkeys(self._source_groups + self._schema_groups ))  # uniques, preserve order
+
+        return self._subset(_meta_group_names)
 
     @property
     def file_name(self):
@@ -768,24 +832,42 @@ class Pipeline(OrderedDict):
             for p in self[group_name]:
                 chain.append(p)
 
-        for p in chain[1:]:
-            p.set_source_pipe(chain[0])
 
-        last = reduce(lambda last, next: next.set_source_pipe(last), chain[1:], chain[0])
+        last = chain[0]
+        for p in chain[1:]:
+            p.set_source_pipe(last)
+            last = p
+
+        #last = reduce(lambda last, next: next.set_source_pipe(last), chain[1:], chain[0])
 
         for p in chain:
             p.bundle = self.bundle
 
         return chain, last
 
-    def run(self, count=None):
+    def run(self, count=None, source_pipes = None):
 
-        chain, last = self._collect()
+        if source_pipes:
+            for source_pipe in source_pipes:
 
-        sink = Sink(count = count)
-        sink.set_source_pipe(last)
+                self.bundle.logger.info("Running source {} in a multi-source run".format(source_pipe.source.name))
 
-        sink.run()
+                self['source'] = [source_pipe] # Setting as a scalar appends, as a list will replace.
+
+                chain, last = self._collect()
+
+                sink = Sink(count=count)
+                sink.set_source_pipe(last)
+
+                sink.run()
+
+        else:
+            chain, last = self._collect()
+
+            sink = Sink(count=count)
+            sink.set_source_pipe(last)
+
+            sink.run()
 
         return self
 
@@ -796,7 +878,6 @@ class Pipeline(OrderedDict):
         # Iterate over the last pipe, which will pull from all those before it.
         for row in last:
             yield row
-
 
     def __str__(self):
 

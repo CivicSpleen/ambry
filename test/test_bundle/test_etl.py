@@ -25,24 +25,33 @@ class Test(TestBase):
         from ambry.etl.partition import new_partition_data_file
 
         data = []
-        for i in range(10):
+        for i in range(6):
             data.append(['abcdefghij'[j] if i == 0 else str(j) for j in range(10)])
 
-        cdf = new_partition_data_file(self.fs, 'foo.csv')
+        for i in range(3):
+            cdf = new_partition_data_file(self.fs, 'foo.csv')
 
-        # Put the data in
-        for row in data:
-            cdf.insert(row)
+            cdf.insert_header(data[0])
+
+            # Put the data in
+            for row in data[1:]:
+                cdf.insert_body(row)
+
+            cdf.close()
+
+        self.assertEqual(16, len(self.fs.getcontents('foo.csv').splitlines()))
 
         # Take it out
         for i, row in enumerate(cdf.rows):
-            self.assertEquals(data[i], row)
+            if i < len(data):
+                self.assertEquals(data[i], row)
 
         for i, row in enumerate(cdf.dict_rows,1):
-            self.assertEquals(sorted(data[0]), sorted(row.keys()))
-            self.assertEquals(sorted(data[i]), sorted(row.values()))
+            if i < len(data):
+                self.assertEquals(sorted(data[0]), sorted(row.keys()))
+                self.assertEquals(sorted(data[i]), sorted(row.values()))
 
-    #@unittest.skip('Timing test')
+    @unittest.skip('Timing test')
     def test_csv_time(self):
         """Time writing rows with a PartitionDataFile.
 
@@ -482,7 +491,7 @@ class Test(TestBase):
 
         # Check the source schema file.
         self.assertIn('renter_cost_gt_30', b.source_fs.getcontents('source_schema.csv'))
-        self.assertIn('rent,1,size,size,float,,,,,,',b.source_fs.getcontents('source_schema.csv'))
+        self.assertIn('rent,1,gvid,gvid,str,,,,,,',b.source_fs.getcontents('source_schema.csv'))
         self.assertIn('rpeople,1,size,size,float,,,,,,', b.source_fs.getcontents('source_schema.csv'))
 
         # Check a few random bits from the pipeline debugging output.
@@ -495,8 +504,8 @@ class Test(TestBase):
         # The schema file should have a schema in it.
 
         schema_lines = b.source_fs.getcontents('schema.csv').splitlines()
-        self.assertEqual(9, len(schema_lines) )
-        self.assertIn('rent,4,renter_cost_gt_30,,,c00000load01004,INTEGER,renter_cost_gt_30,', schema_lines)
+        self.assertEqual(7, len(schema_lines) )
+        self.assertIn('rent,4,owner_cost_gt_30_pct,,,c00000load01004,REAL,owner_cost_gt_30_pct,', schema_lines)
 
         import ambry
 
@@ -592,7 +601,6 @@ class Test(TestBase):
                 for i in range(10000):
                     yield([i,i])
 
-
         # Sample
         pl = Pipeline(
             source=Source(),
@@ -616,3 +624,33 @@ class Test(TestBase):
         pl.run()
 
         self.assertEquals(11, len(pl[PrintRows].rows))
+
+    def test_multi_source(self):
+        from ambry.etl.pipeline import Pipeline, Pipe, PrintRows
+
+        class Source(Pipe):
+
+            def __init__(self, start):
+                self.start = start
+
+            def __iter__(self):
+
+                for i in range(self.start, self.start+10):
+                    if i == 0:
+                        yield ['int', 'int'] # header
+
+                    yield ([self.start, i])
+
+            def __str__(self):
+                return 'Source {}'.format(self.start)
+
+        # Sample
+        pl = Pipeline(
+            source_last=PrintRows(count=50)
+        )
+
+        pl.run(source_pipes=[Source(0), Source(10), Source(20)])
+
+        self.assertIn([3, 0, 2], pl[PrintRows].rows)
+        self.assertIn([19, 10, 18], pl[PrintRows].rows)
+        self.assertIn([22, 20, 21], pl[PrintRows].rows)

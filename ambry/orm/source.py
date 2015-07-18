@@ -122,6 +122,9 @@ class DataSource(Base, DictableMixin):
         if self.urltype:
             return self.urltype
 
+        if self.url.startswith('gs://'):
+            return 'gs' # Google spreadsheet
+
         if self.url:
             root, ext = splitext(self.url)
             return ext[1:]
@@ -161,8 +164,11 @@ class DataSource(Base, DictableMixin):
         from fs.zipfs import ZipFS
         import os
 
+        if self.get_urltype() == 'gs':
+            return DelayedOpen(self, None, None, None)
+
         if cache_fs is None:
-            cache_fs = self._cache_fs # Set externally by Bundle.
+            cache_fs = self._cache_fs # Set externally by Bundle in ambry.bundle.bundle.Bundle#source
 
         fstor = None
 
@@ -200,6 +206,9 @@ class DataSource(Base, DictableMixin):
     def row_gen(self, fstor = None):
         """Return a Row Generator"""
         import petl
+
+        if self.get_urltype() == 'gs':
+            return SourceRowGen( self, google_iter(self ))
 
         gft = self.get_filetype()
 
@@ -341,3 +350,27 @@ def make_excel_date_caster(file_name):
                 return None
 
     return excel_date
+
+def google_iter(source):
+    import gspread
+    from oauth2client.client import SignedJwtAssertionCredentials
+
+    json_key = source._library.config.account('google_spreadsheets')
+
+    scope = ['https://spreadsheets.google.com/feeds']
+
+    credentials = SignedJwtAssertionCredentials(json_key['client_email'], json_key['private_key'], scope)
+
+    spreadsheet_key = source.url.replace('gs://', '')
+
+    gc = gspread.authorize(credentials)
+
+    sh = gc.open_by_key(spreadsheet_key)
+
+    wksht = sh.worksheet(source.segment)
+
+    for row in wksht.get_all_values():
+        yield row
+
+
+

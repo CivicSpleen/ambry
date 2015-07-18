@@ -84,7 +84,7 @@ class StatSet(object):
 
         self.n += 1
 
-        self.size = max(self.size, len(str(v)))
+        self.size = max(self.size, len(unicode(v)))
 
         if self.lom == self.LOM.NOMINAL or self.lom == self.LOM.ORDINAL:
             if self.is_time or self.is_date:
@@ -247,8 +247,6 @@ class Stats(Pipe):
 
         self._func, self._func_code = self.build()
 
-
-
     def add(self, column, build = True):
         """Determine the LOM from a ORM Column"""
 
@@ -281,7 +279,7 @@ class Stats(Pipe):
 
         if not parts:
             from pipeline import PipelineError
-            raise PipelineError("Did not get any stats variables for table {} source {} "
+            raise PipelineError("Did not get any stats variables for table {} source {}. Was add() or init() called first? "
                            .format(self._source.dest_table.name , self.source.name))
 
         code = 'def _process_row(stats, row):\n    {}'.format('\n    '.join(parts))
@@ -292,7 +290,6 @@ class Stats(Pipe):
 
         return f, code
 
-
     def stats(self):
         return [ (name, self._stats[name]) for name, stat in self._stats.items() ]
 
@@ -301,9 +298,6 @@ class Stats(Pipe):
             self._func(self._stats, row)
         except KeyError as e:
             raise KeyError('Failed to find key in row. headers = "{}", code = "{}" '.format(self.headers, self._func_code))
-        except:
-            print '!!! headers = "{}", code = "{}" '.format(self.headers, self._func_code)
-            raise
 
         return row
 

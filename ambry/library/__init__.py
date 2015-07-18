@@ -66,6 +66,14 @@ class Library(object):
         return self._db
 
     @property
+    def filesystem(self):
+        return self._fs
+
+    @property
+    def config(self):
+        return self._config
+
+    @property
     def download_cache(self):
         from fs.osfs import OSFS
         return OSFS(self._fs.downloads())
@@ -180,7 +188,6 @@ class Library(object):
         """Return a bundle build on a dataset, with the given vid or id reference"""
 
         from ..bundle import Bundle
-        from fs.opener import fsopendir
         from ..orm.dataset import Dataset
         from ..orm.exc import NotFoundError
 
@@ -362,4 +369,31 @@ class Library(object):
             self._search = Search(self)
 
         return self._search
+
+
+    def install_packages(self, module_name, pip_name):
+
+        from ambry.dbexceptions import ConfigurationError
+        from ..util.packages import install
+        import sys
+        import imp
+        import os
+
+        python_dir = self._fs.python()
+
+        if not python_dir:
+            raise ConfigurationError("Can't install python requirements without a configuration item for filesystems.python")
+
+        if not os.path.exists(python_dir):
+            os.makedirs(python_dir)
+
+        sys.path.append(python_dir)
+
+        try:
+            imp.find_module(module_name)
+            return # self.log("Required package already installed: {}->{}".format(module_name, pip_name))
+        except ImportError:
+            self.logger.info("Installing required package: {}->{}".format(module_name, pip_name))
+            install(python_dir, module_name, pip_name)
+
 

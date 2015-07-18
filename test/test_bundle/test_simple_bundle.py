@@ -24,12 +24,12 @@ class Test(TestBase):
 
         b.sync()  # This will sync the files back to the bundle's source dir
 
-        self.assertEquals(8, len(b.dataset.files))
+        self.assertEquals(7, len(b.dataset.files))
         file_names = [f.path for f in b.dataset.files]
 
-
-        self.assertEqual([u'sources.csv', u'bundle.py', u'sourceschema', u'build_meta', u'documentation.md',
-                          u'partitions', u'bundle.yaml', u'schema.csv'], file_names)
+        print file_names
+        self.assertEqual([u'bundle.py', u'documentation.md', u'sourceschema', u'sources.csv', u'bundle.yaml',
+                          u'build_meta', u'schema.csv'], file_names)
 
         self.assertEqual(13, len(b.dataset.configs))
 
@@ -99,6 +99,8 @@ class Test(TestBase):
         b.do_prepare()
         self.assertEquals('prepared', b.state)
 
+        b.do_meta()
+
         def edit_pipeline(pl):
             from ambry.etl.pipeline import PrintRows, LogRate, Edit, WriteToSelectedPartition, WriteToPartition
 
@@ -108,24 +110,26 @@ class Test(TestBase):
             # Converting to the cesus geoid b/c they are just numbers, and when used in a partition name,
             # the names are lowercased, causing the case sensitive GVIDs to alias.
             pl.dest_augment = Edit(
-                expand={
-                    ('_p_space', '_p_table') :
-                        lambda e,row: [civick.GVid.parse(row[10]).promote('county').convert(census), e._source.dest_table_name]
-                },
-                edit = {'triangle' : lambda e,v : 1},
-                add = ['id']
+                edit = {'triangle' : lambda e,v : 1}
             )
 
-            pl.build_last = [PrintRows( offset=5, print_at='end'), LogRate(prt, 3000,'')]
+            pl.build_last =  [PrintRows( print_at='end'), LogRate(prt, 3000,'')]
 
-            pl.write_to_table = WriteToPartition() # WriteToSelectedPartition()
+            def select_part(source, row):
+                from ambry.identity import PartialPartitionName
+                return PartialPartitionName(table=source.dest_table_name, time = row[8])
 
+            # assign a scalar to append, assign a list to replace
+            pl.write_to_table = [WriteToSelectedPartition(select_part)] # WriteToSelectedPartition()
 
         b.set_edit_pipeline(edit_pipeline)
 
         b.do_build()
 
-        print list(b.build_fs.walkfiles())
+        print b.dataset.partitions[0].time_coverage
+
+        print list(b.build_fs.listdir('pipeline'))
+        print b.build_fs.getcontents('pipeline/build-demo.txt')
 
         return
 
