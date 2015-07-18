@@ -482,9 +482,8 @@ class PrintRows(Pipe):
 
         # return  SingleTable([[ str(x) for x in row] for row in self.rows] ).table
 
-        aug_header = ['0'] + ['#' + str(j) + ' ' + c for j, c in enumerate(self.headers)]
-
         if self.rows:
+            aug_header = ['0'] + ['#' + str(j) + ' ' + c for j, c in enumerate(self.headers)]
             return 'print. {} rows total\n'.format(self.i) + tabulate(self.rows,aug_header[self.offset:self.columns],
                                                                       tablefmt="pipe")
         else:

@@ -292,7 +292,6 @@ class PartitionProxy(Proxy):
 
     def finalize(self, pipeline, stats):
 
-        from ambry.etl import Stats
 
         self._partition.state = self._partition.STATES.BUILT
 

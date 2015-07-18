@@ -187,7 +187,6 @@ class Partition(Base, DictableMixin):
             elif sd[c.name].is_date:
                 tcov |= set(parser.parse(x).year if isinstance(x,basestring) else x.year for x in sd[c.name].uniques)
 
-
         ## Space Coverage
 
         if 'source_data' in self.data:
@@ -200,6 +199,8 @@ class Partition(Base, DictableMixin):
 
         # For geo_coverage, only includes the higher level summary levels, counties, states, places and urban areas
         self.space_coverage = sorted([str(x) for x in scov if bool(x) and x.sl in (10, 40, 50, 60, 160, 400)])
+
+
 
         ## Time Coverage
 
@@ -217,7 +218,7 @@ class Partition(Base, DictableMixin):
             for year in expand_to_years(self.identity.name.time):
                 tcov.add(year)
 
-        self.time_coverage = sorted(tcov)
+        self.time_coverage = tcov
 
         ## Grains
 

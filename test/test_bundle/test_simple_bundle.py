@@ -126,31 +126,25 @@ class Test(TestBase):
 
         b.do_build()
 
-        print b.dataset.partitions[0].time_coverage
+        for p in b.partitions:
+            self.assertIn(int(p.identity.time), p.time_coverage)
 
-        print list(b.build_fs.listdir('pipeline'))
-        print b.build_fs.getcontents('pipeline/build-demo.txt')
-
-        return
-
-        self.assertEquals([2000, 2001, 2002, 2010], b.dataset.partitions[0].time_coverage)
         self.assertEquals([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
                           b.dataset.partitions[0].space_coverage)
         self.assertEquals([u'2qZZZZZZZZZZ'], b.dataset.partitions[0].grain_coverage)
 
-        self.assertEquals([1998, 1999, 2000, 2002, 2003, 2004, 2012], b.dataset.partitions[2].time_coverage)
         self.assertEquals([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
                           b.dataset.partitions[2].space_coverage)
         self.assertEquals([u'2qZZZZZZZZZZ'], b.dataset.partitions[2].grain_coverage)
 
-        self.assertEqual(3, len(b.dataset.partitions))
-        self.assertEqual(1, len(b.dataset.tables))
+        self.assertEqual(4, len(b.dataset.partitions))
+        self.assertEqual(2, len(b.dataset.tables))
 
         c = b.build_fs.getcontents(list(b.build_fs.walkfiles())[0])
 
         self.assertEquals(6001, len(c.splitlines()))
 
-        self.assertEquals(33, len(b.dataset.stats))
+        self.assertEquals(44, len(b.dataset.stats))
 
         self.assertEquals('built', b.state)
 
