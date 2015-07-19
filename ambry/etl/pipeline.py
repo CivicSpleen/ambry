@@ -324,8 +324,14 @@ class MergeHeader(Pipe):
                 elif not self.data_end_line or self.i <= self.data_end_line:
                      yield row
 
-                elif self.data_end_line and self.i>= self.data_end_line:
+                elif self.data_end_line and self.i >= self.data_end_line:
                     self.footers.append(row)
+
+                self.i += 1
+
+    def __str__(self):
+
+        return 'Merge Rows: header = {} '.format(','.join(str(e) for e in self.header_lines))
 
 class Edit(Pipe):
     """Edit rows as they pass through """
@@ -426,14 +432,10 @@ class PrintRows(Pipe):
     def __init__(self, count=10, columns=None, offset = None, print_at=None):
         self.columns = columns
         self.offset = offset
+        self.count_inc = count
         self.count = count
         self.rows = []
-        self.i = 0
-        self.aug_header = None
-
-        # In multi-source, multi-run pipelines, used to reset the rows after finish, but allow getting rows
-        # externally.
-        self.reset = False
+        self.i = 1
 
         try:
             self.print_at_row = int(print_at)
@@ -444,11 +446,6 @@ class PrintRows(Pipe):
 
     def process_body(self, row):
         orig_row = list(row)
-
-        if self.reset:
-            self.reset = False
-            self.rows = []
-            self.i = 1
 
         if self.i < self.count:
 
@@ -468,22 +465,20 @@ class PrintRows(Pipe):
         if self.print_at_end:
             print str(self)
 
-        self.reset = True
+        # For multi-run pipes, the count is the number of rows per source.
+        self.count += self.count_inc
 
     def process_header(self, row):
         self.headers = row
-        self.i += 1
+
 
         return row
 
     def __str__(self):
         from tabulate import tabulate
-        from terminaltables import SingleTable
-
-        # return  SingleTable([[ str(x) for x in row] for row in self.rows] ).table
 
         if self.rows:
-            aug_header = ['0'] + ['#' + str(j) + ' ' + c for j, c in enumerate(self.headers)]
+            aug_header = ['0'] + ['#' + str(j) + ' ' + str(c) for j, c in enumerate(self.headers)]
             return 'print. {} rows total\n'.format(self.i) + tabulate(self.rows,aug_header[self.offset:self.columns],
                                                                       tablefmt="pipe")
         else:
@@ -501,69 +496,45 @@ def make_table_map(table, headers):
 
     return eval(code)
 
+class SelectPartition(Pipe):
+    """A Base class for adding a _pname column, which is used by the partition writer to select which
+    partition a row is written to. By default, uses a partition name that condidsts of only the
+     destination table of the source"""
+
+    def __init__(self, select_f=None):
+        self._default = None
+
+        # Under the theory that removing an if is faster.
+        if select_f:
+            self.select_f = select_f
+            self.process_body = self.process_body_select
+        else:
+            self.process_body = self.process_body_default
+
+    def process_header(self, row):
+        from ..identity import PartialPartitionName
+        self._default = PartialPartitionName(table = self.source.dest_table_name)
+        return row + ['_pname']
+
+    def process_body(self, row):
+        raise NotImplemented("This function should be patched into nonexistence")
+
+    def process_body_select(self, row):
+        return list(row) + [self.select_f(self.source, row)]
+
+    def process_body_default(self, row):
+
+        return list(row) + [self._default]
+
+
 class PartitionWriter(object):
     """Marker class so the partitions can be retrieved after the pipeline finishes
     """
 
 class WriteToPartition(Pipe, PartitionWriter):
-    """ """
-
-    def __init__(self, **kwargs):
-        from stats import Stats
-        self._kwargs = kwargs
-        self._table_map = None
-        self._datafile = None
-
-        self._stats = Stats()
-
-    def init(self):
-        from ..identity import PartialPartitionName
-
-        if self._kwargs:
-            pname = PartialPartitionName(**self._kwargs)
-        else:
-            pname = PartialPartitionName(table=self._source.dest_table_name)
-
-        self.headers = None
-
-        p = self.bundle.partitions.partition(pname)
-        if not p:
-            p = self.bundle.partitions.new_partition(pname)
-
-        self.partition = p
-        self._datafile = p.datafile()
-
-        self._stats.set_source_pipe(self._source_pipe)
-
-    def process_header(self, row):
-        self.init() # Delayed because the _soruce isn't set at init time.
-        self.headers = row
-        self._datafile.insert_header(row)
-        self._table_map = make_table_map(self.partition.table, self.headers)
-        self._stats.process_header(row)
-        return row
-
-    def process_body(self, row):
-
-        self._datafile.insert_body(self._table_map(row))
-        self._stats.process_body(row)
-        return row
-
-    def finish(self):
-        self._datafile.close()
-
-    @property
-    def partitions(self):
-        """Return the partition, in an generator file to match WriteToSelectedPartition"""
-        yield self.partition, self._stats
-
-    def __str__(self):
-        return repr(self)
-
-class WriteToSelectedPartition(Pipe, PartitionWriter):
     """Writes to one of several partitions, depending on the contents of columns that selects a partition"""
 
-    def __init__(self, select_f):
+    def __init__(self):
         """
 
         :param select_f: A function which takes  source and a row and returns a PartialPartitionName
@@ -572,20 +543,26 @@ class WriteToSelectedPartition(Pipe, PartitionWriter):
 
         self._datafiles = {}
         self.headers = None
-        self._select_f = select_f
+        self.p_name_index = None
 
     def process_header(self, row):
 
         self.headers = row # Can't write until the first row tells us what the partition is
+
+        if not '_pname' in row:
+            raise PipelineError("Did not get a _pname header. The pipeline must insert a _pname value"
+                                " to write to partitions ")
+
+        self.p_name_index = row.index('_pname')
 
         return row
 
     def process_body(self, row):
         from stats import Stats
 
-        pname = self._select_f(self.source, row)
+        pname = row[self.p_name_index]
 
-        (p, table_mapper, datafile, stats) = self._datafiles.get(str(pname), (None, None, None, None))
+        (p, table_mapper, datafile, stats) = self._datafiles.get(pname, (None, None, None, None))
 
         if p is None:
 
@@ -599,13 +576,12 @@ class WriteToSelectedPartition(Pipe, PartitionWriter):
             stats.set_source_pipe(self._source_pipe)
             stats.process_header(table_mapper(self.headers))
 
-            self._datafiles[str(pname)] = (p, table_mapper,datafile,stats)
+            self._datafiles[pname] = (p, table_mapper,datafile,stats)
 
             datafile.insert_header(table_mapper(self.headers))
 
         datafile.insert_body(table_mapper(row))
         stats.process_body(table_mapper(row))
-
 
         return row
 
@@ -639,6 +615,7 @@ class PipelineSegment(list):
         self.name = name
 
         for p in args:
+            assert not isinstance(p, (list, tuple))
             self.append(p)
 
     def __getitem__(self, k):
@@ -668,12 +645,16 @@ class PipelineSegment(list):
     def insert(self, i, x):
         import inspect
 
+        assert not isinstance(x, (list, tuple))
+
         if inspect.isclass(x):
             x = x()
 
         if isinstance(x, Pipe):
             x.segment = self
             x.pipeline = self.pipeline
+
+        assert not inspect.isclass(x)
 
         super(PipelineSegment, self).insert(i, x)
 
@@ -718,6 +699,7 @@ class Pipeline(OrderedDict):
                         'dest_map_header',          # Change header names to be the same as used in the dest table
                         'dest_cast_columns',        # Run casters to convert values, maybe create code columns.
                         'dest_augment',             # Add dimension columns
+                        'select_partition',         # For callers to hijack the end of the process
                         'build_last',               # For callers to hijack the end of the process
                         'write_to_table'            # Write the rows to the table.
                      ]
@@ -731,12 +713,11 @@ class Pipeline(OrderedDict):
         super(Pipeline, self).__setattr__('bundle', bundle)
 
         for group_name in self._group_names:
-
             gs = kwargs.get(group_name , [])
             if not isinstance(gs, (list, tuple)):
                 gs = [gs]
 
-            self[group_name] = PipelineSegment(self, group_name, *gs)
+            self.__setitem__(group_name, PipelineSegment(self, group_name, *gs))
 
     def _subset(self, subset):
         kwargs = {}
@@ -782,13 +763,30 @@ class Pipeline(OrderedDict):
         # If the caller tries to set a pipeline segment with a pipe, translte
         # the call to an append on the segment.
 
+        if isinstance(v, (list, tuple)):
+            v = list(filter(bool, v))
+
+        empty_ps = PipelineSegment(self, k)
+
         if isinstance(v, Pipe) or ( isinstance(v, type) and issubclass(v, Pipe)):
+            # Assignment from a pipe is appending
             self[k].append(v)
+        elif v is None:
+            # Assignment from None
+            super(Pipeline, self).__setitem__(k, empty_ps)
+        elif isinstance(v, (list, tuple) ) and not v  :
+            # Assignment from empty list
+            super(Pipeline, self).__setitem__(k, empty_ps)
+        elif isinstance(v, PipelineSegment):
+            super(Pipeline, self).__setitem__(k, v)
+        elif isinstance(v, (list, tuple) ):
+            # Assignment from a list
+            super(Pipeline, self).__setitem__(k, PipelineSegment(self, k, *v))
         else:
-            if v is None or ( isinstance(v, list) and len(v) > 0 and v[0] is None ):
-                super(Pipeline, self).__setitem__(k,PipelineSegment(self,k))
-            else:
-                super(Pipeline, self).__setitem__(k, v)
+            # This maybe should be an error?
+            super(Pipeline, self).__setitem__(k, v)
+
+        assert isinstance(self[k], PipelineSegment)
 
     def __getitem__(self, k):
 
@@ -818,9 +816,10 @@ class Pipeline(OrderedDict):
         if k.startswith('_OrderedDict__'):
             return super(Pipeline, self).__setattr__(k, v)
 
-        self[k] = v
+        self.__setitem__(k,v)
 
     def _collect(self):
+        import inspect
 
         chain = []
 
@@ -828,12 +827,15 @@ class Pipeline(OrderedDict):
         # it on output.
 
         for group_name in self._group_names:
+
+            assert isinstance(self[group_name], PipelineSegment)
+
             for p in self[group_name]:
                 chain.append(p)
 
-
         last = chain[0]
         for p in chain[1:]:
+            assert not inspect.isclass(p)
             p.set_source_pipe(last)
             last = p
 
@@ -849,7 +851,8 @@ class Pipeline(OrderedDict):
         if source_pipes:
             for source_pipe in source_pipes:
 
-                self.bundle.logger.info("Running source {} in a multi-source run".format(source_pipe.source.name))
+                if self.bundle:
+                    self.bundle.logger.info("Running source {} in a multi-source run".format(source_pipe.source.name))
 
                 self['source'] = [source_pipe] # Setting as a scalar appends, as a list will replace.
 

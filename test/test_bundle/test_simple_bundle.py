@@ -102,7 +102,7 @@ class Test(TestBase):
         b.do_meta()
 
         def edit_pipeline(pl):
-            from ambry.etl.pipeline import PrintRows, LogRate, Edit, WriteToSelectedPartition, WriteToPartition
+            from ambry.etl.pipeline import PrintRows, LogRate, Edit, WriteToPartition, SelectPartition
 
             def prt(m):
                 print m
@@ -119,14 +119,17 @@ class Test(TestBase):
                 from ambry.identity import PartialPartitionName
                 return PartialPartitionName(table=source.dest_table_name, time = row[8])
 
+            pl.select_partition = [SelectPartition(select_part)]
+
             # assign a scalar to append, assign a list to replace
-            pl.write_to_table = [WriteToSelectedPartition(select_part)] # WriteToSelectedPartition()
+            pl.write_to_table = [WriteToPartition] # WriteToSelectedPartition()
 
         b.set_edit_pipeline(edit_pipeline)
 
         b.do_build()
 
         for p in b.partitions:
+
             self.assertIn(int(p.identity.time), p.time_coverage)
 
         self.assertEquals([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],

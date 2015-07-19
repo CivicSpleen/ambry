@@ -164,7 +164,12 @@ class Bundle(object):
 
     def do_pipeline(self, source=None):
         """COnstruct the meta pipeline. This method shold not be overridden; iverride meta_pipeline() instead. """
-        source = self.source(source) if isinstance(source, basestring) else source
+
+        resolved_source = self.source(source) if isinstance(source, basestring) else source
+
+        if not resolved_source and source:
+            from ..etl import PipelineError
+            raise PipelineError('Failed to resolve source name: {}'.format(source))
 
 
         pl = self.pipeline(source)
@@ -176,7 +181,7 @@ class Bundle(object):
     def pipeline(self, source=None):
         """Construct the ETL pipeline for all phases. Segments that are not used for the current phase
         are filtered out later. """
-        from ambry.etl.pipeline import Pipeline, MergeHeader, MangleHeader, WriteToPartition
+        from ambry.etl.pipeline import Pipeline, MergeHeader, MangleHeader, WriteToPartition, SelectPartition
         from ambry.etl.intuit import TypeIntuiter
         from ambry.etl.stats import Stats
 
@@ -185,7 +190,7 @@ class Bundle(object):
         else:
             source = None
 
-        return Pipeline(
+        pl =  Pipeline(
                 bundle = self,
                 source=source.source_pipe() if source else None,
                 source_first=None,
@@ -203,9 +208,12 @@ class Bundle(object):
                 write_dest_schema=None,
                 build_first=None,
                 dest_statistics=Stats(),
+                select_partition = SelectPartition(),
                 build_last=None,
                 write_to_table= WriteToPartition()
         )
+
+        return pl
 
     def set_edit_pipeline(self, f):
         """Set a function to edit the pipeline"""

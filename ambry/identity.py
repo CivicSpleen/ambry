@@ -372,6 +372,21 @@ class PartialPartitionName(Name):
         pass
 
 
+    def __eq__(self, o):
+        return (self.time == o.time and self.space == o.space and self.table == o.table and
+                self.grain == o.grain and self.format == o.format and self.segment == o.segment)
+
+    def __cmp__(self, o):
+        return cmp(str(self), str(o))
+
+    def __hash__(self):
+        return (hash(self.time) ^ hash(self.space) ^ hash(self.table) ^
+                hash(self.grain) ^ hash(self.format) ^ hash(self.segment))
+
+
+
+
+
 class PartitionName(PartialPartitionName, Name):
 
     """A Partition Name."""

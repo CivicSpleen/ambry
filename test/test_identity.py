@@ -450,6 +450,14 @@ class Test(TestBase):
             p = PartialPartitionName(**dict(zip(s, s)))
             self.assertIn('name', p.promote(ds_name).dict)
 
+            p2 = PartialPartitionName(**dict(zip(s, s)))
+
+            self.assertEqual(p, p2)
+
+            p3 = PartialPartitionName(**dict(zip(s[1:], s[1:])))
+
+            self.assertNotEqual(p, p3)
+
 
 def suite():
     suite = unittest.TestSuite()
