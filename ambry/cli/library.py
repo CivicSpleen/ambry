@@ -64,7 +64,6 @@ def library_parser(cmd):
     sp.add_argument('-w', '--warehouses', default=False, action="store_true", help='Re-synchronize warehouses')
     sp.add_argument('-F', '--bundle-list', help='File of bundle VIDs. Sync only VIDs listed in this file')
 
-
     sp = asp.add_parser('get', help='Search for the argument as a bundle or partition name or id. '
                                     'Possible download the file from the remote library')
     sp.set_defaults(subcommand='get')
@@ -91,6 +90,11 @@ def library_parser(cmd):
     whsp = asp.add_parser('config', help='Configure varibles')
     whsp.set_defaults(subcommand='config')
     whsp.add_argument('term', type=str, nargs='?', help='Var=Value')
+
+    sp = asp.add_parser('number', help='Return a new number from the number server')
+    sp.set_defaults(subcommand='number')
+    sp.add_argument('-k', '--key', default=False, help="Set the number server key, or 'self' for self assignment ")
+
 
 def library_command(args, rc):
     from ..library import new_library
@@ -360,12 +364,10 @@ def library_sync(args, l, config):
         l.logger.info("==== Sync warehouses")
         l.sync_warehouses()
 
+def library_number(args, l, config):
 
-
+    l.number(assignment_class=args.key)
 
 def library_unknown(args, l, config):
     fatal("Unknown subcommand")
     fatal(args)
-
-
-

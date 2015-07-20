@@ -25,6 +25,7 @@ class Bundle(object):
         self._log_level = logging.INFO
 
         self._errors = []
+        self._warnings = []
 
         self._source_url = source_url
         self._build_url = build_url
@@ -108,6 +109,14 @@ class Bundle(object):
         from partitions import Partitions
         return Partitions(self)
 
+    def partition(self, ref):
+        """Return the Schema acessor"""
+        from partitions import Partitions
+        for p in self.partitions:
+            if p.vid == str(ref):
+                return p
+        return None
+
     def source(self, name):
         source =  self.dataset.source_file(name)
 
@@ -171,10 +180,7 @@ class Bundle(object):
             from ..etl import PipelineError
             raise PipelineError('Failed to resolve source name: {}'.format(source))
 
-
         pl = self.pipeline(source)
-
-        self.edit_pipeline(pl)
 
         return pl
 
@@ -213,7 +219,25 @@ class Bundle(object):
                 write_to_table= WriteToPartition()
         )
 
+        self.modify_pipe_from_metadata(pl)
+
+        self.edit_pipeline(pl)
+
         return pl
+
+    def modify_pipe_from_metadata(self, pl):
+        """Modify the pipeline based on entries in the pipeline section of the metadata"""
+        from ambry.etl import *
+
+        for group_name, e in self.metadata.pipeline.items():
+
+            if isinstance(e, basestring):
+                e = eval(e)
+            else:
+                e = [ eval(i) for i in e]
+
+            pl[group_name] = e
+
 
     def set_edit_pipeline(self, f):
         """Set a function to edit the pipeline"""
@@ -257,6 +281,7 @@ class Bundle(object):
         if message not in self._errors:
             self._errors.append(message)
 
+        self.set_error_state()
         self.logger.error(message)
 
     def warn(self, message):
@@ -305,6 +330,7 @@ class Bundle(object):
     STATES.FINALIZED = 'finalized'
     STATES.INSTALLING = 'installing'
     STATES.INSTALLED = 'installed'
+    STATES.META = 'meta'
 
     # Other things that can be part of the 'last action'
     STATES.INFO = 'info'
@@ -314,6 +340,11 @@ class Bundle(object):
     ##
 
     def do_sync(self, force = None, defaults = False):
+
+        if self.is_finalized:
+            self.error("Can't sync; bundle is finalized")
+            return False
+
         ds = self.dataset
 
         syncs  = self.build_source_files.sync(force, defaults)
@@ -331,17 +362,59 @@ class Bundle(object):
         :param defaults [False] If True and direction is rtf, write default source files
         :return:
         """
+
+        if self.is_finalized:
+            self.error("Can't sync; bundle is finalized")
+            return False
+
         self.do_sync(force, defaults = defaults)
 
         return True
 
     ##
+    ## Do All; Run the full process
+
+    def run(self):
+
+        if self.is_finalized:
+            self.error("Can't run; bundle is finalized")
+            return False
+
+        #if not b.do_clean():
+        #    b.error('Run: failed to clean')
+        #    return False
+
+        if not self.do_sync():
+            self.error('Run: failed to sync')
+            return False
+
+        if not self.do_meta():
+            self.error('Run: failed to meta')
+            return False
+
+        b = self.cast_to_build_subclass()
+
+        if not b.do_prepare():
+            b.error('Run: failed to prepare')
+            return False
+
+        if not b.do_build():
+            b.error('Run: failed to build')
+            return False
+
+        b.finalize()
+
+        return b
+
+    ##
     ## Clean
     ##
 
-    def do_clean(self):
+    @property
+    def is_clean(self):
+        return self.state == self.STATES.CLEANED
 
-        self.state = self.STATES.CLEANING
+    def do_clean(self):
 
         if self.clean():
             if self.post_clean():
@@ -369,6 +442,12 @@ class Bundle(object):
          to regenerate them"""
         from ambry.orm import ColumnStat, File
         from sqlalchemy.orm import object_session
+
+        if self.is_finalized:
+            self.warn("Can't clean; bundle is finalized")
+            return False
+
+        self.state = self.STATES.CLEANING
 
         ds = self.dataset
         s = object_session(ds)
@@ -430,7 +509,7 @@ class Bundle(object):
 
     @property
     def is_prepared(self):
-        return bool(self.dataset.config.build.state.prepared)
+        return self.state == Bundle.STATES.PREPARED
 
     def do_prepare(self):
         """This method runs pre_, main and post_ prepare methods."""
@@ -494,6 +573,11 @@ class Bundle(object):
 
     def pre_prepare(self):
         """"""
+
+        if self.is_finalized:
+            self.warn("Can't prepare; bundle is finalized")
+            return False
+
         return True
 
     def post_prepare(self):
@@ -519,11 +603,20 @@ class Bundle(object):
         """
         from ambry.orm.file import File
 
-        self.load_requirements()
+        if self.is_finalized:
+            self.error("Can't meta; bundle is finalized")
+            return False
+
+        if self.is_built:
+            self.error("Can't meta; bundle is built")
+            return False
 
         self.do_sync()
 
-        self.do_prepare()
+        if not self.is_prepared:
+            self.do_prepare()
+
+        self.load_requirements()
 
         self.log("---- Meta ---- ")
 
@@ -535,7 +628,9 @@ class Bundle(object):
 
         self.do_sync()
 
-        self.set_last_access(Bundle.STATES.SYNCED)
+        self.set_last_access(Bundle.STATES.META)
+
+        return True
 
     def meta_make_source_tables(self, pl):
         from ambry.etl.intuit import TypeIntuiter
@@ -594,7 +689,7 @@ class Bundle(object):
             self.meta_make_source_tables(pl)
             self.meta_make_dest_tables(pl)
 
-        source.dataset.commit()
+            source.dataset.commit()
 
     ##
     ## Build
@@ -607,16 +702,8 @@ class Bundle(object):
 
     def do_build(self, table_name = None, force=False, print_pipe=False):
 
-        self.load_requirements()
-
-        if not self.is_prepared:
-            if not self.do_prepare():
-                self.log("Prepare failed; skipping build")
-                return False
-
-        self.state = self.STATES.BUILDING
         if self.pre_build(force):
-
+            self.state = self.STATES.BUILDING
             self.log("---- Build ---")
             if self.build(table_name, print_pipe=print_pipe):
                 self.state = self.STATES.BUILT
@@ -643,17 +730,19 @@ class Bundle(object):
     # Build the final package
     def pre_build(self, force = False):
 
+        if not self.is_prepared:
+            self.error("Build called before prepare completed ( state = {})".format(self.state))
+            return False
+
         if self.is_built and not force:
             self.error("Bundle is already built. Skipping  ( Use --clean  or --force to force build ) ")
             return False
 
-        if not self.is_prepared:
-            self.error("Build called before prepare completed")
+        if self.is_finalized:
+            self.error("Can't build; bundle is finalized")
             return False
 
-        # python_dir = self.config.python_dir()
-        # if python_dir and python_dir not in sys.path:
-        #    sys.path.append(python_dir)
+        self.load_requirements()
 
         return True
 
@@ -665,7 +754,7 @@ class Bundle(object):
         self.build_fs.setcontents(os.path.join('pipeline', 'build-' + table_name + '.txt'), unicode(pl),
                                   encoding='utf8')
 
-    def build(self, table_name = None, source_name = None, print_pipe=False):
+    def build(self, target_table_name = None, source_name = None, print_pipe=False):
         from ..etl import PrintRows, augment_pipeline
         from collections import defaultdict
 
@@ -674,13 +763,14 @@ class Bundle(object):
         for i, source in enumerate(self.sources):
             sources_for_table[source.dest_table.name].add(source)
 
-        for table, sources in sources_for_table.items():
-            if table_name and source.dest_table.name != table_name:
+        for table_name, sources in sources_for_table.items():
+
+            if target_table_name and table_name != target_table_name:
                 self.logger.info("Skipping sources {}, table {} ( only running table {} ) "
-                                 .format(','.join(s.name for s in sources), table, table_name))
+                                 .format(','.join(s.name for s in sources), table_name, target_table_name))
                 continue
 
-            self.logger.info("Running build for table: {} ".format(source.dest_table.name))
+            self.logger.info("Running build for table: {} ".format(table_name))
 
             pl = self.do_pipeline().build_phase
 
@@ -692,10 +782,10 @@ class Bundle(object):
             if print_pipe:
                 self.logger.info(pl)
 
-            self.build_log_pipeline(table, pl)
+            self.build_log_pipeline(table_name, pl)
             self.build_post_build_source(pl)
 
-        source.dataset.commit()
+        self.dataset.commit()
 
         return True
 
@@ -706,17 +796,25 @@ class Bundle(object):
         try:
             for p, stats in pl[PartitionWriter].partitions:
                 self.logger.info("Finalizing partition {}".format(p.identity.name))
-                p.finalize(pl, stats)
-                pass
+                # We're passing the datafile path into filanize b/c finalize is on the ORM object, and datafile is
+                # on the proxy.
+                p.finalize(stats)
+                # FIXME SHouldn't need to do this commit, but without it, somce stats get added multiple
+                # times, causing an error later. Probably could be avoided by adding the states to the
+                # collection in the dataset
+                self.commit()
+
         except IndexError:
             self.error("Pipeline didn't have a PartitionWriters, won't try to finalize")
+
+        self.commit()
+
     def post_build(self):
         """After the build, update the configuration with the time required for
         the build, then save the schema back to the tables, if it was revised
         during the build."""
 
         return True
-
 
     ##
     ## Update
@@ -751,10 +849,6 @@ class Bundle(object):
         self.update_copy_partitions()
 
         return True
-
-    ##
-    ## Finalize
-    ##
 
     def post_build_test(self):
 
@@ -852,12 +946,36 @@ class Bundle(object):
         self.metadata.write_to_dir()
 
 
+    ##
+    ## Finalize
+    ##
+
+    @property
+    def is_finalized(self):
+        """Return True if the bundle is installed."""
+        return self.state == self.STATES.FINALIZED
+
+    def do_finalize(self):
+        """Call's finalize(); for similarity with other process commands. """
+        return self.finalize()
+
     def finalize(self):
         self.state = self.STATES.FINALIZED
+        self.commit()
+        return True
 
     ##
-    ## Install
+    ## check in to remote
     ##
+
+    def checkin(self):
+
+        if not ( self.is_finalized or self.is_prepared):
+            self.error("Can't checkin; bundle state must be either finalized or prepared")
+            return False
+
+        self.commit()
+        self.library.checkin(self)
 
     @property
     def is_installed(self):
@@ -866,6 +984,7 @@ class Bundle(object):
         r = self.library.resolve(self.identity.vid)
 
         return r is not None
+
 
     ##
     ##

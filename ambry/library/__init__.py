@@ -108,8 +108,6 @@ class Library(object):
 
         raise ConfigurationError('Failed to find remote for key values: {}'.format(fails))
 
-
-
     def commit(self):
         self._db.commit()
 
@@ -223,57 +221,100 @@ class Library(object):
     ## Storing
     ##
 
-    def install_to_remote(self,b):
+    def checkin(self,b):
+        """
+        Copy a bundle to a new Sqlite file, then store the file on the remote.
+
+        :param b: The bundle
+        :return:
+        """
         import tempfile
         from ambry.orm.database import Database
         from ambry.util import copy_file_or_flo
+        import os
+
+        remote = self.remote(b)
 
         try:
             td = tempfile.mkdtemp()
 
             db = Database('sqlite:////{}/{}.db'.format(td, b.identity.vid))
 
+            assert not os.path.exists(db.path)
+
             db.open()
 
             ds = db.copy_dataset(b.dataset)
 
-            remote = self.remote(b)
+            # Set the location for the bundle file
+            for p in ds.partitions:
+                p.location = 'remote'
 
-            remote.put(db.path, b.identity.cache_key + ".db")
+            ds.commit()
+
+            path = remote.put(db.path, b.identity.cache_key + ".db")
 
             for p in b.partitions:
                 with remote.put_stream(p.datafile().munged_path) as f:
                     copy_file_or_flo(p.datafile().open('rb'), f)
+
+            b.dataset.commit()
 
         finally:
             from shutil import rmtree
 
             rmtree(td)
 
-    def stream_partition(self, ref):
-        """Yield rows of a partition"""
+        return path
+
+    def stream_partition(self, p, raw=False, skip_header = False):
+        """Yield rows of a partition, as an intyerator. Data is taken from one of these locations:
+        - The warehouse, for installed data
+        - The build directory, for built data
+        - The remote, for checked in data.
+        """
         from ambry.bundle.partitions import PartitionProxy
+        from ambry.etl.transform import CasterPipe
 
-        p_orm = self.partition(ref)
+        if p.location == 'build':
+            source = p.datafile().open('rb')
+        elif p.location == 'remote':
+            b = self.bundle(p.identity.as_dataset().vid)
+            remote = self.remote(b)
+            source = remote.get_stream(p.datafile().munged_path)
+        elif p.location == 'warehouse':
+            raise NotImplementedError()
 
-        b = self.bundle(p_orm.d_vid)
+        def generator():
 
-        p = PartitionProxy(b, p_orm)
-
-        remote = self.remote(b)
-
-        with remote.get_stream(p.datafile().munged_path) as f:
-
-            reader = p.datafile().reader(f)
+            reader = p.datafile().reader(source)
 
             header = reader.next()
 
-            for a,b in  zip(header, (c.name for c in p.table.columns)):
+            for i, (a, b) in enumerate(zip(header, (c.name for c in p.table.columns))):
                 if a != b:
-                    raise Exception("Partition header {} is different from column name {}".format(a,b))
+                    raise Exception("At position {}, partition header {} is different from column name {}".format(i, a, b))
+
+            yield header
 
             for row in reader:
                 yield row
+
+            source.close()
+
+        if raw:
+            itr = iter(generator())
+
+        else:
+            cp = CasterPipe(p.table)
+            cp.set_source_pipe(generator())
+
+            itr = iter(cp)
+
+        if skip_header:
+            itr.next()
+
+        return itr
 
     def remove(self, bundle):
         '''Remove a bundle from the library, and delete the configuration for

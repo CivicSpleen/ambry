@@ -89,9 +89,7 @@ class TestBase(unittest.TestCase):
         if not build_url:
             build_url =  "mem://{}/build".format(name)
 
-
-
-        try: # One fails for real directories, the other the mem:
+        try: # One fails for real directories, the other for mem:
             assert fsopendir(source_url, create_dir = True).isdirempty('/')
             assert fsopendir(build_url, create_dir = True).isdirempty('/')
         except ParentDirectoryMissingError:

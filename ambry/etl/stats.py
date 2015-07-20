@@ -88,9 +88,9 @@ class StatSet(object):
 
         if self.lom == self.LOM.NOMINAL or self.lom == self.LOM.ORDINAL:
             if self.is_time or self.is_date:
-                self.counts[str(v)] += 1
+                self.counts[unicode(v)] += 1
             else:
-                self.counts[v] += 1
+                self.counts[unicode(v)] += 1
 
         elif self.lom == self.LOM.INTERVAL or self.lom == self.LOM.RATIO:
 
@@ -100,7 +100,7 @@ class StatSet(object):
             # HACK There are probably a lot of 1-off errors in this
 
             if self.n < 5000:
-                self.counts[v] += 1
+                self.counts[unicode(v)] += 1
 
             elif self.n == 5000:
                 # If less than 1% are unique, assume that this number is actually an ordinal
@@ -125,8 +125,8 @@ class StatSet(object):
 
             try:
                 self.stats.add(float(v))
-            except ValueError:
-                self.counts[str(v)] += 1
+            except (ValueError, TypeError):
+                self.counts[unicode(v)] += 1
         else:
             assert False, "Really should be one or the other ... "
 

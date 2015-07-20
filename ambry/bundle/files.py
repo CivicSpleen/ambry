@@ -292,8 +292,15 @@ class MetadataFile(DictBuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
 
         if fr.has_contents:
+
+            o = fr.unpacked_contents
+
+            o['identity'] = self._dataset.identity.ident_dict
+            o['names'] = self._dataset.identity.names_dict
+
             with self._fs.open(file_name(self._file_const), 'wb') as f:
-                yaml.dump(fr.unpacked_contents, f, default_flow_style=False, indent=4, encoding='utf-8')
+
+                yaml.safe_dump(o, f, default_flow_style=False, indent=4, encoding='utf-8')
 
 
 

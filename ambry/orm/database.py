@@ -451,8 +451,6 @@ class Database(object):
         return self.dataset(ds.vid)
 
 
-
-
 def _pragma_on_connect(dbapi_con, con_record):
     """ISSUE some Sqlite pragmas when the connection is created."""
 

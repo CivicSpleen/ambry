@@ -16,7 +16,8 @@ library:
   database: sqlite://
   warehouse: sqlite://
   remotes:
-    test: '{root}/test-remote'
+    test: 's3://devtest.sandiegodata.org/ambry10'
+    test-orig: '{root}/test-remote'
     example: '{root}/example-remote'
 
 services:

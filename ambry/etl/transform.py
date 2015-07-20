@@ -7,6 +7,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 import textwrap
 from functools import partial
+from pipeline import Pipe
 
 class CasterError(Exception):
     pass
@@ -294,6 +295,9 @@ class Transform(object):
 
         self.error_accumulator = None
 
+        self.errors = None
+
+
     def append(self, name, type_):
         self.types.append((name, type_))
 
@@ -387,3 +391,41 @@ class ListTransform(Transform):
             row,self.error_accumulator  = self.error_handler(row, self.error_accumulator)
 
         return row, self.error_accumulator
+
+class CasterPipe(Transform, Pipe, ):
+
+    def __init__(self, table = None, error_handler=None):
+        super(CasterPipe, self).__init__(error_handler)
+        self.errors = []
+        self.table = table
+
+    def process_header(self, row):
+        self.headers = row
+
+        if self.table:
+            table = self.table
+        else:
+            table = self.source.dest_table
+
+        if self.table:
+            cm = { c.name: c for c in self.table.columns}
+
+            for h in self.headers:
+                self.append(h, cm[h].python_type)
+
+        return row
+
+    def process_body(self, row):
+
+        self.error_accumulator = {} # Clear the accumulator
+        row = self.row_transform(self, row) # casters can call self.cast_error to add to the accmulator
+        if self.error_handler:
+            row, self.error_accumulator = self.error_handler(row, self.error_accumulator)
+        else:
+            self.errors.append(self.error_accumulator)
+
+        return row
+
+
+
+

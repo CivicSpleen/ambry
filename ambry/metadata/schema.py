@@ -64,6 +64,8 @@ class Requirements(VarDictGroup):
 class Build(VarDictGroup):
     """Build parameters"""
 
+class Pipeline(VarDictGroup):
+    """Build parameters"""
 
 class ExtDocTerm(DictTerm):
     url = ScalarTerm()
@@ -120,6 +122,7 @@ class Top(StructuredPropertyTree):
     requirements = Requirements()
     external_documentation = ExtDoc()
     build = Build()
+    pipeline = Pipeline()
     contacts = Contacts()
     names = Names()
     versions = Versions()

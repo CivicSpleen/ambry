@@ -66,6 +66,7 @@ class Partition(Base, DictableMixin):
     grain_coverage = SAColumn('f_gcov', MutationList.as_mutable(JSONEncodedObj))
 
     installed = SAColumn('p_installed', String(100))
+    location = SAColumn('p_location', String(100)) # Location of the data file
 
     __table_args__ = (#ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
         UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'),
@@ -298,6 +299,20 @@ class Partition(Base, DictableMixin):
         for k, v in kwargs.items():
             if hasattr(self, k):
                 setattr(self, k, v)
+
+    def finalize(self, stats):
+
+        self.state = self._partition.STATES.BUILT
+
+        # Write the stats for this partition back into the partition
+
+        self.set_stats(stats.stats())
+        self.set_coverage(stats.stats())
+        self.table.update_from_stats(stats.stats())
+
+        self.location = 'build'
+
+        self.state = self._partition.STATES.FINALIZED
 
     @staticmethod
     def before_insert(mapper, conn, target):

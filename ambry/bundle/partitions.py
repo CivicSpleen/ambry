@@ -271,6 +271,7 @@ class Partitions(object):
         return p
 
 
+
 class PartitionProxy(Proxy):
 
     def __init__(self, bundle, obj):
@@ -289,23 +290,13 @@ class PartitionProxy(Proxy):
         from ambry.etl.partition import new_partition_data_file
         return new_partition_data_file(self._bundle.build_fs, self.cache_key)
 
+    @property
+    def location(self):
 
-    def finalize(self, pipeline, stats):
+        base_location = self._partition.location
 
+        if self._bundle.build_fs.exists(base_location):
+            if self._bundle.build_fs.hashsyspath(base_location):
+                return  self._bundle.build_fs.getsyspath(base_location)
 
-        self._partition.state = self._partition.STATES.BUILT
-
-        try:
-
-            # Write the stats for this partition back into the partition
-
-            self.set_stats(stats.stats())
-            self.set_coverage(stats.stats())
-            self.table.update_from_stats(stats.stats())
-            self._bundle.dataset.commit()
-
-        except KeyError as e:
-            raise
-            pass  # No stats in the pipeline.
-
-        self._partition.state = self._partition.STATES.FINALIZED
+        return base_location

@@ -61,13 +61,14 @@ class Test(TestBase):
 
         b = self.setup_bundle('simple')
         b.source_fs.remove('schema.csv')
-        b.sync()
+        self.assertTrue(b.sync())
 
         b = b.cast_to_build_subclass()
+
+        self.assertTrue(b.do_meta())
         self.assertEquals('synced', b.state)
-        b.do_prepare()
+        self.assertTrue(b.do_prepare())
         self.assertEquals('prepared', b.state)
-        b.do_meta()
 
         def edit_pipeline(pl):
             from ambry.etl.pipeline import PrintRows, LogRate
@@ -79,11 +80,25 @@ class Test(TestBase):
 
         b.set_edit_pipeline(edit_pipeline)
 
-        b.do_build()
+        self.assertTrue(b.do_build())
 
         self.assertEquals(1,len(b.dataset.partitions))
 
         self.assertEquals(4,len(b.dataset.source_columns))
+
+        # Already built can't build again
+        self.assertFalse(b.do_build())
+
+        self.assertTrue(b.do_clean())
+        # Can't build if not prepared
+        self.assertFalse(b.do_build())
+
+        self.assertTrue(b.do_prepare)
+        self.assertTrue(b.do_build)
+
+        self.assertTrue(b.finalize())
+        self.assertTrue(b.is_finalized)
+        self.assertFalse(b.do_clean())
 
         return b
 
@@ -96,10 +111,10 @@ class Test(TestBase):
         b.sync()
         b = b.cast_to_build_subclass()
         self.assertEquals('synced', b.state)
-        b.do_prepare()
-        self.assertEquals('prepared', b.state)
+        self.assertTrue(b.do_meta())
 
-        b.do_meta()
+        self.assertTrue(b.do_prepare())
+        self.assertEquals('prepared', b.state)
 
         def edit_pipeline(pl):
             from ambry.etl.pipeline import PrintRows, LogRate, Edit, WriteToPartition, SelectPartition
@@ -126,7 +141,7 @@ class Test(TestBase):
 
         b.set_edit_pipeline(edit_pipeline)
 
-        b.do_build()
+        self.assertTrue(b.do_build())
 
         for p in b.partitions:
 
@@ -157,15 +172,17 @@ class Test(TestBase):
         b = self.setup_bundle('complete-load')
         b.sync()
         b = b.cast_to_meta_subclass()
-        self.assertEquals('synced', b.state)
-        b.do_prepare()
-        self.assertEquals('prepared', b.state)
         b.do_meta()
+        self.assertEquals('synced', b.state)
+        self.assertTrue(b.do_prepare())
+        self.assertEquals('prepared', b.state)
+
 
     def test_db_copy(self):
         from ambry.orm.database import Database
 
         b = self.test_simple_build()
+        self.assertTrue(b.do_prepare())
         l = b._library
 
         import tempfile
@@ -195,17 +212,29 @@ class Test(TestBase):
 
     def test_install(self):
         """Test copying a bundle to a remote, then streaming it back"""
+        import os
 
-        b = self.test_simple_build()
+        b = self.setup_bundle('simple')
+        b.source_fs.remove('schema.csv')
+        b = b.run()
+
         l = b._library
+        p = list(b.partitions)[0]
 
-        l.install_to_remote(b)
+        # Initially, its location is the build director
+        self.assertEqual('build', list(b.partitions)[0].location)
 
-        #self.dump_database('partitions')
+        self.assertEquals(497054, int(sum(row[3] for row in l.stream_partition(p, skip_header=True))))
 
-        p = l.partition(list(b.partitions)[0].vid)
+        b.checkin()
 
-        self.assertEqual(10000, len(list(l.stream_partition(p.vid))))
+        self.assertEqual('build',p.location)
+
+        self.assertEquals(497054, int(sum(row[3] for row  in l.stream_partition(p, skip_header = True))))
+
+        self.assertEqual(10000, len(list(l.stream_partition(p, skip_header=True))))
+
+        self.assertEqual(10001, len(list(l.stream_partition(p, skip_header=False))))
 
     def test_simple_meta(self):
         """Build the simple bundle"""

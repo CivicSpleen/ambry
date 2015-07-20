@@ -125,7 +125,7 @@ def bundle_parser(cmd):
     # config newnum
     sp = asp.add_parser('newnum', help='Get a new dataset number')
     sp.set_defaults(subsubcommand='newnum')
-    sp.add_argument('-k', '--key', default=False, help="Set the number server key, or 'self' for self assignment ")
+
 
     # config scrape
     sp = asp.add_parser('scrape',
@@ -309,7 +309,6 @@ def bundle_info(args, l, rc):
     b = l.bundle(ref)
     b.set_last_access(Bundle.STATES.INFO)
 
-    info = [list(), list()]
     def inf(column,k,v):
         info[column].append((k, v))
 
@@ -332,9 +331,13 @@ def bundle_info(args, l, rc):
                     row += [None, None]
             yield row
 
+    info = [list()]
+    inf(0, 'Title', b.metadata.about.title)
+    inf(0, 'Summary',b.metadata.about.summary)
+    print tabulate(join(*info), tablefmt='plain')
 
-    inf(0,'Title', trunc(b.metadata.about.title))
-    inf(0,'Summary', trunc(b.metadata.about.summary))
+    info = [list(), list()]
+
     inf(0,"VID", b.identity.vid)
     inf(0,"VName", b.identity.vname)
 
@@ -346,8 +349,6 @@ def bundle_info(args, l, rc):
     except KeyError:
         pass
 
-
-    print '----'
     print tabulate(join(*info), tablefmt='plain')
 
     info = [list()]
@@ -509,11 +510,8 @@ def bundle_prepare(args, l, rc):
         if args.sync:
             b.do_sync()
 
-
     b = using_bundle(args, l).cast_to_build_subclass()
     b.do_prepare()
-
-
 
 def bundle_build(args, l, rc):
     from ambry.bundle import Bundle
@@ -537,21 +535,10 @@ def bundle_build(args, l, rc):
     b.do_build(print_pipe=args.print_pipe)
     b.set_last_access(Bundle.STATES.BUILT)
 
-def bundle_install(args, b, st, rc):
+def bundle_install(args, l, rc):
     raise NotImplementedError()
 
-    force = args.force
-
-    if b.pre_install():
-        b.log("---- Install ---")
-        if b.install(force=force):
-            b.post_install()
-            b.log("---- Done Installing ---")
-        else:
-            b.log("---- Install exited with failure ---")
-            return False
-    else:
-        b.log("---- Skipping Install ---- ")
+    b.install()
 
     return True
 
@@ -624,40 +611,9 @@ def bundle_config(args, l, rc):
         return bundle_config_s3urls(args, b, st, rc)
 
     elif args.subsubcommand == 'newnum':
+        pass
 
-        from ..identity import NumberServer
-        from requests.exceptions import HTTPError
-        from ..identity import DatasetNumber, Identity
 
-        nsconfig = rc.service('numbers')
-
-        if args.key:
-            nsconfig['key'] = args.key
-
-        ns = NumberServer(**nsconfig)
-
-        d = b.identity.dict
-
-        if args.key in ('rand', 'self'):
-            d['id'] = str(DatasetNumber())
-
-        else:
-            try:
-                d['id'] = str(ns.next())
-                prt("Got number from number server: {}".format(d['id']))
-            except HTTPError as e:
-                warn("Failed to get number from number server. Config = {}: {}".format(nsconfig, e.message))
-                warn("Using self-generated number. "
-                     "There is no problem with this, but they are longer than centrally generated numbers.")
-                d['id'] = str(DatasetNumber())
-
-        ident = Identity.from_dict(d)
-
-        b.metadata.identity = ident.ident_dict
-        b.metadata.names = ident.names_dict
-        b.metadata.write_to_dir(write_all=True)
-
-        prt("New object number: {}".format(ident.id_))
 
     elif args.subsubcommand == 'scrape':
         return bundle_config_scrape(args, b, st, rc)

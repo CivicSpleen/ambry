@@ -35,17 +35,7 @@ names:
     vid: dfY0NJscai003
     vname: example.com-simple-0.1.3
 
-build:
-    key1: value1
-    dict1:
-        key1: value1
-        key2: value2
-        dict2:
-            key1: value1
-            key2: value2
-            dict3:
-                key1: value1
-                key2: value2
+
 dependencies: {}
 requirements:
     xlrd: xlrd

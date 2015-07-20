@@ -35,7 +35,7 @@ class Pipe(object):
 
     def set_source_pipe(self, source_pipe):
         self._source_pipe = source_pipe
-        self._source = source_pipe.source if source_pipe else None
+        self._source = source_pipe.source if source_pipe and hasattr(source_pipe, 'source') else None
 
         return self
 
@@ -135,6 +135,22 @@ class Sample(Pipe):
 
         self.i += 1
         return row
+
+class Ticker(Pipe):
+    """ Ticks out 'H' and 'B' for header and rows.
+    """
+
+    def __init__(self, name = None):
+        self._name = name
+
+    def process_body(self, row):
+        print self._name if self._name else 'B'
+        return row
+
+    def process_header(self, row):
+        print '== {} {} =='.format(self.source.name, self._name if self._name else '')
+        return row
+
 
 class AddHeader(Pipe):
     """Adds a header to a row file that doesn't have one, by returning the header for the first row. """
@@ -492,9 +508,10 @@ def make_table_map(table, headers):
     for i,h in enumerate(headers):
         header_parts[h] = 'row[{}]'.format(i)
 
-    code = 'lambda row: [{}]'.format(','.join(header_parts.get(c.name,'None') for c in table.columns ))
+    body_code = 'lambda row: [{}]'.format(','.join(header_parts.get(c.name,'None') for c in table.columns ))
+    header_code = 'lambda row: [{}]'.format(','.join(header_parts.get(c.name, "'{}'".format(c.name)) for c in table.columns))
 
-    return eval(code)
+    return eval(header_code), eval(body_code)
 
 class SelectPartition(Pipe):
     """A Base class for adding a _pname column, which is used by the partition writer to select which
@@ -562,7 +579,7 @@ class WriteToPartition(Pipe, PartitionWriter):
 
         pname = row[self.p_name_index]
 
-        (p, table_mapper, datafile, stats) = self._datafiles.get(pname, (None, None, None, None))
+        (p, header_mapper, body_mapper, datafile, stats) = self._datafiles.get(pname, (None, None, None, None, None))
 
         if p is None:
 
@@ -570,30 +587,30 @@ class WriteToPartition(Pipe, PartitionWriter):
             if not p:
                 p = self.bundle.partitions.new_partition(pname)
 
-            table_mapper = make_table_map(p.table, self.headers)
+            header_mapper, body_mapper = make_table_map(p.table, self.headers)
             datafile = p.datafile()
             stats = Stats()
             stats.set_source_pipe(self._source_pipe)
-            stats.process_header(table_mapper(self.headers))
+            stats.process_header(header_mapper(self.headers))
 
-            self._datafiles[pname] = (p, table_mapper,datafile,stats)
+            self._datafiles[pname] = (p, header_mapper, body_mapper ,datafile,stats)
 
-            datafile.insert_header(table_mapper(self.headers))
+            datafile.insert_header(header_mapper(self.headers))
 
-        datafile.insert_body(table_mapper(row))
-        stats.process_body(table_mapper(row))
+        datafile.insert_body(body_mapper(row))
+        stats.process_body(body_mapper(row))
 
         return row
 
     def finish(self):
 
-        for pname, (p, table_mapper, datafile, stats) in self._datafiles.items():
+        for pname, (p, header_mapper, body_mapper, datafile, stats) in self._datafiles.items():
             datafile.close()
 
     @property
     def partitions(self):
         """Generate the partitions, so they can be manipulated after the pipeline completes"""
-        for pname, (p, table_mapper, datafile, stats) in self._datafiles.items():
+        for pname, (p, header_mapper, body_mapper, datafile, stats) in self._datafiles.items():
             yield p, stats
 
     def __str__(self):
@@ -670,17 +687,20 @@ class Pipeline(OrderedDict):
 
     _source_groups =  [
                         'source',                   # The unadulterated source file
+                        'first',                    # For callers to hijack the start of the process
                         'source_first',             # For callers to hijack the start of the process
                         'source_row_intuit',        # Classify rows
                         'source_coalesce_rows',     # Combine rows into a header according to classification
                         'source_map_header',  # Alter column names to names used in final table
                         'source_type_intuit',       # Classify the types of columns
                         'source_last',
+                        'last',
                         'write_source_schema'       # Create the source schema, one source table per source
                        ]
 
     _schema_groups = [
                         'source',
+                        'first',  # For callers to hijack the start of the process
                         'schema_first',
                         'source_coalesce_rows',     # Combine rows into a header according to classification
                         'source_map_header',        # Alter column names to names used in final table
@@ -688,11 +708,13 @@ class Pipeline(OrderedDict):
                         'dest_cast_columns',        # Run casters to convert values, maybe create code columns.
                         'dest_augment',             # Add dimension columns
                         'schema_last',
+        'last',
                         'write_dest_schema'         # Write the destinatino schema
                         ]
 
     _build_groups = [
                         'source',
+                        'first',  # For callers to hijack the start of the process
                         'build_first',
                         'source_coalesce_rows',     # Combine rows into a header according to classification
                         'source_map_header',        # Alter column names to names used in final table
@@ -701,6 +723,7 @@ class Pipeline(OrderedDict):
                         'dest_augment',             # Add dimension columns
                         'select_partition',         # For callers to hijack the end of the process
                         'build_last',               # For callers to hijack the end of the process
+                        'last',
                         'write_to_table'            # Write the rows to the table.
                      ]
 
@@ -786,7 +809,7 @@ class Pipeline(OrderedDict):
             # This maybe should be an error?
             super(Pipeline, self).__setitem__(k, v)
 
-        assert isinstance(self[k], PipelineSegment)
+        assert isinstance(self[k], PipelineSegment), "Unexpected typ: {}".format(type(self[k]))
 
     def __getitem__(self, k):
 

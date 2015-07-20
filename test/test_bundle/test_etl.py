@@ -185,7 +185,6 @@ class Test(TestBase):
         self.assertTrue(isinstance(row['time'], datetime.time))
         self.assertTrue(isinstance(row['datetime'], datetime.datetime))
 
-
         #
         # Custom caster types
         #
@@ -566,6 +565,36 @@ class Test(TestBase):
         b.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
 
         self.assertEqual(6, sum( e[1] == 'rtf' for e in b.do_sync() ))
+
+    def test_pipe_config(self):
+
+        from ambry.etl import Ticker
+
+        b = self.setup_bundle('simple')
+        l = b._library
+
+        b.metadata.pipeline = dict(
+            first="Edit( add = { 'a': lambda e,r: 1 }) ",
+            #dest_augment = "Edit( add = { 'a': lambda e,r: 1 }) ",
+            build_last = "PrintRows(print_at='end')"
+        )
+
+        b.do_sync()
+        b.do_meta()
+        b.do_prepare()
+
+        b.do_build()
+
+        self.assertEquals(10001, len(b.build_fs.getcontents('/example.com/simple-0.1.3/simple.csv').splitlines()))
+
+        p = list(b.partitions)[0]
+        self.assertEquals(10001, len(list(l.stream_partition(p))))
+
+        for i, row in enumerate(l.stream_partition(p)):
+            print i, row
+            if i > 5:
+                break
+
 
     def test_edit(self):
         """Test the Edit pipe, for altering the structure of data"""
