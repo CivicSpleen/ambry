@@ -883,7 +883,8 @@ class Warehouse(object):
             clauses = []
 
             if not link_map:
-                self.logger.error("Partition '{}' has no linkable columns with index '{}'".format(p_name, orig_table.name))
+                self.logger.error("Partition '{}' has no linkable columns with index '{}'"
+                                  .format(p_name, orig_table.name))
 
             for col_a, col_b in link_map:
 

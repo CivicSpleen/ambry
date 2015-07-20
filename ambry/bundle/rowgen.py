@@ -467,7 +467,6 @@ class IteratorRowGenerator(RowGenerator):
             yield line
 
 
-
 class RowSpecIntuiter(object):
     data_start_line = None
     data_end_line = None

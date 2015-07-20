@@ -598,7 +598,6 @@ class BuildBundle(Bundle):
     """A bundle class for building bundle files.
 
     Uses the bundle.yaml file for identity configuration
-
     """
 
     META_COMPLETE_MARKER = '.meta_complete'

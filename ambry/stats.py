@@ -15,6 +15,7 @@ class StandardError(object):
     # Find the standard error for a column
 
     def se(self, col):
+        """Creates a new standard error column from a margin of error column"""
 
         col_name = col.name
 
@@ -35,12 +36,13 @@ class StandardError(object):
         return self.df[col_name+'_se']
 
     def add_se(self,*cols):
-
+        """Creates a set of new SE columns"""
         for col in cols:
             if not col.name+'_se' in self.df:
                 self.df[col.name+'_se'] = self.se(col)
 
     def cv(self, col):
+        """Return a coeffieicnet of variation column, possibly also creating a standard error colmn """
         return (self.se(col).astype(float) / col.astype(float)) * 100.0
 
     def cvt(self, col):
@@ -52,6 +54,8 @@ class StandardError(object):
             return (col, self.cv(col))
 
     def sum(self,  *cols):
+        """"Sums a set of columns and also returns the associated SE"""
+
         import numpy as np
 
         if not isinstance(cols[0], (tuple, list)):
