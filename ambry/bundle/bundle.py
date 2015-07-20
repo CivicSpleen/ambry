@@ -678,7 +678,7 @@ class Bundle(object):
 
             pl = self.do_pipeline(source).meta_phase
 
-            augment_pipeline(pl, PrintRows)
+            augment_pipeline(pl, tail_pipe=PrintRows)
 
             pl.run()
 
@@ -775,7 +775,7 @@ class Bundle(object):
             pl = self.do_pipeline().build_phase
 
             if print_pipe:
-                augment_pipeline(pl, PrintRows())
+                augment_pipeline(pl, tail_pipe=PrintRows())
 
             pl.run(source_pipes = [s.source_pipe() for s in sources])
 

@@ -511,6 +511,11 @@ def make_table_map(table, headers):
     body_code = 'lambda row: [{}]'.format(','.join(header_parts.get(c.name,'None') for c in table.columns ))
     header_code = 'lambda row: [{}]'.format(','.join(header_parts.get(c.name, "'{}'".format(c.name)) for c in table.columns))
 
+    #print '!!!!', headers
+    #print '!!!!', [ c.name for c in table.columns ]
+    #print '!!!!', body_code
+    #print '!!!!', header_code
+
     return eval(header_code), eval(body_code)
 
 class SelectPartition(Pipe):
@@ -562,6 +567,8 @@ class WriteToPartition(Pipe, PartitionWriter):
         self.headers = None
         self.p_name_index = None
 
+        self.header_mapper, self.body_mapper = None, None
+
     def process_header(self, row):
 
         self.headers = row # Can't write until the first row tells us what the partition is
@@ -571,6 +578,9 @@ class WriteToPartition(Pipe, PartitionWriter):
                                 " to write to partitions ")
 
         self.p_name_index = row.index('_pname')
+        self._source_name = self.source.name
+
+        self.header_mapper, self.body_mapper = make_table_map(self.source.dest_table, self.headers)
 
         return row
 
@@ -579,38 +589,40 @@ class WriteToPartition(Pipe, PartitionWriter):
 
         pname = row[self.p_name_index]
 
-        (p, header_mapper, body_mapper, datafile, stats) = self._datafiles.get(pname, (None, None, None, None, None))
+        try:
+            (p,  datafile, stats) = self._datafiles[pname]
 
-        if p is None:
+        except KeyError:
 
             p = self.bundle.partitions.partition(pname)
             if not p:
                 p = self.bundle.partitions.new_partition(pname)
 
-            header_mapper, body_mapper = make_table_map(p.table, self.headers)
             datafile = p.datafile()
             stats = Stats()
             stats.set_source_pipe(self._source_pipe)
-            stats.process_header(header_mapper(self.headers))
 
-            self._datafiles[pname] = (p, header_mapper, body_mapper ,datafile,stats)
+            self._datafiles[pname] = (p,datafile,stats)
 
-            datafile.insert_header(header_mapper(self.headers))
+            mr = self.header_mapper(self.headers)
+            datafile.insert_header(mr)
+            stats.process_header(mr)
 
-        datafile.insert_body(body_mapper(row))
-        stats.process_body(body_mapper(row))
+        mbr = self.body_mapper(row)
+        datafile.insert_body(mbr)
+        stats.process_body(mbr)
 
         return row
 
     def finish(self):
 
-        for pname, (p, header_mapper, body_mapper, datafile, stats) in self._datafiles.items():
+        for pname, (p, datafile, stats) in self._datafiles.items():
             datafile.close()
 
     @property
     def partitions(self):
         """Generate the partitions, so they can be manipulated after the pipeline completes"""
-        for pname, (p, header_mapper, body_mapper, datafile, stats) in self._datafiles.items():
+        for pname, (p, datafile, stats) in self._datafiles.items():
             yield p, stats
 
     def __str__(self):

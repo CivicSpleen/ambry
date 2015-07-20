@@ -301,12 +301,13 @@ def bundle_info(args, l, rc):
     from ambry.bundle import Bundle
 
     ref, frm = get_bundle_ref(args,l)
+    b = l.bundle(ref)
 
     if args.which:
-        prt('Will use bundle ref {}, referenced from {}'.format(ref, frm))
+        prt('Will use bundle ref {}, {}, referenced from {}'.format(ref, b.identity.vname, frm))
         return
 
-    b = l.bundle(ref)
+
     b.set_last_access(Bundle.STATES.INFO)
 
     def inf(column,k,v):
@@ -490,7 +491,7 @@ def bundle_meta(args, l, rc):
 
     if args.clean:
         b.do_clean()
-        b.set_last_access(Bundle.STATES.CLEAN)
+        b.set_last_access(Bundle.STATES.CLEANED)
 
     b.do_sync()
 
@@ -529,6 +530,10 @@ def bundle_build(args, l, rc):
         if not b.do_clean():
             return False
 
+        if not b.do_prepare():
+            return False
+
+    if not b.is_prepared:
         if not b.do_prepare():
             return False
 

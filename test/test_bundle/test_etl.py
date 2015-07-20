@@ -591,7 +591,10 @@ class Test(TestBase):
         self.assertEquals(10001, len(list(l.stream_partition(p))))
 
         for i, row in enumerate(l.stream_partition(p)):
-            print i, row
+            if i == 0:
+                self.assertEqual('a', row[-1])
+            else:
+                self.assertEqual(1, row[-1])
             if i > 5:
                 break
 
