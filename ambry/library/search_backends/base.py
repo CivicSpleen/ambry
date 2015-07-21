@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
+import itertools
+import logging
 from math import log
-import re
 from pprint import pformat
+import re
 
 from nltk.stem.lancaster import LancasterStemmer
 
@@ -10,8 +12,9 @@ from sqlalchemy.orm import object_session
 from sqlalchemy.sql import text
 
 from geoid.civick import GVid
+from geoid.util import iallval
+
 from ambry.util import get_logger
-import logging
 
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
@@ -72,7 +75,7 @@ class BaseSearchBackend(object):
         self.identifier_index = self._get_identifier_index()
 
     def reset(self):
-        """ Resets (deletes?) all indexes. """
+        """ Resets (deletes? FIXME:) all indexes. """
         self.dataset_index.reset()
         self.partition_index.reset()
         self.identifier_index.reset()
@@ -91,6 +94,31 @@ class BaseSearchBackend(object):
         """ Initializes and returns identifier index. """
         raise NotImplementedError(
             'subclasses of BaseSearchBackend must provide a _get_identifier_index() method')
+
+    def _or_join(self, terms):
+        """ FIXME: """
+
+        if isinstance(terms, (tuple, list)):
+            if len(terms) > 1:
+                return '(' + ' OR '.join(terms) + ')'
+            else:
+                return terms[0]
+        else:
+            return terms
+
+    def _and_join(self, terms):
+        """ FIXME: """
+        if len(terms) > 1:
+            return ' AND '.join([self._or_join(t) for t in terms])
+        else:
+            return self._or_join(terms[0])
+
+    def _kwd_term(self, keyword, terms):
+        """ FIXME: """
+        if terms:
+            return keyword + ':(' + self._and_join(terms) + ')'
+        else:
+            return None
 
 
 class BaseIndex(object):
@@ -244,6 +272,56 @@ class BaseDatasetIndex(BaseIndex):
 
         return document
 
+    def _make_query_from_terms(self, terms):
+        """ Creates a query for dataset from decomposed search terms.
+
+        Args:
+            terms (dict or unicode or string):
+
+        Returns:
+            str with FTS query.
+        """
+
+        if not isinstance(terms, dict):
+            stp = SearchTermParser()
+            terms = stp.parse(terms)
+
+        keywords = list()
+        doc = list()
+
+        source = None
+
+        # The top level ( title, names, keywords, doc ) will get ANDed together
+
+        if 'about' in terms:
+            doc.append(terms['about'])
+
+        if 'source' in terms:
+            source = terms['source']
+
+        cterms = None
+
+        if doc:
+            cterms = self.backend._and_join(doc)
+
+        if keywords:
+            keywords_terms = 'keywords:(' + self.backend._and_join(keywords) + ')'
+            if cterms:
+                cterms = self.backend._and_join(cterms, keywords_terms)
+            else:
+                cterms = keywords_terms
+
+        if source:
+            source_terms = 'keywords:{}'.format(source)
+            if cterms:
+                cterms = self.backend._and_join(cterms, source_terms)
+            else:
+                cterms = source_terms
+
+        logger.debug('Dataset terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
+        assert cterms is not None, u'Failed to create dataset query from {} terms.'.format(terms)
+        return cterms
+
 
 class BasePartitionIndex(BaseIndex):
     # FIXME: add other specs for fields.
@@ -310,6 +388,126 @@ class BasePartitionIndex(BaseIndex):
             doc=doc_field)
 
         return document
+
+    def _make_query_from_terms(self, terms):
+        """ Returns a FTS query for partition created from decomposed search terms.
+
+        Args:
+            terms (dict or str):
+
+        Returns:
+            str containing FTS query.
+
+        """
+
+        if not isinstance(terms, dict):
+            stp = SearchTermParser()
+            terms = stp.parse(terms)
+
+        keywords = list()
+        doc = list()
+
+        # The top level ( title, names, keywords, doc ) will get ANDed together
+
+        if 'about' in terms:
+            doc.append(terms['about'])
+
+        if 'with' in terms:
+            doc.append(terms['with'])
+
+        if 'in' in terms:
+            place_vids = self._expand_place_ids(terms['in'])
+            keywords.append(place_vids)
+
+        if 'by' in terms:
+            keywords.append(terms['by'])
+        frm_to = self._from_to_as_term(terms.get('from', None), terms.get('to', None))
+
+        if frm_to:
+            keywords.append(frm_to)
+
+        cterms = None
+        if doc:
+            cterms = self.backend._or_join(doc)
+
+        if keywords:
+            if cterms:
+                cterms = '{} AND {}'.format(cterms, self.backend._kwd_term('keywords', keywords))
+            else:
+                cterms = self.backend._kwd_term('keywords', keywords)
+
+        logger.debug('Partition terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
+
+        assert cterms is not None, u'Failed to create partition query from {} terms.'.format(terms)
+
+        return cterms
+
+    def _from_to_as_term(self, frm, to):
+        """ Turns from and to into the query format.
+
+        Args:
+            frm (str): from year
+            to (str): to year
+
+        Returns:
+            FTS query str with years range.
+
+        """
+
+        # The wackiness with the conversion to int and str, and adding ' ', is because there
+        # can't be a space between the 'TO' and the brackets in the time range
+        # when one end is open
+        from_year = ''
+        to_year = ''
+
+        def year_or_empty(prefix, year, suffix):
+            try:
+                return prefix + str(int(year)) + suffix
+            except (ValueError, TypeError):
+                return ''
+
+        if frm:
+            from_year = year_or_empty('', frm, ' ')
+
+        if to:
+            to_year = year_or_empty(' ', to, '')
+
+        if bool(from_year) or bool(to_year):
+            return '[{}TO{}]'.format(from_year, to_year)
+        else:
+            return None
+
+    def _expand_place_ids(self, terms):
+        """ Lookups all of the place identifiers to get gvids
+
+        Args:
+            terms (str or unicode): terms to lookup
+
+        Returns:
+            str or list: given terms if no identifiers found, otherwise list of identifiers.
+        """
+
+        place_vids = []
+        first_type = None
+
+        for result in self.backend.identifier_index.search(terms):
+
+            if not first_type:
+                first_type = result.type
+
+            if result.type != first_type:
+                # Ignore ones that aren't the same type as the best match
+                continue
+
+            place_vids.append(result.vid)
+
+        if place_vids:
+            # Add the 'all region' gvids for the higher level
+            all_set = set(itertools.chain.from_iterable(iallval(GVid.parse(x)) for x in place_vids))
+            place_vids += list(str(x) for x in all_set)
+            return place_vids
+        else:
+            return terms
 
 
 class BaseIdentifierIndex(BaseIndex):

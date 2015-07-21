@@ -55,9 +55,9 @@ class AmbryReadyMixin(object):
     def test_search_dataset_by_title(self):
         db = self.new_database()
         dataset = self.new_db_dataset(db, n=0)
-        dataset.config.metadata.about.title = 'The-title'
+        dataset.config.metadata.about.title = 'title'
         self.backend.dataset_index.index_one(dataset)
-        self._assert_finds_dataset(dataset, 'The-title')
+        self._assert_finds_dataset(dataset, 'title')
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_summary(self):
@@ -302,7 +302,6 @@ class WhooshBackendTest(TestBase, AmbryReadyMixin):
         self.backend = WhooshSearchBackend(self.library)
 
 
-@unittest.skip('Not ready')
 class SQLiteBackendTest(TestBase, AmbryReadyMixin):
 
     def setUp(self):
@@ -310,3 +309,87 @@ class SQLiteBackendTest(TestBase, AmbryReadyMixin):
         rc = self.get_rc()
         self.library = new_library(rc)
         self.backend = SQLiteSearchBackend(self.library)
+
+    @unittest.skip('Not ready.')
+    def test_search_years_range(self):
+        """ search by `* from 1978 to 1979` """
+        # FIXME:
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        PartitionFactory._meta.sqlalchemy_session = db.session
+        partition = PartitionFactory(dataset=dataset, time_coverage=['1978', '1979'])
+        db.session.commit()
+        self.backend.partition_index.index_one(partition)
+        self.backend.dataset_index.index_one(dataset)
+
+        # find partition in the partition index.
+        self._assert_finds_partition(partition, '* from 1978 to 1979')
+
+        # finds dataset extended with partition
+        found = self.backend.dataset_index.search('* from 1978 to 1979')
+        self.assertEquals(len(found), 1)
+        self.assertEquals(len(found[0].partitions), 1)
+        self.assertIn(partition.vid, found[0].partitions)
+
+    @unittest.skip('Not ready.')
+    def test_search_in(self):
+        """ search by `* in California` """
+        # FIXME: Not sure about proper field. Using space_coverage. Ask Eric for proper field.
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        table = dataset.new_table('table2', description='table2')
+        partition = dataset.new_partition(table, time=1, space_coverage=['california'])
+        db.commit()
+        self.backend.dataset_index.index_one(dataset)
+        self.backend.partition_index.index_one(partition)
+
+        # find partition in the partition index.
+        self._assert_finds_partition(partition, 'in California')
+
+        # finds dataset extended with partition
+        found = self.backend.dataset_index.search('dataset in California')
+        self.assertEquals(len(found), 1)
+        self.assertEquals(len(found[0].partitions), 1)
+        self.assertIn(partition.vid, found[0].partitions)
+
+    @unittest.skip('Not ready.')
+    def test_search_by(self):
+        """ search by `* by California` """
+        # FIXME: Ask Eric for real-life example and field which stores target for `by`.
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        table = dataset.new_table('table2', description='table2')
+        partition = dataset.new_partition(table, time=1, grain_coverage=['california'])
+        db.commit()
+        self.backend.dataset_index.index_one(dataset)
+        self.backend.partition_index.index_one(partition)
+
+        # find partition in the partition index.
+        self._assert_finds_partition(partition, 'by California')
+
+        # finds dataset extended with partition
+        found = self.backend.dataset_index.search('* by California')
+        self.assertEquals(len(found), 1)
+        self.assertEquals(len(found[0].partitions), 1)
+        self.assertIn(partition.vid, found[0].partitions)
+
+    # test some complex examples.
+    @unittest.skip('Not ready.')
+    def test_range_and_in(self):
+        """ search by `table2 from 1978 to 1979 in california` """
+        db = self.new_database()
+        dataset = self.new_db_dataset(db, n=0)
+        db.session.commit()
+        table = dataset.new_table('table2', description='table2')
+        partition = dataset.new_partition(
+            table, time=1, space_coverage=['california'],
+            time_coverage=['1978', '1979'])
+        db.commit()
+        self.backend.dataset_index.index_one(dataset)
+        self.backend.partition_index.index_one(partition)
+
+        # finds dataset extended with partition
+        found = self.backend.dataset_index.search('table2 from 1978 to 1979 in california')
+        self.assertEquals(len(found), 1)
+        self.assertEquals(len(found[0].partitions), 1)
+        self.assertIn(partition.vid, found[0].partitions)
