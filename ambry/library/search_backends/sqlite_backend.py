@@ -28,11 +28,6 @@ class SQLiteSearchBackend(BaseSearchBackend):
         """ Returns identifier index. """
         return IdentifierSQLiteIndex(backend=self)
 
-    def _and_join(self, terms):
-        if len(terms) == 1:
-            return ''.join(terms)
-        return ' AND '.join(terms)
-
 
 class DatasetSQLiteIndex(BaseDatasetIndex):
 
@@ -249,14 +244,19 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         logger.debug('Creating partition FTS table.')
 
         query = """\
-            CREATE VIRTUAL TABLE partition_index USING fts3(
+            CREATE VIRTUAL TABLE IF NOT EXISTS partition_index USING fts3(
                 vid VARCHAR(256) NOT NULL,
                 dataset_vid VARCHAR(256) NOT NULL,
+                from_year INTEGER,
+                to_year INTEGER,
                 title TEXT,
                 keywords TEXT,
                 doc TEXT
             );
         """
+        # FIXME: do not index from_year and to_year
+        # notindexed=from_year,
+        # notindexed=to_year
         self.backend.library.database.connection.execute(query)
 
     def search(self, search_phrase, limit=None):
@@ -274,20 +274,45 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         # Now to make proper query we need to replace all hypens in the search phrase.
         # See http://stackoverflow.com/questions/3865733/how-do-i-escape-the-character-in-sqlite-fts3-queries
         search_phrase = search_phrase.replace('-', '_')
-        match_query = self._make_query_from_terms(search_phrase)
+        from ambry.library.search_backends.base import SearchTermParser
+        terms = SearchTermParser().parse(search_phrase)
+        from_year = terms.pop('from', None)
+        to_year = terms.pop('to', None)
+
+        match_query = self._make_query_from_terms(terms)
 
         raw_connection = self.backend.library.database.engine.raw_connection()
         raw_connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
 
-        query = text("""
-            SELECT vid, dataset_vid, rank(matchinfo(partition_index)) AS score
-            FROM partition_index
-            WHERE partition_index MATCH :match_query;
-        """)  # FIXME: order by rank.
 
-        results = self.backend.library.database.connection.execute(query, match_query=match_query).fetchall()
+        # SQLite FTS implementation does not allow to create indexes on FTS tables.
+        # see https://sqlite.org/fts3.html 1.5. Summary, p 1:
+        # ... it is not possible to create indices ...
+        #
+        # So, filter years range here.
+        if match_query:
+            query = text("""
+                SELECT vid, dataset_vid, rank(matchinfo(partition_index)), from_year, to_year AS score
+                FROM partition_index
+                WHERE partition_index MATCH :match_query;
+            """)  # FIXME: order by rank.
+            results = self.backend.library.database.connection\
+                .execute(query, match_query=match_query)\
+                .fetchall()
+        else:
+            query = text("""
+                SELECT vid, dataset_vid, rank(matchinfo(partition_index)), from_year, to_year AS score
+                FROM partition_index""")
+            results = self.backend.library.database.connection\
+                .execute(query)\
+                .fetchall()
+
         for result in results:
-            vid, dataset_vid, score = result
+            vid, dataset_vid, score, db_from_year, db_to_year = result
+            if from_year and from_year < db_from_year:
+                continue
+            if to_year and to_year > db_to_year:
+                continue
             yield PartitionSearchResult(
                 vid=vid, dataset_vid=dataset_vid, score=score)
 
@@ -310,14 +335,25 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         doc['doc'] = doc['doc'].replace('-', '_')
         # FIXME: title field seems unused.
         doc['title'] = doc['title'].replace('-', '_')
+
+        # extend doc a little be, the _index_document will clear unused fields
+        doc['time_coverage'] = partition.time_coverage
         return doc
 
     def _index_document(self, document, force=False):
         """ Adds parition document to the index. """
+        time_coverage = document.pop('time_coverage', [])
+        from_year = None
+        to_year = None
+        if time_coverage:
+            from_year = int(time_coverage[0])
+            to_year = int(time_coverage[-1])
+
         query = text("""
-            INSERT INTO partition_index(vid, dataset_vid, title, keywords, doc)
-            VALUES(:vid, :dataset_vid, :title, :keywords, :doc); """)
-        self.backend.library.database.connection.execute(query, **document)
+            INSERT INTO partition_index(vid, dataset_vid, title, keywords, doc, from_year, to_year)
+            VALUES(:vid, :dataset_vid, :title, :keywords, :doc, :from_year, :to_year); """)
+        self.backend.library.database.connection.execute(
+            query, from_year=from_year, to_year=to_year, **document)
 
     def reset(self):
         """ Drops index table. """

@@ -426,7 +426,7 @@ class BasePartitionIndex(BaseIndex):
         if frm_to:
             keywords.append(frm_to)
 
-        cterms = None
+        cterms = ''
         if doc:
             cterms = self.backend._or_join(doc)
 
@@ -437,8 +437,6 @@ class BasePartitionIndex(BaseIndex):
                 cterms = self.backend._kwd_term('keywords', keywords)
 
         logger.debug('Partition terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
-
-        assert cterms is not None, u'Failed to create partition query from {} terms.'.format(terms)
 
         return cterms
 
