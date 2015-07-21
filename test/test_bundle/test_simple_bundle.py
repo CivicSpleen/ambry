@@ -296,7 +296,8 @@ class Test(TestBase):
 
         self.assertEqual(13,len(b.build_source_files.file(File.BSFILE.SOURCESCHEMA).record.unpacked_contents))
 
-        # Check that there are no sync opportunities 
+        # Check that there are no sync opportunities
+        print b.build_source_files.sync_dirs()
         self.assertFalse(any(e[1] for e in b.build_source_files.sync_dirs()))
 
         #print '!!!', b.source_fs.getcontents('source_schema.csv')

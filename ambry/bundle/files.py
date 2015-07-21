@@ -122,7 +122,7 @@ class BuildSourceFile(object):
 
             return self.SYNC_DIR.RECORD_TO_FILE
 
-        if self.record.modified > self.fs_modtime and self.record.source_hash != self.fs_hash:
+        if self.record.modified > self.fs_modtime:
             # Record is newer
 
             return self.SYNC_DIR.RECORD_TO_FILE
@@ -213,6 +213,7 @@ class RowBuildSourceFile(BuildSourceFile):
                     w.writerow(row)
 
             fr.source_hash = self.fs_hash
+            fr.modified = self.fs_modtime
 
 class DictBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
@@ -252,6 +253,7 @@ class DictBuildSourceFile(BuildSourceFile):
             with self._fs.open(fn_path, 'wb') as f:
                 yaml.dump(fr.unpacked_contents, default_flow_style=False)
             fr.source_hash = self.fs_hash
+            fr.modified = self.fs_modtime
 
 class StringSourceFile(BuildSourceFile):
     """A Source Build File that is a single file. """
@@ -279,6 +281,7 @@ class StringSourceFile(BuildSourceFile):
             with self._fs.open(file_name(self._file_const), 'wb') as f:
                 f.write(fr.contents)
             fr.source_hash = self.fs_hash
+            fr.modified = self.fs_modtime
 
 class MetadataFile(DictBuildSourceFile):
 
