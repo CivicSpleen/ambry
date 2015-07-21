@@ -161,6 +161,7 @@ class TableFactory(SQLAlchemyModelFactory):
         return True
 
 
+# FIXME: Is broken.
 class ColumnFactory(SQLAlchemyModelFactory):
     class Meta:
         model = Column
@@ -185,7 +186,7 @@ class ColumnFactory(SQLAlchemyModelFactory):
         kwargs['id'] = 'c{table_id}{sequence_id:03d}'.format(
             table_id=_drop_entity(table.id),
             sequence_id=kwargs['sequence_id'])
-        kwargs['vid'] = 'c{column_id}{table_sequence_id:03d}'.format(
+        kwargs['vid'] = '{column_id}{table_sequence_id:03d}'.format(
             column_id=kwargs['id'],
             table_sequence_id=table.sequence_id)
 
@@ -210,7 +211,7 @@ class ColumnFactory(SQLAlchemyModelFactory):
             column (Column): column instance to validate.
         """
         # dataset = cls._meta.sqlalchemy_session.query(Dataset).filter_by(vid=column.d_vid).one()
-        table = cls._meta.sqlalchemy_session.query(Table).filter_by(vid=column.t_vid).one()
+        table = cls._meta.sqlalchemy_session.query(Table).filter_by(vid=column.t_vid).first()
         assert column.vid.startswith('c')
 
         assert column.id.startswith('c')
@@ -259,6 +260,7 @@ class PartitionFactory(SQLAlchemyModelFactory):
             table = TableFactory(dataset=dataset)
 
         kwargs['dataset'] = dataset
+        kwargs['d_vid'] = dataset.vid
         kwargs['t_vid'] = table.vid
 
         kwargs['id'] = 'p{dataset_id}{sequence_id:03d}'.format(
@@ -269,8 +271,6 @@ class PartitionFactory(SQLAlchemyModelFactory):
             id=kwargs['id'],
             dataset=dataset)
         kwargs['cache_key'] = '%s-key.%s' % (kwargs['vid'], kwargs['format'])
-
-        kwargs['d_vid'] = dataset.vid
 
         instance = super(PartitionFactory, cls)._prepare(create, **kwargs)
         instance.set_attributes(**kwargs)

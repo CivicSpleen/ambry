@@ -290,29 +290,30 @@ class Test(TestBase):
         ##
         ## Source schema
 
+        # No source schema yet
         self.assertIsNone(b.build_source_files.file(File.BSFILE.SOURCESCHEMA).record.unpacked_contents)
 
         b.do_meta()
 
+        # It is created in meta
         self.assertEqual(13,len(b.build_source_files.file(File.BSFILE.SOURCESCHEMA).record.unpacked_contents))
 
         # Check that there are no sync opportunities
-        print b.build_source_files.sync_dirs()
         self.assertFalse(any(e[1] for e in b.build_source_files.sync_dirs()))
-
-        #print '!!!', b.source_fs.getcontents('source_schema.csv')
 
         bsf = b.build_source_files.file(File.BSFILE.SOURCESCHEMA)
 
+        # Everything synced now
         self.assertEquals(bsf.fs_hash, bsf.record.source_hash )
 
-        # Modify the destination name
+        # Modify the file
         time.sleep(2)
         b.source_fs.setcontents('source_schema.csv',
                                 b.source_fs.getcontents('source_schema.csv')
                                 .replace('geolevels,geolevels', 'geolevels,gl'))
 
+        # Should be different
         self.assertNotEquals(bsf.fs_hash, bsf.record.source_hash)
 
-
+        # Which causes a sync
         self.assertIn(('sourceschema', 'ftr'), b.do_sync())  # No changes, should not sync

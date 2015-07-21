@@ -909,11 +909,10 @@ class Bundle(object):
             places = list(self.library.search.search_identifiers(term))
 
             if not places:
-                raise BuildError( "Failed to find space identifier '{}' in full text identifier search".format(term))
+                raise BuildError(
+                    "Failed to find space identifier '{}' in full text identifier search".format(term))
 
-            score, gvid, type, name = places[0]
-
-            return gvid
+            return places[0].vid
 
         if self.metadata.about.space:  # From the bundle metadata
             spaces.add(resolve(self.metadata.about.space))
@@ -947,6 +946,7 @@ class Bundle(object):
 
         self.metadata.write_to_dir()
 
+<<<<<<< HEAD
 
     ##
     ## Finalize
@@ -961,6 +961,8 @@ class Bundle(object):
         """Call's finalize(); for similarity with other process commands. """
         return self.finalize()
 
+=======
+>>>>>>> 814cad04b720588ee55232b718d6aa69ff5786be
     def finalize(self):
         self.state = self.STATES.FINALIZED
         self.commit()

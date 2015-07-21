@@ -8,10 +8,9 @@ from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIn
     BaseIdentifierIndex, BaseSearchBackend, IdentifierSearchResult,\
     DatasetSearchResult, PartitionSearchResult
 
-from ambry.library.search_backends.base import SearchTermParser
 from ambry.util import get_logger
 
-logger = get_logger(__name__, level=logging.DEBUG)
+logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 
 class SQLiteSearchBackend(BaseSearchBackend):
@@ -36,7 +35,7 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         assert backend is not None, 'backend argument can not be None.'
         super(self.__class__, self).__init__(backend=backend)
 
-        logger.debug('sqlitesearch: creating dataset FTS table.')
+        logger.debug('Creating dataset FTS table.')
 
         query = """\
             CREATE VIRTUAL TABLE dataset_index USING fts3(
@@ -59,6 +58,11 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
             list of DatasetSearchResult instances.
 
         """
+        # SQLite FTS can't find terms with `-`, therefore all hyphens replaced with underscore before save.
+        # Now to make proper query we need to replace all hypens in the search phrase.
+        # See http://stackoverflow.com/questions/3865733/how-do-i-escape-the-character-in-sqlite-fts3-queries
+        search_phrase = search_phrase.replace('-', '_')
+        match_query = self._make_query_from_terms(search_phrase)
 
         raw_connection = self.backend.library.database.engine.raw_connection()
         raw_connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
@@ -66,9 +70,12 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         query = ("""
             SELECT vid, rank(matchinfo(dataset_index)) AS score
             FROM dataset_index
-            WHERE vid MATCH :part;
-        """)  # FIXME: ordery by rank.
-        results = self.backend.library.database.connection.execute(query, part=search_phrase).fetchall()
+            WHERE dataset_index MATCH :match_query
+        """)
+        # FIXME: order by rank.
+
+        logger.debug('Searching datasets using `{}` query.'.format(match_query))
+        results = self.backend.library.database.connection.execute(query, match_query=match_query).fetchall()
         datasets = {}
         for result in results:
             vid, score = result
@@ -76,8 +83,32 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
             datasets[vid].vid = vid
             datasets[vid].b_score = score
 
-        # FIXME: extend with partitions.
+        logger.debug('Extending datasets with partitions.')
+        for partition in self.backend.partition_index.search(search_phrase):
+            datasets[partition.dataset_vid].p_score += partition.score
+            datasets[partition.dataset_vid].partitions.add(partition.vid)
         return datasets.values()
+
+    def _as_document(self, dataset):
+        """ Converts dataset to document indexed by to FTS index.
+
+        Args:
+            dataset (orm.Dataset): dataset to convert.
+
+        Returns:
+            dict with structure matches to BaseDatasetIndex._schema.
+
+        """
+        doc = super(self.__class__, self)._as_document(dataset)
+
+        # SQLite FTS can't find terms with `-`, replace it with underscore here and while searching.
+        # See http://stackoverflow.com/questions/3865733/how-do-i-escape-the-character-in-sqlite-fts3-queries
+        # FIXME: Add tests for all fields
+        doc['keywords'] = doc['keywords'].replace('-', '_')
+        doc['doc'] = doc['doc'].replace('-', '_')
+        # FIXME: title field seems unused.
+        doc['title'] = doc['title'].replace('-', '_')
+        return doc
 
     def _index_document(self, document, force=False):
         """ Adds document to the index. """
@@ -107,6 +138,31 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         """)
         self.backend.library.database.connection.execute(query, vid=vid)
 
+    def is_indexed(self, dataset):
+        """ Returns True if dataset is already indexed. Otherwise returns False. """
+        query = text("""
+            SELECT vid
+            FROM dataset_index
+            WHERE vid = :vid;
+        """)
+        result = self.backend.library.database.connection.execute(query, vid=dataset.vid)
+        return bool(result.fetchall())
+
+    def all(self):
+        """ Returns list with all indexed datasets. """
+        datasets = []
+
+        query = text("""
+            SELECT vid
+            FROM dataset_index;""")
+
+        for result in self.backend.library.database.connection.execute(query):
+            res = DatasetSearchResult()
+            res.vid = result[0]
+            res.b_score = 1
+            datasets.append(res)
+        return datasets
+
 
 class IdentifierSQLiteIndex(BaseIdentifierIndex):
 
@@ -114,7 +170,7 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
         assert backend is not None, 'backend argument can not be None.'
         super(self.__class__, self).__init__(backend=backend)
 
-        logger.debug('sqlitesearch: creating identifier FTS table.')
+        logger.debug('Creating identifier FTS table.')
 
         query = """\
             CREATE VIRTUAL TABLE identifier_index USING fts3(
@@ -140,8 +196,8 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
         query = ("""
             SELECT identifier, type, name, 0
             FROM identifier_index
-            WHERE identifier MATCH :part;
-        """)  # FIXME: Add score. Do we really need scores for Identifiers?
+            WHERE identifier MATCH :part; """)
+        # FIXME: Add score. Do we really need scores for Identifiers?
 
         results = self.backend.library.database.connection.execute(query, part=search_phrase).fetchall()
         for result in results:
@@ -185,17 +241,22 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         assert backend is not None, 'backend argument can not be None.'
         super(self.__class__, self).__init__(backend=backend)
 
-        logger.debug('sqlitesearch: creating partition FTS table.')
+        logger.debug('Creating partition FTS table.')
 
         query = """\
-            CREATE VIRTUAL TABLE partition_index USING fts3(
+            CREATE VIRTUAL TABLE IF NOT EXISTS partition_index USING fts3(
                 vid VARCHAR(256) NOT NULL,
                 dataset_vid VARCHAR(256) NOT NULL,
+                from_year INTEGER,
+                to_year INTEGER,
                 title TEXT,
                 keywords TEXT,
                 doc TEXT
             );
         """
+        # FIXME: do not index from_year and to_year
+        # notindexed=from_year,
+        # notindexed=to_year
         self.backend.library.database.connection.execute(query)
 
     def search(self, search_phrase, limit=None):
@@ -209,27 +270,90 @@ class PartitionSQLiteIndex(BasePartitionIndex):
             PartitionSearchResult instances.
         """
 
+        # SQLite FTS can't find terms with `-`, therefore all hyphens replaced with underscore before save.
+        # Now to make proper query we need to replace all hypens in the search phrase.
+        # See http://stackoverflow.com/questions/3865733/how-do-i-escape-the-character-in-sqlite-fts3-queries
+        search_phrase = search_phrase.replace('-', '_')
+        from ambry.library.search_backends.base import SearchTermParser
+        terms = SearchTermParser().parse(search_phrase)
+        from_year = terms.pop('from', None)
+        to_year = terms.pop('to', None)
+
+        match_query = self._make_query_from_terms(terms)
+
         raw_connection = self.backend.library.database.engine.raw_connection()
         raw_connection.create_function('rank', 1, _make_rank_func((1., .1, 0, 0)))
 
-        query = ("""
-            SELECT vid, dataset_vid, rank(matchinfo(partition_index)) AS score
-            FROM partition_index
-            WHERE vid MATCH :part;
-        """)  # FIXME: order by rank.
-        results = self.backend.library.database.connection.execute(query, part=search_phrase).fetchall()
+
+        # SQLite FTS implementation does not allow to create indexes on FTS tables.
+        # see https://sqlite.org/fts3.html 1.5. Summary, p 1:
+        # ... it is not possible to create indices ...
+        #
+        # So, filter years range here.
+        if match_query:
+            query = text("""
+                SELECT vid, dataset_vid, rank(matchinfo(partition_index)), from_year, to_year AS score
+                FROM partition_index
+                WHERE partition_index MATCH :match_query;
+            """)  # FIXME: order by rank.
+            results = self.backend.library.database.connection\
+                .execute(query, match_query=match_query)\
+                .fetchall()
+        else:
+            query = text("""
+                SELECT vid, dataset_vid, rank(matchinfo(partition_index)), from_year, to_year AS score
+                FROM partition_index""")
+            results = self.backend.library.database.connection\
+                .execute(query)\
+                .fetchall()
+
         for result in results:
-            vid, dataset_vid, score = result
+            vid, dataset_vid, score, db_from_year, db_to_year = result
+            if from_year and from_year < db_from_year:
+                continue
+            if to_year and to_year > db_to_year:
+                continue
             yield PartitionSearchResult(
                 vid=vid, dataset_vid=dataset_vid, score=score)
 
+    def _as_document(self, partition):
+        """ Converts partition to document indexed by to FTS index.
+
+        Args:
+            partition (orm.Partition): partition to convert.
+
+        Returns:
+            dict with structure matches to BasePartitionIndex._schema.
+
+        """
+        doc = super(self.__class__, self)._as_document(partition)
+
+        # SQLite FTS can't find terms with `-`, replace it with underscore here and while searching.
+        # See http://stackoverflow.com/questions/3865733/how-do-i-escape-the-character-in-sqlite-fts3-queries
+        # FIXME: Add tests for all fields
+        doc['keywords'] = doc['keywords'].replace('-', '_')
+        doc['doc'] = doc['doc'].replace('-', '_')
+        # FIXME: title field seems unused.
+        doc['title'] = doc['title'].replace('-', '_')
+
+        # extend doc a little be, the _index_document will clear unused fields
+        doc['time_coverage'] = partition.time_coverage
+        return doc
+
     def _index_document(self, document, force=False):
         """ Adds parition document to the index. """
+        time_coverage = document.pop('time_coverage', [])
+        from_year = None
+        to_year = None
+        if time_coverage:
+            from_year = int(time_coverage[0])
+            to_year = int(time_coverage[-1])
+
         query = text("""
-            INSERT INTO partition_index(vid, dataset_vid, title, keywords)
-            VALUES(:vid, :dataset_vid, :title, :keywords);
-        """)
-        self.backend.library.database.connection.execute(query, **document)
+            INSERT INTO partition_index(vid, dataset_vid, title, keywords, doc, from_year, to_year)
+            VALUES(:vid, :dataset_vid, :title, :keywords, :doc, :from_year, :to_year); """)
+        self.backend.library.database.connection.execute(
+            query, from_year=from_year, to_year=to_year, **document)
 
     def reset(self):
         """ Drops index table. """
@@ -250,6 +374,29 @@ class PartitionSQLiteIndex(BasePartitionIndex):
             WHERE vid = :vid;
         """)
         self.backend.library.database.connection.execute(query, vid=vid)
+
+    def is_indexed(self, partition):
+        """ Returns True if partition is already indexed. Otherwise returns False. """
+        query = text("""
+            SELECT vid
+            FROM partition_index
+            WHERE vid = :vid;
+        """)
+        result = self.backend.library.database.connection.execute(query, vid=partition.vid)
+        return bool(result.fetchall())
+
+    def all(self):
+        """ Returns list with vids of all indexed partitions. """
+        partitions = []
+
+        query = text("""
+            SELECT dataset_vid, vid
+            FROM partition_index;""")
+
+        for result in self.backend.library.database.connection.execute(query):
+            dataset_vid, vid = result
+            partitions.append(PartitionSearchResult(dataset_vid=dataset_vid, vid=vid, score=1))
+        return partitions
 
 
 def _make_rank_func(weights):

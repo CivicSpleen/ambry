@@ -665,11 +665,10 @@ class Renderer(object):
         """Incremental search, search as you type."""
 
         results = []
-        for score, gvid, name in self.library.search.search_identifiers(term):
-            # results.append({"label":name, "value":gvid})
-            results.append({"label": name})
+        for identifier in self.library.search.search_identifiers(term):
+            results.append({'label': identifier.name})
 
-        return Response(dumps(results,cls=JSONEncoder,indent=4),mimetype='application/json')
+        return Response(dumps(results, cls=JSONEncoder, indent=4), mimetype='application/json')
 
     def bundle_search(self,  terms):
         """Incremental search, search as you type."""
@@ -679,24 +678,22 @@ class Renderer(object):
 
         self.session['last_search_terms'] = terms
 
-        parsed = self.library.search.make_query_from_terms(terms)
-
         final_results = []
 
-        init_results = self.library.search.search_datasets(parsed)
+        init_results = self.library.search.search_datasets(terms)
+        parsed = self.library.search.get_parsed_query()
 
         pvid_limit = 5
 
         all_idents = self.library.search.identifier_map
 
-        for result in sorted(init_results.values(), key=lambda e: e.score, reverse=True):
+        for result in sorted(init_results, key=lambda e: e.score, reverse=True):
 
             try:
                 d = self.doc_cache.dataset(result.vid)
             except NotFoundError:
-                logger.error("Failed to find dataset {}".format(result.vid))
+                logger.error('Failed to find dataset {}'.format(result.vid))
                 continue
-
 
             d['partition_count'] = len(result.partitions)
             d['partitions'] = {}
@@ -754,7 +751,7 @@ class Renderer(object):
 
         self.session['last_search_results'] = final_results
 
-        return self.render(template,query = parsed,results=final_results,facets=facets,**self.cc())
+        return self.render(template, query=parsed, results=final_results, facets=facets, **self.cc())
 
     def generate_sources(self):
 

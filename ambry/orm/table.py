@@ -8,7 +8,7 @@ __docformat__ = 'restructuredtext en'
 
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
-from sqlalchemy import  Text, String, ForeignKey
+from sqlalchemy import Text, String, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import text
 
@@ -24,7 +24,7 @@ class Table(Base, DictableMixin):
     vid = SAColumn('t_vid', String(20), primary_key=True)
     id = SAColumn('t_id', String(20), primary_key=False)
     d_id = SAColumn('t_d_id', String(20))
-    d_vid = SAColumn('t_d_vid',String(20),ForeignKey('datasets.d_vid'),index=True)
+    d_vid = SAColumn('t_d_vid', String(20), ForeignKey('datasets.d_vid'), index=True)
 
     sequence_id = SAColumn('t_sequence_id', Integer, nullable=False)
     name = SAColumn('t_name', String(200), nullable=False)
@@ -38,7 +38,6 @@ class Table(Base, DictableMixin):
     proto_vid = SAColumn('t_proto_vid', String(20), index=True)
 
     installed = SAColumn('t_installed', String(100))
-
 
     data = SAColumn('t_data', MutationDict.as_mutable(JSONEncodedObj))
 
@@ -57,24 +56,24 @@ class Table(Base, DictableMixin):
 
             protos = {}
 
-            protos.update({ c.fk_vid:c for c in t.columns if c.fk_vid })
-            protos.update({ c.proto_vid:c for c in t.columns if c.proto_vid})
+            protos.update({c.fk_vid: c for c in t.columns if c.fk_vid})
+            protos.update({c.proto_vid: c for c in t.columns if c.proto_vid})
 
             # HACK: The numbering in the proto dataset changes, so we have to make substitutions
             if 'c00104002' in protos:
                 protos['c00109003'] = protos['c00104002']
                 del protos['c00104002']
 
-            protos = { str(ObjectNumber.parse(n).rev(None)):c for n, c in protos.items() } # Remove revisions
+            protos = {str(ObjectNumber.parse(n).rev(None)): c for n, c in protos.items()}  # Remove revisions
 
             return protos
 
         protos_s = protos(self)
         protos_o = protos(other)
 
-        inter =  set(protos_s.keys())  & set(protos_o.keys())
+        inter = set(protos_s.keys()) & set(protos_o.keys())
 
-        return list(set( (protos_s[n], protos_o[n])  for n in inter ) )
+        return list(set((protos_s[n], protos_o[n]) for n in inter))
 
     @staticmethod
     def mangle_name(name, preserve_case=False):
@@ -143,8 +142,8 @@ class Table(Base, DictableMixin):
         return c
 
     def add_id_column(self, description=None):
-        self.add_column(name='id',datatype='integer',is_primary_key = True,
-                        description = self.description if not description else description)
+        self.add_column(name='id', datatype='integer', is_primary_key=True,
+                        description=self.description if not description else description)
 
     @property
     def primary_key(self):
@@ -152,8 +151,6 @@ class Table(Base, DictableMixin):
             if c.is_primary_key:
                 return c
         return None
-
-
 
     def get_fixed_regex(self):
         """Using the size values for the columns for the table, construct a
@@ -305,7 +302,7 @@ class Table(Base, DictableMixin):
     def insertable_dict(self):
         x = {('t_' + k).strip('_'): v for k, v in self.dict.items()}
 
-        if not 't_vid' in x or not x['t_vid']:
+        if 't_vid' not in x or not x['t_vid']:
             raise ValueError("Must have vid set: {} ".format(x))
 
         return x
@@ -317,16 +314,15 @@ class Table(Base, DictableMixin):
 
         for c in self.columns:
 
-            if not c in sd:
+            if c not in sd:
                 continue
 
-            stat = sd[i]
+            stat = sd[c]
 
             if stat.size and stat.size > c.size:
                 c.size = stat.size
 
             c.lom = stat.lom
-
 
     @staticmethod
     def before_insert(mapper, conn, target):
@@ -365,4 +361,3 @@ class Table(Base, DictableMixin):
 
 event.listen(Table, 'before_insert', Table.before_insert)
 event.listen(Table, 'before_update', Table.before_update)
-
