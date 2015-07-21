@@ -12,8 +12,6 @@ from collections import Counter
 from livestats import livestats
 
 from ambry.util import Constant
-from ambry.etl.pipeline import Pipe
-
 
 def text_hist(nums, ascii = False):
 
@@ -219,31 +217,19 @@ class StatSet(object):
             ('uvalues',dict(self.counts.most_common(100)) ) ]
         )
 
-class Stats(Pipe):
+class Stats(object):
     """ Stats object reads rows from the input iterator, processes the row, and yields it back out"""
 
-    def __init__(self, table = None):
+    def __init__(self, table):
 
-        self.table = table
+        self._table = table
         self._stats = {}
         self._func = None
         self._func_code = None
         self.headers = None
 
-    def init(self, headers):
-
-        from pipeline import PipelineError
-
-        failures = []
-
-        for c in self._source.dest_table.columns:
-
-            if not c.name in self.headers:
-                self.error("Stats failed to find table {} column {} in the headers for source {} "
-                           .format(self._source.dest_table.name, c.name , self.source.name))
-            else:
-
-                self.add(c, build = False)
+        for c in self._table.columns:
+            self.add(c, build = False)
 
         self._func, self._func_code = self.build()
 
@@ -279,8 +265,8 @@ class Stats(Pipe):
 
         if not parts:
             from pipeline import PipelineError
-            raise PipelineError("Did not get any stats variables for table {} source {}. Was add() or init() called first? "
-                           .format(self._source.dest_table.name , self.source.name))
+            raise PipelineError("Did not get any stats variables for table {}. Was add() or init() called first? "
+                           .format(self.table.name))
 
         code = 'def _process_row(stats, row):\n    {}'.format('\n    '.join(parts))
 
@@ -306,11 +292,10 @@ class Stats(Pipe):
 
         self.headers = row
 
-        self.init(self.headers)
-
         return row
 
     def process_body(self, row):
+
         self.process(dict(zip(self.headers, row)))
 
         return row
@@ -326,7 +311,6 @@ class Stats(Pipe):
             stats_dict["hist"] = text_hist(stats_dict["hist"], True)
             if not rows:
                 rows.append(stats_dict.keys())
-
 
             rows.append(stats_dict.values())
 

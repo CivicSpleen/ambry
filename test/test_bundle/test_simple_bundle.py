@@ -236,14 +236,82 @@ class Test(TestBase):
 
         self.assertEqual(10001, len(list(l.stream_partition(p, skip_header=False))))
 
-    def test_simple_meta(self):
+    def test_simple_sync(self):
         """Build the simple bundle"""
+        import time
+        from ambry.orm.file import File
 
-        b = self.setup_bundle('simple')
-        b.sync()  # This will sync the files back to the bundle's source dir
+        # The modification times for mem: files don't seem to change, so we use temp: instead
+        b = self.setup_bundle('simple', source_url = 'temp://')
+        self.assertTrue(b.do_sync() ) # This will sync the files back to the bundle's source dir
 
-        print list(b.source_fs.listdir())
+        header = (
+            '"name","title","table","segment","time","space","grain","start_line","end_line",'+
+            '"comment_lines","header_lines","description","url"'
+        )
 
-        for i in [u'bundle.yaml', u'schema.csv', u'documentation.md', u'bundle.py', u'sources.csv']:
-            pass
+        lines = [
+            '"2009-gs",,"geofile_schema",2009,2009,,,,,,,,"gs://1lKkKVBu0sHSwyuyuGRPMfmNqG8FIjVw2RYMLYgr2GX4"',
+            '"2010-gs",,"geofile_schema",2010,2010,,,,,,,,"gs://1lKkKVBu0sHSwyuyuGRPMfmNqG8FIjVw2RYMLYgr2GX4"'
+        ]
 
+        time.sleep(2.0) # Make sure the mod time differes
+        b.source_fs.setcontents('sources.csv',header+'\n'+lines[0])
+
+        self.assertIn(('sources', 'ftr'),  b.do_sync())
+
+        self.assertEqual(0, len(b.dataset.sources)) # Synced to record, but not to objects
+
+        self.assertTrue(b.do_prepare())
+
+        self.assertEqual(1, len(b.dataset.sources)) # Prepare syncs to objects
+
+        #time.sleep(2.0)  # Make sure the mod time differes
+        b.source_fs.setcontents('sources.csv', '\n'.join([header]+lines))
+
+        b.do_prepare()
+
+        self.assertEqual(1, len(b.dataset.sources)) # 2 line file hasn't been synced yet; prepare does nothgin
+
+        self.assertIn(('sources', 'ftr'), b.do_sync())
+
+        self.assertEqual(1, len(b.dataset.sources)) # Synced, but 2nd object only after prepare
+
+        b.do_prepare()
+
+        self.assertEqual(2, len(b.dataset.sources)) # Prepare created second object
+
+        self.assertNotIn(('sources', 'ftr'), b.do_sync()) # No changes, should not sync
+
+        b.dataset.sources = [b.dataset.sources[0]]
+
+        self.assertEqual(1, len(b.dataset.sources))
+
+        ##
+        ## Source schema
+
+        self.assertIsNone(b.build_source_files.file(File.BSFILE.SOURCESCHEMA).record.unpacked_contents)
+
+        b.do_meta()
+
+        self.assertEqual(13,len(b.build_source_files.file(File.BSFILE.SOURCESCHEMA).record.unpacked_contents))
+
+        # Check that there are no sync opportunities 
+        self.assertFalse(any(e[1] for e in b.build_source_files.sync_dirs()))
+
+        #print '!!!', b.source_fs.getcontents('source_schema.csv')
+
+        bsf = b.build_source_files.file(File.BSFILE.SOURCESCHEMA)
+
+        self.assertEquals(bsf.fs_hash, bsf.record.source_hash )
+
+        # Modify the destination name
+        time.sleep(2)
+        b.source_fs.setcontents('source_schema.csv',
+                                b.source_fs.getcontents('source_schema.csv')
+                                .replace('geolevels,geolevels', 'geolevels,gl'))
+
+        self.assertNotEquals(bsf.fs_hash, bsf.record.source_hash)
+
+
+        self.assertIn(('sourceschema', 'ftr'), b.do_sync())  # No changes, should not sync

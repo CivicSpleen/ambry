@@ -180,6 +180,7 @@ def bundle_parser(cmd):
     group.add_argument('-o', '--from-objects', default=False, action="store_const",
                        const=BuildSourceFile.SYNC_DIR.OBJECT_TO_FILE, dest='sync_dir',
                        help='Source sync from database objects to source')
+    command_p.add_argument('-t', '--test', default=False, action="store_true", help='Only Report the directions of the next sync')
     command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
 
 
@@ -478,7 +479,10 @@ def bundle_sync(args, l, rc):
     prt("Bundle source filesystem: {}".format(b.source_fs))
     prt("Sync direction: {}".format(args.sync_dir if args.sync_dir else 'latest'))
 
-    syncs =  b.do_sync(args.sync_dir if args.sync_dir else None)
+    if args.test:
+        syncs = b.build_source_files.sync_dirs()
+    else:
+        syncs =  b.do_sync(args.sync_dir if args.sync_dir else None)
 
     print tabulate(syncs, headers="Key Direction".split())
 

@@ -278,6 +278,7 @@ class PartitionProxy(Proxy):
         super(PartitionProxy, self).__init__(obj)
         self._partition = obj
         self._bundle = bundle
+        self._datafile = None
 
     def clean(self):
         """Remove all built files and return the partition to a newly-created state"""
@@ -286,9 +287,16 @@ class PartitionProxy(Proxy):
         """Returns self, to deal with old bundles that has a direct reference to their database. """
         return self
 
+    @property
     def datafile(self):
-        from ambry.etl.partition import new_partition_data_file
-        return new_partition_data_file(self._bundle.build_fs, self.cache_key)
+        if self._datafile is None:
+            from ambry.etl.partition import new_partition_data_file
+            from ambry.etl.stats import  Stats
+
+            self._datafile =  new_partition_data_file(self._bundle.build_fs, self.cache_key,
+                                                      stats = Stats(self.table))
+
+        return self._datafile
 
     @property
     def location(self):

@@ -25,7 +25,11 @@ larget schema files, such as those in the US Census.
 from ambry.orm import File
 import hashlib
 import time
-from ..util import Constant
+from ..util import Constant, get_logger
+
+import logging
+logger = get_logger(__name__)
+logger.setLevel(logging.INFO)
 
 class FileTypeError(Exception):
     """Bad file type"""
@@ -55,6 +59,9 @@ class BuildSourceFile(object):
     def exists(self):
         return self._fs.exists(file_name(self._file_const))
 
+    def size(self):
+        return self._fs.getsize(file_name(self._file_const))
+
     @property
     def record(self):
         return self._dataset.bsfile(self._file_const)
@@ -76,6 +83,7 @@ class BuildSourceFile(object):
     def path(self):
         return self._fs.getsyspath(file_name(self._file_const))
 
+    @property
     def fs_modtime(self):
         import time
         from fs.errors import ResourceNotFoundError
@@ -88,6 +96,7 @@ class BuildSourceFile(object):
         except ResourceNotFoundError:
             return None
 
+    @property
     def fs_hash(self):
         from ambry.util import md5_for_file
 
@@ -103,20 +112,24 @@ class BuildSourceFile(object):
         :return:
         """
 
-        if self.exists() and not self.record.size:
+        if self.exists() and bool(self.size()) and not self.record.size:
             # The fs exists, but the record is empty
+
             return self.SYNC_DIR.FILE_TO_RECORD
 
-        elif self.record.size and not self.exists():
+        if self.record.size and not self.exists():
             # Record exists, but not the FS
+
             return self.SYNC_DIR.RECORD_TO_FILE
 
-        if self.record.modified > self.fs_modtime():
+        if self.record.modified > self.fs_modtime and self.record.source_hash != self.fs_hash:
             # Record is newer
+
             return self.SYNC_DIR.RECORD_TO_FILE
 
-        elif self.fs_modtime() > self.record.modified:
+        if self.fs_modtime > self.record.modified and self.record.source_hash != self.fs_hash:
             # Filesystem is newer
+
             return self.SYNC_DIR.FILE_TO_RECORD
 
         return None
@@ -147,6 +160,9 @@ class BuildSourceFile(object):
         self._dataset.config.sync[self._file_const][sd] = time()
         return sd
 
+    def clean_objects(self):
+        pass
+
     def fs_to_record(self):
         """Load a file in the filesystem into the file record"""
         raise NotImplementedError
@@ -154,7 +170,6 @@ class BuildSourceFile(object):
     def record_to_fs(self):
         """Create a filesystem file from a File"""
         raise NotImplementedError
-
 
 class RowBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
@@ -179,9 +194,9 @@ class RowBuildSourceFile(BuildSourceFile):
         fr.update_contents(msgpack.packb(rows))
 
         fr.mime_type = 'application/msgpack'
-        fr.source_hash = self.fs_hash()
+        fr.source_hash = self.fs_hash
 
-        fr.modified = self.fs_modtime()
+        fr.modified = self.fs_modtime
 
     def record_to_fs(self):
         """Create a filesystem file from a File"""
@@ -196,6 +211,8 @@ class RowBuildSourceFile(BuildSourceFile):
                 w = csv.writer(f)
                 for row in fr.unpacked_contents:
                     w.writerow(row)
+
+            fr.source_hash = self.fs_hash
 
 class DictBuildSourceFile(BuildSourceFile):
     """A Source Build file that is a list of rows, like a spreadsheet"""
@@ -217,9 +234,9 @@ class DictBuildSourceFile(BuildSourceFile):
         else:
             raise FileTypeError("Unknown file type for : %s" % fn_path)
 
-        fr.source_hash = self.fs_hash()
+        fr.source_hash = self.fs_hash
 
-        fr.modified = self.fs_modtime()
+        fr.modified = self.fs_modtime
 
     def record_to_fs(self):
         """Create a filesystem file from a File"""
@@ -234,7 +251,7 @@ class DictBuildSourceFile(BuildSourceFile):
         if fr.contents:
             with self._fs.open(fn_path, 'wb') as f:
                 yaml.dump(fr.unpacked_contents, default_flow_style=False)
-
+            fr.source_hash = self.fs_hash
 
 class StringSourceFile(BuildSourceFile):
     """A Source Build File that is a single file. """
@@ -250,8 +267,8 @@ class StringSourceFile(BuildSourceFile):
             fr.update_contents(unicode(f.read()))
 
         fr.mime_type = 'text/plain'
-        fr.source_hash = self.fs_hash()
-        fr.modified = self.fs_modtime()
+        fr.source_hash = self.fs_hash
+        fr.modified = self.fs_modtime
 
     def record_to_fs(self):
         """Create a filesystem file from a File"""
@@ -261,8 +278,12 @@ class StringSourceFile(BuildSourceFile):
         if fr.contents:
             with self._fs.open(file_name(self._file_const), 'wb') as f:
                 f.write(fr.contents)
+            fr.source_hash = self.fs_hash
 
 class MetadataFile(DictBuildSourceFile):
+
+    def clean_objects(self):
+        pass # Not sure if these should eb cleaned or no
 
     def record_to_objects(self):
         """Create config records to match the file metadata"""
@@ -302,9 +323,10 @@ class MetadataFile(DictBuildSourceFile):
 
                 yaml.safe_dump(o, f, default_flow_style=False, indent=4, encoding='utf-8')
 
-
-
 class PythonSourceFile(StringSourceFile):
+
+    def clean_objects(self):
+        pass
 
     def import_bundle_class(self):
         """Add the filesystem to the Python sys path with an import hook, then import
@@ -326,6 +348,9 @@ class PythonSourceFile(StringSourceFile):
         return bundle.Bundle
 
 class SourcesFile(RowBuildSourceFile):
+
+    def clean_objects(self):
+        pass
 
     def record_to_objects(self):
         """Create config records to match the file metadata"""
@@ -381,9 +406,13 @@ class SourcesFile(RowBuildSourceFile):
             self._dataset._database.commit()
 
     def objects_to_record(self):
+        # The sources file is not written out.
         pass
 
 class SchemaFile(RowBuildSourceFile):
+
+    def clean_objects(self):
+        self._dataset.tables[:] = []
 
     def record_to_objects(self):
         """Create config records to match the file metadata"""
@@ -662,10 +691,13 @@ class SchemaFile(RowBuildSourceFile):
         bsfile.mime_type = 'application/msgpack'
         bsfile.update_contents(msgpack.packb(rows))
 
-
 class SourceSchemaFile(RowBuildSourceFile):
 
+    def clean_objects(self):
+        self._dataset.source_tables[:] = []
+
     def record_to_objects(self):
+        """Write from the stored file data to the source records"""
         from ambry.dbexceptions import ConfigurationError
         bsfile = self._dataset.bsfile(self._file_const)
 
@@ -702,8 +734,6 @@ class SourceSchemaFile(RowBuildSourceFile):
 
         self._dataset._database.commit()
 
-
-
 file_info_map = {
     File.BSFILE.BUILD : ('bundle.py',PythonSourceFile),
     File.BSFILE.BUILDMETA: ('meta.py',PythonSourceFile),
@@ -732,9 +762,6 @@ def file_default(const):
 
     with open(path) as f:
         return f.read()
-
-
-
 
 class BuildSourceFileAccessor(object):
 
@@ -766,25 +793,31 @@ class BuildSourceFileAccessor(object):
         for file_const, (file_name, clz) in  file_info_map.items():
             f = self.file(file_const)
 
+            sync_info = ( None, None )
+
             if defaults and force == f.SYNC_DIR.RECORD_TO_FILE and  not f.record.contents:
-                syncs.append((file_const, f.prepare_to_edit()))
+                sync_info = (file_const, f.prepare_to_edit())
             elif force == f.SYNC_DIR.OBJECT_TO_FILE:
                 try:
                     f.objects_to_record()
-                    syncs.append((file_const,f.sync(f.SYNC_DIR.RECORD_TO_FILE)))
+                    sync_info = (file_const,f.sync(f.SYNC_DIR.RECORD_TO_FILE))
                 except AttributeError:
                     pass
             elif force == f.SYNC_DIR.FILE_TO_RECORD:
-                syncs.append((file_const, f.sync(force)))
+                sync_info = (file_const, f.sync(force))
             else:
-                syncs.append((file_const, f.sync()))
+                sync_info = (file_const, f.sync())
+
+            # If the file was synced to the records, assume that the objects should be completely replaced,
+            # not merged
+            if sync_info[1] == f.SYNC_DIR.FILE_TO_RECORD:
+                f.clean_objects()
+
+            syncs.append(sync_info)
 
         return syncs
 
     def sync_dirs(self):
         return [ (file_const, self.file(file_const).sync_dir() )
                  for file_const, (file_name, clz) in  file_info_map.items() ]
-
-
-
 

@@ -28,6 +28,7 @@ class Test(TestBase):
         for i in range(6):
             data.append(['abcdefghij'[j] if i == 0 else str(j) for j in range(10)])
 
+
         for i in range(3):
             cdf = new_partition_data_file(self.fs, 'foo.csv')
 
@@ -38,6 +39,8 @@ class Test(TestBase):
                 cdf.insert_body(row)
 
             cdf.close()
+
+        print self.fs.getcontents('foo.csv')
 
         self.assertEqual(16, len(self.fs.getcontents('foo.csv').splitlines()))
 

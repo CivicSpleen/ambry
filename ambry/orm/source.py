@@ -15,6 +15,9 @@ from source_table import SourceTable
 from table import Table
 from . import Base,  DictableMixin
 
+class SourceError(Exception):
+    pass
+
 
 class DelayedOpen(object):
 
@@ -122,7 +125,7 @@ class DataSource(Base, DictableMixin):
         if self.urltype:
             return self.urltype
 
-        if self.url.startswith('gs://'):
+        if self.url and self.url.startswith('gs://'):
             return 'gs' # Google spreadsheet
 
         if self.url:
@@ -174,6 +177,9 @@ class DataSource(Base, DictableMixin):
 
         def walk_all(fs):
             return [os.path.join(e[0], x) for e in fs.walk() for x in e[1]]
+
+        if not self.url:
+            raise SourceError("Can't download; not url specified")
 
         f = download(self.url, cache_fs)
 

@@ -277,17 +277,17 @@ class Library(object):
         from ambry.etl.transform import CasterPipe
 
         if p.location == 'build':
-            source = p.datafile().open('rb')
+            source = p.datafile.open('rb')
         elif p.location == 'remote':
             b = self.bundle(p.identity.as_dataset().vid)
             remote = self.remote(b)
-            source = remote.get_stream(p.datafile().munged_path)
+            source = remote.get_stream(p.datafile.munged_path)
         elif p.location == 'warehouse':
             raise NotImplementedError()
 
         def generator():
 
-            reader = p.datafile().reader(source)
+            reader = p.datafile.reader(source)
 
             header = reader.next()
 

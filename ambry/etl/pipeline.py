@@ -563,7 +563,12 @@ class WriteToPartition(Pipe, PartitionWriter):
         :return:
         """
 
-        self._datafiles = {}
+        # The partitions are stored in both the data files and the partitions dicts, because
+        # the _datafiles may have multiple copies of the same partition, and they all have to
+        # be the same instance.
+        self._datafiles = {} # Partitions associated with table mappers
+        self._partitions = {} # Just the partitions.
+        self._headers = {}
         self.headers = None
         self.p_name_index = None
 
@@ -578,52 +583,50 @@ class WriteToPartition(Pipe, PartitionWriter):
                                 " to write to partitions ")
 
         self.p_name_index = row.index('_pname')
-        self._source_name = self.source.name
 
-        self.header_mapper, self.body_mapper = make_table_map(self.source.dest_table, self.headers)
+        self._headers[self.source.name] = row
 
         return row
 
     def process_body(self, row):
-        from stats import Stats
 
         pname = row[self.p_name_index]
+        df_key = (self.source.name, pname)
 
         try:
-            (p,  datafile, stats) = self._datafiles[pname]
+            (p,  header_mapper, body_mapper) = self._datafiles[df_key]
 
         except KeyError:
 
-            p = self.bundle.partitions.partition(pname)
-            if not p:
-                p = self.bundle.partitions.new_partition(pname)
+            try:
+                p  = self._partitions[pname]
+            except KeyError:
+                p = self.bundle.partitions.partition(pname)
+                if not p:
+                    p = self.bundle.partitions.new_partition(pname)
 
-            datafile = p.datafile()
-            stats = Stats()
-            stats.set_source_pipe(self._source_pipe)
+                self._partitions[pname] = p
 
-            self._datafiles[pname] = (p,datafile,stats)
+            header_mapper, body_mapper = make_table_map(p.table, self._headers[self.source.name])
 
-            mr = self.header_mapper(self.headers)
-            datafile.insert_header(mr)
-            stats.process_header(mr)
+            self._datafiles[df_key] = (p, header_mapper, body_mapper)
 
-        mbr = self.body_mapper(row)
-        datafile.insert_body(mbr)
-        stats.process_body(mbr)
+            p.datafile.insert_header(header_mapper(self.headers))
+
+        p.datafile.insert_body(body_mapper(row))
 
         return row
 
     def finish(self):
 
-        for pname, (p, datafile, stats) in self._datafiles.items():
-            datafile.close()
+        for key, (p, header_mapper, body_mapper) in self._datafiles.items():
+            p.datafile.close()
 
     @property
     def partitions(self):
         """Generate the partitions, so they can be manipulated after the pipeline completes"""
-        for pname, (p, datafile, stats) in self._datafiles.items():
-            yield p, stats
+        for p in self._partitions.values():
+            yield p, p.datafile.stats
 
     def __str__(self):
 

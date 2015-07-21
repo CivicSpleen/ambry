@@ -213,7 +213,6 @@ class Bundle(object):
                 schema_last=None,
                 write_dest_schema=None,
                 build_first=None,
-                dest_statistics=Stats(),
                 select_partition = SelectPartition(),
                 build_last=None,
                 write_to_table= WriteToPartition()
@@ -467,8 +466,6 @@ class Bundle(object):
         if ds.bsfile(File.BSFILE.SCHEMA).has_contents:
             self.dataset.tables[:] = []
 
-        if ds.bsfile(File.BSFILE.COLMAP).has_contents:
-            self.dataset.colmaps[:] = []
 
         #ds.config.metadata.clean()
         ds.config.build.clean()
@@ -665,31 +662,36 @@ class Bundle(object):
 
     def meta(self, source_name = None, print_pipe=False):
         from ..etl import PrintRows, augment_pipeline
+        from ..orm.source import SourceError
 
         self.load_requirements()
 
         for i, source in enumerate(self.sources):
 
-            if source_name and source.name != source_name:
-                self.logger.info("Skipping {} ( only running {} ) ".format(source.name, source_name))
-                continue
+            try:
+                if source_name and source.name != source_name:
+                    self.logger.info("Skipping {} ( only running {} ) ".format(source.name, source_name))
+                    continue
 
-            self.logger.info("Running meta for source: {} ".format(source.name))
+                self.logger.info("Running meta for source: {} ".format(source.name))
 
-            pl = self.do_pipeline(source).meta_phase
+                pl = self.do_pipeline(source).meta_phase
 
-            augment_pipeline(pl, tail_pipe=PrintRows)
+                augment_pipeline(pl, tail_pipe=PrintRows)
 
-            pl.run()
+                pl.run()
 
-            if print_pipe:
-                self.logger.info(pl)
+                if print_pipe:
+                    self.logger.info(pl)
 
-            self.meta_log_pipeline(pl)
-            self.meta_make_source_tables(pl)
-            self.meta_make_dest_tables(pl)
+                self.meta_log_pipeline(pl)
+                self.meta_make_source_tables(pl)
+                self.meta_make_dest_tables(pl)
 
-            source.dataset.commit()
+                source.dataset.commit()
+
+            except Exception as e:
+                self.error('Failed to meta process source {}: {} '.format(source_name, e))
 
     ##
     ## Build

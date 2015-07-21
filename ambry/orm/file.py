@@ -9,7 +9,7 @@ __docformat__ = 'restructuredtext en'
 
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
-from sqlalchemy import  Text, Binary, String, ForeignKey
+from sqlalchemy import  Text, Binary, String, ForeignKey, Float
 
 from ..util import Constant
 from ..identity import LocationRef
@@ -45,7 +45,7 @@ class File(Base, DictableMixin):
 
     state = SAColumn('f_state', Text)
     hash = SAColumn('f_hash', Text) # Hash of the contents
-    modified = SAColumn('f_modified', Integer)
+    modified = SAColumn('f_modified', Float)
     size = SAColumn('f_size', BigIntegerType)
     contents = SAColumn('f_contents', Binary)
 
@@ -95,6 +95,7 @@ class File(Base, DictableMixin):
         self.hash = hashlib.md5(self.contents).hexdigest()
         self.modified = time.time()
         self.size = len(self.contents)
+
 
     @property
     def has_contents(self):

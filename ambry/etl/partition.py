@@ -10,7 +10,7 @@ import unicodecsv as csv
 from ambry.etl.pipeline import Sink, Pipe
 
 
-def new_partition_data_file(fs, path):
+def new_partition_data_file(fs, path, stats = None):
 
     ext_map = {
         PartitionCsvDataFile.EXTENSION: PartitionCsvDataFile,
@@ -28,13 +28,12 @@ def new_partition_data_file(fs, path):
     if not ext:
         ext = '.csv'
 
-    return ext_map[ext](fs, path)
-
+    return ext_map[ext](fs, path, stats=stats)
 
 class PartitionDataFile(object):
     """An accessor for files that hold Partition Data"""
 
-    def __init__(self, fs, path):
+    def __init__(self, fs, path, stats = None):
         """
         Create a new acessor
         :param fs: a filesystem object
@@ -47,6 +46,7 @@ class PartitionDataFile(object):
         self._path = path
         self._nrows = 0
         self._header = None
+        self.stats = stats
 
     def insert_body(self, row):
         """
@@ -107,14 +107,14 @@ class PartitionCsvDataFile(PartitionDataFile):
 
     EXTENSION = '.csv'
 
-    def __init__(self, fs, path):
+    def __init__(self, fs, path, stats=None):
 
-        super(PartitionCsvDataFile, self).__init__(fs, path)
+        super(PartitionCsvDataFile, self).__init__(fs, path, stats)
 
         self._file = None
         self._reader = None
         self._writer = None
-        self._nrows = None
+        self._nrows = 0
 
     def openr(self):
         """Open for reading"""
@@ -188,31 +188,33 @@ class PartitionCsvDataFile(PartitionDataFile):
         assert isinstance(row, (list, tuple))
         self._header = list(row)
 
+        # WARNING! This *must* be outside of the ==0 block, because it may open the file,
+        # which will set _nrows for a non-empty file
         w = self.writer()
 
         if self._nrows == 0:
             w.writerow(row)
+            self._nrows += 1
+
+        if self.stats:
+            self.stats.process_header(row)
 
 
     def insert_body(self, row):
         """
-        Add a row to the file. The first row must be a tuple or list, containing the header, to set the order of
-        the fields, while subsequent rows can be lists or dicts.
+        Add a row to the file.
 
         :param row:
         :return:
         """
 
-        if not isinstance(row, (list, tuple)):
-            # Assume the row has a map interface, and write out the row in the order of the
-            # column names provided in the header
-
-            row = [row.get(k, None) for k in self._header]
-
+        # Assume the first item is the id, and fill it is if it empty
         if row[0] is None:
             row[0] = self._nrows
 
         self.writer().writerow(row)
+        if self.stats:
+            self.stats.process_body(row)
 
         self._nrows += 1
 
@@ -279,6 +281,8 @@ class PartitionMsgpackDataFile(PartitionDataFile):
         self._nrows = 0
         if self._file:
             self._file.close()
+
+
 
     def insert_body(self, row):
         """
