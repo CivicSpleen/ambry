@@ -24,8 +24,8 @@ class TestBase(unittest.TestCase):
 
         self.db = None
 
-    def ds_params(self, n ):
-        return dict(vid=self.dn[n], source='source', dataset='dataset')
+    def ds_params(self, n, source='source'):
+        return dict(vid=self.dn[n], source=source, dataset='dataset')
 
     def get_rc(self, name='ambry.yaml'):
         from ambry.run import get_runconfig
@@ -37,12 +37,11 @@ class TestBase(unittest.TestCase):
 
         return get_runconfig(bf_dir('ambry.yaml'))
 
-    def new_dataset(self, n=1):
-        return Dataset(**self.ds_params(n))
+    def new_dataset(self, n=1, source='source'):
+        return Dataset(**self.ds_params(n, source=source))
 
-    def new_db_dataset(self, db, n=1):
-
-        return db.new_dataset(**self.ds_params(n))
+    def new_db_dataset(self, db, n=1, source='source'):
+        return db.new_dataset(**self.ds_params(n, source=source))
 
     def copy_bundle_files(self, source, dest):
         from ambry.bundle.files import file_info_map

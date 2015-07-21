@@ -75,28 +75,25 @@ class AmbryReadyMixin(object):
         self._assert_finds_dataset(dataset, str(dataset.identity.id_))
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
-    def _test_search_dataset_by_source(self):
-        # FIXME:
+    def test_search_dataset_by_source(self):
         db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(db, n=0, source='example.com')
         assert dataset.identity.source
         self.backend.dataset_index.index_one(dataset)
-        self._assert_finds_dataset(dataset, dataset.identity.source)
+        self._assert_finds_dataset(dataset, 'source example.com from 1978 to 1975')
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
-    def _test_search_dataset_by_vname(self):
-        # FIXME:
+    def test_search_dataset_by_name(self):
         db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(db, n=0, source='example.com')
         assert str(dataset.identity.name)
         self.backend.dataset_index.index_one(dataset)
         self._assert_finds_dataset(dataset, str(dataset.identity.name))
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
-    def _test_search_dataset_by_vname(self):
-        # FIXME:
+    def test_search_dataset_by_vname(self):
         db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(db, n=0, source='example.com')
         assert str(dataset.identity.vname)
         self.backend.dataset_index.index_one(dataset)
         self._assert_finds_dataset(dataset, str(dataset.identity.vname))
@@ -145,10 +142,10 @@ class AmbryReadyMixin(object):
         self.backend.partition_index.index_one(partition)
         self._assert_finds_partition(partition, partition.identity.id_)
 
-    def _test_search_partition_by_name(self):
-        # FIXME:
+    @unittest.skipIf(SKIP_ALL, 'Debug skip.')
+    def test_search_partition_by_name(self):
         db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(db, n=0, source='example.com')
         table = dataset.new_table('table2', description='table2')
         partition = dataset.new_partition(table, time=1, name='Partition1')
         db.commit()
@@ -156,10 +153,9 @@ class AmbryReadyMixin(object):
         self._assert_finds_partition(partition, unicode(partition.identity.name))
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
-    def _test_search_partition_by_vname(self):
-        # FIXME:
+    def test_search_partition_by_vname(self):
         db = self.new_database()
-        dataset = self.new_db_dataset(db, n=0)
+        dataset = self.new_db_dataset(db, n=0, source='example.com')
         PartitionFactory._meta.sqlalchemy_session = db.session
         partition = PartitionFactory(dataset=dataset)
         self.backend.partition_index.index_one(partition)

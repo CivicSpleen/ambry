@@ -190,13 +190,14 @@ class DatasetWhooshIndex(BaseDatasetIndex):
                 cterms = keywords_terms
 
         if source:
-            # FIXME: test that.
-            source_terms = 'keywords:{} AND '.format(source, cterms)
+            source_terms = 'keywords:{}'.format(source)
             if cterms:
                 cterms = self.backend._and_join(cterms, source_terms)
             else:
                 cterms = source_terms
 
+        logger.debug('Dataset terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
+        assert cterms is not None, u'Failed to create dataset query from {} terms.'.format(terms)
         return cterms
 
     def _get_generic_schema(self):
@@ -503,6 +504,10 @@ class PartitionWhooshIndex(BasePartitionIndex):
                 cterms = '{} AND {}'.format(cterms, self.backend._kwd_term('keywords', keywords))
             else:
                 cterms = self.backend._kwd_term('keywords', keywords)
+
+        logger.debug('Partition terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
+
+        assert cterms is not None, u'Failed to create partition query from {} terms.'.format(terms)
 
         return cterms
 
