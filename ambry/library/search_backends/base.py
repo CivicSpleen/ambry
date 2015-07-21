@@ -268,7 +268,7 @@ class BasePartitionIndex(BaseIndex):
 
         schema = ' '.join(
             '{} {} {} {} {}'.format(
-                c.id_,
+                c.id,
                 c.vid,
                 c.name,
                 c.altname,
@@ -295,7 +295,7 @@ class BasePartitionIndex(BaseIndex):
         )
 
         doc_field = unicode(
-            values + ' ' + schema + ' '
+            values + ' ' + schema + ' ' +
             u' '.join([
                 unicode(partition.identity.vid),
                 unicode(partition.identity.id_),

@@ -254,7 +254,7 @@ class IdentifierWhooshIndex(BaseIdentifierIndex):
         self._parsed_query = search_phrase
         schema = self._get_generic_schema()
         parser = QueryParser('name', schema=schema)
-        query = parser.parse(search_phrase)  # query_string)
+        query = parser.parse(search_phrase)
 
         class PosSizeWeighting(scoring.WeightingModel):
 

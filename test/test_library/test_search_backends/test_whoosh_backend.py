@@ -30,6 +30,7 @@ class DatasetWhooshIndexTest(TestBase):
 
         # we need clear index for each test
         WhooshSearchBackend(self.library).dataset_index.reset()
+        WhooshSearchBackend(self.library).partition_index.reset()
         self.backend = WhooshSearchBackend(self.library)
 
     def tearDown(self):
@@ -72,7 +73,7 @@ class DatasetWhooshIndexTest(TestBase):
         self.backend.partition_index.index_one(partition1)
 
         # search just added document.
-        found = self.backend.dataset_index.search('Test dataset')
+        found = self.backend.dataset_index.search('dataset')
         found_dataset = found[0]
         assert found_dataset.vid == dataset.vid
         self.assertEquals(len(found_dataset.partitions), 1)
