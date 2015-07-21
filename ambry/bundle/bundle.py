@@ -946,8 +946,6 @@ class Bundle(object):
 
         self.metadata.write_to_dir()
 
-<<<<<<< HEAD
-
     ##
     ## Finalize
     ##
@@ -961,8 +959,6 @@ class Bundle(object):
         """Call's finalize(); for similarity with other process commands. """
         return self.finalize()
 
-=======
->>>>>>> 814cad04b720588ee55232b718d6aa69ff5786be
     def finalize(self):
         self.state = self.STATES.FINALIZED
         self.commit()
