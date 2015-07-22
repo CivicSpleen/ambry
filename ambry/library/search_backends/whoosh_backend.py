@@ -282,7 +282,7 @@ class PartitionWhooshIndex(BasePartitionIndex):
             search_phrase (str or unicode):
             limit (int, optional): how many results to generate. None means without limit.
 
-        Generates:
+        Yields:
             PartitionSearchResult instances.
 
         """

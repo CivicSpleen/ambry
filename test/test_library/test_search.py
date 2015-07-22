@@ -12,7 +12,6 @@ from ambry.library import new_library
 from test.test_orm.factories import PartitionFactory
 
 
-@unittest.skip('Not ready')
 class SearchTest(TestBase):
     def setUp(self):
         super(self.__class__, self).setUp()
