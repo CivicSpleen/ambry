@@ -532,9 +532,9 @@ class Test(TestBase):
 
         from ambry.etl.intuit import TypeIntuiter
         from ambry.orm.column import Column
-        import datetime
+        import datetime, time
 
-        b = self.setup_bundle('process')
+        b = self.setup_bundle('process', source_url='temp://') # So modtimes work properly
 
         b.sync()
         b = b.cast_to_build_subclass()
@@ -567,7 +567,8 @@ class Test(TestBase):
         from ambry.orm.file import File
         b.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
 
-        self.assertEqual(6, sum( e[1] == 'rtf' for e in b.do_sync() ))
+        time.sleep(2) # Give modtimes a chance to change
+        self.assertEqual(4, sum( e[1] == 'rtf' for e in b.do_sync() ))
 
     def test_pipe_config(self):
 

@@ -14,10 +14,9 @@ class Test(TestBase):
         self.assertIn('bundle.py', dir_list)
         self.assertIn('sources.csv', dir_list)
         self.assertIn('bundle.yaml', dir_list)
-        self.assertIn('schema.csv', dir_list)
         self.assertIn('documentation.md', dir_list)
 
-    def test_simple_prepare(self):
+    def test_simple_process(self):
         """Build the simple bundle"""
         from ambry.orm.file import File
         import time
@@ -30,10 +29,11 @@ class Test(TestBase):
         self.assertEquals(7, len(b.dataset.files))
         file_names = [f.path for f in b.dataset.files]
 
-        self.assertEqual([u'bundle.py', u'documentation.md', u'sourceschema', u'sources.csv', u'bundle.yaml',
-                          u'build_meta', u'schema.csv'], file_names)
+        print file_names
+        self.assertEqual([u'bundle.py', u'documentation.md', u'source_schema.csv', u'sources.csv', u'bundle.yaml',
+                          u'meta.py', u'schema.csv'], file_names)
 
-        self.assertEqual(13, len(b.dataset.configs))
+        self.assertEqual(12, len(b.dataset.configs))
 
         self.assertFalse(b.is_prepared)
         self.assertFalse(b.is_built)
@@ -102,9 +102,12 @@ class Test(TestBase):
         #
         # Basic process with FILE preference
 
-        #set_preference(File.PREFERENCE.FILE)
-
+        set_preference(File.PREFERENCE.FILE)
         v1 = 'value1'
+        v2 = 'value2'
+        v3 = 'value3'
+        v4 = 'value4'
+
         time.sleep(2)
         muck_source_file(v1)
 
@@ -124,7 +127,6 @@ class Test(TestBase):
         self.assertEquals(v1,file_record())
         self.assertEquals(v1,schema_object())
 
-        v2 = 'value2'
         muck_source_schema_object(v2)
         self.assertEquals(v1,source_file())
         self.assertEquals(v1,file_record())
@@ -135,6 +137,19 @@ class Test(TestBase):
         self.assertEquals(v1,source_file())
         self.assertEquals(v1,file_record())
         self.assertEquals(v1,schema_object())
+
+        # Run meta, alter the source file, then run meta again
+        # The file should retain the change.
+        muck_source_file(v4)
+        sync_source_to_record()
+        muck_source_schema_object(v4)
+
+        b.do_sync()
+        time.sleep(1) # Allow modification time to change
+        muck_source_file(v1)
+        b.do_sync()
+        self.assertEquals(v1, source_file())
+        self.assertEquals(v1, file_record())
 
         ##################
         # Alter the preference to the OBJECT, should
@@ -179,8 +194,7 @@ class Test(TestBase):
         self.assertEquals(v2, schema_object(pos=5))
 
         # Actually test the merging
-        v3 = 'value3'
-        v4 = 'value4'
+
         set_preference(File.PREFERENCE.MERGE)
         muck_source_file(v3)
         sync_source_to_record()
@@ -215,11 +229,77 @@ class Test(TestBase):
         self.assertEquals(v4, file_record(pos=5))
         self.assertEquals(v4, schema_object(pos=5))
 
+    def test_schema_update(self):
+        """Check that changes to the source schema persist across re-running meta"""
+        from ambry.orm.file import File
+        import time
+
+        # The modification times for mem: files don't seem to change, so we use temp: instead
+        b = self.setup_bundle('simple', source_url='temp://')
+
+        b.do_sync()  # This will sync the files back to the bundle's source dir
+
+        def muck_schema_file(source_header, dest_header ):
+            """Alter the source_schema file"""
+            import csv
+
+            with b.source_fs.open('source_schema.csv', 'rb') as f:
+                rows = list(csv.reader(f))
+
+            for row in rows:
+                if row[2] == source_header:
+                    row[3] = dest_header
+
+            with b.source_fs.open('source_schema.csv', 'wb') as f:
+                csv.writer(f).writerows(rows)
+
+        def check_schema_file(source_header):
+            import csv
+
+            with b.source_fs.open('source_schema.csv', 'rb') as f:
+                rows = list(csv.reader(f))
+
+            for row in rows:
+                if row[2] == source_header:
+                    return row[3]
+
+        def check_schema_record(source_header):
+            import csv
+
+            rows = b.build_source_files.file(File.BSFILE.SOURCESCHEMA).record.unpacked_contents
+
+
+            for row in rows:
+                if row[2] == source_header:
+                    return row[3]
+
+        def check_schema_object(source_header):
+
+            for col in b.dataset.source_columns:
+                if col.source_header == source_header:
+                    return col.dest_header
+
+        b.do_meta()
+
+        time.sleep(1)
+        muck_schema_file('uuid','value1')
+
+        self.assertEquals('value1',check_schema_file('uuid'))
+
+        b.do_sync()
+
+        self.assertEquals('value1',check_schema_record('uuid'))
+
+        b.do_meta()
+
+        self.assertEquals('value1', check_schema_file('uuid'))
+
+
     def test_simple_build(self):
         """Build the simple bundle"""
 
         b = self.setup_bundle('simple')
-        b.source_fs.remove('schema.csv')
+
         self.assertTrue(b.sync())
 
         b = b.cast_to_build_subclass()
@@ -368,13 +448,14 @@ class Test(TestBase):
             from shutil import rmtree
             rmtree(td)
 
-
+    # FIXME This test passes when run individually, but fails when run with the other
+    # tests in the class, at least when run in PyCharm.
     def test_install(self):
         """Test copying a bundle to a remote, then streaming it back"""
         import os
 
         b = self.setup_bundle('simple')
-        b.source_fs.remove('schema.csv')
+
         b = b.run()
 
         l = b._library
@@ -394,85 +475,3 @@ class Test(TestBase):
         self.assertEqual(10000, len(list(l.stream_partition(p, skip_header=True))))
 
         self.assertEqual(10001, len(list(l.stream_partition(p, skip_header=False))))
-
-    def test_simple_sync(self):
-        """Build the simple bundle"""
-        import time
-        from ambry.orm.file import File
-
-        # The modification times for mem: files don't seem to change, so we use temp: instead
-        b = self.setup_bundle('simple', source_url = 'temp://')
-        self.assertTrue(b.do_sync() ) # This will sync the files back to the bundle's source dir
-
-        header = (
-            '"name","title","table","segment","time","space","grain","start_line","end_line",'+
-            '"comment_lines","header_lines","description","url"'
-        )
-
-        lines = [
-            '"2009-gs",,"geofile_schema",2009,2009,,,,,,,,"gs://1lKkKVBu0sHSwyuyuGRPMfmNqG8FIjVw2RYMLYgr2GX4"',
-            '"2010-gs",,"geofile_schema",2010,2010,,,,,,,,"gs://1lKkKVBu0sHSwyuyuGRPMfmNqG8FIjVw2RYMLYgr2GX4"'
-        ]
-
-        time.sleep(2.0) # Make sure the mod time differes
-        b.source_fs.setcontents('sources.csv',header+'\n'+lines[0])
-
-        self.assertIn(('sources', 'ftr'),  b.do_sync())
-
-        self.assertEqual(0, len(b.dataset.sources)) # Synced to record, but not to objects
-
-        self.assertTrue(b.do_prepare())
-
-        self.assertEqual(1, len(b.dataset.sources)) # Prepare syncs to objects
-
-        time.sleep(2.0)  # Make sure the mod time differes
-        b.source_fs.setcontents('sources.csv', '\n'.join([header]+lines))
-
-        b.do_prepare()
-
-        self.assertEqual(1, len(b.dataset.sources)) # 2 line file hasn't been synced yet; prepare does nothgin
-
-        self.assertIn(('sources', 'ftr'), b.do_sync())
-
-        self.assertEqual(1, len(b.dataset.sources)) # Synced, but 2nd object only after prepare
-
-        b.do_prepare()
-
-        self.assertEqual(2, len(b.dataset.sources)) # Prepare created second object
-
-        self.assertNotIn(('sources', 'ftr'), b.do_sync()) # No changes, should not sync
-
-        b.dataset.sources = [b.dataset.sources[0]]
-
-        self.assertEqual(1, len(b.dataset.sources))
-
-        ##
-        ## Source schema
-
-        # No source schema yet
-        self.assertIsNone(b.build_source_files.file(File.BSFILE.SOURCESCHEMA).record.unpacked_contents)
-
-        b.do_meta()
-
-        # It is created in meta
-        self.assertEqual(13,len(b.build_source_files.file(File.BSFILE.SOURCESCHEMA).record.unpacked_contents))
-
-        # Check that there are no sync opportunities
-        self.assertFalse(any(e[1] for e in b.build_source_files.sync_dirs()))
-
-        bsf = b.build_source_files.file(File.BSFILE.SOURCESCHEMA)
-
-        # Everything synced now
-        self.assertEquals(bsf.fs_hash, bsf.record.source_hash )
-
-        # Modify the file
-        time.sleep(2)
-        b.source_fs.setcontents('source_schema.csv',
-                                b.source_fs.getcontents('source_schema.csv')
-                                .replace('geolevels,geolevels', 'geolevels,gl'))
-
-        # Should be different
-        self.assertNotEquals(bsf.fs_hash, bsf.record.source_hash)
-
-        # Which causes a sync
-        self.assertIn(('sourceschema', 'ftr'), b.do_sync())  # No changes, should not sync

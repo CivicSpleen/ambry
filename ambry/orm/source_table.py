@@ -116,9 +116,13 @@ class SourceColumn(Base):
 
         for k, v in kwargs.items():
             if hasattr(self, k):
+
+                if k == 'dest_header':
+                    # Don't reset the dest header on updates.
+                    if self.dest_header and self.dest_header != self.source_header:
+                        continue
+
                 setattr(self, k, v)
-
-
 
 
 class SourceTable(Base):

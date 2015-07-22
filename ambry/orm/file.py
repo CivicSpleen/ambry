@@ -33,6 +33,16 @@ class File(Base, DictableMixin):
     BSFILE.PARTITIONS = 'partitions'
     BSFILE.DOC = 'documentation'
 
+    path_map = {
+        BSFILE.BUILD: 'bundle.py',
+        BSFILE.BUILDMETA: 'meta.py',
+        BSFILE.DOC: 'documentation.md',
+        BSFILE.META: 'bundle.yaml',
+        BSFILE.SCHEMA: 'schema.csv',
+        BSFILE.SOURCESCHEMA: 'source_schema.csv',
+        BSFILE.SOURCES: 'sources.csv',
+    }
+
     # The preferences are primarily implemented in the prepare phase. WIth FILE preference, the
     # objects are always cleared before loading file values. With O, file values are never loaded, but objects
     # are written to files. With MERGE, Files are loaded to objects at the start of prepare, and  objects are
@@ -52,7 +62,7 @@ class File(Base, DictableMixin):
 
     source = SAColumn('f_source', Text, nullable=False)
 
-    preference = SAColumn('f_preference', String(1), default=PREFERENCE.FILE) # 'F' for filesystem, 'O' for objects, "M" for merge
+    preference = SAColumn('f_preference', String(1), default=PREFERENCE.MERGE) # 'F' for filesystem, 'O' for objects, "M" for merge
 
     state = SAColumn('f_state', Text)
     hash = SAColumn('f_hash', Text) # Hash of the contents
@@ -107,7 +117,6 @@ class File(Base, DictableMixin):
         self.modified = time.time()
         self.size = len(self.contents)
 
-
     @property
     def has_contents(self):
         return self.size > 0
@@ -117,3 +126,12 @@ class File(Base, DictableMixin):
 
     def __repr__(self):
         return "<file: {}; {}/{}>".format(self.path, self.major_type, self.minor_type)
+
+    @staticmethod
+    def validate_path(target, value, oldvalue, initiator):
+        "Strip non-numeric characters from a phone number"
+        pass
+
+from sqlalchemy import event
+
+event.listen(File.path, 'set', File.validate_path)

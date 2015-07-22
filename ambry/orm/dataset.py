@@ -237,21 +237,23 @@ class Dataset(Base):
 
         return None
 
-    def bsfile(self, name):
+    def bsfile(self, file_const):
         """Return a Build Source file ref, creating a new one if the one requested does not exist"""
         from sqlalchemy.orm.exc import NoResultFound
+
+        assert file_const in File.path_map.keys()
 
         try:
 
             fr = (object_session(self).query(File)
                 .filter(File.d_vid == self.vid)
                 .filter(File.major_type == File.MAJOR_TYPE.BUILDSOURCE)
-                .filter(File.minor_type == name).one())
+                .filter(File.minor_type == file_const).one())
         except NoResultFound:
             fr = File(d_vid = self.vid,
                       major_type = File.MAJOR_TYPE.BUILDSOURCE,
-                      minor_type = name,
-                      path = name,
+                      minor_type = file_const,
+                      path = File.path_map[file_const],
                       source = 'fs')
             object_session(self).add(fr)
 

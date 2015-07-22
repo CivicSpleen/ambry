@@ -557,6 +557,8 @@ class Bundle(object):
             self.warn("Can't prepare; bundle is finalized")
             return False
 
+        self.do_sync()
+
         self.build_source_files.record_to_objects()
 
         return True
@@ -599,13 +601,18 @@ class Bundle(object):
         self.do_sync()
 
         self.build_source_files.record_to_objects()
-        #self.build_source_files.objects_to_record()
+
+        #if not self.is_prepared:
+        #    self.build_source_files.record_to_objects()
+        #    self.build_source_files.objects_to_record()
 
         self.load_requirements()
 
         self.log("---- Meta ---- ")
 
         self.meta(source_name=source_name, print_pipe=print_pipe)
+
+        self.build_source_files.objects_to_record()
 
         self.build_source_files.file(File.BSFILE.SOURCES).objects_to_record()
         self.build_source_files.file(File.BSFILE.SOURCESCHEMA).objects_to_record()

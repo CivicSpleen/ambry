@@ -112,8 +112,16 @@ class BuildSourceFile(object):
         :return:
         """
 
+        # NOTE: These are ordered so the FILE_TO_RECORD has preference over RECORD_TO_FILE
+        # if there is a conflict.
+
         if self.exists() and bool(self.size()) and not self.record.size:
             # The fs exists, but the record is empty
+
+            return self.SYNC_DIR.FILE_TO_RECORD
+
+        if self.fs_modtime > self.record.modified and self.record.source_hash != self.fs_hash:
+            # Filesystem is newer
 
             return self.SYNC_DIR.FILE_TO_RECORD
 
@@ -127,10 +135,6 @@ class BuildSourceFile(object):
 
             return self.SYNC_DIR.RECORD_TO_FILE
 
-        if self.fs_modtime > self.record.modified and self.record.source_hash != self.fs_hash:
-            # Filesystem is newer
-
-            return self.SYNC_DIR.FILE_TO_RECORD
 
         return None
 
@@ -772,13 +776,13 @@ class SourceSchemaFile(RowBuildSourceFile):
         self._dataset._database.commit()
 
 file_info_map = {
-    File.BSFILE.BUILD : ('bundle.py',PythonSourceFile),
-    File.BSFILE.BUILDMETA: ('meta.py',PythonSourceFile),
-    File.BSFILE.DOC: ('documentation.md',StringSourceFile),
-    File.BSFILE.META: ('bundle.yaml',MetadataFile),
-    File.BSFILE.SCHEMA: ('schema.csv',SchemaFile),
-    File.BSFILE.SOURCESCHEMA: ('source_schema.csv', SourceSchemaFile),
-    File.BSFILE.SOURCES: ('sources.csv',SourcesFile)
+    File.BSFILE.BUILD : (File.path_map[File.BSFILE.BUILD],PythonSourceFile),
+    File.BSFILE.BUILDMETA: (File.path_map[File.BSFILE.BUILDMETA],PythonSourceFile),
+    File.BSFILE.DOC: (File.path_map[File.BSFILE.DOC],StringSourceFile),
+    File.BSFILE.META: (File.path_map[File.BSFILE.META],MetadataFile),
+    File.BSFILE.SCHEMA: (File.path_map[File.BSFILE.SCHEMA],SchemaFile),
+    File.BSFILE.SOURCESCHEMA: (File.path_map[File.BSFILE.SOURCESCHEMA], SourceSchemaFile),
+    File.BSFILE.SOURCES: (File.path_map[File.BSFILE.SOURCES],SourcesFile)
 }
 
 def file_name(const):
@@ -844,6 +848,7 @@ class BuildSourceFileAccessor(object):
             f = self.file(file_const)
 
             if f.record.preference in (File.PREFERENCE.MERGE, File.PREFERENCE.OBJECT):
+
                 f.objects_to_record()
 
     def sync(self, force = None, defaults = False):
