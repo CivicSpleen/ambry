@@ -24,7 +24,6 @@ class DatasetSearchResult(object):
         self.vid = None
         self.b_score = 0
         self.p_score = 0
-        self.bundle_found = False  # FIXME: Find usage. If there is now such, remove.
         self.partitions = set()
 
     @property
