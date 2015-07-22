@@ -432,7 +432,7 @@ class BasePartitionIndex(BaseIndex):
 
         if keywords:
             if cterms:
-                cterms = '{} AND {}'.format(cterms, self.backend._kwd_term('keywords', keywords))
+                cterms = self.backend._and_join([cterms, self.backend._kwd_term('keywords', keywords)])
             else:
                 cterms = self.backend._kwd_term('keywords', keywords)
 

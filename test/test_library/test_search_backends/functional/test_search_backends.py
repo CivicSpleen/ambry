@@ -318,10 +318,3 @@ class SQLiteBackendTest(TestBase, AmbryReadyMixin):
         rc = self.get_rc()
         self.library = new_library(rc)
         self.backend = SQLiteSearchBackend(self.library)
-
-    # test some complex examples.
-    @unittest.skip('Not ready')
-    def test_range_and_in(self):
-        """ search by `table2 from 1978 to 1979 in california` """
-        # FIXME:
-        pass

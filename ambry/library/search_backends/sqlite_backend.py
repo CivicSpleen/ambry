@@ -6,7 +6,7 @@ import struct
 
 from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIndex,\
     BaseIdentifierIndex, BaseSearchBackend, IdentifierSearchResult,\
-    DatasetSearchResult, PartitionSearchResult
+    DatasetSearchResult, PartitionSearchResult, SearchTermParser
 
 from ambry.util import get_logger
 
@@ -27,6 +27,12 @@ class SQLiteSearchBackend(BaseSearchBackend):
     def _get_identifier_index(self):
         """ Returns identifier index. """
         return IdentifierSQLiteIndex(backend=self)
+
+    def _and_join(self, terms):
+        if len(terms) > 1:
+            return ' '.join([self._or_join(t) for t in terms])
+        else:
+            return self._or_join(terms[0])
 
 
 class DatasetSQLiteIndex(BaseDatasetIndex):
@@ -274,7 +280,6 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         # Now to make proper query we need to replace all hypens in the search phrase.
         # See http://stackoverflow.com/questions/3865733/how-do-i-escape-the-character-in-sqlite-fts3-queries
         search_phrase = search_phrase.replace('-', '_')
-        from ambry.library.search_backends.base import SearchTermParser
         terms = SearchTermParser().parse(search_phrase)
         from_year = terms.pop('from', None)
         to_year = terms.pop('to', None)
@@ -292,7 +297,7 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         # So, filter years range here.
         if match_query:
             query = text("""
-                SELECT vid, dataset_vid, rank(matchinfo(partition_index)), from_year, to_year AS score
+                SELECT vid, dataset_vid, rank(matchinfo(partition_index)) AS score, from_year, to_year
                 FROM partition_index
                 WHERE partition_index MATCH :match_query
                 ORDER BY score DESC;
