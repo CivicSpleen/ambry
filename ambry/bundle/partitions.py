@@ -287,6 +287,8 @@ class PartitionProxy(Proxy):
         """Returns self, to deal with old bundles that has a direct reference to their database. """
         return self
 
+
+
     @property
     def datafile(self):
         if self._datafile is None:

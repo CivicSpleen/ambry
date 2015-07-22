@@ -19,15 +19,17 @@ class Test(TestBase):
 
     def test_simple_prepare(self):
         """Build the simple bundle"""
+        from ambry.orm.file import File
+        import time
 
-        b = self.setup_bundle('simple')
+        # The modification times for mem: files don't seem to change, so we use temp: instead
+        b = self.setup_bundle('simple', source_url='temp://')
 
-        b.sync()  # This will sync the files back to the bundle's source dir
+        b.do_sync()  # This will sync the files back to the bundle's source dir
 
         self.assertEquals(7, len(b.dataset.files))
         file_names = [f.path for f in b.dataset.files]
 
-        print file_names
         self.assertEqual([u'bundle.py', u'documentation.md', u'sourceschema', u'sources.csv', u'bundle.yaml',
                           u'build_meta', u'schema.csv'], file_names)
 
@@ -36,25 +38,180 @@ class Test(TestBase):
         self.assertFalse(b.is_prepared)
         self.assertFalse(b.is_built)
 
+        #
+        # Test preferences
+        #
+
+        def muck_source_file(g, pos = 6):
+            """Alter the source_schema file"""
+            import csv
+            with b.source_fs.open('sources.csv', 'rb') as f:
+                rows = list(csv.reader(f))
+
+            rows[1][pos] = g
+
+            with b.source_fs.open('sources.csv', 'wb') as f:
+                csv.writer(f).writerows(rows)
+
+        def source_file(pos=6):
+            import csv
+
+            with b.source_fs.open('sources.csv', 'rb') as f:
+                rows = list(csv.reader(f))
+
+            self.assertEquals(2, len(rows))
+
+            return rows[1][pos]
+
+        def file_record(pos=6):
+            f = b.build_source_files.file(File.BSFILE.SOURCES).record
+
+            rows = f.unpacked_contents
+
+            self.assertEquals(2, len(rows))
+
+            return rows[1][pos]
+
+        def muck_source_schema_object(g, pos=6):
+            """Alter the source_schema file"""
+            if pos == 6:
+                b.dataset.sources[0].grain = g
+            elif pos == 5:
+                b.dataset.sources[0].space = g
+            else:
+                raise Exception("Unknown pos")
+
+        def schema_object(pos=6):
+            try:
+                if pos == 6:
+                    return b.dataset.sources[0].grain
+                elif pos == 5:
+                    return b.dataset.sources[0].space
+                else:
+                    raise Exception("Unknown pos")
+
+            except IndexError:
+                return None
+
+        def set_preference(p):
+            b.build_source_files.file(File.BSFILE.SOURCES).record.preference = p
+
+        def sync_source_to_record():
+            b.build_source_files.file(File.BSFILE.SOURCES).fs_to_record()
+
+        #
+        # Basic process with FILE preference
+
+        #set_preference(File.PREFERENCE.FILE)
+
+        v1 = 'value1'
+        time.sleep(2)
+        muck_source_file(v1)
+
+        self.assertEquals(v1, source_file())
+        self.assertNotEquals(v1, file_record())
+        self.assertNotEquals(v1, schema_object())
+
+        self.assertIn(('sources', 'ftr'), b.do_sync())
+
+        self.assertEquals(v1,source_file())
+        self.assertEquals(v1,file_record())
+        self.assertNotEquals(v1,schema_object())
+
         b.do_prepare()
 
-        self.assertTrue(b.is_prepared)
-        self.assertFalse(b.is_built)
+        self.assertEquals(v1,source_file())
+        self.assertEquals(v1,file_record())
+        self.assertEquals(v1,schema_object())
 
-        self.assertTrue(len(b.dataset.configs) > 10)
+        v2 = 'value2'
+        muck_source_schema_object(v2)
+        self.assertEquals(v1,source_file())
+        self.assertEquals(v1,file_record())
+        self.assertEquals(v2,schema_object())
 
-        self.assertEquals('Simple Example Bundle', b.metadata.about.title)
-        self.assertEquals('Example Com', b.metadata.contacts.creator.org)
+        # Should overwrite the object with the file.
+        b.do_prepare()
+        self.assertEquals(v1,source_file())
+        self.assertEquals(v1,file_record())
+        self.assertEquals(v1,schema_object())
 
-        # FIXME. This should work, but doesn't currenly, 20150704
-        # self.assertEquals([u'example', u'demo'], b.metadata.about.tags )
+        ##################
+        # Alter the preference to the OBJECT, should
+        # cause the object to overwrite the record
+        set_preference(File.PREFERENCE.OBJECT)
+        muck_source_file(v1)
+        sync_source_to_record()
+        muck_source_schema_object(v1)
 
-        self.assertTrue(len(b.dataset.tables) == 1)
-        self.assertEqual('example', b.dataset.tables[0].name)
+        # Check that a reset works
+        self.assertEquals(v1, source_file())
+        self.assertEquals(v1, file_record())
+        self.assertEquals(v1, schema_object())
 
-        self.assertEqual([u'id', u'uuid', u'int', u'float', u'categorical', u'ordinal',
-                          u'gaussian', u'triangle', u'exponential', u'bg_gvid', u'year', u'date'],
-                         [c.name for c in b.dataset.tables[0].columns])
+        muck_source_schema_object(v2)
+        self.assertEquals(v1,source_file())
+        self.assertEquals(v1,file_record())
+        self.assertEquals(v2,schema_object())
+
+        # Prepare should move the object to the file record, not the
+        # file record to the object
+        b.do_prepare()
+        self.assertEquals(v1,source_file())
+        self.assertEquals(v2,file_record())
+        self.assertEquals(v2,schema_object())
+
+        ##################
+        # Alter the preference to MERGE
+        set_preference(File.PREFERENCE.OBJECT)
+        muck_source_file(v1)
+        muck_source_file(v2,pos=5)
+        sync_source_to_record()
+        muck_source_schema_object(v1)
+        muck_source_schema_object(v2, pos=5)
+
+        # Check that a reset works
+        self.assertEquals(v1, source_file())
+        self.assertEquals(v1, file_record())
+        self.assertEquals(v1, schema_object())
+        self.assertEquals(v2, source_file(pos=5))
+        self.assertEquals(v2, file_record(pos=5))
+        self.assertEquals(v2, schema_object(pos=5))
+
+        # Actually test the merging
+        v3 = 'value3'
+        v4 = 'value4'
+        set_preference(File.PREFERENCE.MERGE)
+        muck_source_file(v3)
+        sync_source_to_record()
+
+        self.assertEquals(v3, source_file())
+        self.assertEquals(v3, file_record())
+        self.assertEquals(v1, schema_object())
+
+        self.assertEquals(v2, source_file(pos=5))
+        self.assertEquals(v2, file_record(pos=5))
+
+        # Ths last change happens during the prepare.
+        def prepare(self):
+
+            muck_source_schema_object(v4, pos=5)
+            return True
+
+        b.__class__.prepare = prepare
+
+        # This should push the record to the objects, carrying v3 into the object in pos=6. Then, the
+        # end of the prepare phase should carry v4 in pos=5 back into the record. So, both the record
+        # and the object should have v3 in pos=6 and and v4 in pos=5
+
+        self.assertTrue(b.do_prepare())
+
+        self.assertEquals(v3, source_file())
+        self.assertEquals(v3, file_record())
+        self.assertEquals(v3, schema_object()) # pre_prepare carried v3 to object
+        self.assertEquals(v2, source_file(pos=5)) # source file won't change until sync
+        self.assertEquals(v4, file_record(pos=5))
+        self.assertEquals(v4, schema_object(pos=5))
 
     def test_simple_build(self):
         """Build the simple bundle"""
@@ -162,7 +319,7 @@ class Test(TestBase):
 
         self.assertEquals(6001, len(c.splitlines()))
 
-        self.assertEquals(44, len(b.dataset.stats))
+        self.assertEquals(48, len(b.dataset.stats))
 
         self.assertEquals('built', b.state)
 
@@ -266,7 +423,7 @@ class Test(TestBase):
 
         self.assertEqual(1, len(b.dataset.sources)) # Prepare syncs to objects
 
-        #time.sleep(2.0)  # Make sure the mod time differes
+        time.sleep(2.0)  # Make sure the mod time differes
         b.source_fs.setcontents('sources.csv', '\n'.join([header]+lines))
 
         b.do_prepare()

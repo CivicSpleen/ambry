@@ -255,8 +255,8 @@ class Library(object):
             path = remote.put(db.path, b.identity.cache_key + ".db")
 
             for p in b.partitions:
-                with remote.put_stream(p.datafile().munged_path) as f:
-                    copy_file_or_flo(p.datafile().open('rb'), f)
+                with remote.put_stream(p.datafile.munged_path) as f:
+                    copy_file_or_flo(p.datafile.open('rb'), f)
 
             b.dataset.commit()
 
@@ -285,6 +285,7 @@ class Library(object):
         elif p.location == 'warehouse':
             raise NotImplementedError()
 
+
         def generator():
 
             reader = p.datafile.reader(source)
@@ -301,6 +302,8 @@ class Library(object):
                 yield row
 
             source.close()
+            p.datafile.close()
+
 
         if raw:
             itr = iter(generator())

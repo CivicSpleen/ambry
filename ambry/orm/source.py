@@ -144,7 +144,18 @@ class DataSource(Base, DictableMixin):
         """
         from collections import OrderedDict
         return OrderedDict( (p.key,getattr(self, p.key)) for p in self.__mapper__.attrs
-                            if p.key not in ('_source_table', 'dest_table', 'd_vid', 't_vid','st_id', 'dataset', 'hash' ) )
+                            if p.key not in ('_source_table', '_dest_table', 'd_vid', 't_vid','st_id', 'dataset', 'hash' ) )
+
+    @property
+    def row(self):
+        from collections import OrderedDict
+
+        # Use an Ordered Dict to make it friendly to creating CSV files.
+
+        d = OrderedDict([(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
+                          if p.key not in ('_source_table', '_dest_table', 'd_vid', 't_vid','st_id', 'dataset', 'hash' )])
+
+        return d
 
     def update(self, **kwargs):
 

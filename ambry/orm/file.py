@@ -33,6 +33,15 @@ class File(Base, DictableMixin):
     BSFILE.PARTITIONS = 'partitions'
     BSFILE.DOC = 'documentation'
 
+    # The preferences are primarily implemented in the prepare phase. WIth FILE preference, the
+    # objects are always cleared before loading file values. With O, file values are never loaded, but objects
+    # are written to files. With MERGE, Files are loaded to objects at the start of prepare, and  objects are
+    # written back at the end, with no clearing.
+    PREFERENCE = Constant
+    PREFERENCE.FILE = 'F'
+    PREFERENCE.OBJECT = 'O'
+    PREFERENCE.MERGE = 'M'
+
     id = SAColumn('id', Integer, primary_key=True)
     d_vid = SAColumn('f_d_vid', String(16), ForeignKey('datasets.d_vid'), nullable=False, index=True)
     path = SAColumn('f_path', Text, nullable=False)
@@ -42,6 +51,8 @@ class File(Base, DictableMixin):
     mime_type = SAColumn('f_mime_type', Text)
 
     source = SAColumn('f_source', Text, nullable=False)
+
+    preference = SAColumn('f_preference', String(1), default=PREFERENCE.FILE) # 'F' for filesystem, 'O' for objects, "M" for merge
 
     state = SAColumn('f_state', Text)
     hash = SAColumn('f_hash', Text) # Hash of the contents

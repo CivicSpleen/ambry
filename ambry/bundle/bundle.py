@@ -226,7 +226,7 @@ class Bundle(object):
 
     def modify_pipe_from_metadata(self, pl):
         """Modify the pipeline based on entries in the pipeline section of the metadata"""
-        from ambry.etl import *
+        import ambry.etl
 
         for group_name, e in self.metadata.pipeline.items():
 
@@ -546,34 +546,18 @@ class Bundle(object):
 
     def prepare(self):
         from ambry.orm.exc import NotFoundError
-        from ambry.orm import File
-
-        try:
-            # Implement later ...
-            #self.sources.check_dependencies()
-            pass
-        except NotFoundError as e:
-            self.error(e.message)
-            return False
-
-        self.build_source_files.file(File.BSFILE.META).record_to_objects()
-        # SOURCES must come before SOURCESCHEMA, to create required source_tables.
-        # The SOURCESCHEMA r_to_o proess won't load columns for source tables that weren't created
-        # beforehand.
-        self.build_source_files.file(File.BSFILE.SOURCES).record_to_objects()
-        self.build_source_files.file(File.BSFILE.SOURCESCHEMA).record_to_objects()
-        self.build_source_files.file(File.BSFILE.SCHEMA).record_to_objects()
-
-        self.commit()
 
         return True
 
     def pre_prepare(self):
         """"""
+        from ambry.orm import File
 
         if self.is_finalized:
             self.warn("Can't prepare; bundle is finalized")
             return False
+
+        self.build_source_files.record_to_objects()
 
         return True
 
@@ -583,6 +567,10 @@ class Bundle(object):
         for t in self.schema.tables:
             if not bool(t.description):
                 self.error("No title ( Description of id column ) set for table: {} ".format(t.name))
+
+        self.build_source_files.objects_to_record()
+
+        self.commit()
 
         return True
 

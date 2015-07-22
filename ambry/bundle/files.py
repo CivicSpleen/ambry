@@ -258,6 +258,16 @@ class DictBuildSourceFile(BuildSourceFile):
 class StringSourceFile(BuildSourceFile):
     """A Source Build File that is a single file. """
 
+    def clean_objects(self):
+        """This sort of file can only be set from files, and there are no associated object"""
+        pass
+
+    def record_to_objects(self):
+        pass
+
+    def objects_to_record(self):
+        pass
+
     def fs_to_record(self):
         """Load a file in the filesystem into the file record"""
 
@@ -286,6 +296,8 @@ class StringSourceFile(BuildSourceFile):
 class MetadataFile(DictBuildSourceFile):
 
     def clean_objects(self):
+        self._dataset.configs = [ c for c in self._dataset.configs if c.type != 'metadata' ]
+
         pass # Not sure if these should eb cleaned or no
 
     def record_to_objects(self):
@@ -329,6 +341,7 @@ class MetadataFile(DictBuildSourceFile):
 class PythonSourceFile(StringSourceFile):
 
     def clean_objects(self):
+        """The python sources can only be set from files, and there are no associated objects"""
         pass
 
     def import_bundle_class(self):
@@ -353,7 +366,8 @@ class PythonSourceFile(StringSourceFile):
 class SourcesFile(RowBuildSourceFile):
 
     def clean_objects(self):
-        pass
+
+        self._dataset.sources[:] = []
 
     def record_to_objects(self):
         """Create config records to match the file metadata"""
@@ -409,8 +423,29 @@ class SourcesFile(RowBuildSourceFile):
             self._dataset._database.commit()
 
     def objects_to_record(self):
-        # The sources file is not written out.
-        pass
+        import msgpack
+
+        rows = []
+
+        last_table = None
+        for source in self._dataset.sources:
+
+            row = source.row
+
+            if not rows:
+                rows.append(row.keys())
+
+            rows.append(row.values())
+
+        # Transpose trick to remove empty columns
+        rows = zip(*[ row for row in zip(*rows) if bool(filter(bool,row[1:])) ])
+
+        bsfile = self._dataset.bsfile(self._file_const)
+
+        bsfile.mime_type = 'application/msgpack'
+        bsfile.update_contents(msgpack.packb(rows))
+
+
 
 class SchemaFile(RowBuildSourceFile):
 
@@ -535,7 +570,6 @@ class SchemaFile(RowBuildSourceFile):
             #    self.validate_column(t, col, warnings, errors)
 
         return warnings, errors
-
 
     def _dump_gen(self):
         """Yield schema row for use in exporting the schema to other
@@ -789,6 +823,29 @@ class BuildSourceFileAccessor(object):
 
         return bsfile
 
+    def record_to_objects(self):
+        """Create objects from files, or merfe the files into the objects. """
+        from ambry.orm.file import File
+
+        for file_const, (file_name, clz) in file_info_map.items():
+            f = self.file(file_const)
+
+            if f.record.preference == File.PREFERENCE.FILE:
+                f.clean_objects()
+
+            if f.record.preference in (File.PREFERENCE.FILE, File.PREFERENCE.MERGE):
+                f.record_to_objects()
+
+    def objects_to_record(self):
+        """Create file records fro objects. """
+        from ambry.orm.file import File
+
+        for file_const, (file_name, clz) in file_info_map.items():
+            f = self.file(file_const)
+
+            if f.record.preference in (File.PREFERENCE.MERGE, File.PREFERENCE.OBJECT):
+                f.objects_to_record()
+
     def sync(self, force = None, defaults = False):
 
         syncs = []
@@ -810,11 +867,6 @@ class BuildSourceFileAccessor(object):
                 sync_info = (file_const, f.sync(force))
             else:
                 sync_info = (file_const, f.sync())
-
-            # If the file was synced to the records, assume that the objects should be completely replaced,
-            # not merged
-            if sync_info[1] == f.SYNC_DIR.FILE_TO_RECORD:
-                f.clean_objects()
 
             syncs.append(sync_info)
 
