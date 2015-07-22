@@ -571,19 +571,30 @@ class Test(TestBase):
 
     def test_pipe_config(self):
 
-        from ambry.etl import Ticker
-
         b = self.setup_bundle('simple')
         l = b._library
 
-        b.metadata.pipeline = dict(
-            first="Edit( add = { 'a': lambda e,r: 1 }) ",
-            #dest_augment = "Edit( add = { 'a': lambda e,r: 1 }) ",
-            build_last = "PrintRows(print_at='end')"
-        )
+        import yaml
 
         b.do_sync()
+
+        # Re-write the metadata to include a pipeline
+        with b.source_fs.open('bundle.yaml') as f:
+            config =  yaml.load(f)
+
+        config['pipeline'] = dict(
+            first="ambry.etl.Edit( add = { 'a': lambda e,r: 1 }) ",
+            # dest_augment = "Edit( add = { 'a': lambda e,r: 1 }) ",
+            last="ambry.etl.PrintRows(print_at='end')"
+        )
+
+        with b.source_fs.open('bundle.yaml', 'wb') as f:
+            yaml.dump(config, f)
+
+        b.do_sync(force='ftr') # force b/c not enough time for modtime to change
+
         b.do_meta()
+
         b.do_prepare()
 
         b.do_build()
@@ -595,6 +606,7 @@ class Test(TestBase):
 
         for i, row in enumerate(l.stream_partition(p)):
             if i == 0:
+                print '!!!', row
                 self.assertEqual('a', row[-1])
             else:
                 self.assertEqual(1, row[-1])

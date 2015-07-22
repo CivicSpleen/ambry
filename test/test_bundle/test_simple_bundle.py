@@ -184,6 +184,7 @@ class Test(TestBase):
         set_preference(File.PREFERENCE.MERGE)
         muck_source_file(v3)
         sync_source_to_record()
+        muck_source_schema_object(v1, pos=5)
 
         self.assertEquals(v3, source_file())
         self.assertEquals(v3, file_record())
@@ -191,6 +192,7 @@ class Test(TestBase):
 
         self.assertEquals(v2, source_file(pos=5))
         self.assertEquals(v2, file_record(pos=5))
+        self.assertEquals(v1, schema_object(pos=5))
 
         # Ths last change happens during the prepare.
         def prepare(self):

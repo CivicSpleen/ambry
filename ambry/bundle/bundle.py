@@ -578,7 +578,7 @@ class Bundle(object):
     ## Meta
     ##
 
-    def do_meta(self, source_name = None, force=False, print_pipe=False):
+    def do_meta(self, source_name = None,  print_pipe=False):
         """
         Synchronize with the files and run the meta pipeline, possibly creating new objects. Then, write the
         objects back to file records and synchronize.
@@ -598,8 +598,8 @@ class Bundle(object):
 
         self.do_sync()
 
-        if not self.is_prepared:
-            self.do_prepare()
+        self.build_source_files.record_to_objects()
+        #self.build_source_files.objects_to_record()
 
         self.load_requirements()
 
