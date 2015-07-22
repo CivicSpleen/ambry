@@ -74,7 +74,7 @@ class BaseSearchBackend(object):
         self.identifier_index = self._get_identifier_index()
 
     def reset(self):
-        """ Resets (deletes? FIXME:) all indexes. """
+        """ Resets (deletes) all indexes. """
         self.dataset_index.reset()
         self.partition_index.reset()
         self.identifier_index.reset()
@@ -95,7 +95,17 @@ class BaseSearchBackend(object):
             'subclasses of BaseSearchBackend must provide a _get_identifier_index() method')
 
     def _or_join(self, terms):
-        """ FIXME: """
+        """ Joins terms using OR operator.
+
+        Args:
+            terms (list): terms to join
+
+        Examples:
+            self._or_join(['term1', 'term2']) -> 'term1 OR term2'
+
+        Returns:
+            str
+        """
 
         if isinstance(terms, (tuple, list)):
             if len(terms) > 1:
@@ -106,16 +116,39 @@ class BaseSearchBackend(object):
             return terms
 
     def _and_join(self, terms):
-        """ FIXME: """
+        """ Joins terms using AND operator.
+
+        Args:
+            terms (list): terms to join
+
+        Examples:
+            self._and_join(['term1']) -> 'term1'
+            self._and_join(['term1', 'term2']) -> 'term1 AND term2'
+            self._and_join(['term1', 'term2', 'term3']) -> 'term1 AND term2 AND term3'
+
+        Returns:
+            str
+        """
         if len(terms) > 1:
             return ' AND '.join([self._or_join(t) for t in terms])
         else:
             return self._or_join(terms[0])
 
-    def _kwd_term(self, keyword, terms):
-        """ FIXME: """
+    def _field_term(self, field, terms):
+        """ AND join of the terms of the field.
+
+        Args:
+            field (str): name of the field
+            terms (list): list of the terms
+
+        Examples:
+            self._field_term('keywords', ['term1', 'term2']) -> 'keywords:(term1 AND term2)'
+
+        Returns:
+            str
+        """
         if terms:
-            return keyword + ':(' + self._and_join(terms) + ')'
+            return field + ':(' + self._and_join(terms) + ')'
         else:
             return None
 
@@ -202,13 +235,11 @@ class BaseIndex(object):
 
 
 class BaseDatasetIndex(BaseIndex):
-    # FIXME: add other specs for fields.
-
-    _schema = {
-        'vid': 'id',
-        'title': 'ngramwords',
-        'keywords': 'keyword',
-        'doc': 'text'}
+    _schema = [
+        'vid',
+        'title',
+        'keywords',
+        'doc']
 
     def _as_document(self, dataset):
         """ Converts dataset to document indexed by to FTS index.
@@ -239,7 +270,6 @@ class BaseDatasetIndex(BaseIndex):
                                                dataset.identity.source,
                                                dataset.identity.name,
                                                dataset.identity.vname,
-                                               # bundle.metadata.documentation.main, # FIXME: Can't find such field in new implementation.
                                                columns]])
 
         # From the source, make a varity of combinations for keywords:
@@ -256,7 +286,6 @@ class BaseDatasetIndex(BaseIndex):
             except KeyError:
                 return g
 
-        # FIXME: old keywords contain list(dataset.config.metadata.coverage.geo). Do not know which field it is now.
         keywords = (
             list(dataset.config.metadata.about.groups) + list(dataset.config.metadata.about.tags) +
             [resum(g) for g in dataset.config.metadata.about.grain] +
@@ -323,14 +352,13 @@ class BaseDatasetIndex(BaseIndex):
 
 
 class BasePartitionIndex(BaseIndex):
-    # FIXME: add other specs for fields.
 
-    _schema = {
-        'vid': 'id',
-        'dataset_vid': 'id',
-        'title': 'ngramwords',
-        'keywords': 'keyword',
-        'doc': 'text'}
+    _schema = [
+        'vid',
+        'dataset_vid',
+        'title',
+        'keywords',
+        'doc']
 
     def _as_document(self, partition):
         """ Converts given partition to the document indexed by FTS backend.
@@ -431,9 +459,9 @@ class BasePartitionIndex(BaseIndex):
 
         if keywords:
             if cterms:
-                cterms = self.backend._and_join([cterms, self.backend._kwd_term('keywords', keywords)])
+                cterms = self.backend._and_join([cterms, self.backend._field_term('keywords', keywords)])
             else:
-                cterms = self.backend._kwd_term('keywords', keywords)
+                cterms = self.backend._field_term('keywords', keywords)
 
         logger.debug('Partition terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
 
@@ -508,13 +536,12 @@ class BasePartitionIndex(BaseIndex):
 
 
 class BaseIdentifierIndex(BaseIndex):
-    # FIXME: add other specs for fields.
 
-    _schema = {
-        'identifier': 'id',
-        'type': 'id',
-        'name': 'ngram',
-    }
+    _schema = [
+        'identifier',
+        'type',
+        'name',
+    ]
 
     def _as_document(self, identifier):
         """ Converts given identifier to the document indexed by FTS backend.
