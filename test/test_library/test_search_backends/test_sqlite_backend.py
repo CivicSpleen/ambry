@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-import os
-import unittest
+
+from sqlalchemy.sql.expression import text
 
 from test.test_base import TestBase
 
@@ -9,10 +9,28 @@ from ambry.library import new_library
 from ambry.library.search_backends.base import DatasetSearchResult, IdentifierSearchResult,\
     PartitionSearchResult
 from test.test_orm.factories import PartitionFactory
-from sqlalchemy.sql.expression import text
 
 
-@unittest.skip('Not ready')
+class SQLiteSearchBackendTest(TestBase):
+
+    def setUp(self):
+        super(self.__class__, self).setUp()
+        rc = self.get_rc()
+        library = new_library(rc)
+        self.backend = SQLiteSearchBackend(library)
+
+    # _and_join tests
+    def test_joins_terms(self):
+        self.assertEquals(
+            self.backend._and_join(['term1', 'term2']),
+            'term1 term2')
+
+    def test_joins_one_term(self):
+        self.assertEquals(
+            self.backend._and_join(['term1']),
+            'term1')
+
+
 class DatasetSQLiteIndexTest(TestBase):
 
     def setUp(self):
@@ -41,29 +59,6 @@ class DatasetSQLiteIndexTest(TestBase):
         all_vids = [x.vid for x in found]
         self.assertIn(dataset.vid, all_vids)
         self.assertIsInstance(found[0], DatasetSearchResult)
-
-    def _test_extends_found_dataset_with_partitions(self):
-        # FIXME:
-
-        # add dataset to backend.
-        db = self.new_database()
-
-        # create and index some partitions
-        PartitionFactory._meta.sqlalchemy_session = db.session
-
-        dataset = self.new_db_dataset(db, n=0)
-        dataset.config.metadata.about.title = 'Test dataset'
-        self.backend.dataset_index.index_one(dataset)
-        partition1 = PartitionFactory(dataset=dataset, vname=dataset.vname)
-        db.session.commit()
-        self.backend.partition_index.index_one(partition1)
-
-        # search just added document.
-        found = self.backend.dataset_index.search('Test dataset')
-        found_dataset = found[0]
-        assert found_dataset.vid == dataset.vid
-        self.assertEquals(len(found_dataset.partitions), 1)
-        self.assertIn(partition1.vid, found_dataset.partitions)
 
     # _index_document tests
     def test_adds_dataset_document_to_the_index(self):
@@ -102,7 +97,6 @@ class DatasetSQLiteIndexTest(TestBase):
         self.assertEquals(result, [])
 
 
-@unittest.skip('Not ready')
 class IdentifierSQLiteIndexTest(TestBase):
 
     def setUp(self):
@@ -184,7 +178,6 @@ class IdentifierSQLiteIndexTest(TestBase):
         self.assertEquals(result, [])
 
 
-@unittest.skip('Not ready')
 class PartitionSQLiteIndexTest(TestBase):
 
     def setUp(self):
