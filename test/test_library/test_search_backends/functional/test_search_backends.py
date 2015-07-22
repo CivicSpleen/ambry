@@ -9,6 +9,8 @@ from ambry.library import new_library
 
 from test.test_orm.factories import PartitionFactory
 
+# Description of the search system:
+# https://docs.google.com/document/d/1jLGRsYt4G6Tfo6m_Dtry6ZFRnDWpW6gXUkNPVaGxoO4/edit#
 
 # To debug set SKIP_ALL to True and comment @skip decorator on test you want to run.
 SKIP_ALL = False
@@ -82,7 +84,7 @@ class AmbryReadyMixin(object):
         dataset = self.new_db_dataset(db, n=0, source='example.com')
         assert dataset.identity.source
         self.backend.dataset_index.index_one(dataset)
-        self._assert_finds_dataset(dataset, 'source example.com from 1978 to 1975')
+        self._assert_finds_dataset(dataset, 'source example.com')
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_dataset_by_name(self):
@@ -166,7 +168,7 @@ class AmbryReadyMixin(object):
     # search tests
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_years_range(self):
-        """ search by `source example.com from 1978 to 1979` """
+        """ search by `source example.com from 1978 to 1979` (temporal bounds) """
         db = self.new_database()
         dataset = self.new_db_dataset(db, n=0, source='example.com')
         table = dataset.new_table('table2', description='table2')
@@ -232,8 +234,7 @@ class AmbryReadyMixin(object):
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_in(self):
-        """ search by `source example.com in California` """
-        # FIXME: Not sure about proper field. Using space_coverage. Ask Eric for proper field.
+        """ search by `source example.com in California` (geographic bounds) """
         db = self.new_database()
         dataset = self.new_db_dataset(db, n=0, source='example.com')
         table = dataset.new_table('table2', description='table2')
@@ -253,21 +254,20 @@ class AmbryReadyMixin(object):
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_by(self):
-        """ search by `source example.com by California` """
-        # FIXME: Ask Eric for real-life example and field which stores target for `by`.
+        """ search by `source example.com by county` (granularity search) """
         db = self.new_database()
         dataset = self.new_db_dataset(db, n=0, source='example.com')
         table = dataset.new_table('table2', description='table2')
-        partition = dataset.new_partition(table, time=1, grain_coverage=['california'])
+        partition = dataset.new_partition(table, time=1, grain_coverage=['county'])
         db.commit()
         self.backend.dataset_index.index_one(dataset)
         self.backend.partition_index.index_one(partition)
 
         # find partition in the partition index.
-        self._assert_finds_partition(partition, 'by California')
+        self._assert_finds_partition(partition, 'by county')
 
         # finds dataset extended with partition
-        found = self.backend.dataset_index.search('source example.com by California')
+        found = self.backend.dataset_index.search('source example.com by county')
         self.assertEquals(len(found), 1)
         self.assertEquals(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)
@@ -275,7 +275,7 @@ class AmbryReadyMixin(object):
     # test some complex examples.
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_range_and_in(self):
-        """ search by `table2 from 1978 to 1979 in california` """
+        """ search by `table2 from 1978 to 1979 in california` (geographic bounds and temporal bounds) """
         db = self.new_database()
         dataset = self.new_db_dataset(db, n=0)
         db.session.commit()
