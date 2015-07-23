@@ -311,6 +311,7 @@ class PartitionWhooshIndex(BasePartitionIndex):
 
 def _init_index(root_dir, schema, index_name):
     """ Creates new index or opens existing.
+
     Args:
         root_dir (str): root dir where to find or create index.
         schema (whoosh.fields.Schema): schema of the index to create or open.
@@ -320,7 +321,7 @@ def _init_index(root_dir, schema, index_name):
         Exception: if opening or creating failed.
 
     Returns:
-        tuple: first element is index, second is index directory.
+        tuple ((whoosh.index.FileIndex, str)): first element is index, second is index directory.
     """
 
     index_dir = os.path.join(root_dir, index_name)
@@ -331,5 +332,5 @@ def _init_index(root_dir, schema, index_name):
         else:
             return open_dir(index_dir), index_dir
     except Exception as e:
-        logger.error("Init error: failed to open search index at: '{}': {} ".format(dir, e))
+        logger.error("Init error: failed to open search index at: '{}': {} ".format(index_dir, e))
         raise
