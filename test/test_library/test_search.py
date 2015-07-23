@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import unittest
 import fudge
 from fudge.inspector import arg
 
