@@ -6,6 +6,7 @@ logger = get_logger(__name__, level=logging.INFO, propagate=False)
 from ambry.library.search_backends.whoosh_backend import WhooshSearchBackend
 from ambry.library.search_backends.sqlite_backend import SQLiteSearchBackend
 
+# All backends.
 BACKENDS = {
     'whoosh': WhooshSearchBackend,
     'sqlite': SQLiteSearchBackend
@@ -16,8 +17,6 @@ class Search(object):
     def __init__(self, library, backend=None):
 
         if not backend:
-            # FIXME: create setting for backends.
-            # backend = conf.search_backends['default']
             try:
                 backend_name = library.config.services.search
                 if not backend_name:
@@ -40,25 +39,23 @@ class Search(object):
         self.library = library
 
     def reset(self):
-        # FIXME: looks unused. Try to remove.
         self.backend.reset()
 
     def index_dataset(self, dataset, force=False):
-        # FIXME: replace all calls with appropriate method from backend and remove that method.
+        """ Adds given dataset to the index. """
         self.backend.dataset_index.index_one(dataset, force=force)
 
     def index_partition(self, partition, force=False):
-        # FIXME: replace all calls with appropriate method from backend and remove that method.
+        """ Adds given partition to the index. """
         self.backend.partition_index.index_one(partition, force=force)
 
-    def index_datasets(self, tick_f=None):
+    def index_library_datasets(self, tick_f=None):
         """ Indexes all datasets of the library.
 
         Args:
             tick_f (callable, optional): callable of one argument. Gets string with index state.
 
         """
-        # FIXME: rename to index_library_datasets and fix all calls.
 
         dataset_n = 0
         partition_n = 0

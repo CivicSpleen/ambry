@@ -48,7 +48,7 @@ class SearchTest(TestBase):
             search = Search(self.library)
             self.assertIsInstance(search.backend, WhooshSearchBackend)
 
-    # index_datasets tests
+    # index_library_datasets tests
     def test_indexes_library_datasets(self):
         ds1 = self.new_db_dataset(self.library.database, n=1)
         ds2 = self.new_db_dataset(self.library.database, n=2)
@@ -62,7 +62,7 @@ class SearchTest(TestBase):
 
         with fudge.patched_context(DatasetWhooshIndex, 'index_one', fake_index_one):
             search = Search(self.library)
-            search.index_datasets()
+            search.index_library_datasets()
 
     def test_indexes_library_datasets_partitions(self):
         ds1 = self.new_db_dataset(self.library.database, n=1)
@@ -77,7 +77,7 @@ class SearchTest(TestBase):
 
         with fudge.patched_context(PartitionWhooshIndex, 'index_one', fake_index_one):
             search = Search(self.library)
-            search.index_datasets()
+            search.index_library_datasets()
 
     def test_feeds_tick_function_with_indexed(self):
         ds1 = self.new_db_dataset(self.library.database, n=1)
@@ -95,4 +95,4 @@ class SearchTest(TestBase):
         with fudge.patched_context(PartitionWhooshIndex, 'index_one', fake_index_one):
             with fudge.patched_context(DatasetWhooshIndex, 'index_one', fake_index_one):
                 search = Search(self.library)
-                search.index_datasets(tick_f=tick_f)
+                search.index_library_datasets(tick_f=tick_f)
