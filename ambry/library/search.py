@@ -64,7 +64,6 @@ class Search(object):
             if tick_f:
                 tick_f('datasets: {} partitions: {}'.format(d, p))
 
-        # FIXME: Test that func.
         for dataset in self.library.datasets:
             if self.backend.dataset_index.index_one(dataset):
                 # dataset added to index
@@ -89,6 +88,7 @@ class Search(object):
             self.partition_index.get_parsed_query())
 
     def index_identifiers(self, identifiers):
+        """ Adds given identifiers to the index. """
         self.backend.identifier_index.index_many(identifiers)
 
     def search_identifiers(self, search_phrase, limit=10):
