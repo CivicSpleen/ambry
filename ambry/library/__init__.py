@@ -4,6 +4,12 @@ of the bundles that have been installed into it.
 
 # Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
+import logging
+
+from ambry.util import get_logger
+
+logger = get_logger(__name__, level=logging.INFO, propagate=False)
+
 
 def new_library(config=None):
 
@@ -11,7 +17,7 @@ def new_library(config=None):
     from ..orm import Database
     from .filesystem import LibraryFilesystem
     from boto.exception import S3ResponseError  # the ckcache lib should return its own exception
-    from search import Search
+
     if config is None:
         from ..run import get_runconfig
         config = get_runconfig()
@@ -19,13 +25,19 @@ def new_library(config=None):
     remotes = {}
 
     for name, remote in config.library().get('remotes', {}).items():
+        remote_account = remote.get('account')
+        if remote_account and remote_account not in config.accounts:
+            config_files = ' or '.join(config.files)
+            warn_msg = \
+                'Missing credentials: {} remote skipped because of missing credentials. To setup '\
+                'remote add {} to the accounts section of the {}'\
+                .format(remote['account'], remote['account'], config_files)
+            logger.warning(warn_msg)
+            continue
 
         try:
             remotes[name] = new_cache(remote, config.filesystem('root'))
         except S3ResponseError as e:
-            from ..util import get_logger
-
-            logger = get_logger(__name__)
             logger.error("Failed to init cache {} : {}; {} ".format(name, str(remote.bucket), e))
 
     # A bit random. There just should be some priority
