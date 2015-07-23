@@ -39,9 +39,9 @@ xlrd==0.9.3
 psycopg2==2.6
 fs==0.5.2
 msgpack-python==0.4.6
-runstats
-tabulate
-watchdog
-petl
-openpyxl
-keychain
+runstats==0.5.3
+tabulate==0.7.5
+watchdog==0.8.3
+petl==1.0.11
+openpyxl==2.2.5
+# FIXME: keychain - Could not find a version that satisfies the requirement keychain
