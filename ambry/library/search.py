@@ -1,13 +1,41 @@
 # -*- coding: utf-8 -*-
+import logging
+from ambry.util import get_logger
+
+logger = get_logger(__name__, level=logging.INFO, propagate=False)
+from ambry.library.search_backends.whoosh_backend import WhooshSearchBackend
+from ambry.library.search_backends.sqlite_backend import SQLiteSearchBackend
+
+BACKENDS = {
+    'whoosh': WhooshSearchBackend,
+    'sqlite': SQLiteSearchBackend
+}
 
 
 class Search(object):
     def __init__(self, library, backend=None):
+
         if not backend:
             # FIXME: create setting for backends.
             # backend = conf.search_backends['default']
-            from ambry.library.search_backends.whoosh_backend import WhooshSearchBackend
-            backend = WhooshSearchBackend(library)
+            try:
+                backend_name = library.config.services.search
+                if not backend_name:
+                    # config contains search key without value.
+                    raise KeyError
+
+                if backend_name not in BACKENDS:
+                    raise Exception(
+                        'Missing backend: search section of the config contains {} unknown backend'.format(backend_name))
+            except KeyError:
+                backend_name = library.database.driver
+
+            if backend_name not in BACKENDS:
+                logger.warning(
+                    'Missing backend: ambry does not have {} search backend. Using whoosh search.'.format(backend_name))
+                backend_name = 'whoosh'
+
+            backend = BACKENDS[backend_name](library)
         self.backend = backend
         self.library = library
 

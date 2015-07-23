@@ -8,6 +8,7 @@ from test.test_base import TestBase
 from ambry.library.search import Search
 from ambry.library.search_backends.whoosh_backend import DatasetWhooshIndex, PartitionWhooshIndex
 from ambry.library.search_backends.whoosh_backend import WhooshSearchBackend
+from ambry.library.search_backends.sqlite_backend import SQLiteSearchBackend
 from ambry.library import new_library
 from test.test_orm.factories import PartitionFactory
 
@@ -23,9 +24,29 @@ class SearchTest(TestBase):
         if hasattr(self, 'backend'):
             self.backend.reset()
 
-    def test_uses_default_backend(self):
+    def test_uses_library_driver_backend(self):
+        assert self.library.database.driver == 'sqlite'
+        self.library.config.services.search = None
+        search = Search(self.library)
+        self.assertIsInstance(search.backend, SQLiteSearchBackend)
+
+    def test_uses_backend_from_config(self):
+        self.library.config.services.search = 'whoosh'
         search = Search(self.library)
         self.assertIsInstance(search.backend, WhooshSearchBackend)
+
+    def test_raises_missing_backend_exception_if_config_contains_invalid_backend(self):
+        # services.search
+        self.library.config.services.search = 'foo'
+        try:
+            Search(self.library)
+        except Exception as exc:
+            self.assertIn('Missing backend', exc.message)
+
+    def test_uses_default_backend_if_library_database_search_is_not_implemented(self):
+        with fudge.patched_context(self.library.database, 'driver', 'mysql'):
+            search = Search(self.library)
+            self.assertIsInstance(search.backend, WhooshSearchBackend)
 
     # index_datasets tests
     def test_indexes_library_datasets(self):
