@@ -317,9 +317,6 @@ def _init_index(root_dir, schema, index_name):
         schema (whoosh.fields.Schema): schema of the index to create or open.
         index_name (str): name of the index.
 
-    Raises:
-        Exception: if opening or creating failed.
-
     Returns:
         tuple ((whoosh.index.FileIndex, str)): first element is index, second is index directory.
     """
