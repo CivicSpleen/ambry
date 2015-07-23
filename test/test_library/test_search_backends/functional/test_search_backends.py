@@ -238,7 +238,7 @@ class AmbryReadyMixin(object):
         db = self.new_database()
         dataset = self.new_db_dataset(db, n=0, source='example.com')
         table = dataset.new_table('table2', description='table2')
-        partition = dataset.new_partition(table, time=1, space_coverage=['California'])
+        partition = dataset.new_partition(table, time=1, space_coverage=['california'])
         db.commit()
         self.backend.dataset_index.index_one(dataset)
         self.backend.partition_index.index_one(partition)
@@ -304,11 +304,6 @@ class WhooshBackendTest(TestBase, AmbryReadyMixin):
         # we need clean backend for test
         WhooshSearchBackend(self.library).reset()
         self.backend = WhooshSearchBackend(self.library)
-
-    @unittest.skip('Not ready.')
-    def test_search_in(self):
-        # FIXME: implement.
-        pass
 
 
 class SQLiteBackendTest(TestBase, AmbryReadyMixin):
