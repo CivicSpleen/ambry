@@ -6,7 +6,7 @@ import struct
 
 from ambry.library.search_backends.base import BaseDatasetIndex, BasePartitionIndex,\
     BaseIdentifierIndex, BaseSearchBackend, IdentifierSearchResult,\
-    DatasetSearchResult, PartitionSearchResult
+    DatasetSearchResult, PartitionSearchResult, SearchTermParser
 
 from ambry.util import get_logger
 
@@ -27,6 +27,23 @@ class SQLiteSearchBackend(BaseSearchBackend):
     def _get_identifier_index(self):
         """ Returns identifier index. """
         return IdentifierSQLiteIndex(backend=self)
+
+    def _and_join(self, terms):
+        """ AND join of the terms.
+
+        Args:
+            terms (list):
+
+        Examples:
+            self._and_join(['term1', 'term2'])
+
+        Returns:
+            str
+        """
+        if len(terms) > 1:
+            return ' '.join([self._or_join(t) for t in terms])
+        else:
+            return self._or_join(terms[0])
 
 
 class DatasetSQLiteIndex(BaseDatasetIndex):
@@ -71,8 +88,8 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
             SELECT vid, rank(matchinfo(dataset_index)) AS score
             FROM dataset_index
             WHERE dataset_index MATCH :match_query
+            ORDER BY score DESC;
         """)
-        # FIXME: order by rank.
 
         logger.debug('Searching datasets using `{}` query.'.format(match_query))
         results = self.backend.library.database.connection.execute(query, match_query=match_query).fetchall()
@@ -103,10 +120,8 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
 
         # SQLite FTS can't find terms with `-`, replace it with underscore here and while searching.
         # See http://stackoverflow.com/questions/3865733/how-do-i-escape-the-character-in-sqlite-fts3-queries
-        # FIXME: Add tests for all fields
         doc['keywords'] = doc['keywords'].replace('-', '_')
         doc['doc'] = doc['doc'].replace('-', '_')
-        # FIXME: title field seems unused.
         doc['title'] = doc['title'].replace('-', '_')
         return doc
 
@@ -197,7 +212,6 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
             SELECT identifier, type, name, 0
             FROM identifier_index
             WHERE identifier MATCH :part; """)
-        # FIXME: Add score. Do we really need scores for Identifiers?
 
         results = self.backend.library.database.connection.execute(query, part=search_phrase).fetchall()
         for result in results:
@@ -234,6 +248,31 @@ class IdentifierSQLiteIndex(BaseIdentifierIndex):
         """)
         self.backend.library.database.connection.execute(query, identifier=identifier)
 
+    def is_indexed(self, identifier):
+        """ Returns True if identifier is already indexed. Otherwise returns False. """
+        query = text("""
+            SELECT identifier
+            FROM identifier_index
+            WHERE identifier = :identifier;
+        """)
+        result = self.backend.library.database.connection.execute(query, identifier=identifier['identifier'])
+        return bool(result.fetchall())
+
+    def all(self):
+        """ Returns list with all indexed identifiers. """
+        identifiers = []
+
+        query = text("""
+            SELECT identifier, type, name
+            FROM identifier_index;""")
+
+        for result in self.backend.library.database.connection.execute(query):
+            vid, type_, name = result
+            res = IdentifierSearchResult(
+                score=1, vid=vid, type=type_, name=name)
+            identifiers.append(res)
+        return identifiers
+
 
 class PartitionSQLiteIndex(BasePartitionIndex):
 
@@ -254,9 +293,6 @@ class PartitionSQLiteIndex(BasePartitionIndex):
                 doc TEXT
             );
         """
-        # FIXME: do not index from_year and to_year
-        # notindexed=from_year,
-        # notindexed=to_year
         self.backend.library.database.connection.execute(query)
 
     def search(self, search_phrase, limit=None):
@@ -274,7 +310,6 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         # Now to make proper query we need to replace all hypens in the search phrase.
         # See http://stackoverflow.com/questions/3865733/how-do-i-escape-the-character-in-sqlite-fts3-queries
         search_phrase = search_phrase.replace('-', '_')
-        from ambry.library.search_backends.base import SearchTermParser
         terms = SearchTermParser().parse(search_phrase)
         from_year = terms.pop('from', None)
         to_year = terms.pop('to', None)
@@ -292,10 +327,11 @@ class PartitionSQLiteIndex(BasePartitionIndex):
         # So, filter years range here.
         if match_query:
             query = text("""
-                SELECT vid, dataset_vid, rank(matchinfo(partition_index)), from_year, to_year AS score
+                SELECT vid, dataset_vid, rank(matchinfo(partition_index)) AS score, from_year, to_year
                 FROM partition_index
-                WHERE partition_index MATCH :match_query;
-            """)  # FIXME: order by rank.
+                WHERE partition_index MATCH :match_query
+                ORDER BY score DESC;
+            """)
             results = self.backend.library.database.connection\
                 .execute(query, match_query=match_query)\
                 .fetchall()
@@ -330,13 +366,11 @@ class PartitionSQLiteIndex(BasePartitionIndex):
 
         # SQLite FTS can't find terms with `-`, replace it with underscore here and while searching.
         # See http://stackoverflow.com/questions/3865733/how-do-i-escape-the-character-in-sqlite-fts3-queries
-        # FIXME: Add tests for all fields
         doc['keywords'] = doc['keywords'].replace('-', '_')
         doc['doc'] = doc['doc'].replace('-', '_')
-        # FIXME: title field seems unused.
         doc['title'] = doc['title'].replace('-', '_')
 
-        # extend doc a little be, the _index_document will clear unused fields
+        # pass time_coverage to the _index_document.
         doc['time_coverage'] = partition.time_coverage
         return doc
 
@@ -405,9 +439,9 @@ def _make_rank_func(weights):
         # in machine byte order
         # http://www.sqlite.org/fts3.html#matchinfo
         # and struct defaults to machine byte order
-        matchinfo = struct.unpack("I"*(len(matchinfo)/4), matchinfo)
+        matchinfo = struct.unpack('I' * (len(matchinfo) / 4), matchinfo)
         it = iter(matchinfo[2:])
-        return sum(x[0]*w/x[1]
+        return sum(x[0] * w / x[1]
                    for x, w in zip(zip(it, it, it), weights)
                    if x[1])
     return rank

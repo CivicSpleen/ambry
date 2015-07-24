@@ -48,17 +48,8 @@ class DatasetWhooshIndex(BaseDatasetIndex):
     def __init__(self, backend=None):
         assert backend is not None, 'backend can not be None'
         super(self.__class__, self).__init__(backend)
-        self.index_dir = os.path.join(self.backend.root_dir, 'datasets')
-        try:
-            schema = self._get_generic_schema()
-            if not os.path.exists(self.index_dir):
-                os.makedirs(self.index_dir)
-                self.index = create_in(self.index_dir, schema)
-            else:
-                self.index = open_dir(self.index_dir)
-        except Exception as e:
-            logger.error("Failed to open search index at: '{}': {} ".format(dir, e))
-            raise
+        self.index, self.index_dir = _init_index(
+            self.backend.root_dir, self._get_generic_schema(), 'datasets')
 
     def reset(self):
         """ Resets index by removing index directory. """
@@ -156,17 +147,8 @@ class IdentifierWhooshIndex(BaseIdentifierIndex):
 
     def __init__(self, backend=None):
         super(self.__class__, self).__init__(backend=backend)
-        self.index_dir = os.path.join(self.backend.root_dir, 'identifiers')
-        try:
-            schema = self._get_generic_schema()
-            if not os.path.exists(self.index_dir):
-                os.makedirs(self.index_dir)
-                self.index = create_in(self.index_dir, schema)
-            else:
-                self.index = open_dir(self.index_dir)
-        except Exception as e:
-            logger.error('Failed to open search index at: {}: {}'.format(dir, e))
-            raise
+        self.index, self.index_dir = _init_index(
+            self.backend.root_dir, self._get_generic_schema(), 'identifiers')
 
     def reset(self):
         if os.path.exists(self.index_dir):
@@ -249,18 +231,8 @@ class PartitionWhooshIndex(BasePartitionIndex):
 
     def __init__(self, backend=None):
         super(self.__class__, self).__init__(backend=backend)
-
-        self.index_dir = os.path.join(self.backend.root_dir, 'partitions')
-        try:
-            schema = self._get_generic_schema()
-            if not os.path.exists(self.index_dir):
-                os.makedirs(self.index_dir)
-                self.index = create_in(self.index_dir, schema)
-            else:
-                self.index = open_dir(self.index_dir)
-        except Exception as e:
-            logger.error('Failed to open search index at: {}: {}'.format(dir, e))
-            raise
+        self.index, self.index_dir = _init_index(
+            self.backend.root_dir, self._get_generic_schema(), 'partitions')
 
     def reset(self):
         if os.path.exists(self.index_dir):
@@ -282,7 +254,7 @@ class PartitionWhooshIndex(BasePartitionIndex):
             search_phrase (str or unicode):
             limit (int, optional): how many results to generate. None means without limit.
 
-        Generates:
+        Yields:
             PartitionSearchResult instances.
 
         """
@@ -335,3 +307,27 @@ class PartitionWhooshIndex(BasePartitionIndex):
         writer = self.index.writer()
         writer.delete_by_term('vid', vid)
         writer.commit()
+
+
+def _init_index(root_dir, schema, index_name):
+    """ Creates new index or opens existing.
+
+    Args:
+        root_dir (str): root dir where to find or create index.
+        schema (whoosh.fields.Schema): schema of the index to create or open.
+        index_name (str): name of the index.
+
+    Returns:
+        tuple ((whoosh.index.FileIndex, str)): first element is index, second is index directory.
+    """
+
+    index_dir = os.path.join(root_dir, index_name)
+    try:
+        if not os.path.exists(index_dir):
+            os.makedirs(index_dir)
+            return create_in(index_dir, schema), index_dir
+        else:
+            return open_dir(index_dir), index_dir
+    except Exception as e:
+        logger.error("Init error: failed to open search index at: '{}': {} ".format(index_dir, e))
+        raise

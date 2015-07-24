@@ -242,7 +242,7 @@ def root_search(args, l, config):
         l.search.index_identifiers(records)
 
         print 'Reindexing docs'
-        l.search.index_datasets(tick_f=tick)
+        l.search.index_library_datasets(tick_f=tick)
 
         return
 

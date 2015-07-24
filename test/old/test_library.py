@@ -796,7 +796,7 @@ source/dataset-subset-variation-0.0.1/tthree.db:
 
         #for ds in l.datasets():  print ds.vid
 
-        l.search.index_datasets()
+        l.search.index_library_datasets()
 
         for r in l.search.search_datasets("title:zip"):
             ds = l.dataset(r)

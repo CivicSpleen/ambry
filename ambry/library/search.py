@@ -1,36 +1,61 @@
 # -*- coding: utf-8 -*-
+import logging
+from ambry.util import get_logger
+
+from ambry.library.search_backends import WhooshSearchBackend, SQLiteSearchBackend
+
+logger = get_logger(__name__, level=logging.INFO, propagate=False)
+
+# All backends.
+BACKENDS = {
+    'whoosh': WhooshSearchBackend,
+    'sqlite': SQLiteSearchBackend
+}
 
 
 class Search(object):
     def __init__(self, library, backend=None):
+
         if not backend:
-            # FIXME: create setting for backends.
-            # backend = conf.search_backends['default']
-            from ambry.library.search_backends.whoosh_backend import WhooshSearchBackend
-            backend = WhooshSearchBackend(library)
+            try:
+                backend_name = library.config.services.search
+                if not backend_name:
+                    # config contains search key without value.
+                    raise KeyError
+
+                if backend_name not in BACKENDS:
+                    raise Exception(
+                        'Missing backend: search section of the config contains {} unknown backend'.format(backend_name))
+            except KeyError:
+                backend_name = library.database.driver
+
+            if backend_name not in BACKENDS:
+                logger.warning(
+                    'Missing backend: ambry does not have {} search backend. Using whoosh search.'.format(backend_name))
+                backend_name = 'whoosh'
+
+            backend = BACKENDS[backend_name](library)
         self.backend = backend
         self.library = library
 
     def reset(self):
-        # FIXME: looks unused. Try to remove.
         self.backend.reset()
 
     def index_dataset(self, dataset, force=False):
-        # FIXME: replace all calls with appropriate method from backend and remove that method.
+        """ Adds given dataset to the index. """
         self.backend.dataset_index.index_one(dataset, force=force)
 
     def index_partition(self, partition, force=False):
-        # FIXME: replace all calls with appropriate method from backend and remove that method.
+        """ Adds given partition to the index. """
         self.backend.partition_index.index_one(partition, force=force)
 
-    def index_datasets(self, tick_f=None):
+    def index_library_datasets(self, tick_f=None):
         """ Indexes all datasets of the library.
 
         Args:
             tick_f (callable, optional): callable of one argument. Gets string with index state.
 
         """
-        # FIXME: rename to index_library_datasets and fix all calls.
 
         dataset_n = 0
         partition_n = 0
@@ -39,7 +64,6 @@ class Search(object):
             if tick_f:
                 tick_f('datasets: {} partitions: {}'.format(d, p))
 
-        # FIXME: Test that func.
         for dataset in self.library.datasets:
             if self.backend.dataset_index.index_one(dataset):
                 # dataset added to index
@@ -64,6 +88,7 @@ class Search(object):
             self.partition_index.get_parsed_query())
 
     def index_identifiers(self, identifiers):
+        """ Adds given identifiers to the index. """
         self.backend.identifier_index.index_many(identifiers)
 
     def search_identifiers(self, search_phrase, limit=10):
