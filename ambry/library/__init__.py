@@ -244,6 +244,7 @@ class Library(object):
 
             db.open()
 
+            db.commit()
             ds = db.copy_dataset(b.dataset)
 
             # Set the location for the bundle file
@@ -255,8 +256,9 @@ class Library(object):
             path = remote.put(db.path, b.identity.cache_key + ".db")
 
             for p in b.partitions:
-                with remote.put_stream(p.datafile.munged_path) as f:
-                    copy_file_or_flo(p.datafile.open('rb'), f)
+                if p.is_segment:
+                    with remote.put_stream(p.datafile.munged_path) as f:
+                        copy_file_or_flo(p.datafile.open('rb'), f)
 
             b.dataset.commit()
 
@@ -266,58 +268,6 @@ class Library(object):
             rmtree(td)
 
         return path
-
-    def stream_partition(self, p, raw=False, skip_header = False):
-        """Yield rows of a partition, as an intyerator. Data is taken from one of these locations:
-        - The warehouse, for installed data
-        - The build directory, for built data
-        - The remote, for checked in data.
-        """
-        from ambry.bundle.partitions import PartitionProxy
-        from ambry.etl.transform import CasterPipe
-
-        if p.location == 'build':
-            source = p.datafile.open('rb')
-        elif p.location == 'remote':
-            b = self.bundle(p.identity.as_dataset().vid)
-            remote = self.remote(b)
-            source = remote.get_stream(p.datafile.munged_path)
-        elif p.location == 'warehouse':
-            raise NotImplementedError()
-
-
-        def generator():
-
-            reader = p.datafile.reader(source)
-
-            header = reader.next()
-
-            for i, (a, b) in enumerate(zip(header, (c.name for c in p.table.columns))):
-                if a != b:
-                    raise Exception("At position {}, partition header {} is different from column name {}".format(i, a, b))
-
-            yield header
-
-            for row in reader:
-                yield row
-
-            source.close()
-            p.datafile.close()
-
-
-        if raw:
-            itr = iter(generator())
-
-        else:
-            cp = CasterPipe(p.table)
-            cp.set_source_pipe(generator())
-
-            itr = iter(cp)
-
-        if skip_header:
-            itr.next()
-
-        return itr
 
     def remove(self, bundle):
         '''Remove a bundle from the library, and delete the configuration for

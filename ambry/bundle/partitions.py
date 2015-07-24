@@ -38,56 +38,6 @@ class Partitions(object):
         self.bundle = bundle
         self._partitions = {}
 
-    def partition(self, arg, **kwargs):
-        """Get a local partition object from either a Partion ORM object, or a
-        partition name.
-
-        :param arg:
-        :param kwargs:
-        Arguments:
-        arg    -- a orm.Partition or Partition object.
-
-        """
-
-        from ambry.orm import Partition as OrmPartition
-        from ambry.identity import PartitionNumber
-        from ..identity import PartitionIdentity
-        from sqlalchemy import or_
-
-        session = self.bundle.database.session
-
-        orm_partition = None
-
-        if isinstance(arg, OrmPartition):
-            orm_partition = arg
-
-        elif isinstance(arg, basestring):
-
-            orm_query = session.query(OrmPartition).filter(
-                or_(OrmPartition.id_ == arg, OrmPartition.vid == arg))
-
-        elif isinstance(arg, PartitionNumber):
-            orm_query = session.query(OrmPartition).filter(OrmPartition.id_ == str(arg))
-
-        elif isinstance(arg, PartitionIdentity):
-            orm_query = session.query(OrmPartition).filter(OrmPartition.id_ == str(arg.id_))
-
-        else:
-            raise ValueError("Arg must be a Partition or PartitionNumber. Got {}".format(type(arg)))
-
-        if not orm_partition:
-            orm_partition = orm_query.one()
-
-        vid = orm_partition.vid
-
-        if vid in self._partitions:
-            return self._partitions[vid]
-        else:
-            p = self.new_partition(self.bundle, orm_partition, **kwargs)
-            self._partitions[vid] = p
-            return p
-
-
     def partition(self, id_):
         """Get a partition by the id number.
 
@@ -101,7 +51,7 @@ class Partitions(object):
             a Sqlalchemy exception if the partition either does not exist or
             is not unique
 
-        Because this method works on the bundle, it the id_ ( without version information )
+        Because this method works on the bundle, the id_ ( without version information )
         is equivalent to the vid ( with version information )
 
         """
@@ -218,16 +168,31 @@ class Partitions(object):
         from ambry.identity import PartialPartitionName
 
         if name:
-            kwargs = { k:str(v) for k,v in name.dict.items() if k in [ e[0] for e in PartialPartitionName._name_parts] }
+            kwargs.update( (k,str(v)) for k,v in name.dict.items()
+                           if k in [ e[0] for e in PartialPartitionName._name_parts] )
 
         p = self.bundle.dataset.new_partition(data=data,**kwargs)
         self.bundle.dataset.commit()
 
         return PartitionProxy(self.bundle, p)
 
+    def get_or_new_partition(self,pname, data=None, **kwargs):
+
+        p = self.bundle.partitions.partition(pname)
+        if not p:
+            from ..orm.partition import Partition
+
+            p = self.bundle.partitions.new_partition(pname, data = data, **kwargs)
+
+        return p
+
+
     def __iter__(self):
+        """Iterate over the type 'p' partitions, ignoring the 's' type. """
+        from ambry.orm.partition import Partition
         for p in self.bundle.dataset.partitions:
-            yield PartitionProxy(self.bundle, p)
+            if p.type == Partition.TYPE.UNION:
+                yield PartitionProxy(self.bundle, p)
 
     def new_db_from_pandas(self,frame,table=None,data=None,load=True, **kwargs):
         """Create a new db partition from a pandas data frame.
@@ -271,7 +236,6 @@ class Partitions(object):
         return p
 
 
-
 class PartitionProxy(Proxy):
 
     def __init__(self, bundle, obj):
@@ -283,14 +247,19 @@ class PartitionProxy(Proxy):
     def clean(self):
         """Remove all built files and return the partition to a newly-created state"""
 
+        self.datafile.delete()
+
     def database(self):
         """Returns self, to deal with old bundles that has a direct reference to their database. """
         return self
 
-
-
     @property
     def datafile(self):
+
+        if self.type != self.TYPE.SEGMENT:
+            from ambry.dbexceptions import BundleError
+            raise BundleError("Only segment partitions can have datafiles")
+
         if self._datafile is None:
             from ambry.etl.partition import new_partition_data_file
             from ambry.etl.stats import  Stats
@@ -300,13 +269,79 @@ class PartitionProxy(Proxy):
 
         return self._datafile
 
+
     @property
     def location(self):
 
+        if not self.is_segment:
+            raise Exception("Not a segment. Doesn't have a location")
+
         base_location = self._partition.location
+
+        assert bool(base_location)
 
         if self._bundle.build_fs.exists(base_location):
             if self._bundle.build_fs.hashsyspath(base_location):
                 return  self._bundle.build_fs.getsyspath(base_location)
 
         return base_location
+
+    def stream(self, raw=False, skip_header=False):
+        """Yield rows of a partition, as an intyerator. Data is taken from one of these locations:
+        - The warehouse, for installed data
+        - The build directory, for built data
+        - The remote, for checked in data.
+        """
+
+        from ambry.etl.transform import CasterPipe
+
+        if not self.type == self.TYPE.SEGMENT:
+            from itertools import chain
+
+            parts = [ PartitionProxy(self._bundle, p) for p in self.children ]
+            iters = [parts[0].stream(raw, skip_header)] + [p.stream(raw, True) for p in parts[1:]]
+            return chain.from_iterable(iters)
+
+        elif self.location == 'build':
+            source = self.datafile.open('rb')
+        elif self.location == 'remote':
+            b = self.bundle(self.identity.as_dataset().vid)
+            remote = self.remote(b)
+            source = remote.get_stream(self.datafile.munged_path)
+        elif self.location == 'warehouse':
+            raise NotImplementedError()
+
+        def generator():
+            reader = self.datafile.reader(source)
+
+            header = reader.next()
+
+            # Check that header is sensible.
+            for i, (a, b) in enumerate(zip(header, (c.name for c in self.table.columns))):
+                if a != b:
+                    raise Exception(
+                        "For {} at position {}, partition header {} is different from column name {}. {}\n{}"
+                            .format(self.identity.name, i, a, b, list(header), [c.name for c in self.table.columns] ))
+
+            yield header
+
+            for row in reader:
+                yield row
+
+            source.close()
+            self.datafile.close()
+
+        if raw:
+            itr = iter(generator())
+
+        else:
+            # Wrap the generator in a Caster, to convert the values to the right type.
+            cp = CasterPipe(self.table)
+            cp.set_source_pipe(generator())
+
+            itr = iter(cp)
+
+        if skip_header:
+            itr.next()
+
+        return itr

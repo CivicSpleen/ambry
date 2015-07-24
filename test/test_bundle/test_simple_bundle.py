@@ -26,12 +26,12 @@ class Test(TestBase):
 
         b.do_sync()  # This will sync the files back to the bundle's source dir
 
-        self.assertEquals(7, len(b.dataset.files))
+        self.assertEquals(8, len(b.dataset.files))
         file_names = [f.path for f in b.dataset.files]
 
         print file_names
-        self.assertEqual([u'bundle.py', u'documentation.md', u'source_schema.csv', u'sources.csv', u'bundle.yaml',
-                          u'meta.py', u'schema.csv'], file_names)
+        self.assertEqual([u'sources.csv', u'bundle.py', u'source_schema.csv', u'lib.py', u'meta.py',
+                          u'documentation.md', u'bundle.yaml', u'schema.csv'], file_names)
 
         self.assertEqual(12, len(b.dataset.configs))
 
@@ -321,7 +321,11 @@ class Test(TestBase):
 
         self.assertTrue(b.do_build())
 
-        self.assertEquals(1,len(b.dataset.partitions))
+        # Two dataset partitions, one segment, one union
+        self.assertEquals(2,len(b.dataset.partitions))
+
+        # But, only one partition from the bundle, which is the one union partition
+        self.assertEquals(1, len(list(b.partitions)))
 
         self.assertEquals(4,len(b.dataset.source_columns))
 
@@ -461,17 +465,14 @@ class Test(TestBase):
         l = b._library
         p = list(b.partitions)[0]
 
-        # Initially, its location is the build director
-        self.assertEqual('build', list(b.partitions)[0].location)
-
-        self.assertEquals(497054, int(sum(row[3] for row in l.stream_partition(p, skip_header=True))))
+        self.assertEquals(497054, int(sum(row[3] for row in p.stream(skip_header=True))))
 
         b.checkin()
 
-        self.assertEqual('build',p.location)
+        #self.assertEqual('build',p.location)
 
-        self.assertEquals(497054, int(sum(row[3] for row  in l.stream_partition(p, skip_header = True))))
+        self.assertEquals(497054, int(sum(row[3] for row  in p.stream( skip_header = True))))
 
-        self.assertEqual(10000, len(list(l.stream_partition(p, skip_header=True))))
+        self.assertEqual(10000, len(list(p.stream(skip_header=True))))
 
-        self.assertEqual(10001, len(list(l.stream_partition(p, skip_header=False))))
+        self.assertEqual(10001, len(list(p.stream(skip_header=False))))

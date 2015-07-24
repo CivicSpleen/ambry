@@ -82,7 +82,6 @@ class Sink(Pipe):
     def __init__(self, count = None):
         self._count = count
 
-
     def run(self, count=None, *args, **kwargs):
 
         count = count if count else self._count
@@ -511,16 +510,11 @@ def make_table_map(table, headers):
     body_code = 'lambda row: [{}]'.format(','.join(header_parts.get(c.name,'None') for c in table.columns ))
     header_code = 'lambda row: [{}]'.format(','.join(header_parts.get(c.name, "'{}'".format(c.name)) for c in table.columns))
 
-    #print '!!!!', headers
-    #print '!!!!', [ c.name for c in table.columns ]
-    #print '!!!!', body_code
-    #print '!!!!', header_code
-
     return eval(header_code), eval(body_code)
 
 class SelectPartition(Pipe):
     """A Base class for adding a _pname column, which is used by the partition writer to select which
-    partition a row is written to. By default, uses a partition name that condidsts of only the
+    partition a row is written to. By default, uses a partition name that consists of only the
      destination table of the source"""
 
     def __init__(self, select_f=None):
@@ -535,7 +529,7 @@ class SelectPartition(Pipe):
 
     def process_header(self, row):
         from ..identity import PartialPartitionName
-        self._default = PartialPartitionName(table = self.source.dest_table_name)
+        self._default = PartialPartitionName(table = self.source.dest_table_name, segment=self.source.id)
         return row + ['_pname']
 
     def process_body(self, row):
@@ -603,7 +597,9 @@ class WriteToPartition(Pipe, PartitionWriter):
             except KeyError:
                 p = self.bundle.partitions.partition(pname)
                 if not p:
-                    p = self.bundle.partitions.new_partition(pname)
+                    from ..orm.partition import Partition
+                    p = self.bundle.partitions.new_partition(pname, type=Partition.TYPE.SEGMENT )
+                    p.clean()
 
                 self._partitions[pname] = p
 

@@ -19,7 +19,6 @@ class Bundle(object):
         self._library = library
         self._logger = None
 
-
         assert bool(library)
 
         self._log_level = logging.INFO
@@ -62,7 +61,7 @@ class Bundle(object):
         """
         from ambry.orm import File
         bsf = self.build_source_files.file(File.BSFILE.BUILD)
-        return self.cast_to_subclass(bsf.import_bundle_class())
+        return self.cast_to_subclass(bsf.import_bundle())
 
     def cast_to_meta_subclass(self):
         """
@@ -74,7 +73,11 @@ class Bundle(object):
         from ambry.orm import File
 
         bsf = self.build_source_files.file(File.BSFILE.BUILDMETA)
-        return self.cast_to_subclass(bsf.import_bundle_class())
+        return self.cast_to_subclass(bsf.import_bundle())
+
+    def import_lib(self):
+        from ambry.orm import File
+        self.build_source_files.file(File.BSFILE.LIB).import_lib()
 
     def commit(self):
         return self.dataset.commit()
@@ -116,6 +119,10 @@ class Bundle(object):
             if p.vid == str(ref):
                 return p
         return None
+
+    def wrap_partition(self, p):
+        from partitions import PartitionProxy
+        return PartitionProxy(self, p)
 
     def source(self, name):
         source =  self.dataset.source_file(name)
@@ -513,6 +520,8 @@ class Bundle(object):
 
         self.load_requirements()
 
+        self.import_lib()
+
         r = True
 
         if self.pre_prepare():
@@ -597,6 +606,8 @@ class Bundle(object):
         if self.is_built:
             self.error("Can't meta; bundle is built")
             return False
+
+        self.import_lib()
 
         self.do_sync()
 
@@ -686,7 +697,8 @@ class Bundle(object):
                 source.dataset.commit()
 
             except Exception as e:
-                self.error('Failed to meta process source {}: {} '.format(source_name, e))
+                raise
+                self.error('Failed to meta process source {}: {} '.format(source.name, e))
 
     ##
     ## Build
@@ -741,6 +753,8 @@ class Bundle(object):
 
         self.load_requirements()
 
+        self.import_lib()
+
         return True
 
     def build_log_pipeline(self, table_name, pl):
@@ -786,6 +800,29 @@ class Bundle(object):
 
         return True
 
+    def build_unify_partitions(self):
+        from collections import defaultdict
+        from ..orm.partition import Partition
+        partitions = defaultdict(set)
+        for p in self.dataset.partitions:
+            if p.type == p.TYPE.SEGMENT:
+                name = p.identity.name
+                name.segment = None
+                partitions[name].add(p)
+
+        for name, segments in partitions.items():
+            last_id = 0;
+
+            parent = self.partitions.get_or_new_partition(name, type = Partition.TYPE.UNION)
+
+            for seg in sorted(segments, key = lambda s: str(s.name)):
+                first_id = last_id + 1
+                seg.count = seg.stats_dict.id.count
+                last_id = first_id + seg.count - 1
+                seg.min_key = first_id
+                seg.max_key = last_id
+                seg.parent_vid = parent.vid
+
     def build_post_build_source(self, pl):
 
         from ..etl import PartitionWriter
@@ -803,6 +840,8 @@ class Bundle(object):
 
         except IndexError:
             self.error("Pipeline didn't have a PartitionWriters, won't try to finalize")
+
+        self.build_unify_partitions()
 
         self.commit()
 

@@ -10,7 +10,7 @@ __docformat__ = 'restructuredtext en'
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
 from sqlalchemy import String, ForeignKey
-from sqlalchemy.orm import relationship, object_session
+from sqlalchemy.orm import relationship, object_session, backref
 
 from . import Base, MutationDict, MutationList, JSONEncodedObj, BigIntegerType
 
@@ -38,6 +38,10 @@ class Partition(Base, DictableMixin):
     STATES.INSTALLING = 'installing'
     STATES.INSTALLED = 'installed'
 
+    TYPE = Constant
+    TYPE.SEGMENT = 's'
+    TYPE.UNION = 'u'
+
     sequence_id = SAColumn('p_sequence_id', Integer)
     vid = SAColumn('p_vid', String(20), primary_key=True, nullable=False)
     id = SAColumn('p_id', String(20), nullable=False)
@@ -47,14 +51,16 @@ class Partition(Base, DictableMixin):
     vname = SAColumn('p_vname',String(200),unique=True,nullable=False,index=True)
     fqname = SAColumn('p_fqname',String(200),unique=True,nullable=False,index=True)
     cache_key = SAColumn('p_cache_key',String(200),unique=True,nullable=False,index=True)
-    ref = SAColumn('p_ref', String(200), index=True)
-    time = SAColumn('p_time', String(20))  # FIXME: add helptext
+    parent_vid = SAColumn('p_p_vid', String(20), ForeignKey('partitions.p_vid'), nullable=True, index=True)
+    ref = SAColumn('p_ref', String(20), index=True) # VID reference to an eariler version to use instead of this one
+    type = SAColumn('p_type', String(20), default=TYPE.UNION) # u = normal partition, s = segment
     table_name = SAColumn('p_table_name', String(50))
+    time = SAColumn('p_time', String(20))  # FIXME: add helptext
     space = SAColumn('p_space', String(50))
     grain = SAColumn('p_grain', String(50))
     variant = SAColumn('p_variant', String(50))
     format = SAColumn('p_format', String(50))
-    segment = SAColumn('p_segment', Integer)
+    segment = SAColumn('p_segment', Integer) # Part of a larger partition. segment_id is usually also a source ds_id
     min_key = SAColumn('p_min_key', BigIntegerType)
     max_key = SAColumn('p_max_key', BigIntegerType)
     count = SAColumn('p_count', Integer)
@@ -78,6 +84,7 @@ class Partition(Base, DictableMixin):
 
     stats = relationship(ColumnStat, backref='partition', cascade="all, delete, delete-orphan")
 
+    children = relationship('Partition', backref=backref('parent', remote_side=[vid]), cascade = 'all')
 
     @property
     def identity(self):
@@ -106,6 +113,11 @@ class Partition(Base, DictableMixin):
         }
 
         return PartitionIdentity.from_dict(dict(ds.dict.items() + d.items()))
+
+    @property
+    def is_segment(self):
+
+        return self.type == self.TYPE.SEGMENT
 
     def __repr__(self):
         return "<{} partition: {}>".format(self.format, self.vname)
@@ -140,7 +152,6 @@ class Partition(Base, DictableMixin):
             cs = ColumnStat(p_vid=self.vid, d_vid = self.d_vid, c_vid=c.vid, **d)
 
             self.stats.append(cs)
-
 
     def parse_gvid_or_place(self, gvid_or_place):
         from geoid.civick import GVid
@@ -311,6 +322,8 @@ class Partition(Base, DictableMixin):
         self.location = 'build'
 
         self.state = self._partition.STATES.FINALIZED
+
+
 
     @staticmethod
     def before_insert(mapper, conn, target):

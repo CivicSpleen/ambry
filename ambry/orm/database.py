@@ -445,6 +445,10 @@ class Database(object):
         ds.source_tables
         ds.source_columns
 
+        # Put the partitions in dependency order so the merge won't throw a Foreign key integrity error
+        # The non-segment partitions go first, then the segments.
+        ds.partitions = [ p for p in ds.partitions if not p.is_segment ] + [ p for p in ds.partitions if p.is_segment ]
+
         self.session.merge(ds)
         self.session.commit()
 

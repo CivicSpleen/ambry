@@ -112,12 +112,19 @@ class Table(Base, DictableMixin):
             c = Column(t_vid=self.vid, sequence_id=len(self.columns), name=name, datatype='varchar')
             extant = False
 
+
         # Update possibly existing data
         c.data = dict((c.data.items() if c.data else []) + kwargs.get('data', {}).items())
 
         for key, value in kwargs.items():
 
             if key[0] != '_' and key not in ['t_vid', 'name',  'sequence_id', 'data']:
+
+                # Don't overwrite a description with a null value. Of course, that makes it hard
+                # to delete the value.
+                if key == 'description' and bool(c.description) and not bool(value):
+                    continue
+
                 try:
                     setattr(c, key, value)
                 except AttributeError:

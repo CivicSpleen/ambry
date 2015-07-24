@@ -348,7 +348,7 @@ class PythonSourceFile(StringSourceFile):
         """The python sources can only be set from files, and there are no associated objects"""
         pass
 
-    def import_bundle_class(self):
+    def import_bundle(self):
         """Add the filesystem to the Python sys path with an import hook, then import
         to file as Python"""
         import sys, imp
@@ -366,6 +366,25 @@ class PythonSourceFile(StringSourceFile):
         exec bf.contents in bundle.__dict__
 
         return bundle.Bundle
+
+    def import_lib(self):
+        """Import the lib.py file into the bundle module"""
+        import sys, imp
+
+        bundle = imp.new_module('bundle')
+
+        sys.modules['bundle'] = bundle
+
+        bf = self._dataset.bsfile(self._file_const)
+
+        if not bf.has_contents:
+            return
+
+        exec bf.contents in bundle.__dict__
+
+        #print '!!!', bundle.__dict__
+
+        return bundle
 
 class SourcesFile(RowBuildSourceFile):
 
@@ -778,6 +797,7 @@ class SourceSchemaFile(RowBuildSourceFile):
 file_info_map = {
     File.BSFILE.BUILD : (File.path_map[File.BSFILE.BUILD],PythonSourceFile),
     File.BSFILE.BUILDMETA: (File.path_map[File.BSFILE.BUILDMETA],PythonSourceFile),
+    File.BSFILE.LIB: (File.path_map[File.BSFILE.LIB], PythonSourceFile),
     File.BSFILE.DOC: (File.path_map[File.BSFILE.DOC],StringSourceFile),
     File.BSFILE.META: (File.path_map[File.BSFILE.META],MetadataFile),
     File.BSFILE.SCHEMA: (File.path_map[File.BSFILE.SCHEMA],SchemaFile),

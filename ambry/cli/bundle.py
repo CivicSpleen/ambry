@@ -146,8 +146,10 @@ def bundle_parser(cmd):
                        help='Dump sources')
     group.add_argument('-T', '--source_tables', default=False, action="store_const", const='sourcetables', dest='table',
                        help='Dump source tables')
-    group.add_argument('-p', '--partitions', default=False, action="store_const", const='partitions', dest='partitions',
+    group.add_argument('-p', '--partitions', default=False, action="store_const", const='partitions', dest='table',
                        help='Dump partitions')
+    group.add_argument('-t', '--dest_tables', default=False, action="store_const", const='tables', dest='table',
+                       help='Dump destination tables')
     command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
 
     # Info command
@@ -714,7 +716,6 @@ def bundle_dump(args, l, rc):
 
     elif args.table == 'sourcetables':
 
-
         records = []
         for t in b.dataset.source_tables:
             for c in t.columns:
@@ -726,6 +727,19 @@ def bundle_dump(args, l, rc):
         if records:
             headers, records = records[0], records[1:]
         headers = []
+
+
+    elif args.table == 'tables':
+
+        records = []
+        headers = []
+        for t in b.dataset.tables:
+            for c in t.columns:
+                if not headers:
+                    headers = c.row.keys()
+
+                records.append(c.row.values())
+
 
     print tabulate.tabulate(records, headers = headers)
 

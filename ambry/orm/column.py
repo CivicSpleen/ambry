@@ -409,6 +409,17 @@ class Column(Base):
         target.id = str(con.rev(None))
         target.d_vid = str(ObjectNumber.parse(target.t_vid).as_dataset)
 
+    @property
+    def row(self):
+        from collections import OrderedDict
+
+        # Use an Ordered Dict to make it friendly to creating CSV files.
+
+        d = OrderedDict([('table', self.table.name)] + [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
+                        if p.key in ['sequence_id', 'name', 'datatype', 'description' ]])
+
+        return d
+
 
     def __repr__(self):
         return "<column: {}, {}>".format(self.name, self.vid)

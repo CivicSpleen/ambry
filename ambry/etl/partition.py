@@ -79,7 +79,20 @@ class PartitionDataFile(object):
         return self._path
 
     def open(self, *args, **kwargs):
-        return self._fs.open(self.munged_path, *args, **kwargs)
+        self._file =  self._fs.open(self.munged_path, *args, **kwargs)
+        return self._file
+
+    def close(self):
+        if self._file:
+            self._file.close();
+            self._file = None
+
+    def delete(self):
+        from fs.errors import ResourceNotFoundError
+        try:
+            self._fs.remove(self.munged_path)
+        except ResourceNotFoundError:
+            pass
 
     @property
     def rows(self):

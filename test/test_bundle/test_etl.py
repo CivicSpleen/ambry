@@ -600,14 +600,15 @@ class Test(TestBase):
 
         b.do_build()
 
-        self.assertEquals(10001, len(b.build_fs.getcontents('/example.com/simple-0.1.3/simple.csv').splitlines()))
+        print list(b.build_fs.walkfiles())
+
+        self.assertEquals(10001, len(b.build_fs.getcontents('/example.com/simple-0.1.3/simple/1.csv').splitlines()))
 
         p = list(b.partitions)[0]
-        self.assertEquals(10001, len(list(l.stream_partition(p))))
+        self.assertEquals(10001, len(list(p.stream())))
 
-        for i, row in enumerate(l.stream_partition(p)):
+        for i, row in enumerate(p.stream()):
             if i == 0:
-                print '!!!', row
                 self.assertEqual('a', row[-1])
             else:
                 self.assertEqual(1, row[-1])
@@ -708,3 +709,20 @@ class Test(TestBase):
         self.assertIn([3, 0, 2], pl[PrintRows].rows)
         self.assertIn([19, 10, 18], pl[PrintRows].rows)
         self.assertIn([22, 20, 21], pl[PrintRows].rows)
+
+    def test_segments(self):
+
+        b = self.setup_bundle('segments')
+        l = b._library
+
+        b.do_sync()
+
+        b.do_meta()
+
+        b.do_prepare()
+
+        b.do_build()
+
+        p = list(b.partitions)[0]
+
+        self.assertEquals(41, len(list(p.stream())))
