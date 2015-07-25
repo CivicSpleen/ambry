@@ -233,6 +233,30 @@ class Library(object):
     ## Storing
     ##
 
+    def create_bundle_file(self, b):
+        import os
+        from ambry.orm.database import Database
+        import tempfile
+        import os
+
+        fh, path = tempfile.mkstemp()
+        os.fdopen(fh).close()
+
+        db = Database('sqlite:///{}.db'.format(path))
+
+        db.open()
+
+        b.commit()
+        ds = db.copy_dataset(b.dataset)
+
+        # Set the location for the bundle file
+        for p in ds.partitions:
+            p.location = 'remote'
+
+        ds.commit()
+
+        return db.path
+
     def checkin(self,b):
         """
         Copy a bundle to a new Sqlite file, then store the file on the remote.
@@ -240,46 +264,26 @@ class Library(object):
         :param b: The bundle
         :return:
         """
-        import tempfile
-        from ambry.orm.database import Database
+
         from ambry.util import copy_file_or_flo
         import os
 
         remote = self.remote(b)
 
-        try:
-            td = tempfile.mkdtemp()
+        db_path = self.create_bundle_file(b)
 
-            db = Database('sqlite:////{}/{}.db'.format(td, b.identity.vid))
+        path = remote.put(db_path, b.identity.cache_key + ".db")
 
-            assert not os.path.exists(db.path)
+        os.remove(db_path)
 
-            db.open()
+        for p in b.partitions:
+            if p.is_segment:
+                with remote.put_stream(p.datafile.munged_path) as f:
+                    copy_file_or_flo(p.datafile.open('rb'), f)
 
-            db.commit()
-            ds = db.copy_dataset(b.dataset)
+        b.dataset.commit()
 
-            # Set the location for the bundle file
-            for p in ds.partitions:
-                p.location = 'remote'
 
-            ds.commit()
-
-            path = remote.put(db.path, b.identity.cache_key + ".db")
-
-            for p in b.partitions:
-                if p.is_segment:
-                    with remote.put_stream(p.datafile.munged_path) as f:
-                        copy_file_or_flo(p.datafile.open('rb'), f)
-
-            b.dataset.commit()
-
-        finally:
-            from shutil import rmtree
-
-            rmtree(td)
-
-        return path
 
     def remove(self, bundle):
         '''Remove a bundle from the library, and delete the configuration for

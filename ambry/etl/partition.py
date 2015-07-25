@@ -9,7 +9,6 @@ import unicodecsv as csv
 
 from ambry.etl.pipeline import Sink, Pipe
 
-
 def new_partition_data_file(fs, path, stats = None):
 
     ext_map = {
@@ -26,7 +25,7 @@ def new_partition_data_file(fs, path, stats = None):
         fs.makedir(dn, recursive=True)
 
     if not ext:
-        ext = '.csv'
+        ext = '.msg'
 
     return ext_map[ext](fs, path, stats=stats)
 
@@ -101,7 +100,7 @@ class PartitionDataFile(object):
 
     def clean(self):
         """Remove all of the rows in the file"""
-        return NotImplementedError()
+        return self.delete()
 
     @property
     def size(self):
@@ -114,6 +113,34 @@ class PartitionDataFile(object):
             return self._path
         else:
             return self._path+self.EXTENSION
+
+class PartitionCsvDataFileReader(object):
+
+    def __init__(self, f):
+        import unicodecsv as csv
+
+        self._f = f
+        self.n = 0
+        self.header = None
+        self.reader = csv.reader(self._f)
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        """Generate rows from the file"""
+
+        row = self.reader.next()
+
+        if not self.header:
+            self.header = row
+
+        self.n += 1
+
+        return row
+
+    def close(self):
+        self._f.close()
 
 class PartitionCsvDataFile(PartitionDataFile):
     """An accessor for files that hold Partition Data"""
@@ -128,6 +155,9 @@ class PartitionCsvDataFile(PartitionDataFile):
         self._reader = None
         self._writer = None
         self._nrows = 0
+
+    def set_reader(self, reader):
+        self._reader = reader
 
     def openr(self):
         """Open for reading"""
@@ -169,14 +199,10 @@ class PartitionCsvDataFile(PartitionDataFile):
 
     def reader(self, stream=None):
 
-        if not self._reader:
-
-            if not stream:
-                stream = self.openr()
-
-            self._reader = csv.reader(stream)
-
-        return self._reader
+        if stream:
+            return PartitionCsvDataFileReader(stream)
+        else:
+            return PartitionCsvDataFileReader(self.openr())
 
     def close(self):
         """
@@ -212,7 +238,6 @@ class PartitionCsvDataFile(PartitionDataFile):
         if self.stats:
             self.stats.process_header(row)
 
-
     def insert_body(self, row):
         """
         Add a row to the file.
@@ -226,22 +251,11 @@ class PartitionCsvDataFile(PartitionDataFile):
             row[0] = self._nrows
 
         self.writer().writerow(row)
+
         if self.stats:
             self.stats.process_body(row)
 
         self._nrows += 1
-
-    @property
-    def rows(self):
-        """Generate rows from the file"""
-
-        self.close()
-
-        for i, row in enumerate(self.reader()):
-            if i == 0:
-                self._header = row
-            self._nrows  = 1
-            yield row
 
     @property
     def dict_rows(self):
@@ -258,17 +272,51 @@ class PartitionCsvDataFile(PartitionDataFile):
 
             yield dict(zip(self._header, row))
 
-    def clean(self):
-        """Remove all of the rows in the file"""
-
-        self.close()
-        self._fs.remove(self._path)
-
     @property
     def size(self):
         """Return the size of the file, in data rows"""
         return NotImplementedError()
 
+class PartitionMsgpackDataFileReader(object):
+
+    def __init__(self, f):
+
+        self._f = f
+        self.n = 0
+        self.header = None
+
+    def __iter__(self):
+
+        import msgpack
+
+        unpacker = msgpack.Unpacker(self._f, object_hook=self.decode_obj)
+
+        for row in unpacker:
+            assert isinstance(row, (tuple, list)), row
+
+            if not self.header:
+                self.header = row
+
+            self.n += 1
+
+            yield row
+
+    @staticmethod
+    def decode_obj(obj):
+        import datetime
+
+        if b'__datetime__' in obj:
+            obj = datetime.datetime.strptime(obj["as_str"], "%Y%m%dT%H:%M:%S.%f")
+        elif b'__date__' in obj:
+            obj = datetime.datetime.strptime(obj["as_str"], "%Y%m%d")
+        else:
+            raise Exception("Unknown type on decode: {} ".format(obj))
+
+        return obj
+
+
+    def close(self):
+        self._f.close()
 
 class PartitionMsgpackDataFile(PartitionDataFile):
     """A reader and writer for Partition files in MessagePack format, which is about 60%  faster than unicode
@@ -276,9 +324,9 @@ class PartitionMsgpackDataFile(PartitionDataFile):
 
     EXTENSION = '.msg'
 
-    def __init__(self, fs, path):
+    def __init__(self, fs, path, stats=None):
 
-        super(PartitionMsgpackDataFile, self).__init__(fs, path)
+        super(PartitionMsgpackDataFile, self).__init__(fs, path, stats)
 
         self._file = None
         self._reader = None
@@ -294,8 +342,45 @@ class PartitionMsgpackDataFile(PartitionDataFile):
         self._nrows = 0
         if self._file:
             self._file.close()
+            self._file = None
 
+    def insert_header(self, row):
+        """
+        Write the header, but only if the file is empty
+        :param row:
+        :return:
+        """
 
+        import msgpack
+
+        if not self._nrows == 0:
+            return
+
+        self._header = list(row)
+
+        if not self._file:
+            self._file = self._fs.open(self.munged_path, mode='wb')
+
+        assert isinstance(row, (list, tuple))
+
+        self._file.write(msgpack.packb(row))
+
+        self._nrows += 1
+
+        if self.stats:
+            self.stats.process_header(row)
+
+    @staticmethod
+    def encode_obj(obj):
+        import datetime
+        if isinstance(obj, datetime.datetime):
+            return {'__datetime__': True, 'as_str': obj.strftime("%Y%m%dT%H:%M:%S.%f")}
+        if isinstance(obj, datetime.date):
+            return {'__date__': True, 'as_str': obj.strftime("%Y%m%d")}
+        else:
+            raise Exception("Unknown type on encode: {}, {}".format(type(obj), obj))
+
+        return obj
 
     def insert_body(self, row):
         """
@@ -308,36 +393,25 @@ class PartitionMsgpackDataFile(PartitionDataFile):
 
         import msgpack
 
+        # Assume the first item is the id, and fill it is if it empty
+        if row[0] is None:
+            row[0] = self._nrows
+
         if not self._file:
             self._file = self._fs.open(self.munged_path, mode='wb')
 
-        if self._nrows == 0: # Save the header
-            assert isinstance(row, (list, tuple))
-            self._header = list(row)
+        assert isinstance(row, (tuple, list)), row
 
-        if isinstance(row, (list, tuple)):
-            self._file.write(msgpack.packb(row))
-        else:
-            # Assume the row has a map interface, and write out the row in the order of the
-            # column names provided in the header
-            self._file.write(msgpack.packb([row.get(k,None) for k in self._header]))
+        self._file.write(msgpack.packb(row, default=self.encode_obj))
 
         self._nrows += 1
 
-    @property
-    def rows(self):
-        """Generate rows from the file"""
+    def reader(self, stream=None):
 
-        import msgpack
-
-        with self._fs.open(self.munged_path, mode='wb') as f:
-            unpacker = msgpack.Unpacker(f)
-
-            for i, row in enumerate(unpacker):
-                if i == 0:
-                    self._header = row
-                self._nrows  = 1
-                yield row
+        if stream:
+            return PartitionMsgpackDataFileReader(stream)
+        else:
+            return  PartitionMsgpackDataFileReader(self._fs.open(self.munged_path, mode='rb'))
 
     @property
     def dict_rows(self):

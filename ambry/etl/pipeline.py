@@ -150,7 +150,6 @@ class Ticker(Pipe):
         print '== {} {} =='.format(self.source.name, self._name if self._name else '')
         return row
 
-
 class AddHeader(Pipe):
     """Adds a header to a row file that doesn't have one, by returning the header for the first row. """
 
@@ -499,7 +498,6 @@ class PrintRows(Pipe):
         else:
             return 'print. 0 rows'
 
-
 def make_table_map(table, headers):
     """"Create a function to map from rows with the structure of the headers to the structure of the table. """
 
@@ -515,7 +513,7 @@ def make_table_map(table, headers):
 class SelectPartition(Pipe):
     """A Base class for adding a _pname column, which is used by the partition writer to select which
     partition a row is written to. By default, uses a partition name that consists of only the
-     destination table of the source"""
+     destination table of the source and a segment of the id of the source"""
 
     def __init__(self, select_f=None):
         self._default = None
@@ -536,12 +534,15 @@ class SelectPartition(Pipe):
         raise NotImplemented("This function should be patched into nonexistence")
 
     def process_body_select(self, row):
-        return list(row) + [self.select_f(self.source, row)]
+
+        name = self.select_f(self.source, row)
+        if not name.segment:
+            name.segment = 1
+
+        return list(row) + [name]
 
     def process_body_default(self, row):
-
         return list(row) + [self._default]
-
 
 class PartitionWriter(object):
     """Marker class so the partitions can be retrieved after the pipeline finishes
@@ -580,11 +581,17 @@ class WriteToPartition(Pipe, PartitionWriter):
 
         self._headers[self.source.name] = row
 
+        self._source_id = self.source.id
+
         return row
 
     def process_body(self, row):
 
         pname = row[self.p_name_index]
+
+        if not pname.segment:
+            pname.segment = self._source_id
+
         df_key = (self.source.name, pname)
 
         try:
@@ -598,6 +605,7 @@ class WriteToPartition(Pipe, PartitionWriter):
                 p = self.bundle.partitions.partition(pname)
                 if not p:
                     from ..orm.partition import Partition
+
                     p = self.bundle.partitions.new_partition(pname, type=Partition.TYPE.SEGMENT )
                     p.clean()
 
@@ -622,17 +630,16 @@ class WriteToPartition(Pipe, PartitionWriter):
     def partitions(self):
         """Generate the partitions, so they can be manipulated after the pipeline completes"""
         for p in self._partitions.values():
-            yield p, p.datafile.stats
+            yield p
 
     def __str__(self):
 
         out = ""
 
-        for p,s in self.partitions:
-            out += str(p.identity.name) + "\n" + str(s) + "\n"
+        for p in self.partitions:
+            out += str(p.identity.name) + "\n"
 
         return repr(self) + "\n" + out
-
 
 class PipelineSegment(list):
 

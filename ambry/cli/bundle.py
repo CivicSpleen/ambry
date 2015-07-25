@@ -310,7 +310,6 @@ def bundle_info(args, l, rc):
         prt('Will use bundle ref {}, {}, referenced from {}'.format(ref, b.identity.vname, frm))
         return
 
-
     b.set_last_access(Bundle.STATES.INFO)
 
     def inf(column,k,v):
@@ -359,105 +358,34 @@ def bundle_info(args, l, rc):
     inf(0, "Source FS",str(b.source_fs))
     inf(0, "Build  FS", str(b.build_fs))
 
-    print '----'
     print tabulate(join(info[0]), tablefmt='plain')
 
-    from ambry.etl.stats import text_hist
-    from textwrap import wrap
-    from terminaltables import  SingleTable
+    if args.stats:
 
-    for p in b.partitions:
-        rows = ['Column LOM Count Uniques Values'.split()]
-        for k, v in  p.stats_dict.items():
+        from ambry.etl.stats import text_hist
+        from textwrap import wrap
+        from terminaltables import  SingleTable
 
-            rows.append([
-                str(k), str(v.lom), str(v.count), str(v.nuniques),
-                text_hist(int(x) for x in v.hist) if v.lom == 'i' else (
-                    '\n'.join(wrap(', '.join(sorted(str(x) for x in v.uvalues.keys()[:10])), 50)))
-            ])
+        for p in b.partitions:
+            rows = ['Column LOM Count Uniques Values'.split()]
+            keys = [ k for k,v in p.stats_dict.items() ]
+            d = p.stats_dict
+            for c in p.table.columns:
+                if c.name in keys:
+                    k = c.name
+                    v = d[c.name]
 
-        #print tabulate(row, tablefmt='plain')
-        print SingleTable(rows, title="Stats for "+str(p.identity.name)).table
+                    rows.append([
+                        str(k), str(v.lom), str(v.count), str(v.nuniques),
+                        text_hist(int(x) for x in v.hist) if v.lom == 'i' else (
+                            '\n'.join(wrap(', '.join(sorted(str(x) for x in v.uvalues.keys()[:10])), 50)))
+                    ])
 
-    if False:
+            #print tabulate(row, tablefmt='plain')
+            print SingleTable(rows, title="Stats for "+str(p.identity.name)).table
 
-        wrapper = textwrap.TextWrapper()
 
-        lprt("Stats", '')
-        wprt('Col Name', "{:>7s} {:>7s} {:>10s} {:70s}".format(
-            "Count", 'Uniq', 'Mean', 'Sample Values'))
-        for col_name, s in p.stats.__dict__.items():
 
-            if s.uvalues:
-                vals = (u'\n' + u' ' * 49).join(wrapper.wrap(u','.join(s.uvalues.keys()[:5])))
-
-            wprt(col_name, u"{:>7s} {:>7s} {:>10s} {:70s}".format(
-                str(s.count) if s.count else '',
-                str(s.nuniques) if s.nuniques else '',
-                '{:10.2e}'.format(s.mean) if s.mean else '',
-                vals
-            ))
-
-    return
-
-    if False:
-
-        if b.database.exists():
-
-            process = b.get_value_group('process')
-
-            # Older bundles have the dbcreated values assigned to the root dataset vid ('a0/001')
-            # instead of the bundles dataset vid
-            from ambry.library.database import ROOT_CONFIG_NAME_V
-            root_db_created = b.database.get_config_value(ROOT_CONFIG_NAME_V, 'process', 'dbcreated')
-
-            lprt('Created', process.get('dbcreated', root_db_created.value))
-            lprt('Prepared', process.get('prepared', ''))
-            lprt('Built ', process.get('built', ''))
-
-            if process.get('buildtime', False):
-                lprt('Build time', str(round(float(process['buildtime']), 2)) +'s')
-
-            lprt("Parts", b.partitions.count)
-
-            hprt("Partitions")
-            for i, partition in enumerate(b.partitions):
-                lprt(indent,partition.identity.sname)
-
-                if i > 6:
-                    lprt(indent, "... and {} more".format(b.partitions.count - 6))
-                    break
-
-        if b.metadata.dependencies:
-            # For source bundles
-            deps = b.metadata.dependencies.items()
-        else:
-            # for built bundles
-            try:
-                deps = b.odep.items()
-            except AttributeError:
-                deps = None
-            except DatabaseMissingError:
-                deps = None
-
-        if deps:
-            hprt("Dependencies")
-            for k, v in deps:
-                lprt(k,v)
-
-        if args.stats or args.partitions:
-            for p in b.partitions.all:
-                hprt("Partition {}".format(p.identity))
-                if args.partitions:
-                    p.record.data
-
-                    def bl(k, v):
-                        lprt(k, p.record.data.get(v, ''))
-
-                    lprt('# Rows', p.record.count)
-                    bl('g cov', 'geo_coverage')
-                    bl('g grain', 'geo_grain')
-                    bl('t cov', 'time_coverage')
 
 
 def bundle_clean(args, l, rc):

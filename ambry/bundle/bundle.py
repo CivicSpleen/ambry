@@ -124,6 +124,22 @@ class Bundle(object):
         from partitions import PartitionProxy
         return PartitionProxy(self, p)
 
+    def delete_partition(self, vid_or_p):
+
+        try:
+            vid = vid_or_p.vid
+        except AttributeError:
+            vid = vid_or_p
+
+        vid = vid_or_p.vid
+
+        print '!!!!', vid
+
+        p = self.partition(vid)
+
+        self.dataset._database.session.delete(p._partition)
+
+
     def source(self, name):
         source =  self.dataset.source_file(name)
 
@@ -196,7 +212,6 @@ class Bundle(object):
         are filtered out later. """
         from ambry.etl.pipeline import Pipeline, MergeHeader, MangleHeader, WriteToPartition, SelectPartition
         from ambry.etl.intuit import TypeIntuiter
-        from ambry.etl.stats import Stats
 
         if source:
             source = self.source(source) if isinstance(source, basestring) else source
@@ -474,7 +489,6 @@ class Bundle(object):
             self.dataset.tables[:] = []
 
 
-        #ds.config.metadata.clean()
         ds.config.build.clean()
         ds.config.process.clean()
 
@@ -491,9 +505,6 @@ class Bundle(object):
 
         raise NotImplementedError()
 
-        for source in self.dataset.sources:
-            print source
-
     def load_requirements(self):
         """If there are python library requirements set, append the python dir
         to the path."""
@@ -505,7 +516,6 @@ class Bundle(object):
 
         python_dir = self._library.filesystem.python()
         sys.path.append(python_dir)
-
 
     ##
     ## Prepare
@@ -612,10 +622,6 @@ class Bundle(object):
         self.do_sync()
 
         self.build_source_files.record_to_objects()
-
-        #if not self.is_prepared:
-        #    self.build_source_files.record_to_objects()
-        #    self.build_source_files.objects_to_record()
 
         self.load_requirements()
 
@@ -801,8 +807,15 @@ class Bundle(object):
         return True
 
     def build_unify_partitions(self):
+        """For all of the segments for a partition, create the parent partition, combine the children into the parent,
+        and delete the children. """
+
         from collections import defaultdict
         from ..orm.partition import Partition
+        from ..etl.stats import Stats
+
+        # Group the segments by their parent partition name, which is the
+        # same name, without the segment.
         partitions = defaultdict(set)
         for p in self.dataset.partitions:
             if p.type == p.TYPE.SEGMENT:
@@ -810,29 +823,52 @@ class Bundle(object):
                 name.segment = None
                 partitions[name].add(p)
 
+        # For each group, copy the segment partitions to the parent partitions, then
+        # delete the segment partitions.
         for name, segments in partitions.items():
-            last_id = 0;
+
+            self.log("Coalescing segments for partition {} ".format(name))
 
             parent = self.partitions.get_or_new_partition(name, type = Partition.TYPE.UNION)
+            stats = Stats(parent.table)
 
+            pdf = parent.datafile
             for seg in sorted(segments, key = lambda s: str(s.name)):
-                first_id = last_id + 1
-                seg.count = seg.stats_dict.id.count
-                last_id = first_id + seg.count - 1
-                seg.min_key = first_id
-                seg.max_key = last_id
-                seg.parent_vid = parent.vid
+
+                self.log("Coalescing segment  {} ".format(seg.identity.name))
+
+                reader = self.wrap_partition(seg).datafile.reader()
+                header = None
+                for row in reader:
+
+                    if header is None:
+                        header = row
+                        pdf.insert_header(row)
+                        stats.process_header(row)
+                    else:
+                        pdf.insert_body(row)
+                        stats.process_body(row)
+
+                reader.close()
+
+            pdf.close()
+            parent.finalize(stats)
+
+            for s in segments:
+                self.wrap_partition(s).datafile.delete()
+                self.dataset._database.session.delete(s)
+
 
     def build_post_build_source(self, pl):
 
         from ..etl import PartitionWriter
 
         try:
-            for p, stats in pl[PartitionWriter].partitions:
+            for p in pl[PartitionWriter].partitions:
                 self.logger.info("Finalizing partition {}".format(p.identity.name))
                 # We're passing the datafile path into filanize b/c finalize is on the ORM object, and datafile is
                 # on the proxy.
-                p.finalize(stats)
+                p.finalize()
                 # FIXME SHouldn't need to do this commit, but without it, somce stats get added multiple
                 # times, causing an error later. Probably could be avoided by adding the states to the
                 # collection in the dataset
@@ -841,14 +877,24 @@ class Bundle(object):
         except IndexError:
             self.error("Pipeline didn't have a PartitionWriters, won't try to finalize")
 
-        self.build_unify_partitions()
-
         self.commit()
+
+    def build_post_combine_stats(self):
+
+        pass
+
+    def build_post_write_bundle_file(self):
+
+        path = self.library.create_bundle_file(self)
 
     def post_build(self):
         """After the build, update the configuration with the time required for
         the build, then save the schema back to the tables, if it was revised
         during the build."""
+
+        self.build_unify_partitions()
+
+        self.build_post_write_bundle_file()
 
         return True
 

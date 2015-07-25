@@ -167,7 +167,6 @@ class Dataset(Base):
         '''
         '''
         from . import Partition
-        from ..identity import PartialPartitionName
 
         # Create the basic partition record, with a sequence ID.
 
@@ -175,17 +174,15 @@ class Dataset(Base):
             table = self.table(table)
 
         p = Partition(
-            sequence_id = len(self.partitions)+1, # First guess; concurrent access could invalidate later.
             t_vid = table.vid,
+            d_vid = self.vid,
             table_name = table.name,
             **kwargs
         )
 
-
-
-        object_session(self).add(p)
-
+        errors = 0
         self.partitions.append(p)
+        object_session(self).commit()
 
         return p
 

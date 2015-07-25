@@ -322,7 +322,7 @@ class Test(TestBase):
         self.assertTrue(b.do_build())
 
         # Two dataset partitions, one segment, one union
-        self.assertEquals(2,len(b.dataset.partitions))
+        self.assertEquals(1,len(b.dataset.partitions))
 
         # But, only one partition from the bundle, which is the one union partition
         self.assertEquals(1, len(list(b.partitions)))
@@ -387,7 +387,6 @@ class Test(TestBase):
         self.assertTrue(b.do_build())
 
         for p in b.partitions:
-
             self.assertIn(int(p.identity.time), p.time_coverage)
 
         self.assertEquals([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
@@ -401,9 +400,11 @@ class Test(TestBase):
         self.assertEqual(4, len(b.dataset.partitions))
         self.assertEqual(2, len(b.dataset.tables))
 
-        c = b.build_fs.getcontents(list(b.build_fs.walkfiles())[0])
+        from ambry.etl.partition import PartitionMsgpackDataFileReader
 
-        self.assertEquals(6001, len(c.splitlines()))
+        p = list(b.partitions)[0]
+
+        self.assertEquals(6001, sum( 1 for row in p.datafile.reader() ))
 
         self.assertEquals(48, len(b.dataset.stats))
 
@@ -419,7 +420,6 @@ class Test(TestBase):
         self.assertEquals('synced', b.state)
         self.assertTrue(b.do_prepare())
         self.assertEquals('prepared', b.state)
-
 
     def test_db_copy(self):
         from ambry.orm.database import Database
@@ -476,3 +476,25 @@ class Test(TestBase):
         self.assertEqual(10000, len(list(p.stream(skip_header=True))))
 
         self.assertEqual(10001, len(list(p.stream(skip_header=False))))
+
+    def test_msgpack_build(self):
+        """Build the simple bundle"""
+
+        from geoid import civick, census
+
+        b = self.setup_bundle('complete-build')
+        b = b.run()
+
+        for p in b.partitions:
+            print '---', p.identity.name
+
+            for c in p.children:
+                print '   ', c.identity.name
+                id_sum = 0
+                for row in b.wrap_partition(c).stream(skip_header=True):
+
+                    id_sum += row[0]
+
+                self.assertEqual(18003000, id_sum)
+
+

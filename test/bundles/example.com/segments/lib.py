@@ -23,7 +23,7 @@ class RandomSourcePipe(Pipe):
 
         rc = random.choice
 
-        for i in range(10):
+        for i in range(20000):
             row = OrderedDict()
 
             row['uuid'] = str(uuid.uuid4())

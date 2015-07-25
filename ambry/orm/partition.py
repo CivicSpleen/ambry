@@ -61,8 +61,8 @@ class Partition(Base, DictableMixin):
     variant = SAColumn('p_variant', String(50))
     format = SAColumn('p_format', String(50))
     segment = SAColumn('p_segment', Integer) # Part of a larger partition. segment_id is usually also a source ds_id
-    min_key = SAColumn('p_min_key', BigIntegerType)
-    max_key = SAColumn('p_max_key', BigIntegerType)
+    min_id = SAColumn('p_min_id', BigIntegerType)
+    max_id = SAColumn('p_max_id', BigIntegerType)
     count = SAColumn('p_count', Integer)
     state = SAColumn('p_state', String(50))
     data = SAColumn('p_data', MutationDict.as_mutable(JSONEncodedObj))
@@ -75,7 +75,7 @@ class Partition(Base, DictableMixin):
     location = SAColumn('p_location', String(100)) # Location of the data file
 
     __table_args__ = (#ForeignKeyConstraint( [d_vid, d_location], ['datasets.d_vid','datasets.d_location']),
-        UniqueConstraint('p_sequence_id', 'p_t_vid', name='_uc_partitions_1'),
+        UniqueConstraint('p_sequence_id', 'p_d_vid', name='_uc_partitions_1'),
     )
 
     # For the primary table for the partition. There is one per partition, but a table
@@ -193,6 +193,7 @@ class Partition(Base, DictableMixin):
                 scov |= set(x for x in isimplify(GVid.parse(gvid) for gvid in sd[c.name].uniques))
                 grains |= set(GVid.parse(gvid).summarize() for gvid in sd[c.name].uniques)
             elif sd[c.name].is_year:
+
                 tcov |= set(int(x) for x in sd[c.name].uniques)
             elif sd[c.name].is_date:
                 tcov |= set(parser.parse(x).year if isinstance(x,basestring) else x.year for x in sd[c.name].uniques)
@@ -209,8 +210,6 @@ class Partition(Base, DictableMixin):
 
         # For geo_coverage, only includes the higher level summary levels, counties, states, places and urban areas
         self.space_coverage = sorted([str(x) for x in scov if bool(x) and x.sl in (10, 40, 50, 60, 160, 400)])
-
-
 
         ## Time Coverage
 
@@ -255,6 +254,9 @@ class Partition(Base, DictableMixin):
 
             def items(self):
                 return self.__dict__.items()
+
+            def __getitem__(self, k):
+                return self.__dict__[k]
 
         cols = {s.column.name: Bunch(s.dict) for s in self.stats}
 
@@ -309,26 +311,36 @@ class Partition(Base, DictableMixin):
             if hasattr(self, k):
                 setattr(self, k, v)
 
-    def finalize(self, stats):
+    def finalize(self, stats=None):
 
         self.state = self._partition.STATES.BUILT
 
         # Write the stats for this partition back into the partition
 
-        self.set_stats(stats.stats())
-        self.set_coverage(stats.stats())
-        self.table.update_from_stats(stats.stats())
+        if stats:
+            self.set_stats(stats.stats())
+            self.set_coverage(stats.stats())
+            self.table.update_from_stats(stats.stats())
 
         self.location = 'build'
 
         self.state = self._partition.STATES.FINALIZED
 
-
-
     @staticmethod
     def before_insert(mapper, conn, target):
         """event.listen method for Sqlalchemy to set the sequence for this
         object and create an ObjectNumber value for the id_"""
+        from sqlalchemy import text
+
+        if not target.sequence_id:
+            conn.execute("BEGIN IMMEDIATE")
+            sql = text("SELECT max(p_sequence_id)+1 FROM Partitions WHERE p_d_vid = :did")
+
+            target.sequence_id, = conn.execute(sql, did=target.d_vid).fetchone()
+
+            if not target.sequence_id:
+                target.sequence_id = 1
+
 
         if not target.vid:
             assert bool(target.d_vid)

@@ -35,25 +35,6 @@ class Test(unittest.TestCase):
         for row in db.connection.execute("SELECT * FROM {}".format(table)):
             print row
 
-    def test_file_basic(self):
-        """Basic operations on datasets"""
-        from ambry.orm.database import Database
-
-        db = Database(self.dsn)
-        db.open()
-
-        ds = db.new_dataset(**self.ds_params)
-
-        ds.bsfile('a')
-        ds.bsfile('b')
-
-        a = ds.bsfile('a')
-        self.assertEquals('fs',a.source)
-        self.assertEquals('a', a.path)
-
-        db.commit()
-
-        self.dump_database(db,'files')
 
 def suite():
     suite = unittest.TestSuite()

@@ -76,19 +76,24 @@ class StatSet(object):
         self.num_bins = 16
         self.bins = [0] * self.num_bins
 
-
     def add(self, v):
         from math import sqrt
 
         self.n += 1
 
-        self.size = max(self.size, len(unicode(v)))
+        try:
+            unival = unicode(v)
+        except UnicodeError:
+            unival = v.decode('ascii','ignore')
+
+
+        self.size = max(self.size, len(unival))
 
         if self.lom == self.LOM.NOMINAL or self.lom == self.LOM.ORDINAL:
             if self.is_time or self.is_date:
-                self.counts[unicode(v)] += 1
+                self.counts[unival] += 1
             else:
-                self.counts[unicode(v)] += 1
+                self.counts[unival] += 1
 
         elif self.lom == self.LOM.INTERVAL or self.lom == self.LOM.RATIO:
 
@@ -98,7 +103,7 @@ class StatSet(object):
             # HACK There are probably a lot of 1-off errors in this
 
             if self.n < 5000:
-                self.counts[unicode(v)] += 1
+                self.counts[unival] += 1
 
             elif self.n == 5000:
                 # If less than 1% are unique, assume that this number is actually an ordinal
@@ -124,7 +129,7 @@ class StatSet(object):
             try:
                 self.stats.add(float(v))
             except (ValueError, TypeError):
-                self.counts[unicode(v)] += 1
+                self.counts[unival] += 1
         else:
             assert False, "Really should be one or the other ... "
 

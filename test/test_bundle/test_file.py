@@ -136,3 +136,91 @@ class Test(unittest.TestCase):
         #ad = AttrDict(ds.bsfile(File.BSFILE.META).unpacked_contents)
         #for x in  ad.flatten():
         #    print x
+
+    def test_datafile(self):
+        from ambry.etl.partition import PartitionCsvDataFile, PartitionMsgpackDataFile
+        from fs.opener import fsopendir
+        import time
+        import datetime
+        from contexttimer import Timer
+
+        fs = fsopendir('mem://')
+
+        N = 100000
+
+        # Basic read/ write tests.
+
+        header = 'abcdef'.split()
+        row = [ None, 1, 2.0, 'Foobar', datetime.date(10,10,10), datetime.date(10,10,10) ]
+
+        with Timer() as t:
+
+            df = PartitionCsvDataFile(fs, 'foobar')
+
+            df.insert_header(['a', 'b'])
+
+            for i in range(N):
+                df.insert_body([i,i])
+
+            df.close()
+            print float(N)/t.elapsed
+
+        with Timer() as t:
+            count = 0
+
+            for row in df.reader():
+                try:
+                    count += int(row[0])
+                except:
+                    pass
+
+            print float(N)/t.elapsed
+
+        with Timer() as t:
+            df = PartitionMsgpackDataFile(fs, 'foobar')
+
+            df.insert_header(['a', 'b'])
+
+            for i in range(N):
+                df.insert_body([i, i])
+
+            df.close()
+            print float(N)/t.elapsed
+
+        with Timer() as t:
+            count = 0
+
+            for row in df.reader():
+                try:
+                    count += int(row[0])
+                except:
+                    pass
+
+            print float(N)/t.elapsed
+
+        # Test rate of coping from one set of segments
+
+        def gen_df(N, name):
+            df = PartitionMsgpackDataFile(fs, name)
+
+            df.insert_header(header)
+
+            for i in range(N):
+                df.insert_body(row)
+
+            df.close()
+
+            return df
+
+        from itertools import chain
+
+        df = PartitionMsgpackDataFile(fs, 'output')
+
+        with Timer() as t:
+            for row in chain(gen_df(N, 'foo1').reader(), gen_df(N,'foo2').reader()):
+                df.insert_body(row)
+
+            print float(2*N) / t.elapsed
+
+
+

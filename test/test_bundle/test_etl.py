@@ -602,7 +602,7 @@ class Test(TestBase):
 
         print list(b.build_fs.walkfiles())
 
-        self.assertEquals(10001, len(b.build_fs.getcontents('/example.com/simple-0.1.3/simple/1.csv').splitlines()))
+        self.assertEquals(10001, len(b.build_fs.getcontents('/example.com/simple-0.1.3/simple.csv').splitlines()))
 
         p = list(b.partitions)[0]
         self.assertEquals(10001, len(list(p.stream())))
@@ -725,4 +725,28 @@ class Test(TestBase):
 
         p = list(b.partitions)[0]
 
-        self.assertEquals(41, len(list(p.stream())))
+        #for row in p.stream(skip_header=True):
+        #    print row[0]
+
+        #self.assertEquals(41, len(list(p.stream())))
+
+        import time
+        t1 = time.time()
+        count = 0
+        for row in p.stream(skip_header=True, raw = True):
+            count += 1
+        print float(count)/ ( time.time() - t1)
+
+
+        for c in p.children:
+            c = b.wrap_partition(c)
+            t1 = time.time()
+            count = 0
+            for row in c.stream(skip_header=True, raw = True):
+                count += 1
+            print float(count) / (time.time() - t1)
+
+
+
+
+

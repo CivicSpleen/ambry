@@ -172,7 +172,6 @@ class Partitions(object):
                            if k in [ e[0] for e in PartialPartitionName._name_parts] )
 
         p = self.bundle.dataset.new_partition(data=data,**kwargs)
-        self.bundle.dataset.commit()
 
         return PartitionProxy(self.bundle, p)
 
@@ -181,7 +180,6 @@ class Partitions(object):
         p = self.bundle.partitions.partition(pname)
         if not p:
             from ..orm.partition import Partition
-
             p = self.bundle.partitions.new_partition(pname, data = data, **kwargs)
 
         return p
@@ -256,25 +254,19 @@ class PartitionProxy(Proxy):
     @property
     def datafile(self):
 
-        if self.type != self.TYPE.SEGMENT:
-            from ambry.dbexceptions import BundleError
-            raise BundleError("Only segment partitions can have datafiles")
+        #if self.type != self.TYPE.SEGMENT:
+        #    from ambry.dbexceptions import BundleError
+        #    raise BundleError("Only segment partitions can have datafiles")
 
         if self._datafile is None:
             from ambry.etl.partition import new_partition_data_file
-            from ambry.etl.stats import  Stats
 
-            self._datafile =  new_partition_data_file(self._bundle.build_fs, self.cache_key,
-                                                      stats = Stats(self.table))
+            self._datafile =  new_partition_data_file(self._bundle.build_fs, self.cache_key)
 
         return self._datafile
 
-
     @property
     def location(self):
-
-        if not self.is_segment:
-            raise Exception("Not a segment. Doesn't have a location")
 
         base_location = self._partition.location
 
@@ -295,26 +287,23 @@ class PartitionProxy(Proxy):
 
         from ambry.etl.transform import CasterPipe
 
-        if not self.type == self.TYPE.SEGMENT:
-            from itertools import chain
+        if self.location == 'build':
+            reader = self.datafile.reader()
 
-            parts = [ PartitionProxy(self._bundle, p) for p in self.children ]
-            iters = [parts[0].stream(raw, skip_header)] + [p.stream(raw, True) for p in parts[1:]]
-            return chain.from_iterable(iters)
-
-        elif self.location == 'build':
-            source = self.datafile.open('rb')
         elif self.location == 'remote':
             b = self.bundle(self.identity.as_dataset().vid)
             remote = self.remote(b)
-            source = remote.get_stream(self.datafile.munged_path)
+
+            self.datafile.reader(remote.get_stream(self.datafile.munged_path))
+
         elif self.location == 'warehouse':
             raise NotImplementedError()
 
         def generator():
-            reader = self.datafile.reader(source)
 
-            header = reader.next()
+            itr = iter(reader)
+
+            header = itr.next()
 
             # Check that header is sensible.
             for i, (a, b) in enumerate(zip(header, (c.name for c in self.table.columns))):
@@ -325,11 +314,10 @@ class PartitionProxy(Proxy):
 
             yield header
 
-            for row in reader:
+            for row in itr:
                 yield row
 
-            source.close()
-            self.datafile.close()
+            reader.close()
 
         if raw:
             itr = iter(generator())
