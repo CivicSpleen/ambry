@@ -341,7 +341,6 @@ class Partition(Base, DictableMixin):
             if not target.sequence_id:
                 target.sequence_id = 1
 
-
         if not target.vid:
             assert bool(target.d_vid)
             assert bool(target.sequence_id)

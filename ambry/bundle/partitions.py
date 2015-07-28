@@ -66,7 +66,8 @@ class Partitions(object):
 
         s = self.bundle.dataset._database.session
 
-        q = (s.query(OrmPartition).filter(or_(
+        q = (s.query(OrmPartition).filter(OrmPartition.d_vid == self.bundle.dataset.vid)
+            .filter(or_(
                  OrmPartition.id == str(id_).encode('ascii'),
                  OrmPartition.vid == str(id_).encode('ascii')
              )))
@@ -79,7 +80,8 @@ class Partitions(object):
             orm_partition = None
 
         if not orm_partition:
-            q = (s.query(OrmPartition).filter(OrmPartition.name == str(id_).encode('ascii')))
+            q = (s.query(OrmPartition).filter(OrmPartition.d_vid == self.bundle.dataset.vid)
+                 .filter(OrmPartition.name == str(id_).encode('ascii')))
 
             try:
                 orm_partition = q.one()
@@ -181,6 +183,8 @@ class Partitions(object):
         if not p:
             from ..orm.partition import Partition
             p = self.bundle.partitions.new_partition(pname, data = data, **kwargs)
+
+        assert p.d_vid == self.bundle.dataset.vid
 
         return p
 
@@ -285,16 +289,23 @@ class PartitionProxy(Proxy):
         - The remote, for checked in data.
         """
 
+        from ..orm.exc import NotFoundError
+        from fs.errors import ResourceNotFoundError
+
         from ambry.etl.transform import CasterPipe
 
         if self.location == 'build':
-            reader = self.datafile.reader()
+            try:
+                reader = self.datafile.reader()
+            except ResourceNotFoundError:
+                raise NotFoundError("Partition {} not found in location '{}'. System Path: {} "
+                                    .format(self.identity.fqname, self.location, self.datafile.syspath))
 
         elif self.location == 'remote':
-            b = self.bundle(self.identity.as_dataset().vid)
-            remote = self.remote(b)
+            b = self._bundle.library.bundle(self.identity.as_dataset().vid)
+            remote = self._bundle.library.remote(b)
 
-            self.datafile.reader(remote.get_stream(self.datafile.munged_path))
+            self.datafile.reader(remote.open(self.datafile.munged_path, 'rb'))
 
         elif self.location == 'warehouse':
             raise NotImplementedError()

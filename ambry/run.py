@@ -308,10 +308,9 @@ class RunConfig(object):
 
         for name, remote in pairs:
 
-            if  isinstance(remote, basestring):
-                r[str(name)] = parse_cache_string(remote, root_dir)
-            else:
-                r[str(name)] = remote
+            remote = remote.format(root = root_dir)
+
+            r[str(name)] = remote
 
         return r
 

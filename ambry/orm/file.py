@@ -123,6 +123,16 @@ class File(Base, DictableMixin):
     def has_contents(self):
         return self.size > 0
 
+    @property
+    def row(self):
+        from collections import OrderedDict
+
+        # Use an Ordered Dict to make it friendly to creating CSV files.
+
+        d = OrderedDict((p.key, getattr(self, p.key)) for p in self.__mapper__.attrs)
+
+        return d
+
     def __init__(self,  **kwargs):
         super(File, self).__init__( **kwargs)
 

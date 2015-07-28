@@ -308,7 +308,6 @@ class Dataset(Base):
             self.variation,
             self.revision)
 
-
 class ConfigAccessor(object):
 
     def __init__(self, dataset):

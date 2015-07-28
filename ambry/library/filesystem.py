@@ -32,7 +32,6 @@ class LibraryFilesystem():
 
         return p
 
-
     def downloads(self, *args):
         return self._compose('downloads',args)
 
@@ -51,3 +50,46 @@ class LibraryFilesystem():
     def search(self, *args):
         """For file-based search systems, like Whoosh"""
         return self._compose('search',args)
+
+    @property
+    def remotes(self):
+
+        return self._config.library().get('remotes', {})
+
+    def remote(self, name):
+        from fs.s3fs import S3FS
+        from fs.opener import fsopendir
+        from ambry.util import parse_url_to_dict
+
+        r = self.remotes[name]
+
+        # TODO: Hack the pyfilesystem fs.opener file to get credentials from a keychain
+        if r.startswith('s3'):
+            from fs.s3fs import S3FS
+            from ambry.util import parse_url_to_dict
+
+            import ssl
+
+            _old_match_hostname = ssl.match_hostname
+
+            def _new_match_hostname(cert, hostname):
+                if hostname.endswith('.s3.amazonaws.com'):
+                    pos = hostname.find('.s3.amazonaws.com')
+                    hostname = hostname[:pos].replace('.', '') + hostname[pos:]
+                return _old_match_hostname(cert, hostname)
+
+            ssl.match_hostname = _new_match_hostname
+
+            pd = parse_url_to_dict(r)
+
+            account = self._config.account(pd['netloc'])
+
+            return S3FS(
+                bucket = pd['netloc'],
+                prefix = pd['path'],
+                aws_access_key = account['access'],
+                aws_secret_key = account['secret'],
+
+            )
+        else:
+            return fsopendir(r, create_dir = True)

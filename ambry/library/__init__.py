@@ -13,7 +13,7 @@ logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 def new_library(config=None):
 
-    from ckcache import new_cache
+
     from ..orm import Database
     from .filesystem import LibraryFilesystem
     from boto.exception import S3ResponseError  # the ckcache lib should return its own exception
@@ -22,28 +22,6 @@ def new_library(config=None):
         from ..run import get_runconfig
         config = get_runconfig()
 
-    remotes = {}
-
-    for name, remote in config.library().get('remotes', {}).items():
-        remote_account = remote.get('account')
-        if remote_account and remote_account not in config.accounts:
-            config_files = ' or '.join(config.files)
-            warn_msg = \
-                'Missing credentials: {} remote skipped because of missing credentials. To setup '\
-                'remote add {} to the accounts section of the {}'\
-                .format(remote['account'], remote['account'], config_files)
-            logger.warning(warn_msg)
-            continue
-
-        try:
-            remotes[name] = new_cache(remote, config.filesystem('root'))
-        except S3ResponseError as e:
-            logger.error("Failed to init cache {} : {}; {} ".format(name, str(remote.bucket), e))
-
-    # A bit random. There just should be some priority
-    for i, remote in enumerate(remotes.values()):
-        remote.set_priority(i)
-
     lfs = LibraryFilesystem(config)
     db = Database(config.library()['database'])
     warehouse = None
@@ -51,16 +29,14 @@ def new_library(config=None):
     l = Library(config=config,
                 database=db,
                 filesystem=lfs,
-                warehouse=warehouse,
-                remotes=remotes
-                )
+                warehouse=warehouse)
 
     return l
 
 
 class Library(object):
 
-    def __init__(self,config, database,filesystem, warehouse, remotes ):
+    def __init__(self,config, database,filesystem, warehouse ):
         from ..util import get_logger
 
         self._config = config
@@ -68,10 +44,19 @@ class Library(object):
         self._db.open()
         self._fs = filesystem
         self._warehouse = warehouse
-        self._remotes = remotes
+
         self._search = None
 
         self.logger = get_logger(__name__)
+
+    def resolve_object_number(self,ref):
+        """Resolve a variety of object numebrs to a dataset number"""
+        from ..identity import ObjectNumber
+
+        on = ObjectNumber.parse(ref)
+        ds_on = on.as_dataset
+
+        return ds_on
 
     @property
     def database(self):
@@ -92,27 +77,35 @@ class Library(object):
 
     @property
     def remotes(self):
-        return self._remotes
+        return self.filesystem.remotes
 
-    def remote(self,name_or_bundle):
+    def remote(self, name_or_bundle):
+        return self.filesystem.remote(self.resolve_remote(name_or_bundle))
+
+    def resolve_remote(self, name_or_bundle):
         from ..dbexceptions import ConfigurationError
 
         fails = []
 
-        try:
-            return self._remotes[name_or_bundle]
-        except KeyError:
-            pass
+        remote_names = self.filesystem.remotes.keys()
 
         try:
-            return self._remotes[name_or_bundle.metadata.about.access]
+            if name_or_bundle in remote_names:
+                return name_or_bundle
+        except KeyError:
+            fails.append(name_or_bundle)
+
+        try:
+            if name_or_bundle.metadata.about.remote in remote_names:
+                return name_or_bundle.metadata.about.remote
         except AttributeError:
             pass
         except KeyError:
             fails.append(name_or_bundle.metadata.about.access)
 
         try:
-            return self._remotes[name_or_bundle.metadata.about.remote]
+            if name_or_bundle.metadata.about.access in remote_names:
+                return name_or_bundle.metadata.about.access
         except AttributeError:
             pass
         except KeyError:
@@ -132,6 +125,10 @@ class Library(object):
     def datasets(self):
         """Return all datasets"""
         return self._db.datasets
+
+    def dataset(self, ref, load_all = False):
+        """Return all datasets"""
+        return self.database.dataset(ref, load_all = load_all)
 
     def new_bundle(self,assignment_class = None, **kwargs):
         """
@@ -204,6 +201,7 @@ class Library(object):
         if isinstance(ref, Dataset ):
             ds = ref
         else:
+            ref = self.resolve_object_number(ref)
             ds = self._db.dataset(ref)
 
         if not ds:
@@ -220,14 +218,31 @@ class Library(object):
 
 
     def partition(self, ref):
-        from ambry.identity import ObjectNumber
+        from ambry.orm import Partition
+        from ambry.orm.exc import NotFoundError
+        from ambry.identity import ObjectNumber, NotObjectNumberError
+        from sqlalchemy import or_
 
-        on = ObjectNumber.parse(ref)
-        ds_on = on.as_dataset
+        try:
+            on = ObjectNumber.parse(ref)
+            ds_on = on.as_dataset
 
-        ds = self._db.dataset(ds_on) # Could do it in on SQL query, but this is easier.
+            ds = self._db.dataset(ds_on) # Could do it in on SQL query, but this is easier.
 
-        return ds.partition(ref)
+            p =  ds.partition(ref)
+
+        except NotObjectNumberError:
+            q = (self.database.session.query(Partition)
+                 .filter(or_(Partition.name == str(ref), Partition.vname == str(ref)))
+                 .order_by(Partition.vid.desc()))
+
+            p = q.first()
+
+
+        if not p:
+            raise NotFoundError("No partition for ref: '{}'".format(ref))
+
+
 
     ##
     ## Storing
@@ -243,19 +258,73 @@ class Library(object):
         os.fdopen(fh).close()
 
         db = Database('sqlite:///{}.db'.format(path))
-
         db.open()
 
         b.commit()
         ds = db.copy_dataset(b.dataset)
 
-        # Set the location for the bundle file
-        for p in ds.partitions:
-            p.location = 'remote'
+        ds.commit()
+
+        db.close()
+
+        return db.path
+
+    def duplicate(self, b):
+        """Duplicate a bundle, with a higher version number"""
+        from ..bundle import Bundle
+        from ..orm.exc import NotFoundError, ConflictError
+        from sqlalchemy.orm import object_session, make_transient, lazyload
+        from ..orm import File
+
+        on = b.identity.on
+        on.revision = on.revision + 1
+
+        try:
+            extant = self.bundle(str(on))
+
+            if extant:
+                raise ConflictError("Already have a bundle with vid: {}".format(str(on)))
+        except NotFoundError:
+            pass
+
+        d = b.dataset.dict
+        d['revision'] = on.revision
+        d['vid'] = str(on)
+        del d['name']
+        del d['vname']
+        del d['version']
+        del d['fqname']
+        del d['cache_key']
+
+        ds = self.database.new_dataset(**d)
+
+        nb = self.bundle(ds.vid)
+        nb.state = Bundle.STATES.NEW
+
+        nb.set_last_access(Bundle.STATES.NEW)
+
+        nb.set_file_system(source_url=self._fs.source(ds.name),
+                          build_url=self._fs.build(ds.name))
+
+        session = object_session(nb.dataset)
+
+        for f in session.query(File).filter(File.d_vid == ds.vid).options(lazyload('*')).all():
+
+            d =  f.row
+            print d['d_vid'], d['path'], d['major_type'], d['minor_type']
+
+            del d['id']
+            del d['d_vid']
+            del d['dataset']
+
+            nf = File(**d)
+
+
+            ds.files.append(nf)
 
         ds.commit()
 
-        return db.path
+        return nb
 
     def checkin(self,b):
         """
@@ -265,25 +334,84 @@ class Library(object):
         :return:
         """
 
-        from ambry.util import copy_file_or_flo
+        from ambry.bundle import Bundle
         import os
+        from ambry.orm.database import Database
+        remote_name = self.resolve_remote(b)
 
-        remote = self.remote(b)
+        remote = self.remote(remote_name)
 
         db_path = self.create_bundle_file(b)
 
-        path = remote.put(db_path, b.identity.cache_key + ".db")
+        db = Database('sqlite:///{}'.format(db_path))
+        ds = db.dataset(b.dataset.vid)
+
+        self.logger.info('Checking in bundle {}'.format(ds.identity.vname))
+
+        # Set the location for the bundle file
+        for p in ds.partitions:
+            p.location = 'remote'
+
+        ds.config.build.state.current = Bundle.STATES.INSTALLED
+        ds.commit()
+        db.commit()
+        db.close()
+
+        db_ck = b.identity.cache_key + ".db"
+
+        with open(db_path) as f:
+            remote.setcontents(db_ck, f)
 
         os.remove(db_path)
 
+        def prt(a,b):
+            print a, b
+
         for p in b.partitions:
-            if p.is_segment:
-                with remote.put_stream(p.datafile.munged_path) as f:
-                    copy_file_or_flo(p.datafile.open('rb'), f)
+            # Turn off the compression, which really turns off decompression on read. This is important because
+            # we want to copy the compressed data to the remote.
+            with p.datafile.open('rb', compress = False) as fin:
+                self.logger.info('Checking in {}'.format(p.identity.vname))
+                remote.setcontents(p.datafile.munged_path, fin)
 
         b.dataset.commit()
 
+        return remote_name, db_ck
 
+    def sync_remote(self, remote_name):
+        from fs.opener import fsopendir
+        import os
+        from ambry.orm.database import Database
+        from ambry.bundle import Bundle
+
+        remote = self.remote(remote_name)
+
+        #temp = fsopendir("temp://ambry-import", create_dir = True)
+        temp = fsopendir("/tmp/ambry-import", create_dir=True)
+
+        for fn in remote.walkfiles(wildcard='*.db'):
+            temp.makedir(os.path.dirname(fn), recursive = True, allow_recreate=True)
+            with remote.open(fn, 'rb') as f:
+                temp.setcontents(fn, f)
+
+            try:
+                db = Database('sqlite:///{}'.format(temp.getsyspath(fn)))
+                db.open()
+
+                ds = list(db.datasets)[0]
+
+                extant = self.dataset(ds.vid)
+                if not extant:
+                    self.database.copy_dataset(ds)
+
+                b = self.bundle(ds.vid)
+                b.state = Bundle.STATES.INSTALLED
+
+                self.logger.info("Synced {}".format(ds.vname))
+            except Exception as e:
+                self.logger.error("Failed to sync {}, {}: {}".format(fn, temp.getsyspath(fn), e))
+
+        self.database.commit()
 
     def remove(self, bundle):
         '''Remove a bundle from the library, and delete the configuration for
@@ -291,7 +419,6 @@ class Library(object):
 
         bundle.remove()
         self.database.remove_dataset(bundle.dataset)
-
 
     def number(self, assignment_class=None, namespace = 'd'):
         """
@@ -378,7 +505,6 @@ class Library(object):
             self._search = Search(self)
 
         return self._search
-
 
     def install_packages(self, module_name, pip_name):
 

@@ -735,8 +735,12 @@ class ObjectNumber(object):
         if not on_str:
             raise NotObjectNumberError("Got null input")
 
+        if not isinstance(on_str, basestring):
+            raise NotObjectNumberError("Must be a string")
+
         # if isinstance(on_str, unicode):
         #     dataset = on_str.encode('ascii')
+
 
         type_ = on_str[0]
         on_str = on_str[1:]
@@ -942,11 +946,7 @@ class TopNumber(ObjectNumber):
         return ObjectNumber.base62_encode(self.dataset).rjust(ds_len, '0')
 
     def __str__(self):
-        return (
-            self.space +
-            self._ds_str() +
-            ObjectNumber._rev_str(
-                self.revision))
+        return (self.space +self._ds_str() + ObjectNumber._rev_str(self.revision))
 
 
 class DatasetNumber(ObjectNumber):
@@ -976,6 +976,12 @@ class DatasetNumber(ObjectNumber):
         ds_len = self.DLEN.DATASET_CLASSES[self.assignment_class]
 
         return ObjectNumber.base62_encode(self.dataset).rjust(ds_len, '0')
+
+    @property
+    def as_dataset(self):
+        from copy import copy
+        return copy(self)
+
 
     def as_partition(self, partition_number=0):
         """Return a new PartitionNumber based on this DatasetNumber."""

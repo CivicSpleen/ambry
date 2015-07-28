@@ -13,6 +13,8 @@ def bundle_command(args, rc):
 
     from ..library import new_library
     from . import global_logger
+    from ambry.orm.exc import ConflictError
+
     l = new_library(rc)
     l.logger = global_logger
 
@@ -21,7 +23,10 @@ def bundle_command(args, rc):
         warn('Entering debug mode. Send USR1 signal (kill -USR1 ) to break to interactive prompt')
         debug.listen()
 
-    globals()['bundle_' + args.subcommand](args, l, rc)
+    try:
+        globals()['bundle_' + args.subcommand](args, l, rc)
+    except ConflictError as e:
+        fatal(str(e))
 
 def get_bundle_ref(args,l):
     """ Use a variety of methods to determine which bundle to use
@@ -30,6 +35,8 @@ def get_bundle_ref(args,l):
     :return:
     """
     import os
+    from ambry.orm.exc import NotFoundError
+    from ambry.identity import NotObjectNumberError
 
     cwd_bundle = os.path.join(os.getcwd(), 'bundle.yaml')
     if os.path.exists(cwd_bundle):
@@ -41,8 +48,9 @@ def get_bundle_ref(args,l):
 
     try:
         if args.term:
-         return (args.term, 'argument')
-    except AttributeError:
+            l.bundle(args.term) # Exception if not exists
+            return (args.term, 'argument')
+    except (AttributeError, NotFoundError, NotObjectNumberError):
         pass
 
     if args.id:
@@ -95,7 +103,6 @@ def bundle_parser(cmd):
     sp.add_argument('-t', '--time', default=None, help='Time period. Use ISO Time intervals where possible. ')
     sp.add_argument('-p', '--space', default=None, help='Spatial extent name')
     sp.add_argument('-v', '--variation', default=None, help='Name of the variation')
-    sp.add_argument('-c', '--creator', required=False, help='Id of the creator')
     sp.add_argument('-n', '--dryrun', action="store_true", default=False, help='Dry run')
     sp.add_argument('-k', '--key', help='Number server key. Use \'self\' for a random, self-generated key.')
     sp.add_argument('args', nargs=argparse.REMAINDER)  # Get everything else.
@@ -108,37 +115,11 @@ def bundle_parser(cmd):
 
     asp = command_p.add_subparsers(title='Config subcommands', help='Subcommand for operations on a bundle file')
 
-    # config rewrite
-    sp = asp.add_parser('rewrite', help='Re-write the bundle file, updating the formatting')
-    sp.set_defaults(subsubcommand='rewrite')
-
-    # config doc
-    sp = asp.add_parser('doc', help='Display some of the bundle documentation')
-    sp.set_defaults(subsubcommand='doc')
-
-
-    # config incver
-    sp = asp.add_parser('incver', help='Increment the version number')
-    sp.set_defaults(subsubcommand='incver')
-    sp.add_argument('-m', '--message', default=False, help="Message ")
-
-    # config newnum
-    sp = asp.add_parser('newnum', help='Get a new dataset number')
-    sp.set_defaults(subsubcommand='newnum')
-
-
-    # config scrape
-    sp = asp.add_parser('scrape',
-                        help='Scrape all of the links from the page references in external_documentation.download')
-    sp.set_defaults(subsubcommand='scrape')
-    sp.add_argument('-r', '--regex', default=False, help="Select entries where the UR matches the regular expression")
-
-
-    # config doc
+    # Dump
     command_p = sub_cmd.add_parser('dump', help="Dump records from the bundle database")
     command_p.set_defaults(subcommand='dump')
     group = command_p.add_mutually_exclusive_group()
-    group.add_argument('-c', '--configf', default=False, action="store_const", const = 'configs', dest='table',
+    group.add_argument('-c', '--config', default=False, action="store_const", const = 'configs', dest='table',
                             help='Dump configs')
     group.add_argument('-f', '--files', default=False, action="store_const", const='files', dest='table',
                             help='Dump files')
@@ -157,9 +138,7 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='info')
     command_p.add_argument('-w', '--which', default=False, action="store_true",
                            help='Report the reference of the bundles that will be accessed by other commands')
-    command_p.add_argument('-s', '--schema', default=False, action="store_true",
-                           help='Dump the schema as a CSV. The bundle must have been prepared')
-    command_p.add_argument('-d', '--dep', default=False, help='Report information about a dependency')
+
     command_p.add_argument('-S', '--stats', default=False, action="store_true",
                            help='Also report column stats for partitions')
     command_p.add_argument('-P', '--partitions', default=False, action="store_true",
@@ -185,6 +164,11 @@ def bundle_parser(cmd):
     command_p.add_argument('-t', '--test', default=False, action="store_true", help='Only Report the directions of the next sync')
     command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
 
+    #
+    #     duplicate Command
+    #
+    command_p = sub_cmd.add_parser('duplicate', help='Increment a bundles version number and create a new bundle')
+    command_p.set_defaults(subcommand='duplicate')
 
     #
     # Clean Command
@@ -231,6 +215,21 @@ def bundle_parser(cmd):
                            help='Install after building')
     command_p.add_argument('-p', '--print_pipe', default=False, action="store_true",
                            help='Print out the pipeline as it runs')
+
+
+    #
+    # Finalize Command
+    #
+    command_p = sub_cmd.add_parser('finalize', help='Finalize the bundle, preventing further changes')
+    command_p.set_defaults(subcommand='finalize')
+
+
+    #
+    # Checkin Command
+    #
+    command_p = sub_cmd.add_parser('checkin', help='Commit the bundle to the remote store')
+    command_p.set_defaults(subcommand='checkin')
+
 
     #
     # Update Command
@@ -295,20 +294,26 @@ def bundle_parser(cmd):
     command_p.add_argument('-a', '--append', default=False, action="store_true", help='Append the source and bundle name to the path')
     command_p.add_argument('-d', '--defaults', default=False, action="store_true",
                            help='Write default files when there is no other content for file. ')
-
     command_p.add_argument('source', nargs='?', type=str, help='Bundle source directory or file')
+
+    command_p = sub_cmd.add_parser('extract', help='Extract data from a bundle')
+    command_p.set_defaults(subcommand='extract')
+    command_p.add_argument('-l', '--limit', type=int, default=None, help='Limit on number of rwos per file')
+    command_p.add_argument('partition', nargs='?', metavar='partition',  type=str, help='Partition to export')
+    command_p.add_argument('directory', nargs='?', metavar='directory', help='Output directory')
 
 def bundle_info(args, l, rc):
     from ambry.util.datestimes import compress_years
     from tabulate import tabulate
     from ambry.bundle import Bundle
-
-    ref, frm = get_bundle_ref(args,l)
-    b = l.bundle(ref)
+    from ambry.orm.exc import NotFoundError
 
     if args.which:
+        ref, frm = get_bundle_ref(args, l)
         prt('Will use bundle ref {}, {}, referenced from {}'.format(ref, b.identity.vname, frm))
         return
+
+    b = using_bundle(args, l)
 
     b.set_last_access(Bundle.STATES.INFO)
 
@@ -355,16 +360,39 @@ def bundle_info(args, l, rc):
     print tabulate(join(*info), tablefmt='plain')
 
     info = [list()]
-    inf(0, "Source FS",str(b.source_fs))
+
     inf(0, "Build  FS", str(b.build_fs))
+    inf(0, "Source FS", str(b.source_fs))
 
     print tabulate(join(info[0]), tablefmt='plain')
+
+    # DIsplay info about a partition, if one was provided
+    if args.term:
+        try:
+            p = b.partition(args.term)
+
+            info = [list(), list()]
+
+            inf(0, "ID", p.identity.id_)
+            inf(0, "VID", p.identity.vid)
+            inf(1, "Name", p.identity.name)
+            inf(1, "VName", p.identity.vname)
+
+            inf(0, "Location", p.location)
+            inf(1, "State", p.state)
+
+            print "\nPartition"
+            print tabulate(join(*info), tablefmt='plain')
+
+        except NotFoundError:
+            pass
 
     if args.stats:
 
         from ambry.etl.stats import text_hist
         from textwrap import wrap
         from terminaltables import  SingleTable
+
 
         for p in b.partitions:
             rows = ['Column LOM Count Uniques Values'.split()]
@@ -384,8 +412,34 @@ def bundle_info(args, l, rc):
             #print tabulate(row, tablefmt='plain')
             print SingleTable(rows, title="Stats for "+str(p.identity.name)).table
 
+    elif args.partitions:
+
+        rows = []
+        for p in b.partitions:
+            rows.append([p.vid,p.vname, p.table.name])
+        print '\nPartitions'
+        print tabulate(rows)
+
+def bundle_duplicate(args, l, rc):
+    from ambry.bundle import Bundle
+
+    b = using_bundle(args, l)
+
+    if not b.is_finalized:
+        fatal("Can't increments a bundle unless it is finalized")
+
+    nb = l.duplicate(b)
+
+    nb.set_last_access(Bundle.STATES.NEW)
+
+    prt("New Bundle: {} ".format(nb.identity.vname))
 
 
+def bundle_finalize(args, l, rc):
+    from ambry.bundle import Bundle
+    b = using_bundle(args, l)
+    b.finalize()
+    b.set_last_access(Bundle.STATES.FINALIZED)
 
 
 def bundle_clean(args, l, rc):
@@ -451,24 +505,20 @@ def bundle_prepare(args, l, rc):
 def bundle_build(args, l, rc):
     from ambry.bundle import Bundle
 
-    if args.clean or args.sync:
-        b = using_bundle(args, l).cast_to_build_subclass()
-        if args.clean:
-            b.do_clean()
-        if args.sync:
-            b.do_sync()
-
     b = using_bundle(args, l).cast_to_build_subclass()
 
     if args.clean:
         if not b.do_clean():
+            b.error("Clean failed, not building")
             return False
 
         if not b.do_prepare():
+            b.error("Prepare failed, not building")
             return False
 
     if not b.is_prepared:
         if not b.do_prepare():
+            b.error("Prepare failed, not building")
             return False
 
     b.do_build(print_pipe=args.print_pipe)
@@ -503,67 +553,24 @@ def bundle_run(args, l, rc):
     if not callable(f):
         raise TypeError("Got object for name '{}', but it isn't a function".format(args.method))
 
+    b.logger.info("Running: {}({})".format(str(args.method), ','.join(args.args)))
+
     r = f(*args.args)
 
     print "RETURN: ", r
 
 
-def bundle_update(args, b, st, rc):
-    raise NotImplementedError()
-    if b.pre_update():
-        b.log("---- Update ---")
-        if b.update():
-            b.post_update()
-            b.log("---- Done Updating ---")
-        else:
-            b.log("---- Update exited with failure ---")
-            return False
-    else:
-        b.log("---- Skipping Update ---- ")
+def bundle_checkin(args, l, rc):
 
 
-def bundle_config(args, l, rc):
+    ref, frm = get_bundle_ref(args, l)
 
+    b = l.bundle(ref)
 
+    remote, path = b.checkin()
 
-    raise NotImplementedError()
-
-    if args.subsubcommand == 'rewrite':
-        b.log("Rewriting the config file")
-        with b.session:
-            b.update_configuration()
-    elif args.subsubcommand == 'dump':
-        print b.config.dump()
-
-    elif args.subsubcommand == 'schema':
-        print b.schema.as_markdown()
-
-    elif args.subsubcommand == 'incver':
-
-        description = raw_input("Revision Description: ")
-
-        identity = b.increment_revision(description)
-
-        print identity.fqname
-
-    elif args.subsubcommand == 's3urls':
-        return bundle_config_s3urls(args, b, st, rc)
-
-    elif args.subsubcommand == 'newnum':
-        pass
-
-
-
-    elif args.subsubcommand == 'scrape':
-        return bundle_config_scrape(args, b, st, rc)
-
-    elif args.subsubcommand == 'doc':
-        f = "{:10s} {}"
-        prt(f, 'title', b.metadata.about.title)
-
-    else:
-        err("Unknown subsubcommand for 'config' subcommand: {}".format(args))
-
+    if path:
+        b.log("Checked in to remote '{}' path '{}'".format(remote, path))
 
 def bundle_dump(args, l, rc):
     import tabulate
@@ -806,6 +813,7 @@ def bundle_import(args, l, rc):
     from fs.opener import fsopendir
     import yaml
     from ambry.orm.exc import NotFoundError
+    import os
 
     if args.source:
         source_dir = args.source
@@ -813,9 +821,14 @@ def bundle_import(args, l, rc):
         import os
         source_dir = os.getcwd()
 
+    source_dir = os.path.abspath(source_dir)
+
     fs = fsopendir(source_dir)
 
     config = yaml.load(fs.getcontents('bundle.yaml'))
+
+    if not config:
+        fatal("Failed to get a valid bundle configuration from '{}'".format(source_dir))
 
     bid =  config['identity']['id']
 
@@ -824,7 +837,7 @@ def bundle_import(args, l, rc):
     except NotFoundError:
         b = l.new_from_bundle_config(config)
 
-    b.set_file_system(source_url=args.source)
+    b.set_file_system(source_url=source_dir)
 
     b.sync()
 
@@ -844,6 +857,8 @@ def bundle_export(args, l, rc):
 
     if args.append:
         source_dir = os.path.join(source_dir,b.identity.source_path)
+
+    source_dir = os.path.abspath(source_dir)
 
     fs = fsopendir(source_dir, create_dir = True)
 
@@ -969,3 +984,27 @@ def bundle_edit(args, l, rc):
 
     observer.join()
     get_chars_t.join()
+
+def bundle_extract(args, l, rc):
+    import csv
+
+    b = using_bundle(args, l)
+
+    b.build_fs.makedir('extract',allow_recreate=True, recursive=True)
+    bfs = b.build_fs.opendir('extract')
+
+    limit = args.limit
+
+    for p in b.partitions:
+        b.logger.info("Extracting: {} ".format(p.name))
+        with bfs.open(p.name+'.csv', 'wb') as f:
+            w = csv.writer(f)
+            for i, row in enumerate(p.datafile.reader()):
+
+                if limit and i > limit:
+                    break
+
+                w.writerow(row)
+
+    b.logger.info("Extracted to: {}".format(bfs.getsyspath('/')) )
+

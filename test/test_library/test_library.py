@@ -18,7 +18,7 @@ class Test(TestBase):
 
         b = l.new_bundle(**self.ds_params(1))
 
-        # TODO. DOesn't actually test anything yet.
+        # TODO. Doesn't actually test anything yet.
 
     def test_number(self):
 
@@ -32,3 +32,11 @@ class Test(TestBase):
             print b.identity.vname
 
         print l.edit_history()
+
+
+    def test_remote(self):
+
+        l = new_library(self.get_rc())
+
+        for k, v in  l.remotes.items():
+            print k, v, l.remote(k)

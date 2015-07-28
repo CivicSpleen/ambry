@@ -738,15 +738,6 @@ class Test(TestBase):
         print float(count)/ ( time.time() - t1)
 
 
-        for c in p.children:
-            c = b.wrap_partition(c)
-            t1 = time.time()
-            count = 0
-            for row in c.stream(skip_header=True, raw = True):
-                count += 1
-            print float(count) / (time.time() - t1)
-
-
 
 
 

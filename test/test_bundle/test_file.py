@@ -163,7 +163,7 @@ class Test(unittest.TestCase):
                 df.insert_body([i,i])
 
             df.close()
-            print float(N)/t.elapsed
+            print "CSV Write    ", float(N)/t.elapsed, df.size
 
         with Timer() as t:
             count = 0
@@ -174,7 +174,7 @@ class Test(unittest.TestCase):
                 except:
                     pass
 
-            print float(N)/t.elapsed
+            print "CSV Read     ", float(N)/t.elapsed
 
         with Timer() as t:
             df = PartitionMsgpackDataFile(fs, 'foobar')
@@ -185,7 +185,7 @@ class Test(unittest.TestCase):
                 df.insert_body([i, i])
 
             df.close()
-            print float(N)/t.elapsed
+            print "MSGPack write" , float(N)/t.elapsed, df.size
 
         with Timer() as t:
             count = 0
@@ -196,7 +196,29 @@ class Test(unittest.TestCase):
                 except:
                     pass
 
-            print float(N)/t.elapsed
+            print "MSGPack read ", float(N)/t.elapsed
+
+        with Timer() as t:
+            df = PartitionMsgpackDataFile(fs, 'foobar', compress = False)
+
+            df.insert_header(['a', 'b'])
+
+            for i in range(N):
+                df.insert_body([i, i])
+
+            df.close()
+            print "MSGPack write", float(N) / t.elapsed, df.size
+
+        with Timer() as t:
+            count = 0
+
+            for row in df.reader():
+                try:
+                    count += int(row[0])
+                except:
+                    pass
+
+            print "MSGPack read ", float(N) / t.elapsed
 
         # Test rate of coping from one set of segments
 
@@ -212,15 +234,17 @@ class Test(unittest.TestCase):
 
             return df
 
-        from itertools import chain
 
-        df = PartitionMsgpackDataFile(fs, 'output')
 
-        with Timer() as t:
-            for row in chain(gen_df(N, 'foo1').reader(), gen_df(N,'foo2').reader()):
-                df.insert_body(row)
+        if False:
+            from itertools import chain
+            df = PartitionMsgpackDataFile(fs, 'output')
+            df.insert_header(header)
+            with Timer() as t:
+                for row in chain(gen_df(N, 'foo1').reader(), gen_df(N,'foo2').reader()):
+                    df.insert_body(row)
 
-            print float(2*N) / t.elapsed
+                print "Chained MSGPack write/read", float(2*N) / t.elapsed
 
 
 

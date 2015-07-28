@@ -1240,7 +1240,7 @@ def count_open_fds():
 
 
 def parse_url_to_dict(url):
-    """Parse a url and returna dict with keys for all of the parts.
+    """Parse a url and return a dict with keys for all of the parts.
 
     The urlparse function() returns a wacky combination of a namedtuple
     with properties.

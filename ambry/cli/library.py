@@ -332,37 +332,10 @@ def library_sync(args, l, config):
     """Synchronize the remotes and the upstream to a local library database."""
     l.logger.info('args: %s' % args)
 
-    all = args.all or not (args.library or args.remote or args.source or args.json or args.warehouses)
 
-    vids = None
+    for r in l.remotes:
+        print r
 
-    if args.bundle_list:
-        with open(args.bundle_list) as f:
-            vids = set()
-            for line in f:
-                if line[0] != '#':
-                    vid, _ = line.split(None, 1)
-                    vids.add(vid)
-
-    if args.library or all:
-        l.logger.info("==== Sync Library")
-        l.sync_library(clean=args.clean)
-
-    if args.remote or all:
-        l.logger.info("==== Sync Remotes")
-        l.sync_remotes(clean=args.clean, vids=vids)
-
-    if (args.source or all) and l.source:
-        l.logger.info("==== Sync Source")
-        l.sync_source(clean=args.clean)
-
-    if args.json or all:
-        l.logger.info("==== Sync Cached JSON")
-        l.sync_doc_json(clean=args.clean)
-
-    if args.warehouses:
-        l.logger.info("==== Sync warehouses")
-        l.sync_warehouses()
 
 def library_number(args, l, config):
 

@@ -77,6 +77,10 @@ class PartitionDataFile(object):
     def path(self):
         return self._path
 
+    @property
+    def syspath(self):
+        return self._fs.getsyspath(self.munged_path,allow_none=True)
+
     def open(self, *args, **kwargs):
         self._file =  self._fs.open(self.munged_path, *args, **kwargs)
         return self._file
@@ -105,7 +109,8 @@ class PartitionDataFile(object):
     @property
     def size(self):
         """Return the size of the file, in data rows"""
-        return NotImplementedError()
+        return self._fs.getsize(self.munged_path)
+
 
     @property
     def munged_path(self):
@@ -272,18 +277,19 @@ class PartitionCsvDataFile(PartitionDataFile):
 
             yield dict(zip(self._header, row))
 
-    @property
-    def size(self):
-        """Return the size of the file, in data rows"""
-        return NotImplementedError()
-
 class PartitionMsgpackDataFileReader(object):
 
-    def __init__(self, f):
+    def __init__(self, f, compress=True):
 
         self._f = f
         self.n = 0
         self.header = None
+        self._compress = compress
+
+        if self._compress:
+            import gzip
+
+            self._f = gzip.GzipFile(fileobj=self._f)
 
     def __iter__(self):
 
@@ -324,13 +330,14 @@ class PartitionMsgpackDataFile(PartitionDataFile):
 
     EXTENSION = '.msg'
 
-    def __init__(self, fs, path, stats=None):
+    def __init__(self, fs, path, stats=None, compress = True):
 
         super(PartitionMsgpackDataFile, self).__init__(fs, path, stats)
 
         self._file = None
         self._reader = None
         self._writer = None
+        self._compress = compress
 
     def close(self):
         """
@@ -343,6 +350,19 @@ class PartitionMsgpackDataFile(PartitionDataFile):
         if self._file:
             self._file.close()
             self._file = None
+
+    def open(self,  mode, compress=True):
+
+        if not self._file:
+            self._file = self._fs.open(self.munged_path, mode=mode)
+
+            # Allow overriding the compression so we can read the file as compressed data,
+            # for copying to other files.
+            if self._compress and compress:
+                import gzip
+                self._file = gzip.GzipFile(fileobj=self._file)
+
+        return self._file
 
     def insert_header(self, row):
         """
@@ -358,8 +378,7 @@ class PartitionMsgpackDataFile(PartitionDataFile):
 
         self._header = list(row)
 
-        if not self._file:
-            self._file = self._fs.open(self.munged_path, mode='wb')
+        self.open( mode='wb')
 
         assert isinstance(row, (list, tuple))
 
@@ -397,9 +416,6 @@ class PartitionMsgpackDataFile(PartitionDataFile):
         if row[0] is None:
             row[0] = self._nrows
 
-        if not self._file:
-            self._file = self._fs.open(self.munged_path, mode='wb')
-
         assert isinstance(row, (tuple, list)), row
 
         self._file.write(msgpack.packb(row, default=self.encode_obj))
@@ -409,9 +425,9 @@ class PartitionMsgpackDataFile(PartitionDataFile):
     def reader(self, stream=None):
 
         if stream:
-            return PartitionMsgpackDataFileReader(stream)
+            return PartitionMsgpackDataFileReader(stream, self._compress)
         else:
-            return  PartitionMsgpackDataFileReader(self._fs.open(self.munged_path, mode='rb'))
+            return  PartitionMsgpackDataFileReader(self._fs.open(self.munged_path, mode='rb'), self._compress)
 
     @property
     def dict_rows(self):
@@ -429,10 +445,6 @@ class PartitionMsgpackDataFile(PartitionDataFile):
         self.close()
         self._fs.remove(self._path)
 
-    @property
-    def size(self):
-        """Return the size of the file, in data rows"""
-        return NotImplementedError()
 
 
 

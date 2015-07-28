@@ -78,7 +78,8 @@ class Column(Base):
 
     data = SAColumn('c_data', MutationDict.as_mutable(JSONEncodedObj))
 
-    codes = relationship(Code, backref='column',order_by="asc(Code.key)", cascade="save-update, delete, delete-orphan")
+    codes = relationship(Code, backref='column',order_by="asc(Code.key)",
+                         cascade="save-update, delete, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint( 'c_sequence_id','c_t_vid', name='_uc_columns_1'),

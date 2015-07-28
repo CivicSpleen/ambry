@@ -430,6 +430,62 @@ class Edit(Pipe):
 
         return self.edit_row(row)+self.expand_row(row)
 
+class Skip(Pipe):
+    """Skip rows of a table that match a predicate """
+
+    def __init__(self, pred, table = None, use_dict = True):
+        """
+
+        :param add: List of blank columns to add, by header name, or dict of headers and functions to create the column value
+        :param delete: List of headers names of columns to delete
+        :param edit: Dict of header names and functions to alter the value.
+        :return:
+        """
+
+        self.pred = pred
+
+        try:
+            self.table = table.name
+        except AttributeError:
+            self.table = table
+
+        self._use_dict = use_dict
+        self._check = False
+
+        self.skipped = 0
+        self.passed = 0
+        self.ignored = 0
+
+
+    def process_header(self, row):
+
+        # If there is no table specified, always run the predicate, but if the table
+        # is specified, only run the predicate for that table.
+        if self.table is None:
+            self._check = True
+        else:
+            self._check = self.table == self.source.dest_table.name
+
+        self.headers = row
+
+        return row
+
+    def __str__(self):
+
+        return 'Skip. {} skipped, {} passed, {} ignored'.format(self.skipped, self.passed, self.ignored)
+
+    def process_body(self, row):
+
+        if not self._check:
+            self.ignored += 1
+            return row
+        elif self.pred(dict(zip(self.headers,row)) if self._use_dict else row):
+            self.skipped += 1
+            return None
+        else:
+            self.passed += 1
+            return row
+
 class LogRate(Pipe):
 
     def __init__(self, output_f, N, message = None):
@@ -569,7 +625,12 @@ class WriteToPartition(Pipe, PartitionWriter):
 
         self.header_mapper, self.body_mapper = None, None
 
+        self._start_time = None
+        self._end_time = None
+        self._count = 0
+
     def process_header(self, row):
+        import time
 
         self.headers = row # Can't write until the first row tells us what the partition is
 
@@ -583,9 +644,13 @@ class WriteToPartition(Pipe, PartitionWriter):
 
         self._source_id = self.source.id
 
+        self._start_time = time.time()
+
         return row
 
     def process_body(self, row):
+
+        self._count += 1
 
         pname = row[self.p_name_index]
 
@@ -622,9 +687,21 @@ class WriteToPartition(Pipe, PartitionWriter):
         return row
 
     def finish(self):
+        import time
+
+        self._end_time = time.time()
 
         for key, (p, header_mapper, body_mapper) in self._datafiles.items():
             p.datafile.close()
+
+    @property
+    def rate(self):
+        """Report the insertion rate in records per second"""
+        import time
+
+        end = self._end_time if self._end_time else time.time()
+
+        return self._count / ( end  - self._start_time )
 
     @property
     def partitions(self):
@@ -726,7 +803,7 @@ class Pipeline(OrderedDict):
                         'dest_cast_columns',        # Run casters to convert values, maybe create code columns.
                         'dest_augment',             # Add dimension columns
                         'schema_last',
-        'last',
+                        'last',
                         'write_dest_schema'         # Write the destinatino schema
                         ]
 

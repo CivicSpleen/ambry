@@ -7,6 +7,7 @@ included in this distribution as LICENSE.txt
 
 from ..cli import warn, fatal
 from ..identity import LocationRef
+from . import prt
 
 default_locations = [LocationRef.LOCATION.LIBRARY,  LocationRef.LOCATION.REMOTE]
 
@@ -158,59 +159,30 @@ def root_info(args, l, rc):
     from ambry.orm.exc import NotFoundError
     import ambry
 
-    locations = filter(bool, [args.library, args.remote])
 
-    if not locations:
-        locations = default_locations
-
-    if not args.term:
-        prt('Version:   {}, {}', ambry._meta.__version__, rc.environment.category)
-        prt('Root dir:  {}', rc.filesystem('root'))
-
-        try:
-            if l.source:
-                prt('Source :   {}', l.source.base_dir)
-        except (ConfigurationError, AttributeError):
-            prt('Source :   No source directory')
-
-        prt('Configs:   {}', rc.dict['loaded'])
-        prt('Library:   {}', l.database.dsn)
-        prt('Remotes:   {}', ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
-
-        return
-
-    if not l:
-        fatal('No library, probably due to a configuration error.')
-
-    ident = l.resolve(args.term, location=locations)
-
-    if not ident:
-        fatal("Failed to find record for: {}", args.term)
-        return
+    prt('Version:   {}, {}', ambry._meta.__version__, rc.environment.category)
+    prt('Root dir:  {}', rc.filesystem('root'))
 
     try:
-        b = l.get(ident.vid)
+        if l.source:
+            prt('Source :   {}', l.source.base_dir)
+    except (ConfigurationError, AttributeError):
+        prt('Source :   No source directory')
 
-        if not ident.partition:
-            for p in b.partitions.all:
-                ident.add_partition(p.identity)
-
-    except NotFoundError:
-        # fatal("Could not find bundle file for '{}'".format(ident.path))
-        pass
-
-    # Always list partitions if there are 10 or fewer. If more, defer to the partitions flag
-    list_partitions = args.partitions if len(ident.partitions) > 10 else True
-
-    _print_info(l, ident, list_partitions=list_partitions)
+    prt('Configs:   {}', rc.dict['loaded'])
+    prt('Library:   {}', l.database.dsn)
+    prt('Remotes:   {}', ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
 
 
 def root_sync(args, l, config):
     """Sync with the remote. For more options, use library sync
     """
 
-    l.logger.info("==== Sync Remotes")
-    l.sync_remotes()
+    l.logger.info('args: %s' % args)
+
+    for r in l.remotes:
+        prt("Sync with remote {}", r)
+        l.sync_remote(r)
 
 
 def root_search(args, l, config):

@@ -459,17 +459,33 @@ class Test(TestBase):
         import os
 
         b = self.setup_bundle('simple')
+        l = b._library
 
         b = b.run()
 
-        l = b._library
+        self.assertEqual(1, len(list(l.bundles)))
+
         p = list(b.partitions)[0]
+        p_vid = p.vid
 
         self.assertEquals(497054, int(sum(row[3] for row in p.stream(skip_header=True))))
 
-        b.checkin()
+        self.assertEqual('build', l.partition(p_vid).location)
 
-        #self.assertEqual('build',p.location)
+        remote_name, path = b.checkin()
+
+        self.assertEqual('build', l.partition(p_vid).location)
+
+        for b in l.bundles:
+            l.remove(b)
+
+        self.assertEqual(0, len(list(l.bundles)))
+
+        l.sync_remote(remote_name)
+
+        self.assertEqual(1, len(list(l.bundles)))
+
+        self.assertEqual('remote',l.partition(p_vid).location)
 
         self.assertEquals(497054, int(sum(row[3] for row  in p.stream( skip_header = True))))
 

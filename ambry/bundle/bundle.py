@@ -174,13 +174,19 @@ class Bundle(object):
     @memoize
     def source_fs(self):
         from fs.opener import fsopendir
+        from fs.errors import ResourceNotFoundError
 
         source_url = self._source_url if self._source_url else self.dataset.config.library.source.url 
         
         if not source_url:
-            raise ConfigurationError('Must set source URL either in the constructor or the configuration')
-        
-        return fsopendir(source_url)
+            source_url = self.library.filesystem.source(self.identity.cache_key)
+
+        try:
+            return fsopendir(source_url)
+        except ResourceNotFoundError:
+            self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
+            source_url = self.library.filesystem.source(self.identity.cache_key)
+            return fsopendir(source_url)
 
     @property
     @memoize
@@ -190,7 +196,8 @@ class Bundle(object):
         build_url = self._build_url if self._build_url else self.dataset.config.library.build.url
         
         if not build_url:
-            raise ConfigurationError('Must set build URL either in the constructor or the configuration')
+            build_url = self.library.filesystem.build(self.identity.cache_key)
+            #raise ConfigurationError('Must set build URL either in the constructor or the configuration')
 
         return fsopendir(build_url)
 
@@ -427,6 +434,9 @@ class Bundle(object):
 
         return b
 
+    def incver(self, message):
+        """Create a new version of the bundle """
+
     ##
     ## Clean
     ##
@@ -448,9 +458,10 @@ class Bundle(object):
                 self.state = self.STATES.CLEANING  # the clean() method removes states, so we put it back
                 r = False
 
+            self.state = self.STATES.CLEANED  # the clean() method removes states, so we put it back
         else:
             self.log("---- Cleaning ended in failure ----")
-            self.state = self.STATES.CLEANING  # the clean() method removes states, so we put it back
+
             self.set_error_state()
             r = False
 
@@ -487,7 +498,6 @@ class Bundle(object):
 
         if ds.bsfile(File.BSFILE.SCHEMA).has_contents:
             self.dataset.tables[:] = []
-
 
         ds.config.build.clean()
         ds.config.process.clean()
@@ -551,6 +561,7 @@ class Bundle(object):
                 r = False
         else:
             self.log("---- Skipping prepare ---- ")
+            r = False
 
         self.set_last_access(Bundle.STATES.PREPARED)
 
@@ -721,7 +732,7 @@ class Bundle(object):
             self.state = self.STATES.BUILDING
             self.log("---- Build ---")
             if self.build(table_name, print_pipe=print_pipe):
-                self.state = self.STATES.BUILT
+
                 if self.post_build():
                     self.log("---- Done Building ---")
                     r = True
@@ -739,7 +750,10 @@ class Bundle(object):
             self.set_error_state()
             r = False
 
-        self.set_last_access(Bundle.STATES.BUILD)
+        if r:
+            self.set_last_access(Bundle.STATES.BUILT)
+            self.state = self.STATES.BUILT
+
         return r
 
     # Build the final package
@@ -763,15 +777,43 @@ class Bundle(object):
 
         return True
 
-    def build_log_pipeline(self, table_name, pl):
-        """Write a report of the pipeline out to a file """
-        import os
-
-        self.build_fs.makedir('pipeline', allow_recreate=True)
-        self.build_fs.setcontents(os.path.join('pipeline', 'build-' + table_name + '.txt'), unicode(pl),
-                                  encoding='utf8')
-
     def build(self, target_table_name = None, source_name = None, print_pipe=False):
+        return self.build_run_single_source(target_table_name=target_table_name, source_name=source_name,
+                                            print_pipe=print_pipe)
+
+    def build_run_single_source(self, target_table_name=None, source_name=None, print_pipe=False):
+        from ..etl import PrintRows, augment_pipeline, PartitionWriter
+        import time
+
+        for i, source in enumerate(self.sources):
+
+            if target_table_name and source.table.name != target_table_name:
+                self.logger.info("Skipping source {}, table {} ( only running table {} ) "
+                                 .format(','.join(s.name for s in source), source.table.name, target_table_name))
+                continue
+
+            self.logger.info("Running build for source: {} ".format(source.name))
+
+            pl = self.do_pipeline(source).build_phase
+
+            if print_pipe:
+                augment_pipeline(pl, tail_pipe=PrintRows())
+
+            pl.run()
+
+            if print_pipe:
+                self.logger.info(pl)
+
+            self.build_log_pipeline(source.name, pl)
+            self.build_post_build_source(pl)
+
+            self.logger.info("Finished build for source: {}. {} row/sec".format(source.name, pl[PartitionWriter].rate))
+
+        self.dataset.commit()
+
+        return True
+
+    def build_run_multi_sources(self, target_table_name = None, source_name = None, print_pipe=False):
         from ..etl import PrintRows, augment_pipeline
         from collections import defaultdict
 
@@ -794,7 +836,7 @@ class Bundle(object):
             if print_pipe:
                 augment_pipeline(pl, tail_pipe=PrintRows())
 
-            pl.run(source_pipes = [s.source_pipe() for s in sources])
+            pl.run(source_pipes=[s.source_pipe() for s in sources])
 
             if print_pipe:
                 self.logger.info(pl)
@@ -806,13 +848,33 @@ class Bundle(object):
 
         return True
 
-    def build_unify_partitions(self):
+    def build_log_pipeline(self, table_name, pl):
+        """Write a report of the pipeline out to a file """
+        import os
+
+        self.build_fs.makedir('pipeline', allow_recreate=True)
+        self.build_fs.setcontents(os.path.join('pipeline', 'build-' + table_name + '.txt'), unicode(pl),
+                                  encoding='utf8')
+
+    def post_build(self):
+        """After the build, update the configuration with the time required for
+        the build, then save the schema back to the tables, if it was revised
+        during the build."""
+
+        self.build_post_unify_partitions()
+
+        self.build_post_write_bundle_file()
+
+        return True
+
+    def build_post_unify_partitions(self):
         """For all of the segments for a partition, create the parent partition, combine the children into the parent,
         and delete the children. """
 
         from collections import defaultdict
         from ..orm.partition import Partition
         from ..etl.stats import Stats
+        import time
 
         # Group the segments by their parent partition name, which is the
         # same name, without the segment.
@@ -825,6 +887,7 @@ class Bundle(object):
 
         # For each group, copy the segment partitions to the parent partitions, then
         # delete the segment partitions.
+
         for name, segments in partitions.items():
 
             self.log("Coalescing segments for partition {} ".format(name))
@@ -839,7 +902,8 @@ class Bundle(object):
 
                 reader = self.wrap_partition(seg).datafile.reader()
                 header = None
-                for row in reader:
+                start_time = time.time()
+                for i, row in enumerate(reader):
 
                     if header is None:
                         header = row
@@ -850,14 +914,16 @@ class Bundle(object):
                         stats.process_body(row)
 
                 reader.close()
+                self.log("Coalesced {} rows, {} rows/sec ".format(i, float(i)/(time.time()-start_time)))
 
             pdf.close()
+            self.commit()
             parent.finalize(stats)
+            self.commit()
 
             for s in segments:
                 self.wrap_partition(s).datafile.delete()
                 self.dataset._database.session.delete(s)
-
 
     def build_post_build_source(self, pl):
 
@@ -879,58 +945,16 @@ class Bundle(object):
 
         self.commit()
 
-    def build_post_combine_stats(self):
-
-        pass
-
     def build_post_write_bundle_file(self):
+        import os
 
         path = self.library.create_bundle_file(self)
 
-    def post_build(self):
-        """After the build, update the configuration with the time required for
-        the build, then save the schema back to the tables, if it was revised
-        during the build."""
+        with open(path) as f:
+            self.build_fs.setcontents(self.identity.cache_key+'.db', data = f)
 
-        self.build_unify_partitions()
+        self.log("Wrote bundle sqlite file to {}".format(path))
 
-        self.build_post_write_bundle_file()
-
-        return True
-
-    ##
-    ## Update
-    ##
-
-    # Update is like build, but calls into an earlier version of the package.
-    def pre_update(self):
-        from time import time
-
-        if not self.database.exists():
-            raise ProcessError(
-                "Database does not exist yet. Was the 'prepare' step run?")
-
-        if not self.get_value('process', 'prepared'):
-            raise ProcessError("Update called before prepare completed")
-
-        self._update_time = time()
-
-        self._build_time = time()
-
-        return True
-
-    def update_main(self):
-        """This is the methods that is actually called in do_update; it
-        dispatches to developer created update() methods."""
-        return self.update()
-
-    def update(self):
-
-        self.update_copy_schema()
-        self.prepare()
-        self.update_copy_partitions()
-
-        return True
 
     def post_build_test(self):
 
@@ -1027,13 +1051,47 @@ class Bundle(object):
         self.metadata.write_to_dir()
 
     ##
+    ## Update
+    ##
+
+    # Update is like build, but calls into an earlier version of the package.
+    def pre_update(self):
+        from time import time
+
+        if not self.database.exists():
+            raise ProcessError(
+                "Database does not exist yet. Was the 'prepare' step run?")
+
+        if not self.get_value('process', 'prepared'):
+            raise ProcessError("Update called before prepare completed")
+
+        self._update_time = time()
+
+        self._build_time = time()
+
+        return True
+
+    def update_main(self):
+        """This is the methods that is actually called in do_update; it
+        dispatches to developer created update() methods."""
+        return self.update()
+
+    def update(self):
+
+        self.update_copy_schema()
+        self.prepare()
+        self.update_copy_partitions()
+
+        return True
+
+    ##
     ## Finalize
     ##
 
     @property
     def is_finalized(self):
         """Return True if the bundle is installed."""
-        return self.state == self.STATES.FINALIZED
+        return self.state == self.STATES.FINALIZED or self.state == self.STATES.INSTALLED
 
     def do_finalize(self):
         """Call's finalize(); for similarity with other process commands. """
@@ -1050,12 +1108,17 @@ class Bundle(object):
 
     def checkin(self):
 
+        if self.is_built:
+            self.finalize()
+
         if not ( self.is_finalized or self.is_prepared):
             self.error("Can't checkin; bundle state must be either finalized or prepared")
             return False
 
         self.commit()
-        self.library.checkin(self)
+        remote, path = self.library.checkin(self)
+
+        return remote, path
 
     @property
     def is_installed(self):
@@ -1064,7 +1127,6 @@ class Bundle(object):
         r = self.library.resolve(self.identity.vid)
 
         return r is not None
-
 
     ##
     ##
