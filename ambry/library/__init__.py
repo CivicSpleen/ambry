@@ -238,11 +238,12 @@ class Library(object):
 
             p = q.first()
 
-
         if not p:
             raise NotFoundError("No partition for ref: '{}'".format(ref))
 
 
+        b = self.bundle(p.d_vid)
+        return b.wrap_partition(p)
 
     ##
     ## Storing
@@ -311,7 +312,6 @@ class Library(object):
         for f in session.query(File).filter(File.d_vid == ds.vid).options(lazyload('*')).all():
 
             d =  f.row
-            print d['d_vid'], d['path'], d['major_type'], d['minor_type']
 
             del d['id']
             del d['d_vid']

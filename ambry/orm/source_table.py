@@ -163,7 +163,7 @@ class SourceTable(Base):
                 position=position,
                 d_vid=self.d_vid,
                 datatype=datatype.__name__ if isinstance(datatype, type) else datatype,
-                source_header=source_header,
+                source_header=source_header.strip(),
                 **kwargs
             )
         else:

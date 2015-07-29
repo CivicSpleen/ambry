@@ -663,10 +663,6 @@ class SchemaFile(RowBuildSourceFile):
         # Put back into same order as in all_opt_col_fields
         opt_col_fields = [field for field in all_opt_col_fields if field in opt_fields_set]
 
-        indexes = OrderedDict(sorted(indexes.items(), key=lambda t: t[0]))
-
-        first = True
-
         for table in self._dataset.tables:
 
             for col in table.columns:
@@ -682,6 +678,7 @@ class SchemaFile(RowBuildSourceFile):
                 for idx, s in indexes.items():
                     if idx:
                         row[idx] = 1 if col in s else None
+
 
                 for field in opt_col_fields:
                     row[field] = getattr(col, field)
@@ -730,26 +727,26 @@ class SchemaFile(RowBuildSourceFile):
         rows = []
 
         last_table = None
-        for row in self._dump_gen():
+        for table in self._dataset.tables:
+            for col in table.columns:
+                row = col.row
 
-            if not rows:
-                rows.append(row.keys())
+                if not rows:
+                    rows.append(row.keys())
 
-            # Blank row to seperate tables.
-            if last_table and row['table'] != last_table:
-                rows.append([])
+                rows.append(row.values())
 
-            rows.append(row.values())
-
-            last_table = row['table']
+            rows.append([ None for e in rows[0]]) # Transpose trick fails if rows not all same size
 
         # Transpose trick to remove empty columns
-        #rows = zip(*[ row for row in zip(*rows) if bool(filter(bool,row[1:])) ])
+        rows = zip(*[ row for row in zip(*rows) if bool(filter(bool,row[1:])) ])
 
         bsfile = self._dataset.bsfile(self._file_const)
 
         bsfile.mime_type = 'application/msgpack'
         bsfile.update_contents(msgpack.packb(rows))
+
+
 
 class SourceSchemaFile(RowBuildSourceFile):
 

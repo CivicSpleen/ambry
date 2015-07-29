@@ -122,6 +122,8 @@ class Test(TestBase):
 
         t = ds.new_table('table2')
 
+        print '!!!', t, t.vid
+
         p = ds.new_partition(t, time=1)
         p = ds.new_partition(t, time=2)
         p = ds.new_partition(t, time=3)

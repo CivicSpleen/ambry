@@ -112,7 +112,6 @@ class Table(Base, DictableMixin):
             c = Column(t_vid=self.vid, sequence_id=len(self.columns), name=name, datatype='varchar')
             extant = False
 
-
         # Update possibly existing data
         c.data = dict((c.data.items() if c.data else []) + kwargs.get('data', {}).items())
 

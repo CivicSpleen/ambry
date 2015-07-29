@@ -44,6 +44,7 @@ class Column(Base):
     fqname = SAColumn('c_fqname', Text) # Name with the vid prefix
     altname = SAColumn('c_altname', Text)
     datatype = SAColumn('c_datatype', Text)
+    start = SAColumn('c_start', Integer)
     size = SAColumn('c_size', Integer)
     width = SAColumn('c_width', Integer)
     sql = SAColumn('c_sql', Text)
@@ -416,8 +417,11 @@ class Column(Base):
 
         # Use an Ordered Dict to make it friendly to creating CSV files.
 
-        d = OrderedDict([('table', self.table.name)] + [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
-                        if p.key in ['sequence_id', 'name', 'datatype', 'description' ]])
+        d = OrderedDict([('table', self.table.name)] +
+                        [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
+                        if p.key not in ['codes','dataset', 'stats', 'table', 'd_vid','vid', 't_vid'
+                                         'id','is_primary_key' ]]
+                        )
 
         return d
 

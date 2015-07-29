@@ -56,3 +56,4 @@ class ColumnStat(Base):
 
         return {p.key: getattr(self,p.key) for p in self.__mapper__.attrs if p.key not in
                 ('data','column', 'table','partition')}
+

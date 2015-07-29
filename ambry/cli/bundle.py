@@ -310,6 +310,7 @@ def bundle_info(args, l, rc):
 
     if args.which:
         ref, frm = get_bundle_ref(args, l)
+        b = using_bundle(args, l)
         prt('Will use bundle ref {}, {}, referenced from {}'.format(ref, b.identity.vname, frm))
         return
 
@@ -384,7 +385,7 @@ def bundle_info(args, l, rc):
             print "\nPartition"
             print tabulate(join(*info), tablefmt='plain')
 
-        except NotFoundError:
+        except (NotFoundError, AttributeError):
             pass
 
     if args.stats:
@@ -392,7 +393,6 @@ def bundle_info(args, l, rc):
         from ambry.etl.stats import text_hist
         from textwrap import wrap
         from terminaltables import  SingleTable
-
 
         for p in b.partitions:
             rows = ['Column LOM Count Uniques Values'.split()]
@@ -864,7 +864,8 @@ def bundle_export(args, l, rc):
 
     b.set_file_system(source_url=source_dir)
 
-    b.sync(force='rtf', defaults = args.defaults)
+    if not b.is_finalized:
+        b.sync(force='rtf', defaults = args.defaults)
 
     prt("Exported bundle: {}".format(source_dir))
 

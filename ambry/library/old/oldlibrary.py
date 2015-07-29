@@ -1221,37 +1221,8 @@ class Library(object):
 
         return self._search
 
-    def _gen_schema(self):
-        from ambry.bundle.schema import Schema
 
-        return Schema._dump_gen(self)
 
-    def schema_as_csv(self, f=None):
-        import unicodecsv as csv
-        from StringIO import StringIO
-
-        if f is None:
-            f = StringIO()
-
-        g = self._gen_schema()
-
-        header = g.next()
-
-        w = csv.DictWriter(f, header, encoding='utf-8')
-        w.writeheader()
-        last_table = None
-        for row in g:
-
-            # Blank row to seperate tables.
-            if last_table and row['table'] != last_table:
-                w.writerow({})
-
-            w.writerow(row)
-
-            last_table = row['table']
-
-        if isinstance(f, StringIO):
-            return f.getvalue()
 
     @property
     def info(self):

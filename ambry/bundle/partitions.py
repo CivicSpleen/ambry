@@ -282,7 +282,7 @@ class PartitionProxy(Proxy):
 
         return base_location
 
-    def stream(self, raw=False, skip_header=False):
+    def stream(self, skip_header=False, as_dict=False):
         """Yield rows of a partition, as an intyerator. Data is taken from one of these locations:
         - The warehouse, for installed data
         - The build directory, for built data
@@ -291,8 +291,6 @@ class PartitionProxy(Proxy):
 
         from ..orm.exc import NotFoundError
         from fs.errors import ResourceNotFoundError
-
-        from ambry.etl.transform import CasterPipe
 
         if self.location == 'build':
             try:
@@ -305,7 +303,7 @@ class PartitionProxy(Proxy):
             b = self._bundle.library.bundle(self.identity.as_dataset().vid)
             remote = self._bundle.library.remote(b)
 
-            self.datafile.reader(remote.open(self.datafile.munged_path, 'rb'))
+            reader = self.datafile.reader(remote.open(self.datafile.munged_path, 'rb'))
 
         elif self.location == 'warehouse':
             raise NotImplementedError()
@@ -323,22 +321,19 @@ class PartitionProxy(Proxy):
                         "For {} at position {}, partition header {} is different from column name {}. {}\n{}"
                             .format(self.identity.name, i, a, b, list(header), [c.name for c in self.table.columns] ))
 
-            yield header
+            if not as_dict:
+                yield header
 
-            for row in itr:
-                yield row
+            if as_dict:
+                for row in itr:
+                    yield dict(zip(header, row))
+            else:
+                for row in itr:
+                    yield row
 
             reader.close()
 
-        if raw:
-            itr = iter(generator())
-
-        else:
-            # Wrap the generator in a Caster, to convert the values to the right type.
-            cp = CasterPipe(self.table)
-            cp.set_source_pipe(generator())
-
-            itr = iter(cp)
+        itr = iter(generator())
 
         if skip_header:
             itr.next()

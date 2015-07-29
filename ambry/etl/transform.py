@@ -407,11 +407,12 @@ class CasterPipe(Transform, Pipe, ):
         else:
             table = self.source.dest_table
 
-        if self.table:
-            cm = { c.name: c for c in self.table.columns}
+        cm = { c.name: c for c in table.columns}
 
-            for h in self.headers:
-                self.append(h, cm[h].python_type)
+        for h in self.headers:
+            self.append(h, cm[h].python_type)
+
+        self.compile()
 
         return row
 

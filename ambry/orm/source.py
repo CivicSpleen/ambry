@@ -62,11 +62,11 @@ class DataSource(Base, DictableMixin):
 
     st_id = SAColumn('ds_st_id',INTEGER, ForeignKey('sourcetables.st_id'), nullable=True)
     source_table_name = SAColumn('ds_st_name', Text)
-    _source_table = relationship(SourceTable, backref='sources', cascade="all")
+    _source_table = relationship(SourceTable, backref='sources')
 
     t_vid = SAColumn('ds_t_vid', String(16), ForeignKey('tables.t_vid'), nullable=True)
     dest_table_name = SAColumn('ds_dt_name', Text)
-    _dest_table = relationship(Table, backref='sources', cascade="all")
+    _dest_table = relationship(Table, backref='sources')
 
     segment = SAColumn('ds_segment', Text)
     time = SAColumn('ds_time', Text)

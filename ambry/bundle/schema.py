@@ -17,9 +17,6 @@ def _clean_flag(in_flag):
     return bool(in_flag)
 
 
-
-
-
 class Schema(object):
     """Represents the table and column definitions for a bundle
     """

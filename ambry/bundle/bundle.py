@@ -101,12 +101,6 @@ class Bundle(object):
         return self._library
 
     @property
-    def schema(self):
-        """Return the Schema acessor"""
-        from schema import Schema
-        return Schema(self)
-
-    @property
     def partitions(self):
         """Return the Schema acessor"""
         from partitions import Partitions
@@ -122,6 +116,10 @@ class Bundle(object):
 
     def wrap_partition(self, p):
         from partitions import PartitionProxy
+
+        if isinstance(p, PartitionProxy):
+            return p
+
         return PartitionProxy(self, p)
 
     def delete_partition(self, vid_or_p):
@@ -217,7 +215,9 @@ class Bundle(object):
     def pipeline(self, source=None):
         """Construct the ETL pipeline for all phases. Segments that are not used for the current phase
         are filtered out later. """
-        from ambry.etl.pipeline import Pipeline, MergeHeader, MangleHeader, WriteToPartition, SelectPartition
+        from ambry.etl.pipeline import Pipeline, MergeHeader, MangleHeader, MapHeader
+        from ambry.etl.pipeline import WriteToPartition, SelectPartition, MapToSourceTable
+        from ambry.etl.transform import CasterPipe
         from ambry.etl.intuit import TypeIntuiter
 
         if source:
@@ -236,8 +236,8 @@ class Bundle(object):
                 write_source_schema=None,
                 schema_first=None,
                 source_map_header=MangleHeader(),
-                dest_map_header=None,
-                dest_cast_columns=None,
+                dest_map_header=MapToSourceTable(error_on_fail = False),
+                dest_cast_columns=CasterPipe(),
                 dest_augment=None,
                 schema_last=None,
                 write_dest_schema=None,
@@ -484,14 +484,24 @@ class Bundle(object):
         ds = self.dataset
         s = object_session(ds)
 
-        # FIXME. There is a problem with the cascades for ColumnStats that prevents them from beling deleted with the
-        # partitions. Probably, the are seen to be owed by the columns instead.
+        # FIXME. There is a problem with the cascades for ColumnStats that prevents them from
+        # being  deleted with the partitions. Probably, the are seen to be owed by the columns instead.
         s.query(ColumnStat).filter(ColumnStat.d_vid == ds.vid).delete()
 
         self.dataset.partitions[:] = []
 
+        ds.commit()
+
+        for src in self.dataset.sources:
+            src.st_id = None
+            src.t_id = None
+
+        ds.commit()
+
         if ds.bsfile(File.BSFILE.SOURCES).has_contents:
             self.dataset.sources[:] = []
+
+        ds.commit()
 
         if ds.bsfile(File.BSFILE.SOURCESCHEMA).has_contents:
             self.dataset.source_tables[:] = []
@@ -596,7 +606,7 @@ class Bundle(object):
     def post_prepare(self):
         """"""
 
-        for t in self.schema.tables:
+        for t in self.dataset.tables:
             if not bool(t.description):
                 self.error("No title ( Description of id column ) set for table: {} ".format(t.name))
 

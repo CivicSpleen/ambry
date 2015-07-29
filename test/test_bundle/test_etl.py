@@ -370,8 +370,8 @@ class Test(TestBase):
         for i, row in enumerate(last):
 
             if i == 0:
-                self.assertEqual(['id', 'county', 'renter_cost', 'renter_cost_gt_30_cv',
-                                  'owner_cost_gt_30_pct', 'owner_cost_gt_30_pct_cv'], row)
+                self.assertEqual([u'id', u'county', u'renter_cost', u'renter_cost_gt_30_cv',
+                                  u'owner_cost_gt_30_pct', u'owner_cost_gt_30_pct_cv'], row)
             elif i ==1:
                 self.assertEqual(1.0, row[0])
 
@@ -602,7 +602,7 @@ class Test(TestBase):
 
         print list(b.build_fs.walkfiles())
 
-        self.assertEquals(10001, len(b.build_fs.getcontents('/example.com/simple-0.1.3/simple.csv').splitlines()))
+        self.assertTrue(10001, b.build_fs.exists('/example.com/simple-0.1.3/simple.msg'))
 
         p = list(b.partitions)[0]
         self.assertEquals(10001, len(list(p.stream())))
@@ -619,14 +619,14 @@ class Test(TestBase):
     def test_edit(self):
         """Test the Edit pipe, for altering the structure of data"""
         from dateutil.parser import parse
-        from ambry.etl.pipeline import PrintRows, Edit
+        from ambry.etl.pipeline import PrintRows, AddDeleteExpand
 
         b = self.setup_bundle('dimensions')
         b.do_sync()
         b.do_prepare()
 
         pl = b.do_pipeline('dimensions').schema_phase
-        pl.build_last.append(Edit(delete = ['time','county','state'],
+        pl.build_last.append(AddDeleteExpand(delete = ['time','county','state'],
                             add={ "a": lambda e,r: r[4], "b": lambda e,r: r[1]},
                             edit = {'stusab': lambda e,v: v.lower(), 'county_name' : lambda e,v: v.upper() },
                             expand = { ('x','y') : lambda e, r: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
@@ -725,19 +725,11 @@ class Test(TestBase):
 
         p = list(b.partitions)[0]
 
-        #for row in p.stream(skip_header=True):
-        #    print row[0]
-
-        #self.assertEquals(41, len(list(p.stream())))
-
         import time
         t1 = time.time()
         count = 0
-        for row in p.stream(skip_header=True, raw = True):
+        for row in p.stream(skip_header=True):
             count += 1
+
         print float(count)/ ( time.time() - t1)
-
-
-
-
 

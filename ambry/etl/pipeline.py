@@ -164,9 +164,9 @@ class AddHeader(Pipe):
             yield row
 
 class MapHeader(Pipe):
+    """Alter the header using a map"""
     def __init__(self, header_map):
         self._header_map = header_map
-
 
     def __iter__(self):
 
@@ -176,6 +176,23 @@ class MapHeader(Pipe):
 
         for row in rg:
             yield row
+
+
+class MapToSourceTable(Pipe):
+    """Alter the header using the source_header and dest_header in the source table """
+    def __init__(self, error_on_fail = True):
+
+        self.error_on_fail = error_on_fail
+
+    def process_header(self, row):
+
+        m = { c.source_header:c.dest_header for c in self.source.source_table.columns }
+
+        if self.error_on_fail:
+            return list([m[h] for h in row])
+        else:
+            return list([m.get(h, h) for h in row])
+
 
 class MangleHeader(Pipe):
     """"Alter the header with a function"""
@@ -347,7 +364,7 @@ class MergeHeader(Pipe):
 
         return 'Merge Rows: header = {} '.format(','.join(str(e) for e in self.header_lines))
 
-class Edit(Pipe):
+class AddDeleteExpand(Pipe):
     """Edit rows as they pass through """
 
     def __init__(self, add=[], delete=[], edit={}, expand={}):
@@ -429,6 +446,25 @@ class Edit(Pipe):
     def process_body(self, row):
 
         return self.edit_row(row)+self.expand_row(row)
+
+class Add(AddDeleteExpand):
+
+    def __init__(self, add):
+        super(Add, self).__init__(add=add)
+
+class Expand(AddDeleteExpand):
+
+    def __init__(self,  expand):
+        super(Expand, self).__init__(expand=expand)
+
+class Delete(AddDeleteExpand):
+    def __init__(self, delete):
+        super(Delete, self).__init__(delete=delete)
+
+class Edit(AddDeleteExpand):
+    def __init__(self,  edit):
+        super(Edit, self).__init__(edit=edit)
+
 
 class Skip(Pipe):
     """Skip rows of a table that match a predicate """
@@ -800,7 +836,6 @@ class Pipeline(OrderedDict):
                         'source_coalesce_rows',     # Combine rows into a header according to classification
                         'source_map_header',        # Alter column names to names used in final table
                         'dest_map_header',          # Change header names to be the same as used in the dest table
-                        'dest_cast_columns',        # Run casters to convert values, maybe create code columns.
                         'dest_augment',             # Add dimension columns
                         'schema_last',
                         'last',
@@ -1025,5 +1060,7 @@ def augment_pipeline(pl, head_pipe = None, tail_pipe = None):
 
             if tail_pipe:
                 v.append(tail_pipe)
+
+
 
 

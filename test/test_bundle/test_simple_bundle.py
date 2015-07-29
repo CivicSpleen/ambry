@@ -345,6 +345,20 @@ class Test(TestBase):
 
         return b
 
+    def test_simple_build_types(self):
+        """Build the simple bundle and check that the data types are correct"""
+
+        b = self.setup_bundle('simple')
+        b = b.run()
+        l = b.library
+
+        p = list(b.partitions)[0]
+
+        row =  p.stream(skip_header=True).next()
+
+        for c, v in zip(p.table.columns, row):
+            self.assertEquals(type(v), c.python_type)
+
     def test_complete_build(self):
         """Build the simple bundle"""
 
@@ -360,14 +374,14 @@ class Test(TestBase):
         self.assertEquals('prepared', b.state)
 
         def edit_pipeline(pl):
-            from ambry.etl.pipeline import PrintRows, LogRate, Edit, WriteToPartition, SelectPartition
+            from ambry.etl.pipeline import PrintRows, LogRate, AddDeleteExpand, WriteToPartition, SelectPartition
 
             def prt(m):
                 print m
 
             # Converting to the cesus geoid b/c they are just numbers, and when used in a partition name,
             # the names are lowercased, causing the case sensitive GVIDs to alias.
-            pl.dest_augment = Edit(
+            pl.dest_augment = AddDeleteExpand(
                 edit = {'triangle' : lambda e,v : 1}
             )
 
@@ -424,9 +438,10 @@ class Test(TestBase):
     def test_db_copy(self):
         from ambry.orm.database import Database
 
-        b = self.test_simple_build()
-        self.assertTrue(b.do_prepare())
+        b = self.setup_bundle('simple')
         l = b._library
+
+        b = b.run()
 
         import tempfile
 
@@ -440,6 +455,8 @@ class Test(TestBase):
 
             ds1 = b.dataset
             ds2 = db.dataset(ds1.vid)
+
+            print list(ds1.tables)
 
             self.assertEquals(len(ds1.tables), len(ds2.tables))
             self.assertEquals(len(ds1.tables[0].columns), len(ds2.tables[0].columns))
@@ -482,6 +499,9 @@ class Test(TestBase):
         self.assertEqual(0, len(list(l.bundles)))
 
         l.sync_remote(remote_name)
+
+        b = list(l.bundles)[0]
+        p = list(b.partitions)[0]
 
         self.assertEqual(1, len(list(l.bundles)))
 

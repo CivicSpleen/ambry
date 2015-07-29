@@ -161,6 +161,8 @@ class Dataset(Base):
         else:
             object_session(self).merge(table)
 
+        self.commit() # Required to get the table a VID, but probably slow.
+
         return table
 
     def new_partition(self, table, **kwargs):
