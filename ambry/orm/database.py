@@ -4,11 +4,13 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
 
-import os
-
-
-from . import Column, Partition, Table, Dataset, Config, File,  Code, ColumnStat, DataSource, SourceColumn, SourceTable
 from collections import namedtuple
+import os
+import pkgutil
+
+from ambry.orm.exc import DatabaseError, DatabaseMissingError
+from . import Column, Partition, Table, Dataset, Config, File,\
+    Code, ColumnStat, DataSource, SourceColumn, SourceTable
 from ..util import get_logger
 
 ROOT_CONFIG_NAME = 'd000'
@@ -20,12 +22,32 @@ SCHEMA_VERSION = 100
 Dbci = namedtuple('Dbc', 'dsn_template sql')
 
 # Remap the schema
-scheme_map = {'postgis': 'postgresql+psycopg2', 'spatialite': 'sqlite' }
+scheme_map = {'postgis': 'postgresql+psycopg2', 'spatialite': 'sqlite'}
+
+MIGRATION_TEMPLATE = '''\
+# -*- coding: utf-8 -*-',
+
+from ambry.orm.database import BaseMigration
+
+
+class Migration(BaseMigration):
+
+    # set is_ready to True to auto run the migration on next connect.
+    is_ready = False
+
+    def _migrate_sqlite(self, connection):
+        # connection.execute('ALTER table ...')
+        pass
+
+    def _migrate_postgresql(self, connection):
+        # connection.execute('ALTER table ...')
+        pass
+'''
 
 
 class Database(object):
 
-    def __init__(self, dsn, echo = False):
+    def __init__(self, dsn, echo=False):
         from ..util import parse_url_to_dict
 
         self.dsn = dsn
@@ -45,8 +67,7 @@ class Database(object):
         self.logger = get_logger(__name__)
 
     def is_in_memory_db(self):
-
-        return self.dsn == 'sqlite://' or ( self.dsn.startswith('sqlite') and 'memory' in self.dsn )
+        return self.dsn == 'sqlite://' or (self.dsn.startswith('sqlite') and 'memory' in self.dsn)
 
     def create(self):
         """Create the database from the base SQL."""
@@ -76,25 +97,26 @@ class Database(object):
                     # Multiple process may try to make, so it could already
                     # exist
                     os.makedirs(dir_)
-                except Exception as e:  # @UnusedVariable
+                except Exception:
                     pass
 
                 if not os.path.exists(dir_):
                     raise Exception("Couldn't create directory " + dir_)
 
-    ##
-    ## Creation and Existence
-    ##
+    #
+    # Creation and Existence
+    #
 
     def exists(self):
         """Return True if the database exists, or for Sqlite, which will create the file on the
         first reference, the file has been initialized with the root config """
 
-        from sqlalchemy.exc import ProgrammingError, OperationalError
+        from sqlalchemy.exc import ProgrammingError
 
         if self.driver == 'sqlite' and not os.path.exists(self.path):
             return False
 
+        # init engine
         self.engine
 
         try:
@@ -102,7 +124,7 @@ class Database(object):
                 # Since we are using the connection, rather than the session, need to
                 # explicitly set the search path.
                 if self.driver in ('postgres', 'postgis') and self._schema:
-                    self.connection.execute("SET search_path TO {}".format(self._schema))
+                    self.connection.execute('SET search_path TO {}'.format(self._schema))
 
                 rows = self.connection.execute("SELECT * FROM datasets WHERE d_vid = '{}' "
                                                .format(ROOT_CONFIG_NAME_V)).fetchone()
@@ -145,7 +167,11 @@ class Database(object):
             if self.driver == 'sqlite':
                 event.listen(self._engine, 'connect', _pragma_on_connect)
                 # event.listen(self._engine, 'connect', _on_connect_update_schema)
+                # FIXME: remove _on_connect_update_sqlite_schema. Use _validate_version instead.
                 _on_connect_update_sqlite_schema(self.connection, None)
+
+            # FIXME: remove _on_connect_update_sqlite_schema and uncomment next line.
+            # _validate_version(self.connection)
 
         return self._engine
 
@@ -156,10 +182,9 @@ class Database(object):
             self._connection = self.engine.connect()
 
             if self.driver in ['postgres', 'postgis']:
-                self._connection.execute("SET search_path TO library")
+                self._connection.execute('SET search_path TO library')
 
         return self._connection
-
 
     @property
     def session(self):
@@ -174,14 +199,15 @@ class Database(object):
             # set the search path
 
         if self.driver in ('postgres', 'postgis') and self._schema:
-            self._session.execute("SET search_path TO {}".format(self._schema))
+            self._session.execute('SET search_path TO {}'.format(self._schema))
 
         return self._session
 
     def open(self):
-        """Ensure the database exists and is ready to use and return self"""
+        """ Ensure the database exists and is ready to use. """
 
-        self.session # Creates the session
+        # Creates the session
+        self.session
 
         if not self.exists():
             self.create()
@@ -211,8 +237,8 @@ class Database(object):
     def commit(self):
         try:
             self.session.commit()
-            #self.session.expunge_all()  # Clear any cached object in the session.
-            #self.session.expire_all()
+            # self.session.expunge_all()  # Clear any cached object in the session.
+            # self.session.expire_all()
             # self.close_session()
         except Exception as e:
             # self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))
@@ -225,7 +251,7 @@ class Database(object):
     def clean(self, add_config_root=True, create=True):
 
         for ds in self.datasets:
-            self.logger.info("Cleaning: {}".format(ds.name))
+            self.logger.info('Cleaning: {}'.format(ds.name))
             self.remove_dataset(ds)
 
         self.remove_dataset(self.root_dataset)
@@ -240,7 +266,7 @@ class Database(object):
         # http://docs.sqlalchemy.org/en/rel_0_8/faq.html#metadata-schema
 
         for ds in self.datasets:
-            self.logger.info("Cleaning: {}".format(ds.name))
+            self.logger.info('Cleaning: {}'.format(ds.name))
             try:
                 self.remove_dataset(ds)
             except:
@@ -280,13 +306,13 @@ class Database(object):
     def clone(self):
         return self.__class__(self.driver, self.server, self.dbname, self.username, self.password)
 
-
-
     def create_tables(self):
 
         from sqlalchemy.exc import OperationalError
 
-        tables = [Dataset, Config, Table, Column, Partition, File, Code, ColumnStat, SourceColumn, SourceTable, DataSource]
+        tables = [
+            Dataset, Config, Table, Column, Partition, File, Code,
+            ColumnStat, SourceColumn, SourceTable, DataSource]
 
         try:
             self.drop()
@@ -357,10 +383,9 @@ class Database(object):
         self.session.merge(ds)
         self.commit()
 
-
-    ##
-    ## Base Object Access
-    ##
+    #
+    # Base Object Access
+    #
 
     def new_dataset(self, *args, **kwargs):
         """
@@ -405,13 +430,14 @@ class Database(object):
         from ambry.orm.exc import NotFoundError
 
         try:
-            ds =  (self.session.query(Dataset).filter(Dataset.vid == str(ref)).one())
+            ds = self.session.query(Dataset).filter(Dataset.vid == str(ref)).one()
         except NoResultFound:
             try:
-                ds =  (self.session.query(Dataset).filter(Dataset.id == str(ref))
-                        .order_by(Dataset.revision.desc()).first())
+                ds = self.session.query(Dataset).filter(Dataset.id == str(ref))\
+                    .order_by(Dataset.revision.desc())\
+                    .first()
             except NoResultFound:
-                raise NotFoundError("No partition in library for vid : {} ".format(ref))
+                raise NotFoundError('No partition in library for vid : {} '.format(ref))
 
         if ds:
             ds._database = self
@@ -428,7 +454,7 @@ class Database(object):
 
         return self.session.query(Dataset).filter(Dataset.vid != ROOT_CONFIG_NAME_V).all()
 
-    def remove_dataset(self,ds):
+    def remove_dataset(self, ds):
 
         self.session.delete(ds)
         self.session.commit()
@@ -458,7 +484,7 @@ class Database(object):
 def _pragma_on_connect(dbapi_con, con_record):
     """ISSUE some Sqlite pragmas when the connection is created."""
 
-    #dbapi_con.execute('PRAGMA foreign_keys = ON;')
+    # dbapi_con.execute('PRAGMA foreign_keys = ON;')
     # Not clear that there is a performance improvement.
 
     dbapi_con.execute('PRAGMA journal_mode = WAL')
@@ -466,6 +492,7 @@ def _pragma_on_connect(dbapi_con, con_record):
     dbapi_con.execute('PRAGMA temp_store = MEMORY')
     dbapi_con.execute('PRAGMA cache_size = 500000')
     dbapi_con.execute('pragma foreign_keys=ON')
+
 
 def _on_connect_bundle(dbapi_con, con_record):
     """ISSUE some Sqlite pragmas when the connection is created.
@@ -497,11 +524,8 @@ def _on_connect_bundle(dbapi_con, con_record):
     # dbapi_con.execute('PRAGMA synchronous = OFF')
 
 
-
 def _on_connect_update_sqlite_schema(conn, con_record):
     """Perform on-the-fly schema updates based on the user version"""
-    from sqlalchemy.exc import OperationalError
-    from ambry.orm.exc import DatabaseError
 
     version = conn.execute('PRAGMA user_version').fetchone()[0]
     if version:
@@ -510,7 +534,7 @@ def _on_connect_update_sqlite_schema(conn, con_record):
     def maybe_exec(s):
         try:
             conn.execute(s)
-        except Exception as e:
+        except Exception:
             pass
 
     if version > 10 and version < 100:
@@ -521,5 +545,144 @@ def _on_connect_update_sqlite_schema(conn, con_record):
         #maybe_exec('ALTER TABLE columns ... ')
 
     if version < SCHEMA_VERSION:
-        conn.execute('PRAGMA user_version = {}'.format( SCHEMA_VERSION))
+        conn.execute('PRAGMA user_version = {}'.format(SCHEMA_VERSION))
 
+
+def get_stored_version(connection):
+    """ Returns database version. """
+    if connection.engine.driver == 'pysqlite':
+        version = connection.execute('PRAGMA user_version').fetchone()[0]
+        return int(version)
+    elif connection.engine.driver == 'postgresql':
+        # FIXME: Check table existance, create if absent.
+        version = connection.execute('select version from user_version').fetchone()[0]
+        return int(version)
+
+
+def _validate_version(connection):
+    """ Performs on-the-fly schema updates based on the models version. """
+    version = get_stored_version(connection)
+
+    if version > 10 and version < 100:
+        # FIXME: Give a hint to user.
+        raise DatabaseError('Trying to open an old Sqlite database.')
+
+    if _migration_required(connection):
+        migrate(connection)
+
+
+def _migration_required(connection):
+    """ Returns True if ambry models do not match to db tables. Otherwise returns False. """
+    stored_version = get_stored_version(connection)
+    actual_version = SCHEMA_VERSION
+    assert stored_version <= actual_version, 'Db version can not be more than models version. Update your source code.'
+    return stored_version < actual_version
+
+
+def _update_version(connection, version):
+    """ Updates version in the db to the migration version. AKA applyes migration. """
+    if connection.engine.driver == 'pysqlite':
+        connection.execute('PRAGMA user_version = {}'.format(version))
+    elif connection.engine.driver == 'postgresql':
+        connection.execute('insert into user_version (version) values ({})'.format(version))
+    else:
+        raise DatabaseMissingError('Do not know how to update {} database.'.format(connection.engine.driver))
+
+
+def _is_missed(connection, version):
+    """ FIXME: """
+    return get_stored_version(connection) < version
+
+
+def migrate(connection):
+    """ Collects all migrations and applies missed.
+
+    Args:
+        FIXME:
+
+    """
+    import migrations
+
+    package = migrations
+    prefix = package.__name__ + '.'
+    all_migrations = []
+    for importer, modname, ispkg in pkgutil.iter_modules(package.__path__, prefix):
+        version = int(modname.split('.')[-1].split('_')[0])
+        all_migrations.append((version, modname))
+
+    all_migrations = sorted(all_migrations, key=lambda x: x[0])
+
+    for version, modname in all_migrations:
+        if _is_missed(connection, version):
+            module = __import__(modname, fromlist='dummy')
+
+            # run each migration under its own transaction. This allows us to apply valid migrations
+            # and stop on invalid.
+            trans = connection.begin()
+            try:
+                module.Migration().migrate(connection)
+                _update_version(connection, version)
+                trans.commit()
+            finally:
+                trans.rollback()
+
+
+class BaseMigration(object):
+    """ Base class for all migrations. """
+
+    is_ready = False  # FIXME: Find better name.
+
+    def migrate(self, connection):
+        # use transactions
+        if connection.engine.driver == 'pysqlite':
+            self._migrate_sqlite(connection)
+        elif self.engine.connection == 'postgresql':
+            self._migrate_postgresql(connection)
+        else:
+            raise DatabaseMissingError(
+                'Do not know how to migrate {} engine.'.format(self.connection))
+
+    def _migrate_sqlite(self, connection):
+        raise NotImplementedError(
+            'subclasses of MigrationBase must provide a _migrate_sqlite() method')
+
+    def _migrate_postgresql(self, connection):
+        raise NotImplementedError(
+            'subclasses of MigrationBase must provide a _migrate_postgresql() method')
+
+
+def create_migration_template(name):
+    """ Creates migration file. Returns created file name.
+    Args:
+        name (str): name of the migration.
+
+    Returns:
+        str: name of the migration file.
+    """
+    assert name, 'Name of the migration can not be empty.'
+    import migrations
+
+    #
+    # Find next number
+    #
+    package = migrations
+    prefix = package.__name__ + '.'
+    all_versions = []
+    for importer, modname, ispkg in pkgutil.iter_modules(package.__path__, prefix):
+        version = int(modname.split('.')[-1].split('_')[0])
+        all_versions.append(version)
+
+    next_number = max(all_versions) + 1
+
+    #
+    # Generate next migration name
+    #
+    next_migration_name = '{}_{}.py'.format(next_number, name)
+    migration_fullname = os.path.join(package.__path__[0], next_migration_name)
+
+    #
+    # Write next migration file content.
+    #
+    with open(migration_fullname, 'w') as f:
+        f.write(MIGRATION_TEMPLATE)
+    return migration_fullname

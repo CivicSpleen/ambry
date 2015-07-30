@@ -59,25 +59,6 @@ def warn(template, *args, **kwargs):
     global_logger.warning(template.format(*args, **kwargs))
 
 
-
-
-def _source_list(dir_):
-    lst = {}
-    for root, _, files in os.walk(dir_):
-        if 'bundle.yaml' in files:
-            bundle_class = load_bundle(root)
-            bundle = bundle_class(root)
-
-            ident = bundle.identity.dict
-            ident['in_source'] = True
-            ident['source_dir'] = root
-            ident['source_built'] = True if bundle.is_built else False
-            ident['source_version'] = ident['revision']
-            lst[ident['name']] = ident
-
-    return lst
-
-
 def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=None):
     fields = fields or []
     from datetime import datetime
@@ -175,8 +156,9 @@ def _print_info(l, ident, list_partitions=False):
     if d.url:
         prt("D Web Path  : {}", d)
 
+    #
     # For Source Bundles
-    ##
+    #
 
     if resolved_ident.locations.has(LocationRef.LOCATION.SOURCE):
 
@@ -265,21 +247,25 @@ def _print_bundle_info(bundle=None, ident=None):
         prt('Created   : {}', process.get('dbcreated', ''))
         prt('Prepared  : {}', process.get('prepared', ''))
         prt('Built     : {}', process.get('built', ''))
-        prt('Build time: {}', ('%ss' % round(float(process['buildtime']), 2))) if process.get('buildtime') else ''
+        prt(
+            'Build time: {}',
+            ('%ss' % round(float(process['buildtime']), 2))) if process.get('buildtime') else ''
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(prog='ambry', description='Ambry {}. Management interface for ambry, libraries '
-                                                               'and repositories. '.format(ambry._meta.__version__))
+    parser = argparse.ArgumentParser(
+        prog='ambry',
+        description='Ambry {}. Management interface for ambry, libraries '
+                    'and repositories. '.format(ambry._meta.__version__))
 
-    parser.add_argument('-l', '--library', dest='library_name', default="default",
-                        help="Name of library, from the library secton of the config")
+    parser.add_argument('-l', '--library', dest='library_name', default='default',
+                        help='Name of library, from the library secton of the config')
     parser.add_argument('-c', '--config', default=os.getenv(AMBRY_CONFIG_ENV_VAR), action='append',
-                        help="Path to a run config file. Alternatively, set the AMBRY_CONFIG env var")
-    parser.add_argument('--single-config', default=False, action="store_true",
-                        help="Load only the config file specified")
-    parser.add_argument('-E', '--exceptions', default=False, action="store_true",
-                        help="Show full exception trace on all exceptions")
+                        help='Path to a run config file. Alternatively, set the AMBRY_CONFIG env var')
+    parser.add_argument('--single-config', default=False, action='store_true',
+                        help='Load only the config file specified')
+    parser.add_argument('-E', '--exceptions', default=False, action='store_true',
+                        help='Show full exception trace on all exceptions')
 
     cmd = parser.add_subparsers(title='commands', help='command help')
 
@@ -288,7 +274,7 @@ def get_parser():
     from config import config_parser
     from bundle import bundle_parser
     from root import root_parser
-    
+
     library_parser(cmd)
     warehouse_parser(cmd)
     config_parser(cmd)
@@ -299,11 +285,11 @@ def get_parser():
 
 
 def main(argsv=None, ext_logger=None):
-    from .library import library_parser, library_command
-    from .warehouse import warehouse_command, warehouse_parser
-    from config import config_parser, config_command
-    from bundle import bundle_command, bundle_parser
-    from root import root_command, root_parser
+    from .library import library_command
+    from .warehouse import warehouse_command
+    from config import config_command
+    from bundle import bundle_command
+    from root import root_command
     from ..dbexceptions import ConfigurationError
 
     parser = get_parser()
@@ -312,7 +298,7 @@ def main(argsv=None, ext_logger=None):
 
     if args.single_config:
         if args.config is None or len(args.config) > 1:
-            raise Exception("--single_config can only be specified with one -c")
+            raise Exception('--single_config can only be specified with one -c')
         else:
             rc_path = args.config
     elif args.config is not None and len(args.config) == 1:
@@ -333,8 +319,8 @@ def main(argsv=None, ext_logger=None):
     if ext_logger:
         global_logger = ext_logger
     else:
-        name = "{}.{}".format(args.command, args.subcommand)
-        global_logger = get_logger(name,  template="%(levelname)s: %(message)s")
+        name = '{}.{}'.format(args.command, args.subcommand)
+        global_logger = get_logger(name,  template='%(levelname)s: %(message)s')
 
     global_logger.setLevel(logging.INFO)
 
@@ -361,14 +347,13 @@ def main(argsv=None, ext_logger=None):
                                      "development, production, testing, staging")
 
     if f is None:
-        fatal("Error: No command: " + args.command)
+        fatal('Error: No command: ' + args.command)
     else:
         try:
             f(args, rc)
         except KeyboardInterrupt:
             prt('\nExiting...')
-            pass
         except ConfigurationError as e:
             if args.exceptions:
                 raise
-            fatal("{}: {}".format(str(e.__class__.__name__), str(e)))
+            fatal('{}: {}'.format(str(e.__class__.__name__), str(e)))
