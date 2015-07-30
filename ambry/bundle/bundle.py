@@ -9,8 +9,47 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 from ..util import get_logger
 from ..dbexceptions import ConfigurationError, ProcessError
 from ..util import Constant, memoize
+import ambry.etl
 
 class Bundle(object):
+
+    # Default body content for pipelines
+    default_pipelines = {
+        # Classifies rows in multi-header sources
+        'rowintuit': {
+            'body':[
+                ambry.etl.RowIntuiter
+            ]
+        },
+        # Creates the source schemas
+        'source': {
+            'body' :[
+                ambry.etl.MergeHeader,
+                ambry.etl.TypeIntuiter,
+                ambry.etl.MangleHeader
+            ]
+        },
+        'schema': {
+            'body': [
+                ambry.etl.MergeHeader,
+                ambry.etl.MangleHeader,
+                ambry.etl.MapToSourceTable,
+                ambry.etl.TypeIntuiter
+            ]
+        },
+        'build': {
+            'body': [
+                ambry.etl.MergeHeader,
+                ambry.etl.MangleHeader,
+                ambry.etl.MapToSourceTable,
+                ambry.etl.CasterPipe,
+            ],
+            'store':[
+                ambry.etl.SelectPartition,
+                ambry.etl.WriteToPartition
+            ]
+        },
+    }
 
     def __init__(self, dataset, library, source_url=None, build_url=None):
         import logging
@@ -114,6 +153,9 @@ class Bundle(object):
                 return p
         return None
 
+    def table(self, ref):
+        return self.dataset.table(ref)
+
     def wrap_partition(self, p):
         from partitions import PartitionProxy
 
@@ -199,72 +241,74 @@ class Bundle(object):
 
         return fsopendir(build_url)
 
-    def do_pipeline(self, source=None):
-        """COnstruct the meta pipeline. This method shold not be overridden; iverride meta_pipeline() instead. """
-
-        resolved_source = self.source(source) if isinstance(source, basestring) else source
-
-        if not resolved_source and source:
-            from ..etl import PipelineError
-            raise PipelineError('Failed to resolve source name: {}'.format(source))
-
-        pl = self.pipeline(source)
-
-        return pl
-
-    def pipeline(self, source=None):
+    def pipeline(self, source=None, phase = 'build'):
         """Construct the ETL pipeline for all phases. Segments that are not used for the current phase
         are filtered out later. """
-        from ambry.etl.pipeline import Pipeline, MergeHeader, MangleHeader, MapHeader
-        from ambry.etl.pipeline import WriteToPartition, SelectPartition, MapToSourceTable
-        from ambry.etl.transform import CasterPipe
-        from ambry.etl.intuit import TypeIntuiter
+
+        from ambry.etl.pipeline import Pipeline, PartitionWriter
 
         if source:
             source = self.source(source) if isinstance(source, basestring) else source
         else:
             source = None
 
-        pl =  Pipeline(
-                bundle = self,
-                source=source.source_pipe() if source else None,
-                source_first=None,
-                source_row_intuit=None,
-                source_coalesce_rows=MergeHeader(),
-                source_type_intuit=TypeIntuiter(),
-                source_last=None,
-                write_source_schema=None,
-                schema_first=None,
-                source_map_header=MangleHeader(),
-                dest_map_header=MapToSourceTable(error_on_fail = False),
-                dest_cast_columns=CasterPipe(),
-                dest_augment=None,
-                schema_last=None,
-                write_dest_schema=None,
-                build_first=None,
-                select_partition = SelectPartition(),
-                build_last=None,
-                write_to_table= WriteToPartition()
-        )
+        pl = Pipeline(self, source=source.source_pipe() if source else None)
 
-        self.modify_pipe_from_metadata(pl)
+        try:
+            pl.configure(self.default_pipelines[phase])
+        except KeyError:
+            pass # Ok for non-conventional pipe names
+
+        search = []
+
+        # Create a search list of names for getting a pipline from the metadata
+        if source and source.source_table_name:
+            search.append(phase+'-'+source.source_table_name)
+
+        if source and source.dest_table_name:
+            search.append(phase + '-' + source.dest_table_name)
+
+        if source:
+            search.append(phase + '-'+source.name)
+
+        search.append(phase)
+
+        body = []
+
+        # Find the pipe configuration:
+        pipe_config = None
+        pipe_name = None
+        for name in search:
+            if name in self.metadata.pipelines:
+                pipe_config = self.metadata.pipelines[name]
+                pipe_name = name
+                break
+
+        # The pipe_config can either be a list, in which case it is a list of pipe pipes for the body segment
+        # or it could be a dict, in which case each is a list of pipes for the named segments.
+
+        if isinstance(pipe_config, (list,tuple)):
+            # Just convert it to dict form for the next section
+
+            # PartitionWriters are always moved to the 'store' section
+            store, body = [],[]
+
+            for pipe in pipe_config:
+                store.append(pipe) if isinstance(pipe, PartitionWriter) else body.append(pipe)
+
+            pipe_config = dict(body=body, store=store)
+
+        if pipe_config:
+            pl.configure(pipe_config)
+
+        if pipe_name:
+            pl.name = pipe_name
+        else:
+            pl.name = phase
 
         self.edit_pipeline(pl)
 
         return pl
-
-    def modify_pipe_from_metadata(self, pl):
-        """Modify the pipeline based on entries in the pipeline section of the metadata"""
-        import ambry.etl
-
-        for group_name, e in self.metadata.pipeline.items():
-
-            if isinstance(e, basestring):
-                e = eval(e)
-            else:
-                e = [ eval(i) for i in e]
-
-            pl[group_name] = e
 
 
     def set_edit_pipeline(self, f):
@@ -620,7 +664,8 @@ class Bundle(object):
     ## Meta
     ##
 
-    def do_meta(self, source_name = None,  print_pipe=False):
+
+    def do_source_meta(self, source_name=None):
         """
         Synchronize with the files and run the meta pipeline, possibly creating new objects. Then, write the
         objects back to file records and synchronize.
@@ -629,31 +674,124 @@ class Bundle(object):
         :return:
         """
         from ambry.orm.file import File
+        from ..etl import PrintRows, augment_pipeline
 
         if self.is_finalized:
-            self.error("Can't meta; bundle is finalized")
+            self.error("Can't run source meta; bundle is finalized")
             return False
 
         if self.is_built:
-            self.error("Can't meta; bundle is built")
+            self.error("Can't run source meta; bundle is built")
             return False
 
         self.import_lib()
+        self.load_requirements()
 
         self.do_sync()
 
         self.build_source_files.record_to_objects()
 
-        self.load_requirements()
+        self.log("---- Source Meta ---- ")
 
-        self.log("---- Meta ---- ")
+        for i, source in enumerate(self.sources):
 
-        self.meta(source_name=source_name, print_pipe=print_pipe)
+            try:
+                if source_name and source.name != source_name:
+                    self.logger.info("Skipping {} ( only running {} ) ".format(source.name, source_name))
+                    continue
+
+                self.logger.info("Running source meta for source: {} ".format(source.name))
+
+                pl = self.pipeline(source, 'source')
+
+                pl.run()
+
+                self.log_pipeline(pl, 'source')
+                self.meta_make_source_tables(pl)
+
+                source.dataset.commit()
+
+            except Exception as e:
+                raise
+                self.error('Failed in source meta process source {}: {} '.format(source.name, e))
 
         self.build_source_files.objects_to_record()
 
         self.build_source_files.file(File.BSFILE.SOURCES).objects_to_record()
         self.build_source_files.file(File.BSFILE.SOURCESCHEMA).objects_to_record()
+        self.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
+
+        self.do_sync()
+
+        self.set_last_access(Bundle.STATES.META)
+
+        return True
+
+    def do_meta(self, source_name=None):
+
+        r = self.do_source_meta(source_name=source_name)
+
+        if r:
+            r = self.do_schema_meta(source_name=source_name)
+
+        return r
+
+    def do_schema_meta(self, source_name=None):
+        """
+        Synchronize with the files and run the meta pipeline, possibly creating new objects. Then, write the
+        objects back to file records and synchronize.
+
+        :param force:
+        :return:
+        """
+        from ambry.orm.file import File
+        from ..etl import PrintRows, augment_pipeline
+
+        if self.is_finalized:
+            self.error("Can't run source meta; bundle is finalized")
+            return False
+
+        if self.is_built:
+            self.error("Can't run source meta; bundle is built")
+            return False
+
+        self.import_lib()
+        self.load_requirements()
+
+        self.do_sync()
+
+        self.build_source_files.record_to_objects()
+
+        self.log("---- Source Meta ---- ")
+
+        for i, source in enumerate(self.sources):
+
+            try:
+                if source_name and source.name != source_name:
+                    self.logger.info("Skipping {} ( only running {} ) ".format(source.name, source_name))
+                    continue
+
+                self.logger.info("Running schema meta for source: {} ".format(source.name))
+
+                pl = self.pipeline(source, 'schema')
+
+                try:
+                    pl.run()
+                except:
+                    print pl
+                    raise
+
+                self.log_pipeline(pl, 'schema')
+                self.meta_make_dest_tables(pl)
+
+                source.dataset.commit()
+
+            except Exception as e:
+                raise
+                self.error('Failed in schema meta process source {}: {} '.format(source.name, e))
+
+        self.build_source_files.objects_to_record()
+
         self.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
 
         self.do_sync()
@@ -670,7 +808,6 @@ class Bundle(object):
         source = pl.source.source
 
         if not source.st_id:
-
             for c in ti.columns:
                 source.source_table.add_column(c.position, source_header=c.header, dest_header=c.header,
                                                datatype=c.resolved_type)
@@ -686,46 +823,14 @@ class Bundle(object):
                             derivedfrom=c.dest_header,
                             summary=c.summary, description=c.description)
 
-    def meta_log_pipeline(self, pl):
+    def log_pipeline(self, pl, phase):
         """Write a report of the pipeline out to a file """
         import os
 
         self.build_fs.makedir('pipeline', allow_recreate=True)
-        self.build_fs.setcontents(os.path.join('pipeline','meta-'+pl.file_name+'.txt' ), unicode(pl), encoding='utf8')
+        self.build_fs.setcontents(os.path.join('pipeline',phase+'-'+pl.file_name+'.txt' ),
+                                  unicode(pl), encoding='utf8')
 
-    def meta(self, source_name = None, print_pipe=False):
-        from ..etl import PrintRows, augment_pipeline
-        from ..orm.source import SourceError
-
-        self.load_requirements()
-
-        for i, source in enumerate(self.sources):
-
-            try:
-                if source_name and source.name != source_name:
-                    self.logger.info("Skipping {} ( only running {} ) ".format(source.name, source_name))
-                    continue
-
-                self.logger.info("Running meta for source: {} ".format(source.name))
-
-                pl = self.do_pipeline(source).meta_phase
-
-                augment_pipeline(pl, tail_pipe=PrintRows)
-
-                pl.run()
-
-                if print_pipe:
-                    self.logger.info(pl)
-
-                self.meta_log_pipeline(pl)
-                self.meta_make_source_tables(pl)
-                self.meta_make_dest_tables(pl)
-
-                source.dataset.commit()
-
-            except Exception as e:
-                raise
-                self.error('Failed to meta process source {}: {} '.format(source.name, e))
 
     ##
     ## Build
@@ -792,7 +897,7 @@ class Bundle(object):
                                             print_pipe=print_pipe)
 
     def build_run_single_source(self, target_table_name=None, source_name=None, print_pipe=False):
-        from ..etl import PrintRows, augment_pipeline, PartitionWriter
+        from ..etl import PrintRows, augment_pipeline, PartitionWriter, PipelineError
         import time
 
         for i, source in enumerate(self.sources):
@@ -804,12 +909,18 @@ class Bundle(object):
 
             self.logger.info("Running build for source: {} ".format(source.name))
 
-            pl = self.do_pipeline(source).build_phase
+            pl = self.pipeline(source, 'build')
 
             if print_pipe:
                 augment_pipeline(pl, tail_pipe=PrintRows())
 
-            pl.run()
+            try:
+                pl.run()
+            except PipelineError as e:
+                self.logger.error(e)
+                self.logger.error(str(pl))
+                self.logger.error(str(source.dest_table))
+                raise e
 
             if print_pipe:
                 self.logger.info(pl)
@@ -817,7 +928,8 @@ class Bundle(object):
             self.build_log_pipeline(source.name, pl)
             self.build_post_build_source(pl)
 
-            self.logger.info("Finished build for source: {}. {} row/sec".format(source.name, pl[PartitionWriter].rate))
+            self.logger.info("Finished build for source: {}. {} row/sec"
+                             .format(source.name, pl[PartitionWriter].rate))
 
         self.dataset.commit()
 
@@ -841,7 +953,7 @@ class Bundle(object):
 
             self.logger.info("Running build for table: {} ".format(table_name))
 
-            pl = self.do_pipeline().build_phase
+            pl = self.pipeline().build_phase
 
             if print_pipe:
                 augment_pipeline(pl, tail_pipe=PrintRows())

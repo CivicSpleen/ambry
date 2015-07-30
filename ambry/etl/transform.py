@@ -410,7 +410,15 @@ class CasterPipe(Transform, Pipe, ):
         cm = { c.name: c for c in table.columns}
 
         for h in self.headers:
-            self.append(h, cm[h].python_type)
+
+            try:
+                self.append(h, cm[h].python_type)
+            except KeyError:
+                from pipeline import MissingHeaderError
+                raise MissingHeaderError("While processing header in CasterPipe "
+                    "in pipe '{}' failed to find header '{}' in dest table '{}' "
+                    .format(self.pipeline.name, h, table.name))
+
 
         self.compile()
 

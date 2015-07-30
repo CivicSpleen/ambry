@@ -347,7 +347,7 @@ class Test(TestBase):
             if i > 3:
                 break
 
-    def test_etl_pipeline(self):
+    def test_etl_pipeline_run(self):
         from ambry.etl.pipeline import MergeHeader, MangleHeader, MapHeader, Pipeline
         from ambry.etl.pipeline import PrintRows, augment_pipeline
         from ambry.etl.intuit import TypeIntuiter
@@ -355,7 +355,7 @@ class Test(TestBase):
         b = self.setup_bundle('complete-load')
 
         b.do_clean()
-        b.do_sync()
+        b.do_source_meta()
         b.do_prepare()
 
         pl = [
@@ -380,13 +380,23 @@ class Test(TestBase):
 
         pl = Pipeline(
             source = b.source('rent97').fetch().source_pipe(),
-            source_coalesce_rows= MergeHeader() ,
-            source_type_intuit =  TypeIntuiter(),
-            source_map_header= MangleHeader(),
-            dest_map_header = MapHeader({'gvid': 'county', 'renter_cost_gt_30': 'renter_cost'})
+            body = [
+                MergeHeader(),
+                TypeIntuiter(),
+                MangleHeader(),
+                MapHeader({'gvid': 'county', 'renter_cost_gt_30': 'renter_cost'}),
+                PrintRows
+            ]
         )
 
-        augment_pipeline(pl, PrintRows)
+        print pl
+
+        pl.run()
+
+        print pl
+
+        return
+
 
         for i, row in enumerate(pl.iter()):
 
@@ -398,6 +408,17 @@ class Test(TestBase):
 
             if i > 5:
                 break
+
+    def test_etl_pipeline(self):
+
+        b = self.setup_bundle('simple')
+        b.do_sync()
+        b.do_prepare()
+        print b.pipeline(source='simple')
+
+        print '---'
+
+        print b.pipeline(phase='build2')
 
     @unittest.skip('This test needs a source that has a  bad header.')
     def test_mangle_header(self):
@@ -418,7 +439,7 @@ class Test(TestBase):
                 self.assertEqual(['header_one', '_funky_chars', 'spaces', '1_foob_ar'], row)
 
     def test_complete_load_build(self):
-        """Build the simple bundle"""
+        """Build the complete-load bundle"""
         from ambry.etl import augment_pipeline, PrintRows
 
         b = self.setup_bundle('complete-load')
@@ -426,14 +447,19 @@ class Test(TestBase):
         b.sync()
         b = b.cast_to_build_subclass()
         self.assertEquals('synced', b.state)
+
+        b.do_schema_meta()
+
         b.do_prepare()
         self.assertEquals('prepared', b.state)
 
-        b.do_meta()
-
         #b.do_build()
 
-        pl = b.do_pipeline('rent07').build_phase
+        pl = b.pipeline('rent07', 'build')
+
+        print b.table('rent')
+
+        print str(pl)
 
         pl.run()
 
@@ -489,7 +515,7 @@ class Test(TestBase):
         b = b.cast_to_meta_subclass()
         b.do_prepare()
 
-        b.do_meta('rent07', print_pipe=True)
+        b.do_meta('rent07')
 
         # self.assertEquals(6, len(b.dataset.source_tables))
 
@@ -499,7 +525,7 @@ class Test(TestBase):
         self.assertIn('rpeople,1,size,size,float,,,,,,', b.source_fs.getcontents('source_schema.csv'))
 
         # Check a few random bits from the pipeline debugging output.
-        print  b.build_fs.getcontents('pipeline/meta-rent07.txt')
+        print  b.build_fs.getcontents('pipeline/source-rent07.txt')
 
 
         return
@@ -542,11 +568,12 @@ class Test(TestBase):
         b.do_prepare()
         self.assertEquals('prepared', b.state)
 
-        pl = b.do_pipeline('types1').source_phase.run()
+
+        pl = b.pipeline('types1', 'source').run()
 
         self.assertTrue(bool(pl.source))
 
-        ti = pl.source_type_intuit[TypeIntuiter]
+        ti = pl[TypeIntuiter]
 
         ti_cols =  list(ti.columns)
 
@@ -555,7 +582,7 @@ class Test(TestBase):
 
         t = b.dataset.new_table(pl.source.source.name)
 
-        for c in pl.source_type_intuit[TypeIntuiter].columns:
+        for c in pl[TypeIntuiter].columns:
             t.add_column(c.header, datatype = Column.convert_python_type(c.resolved_type))
 
         b.commit()
@@ -583,18 +610,29 @@ class Test(TestBase):
         with b.source_fs.open('bundle.yaml') as f:
             config =  yaml.load(f)
 
-        config['pipeline'] = dict(
-            first="ambry.etl.Edit( add = { 'a': lambda e,r: 1 }) ",
+        config['pipelines']['build'] = dict(
+            first=["Add({'a': lambda e,r: 1 }) "],
             # dest_augment = "Edit( add = { 'a': lambda e,r: 1 }) ",
-            last="ambry.etl.PrintRows(print_at='end')"
+            last=["PrintRows(print_at='end')"],
+            store=['SelectPartition','WriteToPartition']
         )
+
+        config['pipelines']['source'] = [
+            'MergeHeader',
+            "Add({'a': lambda e,r: 1 }) ",
+            'TypeIntuiter()',
+            'MangleHeader()',
+        ]
+
 
         with b.source_fs.open('bundle.yaml', 'wb') as f:
             yaml.dump(config, f)
 
         b.do_sync(force='ftr') # force b/c not enough time for modtime to change
 
-        b.do_meta()
+        b.do_source_meta()
+
+        b.do_schema_meta()
 
         b.do_prepare()
 
@@ -608,6 +646,7 @@ class Test(TestBase):
         self.assertEquals(10001, len(list(p.stream())))
 
         for i, row in enumerate(p.stream()):
+
             if i == 0:
                 self.assertEqual('a', row[-1])
             else:
@@ -625,13 +664,13 @@ class Test(TestBase):
         b.do_sync()
         b.do_prepare()
 
-        pl = b.do_pipeline('dimensions').schema_phase
-        pl.build_last.append(AddDeleteExpand(delete = ['time','county','state'],
+        pl = b.pipeline('dimensions','source')
+        pl.last.append(AddDeleteExpand(delete = ['time','county','state'],
                             add={ "a": lambda e,r: r[4], "b": lambda e,r: r[1]},
                             edit = {'stusab': lambda e,v: v.lower(), 'county_name' : lambda e,v: v.upper() },
                             expand = { ('x','y') : lambda e, r: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
-        pl.build_last.append(PrintRows)
-        pl.build_last.prepend(PrintRows)
+        pl.last.append(PrintRows)
+        pl.last.prepend(PrintRows)
         # header: ['date', 'time', 'stusab', 'state', 'county', 'county_name']
 
         pl.run()
@@ -641,8 +680,8 @@ class Test(TestBase):
         # The PrintRows Pipes save the rows they print, so lets check that the before doesn't have the edited
         # row and the after does.
         row = [9, u'2002-03-21', u'la', u'MARIPOSA COUNTY, CALIFORNIA', u'43', u'09:11:40 PM', 21, 11]
-        self.assertNotIn(row, pl.build_last[0].rows)
-        self.assertIn(row, pl.build_last[2].rows)
+        self.assertNotIn(row, pl.last[0].rows)
+        self.assertIn(row, pl.last[2].rows)
 
     def test_sample_head(self):
         from ambry.etl.pipeline import Pipeline, Pipe, PrintRows, Sample, Head
@@ -659,8 +698,8 @@ class Test(TestBase):
         # Sample
         pl = Pipeline(
             source=Source(),
-            source_first = Sample(est_length=10000),
-            source_last = PrintRows(count=50)
+            first = Sample(est_length=10000),
+            last = PrintRows(count=50)
         )
 
         pl.run()
@@ -672,8 +711,8 @@ class Test(TestBase):
 
         pl = Pipeline(
             source=Source(),
-            source_first=Head(10),
-            source_last=PrintRows(count=50)
+            first=Head(10),
+            last=PrintRows(count=50)
         )
 
         pl.run()
@@ -701,8 +740,10 @@ class Test(TestBase):
 
         # Sample
         pl = Pipeline(
-            source_last=PrintRows(count=50)
+            last=PrintRows(count=50)
         )
+
+        print pl
 
         pl.run(source_pipes=[Source(0), Source(10), Source(20)])
 

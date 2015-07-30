@@ -72,7 +72,7 @@ class StatSet(object):
         self.bin_min = None
         self.bin_max = None
         self.bin_width = None
-        self.bin_primer_count = 5000 # how many point to collect before creating hist bins
+        self.bin_primer_count = 5000 # how many points to collect before creating hist bins
         self.num_bins = 16
         self.bins = [0] * self.num_bins
 
@@ -102,12 +102,12 @@ class StatSet(object):
             # to determine the 4sigma range of the histogram.
             # HACK There are probably a lot of 1-off errors in this
 
-            if self.n < 5000:
+            if self.n < self.bin_primer_count:
                 self.counts[unival] += 1
 
-            elif self.n == 5000:
+            elif self.n == self.bin_primer_count:
                 # If less than 1% are unique, assume that this number is actually an ordinal
-                if self.nuniques < 50:
+                if self.nuniques < (self.bin_primer_count/100):
                     self.lom = self.LOM.ORDINAL
                     self.stats = livestats.LiveStats()
                 else:
@@ -122,7 +122,7 @@ class StatSet(object):
 
                 self.counts = Counter()
 
-            elif self.n > 5000 and v >= self.bin_min and v <= self.bin_max:
+            elif self.n > self.bin_primer_count and v >= self.bin_min and v <= self.bin_max:
                 bin = int((v - self.bin_min) / self.bin_width)
                 self.bins[bin] += 1
 

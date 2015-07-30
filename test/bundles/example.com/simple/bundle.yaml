@@ -61,3 +61,30 @@ build:
 dependencies: {}
 requirements:
     xlrd: xlrd
+pipelines:
+    build:
+        - MergeHeader
+        - TypeIntuiter
+        - MangleHeader
+        - MapToSourceTable(error_on_fail = False)
+        - CasterPipe
+        - SelectPartition
+        - WriteToPartition
+    build2:
+        first:
+            - PrintRows
+        body:
+            - 'Add({
+                ''year'' : lambda e,r: e.source.time,
+                ''release'' : lambda e,r: str(e.source.grain) if e.source.grain else ''all''
+                })'
+            - MergeHeader
+            - TypeIntuiter
+            - MangleHeader
+            - MapToSourceTable(error_on_fail = False)
+            - CasterPipe
+            - SelectPartition
+        last:
+            - PrintRows
+        store:
+            - WriteToPartition

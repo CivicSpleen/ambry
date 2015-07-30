@@ -330,6 +330,16 @@ class Table(Base, DictableMixin):
 
             c.lom = stat.lom
 
+    def __str__(self):
+        from tabulate import tabulate
+
+        headers = "Seq Vid Name Datatype ".split()
+        rows = [ (c.sequence_id, c.vid, c.name, c.datatype ) for c in self.columns ]
+
+        return ('Table: {}\n'.format(self.name)) + tabulate(rows, headers)
+
+
+
     @staticmethod
     def before_insert(mapper, conn, target):
         """event.listen method for Sqlalchemy to set the seqience_id for this

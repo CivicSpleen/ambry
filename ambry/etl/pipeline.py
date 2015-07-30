@@ -4,8 +4,12 @@ files, and complex headers with receeding comments in Excel files.
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
+from collections import OrderedDict
 
 class PipelineError(Exception):
+    pass
+
+class MissingHeaderError(PipelineError):
     pass
 
 class Pipe(object):
@@ -75,6 +79,10 @@ class Pipe(object):
 
         if self.bundle:
             self.bundle.logger.error(m)
+
+    def __str__(self):
+        from ..util import qualified_class_name
+        return qualified_class_name(self)
 
 class Sink(Pipe):
     """A final stage pipe, which consumes its input and produces no output rows"""
@@ -177,7 +185,6 @@ class MapHeader(Pipe):
         for row in rg:
             yield row
 
-
 class MapToSourceTable(Pipe):
     """Alter the header using the source_header and dest_header in the source table """
     def __init__(self, error_on_fail = True):
@@ -189,13 +196,21 @@ class MapToSourceTable(Pipe):
         m = { c.source_header:c.dest_header for c in self.source.source_table.columns }
 
         if self.error_on_fail:
-            return list([m[h] for h in row])
+            try:
+                return list([m[h] for h in row])
+            except KeyError:
+                for h in row:
+                    if not h in m:
+                        raise MissingHeaderError(
+                            ("While in MapToSourceTable, pipeline '{}', failed to find header '{}' "
+                             "in source_table '{}'. table headers: {}" )
+                            .format(self.pipeline.name, h,self.source.source_table.name,
+                                    ','.join(m.keys())))
         else:
             return list([m.get(h, h) for h in row])
 
-
 class MangleHeader(Pipe):
-    """"Alter the header with a function"""
+    """"Alter the header so the values are well-formed, converting to alpjhanumerics and undersscores"""
 
 
     def mangle_column_name(self, i, n):
@@ -229,15 +244,16 @@ class MangleHeader(Pipe):
 
         itr = iter(self.source_pipe)
 
-        self.orig_header = itr.next()
+        self.headers = itr.next()
 
-        yield(self.mangle_header(self.orig_header))
+        yield(self.mangle_header(self.headers))
 
         while True:
             yield itr.next()
 
 class MergeHeader(Pipe):
-    """Strips out the header comments and combines multiple header lines"""
+    """Strips out the header comments and combines multiple header lines to emit a
+    single header line"""
 
     footer = None
     data_start_line = 1
@@ -350,6 +366,7 @@ class MergeHeader(Pipe):
                         self.header_comments.append([str(unicode(x).encode('ascii', 'ignore')) for x in row])
 
                     if self.i == max_header_line:
+
                         yield self.coalesce_headers()
 
                 elif not self.data_end_line or self.i <= self.data_end_line:
@@ -361,8 +378,9 @@ class MergeHeader(Pipe):
                 self.i += 1
 
     def __str__(self):
+        from ..util import qualified_class_name
 
-        return 'Merge Rows: header = {} '.format(','.join(str(e) for e in self.header_lines))
+        return qualified_class_name(self) + ': header = {} '.format(','.join(str(e) for e in self.header_lines))
 
 class AddDeleteExpand(Pipe):
     """Edit rows as they pass through """
@@ -464,7 +482,6 @@ class Delete(AddDeleteExpand):
 class Edit(AddDeleteExpand):
     def __init__(self,  edit):
         super(Edit, self).__init__(edit=edit)
-
 
 class Skip(Pipe):
     """Skip rows of a table that match a predicate """
@@ -581,14 +598,16 @@ class PrintRows(Pipe):
         return row
 
     def __str__(self):
+        from ..util import qualified_class_name
         from tabulate import tabulate
 
         if self.rows:
             aug_header = ['0'] + ['#' + str(j) + ' ' + str(c) for j, c in enumerate(self.headers)]
-            return 'print. {} rows total\n'.format(self.i) + tabulate(self.rows,aug_header[self.offset:self.columns],
-                                                                      tablefmt="pipe")
+            return (qualified_class_name(self)+
+                    ' {} rows total\n'.format(self.i) +
+                    tabulate(self.rows,aug_header[self.offset:self.columns] ,tablefmt="pipe") )
         else:
-            return 'print. 0 rows'
+            return (qualified_class_name(self)+' 0 rows')
 
 def make_table_map(table, headers):
     """"Create a function to map from rows with the structure of the headers to the structure of the table. """
@@ -746,13 +765,13 @@ class WriteToPartition(Pipe, PartitionWriter):
             yield p
 
     def __str__(self):
-
+        from ..util import qualified_class_name
         out = ""
 
         for p in self.partitions:
             out += str(p.identity.name) + "\n"
 
-        return repr(self) + "\n" + out
+        return   qualified_class_name(self)  + "\n" + out
 
 class PipelineSegment(list):
 
@@ -810,60 +829,23 @@ class PipelineSegment(list):
     def source(self):
         return self[0].source
 
-from collections import OrderedDict, Mapping
 class Pipeline(OrderedDict):
     """Hold a defined collection of PipelineGroups, and when called, coalesce them into a single pipeline """
 
     bundle = None
 
-    _source_groups =  [
-                        'source',                   # The unadulterated source file
-                        'first',                    # For callers to hijack the start of the process
-                        'source_first',             # For callers to hijack the start of the process
-                        'source_row_intuit',        # Classify rows
-                        'source_coalesce_rows',     # Combine rows into a header according to classification
-                        'source_map_header',  # Alter column names to names used in final table
-                        'source_type_intuit',       # Classify the types of columns
-                        'source_last',
-                        'last',
-                        'write_source_schema'       # Create the source schema, one source table per source
-                       ]
-
-    _schema_groups = [
-                        'source',
-                        'first',  # For callers to hijack the start of the process
-                        'schema_first',
-                        'source_coalesce_rows',     # Combine rows into a header according to classification
-                        'source_map_header',        # Alter column names to names used in final table
-                        'dest_map_header',          # Change header names to be the same as used in the dest table
-                        'dest_augment',             # Add dimension columns
-                        'schema_last',
-                        'last',
-                        'write_dest_schema'         # Write the destinatino schema
-                        ]
-
-    _build_groups = [
-                        'source',
-                        'first',  # For callers to hijack the start of the process
-                        'build_first',
-                        'source_coalesce_rows',     # Combine rows into a header according to classification
-                        'source_map_header',        # Alter column names to names used in final table
-                        'dest_map_header',          # Change header names to be the same as used in the dest table
-                        'dest_cast_columns',        # Run casters to convert values, maybe create code columns.
-                        'dest_augment',             # Add dimension columns
-                        'select_partition',         # For callers to hijack the end of the process
-                        'build_last',               # For callers to hijack the end of the process
-                        'last',
-                        'write_to_table'            # Write the rows to the table.
-                     ]
-
-    _group_names = list(OrderedDict.fromkeys(_source_groups + _schema_groups + _build_groups)) # uniques, preserve order
+    _group_names = ['source', 'first', 'body', 'augment', 'last', 'store' ]
 
     def __init__(self, bundle = None,  *args, **kwargs):
 
         super(Pipeline, self).__init__()
 
         super(Pipeline, self).__setattr__('bundle', bundle)
+        super(Pipeline, self).__setattr__('name', None)
+
+        for k, v in kwargs.items():
+            if k not in self._group_names:
+                raise IndexError("{} is not a valid pipeline section name".format(k))
 
         for group_name in self._group_names:
             gs = kwargs.get(group_name , [])
@@ -872,7 +854,12 @@ class Pipeline(OrderedDict):
 
             self.__setitem__(group_name, PipelineSegment(self, group_name, *gs))
 
+        if args:
+            self.__setitem__('body', PipelineSegment(self, 'body', *args))
+
+
     def _subset(self, subset):
+        """Return a new pipeline with a subset of the sections"""
         kwargs = {}
         pl = Pipeline(bundle=self.bundle)
         for group_name, pl_segment in self.items():
@@ -882,29 +869,45 @@ class Pipeline(OrderedDict):
 
         return pl
 
-    @property
-    def source_phase(self):
-        """Return a copy with only the PipeSegments that apply to the source phase"""
+    def configure(self, pipe_config):
+        """Configure from a dict"""
 
-        return self._subset(self._source_groups)
+        # Create a context for evaluating the code for each pipeline. This removes the need
+        # to qualify the class names with the module
+        import ambry.etl
+        eval_locals = dict(locals().items()  + ambry.etl.__dict__.items())
 
-    @property
-    def schema_phase(self):
-        """Return a copy with only the PipeSegments that apply to the schema phase"""
+        for segment_name, pipes in pipe_config.items():
 
-        return self._subset(self._schema_groups)
+            parsed_pipes = []
+            for pipe in pipes:
+                if isinstance(pipe, basestring):
+                    try:
+                        parsed_pipes.append(eval(pipe, {}, eval_locals))
+                    except SyntaxError as e:
+                        raise SyntaxError("SyntaxError while parsing pipe '{}' from metadata: {}"
+                                          .format(pipe, e))
+                else:
+                    parsed_pipes.append(pipe)
 
-    @property
-    def build_phase(self):
-        """Return a copy with only the PipeSegments that apply to the build phase"""
+            self[segment_name] = parsed_pipes
 
-        return self._subset(self._build_groups)
+    def replace(self,repl_class, replacement):
+        """Replace a pipe segment, specified by its class, with another segment"""
 
-    @property
-    def meta_phase(self):
-        _meta_group_names = list( OrderedDict.fromkeys(self._source_groups + self._schema_groups ))  # uniques, preserve order
+        for segment_name, pipes in self.items():
+            repl_pipes = []
+            found = False
+            for pipe in pipes:
+                if isinstance(pipe, repl_class):
+                    pipe = replacement
+                    found = True
 
-        return self._subset(_meta_group_names)
+                repl_pipes.append(pipe)
+
+            if found:
+                found = False
+                self[segment_name] = repl_pipes
 
     @property
     def file_name(self):
@@ -966,7 +969,7 @@ class Pipeline(OrderedDict):
             return super(Pipeline, self).__getattr__(k)
 
     def __setattr__(self, k, v):
-        if k.startswith('_OrderedDict__'):
+        if k.startswith('_OrderedDict__') or k in ('name'):
             return super(Pipeline, self).__setattr__(k, v)
 
         self.__setitem__(k,v)
@@ -986,13 +989,14 @@ class Pipeline(OrderedDict):
             for p in self[group_name]:
                 chain.append(p)
 
-        last = chain[0]
-        for p in chain[1:]:
-            assert not inspect.isclass(p)
-            p.set_source_pipe(last)
-            last = p
-
-        #last = reduce(lambda last, next: next.set_source_pipe(last), chain[1:], chain[0])
+        if len(chain):
+            last = chain[0]
+            for p in chain[1:]:
+                assert not inspect.isclass(p)
+                p.set_source_pipe(last)
+                last = p
+        else:
+            last = None
 
         for p in chain:
             p.bundle = self.bundle
@@ -1034,15 +1038,29 @@ class Pipeline(OrderedDict):
         for row in last:
             yield row
 
+    def headers_report(self):
+        """print out all of the headers"""
+        from ..util import qualified_class_name
+        out = []
+        chain, last = self._collect()
+
+        for pipe in chain:
+            if hasattr(pipe, 'headers'):
+                out.append(pipe.segment.name+' ' + qualified_class_name(pipe) +
+                           ': ' + unicode(pipe.headers))
+
+        return '\n'.format(self.name if self.name else '') + '\n'.join(out)
+
     def __str__(self):
 
         out = []
-        for segment_name in self._group_names:
+        chain, last = self._collect()
 
-            for pipe in self[segment_name]:
-                out.append(u"-- {} {} ".format(segment_name, unicode(pipe)))
+        for pipe in chain:
+            out.append((pipe.segment.name if hasattr(pipe,'segment') else '?')
+                       +': '+unicode(pipe))
 
-        return '\n'.join(out)
+        return 'Pipeline {}\n'.format(self.name if self.name else '')+'\n'.join(out)
 
 def augment_pipeline(pl, head_pipe = None, tail_pipe = None):
     """

@@ -122,7 +122,7 @@ class Top(StructuredPropertyTree):
     requirements = Requirements()
     external_documentation = ExtDoc()
     build = Build()
-    pipeline = Pipeline()
+    pipelines = Pipeline()
     contacts = Contacts()
     names = Names()
     versions = Versions()

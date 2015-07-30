@@ -296,12 +296,20 @@ class TypeIntuiter(Pipe):
 
     def __str__(self):
         from tabulate import tabulate
+        from ..util import qualified_class_name
 
         # return  SingleTable([[ str(x) for x in row] for row in self.rows] ).table
 
         results = self.results_table()
 
-        return 'Type Intuiter \n' + str(tabulate(results[1:],results[0], tablefmt="pipe"))
+        if len(results) > 1:
+            o = '\n' + str(tabulate(results[1:],results[0], tablefmt="pipe"))
+        else:
+            o = ''
+
+        return qualified_class_name(self) + o
+
+
 
     def results_table(self):
 
@@ -345,3 +353,5 @@ class TypeIntuiter(Pipe):
 
             yield d
 
+class RowIntuiter(Pipe):
+    pass

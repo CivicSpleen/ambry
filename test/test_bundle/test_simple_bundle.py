@@ -381,26 +381,24 @@ class Test(TestBase):
 
             # Converting to the cesus geoid b/c they are just numbers, and when used in a partition name,
             # the names are lowercased, causing the case sensitive GVIDs to alias.
-            pl.dest_augment = AddDeleteExpand(
+            pl.augment = AddDeleteExpand(
                 edit = {'triangle' : lambda e,v : 1}
             )
 
-            pl.build_last =  [PrintRows( print_at='end'), LogRate(prt, 3000,'')]
+            pl.last =  [PrintRows( print_at='end'), LogRate(prt, 3000,'')]
 
             def select_part(source, row):
                 from ambry.identity import PartialPartitionName
                 return PartialPartitionName(table=source.dest_table_name, time = row[8])
 
-            pl.select_partition = [SelectPartition(select_part)]
-
-            # assign a scalar to append, assign a list to replace
-            pl.write_to_table = [WriteToPartition] # WriteToSelectedPartition()
+            pl.replace(SelectPartition, SelectPartition(select_part))
 
         b.set_edit_pipeline(edit_pipeline)
 
         self.assertTrue(b.do_build())
 
         for p in b.partitions:
+            print p.name
             self.assertIn(int(p.identity.time), p.time_coverage)
 
         self.assertEquals([u'0O0001', u'0O0002', u'0O0003', u'0O0101', u'0O0102', u'0O0103'],
@@ -440,6 +438,7 @@ class Test(TestBase):
 
         b = self.setup_bundle('simple')
         l = b._library
+
 
         b = b.run()
 
