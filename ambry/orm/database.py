@@ -538,7 +538,7 @@ def _on_connect_update_sqlite_schema(conn, con_record):
             pass
 
     if version > 10 and version < 100:
-        raise DatabaseError("Trying to open an old Sqlite database")
+        raise DatabaseError('Trying to open an old Sqlite database')
 
     if version < 100:
         pass
@@ -549,22 +549,38 @@ def _on_connect_update_sqlite_schema(conn, con_record):
 
 
 def get_stored_version(connection):
-    """ Returns database version. """
-    if connection.engine.driver == 'pysqlite':
+    """ Returns database version.
+
+    Note: Assuming user_version pragma (sqlite case) and user_version table (postgresql case)
+        exist because of the db validation after connection. See Database.engine.
+
+    Args:
+        connection (sqlalchemy connection):
+
+    Returns:
+        int: version of the database.
+
+    """
+
+    if connection.engine.name == 'sqlite':
         version = connection.execute('PRAGMA user_version').fetchone()[0]
-        return int(version)
-    elif connection.engine.driver == 'postgresql':
-        # FIXME: Check table existance, create if absent.
-        version = connection.execute('select version from user_version').fetchone()[0]
-        return int(version)
+        return version
+    elif connection.engine.name == 'postgresql':
+        version = connection.execute('SELECT version FROM user_version;').fetchone()[0]
+        return version
+    else:
+        # FIXME: add test
+        raise DatabaseMissingError(
+            'Do not know how to get version from {} engine.'.format(connection.engine.name))
 
 
 def _validate_version(connection):
     """ Performs on-the-fly schema updates based on the models version. """
     version = get_stored_version(connection)
+    assert isinstance(version, int)
 
     if version > 10 and version < 100:
-        # FIXME: Give a hint to user.
+        # FIXME: Give a hint to the user.
         raise DatabaseError('Trying to open an old Sqlite database.')
 
     if _migration_required(connection):
@@ -575,18 +591,34 @@ def _migration_required(connection):
     """ Returns True if ambry models do not match to db tables. Otherwise returns False. """
     stored_version = get_stored_version(connection)
     actual_version = SCHEMA_VERSION
+    assert isinstance(stored_version, int)
+    assert isinstance(actual_version, int)
     assert stored_version <= actual_version, 'Db version can not be more than models version. Update your source code.'
     return stored_version < actual_version
 
 
 def _update_version(connection, version):
-    """ Updates version in the db to the migration version. AKA applyes migration. """
-    if connection.engine.driver == 'pysqlite':
+    """ Updates version in the db to the given version.
+
+    Args:
+        #FIXME:
+
+    """
+    if connection.engine.name == 'sqlite':
         connection.execute('PRAGMA user_version = {}'.format(version))
-    elif connection.engine.driver == 'postgresql':
-        connection.execute('insert into user_version (version) values ({})'.format(version))
+    elif connection.engine.name == 'postgresql':
+        # FIXME: search for table seems better solution.
+        connection.execute('CREATE TABLE IF NOT EXISTS user_version(version INTEGER NOT NULL);')
+
+        # upsert. FIXME: Find better way.
+        if connection.execute('SELECT * FROM user_version;').fetchone():
+            # update
+            connection.execute('UPDATE user_version SET version = {};'.format(version))
+        else:
+            # insert
+            connection.execute('INSERT INTO user_version (version) VALUES ({})'.format(version))
     else:
-        raise DatabaseMissingError('Do not know how to update {} database.'.format(connection.engine.driver))
+        raise DatabaseMissingError('Do not know how to migrate {} engine.'.format(connection.engine.driver))
 
 
 def _is_missed(connection, version):

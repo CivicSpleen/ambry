@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
+from urlparse import urlparse
 import unittest
+
+from ambry.run import get_runconfig
 
 import fudge
 
@@ -9,8 +12,74 @@ from ambry.orm.database import get_stored_version, _validate_version, _migration
     _update_version, _is_missed, migrate
 from ambry.orm.exc import DatabaseError, DatabaseMissingError
 
+MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgresql section to the library section.'
 
-class GetVersionTest(unittest.TestCase):
+
+class BaseDatabaseTest(unittest.TestCase):
+
+    def setUp(self):
+        conf = get_runconfig()
+        if 'postgresql' in conf.dict['library']:
+            dsn = conf.dict['library']['postgresql']['database']
+            parsed_url = urlparse(dsn)
+            db_name = parsed_url.path.replace('/', '')
+            self.postgres_dsn = parsed_url._replace(path='postgres').geturl()
+            self.postgres_test_db = '{}_'.format(db_name)
+            self.postgres_test_dsn = parsed_url._replace(path=self.postgres_test_db).geturl()
+        else:
+            self.postgres_dsn = None
+            self.postgres_test_dsn = None
+            self.postgres_test_db = None
+
+    def tearDown(self):
+        # drop test database
+        if getattr(self, '_active_pg_connection', None):
+            self._active_pg_connection.execute('rollback')
+            self._active_pg_connection.detach()
+            self._active_pg_connection.close()
+            self._active_pg_connection = None
+
+            # droop test database;
+            engine = create_engine(self.postgres_dsn)
+            connection = engine.connect()
+            connection.execute('commit')
+            connection.execute('DROP DATABASE {};'.format(self.postgres_test_db))
+            connection.execute('commit')
+            connection.close()
+
+    def pg_connection(self):
+        # creates test database and returns postgres connection to that database.
+        postgres_user = 'ambry'
+        if not self.postgres_dsn:
+            raise Exception(MISSING_POSTGRES_CONFIG_MSG)
+
+        # connect to postgres database because we need to create database for tests.
+        engine = create_engine(self.postgres_dsn)
+        connection = engine.connect()
+
+        # we have to close opened transaction.
+        connection.execute('commit')
+
+        # drop test database created by previuos run (control + c case).
+        # connection.execute('DROP DATABASE {};'.format(self.postgres_test_db))
+        # connection.execute('commit')
+
+        # create test database
+        query = 'CREATE DATABASE {} OWNER {} template template0 encoding \'UTF8\';'\
+            .format(self.postgres_test_db, postgres_user)
+        connection.execute(query)
+        connection.execute('commit')
+        connection.close()
+
+        # now create connection for tests.
+        self.pg_engine = create_engine(self.postgres_test_dsn)
+        pg_connection = self.pg_engine.connect()
+        self._active_pg_connection = pg_connection
+        return pg_connection
+
+
+class GetVersionTest(BaseDatabaseTest):
+
     def test_returns_user_version_from_sqlite_pragma(self):
         engine = create_engine('sqlite://')
         connection = engine.connect()
@@ -19,8 +88,21 @@ class GetVersionTest(unittest.TestCase):
         self.assertEquals(version, 22)
 
     def test_returns_user_version_from_postgres_table(self):
-        # FIXME:
-        pass
+        if not self.postgres_dsn:
+            # FIXME: it seems failing is better choice here.
+            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
+
+        pg_connection = self.pg_connection()
+
+        create_table_query = '''
+            CREATE TABLE user_version (
+                version INTEGER NOT NULL); '''
+
+        pg_connection.execute(create_table_query)
+        pg_connection.execute('INSERT INTO user_version VALUES (22);')
+        pg_connection.execute('commit')
+        version = get_stored_version(pg_connection)
+        self.assertEquals(version, 22)
 
 
 class ValidateVersionTest(unittest.TestCase):
@@ -70,25 +152,48 @@ class MigrationRequiredTest(unittest.TestCase):
         self.assertFalse(_migration_required(self.connection))
 
 
-class UpdateVersionTest(unittest.TestCase):
+class UpdateVersionTest(BaseDatabaseTest):
 
     def setUp(self):
+        super(self.__class__, self).setUp()
         engine = create_engine('sqlite://')
-        self.connection = engine.connect()
+        self.sqlite_connection = engine.connect()
 
     def test_updates_user_version_sqlite_pragma(self):
-        _update_version(self.connection, 122)
-        stored_version = self.connection.execute('PRAGMA user_version').fetchone()[0]
+        _update_version(self.sqlite_connection, 122)
+        stored_version = self.sqlite_connection.execute('PRAGMA user_version').fetchone()[0]
         self.assertEquals(stored_version, 122)
 
+    def test_creates_user_version_postgresql_table(self):
+        if not self.postgres_dsn:
+            # FIXME: it seems failing is better choice here.
+            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
+        pg_connection = self.pg_connection()
+        _update_version(pg_connection, 123)
+        version = pg_connection.execute('SELECT version FROM user_version;').fetchone()[0]
+        self.assertEquals(version, 123)
+
     def test_updates_user_version_postgresql_table(self):
-        # FIXME:
-        pass
+        if not self.postgres_dsn:
+            # FIXME: it seems failing is better choice here.
+            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
+        pg_connection = self.pg_connection()
+        create_table_query = '''
+            CREATE TABLE user_version (
+                version INTEGER NOT NULL); '''
+
+        pg_connection.execute(create_table_query)
+        pg_connection.execute('INSERT INTO user_version VALUES (22);')
+        pg_connection.execute('commit')
+
+        _update_version(pg_connection, 123)
+        version = pg_connection.execute('SELECT version FROM user_version;').fetchone()[0]
+        self.assertEquals(version, 123)
 
     def test_raises_DatabaseMissingError_error(self):
-        with fudge.patched_context(self.connection.engine, 'driver', 'foo'):
+        with fudge.patched_context(self.sqlite_connection.engine, 'name', 'foo'):
             with self.assertRaises(DatabaseMissingError):
-                _update_version(self.connection, 1)
+                _update_version(self.sqlite_connection, 1)
 
 
 class IsMissedTest(unittest.TestCase):
