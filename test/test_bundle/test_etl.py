@@ -448,16 +448,16 @@ class Test(TestBase):
         b = b.cast_to_build_subclass()
         self.assertEquals('synced', b.state)
 
-        b.do_schema_meta()
+        b.do_meta()
+
+        #print b.source_fs.getcontents('schema.csv')
 
         b.do_prepare()
         self.assertEquals('prepared', b.state)
 
-        #b.do_build()
+        print b.table('rent')
 
         pl = b.pipeline('rent07', 'build')
-
-        print b.table('rent')
 
         print str(pl)
 
@@ -597,6 +597,7 @@ class Test(TestBase):
         time.sleep(2) # Give modtimes a chance to change
         self.assertEqual(4, sum( e[1] == 'rtf' for e in b.do_sync() ))
 
+
     def test_pipe_config(self):
 
         b = self.setup_bundle('simple')
@@ -624,15 +625,14 @@ class Test(TestBase):
             'MangleHeader()',
         ]
 
-
         with b.source_fs.open('bundle.yaml', 'wb') as f:
             yaml.dump(config, f)
 
         b.do_sync(force='ftr') # force b/c not enough time for modtime to change
 
-        b.do_source_meta()
+        b.run_phase('source')
 
-        b.do_schema_meta()
+        b.run_phase('schema')
 
         b.do_prepare()
 

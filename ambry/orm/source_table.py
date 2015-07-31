@@ -5,15 +5,14 @@ Revised BSD License, included in this distribution as LICENSE.txt
 __docformat__ = 'restructuredtext en'
 
 
-from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
 from sqlalchemy import  Text, Binary, String, ForeignKey
 import datetime
-from sqlalchemy import event
 from sqlalchemy.orm import relationship
 
 from ..util import Constant
 from ..orm.column import Column
+from ambry.etl.intuit import unknown
 
 
 from . import Base, MutationDict, JSONEncodedObj
@@ -31,6 +30,7 @@ class SourceColumn(Base):
     DATATYPE.DATE = datetime.date.__name__
     DATATYPE.TIME = datetime.time.__name__
     DATATYPE.DATETIME = datetime.datetime.__name__
+    DATATYPE.UNKNOWN = unknown.__name__
 
     type_map = {
         DATATYPE.INT: int,
@@ -38,7 +38,8 @@ class SourceColumn(Base):
         DATATYPE.STRING: str,
         DATATYPE.DATE: datetime.date,
         DATATYPE.TIME: datetime.time,
-        DATATYPE.DATETIME: datetime.datetime
+        DATATYPE.DATETIME: datetime.datetime,
+        DATATYPE.DATETIME: unknown
     }
 
     column_type_map = {
@@ -47,7 +48,8 @@ class SourceColumn(Base):
         DATATYPE.STRING: Column.DATATYPE_VARCHAR,
         DATATYPE.DATE: Column.DATATYPE_DATE,
         DATATYPE.TIME: Column.DATATYPE_TIME,
-        DATATYPE.DATETIME: Column.DATATYPE_DATETIME
+        DATATYPE.DATETIME: Column.DATATYPE_DATETIME,
+        DATATYPE.UNKNOWN: Column.DATATYPE_VARCHAR
     }
 
     id = SAColumn('sc_id', Integer, primary_key=True)
@@ -76,6 +78,10 @@ class SourceColumn(Base):
     __table_args__ = (
         UniqueConstraint('sc_st_id','sc_source_header', name='_uc_sourcecolumns'),
     )
+
+    @property
+    def python_datatype(self):
+        return self.type_map[self.datatype]
 
     @property
     def column_datatype(self):
@@ -166,6 +172,7 @@ class SourceTable(Base):
                 source_header=source_header.strip(),
                 **kwargs
             )
+
         else:
             c = SourceColumn(
             position=position,
@@ -176,7 +183,7 @@ class SourceTable(Base):
 
             self.columns.append(c)
 
-            return c
+        return c
 
     @property
     def column_map(self):
@@ -185,6 +192,10 @@ class SourceTable(Base):
     @property
     def column_index_map(self):
         return {c.source_header: c.position for c in self.columns}
+
+    @property
+    def headers(self):
+        return [c.source_header for c in self.columns]
 
     @property
     def widths(self):
@@ -196,3 +207,11 @@ class SourceTable(Base):
         widths = [int(w) for w in widths]
 
         return widths
+
+    def __str__(self):
+        from tabulate import tabulate
+
+        headers = "Pos Source_Header Dest_Header Datatype ".split()
+        rows = [(c.position, c.source_header, c.dest_header, c.datatype) for c in self.columns]
+
+        return ('Source Table: {}\n'.format(self.name)) + tabulate(rows, headers)

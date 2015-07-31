@@ -7,10 +7,54 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from collections import OrderedDict
 
 class PipelineError(Exception):
-    pass
+    def __init__(self,  pipe, *args, **kwargs):
+        super(PipelineError, self).__init__(*args, **kwargs)
+        self.pipe = pipe
+
+        def __str__(self):
+            from ambry.util import qualified_class_name
+
+            return """
+======================================
+Pipeline Exception: PipelineError
+Message:         {message}
+Pipeline:        {pipeline_name}
+Pipe:            {pipe_class}
+Source:          {source_name}
+Segment Headers: {headers}
+-------------------------------------
+Pipeline:
+{pipeline}
+""".format(message=self.message, pipeline_name=self.pipe.pipeline.name, pipeline = str(self.pipe.pipeline),
+           pipe_class=qualified_class_name(self.pipe), source_name=self.source.name, headers=self.pipe.headers)
 
 class MissingHeaderError(PipelineError):
-    pass
+    def __init__(self, pipe, header, table, *args, **kwargs):
+        super(MissingHeaderError, self).__init__( pipe, *args, **kwargs)
+
+        self.header = header
+        self.table = table
+
+    def __str__(self):
+        from ambry.util import qualified_class_name
+        return """
+======================================
+Pipeline Exception: MissingHeaderError
+Message:         {message}
+Pipeline:        {pipeline_name}
+Pipe:            {pipe_class}
+Source:          {source_name}
+Segment Headers: {headers}
+Missing Header:  {header}
+-------------------------------------
+{table_columns}
+-------------------------------------
+Pipeline:
+{pipeline}
+""".format(message = self.message, pipeline_name=self.pipe.pipeline.name, pipeline = str(self.pipe.pipeline),
+           pipe_class = qualified_class_name(self.pipe), source_name = self.pipe.source.name,
+           headers =  self.pipe.headers, header = self.header, table_name = self.table.name, table_columns = str(self.table))
+
 
 class Pipe(object):
     """A step in the pipeline"""
@@ -80,9 +124,13 @@ class Pipe(object):
         if self.bundle:
             self.bundle.logger.error(m)
 
-    def __str__(self):
+    def print_header(self):
         from ..util import qualified_class_name
+
         return qualified_class_name(self)
+
+    def __str__(self):
+        return self.print_header()
 
 class Sink(Pipe):
     """A final stage pipe, which consumes its input and produces no output rows"""
@@ -201,11 +249,10 @@ class MapToSourceTable(Pipe):
             except KeyError:
                 for h in row:
                     if not h in m:
-                        raise MissingHeaderError(
-                            ("While in MapToSourceTable, pipeline '{}', failed to find header '{}' "
-                             "in source_table '{}'. table headers: {}" )
-                            .format(self.pipeline.name, h,self.source.source_table.name,
-                                    ','.join(m.keys())))
+                        # pipe, header, table,
+                        raise MissingHeaderError( self, h, self.source.source_table,
+                                                  "Failed to find header in source_table ")
+
         else:
             return list([m.get(h, h) for h in row])
 
@@ -409,7 +456,6 @@ class AddDeleteExpand(Pipe):
         self.edit_row = None
         self.edit_functions = None  # Turn dict lookup into list lookup
 
-
     def process_header(self, row):
 
         self.edit_functions = [None] * len(row)
@@ -417,6 +463,7 @@ class AddDeleteExpand(Pipe):
         header_parts = []
         row_parts = []
         for i, h in enumerate(row):
+
             if h in self.delete:
                 pass
             elif h in self.edit:
@@ -482,6 +529,29 @@ class Delete(AddDeleteExpand):
 class Edit(AddDeleteExpand):
     def __init__(self,  edit):
         super(Edit, self).__init__(edit=edit)
+
+class RemoveBlankColumns(Pipe):
+    """Remove columns that don't have a header"""
+
+    def __init__(self):
+        self.editor = None
+
+    def process_header(self, row):
+
+        header_parts = []
+        for i, h in enumerate(row):
+            if h.strip():
+                header_parts.append('r[{}]'.format(i))
+
+        if header_parts:
+            self.editor = eval("lambda r: [{}]".format(','.join(header_parts)))
+            return self.editor(row)
+        else:
+            self.process_body = lambda self,row: row
+
+    def process_body(self, row):
+        return self.editor(row)
+
 
 class Skip(Pipe):
     """Skip rows of a table that match a predicate """
@@ -833,8 +903,11 @@ class Pipeline(OrderedDict):
     """Hold a defined collection of PipelineGroups, and when called, coalesce them into a single pipeline """
 
     bundle = None
+    name = None
+    phase = None
+    final = None
 
-    _group_names = ['source', 'first', 'body', 'augment', 'last', 'store' ]
+    _group_names = ['source', 'first', 'body', 'augment', 'last', 'store', 'final' ]
 
     def __init__(self, bundle = None,  *args, **kwargs):
 
@@ -842,6 +915,8 @@ class Pipeline(OrderedDict):
 
         super(Pipeline, self).__setattr__('bundle', bundle)
         super(Pipeline, self).__setattr__('name', None)
+        super(Pipeline, self).__setattr__('phase', None)
+        super(Pipeline, self).__setattr__('final', [])
 
         for k, v in kwargs.items():
             if k not in self._group_names:
@@ -856,7 +931,6 @@ class Pipeline(OrderedDict):
 
         if args:
             self.__setitem__('body', PipelineSegment(self, 'body', *args))
-
 
     def _subset(self, subset):
         """Return a new pipeline with a subset of the sections"""
@@ -877,20 +951,30 @@ class Pipeline(OrderedDict):
         import ambry.etl
         eval_locals = dict(locals().items()  + ambry.etl.__dict__.items())
 
+        replacements = {}
+
+        def eval_pipe(pipe):
+            if isinstance(pipe, basestring):
+                try:
+                    return eval(pipe, {}, eval_locals)
+                except SyntaxError as e:
+                    raise SyntaxError("SyntaxError while parsing pipe '{}' from metadata: {}"
+                                      .format(pipe, e))
+            else:
+                return pipe
+
         for segment_name, pipes in pipe_config.items():
+            if segment_name == 'final':
+                # The 'final' segment is actually a list of names of BUndle methods to call afer the pipeline
+                # completes
+                super(Pipeline, self).__setattr__('final', pipes)
+            elif segment_name == 'replace':
+                for frm, to in pipes.items():
+                    self.replace(eval_pipe(frm), eval_pipe(to))
+            else:
+                self[segment_name] = [eval_pipe(pipe) for pipe in pipes ]
 
-            parsed_pipes = []
-            for pipe in pipes:
-                if isinstance(pipe, basestring):
-                    try:
-                        parsed_pipes.append(eval(pipe, {}, eval_locals))
-                    except SyntaxError as e:
-                        raise SyntaxError("SyntaxError while parsing pipe '{}' from metadata: {}"
-                                          .format(pipe, e))
-                else:
-                    parsed_pipes.append(pipe)
 
-            self[segment_name] = parsed_pipes
 
     def replace(self,repl_class, replacement):
         """Replace a pipe segment, specified by its class, with another segment"""
@@ -942,7 +1026,7 @@ class Pipeline(OrderedDict):
             # This maybe should be an error?
             super(Pipeline, self).__setitem__(k, v)
 
-        assert isinstance(self[k], PipelineSegment), "Unexpected typ: {}".format(type(self[k]))
+        assert isinstance(self[k], PipelineSegment), "Unexpected type: {}".format(type(self[k]))
 
     def __getitem__(self, k):
 
@@ -969,7 +1053,7 @@ class Pipeline(OrderedDict):
             return super(Pipeline, self).__getattr__(k)
 
     def __setattr__(self, k, v):
-        if k.startswith('_OrderedDict__') or k in ('name'):
+        if k.startswith('_OrderedDict__') or k in ('name', 'phase'):
             return super(Pipeline, self).__setattr__(k, v)
 
         self.__setitem__(k,v)
@@ -1057,8 +1141,9 @@ class Pipeline(OrderedDict):
         chain, last = self._collect()
 
         for pipe in chain:
-            out.append((pipe.segment.name if hasattr(pipe,'segment') else '?')
-                       +': '+unicode(pipe))
+            out.append((pipe.segment.name if hasattr(pipe,'segment') else '?')+': '+unicode(pipe))
+
+        out.append('final: '+str(self.final))
 
         return 'Pipeline {}\n'.format(self.name if self.name else '')+'\n'.join(out)
 

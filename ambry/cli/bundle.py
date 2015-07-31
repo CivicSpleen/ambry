@@ -65,11 +65,12 @@ def get_bundle_ref(args,l):
 
     return None, None
 
-def using_bundle(args,l):
+def using_bundle(args,l, print_loc = True):
 
     ref, frm = get_bundle_ref(args,l)
 
-    prt('Using bundle ref {}, referenced from {}'.format(ref, frm))
+    if print_loc:
+        prt('Using bundle ref {}, referenced from {}'.format(ref, frm))
 
     b = l.bundle(ref)
 
@@ -138,7 +139,8 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='info')
     command_p.add_argument('-w', '--which', default=False, action="store_true",
                            help='Report the reference of the bundles that will be accessed by other commands')
-
+    command_p.add_argument('-s', '--source_dir', default=False, action="store_true",
+                           help='Display the source directory')
     command_p.add_argument('-S', '--stats', default=False, action="store_true",
                            help='Also report column stats for partitions')
     command_p.add_argument('-P', '--partitions', default=False, action="store_true",
@@ -161,6 +163,16 @@ def bundle_parser(cmd):
     group.add_argument('-o', '--from-objects', default=False, action="store_const",
                        const=BuildSourceFile.SYNC_DIR.OBJECT_TO_FILE, dest='sync_dir',
                        help='Source sync from database objects to source')
+    group = command_p.add_mutually_exclusive_group()
+    group.add_argument('-F', '--record-to-object', default=False, action="store_const",
+                       const=File.PREFERENCE.FILE, dest='preference',
+                       help='Force loading objects from file records')
+    group.add_argument('-M', '--merge', default=False, action="store_const",
+                       const=File.PREFERENCE.MERGE, dest='preference',
+                       help='Load file records into objects, then write back to file records')
+    group.add_argument('-O', '--object-to-record', default=False, action="store_const",
+                       const=File.PREFERENCE.MERGE, dest='preference',
+                       help='Load file records from objects')
     command_p.add_argument('-t', '--test', default=False, action="store_true", help='Only Report the directions of the next sync')
     command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
 
@@ -310,13 +322,17 @@ def bundle_info(args, l, rc):
 
     if args.which:
         ref, frm = get_bundle_ref(args, l)
-        b = using_bundle(args, l)
+        b = using_bundle(args, l, print_loc=False)
         prt('Will use bundle ref {}, {}, referenced from {}'.format(ref, b.identity.vname, frm))
         return
 
-    b = using_bundle(args, l)
+    b = using_bundle(args, l, print_loc=False)
 
     b.set_last_access(Bundle.STATES.INFO)
+
+    if args.source_dir:
+        print b.source_fs.getsyspath('/')
+        return
 
     def inf(column,k,v):
         info[column].append((k, v))
@@ -463,10 +479,18 @@ def bundle_sync(args, l, rc):
     prt("Bundle source filesystem: {}".format(b.source_fs))
     prt("Sync direction: {}".format(args.sync_dir if args.sync_dir else 'latest'))
 
+    if args.preference in (File.PREFERENCE.OBJECT, File.PREFERENCE.MERGE):
+        prt("Loading objects into records")
+        b.build_source_files.objects_to_record(args.preference )
+
     if args.test:
         syncs = b.build_source_files.sync_dirs()
     else:
         syncs =  b.do_sync(args.sync_dir if args.sync_dir else None)
+
+    if args.preference in  (File.PREFERENCE.FILE, File.PREFERENCE.MERGE):
+        prt("Loading records into objects")
+        b.build_source_files.record_to_objects(args.preference )
 
     print tabulate(syncs, headers="Key Direction".split())
 
@@ -485,7 +509,7 @@ def bundle_meta(args, l, rc):
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
     b = using_bundle(args, l).cast_to_meta_subclass()
-    b.do_meta(print_pipe=args.print_pipe)
+    b.do_meta()
     b.set_last_access(Bundle.STATES.META)
 
 def bundle_prepare(args, l, rc):
@@ -536,7 +560,11 @@ def bundle_run(args, l, rc):
 
     import sys
 
-    b = using_bundle(args, l).cast_to_meta_subclass()
+    b = using_bundle(args, l)
+
+    b.do_sync()
+
+    b = b.cast_to_meta_subclass()
 
     b.load_requirements()
 
@@ -580,7 +608,7 @@ def bundle_dump(args, l, rc):
 
     b = l.bundle(ref)
 
-    prt("Dumping configs for {}\n".format(b.identity.fqname))
+    prt("Dumping {} for {}\n".format(args.table,b.identity.fqname))
 
     def trunc(v,l):
         return v[:l] + (v[l:] and '..')
@@ -661,19 +689,29 @@ def bundle_dump(args, l, rc):
 
         if records:
             headers, records = records[0], records[1:]
-        headers = []
-
+        else:
+            headers = []
 
     elif args.table == 'tables':
-
+        from collections import OrderedDict
         records = []
         headers = []
         for t in b.dataset.tables:
-            for c in t.columns:
-                if not headers:
-                    headers = c.row.keys()
+            for i,c in enumerate(t.columns):
+                row = OrderedDict( (k,v) for k,v in c.row.items() if k in
+                ['table','name','id','datatype'])
 
-                records.append(c.row.values())
+                if i == 0:
+                    records.append(row.keys())
+
+                records.append(row.values())
+
+        records = zip(*[row for row in zip(*records) if bool(filter(bool, row[1:]))])
+
+        if records:
+            headers, records = records[0], records[1:]
+        else:
+            headers = []
 
 
     print tabulate.tabulate(records, headers = headers)

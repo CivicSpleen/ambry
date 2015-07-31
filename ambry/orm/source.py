@@ -29,8 +29,8 @@ class DelayedOpen(object):
 
         self.from_cache = from_cache
 
-    def open(self, mode = None ):
-        return self._fs.open(self._path, mode if mode else self._mode )
+    def open(self, mode = None, encoding = None ):
+        return self._fs.open(self._path, mode if mode else self._mode, encoding = encoding )
 
     def syspath(self):
         return self._fs.getsyspath(self._path)
@@ -239,13 +239,13 @@ class DataSource(Base, DictableMixin):
         elif gft == 'fixed' or gft == 'txt':
             from ambry.util.fixedwidth import fixed_width_iter
 
-            return SourceRowGen( self, fixed_width_iter(fstor.open(), self.widths))
+            return SourceRowGen( self, fixed_width_iter(fstor.open(mode='r',encoding=self.encoding), self))
         elif gft == 'xls':
             return SourceRowGen( self, excel_iter(fstor.syspath(), self.segment ))
         elif gft == 'xlsx':
             return SourceRowGen( self, excel_iter(fstor.syspath(), self.segment ))
         else:
-            raise ValueError("Unknown filetype: {} ".format(gft))
+            raise ValueError("Unknown filetype for source {}: {} ".format(self.name, gft))
 
     @property
     def source_table(self):
@@ -289,6 +289,10 @@ class DataSource(Base, DictableMixin):
     @property
     def widths(self):
         return self.source_table.widths
+
+    @property
+    def headers(self):
+        return self.source_table.headers
 
 
 def excel_iter(file_name, segment):

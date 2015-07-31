@@ -415,10 +415,11 @@ class CasterPipe(Transform, Pipe, ):
                 self.append(h, cm[h].python_type)
             except KeyError:
                 from pipeline import MissingHeaderError
-                raise MissingHeaderError("While processing header in CasterPipe "
-                    "in pipe '{}' failed to find header '{}' in dest table '{}' "
+                # pipeline, pipe, header, table,
+                raise MissingHeaderError(
+                    self, h, table,
+                    "While processing header in CasterPipe in pipe '{}' failed to find header '{}' in dest table '{}' "
                     .format(self.pipeline.name, h, table.name))
-
 
         self.compile()
 
@@ -434,7 +435,3 @@ class CasterPipe(Transform, Pipe, ):
             self.errors.append(self.error_accumulator)
 
         return row
-
-
-
-
