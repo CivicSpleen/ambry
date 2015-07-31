@@ -80,6 +80,8 @@ class ConfigFactory(SQLAlchemyModelFactory):
                 .filter_by(vid=d_vid)\
                 .one()
         else:
+            if DatasetFactory._meta.sqlalchemy_session is None:
+                DatasetFactory._meta.sqlalchemy_session = cls._meta.sqlalchemy_session
             dataset = DatasetFactory()
 
         kwargs['d_vid'] = dataset.vid
@@ -122,12 +124,14 @@ class TableFactory(SQLAlchemyModelFactory):
     def _prepare(cls, create, **kwargs):
         dataset = kwargs.get('dataset', None)
         if not dataset:
+            if DatasetFactory._meta.sqlalchemy_session is None:
+                DatasetFactory._meta.sqlalchemy_session = cls._meta.sqlalchemy_session
             dataset = DatasetFactory()
 
         kwargs['id'] = 't{dataset_id}{sequence_id:02d}'.format(
             dataset_id=_drop_entity(dataset.id),
             sequence_id=kwargs['sequence_id'])
-        kwargs['vid'] = '{table_id}{dataset.revision:02d}'.format(
+        kwargs['vid'] = '{table_id}{dataset.revision:03d}'.format(
             table_id=kwargs['id'], dataset=dataset)
 
         kwargs['d_vid'] = dataset.vid
@@ -161,7 +165,6 @@ class TableFactory(SQLAlchemyModelFactory):
         return True
 
 
-# FIXME: Is broken.
 class ColumnFactory(SQLAlchemyModelFactory):
     class Meta:
         model = Column
@@ -181,6 +184,8 @@ class ColumnFactory(SQLAlchemyModelFactory):
     def _prepare(cls, create, **kwargs):
         table = kwargs.get('table', None)
         if not table:
+            if TableFactory._meta.sqlalchemy_session is None:
+                TableFactory._meta.sqlalchemy_session = cls._meta.sqlalchemy_session
             table = TableFactory()
 
         kwargs['id'] = 'c{table_id}{sequence_id:03d}'.format(
@@ -196,7 +201,6 @@ class ColumnFactory(SQLAlchemyModelFactory):
 
         dataset = cls._meta.sqlalchemy_session.query(Dataset).filter_by(vid=table.d_vid).one()
         kwargs['d_vid'] = dataset.vid
-
         return super(ColumnFactory, cls)._prepare(create, **kwargs)
 
     @classmethod
@@ -210,7 +214,6 @@ class ColumnFactory(SQLAlchemyModelFactory):
         Args:
             column (Column): column instance to validate.
         """
-        # dataset = cls._meta.sqlalchemy_session.query(Dataset).filter_by(vid=column.d_vid).one()
         table = cls._meta.sqlalchemy_session.query(Table).filter_by(vid=column.t_vid).first()
         assert column.vid.startswith('c')
 
@@ -327,26 +330,34 @@ class ColumnStatFactory(SQLAlchemyModelFactory):
 
     @classmethod
     def _prepare(cls, create, **kwargs):
-        # shortcut for sqlalchemy session.
+        # shortcut for sqlalchemy query.
         query = cls._meta.sqlalchemy_session.query
 
         d_vid = kwargs.get('d_vid', None)
         if d_vid:
             dataset = query(Dataset).filter_by(vid=d_vid).one()
         else:
+            if DatasetFactory._meta.sqlalchemy_session is None:
+                DatasetFactory._meta.sqlalchemy_session = cls._meta.sqlalchemy_session
             dataset = DatasetFactory()
 
         p_vid = kwargs.get('p_vid', None)
         if d_vid:
             partition = query(Partition).filter_by(vid=p_vid).one()
         else:
+            if PartitionFactory._meta.sqlalchemy_session is None:
+                PartitionFactory._meta.sqlalchemy_session = cls._meta.sqlalchemy_session
             partition = PartitionFactory(dataset=dataset)
 
         c_vid = kwargs.get('c_vid', None)
         if d_vid:
             column = query(Column).filter_by(vid=c_vid).one()
         else:
+            if TableFactory._meta.sqlalchemy_session is None:
+                TableFactory._meta.sqlalchemy_session = cls._meta.sqlalchemy_session
             table = TableFactory(dataset=dataset)
+            if ColumnFactory._meta.sqlalchemy_session is None:
+                ColumnFactory._meta.sqlalchemy_session = cls._meta.sqlalchemy_session
             column = ColumnFactory(table=table)
 
         kwargs['d_vid'] = dataset.vid

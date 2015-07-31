@@ -9,25 +9,23 @@ __docformat__ = 'restructuredtext en'
 
 import datetime
 
-import dateutil.parser
+import dateutil
 
 import sqlalchemy
 
 from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, Boolean, UniqueConstraint
-from sqlalchemy import Float as Real, Text, String, ForeignKey
+from sqlalchemy import Text, String, ForeignKey
 from sqlalchemy.orm import relationship
 
 from sqlalchemy.sql import text
-import sqlalchemy.types as types
 
-from ..util import  memoize
+from ..util import memoize
 
-from . import Base, MutationDict, MutationList,  JSONEncodedObj, BigIntegerType, GeometryType, _clean_flag
+from . import Base, MutationDict, MutationList,  JSONEncodedObj, BigIntegerType, GeometryType
 
 from ambry.orm.code import Code
-from ambry.orm.columnstat import ColumnStat
-from ambry.identity import  ColumnNumber, ObjectNumber
+from ambry.identity import ColumnNumber, ObjectNumber
 
 
 class Column(Base):
@@ -37,11 +35,11 @@ class Column(Base):
     id = SAColumn('c_id', String(20))
     sequence_id = SAColumn('c_sequence_id', Integer)
     is_primary_key = SAColumn('c_is_primary_key', Boolean, default=False)
-    t_vid = SAColumn('c_t_vid',String(20),ForeignKey('tables.t_vid'), nullable=False, index=True)
+    t_vid = SAColumn('c_t_vid', String(20), ForeignKey('tables.t_vid'), nullable=False, index=True)
     d_vid = SAColumn('c_d_vid', String(20), ForeignKey('datasets.d_vid'), nullable=False, index=True)
     t_id = SAColumn('c_t_id', String(20))
     name = SAColumn('c_name', Text)
-    fqname = SAColumn('c_fqname', Text) # Name with the vid prefix
+    fqname = SAColumn('c_fqname', Text)  # Name with the vid prefix
     altname = SAColumn('c_altname', Text)
     datatype = SAColumn('c_datatype', Text)
     start = SAColumn('c_start', Integer)
@@ -79,11 +77,11 @@ class Column(Base):
 
     data = SAColumn('c_data', MutationDict.as_mutable(JSONEncodedObj))
 
-    codes = relationship(Code, backref='column',order_by="asc(Code.key)",
+    codes = relationship(Code, backref='column', order_by="asc(Code.key)",
                          cascade="save-update, delete, delete-orphan")
 
     __table_args__ = (
-        UniqueConstraint( 'c_sequence_id','c_t_vid', name='_uc_columns_1'),
+        UniqueConstraint('c_sequence_id', 'c_t_vid', name='_uc_columns_1'),
     )
 
     DATATYPE_CHAR = 'char'
@@ -104,7 +102,7 @@ class Column(Base):
     DATATYPE_LINESTRING = 'linestring'  # Spatalite, sqlite extensions for geo
     DATATYPE_POLYGON = 'polygon'  # Spatalite, sqlite extensions for geo
 
-    DATATYPE_MULTIPOLYGON = 'multipolygon' # Spatalite, sqlite extensions for geo
+    DATATYPE_MULTIPOLYGON = 'multipolygon'  # Spatalite, sqlite extensions for geo
     DATATYPE_GEOMETRY = 'geometry'  # Spatalite, sqlite extensions for geo
 
     types = {
@@ -145,17 +143,17 @@ class Column(Base):
         self.derivedfrom = self.derivedfrom or None
 
     def type_is_int(self):
-        return self.datatype in ( Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64)
+        return self.datatype in (Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64)
 
     def type_is_real(self):
-        return self.datatype in ( Column.REAL, Column.FLOAT)
+        return self.datatype in (Column.REAL, Column.FLOAT)
 
     def type_is_number(self):
-        return self.datatype in ( Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64,
-                                  Column.DATATYPE_NUMERIC, Column.DATATYPE_REAL, Column.DATATYPE_FLOAT)
+        return self.datatype in (Column.DATATYPE_INTEGER, Column.DATATYPE_INTEGER64,
+                                 Column.DATATYPE_NUMERIC, Column.DATATYPE_REAL, Column.DATATYPE_FLOAT)
 
     def type_is_text(self):
-        return self.datatype in ( Column.DATATYPE_TEXT, Column.DATATYPE_CHAR, Column.DATATYPE_VARCHAR)
+        return self.datatype in (Column.DATATYPE_TEXT, Column.DATATYPE_CHAR, Column.DATATYPE_VARCHAR)
 
     def type_is_geo(self):
         return self.datatype in (
@@ -169,8 +167,7 @@ class Column(Base):
         return self.datatype in (Column.DATATYPE_TIME, Column.DATATYPE_TIMESTAMP)
 
     def type_is_date(self):
-        return self.datatype in (Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE )
-
+        return self.datatype in (Column.DATATYPE_TIMESTAMP, Column.DATATYPE_DATETIME, Column.DATATYPE_DATE)
 
     @property
     def sqlalchemy_type(self):
@@ -189,7 +186,6 @@ class Column(Base):
         """
 
         if self.type_is_time():
-            import dateutil.parser
             dt = dateutil.parser.parse(v)
 
             if self.datatype == Column.DATATYPE_TIME:
@@ -214,11 +210,8 @@ class Column(Base):
             from exc import ConfigurationError
             raise ConfigurationError("Column '{}' has no datatype".format(self.name))
 
-        try:
-            return self.types[self.datatype][2]
-        except KeyError:
-
-            raise
+        # let it fail with KeyError if datatype is unknown.
+        return self.types[self.datatype][2]
 
     @classmethod
     def convert_numpy_type(cls, dtype):
@@ -233,7 +226,6 @@ class Column(Base):
             'int64': cls.DATATYPE_INTEGER64,
             'float64': cls.DATATYPE_FLOAT,
             'object': cls.DATATYPE_TEXT  # Hack. Pandas makes strings into object.
-
         }
 
         t = m.get(dtype.name, None)
@@ -274,8 +266,8 @@ class Column(Base):
         :return:
 
         """
-        d = {p.key: getattr(self,p.key) for p in self.__mapper__.attrs
-             if p.key not in ('table','stats','_codes', 'data')}
+        d = {p.key: getattr(self, p.key) for p in self.__mapper__.attrs
+             if p.key not in ('table', 'stats', '_codes', 'data')}
 
         if not d:
             raise Exception(self.__dict__)
@@ -284,8 +276,8 @@ class Column(Base):
 
         if self.data:
             # Copy data fields into top level dict, but don't overwrite existind values.
-            for k, v in self.data.items() :
-                if k not in d and k not in ('table','stats','_codes', 'data'):
+            for k, v in self.data.items():
+                if k not in d and k not in ('table', 'stats', '_codes', 'data'):
                     d[k] = v
 
         return d
@@ -326,21 +318,19 @@ class Column(Base):
             raise TypeError(
                 'Trying to mangle name with invalid type of: ' + str(type(name)))
 
-
     @property
     @memoize
     def reverse_code_map(self):
         """Return a map from a code ( usually a string ) to the  shorter numeric value"""
 
-        return { c.value:(c.ikey if c.ikey else c.key) for c in self.codes}
+        return {c.value: (c.ikey if c.ikey else c.key) for c in self.codes}
 
     @property
     @memoize
     def forward_code_map(self):
         """Return  a map from the short code to the full value """
 
-        return { c.key:c.value for c in self.codes}
-
+        return {c.key: c.value for c in self.codes}
 
     def add_code(self, key, value, description=None, data=None):
         """
@@ -367,7 +357,7 @@ class Column(Base):
 
         cd = Code(c_vid=self.vid, t_vid=self.t_vid,
                   key=str(key),
-                  ikey= cast_to_int(key),
+                  ikey=cast_to_int(key),
                   value=value,
                   description=description, data=data)
 
@@ -380,8 +370,8 @@ class Column(Base):
         """event.listen method for Sqlalchemy to set the seqience_id for this
         object and create an ObjectNumber value for the id_"""
 
-        #from identity import ObjectNumber
-        #assert not target.fk_vid or not ObjectNumber.parse(target.fk_vid).revision
+        # from identity import ObjectNumber
+        # assert not target.fk_vid or not ObjectNumber.parse(target.fk_vid).revision
 
         if target.sequence_id is None:
             # In case this happens in multi-process mode
@@ -406,7 +396,7 @@ class Column(Base):
 
         ton = ObjectNumber.parse(target.t_vid)
         con = ColumnNumber(ton, target.sequence_id)
-        target.id=str(ton.rev(None))
+        target.id = str(ton.rev(None))
         target.vid = str(con)
         target.id = str(con.rev(None))
         target.d_vid = str(ObjectNumber.parse(target.t_vid).as_dataset)
@@ -419,15 +409,14 @@ class Column(Base):
 
         d = OrderedDict([('table', self.table.name)] +
                         [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
-                        if p.key not in ['codes','dataset', 'stats', 'table', 'd_vid','vid', 't_vid'
-                                         'id','is_primary_key' ]]
+                        if p.key not in ['codes', 'dataset', 'stats', 'table', 'd_vid', 'vid', 't_vid'
+                                         'id', 'is_primary_key']]
                         )
 
         return d
 
-
     def __repr__(self):
-        return "<column: {}, {}>".format(self.name, self.vid)
+        return '<column: {}, {}>'.format(self.name, self.vid)
 
 event.listen(Column, 'before_insert', Column.before_insert)
 event.listen(Column, 'before_update', Column.before_update)

@@ -1,16 +1,532 @@
 # -*- coding: utf-8 -*-
+from urlparse import urlparse
 import unittest
+
+from ambry.run import get_runconfig
 
 import fudge
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Connection as SQLAlchemyConnection
 
 from ambry.orm.database import get_stored_version, _validate_version, _migration_required, SCHEMA_VERSION,\
     _update_version, _is_missed, migrate
 from ambry.orm.exc import DatabaseError, DatabaseMissingError
 
+import os
+import shutil
+from tempfile import mkdtemp
 
-class GetVersionTest(unittest.TestCase):
+
+from sqlalchemy.engine.reflection import Inspector
+from sqlalchemy.exc import ProgrammingError, OperationalError
+
+from ambry.orm.database import Database, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME
+from ambry.orm.dataset import Dataset
+
+from test.test_orm.factories import DatasetFactory, ConfigFactory,\
+    TableFactory, ColumnFactory, PartitionFactory,\
+    ColumnStatFactory
+
+from test.test_library.asserts import assert_spec
+
+TEST_TEMP_DIR = 'test-library-'
+
+# FIXME: Change message after config change.
+MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgresql section to the library section.'
+
+
+class BaseDatabaseTest(unittest.TestCase):
+    """ Base class for database tests who requires postgresql connection. """
+
+    def setUp(self):
+        conf = get_runconfig()
+        if 'postgresql' in conf.dict['library']:
+            dsn = conf.dict['library']['postgresql']['database']
+            parsed_url = urlparse(dsn)
+            db_name = parsed_url.path.replace('/', '')
+            self.postgres_dsn = parsed_url._replace(path='postgres').geturl()
+            self.postgres_test_db = '{}_'.format(db_name)
+            self.postgres_test_dsn = parsed_url._replace(path=self.postgres_test_db).geturl()
+        else:
+            self.postgres_dsn = None
+            self.postgres_test_dsn = None
+            self.postgres_test_db = None
+
+    def tearDown(self):
+        # drop test database
+        if getattr(self, '_active_pg_connection', None):
+            self._active_pg_connection.execute('rollback')
+            self._active_pg_connection.detach()
+            self._active_pg_connection.close()
+            self._active_pg_connection = None
+
+            # droop test database;
+            engine = create_engine(self.postgres_dsn)
+            connection = engine.connect()
+            connection.execute('commit')
+            connection.execute('DROP DATABASE {};'.format(self.postgres_test_db))
+            connection.execute('commit')
+            connection.close()
+
+    def pg_connection(self):
+        # creates test database and returns postgres connection to that database.
+        postgres_user = 'ambry'
+        if not self.postgres_dsn:
+            raise Exception(MISSING_POSTGRES_CONFIG_MSG)
+
+        # connect to postgres database because we need to create database for tests.
+        engine = create_engine(self.postgres_dsn)
+        connection = engine.connect()
+
+        # we have to close opened transaction.
+        connection.execute('commit')
+
+        # drop test database created by previuos run (control + c case).
+        # connection.execute('DROP DATABASE {};'.format(self.postgres_test_db))
+        # connection.execute('commit')
+
+        # create test database
+        query = 'CREATE DATABASE {} OWNER {} template template0 encoding \'UTF8\';'\
+            .format(self.postgres_test_db, postgres_user)
+        connection.execute(query)
+        connection.execute('commit')
+        connection.close()
+
+        # now create connection for tests.
+        self.pg_engine = create_engine(self.postgres_test_dsn)
+        pg_connection = self.pg_engine.connect()
+        self._active_pg_connection = pg_connection
+        return pg_connection
+
+
+class DatabaseTest(unittest.TestCase):
+
+    def setUp(self):
+        self.sqlite_db = Database('sqlite://')
+        self.sqlite_db.create()
+
+    def tearDown(self):
+        fudge.clear_expectations()
+        fudge.clear_calls()
+
+    # helpers
+    def _assert_exists(self, model_class, **filter_kwargs):
+        query = self.query(model_class)\
+            .filter_by(**filter_kwargs)
+        assert query.first() is not None
+
+    def _assert_does_not_exist(self, model_class, **filter_kwargs):
+        query = self.query(model_class)\
+            .filter_by(**filter_kwargs)
+        assert query.first() is None
+
+    def test_initializes_path_and_driver(self):
+        dsn = 'postgresql+psycopg2://ambry:secret@127.0.0.1/exampledb'
+        db = Database(dsn)
+        self.assertEquals(db.path, '/exampledb')
+        self.assertEquals(db.driver, 'postgresql+psycopg2')
+
+    # .create tests
+    def test_creates_new_database(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(self.sqlite_db._create_path, ['self'])
+        assert_spec(self.sqlite_db.exists, ['self'])
+        assert_spec(self.sqlite_db.create_tables, ['self'])
+        assert_spec(self.sqlite_db._add_config_root, ['self'])
+
+        # prepare state
+        self.sqlite_db.exists = fudge.Fake('exists').expects_call().returns(False)
+        self.sqlite_db._create_path = fudge.Fake('_create_path').expects_call()
+        self.sqlite_db.create_tables = fudge.Fake('create_tables').expects_call()
+        self.sqlite_db._add_config_root = fudge.Fake('_add_config_root').expects_call()
+        ret = self.sqlite_db.create()
+        self.assertTrue(ret)
+        fudge.verify()
+
+    def test_returns_false_if_database_exists(self):
+
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(self.sqlite_db.exists, ['self'])
+
+        # prepare state
+        with fudge.patched_context(self.sqlite_db, 'exists', fudge.Fake('exists').expects_call().returns(True)):
+            ret = self.sqlite_db.create()
+            self.assertFalse(ret)
+        fudge.verify()
+
+    # ._create_path tests
+    def test_makes_database_directory(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(os.makedirs, ['name', 'mode'])
+        assert_spec(os.path.exists, ['path'])
+
+        # prepare state
+        fake_makedirs = fudge.Fake('makedirs').expects_call()
+        fake_exists = fudge.Fake('exists')\
+            .expects_call()\
+            .returns(False)\
+            .next_call()\
+            .returns(True)
+
+        # test
+        with fudge.patched_context(os, 'makedirs', fake_makedirs):
+            with fudge.patched_context(os.path, 'exists', fake_exists):
+                db = Database('sqlite:///test_database1.db')
+                db._create_path()
+        fudge.verify()
+
+    def test_ignores_exception_if_makedirs_failed(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(os.makedirs, ['name', 'mode'])
+
+        fake_makedirs = fudge.Fake('makedirs')\
+            .expects_call()\
+            .raises(Exception('My fake exception'))
+
+        fake_exists = fudge.Fake('exists')\
+            .expects_call()\
+            .returns(False)\
+            .next_call()\
+            .returns(True)
+
+        # test
+        with fudge.patched_context(os, 'makedirs', fake_makedirs):
+            with fudge.patched_context(os.path, 'exists', fake_exists):
+                db = Database('sqlite:///test_database1.db')
+                db._create_path()
+        fudge.verify()
+
+    def test_raises_exception_if_dir_does_not_exists_after_creation_attempt(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(os.makedirs, ['name', 'mode'])
+        assert_spec(os.path.exists, ['path'])
+
+        # prepare state
+        fake_makedirs = fudge.Fake('makedirs')\
+            .expects_call()
+
+        fake_exists = fudge.Fake('exists')\
+            .expects_call()\
+            .returns(False)\
+            .next_call()\
+            .returns(False)
+
+        # test
+        with fudge.patched_context(os, 'makedirs', fake_makedirs):
+            with fudge.patched_context(os.path, 'exists', fake_exists):
+                try:
+                    db = Database('sqlite:///test_database1.db')
+                    db._create_path()
+                except Exception as exc:
+                    self.assertIn('Couldn\'t create directory', exc.message)
+        fudge.verify()
+
+    # .exists tests
+    def test_sqlite_database_does_not_exists_if_file_not_found(self):
+        db = Database('sqlite://no-such-file.db')
+        self.assertFalse(db.exists())
+
+    def test_returns_false_if_datasets_table_does_not_exist(self):
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(self.sqlite_db.connection.execute, ['self', 'object'])
+
+        # prepare state
+        statement = 'select 1'
+        params = []
+
+        self.sqlite_db.connection.execute = fudge.Fake()\
+            .expects_call()\
+            .raises(ProgrammingError(statement, params, 'orig'))
+
+        # testing.
+        ret = self.sqlite_db.exists()
+        self.assertFalse(ret)
+
+    @fudge.patch(
+        'ambry.orm.database.os.path.exists')
+    def test_returns_true_if_root_config_dataset_exists(self, fake_path_exists):
+        # prepare state
+        fake_path_exists.expects_call().returns(True)
+
+        # testing.
+        self.assertTrue(self.sqlite_db.exists())
+
+    def test_returns_false_if_root_config_dataset_does_not_exist(self):
+        self.sqlite_db.connection.execute('DELETE FROM datasets;')
+        self.sqlite_db.commit()
+        query = "SELECT * FROM datasets WHERE d_vid = '{}' ".format(ROOT_CONFIG_NAME_V)
+        self.assertIsNone(self.sqlite_db.connection.execute(query).fetchone())
+        self.assertFalse(self.sqlite_db.exists())
+
+    # engine() tests.
+    @fudge.patch(
+        'sqlalchemy.create_engine',
+        'ambry.orm.database._on_connect_update_sqlite_schema')
+    def test_engine_creates_and_caches_sqlalchemy_engine(self, fake_create, fake_on):
+        fake_on.expects_call()
+        engine_stub = fudge.Fake().is_a_stub()
+        fake_create.expects_call()\
+            .returns(engine_stub)
+        db = Database('sqlite://')
+        self.assertEquals(db.engine, engine_stub)
+        self.assertEquals(db._engine, engine_stub)
+
+    @fudge.patch(
+        'sqlalchemy.create_engine',
+        'sqlalchemy.event',
+        'ambry.orm.database._on_connect_update_sqlite_schema')
+    def test_listens_to_connect_signal_for_sqlite_driver(self, fake_create,
+                                                         fake_event, fake_on):
+        fake_event\
+            .provides('listen')
+        engine_stub = fudge.Fake().is_a_stub()
+        fake_create.expects_call()\
+            .returns(engine_stub)
+        fake_on.expects_call()
+        Database('sqlite://').engine
+
+    # connection tests.
+    def test_connection_creates_and_caches_new_sqlalchemy_connection(self):
+        db = Database('sqlite://')
+        self.assertIsInstance(db.connection, SQLAlchemyConnection)
+        self.assertIsInstance(db._connection, SQLAlchemyConnection)
+
+    def test_connection_sets_search_path_to_library_for_postgres(self):
+        fake_connection = fudge.Fake('connection')\
+            .provides('execute')\
+            .with_args('SET search_path TO library')\
+            .expects_call()
+
+        fake_engine = fudge.Fake()\
+            .provides('connect')\
+            .returns(fake_connection)
+
+        dsn = 'postgresql+psycopg2://ambry:secret@127.0.0.1/exampledb'
+        db = Database(dsn)
+        db._engine = fake_engine
+        self.assertEquals(db.connection, fake_connection)
+
+    def test_connection_sets_path_to_library_for_postgis(self):
+        fake_connection = fudge.Fake('connection')\
+            .provides('execute')\
+            .with_args('SET search_path TO library')\
+            .expects_call()
+
+        fake_engine = fudge.Fake()\
+            .provides('connect')\
+            .returns(fake_connection)
+
+        dsn = 'postgis+psycopg2://ambry:secret@127.0.0.1/exampledb'
+        db = Database(dsn)
+        db._engine = fake_engine
+        self.assertEquals(db.connection, fake_connection)
+
+    # .session tests # FIXME:
+
+    # .open tests # FIXME:
+
+    # .close tests
+    def test_closes_session_and_connection(self):
+        db = Database('sqlite://')
+        with fudge.patched_context(db.session, 'close', fudge.Fake('session.close').expects_call()):
+            with fudge.patched_context(db.connection, 'close', fudge.Fake('connection.close').expects_call()):
+                db.close()
+        fudge.verify()
+        self.assertIsNone(db._session)
+        self.assertIsNone(db._connection)
+
+    # .commit tests
+    def test_commit_commits_session(self):
+        db = Database('sqlite://')
+
+        # init engine and session
+        db.session
+
+        with fudge.patched_context(db._session, 'commit', fudge.Fake().expects_call()):
+            db.commit()
+        fudge.verify()
+
+    def test_commit_raises_session_commit_exception(self):
+        db = Database('sqlite://')
+
+        # init engine and session
+        db.session
+
+        with fudge.patched_context(db._session, 'commit', fudge.Fake().expects_call().raises(ValueError)):
+            with self.assertRaises(ValueError):
+                db.commit()
+
+        fudge.verify()
+
+    # .rollback tests
+    def test_rollbacks_session(self):
+        db = Database('sqlite://')
+
+        # init engine and session
+        db.session
+
+        with fudge.patched_context(db._session, 'rollback', fudge.Fake('session.rollback').expects_call()):
+            db.rollback()
+        fudge.verify()
+
+    # .clean tests FIXME:
+
+    # .drop tests FIXME:
+
+    # .metadata tests FIXME:
+
+    # .inspector tests
+    def test_contains_engine_inspector(self):
+        db = Database('sqlite://')
+        self.assertIsInstance(db.inspector, Inspector)
+        self.assertEquals(db.engine, db.inspector.engine)
+
+    # .clone tests
+    def test_clone_returns_new_instance(self):
+        db = Database('sqlite://')
+        new_db = db.clone()
+        self.assertNotEquals(db, new_db)
+        self.assertEquals(db.dsn, new_db.dsn)
+
+    # .create_tables test
+    def test_ignores_OperationalError_while_droping(self):
+        db = Database('sqlite://')
+        fake_drop = fudge.Fake()\
+            .expects_call()\
+            .raises(OperationalError('select 1;', [], 'a'))
+        with fudge.patched_context(db, 'drop', fake_drop):
+            db.create_tables()
+
+    def test_creates_dataset_table(self):
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+
+        # Now all tables are created. Can we use ORM to create datasets?
+        DatasetFactory()
+        self.sqlite_db.commit()
+
+    def test_creates_table_table(self):
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        TableFactory._meta.sqlalchemy_session = self.sqlite_db.session
+
+        # Now all tables are created. Can we use ORM to create datasets?
+        ds1 = DatasetFactory()
+        self.sqlite_db.commit()
+        TableFactory(dataset=ds1)
+        self.sqlite_db.commit()
+
+    def test_creates_column_table(self):
+        ColumnFactory._meta.sqlalchemy_session = self.sqlite_db.session
+
+        # Now all tables are created. Can we use ORM to create columns?
+
+        ColumnFactory()
+        self.sqlite_db.commit()
+
+    def test_creates_partition_table(self):
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        PartitionFactory._meta.sqlalchemy_session = self.sqlite_db.session
+
+        ds1 = DatasetFactory()
+        PartitionFactory(dataset=ds1)
+        self.sqlite_db.commit()
+
+    # ._add_config_root tests
+    def test_creates_new_root_config(self):
+        # prepare state
+        db = Database('sqlite://')
+        db.enable_delete = True
+        db.create_tables()
+        query = db.session.query
+        datasets = query(Dataset).all()
+        self.assertEquals(len(datasets), 0)
+
+        # testing
+        db._add_config_root()
+        datasets = query(Dataset).all()
+        self.assertEquals(len(datasets), 1)
+        self.assertEquals(datasets[0].name, ROOT_CONFIG_NAME)
+        self.assertEquals(datasets[0].vname, ROOT_CONFIG_NAME_V)
+
+    def test_closes_session_if_root_config_exists(self):
+
+        # first assert signatures of the functions we are going to mock did not change.
+        assert_spec(self.sqlite_db.close_session, ['self'])
+
+        # testing
+        with fudge.patched_context(self.sqlite_db, 'close_session', fudge.Fake('close_session').expects_call()):
+            self.sqlite_db._add_config_root()
+        fudge.verify()
+
+    # ._clean_config_root tests
+    def tests_resets_instance_fields(self):
+        db = Database('sqlite://')
+        db.enable_delete = True
+        db.create_tables()
+
+        # prepare state
+        DatasetFactory._meta.sqlalchemy_session = db.session
+        ds = DatasetFactory(
+            id=ROOT_CONFIG_NAME, vid=ROOT_CONFIG_NAME_V,
+            name='name', vname='vname',
+            source='source', dataset='dataset',
+            revision=33)
+        db.session.commit()
+
+        db._clean_config_root()
+
+        # refresh dataset
+        ds = db.session.query(Dataset)\
+            .filter_by(id=ROOT_CONFIG_NAME)\
+            .one()
+        self.assertEquals(ds.name, ROOT_CONFIG_NAME)
+        self.assertEquals(ds.vname, ROOT_CONFIG_NAME_V)
+        self.assertEquals(ds.source, ROOT_CONFIG_NAME)
+        self.assertEquals(ds.dataset, ROOT_CONFIG_NAME)
+        self.assertEquals(ds.revision, 1)
+
+    # .new_dataset test FIXME:
+
+    # .root_dataset tests FIXME:
+
+    # .dataset tests FIXME:
+
+    # .datasets tests
+    def test_returns_list_with_all_datasets(self):
+        # prepare state
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+
+        ds1 = DatasetFactory()
+        ds2 = DatasetFactory()
+        ds3 = DatasetFactory()
+
+        # testing
+        ret = self.sqlite_db.datasets
+        self.assertIsInstance(ret, list)
+        self.assertEquals(len(ret), 3)
+        self.assertIn(ds1, ret)
+        self.assertIn(ds2, ret)
+        self.assertIn(ds3, ret)
+
+    # .remove_dataset test
+    def test_removes_dataset(self):
+
+        # prepare state.
+        DatasetFactory._meta.sqlalchemy_session = self.sqlite_db.session
+        ds1 = DatasetFactory()
+        self.sqlite_db.session.commit()
+        ds1_vid = ds1.vid
+
+        # testing
+        self.sqlite_db.remove_dataset(ds1)
+        self.assertEquals(
+            self.sqlite_db.session.query(Dataset).filter_by(vid=ds1_vid).all(),
+            [],
+            'Dataset was not removed.')
+
+
+class GetVersionTest(BaseDatabaseTest):
+
     def test_returns_user_version_from_sqlite_pragma(self):
         engine = create_engine('sqlite://')
         connection = engine.connect()
@@ -19,8 +535,21 @@ class GetVersionTest(unittest.TestCase):
         self.assertEquals(version, 22)
 
     def test_returns_user_version_from_postgres_table(self):
-        # FIXME:
-        pass
+        if not self.postgres_dsn:
+            # FIXME: it seems failing is better choice here.
+            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
+
+        pg_connection = self.pg_connection()
+
+        create_table_query = '''
+            CREATE TABLE user_version (
+                version INTEGER NOT NULL); '''
+
+        pg_connection.execute(create_table_query)
+        pg_connection.execute('INSERT INTO user_version VALUES (22);')
+        pg_connection.execute('commit')
+        version = get_stored_version(pg_connection)
+        self.assertEquals(version, 22)
 
 
 class ValidateVersionTest(unittest.TestCase):
@@ -70,25 +599,48 @@ class MigrationRequiredTest(unittest.TestCase):
         self.assertFalse(_migration_required(self.connection))
 
 
-class UpdateVersionTest(unittest.TestCase):
+class UpdateVersionTest(BaseDatabaseTest):
 
     def setUp(self):
+        super(self.__class__, self).setUp()
         engine = create_engine('sqlite://')
-        self.connection = engine.connect()
+        self.sqlite_connection = engine.connect()
 
     def test_updates_user_version_sqlite_pragma(self):
-        _update_version(self.connection, 122)
-        stored_version = self.connection.execute('PRAGMA user_version').fetchone()[0]
+        _update_version(self.sqlite_connection, 122)
+        stored_version = self.sqlite_connection.execute('PRAGMA user_version').fetchone()[0]
         self.assertEquals(stored_version, 122)
 
+    def test_creates_user_version_postgresql_table(self):
+        if not self.postgres_dsn:
+            # FIXME: it seems failing is better choice here.
+            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
+        pg_connection = self.pg_connection()
+        _update_version(pg_connection, 123)
+        version = pg_connection.execute('SELECT version FROM user_version;').fetchone()[0]
+        self.assertEquals(version, 123)
+
     def test_updates_user_version_postgresql_table(self):
-        # FIXME:
-        pass
+        if not self.postgres_dsn:
+            # FIXME: it seems failing is better choice here.
+            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
+        pg_connection = self.pg_connection()
+        create_table_query = '''
+            CREATE TABLE user_version (
+                version INTEGER NOT NULL); '''
+
+        pg_connection.execute(create_table_query)
+        pg_connection.execute('INSERT INTO user_version VALUES (22);')
+        pg_connection.execute('commit')
+
+        _update_version(pg_connection, 123)
+        version = pg_connection.execute('SELECT version FROM user_version;').fetchone()[0]
+        self.assertEquals(version, 123)
 
     def test_raises_DatabaseMissingError_error(self):
-        with fudge.patched_context(self.connection.engine, 'driver', 'foo'):
+        with fudge.patched_context(self.sqlite_connection.engine, 'name', 'foo'):
             with self.assertRaises(DatabaseMissingError):
-                _update_version(self.connection, 1)
+                _update_version(self.sqlite_connection, 1)
 
 
 class IsMissedTest(unittest.TestCase):

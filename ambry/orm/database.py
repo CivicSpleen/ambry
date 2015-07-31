@@ -8,10 +8,14 @@ from collections import namedtuple
 import os
 import pkgutil
 
-from ambry.orm.exc import DatabaseError, DatabaseMissingError
+from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import IntegrityError
+
+from ambry.orm.exc import DatabaseError, DatabaseMissingError, NotFoundError, ConflictError
+
+from ambry.util import get_logger, parse_url_to_dict
 from . import Column, Partition, Table, Dataset, Config, File,\
     Code, ColumnStat, DataSource, SourceColumn, SourceTable
-from ..util import get_logger
 
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
@@ -44,11 +48,12 @@ class Migration(BaseMigration):
         pass
 '''
 
+logger = get_logger(__name__)
+
 
 class Database(object):
 
     def __init__(self, dsn, echo=False):
-        from ..util import parse_url_to_dict
 
         self.dsn = dsn
 
@@ -64,7 +69,7 @@ class Database(object):
         self._schema = None
         self._echo = echo
 
-        self.logger = get_logger(__name__)
+        self.logger = logger
 
     def is_in_memory_db(self):
         return self.dsn == 'sqlite://' or (self.dsn.startswith('sqlite') and 'memory' in self.dsn)
@@ -75,7 +80,7 @@ class Database(object):
         if not self.exists():
             self._create_path()
 
-            self.enable_delete = True
+            self.enable_delete = True  # FIXME: Seems unused. Remove if so.
 
             self.create_tables()
 
@@ -215,7 +220,6 @@ class Database(object):
     def close(self):
 
         self.close_session()
-
         self.close_connection()
 
         if self._engine:
@@ -235,20 +239,13 @@ class Database(object):
             self._connection = None
 
     def commit(self):
-        try:
-            self.session.commit()
-            # self.session.expunge_all()  # Clear any cached object in the session.
-            # self.session.expire_all()
-            # self.close_session()
-        except Exception as e:
-            # self.logger.error("Failed to commit in {}; {}".format(self.dsn, e))
-            raise
+        self.session.commit()
 
     def rollback(self):
         self.session.rollback()
         # self.close_session()
 
-    def clean(self, add_config_root=True, create=True):
+    def clean(self):
 
         for ds in self.datasets:
             self.logger.info('Cleaning: {}'.format(ds.name))
@@ -304,7 +301,7 @@ class Database(object):
         return Inspector.from_engine(self.engine)
 
     def clone(self):
-        return self.__class__(self.driver, self.server, self.dbname, self.username, self.password)
+        return self.__class__(self.dsn)
 
     def create_tables(self):
 
@@ -324,7 +321,7 @@ class Database(object):
         for table in tables:
             try:
                 it = table.__table__
-            # stored_partitions, file_link are already tables.
+                # stored_partitions, file_link are already tables.
             except AttributeError:
                 it = table
 
@@ -347,10 +344,10 @@ class Database(object):
                 it.schema = orig_schema
 
     def _add_config_root(self):
-        from sqlalchemy.orm.exc import NoResultFound
+        """ FIXME: """
 
         try:
-            self.session.query(Dataset).filter(Dataset.vid == ROOT_CONFIG_NAME).one()
+            self.session.query(Dataset).filter_by(id=ROOT_CONFIG_NAME).one()
             self.close_session()
         except NoResultFound:
             o = Dataset(
@@ -370,8 +367,9 @@ class Database(object):
 
     def _clean_config_root(self):
         """Hack need to clean up some installed databases."""
+        # FIXME: Seems unused. Remove if so.
 
-        ds = self.session.query(Dataset).filter(Dataset.id_ == ROOT_CONFIG_NAME).one()
+        ds = self.session.query(Dataset).filter_by(id=ROOT_CONFIG_NAME).one()
 
         ds.id_ = ROOT_CONFIG_NAME
         ds.name = ROOT_CONFIG_NAME
@@ -395,7 +393,6 @@ class Database(object):
         :return: :class:`ambry.orm.Dataset`
         :raises: :class:`ambry.orm.ConflictError` if the a Dataset records already exists with the given vid
         """
-        from sqlalchemy.exc import IntegrityError
 
         ds = Dataset(*args, **kwargs)
 
@@ -405,10 +402,9 @@ class Database(object):
             ds._database = self
             return ds
         except IntegrityError as e:
-            from ambry.orm.exc import ConflictError
-
             self.session.rollback()
-            raise ConflictError("Can't create dataset '{}'; one probably already exists: {} ".format(str(ds), e))
+            raise ConflictError(
+                "Can't create dataset '{}'; one probably already exists: {} ".format(str(ds), e))
 
     @property
     def root_dataset(self):
@@ -425,9 +421,6 @@ class Database(object):
         :return: :class:`ambry.orm.Dataset`
 
         """
-
-        from sqlalchemy.orm.exc import NoResultFound
-        from ambry.orm.exc import NotFoundError
 
         try:
             ds = self.session.query(Dataset).filter(Dataset.vid == str(ref)).one()
@@ -538,7 +531,7 @@ def _on_connect_update_sqlite_schema(conn, con_record):
             pass
 
     if version > 10 and version < 100:
-        raise DatabaseError("Trying to open an old Sqlite database")
+        raise DatabaseError('Trying to open an old Sqlite database')
 
     if version < 100:
         pass
@@ -549,22 +542,43 @@ def _on_connect_update_sqlite_schema(conn, con_record):
 
 
 def get_stored_version(connection):
-    """ Returns database version. """
-    if connection.engine.driver == 'pysqlite':
+    """ Returns database version.
+
+    Note: Assuming user_version pragma (sqlite case) and user_version table (postgresql case)
+        exist because of the db validation after connection. See Database.engine.
+
+    Args:
+        connection (sqlalchemy connection):
+
+    Returns:
+        int: version of the database.
+
+    """
+
+    if connection.engine.name == 'sqlite':
         version = connection.execute('PRAGMA user_version').fetchone()[0]
-        return int(version)
-    elif connection.engine.driver == 'postgresql':
-        # FIXME: Check table existance, create if absent.
-        version = connection.execute('select version from user_version').fetchone()[0]
-        return int(version)
+        return version
+    elif connection.engine.name == 'postgresql':
+        version = connection.execute('SELECT version FROM user_version;').fetchone()[0]
+        return version
+    else:
+        # FIXME: add test
+        raise DatabaseMissingError(
+            'Do not know how to get version from {} engine.'.format(connection.engine.name))
 
 
 def _validate_version(connection):
-    """ Performs on-the-fly schema updates based on the models version. """
+    """ Performs on-the-fly schema updates based on the models version.
+
+    Raises:
+        DatabaseError: if user uses old sqlite database.
+
+    """
     version = get_stored_version(connection)
+    assert isinstance(version, int)
 
     if version > 10 and version < 100:
-        # FIXME: Give a hint to user.
+        # FIXME: Give a hint to the user.
         raise DatabaseError('Trying to open an old Sqlite database.')
 
     if _migration_required(connection):
@@ -575,22 +589,46 @@ def _migration_required(connection):
     """ Returns True if ambry models do not match to db tables. Otherwise returns False. """
     stored_version = get_stored_version(connection)
     actual_version = SCHEMA_VERSION
+    assert isinstance(stored_version, int)
+    assert isinstance(actual_version, int)
     assert stored_version <= actual_version, 'Db version can not be more than models version. Update your source code.'
     return stored_version < actual_version
 
 
 def _update_version(connection, version):
-    """ Updates version in the db to the migration version. AKA applyes migration. """
-    if connection.engine.driver == 'pysqlite':
+    """ Updates version in the db to the given version.
+
+    Args:
+        #FIXME:
+
+    """
+    if connection.engine.name == 'sqlite':
         connection.execute('PRAGMA user_version = {}'.format(version))
-    elif connection.engine.driver == 'postgresql':
-        connection.execute('insert into user_version (version) values ({})'.format(version))
+    elif connection.engine.name == 'postgresql':
+        # FIXME: search for table seems better solution.
+        connection.execute('CREATE TABLE IF NOT EXISTS user_version(version INTEGER NOT NULL);')
+
+        # upsert. FIXME: Find better way.
+        if connection.execute('SELECT * FROM user_version;').fetchone():
+            # update
+            connection.execute('UPDATE user_version SET version = {};'.format(version))
+        else:
+            # insert
+            connection.execute('INSERT INTO user_version (version) VALUES ({})'.format(version))
     else:
-        raise DatabaseMissingError('Do not know how to update {} database.'.format(connection.engine.driver))
+        raise DatabaseMissingError('Do not know how to migrate {} engine.'.format(connection.engine.driver))
 
 
 def _is_missed(connection, version):
-    """ FIXME: """
+    """ Returns True if migration is not applied. Otherwise returns False.
+
+    Args:
+        connection (sqlalchemy connection): sqlalchemy session to check for migration.
+        version (int): versio of the migration.
+
+    Returns:
+        bool: True if migration is missed, False otherwise.
+    """
     return get_stored_version(connection) < version
 
 
@@ -598,7 +636,7 @@ def migrate(connection):
     """ Collects all migrations and applies missed.
 
     Args:
-        FIXME:
+        connection (sqlalchemy connection):
 
     """
     import migrations
@@ -611,13 +649,15 @@ def migrate(connection):
         all_migrations.append((version, modname))
 
     all_migrations = sorted(all_migrations, key=lambda x: x[0])
+    logger.debug('Collected migrations: {}'.format(all_migrations))
 
     for version, modname in all_migrations:
         if _is_missed(connection, version):
+            logger.info('Missed migration: {} migration is missed. Migrating...'.format(version))
             module = __import__(modname, fromlist='dummy')
 
             # run each migration under its own transaction. This allows us to apply valid migrations
-            # and stop on invalid.
+            # and break on invalid.
             trans = connection.begin()
             try:
                 module.Migration().migrate(connection)
