@@ -12,7 +12,7 @@ from itertools import ifilterfalse
 from heapq import nsmallest
 from operator import itemgetter
 import logging
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict, defaultdict, Mapping
 
 import yaml
 
@@ -20,10 +20,8 @@ from flo import *  # Legacy; should convert clients to direct import
 
 logger_init = set()
 
-def get_logger(name, file_name=None, stream=None, template=None, propagate=False, level=logging.INFO):
-    return _get_logger(name, file_name=file_name, stream=stream, template=template, propagate=propagate, level=level)
 
-def _get_logger(name, file_name=None, stream=None, template=None, propagate=False, level=logging.INFO):
+def get_logger(name, file_name=None, stream=None, template=None, propagate=False, level=logging.INFO):
     """Get a logger by name.
 
     """
@@ -625,8 +623,6 @@ class MapView(collections.MutableMapping):
         return getattr(self._inner, item)
 
 
-from collections import Mapping
-
 
 class CaseInsensitiveDict(Mapping):  # http://stackoverflow.com/a/16202162
 
@@ -743,6 +739,7 @@ def zip_dir(dir, file_):
             zf.write(f)
     return dir
 
+
 def md5_for_stream(f, block_size=2 ** 20):
     import hashlib
 
@@ -756,6 +753,7 @@ def md5_for_stream(f, block_size=2 ** 20):
         md5.update(data)
 
         return md5.hexdigest()
+
 
 def md5_for_file(f, block_size=2 ** 20):
     """Generate an MD5 has for a possibly large file by breaking it into
@@ -1317,14 +1315,14 @@ def print_yaml(o):
     print(yaml.dump(o, default_flow_style=False, indent=4, encoding='utf-8'))
 
 
-
 def qualified_class_name(o):
     module = o.__class__.__module__
     if module is None or module == str.__class__.__module__:
         return o.__class__.__name__
     return module + '.' + o.__class__.__name__
 
-#from http://code.activestate.com/recipes/496741-object-proxying/
+
+# from http://code.activestate.com/recipes/496741-object-proxying/
 class Proxy(object):
     """Proxy an object"""
     __slots__ = ["_obj", "__weakref__"]
@@ -1337,15 +1335,19 @@ class Proxy(object):
     #
     def __getattr__(self, name):
         return getattr(object.__getattribute__(self, "_obj"), name)
+
     def __delattr__(self, name):
         delattr(object.__getattribute__(self, "_obj"), name)
+
     def __setattr__(self, name, value):
         setattr(object.__getattribute__(self, "_obj"), name, value)
 
     def __nonzero__(self):
         return bool(object.__getattribute__(self, "_obj"))
+
     def __str__(self):
         return str(object.__getattribute__(self, "_obj"))
+
     def __repr__(self):
         return repr(object.__getattribute__(self, "_obj"))
 
@@ -1414,7 +1416,9 @@ screen."""
         except ImportError:
             self.impl = _GetchUnix()
 
-    def __call__(self): return self.impl()
+    def __call__(self):
+        return self.impl()
+
 
 #from http://code.activestate.com/recipes/134892/
 class _GetchUnix:

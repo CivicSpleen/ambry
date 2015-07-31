@@ -22,6 +22,7 @@ from ambry.orm.file import File
 class Dataset(Base):
     __tablename__ = 'datasets'
 
+    # FIXME: Which field stores location?
     LOCATION = Constant()
     LOCATION.LIBRARY = LocationRef.LOCATION.LIBRARY
     LOCATION.PARTITION = LocationRef.LOCATION.PARTITION
@@ -33,9 +34,9 @@ class Dataset(Base):
     vid = SAColumn('d_vid', String(20), primary_key=True)
     id = SAColumn('d_id', String(20), )
     name = SAColumn('d_name', String(200), nullable=False, index=True)
-    vname = SAColumn('d_vname',String(200),unique=True,nullable=False,index=True)
+    vname = SAColumn('d_vname', String(200), unique=True, nullable=False, index=True)
     fqname = SAColumn('d_fqname', String(200), unique=True, nullable=False)
-    cache_key = SAColumn('d_cache_key',String(200),unique=True,nullable=False,index=True)
+    cache_key = SAColumn('d_cache_key', String(200), unique=True, nullable=False, index=True)
     source = SAColumn('d_source', String(200), nullable=False)
     dataset = SAColumn('d_dataset', String(200), nullable=False)
     subset = SAColumn('d_subset', String(200))
@@ -49,9 +50,9 @@ class Dataset(Base):
 
     path = None  # Set by the Library and other queries.
 
-    tables = relationship("Table",backref='dataset',cascade="all, delete-orphan")
+    tables = relationship("Table", backref='dataset', cascade="all, delete-orphan")
 
-    partitions = relationship("Partition",backref='dataset',cascade="all, delete-orphan")
+    partitions = relationship("Partition", backref='dataset', cascade="all, delete-orphan")
 
     configs = relationship('Config', backref='dataset', cascade="all, delete-orphan")
 
