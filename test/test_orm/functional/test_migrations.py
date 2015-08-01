@@ -11,7 +11,7 @@ from ambry.orm.database import Database
 from ambry.orm import database
 from ambry.orm import migrations
 
-from test.test_orm.base import BasePostgreSQLTest
+from test.test_orm.base import BasePostgreSQLTest, MISSING_POSTGRES_CONFIG_MSG
 
 
 class MigrationTest(BasePostgreSQLTest):
@@ -82,6 +82,8 @@ class MigrationTest(BasePostgreSQLTest):
         'ambry.orm.database._get_all_migrations')
     def test_applies_new_migration_to_postgresql_database(self, fake_get):
         # replace real migrations with tests migrations.
+        if not self.postgres_test_dsn:
+            raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
 
         test_migrations = [
             (100, 'test.test_orm.functional.migrations.0100_init'),

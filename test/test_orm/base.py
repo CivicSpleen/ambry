@@ -7,9 +7,8 @@ from sqlalchemy.pool import NullPool
 
 from ambry.run import get_runconfig
 
-
-# FIXME: Change message after config change.
-MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgresql section to the library section.'
+MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgresql section to the ambry accounts.'
+# example of the config - dsn: postgresql+psycopg2://ambry:secret@127.0.0.1/ambry
 
 
 class BasePostgreSQLTest(unittest.TestCase):
@@ -17,8 +16,8 @@ class BasePostgreSQLTest(unittest.TestCase):
 
     def setUp(self):
         conf = get_runconfig()
-        if 'postgresql' in conf.dict['library']:
-            dsn = conf.dict['library']['postgresql']['database']
+        if 'postgresql' in conf.dict['accounts']:
+            dsn = conf.dict['accounts']['postgresql']['dsn']
             parsed_url = urlparse(dsn)
             db_name = parsed_url.path.replace('/', '')
             self.postgres_dsn = parsed_url._replace(path='postgres').geturl()

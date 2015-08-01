@@ -55,12 +55,3 @@ class Test(TestBase):
             raise AssertionError('Dupe unexpectadly saved. It seems unique constraint is broken.')
         except IntegrityError as exc:
             self.assertIn('UNIQUE constraint failed', exc.message)
-
-
-
-
-def suite():
-    import unittest
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite
