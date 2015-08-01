@@ -5,7 +5,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-from __future__ import print_function
+import os
 from functools import partial
 from collections import OrderedDict, defaultdict, Mapping, deque, MutableMapping
 
