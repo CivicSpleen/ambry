@@ -3,7 +3,6 @@
 
 """File-Like Objects and support functions"""
 
-
 import os
 import sys
 
@@ -37,7 +36,6 @@ class RedirectStdStreams(object):
 def copy_file_or_flo(input_, output, buffer_size=64 * 1024, cb=None):
     """ Copy a file name or file-like-object to another
     file name or file-like object"""
-    import shutil
 
     assert bool(input_)
     assert bool(output)
@@ -244,6 +242,7 @@ class MetadataFlo(object):
 
         self.close()
 
+
 # http://code.activestate.com/recipes/426060-a-queue-for-string-data-which-looks-like-a-file-ob/
 class StringQueue(object):
     """ A File Like FIFO """
@@ -253,36 +252,35 @@ class StringQueue(object):
         self.write(data)
 
     def write(self, data):
-        #check type here, as wrong data type will cause error on self.read,
-        #which may be confusing.
-        if type(data) != type(""):
-            raise TypeError, "argument 1 must be string, not %s" % type(data).__name__
-        #append data to list, no need to "".join just yet.
+        # check type here, as wrong data type will cause error on self.read,
+        # which may be confusing.
+        if isinstance(data, str):
+            raise TypeError('argument 1 must be string, not %s' % type(data).__name__)
+        # append data to list, no need to "".join just yet.
         self.l_buffer.append(data)
 
     def _build_str(self):
-        #build a new string out of list
+        # build a new string out of list
         new_string = "".join(self.l_buffer)
-        #join string buffer and new string
+        # join string buffer and new string
         self.s_buffer = "".join((self.s_buffer, new_string))
-        #clear list
+        # clear list
         self.l_buffer = []
 
     def __len__(self):
-        #calculate length without needing to _build_str
+        # calculate length without needing to _build_str
         return sum(len(i) for i in self.l_buffer) + len(self.s_buffer)
 
     def read(self, count=None):
-        #if string doesnt have enough chars to satisfy caller, or caller is
-        #requesting all data
-        if count > len(self.s_buffer) or count==None: self._build_str()
-        #if i don't have enough bytes to satisfy caller, return nothing.
-        if count > len(self.s_buffer): return ""
-        #get data requested by caller
+        # if string doesnt have enough chars to satisfy caller, or caller is
+        # requesting all data
+        if count > len(self.s_buffer) or count is None:
+            self._build_str()
+        # if i don't have enough bytes to satisfy caller, return nothing.
+        if count > len(self.s_buffer):
+            return ''
+        # get data requested by caller
         result = self.s_buffer[:count]
-        #remove requested data from string buffer
+        # remove requested data from string buffer
         self.s_buffer = self.s_buffer[len(result):]
         return result
-
-
-
