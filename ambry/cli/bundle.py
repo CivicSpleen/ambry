@@ -502,14 +502,14 @@ def bundle_meta(args, l, rc):
     b = using_bundle(args, l).cast_to_meta_subclass()
 
     if args.clean:
-        b.do_clean()
+        b.clean()
         b.set_last_access(Bundle.STATES.CLEANED)
 
-    b.do_sync()
+    b.sync()
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
     b = using_bundle(args, l).cast_to_meta_subclass()
-    b.do_meta()
+    b.meta()
     b.set_last_access(Bundle.STATES.META)
 
 def bundle_prepare(args, l, rc):

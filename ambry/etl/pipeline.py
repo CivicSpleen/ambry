@@ -147,6 +147,31 @@ class Sink(Pipe):
             if count and i == count:
                 break
 
+
+class IterSource(Pipe):
+    """Creates a source from an Iterator"""
+
+    def __init__(self, iterator, header = None):
+        self.iterator = iterator
+        self.header = header
+
+    def __iter__(self):
+
+        itr = iter(self.iterator)
+
+        if self.header:
+            yield self.header
+        else:
+            # Create a header from the datatypes
+            first = itr.next()
+            yield [ type(e).__name__ for e in first]
+            yield first
+
+        for row in itr:
+            yield row
+
+
+
 class Head(Pipe):
     """ Pass-throughg only the first N rows
     """
@@ -633,6 +658,7 @@ class PrintRows(Pipe):
         try:
             self.print_at_row = int(print_at)
             self.print_at_end = False
+
         except:
             self.print_at_row = None
             self.print_at_end = bool(print_at)
@@ -648,6 +674,7 @@ class PrintRows(Pipe):
 
         if self.i == self.print_at_row:
             print str(self)
+
 
         self.i += 1
 
@@ -678,6 +705,71 @@ class PrintRows(Pipe):
                     tabulate(self.rows,aug_header[self.offset:self.columns] ,tablefmt="pipe") )
         else:
             return (qualified_class_name(self)+' 0 rows')
+
+
+class PrintEvery(Pipe):
+    """Print a row every N rows. Always prints the header. """
+
+    def __init__(self, N):
+        self.N = N
+        self.i = 0
+
+    def process_header(self, row):
+        print 'Print Header: ',row
+        return row
+
+    def process_body(self, row):
+        if self.i % self.N == 0:
+            print 'Print Row   :',row
+        self.i +=1
+        return row
+
+class MatchPredicate(Pipe):
+    """Store rows that match a predicate. THe predicate is a function that takes the row as its
+    sole parameter and returns true or false"""
+
+    def __init__(self, pred):
+        self._pred = pred
+        self.i = 0
+        self.matches = []
+
+    def process_body(self, row):
+
+        if self._pred(row):
+            self.matches.append(row)
+
+        return row
+
+class Reduce(Pipe):
+    """Like works like reduce() on the body rows, using the function f(accumulator,row) """
+
+    def __init__(self, f, initializer=None):
+        self._f = f
+        self._initializer = initializer
+        self.accumulator = None
+
+    def __iter__(self):
+
+        it = iter(self._source_pipe)
+
+        # Yield the header
+        yield next(it)
+
+        if self._initializer is None:
+            try:
+                self.accumulator = self._f(None, next(it))
+            except StopIteration:
+                raise TypeError('reduce() of empty sequence with no initial value')
+        else:
+            self.accumulator = self._initializer
+
+        for row in it:
+            self.accumulator = self._f(self.accumulator, row)
+            yield row
+
+
+
+
 
 def make_table_map(table, headers):
     """"Create a function to map from rows with the structure of the headers to the structure of the table. """

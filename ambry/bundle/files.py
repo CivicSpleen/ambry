@@ -441,6 +441,7 @@ class SourcesFile(RowBuildSourceFile):
                 ds = self._dataset.source_file(d['name'])
                 if ds:
                     ds.update(**d)
+
                 else:
                     ds = DataSource(**d)
 
@@ -519,7 +520,7 @@ class SchemaFile(RowBuildSourceFile):
             if not table_name in extant_tables:
 
                 t = self._dataset.new_table(table_name,
-                                            description = row['description'] if row['column'] == 'id' else '')
+                                            description = row.get('description') if row['column'] == 'id' else '')
 
                 extant_tables[table_name] = t
 
@@ -672,8 +673,9 @@ def file_default(const):
 
 class BuildSourceFileAccessor(object):
 
-    def __init__(self, dataset, filesystem = None):
+    def __init__(self, bundle, dataset, filesystem = None):
         assert not isinstance(filesystem, basestring ) # Bundle fs changed from FS to URL; catch use of old values
+        self._bundle = bundle
         self._dataset = dataset
         self._fs = filesystem
 
@@ -703,9 +705,11 @@ class BuildSourceFileAccessor(object):
             pref = preference if preference else f.record.preference
 
             if pref == File.PREFERENCE.FILE:
+                self._bundle.log("   Cleaning objects {}".format(file_const))
                 f.clean_objects()
 
             if pref in (File.PREFERENCE.FILE, File.PREFERENCE.MERGE):
+                self._bundle.log("   rto {}".format(file_const))
                 f.record_to_objects()
 
     def objects_to_record(self, preference=None):
@@ -718,7 +722,7 @@ class BuildSourceFileAccessor(object):
             pref = preference if preference else f.record.preference
 
             if pref in (File.PREFERENCE.MERGE, File.PREFERENCE.OBJECT):
-
+                self._bundle.log("   otr {}".format(file_const))
                 f.objects_to_record()
 
     def sync(self, force = None, defaults = False):
@@ -734,14 +738,19 @@ class BuildSourceFileAccessor(object):
                 sync_info = (file_const, f.prepare_to_edit())
             elif force == f.SYNC_DIR.OBJECT_TO_FILE:
                 try:
+                    self._bundle.log("   otr {}".format(file_const))
                     f.objects_to_record()
+                    self._bundle.log("   rtf {}".format(file_const))
                     sync_info = (file_const,f.sync(f.SYNC_DIR.RECORD_TO_FILE))
                 except AttributeError:
                     pass
             elif force == f.SYNC_DIR.FILE_TO_RECORD:
+                self._bundle.log("   ftr {}".format(file_const))
                 sync_info = (file_const, f.sync(force))
             else:
                 sync_info = (file_const, f.sync())
+                if sync_info[1]:
+                    self._bundle.log("   {} {}".format(sync_info[1],file_const))
 
             syncs.append(sync_info)
 

@@ -13,6 +13,25 @@ import ambry.etl
 
 class Bundle(object):
 
+    STATES = Constant()
+    STATES.NEW = 'new'
+    STATES.SYNCED = 'sync_done'
+    STATES.DOWNLOADED = 'downloaded'
+    STATES.CLEANING = 'clean'
+    STATES.CLEANED = 'clean_done'
+    STATES.PREPARING = 'prepare'
+    STATES.PREPARED = 'prepare_done'
+    STATES.BUILDING = 'build'
+    STATES.BUILT = 'build_done'
+    STATES.FINALIZING = 'finalize'
+    STATES.FINALIZED = 'finalize_done'
+    STATES.INSTALLING = 'install'
+    STATES.INSTALLED = 'install_done'
+    STATES.META = 'meta'
+
+    # Other things that can be part of the 'last action'
+    STATES.INFO = 'info'
+
     # Default body content for pipelines
     default_pipelines = {
         # Classifies rows in multi-header sources
@@ -88,7 +107,6 @@ class Bundle(object):
 
         self._pipeline_editor = None # A function that can be set to edit the pipeline, rather than overriding the method
 
-
     def set_file_system(self, source_url=None, build_url=None):
         """Set the source file filesystem and/or build  file system"""
 
@@ -104,7 +122,6 @@ class Bundle(object):
             self._build_url = build_url
             self.dataset.config.library.build.url = self._build_url
             self.dataset.commit()
-
 
     def cast_to_subclass(self, clz):
         return clz(self._dataset, self._library, self._source_url, self._build_url)
@@ -133,8 +150,21 @@ class Bundle(object):
         return self.cast_to_subclass(bsf.import_bundle())
 
     def import_lib(self):
+        """Import the lib.py file from the bundle"""
         from ambry.orm import File
         self.build_source_files.file(File.BSFILE.LIB).import_lib()
+
+    def load_requirements(self):
+        """If there are python library requirements set, append the python dir
+        to the path."""
+
+        import sys
+
+        for module_name, pip_name in self.metadata.requirements.items():
+            self._library.install_packages(module_name, pip_name)
+
+        python_dir = self._library.filesystem.python()
+        sys.path.append(python_dir)
 
     def commit(self):
         return self.dataset.commit()
@@ -196,12 +226,9 @@ class Bundle(object):
 
         vid = vid_or_p.vid
 
-        print '!!!!', vid
-
         p = self.partition(vid)
 
         self.dataset._database.session.delete(p._partition)
-
 
     def source(self, name):
         source =  self.dataset.source_file(name)
@@ -236,7 +263,7 @@ class Bundle(object):
         """Return acessors to the build files"""
 
         from files import BuildSourceFileAccessor
-        return BuildSourceFileAccessor(self.dataset, self.source_fs)
+        return BuildSourceFileAccessor(self, self.dataset, self.source_fs)
 
     @property
     @memoize
@@ -285,76 +312,6 @@ class Bundle(object):
         search.append(phase)
 
         return search
-
-    def pipeline(self, source=None, phase = 'build'):
-        """Construct the ETL pipeline for all phases. Segments that are not used for the current phase
-        are filtered out later. """
-
-        from ambry.etl.pipeline import Pipeline, PartitionWriter
-
-        if source:
-            source = self.source(source) if isinstance(source, basestring) else source
-        else:
-            source = None
-
-        pl = Pipeline(self, source=source.source_pipe() if source else None)
-
-        try:
-            pl.configure(self.default_pipelines[phase])
-        except KeyError:
-            pass # Ok for non-conventional pipe names
-
-        body = []
-
-        # Find the pipe configuration:
-        pipe_config = None
-        pipe_name = None
-        for name in self.phase_search_names(source, phase):
-            if name in self.metadata.pipelines:
-                pipe_config = self.metadata.pipelines[name]
-                pipe_name = name
-                break
-
-        # The pipe_config can either be a list, in which case it is a list of pipe pipes for the body segment
-        # or it could be a dict, in which case each is a list of pipes for the named segments.
-
-        if isinstance(pipe_config, (list,tuple)):
-            # Just convert it to dict form for the next section
-
-            # PartitionWriters are always moved to the 'store' section
-            store, body = [],[]
-
-            for pipe in pipe_config:
-                store.append(pipe) if isinstance(pipe, PartitionWriter) else body.append(pipe)
-
-            pipe_config = dict(body=body, store=store)
-
-        if pipe_config:
-            pl.configure(pipe_config)
-
-        if pipe_name:
-            pl.name = pipe_name
-        else:
-            pl.name = phase
-
-        pl.phase = phase
-
-        self.edit_pipeline(pl)
-
-        return pl
-
-    def set_edit_pipeline(self, f):
-        """Set a function to edit the pipeline"""
-
-        self._pipeline_editor = f
-
-    def edit_pipeline(self, pipeline):
-        """Called after the meta pipeline is constructed, to allow per-pipeline modification."""
-
-        if self._pipeline_editor:
-            self._pipeline_editor(pipeline)
-
-        return pipeline
 
     @property
     def logger(self):
@@ -417,47 +374,8 @@ class Bundle(object):
             raise FatalError(message)
 
     ##
-    ## Build Process
-    ##
-
-    STATES = Constant()
-    STATES.NEW = 'new'
-    STATES.SYNCED = 'synced'
-    STATES.DOWNLOADED = 'downloaded'
-    STATES.CLEANING = 'cleaning'
-    STATES.CLEANED = 'cleaned'
-    STATES.PREPARING = 'preparing'
-    STATES.PREPARED = 'prepared'
-    STATES.BUILDING = 'building'
-    STATES.BUILT = 'built'
-    STATES.FINALIZING = 'finalizing'
-    STATES.FINALIZED = 'finalized'
-    STATES.INSTALLING = 'installing'
-    STATES.INSTALLED = 'installed'
-    STATES.META = 'meta'
-
-    # Other things that can be part of the 'last action'
-    STATES.INFO = 'info'
-
-    ##
     ## Source Synced
     ##
-
-    def do_sync(self, force = None, defaults = False):
-
-        if self.is_finalized:
-            self.error("Can't sync; bundle is finalized")
-            return False
-
-        ds = self.dataset
-
-        syncs  = self.build_source_files.sync(force, defaults)
-
-        self.state = self.STATES.SYNCED
-        self.log("---- Synchronized ----")
-        self.dataset.commit()
-
-        return syncs
 
     def sync(self, force=None, defaults = False):
         """
@@ -471,9 +389,54 @@ class Bundle(object):
             self.error("Can't sync; bundle is finalized")
             return False
 
-        self.do_sync(force, defaults = defaults)
+        if self.is_finalized:
+            self.error("Can't sync; bundle is finalized")
+            return False
 
-        return True
+        ds = self.dataset
+
+        syncs = self.build_source_files.sync(force, defaults)
+
+        self.state = self.STATES.SYNCED
+        self.log("---- Synchronized ----")
+        self.dataset.commit()
+
+        return syncs
+
+    def sync_in(self):
+        """Synchronize from files to records, and records to objects"""
+        from ambry.orm import File
+        from ambry.bundle.files import BuildSourceFile
+        syncs = self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
+        self.build_source_files.record_to_objects()
+        self.state = self.STATES.SYNCED
+
+    def sync_objects_in(self):
+        """Synchronize from records to objects"""
+        from ambry.orm import File
+        from ambry.bundle.files import BuildSourceFile
+
+        self.build_source_files.record_to_objects()
+
+    def sync_out(self):
+        from ambry.bundle.files import BuildSourceFile
+        """Synchronize from objects to records"""
+        self.build_source_files.objects_to_record()
+        self.build_source_files.sync(BuildSourceFile.SYNC_DIR.RECORD_TO_FILE)
+        self.state = self.STATES.SYNCED
+
+
+    def sync_objects_out(self):
+        from ambry.bundle.files import BuildSourceFile
+        """Synchronize from objects to records, and records to files"""
+
+        self.build_source_files.objects_to_record()
+
+
+    def sync_objects(self):
+        self.build_source_files.record_to_objects()
+        self.build_source_files.objects_to_record()
+
 
     ##
     ## Do All; Run the full process
@@ -484,34 +447,21 @@ class Bundle(object):
             self.error("Can't run; bundle is finalized")
             return False
 
-        #if not b.do_clean():
-        #    b.error('Run: failed to clean')
-        #    return False
+        self.sync_in()
 
-        if not self.do_sync():
-            self.error('Run: failed to sync')
-            return False
-
-        if not self.do_meta():
+        if not self.meta():
             self.error('Run: failed to meta')
             return False
 
-        b = self.cast_to_build_subclass()
-
-        if not b.do_prepare():
-            b.error('Run: failed to prepare')
+        if not self.build():
+            self.error('Run: failed to build')
             return False
 
-        if not b.do_build():
-            b.error('Run: failed to build')
-            return False
+        self.sync_out()
 
-        b.finalize()
+        self.finalize()
 
-        return b
-
-    def incver(self, message):
-        """Create a new version of the bundle """
+        return True
 
     ##
     ## Clean
@@ -521,31 +471,8 @@ class Bundle(object):
     def is_clean(self):
         return self.state == self.STATES.CLEANED
 
-    def do_clean(self):
-
-        if self.clean():
-            if self.post_clean():
-                self.log("---- Done Cleaning ----")
-                self.state = self.STATES.CLEANED
-                r = True
-            else:
-                self.log("---- Post-cleaning ended in Failure ----")
-                self.set_error_state()
-                self.state = self.STATES.CLEANING  # the clean() method removes states, so we put it back
-                r = False
-
-            self.state = self.STATES.CLEANED  # the clean() method removes states, so we put it back
-        else:
-            self.log("---- Cleaning ended in failure ----")
-
-            self.set_error_state()
-            r = False
-
-        self.set_last_access(Bundle.STATES.CLEANED)
-        self.dataset.commit()
-        return r
-
     def clean(self):
+
         """Clean generated objects from the dataset, but only if there are File contents
          to regenerate them"""
         from ambry.orm import ColumnStat, File
@@ -555,6 +482,7 @@ class Bundle(object):
             self.warn("Can't clean; bundle is finalized")
             return False
 
+        self.log("---- Cleaning ----")
         self.state = self.STATES.CLEANING
 
         ds = self.dataset
@@ -590,28 +518,11 @@ class Bundle(object):
 
         ds.commit()
 
+        self.state = self.STATES.CLEANED
+
+        self.log("---- Done Cleaning ----")
+
         return True
-
-    def post_clean(self):
-        pass
-        return True
-
-    def download(self):
-        """Download referenced source files and bundles. BUndles will be instlaled in the warehouse"""
-
-        raise NotImplementedError()
-
-    def load_requirements(self):
-        """If there are python library requirements set, append the python dir
-        to the path."""
-
-        import sys
-
-        for module_name, pip_name in self.metadata.requirements.items():
-            self._library.install_packages(module_name, pip_name)
-
-        python_dir = self._library.filesystem.python()
-        sys.path.append(python_dir)
 
     ##
     ## Prepare
@@ -621,7 +532,7 @@ class Bundle(object):
     def is_prepared(self):
         return self.state == Bundle.STATES.PREPARED
 
-    def do_prepare(self):
+    def prepare(self):
         """This method runs pre_, main and post_ prepare methods."""
 
         self.load_requirements()
@@ -633,7 +544,7 @@ class Bundle(object):
         if self.pre_prepare():
             self.state = self.STATES.PREPARING
             self.log("---- Preparing ----")
-            if self.prepare():
+            if self.prepare_main():
                 self.state = self.STATES.PREPARED
                 if self.post_prepare():
                     self.log("---- Done Preparing ----")
@@ -649,14 +560,12 @@ class Bundle(object):
             self.log("---- Skipping prepare ---- ")
             r = False
 
-        self.set_last_access(Bundle.STATES.PREPARED)
 
         self.dataset.commit()
 
         return r
 
-    def prepare(self):
-        from ambry.orm.exc import NotFoundError
+    def prepare_main(self):
 
         return True
 
@@ -668,10 +577,6 @@ class Bundle(object):
             self.warn("Can't prepare; bundle is finalized")
             return False
 
-        self.do_sync()
-
-        self.build_source_files.record_to_objects()
-
         return True
 
     def post_prepare(self):
@@ -681,28 +586,105 @@ class Bundle(object):
             if not bool(t.description):
                 self.error("No title ( Description of id column ) set for table: {} ".format(t.name))
 
-        self.build_source_files.objects_to_record()
-
         self.commit()
 
         return True
 
     ##
-    ## Meta
+    ## General Phase Runs
     ##
 
-    def log_pipeline(self, pl):
-        """Write a report of the pipeline out to a file """
-        import os
+    def pipeline(self, phase, source=None):
+        """Construct the ETL pipeline for all phases. Segments that are not used for the current phase
+        are filtered out later. """
 
-        self.build_fs.makedir('pipeline', allow_recreate=True)
-        self.build_fs.setcontents(os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt'),
-                                  unicode(pl), encoding='utf8')
+        from ambry.etl.pipeline import Pipeline, PartitionWriter
 
-    def post_phase_routines(self, phase):
-        pass
+        if source:
+            source = self.source(source) if isinstance(source, basestring) else source
+        else:
+            source = None
 
-    def run_phase(self, phase,  sources=None):
+        pl = Pipeline(self, source=source.source_pipe() if source else None)
+
+        try:
+            phase_config = self.default_pipelines[phase]
+        except KeyError:
+            phase_config = None  # Ok for non-conventional pipe names
+
+        if phase_config:
+            pl.configure(phase_config)
+
+        body = []
+
+        # Find the pipe configuration:
+        pipe_config = None
+        pipe_name = None
+        for name in self.phase_search_names(source, phase):
+            if name in self.metadata.pipelines:
+                pipe_config = self.metadata.pipelines[name]
+                pipe_name = name
+                break
+
+
+        # The pipe_config can either be a list, in which case it is a list of pipe pipes for the body segment
+        # or it could be a dict, in which case each is a list of pipes for the named segments.
+
+        if isinstance(pipe_config, (list, tuple)):
+            # Just convert it to dict form for the next section
+
+            # PartitionWriters are always moved to the 'store' section
+            store, body = [], []
+
+            for pipe in pipe_config:
+                store.append(pipe) if isinstance(pipe, PartitionWriter) else body.append(pipe)
+
+            pipe_config = dict(body=body, store=store)
+
+        if pipe_config:
+            pl.configure(pipe_config)
+
+        if pipe_name:
+            pl.name = pipe_name
+        else:
+            pl.name = phase
+
+        pl.phase = phase
+
+        self.edit_pipeline(pl)
+
+        return pl
+
+    def set_edit_pipeline(self, f):
+        """Set a function to edit the pipeline"""
+
+        self._pipeline_editor = f
+
+    def edit_pipeline(self, pipeline):
+        """Called after the meta pipeline is constructed, to allow per-pipeline modification."""
+
+        if self._pipeline_editor:
+            self._pipeline_editor(pipeline)
+
+        return pipeline
+
+    def pre_phase(self, phase, force=False):
+
+        if self.is_built and not force:
+            self.error("Bundle is already built. Skipping  ( Use --clean  or --force to force build ) ")
+            return False
+
+        if self.is_finalized and not force:
+            self.error("Can't build; bundle is finalized")
+            return False
+
+        self.load_requirements()
+
+        self.import_lib()
+
+        return True
+
+    def phase_main(self, phase,  sources=None):
         """
         Synchronize with the files and run the meta pipeline, possibly creating new objects. Then, write the
         objects back to file records and synchronize.
@@ -723,9 +705,6 @@ class Bundle(object):
         self.import_lib()
         self.load_requirements()
 
-        self.do_sync()
-        self.build_source_files.record_to_objects()
-
         self.log("---- Phase {} ---- ".format(phase))
 
         for i, source in enumerate(self.sources):
@@ -735,7 +714,7 @@ class Bundle(object):
 
             self.logger.info("Running phase {} for source {} ".format(phase, source.name))
 
-            pl = self.pipeline(source, phase)
+            pl = self.pipeline(phase, source)
 
             pl.run()
 
@@ -743,16 +722,74 @@ class Bundle(object):
                 self.log("Run final method {}".format(m))
                 getattr(self, m)(pl)
 
-        source.dataset.commit()
+        self.dataset.commit()
 
-        self.build_source_files.objects_to_record()
-        self.do_sync()
-
-        self.set_last_access(Bundle.STATES.META)
 
         return True
 
-    def do_meta(self, sources=None):
+    def post_phase(self, phase):
+        """After the build, update the configuration with the time required for
+        the build, then save the schema back to the tables, if it was revised
+        during the build."""
+
+        return True
+
+    def run_phase(self, phase, sources = None):
+
+        phase_pre_name = 'pre_{}'.format(phase)
+        phase_post_name = 'post_{}'.format(phase)
+
+        if hasattr(self, phase_pre_name):
+            phase_pre = getattr(self, phase_pre_name)
+        else:
+            phase_pre = self.pre_phase
+
+        if hasattr(self, phase_post_name):
+            phase_post = getattr(self, phase_post_name)
+        else:
+            phase_post = self.post_phase
+
+        if phase_pre(phase):
+            self.state = phase
+            self.log("---- Phase: {} ---".format(phase))
+            if self.phase_main(phase):
+
+                if phase_post(phase):
+                    self.log("---- Done {} ---".format(phase))
+                    r = True
+                else:
+                    self.log("---- {} failed ---".format(phase_post_name))
+                    self.set_error_state()
+                    r = False
+
+            else:
+                self.log("---- Phase {} exited with failure ---".format(phase))
+                self.set_error_state()
+                r = False
+        else:
+            self.log("---- Skipping {} ---- ".format(phase))
+            self.set_error_state()
+            r = False
+
+        if r:
+
+            self.state = phase+'_done'
+
+        return r
+
+    def log_pipeline(self, pl):
+        """Write a report of the pipeline out to a file """
+        import os
+
+        self.build_fs.makedir('pipeline', allow_recreate=True)
+        self.build_fs.setcontents(os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt'),
+                                  unicode(pl), encoding='utf8')
+
+    ##
+    ## Meta
+    ##
+
+    def meta(self, sources=None):
 
         r = self.run_phase('source',sources=sources)
 
@@ -761,12 +798,11 @@ class Bundle(object):
 
         return r
 
-    def do_schema_meta(self, sources=None):
+    def meta_schema(self, sources=None):
         return self.run_phase('schema', sources=sources)
 
-    def do_source_meta(self, sources=None):
+    def meta_source(self, sources=None):
         return self.run_phase('source', sources=sources)
-
 
     def meta_make_source_tables(self, pl):
         from ambry.etl.intuit import TypeIntuiter
@@ -802,63 +838,12 @@ class Bundle(object):
     @property
     def is_built(self):
         """Return True is the bundle has been built."""
-        return bool(self.dataset.config.build.state.built)
-
-    def do_build(self, table_name = None, force=False, print_pipe=False):
-
-        if self.pre_build(force):
-            self.state = self.STATES.BUILDING
-            self.log("---- Build ---")
-            if self.build(table_name):
-
-                if self.post_build():
-                    self.log("---- Done Building ---")
-                    r = True
-                else:
-                    self.log("---- Post-build failed ---")
-                    self.set_error_state()
-                    r = False
-
-            else:
-                self.log("---- Build exited with failure ---")
-                self.set_error_state()
-                r = False
-        else:
-            self.log("---- Skipping Build ---- ")
-            self.set_error_state()
-            r = False
-
-        if r:
-            self.set_last_access(Bundle.STATES.BUILT)
-            self.state = self.STATES.BUILT
-
-        return r
-
-    # Build the final package
-    def pre_build(self, force = False):
-
-        if not self.is_prepared:
-            self.error("Build called before prepare completed ( state = {})".format(self.state))
-            return False
-
-        if self.is_built and not force:
-            self.error("Bundle is already built. Skipping  ( Use --clean  or --force to force build ) ")
-            return False
-
-        if self.is_finalized:
-            self.error("Can't build; bundle is finalized")
-            return False
-
-        self.load_requirements()
-
-        self.import_lib()
-
-        return True
+        return self.state == self.STATES.BUILT
 
     def build(self,  sources = None):
         return self.run_phase('build',sources)
 
-    def post_build(self):
+    def post_build(self,phase):
         """After the build, update the configuration with the time required for
         the build, then save the schema back to the tables, if it was revised
         during the build."""
@@ -953,6 +938,7 @@ class Bundle(object):
         path = self.library.create_bundle_file(self)
 
         with open(path) as f:
+            self.build_fs.makedir(os.path.dirname(self.identity.cache_key), allow_recreate=True)
             self.build_fs.setcontents(self.identity.cache_key+'.db', data = f)
 
         self.log("Wrote bundle sqlite file to {}".format(path))
@@ -1050,40 +1036,6 @@ class Bundle(object):
         self.metadata.coverage.grain = sorted(conv_grain(g) for g in grains)
 
         self.metadata.write_to_dir()
-
-    ##
-    ## Update
-    ##
-
-    # Update is like build, but calls into an earlier version of the package.
-    def pre_update(self):
-        from time import time
-
-        if not self.database.exists():
-            raise ProcessError(
-                "Database does not exist yet. Was the 'prepare' step run?")
-
-        if not self.get_value('process', 'prepared'):
-            raise ProcessError("Update called before prepare completed")
-
-        self._update_time = time()
-
-        self._build_time = time()
-
-        return True
-
-    def update_main(self):
-        """This is the methods that is actually called in do_update; it
-        dispatches to developer created update() methods."""
-        return self.update()
-
-    def update(self):
-
-        self.update_copy_schema()
-        self.prepare()
-        self.update_copy_partitions()
-
-        return True
 
     ##
     ## Finalize
