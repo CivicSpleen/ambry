@@ -50,10 +50,17 @@ logger = get_logger(__name__)
 
 
 class Database(object):
-    """ FIXME: """
+    """ Stores local database of the datasets. """
 
     def __init__(self, dsn, echo=False, engine_kwargs=None):
-        """ FIXME: """
+        """ Initializes database.
+
+        Args:
+            dsn (str): database connect string, 'sqlite://' for example.
+            echo (boolean): echo parameter of the create_engine.
+            engine_kwargs (dict): parameters to pass to the create_engine method of the Sqlalchemy.
+
+        """
 
         self.dsn = dsn
 
@@ -81,13 +88,8 @@ class Database(object):
 
         if not self.exists():
             self._create_path()
-
-            self.enable_delete = True  # FIXME: Seems unused. Remove if so.
-
             self.create_tables()
-
             self._add_config_root()
-
             return True
 
         return False
@@ -123,32 +125,25 @@ class Database(object):
 
         # init engine
         self.engine
+        rows = []
 
         try:
-            try:
-                # Since we are using the connection, rather than the session, need to
-                # explicitly set the search path.
-                if self.driver in ('postgres', 'postgis') and self._schema:
-                    self.connection.execute('SET search_path TO {}'.format(self._schema))
+            # Since we are using the connection, rather than the session, need to
+            # explicitly set the search path.
+            if self.driver in ('postgres', 'postgis') and self._schema:
+                self.connection.execute('SET search_path TO {}'.format(self._schema))
 
-                rows = self.connection.execute("SELECT * FROM datasets WHERE d_vid = '{}' "
-                                               .format(ROOT_CONFIG_NAME_V)).fetchone()
+            rows = self.connection.execute("SELECT * FROM datasets WHERE d_vid = '{}' "
+                                           .format(ROOT_CONFIG_NAME_V)).fetchone()
 
-            except ProgrammingError as e:
-                # This happens when the datasets table doesn't exist
-                rows = False
+        except ProgrammingError:
+            # This happens when the datasets table doesn't exist
+            pass
 
-            if not rows:
-                return False
-            else:
-                return True
-
-        except Exception as e:
-            # What is the more specific exception here?
-
-            return False
         finally:
             self.close_connection()
+
+        return bool(rows)
 
     @property
     def engine(self):
@@ -337,7 +332,7 @@ class Database(object):
                 it.schema = orig_schema
 
     def _add_config_root(self):
-        """ FIXME: """
+        """ Adds the root dataset, which holds configuration values for the database. """
 
         try:
             self.session.query(Dataset).filter_by(id=ROOT_CONFIG_NAME).one()
@@ -358,29 +353,13 @@ class Database(object):
             self.session.add(o)
             self.commit()
 
-    def _clean_config_root(self):
-        """Hack need to clean up some installed databases."""
-        # FIXME: Seems unused. Remove if so.
-
-        ds = self.session.query(Dataset).filter_by(id=ROOT_CONFIG_NAME).one()
-
-        ds.id_ = ROOT_CONFIG_NAME
-        ds.name = ROOT_CONFIG_NAME
-        ds.vname = ROOT_CONFIG_NAME_V
-        ds.source = ROOT_CONFIG_NAME
-        ds.dataset = ROOT_CONFIG_NAME
-        ds.revision = 1
-
-        self.session.merge(ds)
-        self.commit()
-
     #
     # Base Object Access
     #
 
     def new_dataset(self, *args, **kwargs):
-        """
-        Create a new dataset
+        """ Creates a new dataset
+
         :param args: Positional args passed to the Dataset constructor.
         :param kwargs:  Keyword args passed to the Dataset constructor.
         :return: :class:`ambry.orm.Dataset`
@@ -402,7 +381,6 @@ class Database(object):
     @property
     def root_dataset(self):
         """Return the root dataset, which hold configuration values for the library"""
-
         return self.dataset(ROOT_CONFIG_NAME_V)
 
     def dataset(self, ref, load_all=False):
@@ -585,7 +563,6 @@ def get_stored_version(connection):
             raise VersionIsNotStored
         return version
     else:
-        # FIXME: add test
         raise DatabaseMissingError(
             'Do not know how to get version from {} engine.'.format(connection.engine.name))
 
@@ -650,8 +627,7 @@ def _validate_version(connection):
     assert isinstance(version, int)
 
     if version > 10 and version < 100:
-        # FIXME: Give a hint to the user.
-        raise DatabaseError('Trying to open an old Sqlite database.')
+        raise DatabaseError('Trying to open an old SQLite database.')
 
     if _migration_required(connection):
         migrate(connection)
@@ -671,16 +647,16 @@ def _update_version(connection, version):
     """ Updates version in the db to the given version.
 
     Args:
-        #FIXME:
+        connection (sqlalchemy connection): sqlalchemy session where to update version.
+        version (int): version of the migration.
 
     """
     if connection.engine.name == 'sqlite':
         connection.execute('PRAGMA user_version = {}'.format(version))
     elif connection.engine.name == 'postgresql':
-        # FIXME: search for table seems better solution.
         connection.execute('CREATE TABLE IF NOT EXISTS user_version(version INTEGER NOT NULL);')
 
-        # upsert. FIXME: Find better way.
+        # upsert.
         if connection.execute('SELECT * FROM user_version;').fetchone():
             # update
             connection.execute('UPDATE user_version SET version = {};'.format(version))
@@ -696,7 +672,7 @@ def _is_missed(connection, version):
 
     Args:
         connection (sqlalchemy connection): sqlalchemy session to check for migration.
-        version (int): versio of the migration.
+        version (int): version of the migration.
 
     Returns:
         bool: True if migration is missed, False otherwise.
