@@ -33,5 +33,5 @@ To change model's fields and appropriate database table (AKA migration):
       $ ambry makemigration <your_migration_name>
     3. Open file created by command and add appropriate sql to the _migrate_sqlite and _migrate_postgresql methods.
     4. When you are ready to apply migration, increment orm.database.SCHEMA_VERSION (now your SCHEMA_VERSION has to match to migration number.)
-    5. Check just created migration on your own db.  (FIXME: Describe how.)
+    5. Check just created migration on your own db (check both, SQLite and PostgreSQL).  (FIXME: Describe how.)
     6. Commit and push files your changed.
