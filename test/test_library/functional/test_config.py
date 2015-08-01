@@ -16,14 +16,11 @@ class Test(TestBase):
         return get_runconfig(bf_dir(name))
 
     def test_run_config_filesystem(self):
-
-        self.rc = self.get_rc()
-
-        self.assertEquals('/tmp/test/downloads', self.rc.filesystem('downloads'))
-        self.assertEquals('/tmp/test/extracts', self.rc.filesystem('extracts'))
+        rc = self.get_rc()
+        self.assertEquals('/tmp/test/downloads', rc.filesystem('downloads'))
+        self.assertEquals('/tmp/test/extracts', rc.filesystem('extracts'))
 
     def test_run_config_library(self):
-
-        self.rc = self.get_rc()
-
-        print self.rc.library()
+        rc = self.get_rc()
+        self.assertIn('warehouse', rc.library())
+        self.assertIn('database', rc.library())
