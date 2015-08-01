@@ -1,18 +1,18 @@
+# -*- coding: utf-8 -*-
 
-import unittest
 import tempfile
 import uuid
-from ambry.orm import Dataset
-from ambry.identity import DatasetNumber
 
+from ambry.identity import DatasetNumber
+from ambry.orm.database import Database
 from test.test_base import TestBase
+
 
 class Test(TestBase):
 
     def setUp(self):
-        from sqlalchemy import create_engine
 
-        super(Test,self).setUp()
+        super(Test, self).setUp()
 
         self.uuid = str(uuid.uuid4())
         self.tmpdir = tempfile.mkdtemp(self.uuid)
@@ -26,11 +26,9 @@ class Test(TestBase):
         # Make an array of dataset numbers, so we can refer to them with a single integer
         self.dn = [str(DatasetNumber(x, x)) for x in range(1, 10)]
 
-
     def test_dataset_basic(self):
         """Basic operations on datasets"""
 
-        from ambry.orm.database import Database
         from ambry.orm.exc import ConflictError
         from ambry.identity import DatasetNumber
 
@@ -74,8 +72,6 @@ class Test(TestBase):
 
     def test_config(self):
 
-        from ambry.orm.database import Database
-
         db = Database(self.dsn)
         db.open()
 
@@ -84,7 +80,6 @@ class Test(TestBase):
         self.assertEqual('foobar',  db.root_dataset.config.library.config.path)
 
     def test_tables(self):
-        from ambry.orm.database import Database
 
         db = Database(self.dsn)
         db.open()
@@ -113,8 +108,6 @@ class Test(TestBase):
         self.assertEqual('table3-description', db.dataset(ds.vid).table('table3').description)
 
     def test_partitions(self):
-        from ambry.orm.database import Database
-
         db = Database(self.dsn)
         db.open()
 
@@ -122,19 +115,15 @@ class Test(TestBase):
 
         t = ds.new_table('table2')
 
-        print '!!!', t, t.vid
+        p1 = ds.new_partition(t, time=1)
+        p2 = ds.new_partition(t, time=2)
+        p3 = ds.new_partition(t, time=3)
 
-        p = ds.new_partition(t, time=1)
-        p = ds.new_partition(t, time=2)
-        p = ds.new_partition(t, time=3)
+        assert p1 != p2
+        assert p2 != p3
 
         db.commit()
 
         self.assertEqual(3, len(ds.partitions))
 
         self.dump_database('partitions', db)
-
-def suite():
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(Test))
-    return suite
