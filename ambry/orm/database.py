@@ -10,6 +10,7 @@ import os
 
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy import create_engine, event
 
 from ambry.orm.exc import DatabaseError, DatabaseMissingError, NotFoundError, ConflictError
 
@@ -150,8 +151,6 @@ class Database(object):
     @property
     def engine(self):
         """return the SqlAlchemy engine for this database."""
-        from sqlalchemy import create_engine
-        from sqlalchemy import event
 
         if not self._engine:
 
@@ -643,7 +642,7 @@ def _validate_version(connection):
         version = get_stored_version(connection)
     except VersionIsNotStored:
         # FIXME: Consider to remove that message while testing. It is very annoying.
-        logger.info('Version not stored in the db: assuming new database creation.')
+        # logger.info('Version not stored in the db: assuming new database creation.')
         version = SCHEMA_VERSION
         _update_version(connection, version)
     assert isinstance(version, int)

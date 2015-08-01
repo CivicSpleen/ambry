@@ -1,12 +1,14 @@
+# -*- coding: utf-8 -*-
+import os
+
+from ambry.run import get_runconfig
 from test.test_base import TestBase
+from test import bundlefiles
 
 
 class Test(TestBase):
 
     def get_rc(self, name='ambry.yaml'):
-        from ambry.run import get_runconfig
-        import os
-        from test import bundlefiles
 
         def bf_dir(fn):
             return os.path.join(os.path.dirname(bundlefiles.__file__), fn)

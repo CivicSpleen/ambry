@@ -9,18 +9,17 @@ from ambry.orm.database import Database
 from ambry.orm import database
 from ambry.orm import migrations
 
-# FIXME: move upper
-from test.test_orm.unit.test_database import BaseDatabaseTest
+from test.test_orm.base import BasePostgreSQLTest
 
 
-class MigrationTest(BaseDatabaseTest):
+class MigrationTest(BasePostgreSQLTest):
 
     def setUp(self):
         super(self.__class__, self).setUp()
         self.sqlite_db_file = 'test_migration.db'
 
     def tearDown(self):
-        super(self.__class__, self).setUp()
+        super(self.__class__, self).tearDown()
         if os.path.exists(self.sqlite_db_file):
             os.remove(self.sqlite_db_file)
 
@@ -49,10 +48,10 @@ class MigrationTest(BaseDatabaseTest):
         # replace real migrations with tests migrations.
 
         test_migrations = [
-            (100, 'test.test_library.functional.migrations.0100_init'),
-            (101, 'test.test_library.functional.migrations.0101_add_column'),
-            (102, 'test.test_library.functional.migrations.0102_create_table'),
-            (103, 'test.test_library.functional.migrations.0103_not_ready')  # that should not apply
+            (100, 'test.test_orm.functional.migrations.0100_init'),
+            (101, 'test.test_orm.functional.migrations.0101_add_column'),
+            (102, 'test.test_orm.functional.migrations.0102_create_table'),
+            (103, 'test.test_orm.functional.migrations.0103_not_ready')  # that should not apply
         ]
 
         fake_get.expects_call().returns(test_migrations)
@@ -83,10 +82,10 @@ class MigrationTest(BaseDatabaseTest):
         # replace real migrations with tests migrations.
 
         test_migrations = [
-            (100, 'test.test_library.functional.migrations.0100_init'),
-            (101, 'test.test_library.functional.migrations.0101_add_column'),
-            (102, 'test.test_library.functional.migrations.0102_create_table'),
-            (103, 'test.test_library.functional.migrations.0103_not_ready')  # that should not apply
+            (100, 'test.test_orm.functional.migrations.0100_init'),
+            (101, 'test.test_orm.functional.migrations.0101_add_column'),
+            (102, 'test.test_orm.functional.migrations.0102_create_table'),
+            (103, 'test.test_orm.functional.migrations.0103_not_ready')  # that should not apply
         ]
 
         fake_get.expects_call().returns(test_migrations)

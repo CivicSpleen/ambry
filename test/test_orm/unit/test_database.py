@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import os
-from urlparse import urlparse
 import unittest
 
 import fudge
@@ -14,7 +13,6 @@ from sqlalchemy.exc import ProgrammingError, OperationalError
 from ambry.orm.database import get_stored_version, _validate_version, _migration_required, SCHEMA_VERSION,\
     _update_version, _is_missed, migrate
 from ambry.orm.exc import DatabaseError, DatabaseMissingError
-from ambry.run import get_runconfig
 
 from ambry.orm.database import Database, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME
 from ambry.orm.dataset import Dataset
@@ -24,72 +22,7 @@ from test.test_orm.factories import DatasetFactory, TableFactory,\
 
 from test.test_library.asserts import assert_spec
 
-# FIXME: Change message after config change.
-MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgresql section to the library section.'
-
-
-class BaseDatabaseTest(unittest.TestCase):
-    """ Base class for database tests who requires postgresql connection. """
-
-    def setUp(self):
-        conf = get_runconfig()
-        if 'postgresql' in conf.dict['library']:
-            dsn = conf.dict['library']['postgresql']['database']
-            parsed_url = urlparse(dsn)
-            db_name = parsed_url.path.replace('/', '')
-            self.postgres_dsn = parsed_url._replace(path='postgres').geturl()
-            self.postgres_test_db = '{}_test'.format(db_name)
-            self.postgres_test_dsn = parsed_url._replace(path=self.postgres_test_db).geturl()
-        else:
-            self.postgres_dsn = None
-            self.postgres_test_dsn = None
-            self.postgres_test_db = None
-
-    def tearDown(self):
-        # drop test database
-        if getattr(self, '_active_pg_connection', None):
-            self._active_pg_connection.execute('rollback')
-            self._active_pg_connection.detach()
-            self._active_pg_connection.close()
-            self._active_pg_connection = None
-
-            # droop test database;
-            engine = create_engine(self.postgres_dsn)
-            connection = engine.connect()
-            connection.execute('commit')
-            connection.execute('DROP DATABASE {};'.format(self.postgres_test_db))
-            connection.execute('commit')
-            connection.close()
-
-    def pg_connection(self):
-        # creates test database and returns postgres connection to that database.
-        postgres_user = 'ambry'
-        if not self.postgres_dsn:
-            raise Exception(MISSING_POSTGRES_CONFIG_MSG)
-
-        # connect to postgres database because we need to create database for tests.
-        engine = create_engine(self.postgres_dsn)
-        connection = engine.connect()
-
-        # we have to close opened transaction.
-        connection.execute('commit')
-
-        # drop test database created by previuos run (control + c case).
-        connection.execute('DROP DATABASE {};'.format(self.postgres_test_db))
-        connection.execute('commit')
-
-        # create test database
-        query = 'CREATE DATABASE {} OWNER {} template template0 encoding \'UTF8\';'\
-            .format(self.postgres_test_db, postgres_user)
-        connection.execute(query)
-        connection.execute('commit')
-        connection.close()
-
-        # now create connection for tests.
-        self.pg_engine = create_engine(self.postgres_test_dsn)
-        pg_connection = self.pg_engine.connect()
-        self._active_pg_connection = pg_connection
-        return pg_connection
+from test.test_orm.base import BasePostgreSQLTest, MISSING_POSTGRES_CONFIG_MSG
 
 
 class DatabaseTest(unittest.TestCase):
@@ -97,6 +30,8 @@ class DatabaseTest(unittest.TestCase):
     def setUp(self):
         self.sqlite_db = Database('sqlite://')
         self.sqlite_db.create()
+        fudge.clear_expectations()
+        fudge.clear_calls()
 
     def tearDown(self):
         fudge.clear_expectations()
@@ -253,10 +188,10 @@ class DatabaseTest(unittest.TestCase):
 
     # engine() tests.
     @fudge.patch(
-        'sqlalchemy.create_engine',
-        'ambry.orm.database._on_connect_update_sqlite_schema')
-    def test_engine_creates_and_caches_sqlalchemy_engine(self, fake_create, fake_on):
-        fake_on.expects_call()
+        'ambry.orm.database.create_engine',
+        'ambry.orm.database._validate_version')
+    def test_engine_creates_and_caches_sqlalchemy_engine(self, fake_create, fake_validate):
+        fake_validate.expects_call()
         engine_stub = fudge.Fake().is_a_stub()
         fake_create.expects_call()\
             .returns(engine_stub)
@@ -265,17 +200,16 @@ class DatabaseTest(unittest.TestCase):
         self.assertEquals(db._engine, engine_stub)
 
     @fudge.patch(
-        'sqlalchemy.create_engine',
-        'sqlalchemy.event',
-        'ambry.orm.database._on_connect_update_sqlite_schema')
+        'ambry.orm.database.create_engine',
+        'ambry.orm.database.event',
+        'ambry.orm.database._validate_version')
     def test_listens_to_connect_signal_for_sqlite_driver(self, fake_create,
-                                                         fake_event, fake_on):
-        fake_event\
-            .provides('listen')
+                                                         fake_event, fake_validate):
+        fake_validate.expects_call()
+        fake_event.provides('listen')
         engine_stub = fudge.Fake().is_a_stub()
         fake_create.expects_call()\
             .returns(engine_stub)
-        fake_on.expects_call()
         Database('sqlite://').engine
 
     # connection tests.
@@ -517,7 +451,7 @@ class DatabaseTest(unittest.TestCase):
             'Dataset was not removed.')
 
 
-class GetVersionTest(BaseDatabaseTest):
+class GetVersionTest(BasePostgreSQLTest):
 
     def test_returns_user_version_from_sqlite_pragma(self):
         engine = create_engine('sqlite://')
@@ -591,7 +525,7 @@ class MigrationRequiredTest(unittest.TestCase):
         self.assertFalse(_migration_required(self.connection))
 
 
-class UpdateVersionTest(BaseDatabaseTest):
+class UpdateVersionTest(BasePostgreSQLTest):
 
     def setUp(self):
         super(self.__class__, self).setUp()
