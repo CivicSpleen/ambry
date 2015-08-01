@@ -620,8 +620,7 @@ def _validate_version(connection):
     try:
         version = get_stored_version(connection)
     except VersionIsNotStored:
-        # FIXME: Consider to remove that message while testing. It is very annoying.
-        # logger.info('Version not stored in the db: assuming new database creation.')
+        logger.info('Version not stored in the db: assuming new database creation.')
         version = SCHEMA_VERSION
         _update_version(connection, version)
     assert isinstance(version, int)
