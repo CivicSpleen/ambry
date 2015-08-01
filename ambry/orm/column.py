@@ -81,7 +81,7 @@ class Column(Base):
                          cascade="save-update, delete, delete-orphan")
 
     __table_args__ = (
-        UniqueConstraint('c_sequence_id', 'c_t_vid', name='_uc_columns_1'),
+        UniqueConstraint('c_sequence_id', 'c_t_vid', name='_uc_c_sequence_id'),
     )
 
     DATATYPE_CHAR = 'char'

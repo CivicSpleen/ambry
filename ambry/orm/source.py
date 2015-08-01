@@ -8,12 +8,13 @@ __docformat__ = 'restructuredtext en'
 
 
 from sqlalchemy import Column as SAColumn
-from sqlalchemy import  Text, String, ForeignKey, INTEGER, UniqueConstraint
-from . import  MutationList, JSONEncodedObj
+from sqlalchemy import Text, String, ForeignKey, INTEGER, UniqueConstraint
+from . import MutationList, JSONEncodedObj
 from sqlalchemy.orm import relationship
 from source_table import SourceTable
 from table import Table
 from . import Base,  DictableMixin
+
 
 class SourceError(Exception):
     pass
@@ -21,7 +22,7 @@ class SourceError(Exception):
 
 class DelayedOpen(object):
 
-    def __init__(self, source, fs, path, mode = 'r', from_cache = False):
+    def __init__(self, source, fs, path, mode='r', from_cache=False):
         self._source = source
         self._fs = fs
         self._path = path
@@ -29,14 +30,15 @@ class DelayedOpen(object):
 
         self.from_cache = from_cache
 
-    def open(self, mode = None ):
-        return self._fs.open(self._path, mode if mode else self._mode )
+    def open(self, mode=None):
+        return self._fs.open(self._path, mode if mode else self._mode)
 
     def syspath(self):
         return self._fs.getsyspath(self._path)
 
     def source_pipe(self):
         return self._source.row_gen()
+
 
 class SourceRowGen(object):
     """Holds a reference to a source record """
@@ -49,6 +51,7 @@ class SourceRowGen(object):
         for row in self._rowgen:
             yield row
 
+
 class DataSource(Base, DictableMixin):
     """A source of data, such as a remote file or bundle"""
 
@@ -60,7 +63,7 @@ class DataSource(Base, DictableMixin):
     name = SAColumn('ds_name', Text)
     title = SAColumn('ds_title', Text)
 
-    st_id = SAColumn('ds_st_id',INTEGER, ForeignKey('sourcetables.st_id'), nullable=True)
+    st_id = SAColumn('ds_st_id', INTEGER, ForeignKey('sourcetables.st_id'), nullable=True)
     source_table_name = SAColumn('ds_st_name', Text)
     _source_table = relationship(SourceTable, backref='sources')
 
@@ -78,17 +81,17 @@ class DataSource(Base, DictableMixin):
     header_lines = SAColumn('ds_header_lines', MutationList.as_mutable(JSONEncodedObj))
     description = SAColumn('ds_description', Text)
     file = SAColumn('ds_file', Text)
-    urltype = SAColumn('ds_urltype', Text) # null or zip
-    filetype = SAColumn('ds_filetype', Text) # tsv, csv, fixed
+    urltype = SAColumn('ds_urltype', Text)  # null or zip
+    filetype = SAColumn('ds_filetype', Text)  # tsv, csv, fixed
     encoding = SAColumn('ds_encoding', Text)
     url = SAColumn('ds_url', Text)
     ref = SAColumn('ds_ref', Text)
     hash = SAColumn('ds_hash', Text)
 
-    generator = SAColumn('ds_generator', Text) # class name for a Pipe to generator rows
+    generator = SAColumn('ds_generator', Text)  # class name for a Pipe to generator rows
 
     __table_args__ = (
-        UniqueConstraint('ds_d_vid', 'ds_name', name='_uc_columns_1'),
+        UniqueConstraint('ds_d_vid', 'ds_name', name='_uc_ds_d_vid'),
     )
 
     def get_filetype(self):
