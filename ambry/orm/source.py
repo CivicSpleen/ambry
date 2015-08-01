@@ -321,7 +321,7 @@ def download(url, cache_fs):
 
     import os.path
     import requests
-    from ambry.util import copy_file_or_flo
+    from ambry.util.flo import copy_file_or_flo
 
     parsed = urlparse.urlparse(str(url))
 
@@ -336,12 +336,13 @@ def download(url, cache_fs):
 
         r = requests.get(url, stream=True)
 
-        cache_fs.makedir(os.path.dirname(cache_path),recursive=True, allow_recreate=True)
+        cache_fs.makedir(os.path.dirname(cache_path), recursive=True, allow_recreate=True)
 
         with cache_fs.open(cache_path, 'wb') as f:
             copy_file_or_flo(r.raw, f)
 
     return cache_path
+
 
 def make_excel_date_caster(file_name):
     """Make a date caster function that can convert dates from a particular workbook. This is required
@@ -362,7 +363,7 @@ def make_excel_date_caster(file_name):
             return datetime.date(year, month, day)
         except ValueError:
             # Could be actually a string, not a float. Because Excel dates are completely broken.
-            from  dateutil import parser
+            from dateutil import parser
 
             try:
                 return parser.parse(v).date()
@@ -370,6 +371,7 @@ def make_excel_date_caster(file_name):
                 return None
 
     return excel_date
+
 
 def google_iter(source):
     import gspread
@@ -391,6 +393,3 @@ def google_iter(source):
 
     for row in wksht.get_all_values():
         yield row
-
-
-
