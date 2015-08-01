@@ -8,7 +8,7 @@ from collections import namedtuple
 import pkgutil
 import os
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm.exc import NoResultFound
 
 from ambry.orm.exc import DatabaseError, DatabaseMissingError, NotFoundError, ConflictError
@@ -49,6 +49,7 @@ logger = get_logger(__name__)
 
 
 class Database(object):
+    """ FIXME: """
 
     def __init__(self, dsn, echo=False):
 
@@ -69,6 +70,7 @@ class Database(object):
         self.logger = logger
 
     def is_in_memory_db(self):
+        """ Returns True if in memory database is used. Otherwise returns False. """
         return self.dsn == 'sqlite://' or (self.dsn.startswith('sqlite') and 'memory' in self.dsn)
 
     def create(self):
@@ -112,8 +114,6 @@ class Database(object):
     def exists(self):
         """Return True if the database exists, or for Sqlite, which will create the file on the
         first reference, the file has been initialized with the root config """
-
-        from sqlalchemy.exc import ProgrammingError
 
         if self.driver == 'sqlite' and not os.path.exists(self.path):
             return False
@@ -168,11 +168,6 @@ class Database(object):
 
             if self.driver == 'sqlite':
                 event.listen(self._engine, 'connect', _pragma_on_connect)
-                # event.listen(self._engine, 'connect', _on_connect_update_schema)
-                # FIXME: remove _on_connect_update_sqlite_schema. Use _validate_version instead.
-                # _on_connect_update_sqlite_schema(self.connection, None)
-
-            # FIXME: remove _on_connect_update_sqlite_schema and uncomment next line.
             _validate_version(self.connection)
 
         return self._engine
@@ -306,11 +301,11 @@ class Database(object):
 
         tables = [
             Dataset, Config, Table, Column, Partition, File, Code,
-            ColumnStat, SourceColumn, SourceTable, DataSource]
+            ColumnStat, SourceTable, SourceColumn, DataSource]
 
         try:
             self.drop()
-        except OperationalError:
+        except (OperationalError, ProgrammingError):
             pass
 
         orig_schemas = {}
@@ -471,6 +466,129 @@ class Database(object):
         return self.dataset(ds.vid)
 
 
+class BaseMigration(object):
+    """ Base class for all migrations. """
+
+    def migrate(self, connection):
+        # use transactions
+        if connection.engine.name == 'sqlite':
+            self._migrate_sqlite(connection)
+        elif connection.engine.name == 'postgresql':
+            self._migrate_postgresql(connection)
+        else:
+            raise DatabaseMissingError(
+                'Do not know how to migrate {} engine.'.format(self.connection))
+
+    def _migrate_sqlite(self, connection):
+        raise NotImplementedError(
+            'subclasses of MigrationBase must provide a _migrate_sqlite() method')
+
+    def _migrate_postgresql(self, connection):
+        raise NotImplementedError(
+            'subclasses of MigrationBase must provide a _migrate_postgresql() method')
+
+
+class VersionIsNotStored(Exception):
+    """ Means that ambry never updated db schema. """
+    pass
+
+
+def migrate(connection):
+    """ Collects all migrations and applies missed.
+
+    Args:
+        connection (sqlalchemy connection):
+
+    """
+    all_migrations = _get_all_migrations()
+    logger.debug('Collected migrations: {}'.format(all_migrations))
+
+    for version, modname in all_migrations:
+        if _is_missed(connection, version) and version <= SCHEMA_VERSION:
+            logger.info('Missed migration: {} migration is missed. Migrating...'.format(version))
+            module = __import__(modname, fromlist='dummy')
+
+            # run each migration under its own transaction. This allows us to apply valid migrations
+            # and break on invalid.
+            trans = connection.begin()
+            try:
+                module.Migration().migrate(connection)
+                _update_version(connection, version)
+                trans.commit()
+            except:
+                trans.rollback()
+                raise
+
+
+def create_migration_template(name):
+    """ Creates migration file. Returns created file name.
+    Args:
+        name (str): name of the migration.
+
+    Returns:
+        str: name of the migration file.
+    """
+    assert name, 'Name of the migration can not be empty.'
+    import migrations
+
+    #
+    # Find next number
+    #
+    package = migrations
+    prefix = package.__name__ + '.'
+    all_versions = []
+    for importer, modname, ispkg in pkgutil.iter_modules(package.__path__, prefix):
+        version = int(modname.split('.')[-1].split('_')[0])
+        all_versions.append(version)
+
+    next_number = max(all_versions) + 1
+
+    #
+    # Generate next migration name
+    #
+    next_migration_name = '{}_{}.py'.format(next_number, name)
+    migration_fullname = os.path.join(package.__path__[0], next_migration_name)
+
+    #
+    # Write next migration file content.
+    #
+    with open(migration_fullname, 'w') as f:
+        f.write(MIGRATION_TEMPLATE)
+    return migration_fullname
+
+
+def get_stored_version(connection):
+    """ Returns database version.
+
+    Raises: Assuming user_version pragma (sqlite case) and user_version table (postgresql case)
+        exist because they created with the database creation.
+
+    Args:
+        connection (sqlalchemy connection):
+
+    Returns:
+        int: version of the database.
+
+    """
+
+    if connection.engine.name == 'sqlite':
+        version = connection.execute('PRAGMA user_version').fetchone()[0]
+        if version == 0:
+            raise VersionIsNotStored
+        return version
+    elif connection.engine.name == 'postgresql':
+        try:
+            version = connection.execute('SELECT version FROM user_version;').fetchone()[0]
+        except ProgrammingError:
+            # This happens when the user_version table doesn't exist
+            raise VersionIsNotStored
+        return version
+    else:
+        # FIXME: add test
+        raise DatabaseMissingError(
+            'Do not know how to get version from {} engine.'.format(connection.engine.name))
+
+
 def _pragma_on_connect(dbapi_con, con_record):
     """ISSUE some Sqlite pragmas when the connection is created."""
 
@@ -514,56 +632,6 @@ def _on_connect_bundle(dbapi_con, con_record):
     # dbapi_con.execute('PRAGMA synchronous = OFF')
 
 
-def _on_connect_update_sqlite_schema(conn, con_record):
-    """Perform on-the-fly schema updates based on the user version"""
-
-    version = conn.execute('PRAGMA user_version').fetchone()[0]
-    if version:
-        version = int(version)
-
-    def maybe_exec(s):
-        try:
-            conn.execute(s)
-        except Exception:
-            pass
-
-    if version > 10 and version < 100:
-        raise DatabaseError('Trying to open an old Sqlite database')
-
-    if version < 100:
-        pass
-        #maybe_exec('ALTER TABLE columns ... ')
-
-    if version < SCHEMA_VERSION:
-        conn.execute('PRAGMA user_version = {}'.format(SCHEMA_VERSION))
-
-
-def get_stored_version(connection):
-    """ Returns database version.
-
-    Note: Assuming user_version pragma (sqlite case) and user_version table (postgresql case)
-        exist because of the db validation after connection. See Database.engine.
-
-    Args:
-        connection (sqlalchemy connection):
-
-    Returns:
-        int: version of the database.
-
-    """
-
-    if connection.engine.name == 'sqlite':
-        version = connection.execute('PRAGMA user_version').fetchone()[0]
-        return version
-    elif connection.engine.name == 'postgresql':
-        version = connection.execute('SELECT version FROM user_version;').fetchone()[0]
-        return version
-    else:
-        # FIXME: add test
-        raise DatabaseMissingError(
-            'Do not know how to get version from {} engine.'.format(connection.engine.name))
-
-
 def _validate_version(connection):
     """ Performs on-the-fly schema updates based on the models version.
 
@@ -571,7 +639,13 @@ def _validate_version(connection):
         DatabaseError: if user uses old sqlite database.
 
     """
-    version = get_stored_version(connection)
+    try:
+        version = get_stored_version(connection)
+    except VersionIsNotStored:
+        # FIXME: Consider to remove that message while testing. It is very annoying.
+        logger.info('Version not stored in the db: assuming new database creation.')
+        version = SCHEMA_VERSION
+        _update_version(connection, version)
     assert isinstance(version, int)
 
     if version > 10 and version < 100:
@@ -647,89 +721,3 @@ def _get_all_migrations():
 
     all_migrations = sorted(all_migrations, key=lambda x: x[0])
     return all_migrations
-
-
-def migrate(connection):
-    """ Collects all migrations and applies missed.
-
-    Args:
-        connection (sqlalchemy connection):
-
-    """
-    all_migrations = _get_all_migrations()
-    logger.debug('Collected migrations: {}'.format(all_migrations))
-
-    for version, modname in all_migrations:
-        if _is_missed(connection, version) and version <= SCHEMA_VERSION:
-            logger.info('Missed migration: {} migration is missed. Migrating...'.format(version))
-            module = __import__(modname, fromlist='dummy')
-
-            # run each migration under its own transaction. This allows us to apply valid migrations
-            # and break on invalid.
-            trans = connection.begin()
-            try:
-                module.Migration().migrate(connection)
-                _update_version(connection, version)
-                trans.commit()
-            except:
-                trans.rollback()
-                raise
-
-
-class BaseMigration(object):
-    """ Base class for all migrations. """
-
-    def migrate(self, connection):
-        # use transactions
-        if connection.engine.driver == 'pysqlite':
-            self._migrate_sqlite(connection)
-        elif self.engine.connection == 'postgresql':
-            self._migrate_postgresql(connection)
-        else:
-            raise DatabaseMissingError(
-                'Do not know how to migrate {} engine.'.format(self.connection))
-
-    def _migrate_sqlite(self, connection):
-        raise NotImplementedError(
-            'subclasses of MigrationBase must provide a _migrate_sqlite() method')
-
-    def _migrate_postgresql(self, connection):
-        raise NotImplementedError(
-            'subclasses of MigrationBase must provide a _migrate_postgresql() method')
-
-
-def create_migration_template(name):
-    """ Creates migration file. Returns created file name.
-    Args:
-        name (str): name of the migration.
-
-    Returns:
-        str: name of the migration file.
-    """
-    assert name, 'Name of the migration can not be empty.'
-    import migrations
-
-    #
-    # Find next number
-    #
-    package = migrations
-    prefix = package.__name__ + '.'
-    all_versions = []
-    for importer, modname, ispkg in pkgutil.iter_modules(package.__path__, prefix):
-        version = int(modname.split('.')[-1].split('_')[0])
-        all_versions.append(version)
-
-    next_number = max(all_versions) + 1
-
-    #
-    # Generate next migration name
-    #
-    next_migration_name = '{}_{}.py'.format(next_number, name)
-    migration_fullname = os.path.join(package.__path__[0], next_migration_name)
-
-    #
-    # Write next migration file content.
-    #
-    with open(migration_fullname, 'w') as f:
-        f.write(MIGRATION_TEMPLATE)
-    return migration_fullname

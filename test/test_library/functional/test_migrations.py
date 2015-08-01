@@ -9,13 +9,18 @@ from ambry.orm.database import Database
 from ambry.orm import database
 from ambry.orm import migrations
 
+# FIXME: move upper
+from test.test_orm.unit.test_database import BaseDatabaseTest
 
-class MigrationTest(unittest.TestCase):
+
+class MigrationTest(BaseDatabaseTest):
 
     def setUp(self):
+        super(self.__class__, self).setUp()
         self.sqlite_db_file = 'test_migration.db'
 
     def tearDown(self):
+        super(self.__class__, self).setUp()
         if os.path.exists(self.sqlite_db_file):
             os.remove(self.sqlite_db_file)
 
@@ -72,5 +77,41 @@ class MigrationTest(unittest.TestCase):
             finally:
                 db.close()
 
-    def test_applies_new_migration_to_postgresql_database(self):
-        pass
+    @fudge.patch(
+        'ambry.orm.database._get_all_migrations')
+    def test_applies_new_migration_to_postgresql_database(self, fake_get):
+        # replace real migrations with tests migrations.
+
+        test_migrations = [
+            (100, 'test.test_library.functional.migrations.0100_init'),
+            (101, 'test.test_library.functional.migrations.0101_add_column'),
+            (102, 'test.test_library.functional.migrations.0102_create_table'),
+            (103, 'test.test_library.functional.migrations.0103_not_ready')  # that should not apply
+        ]
+
+        fake_get.expects_call().returns(test_migrations)
+
+        # create postgresql db
+        self.pg_connection()
+
+        # populate database with initial schema
+        db = Database(self.postgres_test_dsn)
+        db.create()
+        db.close()
+
+        # switch version and reconnect. Now both migrations should apply.
+        with fudge.patched_context(database, 'SCHEMA_VERSION', 102):
+            db = Database(self.postgres_test_dsn)
+            try:
+                # check column created by migration 101.
+                db.connection.execute('SELECT column1 FROM datasets;').fetchall()
+
+                # check table created by migration 102.
+                db.connection.execute('SELECT column1 FROM table1;').fetchall()
+
+                # db version changed to 102
+                self.assertEquals(
+                    db.connection.execute('SELECT version FROM user_version;').fetchone()[0],
+                    102)
+            finally:
+                db.close()

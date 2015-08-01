@@ -1,36 +1,28 @@
 # -*- coding: utf-8 -*-
+import os
 from urlparse import urlparse
 import unittest
-
-from ambry.run import get_runconfig
 
 import fudge
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection as SQLAlchemyConnection
+from sqlalchemy.engine.reflection import Inspector
+from sqlalchemy.exc import ProgrammingError, OperationalError
+
 
 from ambry.orm.database import get_stored_version, _validate_version, _migration_required, SCHEMA_VERSION,\
     _update_version, _is_missed, migrate
 from ambry.orm.exc import DatabaseError, DatabaseMissingError
-
-import os
-import shutil
-from tempfile import mkdtemp
-
-
-from sqlalchemy.engine.reflection import Inspector
-from sqlalchemy.exc import ProgrammingError, OperationalError
+from ambry.run import get_runconfig
 
 from ambry.orm.database import Database, ROOT_CONFIG_NAME_V, ROOT_CONFIG_NAME
 from ambry.orm.dataset import Dataset
 
-from test.test_orm.factories import DatasetFactory, ConfigFactory,\
-    TableFactory, ColumnFactory, PartitionFactory,\
-    ColumnStatFactory
+from test.test_orm.factories import DatasetFactory, TableFactory,\
+    ColumnFactory, PartitionFactory
 
 from test.test_library.asserts import assert_spec
-
-TEST_TEMP_DIR = 'test-library-'
 
 # FIXME: Change message after config change.
 MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgresql section to the library section.'
@@ -46,7 +38,7 @@ class BaseDatabaseTest(unittest.TestCase):
             parsed_url = urlparse(dsn)
             db_name = parsed_url.path.replace('/', '')
             self.postgres_dsn = parsed_url._replace(path='postgres').geturl()
-            self.postgres_test_db = '{}_'.format(db_name)
+            self.postgres_test_db = '{}_test'.format(db_name)
             self.postgres_test_dsn = parsed_url._replace(path=self.postgres_test_db).geturl()
         else:
             self.postgres_dsn = None
@@ -83,8 +75,8 @@ class BaseDatabaseTest(unittest.TestCase):
         connection.execute('commit')
 
         # drop test database created by previuos run (control + c case).
-        # connection.execute('DROP DATABASE {};'.format(self.postgres_test_db))
-        # connection.execute('commit')
+        connection.execute('DROP DATABASE {};'.format(self.postgres_test_db))
+        connection.execute('commit')
 
         # create test database
         query = 'CREATE DATABASE {} OWNER {} template template0 encoding \'UTF8\';'\
