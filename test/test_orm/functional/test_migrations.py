@@ -5,6 +5,8 @@ import fudge
 import os
 import pkgutil
 
+from sqlalchemy.pool import NullPool
+
 from ambry.orm.database import Database
 from ambry.orm import database
 from ambry.orm import migrations
@@ -100,7 +102,7 @@ class MigrationTest(BasePostgreSQLTest):
 
         # switch version and reconnect. Now both migrations should apply.
         with fudge.patched_context(database, 'SCHEMA_VERSION', 102):
-            db = Database(self.postgres_test_dsn)
+            db = Database(self.postgres_test_dsn, engine_kwargs={'poolclass': NullPool})
             try:
                 # check column created by migration 101.
                 db.connection.execute('SELECT column1 FROM datasets;').fetchall()

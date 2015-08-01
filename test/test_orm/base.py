@@ -3,6 +3,7 @@ import unittest
 from urlparse import urlparse
 
 from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 
 from ambry.run import get_runconfig
 
@@ -32,6 +33,7 @@ class BasePostgreSQLTest(unittest.TestCase):
         # drop test database
         if getattr(self, '_active_pg_connection', None):
             self._active_pg_connection.execute('rollback')
+            self._active_pg_connection.detach()
             self._active_pg_connection.close()
             self._active_pg_connection = None
 
@@ -50,8 +52,7 @@ class BasePostgreSQLTest(unittest.TestCase):
             raise Exception(MISSING_POSTGRES_CONFIG_MSG)
 
         # connect to postgres database because we need to create database for tests.
-        from sqlalchemy.pool import NullPool
-        engine = create_engine(self.postgres_dsn, poolclass=NullPool)
+        engine = create_engine(self.postgres_dsn)
         connection = engine.connect()
 
         # we have to close opened transaction.
@@ -71,7 +72,7 @@ class BasePostgreSQLTest(unittest.TestCase):
         connection.execute('commit')
         connection.close()
 
-        # now create connection for tests.
+        # now create connection for tests. Disable polling to make close() easier.
         self.pg_engine = create_engine(self.postgres_test_dsn, poolclass=NullPool)
         pg_connection = self.pg_engine.connect()
         self._active_pg_connection = pg_connection

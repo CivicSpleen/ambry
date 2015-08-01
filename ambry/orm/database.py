@@ -52,7 +52,8 @@ logger = get_logger(__name__)
 class Database(object):
     """ FIXME: """
 
-    def __init__(self, dsn, echo=False):
+    def __init__(self, dsn, echo=False, engine_kwargs=None):
+        """ FIXME: """
 
         self.dsn = dsn
 
@@ -60,6 +61,7 @@ class Database(object):
         self.path = d['path'].replace('//', '/')
 
         self.driver = d['scheme']
+        self.engine_kwargs = engine_kwargs or {}
 
         self.Session = None
         self._session = None
@@ -163,7 +165,7 @@ class Database(object):
             # Easier than constructing the pool
             # self._engine.pool._use_threadlocal = True
 
-            self._engine = create_engine(self.dsn, echo=self._echo)
+            self._engine = create_engine(self.dsn, echo=self._echo, **self.engine_kwargs)
 
             if self.driver == 'sqlite':
                 event.listen(self._engine, 'connect', _pragma_on_connect)
