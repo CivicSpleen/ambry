@@ -5,11 +5,11 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from collections import namedtuple
-import os
 import pkgutil
+import os
 
-from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.exc import NoResultFound
 
 from ambry.orm.exc import DatabaseError, DatabaseMissingError, NotFoundError, ConflictError
 
@@ -35,9 +35,6 @@ from ambry.orm.database import BaseMigration
 
 
 class Migration(BaseMigration):
-
-    # set is_ready to True to auto run the migration on next connect.
-    is_ready = False
 
     def _migrate_sqlite(self, connection):
         # connection.execute('ALTER table ...')
@@ -173,10 +170,10 @@ class Database(object):
                 event.listen(self._engine, 'connect', _pragma_on_connect)
                 # event.listen(self._engine, 'connect', _on_connect_update_schema)
                 # FIXME: remove _on_connect_update_sqlite_schema. Use _validate_version instead.
-                _on_connect_update_sqlite_schema(self.connection, None)
+                # _on_connect_update_sqlite_schema(self.connection, None)
 
             # FIXME: remove _on_connect_update_sqlite_schema and uncomment next line.
-            # _validate_version(self.connection)
+            _validate_version(self.connection)
 
         return self._engine
 
@@ -632,11 +629,11 @@ def _is_missed(connection, version):
     return get_stored_version(connection) < version
 
 
-def migrate(connection):
-    """ Collects all migrations and applies missed.
+def _get_all_migrations():
+    """ Returns sorted list of all migrations.
 
-    Args:
-        connection (sqlalchemy connection):
+    Returns:
+        list of (int, str) tuples: first elem of the tuple is migration number, second if module name.
 
     """
     import migrations
@@ -649,10 +646,21 @@ def migrate(connection):
         all_migrations.append((version, modname))
 
     all_migrations = sorted(all_migrations, key=lambda x: x[0])
+    return all_migrations
+
+
+def migrate(connection):
+    """ Collects all migrations and applies missed.
+
+    Args:
+        connection (sqlalchemy connection):
+
+    """
+    all_migrations = _get_all_migrations()
     logger.debug('Collected migrations: {}'.format(all_migrations))
 
     for version, modname in all_migrations:
-        if _is_missed(connection, version):
+        if _is_missed(connection, version) and version <= SCHEMA_VERSION:
             logger.info('Missed migration: {} migration is missed. Migrating...'.format(version))
             module = __import__(modname, fromlist='dummy')
 
@@ -663,14 +671,13 @@ def migrate(connection):
                 module.Migration().migrate(connection)
                 _update_version(connection, version)
                 trans.commit()
-            finally:
+            except:
                 trans.rollback()
+                raise
 
 
 class BaseMigration(object):
     """ Base class for all migrations. """
-
-    is_ready = False  # FIXME: Find better name.
 
     def migrate(self, connection):
         # use transactions

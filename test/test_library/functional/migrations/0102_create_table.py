@@ -7,7 +7,12 @@ from ambry.orm.database import BaseMigration
 class Migration(BaseMigration):
 
     def _migrate_sqlite(self, connection):
-        pass
+        query = '''
+            CREATE TABLE table1(
+                column1 INTEGER
+            );
+        '''
+        connection.execute(query)
 
     def _migrate_postgresql(self, connection):
         pass
