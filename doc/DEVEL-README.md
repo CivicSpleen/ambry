@@ -23,7 +23,6 @@ $ python setup.py test
 ### To run tests with coverage:
 
     1. Run with coverage
-    
 ```bash
 $ coverage run setup.py test
 ```
@@ -31,7 +30,6 @@ $ coverage run setup.py test
 ```bash
 $ coverage html
 ```
-
     3. Open htmlcov/index.html in the browser.
 
 ### To setup PostgreSQL for tests.
@@ -44,7 +42,6 @@ accounts:
 ```
 
 ### To change model's fields and appropriate database table (AKA migration):
-
     1. Change appropriate models.
     2. Make new empty migration
 ```bash
