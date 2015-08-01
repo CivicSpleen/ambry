@@ -384,33 +384,6 @@ class DatabaseTest(unittest.TestCase):
             self.sqlite_db._add_config_root()
         fudge.verify()
 
-    # ._clean_config_root tests
-    def tests_resets_instance_fields(self):
-        db = Database('sqlite://')
-        db.enable_delete = True
-        db.create_tables()
-
-        # prepare state
-        DatasetFactory._meta.sqlalchemy_session = db.session
-        ds = DatasetFactory(
-            id=ROOT_CONFIG_NAME, vid=ROOT_CONFIG_NAME_V,
-            name='name', vname='vname',
-            source='source', dataset='dataset',
-            revision=33)
-        db.session.commit()
-
-        db._clean_config_root()
-
-        # refresh dataset
-        ds = db.session.query(Dataset)\
-            .filter_by(id=ROOT_CONFIG_NAME)\
-            .one()
-        self.assertEquals(ds.name, ROOT_CONFIG_NAME)
-        self.assertEquals(ds.vname, ROOT_CONFIG_NAME_V)
-        self.assertEquals(ds.source, ROOT_CONFIG_NAME)
-        self.assertEquals(ds.dataset, ROOT_CONFIG_NAME)
-        self.assertEquals(ds.revision, 1)
-
     # .new_dataset test FIXME:
 
     # .root_dataset tests FIXME:
@@ -586,6 +559,18 @@ class IsMissedTest(unittest.TestCase):
     def test_returns_false_if_migration_applied(self, fake_stored):
         fake_stored.expects_call().returns(2)
         self.assertFalse(_is_missed(self.connection, 2))
+
+
+class GetStoredVersionTest(unittest.TestCase):
+
+    def setUp(self):
+        engine = create_engine('sqlite://')
+        self.connection = engine.connect()
+
+    def test_raises_DatabaseMissingError_if_unknown_engine_connection_passed(self):
+        with fudge.patched_context(self.connection.engine, 'name', 'foo'):
+            with self.assertRaises(DatabaseMissingError):
+                get_stored_version(self.connection)
 
 
 class MigrateTest(unittest.TestCase):
