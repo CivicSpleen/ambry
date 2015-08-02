@@ -13,7 +13,7 @@ filesystem:
     search: '{root}/search'
 
 library:
-  database: sqlite://
+  database: test-database
   warehouse: sqlite://
   remotes:
     test: 's3://devtest.sandiegodata.org/ambry10'
@@ -21,6 +21,8 @@ library:
     example: '{root}/example-remote'
 
 database:
+
+  test-database: sqlite://
 
   database1: sqlite:////foo/bar
   database2: postgres://user:pass@host/dbname

@@ -320,6 +320,7 @@ class RunConfig(object):
 
         return r
 
+
     def library(self):
         e = self.config['library']
 
@@ -329,17 +330,18 @@ class RunConfig(object):
         warehouse = e.get('warehouse', '').format(**fs),
 
         try:
-            database = self.database(database, missing_is_dsn=False)
+            database = self.database(database, missing_is_dsn=True, return_dsn=True)
         except:
-            pass
+            raise
 
         try:
-            warehouse = self.database(warehouse, missing_is_dsn=False)
+            warehouse = self.database(warehouse, missing_is_dsn=True, return_dsn=True)
         except:
             pass
 
-        return dict(database=database,warehouse=warehouse,remotes= self.remotes(e.get('remotes', {})))
+        d =  dict(database=database,warehouse=warehouse,remotes= self.remotes(e.get('remotes', {})))
 
+        return d
 
     def warehouse(self, name):
         from warehouse import database_config
@@ -362,7 +364,7 @@ class RunConfig(object):
 
         return e
 
-    def database(self, name, missing_is_dsn=False):
+    def database(self, name, missing_is_dsn=False, return_dsn = False):
 
         fs = self.group('filesystem')
         root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
@@ -377,30 +379,14 @@ class RunConfig(object):
 
         # If the value is a string rather than a dict, it is a DSN string
 
-        if isinstance(e, basestring):
-            from util import parse_url_to_dict
-
-            d = parse_url_to_dict(e)
-
-            e = dict(
-                server=d['hostname'],
-                dbname=d['path'].strip('/'),
-                driver=d['scheme'],
-                password=d.get('password', None),
-                username=d.get('username', None)
-            )
-
         try:
             e = e.to_dict()
         except AttributeError:
             pass  # Already a dict b/c converted from string
 
-        # Ensure that a few required keys exist, so the account check runs smoothly.
-        for key in ('username',):
-            if not key in e:
-                e[key] = None
+        config, dsn = normalize_dsn_or_dict(e)
 
-        if e.get('server') and not e.get('password'):
+        if config.get('server') and not config.get('password'):
 
             account = None
             fails = []
@@ -419,9 +405,14 @@ class RunConfig(object):
             #    print fail
 
             if account:
-                e.update(account)
+                config.update(account)
 
-        return e
+            config, dsn = normalize_dsn_or_dict(config)
+
+        if return_dsn:
+            return dsn
+        else:
+            return config
 
     @property
     def dict(self):
@@ -477,3 +468,90 @@ def mp_run(mp_run_args):
         print '==========^^^ MP Run Exception: {} pid = {} ==========='.format(args, os.getpid())
         raise
 
+
+def normalize_dsn_or_dict(d):
+    from util import parse_url_to_dict
+
+    if isinstance(d, dict):
+
+        try:
+            # Convert from an AttrDict to a real dict
+            d = d.to_dict()
+        except AttributeError:
+            pass  # Already a real dict
+
+        config = d
+        dsn = None
+
+    elif isinstance(d, basestring):
+        config = None
+        dsn = d
+
+    else:
+        raise ConfigurationError("Can't deal with database config '{}' type '{}' ".format(d, type(d)))
+
+    if dsn:
+
+        if dsn.startswith('sqlite') or dsn.startswith('spatialite'):
+            driver, path = dsn.split(':',1)
+
+            slashes, path = path[:2], path[2:]
+
+            if slashes != '//':
+                raise ConfigurationError("Sqlite DSNs must start with at least 2 slashes")
+
+            if len(path) == 1 and path[0] == '/':
+                raise ConfigurationError("Sqlite DSNs can't have only 3 slashes in path")
+
+            if len(path) > 1 and path[0] != '/':
+                raise ConfigurationError("Sqlite DSNs with a path must have 3 or 4 slashes.")
+
+            path = path[1:]
+
+            config=dict(
+                server=None,
+                username = None,
+                password = None,
+                driver = driver,
+                dbname = path
+            )
+        else:
+
+            d = parse_url_to_dict(dsn)
+
+            config = dict(
+                server=d['hostname'],
+                dbname=d['path'].strip('/'),
+                driver=d['scheme'],
+                password=d.get('password', None),
+                username=d.get('username', None)
+            )
+
+    else:
+
+        up = d.get('username', '') or ''
+
+        if d.get('password'):
+
+            up += ':' + d.get('password','')
+
+        if up:
+            up += "@"
+
+        if up and not d.get('server'):
+            raise ConfigurationError("Can't construct a DSN with a username or password without a hostname")
+
+        host_part = up + d.get('server','') if d.get('server') else ''
+
+        if d.get('dbname', False):
+            path_part =  '/'+d.get('dbname')
+
+            #if d['driver'] in ('sqlite3', 'sqlite', 'spatialite'):
+            #    path_part = '/' + path_part
+
+        else:
+            path_part = '' # w/ no dbname, Sqlite should use memory, which required 2 slash. Rel dir is 3, abs dir is 4
+
+        dsn = "{}://{}{}".format(d['driver'], host_part, path_part)
+
+    return config, dsn

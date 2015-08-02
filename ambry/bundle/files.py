@@ -416,6 +416,7 @@ class SourcesFile(RowBuildSourceFile):
         s = self._dataset._database.session
 
         for i, row in enumerate(non_empty_rows):
+
             if i == 0:
                 header = row
             else:
@@ -447,7 +448,7 @@ class SourcesFile(RowBuildSourceFile):
 
                 s.merge(ds)
 
-            self._dataset._database.commit()
+        self._dataset._database.commit()
 
     def objects_to_record(self):
         import msgpack
@@ -699,7 +700,7 @@ class BuildSourceFileAccessor(object):
             pref = preference if preference else f.record.preference
 
             if pref == File.PREFERENCE.FILE:
-                self._bundle.log("   Cleaning objects {}".format(file_const))
+                self._bundle.logger.debug("   Cleaning objects {}".format(file_const))
                 f.clean_objects()
 
             if pref in (File.PREFERENCE.FILE, File.PREFERENCE.MERGE):

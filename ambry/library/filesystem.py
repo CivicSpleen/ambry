@@ -93,7 +93,7 @@ class LibraryFilesystem():
 
             )
 
-            ssl.match_hostname = _old_match_hostname
+            #ssl.match_hostname = _old_match_hostname
 
             return s3
 

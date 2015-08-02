@@ -95,7 +95,7 @@ class Bundle(object):
 
         assert bool(library)
 
-        self._log_level = logging.INFO
+        self._log_level = logging.DEBUG
 
         self._errors = []
         self._warnings = []

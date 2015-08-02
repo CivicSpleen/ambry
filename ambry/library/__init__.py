@@ -13,17 +13,20 @@ logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 def new_library(config=None):
 
-
     from ..orm import Database
     from .filesystem import LibraryFilesystem
     from boto.exception import S3ResponseError  # the ckcache lib should return its own exception
+    from ..util import unparse_url_dict
 
     if config is None:
         from ..run import get_runconfig
         config = get_runconfig()
 
     lfs = LibraryFilesystem(config)
-    db = Database(config.library()['database'])
+
+    db_config = config.library()['database']
+
+    db = Database(db_config)
     warehouse = None
 
     l = Library(config=config,

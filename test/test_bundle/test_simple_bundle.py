@@ -60,7 +60,6 @@ class Test(TestBase):
         self.assertEquals(8, len(b.dataset.files))
         file_names = [f.path for f in b.dataset.files]
 
-        print file_names
         self.assertEqual([u'sources.csv', u'bundle.py', u'source_schema.csv', u'lib.py', u'meta.py',
                           u'documentation.md', u'bundle.yaml', u'schema.csv'], file_names)
 
@@ -73,18 +72,18 @@ class Test(TestBase):
         # Test preferences
         #
 
-        def muck_source_file(g, pos = 6):
+        def muck_source_file(g, val='grain'):
             """Alter the source_schema file"""
             import csv
             with b.source_fs.open('sources.csv', 'rb') as f:
                 rows = list(csv.reader(f))
 
-            rows[1][pos] = g
+            rows[1][rows[0].index(val)] = g
 
             with b.source_fs.open('sources.csv', 'wb') as f:
                 csv.writer(f).writerows(rows)
 
-        def source_file(pos=6):
+        def source_file(val='grain'):
             import csv
 
             with b.source_fs.open('sources.csv', 'rb') as f:
@@ -92,36 +91,28 @@ class Test(TestBase):
 
             self.assertEquals(2, len(rows))
 
-            return rows[1][pos]
+            return rows[1][rows[0].index(val)]
 
-        def file_record(pos=6):
+        def file_record(val='grain'):
             f = b.build_source_files.file(File.BSFILE.SOURCES).record
 
             rows = f.unpacked_contents
 
             self.assertEquals(2, len(rows))
 
-            return rows[1][pos]
+            return rows[1][rows[0].index(val)]
 
-        def muck_source_schema_object(g, pos=6):
+        def muck_source_object(g, val='grain'):
             """Alter the source_schema file"""
-            if pos == 6:
-                b.dataset.sources[0].grain = g
-            elif pos == 5:
-                b.dataset.sources[0].space = g
-            else:
-                raise Exception("Unknown pos")
 
-        def schema_object(pos=6):
+            setattr(list(b.sources)[0], val, g)
+
+        def source_object(val='grain'):
+
             try:
-                if pos == 6:
-                    return b.dataset.sources[0].grain
-                elif pos == 5:
-                    return b.dataset.sources[0].space
-                else:
-                    raise Exception("Unknown pos")
-
-            except IndexError:
+                s = list(b.sources)[0]
+                return getattr(s, val)
+            except IndexError: # Sources list is empty
                 return None
 
         def set_preference(p):
@@ -144,36 +135,36 @@ class Test(TestBase):
 
         self.assertEquals(v1, source_file())
         self.assertNotEquals(v1, file_record())
-        self.assertNotEquals(v1, schema_object())
+        self.assertNotEquals(v1, source_object())
 
         self.assertIn(('sources', 'ftr'), b.sync())
 
         self.assertEquals(v1,source_file())
         self.assertEquals(v1,file_record())
-        self.assertNotEquals(v1,schema_object())
+        self.assertNotEquals(v1,source_object())
 
         b.sync_in()
 
         self.assertEquals(v1,source_file())
         self.assertEquals(v1,file_record())
-        self.assertEquals(v1,schema_object())
+        self.assertEquals(v1,source_object())
 
-        muck_source_schema_object(v2)
+        muck_source_object(v2)
         self.assertEquals(v1,source_file())
         self.assertEquals(v1,file_record())
-        self.assertEquals(v2,schema_object())
+        self.assertEquals(v2,source_object())
 
         # Should overwrite the object with the file.
         b.sync_in()
         self.assertEquals(v1,source_file())
         self.assertEquals(v1,file_record())
-        self.assertEquals(v1,schema_object())
+        self.assertEquals(v1,source_object())
 
         # Run meta, alter the source file, then run meta again
         # The file should retain the change.
         muck_source_file(v4)
         sync_source_to_record()
-        muck_source_schema_object(v4)
+        muck_source_object(v4)
 
         b.sync()
         time.sleep(1) # Allow modification time to change
@@ -188,78 +179,79 @@ class Test(TestBase):
         set_preference(File.PREFERENCE.OBJECT)
         muck_source_file(v1)
         sync_source_to_record()
-        muck_source_schema_object(v1)
+        muck_source_object(v1)
 
         # Check that a reset works
         self.assertEquals(v1, source_file())
         self.assertEquals(v1, file_record())
-        self.assertEquals(v1, schema_object())
+        self.assertEquals(v1, source_object())
 
-        muck_source_schema_object(v2)
+        muck_source_object(v2)
         self.assertEquals(v1,source_file())
         self.assertEquals(v1,file_record())
-        self.assertEquals(v2,schema_object())
+        self.assertEquals(v2,source_object())
 
         # Prepare should move the object to the file record, not the
         # file record to the object
 
         b.sync_objects()
+
         self.assertEquals(v1,source_file())
         self.assertEquals(v2,file_record())
-        self.assertEquals(v2,schema_object())
+        self.assertEquals(v2,source_object())
 
         ##################
         # Alter the preference
         set_preference(File.PREFERENCE.OBJECT)
         muck_source_file(v1)
-        muck_source_file(v2,pos=5)
+        muck_source_file(v2,val='space')
         sync_source_to_record()
-        muck_source_schema_object(v1)
-        muck_source_schema_object(v2, pos=5)
+        muck_source_object(v1)
+        muck_source_object(v2, val='space')
 
         # Check that a reset works
         self.assertEquals(v1, source_file())
         self.assertEquals(v1, file_record())
-        self.assertEquals(v1, schema_object())
-        self.assertEquals(v2, source_file(pos=5))
-        self.assertEquals(v2, file_record(pos=5))
-        self.assertEquals(v2, schema_object(pos=5))
+        self.assertEquals(v1, source_object())
+        self.assertEquals(v2, source_file(val='space'))
+        self.assertEquals(v2, file_record(val='space'))
+        self.assertEquals(v2, source_object(val='space'))
 
         # Actually test the merging
 
         set_preference(File.PREFERENCE.MERGE)
         muck_source_file(v3)
         sync_source_to_record()
-        muck_source_schema_object(v1, pos=5)
+        muck_source_object(v1, val='space')
 
         self.assertEquals(v3, source_file())
         self.assertEquals(v3, file_record())
-        self.assertEquals(v1, schema_object())
+        self.assertEquals(v1, source_object())
 
-        self.assertEquals(v2, source_file(pos=5))
-        self.assertEquals(v2, file_record(pos=5))
-        self.assertEquals(v1, schema_object(pos=5))
+        self.assertEquals(v2, source_file(val='space'))
+        self.assertEquals(v2, file_record(val='space'))
+        self.assertEquals(v1, source_object(val='space'))
 
         # Ths last change happens during the prepare.
         def prepare_main(self):
-            muck_source_schema_object(v4, pos=5)
+            muck_source_object(v4, val='space')
             return True
 
         b.__class__.prepare_main = prepare_main
 
         # This should push the record to the objects, carrying v3 into the object in pos=6. Then, the
-        # end of the prepare phase should carry v4 in pos=5 back into the record. So, both the record
-        # and the object should have v3 in pos=6 and and v4 in pos=5
+        # end of the prepare phase should carry v4 in val='space' back into the record. So, both the record
+        # and the object should have v3 in pos=6 and and v4 in val='space'
 
         b.sync_objects()
         b.sync()
         self.assertEquals(v3, source_file())
         self.assertEquals(v3, file_record())
-        self.assertEquals(v3, schema_object()) # pre_prepare carried v3 to object
+        self.assertEquals(v3, source_object()) # pre_prepare carried v3 to object
 
-        self.assertEquals(v2, source_file(pos=5)) # source file won't change until sync
-        #self.assertEquals(v4, file_record(pos=5)) # TODO This one still fails ...
-        #self.assertEquals(v4, schema_object(pos=5))
+        self.assertEquals(v2, source_file(val='space')) # source file won't change until sync
+        #self.assertEquals(v4, file_record(val='space')) # TODO This one still fails ...
+        #self.assertEquals(v4, schema_object(val='space'))
 
     def test_schema_update(self):
         """Check that changes to the source schema persist across re-running meta"""
@@ -556,5 +548,3 @@ class Test(TestBase):
                     id_sum += row[0]
 
                 self.assertEqual(18003000, id_sum)
-
-
