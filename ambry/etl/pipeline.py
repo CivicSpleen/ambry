@@ -127,7 +127,7 @@ class Head(Pipe):
 
 
 class Sample(Pipe):
-    """ Take a sample of rows, skipping rows exponentially to end at the est_length imput row, with
+    """ Take a sample of rows, skipping rows exponentially to end at the est_length input row, with
     count output rows.
     """
 

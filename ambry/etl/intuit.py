@@ -1,7 +1,7 @@
 """Intuit data types for rows of values."""
 __author__ = 'eric'
 
-from collections import deque
+from collections import deque, OrderedDict
 import datetime
 
 from ambry.etl.pipeline import Pipe
@@ -18,6 +18,7 @@ def test_float(v):
     except:
         return 0
 
+
 def test_int(v):
     # Fixed-width integer codes are actually strings.
     # if v and v[0] == '0' and len(v) > 1:
@@ -31,11 +32,13 @@ def test_int(v):
     except:
         return 0
 
+
 def test_string(v):
     if isinstance(v, basestring):
         return 1
     else:
         return 0
+
 
 def test_datetime(v):
     """Test for ISO datetime."""
@@ -53,8 +56,8 @@ def test_datetime(v):
     for c in set(v):  # Set of Unique characters
         if not c.isdigit() and c not in 'T:-Z':
             return 0
-
     return 1
+
 
 def test_time(v):
     if not isinstance(v, basestring):
@@ -181,7 +184,6 @@ class Column(object):
 
                 return type_
 
-
     def _resolved_type(self):
         """Return the type for the columns, and a flag to indicate that the
         column has codes."""
@@ -189,7 +191,6 @@ class Column(object):
 
         self.type_ratios = {test: (float(self.type_counts[test]) / float(self.count)) if self.count else None
                             for test, testf in tests + [(None, None)]}
-
 
         if self.type_ratios[str] > .2:
             return str, False
@@ -230,8 +231,7 @@ class TypeIntuiter(Pipe):
     header = None
     counts = None
 
-    def __init__(self, skip_rows = 1):
-        from collections import OrderedDict
+    def __init__(self, skip_rows=1):
 
         self._columns = OrderedDict()
         self.skip_rows = skip_rows
@@ -252,7 +252,7 @@ class TypeIntuiter(Pipe):
             return
 
         try:
-            for i,value in enumerate(row):
+            for i, value in enumerate(row):
                 if i not in self._columns:
                     self._columns[i] = Column()
                     self._columns[i].position = i
@@ -265,11 +265,8 @@ class TypeIntuiter(Pipe):
             pass
 
     def __iter__(self):
-
         for i, row in enumerate(self.source_pipe):
-
-            self.process_row(i,row)
-
+            self.process_row(i, row)
             yield row
 
     def iterate(self, row_gen, max_n=None):
@@ -303,13 +300,11 @@ class TypeIntuiter(Pipe):
         results = self.results_table()
 
         if len(results) > 1:
-            o = '\n' + str(tabulate(results[1:],results[0], tablefmt="pipe"))
+            o = '\n' + str(tabulate(results[1:], results[0], tablefmt='pipe'))
         else:
             o = ''
 
         return qualified_class_name(self) + o
-
-
 
     def results_table(self):
 
@@ -335,7 +330,7 @@ class TypeIntuiter(Pipe):
         for v in self.columns:
 
             d = dict(
-                position = v.position,
+                position=v.position,
                 header=v.header,
                 length=v.length,
                 resolved_type=v.resolved_type,
@@ -352,6 +347,7 @@ class TypeIntuiter(Pipe):
             )
 
             yield d
+
 
 class RowIntuiter(Pipe):
     pass
