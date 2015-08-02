@@ -319,7 +319,6 @@ class Library(object):
 
             nf = File(**d)
 
-
             ds.files.append(nf)
 
         ds.commit()
@@ -386,8 +385,8 @@ class Library(object):
 
         remote = self.remote(remote_name)
 
-        #temp = fsopendir("temp://ambry-import", create_dir = True)
-        temp = fsopendir("/tmp/ambry-import", create_dir=True)
+        temp = fsopendir("temp://ambry-import", create_dir = True)
+        #temp = fsopendir("/tmp/ambry-import", create_dir=True)
 
         for fn in remote.walkfiles(wildcard='*.db'):
             temp.makedir(os.path.dirname(fn), recursive = True, allow_recreate=True)

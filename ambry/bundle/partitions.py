@@ -173,6 +173,7 @@ class Partitions(object):
             kwargs.update( (k,str(v)) for k,v in name.dict.items()
                            if k in [ e[0] for e in PartialPartitionName._name_parts] )
 
+
         p = self.bundle.dataset.new_partition(data=data,**kwargs)
 
         return PartitionProxy(self.bundle, p)

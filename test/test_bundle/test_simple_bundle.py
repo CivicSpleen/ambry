@@ -45,6 +45,8 @@ class Test(TestBase):
         self.assertEquals((4950, 14950), pl[Reduce].accumulator)
         self.assertEquals(14, len(pl[MatchPredicate].matches))
 
+        print pl
+
     def test_simple_process(self):
         """Build the simple bundle"""
         from ambry.orm.file import File

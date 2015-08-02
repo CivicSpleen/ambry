@@ -55,7 +55,6 @@ Pipeline:
            pipe_class = qualified_class_name(self.pipe), source_name = self.pipe.source.name,
            headers =  self.pipe.headers, header = self.header, table_name = self.table.name, table_columns = str(self.table))
 
-
 class Pipe(object):
     """A step in the pipeline"""
 
@@ -147,7 +146,6 @@ class Sink(Pipe):
             if count and i == count:
                 break
 
-
 class IterSource(Pipe):
     """Creates a source from an Iterator"""
 
@@ -170,10 +168,23 @@ class IterSource(Pipe):
         for row in itr:
             yield row
 
+class OnlySource(Pipe):
+    """Only allow iteration on a named source. """
 
+    def __init__(self, source_name):
+
+        self.source_name = source_name
+
+    def process_header(self, row):
+
+        if self.source.name != self.source_name:
+            raise StopIteration
+
+        self.headers = row
+        return row
 
 class Head(Pipe):
-    """ Pass-throughg only the first N rows
+    """ Pass-through only the first N rows
     """
 
     def __init__(self, count = 20):
@@ -229,6 +240,7 @@ class Ticker(Pipe):
 
     def process_header(self, row):
         print '== {} {} =='.format(self.source.name, self._name if self._name else '')
+        self.headers = row
         return row
 
 class AddHeader(Pipe):
@@ -253,7 +265,9 @@ class MapHeader(Pipe):
 
         rg = iter(self._source_pipe)
 
-        yield [ self._header_map.get(c,c) for c in rg.next() ]
+        self.headers =  [ self._header_map.get(c,c) for c in rg.next() ]
+
+        yield self.headers
 
         for row in rg:
             yield row
@@ -270,7 +284,7 @@ class MapToSourceTable(Pipe):
 
         if self.error_on_fail:
             try:
-                return list([m[h] for h in row])
+                self.headers =  list([m[h] for h in row])
             except KeyError:
                 for h in row:
                     if not h in m:
@@ -279,7 +293,9 @@ class MapToSourceTable(Pipe):
                                                   "Failed to find header in source_table ")
 
         else:
-            return list([m.get(h, h) for h in row])
+            self.headers = list([m.get(h, h) for h in row])
+
+        return self.headers
 
 class MangleHeader(Pipe):
     """"Alter the header so the values are well-formed, converting to alpjhanumerics and undersscores"""
@@ -316,9 +332,10 @@ class MangleHeader(Pipe):
 
         itr = iter(self.source_pipe)
 
-        self.headers = itr.next()
+        headers = itr.next()
 
-        yield(self.mangle_header(self.headers))
+        self.headers = self.mangle_header(headers)
+        yield self.headers
 
         while True:
             yield itr.next()
@@ -570,13 +587,14 @@ class RemoveBlankColumns(Pipe):
 
         if header_parts:
             self.editor = eval("lambda r: [{}]".format(','.join(header_parts)))
-            return self.editor(row)
+            self.headers = self.editor(row)
+            return self.headers
         else:
             self.process_body = lambda self,row: row
+            return row
 
     def process_body(self, row):
         return self.editor(row)
-
 
 class Skip(Pipe):
     """Skip rows of a table that match a predicate """
@@ -603,7 +621,6 @@ class Skip(Pipe):
         self.skipped = 0
         self.passed = 0
         self.ignored = 0
-
 
     def process_header(self, row):
 
@@ -691,7 +708,6 @@ class PrintRows(Pipe):
     def process_header(self, row):
         self.headers = row
 
-
         return row
 
     def __str__(self):
@@ -706,16 +722,16 @@ class PrintRows(Pipe):
         else:
             return (qualified_class_name(self)+' 0 rows')
 
-
 class PrintEvery(Pipe):
     """Print a row every N rows. Always prints the header. """
 
-    def __init__(self, N):
+    def __init__(self, N=1):
         self.N = N
         self.i = 0
 
     def process_header(self, row):
         print 'Print Header: ',row
+        self.headers = row
         return row
 
     def process_body(self, row):
@@ -753,7 +769,8 @@ class Reduce(Pipe):
         it = iter(self._source_pipe)
 
         # Yield the header
-        yield next(it)
+        self.headers =  next(it)
+        yield self.headers
 
         if self._initializer is None:
             try:
@@ -766,10 +783,6 @@ class Reduce(Pipe):
         for row in it:
             self.accumulator = self._f(self.accumulator, row)
             yield row
-
-
-
-
 
 def make_table_map(table, headers):
     """"Create a function to map from rows with the structure of the headers to the structure of the table. """
@@ -788,8 +801,10 @@ class SelectPartition(Pipe):
     partition a row is written to. By default, uses a partition name that consists of only the
      destination table of the source and a segment of the id of the source"""
 
-    def __init__(self, select_f=None):
+    def __init__(self, select_f=None, as_dict=False):
+
         self._default = None
+        self._as_dict = as_dict
 
         # Under the theory that removing an if is faster.
         if select_f:
@@ -798,19 +813,35 @@ class SelectPartition(Pipe):
         else:
             self.process_body = self.process_body_default
 
+
     def process_header(self, row):
         from ..identity import PartialPartitionName
         self._default = PartialPartitionName(table = self.source.dest_table_name, segment=self.source.id)
-        return row + ['_pname']
+        self.headers = row + ['_pname']
+        self._orig_headers = row
+        return self.headers
 
     def process_body(self, row):
+        """This method gets replaced by process_body_select() or process_body_default()"""
         raise NotImplemented("This function should be patched into nonexistence")
 
     def process_body_select(self, row):
+        from ambry.identity import PartialPartitionName
 
-        name = self.select_f(self.source, row)
+        if self._as_dict:
+            name = self.select_f(self.source, dict(zip(self.headers,row)))
+        else:
+            name = self.select_f(self.source, row)
+
+        # Name must be a dict
+        if not isinstance(name, PartialPartitionName):
+            name = PartialPartitionName(**name)
+
         if not name.segment:
-            name.segment = 1
+            name.segment = self.source.id
+
+        if not name.table:
+            name.table = self.source.dest_table_name
 
         return list(row) + [name]
 
@@ -1214,18 +1245,7 @@ class Pipeline(OrderedDict):
         for row in last:
             yield row
 
-    def headers_report(self):
-        """print out all of the headers"""
-        from ..util import qualified_class_name
-        out = []
-        chain, last = self._collect()
 
-        for pipe in chain:
-            if hasattr(pipe, 'headers'):
-                out.append(pipe.segment.name+' ' + qualified_class_name(pipe) +
-                           ': ' + unicode(pipe.headers))
-
-        return '\n'.format(self.name if self.name else '') + '\n'.join(out)
 
     def __str__(self):
 
@@ -1238,6 +1258,38 @@ class Pipeline(OrderedDict):
         out.append('final: '+str(self.final))
 
         return 'Pipeline {}\n'.format(self.name if self.name else '')+'\n'.join(out)
+
+    def headers_report(self):
+        from ambry.util import qualified_class_name
+        import tabulate
+
+        out = []
+        chain, last = self._collect()
+        for pipe in chain:
+
+            if not hasattr(pipe,'headers') or not pipe.headers:
+                continue
+
+            try:
+                seg_name = pipe.segment.name if hasattr(pipe,'segment') else '?'
+                v = [seg_name, qualified_class_name(pipe)]+[ str(e) for e in pipe.headers if e]
+                out.append(v)
+
+            except AttributeError:
+                pass
+
+        if not out:
+            return None
+
+        # Make all lines the same length
+        ll = max( len(e) for e in out)
+        for i in range(len(out)):
+            if len(out[i])< ll:
+                out[i] += ['']*(ll-len(out[i]))
+
+
+        return tabulate.tabulate(out)
+
 
 def augment_pipeline(pl, head_pipe = None, tail_pipe = None):
     """

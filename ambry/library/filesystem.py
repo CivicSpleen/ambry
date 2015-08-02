@@ -64,6 +64,7 @@ class LibraryFilesystem():
         r = self.remotes[name]
 
         # TODO: Hack the pyfilesystem fs.opener file to get credentials from a keychain
+        # https://github.com/boto/boto/issues/2836
         if r.startswith('s3'):
             from fs.s3fs import S3FS
             from ambry.util import parse_url_to_dict
@@ -84,12 +85,17 @@ class LibraryFilesystem():
 
             account = self._config.account(pd['netloc'])
 
-            return S3FS(
+            s3 =  S3FS(
                 bucket = pd['netloc'],
                 prefix = pd['path'],
                 aws_access_key = account['access'],
                 aws_secret_key = account['secret'],
 
             )
+
+            ssl.match_hostname = _old_match_hostname
+
+            return s3
+
         else:
             return fsopendir(r, create_dir = True)

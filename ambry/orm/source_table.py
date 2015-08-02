@@ -149,6 +149,7 @@ class SourceTable(Base):
 
         for c in self.columns:
             if c.source_header == source_header:
+                assert c.st_id == self.id
                 return c
         else:
             return None
@@ -162,16 +163,14 @@ class SourceTable(Base):
         :param kwargs:  Other source record args.
         :return:
         """
+        from sqlalchemy.orm import object_session
         c = self.column(source_header)
 
         if c:
             c.update(
                 position=position,
-                d_vid=self.d_vid,
                 datatype=datatype.__name__ if isinstance(datatype, type) else datatype,
-                source_header=source_header.strip(),
-                **kwargs
-            )
+                **kwargs )
 
         else:
             c = SourceColumn(

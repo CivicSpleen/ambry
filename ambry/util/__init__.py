@@ -1463,7 +1463,7 @@ def scrape_urls_from_web_page(page_url):
     html_page = urllib2.urlopen(page_url)
     soup = BeautifulSoup(html_page)
 
-    d = dict(external_documentation={}, sources={})
+    d = dict(external_documentation={}, sources={}, links={})
 
     for link in soup.findAll('a'):
 
@@ -1499,7 +1499,7 @@ def scrape_urls_from_web_page(page_url):
             fn, ext = base.split('.', 1)
         except ValueError:
             fn = base
-            ext = 'html'
+            ext = ''
 
         try:  # Yaml adds a lot of junk to encode unicode.
             fn = str(fn)
@@ -1510,11 +1510,12 @@ def scrape_urls_from_web_page(page_url):
 
         # xlsm is a bug that adss 'm' to the end of the url. No idea.
         if ext.lower() in ('zip', 'csv', 'xls', 'xlsx', 'xlsm', 'txt'):
-            d['sources'][fn] = dict(url=url, description=text,
-                                    )
+            d['sources'][fn] = dict(url=url, description=text)
+
         elif ext.lower() in ('pdf', 'html'):
             d['external_documentation'][fn] = dict(url=url, description=text, title=text)
+
         else:
-            pass
+            d['links'][text] = dict(url=url, description=text, title=text)
 
     return d

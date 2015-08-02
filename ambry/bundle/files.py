@@ -452,17 +452,11 @@ class SourcesFile(RowBuildSourceFile):
     def objects_to_record(self):
         import msgpack
 
-        rows = []
+        sorter = lambda r: ('A' if r['urltype'] == 'ref' else 'z' if r['urltype'] is None else r['urltype'], r['name'])
 
-        last_table = None
-        for source in self._dataset.sources:
+        rows = sorted([s.row for s in self._dataset.sources], key=sorter)
 
-            row = source.row
-
-            if not rows:
-                rows.append(row.keys())
-
-            rows.append(row.values())
+        rows = [rows[0].keys()] + [r.values() for r in rows]
 
         # Transpose trick to remove empty columns
         rows = zip(*[ row for row in zip(*rows) if bool(filter(bool,row[1:])) ])
@@ -614,6 +608,7 @@ class SourceSchemaFile(RowBuildSourceFile):
                 row['datatype'] = 'unknown'
 
             del row['table']
+
             st.add_column(**row) # Create or update
 
         if failures:
@@ -630,11 +625,10 @@ class SourceSchemaFile(RowBuildSourceFile):
         for table in self._dataset.source_tables:
 
             for column in table.columns:
-                row = column.row
-                if not rows:
-                    rows.append(row.keys())
+                rows.append(column.row)
 
-                rows.append(row.values())
+        if rows:
+            rows = [rows[0].keys()] + [r.values() for r in rows]
 
         bsfile.mime_type = 'application/msgpack'
         bsfile.update_contents(msgpack.packb(rows))
@@ -709,7 +703,7 @@ class BuildSourceFileAccessor(object):
                 f.clean_objects()
 
             if pref in (File.PREFERENCE.FILE, File.PREFERENCE.MERGE):
-                self._bundle.log("   rto {}".format(file_const))
+                self._bundle.logger.debug("   rto {}".format(file_const))
                 f.record_to_objects()
 
     def objects_to_record(self, preference=None):
@@ -722,7 +716,7 @@ class BuildSourceFileAccessor(object):
             pref = preference if preference else f.record.preference
 
             if pref in (File.PREFERENCE.MERGE, File.PREFERENCE.OBJECT):
-                self._bundle.log("   otr {}".format(file_const))
+                self._bundle.logger.debug("   otr {}".format(file_const))
                 f.objects_to_record()
 
     def sync(self, force = None, defaults = False):
@@ -738,19 +732,19 @@ class BuildSourceFileAccessor(object):
                 sync_info = (file_const, f.prepare_to_edit())
             elif force == f.SYNC_DIR.OBJECT_TO_FILE:
                 try:
-                    self._bundle.log("   otr {}".format(file_const))
+                    self._bundle.logger.debug("   otr {}".format(file_const))
                     f.objects_to_record()
-                    self._bundle.log("   rtf {}".format(file_const))
+                    self._bundle.logger.debug("   rtf {}".format(file_const))
                     sync_info = (file_const,f.sync(f.SYNC_DIR.RECORD_TO_FILE))
                 except AttributeError:
                     pass
             elif force == f.SYNC_DIR.FILE_TO_RECORD:
-                self._bundle.log("   ftr {}".format(file_const))
+                self._bundle.logger.debug("   ftr {}".format(file_const))
                 sync_info = (file_const, f.sync(force))
             else:
                 sync_info = (file_const, f.sync())
                 if sync_info[1]:
-                    self._bundle.log("   {} {}".format(sync_info[1],file_const))
+                    self._bundle.logger.debug("   {} {}".format(sync_info[1],file_const))
 
             syncs.append(sync_info)
 

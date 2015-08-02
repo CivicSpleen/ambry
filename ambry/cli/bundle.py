@@ -39,6 +39,7 @@ def get_bundle_ref(args,l):
     from ambry.identity import NotObjectNumberError
 
     cwd_bundle = os.path.join(os.getcwd(), 'bundle.yaml')
+
     if os.path.exists(cwd_bundle):
         import yaml
         with open(cwd_bundle) as f:
@@ -153,27 +154,6 @@ def bundle_parser(cmd):
     #
     command_p = sub_cmd.add_parser('sync', help='Sync with a source representation')
     command_p.set_defaults(subcommand='sync')
-    group = command_p.add_mutually_exclusive_group()
-    group.add_argument('-s', '--from-source', default=False, action="store_const",
-                            const = BuildSourceFile.SYNC_DIR.FILE_TO_RECORD, dest='sync_dir',
-                            help='Force sync from source to database')
-    group.add_argument('-d', '--from-database', default=False, action="store_const",
-                            const=BuildSourceFile.SYNC_DIR.RECORD_TO_FILE, dest='sync_dir',
-                            help='Source sync from database file records to source')
-    group.add_argument('-o', '--from-objects', default=False, action="store_const",
-                       const=BuildSourceFile.SYNC_DIR.OBJECT_TO_FILE, dest='sync_dir',
-                       help='Source sync from database objects to source')
-    group = command_p.add_mutually_exclusive_group()
-    group.add_argument('-F', '--record-to-object', default=False, action="store_const",
-                       const=File.PREFERENCE.FILE, dest='preference',
-                       help='Force loading objects from file records')
-    group.add_argument('-M', '--merge', default=False, action="store_const",
-                       const=File.PREFERENCE.MERGE, dest='preference',
-                       help='Load file records into objects, then write back to file records')
-    group.add_argument('-O', '--object-to-record', default=False, action="store_const",
-                       const=File.PREFERENCE.MERGE, dest='preference',
-                       help='Load file records from objects')
-    command_p.add_argument('-t', '--test', default=False, action="store_true", help='Only Report the directions of the next sync')
     command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
 
     #
@@ -230,6 +210,19 @@ def bundle_parser(cmd):
 
 
     #
+    # Phase Command
+    #
+    command_p = sub_cmd.add_parser('phase', help='Run a phase')
+    command_p.set_defaults(subcommand='phase')
+
+    command_p.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
+    command_p.add_argument('-s', '--sync', default=False, action="store_true",
+                           help='Syncrhonize before building')
+
+    command_p.add_argument('phase', nargs='?', type=str, help='Name of phase')
+    command_p.add_argument('source', nargs='?', type=str, help='Name of a single source')
+
+    #
     # Finalize Command
     #
     command_p = sub_cmd.add_parser('finalize', help='Finalize the bundle, preventing further changes')
@@ -267,6 +260,7 @@ def bundle_parser(cmd):
 
     command_p = sub_cmd.add_parser('run', help='Run a method on the bundle')
     command_p.set_defaults(subcommand='run')
+    command_p.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
     command_p.add_argument('method', metavar='Method', type=str, help='Name of the method to run')
     command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
 
@@ -461,7 +455,7 @@ def bundle_finalize(args, l, rc):
 def bundle_clean(args, l, rc):
     from ambry.bundle import Bundle
     b = using_bundle(args, l).cast_to_build_subclass()
-    b.do_clean()
+    b.clean()
     b.set_last_access(Bundle.STATES.NEW)
 
 def bundle_download(args, l, rc):
@@ -475,25 +469,8 @@ def bundle_sync(args, l, rc):
     from tabulate import tabulate
 
     b = using_bundle(args,l).cast_to_build_subclass()
-
-    prt("Bundle source filesystem: {}".format(b.source_fs))
-    prt("Sync direction: {}".format(args.sync_dir if args.sync_dir else 'latest'))
-
-    if args.preference in (File.PREFERENCE.OBJECT, File.PREFERENCE.MERGE):
-        prt("Loading objects into records")
-        b.build_source_files.objects_to_record(args.preference )
-
-    if args.test:
-        syncs = b.build_source_files.sync_dirs()
-    else:
-        syncs =  b.do_sync(args.sync_dir if args.sync_dir else None)
-
-    if args.preference in  (File.PREFERENCE.FILE, File.PREFERENCE.MERGE):
-        prt("Loading records into objects")
-        b.build_source_files.record_to_objects(args.preference )
-
-    print tabulate(syncs, headers="Key Direction".split())
-
+    b.sync_in()
+    b.sync_out()
     b.set_last_access(Bundle.STATES.SYNCED)
 
 def bundle_meta(args, l, rc):
@@ -518,13 +495,13 @@ def bundle_prepare(args, l, rc):
     if args.clean or args.sync:
         b = using_bundle(args, l).cast_to_build_subclass()
         if args.clean:
-            b.do_clean()
+            b.clean()
 
         if args.sync:
-            b.do_sync()
+            b.sync()
 
     b = using_bundle(args, l).cast_to_build_subclass()
-    b.do_prepare()
+    b.prepare()
 
 def bundle_build(args, l, rc):
     from ambry.bundle import Bundle
@@ -532,21 +509,30 @@ def bundle_build(args, l, rc):
     b = using_bundle(args, l).cast_to_build_subclass()
 
     if args.clean:
-        if not b.do_clean():
+        if not b.clean():
             b.error("Clean failed, not building")
             return False
 
-        if not b.do_prepare():
-            b.error("Prepare failed, not building")
-            return False
-
-    if not b.is_prepared:
-        if not b.do_prepare():
-            b.error("Prepare failed, not building")
-            return False
-
-    b.do_build(print_pipe=args.print_pipe)
+    b.sync_in()
+    b.build()
+    b.sync_out()
     b.set_last_access(Bundle.STATES.BUILT)
+
+def bundle_phase(args, l, rc):
+    from ambry.bundle import Bundle
+
+    b = using_bundle(args, l).cast_to_build_subclass()
+
+    if args.clean:
+        if not b.clean():
+            b.error("Clean failed, not building")
+            return False
+
+
+    b.sync_in()
+    b.run_phase(args.phase)
+    b.sync_out()
+    b.set_last_access(Bundle.STATES.META)
 
 def bundle_install(args, l, rc):
     raise NotImplementedError()
@@ -562,8 +548,10 @@ def bundle_run(args, l, rc):
 
     b = using_bundle(args, l)
 
-    b.do_sync()
+    if args.clean:
+        b.clean()
 
+    b.sync_in() # Must come before cast_to_meta_subclass
     b = b.cast_to_meta_subclass()
 
     b.load_requirements()
@@ -583,7 +571,9 @@ def bundle_run(args, l, rc):
 
     b.logger.info("Running: {}({})".format(str(args.method), ','.join(args.args)))
 
+
     r = f(*args.args)
+    b.sync_out()
 
     print "RETURN: ", r
 
@@ -814,7 +804,6 @@ def bundle_new(args, l, rc):
 
     from ambry.orm.exc import ConflictError
 
-
     d = dict(
          dataset= args.dataset,
          revision=args.revision,
@@ -1008,12 +997,12 @@ def bundle_edit(args, l, rc):
             elif command == 'build':
                 bc = b.cast_to_build_subclass()
                 if arg == 'p':
-                    bc.do_clean()
-                    bc.do_prepare()
+                    bc.clean()
+                    bc.prepare()
 
                 elif arg == 'B':
-                    bc.do_clean()
-                    bc.do_build()
+                    bc.clean()
+                    bc.build()
 
             elif command == 'unknown':
                 warn('Unknown command char: {} '.format(arg))

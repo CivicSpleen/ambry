@@ -86,8 +86,6 @@ class Bundle(object):
         },
     }
 
-
-
     def __init__(self, dataset, library, source_url=None, build_url=None):
         import logging
 
@@ -245,8 +243,8 @@ class Bundle(object):
 
         for source in self.dataset.sources:
 
-            # Dun't terate over references to other bundles
-            if source.ref:
+            # Don't iterate over references to other bundles
+            if source.urltype == 'ref':
                 continue
 
             source._cache_fs = self._library.download_cache
@@ -605,7 +603,7 @@ class Bundle(object):
         else:
             source = None
 
-        pl = Pipeline(self, source=source.source_pipe() if source else None)
+        pl = Pipeline(self, source=source.source_pipe(account_accessor=self.library.config.account) if source else None)
 
         try:
             phase_config = self.default_pipelines[phase]
@@ -782,8 +780,17 @@ class Bundle(object):
         import os
 
         self.build_fs.makedir('pipeline', allow_recreate=True)
-        self.build_fs.setcontents(os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt'),
-                                  unicode(pl), encoding='utf8')
+        v = """
+Pipeline
+========
+{}
+
+Pipeline Headers
+================
+{}
+""".format(unicode(pl), pl.headers_report())
+
+        self.build_fs.setcontents(os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt'),v, encoding='utf8')
 
     ##
     ## Meta

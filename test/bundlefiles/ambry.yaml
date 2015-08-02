@@ -20,6 +20,27 @@ library:
     test-orig: '{root}/test-remote'
     example: '{root}/example-remote'
 
+database:
+
+  database1: sqlite:////foo/bar
+  database2: postgres://user:pass@host/dbname
+  database3:
+    driver: postgres
+    username: user
+    password: pass
+    server: host
+    dbname: dbname
+  database4:
+    driver: postgres
+    server: host1
+    dbname: dbname
+  database5:
+    driver: postgres
+    server: host2
+    username: user2
+    dbname: dbname
+
+
 services:
     numbers:
         self-key:

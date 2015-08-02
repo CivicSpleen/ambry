@@ -35,6 +35,7 @@ class RunConfig(object):
 
     # Name of the evironmental var for the config file.
     AMBRY_CONFIG_ENV_VAR = 'AMBRY_CONFIG'
+    AMBRY_ACCT_ENV_VAR = 'AMBRY_ACCOUNTS'
 
     ROOT_CONFIG = '/etc/ambry.yaml'
     USER_CONFIG = (os.getenv(AMBRY_CONFIG_ENV_VAR)
@@ -48,7 +49,12 @@ class RunConfig(object):
     else:
         USER_CONFIG = os.path.expanduser('~/.ambry.yaml')
 
-    USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
+    if os.getenv(AMBRY_ACCT_ENV_VAR):
+        USER_ACCOUNTS = os.getenv(AMBRY_ACCT_ENV_VAR)
+    elif os.getenv('VIRTUAL_ENV') and os.path.exists(os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry-accounts.yaml')):
+        USER_ACCOUNTS = os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry-accounts.yaml')
+    else:
+        USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
 
     try:
         DIR_CONFIG = os.path.join(os.getcwd(), 'ambry.yaml')  # In webservers, there is no cwd
@@ -319,11 +325,20 @@ class RunConfig(object):
 
         fs = self.group('filesystem')
 
-        return dict(
-            database=e.get('database','').format(**fs),
-            warehouse=e.get('warehouse', '').format(**fs),
-            remotes= self.remotes(e.get('remotes', {}))
-        )
+        database = e.get('database','').format(**fs)
+        warehouse = e.get('warehouse', '').format(**fs),
+
+        try:
+            database = self.database(database, missing_is_dsn=False)
+        except:
+            pass
+
+        try:
+            warehouse = self.database(warehouse, missing_is_dsn=False)
+        except:
+            pass
+
+        return dict(database=database,warehouse=warehouse,remotes= self.remotes(e.get('remotes', {})))
 
 
     def warehouse(self, name):
@@ -369,34 +384,44 @@ class RunConfig(object):
 
             e = dict(
                 server=d['hostname'],
-                dbname=d['path'].rstrip('/'),
+                dbname=d['path'].strip('/'),
                 driver=d['scheme'],
                 password=d.get('password', None),
                 username=d.get('username', None)
             )
 
-            if e['server'] and not e['password']:
-                e['account'] = "{driver}://{username}@{server}/{dbname}".format(
-                    **e)
-
-        e = self._sub_strings(e, {'dbname': lambda k, v: v.format(root=root_dir),
-                                  'account': lambda k, v: self.account(v)})
-
-        # Copy account credentials into the database record, so there is consistent access
-        # pattern
-        if 'account' in e:
-            account = e['account']
-            if 'password' in account:
-                e['user'] = account['user']
-                e['password'] = account['password']
-
         try:
             e = e.to_dict()
         except AttributeError:
             pass  # Already a dict b/c converted from string
+
+        # Ensure that a few required keys exist, so the account check runs smoothly.
+        for key in ('username',):
+            if not key in e:
+                e[key] = None
+
+        if e.get('server') and not e.get('password'):
+
+            account = None
+            fails = []
+            for account_template in ("{server}-{username}-{dbname}","{server}-{dbname}", "{server}" ):
+                try:
+                    account_key = account_template.format(**e)
+                    account = self.account(account_key)
+                    if account:
+                        break
+                except KeyError:
+                    pass
+                except ConfigurationError as exc:
+                    fails.append((account_key, str(exc)))
+
+            #for fail in fails:
+            #    print fail
+
+            if account:
+                e.update(account)
+
         return e
-
-
 
     @property
     def dict(self):
