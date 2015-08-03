@@ -127,7 +127,7 @@ class File(Base, DictableMixin):
 
     @property
     def has_contents(self):
-        return self.size > 0
+        return self.size > 0 and self.unpacked_contents is not None
 
     @property
     def row(self):

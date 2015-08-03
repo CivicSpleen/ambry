@@ -93,7 +93,7 @@ def library_parser(cmd):
 
     sp = asp.add_parser('number', help='Return a new number from the number server')
     sp.set_defaults(subcommand='number')
-    sp.add_argument('-k', '--key', default=False, help="Set the number server key, or 'self' for self assignment ")
+    sp.add_argument('-k', '--key', default='self', help="Set the number server key, or 'self' for self assignment ")
 
 
 def library_command(args, rc):
@@ -339,7 +339,7 @@ def library_sync(args, l, config):
 
 def library_number(args, l, config):
 
-    l.number(assignment_class=args.key)
+    print l.number(assignment_class=args.key)
 
 def library_unknown(args, l, config):
     fatal("Unknown subcommand")

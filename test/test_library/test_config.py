@@ -1,6 +1,5 @@
 from test.test_base import TestBase
 
-
 class Test(TestBase):
 
     def get_rc(self, name='ambry.yaml'):
@@ -18,7 +17,6 @@ class Test(TestBase):
         # be good, but it makes testing hard.
 
         return rc
-
 
     def test_run_config_filesystem(self):
 
@@ -39,7 +37,6 @@ class Test(TestBase):
         import yaml
 
         rc = self.get_rc()
-
 
         def bf_dir(fn):
             return os.path.join(os.path.dirname(bundlefiles.__file__), fn)

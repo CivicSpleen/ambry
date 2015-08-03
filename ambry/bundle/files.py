@@ -41,7 +41,7 @@ class BuildSourceFile(object):
     SYNC_DIR.RECORD_TO_FILE = 'rtf'
     SYNC_DIR.OBJECT_TO_FILE = 'otf'
 
-    def __init__(self, dataset, filesystem, file_const):
+    def __init__(self, bundle, dataset, filesystem, file_const):
         """
         Construct a new Build Source File acessor
         :param dataset: The dataset that will hold File records
@@ -52,6 +52,7 @@ class BuildSourceFile(object):
 
         assert not isinstance(filesystem, basestring) # Old Datatypes are leaking through.
 
+        self._bundle = bundle
         self._dataset = dataset
         self._fs = filesystem
         self._file_const = file_const
@@ -333,18 +334,37 @@ class MetadataFile(DictBuildSourceFile):
 
     def objects_to_record(self):
         import yaml
+        from ambry.dbexceptions import ConfigurationError
+
         fr = self._dataset.bsfile(self._file_const)
 
         if fr.has_contents:
 
             o = fr.unpacked_contents
 
-            o['identity'] = self._dataset.identity.ident_dict
-            o['names'] = self._dataset.identity.names_dict
+        else:
+            o = yaml.safe_load(file_default(self._file_const))
 
-            with self._fs.open(file_name(self._file_const), 'wb') as f:
+            try:
+                act = self._bundle.library.config.account('ambry').to_dict()
 
-                yaml.safe_dump(o, f, default_flow_style=False, indent=4, encoding='utf-8')
+                if act:
+                    del act['_name']
+                    o['contacts']['creator'] = act
+
+            except ConfigurationError:
+                pass
+
+            print o
+
+        o['identity'] = self._dataset.identity.ident_dict
+        o['names'] = self._dataset.identity.names_dict
+
+        with self._fs.open(file_name(self._file_const), 'wb') as f:
+            yaml.safe_dump(o, f, default_flow_style=False, indent=4, encoding='utf-8')
+
+
+
 
 class PythonSourceFile(StringSourceFile):
 
@@ -457,10 +477,15 @@ class SourcesFile(RowBuildSourceFile):
 
         rows = sorted([s.row for s in self._dataset.sources], key=sorter)
 
-        rows = [rows[0].keys()] + [r.values() for r in rows]
+        if rows:
+            rows = [rows[0].keys()] + [r.values() for r in rows]
 
-        # Transpose trick to remove empty columns
-        rows = zip(*[ row for row in zip(*rows) if bool(filter(bool,row[1:])) ])
+            # Transpose trick to remove empty columns
+            rows = zip(*[ row for row in zip(*rows) if bool(filter(bool,row[1:])) ])
+        else:
+            # No contents, so use the default file
+            import csv
+            rows = list(csv.reader(file_default(self._file_const).splitlines()))
 
         bsfile = self._dataset.bsfile(self._file_const)
 
@@ -577,14 +602,19 @@ class SchemaFile(RowBuildSourceFile):
             rows.append([ None for e in rows[0]]) # Transpose trick fails if rows not all same size
 
         # Transpose trick to remove empty columns
-        rows_before_transpose = len(rows)
-        rows = zip(*[ row for row in zip(*rows) if bool(filter(bool,row[1:])) ])
+        if rows:
+            rows_before_transpose = len(rows)
+            rows = zip(*[ row for row in zip(*rows) if bool(filter(bool,row[1:])) ])
 
-        assert rows_before_transpose == len(rows)  # The transpose trick removes all of the rows if anything goes wrong
+            assert rows_before_transpose == len(rows)  # The transpose trick removes all of the rows if anything goes wrong
+
+        else:
+            # No contents, so use the default file
+            import csv
+            rows = list(csv.reader(file_default(self._file_const).splitlines()))
+
 
         bsfile = self._dataset.bsfile(self._file_const)
-
-
         bsfile.mime_type = 'application/msgpack'
         bsfile.update_contents(msgpack.packb(rows))
 
@@ -630,6 +660,11 @@ class SourceSchemaFile(RowBuildSourceFile):
 
         if rows:
             rows = [rows[0].keys()] + [r.values() for r in rows]
+
+        else:
+            # No contents, so use the default file
+            import csv
+            rows = list(csv.reader(file_default(self._file_const).splitlines()))
 
         bsfile.mime_type = 'application/msgpack'
         bsfile.update_contents(msgpack.packb(rows))
@@ -686,7 +721,7 @@ class BuildSourceFileAccessor(object):
 
         fc = file_class(const_name)
 
-        bsfile = fc(self._dataset, self._fs, const_name)
+        bsfile = fc(self._bundle, self._dataset, self._fs, const_name)
 
         return bsfile
 

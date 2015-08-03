@@ -157,8 +157,8 @@ class Library(object):
 
         b.set_last_access(Bundle.STATES.NEW)
 
-        b.set_file_system(source_url=self._fs.source(ds.name),
-                          build_url=self._fs.build(ds.name))
+        b.set_file_system(source_url=self._fs.source(b.identity.source_path),
+                          build_url=self._fs.build(b.identity.source_path))
 
         self._db.commit()
         return b

@@ -827,6 +827,7 @@ def bundle_new(args, l, rc):
 
         fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
 
+
     try:
         b = l.new_bundle(**d)
 

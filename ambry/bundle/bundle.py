@@ -82,7 +82,6 @@ class Bundle(object):
                 'log_pipeline',
                 'build_post_build_source'
             ]
-
         },
     }
 
@@ -95,7 +94,7 @@ class Bundle(object):
 
         assert bool(library)
 
-        self._log_level = logging.DEBUG
+        self._log_level = logging.INFO
 
         self._errors = []
         self._warnings = []
@@ -264,7 +263,6 @@ class Bundle(object):
         return BuildSourceFileAccessor(self, self.dataset, self.source_fs)
 
     @property
-    @memoize
     def source_fs(self):
         from fs.opener import fsopendir
         from fs.errors import ResourceNotFoundError
@@ -407,7 +405,7 @@ class Bundle(object):
         from ambry.bundle.files import BuildSourceFile
         syncs = self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
         self.build_source_files.record_to_objects()
-        self.state = self.STATES.SYNCED
+        #self.state = self.STATES.SYNCED
 
     def sync_objects_in(self):
         """Synchronize from records to objects"""
@@ -421,7 +419,7 @@ class Bundle(object):
         """Synchronize from objects to records"""
         self.build_source_files.objects_to_record()
         self.build_source_files.sync(BuildSourceFile.SYNC_DIR.RECORD_TO_FILE)
-        self.state = self.STATES.SYNCED
+        #self.state = self.STATES.SYNCED
 
 
     def sync_objects_out(self):
@@ -1105,9 +1103,12 @@ Pipeline Headers
 
         row = self.dataset.row(fields)
 
+        # Modify for special fields
         for i, f in enumerate(fields):
             if f == 'state':
                 row[i] = self.state
+            elif f == 'source_fs':
+                row[i] = self.source_fs
 
         return row
 

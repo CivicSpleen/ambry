@@ -46,8 +46,10 @@ def fatal(template, *args, **kwargs):
         global_logger.critical(template.format(*args, **kwargs))
     except KeyError:
         # When the error string is a template
-
         global_logger.critical(template.replace('{', '{{').replace('}', '}}').format(*args, **kwargs))
+    except:
+        # No idea ...
+        global_logger.critical(';'.join(str(e) for e in [ template ] + list(args) + list(kwargs.items())))
 
     sys.exit(1)
 
