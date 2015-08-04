@@ -698,16 +698,10 @@ def bundle_config_scrape(args, b, st, rc):
 
         # xlsm is a bug that adss 'm' to the end of the url. No idea.
         if ext.lower() in ('zip', 'csv', 'xls', 'xlsx', 'xlsm', 'txt'):
-            d['sources'][fn] = dict(
-                url=url,
-                description=text,
+            d['sources'][fn] = dict(url=url,description=text,
             )
         elif ext.lower() in ('pdf', 'html'):
-            d['external_documentation'][fn] = dict(
-                url=url,
-                description=text,
-                title=text
-            )
+            d['external_documentation'][fn] = dict(url=url,description=text,title=text)
         else:
 
             pass

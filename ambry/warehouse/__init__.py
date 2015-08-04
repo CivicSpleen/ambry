@@ -978,11 +978,15 @@ class Warehouse(object):
         if row:
             for i, (col_name, v) in enumerate(row.items(), 1):
 
+                c_id = None
                 try:
                     c_id, plain_name = col_name.split('_', 1)
                     cn = ObjectNumber.parse(c_id)
 
-                    orig_table = self.library.table(str(cn.as_table))
+                    try:
+                        orig_table = self.library.table(str(cn.as_table))
+                    except:
+                        orig_table = None
 
                     if not orig_table:
                         self.logger.error(
