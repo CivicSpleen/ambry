@@ -67,7 +67,6 @@ class Pipe(object):
         pass
 
     def __iter__(self):
-
         rg = iter(self._source_pipe)
 
         yield self.process_header(rg.next())
