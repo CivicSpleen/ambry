@@ -55,6 +55,9 @@ Pipeline:
            pipe_class = qualified_class_name(self.pipe), source_name = self.pipe.source.name,
            headers =  self.pipe.headers, header = self.header, table_name = self.table.name, table_columns = str(self.table))
 
+class StopPipe(Exception):
+    pass
+
 class Pipe(object):
     """A step in the pipeline"""
 
@@ -104,7 +107,9 @@ class Pipe(object):
 
         rg = iter(self._source_pipe)
 
-        yield self.process_header(rg.next())
+        self.headers = self.process_header(rg.next())
+
+        yield self.headers
 
         for row in rg:
             row =  self.process_body(row)
@@ -171,14 +176,19 @@ class IterSource(Pipe):
 class OnlySource(Pipe):
     """Only allow iteration on a named source. """
 
-    def __init__(self, source_name):
+    def __init__(self, sources):
 
-        self.source_name = source_name
+        if not isinstance(sources, (list, tuple)):
+            sources = [sources]
+        else:
+            sources = list(sources)
+
+        self.sources = sources
 
     def process_header(self, row):
 
-        if self.source.name != self.source_name:
-            raise StopIteration
+        if self.source.name not in self.sources:
+            raise StopPipe
 
         self.headers = row
         return row
@@ -240,18 +250,17 @@ class Ticker(Pipe):
 
     def process_header(self, row):
         print '== {} {} =='.format(self.source.name, self._name if self._name else '')
-        self.headers = row
         return row
 
 class AddHeader(Pipe):
     """Adds a header to a row file that doesn't have one, by returning the header for the first row. """
 
     def __init__(self, header):
-        self._header = header
+        self.headers = header
 
     def __iter__(self):
 
-        yield self._header
+        yield self.headers
 
         for row in self._source_pipe:
             yield row
@@ -284,7 +293,7 @@ class MapToSourceTable(Pipe):
 
         if self.error_on_fail:
             try:
-                self.headers =  list([m[h] for h in row])
+                headers =  list([m[h] for h in row])
             except KeyError:
                 for h in row:
                     if not h in m:
@@ -293,9 +302,9 @@ class MapToSourceTable(Pipe):
                                                   "Failed to find header in source_table ")
 
         else:
-            self.headers = list([m.get(h, h) for h in row])
+            headers = list([m.get(h, h) for h in row])
 
-        return self.headers
+        return headers
 
 class MangleHeader(Pipe):
     """"Alter the header so the values are well-formed, converting to alpjhanumerics and undersscores"""
@@ -472,9 +481,35 @@ class MergeHeader(Pipe):
         return qualified_class_name(self) + ': header = {} '.format(','.join(str(e) for e in self.header_lines))
 
 class AddDeleteExpand(Pipe):
-    """Edit rows as they pass through """
+    """Edit rows as they pass through
 
-    def __init__(self, add=[], delete=[], edit={}, expand={}):
+    The constructor can take four types of functions:
+
+    add: a list of headers, or a dict of functions, each of which will add a new column to the table
+    delete: A list of headers of columns to remove from the table
+    edit: A dict of functions to each the values in a row
+    expand: Like add, but adds multiple values.
+
+    Many of the arguments take a dict, with each key being the name of a header and the value being a function
+    to produce a value for the row. In all cases, the function signature is:
+
+        f(pipe, row, value)
+
+    However, the value is only set for edit entries
+
+    >>> pl = b.pipeline('source','dimensions')
+    >>> pl.last.append(AddDeleteExpand(
+    >>>     delete = ['time','county','state'],
+    >>>     add={ "a": lambda e,r: r[4], "b": lambda e,r: r[1]},
+    >>>     edit = {'stusab': lambda e,r,v: v.lower(), 'county_name' : lambda e,v: v.upper() },
+    >>>     expand = { ('x','y') : lambda e, r: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
+
+    The ``add`` argument may also take a list, which is the names of the headers to add. The column value will be None.
+
+
+    """
+
+    def __init__(self, add=[], delete=[], edit={}, expand={}, as_dict = False):
         """
 
         :param add: List of blank columns to add, by header name, or dict of headers and functions to create the column value
@@ -488,14 +523,21 @@ class AddDeleteExpand(Pipe):
         self.edit = edit
         self.expand = expand
 
+        self.as_dict = as_dict
+
         if isinstance(self.add, (list, tuple)):
             # Convert the list of headers into a sets of functins that
             # just produce None
             from collections import OrderedDict
-            self.add = OrderedDict( (k,lambda e,r: None)  for k in self.add)
+            self.add = OrderedDict( (k,lambda e,r,v: None) for k in self.add)
 
         self.edit_header = None
+        self.edit_header_code = None
         self.edit_row = None
+        self.edit_row_code = None
+        self.expand_row = None
+        self.expand_row_code = None
+
         self.edit_functions = None  # Turn dict lookup into list lookup
 
     def process_header(self, row):
@@ -510,7 +552,7 @@ class AddDeleteExpand(Pipe):
                 pass
             elif h in self.edit:
                 self.edit_functions[i] = self.edit[h]
-                row_parts.append('self.edit_functions[{i}](self,r[{i}])'.format(i=i))
+                row_parts.append('self.edit_functions[{i}](self,r, r[{i}])'.format(i=i))
                 header_parts.append('r[{}]'.format(i))
             else:
                 row_parts.append('r[{}]'.format(i))
@@ -520,7 +562,7 @@ class AddDeleteExpand(Pipe):
             self.edit_functions.append(f)
             i = len(self.edit_functions)-1
             assert self.edit_functions[i] == f
-            row_parts.append('self.edit_functions[{i}](self,r)'.format(i=i))
+            row_parts.append('self.edit_functions[{i}](self,r, None)'.format(i=i))
 
         # The expansions get tacked onto the end, after the adds.
         header_expansions = []
@@ -531,11 +573,12 @@ class AddDeleteExpand(Pipe):
             self.edit_functions.append(f)
             i = len(self.edit_functions) - 1
             assert self.edit_functions[i] == f
-            header_expansions += list(k)  # k must be a list or tauple or other iterable.
-            row_expanders.append('self.edit_functions[{i}](self,r)'.format(i=i))
+            header_expansions += list(k)  # k must be a list or tuple or other iterable.
+            row_expanders.append('self.edit_functions[{i}](self,r, None)'.format(i=i))
 
         if header_expansions:
-            self.expand_row = eval("lambda r,self=self: ({})".format('+'.join(row_expanders)))
+            self.expand_row_code = "lambda r,self=self: ({})".format('+'.join(row_expanders))
+            self.expand_row = eval(self.expand_row_code)
 
         # Maybe lookups in tuples is faster than in lists.
         self.edit_functions = tuple(self.edit_functions)
@@ -543,34 +586,78 @@ class AddDeleteExpand(Pipe):
         header_extra = ["'{}'".format(e) for e in (self.add.keys()+header_expansions) ]
 
         # Build the single function to edit the header or row all at once
-        self.edit_header = eval("lambda r: [{}]".format(',\n'.join(header_parts + header_extra)))
-        self.edit_row = eval("lambda r,self=self: [{}]".format(',\n'.join(row_parts )))
+        self.edit_header_code = "lambda r: [{}]".format(',\n'.join(header_parts + header_extra))
+        self.edit_header = eval(self.edit_header_code)
+        self.edit_row_code = "lambda r,self=self: [{}]".format(',\n'.join(row_parts ))
+        self.edit_row = eval(self.edit_row_code)
 
         # Run it!
-        self.header =  self.edit_header(row)
-        return self.header
+        return self.edit_header(row)
 
     def process_body(self, row):
 
-        return self.edit_row(row)+self.expand_row(row)
+        try:
+            r1 = self.edit_row(row)
+        except:
+            # Todo, put this into the exception
+            print "EDIT ROW CODE", self.edit_row_code
+            raise
+
+        try:
+            r2 = self.expand_row(row)
+        except:
+            # Todo, put this into the exception
+            print "EXPAND ROW CODE: ", self.expand_row_code
+            raise
+
+        return r1+r2
+
 
 class Add(AddDeleteExpand):
-
+    """Add fields to a row"""
     def __init__(self, add):
+        """Add fields using a dict of lambdas. THe new field is appended to the end of the row.
+
+        >>> pl = Pipeline()
+        >>> pl.last = Add({'source_id': lambda pipe,row: pipe.source.id })
+
+        """
         super(Add, self).__init__(add=add)
 
 class Expand(AddDeleteExpand):
-
-    def __init__(self,  expand):
-        super(Expand, self).__init__(expand=expand)
+    """Add columns to the header"""
+    def __init__(self,  expand, as_dict = False):
+        super(Expand, self).__init__(expand=expand, as_dict = as_dict)
 
 class Delete(AddDeleteExpand):
+    """Delete columns. """
     def __init__(self, delete):
         super(Delete, self).__init__(delete=delete)
 
 class Edit(AddDeleteExpand):
-    def __init__(self,  edit):
-        super(Edit, self).__init__(edit=edit)
+    def __init__(self,  edit, as_dict = False):
+        super(Edit, self).__init__(edit=edit, as_dict = as_dict)
+
+class Modify(Pipe):
+    """Base class to modify a whole row, as a dict. Does not modify the header. Uses a slower method
+    than other editing pipes. """
+
+    def __iter__(self):
+
+        from collections import OrderedDict
+
+        rg = iter(self._source_pipe)
+
+        self.headers = self.process_header(rg.next())
+
+        yield self.headers
+
+        for row in rg:
+
+            row = self.process_body(OrderedDict(zip(self.headers, row)))
+
+            if row:
+                yield row.values()
 
 class RemoveBlankColumns(Pipe):
     """Remove columns that don't have a header"""
@@ -587,8 +674,7 @@ class RemoveBlankColumns(Pipe):
 
         if header_parts:
             self.editor = eval("lambda r: [{}]".format(','.join(header_parts)))
-            self.headers = self.editor(row)
-            return self.headers
+            return self.editor(row)
         else:
             self.process_body = lambda self,row: row
             return row
@@ -630,8 +716,6 @@ class Skip(Pipe):
             self._check = True
         else:
             self._check = self.table == self.source.dest_table.name
-
-        self.headers = row
 
         return row
 
@@ -706,7 +790,6 @@ class PrintRows(Pipe):
         self.count += self.count_inc
 
     def process_header(self, row):
-        self.headers = row
 
         return row
 
@@ -731,7 +814,6 @@ class PrintEvery(Pipe):
 
     def process_header(self, row):
         print 'Print Header: ',row
-        self.headers = row
         return row
 
     def process_body(self, row):
@@ -816,10 +898,9 @@ class SelectPartition(Pipe):
 
     def process_header(self, row):
         from ..identity import PartialPartitionName
-        self._default = PartialPartitionName(table = self.source.dest_table_name, segment=self.source.id)
-        self.headers = row + ['_pname']
+        self._default = PartialPartitionName(table = self.source.dest_table.name, segment=self.source.id)
         self._orig_headers = row
-        return self.headers
+        return row + ['_pname']
 
     def process_body(self, row):
         """This method gets replaced by process_body_select() or process_body_default()"""
@@ -846,6 +927,7 @@ class SelectPartition(Pipe):
         return list(row) + [name]
 
     def process_body_default(self, row):
+
         return list(row) + [self._default]
 
 class PartitionWriter(object):
@@ -879,8 +961,6 @@ class WriteToPartition(Pipe, PartitionWriter):
 
     def process_header(self, row):
         import time
-
-        self.headers = row # Can't write until the first row tells us what the partition is
 
         if not '_pname' in row:
             raise PipelineError("Did not get a _pname header. The pipeline must insert a _pname value"
@@ -930,7 +1010,10 @@ class WriteToPartition(Pipe, PartitionWriter):
 
             p.datafile.insert_header(header_mapper(self.headers))
 
-        p.datafile.insert_body(body_mapper(row))
+        try:
+            p.datafile.insert_body(body_mapper(row))
+        except Exception as e:
+            self.bundle.logger.error("Insert failed: {}\n{}".format(row, e))
 
         return row
 
@@ -1030,7 +1113,7 @@ class Pipeline(OrderedDict):
     phase = None
     final = None
 
-    _group_names = ['source', 'first', 'body', 'augment', 'last', 'store', 'final' ]
+    _group_names = ['source', 'first', 'body', 'augment', 'intuit', 'last', 'store', 'final' ]
 
     def __init__(self, bundle = None,  *args, **kwargs):
 
@@ -1040,6 +1123,7 @@ class Pipeline(OrderedDict):
         super(Pipeline, self).__setattr__('name', None)
         super(Pipeline, self).__setattr__('phase', None)
         super(Pipeline, self).__setattr__('final', [])
+        super(Pipeline, self).__setattr__('stopped', False)
 
         for k, v in kwargs.items():
             if k not in self._group_names:
@@ -1072,7 +1156,8 @@ class Pipeline(OrderedDict):
         # Create a context for evaluating the code for each pipeline. This removes the need
         # to qualify the class names with the module
         import ambry.etl
-        eval_locals = dict(locals().items()  + ambry.etl.__dict__.items())
+        import bundle
+        eval_locals = dict(locals().items()  + ambry.etl.__dict__.items() + bundle.__dict__.items() )
 
         replacements = {}
 
@@ -1096,7 +1181,6 @@ class Pipeline(OrderedDict):
                     self.replace(eval_pipe(frm), eval_pipe(to))
             else:
                 self[segment_name] = [eval_pipe(pipe) for pipe in pipes ]
-
 
 
     def replace(self,repl_class, replacement):
@@ -1212,14 +1296,23 @@ class Pipeline(OrderedDict):
 
     def run(self, count=None, source_pipes = None):
 
-        if source_pipes:
-            for source_pipe in source_pipes:
+        try:
+            if source_pipes:
+                for source_pipe in source_pipes:
 
-                if self.bundle:
-                    self.bundle.logger.info("Running source {} in a multi-source run".format(source_pipe.source.name))
+                    if self.bundle:
+                        self.bundle.logger.info("Running source {} in a multi-source run".format(source_pipe.source.name))
 
-                self['source'] = [source_pipe] # Setting as a scalar appends, as a list will replace.
+                    self['source'] = [source_pipe] # Setting as a scalar appends, as a list will replace.
 
+                    chain, last = self._collect()
+
+                    sink = Sink(count=count)
+                    sink.set_source_pipe(last)
+
+                    sink.run()
+
+            else:
                 chain, last = self._collect()
 
                 sink = Sink(count=count)
@@ -1227,13 +1320,9 @@ class Pipeline(OrderedDict):
 
                 sink.run()
 
-        else:
-            chain, last = self._collect()
-
-            sink = Sink(count=count)
-            sink.set_source_pipe(last)
-
-            sink.run()
+        except StopPipe:
+            super(Pipeline, self).__setattr__('stopped', True)
+            pass
 
         return self
 

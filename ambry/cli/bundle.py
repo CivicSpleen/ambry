@@ -38,14 +38,8 @@ def get_bundle_ref(args,l):
     from ambry.orm.exc import NotFoundError
     from ambry.identity import NotObjectNumberError
 
-    cwd_bundle = os.path.join(os.getcwd(), 'bundle.yaml')
-
-    if os.path.exists(cwd_bundle):
-        import yaml
-        with open(cwd_bundle) as f:
-            config =  yaml.load(f)
-            id_ = config['identity']['id']
-            return (id_, 'directory')
+    if args.id:
+        return (args.id, '-i argument')
 
     try:
         if args.term:
@@ -54,21 +48,32 @@ def get_bundle_ref(args,l):
     except (AttributeError, NotFoundError, NotObjectNumberError):
         pass
 
-    if args.id:
-        return (args.id, '-i argument')
-    elif 'AMBRY_BUNDLE' in os.environ:
+    if 'AMBRY_BUNDLE' in os.environ:
         return (os.environ['AMBRY_BUNDLE'], 'environment')
-    else:
-        history = l.edit_history()
 
-        if history:
-            return (history[0].d_vid, 'history')
+    cwd_bundle = os.path.join(os.getcwd(), 'bundle.yaml')
+
+    if os.path.exists(cwd_bundle):
+        import yaml
+
+        with open(cwd_bundle) as f:
+            config = yaml.load(f)
+            id_ = config['identity']['id']
+            return (id_, 'directory')
+
+    history = l.edit_history()
+
+    if history:
+        return (history[0].d_vid, 'history')
 
     return None, None
 
 def using_bundle(args,l, print_loc = True):
 
     ref, frm = get_bundle_ref(args,l)
+
+    if not ref:
+        fatal("Didn't get a bundle ref from the -i option, history, environment or argument")
 
     if print_loc:
         prt('Using bundle ref {}, referenced from {}'.format(ref, frm))
@@ -106,7 +111,7 @@ def bundle_parser(cmd):
     sp.add_argument('-p', '--space', default=None, help='Spatial extent name')
     sp.add_argument('-v', '--variation', default=None, help='Name of the variation')
     sp.add_argument('-n', '--dryrun', action="store_true", default=False, help='Dry run')
-    sp.add_argument('-k', '--key', help='Number server key. Use \'self\' for a random, self-generated key.')
+    sp.add_argument('-k', '--key', default = 'self', help='Number server key. Use \'self\' for a random, self-generated key.')
     sp.add_argument('args', nargs=argparse.REMAINDER)  # Get everything else.
 
     #
@@ -482,6 +487,7 @@ def bundle_meta(args, l, rc):
         b.clean()
         b.set_last_access(Bundle.STATES.CLEANED)
 
+
     b.sync()
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
@@ -489,19 +495,7 @@ def bundle_meta(args, l, rc):
     b.meta()
     b.set_last_access(Bundle.STATES.META)
 
-def bundle_prepare(args, l, rc):
-    from ambry.bundle import Bundle
 
-    if args.clean or args.sync:
-        b = using_bundle(args, l).cast_to_build_subclass()
-        if args.clean:
-            b.clean()
-
-        if args.sync:
-            b.sync()
-
-    b = using_bundle(args, l).cast_to_build_subclass()
-    b.prepare()
 
 def bundle_build(args, l, rc):
     from ambry.bundle import Bundle
@@ -512,6 +506,8 @@ def bundle_build(args, l, rc):
         if not b.clean():
             b.error("Clean failed, not building")
             return False
+        b.set_last_access(Bundle.STATES.CLEANED)
+        b.commit()
 
     b.sync_in()
     b.build()
@@ -527,12 +523,15 @@ def bundle_phase(args, l, rc):
         if not b.clean():
             b.error("Clean failed, not building")
             return False
-
+        b.set_last_access(Bundle.STATES.META)
+        b.commit()
 
     b.sync_in()
     b.run_phase(args.phase)
     b.sync_out()
+
     b.set_last_access(Bundle.STATES.META)
+    b.commit()
 
 def bundle_install(args, l, rc):
     raise NotImplementedError()
@@ -540,7 +539,6 @@ def bundle_install(args, l, rc):
     b.install()
 
     return True
-
 
 def bundle_run(args, l, rc):
 
@@ -789,14 +787,9 @@ def bundle_config_scrape(args, b, st, rc):
     import yaml
     print yaml.dump(d, default_flow_style=False)
 
-
-
-
 def bundle_repopulate(args, b, st, rc):
     raise NotImplementedError()
     return b.repopulate()
-
-
 
 def bundle_new(args, l, rc):
     """Clone one or more registered source packages ( via sync ) into the
@@ -827,9 +820,8 @@ def bundle_new(args, l, rc):
 
         fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
 
-
     try:
-        b = l.new_bundle(**d)
+        b = l.new_bundle(assignment_class = args.key, **d)
 
     except ConflictError:
         fatal("Can't create dataset; one with a conflicting name already exists")
@@ -877,25 +869,20 @@ def bundle_export(args, l, rc):
 
     b = using_bundle(args,l)
 
+    if b.is_finalized:
+        fatal("Can't export a finalized bundle: state =  {}".format(b.state))
+
     if args.source:
-        source_dir = args.source
-    else:
-        import os
-        source_dir = os.getcwd()
+        source_dir = os.path.abspath(args.source)
 
-    if args.append:
-        source_dir = os.path.join(source_dir,b.identity.source_path)
+        if args.append:
+            source_dir = os.path.join(source_dir,b.identity.source_path)
 
-    source_dir = os.path.abspath(source_dir)
+        b.set_file_system(source_url=source_dir)
 
-    fs = fsopendir(source_dir, create_dir = True)
+    b.sync(force='rtf', defaults = args.defaults)
 
-    b.set_file_system(source_url=source_dir)
-
-    if not b.is_finalized:
-        b.sync(force='rtf', defaults = args.defaults)
-
-    prt("Exported bundle: {}".format(source_dir))
+    prt("Exported bundle: {}".format(b.source_fs))
 
 file_const_map = dict(
     b=File.BSFILE.BUILD,

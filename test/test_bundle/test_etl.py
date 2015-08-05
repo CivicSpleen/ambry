@@ -446,7 +446,7 @@ class Test(TestBase):
 
         b.sync_in()
         b = b.cast_to_build_subclass()
-        self.assertEquals('sync_done', b.state)
+        self.assertEquals('new', b.state)
 
         b.meta()
 
@@ -565,7 +565,7 @@ class Test(TestBase):
 
         b.sync_in()
         b = b.cast_to_build_subclass()
-        self.assertEquals('sync_done', b.state)
+        self.assertEquals('new', b.state)
         b.prepare()
         self.assertEquals('prepare_done', b.state)
 
@@ -597,7 +597,6 @@ class Test(TestBase):
         time.sleep(2) # Give modtimes a chance to change
         self.assertEqual(6, sum( e[1] == 'rtf' for e in b.sync() ))
 
-
     def test_pipe_config(self):
 
         b = self.setup_bundle('simple')
@@ -612,15 +611,14 @@ class Test(TestBase):
             config =  yaml.load(f)
 
         config['pipelines']['build'] = dict(
-            first=["Add({'a': lambda e,r: 1 }) "],
-            # dest_augment = "Edit( add = { 'a': lambda e,r: 1 }) ",
+            first=["Add({'a': lambda e,r,v: 1 }) "],
             last=["PrintRows(print_at='end')"],
             store=['SelectPartition','WriteToPartition']
         )
 
         config['pipelines']['source'] = [
             'MergeHeader',
-            "Add({'a': lambda e,r: 1 }) ",
+            "Add({'a': lambda e,r,v: 1 }) ",
             'TypeIntuiter()',
             'MangleHeader()',
         ]
@@ -663,23 +661,27 @@ class Test(TestBase):
         b.prepare()
 
         pl = b.pipeline('source','dimensions')
-        pl.last.append(AddDeleteExpand(delete = ['time','county','state'],
-                            add={ "a": lambda e,r: r[4], "b": lambda e,r: r[1]},
-                            edit = {'stusab': lambda e,v: v.lower(), 'county_name' : lambda e,v: v.upper() },
-                            expand = { ('x','y') : lambda e, r: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
+        pl.last.append(AddDeleteExpand(
+                            delete = ['time','county','state'],
+                            add={ "a": lambda e,r,v: r[4], "b": lambda e,r,v: r[1]},
+                            edit = {'stusab': lambda e,r,v: v.lower(), 'county_name' : lambda e,r,v: v.upper() },
+                            expand = { ('x','y') : lambda e, r, v: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
         pl.last.append(PrintRows)
         pl.last.prepend(PrintRows)
         # header: ['date', 'time', 'stusab', 'state', 'county', 'county_name']
 
         pl.run()
 
-        print str(pl)
 
         # The PrintRows Pipes save the rows they print, so lets check that the before doesn't have the edited
         # row and the after does.
         row = [9, u'2002-03-21', u'la', u'MARIPOSA COUNTY, CALIFORNIA', u'43', u'09:11:40 PM', 21, 11]
         self.assertNotIn(row, pl.last[0].rows)
         self.assertIn(row, pl.last[2].rows)
+
+        print pl.last[0]
+
+        print pl.last[2]
 
     def test_sample_head(self):
         from ambry.etl.pipeline import Pipeline, Pipe, PrintRows, Sample, Head

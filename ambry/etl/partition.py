@@ -10,13 +10,14 @@ import unicodecsv as csv
 from ambry.etl.pipeline import Sink, Pipe
 
 def new_partition_data_file(fs, path, stats = None):
+    from os.path import split, splitext
+
+    assert bool(fs)
 
     ext_map = {
         PartitionCsvDataFile.EXTENSION: PartitionCsvDataFile,
         PartitionMsgpackDataFile.EXTENSION: PartitionMsgpackDataFile
     }
-
-    from os.path import split, splitext
 
     dn, file_ext = split(path)
     fn, ext = splitext(file_ext)
@@ -41,6 +42,8 @@ class PartitionDataFile(object):
         """
 
         self._fs = fs
+
+        assert bool(self._fs)
 
         self._path = path
         self._nrows = 0
@@ -312,9 +315,9 @@ class PartitionMsgpackDataFileReader(object):
         import datetime
 
         if b'__datetime__' in obj:
-            obj = datetime.datetime.strptime(obj["as_str"], "%Y%m%dT%H:%M:%S.%f")
+            obj = datetime.datetime.strptime(obj["as_str"], "%Y-%m-%dT%H:%M:%S.%f")
         elif b'__date__' in obj:
-            obj = datetime.datetime.strptime(obj["as_str"], "%Y%m%d")
+            obj = datetime.datetime.strptime(obj["as_str"], "%Y-%m-%d").date()
         else:
             raise Exception("Unknown type on decode: {} ".format(obj))
 
@@ -331,6 +334,8 @@ class PartitionMsgpackDataFile(PartitionDataFile):
     EXTENSION = '.msg'
 
     def __init__(self, fs, path, stats=None, compress = True):
+
+        assert bool(fs)
 
         super(PartitionMsgpackDataFile, self).__init__(fs, path, stats)
 
@@ -393,9 +398,9 @@ class PartitionMsgpackDataFile(PartitionDataFile):
     def encode_obj(obj):
         import datetime
         if isinstance(obj, datetime.datetime):
-            return {'__datetime__': True, 'as_str': obj.strftime("%Y%m%dT%H:%M:%S.%f")}
+            return {'__datetime__': True, 'as_str': obj.isoformat()}
         if isinstance(obj, datetime.date):
-            return {'__date__': True, 'as_str': obj.strftime("%Y%m%d")}
+            return {'__date__': True, 'as_str': obj.isoformat()}
         else:
             raise Exception("Unknown type on encode: {}, {}".format(type(obj), obj))
 

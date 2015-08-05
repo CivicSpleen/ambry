@@ -384,7 +384,7 @@ class Test(TestBase):
         b = self.setup_bundle('complete-build')
         b.sync_in()
         b = b.cast_to_build_subclass()
-        self.assertEquals('sync_done', b.state)
+        self.assertEquals('new', b.state)
         self.assertTrue(b.meta())
 
         def edit_pipeline(pl):
@@ -396,7 +396,7 @@ class Test(TestBase):
             # Converting to the cesus geoid b/c they are just numbers, and when used in a partition name,
             # the names are lowercased, causing the case sensitive GVIDs to alias.
             pl.augment = AddDeleteExpand(
-                edit = {'triangle' : lambda e,v : 1}
+                edit = {'triangle' : lambda e,r,v : 1}
             )
 
             pl.last =  [PrintRows( print_at='end'), LogRate(prt, 3000,'')]

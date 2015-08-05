@@ -36,7 +36,7 @@ class Bundle(object):
     default_pipelines = {
         # Classifies rows in multi-header sources
         'rowintuit': {
-            'body':[
+            'intuit':[
                 ambry.etl.RowIntuiter
             ]
         },
@@ -45,6 +45,8 @@ class Bundle(object):
             'body' :[
                 ambry.etl.MergeHeader,
                 ambry.etl.MangleHeader,
+            ],
+            'intuit':[
                 ambry.etl.TypeIntuiter,
             ],
             'final': [
@@ -57,8 +59,10 @@ class Bundle(object):
             'body': [
                 ambry.etl.MergeHeader,
                 ambry.etl.MangleHeader,
-                ambry.etl.MapToSourceTable,
-                ambry.etl.TypeIntuiter
+                ambry.etl.MapToSourceTable
+            ],
+            'intuit': [
+                ambry.etl.TypeIntuiter,
             ],
             'final': [
                 'log_pipeline',
@@ -104,6 +108,9 @@ class Bundle(object):
 
         self._pipeline_editor = None # A function that can be set to edit the pipeline, rather than overriding the method
 
+        self._source_fs = None
+        self._build_fs = None
+
     def set_file_system(self, source_url=None, build_url=None):
         """Set the source file filesystem and/or build  file system"""
 
@@ -132,7 +139,11 @@ class Bundle(object):
         """
         from ambry.orm import File
         bsf = self.build_source_files.file(File.BSFILE.BUILD)
-        return self.cast_to_subclass(bsf.import_bundle())
+        try:
+            return self.cast_to_subclass(bsf.import_bundle())
+        except Exception as e:
+            self.error("Failed to load bundle code file, skipping : {}".format(e))
+            return self
 
     def cast_to_meta_subclass(self):
         """
@@ -144,7 +155,13 @@ class Bundle(object):
         from ambry.orm import File
 
         bsf = self.build_source_files.file(File.BSFILE.BUILDMETA)
-        return self.cast_to_subclass(bsf.import_bundle())
+
+        try:
+            return self.cast_to_subclass(bsf.import_bundle())
+        except Exception as e:
+            self.error("Failed to load meta code file, skipping : {}".format(e))
+            return self
+
 
     def import_lib(self):
         """Import the lib.py file from the bundle"""
@@ -267,30 +284,36 @@ class Bundle(object):
         from fs.opener import fsopendir
         from fs.errors import ResourceNotFoundError
 
-        source_url = self._source_url if self._source_url else self.dataset.config.library.source.url 
-        
-        if not source_url:
-            source_url = self.library.filesystem.source(self.identity.cache_key)
+        if not self._source_fs:
 
-        try:
-            return fsopendir(source_url)
-        except ResourceNotFoundError:
-            self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
-            source_url = self.library.filesystem.source(self.identity.cache_key)
-            return fsopendir(source_url)
+            source_url = self._source_url if self._source_url else self.dataset.config.library.source.url
+
+            if not source_url:
+                source_url = self.library.filesystem.source(self.identity.cache_key)
+
+            try:
+                self._source_fs =  fsopendir(source_url)
+            except ResourceNotFoundError:
+                self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
+                source_url = self.library.filesystem.source(self.identity.cache_key)
+                self._source_fs =  fsopendir(source_url)
+
+        return self._source_fs
 
     @property
-    @memoize
     def build_fs(self):
         from fs.opener import fsopendir
 
-        build_url = self._build_url if self._build_url else self.dataset.config.library.build.url
-        
-        if not build_url:
-            build_url = self.library.filesystem.build(self.identity.cache_key)
-            #raise ConfigurationError('Must set build URL either in the constructor or the configuration')
+        if not self._build_fs:
+            build_url = self._build_url if self._build_url else self.dataset.config.library.build.url
 
-        return fsopendir(build_url)
+            if not build_url:
+                build_url = self.library.filesystem.build(self.identity.cache_key)
+                #raise ConfigurationError('Must set build URL either in the constructor or the configuration')
+
+            self._build_fs =  fsopendir(build_url)
+
+        return self._build_fs
 
     def phase_search_names(self, source, phase):
         search = []
@@ -622,7 +645,6 @@ class Bundle(object):
                 pipe_name = name
                 break
 
-
         # The pipe_config can either be a list, in which case it is a list of pipe pipes for the body segment
         # or it could be a dict, in which case each is a list of pipes for the named segments.
 
@@ -678,6 +700,7 @@ class Bundle(object):
 
         self.import_lib()
 
+
         return True
 
     def phase_main(self, phase,  sources=None):
@@ -689,6 +712,7 @@ class Bundle(object):
         :return:
         """
         from ambry.orm.file import File
+        from ambry.etl.pipeline import StopPipe
 
         if self.is_finalized:
             self.error("Can't run phase {}; bundle is finalized".format(phase))
@@ -717,6 +741,9 @@ class Bundle(object):
             for m in pl.final:
                 self.log("Run final method {}".format(m))
                 getattr(self, m)(pl)
+
+            if pl.stopped:
+                break
 
         self.dataset.commit()
 
@@ -816,27 +843,38 @@ Pipeline Headers
 
         source = pl.source.source
         st = source.source_table
-        if not source.st_id:
-            for tic in ti.columns:
-                c = st.column(tic.header)
-                if c:
-                    c.datatype = TypeIntuiter.promote_type(c.datatype, tic.resolved_type)
-                else:
-                    st.add_column(tic.position, source_header=tic.header, dest_header=tic.header,
-                                               datatype=tic.resolved_type_name)
+
+        #if not source.st_id:
+        for tic in ti.columns:
+            c = st.column(tic.header)
+            if c:
+                c.datatype = TypeIntuiter.promote_type(c.datatype, tic.resolved_type)
+                self.log('Update column: {}.{}'.format(st.name, c.source_header ))
+            else:
+                c = st.add_column(tic.position, source_header=tic.header, dest_header=tic.header,
+                                            datatype=tic.resolved_type_name)
+                self.log('Created soruce table column: {}.{}'.format(st.name, c.source_header ))
 
     def meta_make_dest_tables(self, pl):
-
+        from ambry.etl.intuit import TypeIntuiter
+        from ambry.orm.source_table import SourceColumn
         source = pl.source.source
         dest = pl.source.source.dest_table
+        st = source.source_table
 
-        for c in source.source_table.columns:
+        col_type_map = SourceColumn.column_type_map
 
-            dest.add_column(name=c.dest_header, datatype =  c.column_datatype,
-                            derivedfrom=c.dest_header,
-                            summary=c.summary, description=c.description)
+        ti = pl[TypeIntuiter]
 
-    ##
+        for tic in ti.columns:
+            sc = st.column(tic.header)
+
+            dest.add_column(name=tic.header,
+                            datatype =  col_type_map[tic.resolved_type_name],
+                            summary=sc.summary if sc else None,
+                            description=sc.description if sc else None)
+
+            ##
     ## Build
     ##
 

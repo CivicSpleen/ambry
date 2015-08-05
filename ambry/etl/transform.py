@@ -297,6 +297,8 @@ class Transform(object):
 
         self.errors = None
 
+        self.dict_transform_code = None
+        self.row_transform_code = None
 
     def append(self, name, type_):
         self.types.append((name, type_))
@@ -359,14 +361,15 @@ class Transform(object):
             globals()[k] = v
 
         exec dtc
+        self.dict_transform_code = dtc
         self.dict_transform = locals()['dict_transform']
 
         exec rtc
+        self.row_transform_code = rtc
         self.row_transform = locals()['row_transform']
 
     def cast_error(self, type_, name, v, e):
         self.error_accumulator[name] = {'type':type_, 'value':v, 'exception':str(e)}
-
 
 class DictTransform(Transform):
 
@@ -428,7 +431,15 @@ class CasterPipe(Transform, Pipe, ):
     def process_body(self, row):
 
         self.error_accumulator = {} # Clear the accumulator
-        row = self.row_transform(self, row) # casters can call self.cast_error to add to the accmulator
+        try:
+            row = self.row_transform(self, row) # casters can call self.cast_error to add to the accmulator
+        except IndexError as e:
+            raise IndexError('Header has {} items, Row has {} items, caster has {}\nheaders= {}\ncaster = {}\nrow    = {}'
+                             .format(len(self.headers), len(row), len(self.types),
+                                     self.headers, [ e[0] for e in self.types], row))
+        except Exception as e:
+            raise e
+            return None
         if self.error_handler:
             row, self.error_accumulator = self.error_handler(row, self.error_accumulator)
         else:

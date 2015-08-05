@@ -389,6 +389,9 @@ class PythonSourceFile(StringSourceFile):
 
         exec bf.contents in bundle.__dict__
 
+        # print self._file_const, bundle.__dict__.keys()
+        # print bf.contents
+
         return bundle.Bundle
 
     def import_lib(self):
@@ -406,7 +409,8 @@ class PythonSourceFile(StringSourceFile):
 
         exec bf.contents in bundle.__dict__
 
-        #print '!!!', bundle.__dict__
+        #print self._file_const, bundle.__dict__.keys()
+        #print bf.contents
 
         return bundle
 
@@ -612,7 +616,6 @@ class SchemaFile(RowBuildSourceFile):
             # No contents, so use the default file
             import csv
             rows = list(csv.reader(file_default(self._file_const).splitlines()))
-
 
         bsfile = self._dataset.bsfile(self._file_const)
         bsfile.mime_type = 'application/msgpack'

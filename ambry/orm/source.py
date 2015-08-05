@@ -14,6 +14,7 @@ from sqlalchemy.orm import relationship
 from source_table import SourceTable
 from table import Table
 from . import Base,  DictableMixin
+from ambry.etl import Pipe
 
 class SourceError(Exception):
     pass
@@ -39,16 +40,20 @@ class DelayedOpen(object):
     def source_pipe(self):
         return self._source.row_gen()
 
-class SourceRowGen(object):
+class SourceRowGen(Pipe):
     """Holds a reference to a source record """
 
     def __init__(self, source, rowgen):
-        self.source = source
+        self._source = source
         self._rowgen = rowgen
 
     def __iter__(self):
         for row in self._rowgen:
             yield row
+
+    def __str__(self):
+        return super(SourceRowGen, self).__str__() +" source={} rowgen={}".format(self._source.name, type(self._rowgen))
+
 
 class DataSource(Base, DictableMixin):
     """A source of data, such as a remote file or bundle"""
@@ -381,6 +386,15 @@ def download(url, cache_fs, account_accessor=None):
             with cache_fs.open(cache_path, 'wb') as fout:
                 with s3.open(pd['path'], 'rb') as fin:
                     copy_file_or_flo(fin, fout)
+
+        elif url.startswith('ftp:'):
+            import shutil
+            import urllib2
+            from contextlib import closing
+
+            with closing(urllib2.urlopen(url)) as fin:
+                with cache_fs.open(cache_path, 'wb') as fout:
+                    shutil.copyfileobj(fin, fout)
 
         else:
 
