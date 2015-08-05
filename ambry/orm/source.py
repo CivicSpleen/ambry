@@ -8,13 +8,14 @@ __docformat__ = 'restructuredtext en'
 
 
 from sqlalchemy import Column as SAColumn
-from sqlalchemy import  Text, String, ForeignKey, INTEGER, UniqueConstraint
-from . import  MutationList, JSONEncodedObj
+from sqlalchemy import Text, String, ForeignKey, INTEGER, UniqueConstraint
+from . import MutationList, JSONEncodedObj
 from sqlalchemy.orm import relationship
 from source_table import SourceTable
 from table import Table
 from . import Base,  DictableMixin
 from ambry.etl import Pipe
+
 
 class SourceError(Exception):
     pass
@@ -66,7 +67,7 @@ class DataSource(Base, DictableMixin):
     name = SAColumn('ds_name', Text)
     title = SAColumn('ds_title', Text)
 
-    st_id = SAColumn('ds_st_id',INTEGER, ForeignKey('sourcetables.st_id'), nullable=True)
+    st_id = SAColumn('ds_st_id', INTEGER, ForeignKey('sourcetables.st_id'), nullable=True)
     source_table_name = SAColumn('ds_st_name', Text)
     _source_table = relationship(SourceTable, backref='sources')
 
@@ -84,19 +85,19 @@ class DataSource(Base, DictableMixin):
     header_lines = SAColumn('ds_header_lines', MutationList.as_mutable(JSONEncodedObj))
     description = SAColumn('ds_description', Text)
     file = SAColumn('ds_file', Text)
-    urltype = SAColumn('ds_urltype', Text) # null or zip
-    filetype = SAColumn('ds_filetype', Text) # tsv, csv, fixed
+    urltype = SAColumn('ds_urltype', Text)  # null or zip
+    filetype = SAColumn('ds_filetype', Text)  # tsv, csv, fixed
     encoding = SAColumn('ds_encoding', Text)
     url = SAColumn('ds_url', Text)
     ref = SAColumn('ds_ref', Text)
     hash = SAColumn('ds_hash', Text)
 
-    generator = SAColumn('ds_generator', Text) # class name for a Pipe to generator rows
+    generator = SAColumn('ds_generator', Text)  # class name for a Pipe to generator rows
 
     account_acessor = None
 
     __table_args__ = (
-        UniqueConstraint('ds_d_vid', 'ds_name', name='_uc_columns_1'),
+        UniqueConstraint('ds_d_vid', 'ds_name', name='_uc_ds_d_vid'),
     )
 
     def get_filetype(self):
@@ -363,7 +364,7 @@ def download(url, cache_fs, account_accessor=None):
 
     import os.path
     import requests
-    from ambry.util import copy_file_or_flo
+    from ambry.util.flo import copy_file_or_flo
     from ambry.util import parse_url_to_dict
 
     parsed = urlparse.urlparse(str(url))
@@ -407,6 +408,7 @@ def download(url, cache_fs, account_accessor=None):
 
 
 
+
 def make_excel_date_caster(file_name):
     """Make a date caster function that can convert dates from a particular workbook. This is required
     because dates in Excel workbooks are stupid. """
@@ -426,7 +428,7 @@ def make_excel_date_caster(file_name):
             return datetime.date(year, month, day)
         except ValueError:
             # Could be actually a string, not a float. Because Excel dates are completely broken.
-            from  dateutil import parser
+            from dateutil import parser
 
             try:
                 return parser.parse(v).date()
@@ -434,6 +436,7 @@ def make_excel_date_caster(file_name):
                 return None
 
     return excel_date
+
 
 def google_iter(source):
     import gspread
@@ -455,6 +458,3 @@ def google_iter(source):
 
     for row in wksht.get_all_values():
         yield row
-
-
-

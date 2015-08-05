@@ -1,7 +1,7 @@
 """Intuit data types for rows of values."""
 __author__ = 'eric'
 
-from collections import deque
+from collections import deque, OrderedDict
 import datetime
 
 from ambry.etl.pipeline import Pipe
@@ -254,12 +254,13 @@ class Column(object):
     def has_codes(self):
         return self._resolved_type()[1]
 
+
 class TypeIntuiter(Pipe):
     """Determine the types of rows in a table."""
     header = None
     counts = None
 
-    def __init__(self, skip_rows = 1):
+    def __init__(self, skip_rows=1):
         from collections import OrderedDict
 
         self._columns = OrderedDict()
@@ -281,7 +282,7 @@ class TypeIntuiter(Pipe):
             return
 
         try:
-            for i,value in enumerate(row):
+            for i, value in enumerate(row):
                 if i not in self._columns:
                     self._columns[i] = Column()
                     self._columns[i].position = i
@@ -294,11 +295,8 @@ class TypeIntuiter(Pipe):
             pass
 
     def __iter__(self):
-
         for i, row in enumerate(self.source_pipe):
-
-            self.process_row(i,row)
-
+            self.process_row(i, row)
             yield row
 
     def iterate(self, row_gen, max_n=None):
@@ -332,7 +330,7 @@ class TypeIntuiter(Pipe):
         results = self.results_table()
 
         if len(results) > 1:
-            o = '\n' + str(tabulate(results[1:],results[0], tablefmt="pipe"))
+            o = '\n' + str(tabulate(results[1:], results[0], tablefmt='pipe'))
         else:
             o = ''
 
@@ -387,7 +385,7 @@ class TypeIntuiter(Pipe):
         for v in self.columns:
 
             d = dict(
-                position = v.position,
+                position=v.position,
                 header=v.header,
                 length=v.length,
                 resolved_type=v.resolved_type_name,
@@ -406,4 +404,145 @@ class TypeIntuiter(Pipe):
             yield d
 
 class RowIntuiter(Pipe):
-    pass
+    header = None
+    comments = None
+    FIRST_ROWS = 20  # How many rows to keep in the top rows slice while looking for the comments and header.
+    LAST_ROWS = 20  # How many rows to keep in the last rows slice while looking for the last row with data.
+    SAMPLE_SIZE = 200  # How many rows to keep in the sample while recognizing data pattern.
+
+    def _matches(self, row, pattern):
+        """ Returns True if given row matches given patter.
+
+        Args:
+            row (list):
+            pattern (list of sets):
+
+        Returns:
+            bool: True if row matches pattern. False otherwise.
+
+        """
+        for i, e in enumerate(row):
+            # FIXME: Use TypeIntuiter
+            if type(e) not in pattern[i]:
+                return False
+        return True
+
+    def _find_data_lines(self, rows, data_pattern):
+        """ Finds first and last rows with data
+
+        Note: Assuming len(rows) == len(data_pattern)
+
+        Args:
+            rows (list):
+            data_pattern (list of sets):
+
+        Returns:
+            tuple of int, int: (first line index, last line index)
+        """
+
+        first_rows = rows[:self.FIRST_ROWS]  # The first 20 lines ( Header section )
+        last_rows = rows[-self.LAST_ROWS:]  # The last 20 lines ( Footer section )
+
+        first_line = None
+        last_line = None
+
+        # iterate header to find first line with data.
+        for i, row in enumerate(first_rows):
+            if self._matches(row, data_pattern):
+                first_line = i
+                break
+
+        # iterate footer from the end to find last row with data.
+        for i, row in enumerate(reversed(last_rows)):
+            if self._matches(row, data_pattern):
+                last_line = len(rows) - i
+                break
+
+        assert first_line is not None
+        assert last_line is not None
+        return first_line, last_line
+
+    def _find_header(self, first_rows, header_pattern):
+
+        MATCH_THRESHOLD = 0.4  # Ratio of the strings in the row to consider it as header.
+
+        for row in first_rows:
+            if self._matches(row, header_pattern):
+
+                str_matches = 0
+                for elem in row:
+                    if isinstance(elem, (str, unicode)):
+                        str_matches += 1
+                if float(str_matches) / float(len(row)) >= MATCH_THRESHOLD:
+                    return row
+        # FIXME: What should I do if header couldn't be found?
+
+    def _find_comments(self, first_rows, comments_pattern):
+        """ Finds comments in the rows using comments pattern.
+
+        Args:
+            first_rows: rows where to look for comments.
+            comments_pattern: pattern to match against to.
+
+        Returns:
+            list: list with comments or empty list if no comments found.
+        """
+        for row in first_rows:
+            if self._matches(row, comments_pattern):
+                # FIXME: should I join comments?
+                return row
+        return []
+
+    def _get_patterns(self, rows):
+        """ Finds comments, header and data patterns in the rows.
+
+        Args:
+            row (list):
+
+        Returns:
+            FIXME:
+
+        """
+        data_rows = rows[self.FIRST_ROWS:-self.LAST_ROWS]
+        data_sample = data_rows[:self.SAMPLE_SIZE]
+        data_pattern = [set() for x in range(len(data_rows[0]))]
+
+        for row in data_sample:
+            for i, column in enumerate(row):
+                # FIXME: Use TypeIntuiter instead of type()
+                data_pattern[i].add(type(column))
+
+        comments_pattern = [set() for x in range(len(rows[0]))]
+        for row in rows[:2]:
+            for i, column in enumerate(row):
+                # FIXME: Use TypeIntuiter instead of type()
+                comments_pattern[i].add(type(column))
+
+        header_pattern = [set([str, None]) for x in data_pattern]
+        return comments_pattern, header_pattern, data_pattern
+
+    def __iter__(self):
+        """ Generates rows with data.
+
+        Yields:
+            list
+
+        """
+
+        rows = list(self._source_pipe)
+
+        comments_pattern, header_pattern, data_pattern = self._get_patterns(rows)
+
+        # save comments
+        self.comments = self._find_comments(rows, comments_pattern)
+
+        # save header
+        self.header = self._find_header(rows, header_pattern)
+
+        # find data and generate data
+        first_line, end_line = self._find_data_lines(rows, data_pattern)
+
+        for row in rows[first_line:end_line]:
+            yield row
+
+        self.finish()

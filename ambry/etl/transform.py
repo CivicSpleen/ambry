@@ -5,9 +5,12 @@ Copyright (c) 2015 Civic Knowlege. This file is licensed under the terms of
 the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
-import textwrap
+import dateutil.parser as dp
+import datetime
 from functools import partial
 from pipeline import Pipe
+import textwrap
+
 
 class CasterError(Exception):
     pass
@@ -23,12 +26,14 @@ class CastingError(TypeError):
         self.field_name = field_name
         self.value = value
 
+
 def coerce_int(v):
     """Convert to an int, or return if isn't an int."""
     try:
         return int(v)
     except:
         return v
+
 
 def coerce_int_except(v, msg):
     """Convert to an int, throw an exception if it isn't."""
@@ -38,6 +43,7 @@ def coerce_int_except(v, msg):
     except:
         raise ValueError("Bad value: '{}'; {} ".format(v, msg))
 
+
 def coerce_float(v):
     """Convert to an float, or return if isn't an int."""
     try:
@@ -45,12 +51,14 @@ def coerce_float(v):
     except:
         return v
 
+
 def coerce_float_except(v, msg):
     """Convert to an float, throw an exception if it isn't."""
     try:
         return float(v)
     except:
         raise ValueError("Bad value: '{}'; {} ".format(v, msg))
+
 
 class PassthroughTransform(object):
 
@@ -68,6 +76,7 @@ class PassthroughTransform(object):
 
     def __call__(self, row):
         return self.f(row)
+
 
 class BasicTransform(object):
 
@@ -156,6 +165,7 @@ class Int(int):
         if self < 0:
             raise ValueError("Must be a non negative integer")
 
+
 class NonNegativeInt(int):
 
     '''An Integer that is >=0
@@ -166,6 +176,7 @@ class NonNegativeInt(int):
         if self < 0:
             raise ValueError("Must be a non negative integer")
 
+
 class NaturalInt(int):
 
     """An Integer that is > 0."""
@@ -174,6 +185,7 @@ class NaturalInt(int):
         int.__init__(self, v)
         if self <= 0:
             raise ValueError("Must be a greater than zero")
+
 
 def is_nothing(v):
 
@@ -184,6 +196,7 @@ def is_nothing(v):
         return True
     else:
         return False
+
 
 def parse_int(caster, name, v, type_=int):
     """Parse as an integer, or a subclass of Int."""
@@ -197,6 +210,7 @@ def parse_int(caster, name, v, type_=int):
         caster.cast_error(int, name, v, e)
         return None
 
+
 def parse_float(caster, name, v):
 
     try:
@@ -208,13 +222,16 @@ def parse_float(caster, name, v):
         caster.cast_error(float, name, v, e)
         return None
 
+
 def parse_str(caster, name, v):
     return str(v)
+
 
 def parse_unicode(caster, name, v):
     return unicode(v)
 
-def parse_type(type_,caster,  name, v):
+
+def parse_type(type_, caster,  name, v):
 
     try:
         if is_nothing(v):
@@ -225,10 +242,8 @@ def parse_type(type_,caster,  name, v):
         caster.cast_error(type_, name, v, e)
         return None
 
-def parse_date(caster, name, v):
-    import dateutil.parser as dp
-    import datetime
 
+def parse_date(caster, name, v):
     if is_nothing(v):
         return None
     elif isinstance(v, basestring):
@@ -241,12 +256,12 @@ def parse_date(caster, name, v):
     elif isinstance(v, datetime.date):
         return v
     else:
-        caster.cast_error(datetime.date, name, v,"Expected datetime.date or basestring, got '{}'".format(type(v)))
+        caster.cast_error(
+            datetime.date, name, v, "Expected datetime.date or basestring, got '{}'".format(type(v)))
         return None
 
+
 def parse_time(caster, name, v):
-    import dateutil.parser as dp
-    import datetime
     if is_nothing(v):
         return None
     elif isinstance(v, basestring):
@@ -262,9 +277,8 @@ def parse_time(caster, name, v):
         caster.cast_error(datetime.date, name, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
         return None
 
+
 def parse_datetime(caster, name, v):
-    import dateutil.parser as dp
-    import datetime
     if is_nothing(v):
         return None
     elif isinstance(v, basestring):
@@ -277,12 +291,14 @@ def parse_datetime(caster, name, v):
     elif isinstance(v, datetime.datetime):
         return v
     else:
-        caster.cast_error(datetime.date, name, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
+        caster.cast_error(
+            datetime.date, name, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
         return None
+
 
 class Transform(object):
 
-    def __init__(self, error_handler = None):
+    def __init__(self, error_handler=None):
         self.types = []
         self._compiled = None
         self.custom_types = {}
@@ -312,7 +328,6 @@ class Transform(object):
         self.compile()
 
     def make_transform(self):
-        import datetime
 
         o = []
 
@@ -321,13 +336,11 @@ class Transform(object):
             if type_ == str:
                 type_ = unicode
 
-            if type_ in [datetime.date, datetime.time, datetime.datetime, int, float, str, unicode ]:
+            if type_ in [datetime.date, datetime.time, datetime.datetime, int, float, str, unicode]:
                 o.append((i, name, 'parse_{}'.format(type_.__name__)))
 
             else:
                 o.append((i, name, 'partial(parse_type,{})'.format(type_.__name__)))
-
-            c = []
 
         dict_transform = """def dict_transform(caster, row):
 
@@ -336,8 +349,8 @@ class Transform(object):
         from functools import partial
         from ambry.etl.transform import parse_date, parse_time, parse_datetime
 
-        return {{{}}}""".format(','.join("'{name}':{func}(caster, '{name}', row.get('{name}'))".format(i=i, name=name,func=v)
-                                         for i,name,v in o))
+        return {{{}}}""".format(','.join("'{name}':{func}(caster, '{name}', row.get('{name}'))".format(i=i, name=name, func=v)
+                                         for i, name, v in o))
 
         row_transform = """def row_transform(caster, row):
 
@@ -347,7 +360,7 @@ class Transform(object):
         from ambry.etl.transform import parse_date, parse_time, parse_datetime
 
         return [{}]""".format(
-            ','.join("{func}(caster, {i}, row[{i}])".format(i=i, name=name,func=v) for i, name, v in o))
+            ','.join("{func}(caster, {i}, row[{i}])".format(i=i, name=name, func=v) for i, name, v in o))
 
         return dict_transform,  row_transform
 
@@ -355,7 +368,7 @@ class Transform(object):
         # import uuid
 
         # Get the code in string form.
-        dtc,  rtc  = self.make_transform()
+        dtc, rtc = self.make_transform()
 
         for k, v in self.custom_types.items():
             globals()[k] = v
@@ -369,7 +382,7 @@ class Transform(object):
         self.row_transform = locals()['row_transform']
 
     def cast_error(self, type_, name, v, e):
-        self.error_accumulator[name] = {'type':type_, 'value':v, 'exception':str(e)}
+        self.error_accumulator[name] = {'type': type_, 'value': v, 'exception': str(e)}
 
 class DictTransform(Transform):
 
@@ -383,6 +396,7 @@ class DictTransform(Transform):
 
         return row, self.error_accumulator
 
+
 class ListTransform(Transform):
 
     def __call__(self, row):
@@ -391,13 +405,14 @@ class ListTransform(Transform):
         self.error_accumulator = {}
         row = self.row_transform(self, row)
         if self.error_handler:
-            row,self.error_accumulator  = self.error_handler(row, self.error_accumulator)
+            row, self.error_accumulator = self.error_handler(row, self.error_accumulator)
 
         return row, self.error_accumulator
 
+
 class CasterPipe(Transform, Pipe, ):
 
-    def __init__(self, table = None, error_handler=None):
+    def __init__(self, table=None, error_handler=None):
         super(CasterPipe, self).__init__(error_handler)
         self.errors = []
         self.table = table
@@ -410,7 +425,7 @@ class CasterPipe(Transform, Pipe, ):
         else:
             table = self.source.dest_table
 
-        cm = { c.name: c for c in table.columns}
+        cm = {c.name: c for c in table.columns}
 
         for h in self.headers:
 

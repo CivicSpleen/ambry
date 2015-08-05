@@ -611,7 +611,7 @@ class Test(TestBase):
             config =  yaml.load(f)
 
         config['pipelines']['build'] = dict(
-            first=["Add({'a': lambda e,r,v: 1 }) "],
+            augment=["Add({'a': lambda e,r,v: 1 }) "],
             last=["PrintRows(print_at='end')"],
             store=['SelectPartition','WriteToPartition']
         )
@@ -622,6 +622,11 @@ class Test(TestBase):
             'TypeIntuiter()',
             'MangleHeader()',
         ]
+
+        config['pipelines']['schema'] = dict(
+            augment=["Add({'a': lambda e,r,v: 1 }) "],
+        )
+
 
         with b.source_fs.open('bundle.yaml', 'wb') as f:
             yaml.dump(config, f)
@@ -640,6 +645,8 @@ class Test(TestBase):
 
         p = list(b.partitions)[0]
         self.assertEquals(10001, len(list(p.stream())))
+
+        print b.build_fs.getcontents('/pipeline/build-simple.txt')
 
         for i, row in enumerate(p.stream()):
 

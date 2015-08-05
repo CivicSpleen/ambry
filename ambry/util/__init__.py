@@ -6,27 +6,39 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from __future__ import print_function
-import collections
+import os
+from functools import partial
+from collections import OrderedDict, defaultdict, Mapping, deque, MutableMapping
+
 import functools
 from itertools import ifilterfalse
+import json
 from heapq import nsmallest
+import hashlib
 from operator import itemgetter
 import logging
-from collections import OrderedDict, defaultdict, Mapping
-
+import math
+import pprint
+import re
+import sys
+from time import time
 import yaml
-
-from flo import *  # Legacy; should convert clients to direct import
 
 logger_init = set()
 
 
-def get_logger(name, file_name=None, stream=None, template=None, propagate=False, level=logging.INFO):
+def get_logger(name, file_name=None, stream=None, template=None, propagate=False, level=None):
     """Get a logger by name.
 
     """
 
     logger = logging.getLogger(name)
+    if 'test' in sys.argv and not level:
+        # testing without level, this means user does not want to see any log messages.
+        level = logging.CRITICAL
+
+    if not level:
+        level = logging.INFO
     logger.setLevel(level)
     logger.propagate = propagate
 
@@ -78,22 +90,19 @@ def memoize(obj):
 
 def expiring_memoize(obj):
     """Like memoize, but forgets after 10 seconds."""
-    from collections import defaultdict
 
     cache = obj.cache = {}
     last_access = obj.last_access = defaultdict(int)
 
     @functools.wraps(obj)
     def memoizer(*args, **kwargs):
-        import time
-
         key = str(args) + str(kwargs)
 
-        if last_access[key] and last_access[key] + 10 < time.time():
+        if last_access[key] and last_access[key] + 10 < time():
             if key in cache:
                 del cache[key]
 
-        last_access[key] = time.time()
+        last_access[key] = time()
 
         if key not in cache:
             cache[key] = obj(*args, **kwargs)
@@ -132,10 +141,9 @@ def lru_cache(maxsize=128, maxtime=60):
             tuple=tuple,
             sorted=sorted,
             KeyError=KeyError):
-        from time import time
 
         cache = {}  # mapping of args to results
-        queue = collections.deque()  # order that keys have been used
+        queue = deque()  # order that keys have been used
         refcount = Counter()  # times each key is in the queue
         sentinel = object()  # marker for looping around the queue
         kwd_mark = object()  # separate positional and keyword args
@@ -564,8 +572,6 @@ class AttrDict(OrderedDict):
         try:
             yaml.safe_dump(d, stream, default_flow_style=False, indent=4, encoding='utf-8')
         except RepresenterError:
-            import pprint
-
             pprint.pprint(self.to_dict())
             raise
 
@@ -573,15 +579,11 @@ class AttrDict(OrderedDict):
             return stream.getvalue()
 
     def json(self):
-        import yaml
-        import json
-
         o = yaml.load(self.dump())
-
         return json.dumps(o)
 
 
-class MapView(collections.MutableMapping):
+class MapView(MutableMapping):
     """A map that provides a limited view on an underlying, inner map. Iterating over the
     view retrns only the keys specified in the keys argument. """
 
@@ -741,7 +743,6 @@ def zip_dir(dir, file_):
 
 
 def md5_for_stream(f, block_size=2 ** 20):
-    import hashlib
 
     md5 = hashlib.md5()
 
@@ -758,7 +759,6 @@ def md5_for_stream(f, block_size=2 ** 20):
 def md5_for_file(f, block_size=2 ** 20):
     """Generate an MD5 has for a possibly large file by breaking it into
     chunks."""
-    import hashlib
 
     md5 = hashlib.md5()
     try:
@@ -783,16 +783,12 @@ def md5_for_file(f, block_size=2 ** 20):
 
 def rd(v, n=100.0):
     """Round down, to the nearest even 100."""
-    import math
-
     n = float(n)
     return math.floor(v / n) * int(n)
 
 
 def ru(v, n=100.0):
     """Round up, to the nearest even 100."""
-    import math
-
     n = float(n)
     return math.ceil(v / n) * int(n)
 
@@ -808,7 +804,7 @@ def make_acro(past, prefix, s):
     """
 
     def _make_acro(s, t=0):
-        import re
+
         # Really should cache these ...
         v = ['a', 'e', 'i', 'o', 'u', 'y']
         c = [chr(x) for x in range(ord('a'), ord('z') + 1) if chr(x) not in v]
@@ -961,9 +957,6 @@ def init_log_rate(output_f, N=None, message='', print_rate=None):
     emit print_rate messages per second
 
     """
-    from collections import deque
-    import time
-    from functools import partial
 
     if print_rate and not N:
         N = 100
@@ -972,7 +965,7 @@ def init_log_rate(output_f, N=None, message='', print_rate=None):
         N = 5000
 
     d = [0,  # number of items processed
-         time.time(),  # start time. This one gets replaced after first message
+         time(),  # start time. This one gets replaced after first message
          N,  # ticker to next message
          N,  # frequency to log a message
          message,
@@ -996,21 +989,19 @@ def _log_rate(output_f, d, message=None):
 
     """
 
-    import time
-
     if d[2] <= 0:
 
         if message is None:
             message = d[4]
 
         # Average the rate over the length of the deque.
-        d[6].append(int(d[3] / (time.time() - d[1])))
+        d[6].append(int(d[3] / (time() - d[1])))
         rate = sum(d[6]) / len(d[6])
 
         # Prints the processing rate in 1,000 records per sec.
         output_f(message + ': ' + str(rate) + '/s ' + str(d[0] / 1000) + "K ")
 
-        d[1] = time.time()
+        d[1] = time()
 
         # If the print_rate was specified, adjust the number of records to
         # aproximate that rate.
@@ -1120,17 +1111,12 @@ class Progressor(object):
     freq = 5
 
     def __init__(self, message='Download', printf=_print):
-        import time
-        from collections import deque
-
         self.start = time.clock()
         self.message = message
         self.rates = deque(maxlen=10)
         self.printf = printf
 
     def progress(self, i, n):
-
-        import time
 
         now = time.clock()
 
@@ -1303,15 +1289,11 @@ def filter_url(url, **kwargs):
 
 def normalize_newlines(string):
     """Convert \r\n or \r to \n."""
-    import re
-
     return re.sub(r'(\r\n|\r|\n)', '\n', string)
 
 
 def print_yaml(o):
     """Pretty print an object as YAML."""
-    import yaml
-
     print(yaml.dump(o, default_flow_style=False, indent=4, encoding='utf-8'))
 
 
