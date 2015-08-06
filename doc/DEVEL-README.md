@@ -54,3 +54,18 @@ $ ambry makemigration <your_migration_name>
 $ ambry list
 ```
     6. Commit and push files your changed.
+
+### Setup environment to run ambry under python-3 (debian).
+    1.  Install python 3
+```bash
+    $ apt-get install python3 python3-doc python3-dev
+```
+    2. Setup a new virtualenv with python3
+```
+$ mkvirtualenv --python=/usr/bin/python3 ambry3
+```
+    3. Check virtualenv python version
+```bash
+ $ python -V
+Python 3.4.2
+```
