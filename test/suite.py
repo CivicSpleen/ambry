@@ -23,6 +23,9 @@ suite.addTests(test_orm_suite)
 test_metadata_suite = test_loader.discover('test_metadata', top_level_dir='test')
 suite.addTests(test_metadata_suite)
 
+test_etl_suite = test_loader.discover('test_etl', top_level_dir='test')
+suite.addTests(test_etl_suite)
+
 
 if __name__ == '__main__':
     unittest.TextTestRunner().run(suite)
