@@ -56,8 +56,8 @@ class RowIntuiterTest(unittest.TestCase):
         # testing
         pipe1 = RowIntuiter()
         first_line, last_line = pipe1._find_data_lines(rows, data_pattern)
-        self.assertEquals(first_line, 2)
-        self.assertEquals(rows[first_line], ['0', 0, 0.1])
+        self.assertEqual(first_line, 2)
+        self.assertEqual(rows[first_line], ['0', 0, 0.1])
 
     @fudge.patch(
         'ambry.etl.intuit.RowIntuiter._matches')
@@ -77,7 +77,7 @@ class RowIntuiterTest(unittest.TestCase):
 
         pipe1 = RowIntuiter()
         first_line, last_line = pipe1._find_data_lines(rows, data_pattern)
-        self.assertEquals(rows[last_line], ['99', 99, 99.1])
+        self.assertEqual(rows[last_line], ['99', 99, 99.1])
 
     # _find_header tests
     @fudge.patch(
@@ -94,7 +94,7 @@ class RowIntuiterTest(unittest.TestCase):
 
         header_pattern = [set([str, None]), set([str, None])]
         header = pipe1._find_header(rows, header_pattern)
-        self.assertEquals(
+        self.assertEqual(
             header,
             ['header1-1', 'header1-2', 'header1-3'])
 
@@ -113,7 +113,7 @@ class RowIntuiterTest(unittest.TestCase):
 
         header_pattern = [set([str, None]), set([str, None])]
         header = pipe1._find_header(rows, header_pattern)
-        self.assertEquals(
+        self.assertEqual(
             header,
             ['header2-1', 'header2-2', 'header2-3'])
 
@@ -135,7 +135,7 @@ class RowIntuiterTest(unittest.TestCase):
 
         comments_pattern = [set([str, None]), set([str, None]), set([None])]
         comments = pipe1._find_comments(rows, comments_pattern)
-        self.assertEquals(
+        self.assertEqual(
             comments,
             ['Comment1', 'Comment2'])
 
@@ -150,9 +150,9 @@ class RowIntuiterTest(unittest.TestCase):
         rows.extend([[str(i), i] for i in range(200)])
         pipe1 = RowIntuiter()
         comments_pattern, _, _ = pipe1._get_patterns(rows)
-        self.assertEquals(len(comments_pattern), len(rows[0]),
+        self.assertEqual(len(comments_pattern), len(rows[0]),
                           'Comments pattern length has to match to columns amount.')
-        self.assertEquals(comments_pattern, [set([str, None]), set([str, None])])
+        self.assertEqual(comments_pattern, [set([str, None]), set([str, None])])
 
     def test_returns_header_pattern(self):
         # to get header pattern all patterns should be replaced with str|none.
@@ -164,7 +164,7 @@ class RowIntuiterTest(unittest.TestCase):
 
         pipe1 = RowIntuiter()
         _, header_pattern, _ = pipe1._get_patterns(rows)
-        self.assertEquals(
+        self.assertEqual(
             header_pattern,
             [set([str, None]), set([str, None])])
 
@@ -177,8 +177,8 @@ class RowIntuiterTest(unittest.TestCase):
 
         pipe1 = RowIntuiter()
         _, _, data_pattern = pipe1._get_patterns(rows)
-        self.assertEquals(len(data_pattern), len(rows[0]), 'Pattern length has to match to columns amount.')
-        self.assertEquals(data_pattern, [set([int, str]), set([float])])
+        self.assertEqual(len(data_pattern), len(rows[0]), 'Pattern length has to match to columns amount.')
+        self.assertEqual(data_pattern, [set([int, str]), set([float])])
 
     # __iter__ tests
     @fudge.patch(
@@ -199,7 +199,7 @@ class RowIntuiterTest(unittest.TestCase):
         p1.set_source_pipe(self._get_source_pipe(rows))
 
         ret = list(p1)
-        self.assertEquals(len(ret), 200)
+        self.assertEqual(len(ret), 200)
 
         # contains data rows
         self.assertIn(['data1-1', 'data1-2'], ret)

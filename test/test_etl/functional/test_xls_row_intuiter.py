@@ -40,20 +40,20 @@ class Test(unittest.TestCase):
         ret = list(p1)
 
         # contains valid rows
-        self.assertEquals(len(ret), 300)
-        self.assertEquals(ret[0][0], 1)
-        self.assertEquals(ret[0][1], '0O0P01')
-        self.assertEquals(ret[0][2], 1447)
-        self.assertAlmostEquals(ret[0][3], 13.6176070904818)
-        self.assertAlmostEquals(ret[0][4], 42.2481751825)
-        self.assertAlmostEquals(ret[0][5], 8.272140707)
+        self.assertEqual(len(ret), 300)
+        self.assertEqual(ret[0][0], 1)
+        self.assertEqual(ret[0][1], '0O0P01')
+        self.assertEqual(ret[0][2], 1447)
+        self.assertAlmostEqual(ret[0][3], 13.6176070904818)
+        self.assertAlmostEqual(ret[0][4], 42.2481751825)
+        self.assertAlmostEqual(ret[0][5], 8.272140707)
 
         # row intuiter accumulated proper comments
-        self.assertEquals(
+        self.assertEqual(
             p1.comments, ['Renter Costs', 'This is a header comment'])
 
         # row intuiter properly recognized header.
-        self.assertEquals(
+        self.assertEqual(
             p1.header,
             ['id', 'gvid', 'cost_gt_30', 'cost_gt_30_cv', 'cost_gt_30_pct', 'cost_gt_30_pct_cv'])
 
@@ -66,19 +66,19 @@ class Test(unittest.TestCase):
         ret = list(p1)
 
         # contains valid rows
-        self.assertEquals(len(ret), 300)
-        self.assertEquals(ret[0][0], 1)
-        self.assertEquals(ret[0][1], '0O0P01')
-        self.assertEquals(ret[0][2], 1447)
-        self.assertAlmostEquals(ret[0][3], 13.6176070904818)
-        self.assertAlmostEquals(ret[0][4], 42.2481751825)
-        self.assertAlmostEquals(ret[0][5], 8.272140707)
+        self.assertEqual(len(ret), 300)
+        self.assertEqual(ret[0][0], 1)
+        self.assertEqual(ret[0][1], '0O0P01')
+        self.assertEqual(ret[0][2], 1447)
+        self.assertAlmostEqual(ret[0][3], 13.6176070904818)
+        self.assertAlmostEqual(ret[0][4], 42.2481751825)
+        self.assertAlmostEqual(ret[0][5], 8.272140707)
 
         # intuiter does not have comments
-        self.assertEquals(p1.comments, [])
+        self.assertEqual(p1.comments, [])
 
         # row intuiter properly recognized header.
-        self.assertEquals(
+        self.assertEqual(
             p1.header,
             ['id', 'gvid', 'cost_gt_30', 'cost_gt_30_cv', 'cost_gt_30_pct', 'cost_gt_30_pct_cv'])
 
@@ -91,18 +91,18 @@ class Test(unittest.TestCase):
         ret = list(p1)
 
         # contains valid rows
-        self.assertEquals(len(ret), 300)
-        self.assertEquals(ret[0][0], 1)
-        self.assertEquals(ret[0][1], '0O0P01')
-        self.assertEquals(ret[0][2], 1447)
-        self.assertAlmostEquals(ret[0][3], 13.6176070904818)
-        self.assertAlmostEquals(ret[0][4], 42.2481751825)
-        self.assertAlmostEquals(ret[0][5], 8.272140707)
+        self.assertEqual(len(ret), 300)
+        self.assertEqual(ret[0][0], 1)
+        self.assertEqual(ret[0][1], '0O0P01')
+        self.assertEqual(ret[0][2], 1447)
+        self.assertAlmostEqual(ret[0][3], 13.6176070904818)
+        self.assertAlmostEqual(ret[0][4], 42.2481751825)
+        self.assertAlmostEqual(ret[0][5], 8.272140707)
 
         # intuiter does not have comments
-        self.assertEquals(p1.comments, [])
+        self.assertEqual(p1.comments, [])
 
         # row intuiter properly recognized header.
-        self.assertEquals(
+        self.assertEqual(
             p1.header,
             ['id', 'gvid', 'cost_gt_30', 'cost_gt_30_cv', 'cost_gt_30_pct', 'cost_gt_30_pct_cv'])
