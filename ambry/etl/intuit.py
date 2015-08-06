@@ -528,7 +528,6 @@ class RowIntuiter(Pipe):
         # Comments pattern - first two columns are string or None, other columns are None.
         #
         comments_pattern = [set([None]) for x in range(len(rows[0]))]
-        # FIXME: Enhance tests.
         comments_pattern[0].add(str)
         comments_pattern[1].add(str)
 

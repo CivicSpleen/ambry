@@ -44,9 +44,9 @@ class Test(unittest.TestCase):
         self.assertEquals(ret[0][0], 1)
         self.assertEquals(ret[0][1], '0O0P01')
         self.assertEquals(ret[0][2], 1447)
-
-        # FIXME: How can we overcome float number round error?
-        # FIXME: check float values too., 13.6176070905, 42.2481751825, 8.272140707])
+        self.assertAlmostEquals(ret[0][3], 13.6176070904818)
+        self.assertAlmostEquals(ret[0][4], 42.2481751825)
+        self.assertAlmostEquals(ret[0][5], 8.272140707)
 
         # row intuiter accumulated proper comments
         self.assertEquals(
@@ -70,9 +70,9 @@ class Test(unittest.TestCase):
         self.assertEquals(ret[0][0], 1)
         self.assertEquals(ret[0][1], '0O0P01')
         self.assertEquals(ret[0][2], 1447)
-
-        # FIXME: How can we overcome float number round error?
-        # FIXME: check float values too., 13.6176070905, 42.2481751825, 8.272140707])
+        self.assertAlmostEquals(ret[0][3], 13.6176070904818)
+        self.assertAlmostEquals(ret[0][4], 42.2481751825)
+        self.assertAlmostEquals(ret[0][5], 8.272140707)
 
         # intuiter does not have comments
         self.assertEquals(p1.comments, [])
@@ -95,9 +95,9 @@ class Test(unittest.TestCase):
         self.assertEquals(ret[0][0], 1)
         self.assertEquals(ret[0][1], '0O0P01')
         self.assertEquals(ret[0][2], 1447)
-
-        # FIXME: How can we overcome float number round error?
-        # FIXME: check float values too., 13.6176070905, 42.2481751825, 8.272140707])
+        self.assertAlmostEquals(ret[0][3], 13.6176070904818)
+        self.assertAlmostEquals(ret[0][4], 42.2481751825)
+        self.assertAlmostEquals(ret[0][5], 8.272140707)
 
         # intuiter does not have comments
         self.assertEquals(p1.comments, [])
