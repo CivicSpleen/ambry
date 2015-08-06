@@ -120,21 +120,24 @@ class RowIntuiterTest(unittest.TestCase):
     # _find_comments tests
     @fudge.patch(
         'ambry.etl.intuit.RowIntuiter._matches')
-    def test_returns_first_row_matches_to_comments_pattern(self, fake_matches):
+    def test_joins_comments_to_list(self, fake_matches):
         fake_matches.expects_call().returns(False)\
-            .next_call().returns(True)
+            .next_call().returns(True)\
+            .next_call().returns(True)\
+            .next_call().returns(False)
 
         pipe1 = RowIntuiter()
         rows = [
             [None, None, None],
-            ['Comment', None, None],
+            ['Comment1', None, None],
+            ['Comment2', None, None],
             ['header2-1', 'header2-2', 'header2-3']]
 
         comments_pattern = [set([str, None]), set([None]), set([None])]
         comments = pipe1._find_comments(rows, comments_pattern)
         self.assertEquals(
             comments,
-            ['Comment', None, None])
+            ['Comment1', 'Comment2'])
 
     # _get_patterns tests
     def test_returns_comments_pattern(self):
@@ -169,7 +172,7 @@ class RowIntuiterTest(unittest.TestCase):
         rows = [
             ['header1', 'header2'],
         ]
-        rows.extend([[str(i), float(i)] for i in range(100)])
+        rows.extend([['s-{}'.format(i), float(i)] for i in range(100)])
         rows.extend([[i, float(i)] for i in range(100)])
 
         pipe1 = RowIntuiter()
