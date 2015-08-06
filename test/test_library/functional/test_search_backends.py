@@ -109,11 +109,11 @@ class AmbryReadyMixin(object):
         self.backend.dataset_index.index_one(dataset)
 
         datasets = self.backend.dataset_index.all()
-        self.assertEquals(len(datasets), 1)
+        self.assertEqual(len(datasets), 1)
 
         self.backend.dataset_index.index_one(dataset)
         datasets = self.backend.dataset_index.all()
-        self.assertEquals(len(datasets), 1)
+        self.assertEqual(len(datasets), 1)
 
     # partition add
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
@@ -154,7 +154,7 @@ class AmbryReadyMixin(object):
         partition = dataset.new_partition(table, time=1, name='Partition1')
         db.commit()
         self.backend.partition_index.index_one(partition)
-        self._assert_finds_partition(partition, unicode(partition.identity.name))
+        self._assert_finds_partition(partition, str(partition.identity.name))
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
     def test_search_partition_by_vname(self):
@@ -184,8 +184,8 @@ class AmbryReadyMixin(object):
 
         # finds dataset extended with partition
         found = self.backend.dataset_index.search('source example.com from 1978 to 1979')
-        self.assertEquals(len(found), 1)
-        self.assertEquals(len(found[0].partitions), 1)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
@@ -206,8 +206,8 @@ class AmbryReadyMixin(object):
 
         # finds dataset extended with partition
         found = self.backend.dataset_index.search('about cucumber')
-        self.assertEquals(len(found), 1)
-        self.assertEquals(len(found[0].partitions), 1)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
@@ -228,8 +228,8 @@ class AmbryReadyMixin(object):
 
         # finds dataset extended with partition
         found = self.backend.dataset_index.search('dataset with cucumber')
-        self.assertEquals(len(found), 1)
-        self.assertEquals(len(found[0].partitions), 1)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
@@ -248,8 +248,8 @@ class AmbryReadyMixin(object):
 
         # finds dataset extended with partition
         found = self.backend.dataset_index.search('source example.com in California')
-        self.assertEquals(len(found), 1)
-        self.assertEquals(len(found[0].partitions), 1)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)
 
     @unittest.skipIf(SKIP_ALL, 'Debug skip.')
@@ -268,8 +268,8 @@ class AmbryReadyMixin(object):
 
         # finds dataset extended with partition
         found = self.backend.dataset_index.search('source example.com by county')
-        self.assertEquals(len(found), 1)
-        self.assertEquals(len(found[0].partitions), 1)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)
 
     # test some complex examples.
@@ -289,8 +289,8 @@ class AmbryReadyMixin(object):
 
         # finds dataset extended with partition
         found = self.backend.dataset_index.search('table2 from 1978 to 1979 in california')
-        self.assertEquals(len(found), 1)
-        self.assertEquals(len(found[0].partitions), 1)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(len(found[0].partitions), 1)
         self.assertIn(partition.vid, found[0].partitions)
 
 

@@ -21,12 +21,12 @@ class SQLiteSearchBackendTest(TestBase):
 
     # _and_join tests
     def test_joins_terms(self):
-        self.assertEquals(
+        self.assertEqual(
             self.backend._and_join(['term1', 'term2']),
             'term1 term2')
 
     def test_joins_one_term(self):
-        self.assertEquals(
+        self.assertEqual(
             self.backend._and_join(['term1']),
             'term1')
 
@@ -72,7 +72,7 @@ class DatasetSQLiteIndexTest(TestBase):
             FROM dataset_index;
         """
         result = self.backend.library.database.connection.execute(query).fetchall()
-        self.assertEquals(result[0][0], dataset.vid)
+        self.assertEqual(result[0][0], dataset.vid)
 
     # _delete tests
     def test_deletes_dataset_from_index(self):
@@ -88,13 +88,13 @@ class DatasetSQLiteIndexTest(TestBase):
 
         # assert document added.
         result = self.backend.library.database.connection.execute(query, vid=dataset.vid).fetchall()
-        self.assertEquals(dataset.vid, result[0][0])
+        self.assertEqual(dataset.vid, result[0][0])
 
         self.backend.dataset_index._delete(vid=dataset.vid)
 
         # assert document is deleted.
         result = self.backend.library.database.connection.execute(query, vid=dataset.vid).fetchall()
-        self.assertEquals(result, [])
+        self.assertEqual(result, [])
 
 
 class IdentifierSQLiteIndexTest(TestBase):
@@ -128,7 +128,7 @@ class IdentifierSQLiteIndexTest(TestBase):
         """)
 
         result = self.backend.library.database.connection.execute(query, identifier='gvid').fetchall()
-        self.assertEquals(result, [('gvid',)])
+        self.assertEqual(result, [('gvid',)])
 
         # search and found result.
         found = list(self.backend.identifier_index.search('gvid'))
@@ -151,7 +151,7 @@ class IdentifierSQLiteIndexTest(TestBase):
         """)
 
         result = self.backend.library.database.connection.execute(query, identifier='gvid').fetchall()
-        self.assertEquals(result, [('gvid',)])
+        self.assertEqual(result, [('gvid',)])
 
     # _delete tests
     def test_deletes_identifier_from_index(self):
@@ -168,14 +168,14 @@ class IdentifierSQLiteIndexTest(TestBase):
         """)
 
         result = self.backend.library.database.connection.execute(query, identifier='gvid').fetchall()
-        self.assertEquals(result, [('gvid',)])
+        self.assertEqual(result, [('gvid',)])
 
         # deleting
         self.backend.identifier_index._delete(identifier='gvid')
 
         # assert document is deleted.
         result = self.backend.library.database.connection.execute(query, identifier='gvid').fetchall()
-        self.assertEquals(result, [])
+        self.assertEqual(result, [])
 
 
 class PartitionSQLiteIndexTest(TestBase):
@@ -209,7 +209,7 @@ class PartitionSQLiteIndexTest(TestBase):
             FROM partition_index;
         """
         result = self.backend.library.database.connection.execute(query).fetchall()
-        self.assertEquals(result[0][0], partition1.vid)
+        self.assertEqual(result[0][0], partition1.vid)
 
         # search and check found result.
         found = list(self.backend.partition_index.search(partition1.vid))
@@ -232,7 +232,7 @@ class PartitionSQLiteIndexTest(TestBase):
             FROM partition_index;
         """
         result = self.backend.library.database.connection.execute(query).fetchall()
-        self.assertEquals(result[0][0], partition1.vid)
+        self.assertEqual(result[0][0], partition1.vid)
 
     # _delete tests
     def test_deletes_partition_from_index(self):
@@ -250,14 +250,14 @@ class PartitionSQLiteIndexTest(TestBase):
         """)
 
         result = self.backend.library.database.connection.execute(query, vid=partition1.vid).fetchall()
-        self.assertEquals(result, [(partition1.vid,)])
+        self.assertEqual(result, [(partition1.vid,)])
 
         # deleting
         self.backend.partition_index._delete(vid=partition1.vid)
 
         # assert document is deleted.
         result = self.backend.library.database.connection.execute(query, vid=partition1.vid).fetchall()
-        self.assertEquals(result, [])
+        self.assertEqual(result, [])
 
 
 def _assert_resets_index(backend, index_name):
