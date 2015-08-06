@@ -44,9 +44,9 @@ class Test(unittest.TestCase):
         self.assertEqual(ret[0][0], 1)
         self.assertEqual(ret[0][1], '0O0P01')
         self.assertEqual(ret[0][2], 1447)
-        self.assertAlmostEqual(ret[0][3], 13.6176070904818)
-        self.assertAlmostEqual(ret[0][4], 42.2481751825)
-        self.assertAlmostEqual(ret[0][5], 8.272140707)
+        self.assertEqual(ret[0][3], 13.6176070904818)
+        self.assertEqual(ret[0][4], 42.2481751824818)
+        self.assertEqual(ret[0][5], 8.27214070699712)
 
         # row intuiter accumulated proper comments
         self.assertEqual(
@@ -70,9 +70,9 @@ class Test(unittest.TestCase):
         self.assertEqual(ret[0][0], 1)
         self.assertEqual(ret[0][1], '0O0P01')
         self.assertEqual(ret[0][2], 1447)
-        self.assertAlmostEqual(ret[0][3], 13.6176070904818)
-        self.assertAlmostEqual(ret[0][4], 42.2481751825)
-        self.assertAlmostEqual(ret[0][5], 8.272140707)
+        self.assertEqual(ret[0][3], 13.6176070904818)
+        self.assertEqual(ret[0][4], 42.2481751824818)
+        self.assertEqual(ret[0][5], 8.27214070699712)
 
         # intuiter does not have comments
         self.assertEqual(p1.comments, [])
@@ -95,9 +95,9 @@ class Test(unittest.TestCase):
         self.assertEqual(ret[0][0], 1)
         self.assertEqual(ret[0][1], '0O0P01')
         self.assertEqual(ret[0][2], 1447)
-        self.assertAlmostEqual(ret[0][3], 13.6176070904818)
-        self.assertAlmostEqual(ret[0][4], 42.2481751825)
-        self.assertAlmostEqual(ret[0][5], 8.272140707)
+        self.assertEqual(ret[0][3], 13.6176070904818)
+        self.assertEqual(ret[0][4], 42.2481751824818)
+        self.assertEqual(ret[0][5], 8.27214070699712)
 
         # intuiter does not have comments
         self.assertEqual(p1.comments, [])
