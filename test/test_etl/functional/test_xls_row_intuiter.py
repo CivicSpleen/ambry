@@ -81,3 +81,28 @@ class Test(unittest.TestCase):
         self.assertEquals(
             p1.header,
             ['id', 'gvid', 'cost_gt_30', 'cost_gt_30_cv', 'cost_gt_30_pct', 'cost_gt_30_pct_cv'])
+
+    def test_one_header_300_rows_one_footer(self):
+        file_name = 'one_header_300_row_one_footer.xls'
+
+        p1 = RowIntuiter()
+        p1.set_source_pipe(self._get_source(file_name))
+
+        ret = list(p1)
+
+        # contains valid rows
+        self.assertEquals(len(ret), 300)
+        self.assertEquals(ret[0][0], 1)
+        self.assertEquals(ret[0][1], '0O0P01')
+        self.assertEquals(ret[0][2], 1447)
+
+        # FIXME: How can we overcome float number round error?
+        # FIXME: check float values too., 13.6176070905, 42.2481751825, 8.272140707])
+
+        # intuiter does not have comments
+        self.assertEquals(p1.comments, [])
+
+        # row intuiter properly recognized header.
+        self.assertEquals(
+            p1.header,
+            ['id', 'gvid', 'cost_gt_30', 'cost_gt_30_cv', 'cost_gt_30_pct', 'cost_gt_30_pct_cv'])
