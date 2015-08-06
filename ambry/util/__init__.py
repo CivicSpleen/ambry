@@ -1501,3 +1501,32 @@ def scrape_urls_from_web_page(page_url):
             d['links'][text] = dict(url=url, description=text, title=text)
 
     return d
+
+
+def trace(fn):
+    """ Prints parameteters and return values of the each call of the wrapped function.
+
+    Usage:
+        decorate appropriate function or method:
+            @trace
+            def myf():
+                ...
+    """
+    def wrapped(*args, **kwargs):
+        msg = []
+        msg.append('Enter {}('.format(fn.__name__))
+
+        if args:
+            msg.append(u', '.join([unicode(x) for x in args]))
+
+        if kwargs:
+            kwargs_str = ', '.join(['{}={}'.format(k, v) for k, v in kwargs.iteritems()])
+            if args:
+                msg.append(', ')
+            msg.append(kwargs_str)
+        msg.append(')')
+        print(''.join(msg))
+        ret = fn(*args, **kwargs)
+        print(u'Return {}'.format(ret))
+        return ret
+    return wrapped
