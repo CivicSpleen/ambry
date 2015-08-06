@@ -34,28 +34,28 @@ class DatabaseConfigUpdateTest(TestBase):
 
         # top config does not have key or value
         self.assertIsNone(top_config.key, '')
-        self.assertEquals(top_config.value, {})
+        self.assertEqual(top_config.value, {})
 
         #
         # names and about groups does not have values
         #
         names_group = query.filter_by(d_vid=dataset.vid, type='metadata', group='names').first()
-        self.assertEquals(names_group.key, 'names')
-        self.assertEquals(names_group.value, {})
-        self.assertEquals(names_group.parent, top_config)
+        self.assertEqual(names_group.key, 'names')
+        self.assertEqual(names_group.value, {})
+        self.assertEqual(names_group.parent, top_config)
 
         about_group = query.filter_by(d_vid=dataset.vid, type='metadata', group='about').first()
-        self.assertEquals(about_group.key, 'about')
-        self.assertEquals(about_group.value, {})
-        self.assertEquals(about_group.parent, top_config)
+        self.assertEqual(about_group.key, 'about')
+        self.assertEqual(about_group.value, {})
+        self.assertEqual(about_group.parent, top_config)
 
         #
         # Configs have proper parents and values.
         #
         vid_config = query.filter_by(d_vid=dataset.vid, type='metadata', key='vid').first()
-        self.assertEquals(vid_config.key, 'vid')
-        self.assertEquals(vid_config.value, dataset.vid)
-        self.assertEquals(vid_config.parent, names_group)
+        self.assertEqual(vid_config.key, 'vid')
+        self.assertEqual(vid_config.value, dataset.vid)
+        self.assertEqual(vid_config.parent, names_group)
 
     def test_change_database_values(self):
         """ Changing existing property tree key value changes config instance. """
@@ -73,11 +73,11 @@ class DatabaseConfigUpdateTest(TestBase):
         # testing
         query = db.session.query(Config)
         vid_config = query.filter_by(d_vid=dataset.vid, type='metadata', key='vid').first()
-        self.assertEquals(vid_config.value, dataset.vid)
+        self.assertEqual(vid_config.value, dataset.vid)
 
         top.names.vid = 'vid-1'
         vid_config = query.filter_by(type='metadata', key='vid').first()
-        self.assertEquals(vid_config.value, 'vid-1')
+        self.assertEqual(vid_config.value, 'vid-1')
 
 
 class BuildPropertyTreeFromDatabaseTest(TestBase):
@@ -121,7 +121,7 @@ class BuildPropertyTreeFromDatabaseTest(TestBase):
         # build from db
         top = Top()
         top.build_from_db(self.dataset)
-        self.assertEquals(top.names.vid, self.dataset.vid)
+        self.assertEqual(top.names.vid, self.dataset.vid)
 
     def test_change_tree_build_from_database(self):
 
@@ -135,7 +135,7 @@ class BuildPropertyTreeFromDatabaseTest(TestBase):
         # change and test
         assert top.is_bound()
         vid_value_config = self.db.session.query(Config).filter_by(key='vid', type='metadata').one()
-        self.assertNotEquals(vid_value_config.value, 'vid-2')
+        self.assertNotEqual(vid_value_config.value, 'vid-2')
         top.names.vid = 'vid-2'
         vid_value_config = self.db.session.query(Config).filter_by(key='vid', type='metadata').one()
-        self.assertEquals(vid_value_config.value, 'vid-2')
+        self.assertEqual(vid_value_config.value, 'vid-2')

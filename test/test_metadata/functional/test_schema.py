@@ -81,23 +81,23 @@ class TopTest(TestBase):
         # build from db and check
         new_top = Top()
         new_top.build_from_db(dataset)
-        self.assertEquals(new_top.about.access, 'restricted')
-        self.assertEquals(new_top.about.footnote, 'the-footnote')
-        self.assertEquals(new_top.about.grain, 'hospital')
-        self.assertEquals(new_top.about.groups, ['health', 'california'])
-        self.assertEquals(new_top.about.license, 'ckdbl')
-        self.assertEquals(new_top.about.processed, 'processed')
-        self.assertEquals(new_top.about.rights, 'public')
-        self.assertEquals(new_top.about.source, 'http://example.com')
-        self.assertEquals(new_top.about.space, 'California')
-        self.assertEquals(new_top.about.subject, 'Subject')
-        self.assertEquals(
+        self.assertEqual(new_top.about.access, 'restricted')
+        self.assertEqual(new_top.about.footnote, 'the-footnote')
+        self.assertEqual(new_top.about.grain, 'hospital')
+        self.assertEqual(new_top.about.groups, ['health', 'california'])
+        self.assertEqual(new_top.about.license, 'ckdbl')
+        self.assertEqual(new_top.about.processed, 'processed')
+        self.assertEqual(new_top.about.rights, 'public')
+        self.assertEqual(new_top.about.source, 'http://example.com')
+        self.assertEqual(new_top.about.space, 'California')
+        self.assertEqual(new_top.about.subject, 'Subject')
+        self.assertEqual(
             new_top.about.summary,
             'The Inpatient Mortality Indicators (IMIs) are a subset of...')
 
-        self.assertEquals(new_top.about.tags, ['tag1', 'tag2'])
-        self.assertEquals(new_top.about.time, '15:55')  # TODO: How to convert time?
-        self.assertEquals(new_top.about.title, 'Inpatient Mortality Indicators')
+        self.assertEqual(new_top.about.tags, ['tag1', 'tag2'])
+        self.assertEqual(new_top.about.time, '15:55')  # TODO: How to convert time?
+        self.assertEqual(new_top.about.title, 'Inpatient Mortality Indicators')
 
     def test_identity_fields(self):
         """ Test identity group of the metadata config. """
@@ -138,16 +138,16 @@ class TopTest(TestBase):
         # build from db and check
         new_top = Top()
         new_top.build_from_db(dataset)
-        self.assertEquals(new_top.identity.bspace, 'b-space')
-        self.assertEquals(new_top.identity.btime, 'b-time')
-        self.assertEquals(new_top.identity.dataset, dataset.vid)
-        self.assertEquals(new_top.identity.id, dataset.id)
-        self.assertEquals(new_top.identity.revision, 7)
-        self.assertEquals(new_top.identity.source, 'example.com')
-        self.assertEquals(new_top.identity.subset, 'mortality')
-        self.assertEquals(new_top.identity.type, '?')
-        self.assertEquals(new_top.identity.variation, 1)
-        self.assertEquals(new_top.identity.version, '0.0.7')
+        self.assertEqual(new_top.identity.bspace, 'b-space')
+        self.assertEqual(new_top.identity.btime, 'b-time')
+        self.assertEqual(new_top.identity.dataset, dataset.vid)
+        self.assertEqual(new_top.identity.id, dataset.id)
+        self.assertEqual(new_top.identity.revision, 7)
+        self.assertEqual(new_top.identity.source, 'example.com')
+        self.assertEqual(new_top.identity.subset, 'mortality')
+        self.assertEqual(new_top.identity.type, '?')
+        self.assertEqual(new_top.identity.variation, 1)
+        self.assertEqual(new_top.identity.version, '0.0.7')
 
     def test_dependencies_fields(self):
         """ Test dependencies group of the metadata config. """
@@ -174,13 +174,13 @@ class TopTest(TestBase):
         # build from db and check
         new_top = Top()
         new_top.build_from_db(dataset)
-        self.assertEquals(
+        self.assertEqual(
             new_top.dependencies.counties,
             'census.gov-index-counties')
-        self.assertEquals(
+        self.assertEqual(
             new_top.dependencies.facility_index,
             'oshpd.ca.gov-facilities-index-facilities_index-2010e2014')
-        self.assertEquals(
+        self.assertEqual(
             new_top.dependencies.facility_info,
             'oshpd.ca.gov-facilities-index-facilities')
 
@@ -214,13 +214,13 @@ class TopTest(TestBase):
         # build from db and check
         new_top = Top()
         new_top.build_from_db(dataset)
-        self.assertEquals(
+        self.assertEqual(
             new_top.requirements.xlrd,
             'xlrd')
-        self.assertEquals(
+        self.assertEqual(
             new_top.requirements.requests,
             'requests')
-        self.assertEquals(
+        self.assertEqual(
             new_top.requirements.suds,
             'suds')
 
@@ -252,16 +252,16 @@ class TopTest(TestBase):
         # build from db and check
         new_top = Top()
         new_top.build_from_db(dataset)
-        self.assertEquals(
+        self.assertEqual(
             new_top.external_documentation.any_field.url,
             'http://example.com')
-        self.assertEquals(
+        self.assertEqual(
             new_top.external_documentation.any_field.title,
             'the-title')
-        self.assertEquals(
+        self.assertEqual(
             new_top.external_documentation.any_field.description,
             'the-description')
-        self.assertEquals(
+        self.assertEqual(
             new_top.external_documentation.any_field.source,
             'http://example.com')
 
@@ -295,13 +295,13 @@ class TopTest(TestBase):
         # build from db and check
         new_top = Top()
         new_top.build_from_db(dataset)
-        self.assertEquals(
+        self.assertEqual(
             new_top.build.key1,
             'value1')
-        self.assertEquals(
+        self.assertEqual(
             new_top.build.key2,
             'value2')
-        self.assertEquals(
+        self.assertEqual(
             new_top.build.key3,
             'value3')
 
@@ -333,10 +333,10 @@ class TopTest(TestBase):
         # build from db and check
         new_top = Top()
         new_top.build_from_db(dataset)
-        self.assertEquals(new_top.names.fqname, 'fq-name')
-        self.assertEquals(new_top.names.name, 'name')
-        self.assertEquals(new_top.names.vid, 'd001')
-        self.assertEquals(new_top.names.vname, 'vname')
+        self.assertEqual(new_top.names.fqname, 'fq-name')
+        self.assertEqual(new_top.names.name, 'name')
+        self.assertEqual(new_top.names.vid, 'd001')
+        self.assertEqual(new_top.names.vname, 'vname')
 
     # Top().contacts tests
     def test_contacts_fields(self):
@@ -368,11 +368,11 @@ class TopTest(TestBase):
         # build from db and check
         new_top = Top()
         new_top.build_from_db(dataset)
-        self.assertEquals(new_top.contacts.creator.role, 'c-developer')
-        self.assertEquals(new_top.contacts.creator.org, 'c-home')
-        self.assertEquals(new_top.contacts.creator.email, 'c.test@example.com')
-        self.assertEquals(new_top.contacts.creator.name, 'c-tester')
-        self.assertEquals(new_top.contacts.creator.url, 'http://creator.example.com')
+        self.assertEqual(new_top.contacts.creator.role, 'c-developer')
+        self.assertEqual(new_top.contacts.creator.org, 'c-home')
+        self.assertEqual(new_top.contacts.creator.email, 'c.test@example.com')
+        self.assertEqual(new_top.contacts.creator.name, 'c-tester')
+        self.assertEqual(new_top.contacts.creator.url, 'http://creator.example.com')
 
     # Top().versions tests
     def test_versions_fields(self):
@@ -400,6 +400,6 @@ class TopTest(TestBase):
         # build from db and check
         new_top = Top()
         new_top.build_from_db(dataset)
-        self.assertEquals(new_top.versions['1'].date, '2015-04-12T15:49:55.077036')
-        self.assertEquals(new_top.versions['1'].description, 'Adding coverage')
-        self.assertEquals(new_top.versions['1'].version, '0.0.2')
+        self.assertEqual(new_top.versions['1'].date, '2015-04-12T15:49:55.077036')
+        self.assertEqual(new_top.versions['1'].description, 'Adding coverage')
+        self.assertEqual(new_top.versions['1'].version, '0.0.2')
