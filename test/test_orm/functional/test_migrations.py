@@ -42,7 +42,7 @@ class MigrationTest(BasePostgreSQLTest):
             current = all_migrations[i]
             error_msg = '{} migration number violates ordering. Expecting {} migration. '\
                 'See migrations documentation for details.'.format(current, previous[0] + 1)
-            self.assertEquals(current[0] - previous[0], 1, error_msg)
+            self.assertEqual(current[0] - previous[0], 1, error_msg)
 
     @fudge.patch(
         'ambry.orm.database._get_all_migrations')
@@ -74,7 +74,7 @@ class MigrationTest(BasePostgreSQLTest):
                 db.connection.execute('SELECT column1 FROM table1;').fetchall()
 
                 # db version changed to 102
-                self.assertEquals(db.connection.execute('PRAGMA user_version').fetchone()[0], 102)
+                self.assertEqual(db.connection.execute('PRAGMA user_version').fetchone()[0], 102)
             finally:
                 db.close()
 
@@ -113,7 +113,7 @@ class MigrationTest(BasePostgreSQLTest):
                 db.connection.execute('SELECT column1 FROM table1;').fetchall()
 
                 # db version changed to 102
-                self.assertEquals(
+                self.assertEqual(
                     db.connection.execute('SELECT version FROM user_version;').fetchone()[0],
                     102)
             finally:

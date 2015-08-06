@@ -28,7 +28,7 @@ class Test(unittest.TestCase):
 
     def dump_database(self, db, table):
         for row in db.connection.execute("SELECT * FROM {}".format(table)):
-            print row
+            print(row)
 
     def test_table_basic(self):
         """Basic operations on datasets"""

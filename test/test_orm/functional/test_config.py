@@ -21,10 +21,10 @@ class Test(TestBase):
         # need to refresh dataset after commit
         ds = db.dataset(self.dn[0])
 
-        self.assertEquals(ds.config.metadata.identity.id, 'd02')
-        self.assertEquals(ds.config.metadata.identity.version, '0.0.1')
+        self.assertEqual(ds.config.metadata.identity.id, 'd02')
+        self.assertEqual(ds.config.metadata.identity.version, '0.0.1')
 
-        self.assertEquals(10, len(ds.config.metadata.identity))
+        self.assertEqual(10, len(ds.config.metadata.identity))
 
         identity_keys = [
             'subset', 'variation', 'dataset', 'btime', 'source',

@@ -55,18 +55,18 @@ class Test(TestBase):
         db.new_dataset(vid=str(dn.rev(4)), source='a', dataset='dataset')
 
         ds = db.dataset(str(dn.rev(5)))
-        self.assertEquals(str(dn.rev(5)), ds.vid)
+        self.assertEqual(str(dn.rev(5)), ds.vid)
 
         ds = db.dataset(str(dn.rev(3)))
-        self.assertEquals(str(dn.rev(3)), ds.vid)
+        self.assertEqual(str(dn.rev(3)), ds.vid)
 
         ds = db.dataset(str(dn.rev(None)))
-        self.assertEquals(str(dn.rev(5)), ds.vid)
+        self.assertEqual(str(dn.rev(5)), ds.vid)
 
         db.new_dataset(vid=str(dn.rev(6)), source='a', dataset='dataset')
 
         ds = db.dataset(str(dn.rev(None)))
-        self.assertEquals(str(dn.rev(6)), ds.vid)
+        self.assertEqual(str(dn.rev(6)), ds.vid)
 
         db.close()
 
@@ -128,7 +128,7 @@ class Test(TestBase):
 
         # partitions saved to db.
         result = db.connection.execute('SELECT p_vid FROM partitions;').fetchall()
-        self.assertEquals(len(result), 3)
+        self.assertEqual(len(result), 3)
         flatten = [x[0] for x in result]
         self.assertIn(p1.vid, flatten)
         self.assertIn(p2.vid, flatten)

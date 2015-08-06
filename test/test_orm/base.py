@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import unittest
-from urlparse import urlparse
+from six.moves.urllib.parse import urlparse
 
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
