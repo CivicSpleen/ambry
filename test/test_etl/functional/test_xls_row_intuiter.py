@@ -6,12 +6,13 @@ import xlrd
 
 from ambry.etl.intuit import RowIntuiter
 
+TEST_FILES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'functional', 'files')
+
 
 class Test(unittest.TestCase):
 
-    def test_two_comments_two_headers_300_rows(self):
-        TEST_FILES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'functional', 'files')
-        file_name = 'two_comments_two_headers_300_data_rows.xls'
+    def _get_source(self, file_name):
+        """ Creates source pipe from xls wigh given file name and returns it."""
 
         class XlsSource(object):
             def __iter__(self):
@@ -28,9 +29,13 @@ class Test(unittest.TestCase):
                             value = None
                         row.append(value)
                     yield row
+        return XlsSource()
+
+    def test_two_comments_two_headers_300_rows(self):
+        file_name = 'two_comments_two_headers_300_data_rows.xls'
 
         p1 = RowIntuiter()
-        p1.set_source_pipe(XlsSource())
+        p1.set_source_pipe(self._get_source(file_name))
 
         ret = list(p1)
 
@@ -46,6 +51,31 @@ class Test(unittest.TestCase):
         # row intuiter accumulated proper comments
         self.assertEquals(
             p1.comments, ['Renter Costs', 'This is a header comment'])
+
+        # row intuiter properly recognized header.
+        self.assertEquals(
+            p1.header,
+            ['id', 'gvid', 'cost_gt_30', 'cost_gt_30_cv', 'cost_gt_30_pct', 'cost_gt_30_pct_cv'])
+
+    def test_one_header_300_rows(self):
+        file_name = 'one_header_300_data_rows.xls'
+
+        p1 = RowIntuiter()
+        p1.set_source_pipe(self._get_source(file_name))
+
+        ret = list(p1)
+
+        # contains valid rows
+        self.assertEquals(len(ret), 300)
+        self.assertEquals(ret[0][0], 1)
+        self.assertEquals(ret[0][1], '0O0P01')
+        self.assertEquals(ret[0][2], 1447)
+
+        # FIXME: How can we overcome float number round error?
+        # FIXME: check float values too., 13.6176070905, 42.2481751825, 8.272140707])
+
+        # intuiter does not have comments
+        self.assertEquals(p1.comments, [])
 
         # row intuiter properly recognized header.
         self.assertEquals(
