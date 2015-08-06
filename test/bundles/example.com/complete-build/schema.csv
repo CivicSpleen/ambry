@@ -1,4 +1,4 @@
-"table","seq","column","is_pk","is_fk","type","size","description"
+"table","seq","column","is_pk","is_fk","datatype","size","description"
 "example",1,"id",1,,"INTEGER",,"A Pretty Good Table"
 "example",2,"uuid",,,"VARCHAR",36,"A random UUID"
 "example",3,"int",,,"INTEGER",3,"A random integer"

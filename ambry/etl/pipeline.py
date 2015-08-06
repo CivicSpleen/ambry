@@ -15,10 +15,56 @@ from ambry.util import qualified_class_name
 
 
 class PipelineError(Exception):
-    pass
+    def __init__(self,  pipe, *args, **kwargs):
+        super(PipelineError, self).__init__(*args, **kwargs)
+        self.pipe = pipe
+
+        def __str__(self):
+            from ambry.util import qualified_class_name
+
+            return """
+======================================
+Pipeline Exception: PipelineError
+Message:         {message}
+Pipeline:        {pipeline_name}
+Pipe:            {pipe_class}
+Source:          {source_name}
+Segment Headers: {headers}
+-------------------------------------
+Pipeline:
+{pipeline}
+""".format(message=self.message, pipeline_name=self.pipe.pipeline.name, pipeline = str(self.pipe.pipeline),
+           pipe_class=qualified_class_name(self.pipe), source_name=self.source.name, headers=self.pipe.headers)
 
 
 class MissingHeaderError(PipelineError):
+    def __init__(self, pipe, header, table, *args, **kwargs):
+        super(MissingHeaderError, self).__init__( pipe, *args, **kwargs)
+
+        self.header = header
+        self.table = table
+
+    def __str__(self):
+        from ambry.util import qualified_class_name
+        return """
+======================================
+Pipeline Exception: MissingHeaderError
+Message:         {message}
+Pipeline:        {pipeline_name}
+Pipe:            {pipe_class}
+Source:          {source_name}
+Segment Headers: {headers}
+Missing Header:  {header}
+-------------------------------------
+{table_columns}
+-------------------------------------
+Pipeline:
+{pipeline}
+""".format(message = self.message, pipeline_name=self.pipe.pipeline.name, pipeline = str(self.pipe.pipeline),
+           pipe_class = qualified_class_name(self.pipe), source_name = self.pipe.source.name,
+           headers =  self.pipe.headers, header = self.header, table_name = self.table.name, table_columns = str(self.table))
+
+class StopPipe(Exception):
     pass
 
 
@@ -50,6 +96,7 @@ class Pipe(object):
     def set_source_pipe(self, source_pipe):
         self._source_pipe = source_pipe
         self._source = source_pipe.source if source_pipe and hasattr(source_pipe, 'source') else None
+
         return self
 
     def process_header(self, row):
@@ -69,7 +116,9 @@ class Pipe(object):
     def __iter__(self):
         rg = iter(self._source_pipe)
 
-        yield self.process_header(rg.next())
+        self.headers = self.process_header(rg.next())
+
+        yield self.headers
 
         for row in rg:
             row = self.process_body(row)
@@ -88,9 +137,13 @@ class Pipe(object):
         if self.bundle:
             self.bundle.logger.error(m)
 
-    def __str__(self):
+    def print_header(self):
+        from ..util import qualified_class_name
+
         return qualified_class_name(self)
 
+    def __str__(self):
+        return self.print_header()
 
 class Sink(Pipe):
     """A final stage pipe, which consumes its input and produces no output rows"""
@@ -106,6 +159,48 @@ class Sink(Pipe):
 
             if count and i == count:
                 break
+
+class IterSource(Pipe):
+    """Creates a source from an Iterator"""
+
+    def __init__(self, iterator, header = None):
+        self.iterator = iterator
+        self.header = header
+
+    def __iter__(self):
+
+        itr = iter(self.iterator)
+
+        if self.header:
+            yield self.header
+        else:
+            # Create a header from the datatypes
+            first = itr.next()
+            yield [ type(e).__name__ for e in first]
+            yield first
+
+        for row in itr:
+            yield row
+
+class OnlySource(Pipe):
+    """Only allow iteration on a named source. """
+
+    def __init__(self, sources):
+
+        if not isinstance(sources, (list, tuple)):
+            sources = [sources]
+        else:
+            sources = list(sources)
+
+        self.sources = sources
+
+    def process_header(self, row):
+
+        if self.source.name not in self.sources:
+            raise StopPipe
+
+        self.headers = row
+        return row
 
 
 class Head(Pipe):
@@ -123,7 +218,6 @@ class Head(Pipe):
 
         self.count -= 1
         return row
-
 
 class Sample(Pipe):
     """ Take a sample of rows, skipping rows exponentially to end at the est_length input row, with
@@ -153,7 +247,6 @@ class Sample(Pipe):
         self.i += 1
         return row
 
-
 class Ticker(Pipe):
     """ Ticks out 'H' and 'B' for header and rows.
     """
@@ -169,20 +262,18 @@ class Ticker(Pipe):
         print '== {} {} =='.format(self.source.name, self._name if self._name else '')
         return row
 
-
 class AddHeader(Pipe):
     """Adds a header to a row file that doesn't have one, by returning the header for the first row. """
 
     def __init__(self, header):
-        self._header = header
+        self.headers = header
 
     def __iter__(self):
 
-        yield self._header
+        yield self.headers
 
         for row in self._source_pipe:
             yield row
-
 
 class MapHeader(Pipe):
     """Alter the header using a map"""
@@ -193,11 +284,12 @@ class MapHeader(Pipe):
 
         rg = iter(self._source_pipe)
 
-        yield [self._header_map.get(c, c) for c in rg.next()]
+        self.headers =  [ self._header_map.get(c,c) for c in rg.next() ]
+
+        yield self.headers
 
         for row in rg:
             yield row
-
 
 class MapToSourceTable(Pipe):
     """Alter the header using the source_header and dest_header in the source table """
@@ -212,18 +304,18 @@ class MapToSourceTable(Pipe):
 
         if self.error_on_fail:
             try:
-                return list([m[h] for h in row])
+                headers =  list([m[h] for h in row])
             except KeyError:
                 for h in row:
-                    if h not in m:
-                        raise MissingHeaderError(
-                            ("While in MapToSourceTable, pipeline '{}', failed to find header '{}' "
-                             "in source_table '{}'. table headers: {}")
-                            .format(self.pipeline.name, h, self.source.source_table.name,
-                                    ','.join(m.keys())))
-        else:
-            return list([m.get(h, h) for h in row])
+                    if not h in m:
+                        # pipe, header, table,
+                        raise MissingHeaderError( self, h, self.source.source_table,
+                                                  "Failed to find header in source_table ")
 
+        else:
+            headers = list([m.get(h, h) for h in row])
+
+        return headers
 
 class MangleHeader(Pipe):
     """"Alter the header so the values are well-formed, converting to alphanumerics and underscores"""
@@ -259,13 +351,13 @@ class MangleHeader(Pipe):
 
         itr = iter(self.source_pipe)
 
-        self.headers = itr.next()
+        headers = itr.next()
 
-        yield(self.mangle_header(self.headers))
+        self.headers = self.mangle_header(headers)
+        yield self.headers
 
         while True:
             yield itr.next()
-
 
 class MergeHeader(Pipe):
     """Strips out the header comments and combines multiple header lines to emit a
@@ -394,13 +486,40 @@ class MergeHeader(Pipe):
                 self.i += 1
 
     def __str__(self):
+        from ..util import qualified_class_name
+
         return qualified_class_name(self) + ': header = {} '.format(','.join(str(e) for e in self.header_lines))
 
-
 class AddDeleteExpand(Pipe):
-    """Edit rows as they pass through """
+    """Edit rows as they pass through
 
-    def __init__(self, add=[], delete=[], edit={}, expand={}):
+    The constructor can take four types of functions:
+
+    add: a list of headers, or a dict of functions, each of which will add a new column to the table
+    delete: A list of headers of columns to remove from the table
+    edit: A dict of functions to each the values in a row
+    expand: Like add, but adds multiple values.
+
+    Many of the arguments take a dict, with each key being the name of a header and the value being a function
+    to produce a value for the row. In all cases, the function signature is:
+
+        f(pipe, row, value)
+
+    However, the value is only set for edit entries
+
+    >>> pl = b.pipeline('source','dimensions')
+    >>> pl.last.append(AddDeleteExpand(
+    >>>     delete = ['time','county','state'],
+    >>>     add={ "a": lambda e,r: r[4], "b": lambda e,r: r[1]},
+    >>>     edit = {'stusab': lambda e,r,v: v.lower(), 'county_name' : lambda e,v: v.upper() },
+    >>>     expand = { ('x','y') : lambda e, r: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
+
+    The ``add`` argument may also take a list, which is the names of the headers to add. The column value will be None.
+
+
+    """
+
+    def __init__(self, add=[], delete=[], edit={}, expand={}, as_dict = False):
         """
 
         :param add: List of blank columns to add, by header name, or dict of headers and functions to create the column value
@@ -414,13 +533,21 @@ class AddDeleteExpand(Pipe):
         self.edit = edit
         self.expand = expand
 
+        self.as_dict = as_dict
+
         if isinstance(self.add, (list, tuple)):
             # Convert the list of headers into a sets of functins that
             # just produce None
-            self.add = OrderedDict((k, lambda e, r: None) for k in self.add)
+            from collections import OrderedDict
+            self.add = OrderedDict( (k,lambda e,r,v: None) for k in self.add)
 
         self.edit_header = None
+        self.edit_header_code = None
         self.edit_row = None
+        self.edit_row_code = None
+        self.expand_row = None
+        self.expand_row_code = None
+
         self.edit_functions = None  # Turn dict lookup into list lookup
 
     def process_header(self, row):
@@ -430,11 +557,12 @@ class AddDeleteExpand(Pipe):
         header_parts = []
         row_parts = []
         for i, h in enumerate(row):
+
             if h in self.delete:
                 pass
             elif h in self.edit:
                 self.edit_functions[i] = self.edit[h]
-                row_parts.append('self.edit_functions[{i}](self,r[{i}])'.format(i=i))
+                row_parts.append('self.edit_functions[{i}](self,r, r[{i}])'.format(i=i))
                 header_parts.append('r[{}]'.format(i))
             else:
                 row_parts.append('r[{}]'.format(i))
@@ -444,7 +572,7 @@ class AddDeleteExpand(Pipe):
             self.edit_functions.append(f)
             i = len(self.edit_functions)-1
             assert self.edit_functions[i] == f
-            row_parts.append('self.edit_functions[{i}](self,r)'.format(i=i))
+            row_parts.append('self.edit_functions[{i}](self,r, None)'.format(i=i))
 
         # The expansions get tacked onto the end, after the adds.
         header_expansions = []
@@ -455,11 +583,12 @@ class AddDeleteExpand(Pipe):
             self.edit_functions.append(f)
             i = len(self.edit_functions) - 1
             assert self.edit_functions[i] == f
-            header_expansions += list(k)  # k must be a list or tauple or other iterable.
-            row_expanders.append('self.edit_functions[{i}](self,r)'.format(i=i))
+            header_expansions += list(k)  # k must be a list or tuple or other iterable.
+            row_expanders.append('self.edit_functions[{i}](self,r, None)'.format(i=i))
 
         if header_expansions:
-            self.expand_row = eval("lambda r,self=self: ({})".format('+'.join(row_expanders)))
+            self.expand_row_code = "lambda r,self=self: ({})".format('+'.join(row_expanders))
+            self.expand_row = eval(self.expand_row_code)
 
         # Maybe lookups in tuples is faster than in lists.
         self.edit_functions = tuple(self.edit_functions)
@@ -467,39 +596,102 @@ class AddDeleteExpand(Pipe):
         header_extra = ["'{}'".format(e) for e in (self.add.keys()+header_expansions)]
 
         # Build the single function to edit the header or row all at once
-        self.edit_header = eval("lambda r: [{}]".format(',\n'.join(header_parts + header_extra)))
-        self.edit_row = eval("lambda r,self=self: [{}]".format(',\n'.join(row_parts)))
+        self.edit_header_code = "lambda r: [{}]".format(',\n'.join(header_parts + header_extra))
+        self.edit_header = eval(self.edit_header_code)
+        self.edit_row_code = "lambda r,self=self: [{}]".format(',\n'.join(row_parts ))
+        self.edit_row = eval(self.edit_row_code)
 
         # Run it!
-        self.header = self.edit_header(row)
-        return self.header
+        return self.edit_header(row)
 
     def process_body(self, row):
 
-        return self.edit_row(row)+self.expand_row(row)
+        try:
+            r1 = self.edit_row(row)
+        except:
+            # Todo, put this into the exception
+            print "EDIT ROW CODE", self.edit_row_code
+            raise
+
+        try:
+            r2 = self.expand_row(row)
+        except:
+            # Todo, put this into the exception
+            print "EXPAND ROW CODE: ", self.expand_row_code
+            raise
+
+        return r1+r2
 
 
 class Add(AddDeleteExpand):
-
+    """Add fields to a row"""
     def __init__(self, add):
+        """Add fields using a dict of lambdas. THe new field is appended to the end of the row.
+
+        >>> pl = Pipeline()
+        >>> pl.last = Add({'source_id': lambda pipe,row: pipe.source.id })
+
+        """
         super(Add, self).__init__(add=add)
 
-
 class Expand(AddDeleteExpand):
-
-    def __init__(self,  expand):
-        super(Expand, self).__init__(expand=expand)
-
+    """Add columns to the header"""
+    def __init__(self,  expand, as_dict = False):
+        super(Expand, self).__init__(expand=expand, as_dict = as_dict)
 
 class Delete(AddDeleteExpand):
+    """Delete columns. """
     def __init__(self, delete):
         super(Delete, self).__init__(delete=delete)
 
-
 class Edit(AddDeleteExpand):
-    def __init__(self,  edit):
-        super(Edit, self).__init__(edit=edit)
+    def __init__(self,  edit, as_dict = False):
+        super(Edit, self).__init__(edit=edit, as_dict = as_dict)
 
+
+class Modify(Pipe):
+    """Base class to modify a whole row, as a dict. Does not modify the header. Uses a slower method
+    than other editing pipes. """
+
+    def __iter__(self):
+
+        from collections import OrderedDict
+
+        rg = iter(self._source_pipe)
+
+        self.headers = self.process_header(rg.next())
+
+        yield self.headers
+
+        for row in rg:
+
+            row = self.process_body(OrderedDict(zip(self.headers, row)))
+
+            if row:
+                yield row.values()
+
+class RemoveBlankColumns(Pipe):
+    """Remove columns that don't have a header"""
+
+    def __init__(self):
+        self.editor = None
+
+    def process_header(self, row):
+
+        header_parts = []
+        for i, h in enumerate(row):
+            if h.strip():
+                header_parts.append('r[{}]'.format(i))
+
+        if header_parts:
+            self.editor = eval("lambda r: [{}]".format(','.join(header_parts)))
+            return self.editor(row)
+        else:
+            self.process_body = lambda self,row: row
+            return row
+
+    def process_body(self, row):
+        return self.editor(row)
 
 class Skip(Pipe):
     """Skip rows of a table that match a predicate """
@@ -535,8 +727,6 @@ class Skip(Pipe):
             self._check = True
         else:
             self._check = self.table == self.source.dest_table.name
-
-        self.headers = row
 
         return row
 
@@ -582,6 +772,7 @@ class PrintRows(Pipe):
         try:
             self.print_at_row = int(print_at)
             self.print_at_end = False
+
         except:
             self.print_at_row = None
             self.print_at_end = bool(print_at)
@@ -598,6 +789,7 @@ class PrintRows(Pipe):
         if self.i == self.print_at_row:
             print str(self)
 
+
         self.i += 1
 
         return orig_row
@@ -611,11 +803,13 @@ class PrintRows(Pipe):
         self.count += self.count_inc
 
     def process_header(self, row):
-        self.headers = row
 
         return row
 
     def __str__(self):
+        from ..util import qualified_class_name
+        from tabulate import tabulate
+
         if self.rows:
             aug_header = ['0'] + ['#' + str(j) + ' ' + str(c) for j, c in enumerate(self.headers)]
             return (qualified_class_name(self) +
@@ -623,6 +817,67 @@ class PrintRows(Pipe):
                     tabulate(self.rows, aug_header[self.offset:self.columns], tablefmt='pipe'))
         else:
             return (qualified_class_name(self)+' 0 rows')
+
+class PrintEvery(Pipe):
+    """Print a row every N rows. Always prints the header. """
+
+    def __init__(self, N=1):
+        self.N = N
+        self.i = 0
+
+    def process_header(self, row):
+        print 'Print Header: ',row
+        return row
+
+    def process_body(self, row):
+        if self.i % self.N == 0:
+            print 'Print Row   :',row
+        self.i +=1
+        return row
+
+class MatchPredicate(Pipe):
+    """Store rows that match a predicate. THe predicate is a function that takes the row as its
+    sole parameter and returns true or false"""
+
+    def __init__(self, pred):
+        self._pred = pred
+        self.i = 0
+        self.matches = []
+
+    def process_body(self, row):
+
+        if self._pred(row):
+            self.matches.append(row)
+
+        return row
+
+class Reduce(Pipe):
+    """Like works like reduce() on the body rows, using the function f(accumulator,row) """
+
+    def __init__(self, f, initializer=None):
+        self._f = f
+        self._initializer = initializer
+        self.accumulator = None
+
+    def __iter__(self):
+
+        it = iter(self._source_pipe)
+
+        # Yield the header
+        self.headers =  next(it)
+        yield self.headers
+
+        if self._initializer is None:
+            try:
+                self.accumulator = self._f(None, next(it))
+            except StopIteration:
+                raise TypeError('reduce() of empty sequence with no initial value')
+        else:
+            self.accumulator = self._initializer
+
+        for row in it:
+            self.accumulator = self._f(self.accumulator, row)
+            yield row
 
 
 def make_table_map(table, headers):
@@ -643,8 +898,10 @@ class SelectPartition(Pipe):
     partition a row is written to. By default, uses a partition name that consists of only the
      destination table of the source and a segment of the id of the source"""
 
-    def __init__(self, select_f=None):
+    def __init__(self, select_f=None, as_dict=False):
+
         self._default = None
+        self._as_dict = as_dict
 
         # Under the theory that removing an if is faster.
         if select_f:
@@ -653,23 +910,39 @@ class SelectPartition(Pipe):
         else:
             self.process_body = self.process_body_default
 
+
     def process_header(self, row):
         from ..identity import PartialPartitionName
-        self._default = PartialPartitionName(table=self.source.dest_table_name, segment=self.source.id)
+        self._default = PartialPartitionName(table = self.source.dest_table.name, segment=self.source.id)
+        self._orig_headers = row
         return row + ['_pname']
 
     def process_body(self, row):
+        """This method gets replaced by process_body_select() or process_body_default()"""
         raise NotImplemented("This function should be patched into nonexistence")
 
     def process_body_select(self, row):
+        from ambry.identity import PartialPartitionName
 
-        name = self.select_f(self.source, row)
+        if self._as_dict:
+            name = self.select_f(self.source, dict(zip(self.headers,row)))
+        else:
+            name = self.select_f(self.source, row)
+
+        # Name must be a dict
+        if not isinstance(name, PartialPartitionName):
+            name = PartialPartitionName(**name)
+
         if not name.segment:
-            name.segment = 1
+            name.segment = self.source.id
+
+        if not name.table:
+            name.table = self.source.dest_table_name
 
         return list(row) + [name]
 
     def process_body_default(self, row):
+
         return list(row) + [self._default]
 
 
@@ -705,9 +978,7 @@ class WriteToPartition(Pipe, PartitionWriter):
 
     def process_header(self, row):
 
-        self.headers = row  # Can't write until the first row tells us what the partition is
-
-        if '_pname' not in row:
+        if not '_pname' in row:
             raise PipelineError("Did not get a _pname header. The pipeline must insert a _pname value"
                                 " to write to partitions ")
 
@@ -755,7 +1026,10 @@ class WriteToPartition(Pipe, PartitionWriter):
 
             p.datafile.insert_header(header_mapper(self.headers))
 
-        p.datafile.insert_body(body_mapper(row))
+        try:
+            p.datafile.insert_body(body_mapper(row))
+        except Exception as e:
+            self.bundle.logger.error("Insert failed: {}\n{}".format(row, e))
 
         return row
 
@@ -803,6 +1077,8 @@ class PipelineSegment(list):
 
     def __getitem__(self, k):
 
+        import inspect
+
         # Index by class
         if inspect.isclass(k):
 
@@ -847,14 +1123,20 @@ class Pipeline(OrderedDict):
     """Hold a defined collection of PipelineGroups, and when called, coalesce them into a single pipeline """
 
     bundle = None
+    name = None
+    phase = None
+    final = None
 
-    _group_names = ['source', 'first', 'body', 'augment', 'last', 'store']
+    _group_names = ['source', 'first', 'body', 'augment', 'intuit', 'last', 'store', 'final' ]
 
     def __init__(self, bundle=None,  *args, **kwargs):
 
         super(Pipeline, self).__init__()
         super(Pipeline, self).__setattr__('bundle', bundle)
         super(Pipeline, self).__setattr__('name', None)
+        super(Pipeline, self).__setattr__('phase', None)
+        super(Pipeline, self).__setattr__('final', [])
+        super(Pipeline, self).__setattr__('stopped', False)
 
         for k, v in kwargs.items():
             if k not in self._group_names:
@@ -872,11 +1154,13 @@ class Pipeline(OrderedDict):
 
     def _subset(self, subset):
         """Return a new pipeline with a subset of the sections"""
+        kwargs = {}
         pl = Pipeline(bundle=self.bundle)
         for group_name, pl_segment in self.items():
             if group_name not in subset:
                 continue
             pl[group_name] = pl_segment
+
         return pl
 
     def configure(self, pipe_config):
@@ -885,24 +1169,34 @@ class Pipeline(OrderedDict):
         # Create a context for evaluating the code for each pipeline. This removes the need
         # to qualify the class names with the module
         import ambry.etl
-        eval_locals = dict(locals().items() + ambry.etl.__dict__.items())
+        import bundle
+        eval_locals = dict(locals().items()  + ambry.etl.__dict__.items() + bundle.__dict__.items() )
+
+        replacements = {}
+
+        def eval_pipe(pipe):
+            if isinstance(pipe, basestring):
+                try:
+                    return eval(pipe, {}, eval_locals)
+                except SyntaxError as e:
+                    raise SyntaxError("SyntaxError while parsing pipe '{}' from metadata: {}"
+                                      .format(pipe, e))
+            else:
+                return pipe
 
         for segment_name, pipes in pipe_config.items():
+            if segment_name == 'final':
+                # The 'final' segment is actually a list of names of BUndle methods to call afer the pipeline
+                # completes
+                super(Pipeline, self).__setattr__('final', pipes)
+            elif segment_name == 'replace':
+                for frm, to in pipes.items():
+                    self.replace(eval_pipe(frm), eval_pipe(to))
+            else:
+                self[segment_name] = [eval_pipe(pipe) for pipe in pipes ]
 
-            parsed_pipes = []
-            for pipe in pipes:
-                if isinstance(pipe, basestring):
-                    try:
-                        parsed_pipes.append(eval(pipe, {}, eval_locals))
-                    except SyntaxError as e:
-                        raise SyntaxError("SyntaxError while parsing pipe '{}' from metadata: {}"
-                                          .format(pipe, e))
-                else:
-                    parsed_pipes.append(pipe)
 
-            self[segment_name] = parsed_pipes
-
-    def replace(self, repl_class, replacement):
+    def replace(self,repl_class, replacement):
         """Replace a pipe segment, specified by its class, with another segment"""
 
         for segment_name, pipes in self.items():
@@ -977,7 +1271,7 @@ class Pipeline(OrderedDict):
             return super(Pipeline, self).__getattr__(k)
 
     def __setattr__(self, k, v):
-        if k.startswith('_OrderedDict__') or k in ('name'):
+        if k.startswith('_OrderedDict__') or k in ('name', 'phase'):
             return super(Pipeline, self).__setattr__(k, v)
 
         self.__setitem__(k, v)
@@ -1012,14 +1306,23 @@ class Pipeline(OrderedDict):
 
     def run(self, count=None, source_pipes=None):
 
-        if source_pipes:
-            for source_pipe in source_pipes:
+        try:
+            if source_pipes:
+                for source_pipe in source_pipes:
 
-                if self.bundle:
-                    self.bundle.logger.info("Running source {} in a multi-source run".format(source_pipe.source.name))
+                    if self.bundle:
+                        self.bundle.logger.info("Running source {} in a multi-source run".format(source_pipe.source.name))
 
-                self['source'] = [source_pipe]  # Setting as a scalar appends, as a list will replace.
+                    self['source'] = [source_pipe] # Setting as a scalar appends, as a list will replace.
 
+                    chain, last = self._collect()
+
+                    sink = Sink(count=count)
+                    sink.set_source_pipe(last)
+
+                    sink.run()
+
+            else:
                 chain, last = self._collect()
 
                 sink = Sink(count=count)
@@ -1027,13 +1330,9 @@ class Pipeline(OrderedDict):
 
                 sink.run()
 
-        else:
-            chain, last = self._collect()
-
-            sink = Sink(count=count)
-            sink.set_source_pipe(last)
-
-            sink.run()
+        except StopPipe:
+            super(Pipeline, self).__setattr__('stopped', True)
+            pass
 
         return self
 
@@ -1045,17 +1344,7 @@ class Pipeline(OrderedDict):
         for row in last:
             yield row
 
-    def headers_report(self):
-        """print out all of the headers"""
-        out = []
-        chain, last = self._collect()
 
-        for pipe in chain:
-            if hasattr(pipe, 'headers'):
-                out.append(pipe.segment.name+' ' + qualified_class_name(pipe) +
-                           ': ' + unicode(pipe.headers))
-
-        return '\n'.format(self.name if self.name else '') + '\n'.join(out)
 
     def __str__(self):
 
@@ -1063,10 +1352,43 @@ class Pipeline(OrderedDict):
         chain, last = self._collect()
 
         for pipe in chain:
-            out.append((pipe.segment.name if hasattr(pipe, 'segment') else '?')
-                       + ': ' + unicode(pipe))
+            out.append((pipe.segment.name if hasattr(pipe,'segment') else '?')+': '+unicode(pipe))
+
+        out.append('final: '+str(self.final))
 
         return 'Pipeline {}\n'.format(self.name if self.name else '')+'\n'.join(out)
+
+    def headers_report(self):
+        from ambry.util import qualified_class_name
+        import tabulate
+
+        out = []
+        chain, last = self._collect()
+        for pipe in chain:
+
+            if not hasattr(pipe,'headers') or not pipe.headers:
+                continue
+
+            try:
+                seg_name = pipe.segment.name if hasattr(pipe,'segment') else '?'
+                v = [seg_name, qualified_class_name(pipe)]+[ str(e) for e in pipe.headers if e]
+                out.append(v)
+
+            except AttributeError:
+                pass
+
+        if not out:
+            return None
+
+        # Make all lines the same length
+        ll = max( len(e) for e in out)
+        for i in range(len(out)):
+            if len(out[i])< ll:
+                out[i] += ['']*(ll-len(out[i]))
+
+
+        return tabulate.tabulate(out)
+
 
 
 def augment_pipeline(pl, head_pipe=None, tail_pipe=None):

@@ -111,6 +111,11 @@ def root_parser(cmd):
     sp.set_defaults(subcommand='remove')
     sp.add_argument('term', nargs='?', type=str, help='bundle reference')
 
+    sp = cmd.add_parser('import', help='Import multiple source directories')
+    sp.set_defaults(command='root')
+    sp.set_defaults(subcommand='import')
+    sp.add_argument('term', nargs=1, type=str, help='Base directory')
+
 
 def root_command(args, rc):
     from ..library import new_library
@@ -176,7 +181,7 @@ def root_list(args, l, rc):
 def root_list_datasets(args, l, rc):
     from tabulate import tabulate
 
-    header = ['vid', 'vname', 'state', 'description']
+    header = ['vid', 'vname', 'state', 'source_fs']
     records = []
 
     for b in l.bundles:
@@ -196,9 +201,9 @@ def root_info(args, l, rc):
     prt('Root dir:  {}', rc.filesystem('root'))
 
     try:
-        if l.source:
-            prt('Source :   {}', l.source.base_dir)
-    except (ConfigurationError, AttributeError):
+        if l.filesystem.source():
+            prt('Source :   {}', l.filesystem.source())
+    except (ConfigurationError, AttributeError) as e:
         prt('Source :   No source directory')
 
     prt('Configs:   {}', rc.dict['loaded'])
@@ -322,3 +327,36 @@ def root_remove(args, l, rc):
     b = l.bundle(args.term)
 
     l.remove(b)
+
+def root_import(args, l, rc):
+    import yaml
+    from fs.opener import fsopendir
+    from . import err
+    from ambry.orm.exc import NotFoundError
+    import os
+
+    fs = fsopendir(args.term[0])
+
+    for f in fs.walkfiles(wildcard='bundle.yaml'):
+
+        config = yaml.load(fs.getcontents(f))
+
+        if not config:
+            err("Failed to get a valid bundle configuration from '{}'".format(f))
+
+        bid = config['identity']['id']
+
+        try:
+            b = l.bundle(bid)
+        except NotFoundError:
+            b = l.new_from_bundle_config(config)
+
+        b.set_file_system(source_url=os.path.dirname(fs.getsyspath(f)))
+
+        b.sync()
+
+        prt("Loaded bundle: {}".format(b.identity.fqname))
+
+
+
+

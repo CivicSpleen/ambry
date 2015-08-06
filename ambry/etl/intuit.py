@@ -9,6 +9,19 @@ from ambry.util import get_logger
 
 logger = get_logger(__name__)
 
+class unknown(str):
+
+    __name__  = 'unknown'
+
+    def __new__(cls):
+        return super(unknown, cls).__new__(cls, cls.__name__)
+
+    def __str__(self):
+        return self.__name__
+
+    def __eq__(self, other):
+        return str(self) == str(other)
+
 
 def test_float(v):
     # Fixed-width integer codes are actually strings.
@@ -20,7 +33,6 @@ def test_float(v):
         return 1
     except:
         return 0
-
 
 def test_int(v):
     # Fixed-width integer codes are actually strings.
@@ -35,13 +47,11 @@ def test_int(v):
     except:
         return 0
 
-
 def test_string(v):
     if isinstance(v, basestring):
         return 1
     else:
         return 0
-
 
 def test_datetime(v):
     """Test for ISO datetime."""
@@ -59,8 +69,8 @@ def test_datetime(v):
     for c in set(v):  # Set of Unique characters
         if not c.isdigit() and c not in 'T:-Z':
             return 0
-    return 1
 
+    return 1
 
 def test_time(v):
     if not isinstance(v, basestring):
@@ -187,6 +197,7 @@ class Column(object):
 
                 return type_
 
+
     def _resolved_type(self):
         """Return the type for the columns, and a flag to indicate that the
         column has codes."""
@@ -195,11 +206,13 @@ class Column(object):
         self.type_ratios = {test: (float(self.type_counts[test]) / float(self.count)) if self.count else None
                             for test, testf in tests + [(None, None)]}
 
+        # If it is more than 20% str, it's a str
         if self.type_ratios[str] > .2:
             return str, False
 
-        if self.type_ratios[None] > .7:
-            return str, False
+        # If more than 70% None, it's also a str, because ...
+        #if self.type_ratios[None] > .7:
+        #    return str, False
 
         if self.type_counts[datetime.datetime] > 0:
             num_type = datetime.datetime
@@ -212,17 +225,33 @@ class Column(object):
 
         elif self.type_counts[float] > 0:
             num_type = float
-        else:
+
+        elif self.type_counts[int] > 0:
             num_type = int
 
-        if self.type_counts[str] > 0:
-            return num_type, True
+        elif self.type_counts[str] > 0:
+            num_type = str
+
         else:
-            return num_type, False
+            num_type = unknown
+
+        if self.type_counts[str] > 0 and num_type != str:
+            has_codes = True
+        else:
+            has_codes = False
+
+        return num_type, has_codes
 
     @property
     def resolved_type(self):
         return self._resolved_type()[0]
+
+    @property
+    def resolved_type_name(self):
+        try:
+            return self.resolved_type.__name__
+        except AttributeError:
+            return self.resolved_type
 
     @property
     def has_codes(self):
@@ -235,6 +264,7 @@ class TypeIntuiter(Pipe):
     counts = None
 
     def __init__(self, skip_rows=1):
+        from collections import OrderedDict
 
         self._columns = OrderedDict()
         self.skip_rows = skip_rows
@@ -309,6 +339,31 @@ class TypeIntuiter(Pipe):
 
         return qualified_class_name(self) + o
 
+    @staticmethod
+    def promote_type(orig_type, new_type):
+        """Given a table with an original type, decide whether a new determination of a new applicable type
+        should overide the existing one"""
+
+        try:
+            orig_type = orig_type.__name__
+        except AttributeError:
+            pass
+
+        try:
+            new_type = new_type.__name__
+        except AttributeError:
+            pass
+
+
+        type_precidence = ['unknown', 'int', 'float', 'str']
+
+        # TODO This will fail for dates and times.
+
+        if type_precidence.index(new_type) > type_precidence.index(orig_type):
+            return new_type
+        else:
+            return orig_type
+
     def results_table(self):
 
         fields = 'position header length resolved_type has_codes count ints floats strs nones datetimes dates times '.split()
@@ -336,7 +391,7 @@ class TypeIntuiter(Pipe):
                 position=v.position,
                 header=v.header,
                 length=v.length,
-                resolved_type=v.resolved_type,
+                resolved_type=v.resolved_type_name,
                 has_codes=v.has_codes,
                 count=v.count,
                 ints=v.type_counts.get(int, None),
@@ -350,7 +405,6 @@ class TypeIntuiter(Pipe):
             )
 
             yield d
-
 
 class RowIntuiter(Pipe):
     header = None

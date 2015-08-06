@@ -196,7 +196,8 @@ class Partition(Base, DictableMixin):
 
                 tcov |= set(int(x) for x in sd[c.name].uniques)
             elif sd[c.name].is_date:
-                tcov |= set(parser.parse(x).year if isinstance(x,basestring) else x.year for x in sd[c.name].uniques)
+                # The fuzzy=True argument allows ignoring the '-' char in dates produced by .isoformat()
+                tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x,basestring) else x.year for x in sd[c.name].uniques)
 
         ## Space Coverage
 

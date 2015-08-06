@@ -1430,3 +1430,74 @@ class _GetchWindows:
 
 
 getch = _Getch()
+
+
+def scrape_urls_from_web_page(page_url):
+    import urlparse
+    from bs4 import BeautifulSoup
+    import urllib2
+
+    parts = list(urlparse.urlsplit(page_url))
+
+    parts[2] = ''
+    root_url = urlparse.urlunsplit(parts)
+
+    html_page = urllib2.urlopen(page_url)
+    soup = BeautifulSoup(html_page)
+
+    d = dict(external_documentation={}, sources={}, links={})
+
+    for link in soup.findAll('a'):
+
+        if not link:
+            continue
+
+        if link.string:
+            text = str(link.string.encode('ascii', 'ignore'))
+        else:
+            text = 'None'
+
+        url = link.get('href')
+
+        if not url:
+            continue
+
+        if 'javascript' in url:
+            continue
+
+        if url.startswith('http'):
+            pass
+        elif url.startswith('/'):
+            url = os.path.join(root_url, url)
+        else:
+            url = os.path.join(page_url, url)
+
+        base = os.path.basename(url)
+
+        if '#' in base:
+            continue
+
+        try:
+            fn, ext = base.split('.', 1)
+        except ValueError:
+            fn = base
+            ext = ''
+
+        try:  # Yaml adds a lot of junk to encode unicode.
+            fn = str(fn)
+            url = str(url)
+            text = str(text)
+        except UnicodeDecodeError:
+            pass
+
+        # xlsm is a bug that adss 'm' to the end of the url. No idea.
+        if ext.lower() in ('zip', 'csv', 'xls', 'xlsx', 'xlsm', 'txt'):
+            d['sources'][fn] = dict(url=url, description=text)
+
+        elif ext.lower() in ('pdf', 'html'):
+            d['external_documentation'][fn] = dict(url=url, description=text, title=text)
+
+        else:
+            d['links'][text] = dict(url=url, description=text, title=text)
+
+    return d

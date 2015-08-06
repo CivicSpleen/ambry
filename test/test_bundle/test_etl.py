@@ -312,9 +312,9 @@ class Test(TestBase):
 
         b = self.setup_bundle('complete-load')
 
-        b.do_clean()
-        b.do_sync()
-        b.do_prepare()
+        b.clean()
+        b.sync_in()
+        b.prepare()
 
         self.assertEquals(14, len(b.dataset.sources))
 
@@ -333,9 +333,9 @@ class Test(TestBase):
 
         b = self.setup_bundle('complete-load')
 
-        b.do_clean()
-        b.do_sync()
-        b.do_prepare()
+        b.clean()
+        b.sync_in()
+        b.prepare()
 
         for i,row in enumerate(b.source('simple_fixed').fetch().source_pipe()):
             print row
@@ -354,9 +354,9 @@ class Test(TestBase):
 
         b = self.setup_bundle('complete-load')
 
-        b.do_clean()
-        b.do_source_meta()
-        b.do_prepare()
+        b.clean()
+        b.sync_in()
+        b.meta_source()
 
         pl = [
             b.source('rent97').fetch().source_pipe(),
@@ -412,13 +412,13 @@ class Test(TestBase):
     def test_etl_pipeline(self):
 
         b = self.setup_bundle('simple')
-        b.do_sync()
-        b.do_prepare()
-        print b.pipeline(source='simple')
+        b.sync_in()
+        b.prepare()
+        print b.pipeline('build', 'simple')
 
         print '---'
 
-        print b.pipeline(phase='build2')
+        print b.pipeline('build2')
 
     @unittest.skip('This test needs a source that has a  bad header.')
     def test_mangle_header(self):
@@ -444,20 +444,20 @@ class Test(TestBase):
 
         b = self.setup_bundle('complete-load')
 
-        b.sync()
+        b.sync_in()
         b = b.cast_to_build_subclass()
-        self.assertEquals('synced', b.state)
+        self.assertEquals('new', b.state)
 
-        b.do_schema_meta()
+        b.meta()
 
-        b.do_prepare()
-        self.assertEquals('prepared', b.state)
+        #print b.source_fs.getcontents('schema.csv')
 
-        #b.do_build()
-
-        pl = b.pipeline('rent07', 'build')
+        b.prepare()
+        self.assertEquals('prepare_done', b.state)
 
         print b.table('rent')
+
+        pl = b.pipeline('build', 'rent07')
 
         print str(pl)
 
@@ -468,10 +468,11 @@ class Test(TestBase):
         """"""
 
         b = self.setup_bundle('complete-load')
-        b.sync()
+        b.sync_in()
         b = b.cast_to_meta_subclass()
 
-        b.do_meta()
+        b.meta()
+        b.sync_out()
 
         self.assertIn('position', b.source_fs.getcontents('source_schema.csv'))
         self.assertIn('renter_cost_gt_30',b.source_fs.getcontents('source_schema.csv'))
@@ -511,15 +512,15 @@ class Test(TestBase):
             build_url = source_url = None
 
         b = self.setup_bundle('complete-load', build_url = build_url, source_url = source_url)
-        b.do_sync()
+        b.sync_in()
         b = b.cast_to_meta_subclass()
-        b.do_prepare()
 
-        b.do_meta('rent07')
+        b.meta('rent07')
 
         # self.assertEquals(6, len(b.dataset.source_tables))
 
         # Check the source schema file.
+        b.sync_out()
         self.assertIn('renter_cost_gt_30', b.source_fs.getcontents('source_schema.csv'))
         self.assertIn('rent,1,gvid,gvid,str,,,,,,',b.source_fs.getcontents('source_schema.csv'))
         self.assertIn('rpeople,1,size,size,float,,,,,,', b.source_fs.getcontents('source_schema.csv'))
@@ -552,7 +553,7 @@ class Test(TestBase):
                 pl.build_last = PrintRows(print_at='end')
 
         b = b.cast_to_subclass(TestBundle)
-        b.do_build('rent')
+        b.build('rent')
 
     def test_type_intuition(self):
 
@@ -562,14 +563,13 @@ class Test(TestBase):
 
         b = self.setup_bundle('process', source_url='temp://') # So modtimes work properly
 
-        b.sync()
+        b.sync_in()
         b = b.cast_to_build_subclass()
-        self.assertEquals('synced', b.state)
-        b.do_prepare()
-        self.assertEquals('prepared', b.state)
+        self.assertEquals('new', b.state)
+        b.prepare()
+        self.assertEquals('prepare_done', b.state)
 
-
-        pl = b.pipeline('types1', 'source').run()
+        pl = b.pipeline('source','types1').run()
 
         self.assertTrue(bool(pl.source))
 
@@ -595,7 +595,7 @@ class Test(TestBase):
         b.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
 
         time.sleep(2) # Give modtimes a chance to change
-        self.assertEqual(4, sum( e[1] == 'rtf' for e in b.do_sync() ))
+        self.assertEqual(6, sum( e[1] == 'rtf' for e in b.sync() ))
 
     def test_pipe_config(self):
 
@@ -604,39 +604,40 @@ class Test(TestBase):
 
         import yaml
 
-        b.do_sync()
+        b.sync_in()
 
         # Re-write the metadata to include a pipeline
         with b.source_fs.open('bundle.yaml') as f:
             config =  yaml.load(f)
 
         config['pipelines']['build'] = dict(
-            first=["Add({'a': lambda e,r: 1 }) "],
-            # dest_augment = "Edit( add = { 'a': lambda e,r: 1 }) ",
+            augment=["Add({'a': lambda e,r,v: 1 }) "],
             last=["PrintRows(print_at='end')"],
             store=['SelectPartition','WriteToPartition']
         )
 
         config['pipelines']['source'] = [
             'MergeHeader',
-            "Add({'a': lambda e,r: 1 }) ",
+            "Add({'a': lambda e,r,v: 1 }) ",
             'TypeIntuiter()',
             'MangleHeader()',
         ]
+
+        config['pipelines']['schema'] = dict(
+            augment=["Add({'a': lambda e,r,v: 1 }) "],
+        )
 
 
         with b.source_fs.open('bundle.yaml', 'wb') as f:
             yaml.dump(config, f)
 
-        b.do_sync(force='ftr') # force b/c not enough time for modtime to change
+        b.sync_in() # force b/c not enough time for modtime to change
 
-        b.do_source_meta()
+        b.run_phase('source')
 
-        b.do_schema_meta()
+        b.run_phase('schema')
 
-        b.do_prepare()
-
-        b.do_build()
+        b.build()
 
         print list(b.build_fs.walkfiles())
 
@@ -644,6 +645,8 @@ class Test(TestBase):
 
         p = list(b.partitions)[0]
         self.assertEquals(10001, len(list(p.stream())))
+
+        print b.build_fs.getcontents('/pipeline/build-simple.txt')
 
         for i, row in enumerate(p.stream()):
 
@@ -661,27 +664,31 @@ class Test(TestBase):
         from ambry.etl.pipeline import PrintRows, AddDeleteExpand
 
         b = self.setup_bundle('dimensions')
-        b.do_sync()
-        b.do_prepare()
+        b.sync_in()
+        b.prepare()
 
-        pl = b.pipeline('dimensions','source')
-        pl.last.append(AddDeleteExpand(delete = ['time','county','state'],
-                            add={ "a": lambda e,r: r[4], "b": lambda e,r: r[1]},
-                            edit = {'stusab': lambda e,v: v.lower(), 'county_name' : lambda e,v: v.upper() },
-                            expand = { ('x','y') : lambda e, r: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
+        pl = b.pipeline('source','dimensions')
+        pl.last.append(AddDeleteExpand(
+                            delete = ['time','county','state'],
+                            add={ "a": lambda e,r,v: r[4], "b": lambda e,r,v: r[1]},
+                            edit = {'stusab': lambda e,r,v: v.lower(), 'county_name' : lambda e,r,v: v.upper() },
+                            expand = { ('x','y') : lambda e, r, v: [ parse(r[1]).hour, parse(r[1]).minute ] } ))
         pl.last.append(PrintRows)
         pl.last.prepend(PrintRows)
         # header: ['date', 'time', 'stusab', 'state', 'county', 'county_name']
 
         pl.run()
 
-        print str(pl)
 
         # The PrintRows Pipes save the rows they print, so lets check that the before doesn't have the edited
         # row and the after does.
         row = [9, u'2002-03-21', u'la', u'MARIPOSA COUNTY, CALIFORNIA', u'43', u'09:11:40 PM', 21, 11]
         self.assertNotIn(row, pl.last[0].rows)
         self.assertIn(row, pl.last[2].rows)
+
+        print pl.last[0]
+
+        print pl.last[2]
 
     def test_sample_head(self):
         from ambry.etl.pipeline import Pipeline, Pipe, PrintRows, Sample, Head
@@ -756,13 +763,13 @@ class Test(TestBase):
         b = self.setup_bundle('segments')
         l = b._library
 
-        b.do_sync()
+        b.sync_in()
 
-        b.do_meta()
+        b.meta()
 
-        b.do_prepare()
+        b.prepare()
 
-        b.do_build()
+        b.build()
 
         p = list(b.partitions)[0]
 

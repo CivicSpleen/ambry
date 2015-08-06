@@ -1,0 +1,14 @@
+accounts:
+
+    ambry:
+        name: Bob Bobson
+        org: Civic Knowledge
+        email: bob@civicknowledge.com
+        url: http://civicknowledge.com
+
+    host1:
+        user: creduser1
+        password: credpass1
+
+    host2-user2-dbname:
+        password: credpass2

@@ -14,6 +14,7 @@ from sqlalchemy.orm import relationship
 from source_table import SourceTable
 from table import Table
 from . import Base,  DictableMixin
+from ambry.etl import Pipe
 
 
 class SourceError(Exception):
@@ -22,16 +23,17 @@ class SourceError(Exception):
 
 class DelayedOpen(object):
 
-    def __init__(self, source, fs, path, mode='r', from_cache=False):
+    def __init__(self, source, fs, path, mode = 'r', from_cache = False, account_accessor = None):
         self._source = source
         self._fs = fs
         self._path = path
         self._mode = mode
+        self._account_accessor = account_accessor
 
         self.from_cache = from_cache
 
-    def open(self, mode=None):
-        return self._fs.open(self._path, mode if mode else self._mode)
+    def open(self, mode = None, encoding = None ):
+        return self._fs.open(self._path, mode if mode else self._mode, encoding = encoding )
 
     def syspath(self):
         return self._fs.getsyspath(self._path)
@@ -39,17 +41,19 @@ class DelayedOpen(object):
     def source_pipe(self):
         return self._source.row_gen()
 
-
-class SourceRowGen(object):
+class SourceRowGen(Pipe):
     """Holds a reference to a source record """
 
     def __init__(self, source, rowgen):
-        self.source = source
+        self._source = source
         self._rowgen = rowgen
 
     def __iter__(self):
         for row in self._rowgen:
             yield row
+
+    def __str__(self):
+        return super(SourceRowGen, self).__str__() +" source={} rowgen={}".format(self._source.name, type(self._rowgen))
 
 
 class DataSource(Base, DictableMixin):
@@ -89,6 +93,8 @@ class DataSource(Base, DictableMixin):
     hash = SAColumn('ds_hash', Text)
 
     generator = SAColumn('ds_generator', Text)  # class name for a Pipe to generator rows
+
+    account_acessor = None
 
     __table_args__ = (
         UniqueConstraint('ds_d_vid', 'ds_name', name='_uc_ds_d_vid'),
@@ -156,7 +162,7 @@ class DataSource(Base, DictableMixin):
         # Use an Ordered Dict to make it friendly to creating CSV files.
 
         d = OrderedDict([(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
-                          if p.key not in ('_source_table', '_dest_table', 'd_vid', 't_vid','st_id', 'dataset', 'hash' )])
+                          if p.key not in ('id', '_source_table', '_dest_table', 'd_vid', 't_vid','st_id', 'dataset', 'hash' )])
 
         return d
 
@@ -166,23 +172,23 @@ class DataSource(Base, DictableMixin):
             if hasattr(self, k):
                 setattr(self,k, v)
 
-    def source_pipe(self, cache_fs=None):
+    def source_pipe(self, cache_fs=None, account_accessor = None):
 
         if self.generator: # Get the source from the generator, not from a file.
             import bundle
             gen = eval(self.generator)
             return gen(self)
         else:
-            return self.fetch(cache_fs).source_pipe()
+            return self.fetch(cache_fs, account_accessor = account_accessor).source_pipe()
 
-    def fetch(self, cache_fs = None):
+    def fetch(self, cache_fs = None, account_accessor = None):
         """Download the source and return a callable object that will open the file. """
 
         from fs.zipfs import ZipFS
         import os
 
         if self.get_urltype() == 'gs':
-            return DelayedOpen(self, None, None, None)
+            return DelayedOpen(self, None, None, None, None)
 
         if cache_fs is None:
             cache_fs = self._cache_fs # Set externally by Bundle in ambry.bundle.bundle.Bundle#source
@@ -195,7 +201,7 @@ class DataSource(Base, DictableMixin):
         if not self.url:
             raise SourceError("Can't download; not url specified")
 
-        f = download(self.url, cache_fs)
+        f = download(self.url, cache_fs, account_accessor = account_accessor)
 
         if self.get_urltype() == 'zip':
 
@@ -203,7 +209,7 @@ class DataSource(Base, DictableMixin):
             if not self.file:
                 first = walk_all(fs)[0]
 
-                fstor = DelayedOpen(self, fs, first, 'rU')
+                fstor = DelayedOpen(self, fs, first, 'rU', None)
             else:
                 import re
 
@@ -213,7 +219,7 @@ class DataSource(Base, DictableMixin):
                         continue
 
                     if re.search(self.file, zip_fn):
-                        fstor = DelayedOpen( self,  fs,zip_fn, 'rb')
+                        fstor = DelayedOpen( self,  fs,zip_fn, 'rb', account_accessor)
                         break
 
         else:
@@ -242,13 +248,13 @@ class DataSource(Base, DictableMixin):
         elif gft == 'fixed' or gft == 'txt':
             from ambry.util.fixedwidth import fixed_width_iter
 
-            return SourceRowGen( self, fixed_width_iter(fstor.open(), self.widths))
+            return SourceRowGen( self, fixed_width_iter(fstor.open(mode='r',encoding=self.encoding), self))
         elif gft == 'xls':
             return SourceRowGen( self, excel_iter(fstor.syspath(), self.segment ))
         elif gft == 'xlsx':
             return SourceRowGen( self, excel_iter(fstor.syspath(), self.segment ))
         else:
-            raise ValueError("Unknown filetype: {} ".format(gft))
+            raise ValueError("Unknown filetype for source {}: {} ".format(self.name, gft))
 
     @property
     def source_table(self):
@@ -293,6 +299,10 @@ class DataSource(Base, DictableMixin):
     def widths(self):
         return self.source_table.widths
 
+    @property
+    def headers(self):
+        return self.source_table.headers
+
 
 def excel_iter(file_name, segment):
     from xlrd import open_workbook
@@ -315,13 +325,47 @@ def excel_iter(file_name, segment):
     for i in range(0, s.nrows):
         yield srow_to_list(i, s)
 
+def get_s3(url, account_accessor):
+    # TODO: Hack the pyfilesystem fs.opener file to get credentials from a keychain
+    # The monkey patch fixes a bug: https://github.com/boto/boto/issues/2836
+    from fs.s3fs import S3FS
+    from ambry.util import parse_url_to_dict
 
-def download(url, cache_fs):
+    import ssl
+
+    _old_match_hostname = ssl.match_hostname
+
+    def _new_match_hostname(cert, hostname):
+        if hostname.endswith('.s3.amazonaws.com'):
+            pos = hostname.find('.s3.amazonaws.com')
+            hostname = hostname[:pos].replace('.', '') + hostname[pos:]
+        return _old_match_hostname(cert, hostname)
+
+    ssl.match_hostname = _new_match_hostname
+
+    pd = parse_url_to_dict(url)
+
+    account = account_accessor(pd['netloc'])
+
+    s3 = S3FS(
+        bucket=pd['netloc'],
+        #prefix=pd['path'],
+        aws_access_key=account['access'],
+        aws_secret_key=account['secret'],
+
+    )
+
+    #ssl.match_hostname = _old_match_hostname
+
+    return s3
+
+def download(url, cache_fs, account_accessor=None):
     import urlparse
 
     import os.path
     import requests
     from ambry.util.flo import copy_file_or_flo
+    from ambry.util import parse_url_to_dict
 
     parsed = urlparse.urlparse(str(url))
 
@@ -334,14 +378,35 @@ def download(url, cache_fs):
 
     if not cache_fs.exists(cache_path):
 
-        r = requests.get(url, stream=True)
-
         cache_fs.makedir(os.path.dirname(cache_path), recursive=True, allow_recreate=True)
 
-        with cache_fs.open(cache_path, 'wb') as f:
-            copy_file_or_flo(r.raw, f)
+        if url.startswith('s3:'):
+            s3 = get_s3(url, account_accessor)
+            pd = parse_url_to_dict(url)
+
+            with cache_fs.open(cache_path, 'wb') as fout:
+                with s3.open(pd['path'], 'rb') as fin:
+                    copy_file_or_flo(fin, fout)
+
+        elif url.startswith('ftp:'):
+            import shutil
+            import urllib2
+            from contextlib import closing
+
+            with closing(urllib2.urlopen(url)) as fin:
+                with cache_fs.open(cache_path, 'wb') as fout:
+                    shutil.copyfileobj(fin, fout)
+
+        else:
+
+            r = requests.get(url, stream=True)
+
+            with cache_fs.open(cache_path, 'wb') as f:
+                copy_file_or_flo(r.raw, f)
 
     return cache_path
+
+
 
 
 def make_excel_date_caster(file_name):

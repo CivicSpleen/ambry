@@ -114,14 +114,20 @@ class File(Base, DictableMixin):
         import hashlib
         import time
 
+        old_size = self.size
+        new_size = len(contents)
+
+        # TODO remove this, debugging only.
+        #assert not old_size or  new_size > .5*old_size, "new={} old={}".format(new_size, old_size)
+
         self.contents = contents
-        self.hash = hashlib.md5(self.contents).hexdigest()
+        self.hash = hashlib.md5(contents).hexdigest()
         self.modified = time.time()
-        self.size = len(self.contents)
+        self.size = new_size
 
     @property
     def has_contents(self):
-        return self.size > 0
+        return self.size > 0 and self.unpacked_contents is not None
 
     @property
     def row(self):

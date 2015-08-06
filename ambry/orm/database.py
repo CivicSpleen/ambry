@@ -8,7 +8,7 @@ from collections import namedtuple
 import pkgutil
 import os
 
-from sqlalchemy.exc import IntegrityError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, ProgrammingError, OperationalError
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy import create_engine, event
 
@@ -139,6 +139,10 @@ class Database(object):
         except ProgrammingError:
             # This happens when the datasets table doesn't exist
             pass
+        except OperationalError:
+            # TODO Should check that the error is b/c the datasets table is missing, and reraise if it is for
+            # some other reason.
+            return False
 
         finally:
             self.close_connection()

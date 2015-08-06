@@ -38,13 +38,8 @@ def get_bundle_ref(args,l):
     from ambry.orm.exc import NotFoundError
     from ambry.identity import NotObjectNumberError
 
-    cwd_bundle = os.path.join(os.getcwd(), 'bundle.yaml')
-    if os.path.exists(cwd_bundle):
-        import yaml
-        with open(cwd_bundle) as f:
-            config =  yaml.load(f)
-            id_ = config['identity']['id']
-            return (id_, 'directory')
+    if args.id:
+        return (args.id, '-i argument')
 
     try:
         if args.term:
@@ -53,23 +48,35 @@ def get_bundle_ref(args,l):
     except (AttributeError, NotFoundError, NotObjectNumberError):
         pass
 
-    if args.id:
-        return (args.id, '-i argument')
-    elif 'AMBRY_BUNDLE' in os.environ:
+    if 'AMBRY_BUNDLE' in os.environ:
         return (os.environ['AMBRY_BUNDLE'], 'environment')
-    else:
-        history = l.edit_history()
 
-        if history:
-            return (history[0].d_vid, 'history')
+    cwd_bundle = os.path.join(os.getcwd(), 'bundle.yaml')
+
+    if os.path.exists(cwd_bundle):
+        import yaml
+
+        with open(cwd_bundle) as f:
+            config = yaml.load(f)
+            id_ = config['identity']['id']
+            return (id_, 'directory')
+
+    history = l.edit_history()
+
+    if history:
+        return (history[0].d_vid, 'history')
 
     return None, None
 
-def using_bundle(args,l):
+def using_bundle(args,l, print_loc = True):
 
     ref, frm = get_bundle_ref(args,l)
 
-    prt('Using bundle ref {}, referenced from {}'.format(ref, frm))
+    if not ref:
+        fatal("Didn't get a bundle ref from the -i option, history, environment or argument")
+
+    if print_loc:
+        prt('Using bundle ref {}, referenced from {}'.format(ref, frm))
 
     b = l.bundle(ref)
 
@@ -104,7 +111,7 @@ def bundle_parser(cmd):
     sp.add_argument('-p', '--space', default=None, help='Spatial extent name')
     sp.add_argument('-v', '--variation', default=None, help='Name of the variation')
     sp.add_argument('-n', '--dryrun', action="store_true", default=False, help='Dry run')
-    sp.add_argument('-k', '--key', help='Number server key. Use \'self\' for a random, self-generated key.')
+    sp.add_argument('-k', '--key', default = 'self', help='Number server key. Use \'self\' for a random, self-generated key.')
     sp.add_argument('args', nargs=argparse.REMAINDER)  # Get everything else.
 
     #
@@ -138,7 +145,8 @@ def bundle_parser(cmd):
     command_p.set_defaults(subcommand='info')
     command_p.add_argument('-w', '--which', default=False, action="store_true",
                            help='Report the reference of the bundles that will be accessed by other commands')
-
+    command_p.add_argument('-s', '--source_dir', default=False, action="store_true",
+                           help='Display the source directory')
     command_p.add_argument('-S', '--stats', default=False, action="store_true",
                            help='Also report column stats for partitions')
     command_p.add_argument('-P', '--partitions', default=False, action="store_true",
@@ -151,17 +159,6 @@ def bundle_parser(cmd):
     #
     command_p = sub_cmd.add_parser('sync', help='Sync with a source representation')
     command_p.set_defaults(subcommand='sync')
-    group = command_p.add_mutually_exclusive_group()
-    group.add_argument('-s', '--from-source', default=False, action="store_const",
-                            const = BuildSourceFile.SYNC_DIR.FILE_TO_RECORD, dest='sync_dir',
-                            help='Force sync from source to database')
-    group.add_argument('-d', '--from-database', default=False, action="store_const",
-                            const=BuildSourceFile.SYNC_DIR.RECORD_TO_FILE, dest='sync_dir',
-                            help='Source sync from database file records to source')
-    group.add_argument('-o', '--from-objects', default=False, action="store_const",
-                       const=BuildSourceFile.SYNC_DIR.OBJECT_TO_FILE, dest='sync_dir',
-                       help='Source sync from database objects to source')
-    command_p.add_argument('-t', '--test', default=False, action="store_true", help='Only Report the directions of the next sync')
     command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
 
     #
@@ -218,6 +215,19 @@ def bundle_parser(cmd):
 
 
     #
+    # Phase Command
+    #
+    command_p = sub_cmd.add_parser('phase', help='Run a phase')
+    command_p.set_defaults(subcommand='phase')
+
+    command_p.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
+    command_p.add_argument('-s', '--sync', default=False, action="store_true",
+                           help='Syncrhonize before building')
+
+    command_p.add_argument('phase', nargs='?', type=str, help='Name of phase')
+    command_p.add_argument('source', nargs='?', type=str, help='Name of a single source')
+
+    #
     # Finalize Command
     #
     command_p = sub_cmd.add_parser('finalize', help='Finalize the bundle, preventing further changes')
@@ -255,6 +265,7 @@ def bundle_parser(cmd):
 
     command_p = sub_cmd.add_parser('run', help='Run a method on the bundle')
     command_p.set_defaults(subcommand='run')
+    command_p.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
     command_p.add_argument('method', metavar='Method', type=str, help='Name of the method to run')
     command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
 
@@ -310,13 +321,17 @@ def bundle_info(args, l, rc):
 
     if args.which:
         ref, frm = get_bundle_ref(args, l)
-        b = using_bundle(args, l)
+        b = using_bundle(args, l, print_loc=False)
         prt('Will use bundle ref {}, {}, referenced from {}'.format(ref, b.identity.vname, frm))
         return
 
-    b = using_bundle(args, l)
+    b = using_bundle(args, l, print_loc=False)
 
     b.set_last_access(Bundle.STATES.INFO)
+
+    if args.source_dir:
+        print b.source_fs.getsyspath('/')
+        return
 
     def inf(column,k,v):
         info[column].append((k, v))
@@ -445,7 +460,7 @@ def bundle_finalize(args, l, rc):
 def bundle_clean(args, l, rc):
     from ambry.bundle import Bundle
     b = using_bundle(args, l).cast_to_build_subclass()
-    b.do_clean()
+    b.clean()
     b.set_last_access(Bundle.STATES.NEW)
 
 def bundle_download(args, l, rc):
@@ -459,17 +474,8 @@ def bundle_sync(args, l, rc):
     from tabulate import tabulate
 
     b = using_bundle(args,l).cast_to_build_subclass()
-
-    prt("Bundle source filesystem: {}".format(b.source_fs))
-    prt("Sync direction: {}".format(args.sync_dir if args.sync_dir else 'latest'))
-
-    if args.test:
-        syncs = b.build_source_files.sync_dirs()
-    else:
-        syncs =  b.do_sync(args.sync_dir if args.sync_dir else None)
-
-    print tabulate(syncs, headers="Key Direction".split())
-
+    b.sync_in()
+    b.sync_out()
     b.set_last_access(Bundle.STATES.SYNCED)
 
 def bundle_meta(args, l, rc):
@@ -478,29 +484,18 @@ def bundle_meta(args, l, rc):
     b = using_bundle(args, l).cast_to_meta_subclass()
 
     if args.clean:
-        b.do_clean()
+        b.clean()
         b.set_last_access(Bundle.STATES.CLEANED)
 
-    b.do_sync()
+
+    b.sync()
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
     b = using_bundle(args, l).cast_to_meta_subclass()
-    b.do_meta(print_pipe=args.print_pipe)
+    b.meta()
     b.set_last_access(Bundle.STATES.META)
 
-def bundle_prepare(args, l, rc):
-    from ambry.bundle import Bundle
 
-    if args.clean or args.sync:
-        b = using_bundle(args, l).cast_to_build_subclass()
-        if args.clean:
-            b.do_clean()
-
-        if args.sync:
-            b.do_sync()
-
-    b = using_bundle(args, l).cast_to_build_subclass()
-    b.do_prepare()
 
 def bundle_build(args, l, rc):
     from ambry.bundle import Bundle
@@ -508,21 +503,35 @@ def bundle_build(args, l, rc):
     b = using_bundle(args, l).cast_to_build_subclass()
 
     if args.clean:
-        if not b.do_clean():
+        if not b.clean():
             b.error("Clean failed, not building")
             return False
+        b.set_last_access(Bundle.STATES.CLEANED)
+        b.commit()
 
-        if not b.do_prepare():
-            b.error("Prepare failed, not building")
-            return False
-
-    if not b.is_prepared:
-        if not b.do_prepare():
-            b.error("Prepare failed, not building")
-            return False
-
-    b.do_build(print_pipe=args.print_pipe)
+    b.sync_in()
+    b.build()
+    b.sync_out()
     b.set_last_access(Bundle.STATES.BUILT)
+
+def bundle_phase(args, l, rc):
+    from ambry.bundle import Bundle
+
+    b = using_bundle(args, l).cast_to_build_subclass()
+
+    if args.clean:
+        if not b.clean():
+            b.error("Clean failed, not building")
+            return False
+        b.set_last_access(Bundle.STATES.META)
+        b.commit()
+
+    b.sync_in()
+    b.run_phase(args.phase)
+    b.sync_out()
+
+    b.set_last_access(Bundle.STATES.META)
+    b.commit()
 
 def bundle_install(args, l, rc):
     raise NotImplementedError()
@@ -531,12 +540,17 @@ def bundle_install(args, l, rc):
 
     return True
 
-
 def bundle_run(args, l, rc):
 
     import sys
 
-    b = using_bundle(args, l).cast_to_meta_subclass()
+    b = using_bundle(args, l)
+
+    if args.clean:
+        b.clean()
+
+    b.sync_in() # Must come before cast_to_meta_subclass
+    b = b.cast_to_meta_subclass()
 
     b.load_requirements()
 
@@ -555,7 +569,9 @@ def bundle_run(args, l, rc):
 
     b.logger.info("Running: {}({})".format(str(args.method), ','.join(args.args)))
 
+
     r = f(*args.args)
+    b.sync_out()
 
     print "RETURN: ", r
 
@@ -580,7 +596,7 @@ def bundle_dump(args, l, rc):
 
     b = l.bundle(ref)
 
-    prt("Dumping configs for {}\n".format(b.identity.fqname))
+    prt("Dumping {} for {}\n".format(args.table,b.identity.fqname))
 
     def trunc(v,l):
         return v[:l] + (v[l:] and '..')
@@ -661,19 +677,29 @@ def bundle_dump(args, l, rc):
 
         if records:
             headers, records = records[0], records[1:]
-        headers = []
-
+        else:
+            headers = []
 
     elif args.table == 'tables':
-
+        from collections import OrderedDict
         records = []
         headers = []
         for t in b.dataset.tables:
-            for c in t.columns:
-                if not headers:
-                    headers = c.row.keys()
+            for i,c in enumerate(t.columns):
+                row = OrderedDict( (k,v) for k,v in c.row.items() if k in
+                ['table','name','id','datatype'])
 
-                records.append(c.row.values())
+                if i == 0:
+                    records.append(row.keys())
+
+                records.append(row.values())
+
+        records = zip(*[row for row in zip(*records) if bool(filter(bool, row[1:]))])
+
+        if records:
+            headers, records = records[0], records[1:]
+        else:
+            headers = []
 
 
     print tabulate.tabulate(records, headers = headers)
@@ -761,21 +787,15 @@ def bundle_config_scrape(args, b, st, rc):
     import yaml
     print yaml.dump(d, default_flow_style=False)
 
-
-
-
 def bundle_repopulate(args, b, st, rc):
     raise NotImplementedError()
     return b.repopulate()
-
-
 
 def bundle_new(args, l, rc):
     """Clone one or more registered source packages ( via sync ) into the
     source directory."""
 
     from ambry.orm.exc import ConflictError
-
 
     d = dict(
          dataset= args.dataset,
@@ -801,7 +821,7 @@ def bundle_new(args, l, rc):
         fatal("Must set accounts.ambry.email and accounts.ambry.name, usually in {}".format(rc.USER_ACCOUNTS))
 
     try:
-        b = l.new_bundle(**d)
+        b = l.new_bundle(assignment_class = args.key, **d)
 
     except ConflictError:
         fatal("Can't create dataset; one with a conflicting name already exists")
@@ -849,25 +869,20 @@ def bundle_export(args, l, rc):
 
     b = using_bundle(args,l)
 
+    if b.is_finalized:
+        fatal("Can't export a finalized bundle: state =  {}".format(b.state))
+
     if args.source:
-        source_dir = args.source
-    else:
-        import os
-        source_dir = os.getcwd()
+        source_dir = os.path.abspath(args.source)
 
-    if args.append:
-        source_dir = os.path.join(source_dir,b.identity.source_path)
+        if args.append:
+            source_dir = os.path.join(source_dir,b.identity.source_path)
 
-    source_dir = os.path.abspath(source_dir)
+        b.set_file_system(source_url=source_dir)
 
-    fs = fsopendir(source_dir, create_dir = True)
+    b.sync(force='rtf', defaults = args.defaults)
 
-    b.set_file_system(source_url=source_dir)
-
-    if not b.is_finalized:
-        b.sync(force='rtf', defaults = args.defaults)
-
-    prt("Exported bundle: {}".format(source_dir))
+    prt("Exported bundle: {}".format(b.source_fs))
 
 file_const_map = dict(
     b=File.BSFILE.BUILD,
@@ -970,12 +985,12 @@ def bundle_edit(args, l, rc):
             elif command == 'build':
                 bc = b.cast_to_build_subclass()
                 if arg == 'p':
-                    bc.do_clean()
-                    bc.do_prepare()
+                    bc.clean()
+                    bc.prepare()
 
                 elif arg == 'B':
-                    bc.do_clean()
-                    bc.do_build()
+                    bc.clean()
+                    bc.build()
 
             elif command == 'unknown':
                 warn('Unknown command char: {} '.format(arg))

@@ -336,7 +336,7 @@ class Table(Base, DictableMixin):
         headers = "Seq Vid Name Datatype ".split()
         rows = [ (c.sequence_id, c.vid, c.name, c.datatype ) for c in self.columns ]
 
-        return ('Table: {}\n'.format(self.name)) + tabulate(rows, headers)
+        return ('Dest Table: {}\n'.format(self.name)) + tabulate(rows, headers)
 
 
 

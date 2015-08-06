@@ -13,17 +13,20 @@ logger = get_logger(__name__, level=logging.INFO, propagate=False)
 
 def new_library(config=None):
 
-
     from ..orm import Database
     from .filesystem import LibraryFilesystem
     from boto.exception import S3ResponseError  # the ckcache lib should return its own exception
+    from ..util import unparse_url_dict
 
     if config is None:
         from ..run import get_runconfig
         config = get_runconfig()
 
     lfs = LibraryFilesystem(config)
-    db = Database(config.library()['database'])
+
+    db_config = config.library()['database']
+
+    db = Database(db_config)
     warehouse = None
 
     l = Library(config=config,
@@ -154,8 +157,8 @@ class Library(object):
 
         b.set_last_access(Bundle.STATES.NEW)
 
-        b.set_file_system(source_url=self._fs.source(ds.name),
-                          build_url=self._fs.build(ds.name))
+        b.set_file_system(source_url=self._fs.source(b.identity.source_path),
+                          build_url=self._fs.build(b.identity.source_path))
 
         self._db.commit()
         return b
@@ -319,7 +322,6 @@ class Library(object):
 
             nf = File(**d)
 
-
             ds.files.append(nf)
 
         ds.commit()
@@ -386,8 +388,8 @@ class Library(object):
 
         remote = self.remote(remote_name)
 
-        #temp = fsopendir("temp://ambry-import", create_dir = True)
-        temp = fsopendir("/tmp/ambry-import", create_dir=True)
+        temp = fsopendir("temp://ambry-import", create_dir = True)
+        #temp = fsopendir("/tmp/ambry-import", create_dir=True)
 
         for fn in remote.walkfiles(wildcard='*.db'):
             temp.makedir(os.path.dirname(fn), recursive = True, allow_recreate=True)

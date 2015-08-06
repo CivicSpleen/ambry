@@ -203,6 +203,13 @@ class StatSet(object):
     def dict(self):
         """Return a  dict that can be passed into the ColumnStats constructor"""
         from collections import OrderedDict
+
+        try:
+            skewness = self.skewness
+            kurtosis = self.kurtosis
+        except ZeroDivisionError:
+            skewness = kurtosis = float('nan')
+
         return OrderedDict([
             ('name', self.column_name),
             ('flags', self.flags),
@@ -216,8 +223,8 @@ class StatSet(object):
             ('p50',self.p50),
             ('p75',self.p75),
             ('max',self.max),
-            ('skewness',self.skewness),
-            ('kurtosis',self.kurtosis),
+            ('skewness', skewness),
+            ('kurtosis', kurtosis),
             ('hist',self.bins),
             ('uvalues',dict(self.counts.most_common(100)) ) ]
         )
