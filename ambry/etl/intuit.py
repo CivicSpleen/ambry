@@ -1,7 +1,7 @@
 """Intuit data types for rows of values."""
 __author__ = 'eric'
 
-from collections import deque, OrderedDict
+from collections import deque
 import datetime
 
 from ambry.etl.pipeline import Pipe
@@ -9,9 +9,10 @@ from ambry.util import get_logger
 
 logger = get_logger(__name__)
 
+
 class unknown(str):
 
-    __name__  = 'unknown'
+    __name__ = 'unknown'
 
     def __new__(cls):
         return super(unknown, cls).__new__(cls, cls.__name__)
@@ -354,7 +355,6 @@ class TypeIntuiter(Pipe):
         except AttributeError:
             pass
 
-
         type_precidence = ['unknown', 'int', 'float', 'str']
 
         # TODO This will fail for dates and times.
@@ -405,6 +405,7 @@ class TypeIntuiter(Pipe):
             )
 
             yield d
+
 
 class RowIntuiter(Pipe):
     header = None
@@ -503,7 +504,7 @@ class RowIntuiter(Pipe):
             row (list):
 
         Returns:
-            FIXME:
+            tuple of comments_pattern, header_pattern, data_pattern.
 
         """
         assert len(rows) > self.FIRST_ROWS + self.LAST_ROWS, 'Number of rows is not enough to recognize patter.s.'
