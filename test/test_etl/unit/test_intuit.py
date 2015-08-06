@@ -133,7 +133,7 @@ class RowIntuiterTest(unittest.TestCase):
             ['Comment2', None, None],
             ['header2-1', 'header2-2', 'header2-3']]
 
-        comments_pattern = [set([str, None]), set([None]), set([None])]
+        comments_pattern = [set([str, None]), set([str, None]), set([None])]
         comments = pipe1._find_comments(rows, comments_pattern)
         self.assertEquals(
             comments,
@@ -142,9 +142,9 @@ class RowIntuiterTest(unittest.TestCase):
     # _get_patterns tests
     def test_returns_comments_pattern(self):
         rows = [
-            [1, 'Comment from row 0'],
-            [2, 'Comment from row 1'],
-            [3, 'Comment from row 2']
+            ['Comment from row 0', None],
+            ['Comment from row 1', None],
+            ['Comment from row 2', None]
         ]
         # extend with data rows
         rows.extend([[str(i), i] for i in range(200)])
@@ -152,7 +152,7 @@ class RowIntuiterTest(unittest.TestCase):
         comments_pattern, _, _ = pipe1._get_patterns(rows)
         self.assertEquals(len(comments_pattern), len(rows[0]),
                           'Comments pattern length has to match to columns amount.')
-        self.assertEquals(comments_pattern, [set([int]), set([str])])
+        self.assertEquals(comments_pattern, [set([str, None]), set([str, None])])
 
     def test_returns_header_pattern(self):
         # to get header pattern all patterns should be replaced with str|none.

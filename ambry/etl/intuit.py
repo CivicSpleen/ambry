@@ -408,6 +408,12 @@ class TypeIntuiter(Pipe):
 
 
 class RowIntuiter(Pipe):
+    """ Separates rows to the comments, header and data.
+
+    Note: Assuming None means empty value in the cell. Empty strings (xlrd case) have to be replaced
+        with None to match header and comment patterns. # FIXME: Consult Eric.
+    """
+
     header = None
     comments = None
     errors = {}
@@ -494,7 +500,9 @@ class RowIntuiter(Pipe):
         comments = []
         for row in rows:
             if self._matches(row, comments_pattern):
-                comments.append(''.join([x for x in row if x]))
+                comment = ' '.join([x for x in row if x])
+                if comment:
+                    comments.append(comment)
         return comments
 
     def _get_patterns(self, rows):
@@ -516,10 +524,17 @@ class RowIntuiter(Pipe):
             for i, column in enumerate(row):
                 data_pattern[i].add(self._get_type(column))
 
-        comments_pattern = [set() for x in range(len(rows[0]))]
-        for row in rows[:2]:
-            for i, column in enumerate(row):
-                comments_pattern[i].add(self._get_type(column))
+        #
+        # Comments pattern - first two columns are string or None, other columns are None.
+        #
+        comments_pattern = [set([None]) for x in range(len(rows[0]))]
+        # FIXME: Enhance tests.
+        comments_pattern[0].add(str)
+        comments_pattern[1].add(str)
+
+        #
+        # Header pattern.
+        #
 
         header_pattern = [set([str, None]) for x in data_pattern]
         return comments_pattern, header_pattern, data_pattern
@@ -579,10 +594,10 @@ class RowIntuiter(Pipe):
         comments_pattern, header_pattern, data_pattern = self._get_patterns(rows)
 
         # save comments
-        self.comments = self._find_comments(rows, comments_pattern)
+        self.comments = self._find_comments(rows[:self.FIRST_ROWS], comments_pattern)
 
         # save header
-        self.header = self._find_header(rows, header_pattern)
+        self.header = self._find_header(rows[:self.FIRST_ROWS], header_pattern)
 
         # find data and generate data
         first_line, end_line = self._find_data_lines(rows, data_pattern)
