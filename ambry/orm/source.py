@@ -6,15 +6,48 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 __docformat__ = 'restructuredtext en'
 
+from collections import OrderedDict
+import datetime
+import hashlib
+import os
+from os.path import splitext
+import re
+import shutil
+import ssl
+
+from dateutil import parser
+
+import requests
+
+import petl
+
+import gspread
+
+from oauth2client.client import SignedJwtAssertionCredentials
+
+from contextlib import closing
+
+from six.moves.urllib.parse import urlparse
+from six.moves.urllib.request import urlopen
+
+from fs.zipfs import ZipFS
+from fs.s3fs import S3FS
 
 from sqlalchemy import Column as SAColumn
 from sqlalchemy import Text, String, ForeignKey, INTEGER, UniqueConstraint
-from . import MutationList, JSONEncodedObj
 from sqlalchemy.orm import relationship
-from source_table import SourceTable
-from table import Table
-from . import Base,  DictableMixin
+
+from xlrd import open_workbook, xldate_as_tuple
+
 from ambry.etl import Pipe
+from ambry.util import parse_url_to_dict
+from ambry.util.flo import copy_file_or_flo
+
+from .source_table import SourceTable
+from .table import Table
+
+from . import MutationList, JSONEncodedObj
+from . import Base,  DictableMixin
 
 
 class SourceError(Exception):
@@ -23,7 +56,7 @@ class SourceError(Exception):
 
 class DelayedOpen(object):
 
-    def __init__(self, source, fs, path, mode = 'r', from_cache = False, account_accessor = None):
+    def __init__(self, source, fs, path, mode='r', from_cache=False, account_accessor=None):
         self._source = source
         self._fs = fs
         self._path = path
@@ -32,14 +65,15 @@ class DelayedOpen(object):
 
         self.from_cache = from_cache
 
-    def open(self, mode = None, encoding = None ):
-        return self._fs.open(self._path, mode if mode else self._mode, encoding = encoding )
+    def open(self, mode=None, encoding=None):
+        return self._fs.open(self._path, mode if mode else self._mode, encoding=encoding)
 
     def syspath(self):
         return self._fs.getsyspath(self._path)
 
     def source_pipe(self):
         return self._source.row_gen()
+
 
 class SourceRowGen(Pipe):
     """Holds a reference to a source record """
@@ -53,7 +87,7 @@ class SourceRowGen(Pipe):
             yield row
 
     def __str__(self):
-        return super(SourceRowGen, self).__str__() +" source={} rowgen={}".format(self._source.name, type(self._rowgen))
+        return super(SourceRowGen, self).__str__() + ' source={} rowgen={}'.format(self._source.name, type(self._rowgen))
 
 
 class DataSource(Base, DictableMixin):
@@ -101,23 +135,19 @@ class DataSource(Base, DictableMixin):
     )
 
     def get_filetype(self):
-        from os.path import splitext
-        import urlparse
-
         if self.filetype:
             return self.filetype
 
         if self.file:
             root, ext = splitext(self.file)
-
             return ext[1:]
 
-        parsed = urlparse.urlparse(self.url)
+        parsed = urlparse(self.url)
 
         root, ext = splitext(parsed.path)
 
         if ext == '.zip':
-            parsed_path = parsed.path.replace('.zip','')
+            parsed_path = parsed.path.replace('.zip', '')
             root, ext = splitext(parsed_path)
 
             return ext[1:]
@@ -128,14 +158,12 @@ class DataSource(Base, DictableMixin):
         return None
 
     def get_urltype(self):
-        from os.path import splitext
-        import urlparse
 
         if self.urltype:
             return self.urltype
 
         if self.url and self.url.startswith('gs://'):
-            return 'gs' # Google spreadsheet
+            return 'gs'  # Google spreadsheet
 
         if self.url:
             root, ext = splitext(self.url)
@@ -151,47 +179,42 @@ class DataSource(Base, DictableMixin):
         :return:
 
         """
-        from collections import OrderedDict
-        return OrderedDict( (p.key,getattr(self, p.key)) for p in self.__mapper__.attrs
-                            if p.key not in ('_source_table', '_dest_table', 'd_vid', 't_vid','st_id', 'dataset', 'hash' ) )
+        SKIP_KEYS = ('_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset', 'hash')
+        return OrderedDict(
+            (p.key, getattr(self, p.key)) for p in self.__mapper__.attrs if p.key not in SKIP_KEYS)
 
     @property
     def row(self):
-        from collections import OrderedDict
 
         # Use an Ordered Dict to make it friendly to creating CSV files.
+        SKIP_KEYS = ('id', '_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset', 'hash')
 
-        d = OrderedDict([(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
-                          if p.key not in ('id', '_source_table', '_dest_table', 'd_vid', 't_vid','st_id', 'dataset', 'hash' )])
-
+        d = OrderedDict(
+            [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs if p.key not in SKIP_KEYS])
         return d
 
     def update(self, **kwargs):
 
-        for k, v in kwargs.items():
+        for k, v in list(kwargs.items()):
             if hasattr(self, k):
-                setattr(self,k, v)
+                setattr(self, k, v)
 
-    def source_pipe(self, cache_fs=None, account_accessor = None):
+    def source_pipe(self, cache_fs=None, account_accessor=None):
 
-        if self.generator: # Get the source from the generator, not from a file.
-            import bundle
+        if self.generator:  # Get the source from the generator, not from a file.
             gen = eval(self.generator)
             return gen(self)
         else:
-            return self.fetch(cache_fs, account_accessor = account_accessor).source_pipe()
+            return self.fetch(cache_fs, account_accessor=account_accessor).source_pipe()
 
-    def fetch(self, cache_fs = None, account_accessor = None):
+    def fetch(self, cache_fs=None, account_accessor=None):
         """Download the source and return a callable object that will open the file. """
-
-        from fs.zipfs import ZipFS
-        import os
 
         if self.get_urltype() == 'gs':
             return DelayedOpen(self, None, None, None, None)
 
         if cache_fs is None:
-            cache_fs = self._cache_fs # Set externally by Bundle in ambry.bundle.bundle.Bundle#source
+            cache_fs = self._cache_fs  # Set externally by Bundle in ambry.bundle.bundle.Bundle#source
 
         fstor = None
 
@@ -201,7 +224,7 @@ class DataSource(Base, DictableMixin):
         if not self.url:
             raise SourceError("Can't download; not url specified")
 
-        f = download(self.url, cache_fs, account_accessor = account_accessor)
+        f = download(self.url, cache_fs, account_accessor=account_accessor)
 
         if self.get_urltype() == 'zip':
 
@@ -211,7 +234,6 @@ class DataSource(Base, DictableMixin):
 
                 fstor = DelayedOpen(self, fs, first, 'rU', None)
             else:
-                import re
 
                 # Put the walk output into a normal list of files
                 for zip_fn in walk_all(fs):
@@ -219,7 +241,7 @@ class DataSource(Base, DictableMixin):
                         continue
 
                     if re.search(self.file, zip_fn):
-                        fstor = DelayedOpen( self,  fs,zip_fn, 'rb', account_accessor)
+                        fstor = DelayedOpen(self, fs, zip_fn, 'rb', account_accessor)
                         break
 
         else:
@@ -229,12 +251,11 @@ class DataSource(Base, DictableMixin):
 
         return fstor
 
-    def row_gen(self, fstor = None):
+    def row_gen(self, fstor=None):
         """Return a Row Generator"""
-        import petl
 
         if self.get_urltype() == 'gs':
-            return SourceRowGen( self, google_iter(self ))
+            return SourceRowGen(self, google_iter(self))
 
         gft = self.get_filetype()
 
@@ -242,26 +263,26 @@ class DataSource(Base, DictableMixin):
             fstor = self._fstor
 
         if gft == 'csv':
-            return SourceRowGen( self, petl.io.csv.fromcsv(fstor, self.encoding if self.encoding else None))
+            return SourceRowGen(self, petl.io.csv.fromcsv(fstor, self.encoding if self.encoding else None))
         elif gft == 'tsv':
-            return SourceRowGen( self, petl.io.csv.fromtsv(fstor, self.encoding if self.encoding else None))
+            return SourceRowGen(self, petl.io.csv.fromtsv(fstor, self.encoding if self.encoding else None))
         elif gft == 'fixed' or gft == 'txt':
             from ambry.util.fixedwidth import fixed_width_iter
 
-            return SourceRowGen( self, fixed_width_iter(fstor.open(mode='r',encoding=self.encoding), self))
+            return SourceRowGen(self, fixed_width_iter(fstor.open(mode='r', encoding=self.encoding), self))
         elif gft == 'xls':
-            return SourceRowGen( self, excel_iter(fstor.syspath(), self.segment ))
+            return SourceRowGen(self, excel_iter(fstor.syspath(), self.segment))
         elif gft == 'xlsx':
-            return SourceRowGen( self, excel_iter(fstor.syspath(), self.segment ))
+            return SourceRowGen(self, excel_iter(fstor.syspath(), self.segment))
         else:
-            raise ValueError("Unknown filetype for source {}: {} ".format(self.name, gft))
+            raise ValueError('Unknown filetype for source {}: {} '.format(self.name, gft))
 
     @property
     def source_table(self):
 
         if not self._source_table:
             name = self.source_table_name if self.source_table_name else self.name
-            st =  self.dataset.source_table(name)
+            st = self.dataset.source_table(name)
             if not st:
                 st = self.dataset.new_source_table(name)
 
@@ -273,7 +294,7 @@ class DataSource(Base, DictableMixin):
 
     @property
     def dest_table(self):
-        from exc import NotFoundError
+        from .exc import NotFoundError
 
         if not self._dest_table:
             name = self.dest_table_name if self.dest_table_name else self.name
@@ -305,8 +326,6 @@ class DataSource(Base, DictableMixin):
 
 
 def excel_iter(file_name, segment):
-    from xlrd import open_workbook
-    from xlrd.biffh import XLRDError
 
     def srow_to_list(row_num, s):
         """Convert a sheet row to a list"""
@@ -325,13 +344,10 @@ def excel_iter(file_name, segment):
     for i in range(0, s.nrows):
         yield srow_to_list(i, s)
 
+
 def get_s3(url, account_accessor):
     # TODO: Hack the pyfilesystem fs.opener file to get credentials from a keychain
     # The monkey patch fixes a bug: https://github.com/boto/boto/issues/2836
-    from fs.s3fs import S3FS
-    from ambry.util import parse_url_to_dict
-
-    import ssl
 
     _old_match_hostname = ssl.match_hostname
 
@@ -349,32 +365,25 @@ def get_s3(url, account_accessor):
 
     s3 = S3FS(
         bucket=pd['netloc'],
-        #prefix=pd['path'],
+        # prefix=pd['path'],
         aws_access_key=account['access'],
         aws_secret_key=account['secret'],
-
     )
 
-    #ssl.match_hostname = _old_match_hostname
+    # ssl.match_hostname = _old_match_hostname
 
     return s3
 
+
 def download(url, cache_fs, account_accessor=None):
-    import urlparse
 
-    import os.path
-    import requests
-    from ambry.util.flo import copy_file_or_flo
-    from ambry.util import parse_url_to_dict
-
-    parsed = urlparse.urlparse(str(url))
+    parsed = urlparse(str(url))
 
     cache_path = os.path.join(parsed.netloc, parsed.path.strip('/'))
 
     if parsed.query:
-        import hashlib
-        hash = hashlib.sha224(parsed.query).hexdigest()
-        cache_path = os.path.join(cache_path, hash)
+        hash_ = hashlib.sha224(parsed.query).hexdigest()
+        cache_path = os.path.join(cache_path, hash_)
 
     if not cache_fs.exists(cache_path):
 
@@ -389,46 +398,31 @@ def download(url, cache_fs, account_accessor=None):
                     copy_file_or_flo(fin, fout)
 
         elif url.startswith('ftp:'):
-            import shutil
-            import urllib2
-            from contextlib import closing
-
-            with closing(urllib2.urlopen(url)) as fin:
+            with closing(urlopen(url)) as fin:
                 with cache_fs.open(cache_path, 'wb') as fout:
                     shutil.copyfileobj(fin, fout)
 
         else:
-
             r = requests.get(url, stream=True)
-
             with cache_fs.open(cache_path, 'wb') as f:
                 copy_file_or_flo(r.raw, f)
 
     return cache_path
 
 
-
-
 def make_excel_date_caster(file_name):
     """Make a date caster function that can convert dates from a particular workbook. This is required
     because dates in Excel workbooks are stupid. """
-
-    from xlrd import open_workbook
 
     wb = open_workbook(file_name)
     datemode = wb.datemode
 
     def excel_date(v):
-        from xlrd import xldate_as_tuple
-        import datetime
-
         try:
-
             year, month, day, hour, minute, second = xldate_as_tuple(float(v), datemode)
             return datetime.date(year, month, day)
         except ValueError:
             # Could be actually a string, not a float. Because Excel dates are completely broken.
-            from dateutil import parser
 
             try:
                 return parser.parse(v).date()
@@ -439,8 +433,6 @@ def make_excel_date_caster(file_name):
 
 
 def google_iter(source):
-    import gspread
-    from oauth2client.client import SignedJwtAssertionCredentials
 
     json_key = source._library.config.account('google_spreadsheets')
 

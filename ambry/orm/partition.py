@@ -112,7 +112,7 @@ class Partition(Base, DictableMixin):
             'format': self.format if self.format else 'db'
         }
 
-        return PartitionIdentity.from_dict(dict(ds.dict.items() + d.items()))
+        return PartitionIdentity.from_dict(dict(list(ds.dict.items()) + list(d.items())))
 
     @property
     def is_segment(self):
@@ -197,13 +197,13 @@ class Partition(Base, DictableMixin):
                 tcov |= set(int(x) for x in sd[c.name].uniques)
             elif sd[c.name].is_date:
                 # The fuzzy=True argument allows ignoring the '-' char in dates produced by .isoformat()
-                tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x,basestring) else x.year for x in sd[c.name].uniques)
+                tcov |= set(parser.parse(x, fuzzy=True).year if isinstance(x, basestring) else x.year for x in sd[c.name].uniques)
 
         ## Space Coverage
 
         if 'source_data' in self.data:
 
-            for source_name, source in self.data['source_data'].items():
+            for source_name, source in list(self.data['source_data'].items()):
                     scov.add(self.parse_gvid_or_place(source['space']))
 
         if self.identity.space:  # And from the partition name
@@ -218,7 +218,7 @@ class Partition(Base, DictableMixin):
         # If there was a time value in the source that this partition was created from, then
         # add it to the years.
         if 'source_data' in self.data:
-            for source_name, source in self.data['source_data'].items():
+            for source_name, source in list(self.data['source_data'].items()):
                 if 'time' in source:
                     for year in expand_to_years(source['time']):
                         tcov.add(year)
@@ -233,7 +233,7 @@ class Partition(Base, DictableMixin):
         ## Grains
 
         if 'source_data' in self.data:
-            for source_name, source in self.data['source_data'].items():
+            for source_name, source in list(self.data['source_data'].items()):
                 if 'grain' in source:
                     grains.add(source['grain'])
 
@@ -254,7 +254,7 @@ class Partition(Base, DictableMixin):
                 return str(self.__dict__)
 
             def items(self):
-                return self.__dict__.items()
+                return list(self.__dict__.items())
 
             def __getitem__(self, k):
                 return self.__dict__[k]
@@ -280,7 +280,7 @@ class Partition(Base, DictableMixin):
         sample = []
 
         for j, row in enumerate(self.database.connection.execute(sql)):
-            sample.append(row.values())
+            sample.append(list(row.values()))
 
         self.record.data['sample'] = sample
 
@@ -308,7 +308,7 @@ class Partition(Base, DictableMixin):
         if 'table' in kwargs:
             del kwargs['table']  # In source_schema.csv, this is the name of the table, not the object
 
-        for k, v in kwargs.items():
+        for k, v in list(kwargs.items()):
             if hasattr(self, k):
                 setattr(self, k, v)
 

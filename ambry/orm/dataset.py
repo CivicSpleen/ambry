@@ -13,6 +13,7 @@ from ..util import Constant
 from ..identity import LocationRef
 
 from . import Base, MutationDict, JSONEncodedObj
+from .config import ConfigGroupAccessor
 
 from ambry.identity import DatasetNumber
 from ambry.identity import ObjectNumber
@@ -120,7 +121,7 @@ class Dataset(Base):
 
     def table(self, ref):
 
-        from exc import NotFoundError
+        from .exc import NotFoundError
 
         for t in self.tables:
             if str(ref) == t.name or str(ref) == t.id or str(ref) == t.vid:
@@ -134,7 +135,7 @@ class Dataset(Base):
         If updating, will only update data.
         '''
         from . import Table
-        from exc import NotFoundError
+        from .exc import NotFoundError
 
         try:
             table = self.table(name)
@@ -145,9 +146,9 @@ class Dataset(Base):
                           sequence_id = len(self.tables)+1)
 
         # Update possibly extant data
-        table.data = dict( (table.data.items() if table.data else []) + kwargs.get('data', {}).items() )
+        table.data = dict( (list(table.data.items()) if table.data else []) + list(kwargs.get('data', {}).items()) )
 
-        for key, value in kwargs.items():
+        for key, value in list(kwargs.items()):
 
             if not key:
                 continue
@@ -177,13 +178,12 @@ class Dataset(Base):
             table = self.table(table)
 
         p = Partition(
-            t_vid = table.vid,
-            d_vid = self.vid,
-            table_name = table.name,
+            t_vid=table.vid,
+            d_vid=self.vid,
+            table_name=table.name,
             **kwargs
         )
 
-        errors = 0
         self.partitions.append(p)
         object_session(self).commit()
 
@@ -191,7 +191,7 @@ class Dataset(Base):
 
     def partition(self, ref):
 
-        from exc import NotFoundError
+        from .exc import NotFoundError
 
         for p in self.partitions:
             if str(ref) == p.name or str(ref) == p.id or str(ref) == p.vid:
@@ -200,7 +200,7 @@ class Dataset(Base):
         raise NotFoundError("Failed to find partition for ref '{}' in dataset '{}'".format(ref, self.name))
 
     def new_source(self, name, **kwargs):
-        from source import DataSource
+        from .source import DataSource
 
         kwargs['d_vid'] = self.vid
 
@@ -210,15 +210,17 @@ class Dataset(Base):
 
         return source
 
-    def source_file(self,name):
-        from source import DataSource
-        source =  (object_session(self).query(DataSource)
-                .filter(DataSource.name == name).filter(DataSource.d_vid == self.vid)).first()
-
+    def source_file(self, name):
+        from .source import DataSource
+        source = object_session(self)\
+            .query(DataSource)\
+            .filter(DataSource.name == name)\
+            .filter(DataSource.d_vid == self.vid)\
+            .first()
         return source
 
-    def new_source_table(self,name):
-        from source_table import  SourceTable
+    def new_source_table(self, name):
+        from .source_table import SourceTable
 
         extant = next(iter(e for e in self.source_tables if e.name == name), None)
 
@@ -231,7 +233,7 @@ class Dataset(Base):
 
         return st
 
-    def source_table(self,name):
+    def source_table(self, name):
 
         for st in self.source_tables:
             if st.name == name:
@@ -243,20 +245,22 @@ class Dataset(Base):
         """Return a Build Source file ref, creating a new one if the one requested does not exist"""
         from sqlalchemy.orm.exc import NoResultFound
 
-        assert file_const in File.path_map.keys()
+        assert file_const in list(File.path_map.keys())
 
         try:
 
-            fr = (object_session(self).query(File)
-                .filter(File.d_vid == self.vid)
-                .filter(File.major_type == File.MAJOR_TYPE.BUILDSOURCE)
-                .filter(File.minor_type == file_const).one())
+            fr = object_session(self)\
+                .query(File)\
+                .filter(File.d_vid == self.vid)\
+                .filter(File.major_type == File.MAJOR_TYPE.BUILDSOURCE)\
+                .filter(File.minor_type == file_const)\
+                .one()
         except NoResultFound:
-            fr = File(d_vid = self.vid,
-                      major_type = File.MAJOR_TYPE.BUILDSOURCE,
-                      minor_type = file_const,
-                      path = File.path_map[file_const],
-                      source = 'fs')
+            fr = File(d_vid=self.vid,
+                      major_type=File.MAJOR_TYPE.BUILDSOURCE,
+                      minor_type=file_const,
+                      path=File.path_map[file_const],
+                      source='fs')
             object_session(self).add(fr)
 
         return fr
@@ -294,7 +298,7 @@ class Dataset(Base):
 
         row = [None] * len(fields)
 
-        for i,f in enumerate(fields):
+        for i, f in enumerate(fields):
             if f in d:
                 row[i] = d[f]
 
@@ -310,6 +314,7 @@ class Dataset(Base):
             self.subset,
             self.variation,
             self.revision)
+
 
 class ConfigAccessor(object):
 
@@ -328,7 +333,7 @@ class ConfigAccessor(object):
         >>> ds.process.build.bar = [5,6,7,8]
         """
 
-        from config import ConfigGroupAccessor
+        from .config import ConfigGroupAccessor
 
         return ConfigGroupAccessor(self.dataset, 'process')
 
@@ -345,23 +350,19 @@ class ConfigAccessor(object):
     def build(self):
         """Access build configuration values as attributes. See self.process
             for a usage example"""
-        from config import ConfigGroupAccessor
+        from .config import ConfigGroupAccessor
 
         return ConfigGroupAccessor(self.dataset, 'buildstate')
 
     @property
     def sync(self):
         """Access sync configuration values as attributes. See self.process for a usage example"""
-        from config import ConfigGroupAccessor
-
         return ConfigGroupAccessor(self.dataset, 'sync')
 
     @property
     def library(self):
         """Access library configuration values as attributes. The library config
          is really only relevant to the root dataset. See self.process for a usage example"""
-        from config import ConfigGroupAccessor
-
         return ConfigGroupAccessor(self.dataset, 'library')
 
     def rows(self):
@@ -376,10 +377,13 @@ class ConfigAccessor(object):
         from sqlalchemy import or_
 
         rows = []
+        configs = self.session\
+            .query(SAConfig)\
+            .filter(or_(SAConfig.group == 'config', SAConfig.group == 'process'),
+                    SAConfig.d_vid == self.dataset.vid)\
+            .all()
 
-        for r in self.session.query(SAConfig).filter(or_(SAConfig.group == 'config', SAConfig.group == 'process'),
-                                                     SAConfig.d_vid == self.dataset.vid).all():
-
+        for r in configs:
             parts = r.key.split('.', 3)
 
             if r.group == 'process':

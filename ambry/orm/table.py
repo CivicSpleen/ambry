@@ -64,7 +64,7 @@ class Table(Base, DictableMixin):
                 protos['c00109003'] = protos['c00104002']
                 del protos['c00104002']
 
-            protos = {str(ObjectNumber.parse(n).rev(None)): c for n, c in protos.items()}  # Remove revisions
+            protos = {str(ObjectNumber.parse(n).rev(None)): c for n, c in list(protos.items())}  # Remove revisions
 
             return protos
 
@@ -113,9 +113,9 @@ class Table(Base, DictableMixin):
             extant = False
 
         # Update possibly existing data
-        c.data = dict((c.data.items() if c.data else []) + kwargs.get('data', {}).items())
+        c.data = dict((list(c.data.items()) if c.data else []) + list(kwargs.get('data', {}).items()))
 
-        for key, value in kwargs.items():
+        for key, value in list(kwargs.items()):
 
             if key[0] != '_' and key not in ['t_vid', 'name',  'sequence_id', 'data']:
 
@@ -129,7 +129,7 @@ class Table(Base, DictableMixin):
                 except AttributeError:
                     raise AttributeError("Column record has no attribute {}".format(key))
 
-            if key == 'is_primary_key' and isinstance(value, basestring) and len(value) == 0:
+            if key == 'is_primary_key' and isinstance(value, str) and len(value) == 0:
                 value = False
                 setattr(c, key, value)
 
@@ -265,7 +265,7 @@ class Table(Base, DictableMixin):
     def dict(self):
         d = {
             k: v for k,
-                     v in self.__dict__.items() if k in [
+                     v in list(self.__dict__.items()) if k in [
                 'id', 'vid', 'd_id', 'd_vid', 'sequence_id', 'name', 'altname', 'vname', 'description', 'universe',
             'keywords',
                 'installed', 'proto_vid', 'type', 'codes']}
@@ -288,7 +288,7 @@ class Table(Base, DictableMixin):
 
     @property
     def nonull_dict(self):
-        return {k: v for k, v in self.dict.items() if v and k not in 'codes'}
+        return {k: v for k, v in list(self.dict.items()) if v and k not in 'codes'}
 
     @property
     def nonull_col_dict(self):
@@ -306,7 +306,7 @@ class Table(Base, DictableMixin):
 
     @property
     def insertable_dict(self):
-        x = {('t_' + k).strip('_'): v for k, v in self.dict.items()}
+        x = {('t_' + k).strip('_'): v for k, v in list(self.dict.items())}
 
         if 't_vid' not in x or not x['t_vid']:
             raise ValueError("Must have vid set: {} ".format(x))
