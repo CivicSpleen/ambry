@@ -1,14 +1,37 @@
 """Support for creating web pages and text representations of schemas."""
 
+from csv import reader
 import os
-from flask.json import JSONEncoder as FlaskJSONEncoder
-# from . import memoize
-from flask.json import dumps
-from flask import Response
+
+from pygments import highlight
+from pygments.lexers.sql import SqlLexer
+from pygments.formatters import HtmlFormatter
+
+from six import StringIO
+import sqlparse
 
 import jinja2.tests
+from jinja2 import Environment, PackageLoader
 
-from ..util import get_logger
+from flask.json import JSONEncoder as FlaskJSONEncoder
+from flask.json import dumps
+from flask import Response, make_response, url_for
+
+from geoid.civick import GVid
+
+import unicodecsv
+
+from ambry.identity import ObjectNumber, NotObjectNumberError, Identity
+from ambry.library import new_library
+from ambry.orm import Table
+from ambry.orm.exc import NotFoundError
+from ambry.warehouse.manifest import Manifest
+from ambry.util import get_logger
+from ambry.util.flo import StringQueue
+import ambry.ui.templates as tdir
+
+from . import renderer
+
 
 logger = get_logger(__name__)
 
@@ -52,7 +75,7 @@ def pretty_time(s):
                 seconds -= value * count
                 if value == 1:
                     name = name.rstrip('s')
-                result.append("{} {}".format(value, name))
+                result.append('{} {}'.format(value, name))
 
         return ', '.join(result[:granularity])
 
@@ -63,10 +86,6 @@ def pretty_time(s):
 
 
 def resolve(t):
-    from ambry.identity import Identity
-    from ambry.orm import Table
-    from ambry.warehouse.manifest import Manifest
-
     if isinstance(t, basestring):
         return t
     elif isinstance(t, (Identity, Table)):
@@ -88,23 +107,21 @@ def resolve(t):
 
 
 def bundle_path(b):
-    return "/bundles/{}.html".format(resolve(b))
+    return '/bundles/{}.html'.format(resolve(b))
 
 
 def schema_path(b, format):
-    return "/bundles/{}/schema.{}".format(resolve(b), format)
+    return '/bundles/{}/schema.{}'.format(resolve(b), format)
 
 
 def table_path(b, t):
-    return "/bundles/{}/tables/{}.html".format(resolve(b), resolve(t))
+    return '/bundles/{}/tables/{}.html'.format(resolve(b), resolve(t))
 
 
 def proto_vid_path(pvid):
-    from ambry.orm.exc import NotFoundError
 
     try:
         b, t, c = deref_tc_ref(pvid)
-
         return table_path(str(b), str(t))
 
     except NotFoundError:
@@ -113,9 +130,6 @@ def proto_vid_path(pvid):
 
 def deref_tc_ref(ref):
     """Given a column or table, vid or id, return the object."""
-    from ambry.identity import ObjectNumber
-    from ambry.orm.exc import NotFoundError
-
     on = ObjectNumber.parse(ref)
 
     b = str(on.as_dataset)
@@ -130,21 +144,18 @@ def deref_tc_ref(ref):
     if not on.revision:
         # The table does not have a revision, so we need to get one, just get the
         # latest one
-        from . import renderer
 
         r = renderer()
         dc = r.doc_cache
 
         tm = dc.table_version_map()
 
-
-        if not str(t) in tm:
+        if str(t) not in tm:
             # This happens when the the referenced table is in a bundle that is not installed,
             # often because it is private or restricted
             raise NotFoundError('Table {} not in table_version_map'.format(str(t)))
 
-
-        t_vid = reversed(sorted(tm.get(str(t)))).next()
+        t_vid = next(reversed(sorted(tm.get(str(t)))))
 
         t = ObjectNumber.parse(t_vid)
         b = t.as_dataset
@@ -157,8 +168,6 @@ def deref_tc_ref(ref):
 
 def tc_obj(ref):
     """Return an object for a table or column."""
-    from . import renderer
-    from ambry.orm.exc import NotFoundError
 
     dc = renderer().doc_cache
 
@@ -173,21 +182,14 @@ def tc_obj(ref):
 
         # This can happen when the table reference has a version id in it, and that version is not available.
         # So, try it again without the version
-        from ambry.identity import ObjectNumber
-
         table = dc.table(str(ObjectNumber.parse(str(t)).rev(None)))
 
     if c:
-
-        if not table:
-            pass
-
         try:
             return table['columns'][str(c.rev(0))]
         except KeyError:
             return None
         except TypeError:
-
             return None
     else:
         return table
@@ -195,10 +197,7 @@ def tc_obj(ref):
 
 def partition_path(b, p=None):
     if p is None:
-        from ambry.identity import ObjectNumber, NotObjectNumberError
-
         p = b
-
         try:
             on = ObjectNumber.parse(p)
             b = str(on.as_dataset)
@@ -208,24 +207,22 @@ def partition_path(b, p=None):
             b = str(on)
             raise
 
-    return "/bundles/{}/partitions/{}.html".format(resolve(b), resolve(p))
+    return '/bundles/{}/partitions/{}.html'.format(resolve(b), resolve(p))
 
 
 def manifest_path(m):
-    return "/manifests/{}.html".format(m)
+    return '/manifests/{}.html'.format(m)
 
 
 def store_path(s):
-    return "/stores/{}.html".format(s)
+    return '/stores/{}.html'.format(s)
 
 
 def store_table_path(s, t):
-    return "/stores/{}/tables/{}.html".format(s, t)
+    return '/stores/{}/tables/{}.html'.format(s, t)
 
 
 def extract_url(s, t, format):
-    from flask import url_for
-
     return url_for('get_extract', wid=s, tid=t, ct=format)
 
 
@@ -234,8 +231,6 @@ def db_download_url(base, s):
 
 
 def extractor_list(t):
-    # from . import renderer
-
     return ['csv', 'json'] + (['kml', 'geojson'] if t.get('is_geo', False) else [])
 
 
@@ -261,33 +256,24 @@ class JSONEncoder(FlaskJSONEncoder):
     def default(self, o):
         return str(type(o))
 
-        # return FlaskJSONEncoder.default(self, o)
-
 
 def format_sql(sql):
-    from pygments import highlight
-    from  pygments.lexers.sql import SqlLexer
-    from pygments.formatters import HtmlFormatter
-    import sqlparse
-
-    return highlight(sqlparse.format(sql, reindent=True, keyword_case='upper'), SqlLexer(), HtmlFormatter())
+    return highlight(
+        sqlparse.format(sql, reindent=True, keyword_case='upper'),
+        SqlLexer(),
+        HtmlFormatter())
 
 
 @property
 def pygmentize_css(self):
-    from pygments.formatters import HtmlFormatter
-
     return HtmlFormatter(style='manni').get_style_defs('.highlight')
+
 
 class Renderer(object):
 
-    def __init__(self, content_type='html', session = {}, blueprints=None):
-
-        from jinja2 import Environment, PackageLoader
+    def __init__(self, content_type='html', session={}, blueprints=None):
 
         try:
-            from ambry.library import new_library
-
             self.library = new_library()
             self.doc_cache = self.library.doc_cache
         except:
@@ -340,7 +326,8 @@ class Renderer(object):
             raise
 
         finally:
-            self.extracts.append(extract_entry(extracted,completed,rel_path,self.cache.path(rel_path)))
+            self.extracts.append(
+                extract_entry(extracted, completed, rel_path, self.cache.path(rel_path)))
 
     def cc(self):
         """return common context values."""
@@ -371,12 +358,14 @@ class Renderer(object):
             'tc_obj': tc_obj,
             'extract_url': extract_url,
             'db_download_url': db_download_url,
-            'bundle_sort': lambda l, key: sorted(l,key=lambda x: x['identity'][key])}
+            'bundle_sort': lambda l, key: sorted(l, key=lambda x: x['identity'][key])}
 
     def render(self, template, *args, **kwargs):
 
         if self.content_type == 'json':
-            return Response(dumps(dict(**kwargs),cls=JSONEncoder,indent=4), mimetype='application/json')
+            return Response(
+                dumps(kwargs, cls=JSONEncoder, indent=4),
+                mimetype='application/json')
 
         else:
             return template.render(*args, **kwargs)
@@ -402,8 +391,8 @@ class Renderer(object):
 
         return self.render(
             template,
-            last_search_terms = self.session.get('last_search_terms',''),
-            last_search_results = self.session.get('last_search_results',None),
+            last_search_terms=self.session.get('last_search_terms', ''),
+            last_search_results=self.session.get('last_search_results', None),
             l=self.doc_cache.library_info(),
             **self.cc())
 
@@ -430,11 +419,8 @@ class Renderer(object):
 
         b = self.doc_cache.bundle(vid)
 
-        for p in b['partitions'].values():
-            p['description'] = b['tables'][
-                p['table_vid']].get(
-                'description',
-                '')
+        for p in list(b['partitions'].values()):
+            p['description'] = b['tables'][p['table_vid']].get('description', '')
 
         return self.render(template, b=b, **self.cc())
 
@@ -449,33 +435,26 @@ class Renderer(object):
 
     def schemacsv(self, vid):
         """Render documentation for a single bundle."""
-        from flask import make_response
-
         response = make_response(self.doc_cache.get_schemacsv(vid))
-
-        response.headers[
-            "Content-Disposition"] = "attachment; filename={}-schema.csv".format(vid)
-
+        response.headers['Content-Disposition'] = 'attachment; filename={}-schema.csv'.format(vid)
         return response
 
     def schema(self, vid):
         """Render documentation for a single bundle."""
-        from csv import reader
-        from StringIO import StringIO
-        # import json
-
         template = self.env.get_template('bundle/schema.html')
 
         b_data = self.doc_cache.bundle(vid)
 
         b = self.library.bundle(vid)
 
-        reader = reader(StringIO(b.schema.as_csv()))
+        schema_reader = reader(StringIO(b.schema.as_csv()))
 
         del b_data['partitions']
         del b_data['tables']
 
-        schema = dict(header=reader.next(), rows=[x for x in reader])
+        schema = dict(
+            header=next(reader),
+            rows=[x for x in schema_reader])
 
         return self.render(template, b=b_data, schema=schema, **self.cc())
 
@@ -493,7 +472,6 @@ class Renderer(object):
         return self.render(template, b=b, t=t, **self.cc())
 
     def partition(self, pvid):
-        from geoid.civick import GVid
 
         template = self.env.get_template('bundle/partition.html')
 
@@ -538,7 +516,7 @@ class Renderer(object):
         indexed_table_count = 0
         indexed_column_count = 0
 
-        for table, data in store['tables'].items():
+        for table, data in list(store['tables'].items()):
             if data['type'] == "table":
                 table_count += 1
                 column_count += len(data['columns'])
@@ -548,10 +526,10 @@ class Renderer(object):
                 indexed_column_count += len(data['columns'])
 
         store['counts'] = dict(
-            table_count = table_count,
-            column_count = column_count,
-            indexed_table_count = indexed_table_count,
-            indexed_column_count = indexed_column_count
+            table_count=table_count,
+            column_count=column_count,
+            indexed_table_count=indexed_table_count,
+            indexed_column_count=indexed_column_count
         )
 
         return self.render(template, s=store, **self.cc())
@@ -559,7 +537,7 @@ class Renderer(object):
     def store_table(self, uid, tid):
 
         # Copy so we don't modify the cached version
-        store = dict(self.doc_cache.warehouse(uid).items())
+        store = dict(list(self.doc_cache.warehouse(uid).items()))
 
         t = store['tables'][tid]
 
@@ -570,11 +548,8 @@ class Renderer(object):
         if self.content_type == 'csv':
 
             def yield_csv():
-                import unicodecsv
-                from ambry.util.flo import StringQueue
-
-                h = [ 'seq_id', 'vid', 'datatype',  'column_name', 'alt_name',  'description',
-                      'user_column_name', 'user_description' ]
+                h = ['seq_id', 'vid', 'datatype',  'column_name', 'alt_name',  'description',
+                     'user_column_name', 'user_description']
 
                 f = StringQueue()
 
@@ -583,7 +558,7 @@ class Renderer(object):
                 w.writerow(h)
                 yield f.read()
 
-                for c in sorted(t['columns'].values(), key =  lambda c: c['sequence_id'] ):
+                for c in sorted(list(t['columns'].values()), key=lambda c: c['sequence_id']):
 
                     w.writerow([
                         c['sequence_id'],
@@ -591,23 +566,21 @@ class Renderer(object):
                         c['datatype'],
                         c['name'],
                         c['altname'],
-                        c.get('description',''),
+                        c.get('description', ''),
                         c.get('user_column_name', ''),
                         c.get('user_description', ''),
                     ])
 
                     yield f.read()  # Returns everything previously written
 
-            return Response(yield_csv(), mimetype='text/csv',
-                            headers = {"Content-Disposition": "attachment; filename=table-{}.csv".format(t['vid']) })
-
+            return Response(
+                yield_csv(), mimetype='text/csv',
+                headers={'Content-Disposition': 'attachment; filename=table-{}.csv'.format(t['vid'])})
 
         else:
             template = self.env.get_template('store/table.html')
 
             return self.render(template, s=store, t=t, **self.cc())
-
-
 
     def info(self, app_config, run_config):
 
@@ -646,19 +619,13 @@ class Renderer(object):
 
     @property
     def css_dir(self):
-        import ambry.ui.templates as tdir
-
         return os.path.join(os.path.abspath(os.path.dirname(tdir.__file__)), 'css')
 
     def css_path(self, name):
-        import ambry.ui.templates as tdir
-
         return os.path.join(os.path.abspath(os.path.dirname(tdir.__file__)), 'css', name)
 
     @property
     def js_dir(self):
-        import ambry.ui.templates as tdir
-
         return os.path.join(os.path.abspath(os.path.dirname(tdir.__file__)), 'js')
 
     def place_search(self, term):
@@ -672,9 +639,6 @@ class Renderer(object):
 
     def bundle_search(self,  terms):
         """Incremental search, search as you type."""
-        from ambry.orm.exc import NotFoundError
-
-        from geoid.civick import GVid
 
         self.session['last_search_terms'] = terms
 
@@ -734,7 +698,7 @@ class Renderer(object):
 
         for r in final_results:
             facets['sources'].add(r['source'])
-            for p in r['partitions'].values():
+            for p in list(r['partitions'].values()):
                 if 'time_coverage' in p and p['time_coverage']:
                     facets['years'] |= set(p['time_coverage']['years'])
 
@@ -758,7 +722,7 @@ class Renderer(object):
         lj = self.doc_cache.get_library()
 
         sources = {}
-        for vid, b in lj['bundles'].items():
+        for vid, b in list(lj['bundles'].items()):
 
             source = b['identity']['source']
 
