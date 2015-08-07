@@ -102,7 +102,7 @@ class DatasetWhooshIndex(BaseDatasetIndex):
         for partition in self.backend.partition_index.search(search_phrase):
             datasets[partition.dataset_vid].p_score += partition.score
             datasets[partition.dataset_vid].partitions.add(partition.vid)
-        return datasets.values()
+        return list(datasets.values())
 
     def _index_document(self, document, force=False):
         """ Adds dataset document to the index. """

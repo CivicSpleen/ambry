@@ -104,7 +104,7 @@ class DatasetSQLiteIndex(BaseDatasetIndex):
         for partition in self.backend.partition_index.search(search_phrase):
             datasets[partition.dataset_vid].p_score += partition.score
             datasets[partition.dataset_vid].partitions.add(partition.vid)
-        return datasets.values()
+        return list(datasets.values())
 
     def _as_document(self, dataset):
         """ Converts dataset to document indexed by to FTS index.
@@ -442,6 +442,6 @@ def _make_rank_func(weights):
         matchinfo = struct.unpack('I' * (len(matchinfo) / 4), matchinfo)
         it = iter(matchinfo[2:])
         return sum(x[0] * w / x[1]
-                   for x, w in zip(zip(it, it, it), weights)
+                   for x, w in zip(list(zip(it, it, it)), weights)
                    if x[1])
     return rank

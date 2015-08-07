@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import unicode_literals
 import itertools
 import logging
 from math import log
 from pprint import pformat
 import re
+
+from six import iterkeys, iteritems
 
 from nltk.stem.lancaster import LancasterStemmer
 
@@ -182,9 +185,9 @@ class BaseIndex(object):
         if not self.is_indexed(instance) and not force:
             doc = self._as_document(instance)
             self._index_document(doc, force=force)
-            logger.debug(u'{} indexed as\n {}'.format(instance.__class__, pformat(doc)))
+            logger.debug('{} indexed as\n {}'.format(instance.__class__, pformat(doc)))
             return True
-        logger.debug(u'{} already indexed.'.format(instance.__class__))
+        logger.debug('{} already indexed.'.format(instance.__class__))
         return False
 
     def index_many(self, instances, tick_f=None):
@@ -263,14 +266,14 @@ class BaseDatasetIndex(BaseIndex):
         columns = '\n'.join(
             [' '.join(list(t)) for t in execute(query, dataset_vid=str(dataset.identity.vid))])
 
-        doc = u'\n'.join([unicode(x) for x in [dataset.config.metadata.about.title,
-                                               dataset.config.metadata.about.summary,
-                                               dataset.identity.id_,
-                                               dataset.identity.vid,
-                                               dataset.identity.source,
-                                               dataset.identity.name,
-                                               dataset.identity.vname,
-                                               columns]])
+        doc = '\n'.join([unicode(x) for x in [dataset.config.metadata.about.title,
+                                              dataset.config.metadata.about.summary,
+                                              dataset.identity.id_,
+                                              dataset.identity.vid,
+                                              dataset.identity.source,
+                                              dataset.identity.name,
+                                              dataset.identity.vname,
+                                              columns]])
 
         # From the source, make a varity of combinations for keywords:
         # foo.bar.com -> "foo foo.bar foo.bar.com bar.com"
@@ -293,9 +296,9 @@ class BaseDatasetIndex(BaseIndex):
 
         document = dict(
             vid=unicode(dataset.identity.vid),
-            title=unicode(dataset.identity.name) + u' ' + unicode(dataset.config.metadata.about.title),
+            title=unicode(dataset.identity.name) + ' ' + unicode(dataset.config.metadata.about.title),
             doc=unicode(doc),
-            keywords=u' '.join(unicode(x) for x in keywords)
+            keywords=' '.join(unicode(x) for x in keywords)
         )
 
         return document
@@ -347,7 +350,7 @@ class BaseDatasetIndex(BaseIndex):
                 cterms = source_terms
 
         logger.debug('Dataset terms conversion: `{}` terms converted to `{}` query.'.format(terms, cterms))
-        assert cterms is not None, u'Failed to create dataset query from {} terms.'.format(terms)
+        assert cterms is not None, 'Failed to create dataset query from {} terms.'.format(terms)
         return cterms
 
 
@@ -401,7 +404,7 @@ class BasePartitionIndex(BaseIndex):
 
         doc_field = unicode(
             values + ' ' + schema + ' ' +
-            u' '.join([
+            ' '.join([
                 unicode(partition.identity.vid),
                 unicode(partition.identity.id_),
                 unicode(partition.identity.name),
@@ -610,7 +613,7 @@ class SearchTermParser(object):
 
     def __init__(self):
         mt = '|'.join(
-            [r'\b' + x.upper() + r'\b' for x in self.marker_terms.keys()])
+            [r'\b' + x.upper() + r'\b' for x in iterkeys(self.marker_terms)])
 
         self.scanner = re.Scanner([
             (r'\s+', None),
@@ -671,7 +674,7 @@ class SearchTermParser(object):
         for marker, terms in comps:
             groups[marker] += [term for marker, term in terms]
 
-        for marker, terms in groups.items():
+        for marker, terms in iteritems(groups):
 
             if len(terms) > 1:
                 if marker in 'in':
