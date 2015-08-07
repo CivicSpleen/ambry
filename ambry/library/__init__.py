@@ -193,7 +193,6 @@ class Library(object):
 
         return b
 
-
     def bundle(self, ref):
         """Return a bundle build on a dataset, with the given vid or id reference"""
 
@@ -219,7 +218,6 @@ class Library(object):
         for ds in self.datasets:
             yield self.bundle(ds)
 
-
     def partition(self, ref):
         from ambry.orm import Partition
         from ambry.orm.exc import NotFoundError
@@ -243,7 +241,6 @@ class Library(object):
 
         if not p:
             raise NotFoundError("No partition for ref: '{}'".format(ref))
-
 
         b = self.bundle(p.d_vid)
         return b.wrap_partition(p)
@@ -362,6 +359,7 @@ class Library(object):
         db_ck = b.identity.cache_key + ".db"
 
         with open(db_path) as f:
+            remote.makedir(os.path.dirname(db_ck), recursive = True, allow_recreate= True)
             remote.setcontents(db_ck, f)
 
         os.remove(db_path)
@@ -374,6 +372,7 @@ class Library(object):
             # we want to copy the compressed data to the remote.
             with p.datafile.open('rb', compress = False) as fin:
                 self.logger.info('Checking in {}'.format(p.identity.vname))
+                remote.makedir(os.path.dirname(p.datafile.munged_path), recursive=True, allow_recreate=True)
                 remote.setcontents(p.datafile.munged_path, fin)
 
         b.dataset.commit()
@@ -532,5 +531,6 @@ class Library(object):
         except ImportError:
             self.logger.info("Installing required package: {}->{}".format(module_name, pip_name))
             install(python_dir, module_name, pip_name)
+
 
 

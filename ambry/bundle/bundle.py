@@ -206,6 +206,18 @@ class Bundle(object):
     def library(self):
         return self._library
 
+    def dep(self, source_name):
+        """Return a bundle dependency from the sources list
+
+        :param source_name: Source name. The URL field must be a bundle or partition reference
+        :return:
+        """
+
+        source = self.source(source_name)
+
+        return self.library.partition(source.url)
+
+
     @property
     def partitions(self):
         """Return the Schema acessor"""
@@ -245,14 +257,16 @@ class Bundle(object):
         self.dataset._database.session.delete(p._partition)
 
     def source(self, name):
-        source =  self.dataset.source_file(name)
+        return self.dataset.source_file(name)
 
-        if not source:
-            return None
+    def source_pipe(self, source):
+        """Create a source pipe for a source, giving it access to download files to the local cache"""
+        from ambry.etl.rowgen import source_pipe
 
-        source._cache_fs = self._library.download_cache
-        source._library = self._library
-        return source
+        if isinstance(source, basestring):
+            source = self.source(source)
+
+        return source_pipe(source, self._library.download_cache, self.library.config.account)
 
     @property
     def sources(self):
@@ -490,14 +504,14 @@ class Bundle(object):
     def is_clean(self):
         return self.state == self.STATES.CLEANED
 
-    def clean(self):
+    def clean(self, force = False):
 
         """Clean generated objects from the dataset, but only if there are File contents
          to regenerate them"""
         from ambry.orm import ColumnStat, File
         from sqlalchemy.orm import object_session
 
-        if self.is_finalized:
+        if self.is_finalized and not force:
             self.warn("Can't clean; bundle is finalized")
             return False
 
@@ -624,7 +638,7 @@ class Bundle(object):
         else:
             source = None
 
-        pl = Pipeline(self, source=source.source_pipe(account_accessor=self.library.config.account) if source else None)
+        pl = Pipeline(self, source=self.source_pipe(source) if source else None)
 
         try:
             phase_config = self.default_pipelines[phase]
@@ -700,7 +714,6 @@ class Bundle(object):
 
         self.import_lib()
 
-
         return True
 
     def phase_main(self, phase,  sources=None):
@@ -747,7 +760,6 @@ class Bundle(object):
 
         self.dataset.commit()
 
-
         return True
 
     def post_phase(self, phase):
@@ -775,7 +787,7 @@ class Bundle(object):
         if phase_pre(phase):
             self.state = phase
             self.log("---- Phase: {} ---".format(phase))
-            if self.phase_main(phase):
+            if self.phase_main(phase, sources=sources):
 
                 if phase_post(phase):
                     self.log("---- Done {} ---".format(phase))
@@ -877,6 +889,10 @@ Pipeline Headers
             ##
     ## Build
     ##
+
+    @property
+    def is_buildable(self):
+        return not self.is_built and not self.is_finalized
 
     @property
     def is_built(self):

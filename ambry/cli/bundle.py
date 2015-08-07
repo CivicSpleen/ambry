@@ -171,6 +171,8 @@ def bundle_parser(cmd):
     # Clean Command
     #
     command_p = sub_cmd.add_parser('clean', help='Return bundle to state before build, prepare and extracts')
+    command_p.add_argument('-f', '--force', default=False, action="store_true",
+                          help='Force cleaning a built or finalized bundle')
     command_p.set_defaults(subcommand='clean')
 
     #
@@ -212,6 +214,7 @@ def bundle_parser(cmd):
                            help='Install after building')
     command_p.add_argument('-p', '--print_pipe', default=False, action="store_true",
                            help='Print out the pipeline as it runs')
+    command_p.add_argument('sources', nargs='*', type=str, help='Sources to run, instead of running all sources')
 
 
     #
@@ -239,7 +242,6 @@ def bundle_parser(cmd):
     #
     command_p = sub_cmd.add_parser('checkin', help='Commit the bundle to the remote store')
     command_p.set_defaults(subcommand='checkin')
-
 
     #
     # Update Command
@@ -276,7 +278,6 @@ def bundle_parser(cmd):
                                    help='Load data previously submitted to the library back into the build dir')
     command_p.set_defaults(subcommand='repopulate')
 
-
     command_p = sub_cmd.add_parser('edit', help='Edit a bundle file')
     command_p.set_defaults(subcommand='edit')
 
@@ -294,7 +295,6 @@ def bundle_parser(cmd):
     group.add_argument('-d', '--documentation', default=False, action='store_const', const=File.BSFILE.DOC, dest='file_const',
                    help="Edit the documentation")
     command_p.add_argument('term', nargs='?', type=str, help='bundle reference')
-
 
     command_p = sub_cmd.add_parser('import', help='Import a source bundle. ')
     command_p.set_defaults(subcommand='import')
@@ -435,6 +435,11 @@ def bundle_info(args, l, rc):
         print '\nPartitions'
         print tabulate(rows)
 
+def check_built(b):
+    """Exit if the bundle is built or finalized"""
+    if b.is_built or b.is_finalized:
+        fatal("Can't perform operation; locked state = '{}'. Call bambry clean explicity".format(b.state))
+
 def bundle_duplicate(args, l, rc):
     from ambry.bundle import Bundle
 
@@ -449,7 +454,6 @@ def bundle_duplicate(args, l, rc):
 
     prt("New Bundle: {} ".format(nb.identity.vname))
 
-
 def bundle_finalize(args, l, rc):
     from ambry.bundle import Bundle
     b = using_bundle(args, l)
@@ -460,7 +464,7 @@ def bundle_finalize(args, l, rc):
 def bundle_clean(args, l, rc):
     from ambry.bundle import Bundle
     b = using_bundle(args, l).cast_to_build_subclass()
-    b.clean()
+    b.clean(force=args.force)
     b.set_last_access(Bundle.STATES.NEW)
 
 def bundle_download(args, l, rc):
@@ -487,7 +491,6 @@ def bundle_meta(args, l, rc):
         b.clean()
         b.set_last_access(Bundle.STATES.CLEANED)
 
-
     b.sync()
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
@@ -496,11 +499,12 @@ def bundle_meta(args, l, rc):
     b.set_last_access(Bundle.STATES.META)
 
 
-
 def bundle_build(args, l, rc):
     from ambry.bundle import Bundle
 
     b = using_bundle(args, l).cast_to_build_subclass()
+
+    check_built(b)
 
     if args.clean:
         if not b.clean():
@@ -510,7 +514,7 @@ def bundle_build(args, l, rc):
         b.commit()
 
     b.sync_in()
-    b.build()
+    b.build(args.sources)
     b.sync_out()
     b.set_last_access(Bundle.STATES.BUILT)
 
@@ -518,6 +522,8 @@ def bundle_phase(args, l, rc):
     from ambry.bundle import Bundle
 
     b = using_bundle(args, l).cast_to_build_subclass()
+
+    check_built(b)
 
     if args.clean:
         if not b.clean():
@@ -545,6 +551,8 @@ def bundle_run(args, l, rc):
     import sys
 
     b = using_bundle(args, l)
+
+    check_built(b)
 
     if args.clean:
         b.clean()
@@ -889,7 +897,7 @@ file_const_map = dict(
     d=File.BSFILE.DOC,
     m=File.BSFILE.META,
     s=File.BSFILE.SCHEMA,
-    c=File.BSFILE.COLMAP,
+    S=File.BSFILE.SOURCESCHEMA,
     r=File.BSFILE.SOURCES)
 
 
@@ -980,17 +988,19 @@ def bundle_edit(args, l, rc):
 
             elif command == 'change':
                 prt("Changed: {}".format(arg))
-                b.sync()
+                if b.is_buildable:
+                    b.sync()
+                else:
+                    err("Bundle is not in a buildable state; did not sync")
 
             elif command == 'build':
                 bc = b.cast_to_build_subclass()
-                if arg == 'p':
-                    bc.clean()
-                    bc.prepare()
-
-                elif arg == 'B':
-                    bc.clean()
-                    bc.build()
+                if b.is_buildable:
+                    if arg == 'B':
+                        bc.clean()
+                        bc.build()
+                else:
+                    err("Bundle is not in a buildable state; not building")
 
             elif command == 'unknown':
                 warn('Unknown command char: {} '.format(arg))

@@ -1,0 +1,335 @@
+"""The RowGenerator reads a file and yields rows, handling simple headers in CSV
+files, and complex headers with receeding comments in Excel files.
+
+Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
+Revised BSD License, included in this distribution as LICENSE.txt
+"""
+import os.path
+from ambry.etl import Pipe
+
+class SourceError(Exception):
+    pass
+
+def source_pipe(source, cache_fs, account_accessor):
+    """Create a source pipe from a source ORM record"""
+
+    if source.generator:  # Get the source from the generator, not from a file.
+        import bundle
+        gen = eval(source.generator)
+        return gen(source)
+    else:
+
+        if source.get_urltype() == 'gs':
+            return GoogleSource(source, cache_fs, account_accessor)
+
+        gft = source.get_filetype()
+
+        if gft == 'csv':
+            return CsvSource(source, cache_fs, account_accessor)
+        elif gft == 'tsv':
+            return TsvSource(source, cache_fs, account_accessor)
+        elif gft == 'fixed' or gft == 'txt':
+            return FixedSource(source, cache_fs, account_accessor)
+        elif gft == 'xls':
+            return ExcelSource(source, cache_fs, account_accessor)
+        elif gft == 'xlsx':
+            return ExcelSource(source, cache_fs, account_accessor)
+        else:
+            raise ValueError("Unknown filetype for source {}: {} ".format(source.name, gft))
+
+class DelayedOpen(object):
+    """A Lightweight wrapper to delay opening a PyFilesystem object until is it used. It is needed because
+    The open() command on a filesystem directory, to produce the file object, also opens the file
+    """
+    def __init__(self, source, fs, path, mode = 'r', from_cache = False, account_accessor = None):
+        self._source = source
+        self._fs = fs
+        self._path = path
+        self._mode = mode
+        self._account_accessor = account_accessor
+
+        self.from_cache = from_cache
+
+    def open(self, mode = None, encoding = None ):
+        return self._fs.open(self._path, mode if mode else self._mode, encoding = encoding )
+
+    def syspath(self):
+        return self._fs.getsyspath(self._path)
+
+    def source_pipe(self):
+        return self._source.row_gen()
+
+def fetch(source, cache_fs, account_accessor):
+    """Download the source and return a callable object that will open the file. """
+
+    from fs.zipfs import ZipFS
+    import os
+
+    if source.get_urltype() == 'gs':
+        return DelayedOpen(source, None, None, None, None)
+
+    fstor = None
+
+    def walk_all(fs):
+        return [os.path.join(e[0], x) for e in fs.walk() for x in e[1]]
+
+    if not source.url:
+        raise SourceError("Can't download; not url specified")
+
+    f = download(source.url, cache_fs, account_accessor = account_accessor)
+
+    if source.get_urltype() == 'zip':
+
+        fs = ZipFS(cache_fs.open(f, 'rb'))
+        if not source.file:
+            first = walk_all(fs)[0]
+
+            fstor = DelayedOpen(source, fs, first, 'rU', None)
+        else:
+            import re
+
+            # Put the walk output into a normal list of files
+            for zip_fn in walk_all(fs):
+                if '_MACOSX' in zip_fn:
+                    continue
+
+                if re.search(source.file, zip_fn):
+                    fstor = DelayedOpen( source,  fs,zip_fn, 'rb', account_accessor)
+                    break
+
+    else:
+        fstor = DelayedOpen(source, cache_fs, f, 'rb')
+
+    return fstor
+
+class SourceRowGen(Pipe):
+    """Adapts any iterator to a pipe"""
+
+    def __init__(self, source, cache_fs, account_accessor):
+        self._source = source
+        self._cache_fs = cache_fs
+        self._account_accessor = account_accessor
+        self._fstor = None
+
+    def __iter__(self):
+        rg = self._get_row_gen()
+        self.start()
+        for row in rg:
+            yield row
+
+        self.finish()
+
+    def fetch(self):
+        if not self._fstor:
+            self._fstor = fetch(self._source, self._cache_fs, self._account_accessor)
+
+        return self._fstor
+
+    def _get_row_gen(self):
+        pass
+
+    def start(self):
+        pass
+
+    def finish(self):
+        pass
+
+    def __str__(self):
+        from ..util import qualified_class_name
+
+        return qualified_class_name(self)
+
+class CsvSource(SourceRowGen):
+
+    def _get_row_gen(self):
+        import petl
+        fstor = self.fetch()
+        return petl.io.csv.fromcsv(fstor, self._source.encoding if self._source.encoding else None)
+
+class TsvSource(SourceRowGen):
+
+    def _get_row_gen(self):
+        import petl
+
+        fstor = self.fetch()
+        return petl.io.csv.fromtsv(fstor, self._source.encoding if self._source.encoding else None)
+
+class FixedSource(SourceRowGen):
+
+    def _get_row_gen(self):
+        from ambry.util.fixedwidth import fixed_width_iter
+
+        fstor = self.fetch()
+        return fixed_width_iter(fstor.open(mode='r', encoding=self._source.encoding), self._source)
+
+class ExcelSource(SourceRowGen):
+
+    def _get_row_gen(self):
+        fstor = self.fetch()
+        return excel_iter(fstor.syspath(), self._source.segment)
+
+class GoogleSource(SourceRowGen):
+
+    def _get_row_gen(self):
+        return google_iter(self._source)
+
+def excel_iter(file_name, segment):
+    from xlrd import open_workbook
+
+    def srow_to_list(row_num, s):
+        """Convert a sheet row to a list"""
+
+        values = []
+
+        for col in range(s.ncols):
+            values.append(s.cell(row_num, col).value)
+
+        return values
+
+    wb = open_workbook(file_name)
+
+    s = wb.sheets()[int(segment) if segment else 0]
+
+    for i in range(0, s.nrows):
+        yield srow_to_list(i, s)
+
+
+def get_s3(url, account_accessor):
+    # TODO: Hack the pyfilesystem fs.opener file to get credentials from a keychain
+    # The monkey patch fixes a bug: https://github.com/boto/boto/issues/2836
+    from fs.s3fs import S3FS
+    from ambry.util import parse_url_to_dict
+
+    import ssl
+
+    _old_match_hostname = ssl.match_hostname
+
+    def _new_match_hostname(cert, hostname):
+        if hostname.endswith('.s3.amazonaws.com'):
+            pos = hostname.find('.s3.amazonaws.com')
+            hostname = hostname[:pos].replace('.', '') + hostname[pos:]
+        return _old_match_hostname(cert, hostname)
+
+    ssl.match_hostname = _new_match_hostname
+
+    pd = parse_url_to_dict(url)
+
+    account = account_accessor(pd['netloc'])
+
+    s3 = S3FS(
+        bucket=pd['netloc'],
+        #prefix=pd['path'],
+        aws_access_key=account['access'],
+        aws_secret_key=account['secret'],
+
+    )
+
+    #ssl.match_hostname = _old_match_hostname
+
+    return s3
+
+
+def download(url, cache_fs, account_accessor=None):
+    import urlparse
+
+    import os.path
+    import requests
+    from ambry.util.flo import copy_file_or_flo
+    from ambry.util import parse_url_to_dict
+    import filelock
+
+    parsed = urlparse.urlparse(str(url))
+
+    cache_path = os.path.join(parsed.netloc, parsed.path.strip('/'))
+
+    if parsed.query:
+        import hashlib
+        hash = hashlib.sha224(parsed.query).hexdigest()
+        cache_path = os.path.join(cache_path, hash)
+
+    if not cache_fs.exists(cache_path):
+
+        cache_fs.makedir(os.path.dirname(cache_path), recursive=True, allow_recreate=True)
+
+        lock_file = cache_fs.getsyspath(cache_path+".lock")
+
+        with lock_file:
+
+            if url.startswith('s3:'):
+                s3 = get_s3(url, account_accessor)
+                pd = parse_url_to_dict(url)
+
+                with cache_fs.open(cache_path, 'wb') as fout:
+                    with s3.open(pd['path'], 'rb') as fin:
+                        copy_file_or_flo(fin, fout)
+
+            elif url.startswith('ftp:'):
+                import shutil
+                import urllib2
+                from contextlib import closing
+
+                with closing(urllib2.urlopen(url)) as fin:
+                    with cache_fs.open(cache_path, 'wb') as fout:
+                        shutil.copyfileobj(fin, fout)
+
+            else:
+
+                r = requests.get(url, stream=True)
+
+                with cache_fs.open(cache_path, 'wb') as f:
+                    copy_file_or_flo(r.raw, f)
+
+    return cache_path
+
+
+def make_excel_date_caster(file_name):
+    """Make a date caster function that can convert dates from a particular workbook. This is required
+    because dates in Excel workbooks are stupid. """
+
+    from xlrd import open_workbook
+
+    wb = open_workbook(file_name)
+    datemode = wb.datemode
+
+    def excel_date(v):
+        from xlrd import xldate_as_tuple
+        import datetime
+
+        try:
+
+            year, month, day, hour, minute, second = xldate_as_tuple(float(v), datemode)
+            return datetime.date(year, month, day)
+        except ValueError:
+            # Could be actually a string, not a float. Because Excel dates are completely broken.
+            from dateutil import parser
+
+            try:
+                return parser.parse(v).date()
+            except ValueError:
+                return None
+
+    return excel_date
+
+
+def google_iter(source):
+    """"Iterate over the rows of a goodl spreadsheet. The URL field of the source must start with gs:// followed by
+    the spreadsheet key. """
+    import gspread
+    from oauth2client.client import SignedJwtAssertionCredentials
+
+    json_key = source._library.config.account('google_spreadsheets')
+
+    scope = ['https://spreadsheets.google.com/feeds']
+
+    credentials = SignedJwtAssertionCredentials(json_key['client_email'], json_key['private_key'], scope)
+
+    spreadsheet_key = source.url.replace('gs://', '')
+
+    gc = gspread.authorize(credentials)
+
+    sh = gc.open_by_key(spreadsheet_key)
+
+    wksht = sh.worksheet(source.segment)
+
+    for row in wksht.get_all_values():
+        yield row

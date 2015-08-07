@@ -1,5 +1,4 @@
-"""The RowGenerator reads a file and yields rows, handling simple headers in CSV
-files, and complex headers with receeding comments in Excel files.
+"""Pipes, pipe segments and piplines, for flowing data from sources to partitions. 
 
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
@@ -201,6 +200,70 @@ class OnlySource(Pipe):
 
         self.headers = row
         return row
+
+
+class Slice(Pipe):
+    """Select a slice of the table, using a set of tuples to represent the start and end positions of each
+    part of the slice."""
+    def __init__(self, *args):
+        """
+        Construct with one or more 2-element tuple or a string, in a similar format to what
+        __getitem__ accepts
+
+        >>> s = Slice((2,3), (6,8))
+        >>> s = Slice("2:3,6:8")
+
+        :param args: One or more slice objects
+        :return:
+        """
+
+        if len(args) == 1 and isinstance(args[0], basestring):
+            args = Slice.parse(args[0])
+
+        self._slices = args
+
+        parts = []
+
+        for slice in self._slices:
+            parts.append("row[{}:{}]".format(slice[0], slice[1])
+                         if isinstance(slice, (tuple,list)) else "[row[{}]]".format(slice) )
+
+        self.slicer = eval('lambda row: {}'.format('+'.join(parts)))
+
+    @staticmethod
+    def parse(v):
+        """
+        Parse a slice string, of the same form as used by __getitem__
+
+        >>> Slice.parse("2:3,7,10:12")
+
+        :param v: Input string
+        :return: A list of tuples, one for each element of the slice string
+        """
+
+        parts = v.split(',')
+
+        slices = []
+
+        for part in parts:
+            p = part.split(':')
+
+            if len(p) == 1:
+                slices.append(int(p[0]))
+            elif len(p) == 2:
+                slices.append(tuple(p))
+            else:
+                raise ValueError("Too many ':': {}".format(part))
+
+        return slices
+
+    def process_header(self, row):
+
+        return self.slicer(row)
+
+    def process_body(self, row):
+
+        return self.slicer(row)
 
 
 class Head(Pipe):

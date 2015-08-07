@@ -370,7 +370,5 @@ class Partition(Base, DictableMixin):
         target.cache_key = name.cache_key
         target.fqname = target.identity.fqname
 
-
-
 event.listen(Partition, 'before_insert', Partition.before_insert)
 event.listen(Partition, 'before_update', Partition.before_update)

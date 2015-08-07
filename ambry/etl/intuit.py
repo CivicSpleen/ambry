@@ -351,8 +351,7 @@ class TypeIntuiter(Pipe):
         except AttributeError:
             pass
 
-
-        type_precidence = ['unknown', 'int', 'float', 'str']
+        type_precidence = ['unknown', 'int', 'float', 'date', 'time', 'datetime', 'str']
 
         # TODO This will fail for dates and times.
 

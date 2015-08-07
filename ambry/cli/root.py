@@ -11,7 +11,6 @@ from . import prt
 
 default_locations = [LocationRef.LOCATION.LIBRARY,  LocationRef.LOCATION.REMOTE]
 
-
 def root_parser(cmd):
     import argparse
     from ..identity import LocationRef
@@ -21,25 +20,9 @@ def root_parser(cmd):
     sp = cmd.add_parser('list', help='List bundles and partitions')
     sp.set_defaults(command='root')
     sp.set_defaults(subcommand='list')
-    sp.add_argument('-P', '--plain', default=False, action='store_true', help='Print only vids')
     sp.add_argument('-F', '--fields', type=str,
                     help="Specify fields to use. One of: 'locations', 'vid', 'status', 'vname', 'sname', 'fqname")
-    sp.add_argument('-p', '--partitions', default=False, action='store_true',
-                    help='Show partitions')
-    sp.add_argument('-t', '--tables', default=False, action='store_true',
-                    help='Show tables')
-    sp.add_argument('-a', '--all', default=False, action='store_true',
-                    help='List everything')
-    sp.add_argument('-l', '--library', default=False, action='store_const', const=lr.LIBRARY,
-                    help='List only the library')
-    sp.add_argument('-r', '--remote', default=False, action='store_const', const=lr.REMOTE,
-                    help='List only the remote')
-    sp.add_argument('-s', '--source', default=False, action='store_const', const=lr.SOURCE,
-                    help='List only the source')
-    sp.add_argument('-w', '--warehouse', default=False, action='store_const', const='warehouse',
-                    help='List warehouses')
-    sp.add_argument('-c', '--collection', default=False, action='store_const', const='collection',
-                    help='List collections')
+    sp.add_argument('-s', '--sort', help='Show partitions')
     sp.add_argument('term', nargs='?', type=str,
                     help='Name or ID of the bundle or partition')
 
@@ -143,42 +126,15 @@ def root_makemigration(args, l, rc):
 
 def root_list(args, l, rc):
 
-    #
-    # Listing warehouses and collections is different
-    #
-
-    if args.collection:
-        # root_list_collections(args,l,rc)
-        pass
-
-    if args.warehouse:
-        # root_list_collections(args, l, rc)
-        pass
-
-    #
-    # The remainder are for listing bundles and partitions.
-    #
-
-    if args.tables:
-        # root_list_tables(args, l, rc)
-        pass
-
-    if args.plain:
-        fields = ['vid']
-
-    elif args.fields:
+    if args.fields:
         fields = args.fields.split(',')
 
     else:
         fields = ['locations', 'vid', 'vname']
 
-        if args.source:
-            fields += ['status']
+    root_list_datasets(args, l, rc, args.sort)
 
-    root_list_datasets(args, l, rc)
-
-
-def root_list_datasets(args, l, rc):
+def root_list_datasets(args, l, rc, sort = None):
     from tabulate import tabulate
 
     header = ['vid', 'vname', 'state', 'source_fs']
@@ -186,6 +142,10 @@ def root_list_datasets(args, l, rc):
 
     for b in l.bundles:
         records.append(b.field_row(header))
+
+    if args.sort:
+        idx = header.index(args.sort)
+        records = sorted(records, key=lambda r: r[idx])
 
     print tabulate(records, headers=header)
 
@@ -326,7 +286,12 @@ def root_remove(args, l, rc):
 
     b = l.bundle(args.term)
 
+    fqname = b.identity.fqname
+
     l.remove(b)
+
+    prt("Removed {}".format(fqname))
+
 
 def root_import(args, l, rc):
     import yaml
