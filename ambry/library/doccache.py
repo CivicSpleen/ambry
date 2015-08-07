@@ -44,7 +44,7 @@ class DocCache(object):
                 key += '_'.join(str(arg) for arg in args)
 
             if kwargs:
-                key += '_'.join(str(arg) for arg in kwargs.values())
+                key += '_'.join(str(arg) for arg in list(kwargs.values()))
 
         assert bool(key)
 
@@ -167,7 +167,7 @@ class DocCache(object):
         def table(vid):
             t = self.library.table(vid).nonull_col_dict
 
-            t['foreign_indexes'] = list(set([c['index'].split(':')[0] for c in t['columns'].values() if c.get('index', False) ]))
+            t['foreign_indexes'] = list(set([c['index'].split(':')[0] for c in list(t['columns'].values()) if c.get('index', False) ]))
 
             return t
 
@@ -238,13 +238,13 @@ class DocCache(object):
         d["partitions"] = partitions
 
         d['tables'] = {tvid: {
-            k: v for k, v in (self.get_table(tvid).items() + [('installed_names', [])]) if k != 'columns'
+            k: v for k, v in (list(self.get_table(tvid).items()) + [('installed_names', [])]) if k != 'columns'
         } for tvid in f.dict.get('tables', [])}
 
-        d['bundles'] = {vid: self.get_bundle(vid) for vid in partitions.values()}
+        d['bundles'] = {vid: self.get_bundle(vid) for vid in list(partitions.values())}
 
-        for vid, b in d['bundles'].items():
-            b['installed_partitions'] = [pvid for pvid, pbvid in partitions.items() if vid == pbvid]
+        for vid, b in list(d['bundles'].items()):
+            b['installed_partitions'] = [pvid for pvid, pbvid in list(partitions.items()) if vid == pbvid]
 
         # Generate entries for the tables, using the names that they are installed with. These tables aren't
         # nessiarily installed; this maps the instllation names to vids if they
@@ -262,8 +262,8 @@ class DocCache(object):
                 b_vname=b['identity']['vname']
             )
 
-        for vid, b in d['bundles'].items():
-            for pvid, bvid in d['partitions'].items():
+        for vid, b in list(d['bundles'].items()):
+            for pvid, bvid in list(d['partitions'].items()):
                 b = d['bundles'][bvid]
                 p = b['partitions'][pvid]
                 for tvid in p['table_vids']:
