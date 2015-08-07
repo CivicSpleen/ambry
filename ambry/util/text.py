@@ -5,6 +5,8 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
+from six import StringIO
+
 
 def generate_pdf_pages(fp):
 
@@ -39,8 +41,6 @@ def generate_pdf_pages(fp):
     PDFDevice.debug = debug
     #
     rsrcmgr = PDFResourceManager(caching=caching)
-
-    from cStringIO import StringIO
 
     outfp = StringIO()
 

@@ -1,11 +1,5 @@
 # From : http://stackoverflow.com/a/4915359
 
-
-try:
-    from itertools import izip_longest  # added in Py 2.6
-except ImportError:
-    from itertools import zip_longest as izip_longest  # name change in Py 3.x
-
 try:
     from itertools import accumulate  # added in Py 3.2
 except ImportError:
@@ -27,14 +21,14 @@ def fixed_width_iter(flo, source):
             int(c.start)
             int(c.width)
         except TypeError:
-            raise TypeError("Source table {} must have start and width values for {} column "
+            raise TypeError('Source table {} must have start and width values for {} column '
                             .format(source.source_table.name, c.source_header))
 
-        parts.append("row[{}:{}]".format(c.start-1,c.start+c.width-1))
+        parts.append('row[{}:{}]'.format(c.start-1, c.start+c.width-1))
 
-    parser = eval("lambda row: [{}]".format(','.join(parts)))
+    parser = eval('lambda row: [{}]'.format(','.join(parts)))
 
     yield source.source_table.headers
 
     for line in flo:
-        yield [ e.strip() for e in parser(line.strip()) ]
+        yield [e.strip() for e in parser(line.strip())]
