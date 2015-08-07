@@ -51,8 +51,8 @@ class DatabaseTest(unittest.TestCase):
     def test_initializes_path_and_driver(self):
         dsn = 'postgresql+psycopg2://ambry:secret@127.0.0.1/exampledb'
         db = Database(dsn)
-        self.assertEquals(db.path, '/exampledb')
-        self.assertEquals(db.driver, 'postgresql+psycopg2')
+        self.assertEqual(db.path, '/exampledb')
+        self.assertEqual(db.driver, 'postgresql+psycopg2')
 
     # .create tests
     def test_creates_new_database(self):
@@ -196,8 +196,8 @@ class DatabaseTest(unittest.TestCase):
         fake_create.expects_call()\
             .returns(engine_stub)
         db = Database('sqlite://')
-        self.assertEquals(db.engine, engine_stub)
-        self.assertEquals(db._engine, engine_stub)
+        self.assertEqual(db.engine, engine_stub)
+        self.assertEqual(db._engine, engine_stub)
 
     @fudge.patch(
         'ambry.orm.database.create_engine',
@@ -231,7 +231,7 @@ class DatabaseTest(unittest.TestCase):
         dsn = 'postgresql+psycopg2://ambry:secret@127.0.0.1/exampledb'
         db = Database(dsn)
         db._engine = fake_engine
-        self.assertEquals(db.connection, fake_connection)
+        self.assertEqual(db.connection, fake_connection)
 
     def test_connection_sets_path_to_library_for_postgis(self):
         fake_connection = fudge.Fake('connection')\
@@ -246,7 +246,7 @@ class DatabaseTest(unittest.TestCase):
         dsn = 'postgis+psycopg2://ambry:secret@127.0.0.1/exampledb'
         db = Database(dsn)
         db._engine = fake_engine
-        self.assertEquals(db.connection, fake_connection)
+        self.assertEqual(db.connection, fake_connection)
 
     # .session tests # FIXME:
 
@@ -306,14 +306,14 @@ class DatabaseTest(unittest.TestCase):
     def test_contains_engine_inspector(self):
         db = Database('sqlite://')
         self.assertIsInstance(db.inspector, Inspector)
-        self.assertEquals(db.engine, db.inspector.engine)
+        self.assertEqual(db.engine, db.inspector.engine)
 
     # .clone tests
     def test_clone_returns_new_instance(self):
         db = Database('sqlite://')
         new_db = db.clone()
-        self.assertNotEquals(db, new_db)
-        self.assertEquals(db.dsn, new_db.dsn)
+        self.assertNotEqual(db, new_db)
+        self.assertEqual(db.dsn, new_db.dsn)
 
     # .create_tables test
     def test_ignores_OperationalError_while_droping(self):
@@ -365,14 +365,14 @@ class DatabaseTest(unittest.TestCase):
         db.create_tables()
         query = db.session.query
         datasets = query(Dataset).all()
-        self.assertEquals(len(datasets), 0)
+        self.assertEqual(len(datasets), 0)
 
         # testing
         db._add_config_root()
         datasets = query(Dataset).all()
-        self.assertEquals(len(datasets), 1)
-        self.assertEquals(datasets[0].name, ROOT_CONFIG_NAME)
-        self.assertEquals(datasets[0].vname, ROOT_CONFIG_NAME_V)
+        self.assertEqual(len(datasets), 1)
+        self.assertEqual(datasets[0].name, ROOT_CONFIG_NAME)
+        self.assertEqual(datasets[0].vname, ROOT_CONFIG_NAME_V)
 
     def test_closes_session_if_root_config_exists(self):
 
@@ -402,7 +402,7 @@ class DatabaseTest(unittest.TestCase):
         # testing
         ret = self.sqlite_db.datasets
         self.assertIsInstance(ret, list)
-        self.assertEquals(len(ret), 3)
+        self.assertEqual(len(ret), 3)
         self.assertIn(ds1, ret)
         self.assertIn(ds2, ret)
         self.assertIn(ds3, ret)
@@ -418,7 +418,7 @@ class DatabaseTest(unittest.TestCase):
 
         # testing
         self.sqlite_db.remove_dataset(ds1)
-        self.assertEquals(
+        self.assertEqual(
             self.sqlite_db.session.query(Dataset).filter_by(vid=ds1_vid).all(),
             [],
             'Dataset was not removed.')
@@ -431,7 +431,7 @@ class GetVersionTest(BasePostgreSQLTest):
         connection = engine.connect()
         connection.execute('PRAGMA user_version = 22')
         version = get_stored_version(connection)
-        self.assertEquals(version, 22)
+        self.assertEqual(version, 22)
 
     def test_returns_user_version_from_postgres_table(self):
         if not self.postgres_dsn:
@@ -448,7 +448,7 @@ class GetVersionTest(BasePostgreSQLTest):
         pg_connection.execute('INSERT INTO user_version VALUES (22);')
         pg_connection.execute('commit')
         version = get_stored_version(pg_connection)
-        self.assertEquals(version, 22)
+        self.assertEqual(version, 22)
 
 
 class ValidateVersionTest(unittest.TestCase):
@@ -508,7 +508,7 @@ class UpdateVersionTest(BasePostgreSQLTest):
     def test_updates_user_version_sqlite_pragma(self):
         _update_version(self.sqlite_connection, 122)
         stored_version = self.sqlite_connection.execute('PRAGMA user_version').fetchone()[0]
-        self.assertEquals(stored_version, 122)
+        self.assertEqual(stored_version, 122)
 
     def test_creates_user_version_postgresql_table(self):
         if not self.postgres_dsn:
@@ -517,7 +517,7 @@ class UpdateVersionTest(BasePostgreSQLTest):
         pg_connection = self.pg_connection()
         _update_version(pg_connection, 123)
         version = pg_connection.execute('SELECT version FROM user_version;').fetchone()[0]
-        self.assertEquals(version, 123)
+        self.assertEqual(version, 123)
 
     def test_updates_user_version_postgresql_table(self):
         if not self.postgres_dsn:
@@ -534,7 +534,7 @@ class UpdateVersionTest(BasePostgreSQLTest):
 
         _update_version(pg_connection, 123)
         version = pg_connection.execute('SELECT version FROM user_version;').fetchone()[0]
-        self.assertEquals(version, 123)
+        self.assertEqual(version, 123)
 
     def test_raises_DatabaseMissingError_error(self):
         with fudge.patched_context(self.sqlite_connection.engine, 'name', 'foo'):
@@ -587,7 +587,7 @@ class MigrateTest(unittest.TestCase):
         fake_migrate.expects_call()
         migrate(self.connection)
         stored_version = self.connection.execute('PRAGMA user_version').fetchone()[0]
-        self.assertEquals(stored_version, 100)
+        self.assertEqual(stored_version, 100)
 
     @fudge.patch(
         'ambry.orm.database._is_missed',
@@ -599,4 +599,4 @@ class MigrateTest(unittest.TestCase):
         with self.assertRaises(Exception):
             migrate(self.connection)
         stored_version = self.connection.execute('PRAGMA user_version').fetchone()[0]
-        self.assertEquals(stored_version, 22)
+        self.assertEqual(stored_version, 22)

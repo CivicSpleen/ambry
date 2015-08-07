@@ -84,7 +84,7 @@ class DatasetPostgreSQLIndex(BaseDatasetIndex):
         match_query = self._make_query_from_terms(search_phrase)
         datasets = {}
         # TODO: Implement
-        return datasets.values()
+        return list(datasets.values())
 
     def _index_document(self, document, force=False):
         """ Adds document to the index. """

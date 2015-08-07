@@ -8,16 +8,55 @@ from ambry.etl.rowgen import DelayedOpen, SourceRowGen, excel_iter, download, go
 
 __docformat__ = 'restructuredtext en'
 
+from collections import OrderedDict
+import datetime
+import hashlib
+import os
+from os.path import splitext
+import re
+import shutil
+import ssl
+
+from dateutil import parser
+
+import requests
+
+import petl
+
+import gspread
+
+from oauth2client.client import SignedJwtAssertionCredentials
+
+from contextlib import closing
+
+from six.moves.urllib.parse import urlparse
+from six.moves.urllib.request import urlopen
+
+from fs.zipfs import ZipFS
+from fs.s3fs import S3FS
 
 from sqlalchemy import Column as SAColumn
 from sqlalchemy import Text, String, ForeignKey, INTEGER, UniqueConstraint
-from . import MutationList, JSONEncodedObj
 from sqlalchemy.orm import relationship
+
+from xlrd import open_workbook, xldate_as_tuple
+
+from ambry.etl import Pipe
+from ambry.util import parse_url_to_dict
+from ambry.util.flo import copy_file_or_flo
 from source_table import SourceTable
 from table import Table
 from . import Base,  DictableMixin
 
+from .source_table import SourceTable
+from .table import Table
 
+from . import MutationList, JSONEncodedObj
+from . import Base,  DictableMixin
+
+
+class SourceError(Exception):
+    pass
 
 
 
@@ -66,23 +105,19 @@ class DataSource(Base, DictableMixin):
     )
 
     def get_filetype(self):
-        from os.path import splitext
-        import urlparse
-
         if self.filetype:
             return self.filetype
 
         if self.file:
             root, ext = splitext(self.file)
-
             return ext[1:]
 
-        parsed = urlparse.urlparse(self.url)
+        parsed = urlparse(self.url)
 
         root, ext = splitext(parsed.path)
 
         if ext == '.zip':
-            parsed_path = parsed.path.replace('.zip','')
+            parsed_path = parsed.path.replace('.zip', '')
             root, ext = splitext(parsed_path)
 
             return ext[1:]
@@ -99,7 +134,7 @@ class DataSource(Base, DictableMixin):
             return self.urltype
 
         if self.url and self.url.startswith('gs://'):
-            return 'gs' # Google spreadsheet
+            return 'gs'  # Google spreadsheet
 
         if self.url:
             root, ext = splitext(self.url)
@@ -115,42 +150,34 @@ class DataSource(Base, DictableMixin):
         :return:
 
         """
-        from collections import OrderedDict
-        return OrderedDict( (p.key,getattr(self, p.key)) for p in self.__mapper__.attrs
-                            if p.key not in ('_source_table', '_dest_table', 'd_vid', 't_vid','st_id', 'dataset', 'hash' ) )
+        SKIP_KEYS = ('_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset', 'hash')
+        return OrderedDict(
+            (p.key, getattr(self, p.key)) for p in self.__mapper__.attrs if p.key not in SKIP_KEYS)
 
     @property
     def row(self):
-        from collections import OrderedDict
 
         # Use an Ordered Dict to make it friendly to creating CSV files.
+        SKIP_KEYS = ('id', '_source_table', '_dest_table', 'd_vid', 't_vid', 'st_id', 'dataset', 'hash')
 
-        d = OrderedDict([(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
-                          if p.key not in ('id', '_source_table', '_dest_table', 'd_vid', 't_vid','st_id', 'dataset', 'hash' )])
-
+        d = OrderedDict(
+            [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs if p.key not in SKIP_KEYS])
         return d
 
     def update(self, **kwargs):
 
-        for k, v in kwargs.items():
+        for k, v in list(kwargs.items()):
             if hasattr(self, k):
-                setattr(self,k, v)
+                setattr(self, k, v)
 
-    def source_pipe(self, cache_fs=None, account_accessor = None):
-        raise NotImplemented
 
-    def fetch(self, cache_fs=None, account_accessor=None):
-        raise NotImplemented
-
-    def row_gen(self, fstor=None):
-        raise NotImplementedError
 
     @property
     def source_table(self):
 
         if not self._source_table:
             name = self.source_table_name if self.source_table_name else self.name
-            st =  self.dataset.source_table(name)
+            st = self.dataset.source_table(name)
             if not st:
                 st = self.dataset.new_source_table(name)
 
@@ -162,7 +189,7 @@ class DataSource(Base, DictableMixin):
 
     @property
     def dest_table(self):
-        from exc import NotFoundError
+        from .exc import NotFoundError
 
         if not self._dest_table:
             name = self.dest_table_name if self.dest_table_name else self.name

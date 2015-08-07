@@ -1,14 +1,18 @@
 """Intuit data types for rows of values."""
 __author__ = 'eric'
 
-from collections import deque, OrderedDict
+from collections import deque
 import datetime
 
 from ambry.etl.pipeline import Pipe
+from ambry.util import get_logger
+
+logger = get_logger(__name__)
+
 
 class unknown(str):
 
-    __name__  = 'unknown'
+    __name__ = 'unknown'
 
     def __new__(cls):
         return super(unknown, cls).__new__(cls, cls.__name__)
@@ -403,8 +407,15 @@ class TypeIntuiter(Pipe):
             yield d
 
 class RowIntuiter(Pipe):
+    """ Separates rows to the comments, header and data.
+
+    Note: Assuming None means empty value in the cell. Empty strings (xlrd case) have to be replaced
+        with None to match header and comment patterns. # FIXME: Consult Eric.
+    """
+
     header = None
     comments = None
+    errors = {}
     FIRST_ROWS = 20  # How many rows to keep in the top rows slice while looking for the comments and header.
     LAST_ROWS = 20  # How many rows to keep in the last rows slice while looking for the last row with data.
     SAMPLE_SIZE = 200  # How many rows to keep in the sample while recognizing data pattern.
@@ -421,8 +432,7 @@ class RowIntuiter(Pipe):
 
         """
         for i, e in enumerate(row):
-            # FIXME: Use TypeIntuiter
-            if type(e) not in pattern[i]:
+            if self._get_type(e) not in pattern[i]:
                 return False
         return True
 
@@ -474,23 +484,25 @@ class RowIntuiter(Pipe):
                         str_matches += 1
                 if float(str_matches) / float(len(row)) >= MATCH_THRESHOLD:
                     return row
-        # FIXME: What should I do if header couldn't be found?
+        self.errors['no-header'] = 'Header row was not found.'
 
-    def _find_comments(self, first_rows, comments_pattern):
+    def _find_comments(self, rows, comments_pattern):
         """ Finds comments in the rows using comments pattern.
 
         Args:
-            first_rows: rows where to look for comments.
+            rows: rows where to look for comments.
             comments_pattern: pattern to match against to.
 
         Returns:
             list: list with comments or empty list if no comments found.
         """
-        for row in first_rows:
+        comments = []
+        for row in rows:
             if self._matches(row, comments_pattern):
-                # FIXME: should I join comments?
-                return row
-        return []
+                comment = ' '.join([x for x in row if x])
+                if comment:
+                    comments.append(comment)
+        return comments
 
     def _get_patterns(self, rows):
         """ Finds comments, header and data patterns in the rows.
@@ -499,26 +511,73 @@ class RowIntuiter(Pipe):
             row (list):
 
         Returns:
-            FIXME:
+            tuple of comments_pattern, header_pattern, data_pattern.
 
         """
+        assert len(rows) > self.FIRST_ROWS + self.LAST_ROWS, 'Number of rows is not enough to recognize patter.s.'
         data_rows = rows[self.FIRST_ROWS:-self.LAST_ROWS]
         data_sample = data_rows[:self.SAMPLE_SIZE]
         data_pattern = [set() for x in range(len(data_rows[0]))]
 
         for row in data_sample:
             for i, column in enumerate(row):
-                # FIXME: Use TypeIntuiter instead of type()
-                data_pattern[i].add(type(column))
+                data_pattern[i].add(self._get_type(column))
 
-        comments_pattern = [set() for x in range(len(rows[0]))]
-        for row in rows[:2]:
-            for i, column in enumerate(row):
-                # FIXME: Use TypeIntuiter instead of type()
-                comments_pattern[i].add(type(column))
+        #
+        # Comments pattern - first two columns are string or None, other columns are None.
+        #
+        comments_pattern = [set([None]) for x in range(len(rows[0]))]
+        comments_pattern[0].add(str)
+        comments_pattern[1].add(str)
+
+        #
+        # Header pattern.
+        #
 
         header_pattern = [set([str, None]) for x in data_pattern]
         return comments_pattern, header_pattern, data_pattern
+
+    def _is_float(self, value):
+        """ Returns True if value contains float number.
+
+        """
+        ret = False
+        if isinstance(value, float):
+            ret = True
+        if isinstance(value, basestring) and value.count('.') == 1 and value.replace('.', '1').isdigit():
+            ret = True
+        logger.debug(
+            u'Determining float: value: {}, type: {}, is_float: {}'.format(value, type(value), ret))
+        return ret
+
+    def _is_int(self, value):
+        """ Returns True if value contains int. Otherwise returns False.
+
+        """
+        ret = False
+        if isinstance(value, int):
+            ret = True
+        if isinstance(value, basestring):
+            ret = value.isdigit()
+        logger.debug(
+            u'Determining int: value: {}, type: {}, is_int: {}'.format(value, type(value), ret))
+        return ret
+
+    def _get_type(self, value):
+        """ Determines and returns type of the value.
+
+        Args:
+            value (any):
+
+        Returns:
+            type: int or float or str or unicode.
+        """
+        if self._is_float(value):
+            return float
+        if self._is_int(value):
+            return int
+        if test_string(value):
+            return str
 
     def __iter__(self):
         """ Generates rows with data.
@@ -533,10 +592,10 @@ class RowIntuiter(Pipe):
         comments_pattern, header_pattern, data_pattern = self._get_patterns(rows)
 
         # save comments
-        self.comments = self._find_comments(rows, comments_pattern)
+        self.comments = self._find_comments(rows[:self.FIRST_ROWS], comments_pattern)
 
         # save header
-        self.header = self._find_header(rows, header_pattern)
+        self.header = self._find_header(rows[:self.FIRST_ROWS], header_pattern)
 
         # find data and generate data
         first_line, end_line = self._find_data_lines(rows, data_pattern)

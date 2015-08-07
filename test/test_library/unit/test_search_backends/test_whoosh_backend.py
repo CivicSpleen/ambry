@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import unicode_literals
+
 import os
 
 from test.test_base import TestBase
@@ -18,7 +20,7 @@ class WhooshSearchBackendTest(TestBase):
         self.backend = WhooshSearchBackend(self.library)
 
     def test_initializes_root_dir(self):
-        self.assertEquals(self.backend.root_dir, self.library._fs.search() + '/')
+        self.assertEqual(self.backend.root_dir, self.library._fs.search() + '/')
 
 
 class DatasetWhooshIndexTest(TestBase):
@@ -76,7 +78,7 @@ class DatasetWhooshIndexTest(TestBase):
         found = self.backend.dataset_index.search('dataset')
         found_dataset = found[0]
         assert found_dataset.vid == dataset.vid
-        self.assertEquals(len(found_dataset.partitions), 1)
+        self.assertEqual(len(found_dataset.partitions), 1)
         self.assertIn(partition1.vid, found_dataset.partitions)
 
     # _index_document tests
@@ -86,7 +88,7 @@ class DatasetWhooshIndexTest(TestBase):
 
         # search just added document.
         all_docs = list(self.backend.dataset_index.index.searcher().documents())
-        self.assertEquals(all_docs[0]['vid'], dataset.vid)
+        self.assertEqual(all_docs[0]['vid'], dataset.vid)
 
     def test_replaces_document_in_the_index(self):
         dataset = self.new_db_dataset(self.library.database, n=0)
@@ -95,15 +97,15 @@ class DatasetWhooshIndexTest(TestBase):
 
         # search just added document.
         all_docs = list(self.backend.dataset_index.index.searcher().documents())
-        self.assertEquals(len(all_docs), 1)
-        self.assertEquals(all_docs[0]['vid'], dataset.vid)
+        self.assertEqual(len(all_docs), 1)
+        self.assertEqual(all_docs[0]['vid'], dataset.vid)
 
         # update
-        doc['doc'] = u'updated'
+        doc['doc'] = 'updated'
         self.backend.dataset_index._index_document(doc, force=True)
-        all_docs = list(self.backend.dataset_index.index.searcher().documents(doc=u'updated'))
-        self.assertEquals(len(all_docs), 1)
-        self.assertEquals(all_docs[0]['vid'], dataset.vid)
+        all_docs = list(self.backend.dataset_index.index.searcher().documents(doc='updated'))
+        self.assertEqual(len(all_docs), 1)
+        self.assertEqual(all_docs[0]['vid'], dataset.vid)
 
     # _get_generic_schema tests
     def test_returns_whoosh_schema(self):
@@ -184,8 +186,8 @@ class IdentifierWhooshIndexTest(TestBase):
 
         # search just added document.
         all_docs = list(self.backend.identifier_index.index.searcher().documents())
-        self.assertEquals(all_docs[0]['identifier'], 'gvid')
-        self.assertEquals(all_docs[0]['name'], 'name1')
+        self.assertEqual(all_docs[0]['identifier'], 'gvid')
+        self.assertEqual(all_docs[0]['name'], 'name1')
 
     # _get_generic_schema tests
     def test_returns_whoosh_schema(self):
@@ -264,7 +266,7 @@ class PartitionWhooshIndexTest(TestBase):
     # _from_to_as_term tests
     def test_converts_years_to_query(self):
         period_term = self.backend.partition_index._from_to_as_term('1978', '1979')
-        self.assertEquals(period_term, '[1978 TO 1979]')
+        self.assertEqual(period_term, '[1978 TO 1979]')
 
     # .index_one tests
     def test_adds_partition_document_to_the_index(self):
@@ -292,11 +294,11 @@ class PartitionWhooshIndexTest(TestBase):
         self.assertIn(partition1.vid, all_vids)
 
         # update
-        doc['doc'] = u'updated'
+        doc['doc'] = 'updated'
         self.backend.partition_index._index_document(doc, force=True)
-        all_docs = list(self.backend.partition_index.index.searcher().documents(doc=u'updated'))
-        self.assertEquals(len(all_docs), 1)
-        self.assertEquals(all_docs[0]['vid'], partition1.vid)
+        all_docs = list(self.backend.partition_index.index.searcher().documents(doc='updated'))
+        self.assertEqual(len(all_docs), 1)
+        self.assertEqual(all_docs[0]['vid'], partition1.vid)
 
     # _get_generic_schema tests
     def test_returns_whoosh_schema(self):
@@ -309,32 +311,32 @@ class PartitionWhooshIndexTest(TestBase):
     def test_creates_doc_query_string_from_about(self):
         query_string = self.backend.partition_index._make_query_from_terms('about help')
         # about searches in the default doc field, so it is not need field prefix.
-        self.assertEquals(query_string, 'help')
+        self.assertEqual(query_string, 'help')
 
     def test_creates_doc_query_string_from_with(self):
         query_string = self.backend.partition_index._make_query_from_terms('with help')
         # about searches in the default doc field, so it is not need field prefix.
-        self.assertEquals(query_string, 'help')
+        self.assertEqual(query_string, 'help')
 
     def test_creates_keywords_query_string_from_in(self):
         query_string = self.backend.partition_index._make_query_from_terms('in Beslan, Farn')
         # about searches in the default doc field, so it is not need field prefix.
-        self.assertEquals(query_string, 'keywords:(beslan , farn)')
+        self.assertEqual(query_string, 'keywords:(beslan , farn)')
 
     def test_creates_keywords_query_string_from_by(self):
         query_string = self.backend.partition_index._make_query_from_terms('by Beslan')
         # about searches in the default doc field, so it is not need field prefix.
-        self.assertEquals(query_string, 'keywords:(beslan)')
+        self.assertEqual(query_string, 'keywords:(beslan)')
 
     def test_creates_keywords_query_string_from_period(self):
         query_string = self.backend.partition_index._make_query_from_terms('from 2001 to 2010')
         # about searches in the default doc field, so it is not need field prefix.
-        self.assertEquals(query_string, 'keywords:([2001 TO 2010])')
+        self.assertEqual(query_string, 'keywords:([2001 TO 2010])')
 
     def test_complex_query_string(self):
         raw_query = 'about help in Beslan, Farn from 2001 to 2010 by Beslan'
         query_string = self.backend.partition_index._make_query_from_terms(raw_query)
-        self.assertEquals(
+        self.assertEqual(
             query_string,
             'help AND keywords:(beslan , farn AND beslan AND [2001 TO 2010])')
 

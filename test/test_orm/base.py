@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 import unittest
-from urlparse import urlparse
+from six.moves.urllib.parse import urlparse
 
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
 from ambry.run import get_runconfig
 
-MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgresql section to the ambry accounts.'
+MISSING_POSTGRES_CONFIG_MSG = 'PostgreSQL is not configured properly. Add postgresql-test '\
+    'to the database config of the ambry config.'
 # example of the config - dsn: postgresql+psycopg2://ambry:secret@127.0.0.1/ambry
 
 
@@ -16,8 +17,8 @@ class BasePostgreSQLTest(unittest.TestCase):
 
     def setUp(self):
         conf = get_runconfig()
-        if 'postgresql' in conf.dict['accounts']:
-            dsn = conf.dict['accounts']['postgresql']['dsn']
+        if 'database' in conf.dict and 'postgresql-test' in conf.dict['database']:
+            dsn = conf.dict['database']['postgresql-test']
             parsed_url = urlparse(dsn)
             db_name = parsed_url.path.replace('/', '')
             self.postgres_dsn = parsed_url._replace(path='postgres').geturl()

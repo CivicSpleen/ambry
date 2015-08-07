@@ -55,18 +55,18 @@ class Test(TestBase):
         db.new_dataset(vid=str(dn.rev(4)), source='a', dataset='dataset')
 
         ds = db.dataset(str(dn.rev(5)))
-        self.assertEquals(str(dn.rev(5)), ds.vid)
+        self.assertEqual(str(dn.rev(5)), ds.vid)
 
         ds = db.dataset(str(dn.rev(3)))
-        self.assertEquals(str(dn.rev(3)), ds.vid)
+        self.assertEqual(str(dn.rev(3)), ds.vid)
 
         ds = db.dataset(str(dn.rev(None)))
-        self.assertEquals(str(dn.rev(5)), ds.vid)
+        self.assertEqual(str(dn.rev(5)), ds.vid)
 
         db.new_dataset(vid=str(dn.rev(6)), source='a', dataset='dataset')
 
         ds = db.dataset(str(dn.rev(None)))
-        self.assertEquals(str(dn.rev(6)), ds.vid)
+        self.assertEqual(str(dn.rev(6)), ds.vid)
 
         db.close()
 
@@ -87,7 +87,7 @@ class Test(TestBase):
         ds = db.new_dataset(vid=self.dn[0], source='source', dataset='dataset')
 
         ds.new_table('table1')
-        ds.new_table('table2', description='table2', data=dict(a=1,b=2,c=3))
+        ds.new_table('table2', description='table2', data=dict(a=1, b=2, c=3))
         ds.new_table('table3', description='table3')
 
         db.commit()
@@ -98,7 +98,7 @@ class Test(TestBase):
         db.session.add(t2)
         db.commit()
 
-        ds = db.dataset(ds.vid) # Refresh the memory object
+        ds = db.dataset(ds.vid)  # Refresh the memory object
         ds.new_table('table2', data=dict(b=22))
         ds.new_table('table3', description='table3-description')
 
@@ -126,4 +126,10 @@ class Test(TestBase):
 
         self.assertEqual(3, len(ds.partitions))
 
-        self.dump_database('partitions', db)
+        # partitions saved to db.
+        result = db.connection.execute('SELECT p_vid FROM partitions;').fetchall()
+        self.assertEqual(len(result), 3)
+        flatten = [x[0] for x in result]
+        self.assertIn(p1.vid, flatten)
+        self.assertIn(p2.vid, flatten)
+        self.assertIn(p3.vid, flatten)

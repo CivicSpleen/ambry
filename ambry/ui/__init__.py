@@ -18,20 +18,16 @@ config_paths = [root_config, os.path.expanduser(user_config)]
 # From https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize
 
 
-
-
 # Default configuration
-app_config = {'host': os.getenv('AMBRYDOC_HOST', 'localhost'),
-              'port': os.getenv('AMBRYDOC_PORT', 8081),
-              'cache': os.getenv('AMBRYDOC_CACHE', '/data/cache/jdoc'),
-              'use_proxy': bool(os.getenv('AMBRYDOC_USE_PROXY', False)),
-              'debug': bool(os.getenv('AMBRYDOC_HOST', False)),
-              'SESSION_TYPE': 'filesystem',
-              'SESSION_FILE_DIR' : '/tmp/ambrydoc/sessions/'
-
-              }
-
-
+app_config = {
+    'host': os.getenv('AMBRYDOC_HOST', 'localhost'),
+    'port': os.getenv('AMBRYDOC_PORT', 8081),
+    'cache': os.getenv('AMBRYDOC_CACHE', '/data/cache/jdoc'),
+    'use_proxy': bool(os.getenv('AMBRYDOC_USE_PROXY', False)),
+    'debug': bool(os.getenv('AMBRYDOC_HOST', False)),
+    'SESSION_TYPE': 'filesystem',
+    'SESSION_FILE_DIR': '/tmp/ambrydoc/sessions/'
+}
 
 
 def expiring_memoize(obj):
@@ -67,11 +63,11 @@ def fscache():
     return new_cache(cache_config)
 
 
-def renderer(content_type='html', session = None):
+def renderer(content_type='html', session=None):
 
     session = session if session else {}
 
-    from render import Renderer
+    from .render import Renderer
     return Renderer(content_type=content_type, session=session)
 
 
@@ -80,10 +76,9 @@ def setup_logging():
 
     path = fscache().path('ambrydoc.log', missing_ok=True)
 
-    print "Logging to: ", path
+    print('Logging to: ', path)
 
     logging.basicConfig(filename=path, level=logging.DEBUG)
-
 
 
 app = Flask(__name__)
@@ -97,8 +92,5 @@ if False:  # How to use a proxy
 app.config.update(app_config)
 Session(app)
 
-
+# FIXME:: Unused import or flask magic? Write a comment if flask magic.
 import ambry.ui.views
-
-
-

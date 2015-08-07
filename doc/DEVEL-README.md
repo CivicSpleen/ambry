@@ -33,13 +33,13 @@ $ coverage html
     3. Open htmlcov/index.html in the browser.
 
 ### To setup PostgreSQL for tests.
-Tests use two databases - sqlite and postgresql. SQLite does not require any setup, but PostgreSQL does. You should add postgresql account with dsn to the your accounts file. See example:
+Tests use two databases - sqlite and postgresql. SQLite does not require any setup, but PostgreSQL does. You should add postgresql-test section with dsn to the database section of the ambry config. See example:
 ```yaml
-accounts:
+database:
     ...
-    postgresql:
-        dsn: postgresql+psycopg2://ambry:secret@127.0.0.1/ambry
+    postgresql-test: postgresql+psycopg2://ambry:secret@127.0.0.1/
 ```
+Note: Do not include database name to the dsn because each test creates new database empty on each run.
 
 ### To change model's fields and appropriate database table (AKA migration):
     1. Change appropriate models.
@@ -54,3 +54,18 @@ $ ambry makemigration <your_migration_name>
 $ ambry list
 ```
     6. Commit and push files your changed.
+
+### Setup environment to run ambry under python-3 (debian).
+    1.  Install python 3
+```bash
+    $ apt-get install python3 python3-doc python3-dev
+```
+    2. Setup a new virtualenv with python3
+```
+$ mkvirtualenv --python=/usr/bin/python3 ambry3
+```
+    3. Check virtualenv python version
+```bash
+ $ python -V
+Python 3.4.2
+```

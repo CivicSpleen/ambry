@@ -52,7 +52,7 @@ class SearchTest(TestBase):
         ds1 = self.new_db_dataset(self.library.database, n=1)
         ds2 = self.new_db_dataset(self.library.database, n=2)
         ds3 = self.new_db_dataset(self.library.database, n=3)
-        self.assertEquals(len(self.library.datasets), 3)
+        self.assertEqual(len(self.library.datasets), 3)
 
         fake_index_one = fudge.Fake().is_callable()\
             .expects_call().with_args(arg.passes_test(lambda x: x.vid == ds1.vid)).returns(True)\
@@ -65,7 +65,7 @@ class SearchTest(TestBase):
 
     def test_indexes_library_datasets_partitions(self):
         ds1 = self.new_db_dataset(self.library.database, n=1)
-        self.assertEquals(len(self.library.datasets), 1)
+        self.assertEqual(len(self.library.datasets), 1)
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
 
         partition1 = PartitionFactory(dataset=ds1)
@@ -80,7 +80,7 @@ class SearchTest(TestBase):
 
     def test_feeds_tick_function_with_indexed(self):
         ds1 = self.new_db_dataset(self.library.database, n=1)
-        self.assertEquals(len(self.library.datasets), 1)
+        self.assertEqual(len(self.library.datasets), 1)
         PartitionFactory._meta.sqlalchemy_session = self.library.database.session
 
         PartitionFactory(dataset=ds1)

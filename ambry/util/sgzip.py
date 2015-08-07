@@ -12,15 +12,22 @@ but random access is not allowed.
 
 # based on Andrew Kuchling's minigzip.py distributed with the zlib module
 
+import io
+import json
+import os
 import struct
 import sys
 import time
-import os
 import zlib
-import io
-import __builtin__
 
-__all__ = ["GzipFile", "open"]
+from six.moves import builtins
+from six import string_types, xrange, StringIO
+
+if sys.version_info > (3,):
+    # allow to use long() for 2 and 3 versions of the python.
+    long = int
+
+__all__ = ['GzipFile', 'open']
 
 FTEXT, FHCRC, FEXTRA, FNAME, FCOMMENT = 1, 2, 4, 8, 16
 
@@ -108,7 +115,7 @@ class GzipFile(io.BufferedIOBase):
         if hasattr(filename_or_obj, 'read'):
             filename = None
             fileobj = filename_or_obj
-        elif isinstance(filename_or_obj, basestring):
+        elif isinstance(filename_or_obj, string_types):
             filename = filename_or_obj
             fileobj = None
         else:
@@ -116,7 +123,7 @@ class GzipFile(io.BufferedIOBase):
                           ' filename or file-like object')
 
         if fileobj is None:
-            fileobj = self.myfileobj = __builtin__.open(filename, mode or 'rb')
+            fileobj = self.myfileobj = builtins.open(filename, mode or 'rb')
 
         if filename is None:
             # Issue #13781: os.fdopen() creates a fileobj with a bogus name
@@ -138,7 +145,7 @@ class GzipFile(io.BufferedIOBase):
             # Buffer data read from gzip file. extrastart is offset in
             # stream where buffer starts. extrasize is number of
             # bytes remaining in buffer from current stream position.
-            self.extrabuf = ""
+            self.extrabuf = ''
             self.extrasize = 0
             self.extrastart = 0
             self.name = filename
@@ -154,7 +161,7 @@ class GzipFile(io.BufferedIOBase):
                                              zlib.DEF_MEM_LEVEL,
                                              0)
         else:
-            raise IOError("Mode " + mode + " not supported")
+            raise IOError('Mode ' + mode + ' not supported')
 
         self.fileobj = fileobj
         self.offset = 0
@@ -169,9 +176,9 @@ class GzipFile(io.BufferedIOBase):
     @property
     def filename(self):
         import warnings
-        warnings.warn("use the name attribute", DeprecationWarning, 2)
-        if self.mode == WRITE and self.name[-3:] != ".gz":
-            return self.name + ".gz"
+        warnings.warn('use the name attribute', DeprecationWarning, 2)
+        if self.mode == WRITE and self.name[-3:] != '.gz':
+            return self.name + '.gz'
         return self.name
 
     def __repr__(self):
@@ -179,14 +186,13 @@ class GzipFile(io.BufferedIOBase):
         return '<gzip ' + s[1:-1] + ' ' + hex(id(self)) + '>'
 
     def _check_closed(self):
-        """Raises a ValueError if the underlying file object has been
-        closed."""
+        """Raises a ValueError if the underlying file object has been closed."""
         if self.closed:
             raise ValueError('I/O operation on closed file.')
 
     def _init_write(self, filename):
         self.name = filename
-        self.crc = zlib.crc32("") & 0xffffffff
+        self.crc = zlib.crc32('') & 0xffffffff
         self.size = 0
         self.writebuf = []
         self.bufsize = 0
@@ -195,7 +201,7 @@ class GzipFile(io.BufferedIOBase):
         self.fileobj.write('\037\213')             # magic header
         self.fileobj.write('\010')                 # compression method
         fname = os.path.basename(self.name)
-        if fname.endswith(".gz"):
+        if fname.endswith('.gz'):
             fname = fname[:-3]
         flags = 0
         if fname:
@@ -216,7 +222,6 @@ class GzipFile(io.BufferedIOBase):
         self.fileobj.write('\377')
 
         if self.extra:
-            import json
             # Write the length of the extra field
             extra = json.dumps(self.extra)
             # It's really an LSB  short integer, right?, but this is the
@@ -250,7 +255,6 @@ class GzipFile(io.BufferedIOBase):
         self.fileobj.read(2)
 
         if flag & FEXTRA:
-            import json
             # Read & discard the extra field, if present
             xlen = ord(self.fileobj.read(1)) + 256 * ord(self.fileobj.read(1))
             data = self.fileobj.read(xlen)
@@ -423,8 +427,7 @@ class GzipFile(io.BufferedIOBase):
         # stored is the true file size mod 2**32.
 
         if last_bytes:
-            import StringIO
-            crc_file = StringIO.StringIO(last_bytes)
+            crc_file = StringIO(last_bytes)
         else:
             crc_file = self.fileobj
             self.fileobj.seek(-8, 1)
@@ -569,7 +572,6 @@ class GzipFile(io.BufferedIOBase):
 
 
 if __name__ == '__main__':
-    import sys
 
     class flo(object):
 
@@ -587,15 +589,14 @@ if __name__ == '__main__':
     dcpm_fn = '/tmp/decompressed'
 
     def init_write():
-        import sys
-        with __builtin__.open(uc_fn, 'w') as f:
+        with builtins.open(uc_fn, 'w') as f:
             s = ':'.join(['{:03d}'.format(i) for i in range(50)])
             f.write(s)
 
     def compress():
 
-        with __builtin__.open(uc_fn, 'rb') as f_in:
-            with __builtin__.open(cpm_fn, 'wb') as f_out:
+        with builtins.open(uc_fn, 'rb') as f_in:
+            with builtins.open(cpm_fn, 'wb') as f_out:
                 gz_out = GzipFile(
                     f_out, mode='wb', extra=[
                         'this is extra', {
@@ -609,8 +610,8 @@ if __name__ == '__main__':
 
     def decompress():
 
-        with __builtin__.open(cpm_fn, 'rb') as f_in:
-            with __builtin__.open(dcpm_fn, 'wb') as f_out:
+        with builtins.open(cpm_fn, 'rb') as f_in:
+            with builtins.open(dcpm_fn, 'wb') as f_out:
                 gz_in = GzipFile(flo(f_in), mode='rb')
 
                 while True:
@@ -620,9 +621,9 @@ if __name__ == '__main__':
                     f_out.write(chunk)
                 gz_in.close()
 
-                print 'Extra:', gz_in.extra
-                print 'Extra:', gz_in.extra[1]['foo']
-                print 'Comment:', gz_in.comment
+                print('Extra:', gz_in.extra)
+                print('Extra:', gz_in.extra[1]['foo'])
+                print('Comment:', gz_in.comment)
 
     init_write()
     compress()

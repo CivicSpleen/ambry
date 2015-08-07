@@ -6,6 +6,8 @@
 import os
 import sys
 
+from six import string_types
+
 
 # from http://stackoverflow.com/questions/6796492/python-temporarily-redirect-stdout-stderr
 # Use as a context manager
@@ -44,7 +46,7 @@ def copy_file_or_flo(input_, output, buffer_size=64 * 1024, cb=None):
     output_opened = False
 
     try:
-        if isinstance(input_, basestring):
+        if isinstance(input_, string_types):
 
             if not os.path.isdir(os.path.dirname(input_)):
                 os.makedirs(os.path.dirname(input_))
@@ -52,7 +54,7 @@ def copy_file_or_flo(input_, output, buffer_size=64 * 1024, cb=None):
             input_ = open(input_, 'r')
             input_opened = True
 
-        if isinstance(output, basestring):
+        if isinstance(output, string_types):
 
             if not os.path.isdir(os.path.dirname(output)):
                 os.makedirs(os.path.dirname(output))
@@ -108,7 +110,7 @@ class FileLikeFromIter(object):
 
         while self.prt < n:
             try:
-                d = self._iter.next()
+                d = next(self._iter)
                 l = len(d)
                 self.buffer[self.prt:(self.prt + l)] = d
                 self.prt += l
@@ -146,7 +148,7 @@ class FileLikeFromIter(object):
         else:
             while len(self.data) < n:
                 try:
-                    self.data = ''.join((self.data, self._iter.next()))
+                    self.data = ''.join((self.data, next(self._iter)))
                 except StopIteration:
                     break
 
@@ -208,7 +210,7 @@ class MetadataFlo(object):
     def __iter__(self):
         return self.o.__iter__()
 
-    def next(self):
+    def __next__(self):
 
         line = self.readline()
 
@@ -254,7 +256,7 @@ class StringQueue(object):
     def write(self, data):
         # check type here, as wrong data type will cause error on self.read,
         # which may be confusing.
-        if isinstance(data, str):
+        if isinstance(data, string_types):
             raise TypeError('argument 1 must be string, not %s' % type(data).__name__)
         # append data to list, no need to "".join just yet.
         self.l_buffer.append(data)

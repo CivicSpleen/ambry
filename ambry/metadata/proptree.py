@@ -4,10 +4,14 @@ Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of
 the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
-
+from __future__ import unicode_literals
 from collections import Mapping, OrderedDict, MutableMapping
 import copy
 import logging
+
+from six import StringIO
+from six import iteritems, iterkeys, itervalues
+from six.moves.html_parser import HTMLParser
 
 from sqlalchemy.orm import object_session
 
@@ -44,13 +48,13 @@ class AttrDict(OrderedDict):
         self[k] = v
 
     def __iter__(self):
-        for key in super(OrderedDict, self).keys():
+        for key in iterkeys(super(OrderedDict, self)):
             yield key
 
     @staticmethod
     def flatten_dict(data, path=tuple()):
         dst = list()
-        for k, v in data.iteritems():
+        for k, v in data.items():
             k = path + (k,)
             if isinstance(v, Mapping):
                 for v in v.flatten(k):
@@ -78,8 +82,6 @@ class AttrDict(OrderedDict):
 
     def dump(self, stream=None, map_view=None):
         import yaml
-
-        from StringIO import StringIO
         from ..orm import MutationList, MutationDict
         from yaml.representer import RepresenterError
         from collections import defaultdict
@@ -205,7 +207,7 @@ class StructuredPropertyTree(object):
 
     def set(self, d):
         if d is not None:
-            for k, v in d.items():
+            for k, v in iteritems(d):
                 if k in self._members:
 
                     m = self._members[k]
@@ -274,9 +276,10 @@ class StructuredPropertyTree(object):
 
         """
 
-        self._members = {name: attr for name, attr in type(self).__dict__.items() if isinstance(attr, Group)}
+        self._members = {
+            name: attr for name, attr in iteritems(type(self).__dict__) if isinstance(attr, Group)}
 
-        for name, m in self._members.items():
+        for name, m in iteritems(self._members):
             m.init_descriptor(name, self)
 
     def __getattr__(self, k):
@@ -351,8 +354,9 @@ class Group(object):
     def __init__(self):
         """ """
 
-        self._members = {name: attr for name,  attr in type(self).__dict__.items()
-                          if isinstance(attr, Term) and not name.startswith('_')}
+        self._members = {
+            name: attr for name,  attr in iteritems(type(self).__dict__)
+            if isinstance(attr, Term) and not name.startswith('_')}
 
         self._parent = None
         self._top = None
@@ -382,7 +386,7 @@ class Group(object):
         self._key = key
         self._fqkey = key
 
-        for name, m in self._members.items():
+        for name, m in iteritems(self._members):
             m.init_descriptor(name, top)
 
     def init_instance(self, parent):
@@ -454,7 +458,7 @@ class DictGroup(Group, MutableMapping):
 
         top._term_values[key] = AttrDict()
 
-        for name, m in self._members.items():
+        for name, m in iteritems(self._members):
             top._term_values[key][name] = m.null_entry()
             m.init_descriptor(name, top)
 
@@ -494,7 +498,7 @@ class DictGroup(Group, MutableMapping):
 
         if key not in self._members:
             raise AttributeError('DictGroup does not have such term in {}: {}. Use one from: {}'
-                                 .format(self._key, key, [key for key in self._members.keys()]))
+                                 .format(self._key, key, [k for k in iterkeys(self._members)]))
 
         o = self.get_term_instance(key)
 
@@ -513,11 +517,12 @@ class DictGroup(Group, MutableMapping):
 
     def set(self, d):
         assert isinstance(d, dict)
-        for k, v in d.items():
+        for k, v in iteritems(d):
             try:
                 self.__setitem__(k, v)
             except AttributeError:
                 self._top.add_error(self._key, k, None, v)
+
 
 class TypedDictGroup(DictGroup):
 
@@ -581,7 +586,7 @@ class TypedDictGroup(DictGroup):
         if key not in self._term_values:
             self._term_values[key] = {
                 name: None for name,
-                _ in self._proto._members.items()}
+                _ in iteritems(self._proto._members)}
 
         o = self.get_term_instance(key)
         return o.get()
@@ -634,7 +639,7 @@ class VarDictGroup(DictGroup):
         dataset = self._top._config.dataset
         session = object_session(self._top._config)
         logger.debug(
-            u'Updating VarDictGroup config. dataset: {}, type: {}, key: {}, value: {}'.format(
+            'Updating VarDictGroup config. dataset: {}, type: {}, key: {}, value: {}'.format(
                 dataset, self._top._type, key, value))
 
         if not self._parent._config:
@@ -658,7 +663,7 @@ class VarDictGroup(DictGroup):
             session.merge(config)
             session.commit()
             logger.debug(
-                u'Config bound to the VarDictGroup key updated. config: {}'.format(config))
+                'Config bound to the VarDictGroup key updated. config: {}'.format(config))
 
 
 class Term(object):
@@ -676,8 +681,9 @@ class Term(object):
 
     def __init__(self, store_none=True, link_on_null=None, default=None, constraint=None):
 
-        self._members = { name: attr for name, attr in type(self).__dict__.items()
-                          if isinstance(attr, Term)}
+        self._members = {
+            name: attr for name, attr in iteritems(type(self).__dict__)
+            if isinstance(attr, Term)}
 
         self._store_none = store_none
         self._default = default
@@ -699,7 +705,7 @@ class Term(object):
         dataset = self._top._config.dataset
         session = object_session(self._top._config)
         logger.debug(
-            u'Updating term config. dataset: {}, type: {}, key: {}, value: {}'.format(
+            'Updating term config. dataset: {}, type: {}, key: {}, value: {}'.format(
                 dataset, self._top._type, self._key, self.get()))
 
         if not self._parent._config:
@@ -717,10 +723,10 @@ class Term(object):
 
         if created:
             logger.debug(
-                u'New config created and bound to the term. config: {}'.format(self._config))
+                'New config created and bound to the term. config: {}'.format(self._config))
         else:
             logger.debug(
-                u'Existing config bound to the term. config: {}'.format(self._config))
+                'Existing config bound to the term. config: {}'.format(self._config))
 
     def null_entry(self):
         raise NotImplementedError("Not implemented by {}".format(type(self)))
@@ -749,11 +755,10 @@ class Term(object):
         raise NotImplementedError("Not implemented in {} ".format(type(self)))
 
     def is_empty(self):
-        raise NotImplementedError("Not implemented in {} ".format(type(self)))
+        raise NotImplementedError('Not implemented in {} '.format(type(self)))
 
 # For ScalarTerm.text()
 # from http://stackoverflow.com/a/925630/1144479
-from HTMLParser import HTMLParser
 
 
 class MLStripper(HTMLParser):
@@ -797,7 +802,7 @@ class _ScalarTermS(str):
         return s.get_data()
 
 
-class _ScalarTermU(unicode):
+class _ScalarTermU(unicode):  # TODO: Need 2to3 conversion.
     """A scalar term for extension for unicode, with support for Jinja substitutions"""
     def __new__(cls, string, jinja_sub, term):
         ob = super(_ScalarTermU, cls).__new__(cls, string)
@@ -828,20 +833,20 @@ class ScalarTerm(Term):
     """A Term that can only be a string or number."""
 
     def set(self, v):
-        logger.debug(u'set term: {} = {}'.format(self._fqkey, v))
+        logger.debug('set term: {} = {}'.format(self._fqkey, v))
         if self._constraint and v not in self._constraint:
-            raise ValueError(u'{} is not valid value. Use one from {}.'.format(v, self._constraint))
+            raise ValueError('{} is not valid value. Use one from {}.'.format(v, self._constraint))
         self._parent._term_values[self._key] = v
         if self._top.is_bound():
             self.update_config()
 
     def get(self):
 
-        st = self._parent._term_values.get(self._key,None)
+        st = self._parent._term_values.get(self._key, None)
 
         def jinja_sub(st):
 
-            if isinstance(st, basestring):
+            if isinstance(st, basestring):  # TODO: need 2to3 conversion.
                 from jinja2 import Template
 
                 try:
@@ -856,9 +861,9 @@ class ScalarTerm(Term):
 
             return st
 
-        if isinstance(st, str):
+        if isinstance(st, str):  # TODO: Need 2to3 conversion.
             return _ScalarTermS(st, jinja_sub, self)
-        elif isinstance(st, unicode):
+        elif isinstance(st, unicode):  # TODO: Need 2to3 conversion.
             return _ScalarTermU(st, jinja_sub, self)
         elif st is None:
             return _ScalarTermS('', jinja_sub, self)
@@ -888,12 +893,12 @@ class DictTerm(Term, MutableMapping):
     def init_descriptor(self, key, top):
         super(DictTerm, self).init_descriptor(key, top)
 
-        for name, m in self._members.items():
+        for name, m in iteritems(self._members):
             m.init_descriptor(name, top)
 
         assert(self._key is not None)
 
-        self._store_none_map = {name: m._store_none for name, m in self._members.items()}
+        self._store_none_map = {name: m._store_none for name, m in iteritems(self._members)}
 
     def get_term_instance(self, key):
         m = self._members[key]
@@ -965,7 +970,7 @@ class DictTerm(Term, MutableMapping):
         return v
 
     def __setitem__(self, k, v):
-        if k not in self._members.keys():
+        if k not in iterkeys(self._members):
             self._top.add_error(self._parent._key, self._key, k, v)
             return
 
@@ -991,7 +996,7 @@ class DictTerm(Term, MutableMapping):
 
     def set(self, d):
 
-        for k, v in d.items():
+        for k, v in iteritems(d):
             self.__setitem__(k, v)
 
     @property
@@ -1009,14 +1014,14 @@ class DictTerm(Term, MutableMapping):
 
         d = AttrDict()
 
-        for k, v in self._members.items():
+        for k, v in iteritems(self._members):
             if self._store_none_map[k] is True:
                 d[k] = None
 
         return d
 
     def is_empty(self):
-        return all([v is None for v in self._term_values.values()])
+        return all([v is None for v in itervalues(self._term_values)])
 
 
 class ListTerm(Term):
@@ -1038,7 +1043,7 @@ class ListTerm(Term):
             self.update_config()
 
     def set(self, v):
-        logger.debug(u'set list term: {} = {}'.format(self._fqkey, v))
+        logger.debug('set list term: {} = {}'.format(self._fqkey, v))
         self.__set__(self._parent, v)
 
     def get(self):

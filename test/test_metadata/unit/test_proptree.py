@@ -11,8 +11,8 @@ class AttrDictTest(unittest.TestCase):
         attr_dict = AttrDict(prop1='value1', prop2='value2')
         self.assertTrue(hasattr(attr_dict, 'prop1'))
         self.assertTrue(hasattr(attr_dict, 'prop2'))
-        self.assertEquals(attr_dict.prop1, 'value1')
-        self.assertEquals(attr_dict.prop2, 'value2')
+        self.assertEqual(attr_dict.prop1, 'value1')
+        self.assertEqual(attr_dict.prop2, 'value2')
 
 
 class ScalarTermTest(unittest.TestCase):
@@ -46,12 +46,12 @@ class ListTermTest(unittest.TestCase):
 
         tree = Tree()
         tree.group1.terms1 = 'value1'
-        self.assertEquals(tree.group1.terms1, ['value1'])
+        self.assertEqual(tree.group1.terms1, ['value1'])
 
         # test iteration
         tested = False
         for e in tree.group1.terms1:
-            self.assertEquals(e, 'value1')
+            self.assertEqual(e, 'value1')
             tested = True
         self.assertTrue(tested)
 
@@ -66,7 +66,7 @@ class ListTermTest(unittest.TestCase):
 
         tree = Tree()
         tree.group1.terms1 = ['value1']
-        self.assertEquals(tree.group1.terms1, ['value1'])
+        self.assertEqual(tree.group1.terms1, ['value1'])
 
         tree.group1.terms1 = ['value2', 'value3']
-        self.assertEquals(tree.group1.terms1, ['value2', 'value3'])
+        self.assertEqual(tree.group1.terms1, ['value2', 'value3'])

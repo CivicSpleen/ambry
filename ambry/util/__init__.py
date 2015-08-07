@@ -5,24 +5,36 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-from __future__ import print_function
-import os
-from functools import partial
-from collections import OrderedDict, defaultdict, Mapping, deque, MutableMapping
-
-import functools
-from itertools import ifilterfalse
+from __future__ import unicode_literals
+from collections import OrderedDict, defaultdict, Mapping, deque, MutableMapping, Callable
+from functools import partial, reduce, wraps
 import json
 from heapq import nsmallest
 import hashlib
 from operator import itemgetter
 import logging
 import math
+import os
 import pprint
 import re
+import subprocess
 import sys
 from time import time
+import uuid
 import yaml
+from yaml.representer import RepresenterError
+
+from bs4 import BeautifulSoup
+
+from six.moves import filterfalse, xrange
+from six import iteritems, iterkeys, itervalues, _print, StringIO
+from six.moves import builtins
+from six.moves.urllib.parse import urlparse, urlsplit, urlunsplit
+from six.moves.urllib.request import urlopen
+
+
+from ambry.dbexceptions import ConfigurationError
+
 
 logger_init = set()
 
@@ -43,7 +55,7 @@ def get_logger(name, file_name=None, stream=None, template=None, propagate=False
     logger.propagate = propagate
 
     if not template:
-        template = "%(name)s %(process)s %(levelname)s %(message)s"
+        template = '%(name)s %(process)s %(levelname)s %(message)s'
 
     formatter = logging.Formatter(template)
 
@@ -78,7 +90,7 @@ def rm_rf(d):
 def memoize(obj):
     cache = obj.cache = {}
 
-    @functools.wraps(obj)
+    @wraps(obj)
     def memoizer(*args, **kwargs):
         key = str(args) + str(kwargs)
         if key not in cache:
@@ -94,7 +106,7 @@ def expiring_memoize(obj):
     cache = obj.cache = {}
     last_access = obj.last_access = defaultdict(int)
 
-    @functools.wraps(obj)
+    @wraps(obj)
     def memoizer(*args, **kwargs):
         key = str(args) + str(kwargs)
 
@@ -152,7 +164,7 @@ def lru_cache(maxsize=128, maxtime=60):
         queue_append, queue_popleft = queue.append, queue.popleft
         queue_appendleft, queue_pop = queue.appendleft, queue.pop
 
-        @functools.wraps(user_function)
+        @wraps(user_function)
         def wrapper(*args, **kwds):
             # cache key records both positional and keyword args
             key = args
@@ -195,8 +207,7 @@ def lru_cache(maxsize=128, maxtime=60):
             if len(queue) > maxqueue:
                 refcount.clear()
                 queue_appendleft(sentinel)
-                for key in ifilterfalse(refcount.__contains__,
-                                        iter(queue_pop, sentinel)):
+                for key in filterfalse(refcount.__contains__, iter(queue_pop, sentinel)):
                     queue_appendleft(key)
                     refcount[key] = 1
 
@@ -230,7 +241,7 @@ def lfu_cache(maxsize=100):
         use_count = Counter()  # times each key has been accessed
         kwd_mark = object()  # separate positional and keyword args
 
-        @functools.wraps(user_function)
+        @wraps(user_function)
         def wrapper(*args, **kwds):
             key = args
             if kwds:
@@ -248,9 +259,7 @@ def lfu_cache(maxsize=100):
 
                 # purge least frequently used cache entry
                 if len(cache) > maxsize:
-                    for key, _ in nsmallest(maxsize // 10,
-                                            use_count.iteritems(),
-                                            key=itemgetter(1)):
+                    for key, _ in nsmallest(maxsize // 10, iteritems(use_count), key=itemgetter(1)):
                         del cache[key], use_count[key]
 
             return result
@@ -270,10 +279,9 @@ def lfu_cache(maxsize=100):
 def patch_file_open():
     """A Monkey patch to log opening and closing of files, which is useful for
     debugging file descriptor exhaustion."""
-    import __builtin__
 
     openfiles = set()
-    oldfile = __builtin__.file
+    oldfile = builtins.file
 
     class newfile(oldfile):
         def __init__(self, *args, **kwargs):
@@ -281,24 +289,22 @@ def patch_file_open():
 
             all_fds = count_open_fds()
 
-            print(
-                "### {} OPENING {} ( {} total )###".format(
-                    len(openfiles), str(
-                        self.x), all_fds))
+            print('### {} OPENING {} ( {} total )###'.format(
+                len(openfiles), str(self.x), all_fds))
             oldfile.__init__(self, *args, **kwargs)
 
             openfiles.add(self)
 
         def close(self):
-            print("### {} CLOSING {} ###".format(len(openfiles), str(self.x)))
+            print('### {} CLOSING {} ###'.format(len(openfiles), str(self.x)))
             oldfile.close(self)
             openfiles.remove(self)
 
     def newopen(*args, **kwargs):
         return newfile(*args, **kwargs)
 
-    __builtin__.file = newfile
-    __builtin__.open = newopen
+    builtins.file = newfile
+    builtins.open = newopen
 
 
 # patch_file_open()
@@ -329,10 +335,10 @@ class OrderedDictYAMLLoader(yaml.Loader):
                 pass
 
         self.add_constructor(
-            u'tag:yaml.org,2002:map',
+            'tag:yaml.org,2002:map',
             type(self).construct_yaml_map)
         self.add_constructor(
-            u'tag:yaml.org,2002:omap',
+            'tag:yaml.org,2002:omap',
             type(self).construct_yaml_map)
         self.add_constructor('!include', OrderedDictYAMLLoader.include)
 
@@ -369,8 +375,6 @@ class OrderedDictYAMLLoader(yaml.Loader):
         return mapping
 
     def include(self, node):
-        from ambry.dbexceptions import ConfigurationError
-
         if not self.dir:
             return "ConfigurationError: Can't include file: wasn't able to set base directory"
 
@@ -405,11 +409,11 @@ class IncludeFile(str):
 
 
 def include_representer(dumper, data):
-    return dumper.represent_scalar(u'!include', data.relpath)
+    return dumper.represent_scalar('!include', data.relpath)
 
 
 def include_representer(dumper, data):
-    return dumper.represent_scalar(u'!include', data.relpath)
+    return dumper.represent_scalar('!include', data.relpath)
 
 
 # http://pypi.python.org/pypi/layered-yaml-attrdict-config/12.07.1
@@ -432,8 +436,7 @@ class AttrDict(OrderedDict):
         self[k] = v
 
     def __iter__(self):
-        for key in super(OrderedDict, self).keys():
-            yield key
+        return iterkeys(super(OrderedDict, self))
 
     ##
     # __enter__ and __exit__ allow for assigning a  path to a variable
@@ -457,7 +460,7 @@ class AttrDict(OrderedDict):
     @staticmethod
     def flatten_dict(data, path=tuple()):
         dst = list()
-        for k, v in data.iteritems():
+        for k, v in iteritems(data):
             k = path + (k,)
             if isinstance(v, Mapping):
                 for v in v.flatten(k):
@@ -525,10 +528,8 @@ class AttrDict(OrderedDict):
         self.update_dict(base)
 
     def dump(self, stream=None, map_view=None):
-        from StringIO import StringIO
-        from ..orm import MutationList, MutationDict
-        from yaml.representer import RepresenterError
         from ambry.metadata.meta import _ScalarTermS, _ScalarTermU
+        from ambry.orm import MutationList, MutationDict  # cross-module import
 
         yaml.representer.SafeRepresenter.add_representer(
             MapView, yaml.representer.SafeRepresenter.represent_dict)
@@ -625,7 +626,6 @@ class MapView(MutableMapping):
         return getattr(self._inner, item)
 
 
-
 class CaseInsensitiveDict(Mapping):  # http://stackoverflow.com/a/16202162
 
     def __init__(self, d):
@@ -657,7 +657,7 @@ class CaseInsensitiveDict(Mapping):  # http://stackoverflow.com/a/16202162
 
 
 def lowercase_dict(d):
-    return dict((k.lower(), v) for k, v in d.items())
+    return dict((k.lower(), v) for k, v in iteritems(d))
 
 
 def configure_logging(cfg, custom_level=None):
@@ -698,27 +698,25 @@ def toposort(data):
 
     """
 
-    from functools import reduce
-
     # Ignore self dependencies.
-    for k, v in data.items():
+    for k, v in iteritems(data):
         v.discard(k)
     # Find all items that don't depend on anything.
     extra_items_in_deps = reduce(
-        set.union, data.itervalues()) - set(data.iterkeys())
+        set.union, itervalues(data)) - set(data.keys())
     # Add empty dependences where needed
     data.update({item: set() for item in extra_items_in_deps})
     while True:
-        ordered = set(item for item, dep in data.iteritems() if not dep)
+        ordered = set(item for item, dep in iteritems(data) if not dep)
         if not ordered:
             break
         yield ordered
         data = {item: (dep - ordered)
-                for item, dep in data.iteritems()
+                for item, dep in iteritems(data)
                 if item not in ordered}
 
-    assert not data, "Cyclic dependencies exist among these items:\n%s" % '\n'.join(
-        repr(x) for x in data.iteritems())
+    assert not data, 'Cyclic dependencies exist among these items:\n%s' % '\n'.join(
+        repr(x) for x in list(data.items()))
 
 
 # end of http://code.activestate.com/recipes/578272/ }}}
@@ -870,7 +868,7 @@ def make_acro(past, prefix, s):
         except IndexError:
             pass
 
-    raise Exception("Could not get acronym")
+    raise Exception('Could not get acronym.')
 
 
 def temp_file_name():
@@ -892,8 +890,6 @@ def temp_file_name():
 
     else:
 
-        import uuid
-
         tmp_dir = '/tmp/ambry'
 
         if not os.path.exists(tmp_dir):
@@ -906,7 +902,6 @@ def temp_file_name():
 def zipdir(basedir, archivename):
     from contextlib import closing
     from zipfile import ZipFile, ZIP_DEFLATED
-    import os
 
     assert os.path.isdir(basedir)
 
@@ -933,9 +928,9 @@ def walk_dict(d):
 
     """
     # nested dict keys
-    nested_keys = tuple(k for k in d.keys() if isinstance(d[k], dict))
+    nested_keys = tuple(k for k in list(d.keys()) if isinstance(d[k], dict))
     # key/value pairs for non-dicts
-    items = tuple((k, d[k]) for k in d.keys() if k not in nested_keys)
+    items = tuple((k, d[k]) for k in list(d.keys()) if k not in nested_keys)
 
     # return path, key/sub-dict pairs, and key/value pairs
     yield ('/', [(k, d[k]) for k in nested_keys], items)
@@ -973,7 +968,7 @@ def init_log_rate(output_f, N=None, message='', print_rate=None):
          deque([], maxlen=4)  # Deque for averaging last N rates
          ]
 
-    assert callable(output_f)
+    assert isinstance(output_f, Callable)
 
     f = partial(_log_rate, output_f, d)
     f.always = output_f
@@ -999,7 +994,7 @@ def _log_rate(output_f, d, message=None):
         rate = sum(d[6]) / len(d[6])
 
         # Prints the processing rate in 1,000 records per sec.
-        output_f(message + ': ' + str(rate) + '/s ' + str(d[0] / 1000) + "K ")
+        output_f(message + ': ' + str(rate) + '/s ' + str(d[0] / 1000) + 'K ')
 
         d[1] = time()
 
@@ -1027,9 +1022,7 @@ def daemonize(f, args, rc, prog_name='ambry'):
 
     if args.kill:
         # Not portable, but works in most of our environments.
-        import os
-
-        print("Killing ... ")
+        print('Killing ... ')
         os.system("pkill -f '{}'".format(prog_name))
         return
 
@@ -1048,9 +1041,9 @@ def daemonize(f, args, rc, prog_name='ambry'):
         if args.unlock:
             pid_file.break_lock()
         else:
-            logger.error("Lockfile is locked: {}".format(lock_file_path))
+            logger.error('Lockfile is locked: {}'.format(lock_file_path))
             sys.stderr.write(
-                "ERROR: Lockfile is locked: {}\n".format(lock_file_path))
+                'ERROR: Lockfile is locked: {}\n'.format(lock_file_path))
             sys.exit(1)
 
     for dir in [run_dir, lib_dir, log_dir]:
@@ -1065,7 +1058,7 @@ def daemonize(f, args, rc, prog_name='ambry'):
     class DaemonContext():  # daemon.DaemonContext):
 
         def __exit__(self, exc_type, exc_value, exc_traceback):
-            logger.info("Exiting")
+            logger.info('Exiting')
 
             super(
                 DaemonContext,
@@ -1093,10 +1086,6 @@ def daemonize(f, args, rc, prog_name='ambry'):
 
     with context:
         f(prog_name, args, rc, logger)
-
-
-def _print(*args):
-    print(*args)
 
 
 class Progressor(object):
@@ -1137,10 +1126,12 @@ class Progressor(object):
                 rate = i_rate
                 rate_type = 'i'
 
-            self.printf("{}: Compressed: {} Mb. Downloaded, Uncompressed: {:6.2f}  Mb, {:5.2f} Mb / s ({})".format(
-                self.message, int(int(n) / (1024 * 1024)),
-                round(float(i) / (1024. * 1024.), 2),
-                round(float(rate) / (1024 * 1024), 2), rate_type))
+            msg = '{}: Compressed: {} Mb. Downloaded, Uncompressed: {:6.2f}  Mb, {:5.2f} Mb / s ({})'\
+                .format(
+                    self.message, int(int(n) / (1024 * 1024)),
+                    round(float(i) / (1024. * 1024.), 2),
+                    round(float(rate) / (1024 * 1024), 2), rate_type)
+            self.printf(msg)
 
 
 # http://stackoverflow.com/a/1695250
@@ -1150,7 +1141,7 @@ class Progressor(object):
 
 
 def enum(*sequential, **named):
-    enums = dict(zip(sequential, range(len(sequential))), **named)
+    enums = dict(list(zip(sequential, list(range(len(sequential))))), **named)
     return type('Enum', (), enums)
 
 
@@ -1197,8 +1188,6 @@ class session_context(object):
             finally:
                 self.session.close()
 
-        session.close()
-
 
 def count_open_fds():
     """return the number of open file descriptors for current process.
@@ -1208,17 +1197,13 @@ def count_open_fds():
     http://stackoverflow.com/a/7142094
 
     """
-    import subprocess
-    import os
 
     pid = os.getpid()
     procs = subprocess.check_output(
-        ["lsof", '-w', '-Ff', "-p", str(pid)])
+        ['lsof', '-w', '-Ff', '-p', str(pid)])
 
     nprocs = len(
-        filter(
-            lambda s: s and s[0] == 'f' and s[1:].isdigit(),
-            procs.split('\n'))
+        [s for s in procs.split('\n') if s and s[0] == 'f' and s[1:].isdigit()]
     )
     return nprocs
 
@@ -1230,9 +1215,6 @@ def parse_url_to_dict(url):
     with properties.
 
     """
-
-    from urlparse import urlparse
-
     p = urlparse(url)
 
     return {
@@ -1256,7 +1238,7 @@ def unparse_url_dict(d):
         host_port = ''
 
     if 'port' in d and d['port']:
-        host_port += ":" + str(d['port'])
+        host_port += ':' + str(d['port'])
 
     user_pass = ''
     if 'username' in d and d['username']:
@@ -1268,7 +1250,7 @@ def unparse_url_dict(d):
     if user_pass:
         host_port = '{}@{}'.format(user_pass, host_port)
 
-    url = "{}://{}/{}".format(d.get('scheme', 'http'),
+    url = '{}://{}/{}'.format(d.get('scheme', 'http'),
                               host_port, d.get('path', '').lstrip('/'))
 
     if 'query' in d and d['query']:
@@ -1284,7 +1266,7 @@ def filter_url(url, **kwargs):
 
     d.update(kwargs)
 
-    return unparse_url_dict({k: v for k, v in d.items() if v})
+    return unparse_url_dict({k: v for k, v in list(d.items()) if v})
 
 
 def normalize_newlines(string):
@@ -1307,31 +1289,31 @@ def qualified_class_name(o):
 # from http://code.activestate.com/recipes/496741-object-proxying/
 class Proxy(object):
     """Proxy an object"""
-    __slots__ = ["_obj", "__weakref__"]
+    __slots__ = ['_obj', '__weakref__']
 
     def __init__(self, obj):
-        object.__setattr__(self, "_obj", obj)
+        object.__setattr__(self, '_obj', obj)
 
     #
     # proxying (special cases)
     #
     def __getattr__(self, name):
-        return getattr(object.__getattribute__(self, "_obj"), name)
+        return getattr(object.__getattribute__(self, '_obj'), name)
 
     def __delattr__(self, name):
-        delattr(object.__getattribute__(self, "_obj"), name)
+        delattr(object.__getattribute__(self, '_obj'), name)
 
     def __setattr__(self, name, value):
-        setattr(object.__getattribute__(self, "_obj"), name, value)
+        setattr(object.__getattribute__(self, '_obj'), name, value)
 
-    def __nonzero__(self):
-        return bool(object.__getattribute__(self, "_obj"))
+    def __bool__(self):
+        return bool(object.__getattribute__(self, '_obj'))
 
     def __str__(self):
-        return str(object.__getattribute__(self, "_obj"))
+        return str(object.__getattribute__(self, '_obj'))
 
     def __repr__(self):
-        return repr(object.__getattribute__(self, "_obj"))
+        return repr(object.__getattribute__(self, '_obj'))
 
     #
     # factories
@@ -1366,7 +1348,7 @@ class Proxy(object):
         for name in cls._special_names:
             if hasattr(theclass, name):
                 namespace[name] = make_method(name)
-        return type("%s(%s)" % (cls.__name__, theclass.__name__), (cls,), namespace)
+        return type('%s(%s)' % (cls.__name__, theclass.__name__), (cls,), namespace)
 
     def __new__(cls, obj, *args, **kwargs):
         """
@@ -1377,7 +1359,7 @@ class Proxy(object):
         class must hold its own cache)
         """
         try:
-            cache = cls.__dict__["_class_proxy_cache"]
+            cache = cls.__dict__['_class_proxy_cache']
         except KeyError:
             cls._class_proxy_cache = cache = {}
         try:
@@ -1433,16 +1415,12 @@ getch = _Getch()
 
 
 def scrape_urls_from_web_page(page_url):
-    import urlparse
-    from bs4 import BeautifulSoup
-    import urllib2
-
-    parts = list(urlparse.urlsplit(page_url))
+    parts = list(urlsplit(page_url))
 
     parts[2] = ''
-    root_url = urlparse.urlunsplit(parts)
+    root_url = urlunsplit(parts)
 
-    html_page = urllib2.urlopen(page_url)
+    html_page = urlopen(page_url)
     soup = BeautifulSoup(html_page)
 
     d = dict(external_documentation={}, sources={}, links={})
@@ -1501,3 +1479,32 @@ def scrape_urls_from_web_page(page_url):
             d['links'][text] = dict(url=url, description=text, title=text)
 
     return d
+
+
+def trace(fn):
+    """ Prints parameteters and return values of the each call of the wrapped function.
+
+    Usage:
+        decorate appropriate function or method:
+            @trace
+            def myf():
+                ...
+    """
+    def wrapped(*args, **kwargs):
+        msg = []
+        msg.append('Enter {}('.format(fn.__name__))
+
+        if args:
+            msg.append(', '.join([str(x) for x in args]))
+
+        if kwargs:
+            kwargs_str = ', '.join(['{}={}'.format(k, v) for k, v in list(kwargs.items())])
+            if args:
+                msg.append(', ')
+            msg.append(kwargs_str)
+        msg.append(')')
+        print(''.join(msg))
+        ret = fn(*args, **kwargs)
+        print('Return {}'.format(ret))
+        return ret
+    return wrapped

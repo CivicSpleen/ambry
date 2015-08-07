@@ -107,7 +107,7 @@ class File(Base, DictableMixin):
         header = rows.pop(0)
 
         for row in rows:
-            yield dict(zip(header, row))
+            yield dict(list(zip(header, row)))
 
     def update_contents(self, contents):
         """Update the contents and set the hash and modification time"""

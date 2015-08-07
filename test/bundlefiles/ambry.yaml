@@ -23,6 +23,7 @@ library:
 database:
 
   test-database: sqlite://
+  postgres-test: postgres://user:pass@host # Do not include db name here because db will be created while tests running
 
   database1: sqlite:////foo/bar
   database2: postgres://user:pass@host/dbname

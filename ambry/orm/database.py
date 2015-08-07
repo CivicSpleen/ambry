@@ -332,7 +332,7 @@ class Database(object):
         # does not handle schemas.
         if self._schema:
 
-            for it, orig_schema in orig_schemas.items():
+            for it, orig_schema in list(orig_schemas.items()):
                 it.schema = orig_schema
 
     def _add_config_root(self):
@@ -512,7 +512,7 @@ def create_migration_template(name):
         str: name of the migration file.
     """
     assert name, 'Name of the migration can not be empty.'
-    import migrations
+    from . import migrations
 
     #
     # Find next number
@@ -690,7 +690,7 @@ def _get_all_migrations():
         list of (int, str) tuples: first elem of the tuple is migration number, second if module name.
 
     """
-    import migrations
+    from . import migrations
 
     package = migrations
     prefix = package.__name__ + '.'

@@ -8,10 +8,12 @@ installed into it.
 # Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 # Revised BSD License, included in this distribution as LICENSE.txt
 
+from collections import OrderedDict
+
+import semantic_version
 
 from ambry.orm import Dataset, Partition, File
-from ambry.orm import Table, Column
-from ..identity import Identity, PartitionNumber, DatasetNumber
+from ..identity import Identity, PartitionNumber, DatasetNumber, LocationRef
 
 
 class Resolver(object):
@@ -24,7 +26,6 @@ class Resolver(object):
         self.session = session  # a Sqlalchemy connection
 
     def _resolve_ref_orm(self, ref):
-        from ..identity import Locations
 
         ip = Identity.classify(ref)
 
@@ -67,31 +68,28 @@ class Resolver(object):
 
         if pqp is not None:
 
-            q = (self.session.query(Dataset, Partition, File).join(Partition)
-                .filter(pqp).outerjoin(File, File.ref == Partition.vid)
-                .order_by(Dataset.revision.desc()))
+            q = self.session\
+                .query(Dataset, Partition, File)\
+                .join(Partition)\
+                .filter(pqp).outerjoin(File, File.ref == Partition.vid)\
+                .order_by(Dataset.revision.desc())
 
             for row in q.all():
                 out.append((row.Dataset, row.Partition, row.File))
-
 
         return ip, out
 
     def _resolve_ref(self, ref):
         """Convert the output from _resolve_ref to nested identities."""
 
-        from collections import OrderedDict
-        from ..identity import LocationRef
-
         ip, results = self._resolve_ref_orm(ref)
-
 
         # Convert the ORM results to identities
         out = OrderedDict()
 
         for d, p, f in results:
 
-            if not d.vid in out:
+            if d.vid not in out:
                 out[d.vid] = d.identity
 
             # Locations in the identity are set in add_file
@@ -106,22 +104,17 @@ class Resolver(object):
                     # Also need to set the location in the dataset, or the location
                     # filtering may fail later.
                     lrc = LocationRef.LOCATION
-                    d_f_type = { lrc.REMOTEPARTITION: lrc.REMOTE, lrc.PARTITION: lrc.LIBRARY}.get( f.type_, f.type_)
+                    d_f_type = {lrc.REMOTEPARTITION: lrc.REMOTE, lrc.PARTITION: lrc.LIBRARY}.get(f.type_, f.type_)
                     try:
                         out[d.vid].locations.set(d_f_type)
                     except:
-                        print d.vid, f.type_, d_f_type
+                        # TODO: Who is a reader of that print? Write to log instead.
+                        print(d.vid, f.type_, d_f_type)
                         raise
-
             else:
-
                 out[d.vid].locations.set(LocationRef.LOCATION.LIBRARY)
-
-
             if p:
                 out[d.vid].add_partition(p.identity)
-
-
         return ip, out
 
     def resolve_ref_all(self, ref):
@@ -130,23 +123,17 @@ class Resolver(object):
 
     def resolve_ref_one(self, ref, location=None):
         """Return the "best" result for an object specification."""
-        import semantic_version
-        from collections import OrderedDict
 
         ip, refs = self._resolve_ref(ref)
 
-
         if location:
-
-            refs = OrderedDict([(k, v) for k, v in refs.items() if v.locations.has(location)])
+            refs = OrderedDict([(k, v) for k, v in list(refs.items()) if v.locations.has(location)])
 
         if not isinstance(ip.version, semantic_version.Spec):
-            return ip, refs.values().pop(0) if refs and len(refs.values()) else None
+            return ip, list(refs.values()).pop(0) if refs and len(list(refs.values())) else None
         else:
-
-            versions = { semantic_version.Version(d.name.version): d for d in refs.values()}
-
-            best = ip.version.select(versions.keys())
+            versions = {semantic_version.Version(d.name.version): d for d in list(refs.values())}
+            best = ip.version.select(list(versions.keys()))
 
             if not best:
                 return ip, None

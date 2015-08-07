@@ -22,14 +22,14 @@ class Test(TestBase):
 
         self.rc = self.get_rc()
 
-        self.assertEquals('/tmp/test/downloads', self.rc.filesystem('downloads'))
-        self.assertEquals('/tmp/test/extracts', self.rc.filesystem('extracts'))
+        self.assertEqual('/tmp/test/downloads', self.rc.filesystem('downloads'))
+        self.assertEqual('/tmp/test/extracts', self.rc.filesystem('extracts'))
 
     def test_run_config_library(self):
 
         self.rc = self.get_rc()
 
-        print self.rc.library()
+        print(self.rc.library())
 
     def test_database(self):
         import os
@@ -46,19 +46,19 @@ class Test(TestBase):
 
         # See the ambry.yaml and ambry-accounts.yaml files in test/bundlefiles
 
-        self.assertEquals({'username': None, 'password': None, 'driver': 'sqlite', 'dbname': '/foo/bar', 'server': None},
+        self.assertEqual({'username': None, 'password': None, 'driver': 'sqlite', 'dbname': '/foo/bar', 'server': None},
                           rc.database('database1'))
 
-        self.assertEquals({'username': 'user', 'password': 'pass', 'driver': 'postgres', 'dbname': 'dbname',
+        self.assertEqual({'username': 'user', 'password': 'pass', 'driver': 'postgres', 'dbname': 'dbname',
                            'server': 'host'},
                           rc.database('database2'))
 
-        self.assertEquals(rc.database('database2'), rc.database('database3'))
+        self.assertEqual(rc.database('database2'), rc.database('database3'))
 
-        self.assertEquals('creduser1', rc.database('database4')['user'])
-        self.assertEquals('credpass1', rc.database('database4')['password'])
+        self.assertEqual('creduser1', rc.database('database4')['user'])
+        self.assertEqual('credpass1', rc.database('database4')['password'])
 
-        self.assertEquals({'username': 'user2', '_name': 'host2-user2-dbname', 'password': 'credpass2',
+        self.assertEqual({'username': 'user2', '_name': 'host2-user2-dbname', 'password': 'credpass2',
                            'driver': 'postgres', 'dbname': 'dbname', 'server': 'host2'},
                           rc.database('database5'))
 
@@ -67,9 +67,9 @@ class Test(TestBase):
 
         from ambry.run import normalize_dsn_or_dict as n
 
-        self.assertEquals('sqlite://', n(dict(driver='sqlite', dbname=''))[1])
-        self.assertEquals('sqlite:///foo', n(dict(driver='sqlite',dbname='foo'))[1])
-        self.assertEquals('sqlite:////foo', n(dict(driver='sqlite', dbname='/foo'))[1])
+        self.assertEqual('sqlite://', n(dict(driver='sqlite', dbname=''))[1])
+        self.assertEqual('sqlite:///foo', n(dict(driver='sqlite',dbname='foo'))[1])
+        self.assertEqual('sqlite:////foo', n(dict(driver='sqlite', dbname='/foo'))[1])
 
         def basic_checks(dsn_list):
             # Check the dsns are idempotent

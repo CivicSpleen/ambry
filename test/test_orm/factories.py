@@ -113,7 +113,7 @@ class TableFactory(SQLAlchemyModelFactory):
     id = ''  # will populate it in the _create method.
     vid = ''  # will populate it in the _create method.
 
-    sequence_id = factory.Iterator(range(1, 10))
+    sequence_id = factory.Iterator(list(range(1, 10)))
     name = factory.Sequence(lambda n: 'name-%03d' % n)
     data = {}
 
@@ -178,7 +178,7 @@ class ColumnFactory(SQLAlchemyModelFactory):
 
     d_vid = ''  # Populates in the _prepare method.
 
-    sequence_id = factory.Iterator(range(1, 100))
+    sequence_id = factory.Iterator(list(range(1, 100)))
 
     @classmethod
     def _prepare(cls, create, **kwargs):
@@ -246,7 +246,7 @@ class PartitionFactory(SQLAlchemyModelFactory):
     t_vid = ''  # populates in the _prepare method
     d_vid = ''  # populates in the _prepare method.
 
-    sequence_id = factory.Iterator(range(1, 100))
+    sequence_id = factory.Iterator(list(range(1, 100)))
 
     @classmethod
     def _prepare(cls, create, **kwargs):

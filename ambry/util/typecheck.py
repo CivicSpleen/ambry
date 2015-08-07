@@ -37,6 +37,7 @@ Needed to cast params as floats in function def (or simply divide by 2.0).
       ...
     TypeError: 'fib' method accepts (int), but was given (float)
 """
+from __future__ import print_function
 import sys
 
 
@@ -67,7 +68,7 @@ def accepts(*types, **kw):
                 if argtypes != types:
                     msg = info(f.__name__, types, argtypes, 0)
                     if debug is 1:
-                        print >> sys.stderr, 'TypeWarning: ', msg
+                        print('TypeWarning: ', msg, file=sys.stderr)
                     elif debug is 2:
                         raise TypeError(msg)
                 return f(*args)
@@ -75,7 +76,7 @@ def accepts(*types, **kw):
             return newf
         return decorator
     except KeyError as key:
-        raise KeyError(key + "is not a valid keyword argument")
+        raise KeyError(key + ' is not a valid keyword argument')
     except TypeError as msg:
         raise TypeError(msg)
 
@@ -108,7 +109,7 @@ def returns(ret_type, **kw):
                 if res_type != ret_type:
                     msg = info(f.__name__, (ret_type,), (res_type,), 1)
                     if debug is 1:
-                        print >> sys.stderr, 'TypeWarning: ', msg
+                        print('TypeWarning: ', msg, file=sys.stderr)
                     elif debug is 2:
                         raise TypeError(msg)
                 return result
@@ -116,7 +117,7 @@ def returns(ret_type, **kw):
             return newf
         return decorator
     except KeyError as key:
-        raise KeyError(key + "is not a valid keyword argument")
+        raise KeyError(key + ' is not a valid keyword argument')
     except TypeError as msg:
         raise TypeError(msg)
 

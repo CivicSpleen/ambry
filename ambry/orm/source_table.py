@@ -120,7 +120,7 @@ class SourceColumn(Base):
         if 'table' in kwargs:
             del kwargs['table'] # In source_schema.csv, this is the name of the table, not the object
 
-        for k, v in kwargs.items():
+        for k, v in list(kwargs.items()):
             if hasattr(self, k):
 
                 if k == 'dest_header':

@@ -86,7 +86,7 @@ class ContactTerm(DictTerm):
     email = ScalarTerm(store_none=False)
     url = ScalarTerm(store_none=False)
 
-    def __nonzero__(self):
+    def __bool__(self):
         return bool(self.name or self.email or self.url)
 
     def __bool__(self):
