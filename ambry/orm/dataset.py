@@ -116,7 +116,7 @@ class Dataset(Base):
         return Identity.from_dict(self.dict)
 
     @property
-    def config(self ):
+    def config(self):
         return ConfigAccessor(self)
 
     def table(self, ref):

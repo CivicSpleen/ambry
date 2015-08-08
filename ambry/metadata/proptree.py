@@ -202,22 +202,38 @@ class StructuredPropertyTree(object):
 
         self.register_members()
         self._config = None  # appropriate orm.config.Config instance
-
+        self._valid_configs = []  # Configs exist in both - db and StructuredPropertyTree
         self.set(d)
+
+    def _add_valid(self, config):
+        """ """
+        self._valid_configs.append(config)
 
     def set(self, d):
         if d is not None:
+            self._valid_configs = [self._config]
             for k, v in iteritems(d):
                 if k in self._members:
-
                     m = self._members[k]
                     o = copy.copy(m)
                     o.init_instance(self)
-
                     o.set(v)
-
                 else:
-                    raise MetadataError("Undeclared group: {} ".format(k))
+                    raise MetadataError('Undeclared group: {} '.format(k))
+
+            # delete instances that were not updated as inactive.
+            session = object_session(self._config)
+            valid_ids = [x.id for x in self._valid_configs]
+            missed_configs = session\
+                .query(Config)\
+                .filter(~Config.id.in_(valid_ids), Config.type == self._type)\
+                .all()
+
+            for conf in missed_configs:
+                logger.debug(
+                    'Deleting {} config from database because it was removed from file.'.format(conf))
+                session.delete(conf)
+                session.commit()
 
     def build_from_db(self, dataset):
         logger.debug(
@@ -374,6 +390,7 @@ class Group(object):
             session, Config,
             parent_id=self._parent._config.id, d_vid=dataset.vid,
             group=self._key, key=self._key, type=self._top._type)
+        self._top._add_valid(self._config)
 
         if created:
             logger.debug(
@@ -651,6 +668,7 @@ class VarDictGroup(DictGroup):
             d_vid=dataset.vid, type=self._top._type,
             parent=self._parent._config, group=self._key,
             key=self._key)
+        self._top._add_valid(self._config)
 
         # create or update value config
         config, created = get_or_create(
@@ -664,6 +682,7 @@ class VarDictGroup(DictGroup):
             session.commit()
             logger.debug(
                 'Config bound to the VarDictGroup key updated. config: {}'.format(config))
+        self._top._add_valid(config)
 
 
 class Term(object):
@@ -716,10 +735,14 @@ class Term(object):
             parent=self._parent._config, d_vid=dataset.vid,
             type=self._top._type, key=self._key)
 
-        if self._config.value != self.get():
-            self._config.value = self.get()
-            session.merge(self._config)
-            session.commit()
+        # We update ScalarTerm and ListTerm values only. Composite terms (DictTerm for example)
+        # should not contain value.
+        if isinstance(self, (ScalarTerm, ListTerm)):
+            if self._config.value != self.get():
+                self._config.value = self.get()
+                session.merge(self._config)
+                session.commit()
+        self._top._add_valid(self._config)
 
         if created:
             logger.debug(
@@ -995,7 +1018,6 @@ class DictTerm(Term, MutableMapping):
             return self._term_values.__iter__()
 
     def set(self, d):
-
         for k, v in iteritems(d):
             self.__setitem__(k, v)
 
@@ -1141,7 +1163,6 @@ def get_or_create(session, model, **kwargs):
         Tuple: first element is found or created instance, second is boolean - True if instance created,
             False if instance found.
     """
-
     instance = session.query(model).filter_by(**kwargs).first()
     if instance:
         return instance, False

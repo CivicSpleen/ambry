@@ -6,10 +6,9 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-from ..util import get_logger
-from ..dbexceptions import ConfigurationError, ProcessError
-from ..util import Constant, memoize
 import ambry.etl
+from ..util import get_logger, Constant
+
 
 class Bundle(object):
 
@@ -36,17 +35,17 @@ class Bundle(object):
     default_pipelines = {
         # Classifies rows in multi-header sources
         'rowintuit': {
-            'intuit':[
+            'intuit': [
                 ambry.etl.RowIntuiter
             ]
         },
         # Creates the source schemas
         'source': {
-            'body' :[
+            'body': [
                 ambry.etl.MergeHeader,
                 ambry.etl.MangleHeader,
             ],
-            'intuit':[
+            'intuit': [
                 ambry.etl.TypeIntuiter,
             ],
             'final': [
@@ -77,7 +76,7 @@ class Bundle(object):
                 ambry.etl.MapToSourceTable,
 
             ],
-            'store':[
+            'store': [
                 ambry.etl.CasterPipe,
                 ambry.etl.SelectPartition,
                 ambry.etl.WriteToPartition
@@ -424,17 +423,13 @@ class Bundle(object):
 
     def sync_in(self):
         """Synchronize from files to records, and records to objects"""
-        from ambry.orm import File
         from ambry.bundle.files import BuildSourceFile
-        syncs = self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
+        self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
         self.build_source_files.record_to_objects()
         #self.state = self.STATES.SYNCED
 
     def sync_objects_in(self):
         """Synchronize from records to objects"""
-        from ambry.orm import File
-        from ambry.bundle.files import BuildSourceFile
-
         self.build_source_files.record_to_objects()
 
     def sync_out(self):
@@ -442,23 +437,18 @@ class Bundle(object):
         """Synchronize from objects to records"""
         self.build_source_files.objects_to_record()
         self.build_source_files.sync(BuildSourceFile.SYNC_DIR.RECORD_TO_FILE)
-        #self.state = self.STATES.SYNCED
-
+        # self.state = self.STATES.SYNCED
 
     def sync_objects_out(self):
-        from ambry.bundle.files import BuildSourceFile
         """Synchronize from objects to records, and records to files"""
-
         self.build_source_files.objects_to_record()
-
 
     def sync_objects(self):
         self.build_source_files.record_to_objects()
         self.build_source_files.objects_to_record()
 
-
-    ##
-    ## Do All; Run the full process
+    #
+    # Do All; Run the full process
 
     def run(self):
 
@@ -482,9 +472,9 @@ class Bundle(object):
 
         return True
 
-    ##
-    ## Clean
-    ##
+    #
+    # Clean
+    #
 
     @property
     def is_clean(self):
@@ -501,7 +491,7 @@ class Bundle(object):
             self.warn("Can't clean; bundle is finalized")
             return False
 
-        self.log("---- Cleaning ----")
+        self.log('---- Cleaning ----')
         self.state = self.STATES.CLEANING
 
         ds = self.dataset
@@ -539,13 +529,13 @@ class Bundle(object):
 
         self.state = self.STATES.CLEANED
 
-        self.log("---- Done Cleaning ----")
+        self.log('---- Done Cleaning ----')
 
         return True
 
-    ##
-    ## Prepare
-    ##
+    #
+    # Prepare
+    #
 
     @property
     def is_prepared(self):
@@ -562,23 +552,22 @@ class Bundle(object):
 
         if self.pre_prepare():
             self.state = self.STATES.PREPARING
-            self.log("---- Preparing ----")
+            self.log('---- Preparing ----')
             if self.prepare_main():
                 self.state = self.STATES.PREPARED
                 if self.post_prepare():
-                    self.log("---- Done Preparing ----")
+                    self.log('---- Done Preparing ----')
                 else:
                     self.set_error_state()
-                    self.log("---- Post-prepare exited with failure ----")
+                    self.log('---- Post-prepare exited with failure ----')
                     r = False
             else:
                 self.set_error_state()
-                self.log("---- Prepare exited with failure ----")
+                self.log('---- Prepare exited with failure ----')
                 r = False
         else:
-            self.log("---- Skipping prepare ---- ")
+            self.log('---- Skipping prepare ---- ')
             r = False
-
 
         self.dataset.commit()
 
@@ -590,12 +579,9 @@ class Bundle(object):
 
     def pre_prepare(self):
         """"""
-        from ambry.orm import File
-
         if self.is_finalized:
             self.warn("Can't prepare; bundle is finalized")
             return False
-
         return True
 
     def post_prepare(self):
@@ -603,15 +589,15 @@ class Bundle(object):
 
         for t in self.dataset.tables:
             if not bool(t.description):
-                self.error("No title ( Description of id column ) set for table: {} ".format(t.name))
+                self.error('No title ( Description of id column ) set for table: {} '.format(t.name))
 
         self.commit()
 
         return True
 
-    ##
-    ## General Phase Runs
-    ##
+    #
+    # General Phase Runs
+    #
 
     def pipeline(self, phase, source=None):
         """Construct the ETL pipeline for all phases. Segments that are not used for the current phase
@@ -624,7 +610,9 @@ class Bundle(object):
         else:
             source = None
 
-        pl = Pipeline(self, source=source.source_pipe(account_accessor=self.library.config.account) if source else None)
+        pl = Pipeline(
+            self,
+            source=source.source_pipe(account_accessor=self.library.config.account) if source else None)
 
         try:
             phase_config = self.default_pipelines[phase]
