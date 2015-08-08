@@ -112,6 +112,7 @@ def root_command(args, rc):
         warn('No library: {}'.format(e))
         l = None
     except Exception as e:
+
         warn('Failed to instantiate library: {}'.format(e))
         l = None
 
@@ -151,11 +152,10 @@ def root_list_datasets(args, l, rc, sort = None):
 
 
 def root_info(args, l, rc):
-    from ..cli import _print_info, prt
+    from ..cli import prt
     from ..dbexceptions import ConfigurationError
-    from ambry.orm.exc import NotFoundError
-    import ambry
 
+    import ambry
 
     prt('Version:   {}, {}', ambry._meta.__version__, rc.environment.category)
     prt('Root dir:  {}', rc.filesystem('root'))
@@ -167,8 +167,11 @@ def root_info(args, l, rc):
         prt('Source :   No source directory')
 
     prt('Configs:   {}', rc.dict['loaded'])
-    prt('Library:   {}', l.database.dsn)
-    prt('Remotes:   {}', ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
+    if l:
+        prt('Library:   {}', l.database.dsn)
+        prt('Remotes:   {}', ', '.join([str(r) for r in l.remotes]) if l.remotes else '')
+    else:
+        prt('No library defined!')
 
 def root_sync(args, l, config):
     """Sync with the remote. For more options, use library sync

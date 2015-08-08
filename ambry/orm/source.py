@@ -4,60 +4,24 @@ dataset, partitions, configuration, tables and columns.
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
-from ambry.etl.rowgen import DelayedOpen, SourceRowGen, excel_iter, download, google_iter
 
 __docformat__ = 'restructuredtext en'
 
 from collections import OrderedDict
-import datetime
-import hashlib
-import os
+
 from os.path import splitext
-import re
-import shutil
-import ssl
-
-from dateutil import parser
-
-import requests
-
-import petl
-
-import gspread
-
-from oauth2client.client import SignedJwtAssertionCredentials
-
-from contextlib import closing
 
 from six.moves.urllib.parse import urlparse
-from six.moves.urllib.request import urlopen
-
-from fs.zipfs import ZipFS
-from fs.s3fs import S3FS
 
 from sqlalchemy import Column as SAColumn
 from sqlalchemy import Text, String, ForeignKey, INTEGER, UniqueConstraint
 from sqlalchemy.orm import relationship
-
-from xlrd import open_workbook, xldate_as_tuple
-
-from ambry.etl import Pipe
-from ambry.util import parse_url_to_dict
-from ambry.util.flo import copy_file_or_flo
-from source_table import SourceTable
-from table import Table
-from . import Base,  DictableMixin
 
 from .source_table import SourceTable
 from .table import Table
 
 from . import MutationList, JSONEncodedObj
 from . import Base,  DictableMixin
-
-
-class SourceError(Exception):
-    pass
-
 
 
 class DataSource(Base, DictableMixin):
@@ -218,6 +182,12 @@ class DataSource(Base, DictableMixin):
     @property
     def headers(self):
         return self.source_table.headers
+
+    @property
+    def is_downloadable(self):
+        """Return true if the URL is probably downloadable from the url, and is not a reference or a template"""
+
+        return not self.urltype in ('ref','template')
 
 
 

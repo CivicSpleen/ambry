@@ -284,7 +284,7 @@ class StringSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
 
-        with self._fs.open(fn_path) as f:
+        with self._fs.open(fn_path, 'rb') as f:
             fr.update_contents(unicode(f.read()))
 
         fr.mime_type = 'text/plain'

@@ -1,4 +1,4 @@
-"""Pipes, pipe segments and piplines, for flowing data from sources to partitions. 
+"""Pipes, pipe segments and piplines, for flowing data from sources to partitions.
 
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
@@ -35,7 +35,6 @@ Pipeline:
 """.format(message=self.message, pipeline_name=self.pipe.pipeline.name, pipeline = str(self.pipe.pipeline),
            pipe_class=qualified_class_name(self.pipe), source_name=self.source.name, headers=self.pipe.headers)
 
-
 class MissingHeaderError(PipelineError):
     def __init__(self, pipe, header, table, *args, **kwargs):
         super(MissingHeaderError, self).__init__( pipe, *args, **kwargs)
@@ -65,7 +64,6 @@ Pipeline:
 
 class StopPipe(Exception):
     pass
-
 
 class Pipe(object):
     """A step in the pipeline"""
@@ -217,18 +215,8 @@ class Slice(Pipe):
         :return:
         """
 
-        if len(args) == 1 and isinstance(args[0], basestring):
-            args = Slice.parse(args[0])
+        self._args = args
 
-        self._slices = args
-
-        parts = []
-
-        for slice in self._slices:
-            parts.append("row[{}:{}]".format(slice[0], slice[1])
-                         if isinstance(slice, (tuple,list)) else "[row[{}]]".format(slice) )
-
-        self.slicer = eval('lambda row: {}'.format('+'.join(parts)))
 
     @staticmethod
     def parse(v):
@@ -257,7 +245,34 @@ class Slice(Pipe):
 
         return slices
 
+    @staticmethod
+    def make_slicer( *args):
+
+        if len(args) == 1 and isinstance(args[0], basestring):
+            args = Slice.parse(args[0])
+
+        parts = []
+
+        for slice in args:
+            parts.append("row[{}:{}]".format(slice[0], slice[1])
+                         if isinstance(slice, (tuple, list)) else "[row[{}]]".format(slice))
+
+
+            return eval('lambda row: {}'.format('+'.join(parts)))
+
+
     def process_header(self, row):
+
+        args = self._args
+
+        if not args:
+            args = [self.source.segment]
+
+        try:
+            self.slicer = Slice.make_slicer(args)
+        except Exception as e:
+            raise PipelineError(self, "Failed to eval slicer for parts: {} for source {} "
+                                .format(args, self.source.name))
 
         return self.slicer(row)
 

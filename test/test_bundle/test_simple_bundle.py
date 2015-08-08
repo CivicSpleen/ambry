@@ -63,7 +63,7 @@ class Test(TestBase):
         self.assertEqual([u'sources.csv', u'bundle.py', u'source_schema.csv', u'lib.py', u'meta.py',
                           u'documentation.md', u'bundle.yaml', u'schema.csv'], file_names)
 
-        self.assertEqual(14, len(b.dataset.configs))
+        self.assertEqual(12, len(b.dataset.configs))
 
         self.assertFalse(b.is_prepared)
         self.assertFalse(b.is_built)

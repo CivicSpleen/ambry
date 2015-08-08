@@ -6,6 +6,11 @@ Revised BSD License, included in this distribution as LICENSE.txt
 """
 import os.path
 from ambry.etl import Pipe
+from ambry.util import get_logger
+import logging
+
+logger = get_logger(__name__, level=logging.INFO, propagate=False)
+logger.setLevel(logging.INFO)
 
 class SourceError(Exception):
     pass
@@ -16,7 +21,7 @@ def source_pipe(source, cache_fs, account_accessor):
     if source.generator:  # Get the source from the generator, not from a file.
         import bundle
         gen = eval(source.generator)
-        return gen(source)
+        return gen(source, cache_fs, account_accessor)
     else:
 
         if source.get_urltype() == 'gs':
@@ -76,34 +81,46 @@ def fetch(source, cache_fs, account_accessor):
     if not source.url:
         raise SourceError("Can't download; not url specified")
 
+    logger.debug("Downloading: {}".format(source.url))
     f = download(source.url, cache_fs, account_accessor = account_accessor)
 
-    if source.get_urltype() == 'zip':
+    logger.debug("Downloaded: {}".format(source.url))
 
+    if source.get_urltype() == 'zip':
+        logger.debug("Testing a zip file")
         fs = ZipFS(cache_fs.open(f, 'rb'))
+
         if not source.file:
             first = walk_all(fs)[0]
 
             fstor = DelayedOpen(source, fs, first, 'rU', None)
+            logger.debug("FSTOR for zip file")
         else:
             import re
 
             # Put the walk output into a normal list of files
             for zip_fn in walk_all(fs):
+
                 if '_MACOSX' in zip_fn:
                     continue
 
                 if re.search(source.file, zip_fn):
                     fstor = DelayedOpen( source,  fs,zip_fn, 'rb', account_accessor)
+                    logger.debug("FSTOR for zip archive")
                     break
+
+            if not fstor:
+                from ambry.dbexceptions import  ConfigurationError
+                raise ConfigurationError('Failed to get file {} from archive {}'.format(source.file, f))
 
     else:
         fstor = DelayedOpen(source, cache_fs, f, 'rb')
+        logger.debug("FSTOR for file")
 
     return fstor
 
 class SourceRowGen(Pipe):
-    """Adapts any iterator to a pipe"""
+    """A Source RowGen is the first pipe in a pipeline, generating rows from the original source. """
 
     def __init__(self, source, cache_fs, account_accessor):
         self._source = source
@@ -140,14 +157,14 @@ class SourceRowGen(Pipe):
         return qualified_class_name(self)
 
 class CsvSource(SourceRowGen):
-
+    """Generate rows from a CSV source"""
     def _get_row_gen(self):
         import petl
         fstor = self.fetch()
         return petl.io.csv.fromcsv(fstor, self._source.encoding if self._source.encoding else None)
 
 class TsvSource(SourceRowGen):
-
+    """Generate rows from a TSV ( Tab selerated value) source"""
     def _get_row_gen(self):
         import petl
 
@@ -155,7 +172,7 @@ class TsvSource(SourceRowGen):
         return petl.io.csv.fromtsv(fstor, self._source.encoding if self._source.encoding else None)
 
 class FixedSource(SourceRowGen):
-
+    """Generate rows from a fixed-width source"""
     def _get_row_gen(self):
         from ambry.util.fixedwidth import fixed_width_iter
 
@@ -163,15 +180,36 @@ class FixedSource(SourceRowGen):
         return fixed_width_iter(fstor.open(mode='r', encoding=self._source.encoding), self._source)
 
 class ExcelSource(SourceRowGen):
-
+    """Generate rows from an excel file"""
     def _get_row_gen(self):
         fstor = self.fetch()
         return excel_iter(fstor.syspath(), self._source.segment)
 
 class GoogleSource(SourceRowGen):
-
+    """Generate rows from a CSV source"""
     def _get_row_gen(self):
-        return google_iter(self._source)
+
+        """"Iterate over the rows of a goodl spreadsheet. The URL field of the source must start with gs:// followed by
+        the spreadsheet key. """
+        import gspread
+        from oauth2client.client import SignedJwtAssertionCredentials
+
+        json_key = self.bundle.library.config.account('google_spreadsheets')
+
+        scope = ['https://spreadsheets.google.com/feeds']
+
+        credentials = SignedJwtAssertionCredentials(json_key['client_email'], json_key['private_key'], scope)
+
+        spreadsheet_key = self.source.url.replace('gs://', '')
+
+        gc = gspread.authorize(credentials)
+
+        sh = gc.open_by_key(spreadsheet_key)
+
+        wksht = sh.worksheet(self.source.segment)
+
+        for row in wksht.get_all_values():
+            yield row
 
 def excel_iter(file_name, segment):
     from xlrd import open_workbook
@@ -228,7 +266,6 @@ def get_s3(url, account_accessor):
 
     return s3
 
-
 def download(url, cache_fs, account_accessor=None):
     import urlparse
 
@@ -253,7 +290,7 @@ def download(url, cache_fs, account_accessor=None):
 
         lock_file = cache_fs.getsyspath(cache_path+".lock")
 
-        with lock_file:
+        with filelock.FileLock(lock_file):
 
             if url.startswith('s3:'):
                 s3 = get_s3(url, account_accessor)
@@ -311,25 +348,3 @@ def make_excel_date_caster(file_name):
     return excel_date
 
 
-def google_iter(source):
-    """"Iterate over the rows of a goodl spreadsheet. The URL field of the source must start with gs:// followed by
-    the spreadsheet key. """
-    import gspread
-    from oauth2client.client import SignedJwtAssertionCredentials
-
-    json_key = source._library.config.account('google_spreadsheets')
-
-    scope = ['https://spreadsheets.google.com/feeds']
-
-    credentials = SignedJwtAssertionCredentials(json_key['client_email'], json_key['private_key'], scope)
-
-    spreadsheet_key = source.url.replace('gs://', '')
-
-    gc = gspread.authorize(credentials)
-
-    sh = gc.open_by_key(spreadsheet_key)
-
-    wksht = sh.worksheet(source.segment)
-
-    for row in wksht.get_all_values():
-        yield row

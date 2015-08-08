@@ -266,20 +266,23 @@ class Bundle(object):
         if isinstance(source, basestring):
             source = self.source(source)
 
-        return source_pipe(source, self._library.download_cache, self.library.config.account)
+        sp =  source_pipe(source, self._library.download_cache, self.library.config.account)
+        sp.bundle = self
+        return sp
 
     @property
     def sources(self):
-
+        """Iterate over downloadable sources"""
         for source in self.dataset.sources:
+            if source.is_downloadable:
+                yield source
 
-            # Don't iterate over references to other bundles
-            if source.urltype == 'ref':
-                continue
-
-            source._cache_fs = self._library.download_cache
-            source._library = self._library
-            yield source
+    @property
+    def refs(self):
+        """Iterate over downloadable sources -- referecnes and templates"""
+        for source in self.dataset.sources:
+            if not source.is_downloadable:
+                yield source
 
     @property
     def metadata(self):
