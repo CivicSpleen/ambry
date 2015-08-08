@@ -748,6 +748,9 @@ class Bundle(object):
             if sources and source.name not in sources:
                 continue
 
+            if source.phase and source.phase != phase:
+                continue
+
             self.logger.info("Running phase {} for source {} ".format(phase, source.name))
 
             pl = self.pipeline(phase, source)

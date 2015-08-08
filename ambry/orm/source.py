@@ -43,10 +43,11 @@ class DataSource(Base, DictableMixin):
     dest_table_name = SAColumn('ds_dt_name', Text)
     _dest_table = relationship(Table, backref='sources')
 
-    segment = SAColumn('ds_segment', Text)
+    stage = SAColumn('ds_stage', Text)
     time = SAColumn('ds_time', Text)
     space = SAColumn('ds_space', Text)
     grain = SAColumn('ds_grain', Text)
+    segment = SAColumn('ds_segment', Text)
     start_line = SAColumn('ds_start_line', INTEGER)
     end_line = SAColumn('ds_end_line', INTEGER)
     comment_lines = SAColumn('ds_comment_lines', MutationList.as_mutable(JSONEncodedObj))

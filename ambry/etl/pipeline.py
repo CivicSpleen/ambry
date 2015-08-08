@@ -257,9 +257,10 @@ class Slice(Pipe):
             parts.append("row[{}:{}]".format(slice[0], slice[1])
                          if isinstance(slice, (tuple, list)) else "[row[{}]]".format(slice))
 
+            code = 'lambda row: {}'.format('+'.join(parts))
+            func = eval(code)
 
-            return eval('lambda row: {}'.format('+'.join(parts)))
-
+        return func, code
 
     def process_header(self, row):
 
@@ -269,12 +270,15 @@ class Slice(Pipe):
             args = [self.source.segment]
 
         try:
-            self.slicer = Slice.make_slicer(args)
+            self.slicer, code = Slice.make_slicer(args)
         except Exception as e:
             raise PipelineError(self, "Failed to eval slicer for parts: {} for source {} "
                                 .format(args, self.source.name))
 
-        return self.slicer(row)
+        try:
+            return self.slicer(row)
+        except Exception as e:
+            raise PipelineError(self, "Failed to run slicer: '{}' : {}".format(code, e))
 
     def process_body(self, row):
 

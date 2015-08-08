@@ -119,7 +119,7 @@ def fetch(source, cache_fs, account_accessor):
 
     return fstor
 
-class SourceRowGen(Pipe):
+class SourcePipe(Pipe):
     """A Source RowGen is the first pipe in a pipeline, generating rows from the original source. """
 
     def __init__(self, source, cache_fs, account_accessor):
@@ -156,14 +156,14 @@ class SourceRowGen(Pipe):
 
         return qualified_class_name(self)
 
-class CsvSource(SourceRowGen):
+class CsvSource(SourcePipe):
     """Generate rows from a CSV source"""
     def _get_row_gen(self):
         import petl
         fstor = self.fetch()
         return petl.io.csv.fromcsv(fstor, self._source.encoding if self._source.encoding else None)
 
-class TsvSource(SourceRowGen):
+class TsvSource(SourcePipe):
     """Generate rows from a TSV ( Tab selerated value) source"""
     def _get_row_gen(self):
         import petl
@@ -171,7 +171,7 @@ class TsvSource(SourceRowGen):
         fstor = self.fetch()
         return petl.io.csv.fromtsv(fstor, self._source.encoding if self._source.encoding else None)
 
-class FixedSource(SourceRowGen):
+class FixedSource(SourcePipe):
     """Generate rows from a fixed-width source"""
     def _get_row_gen(self):
         from ambry.util.fixedwidth import fixed_width_iter
@@ -179,13 +179,13 @@ class FixedSource(SourceRowGen):
         fstor = self.fetch()
         return fixed_width_iter(fstor.open(mode='r', encoding=self._source.encoding), self._source)
 
-class ExcelSource(SourceRowGen):
+class ExcelSource(SourcePipe):
     """Generate rows from an excel file"""
     def _get_row_gen(self):
         fstor = self.fetch()
         return excel_iter(fstor.syspath(), self._source.segment)
 
-class GoogleSource(SourceRowGen):
+class GoogleSource(SourcePipe):
     """Generate rows from a CSV source"""
     def _get_row_gen(self):
 

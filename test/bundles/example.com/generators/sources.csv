@@ -1,0 +1,5 @@
+"name","title","table","segment","time","space","generator"
+"source1",,"demo",,2000,"nv","bundle.RandomSourcePipe"
+"source2",,"demo",,2001,"ca","bundle.RandomSourcePipe"
+"source3",,"demo",,2002,"la","bundle.RandomSourcePipe"
+"source4",,"demo",,2003,"ut","bundle.RandomSourcePipe"

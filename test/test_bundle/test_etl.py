@@ -704,6 +704,12 @@ class Test(TestBase):
     def test_slice(self):
         from ambry.etl.pipeline import Pipeline, Pipe, Slice, PrintRows
 
+        self.assertEquals('lambda row: row[0:3]+row[10:13]+[row[9]]+[row[-1]]', Slice.make_slicer((0,3),(10,13),9,-1)[1])
+
+        self.assertEquals('lambda row: row[0:3]+row[10:13]+[row[9]]+[row[-1]]', Slice.make_slicer("0:3,10:13,9,-1")[1])
+
+        return
+
         class Source(Pipe):
             def __iter__(self):
 
@@ -806,3 +812,37 @@ class Test(TestBase):
                 if i > 5:
                     break
                 i, row
+
+    def test_generator(self):
+
+        b = self.setup_bundle('generators')
+        l = b._library
+
+        b.sync_in()
+
+        b.meta()
+
+        b.run_phase('build2')
+
+        p = list(b.partitions)[0]
+
+        count = sum = 0
+        for row in p.stream(as_dict=True):
+            count += 1
+            sum += row['number2']
+
+        self.assertEquals(800,count)
+        self.assertEquals(159200, sum)
+
+        b.run_phase('build2')
+
+        p = list(b.partitions)[0]
+
+        count = sum = 0
+        for row in p.stream(as_dict=True):
+            count += 1
+            sum += row['number2']
+
+        self.assertEquals(800, count)
+        self.assertEquals(159200, sum)
+
