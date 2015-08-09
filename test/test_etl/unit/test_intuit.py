@@ -3,7 +3,7 @@ import unittest
 
 import fudge
 
-from ambry.etl.intuit import RowIntuiter
+from ambry.etl.intuit import RowIntuiter, NoMatchError
 
 
 class RowIntuiterTest(unittest.TestCase):
@@ -30,15 +30,14 @@ class RowIntuiterTest(unittest.TestCase):
 
     def test_returns_false_if_row_does_not_match_to_pattern(self):
         # matches mean that all types of the elems in the row are in the pattern.
-        pipe1 = RowIntuiter()
         pattern = [set([str])]
         row = [1]
-        self.assertFalse(pipe1._matches(row, pattern))
+        self.assertFalse(RowIntuiter()._matches(row, pattern))
 
-    # _find_data_lines tests
+    # _find_first_match_idx tests
     @fudge.patch(
         'ambry.etl.intuit.RowIntuiter._matches')
-    def test_finds_first_line_in_the_header(self, fake_matches):
+    def test_returns_first_match_idx(self, fake_matches):
         # prepare state
         data_pattern = [set([str, int, float])]
         rows = [
@@ -50,18 +49,33 @@ class RowIntuiterTest(unittest.TestCase):
         fake_matches\
             .expects_call().returns(False)\
             .next_call().returns(False)\
-            .next_call().returns(True)\
-            .next_call().returns(True)  # we need not empty last line.
+            .next_call().returns(True)
 
         # testing
-        pipe1 = RowIntuiter()
-        first_line, last_line = pipe1._find_data_lines(rows, data_pattern)
+        first_line = RowIntuiter()._find_first_match_idx(rows, data_pattern)
         self.assertEqual(first_line, 2)
         self.assertEqual(rows[first_line], ['0', 0, 0.1])
 
     @fudge.patch(
         'ambry.etl.intuit.RowIntuiter._matches')
-    def test_finds_last_line_in_the_footer(self, fake_matches):
+    def test_raises_NoMatchError_if_first_match_not_found(self, fake_matches):
+        # prepare state
+        data_pattern = [set([str, int, float])]
+        rows = [
+            ['Header1', None, None]]
+
+        rows.extend([[str(i), i, i + 0.1] for i in range(100)])
+
+        fake_matches.expects_call().returns(False)
+
+        # testing
+        with self.assertRaises(NoMatchError):
+            RowIntuiter()._find_first_match_idx(rows, data_pattern)
+
+    # _find_first_match_idx tests
+    @fudge.patch(
+        'ambry.etl.intuit.RowIntuiter._matches')
+    def test_finds_last_match_idx(self, fake_matches):
         # prepare state
         data_pattern = [set([str, int, float])]
         rows = [
@@ -71,13 +85,28 @@ class RowIntuiterTest(unittest.TestCase):
         rows.extend([[str(i), i, i + 0.1] for i in range(100)])
 
         fake_matches\
-            .expects_call().returns(True)\
-            .next_call().returns(False)\
+            .expects_call().returns(False)\
             .next_call().returns(True)
 
-        pipe1 = RowIntuiter()
-        first_line, last_line = pipe1._find_data_lines(rows, data_pattern)
+        last_line = RowIntuiter()._find_last_match_idx(rows, data_pattern)
+        assert last_line >= 0, '_find_last_match_idx should not return negative indexes.'
         self.assertEqual(rows[last_line], ['99', 99, 99.1])
+
+    @fudge.patch(
+        'ambry.etl.intuit.RowIntuiter._matches')
+    def test_raises_NoMatchError_if_last_match_does_not_exist(self, fake_matches):
+        # prepare state
+        data_pattern = [set([str, int, float])]
+        rows = [
+            [None, None, None]]
+
+        rows.extend([[str(i), i, i + 0.1] for i in range(100)])
+
+        fake_matches\
+            .expects_call().returns(False)\
+
+        with self.assertRaises(NoMatchError):
+            RowIntuiter()._find_last_match_idx(rows, data_pattern)
 
     # _find_header tests
     @fudge.patch(
@@ -151,7 +180,7 @@ class RowIntuiterTest(unittest.TestCase):
         pipe1 = RowIntuiter()
         comments_pattern, _, _ = pipe1._get_patterns(rows)
         self.assertEqual(len(comments_pattern), len(rows[0]),
-                          'Comments pattern length has to match to columns amount.')
+                         'Comments pattern length has to match to columns amount.')
         self.assertEqual(comments_pattern, [set([str, None]), set([str, None])])
 
     def test_returns_header_pattern(self):
@@ -182,19 +211,21 @@ class RowIntuiterTest(unittest.TestCase):
 
     # __iter__ tests
     @fudge.patch(
-        'ambry.etl.intuit.RowIntuiter._find_data_lines')
-    def test_generates_data_rows(self, fake_find):
+        'ambry.etl.intuit.RowIntuiter._find_first_match_idx',
+        'ambry.etl.intuit.RowIntuiter._find_last_match_idx')
+    def test_generates_data_rows(self, fake_find_first, fake_find_last):
         rows = [
             ['Comment', None],
             ['header1', 'header2'],
         ]
 
         # extend with data rows
-        rows.extend([['data{}-1'.format(i), 'data{}-2'.format(i)] for i in range(201)])
+        rows.extend([['data{}-1'.format(i), 'data{}-2'.format(i)] for i in range(200)])
 
         first_line = rows.index(['data0-1', 'data0-2'])
-        last_line = rows.index(['data200-1', 'data200-2'])
-        fake_find.expects_call().returns((first_line, last_line))
+        last_line = rows.index(['data199-1', 'data199-2'])
+        fake_find_first.expects_call().returns(first_line)
+        fake_find_last.expects_call().returns(last_line)
         p1 = RowIntuiter()
         p1.set_source_pipe(self._get_source_pipe(rows))
 
@@ -202,10 +233,171 @@ class RowIntuiterTest(unittest.TestCase):
         self.assertEqual(len(ret), 200)
 
         # contains data rows
-        self.assertIn(['data1-1', 'data1-2'], ret)
-        self.assertIn(['data2-1', 'data2-2'], ret)
-        self.assertIn(['data3-1', 'data3-2'], ret)
+        self.assertEqual(['data0-1', 'data0-2'], ret[0])
+        self.assertEqual(['data1-1', 'data1-2'], ret[1])
+        self.assertEqual(['data2-1', 'data2-2'], ret[2])
+        self.assertEqual(['data198-1', 'data198-2'], ret[198])
+        self.assertEqual(['data199-1', 'data199-2'], ret[199])
 
         # does not contain comment and header
         self.assertNotIn(['Comment', None], ret)
         self.assertNotIn(['header1', 'header2'], ret)
+
+    @fudge.patch(
+        'ambry.etl.intuit.RowIntuiter._find_first_match_idx',
+        'ambry.etl.intuit.RowIntuiter._find_last_match_idx')
+    def test_does_not_generate_footer_if_footer_does_not_have_data(self, fake_find_first, fake_find_last):
+        # This is the case when first chunk contains footer only.
+        rows = []
+        header = [
+            ['Comment', None],
+            ['header1', 'header2'],
+        ]
+        rows.extend(header)
+
+        # extend with data rows
+        data_rows_amount = RowIntuiter.FIRST_ROWS - len(header) + RowIntuiter.DATA_SAMPLE_SIZE + RowIntuiter.LAST_ROWS
+        rows.extend([['data{}-1'.format(i), 'data{}-2'.format(i)] for i in range(data_rows_amount)])
+
+        # extend with footer
+        rows.extend([
+            ['Footer1', None],
+            ['Footer2', None],
+            ['Footer3', None]])
+
+        first_line_idx = rows.index(['data0-1', 'data0-2'])
+        fake_find_first.expects_call().returns(first_line_idx)
+
+        # first time last idx is -1 because rows data only passed.
+        # second time it raises an error because given chunk does not have data.
+        fake_find_last\
+            .expects_call().returns(data_rows_amount + len(header) - 1)\
+            .next_call().raises(NoMatchError)
+        p1 = RowIntuiter()
+        p1.set_source_pipe(self._get_source_pipe(rows))
+
+        ret = list(p1)
+        self.assertEqual(len(ret), data_rows_amount)
+
+        # contains data rows
+        self.assertEquals(['data0-1', 'data0-2'], ret[0])
+        self.assertEquals(['data1-1', 'data1-2'], ret[1])
+        self.assertEquals(['data2-1', 'data2-2'], ret[2])
+
+        # does not contain comment and header
+        self.assertNotIn(['Comment', None], ret)
+        self.assertNotIn(['header1', 'header2'], ret)
+
+        # does not contain footer
+        self.assertNotIn(['Footer1', None], ret)
+        self.assertNotIn(['Footer2', None], ret)
+
+    @fudge.patch(
+        'ambry.etl.intuit.RowIntuiter._find_first_match_idx',
+        'ambry.etl.intuit.RowIntuiter._find_last_match_idx')
+    def test_does_not_generate_footer_if_footer_have_data(self, fake_find_first, fake_find_last):
+        # This is the case when first chunk contains some data and footer.
+        rows = []
+
+        header = [
+            ['header1', 'header2'],
+        ]
+        rows.extend(header)
+
+        # extend with data rows
+        data_rows_amount = RowIntuiter.FIRST_ROWS - len(header) + RowIntuiter.DATA_SAMPLE_SIZE + RowIntuiter.LAST_ROWS + int(RowIntuiter.DATA_SIZE / 2)
+        rows.extend([['data{}-1'.format(i), 'data{}-2'.format(i)] for i in range(data_rows_amount)])
+
+        # extend with footer
+        rows.extend([
+            ['Footer1', None],
+            ['Footer2', None],
+            ['Footer3', None]])
+
+        first_line_idx = rows.index(['data0-1', 'data0-2'])
+        fake_find_first.expects_call().returns(first_line_idx)
+
+        # first time last idx is idx of last elem because rows with data only passed.
+        # second time it raises an error because given chunk does not have data.
+        fake_find_last\
+            .expects_call().returns(data_rows_amount + len(header) - 1)\
+            .next_call().returns(int(RowIntuiter.DATA_SIZE / 2) - 1)
+        p1 = RowIntuiter()
+        p1.set_source_pipe(self._get_source_pipe(rows))
+
+        ret = list(p1)
+        self.assertEqual(len(ret), data_rows_amount)
+
+        # contains data rows
+        self.assertEquals(['data0-1', 'data0-2'], ret[0])
+        self.assertEquals(['data1-1', 'data1-2'], ret[1])
+        self.assertEquals(['data2-1', 'data2-2'], ret[2])
+        self.assertEquals(
+            ['data{}-1'.format(data_rows_amount - 1), 'data{}-2'.format(data_rows_amount - 1)],
+            ret[data_rows_amount - 1])
+
+        # does not contain header
+        self.assertNotIn(['Comment', None], ret)
+        self.assertNotIn(['header1', 'header2'], ret)
+
+        # does not contain footer
+        self.assertNotIn(['Footer1', None], ret)
+        self.assertNotIn(['Footer2', None], ret)
+
+    @fudge.patch(
+        'ambry.etl.intuit.RowIntuiter._find_first_match_idx',
+        'ambry.etl.intuit.RowIntuiter._find_last_match_idx')
+    def test_generates_data_from_many_chunks(self, fake_find_first, fake_find_last):
+        # This is the case when there are many chunks and last chunk contains data and footer.
+        rows = []
+
+        header = [
+            ['header1', 'header2'],
+        ]
+        rows.extend(header)
+
+        # extend with data rows
+        data_rows_amount = RowIntuiter.FIRST_ROWS - len(header) + RowIntuiter.DATA_SAMPLE_SIZE + RowIntuiter.LAST_ROWS
+        # add 3 chunks
+        data_rows_amount += (RowIntuiter.DATA_SIZE * 3)
+        # assert (data_rows_amount + len(header)) % RowIntuiter.DATA_SIZE == 0, 'You need straight rows to make the math to work.'
+
+        # create last chunk with half fill.
+        data_rows_amount += int(RowIntuiter.DATA_SIZE / 2)
+        rows.extend([['data{}-1'.format(i), 'data{}-2'.format(i)] for i in range(data_rows_amount)])
+
+        # extend with footer
+        rows.extend([
+            ['Footer1', None],
+            ['Footer2', None],
+            ['Footer3', None]])
+
+        first_line_idx = rows.index(['data0-1', 'data0-2'])
+        fake_find_first.expects_call().returns(first_line_idx)
+
+        # first time last idx is idx of last elem because rows with data only passed.
+        # second time it raises an error because given chunk does not have data.
+        fake_find_last\
+            .expects_call().returns(data_rows_amount + len(header) - 1)\
+            .next_call().returns(int(RowIntuiter.DATA_SIZE / 2) - 1)
+        p1 = RowIntuiter()
+        p1.set_source_pipe(self._get_source_pipe(rows))
+
+        ret = list(p1)
+        self.assertEqual(len(ret), data_rows_amount)
+
+        # contains data rows
+        self.assertEquals(['data0-1', 'data0-2'], ret[0])
+        self.assertEquals(['data1-1', 'data1-2'], ret[1])
+        self.assertEquals(['data2-1', 'data2-2'], ret[2])
+        self.assertEquals(
+            ['data{}-1'.format(data_rows_amount - 1), 'data{}-2'.format(data_rows_amount - 1)],
+            ret[data_rows_amount - 1])
+
+        # does not contain header
+        self.assertNotIn(['Comment', None], ret)
+        self.assertNotIn(['header1', 'header2'], ret)
+
+        # does not contain footer
+        self.assertNotIn(['Footer1', None], ret)
+        self.assertNotIn(['Footer2', None], ret)
