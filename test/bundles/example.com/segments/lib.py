@@ -2,10 +2,8 @@ from ambry.etl import SourcePipe
 
 class RandomSourcePipe(SourcePipe):
 
-
-
-    def __init__(self, source, cache_fs, account_accessor):
-        super(RandomSourcePipe, self).__init__(source, cache_fs, account_accessor)
+    def __init__(self, bundle, source):
+        super(RandomSourcePipe, self).__init__(bundle, source)
 
         self.year = int(source.time)
         self.space = source.space

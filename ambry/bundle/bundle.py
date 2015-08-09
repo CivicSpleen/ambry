@@ -749,11 +749,21 @@ class Bundle(object):
         else:
             # Use the named soruces, but ensure they are all source objects.
             source_objs = []
+
+            if not isinstance(sources, (list,tuple)):
+                sources = [sources]
+
             for source in sources:
                 if isinstance(source, basestring):
-                    source_objs.append(self.source(source))
+                    source_obj = self.source(source)
+                    if not source_obj:
+                        from ambry.dbexceptions import PhaseError
+                        raise PhaseError("Could not find source named '{}' ".format(source))
+                    source_objs.append(source_obj)
                 else:
                     source_objs.append(source)
+
+            sources = source_objs
 
         self.log('Processing {} sources, stage {} ; {}'.format(len(sources), stage, [s.name for s in sources[:10]]))
 
@@ -914,9 +924,9 @@ Pipeline Headers
         """Return True is the bundle has been built."""
         return self.state == self.STATES.BUILT
 
-    def pre_build(self, phase, force=False):
+    def pre_build(self, phase='build', force=False):
         assert isinstance(force, bool)
-        return self.pre_phase('build', force = force)
+        return self.pre_phase(phase, force = force)
 
     def build(self,  stage = 'main', sources = None):
         assert isinstance(stage, basestring) or stage is None
