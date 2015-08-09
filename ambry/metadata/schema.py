@@ -88,12 +88,11 @@ class ContactTerm(DictTerm):
     email = ScalarTerm(store_none=False)
     url = ScalarTerm(store_none=False)
 
-    # FIXME: Which if valid? 2to3 conversion bug?
     def __bool__(self):
         return bool(self.name or self.email or self.url)
 
-    def __bool__(self):
-        return self.__nonzero__()
+# py2 compatibility, defining it such way fools 2to3 tool.
+ContactTerm.__nonzero__ = ContactTerm.__bool__
 
 
 class Contacts(DictGroup):
