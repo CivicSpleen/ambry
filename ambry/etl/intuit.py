@@ -1,8 +1,11 @@
 """Intuit data types for rows of values."""
+from __future__ import unicode_literals
 __author__ = 'eric'
 
 from collections import deque
 import datetime
+
+from six import string_types, iteritems
 
 from ambry.etl.pipeline import Pipe
 from ambry.util import get_logger
@@ -35,6 +38,7 @@ def test_float(v):
     except:
         return 0
 
+
 def test_int(v):
     # Fixed-width integer codes are actually strings.
     # if v and v[0] == '0' and len(v) > 1:
@@ -48,15 +52,17 @@ def test_int(v):
     except:
         return 0
 
+
 def test_string(v):
-    if isinstance(v, basestring):
+    if isinstance(v, string_types):
         return 1
     else:
         return 0
 
+
 def test_datetime(v):
     """Test for ISO datetime."""
-    if not isinstance(v, basestring):
+    if not isinstance(v, string_types):
         return 0
 
     if len(v) > 22:
@@ -73,8 +79,9 @@ def test_datetime(v):
 
     return 1
 
+
 def test_time(v):
-    if not isinstance(v, basestring):
+    if not isinstance(v, string_types):
         return 0
 
     if len(v) > 15:
@@ -91,7 +98,7 @@ def test_time(v):
 
 
 def test_date(v):
-    if not isinstance(v, basestring):
+    if not isinstance(v, string_types):
         return 0
 
     if len(v) > 10:
@@ -320,9 +327,8 @@ class TypeIntuiter(Pipe):
     @property
     def columns(self):
 
-        for k, v in self._columns.items():
+        for k, v in iteritems(self._columns):
             v.position = k
-
             yield v
 
     def __str__(self):
@@ -481,7 +487,7 @@ class RowIntuiter(Pipe):
 
                 str_matches = 0
                 for elem in row:
-                    if isinstance(elem, (str, unicode)):
+                    if isinstance(elem, string_types):
                         str_matches += 1
                 if float(str_matches) / float(len(row)) >= MATCH_THRESHOLD:
                     return row
@@ -545,10 +551,10 @@ class RowIntuiter(Pipe):
         ret = False
         if isinstance(value, float):
             ret = True
-        if isinstance(value, basestring) and value.count('.') == 1 and value.replace('.', '1').isdigit():
+        if isinstance(value, string_types) and value.count('.') == 1 and value.replace('.', '1').isdigit():
             ret = True
         logger.debug(
-            u'Determining float: value: {}, type: {}, is_float: {}'.format(value, type(value), ret))
+            'Determining float: value: {}, type: {}, is_float: {}'.format(value, type(value), ret))
         return ret
 
     def _is_int(self, value):
@@ -558,10 +564,10 @@ class RowIntuiter(Pipe):
         ret = False
         if isinstance(value, int):
             ret = True
-        if isinstance(value, basestring):
+        if isinstance(value, string_types):
             ret = value.isdigit()
         logger.debug(
-            u'Determining int: value: {}, type: {}, is_int: {}'.format(value, type(value), ret))
+            'Determining int: value: {}, type: {}, is_int: {}'.format(value, type(value), ret))
         return ret
 
     def _get_type(self, value):
