@@ -1057,6 +1057,7 @@ class WriteToPartition(Pipe, PartitionWriter):
         self._start_time = None
         self._end_time = None
         self._count = 0
+        self._source_id = None
 
     def process_header(self, row):
 
@@ -1088,7 +1089,7 @@ class WriteToPartition(Pipe, PartitionWriter):
         try:
             (p,  header_mapper, body_mapper) = self._datafiles[df_key]
 
-        except KeyError:
+        except KeyError: # Failed to find the datafile, so make a new one
 
             try:
                 p = self._partitions[pname]
@@ -1106,6 +1107,7 @@ class WriteToPartition(Pipe, PartitionWriter):
 
             self._datafiles[df_key] = (p, header_mapper, body_mapper)
 
+            # It is a new datafile, so it needs a header.
             p.datafile.insert_header(header_mapper(self.headers))
 
         try:
@@ -1251,8 +1253,9 @@ class Pipeline(OrderedDict):
         # Create a context for evaluating the code for each pipeline. This removes the need
         # to qualify the class names with the module
         import ambry.etl
-        import bundle
-        eval_locals = dict(locals().items()  + ambry.etl.__dict__.items() + bundle.__dict__.items() )
+        import sys
+        # ambry.build comes from ambry.bundle.files.PythonSourceFile#import_bundle
+        eval_locals = dict(locals().items()  + ambry.etl.__dict__.items() + sys.modules['ambry.build'].__dict__.items() )
 
         replacements = {}
 
@@ -1468,10 +1471,7 @@ class Pipeline(OrderedDict):
             if len(out[i])< ll:
                 out[i] += ['']*(ll-len(out[i]))
 
-
         return tabulate.tabulate(out)
-
-
 
 def augment_pipeline(pl, head_pipe=None, tail_pipe=None):
     """

@@ -15,7 +15,6 @@ import textwrap
 class CasterError(Exception):
     pass
 
-
 class CastingError(TypeError):
 
     def __init__(self, field_name, value, message, *args, **kwargs):
@@ -417,25 +416,56 @@ class CasterPipe(Transform, Pipe, ):
         self.errors = []
         self.table = table
 
+    def caster_map(self, table):
+
+        casters = {}
+
+        for c in table.columns:
+
+            caster_f = None
+
+            if c.caster:
+
+                try:
+                    caster_f = getattr(self.bundle, c.caster)
+                except AttributeError as e:
+                    pass
+
+                try:
+                    import sys
+                    caster_f = getattr(sys.modules['ambry.build'], c.caster)
+                except AttributeError as e:
+                    pass
+
+                if not caster_f:
+                    raise AttributeError("Could not find caster '{}' in bundle class or bundle module ".format(c.caster))
+
+            else:
+                caster_f = c.python_type
+
+            self.add_type(caster_f)
+
+            casters[c.name] = caster_f
+
+        return casters
+
     def process_header(self, row):
-        self.headers = row
 
         if self.table:
             table = self.table
         else:
-            table = self.source.dest_table
+            self.table = table = self.source.dest_table
 
-        cm = {c.name: c for c in table.columns}
+        ocm = self.caster_map(table)
 
-        for h in self.headers:
+        for h in row:
 
             try:
-                self.append(h, cm[h].python_type)
+                self.append(h, ocm[h])
             except KeyError:
                 from pipeline import MissingHeaderError
                 # pipeline, pipe, header, table,
-                raise MissingHeaderError(
-                    self, h, table,
+                raise MissingHeaderError(self, h, table,
                     "While processing header in CasterPipe in pipe '{}' failed to find header '{}' in dest table '{}' "
                     .format(self.pipeline.name, h, table.name))
 
@@ -447,14 +477,14 @@ class CasterPipe(Transform, Pipe, ):
 
         self.error_accumulator = {} # Clear the accumulator
         try:
-            row = self.row_transform(self, row) # casters can call self.cast_error to add to the accmulator
+            row = self.row_transform(self, row)
         except IndexError as e:
             raise IndexError('Header has {} items, Row has {} items, caster has {}\nheaders= {}\ncaster = {}\nrow    = {}'
                              .format(len(self.headers), len(row), len(self.types),
                                      self.headers, [ e[0] for e in self.types], row))
         except Exception as e:
             raise e
-            return None
+
         if self.error_handler:
             row, self.error_accumulator = self.error_handler(row, self.error_accumulator)
         else:

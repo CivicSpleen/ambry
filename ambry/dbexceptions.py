@@ -94,8 +94,11 @@ class GeoError(Exception):
 
     """General error doing geographic processing."""
 
+class PhaseError(Exception):
 
-class BuildError(Exception):
+    """General error while running a pipeline phase."""
+
+class BuildError(PhaseError):
 
     """General error while building a bundle."""
 

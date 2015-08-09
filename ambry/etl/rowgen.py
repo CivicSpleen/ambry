@@ -15,30 +15,32 @@ logger.setLevel(logging.INFO)
 class SourceError(Exception):
     pass
 
-def source_pipe(source, cache_fs, account_accessor):
+def source_pipe(bundle, source):
     """Create a source pipe from a source ORM record"""
 
     if source.generator:  # Get the source from the generator, not from a file.
-        import bundle
-        gen = eval(source.generator)
-        return gen(source, cache_fs, account_accessor)
+
+        import sys
+        # Ambry.build comes from ambry.bundle.files.PythonSourceFile#import_bundle
+        gen = eval(source.generator, globals(), sys.modules['ambry.build'].__dict__ )
+        return gen(bundle, source)
     else:
 
         if source.get_urltype() == 'gs':
-            return GoogleSource(source, cache_fs, account_accessor)
+            return GoogleSource(bundle, source)
 
         gft = source.get_filetype()
 
         if gft == 'csv':
-            return CsvSource(source, cache_fs, account_accessor)
+            return CsvSource(bundle, source)
         elif gft == 'tsv':
-            return TsvSource(source, cache_fs, account_accessor)
+            return TsvSource(bundle, source)
         elif gft == 'fixed' or gft == 'txt':
-            return FixedSource(source, cache_fs, account_accessor)
+            return FixedSource(bundle, source)
         elif gft == 'xls':
-            return ExcelSource(source, cache_fs, account_accessor)
+            return ExcelSource(bundle, source)
         elif gft == 'xlsx':
-            return ExcelSource(source, cache_fs, account_accessor)
+            return ExcelSource(bundle, source)
         else:
             raise ValueError("Unknown filetype for source {}: {} ".format(source.name, gft))
 
@@ -122,10 +124,11 @@ def fetch(source, cache_fs, account_accessor):
 class SourcePipe(Pipe):
     """A Source RowGen is the first pipe in a pipeline, generating rows from the original source. """
 
-    def __init__(self, source, cache_fs, account_accessor):
+    def __init__(self, bundle, source):
+
         self._source = source
-        self._cache_fs = cache_fs
-        self._account_accessor = account_accessor
+        self._cache_fs = bundle.library.download_cache
+        self._account_accessor = bundle.library.config.account
         self._fstor = None
 
     def __iter__(self):

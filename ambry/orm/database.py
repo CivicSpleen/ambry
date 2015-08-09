@@ -21,7 +21,7 @@ from . import Column, Partition, Table, Dataset, Config, File,\
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 101
+SCHEMA_VERSION = 102
 
 # Database connection information
 Dbci = namedtuple('Dbc', 'dsn_template sql')

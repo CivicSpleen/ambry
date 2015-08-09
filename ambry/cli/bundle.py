@@ -140,6 +140,12 @@ def bundle_parser(cmd):
                        help='Dump destination tables')
     command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
 
+    # Set
+    command_p = sub_cmd.add_parser('set', help="Set configuration and state values")
+    command_p.set_defaults(subcommand='set')
+    group = command_p.add_mutually_exclusive_group()
+    group.add_argument('-s', '--state', default=None, help='Set the build state')
+
     # Info command
     command_p = sub_cmd.add_parser('info', help='Print information about the bundle')
     command_p.set_defaults(subcommand='info')
@@ -463,21 +469,28 @@ def bundle_finalize(args, l, rc):
 
 def bundle_clean(args, l, rc):
     from ambry.bundle import Bundle
-    b = using_bundle(args, l).cast_to_build_subclass()
-    b.clean(force=args.force)
+    b = using_bundle(args, l).cast_to_subclass()
+    b.clean_all(force=args.force)
     b.set_last_access(Bundle.STATES.NEW)
 
 def bundle_download(args, l, rc):
     from ambry.bundle import Bundle
-    b = using_bundle(args, l).cast_to_build_subclass()
+    b = using_bundle(args, l).cast_to__subclass()
     b.download()
     b.set_last_access(Bundle.STATES.DOWNLOADED)
 
 def bundle_sync(args, l, rc):
     from ambry.bundle import Bundle
+    from ambry.dbexceptions import BundleError
     from tabulate import tabulate
 
-    b = using_bundle(args,l).cast_to_build_subclass()
+    b = using_bundle(args, l)
+
+    try:
+        b = b.cast_to_subclass()
+    except BundleError:
+        err("Failed to load bundle code file.")
+
     b.sync_in()
     b.sync_out()
     b.set_last_access(Bundle.STATES.SYNCED)
@@ -485,24 +498,25 @@ def bundle_sync(args, l, rc):
 def bundle_meta(args, l, rc):
     from ambry.bundle import Bundle
 
-    b = using_bundle(args, l).cast_to_meta_subclass()
+    b = using_bundle(args, l).cast_to_subclass()
 
     if args.clean:
         b.clean()
         b.set_last_access(Bundle.STATES.CLEANED)
 
-    b.sync()
+    b.sync_in()
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
-    b = using_bundle(args, l).cast_to_meta_subclass()
+    b = using_bundle(args, l).cast_to_subclass()
     b.meta()
     b.set_last_access(Bundle.STATES.META)
 
+    b.sync_out()
 
 def bundle_build(args, l, rc):
     from ambry.bundle import Bundle
 
-    b = using_bundle(args, l).cast_to_build_subclass()
+    b = using_bundle(args, l).cast_to_subclass()
 
     check_built(b)
 
@@ -514,14 +528,14 @@ def bundle_build(args, l, rc):
         b.commit()
 
     b.sync_in()
-    b.build(args.sources)
+    b.build(sources=args.sources)
     b.sync_out()
     b.set_last_access(Bundle.STATES.BUILT)
 
 def bundle_phase(args, l, rc):
     from ambry.bundle import Bundle
 
-    b = using_bundle(args, l).cast_to_build_subclass()
+    b = using_bundle(args, l).cast_to_subclass()
 
     check_built(b)
 
@@ -553,16 +567,15 @@ def bundle_run(args, l, rc):
     b = using_bundle(args, l)
 
     check_built(b)
+    b = b.cast_to_subclass()
 
     if args.clean:
         b.clean()
 
     b.sync_in() # Must come before cast_to_meta_subclass
-    b = b.cast_to_meta_subclass()
 
     b.load_requirements()
 
-    #
     # Run a method on the bundle. Can be used for testing and development.
     try:
         f = getattr(b, str(args.method))
@@ -595,6 +608,17 @@ def bundle_checkin(args, l, rc):
 
     if path:
         b.log("Checked in to remote '{}' path '{}'".format(remote, path))
+
+def bundle_set(args, l, rc):
+
+    ref, frm = get_bundle_ref(args, l)
+
+    b = l.bundle(ref)
+
+    if args.state:
+        prt("Setting state to {}".format(args.state))
+        b.state = args.state
+        b.commit()
 
 def bundle_dump(args, l, rc):
     import tabulate
@@ -695,7 +719,7 @@ def bundle_dump(args, l, rc):
         for t in b.dataset.tables:
             for i,c in enumerate(t.columns):
                 row = OrderedDict( (k,v) for k,v in c.row.items() if k in
-                ['table','name','id','datatype'])
+                ['table','name','id','datatype', 'caster','description'])
 
                 if i == 0:
                     records.append(row.keys())
@@ -994,7 +1018,7 @@ def bundle_edit(args, l, rc):
                     err("Bundle is not in a buildable state; did not sync")
 
             elif command == 'build':
-                bc = b.cast_to_build_subclass()
+                bc = b.cast_to_subclass()
                 if b.is_buildable:
                     if arg == 'B':
                         bc.clean()

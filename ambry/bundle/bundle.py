@@ -7,9 +7,10 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 from ..util import get_logger
-from ..dbexceptions import ConfigurationError, ProcessError
-from ..util import Constant, memoize
+from ..util import Constant
 import ambry.etl
+
+indent = '    ' # Indent for structured log output
 
 class Bundle(object):
 
@@ -75,16 +76,17 @@ class Bundle(object):
                 ambry.etl.MergeHeader,
                 ambry.etl.MangleHeader,
                 ambry.etl.MapToSourceTable,
+                ambry.etl.CasterPipe,
 
             ],
             'store':[
-                ambry.etl.CasterPipe,
                 ambry.etl.SelectPartition,
                 ambry.etl.WriteToPartition
             ],
             'final': [
                 'log_pipeline',
-                'build_post_build_source'
+                'build_post_build_source',
+                'cast_errors'
             ]
         },
     }
@@ -127,10 +129,8 @@ class Bundle(object):
             self.dataset.config.library.build.url = self._build_url
             self.dataset.commit()
 
-    def cast_to_subclass(self, clz):
-        return clz(self._dataset, self._library, self._source_url, self._build_url)
 
-    def cast_to_build_subclass(self):
+    def cast_to_subclass(self):
         """
         Load the bundle file from the database to get the derived bundle class,
         then return a new bundle built on that class
@@ -140,27 +140,14 @@ class Bundle(object):
         from ambry.orm import File
         bsf = self.build_source_files.file(File.BSFILE.BUILD)
         try:
-            return self.cast_to_subclass(bsf.import_bundle())
+            clz = bsf.import_bundle()
+
+            return clz(self._dataset, self._library, self._source_url, self._build_url)
+
         except Exception as e:
-            self.error("Failed to load bundle code file, skipping : {}".format(e))
-            return self
+            from ambry.dbexceptions import BundleError
+            raise BundleError("Failed to load bundle code file, skipping : {}".format(e))
 
-    def cast_to_meta_subclass(self):
-        """
-        Load the bundle file from the database to get the derived bundle class,
-        then return a new bundle built on that class
-
-        :return:
-        """
-        from ambry.orm import File
-
-        bsf = self.build_source_files.file(File.BSFILE.BUILDMETA)
-
-        try:
-            return self.cast_to_subclass(bsf.import_bundle())
-        except Exception as e:
-            self.error("Failed to load meta code file, skipping : {}".format(e))
-            return self
 
 
     def import_lib(self):
@@ -187,6 +174,10 @@ class Bundle(object):
     def session(self):
         from sqlalchemy.orm import object_session
         return object_session(self.dataset)
+
+    def rollback(self):
+        from sqlalchemy.orm import object_session
+        return object_session(self.dataset).rollback()
 
     @property
     def dataset(self):
@@ -228,7 +219,7 @@ class Bundle(object):
         """Return the Schema acessor"""
         from partitions import Partitions
         for p in self.partitions:
-            if p.vid == str(ref):
+            if p.vid == str(ref) or p.name == str(ref):
                 return p
         return None
 
@@ -266,23 +257,20 @@ class Bundle(object):
         if isinstance(source, basestring):
             source = self.source(source)
 
-        sp =  source_pipe(source, self._library.download_cache, self.library.config.account)
+        sp =  source_pipe(self, source)
         sp.bundle = self
         return sp
 
     @property
     def sources(self):
         """Iterate over downloadable sources"""
-        for source in self.dataset.sources:
-            if source.is_downloadable:
-                yield source
+        return list(s for s in self.dataset.sources if s.is_downloadable )
+
 
     @property
     def refs(self):
         """Iterate over downloadable sources -- referecnes and templates"""
-        for source in self.dataset.sources:
-            if not source.is_downloadable:
-                yield source
+        return list(s for s in self.dataset.sources if not s.is_downloadable)
 
     @property
     def metadata(self):
@@ -560,6 +548,13 @@ class Bundle(object):
 
         return True
 
+    def clean_all(self, force=False):
+        """Like clean, but also clears out files. """
+
+        self.clean()
+        self.dataset.files[:] = []
+
+
     ##
     ## Prepare
     ##
@@ -713,13 +708,15 @@ class Bundle(object):
             self.error("Can't build; bundle is finalized")
             return False
 
+        self.state = phase
+
         self.load_requirements()
 
         self.import_lib()
 
         return True
 
-    def phase_main(self, phase,  sources=None):
+    def phase_main(self, phase,  stage = 'main', sources=None):
         """
         Synchronize with the files and run the meta pipeline, possibly creating new objects. Then, write the
         objects back to file records and synchronize.
@@ -729,6 +726,8 @@ class Bundle(object):
         """
         from ambry.orm.file import File
         from ambry.etl.pipeline import StopPipe
+
+        assert isinstance(stage, basestring) or stage is None
 
         if self.is_finalized:
             self.error("Can't run phase {}; bundle is finalized".format(phase))
@@ -741,15 +740,37 @@ class Bundle(object):
         self.import_lib()
         self.load_requirements()
 
-        self.log("---- Phase {} ---- ".format(phase))
+        def stage_match(source_stage, this_stage):
+            if not bool(source_stage) and (this_stage == 'main' or this_stage is None):
+                return True
 
-        for i, source in enumerate(self.sources):
+            if bool(source_stage) and source_stage == this_stage:
+                return True
 
-            if sources and source.name not in sources:
-                continue
+            return False
 
-            if source.phase and source.phase != phase:
-                continue
+
+        # Enumerate all of the sources first.
+        if not sources:
+            # Select sources that match this stage
+            sources = []
+            for i, source in enumerate(self.sources):
+
+                if stage_match(source.stage, stage):
+                    #print 'MATCH ', source.stage, stage
+                    sources.append(source)
+        else:
+            # Use the named soruces, but ensure they are all source objects.
+            source_objs = []
+            for source in sources:
+                if isinstance(source, basestring):
+                    source_objs.append(self.source(source))
+                else:
+                    source_objs.append(source)
+
+        self.log('Processing {} sources, stage {} ; {}'.format(len(sources), stage, [s.name for s in sources[:10]]))
+
+        for i, source in enumerate(sources):
 
             self.logger.info("Running phase {} for source {} ".format(phase, source.name))
 
@@ -757,8 +778,9 @@ class Bundle(object):
 
             pl.run()
 
+            self.log("Final methods")
             for m in pl.final:
-                self.log("Run final method {}".format(m))
+                self.log(indent+str(m))
                 getattr(self, m)(pl)
 
             if pl.stopped:
@@ -773,9 +795,14 @@ class Bundle(object):
         the build, then save the schema back to the tables, if it was revised
         during the build."""
 
+        self.state = phase + '_done'
+
         return True
 
-    def run_phase(self, phase, sources = None):
+    def run_phase(self, phase, stage='main', sources = None):
+        from ambry.dbexceptions import PhaseError
+
+        assert isinstance(stage, basestring) or stage is None
 
         phase_pre_name = 'pre_{}'.format(phase)
         phase_post_name = 'post_{}'.format(phase)
@@ -790,33 +817,28 @@ class Bundle(object):
         else:
             phase_post = self.post_phase
 
-        if phase_pre(phase):
-            self.state = phase
+        try:
+
+            step_name = 'Pre-{}'.format(phase)
+            if not phase_pre(phase):
+                self.log("---- Skipping {} ---- ".format(phase))
+                return False
+
             self.log("---- Phase: {} ---".format(phase))
-            if self.phase_main(phase, sources=sources):
+            step_name = phase.title()
+            self.phase_main(phase, stage=stage, sources=sources)
 
-                if phase_post(phase):
-                    self.log("---- Done {} ---".format(phase))
-                    r = True
-                else:
-                    self.log("---- {} failed ---".format(phase_post_name))
-                    self.set_error_state()
-                    r = False
+            step_name = 'Post-{}'.format(phase)
+            phase_post(phase)
 
-            else:
-                self.log("---- Phase {} exited with failure ---".format(phase))
-                self.set_error_state()
-                r = False
-        else:
-            self.log("---- Skipping {} ---- ".format(phase))
+        except Exception as e:
+            self.rollback()
+            self.error('{} phase, stage {} failed: {}'.format(step_name, stage, e))
             self.set_error_state()
-            r = False
+            raise
 
-        if r:
 
-            self.state = phase+'_done'
-
-        return r
+        return True
 
     def log_pipeline(self, pl):
         """Write a report of the pipeline out to a file """
@@ -841,12 +863,12 @@ Pipeline Headers
 
     def meta(self, sources=None):
 
-        r = self.run_phase('source',sources=sources)
+        self.run_phase('source',sources=sources)
 
-        if r:
-            r = self.run_phase('schema',sources=sources)
+        self.run_phase('schema',sources=sources)
 
-        return r
+        return True
+
 
     def meta_schema(self, sources=None):
         return self.run_phase('schema', sources=sources)
@@ -905,10 +927,15 @@ Pipeline Headers
         """Return True is the bundle has been built."""
         return self.state == self.STATES.BUILT
 
-    def build(self,  sources = None):
-        return self.run_phase('build',sources)
+    def pre_build(self, phase, force=False):
+        assert isinstance(force, bool)
+        return self.pre_phase('build', force = force)
 
-    def post_build(self,phase):
+    def build(self,  stage = 'main', sources = None):
+        assert isinstance(stage, basestring) or stage is None
+        return self.run_phase('build',sources=sources, stage = stage)
+
+    def post_build(self,phase='build'):
         """After the build, update the configuration with the time required for
         the build, then save the schema back to the tables, if it was revised
         during the build."""
@@ -916,6 +943,8 @@ Pipeline Headers
         self.build_post_unify_partitions()
 
         self.build_post_write_bundle_file()
+
+        self.state = phase + '_done'
 
         return True
 
@@ -950,7 +979,7 @@ Pipeline Headers
             pdf = parent.datafile
             for seg in sorted(segments, key = lambda s: str(s.name)):
 
-                self.log("Coalescing segment  {} ".format(seg.identity.name))
+                self.log(indent+"Coalescing segment  {} ".format(seg.identity.name))
 
                 reader = self.wrap_partition(seg).datafile.reader()
                 header = None
@@ -966,7 +995,7 @@ Pipeline Headers
                         stats.process_body(row)
 
                 reader.close()
-                self.log("Coalesced {} rows, {} rows/sec ".format(i, float(i)/(time.time()-start_time)))
+                self.log(indent+"Coalesced {} rows, {} rows/sec ".format(i, float(i)/(time.time()-start_time)))
 
             pdf.close()
             self.commit()
@@ -996,6 +1025,23 @@ Pipeline Headers
             self.error("Pipeline didn't have a PartitionWriters, won't try to finalize")
 
         self.commit()
+
+    def cast_errors(self, pl):
+
+        from ..etl import CasterPipe
+
+        cp = pl[CasterPipe]
+
+        col_names = [ c.name for c in cp.table.columns ]
+
+        n = 0
+        for errors in cp.errors:
+            for col,error in errors.items():
+
+                n +=1
+
+                if n < 20:
+                    print col_names[col], error
 
     def build_post_write_bundle_file(self):
         import os

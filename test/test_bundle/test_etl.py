@@ -422,7 +422,7 @@ class Test(TestBase):
         b = self.setup_bundle('complete-load')
 
         b.sync_in()
-        b = b.cast_to_build_subclass()
+        b = b.cast_to_subclass()
         self.assertEquals('new', b.state)
 
         b.meta()
@@ -446,7 +446,6 @@ class Test(TestBase):
 
         b = self.setup_bundle('complete-load')
         b.sync_in()
-        b = b.cast_to_meta_subclass()
 
         b.meta()
         b.sync_out()
@@ -490,7 +489,7 @@ class Test(TestBase):
 
         b = self.setup_bundle('complete-load', build_url = build_url, source_url = source_url)
         b.sync_in()
-        b = b.cast_to_meta_subclass()
+
 
         b.meta('rent07')
 
@@ -540,7 +539,7 @@ class Test(TestBase):
         b = self.setup_bundle('process', source_url='temp://') # So modtimes work properly
 
         b.sync_in()
-        b = b.cast_to_build_subclass()
+
         self.assertEquals('new', b.state)
         b.prepare()
         self.assertEquals('prepare_done', b.state)
@@ -571,7 +570,7 @@ class Test(TestBase):
         b.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
 
         time.sleep(2) # Give modtimes a chance to change
-        self.assertEqual(6, sum( e[1] == 'rtf' for e in b.sync() ))
+        self.assertEqual(1, sum( e[1] == 'rtf' for e in b.sync() ))
 
     def test_pipe_config(self):
 
@@ -815,34 +814,49 @@ class Test(TestBase):
 
     def test_generator(self):
 
-        b = self.setup_bundle('generators')
-        l = b._library
+        b = self.setup_bundle('generators', source_url = 'temp://')
 
         b.sync_in()
+        b = b.cast_to_subclass()
+
+        b.check_subclass()
+
+        l = b._library
 
         b.meta()
 
-        b.run_phase('build2')
+        b.build()
 
-        p = list(b.partitions)[0]
+        self.assertEqual(['example.com-generators-demo', 'example.com-generators-demo-build2'],
+                         [ str(p.identity.name) for p in b.partitions])
 
-        count = sum = 0
-        for row in p.stream(as_dict=True):
-            count += 1
-            sum += row['number2']
+        for p in b.partitions:
 
-        self.assertEquals(800,count)
-        self.assertEquals(159200, sum)
+            count = sum = 0
+            for row in p.stream(as_dict=True):
+                count += 1
+                sum += row['number2']
 
-        b.run_phase('build2')
+            self.assertEquals(800,count)
+            self.assertEquals(159200, sum)
 
-        p = list(b.partitions)[0]
+    def test_casters(self):
 
-        count = sum = 0
-        for row in p.stream(as_dict=True):
-            count += 1
-            sum += row['number2']
+        b = self.setup_bundle('casters', source_url='temp://')
 
-        self.assertEquals(800, count)
-        self.assertEquals(159200, sum)
+        b.sync_in()
+        b = b.cast_to_subclass()
+
+        b.build()
+
+        mn = mx = 0
+        for row in list(b.partitions)[0].stream(as_dict=True):
+            self.assertEqual(row['index'], row['index2'])
+            int(row['numcom']) # Check that the comma was removed
+            mn, mx = min(mn, row['codes']), max(mx, row['codes'])
+
+        self.assertEqual(-1, mn) # The '*' should have been turned into a -1
+        self.assertEqual(6, mx)
+
+
 
