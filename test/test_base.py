@@ -7,13 +7,14 @@ Created on Jun 22, 2012
 # Monkey patch logging, because I really don't understand logging
 
 import unittest
-from ambry.identity import *
+
+from ambry.identity import DatasetNumber
 
 from ambry.orm import Database, Dataset
 
+
 class TestBase(unittest.TestCase):
     def setUp(self):
-        from sqlalchemy import create_engine
 
         super(TestBase, self).setUp()
 
@@ -58,7 +59,7 @@ class TestBase(unittest.TestCase):
         if db is None:
             db = self.db
 
-        for row in db.connection.execute("SELECT * FROM {}".format(table)):
+        for row in db.connection.execute('SELECT * FROM {}'.format(table)):
             print row
 
     def new_database(self):
@@ -67,7 +68,7 @@ class TestBase(unittest.TestCase):
 
         return db
 
-    def setup_bundle(self, name, source_url = None, build_url = None):
+    def setup_bundle(self, name, source_url=None, build_url=None, library=None):
         """Configure a bundle from existing sources"""
         from test import bundles
         from os.path import dirname, join
@@ -76,21 +77,22 @@ class TestBase(unittest.TestCase):
         from ambry.library import new_library
         import yaml
 
-        rc = self.get_rc()
-
-        self.library = new_library(rc)
+        if not library:
+            rc = self.get_rc()
+            library = new_library(rc)
+        self.library = library
 
         self.db = self.library._db
 
         if not source_url:
-            source_url = "mem://{}/source".format(name)
+            source_url = 'mem://{}/source'.format(name)
 
         if not build_url:
-            build_url =  "mem://{}/build".format(name)
+            build_url = 'mem://{}/build'.format(name)
 
-        try: # One fails for real directories, the other for mem:
-            assert fsopendir(source_url, create_dir = True).isdirempty('/')
-            assert fsopendir(build_url, create_dir = True).isdirempty('/')
+        try:  # One fails for real directories, the other for mem:
+            assert fsopendir(source_url, create_dir=True).isdirempty('/')
+            assert fsopendir(build_url, create_dir=True).isdirempty('/')
         except ParentDirectoryMissingError:
             assert fsopendir(source_url).isdirempty('/')
             assert fsopendir(build_url).isdirempty('/')
@@ -102,14 +104,12 @@ class TestBase(unittest.TestCase):
 
         b.set_file_system(source_url=source_url, build_url=build_url)
 
-        self.copy_bundle_files( test_source_fs, b.source_fs)
+        self.copy_bundle_files(test_source_fs, b.source_fs)
 
         return b
 
     def new_bundle(self):
         """Configure a bundle from existing sources"""
-
-        from fs.opener import fsopendir
         from ambry.library import new_library
         from ambry.bundle import Bundle
 
@@ -119,8 +119,4 @@ class TestBase(unittest.TestCase):
 
         self.db = self.library._db
 
-
-        return Bundle(self.new_db_dataset(self.db), self.library, build_url='mem://', source_url = 'mem://')
-
-    def tearDown(self):
-        pass
+        return Bundle(self.new_db_dataset(self.db), self.library, build_url='mem://', source_url='mem://')

@@ -64,8 +64,10 @@ class Requirements(VarDictGroup):
 class Build(VarDictGroup):
     """Build parameters"""
 
+
 class Pipeline(VarDictGroup):
     """Build parameters"""
+
 
 class ExtDocTerm(DictTerm):
     url = ScalarTerm()
@@ -86,6 +88,7 @@ class ContactTerm(DictTerm):
     email = ScalarTerm(store_none=False)
     url = ScalarTerm(store_none=False)
 
+    # FIXME: Which if valid? 2to3 conversion bug?
     def __bool__(self):
         return bool(self.name or self.email or self.url)
 
