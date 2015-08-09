@@ -1,2 +1,2 @@
-"name","title","table","segment","time","space","grain","start_line","end_line","comment_lines","header_lines","description","url"
-"simple","simple","simple",,1000,"california","numbers",,,,,"Simple Random Data","http://public.source.civicknowledge.com/example.com/sources/simple-example.csv"
+name,title,dest_table_name,time,space,grain,description,url
+simple,simple,simple,1000,california,numbers,Simple Random Data,http://public.source.civicknowledge.com/example.com/sources/simple-example.csv

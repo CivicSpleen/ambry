@@ -16,80 +16,67 @@ about:
     - demo
     time: 2010
     title: Simple Example Bundle
+build:
+    dict1:
+        dict2:
+            dict3:
+                key1: value1
+                key2: value2
+            key1: value1
+            key2: value2
+        key1: value1
+        key2: value2
+    key1: value1
 contacts:
+    analyst:
+        org: Example Com
+        url: http://example.com
     creator:
         email: bob@bob.com
         name: Bob Bobson
         org: Example Com
         url: http://example.com
-    analyst:
-        org: Example Com
-        url: http://example.com
-#external_documentation:
-#    main_site:
-#        description: Main website for Example.com
-#        source: null
-#        title: Main Website
-#        url: http://example.com/
+dependencies: {}
 identity:
-    bspace: null
-    btime: null
     dataset: simple
     id: d000simple
     revision: 3
     source: example.com
-    subset: null
-    type: null
-    variation: null
     version: 0.1.3
 names:
-    fqname: example.com-simple-0.1.3~dfY0NJscai003
+    fqname: example.com-simple-0.1.3~d000simple003
     name: example.com-simple
-    vid: dfY0NJscai003
+    vid: d000simple003
     vname: example.com-simple-0.1.3
-build:
-    key1: value1
-    dict1:
-        key1: value1
-        key2: value2
-        dict2:
-            key1: value1
-            key2: value2
-            dict3:
-                key1: value1
-                key2: value2
-dependencies: {}
-requirements:
-    xlrd: xlrd
 pipelines:
-    test:
-        - PrintEvery(10)
-    test2:
-        - 'MatchPredicate(lambda r: r[2] == ''g'')'
-        - 'Reduce(lambda a,r: (a[0]+r[0],a[1]+r[1]) if a else (r[0],r[1])  )'
     build:
+    - MergeHeader
+    - TypeIntuiter
+    - MangleHeader
+    - MapToSourceTable(error_on_fail = False)
+    - CasterPipe
+    - SelectPartition
+    - WriteToPartition
+    build2:
+        body:
+        - 'Add({ ''year'' : lambda e,r: e.source.time, ''release'' : lambda e,r: str(e.source.grain)
+            if e.source.grain else ''all'' })'
         - MergeHeader
         - TypeIntuiter
         - MangleHeader
         - MapToSourceTable(error_on_fail = False)
         - CasterPipe
         - SelectPartition
-        - WriteToPartition
-    build2:
         first:
-            - PrintRows
-        body:
-            - 'Add({
-                ''year'' : lambda e,r: e.source.time,
-                ''release'' : lambda e,r: str(e.source.grain) if e.source.grain else ''all''
-                })'
-            - MergeHeader
-            - TypeIntuiter
-            - MangleHeader
-            - MapToSourceTable(error_on_fail = False)
-            - CasterPipe
-            - SelectPartition
+        - PrintRows
         last:
-            - PrintRows
+        - PrintRows
         store:
-            - WriteToPartition
+        - WriteToPartition
+    test:
+    - PrintEvery(10)
+    test2:
+    - 'MatchPredicate(lambda r: r[2] == ''g'')'
+    - 'Reduce(lambda a,r: (a[0]+r[0],a[1]+r[1]) if a else (r[0],r[1])  )'
+requirements:
+    xlrd: xlrd

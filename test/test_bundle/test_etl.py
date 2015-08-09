@@ -304,30 +304,7 @@ class Test(TestBase):
 
         row, errors =  ctb(['.',  'a',  '3',  0,  3])
 
-    def test_source_download(self):
-        """Down load all of the sources from the complete-load bundle and check the extracted files against the
-        declared MD5 sums. """
 
-        from ambry.util import md5_for_stream
-
-        b = self.setup_bundle('complete-load')
-
-        b.clean()
-        b.sync_in()
-        b.prepare()
-
-        self.assertEquals(14, len(b.dataset.sources))
-
-        for i, source in enumerate(b.sources):
-            print i, source.name
-
-            with source.fetch().open() as f:
-                self.assertEquals(source.hash, md5_for_stream(f))
-
-            for i, row in enumerate(source.fetch().source_pipe()):
-                print row
-                if i > 3:
-                    break
 
     def test_simple_download(self):
 
@@ -337,12 +314,12 @@ class Test(TestBase):
         b.sync_in()
         b.prepare()
 
-        for i,row in enumerate(b.source('simple_fixed').fetch().source_pipe()):
+        for i,row in enumerate(b.source_pipe('simple_fixed')):
             print row
             if i > 3:
                 break
 
-        for i,row in enumerate(b.source('simple').fetch().source_pipe()):
+        for i,row in enumerate(b.source_pipe('simple')):
             print row
             if i > 3:
                 break
@@ -359,7 +336,7 @@ class Test(TestBase):
         b.meta_source()
 
         pl = [
-            b.source('rent97').fetch().source_pipe(),
+            b.source_pipe('rent97'),
             MergeHeader(),
             MangleHeader(),
             MapHeader({'gvid':'county','renter_cost_gt_30':'renter_cost'})
@@ -379,7 +356,7 @@ class Test(TestBase):
                 break
 
         pl = Pipeline(
-            source = b.source('rent97').fetch().source_pipe(),
+            source = b.source_pipe('rent97'),
             body = [
                 MergeHeader(),
                 TypeIntuiter(),
@@ -445,7 +422,7 @@ class Test(TestBase):
         b = self.setup_bundle('complete-load')
 
         b.sync_in()
-        b = b.cast_to_build_subclass()
+        b = b.cast_to_subclass()
         self.assertEquals('new', b.state)
 
         b.meta()
@@ -469,7 +446,6 @@ class Test(TestBase):
 
         b = self.setup_bundle('complete-load')
         b.sync_in()
-        b = b.cast_to_meta_subclass()
 
         b.meta()
         b.sync_out()
@@ -513,7 +489,7 @@ class Test(TestBase):
 
         b = self.setup_bundle('complete-load', build_url = build_url, source_url = source_url)
         b.sync_in()
-        b = b.cast_to_meta_subclass()
+
 
         b.meta('rent07')
 
@@ -527,7 +503,6 @@ class Test(TestBase):
 
         # Check a few random bits from the pipeline debugging output.
         print  b.build_fs.getcontents('pipeline/source-rent07.txt')
-
 
         return
 
@@ -564,7 +539,7 @@ class Test(TestBase):
         b = self.setup_bundle('process', source_url='temp://') # So modtimes work properly
 
         b.sync_in()
-        b = b.cast_to_build_subclass()
+
         self.assertEquals('new', b.state)
         b.prepare()
         self.assertEquals('prepare_done', b.state)
@@ -595,7 +570,7 @@ class Test(TestBase):
         b.build_source_files.file(File.BSFILE.SCHEMA).objects_to_record()
 
         time.sleep(2) # Give modtimes a chance to change
-        self.assertEqual(6, sum( e[1] == 'rtf' for e in b.sync() ))
+        self.assertEqual(1, sum( e[1] == 'rtf' for e in b.sync() ))
 
     def test_pipe_config(self):
 
@@ -679,7 +654,6 @@ class Test(TestBase):
 
         pl.run()
 
-
         # The PrintRows Pipes save the rows they print, so lets check that the before doesn't have the edited
         # row and the after does.
         row = [9, u'2002-03-21', u'la', u'MARIPOSA COUNTY, CALIFORNIA', u'43', u'09:11:40 PM', 21, 11]
@@ -725,6 +699,46 @@ class Test(TestBase):
         pl.run()
 
         self.assertEquals(10, len(pl[PrintRows].rows))
+
+    def test_slice(self):
+        from ambry.etl.pipeline import Pipeline, Pipe, Slice, PrintRows
+
+        self.assertEquals('lambda row: row[0:3]+row[10:13]+[row[9]]+[row[-1]]', Slice.make_slicer((0,3),(10,13),9,-1)[1])
+
+        self.assertEquals('lambda row: row[0:3]+row[10:13]+[row[9]]+[row[-1]]', Slice.make_slicer("0:3,10:13,9,-1")[1])
+
+        return
+
+        class Source(Pipe):
+            def __iter__(self):
+
+                yield [ 'col'+str(j) for j in range(20)]
+
+                for i in range(10000):
+                    yield [ j for j in range(20) ]
+
+        # Sample
+        pl = Pipeline(
+            source=[Source(), Slice((0,3),(10,13),9,-1) ],
+            last=PrintRows(count=50)
+        )
+
+        pl.run()
+
+        self.assertEquals([1, 0, 1, 2, 10, 11, 12, 9, 19], pl[PrintRows].rows[0])
+        self.assertEquals(['col0', 'col1', 'col2', 'col10', 'col11', 'col12', 'col9', 'col19'], pl[PrintRows].headers)
+
+        self.assertEqual([('0', '3'), ('10', '13'), 9, -1], Slice.parse("0:3,10:13,9,-1"))
+
+        pl = Pipeline(
+            source=[Source(), Slice("0:3,10:13,9,-1")],
+            last=PrintRows(count=50)
+        )
+
+        pl.run()
+
+        self.assertEquals([1, 0, 1, 2, 10, 11, 12, 9, 19], pl[PrintRows].rows[0])
+        self.assertEquals(['col0', 'col1', 'col2', 'col10', 'col11', 'col12', 'col9', 'col19'], pl[PrintRows].headers)
 
     def test_multi_source(self):
         from ambry.etl.pipeline import Pipeline, Pipe, PrintRows
@@ -780,4 +794,69 @@ class Test(TestBase):
             count += 1
 
         print float(count)/ ( time.time() - t1)
+
+
+    def test_row_gen(self):
+        from ambry.etl.rowgen import source_pipe
+        b = self.setup_bundle('complete-load')
+
+        b.sync_in()
+
+        # Just verify that we can actually run through all of the sources. Not
+        # sure what the checks should be.
+        for s in b.sources:
+            sp = b.source_pipe(s)
+
+            for i, row in enumerate(sp):
+                if i > 5:
+                    break
+                i, row
+
+    def test_generator(self):
+
+        b = self.setup_bundle('generators', source_url = 'temp://')
+
+        b.sync_in()
+        b = b.cast_to_subclass()
+
+        b.check_subclass()
+
+        l = b._library
+
+        b.meta()
+
+        b.build()
+
+        self.assertEqual(['example.com-generators-demo', 'example.com-generators-demo-build2'],
+                         [ str(p.identity.name) for p in b.partitions])
+
+        for p in b.partitions:
+
+            count = sum = 0
+            for row in p.stream(as_dict=True):
+                count += 1
+                sum += row['number2']
+
+            self.assertEquals(800,count)
+            self.assertEquals(159200, sum)
+
+    def test_casters(self):
+
+        b = self.setup_bundle('casters', source_url='temp://')
+
+        b.sync_in()
+        b = b.cast_to_subclass()
+
+        b.build()
+
+        mn = mx = 0
+        for row in list(b.partitions)[0].stream(as_dict=True):
+            self.assertEqual(row['index'], row['index2'])
+            int(row['numcom']) # Check that the comma was removed
+            mn, mx = min(mn, row['codes']), max(mx, row['codes'])
+
+        self.assertEqual(-1, mn) # The '*' should have been turned into a -1
+        self.assertEqual(6, mx)
+
+
 

@@ -1,5 +1,4 @@
-"""The RowGenerator reads a file and yields rows, handling simple headers in CSV
-files, and complex headers with receeding comments in Excel files.
+"""Pipes, pipe segments and piplines, for flowing data from sources to partitions.
 
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
@@ -36,7 +35,6 @@ Pipeline:
 """.format(message=self.message, pipeline_name=self.pipe.pipeline.name, pipeline = str(self.pipe.pipeline),
            pipe_class=qualified_class_name(self.pipe), source_name=self.source.name, headers=self.pipe.headers)
 
-
 class MissingHeaderError(PipelineError):
     def __init__(self, pipe, header, table, *args, **kwargs):
         super(MissingHeaderError, self).__init__( pipe, *args, **kwargs)
@@ -66,7 +64,6 @@ Pipeline:
 
 class StopPipe(Exception):
     pass
-
 
 class Pipe(object):
     """A step in the pipeline"""
@@ -201,6 +198,91 @@ class OnlySource(Pipe):
 
         self.headers = row
         return row
+
+
+class Slice(Pipe):
+    """Select a slice of the table, using a set of tuples to represent the start and end positions of each
+    part of the slice."""
+    def __init__(self, *args):
+        """
+        Construct with one or more 2-element tuple or a string, in a similar format to what
+        __getitem__ accepts
+
+        >>> s = Slice((2,3), (6,8))
+        >>> s = Slice("2:3,6:8")
+
+        :param args: One or more slice objects
+        :return:
+        """
+
+        self._args = args
+
+
+    @staticmethod
+    def parse(v):
+        """
+        Parse a slice string, of the same form as used by __getitem__
+
+        >>> Slice.parse("2:3,7,10:12")
+
+        :param v: Input string
+        :return: A list of tuples, one for each element of the slice string
+        """
+
+        parts = v.split(',')
+
+        slices = []
+
+        for part in parts:
+            p = part.split(':')
+
+            if len(p) == 1:
+                slices.append(int(p[0]))
+            elif len(p) == 2:
+                slices.append(tuple(p))
+            else:
+                raise ValueError("Too many ':': {}".format(part))
+
+        return slices
+
+    @staticmethod
+    def make_slicer( *args):
+
+        if len(args) == 1 and isinstance(args[0], basestring):
+            args = Slice.parse(args[0])
+
+        parts = []
+
+        for slice in args:
+            parts.append("row[{}:{}]".format(slice[0], slice[1])
+                         if isinstance(slice, (tuple, list)) else "[row[{}]]".format(slice))
+
+            code = 'lambda row: {}'.format('+'.join(parts))
+            func = eval(code)
+
+        return func, code
+
+    def process_header(self, row):
+
+        args = self._args
+
+        if not args:
+            args = [self.source.segment]
+
+        try:
+            self.slicer, code = Slice.make_slicer(args)
+        except Exception as e:
+            raise PipelineError(self, "Failed to eval slicer for parts: {} for source {} "
+                                .format(args, self.source.name))
+
+        try:
+            return self.slicer(row)
+        except Exception as e:
+            raise PipelineError(self, "Failed to run slicer: '{}' : {}".format(code, e))
+
+    def process_body(self, row):
+
+        return self.slicer(row)
 
 
 class Head(Pipe):
@@ -975,6 +1057,7 @@ class WriteToPartition(Pipe, PartitionWriter):
         self._start_time = None
         self._end_time = None
         self._count = 0
+        self._source_id = None
 
     def process_header(self, row):
 
@@ -1006,7 +1089,7 @@ class WriteToPartition(Pipe, PartitionWriter):
         try:
             (p,  header_mapper, body_mapper) = self._datafiles[df_key]
 
-        except KeyError:
+        except KeyError: # Failed to find the datafile, so make a new one
 
             try:
                 p = self._partitions[pname]
@@ -1024,6 +1107,7 @@ class WriteToPartition(Pipe, PartitionWriter):
 
             self._datafiles[df_key] = (p, header_mapper, body_mapper)
 
+            # It is a new datafile, so it needs a header.
             p.datafile.insert_header(header_mapper(self.headers))
 
         try:
@@ -1169,8 +1253,9 @@ class Pipeline(OrderedDict):
         # Create a context for evaluating the code for each pipeline. This removes the need
         # to qualify the class names with the module
         import ambry.etl
-        import bundle
-        eval_locals = dict(locals().items()  + ambry.etl.__dict__.items() + bundle.__dict__.items() )
+        import sys
+        # ambry.build comes from ambry.bundle.files.PythonSourceFile#import_bundle
+        eval_locals = dict(locals().items()  + ambry.etl.__dict__.items() + sys.modules['ambry.build'].__dict__.items() )
 
         replacements = {}
 
@@ -1386,10 +1471,7 @@ class Pipeline(OrderedDict):
             if len(out[i])< ll:
                 out[i] += ['']*(ll-len(out[i]))
 
-
         return tabulate.tabulate(out)
-
-
 
 def augment_pipeline(pl, head_pipe=None, tail_pipe=None):
     """

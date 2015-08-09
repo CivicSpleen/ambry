@@ -212,11 +212,13 @@ class Dataset(Base):
 
     def source_file(self, name):
         from .source import DataSource
-        source = object_session(self)\
-            .query(DataSource)\
-            .filter(DataSource.name == name)\
-            .filter(DataSource.d_vid == self.vid)\
-            .first()
+
+        source = (object_session(self)
+            .query(DataSource)
+            .filter(DataSource.name == name)
+            .filter(DataSource.d_vid == self.vid)
+            .first())
+
         return source
 
     def new_source_table(self, name):

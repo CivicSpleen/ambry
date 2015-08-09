@@ -1,14 +1,28 @@
-"table","seq","column","is_pk","is_fk","datatype","size","description"
-"example",1,"id",1,,"INTEGER",,"A Pretty Good Table"
-"example",2,"uuid",,,"VARCHAR",36,"A random UUID"
-"example",3,"int",,,"INTEGER",3,"A random integer"
-"example",4,"float",,,"REAL",,"A Random float"
-"example",5,"categorical",,,"VARCHAR",,"A categorical variable"
-"example",6,"ordinal",,,"INTEGER",,"An ordinal variable"
-"example",7,"gaussian",,,"REAL",,"A gaussian distribution"
-"example",8,"triangle",,,"REAL",,"A Triangle distribution"
-"example",9,"exponential",,,"REAL",,"An exponential distribution"
-"example",10,"bg_gvid",,,"VARCHAR",,"A Blockgroup gvid reference"
-"example",11,"year",,,"INTEGER",,"A Year"
-"example",12,"date",,,"DATE",,"A Date"
-"example",13,"time",,,"TIME",,"A Time"
+table,column,datatype,size,description
+example,id,integer,,A Pretty Good Table
+example,uuid,varchar,36,A random UUID
+example,int,integer,3,A random integer
+example,float,real,,A Random float
+example,categorical,varchar,,A categorical variable
+example,ordinal,integer,,An ordinal variable
+example,gaussian,real,,A gaussian distribution
+example,triangle,real,,A Triangle distribution
+example,exponential,real,,An exponential distribution
+example,bg_gvid,varchar,,A Blockgroup gvid reference
+example,year,integer,,A Year
+example,date,date,,A Date
+example,time,time,,A Time
+,,,,
+demo,id,integer,,
+demo,uuid,varchar,,
+demo,int,integer,,
+demo,float,real,,
+demo,categorical,varchar,,
+demo,ordinal,integer,,
+demo,gaussian,real,,
+demo,triangle,real,,
+demo,exponential,real,,
+demo,year,integer,,
+demo,date,date,,
+demo,bg_gvid,varchar,,
+,,,,

@@ -140,6 +140,12 @@ def bundle_parser(cmd):
                        help='Dump destination tables')
     command_p.add_argument('term', nargs='?', type=str, help='Bundle reference')
 
+    # Set
+    command_p = sub_cmd.add_parser('set', help="Set configuration and state values")
+    command_p.set_defaults(subcommand='set')
+    group = command_p.add_mutually_exclusive_group()
+    group.add_argument('-s', '--state', default=None, help='Set the build state')
+
     # Info command
     command_p = sub_cmd.add_parser('info', help='Print information about the bundle')
     command_p.set_defaults(subcommand='info')
@@ -171,6 +177,8 @@ def bundle_parser(cmd):
     # Clean Command
     #
     command_p = sub_cmd.add_parser('clean', help='Return bundle to state before build, prepare and extracts')
+    command_p.add_argument('-f', '--force', default=False, action="store_true",
+                          help='Force cleaning a built or finalized bundle')
     command_p.set_defaults(subcommand='clean')
 
     #
@@ -212,6 +220,7 @@ def bundle_parser(cmd):
                            help='Install after building')
     command_p.add_argument('-p', '--print_pipe', default=False, action="store_true",
                            help='Print out the pipeline as it runs')
+    command_p.add_argument('sources', nargs='*', type=str, help='Sources to run, instead of running all sources')
 
 
     #
@@ -239,7 +248,6 @@ def bundle_parser(cmd):
     #
     command_p = sub_cmd.add_parser('checkin', help='Commit the bundle to the remote store')
     command_p.set_defaults(subcommand='checkin')
-
 
     #
     # Update Command
@@ -276,7 +284,6 @@ def bundle_parser(cmd):
                                    help='Load data previously submitted to the library back into the build dir')
     command_p.set_defaults(subcommand='repopulate')
 
-
     command_p = sub_cmd.add_parser('edit', help='Edit a bundle file')
     command_p.set_defaults(subcommand='edit')
 
@@ -294,7 +301,6 @@ def bundle_parser(cmd):
     group.add_argument('-d', '--documentation', default=False, action='store_const', const=File.BSFILE.DOC, dest='file_const',
                    help="Edit the documentation")
     command_p.add_argument('term', nargs='?', type=str, help='bundle reference')
-
 
     command_p = sub_cmd.add_parser('import', help='Import a source bundle. ')
     command_p.set_defaults(subcommand='import')
@@ -435,6 +441,11 @@ def bundle_info(args, l, rc):
         print '\nPartitions'
         print tabulate(rows)
 
+def check_built(b):
+    """Exit if the bundle is built or finalized"""
+    if b.is_built or b.is_finalized:
+        fatal("Can't perform operation; locked state = '{}'. Call bambry clean explicity".format(b.state))
+
 def bundle_duplicate(args, l, rc):
     from ambry.bundle import Bundle
 
@@ -449,7 +460,6 @@ def bundle_duplicate(args, l, rc):
 
     prt("New Bundle: {} ".format(nb.identity.vname))
 
-
 def bundle_finalize(args, l, rc):
     from ambry.bundle import Bundle
     b = using_bundle(args, l)
@@ -459,21 +469,28 @@ def bundle_finalize(args, l, rc):
 
 def bundle_clean(args, l, rc):
     from ambry.bundle import Bundle
-    b = using_bundle(args, l).cast_to_build_subclass()
-    b.clean()
+    b = using_bundle(args, l).cast_to_subclass()
+    b.clean_all(force=args.force)
     b.set_last_access(Bundle.STATES.NEW)
 
 def bundle_download(args, l, rc):
     from ambry.bundle import Bundle
-    b = using_bundle(args, l).cast_to_build_subclass()
+    b = using_bundle(args, l).cast_to__subclass()
     b.download()
     b.set_last_access(Bundle.STATES.DOWNLOADED)
 
 def bundle_sync(args, l, rc):
     from ambry.bundle import Bundle
+    from ambry.dbexceptions import BundleError
     from tabulate import tabulate
 
-    b = using_bundle(args,l).cast_to_build_subclass()
+    b = using_bundle(args, l)
+
+    try:
+        b = b.cast_to_subclass()
+    except BundleError:
+        err("Failed to load bundle code file.")
+
     b.sync_in()
     b.sync_out()
     b.set_last_access(Bundle.STATES.SYNCED)
@@ -481,26 +498,27 @@ def bundle_sync(args, l, rc):
 def bundle_meta(args, l, rc):
     from ambry.bundle import Bundle
 
-    b = using_bundle(args, l).cast_to_meta_subclass()
+    b = using_bundle(args, l).cast_to_subclass()
 
     if args.clean:
         b.clean()
         b.set_last_access(Bundle.STATES.CLEANED)
 
-
-    b.sync()
+    b.sync_in()
 
     # Get the bundle again, to handle the case when the sync updated bundle.py or meta.py
-    b = using_bundle(args, l).cast_to_meta_subclass()
+    b = using_bundle(args, l).cast_to_subclass()
     b.meta()
     b.set_last_access(Bundle.STATES.META)
 
-
+    b.sync_out()
 
 def bundle_build(args, l, rc):
     from ambry.bundle import Bundle
 
-    b = using_bundle(args, l).cast_to_build_subclass()
+    b = using_bundle(args, l).cast_to_subclass()
+
+    check_built(b)
 
     if args.clean:
         if not b.clean():
@@ -510,14 +528,16 @@ def bundle_build(args, l, rc):
         b.commit()
 
     b.sync_in()
-    b.build()
+    b.build(sources=args.sources)
     b.sync_out()
     b.set_last_access(Bundle.STATES.BUILT)
 
 def bundle_phase(args, l, rc):
     from ambry.bundle import Bundle
 
-    b = using_bundle(args, l).cast_to_build_subclass()
+    b = using_bundle(args, l).cast_to_subclass()
+
+    check_built(b)
 
     if args.clean:
         if not b.clean():
@@ -546,15 +566,16 @@ def bundle_run(args, l, rc):
 
     b = using_bundle(args, l)
 
+    check_built(b)
+    b = b.cast_to_subclass()
+
     if args.clean:
         b.clean()
 
     b.sync_in() # Must come before cast_to_meta_subclass
-    b = b.cast_to_meta_subclass()
 
     b.load_requirements()
 
-    #
     # Run a method on the bundle. Can be used for testing and development.
     try:
         f = getattr(b, str(args.method))
@@ -587,6 +608,17 @@ def bundle_checkin(args, l, rc):
 
     if path:
         b.log("Checked in to remote '{}' path '{}'".format(remote, path))
+
+def bundle_set(args, l, rc):
+
+    ref, frm = get_bundle_ref(args, l)
+
+    b = l.bundle(ref)
+
+    if args.state:
+        prt("Setting state to {}".format(args.state))
+        b.state = args.state
+        b.commit()
 
 def bundle_dump(args, l, rc):
     import tabulate
@@ -687,7 +719,7 @@ def bundle_dump(args, l, rc):
         for t in b.dataset.tables:
             for i,c in enumerate(t.columns):
                 row = OrderedDict( (k,v) for k,v in c.row.items() if k in
-                ['table','name','id','datatype'])
+                ['table','name','id','datatype', 'caster','description'])
 
                 if i == 0:
                     records.append(row.keys())
@@ -889,7 +921,7 @@ file_const_map = dict(
     d=File.BSFILE.DOC,
     m=File.BSFILE.META,
     s=File.BSFILE.SCHEMA,
-    c=File.BSFILE.COLMAP,
+    S=File.BSFILE.SOURCESCHEMA,
     r=File.BSFILE.SOURCES)
 
 
@@ -980,17 +1012,19 @@ def bundle_edit(args, l, rc):
 
             elif command == 'change':
                 prt("Changed: {}".format(arg))
-                b.sync()
+                if b.is_buildable:
+                    b.sync()
+                else:
+                    err("Bundle is not in a buildable state; did not sync")
 
             elif command == 'build':
-                bc = b.cast_to_build_subclass()
-                if arg == 'p':
-                    bc.clean()
-                    bc.prepare()
-
-                elif arg == 'B':
-                    bc.clean()
-                    bc.build()
+                bc = b.cast_to_subclass()
+                if b.is_buildable:
+                    if arg == 'B':
+                        bc.clean()
+                        bc.build()
+                else:
+                    err("Bundle is not in a buildable state; not building")
 
             elif command == 'unknown':
                 warn('Unknown command char: {} '.format(arg))

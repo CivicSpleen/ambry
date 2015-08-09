@@ -101,6 +101,7 @@ class TestBase(unittest.TestCase):
 
         config = yaml.load(test_source_fs.getcontents('bundle.yaml'))
         b = self.library.new_from_bundle_config(config)
+
         b.set_file_system(source_url=source_url, build_url=build_url)
 
         self.copy_bundle_files(test_source_fs, b.source_fs)

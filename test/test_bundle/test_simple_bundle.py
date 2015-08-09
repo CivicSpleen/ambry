@@ -57,11 +57,13 @@ class Test(TestBase):
 
         b.sync()  # This will sync the files back to the bundle's source dir
 
-        self.assertEquals(8, len(b.dataset.files))
+        self.assertEquals(7, len(b.dataset.files))
         file_names = [f.path for f in b.dataset.files]
 
-        self.assertEqual([u'sources.csv', u'bundle.py', u'source_schema.csv', u'lib.py', u'meta.py',
-                          u'documentation.md', u'bundle.yaml', u'schema.csv'], file_names)
+        print file_names
+
+        self.assertEqual([u'bundle.py', u'lib.py', u'documentation.md', u'source_schema.csv',
+                          u'sources.csv', u'bundle.yaml', u'schema.csv'], file_names)
 
         self.assertEqual(12, len(b.dataset.configs))
 
@@ -325,7 +327,7 @@ class Test(TestBase):
 
         b.sync_in()
 
-        b = b.cast_to_build_subclass()
+        b = b.cast_to_subclass()
 
         self.assertTrue(b.meta())
         self.assertEquals('schema_done', b.state)
@@ -349,6 +351,8 @@ class Test(TestBase):
         self.assertEquals(1, len(list(b.partitions)))
 
         self.assertEquals(4,len(b.dataset.source_columns))
+
+        self.assertEquals('build_done', b.state)
 
         # Already built can't build again
         self.assertFalse(b.build())
@@ -383,7 +387,7 @@ class Test(TestBase):
 
         b = self.setup_bundle('complete-build')
         b.sync_in()
-        b = b.cast_to_build_subclass()
+        b = b.cast_to_subclass()
         self.assertEquals('new', b.state)
         self.assertTrue(b.meta())
 
@@ -441,7 +445,7 @@ class Test(TestBase):
 
         b = self.setup_bundle('complete-load')
         b.sync()
-        b = b.cast_to_meta_subclass()
+
         b.meta()
         self.assertEquals('schema_done', b.state)
         self.assertTrue(b.prepare())

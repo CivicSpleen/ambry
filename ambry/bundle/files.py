@@ -32,8 +32,9 @@ from ambry.dbexceptions import ConfigurationError
 from ambry.orm import File
 from ..util import Constant, get_logger
 
-
+import logging
 logger = get_logger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class FileTypeError(Exception):
@@ -282,7 +283,7 @@ class StringSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
 
-        with self._fs.open(fn_path) as f:
+        with self._fs.open(fn_path, 'rb') as f:
             fr.update_contents(unicode(f.read()))
 
         fr.mime_type = 'text/plain'
@@ -369,9 +370,12 @@ class PythonSourceFile(StringSourceFile):
         """Add the filesystem to the Python sys path with an import hook, then import
         to file as Python"""
 
-        bundle = imp.new_module('bundle')
-
-        sys.modules['bundle'] = bundle
+        try:
+            import ambry.build
+            module = sys.modules['ambry.build']
+        except ImportError:
+            module = imp.new_module('ambry.build')
+            sys.modules['ambry.build'] = module
 
         bf = self._dataset.bsfile(self._file_const)
 
@@ -379,31 +383,35 @@ class PythonSourceFile(StringSourceFile):
             from ambry.bundle import Bundle
             return Bundle
 
-        exec bf.contents in bundle.__dict__
+        exec bf.contents in module.__dict__
 
-        # print self._file_const, bundle.__dict__.keys()
-        # print bf.contents
+        #print self._file_const, bundle.__dict__.keys()
+        #print bf.contents
 
-        return bundle.Bundle
+        return module.Bundle
 
     def import_lib(self):
         """Import the lib.py file into the bundle module"""
 
-        bundle = imp.new_module('bundle')
+        try:
+            import ambry.build
 
-        sys.modules['bundle'] = bundle
+            module = sys.modules['ambry.build']
+        except ImportError:
+            module = imp.new_module('ambry.build')
+            sys.modules['ambry.build'] = module
 
         bf = self._dataset.bsfile(self._file_const)
 
         if not bf.has_contents:
             return
 
-        exec bf.contents in bundle.__dict__
+        exec bf.contents in module.__dict__
 
         #print self._file_const, bundle.__dict__.keys()
         #print bf.contents
 
-        return bundle
+        return module
 
 class SourcesFile(RowBuildSourceFile):
 
@@ -554,7 +562,7 @@ class SchemaFile(RowBuildSourceFile):
 
             table = get_or_new_table(row)
 
-            data = {k.replace('d_', '', 1): v for k, v in row.items() if k.startswith('d_')}
+            data = {k.replace('d_', '', 1): v for k, v in row.items() if k and k.startswith('d_')}
 
             col = table.add_column(row['column'],
                                fk_vid=row['is_fk'] if row.get('is_fk', False) else None,
@@ -567,11 +575,11 @@ class SchemaFile(RowBuildSourceFile):
                                data=data,
                                keywords=row.get('keywords'),
                                measure=row.get('measure'),
+                               caster=row.get('caster'),
                                units=row.get('units', None),
                                universe=row.get('universe'))
 
-            #if col:
-            #    self.validate_column(t, col, warnings, errors)
+
 
         return warnings, errors
 
@@ -660,8 +668,7 @@ class SourceSchemaFile(RowBuildSourceFile):
         self._dataset._database.commit()
 
 file_info_map = {
-    File.BSFILE.BUILD: (File.path_map[File.BSFILE.BUILD], PythonSourceFile),
-    File.BSFILE.BUILDMETA: (File.path_map[File.BSFILE.BUILDMETA], PythonSourceFile),
+    File.BSFILE.BUILD : (File.path_map[File.BSFILE.BUILD],PythonSourceFile),
     File.BSFILE.LIB: (File.path_map[File.BSFILE.LIB], PythonSourceFile),
     File.BSFILE.DOC: (File.path_map[File.BSFILE.DOC], StringSourceFile),
     File.BSFILE.META: (File.path_map[File.BSFILE.META], MetadataFile),

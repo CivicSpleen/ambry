@@ -410,8 +410,7 @@ class Column(Base):
         d = OrderedDict([('table', self.table.name)] +
                         [(p.key, getattr(self, p.key)) for p in self.__mapper__.attrs
                         if p.key not in ['codes', 'dataset', 'stats', 'table', 'd_vid', 'vid', 't_vid',
-                                         'sequence_id','id', 'is_primary_key']]
-                        )
+                                         'sequence_id','id', 'is_primary_key']])
 
         return d
 
