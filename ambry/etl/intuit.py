@@ -1,13 +1,20 @@
 """Intuit data types for rows of values."""
+from __future__ import unicode_literals
 __author__ = 'eric'
 
 from collections import deque
 import datetime
 
+from six import string_types, iteritems
+
 from ambry.etl.pipeline import Pipe
 from ambry.util import get_logger
 
 logger = get_logger(__name__)
+
+
+class NoMatchError(Exception):
+    pass
 
 
 class unknown(str):
@@ -35,6 +42,7 @@ def test_float(v):
     except:
         return 0
 
+
 def test_int(v):
     # Fixed-width integer codes are actually strings.
     # if v and v[0] == '0' and len(v) > 1:
@@ -48,15 +56,17 @@ def test_int(v):
     except:
         return 0
 
+
 def test_string(v):
-    if isinstance(v, basestring):
+    if isinstance(v, string_types):
         return 1
     else:
         return 0
 
+
 def test_datetime(v):
     """Test for ISO datetime."""
-    if not isinstance(v, basestring):
+    if not isinstance(v, string_types):
         return 0
 
     if len(v) > 22:
@@ -73,8 +83,9 @@ def test_datetime(v):
 
     return 1
 
+
 def test_time(v):
-    if not isinstance(v, basestring):
+    if not isinstance(v, string_types):
         return 0
 
     if len(v) > 15:
@@ -91,7 +102,7 @@ def test_time(v):
 
 
 def test_date(v):
-    if not isinstance(v, basestring):
+    if not isinstance(v, string_types):
         return 0
 
     if len(v) > 10:
@@ -320,9 +331,8 @@ class TypeIntuiter(Pipe):
     @property
     def columns(self):
 
-        for k, v in self._columns.items():
+        for k, v in iteritems(self._columns):
             v.position = k
-
             yield v
 
     def __str__(self):
@@ -419,6 +429,10 @@ class RowIntuiter(Pipe):
     FIRST_ROWS = 20  # How many rows to keep in the top rows slice while looking for the comments and header.
     LAST_ROWS = 20  # How many rows to keep in the last rows slice while looking for the last row with data.
     SAMPLE_SIZE = 200  # How many rows to keep in the sample while recognizing data pattern.
+    DATA_SIZE = 100  # Size of the data in the chunk.
+    HEADER_SIZE = 20  # Size of the header in the chunk.
+    DATA_SAMPLE_SIZE = 1000  # How many rows with data to include to the sample to find patterns
+
 
     def _matches(self, row, pattern):
         """ Returns True if given row matches given patter.
@@ -436,7 +450,7 @@ class RowIntuiter(Pipe):
                 return False
         return True
 
-    def _find_data_lines(self, rows, data_pattern):
+    def _find_first_match_idx(self, rows, pattern):
         """ Finds first and last rows with data
 
         Note: Assuming len(rows) == len(data_pattern)
@@ -447,29 +461,53 @@ class RowIntuiter(Pipe):
 
         Returns:
             tuple of int, int: (first line index, last line index)
+
+        Raises:
+            NoMatchError: if match was not found.
         """
 
         first_rows = rows[:self.FIRST_ROWS]  # The first 20 lines ( Header section )
-        last_rows = rows[-self.LAST_ROWS:]  # The last 20 lines ( Footer section )
-
         first_line = None
-        last_line = None
 
         # iterate header to find first line with data.
         for i, row in enumerate(first_rows):
-            if self._matches(row, data_pattern):
+            if self._matches(row, pattern):
                 first_line = i
                 break
 
+        if first_line is None:
+            raise NoMatchError
+        return first_line
+
+    def _find_last_match_idx(self, rows, pattern):
+        """ Finds first and last rows with data
+
+        Note: Assuming len(rows) == len(data_pattern)
+
+        Args:
+            rows (list):
+            data_pattern (list of sets):
+
+        Returns:
+            tuple of int, int: (first line index, last line index)
+
+        Raises:
+            NoMatchError: if match was not found.
+
+        """
+
+        last_rows = rows[-self.LAST_ROWS:]  # The last 20 lines ( Footer section )
+        last_line = None
+
         # iterate footer from the end to find last row with data.
         for i, row in enumerate(reversed(last_rows)):
-            if self._matches(row, data_pattern):
-                last_line = len(rows) - i
+            if self._matches(row, pattern):
+                last_line = len(rows) - i - 1
                 break
 
-        assert first_line is not None
-        assert last_line is not None
-        return first_line, last_line
+        if last_line is None:
+            raise NoMatchError
+        return last_line
 
     def _find_header(self, first_rows, header_pattern):
 
@@ -480,7 +518,7 @@ class RowIntuiter(Pipe):
 
                 str_matches = 0
                 for elem in row:
-                    if isinstance(elem, (str, unicode)):
+                    if isinstance(elem, string_types):
                         str_matches += 1
                 if float(str_matches) / float(len(row)) >= MATCH_THRESHOLD:
                     return row
@@ -515,9 +553,8 @@ class RowIntuiter(Pipe):
 
         """
         assert len(rows) > self.FIRST_ROWS + self.LAST_ROWS, 'Number of rows is not enough to recognize patter.s.'
-        data_rows = rows[self.FIRST_ROWS:-self.LAST_ROWS]
-        data_sample = data_rows[:self.SAMPLE_SIZE]
-        data_pattern = [set() for x in range(len(data_rows[0]))]
+        data_sample = rows[self.FIRST_ROWS:-self.LAST_ROWS]
+        data_pattern = [set() for x in range(len(data_sample[0]))]
 
         for row in data_sample:
             for i, column in enumerate(row):
@@ -544,10 +581,10 @@ class RowIntuiter(Pipe):
         ret = False
         if isinstance(value, float):
             ret = True
-        if isinstance(value, basestring) and value.count('.') == 1 and value.replace('.', '1').isdigit():
+        if isinstance(value, string_types) and value.count('.') == 1 and value.replace('.', '1').isdigit():
             ret = True
         logger.debug(
-            u'Determining float: value: {}, type: {}, is_float: {}'.format(value, type(value), ret))
+            'Determining float: value: {}, type: {}, is_float: {}'.format(value, type(value), ret))
         return ret
 
     def _is_int(self, value):
@@ -557,10 +594,10 @@ class RowIntuiter(Pipe):
         ret = False
         if isinstance(value, int):
             ret = True
-        if isinstance(value, basestring):
+        if isinstance(value, string_types):
             ret = value.isdigit()
         logger.debug(
-            u'Determining int: value: {}, type: {}, is_int: {}'.format(value, type(value), ret))
+            'Determining int: value: {}, type: {}, is_int: {}'.format(value, type(value), ret))
         return ret
 
     def _get_type(self, value):
@@ -580,27 +617,76 @@ class RowIntuiter(Pipe):
             return str
 
     def __iter__(self):
-        """ Generates rows with data.
+        """ Finds rows with data and generates them.
+
+        Note:
+            Removes comments, header and footer rows from source pipe rows and generates rows
+            with data only.
 
         Yields:
             list
 
         """
+        first_rows = []
 
-        rows = list(self._source_pipe)
+        rows_iter = iter(self._source_pipe)
+        for i in range(self.FIRST_ROWS + self.DATA_SAMPLE_SIZE + self.LAST_ROWS):
+            try:
+                first_rows.append(rows_iter.next())
+            except StopIteration:
+                pass
 
-        comments_pattern, header_pattern, data_pattern = self._get_patterns(rows)
+        comments_pattern, header_pattern, data_pattern = self._get_patterns(first_rows)
 
         # save comments
-        self.comments = self._find_comments(rows[:self.FIRST_ROWS], comments_pattern)
+        self.comments = self._find_comments(first_rows[:self.FIRST_ROWS], comments_pattern)
 
         # save header
-        self.header = self._find_header(rows[:self.FIRST_ROWS], header_pattern)
+        self.header = self._find_header(first_rows[:self.FIRST_ROWS], header_pattern)
 
-        # find data and generate data
-        first_line, end_line = self._find_data_lines(rows, data_pattern)
+        # Determine data borders.
+        first_data_index = self._find_first_match_idx(first_rows, data_pattern)
+        last_data_index = self._find_last_match_idx(first_rows, data_pattern)
 
-        for row in rows[first_line:end_line]:
+        # First generate rows with data from the header.
+        for row in first_rows[first_data_index:last_data_index + 1]:
             yield row
 
+        # Now read all remaining rows from source pipe.
+        # We need to collect them by chunks to properly handle footer.
+        chunk = deque(maxlen=self.DATA_SIZE + self.HEADER_SIZE)
+        while True:
+            # collect rows to chunk.
+            for i in range(self.DATA_SIZE + self.HEADER_SIZE - len(chunk)):
+                try:
+                    chunk.append(rows_iter.next())
+                except StopIteration:
+                    break
+
+            is_last_chunk = len(chunk) < self.DATA_SIZE + self.HEADER_SIZE
+            if is_last_chunk:
+                # find last rows with data
+                try:
+                    last_line_idx = self._find_last_match_idx(list(chunk), data_pattern)
+                except NoMatchError:
+                    # chunk does not have any data rows
+                    break
+
+                # generate rows with data from chunk.
+                for i, row in enumerate(chunk):
+                    if i > last_line_idx:
+                        # Rows with data finished. Next line is footer.
+                        break
+                    yield row
+                # All data rows generated. Drop footer.
+                chunk.clear()
+            else:
+                # It is not obvious has chunk header or not. Return first part of the chunk. Next
+                # iteration will care about remaining rows.
+                for i in range(self.DATA_SIZE):
+                    yield chunk.popleft()
+
+            if is_last_chunk:
+                # all rows generated.
+                break
         self.finish()

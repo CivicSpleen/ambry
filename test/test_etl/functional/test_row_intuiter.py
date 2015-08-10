@@ -106,3 +106,35 @@ class Test(unittest.TestCase):
         self.assertEqual(
             p1.header,
             ['id', 'gvid', 'cost_gt_30', 'cost_gt_30_cv', 'cost_gt_30_pct', 'cost_gt_30_pct_cv'])
+
+    def test_two_comments_two_headers_two_footers_3k_data_rows(self):
+        file_name = 'two_comments_two_headers_two_footers_3k_data_rows.xls'
+
+        p1 = RowIntuiter()
+        p1.set_source_pipe(self._get_source(file_name))
+
+        ret = list(p1)
+
+        # contains valid rows
+        self.assertEqual(len(ret), 3000)
+        self.assertEqual(ret[0][0], 1)
+        self.assertEqual(ret[0][1], '0O0P01')
+        self.assertEqual(ret[0][2], 1447)
+        self.assertEqual(ret[0][3], 13.6176070904818)
+        self.assertEqual(ret[0][4], 42.2481751824818)
+        self.assertEqual(ret[0][5], 8.27214070699712)
+
+        self.assertEqual(ret[2999][0], 3000)
+        self.assertEqual(ret[2999][1], '2g0Pcg00iju')
+        self.assertEqual(ret[2999][2], 131)
+        self.assertEqual(ret[2999][3], 30.5708607475823)
+        self.assertEqual(ret[2999][4], 56.4655172413793)
+        self.assertEqual(ret[2999][5], 20.0652441611474)
+
+        # intuiter stored comments
+        self.assertEqual(p1.comments, ['Renter Costs', 'This is a header comment'])
+
+        # row intuiter properly recognized header.
+        self.assertEqual(
+            p1.header,
+            ['id', 'gvid', 'cost_gt_30', 'cost_gt_30_cv', 'cost_gt_30_pct', 'cost_gt_30_pct_cv'])
