@@ -858,5 +858,9 @@ class Test(TestBase):
         self.assertEqual(-1, mn) # The '*' should have been turned into a -1
         self.assertEqual(6, mx)
 
+        for c in b.dataset.codes:
+            print c.column.table.name, c.column.name, c.key, c.value, c.source
+
+
 
 

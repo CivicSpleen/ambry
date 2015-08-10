@@ -134,7 +134,10 @@ class SourcePipe(Pipe):
     def __iter__(self):
         rg = self._get_row_gen()
         self.start()
-        for row in rg:
+        for i,row in enumerate(rg):
+            if i == 0:
+                self.headers = row
+
             yield row
 
         self.finish()
@@ -176,11 +179,42 @@ class TsvSource(SourcePipe):
 
 class FixedSource(SourcePipe):
     """Generate rows from a fixed-width source"""
+
+    def fixed_width_iter(self, flo, source):
+
+        parts = []
+        self.headers = [] # THe header will be the column positions.
+        for i, c in enumerate(source.source_table.columns):
+
+            try:
+                int(c.start)
+                int(c.width)
+            except TypeError:
+                raise TypeError('Source table {} must have start and width values for {} column '
+                                .format(source.source_table.name, c.source_header))
+
+            parts.append('row[{}:{}]'.format(c.start - 1, c.start + c.width - 1))
+            self.headers.append('{}:{}'.format(c.start - 1, c.start + c.width - 1))
+
+        parser = eval('lambda row: [{}]'.format(','.join(parts)))
+
+        yield source.source_table.headers
+
+        for line in flo:
+            yield [e.strip() for e in parser(line.strip())]
+
     def _get_row_gen(self):
-        from ambry.util.fixedwidth import fixed_width_iter
 
         fstor = self.fetch()
-        return fixed_width_iter(fstor.open(mode='r', encoding=self._source.encoding), self._source)
+        return self.fixed_width_iter(fstor.open(mode='r', encoding=self._source.encoding), self._source)
+
+    def __iter__(self):
+        rg = self._get_row_gen()
+        self.start()
+        for row in rg:
+            yield row
+
+        self.finish()
 
 class ExcelSource(SourcePipe):
     """Generate rows from an excel file"""
@@ -189,7 +223,18 @@ class ExcelSource(SourcePipe):
         return excel_iter(fstor.syspath(), self._source.segment)
 
 class GoogleSource(SourcePipe):
-    """Generate rows from a CSV source"""
+    """Generate rows from a CSV source
+
+    To read a GoogleSpreadsheet, you'll need to have an account entry for google_spreadsheets, and the
+    spreadsheet must be shared with the client email defined in the credentials.
+
+    Visit http://gspread.readthedocs.org/en/latest/oauth2.html to learn how to generate the cerdential file, then
+    copy the entire contents of the file into the a 'google_spreadsheets' key in the accounts file.
+
+    Them share the google spreadsheet document with the email addressed defined in the 'client_email' entry of
+    the credentials.
+
+    """
     def _get_row_gen(self):
 
         """"Iterate over the rows of a goodl spreadsheet. The URL field of the source must start with gs:// followed by

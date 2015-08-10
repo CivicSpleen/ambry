@@ -12,7 +12,7 @@ from sqlalchemy.orm import relationship, object_session
 from ..util import Constant
 from ..identity import LocationRef
 
-from . import Base, MutationDict, JSONEncodedObj
+from . import Base, MutationDict, JSONEncodedObj, MutationList
 from .config import ConfigGroupAccessor
 
 from ambry.identity import DatasetNumber
@@ -46,6 +46,10 @@ class Dataset(Base):
     bspace = SAColumn('d_bspace', String(200))
     revision = SAColumn('d_revision', Integer, nullable=False)
     version = SAColumn('d_version', String(20), nullable=False)
+
+    space_coverage = SAColumn('d_scov', MutationList.as_mutable(JSONEncodedObj))
+    time_coverage = SAColumn('d_tcov', MutationList.as_mutable(JSONEncodedObj))
+    grain_coverage = SAColumn('d_gcov', MutationList.as_mutable(JSONEncodedObj))
 
     data = SAColumn('d_data', MutationDict.as_mutable(JSONEncodedObj))
 

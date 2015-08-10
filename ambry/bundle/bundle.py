@@ -51,8 +51,8 @@ class Bundle(object):
                 ambry.etl.TypeIntuiter,
             ],
             'final': [
-                'log_pipeline',
-                'meta_make_source_tables'
+                'final_log_pipeline',
+                'final_make_source_tables'
             ]
 
         },
@@ -66,8 +66,8 @@ class Bundle(object):
                 ambry.etl.TypeIntuiter,
             ],
             'final': [
-                'log_pipeline',
-                'meta_make_dest_tables'
+                'final_log_pipeline',
+                'final_make_dest_tables'
             ]
 
         },
@@ -84,9 +84,9 @@ class Bundle(object):
                 ambry.etl.WriteToPartition
             ],
             'final': [
-                'log_pipeline',
-                'build_post_build_source',
-                'cast_errors'
+                'final_log_pipeline',
+                'final_finalize_segments',
+                'final_cast_errors'
             ]
         },
     }
@@ -128,7 +128,6 @@ class Bundle(object):
             self._build_url = build_url
             self.dataset.config.library.build.url = self._build_url
             self.dataset.commit()
-
 
     def cast_to_subclass(self):
         """
@@ -837,7 +836,7 @@ class Bundle(object):
 
         return True
 
-    def log_pipeline(self, pl):
+    def final_log_pipeline(self, pl):
         """Write a report of the pipeline out to a file """
         import os
 
@@ -873,7 +872,7 @@ Pipeline Headers
     def meta_source(self, sources=None):
         return self.run_phase('source', sources=sources)
 
-    def meta_make_source_tables(self, pl):
+    def final_make_source_tables(self, pl):
         from ambry.etl.intuit import TypeIntuiter
 
         ti = pl[TypeIntuiter]
@@ -892,7 +891,7 @@ Pipeline Headers
                                             datatype=tic.resolved_type_name)
                 self.log('Created soruce table column: {}.{}'.format(st.name, c.source_header ))
 
-    def meta_make_dest_tables(self, pl):
+    def final_make_dest_tables(self, pl):
         from ambry.etl.intuit import TypeIntuiter
         from ambry.orm.source_table import SourceColumn
         source = pl.source.source
@@ -937,6 +936,8 @@ Pipeline Headers
         the build, then save the schema back to the tables, if it was revised
         during the build."""
 
+        self.build_post_cast_error_codes()
+
         self.build_post_unify_partitions()
 
         self.build_post_write_bundle_file()
@@ -944,6 +945,23 @@ Pipeline Headers
         self.state = phase + '_done'
 
         return True
+
+    def build_post_cast_error_codes(self):
+        """If there are casting errors, final_cast_errors will generate codes for the values. This rounte
+         will report all of them and report an error. """
+
+        if len(self.dataset.codes):
+            cast_errors = 0
+            self.error("Casting Errors")
+            for c in self.dataset.codes:
+                if c.source == 'cast_error':
+                    self.error(indent+"Casting Errors {}.{} {}".format(c.column.table.name, c.column.name, c.key))
+                    cast_errors += 1
+
+            if cast_errors > 0:
+                from ambry.dbexceptions import PhaseError
+                raise PhaseError('Too many casting errors')
+
 
     def build_post_unify_partitions(self):
         """For all of the segments for a partition, create the parent partition, combine the children into the parent,
@@ -988,6 +1006,7 @@ Pipeline Headers
                         pdf.insert_header(row)
                         stats.process_header(row)
                     else:
+                        row[0] = i
                         pdf.insert_body(row)
                         stats.process_body(row)
 
@@ -1003,17 +1022,17 @@ Pipeline Headers
                 self.wrap_partition(s).datafile.delete()
                 self.dataset._database.session.delete(s)
 
-    def build_post_build_source(self, pl):
+    def final_finalize_segments(self, pl):
 
         from ..etl import PartitionWriter
 
         try:
             for p in pl[PartitionWriter].partitions:
-                self.logger.info("Finalizing partition {}".format(p.identity.name))
+                self.logger.info(indent+indent+"Finalizing {}".format(p.identity.name))
                 # We're passing the datafile path into filanize b/c finalize is on the ORM object, and datafile is
                 # on the proxy.
                 p.finalize()
-                # FIXME SHouldn't need to do this commit, but without it, somce stats get added multiple
+                # FIXME SHouldn't need to do this commit, but without it, some stats get added multiple
                 # times, causing an error later. Probably could be avoided by adding the states to the
                 # collection in the dataset
                 self.commit()
@@ -1023,22 +1042,26 @@ Pipeline Headers
 
         self.commit()
 
-    def cast_errors(self, pl):
+    def final_cast_errors(self, pl):
 
         from ..etl import CasterPipe
 
         cp = pl[CasterPipe]
 
-        col_names = [ c.name for c in cp.table.columns ]
-
         n = 0
+        seen = set()
         for errors in cp.errors:
             for col,error in errors.items():
 
                 n +=1
 
-                if n < 20:
-                    print col_names[col], error
+                key = (col, error['value'])
+                if not key in seen:
+                    seen.add(key)
+                    self.error('Cast Error on column {}; {}'.format(cp.headers[col], error))
+
+                    column = cp.source.dest_table.column(cp.headers[col])
+                    column.add_code(error['value'], error['value'], source='cast_error')
 
     def build_post_write_bundle_file(self):
         import os
@@ -1086,14 +1109,9 @@ Pipeline Headers
                 years.add(year)
 
         # From all of the partitions
-        for p in self.partitions.all:
-            if 'time_coverage' in p.record.data:
-                for year in p.record.data['time_coverage']:
-                    years.add(year)
+        for p in self.partitions:
+            years |= set(p.time_coverage)
 
-        self.metadata.coverage.time = sorted(years)
-
-        self.metadata.write_to_dir()
 
     def post_build_geo_coverage(self):
         """Collect all of the geocoverage for the bundle."""

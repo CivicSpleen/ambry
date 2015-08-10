@@ -332,7 +332,7 @@ class Column(Base):
 
         return {c.key: c.value for c in self.codes}
 
-    def add_code(self, key, value, description=None, data=None):
+    def add_code(self, key, value, description=None, data=None, source=None):
         """
 
         :param key: The code value that appears in the datasets, either a string or an int
@@ -359,7 +359,9 @@ class Column(Base):
                   key=str(key),
                   ikey=cast_to_int(key),
                   value=value,
-                  description=description, data=data)
+                  source = source,
+                  description=description,
+                  data=data)
 
         self.codes.append(cd)
 

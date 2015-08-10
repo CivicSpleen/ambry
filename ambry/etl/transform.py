@@ -449,6 +449,7 @@ class CasterPipe(Transform, Pipe, ):
 
         return casters
 
+
     def process_header(self, row):
 
         if self.table:
@@ -483,7 +484,7 @@ class CasterPipe(Transform, Pipe, ):
                              .format(len(self.headers), len(row), len(self.types),
                                      self.headers, [ e[0] for e in self.types], row))
         except Exception as e:
-            raise e
+            raise
 
         if self.error_handler:
             row, self.error_accumulator = self.error_handler(row, self.error_accumulator)

@@ -213,13 +213,10 @@ def bundle_parser(cmd):
     #
     command_p = sub_cmd.add_parser('build', help='Build the data bundle and partitions')
     command_p.set_defaults(subcommand='build')
-    command_p.add_argument('-s', '--sync', default=False, action="store_true", help='Sync with build source files')
+    #command_p.add_argument('-s', '--sync', default=False, action="store_true", help='Sync with build source files')
     command_p.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
+    command_p.add_argument('-f', '--force', default=False, action="store_true", help='Build even built or finalized bundles')
 
-    command_p.add_argument('-i', '--install', default=False, action="store_true",
-                           help='Install after building')
-    command_p.add_argument('-p', '--print_pipe', default=False, action="store_true",
-                           help='Print out the pipeline as it runs')
     command_p.add_argument('sources', nargs='*', type=str, help='Sources to run, instead of running all sources')
 
 
@@ -274,6 +271,8 @@ def bundle_parser(cmd):
     command_p = sub_cmd.add_parser('run', help='Run a method on the bundle')
     command_p.set_defaults(subcommand='run')
     command_p.add_argument('-c', '--clean', default=False, action="store_true", help='Clean first')
+    command_p.add_argument('-f', '--force', default=False, action="store_true",
+                           help='Force running on a built or finalized bundle')
     command_p.add_argument('method', metavar='Method', type=str, help='Name of the method to run')
     command_p.add_argument('args', nargs='*', type=str, help='additional arguments')
 
@@ -488,8 +487,8 @@ def bundle_sync(args, l, rc):
 
     try:
         b = b.cast_to_subclass()
-    except BundleError:
-        err("Failed to load bundle code file.")
+    except BundleError as e:
+        err("Failed to load bundle code file: {}".format(e))
 
     b.sync_in()
     b.sync_out()
@@ -516,9 +515,10 @@ def bundle_meta(args, l, rc):
 def bundle_build(args, l, rc):
     from ambry.bundle import Bundle
 
-    b = using_bundle(args, l).cast_to_subclass()
+    b = using_bundle(args, l)
 
-    check_built(b)
+    if not args.force:
+        check_built(b)
 
     if args.clean:
         if not b.clean():
@@ -528,6 +528,9 @@ def bundle_build(args, l, rc):
         b.commit()
 
     b.sync_in()
+
+    b = b.cast_to_subclass()
+
     b.build(sources=args.sources)
     b.sync_out()
     b.set_last_access(Bundle.STATES.BUILT)
@@ -566,13 +569,15 @@ def bundle_run(args, l, rc):
 
     b = using_bundle(args, l)
 
-    check_built(b)
+    if not args.force:
+        check_built(b)
+
+    b.sync()
+
     b = b.cast_to_subclass()
 
     if args.clean:
         b.clean()
-
-    b.sync_in() # Must come before cast_to_meta_subclass
 
     b.load_requirements()
 
@@ -722,7 +727,7 @@ def bundle_dump(args, l, rc):
                 ['table','name','id','datatype', 'caster','description'])
 
                 if i == 0:
-                    records.append(row.keys())
+                    records.append(row.keys()) # once for each table
 
                 records.append(row.values())
 

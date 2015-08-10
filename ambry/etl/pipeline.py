@@ -179,6 +179,7 @@ class IterSource(Pipe):
         for row in itr:
             yield row
 
+
 class OnlySource(Pipe):
     """Only allow iteration on a named source. """
 

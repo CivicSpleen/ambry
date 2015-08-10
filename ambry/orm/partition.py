@@ -58,11 +58,9 @@ class Partition(Base, DictableMixin):
     fqname = SAColumn('p_fqname', String(200), unique=True, nullable=False, index=True)
     cache_key = SAColumn('p_cache_key', String(200), unique=True, nullable=False, index=True)
     parent_vid = SAColumn('p_p_vid', String(20), ForeignKey('partitions.p_vid'), nullable=True, index=True)
-    ref = SAColumn(
-        'p_ref', String(20), index=True,
+    ref = SAColumn('p_ref', String(20), index=True,
         doc='VID reference to an eariler version to use instead of this one.')
-    type = SAColumn(
-        'p_type', String(20), default=TYPE.UNION,
+    type = SAColumn('p_type', String(20), default=TYPE.UNION,
         doc='u - normal partition, s - segment')
     table_name = SAColumn('p_table_name', String(50))
     time = SAColumn('p_time', String(20))  # FIXME: add helptext
@@ -70,8 +68,7 @@ class Partition(Base, DictableMixin):
     grain = SAColumn('p_grain', String(50))
     variant = SAColumn('p_variant', String(50))
     format = SAColumn('p_format', String(50))
-    segment = SAColumn(
-        'p_segment', Integer,
+    segment = SAColumn('p_segment', Integer,
         doc='Part of a larger partition. segment_id is usually also a source ds_id')
     min_id = SAColumn('p_min_id', BigIntegerType)
     max_id = SAColumn('p_max_id', BigIntegerType)

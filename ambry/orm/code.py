@@ -19,7 +19,6 @@ class Code(Base):
     """Code entries for variables."""
     __tablename__ = 'codes'
 
-
     c_vid = SAColumn('cd_c_vid',String(20),ForeignKey('columns.c_vid'), primary_key=True,index=True,nullable=False)
 
     d_vid = SAColumn('cd_d_vid', String(20), ForeignKey('datasets.d_vid'), primary_key=True, nullable=False, index=True)
@@ -28,9 +27,11 @@ class Code(Base):
     ikey = SAColumn( 'cd_ikey',Integer,index=True)  # Set only if the key is actually an integer
 
     value = SAColumn('cd_value', Text,nullable=False)  # The value the key maps to
-    description = SAColumn('f_description', Text, index=True)
+    description = SAColumn('cd_description', Text)
 
-    data = SAColumn('co_data', MutationDict.as_mutable(JSONEncodedObj))
+    source = SAColumn('cd_source', Text)
+
+    data = SAColumn('cd_data', MutationDict.as_mutable(JSONEncodedObj))
 
     def __init__(self, **kwargs):
 
@@ -41,7 +42,6 @@ class Code(Base):
 
         if self.data:
             self.data.update(kwargs)
-
 
 
     def __repr__(self):

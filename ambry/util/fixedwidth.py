@@ -12,23 +12,4 @@ except ImportError:
             yield total
 
 
-def fixed_width_iter(flo, source):
 
-    parts = []
-    for i, c in enumerate(source.source_table.columns):
-
-        try:
-            int(c.start)
-            int(c.width)
-        except TypeError:
-            raise TypeError('Source table {} must have start and width values for {} column '
-                            .format(source.source_table.name, c.source_header))
-
-        parts.append('row[{}:{}]'.format(c.start-1, c.start+c.width-1))
-
-    parser = eval('lambda row: [{}]'.format(','.join(parts)))
-
-    yield source.source_table.headers
-
-    for line in flo:
-        yield [e.strip() for e in parser(line.strip())]

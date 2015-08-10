@@ -21,7 +21,7 @@ from . import Column, Partition, Table, Dataset, Config, File,\
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 102
+SCHEMA_VERSION = 103
 
 # Database connection information
 Dbci = namedtuple('Dbc', 'dsn_template sql')
@@ -42,8 +42,7 @@ class Migration(BaseMigration):
         pass
 
     def _migrate_postgresql(self, connection):
-        # connection.execute('ALTER table ...')
-        pass
+        self._migrate_sqlite(connection)
 '''
 
 logger = get_logger(__name__)
@@ -624,7 +623,7 @@ def _validate_version(connection):
     try:
         version = get_stored_version(connection)
     except VersionIsNotStored:
-        logger.info('Version not stored in the db: assuming new database creation.')
+        logger.debug('Version not stored in the db: assuming new database creation.')
         version = SCHEMA_VERSION
         _update_version(connection, version)
     assert isinstance(version, int)

@@ -28,6 +28,7 @@ class ExampleSourcePipe(SourcePipe):
             row['indexd3'] = float(i) / 3.0
             row['categorical'] = cat_cycle.next()
             row['codes'] = num_cycle.next()
+            row['keptcodes'] = num_cycle.next()
             row['date'] = date(2000, i%12+1, i%28+1)
 
             if i == 0:
