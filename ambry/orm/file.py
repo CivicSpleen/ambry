@@ -7,12 +7,11 @@ Revised BSD License, included in this distribution as LICENSE.txt
 __docformat__ = 'restructuredtext en'
 
 
-from sqlalchemy import event
 from sqlalchemy import Column as SAColumn, Integer, UniqueConstraint
 from sqlalchemy import  Text, Binary, String, ForeignKey, Float
 
 from ..util import Constant
-from ..identity import LocationRef
+from sqlalchemy import event
 
 from . import Base, MutationDict, JSONEncodedObj, BigIntegerType, DictableMixin
 
@@ -52,12 +51,13 @@ class File(Base, DictableMixin):
     PREFERENCE.OBJECT = 'O'
     PREFERENCE.MERGE = 'M'
 
-    id = SAColumn('id', Integer, primary_key=True)
-    d_vid = SAColumn('f_d_vid', String(16), ForeignKey('datasets.d_vid'), nullable=False, index=True)
+    id = SAColumn('f_id', Integer, primary_key=True)
+    d_vid = SAColumn('f_d_vid', String(16), ForeignKey('datasets.d_vid'), primary_key=True, nullable=False, index=True)
+
     path = SAColumn('f_path', Text, nullable=False)
+
     major_type = SAColumn('f_major_type', Text, nullable=False, index=True)
     minor_type = SAColumn('f_minor_type', Text, nullable=False, index=True)
-
     mime_type = SAColumn('f_mime_type', Text)
 
     source = SAColumn('f_source', Text, nullable=False)
@@ -148,6 +148,30 @@ class File(Base, DictableMixin):
         "Strip non-numeric characters from a phone number"
         pass
 
-from sqlalchemy import event
+    @staticmethod
+    def before_insert(mapper, conn, target):
+        """event.listen method for Sqlalchemy to set the sequence for this
+        object and create an ObjectNumber value for the id_"""
+        from sqlalchemy import text
+
+        if not target.id:
+            conn.execute('BEGIN IMMEDIATE')
+            sql = text('SELECT max(f_id)+1 FROM files WHERE f_d_vid = :did')
+
+            target.id, = conn.execute(sql, did=target.d_vid).fetchone()
+
+            if not target.id:
+                target.id = 1
+
+        File.before_update(mapper, conn, target)
+
+    @staticmethod
+    def before_update(mapper, conn, target):
+        """"""
+        pass
+
+event.listen(File, 'before_insert', File.before_insert)
+event.listen(File, 'before_update', File.before_update)
+
 
 event.listen(File.path, 'set', File.validate_path)

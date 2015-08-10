@@ -10,7 +10,7 @@ from sqlalchemy import Column as SAColumn, Integer
 from sqlalchemy import String
 from sqlalchemy.orm import relationship, object_session
 from ..util import Constant
-from ..identity import LocationRef
+
 
 from . import Base, MutationDict, JSONEncodedObj, MutationList
 from .config import ConfigGroupAccessor
@@ -23,14 +23,6 @@ from ambry.orm.file import File
 class Dataset(Base):
     __tablename__ = 'datasets'
 
-    # FIXME: Which field stores location?
-    LOCATION = Constant()
-    LOCATION.LIBRARY = LocationRef.LOCATION.LIBRARY
-    LOCATION.PARTITION = LocationRef.LOCATION.PARTITION
-    LOCATION.SREPO = LocationRef.LOCATION.SREPO
-    LOCATION.SOURCE = LocationRef.LOCATION.SOURCE
-    LOCATION.REMOTE = LocationRef.LOCATION.REMOTE
-    LOCATION.UPSTREAM = LocationRef.LOCATION.UPSTREAM
 
     vid = SAColumn('d_vid', String(20), primary_key=True)
     id = SAColumn('d_id', String(20), )
@@ -267,6 +259,7 @@ class Dataset(Base):
                       minor_type=file_const,
                       path=File.path_map[file_const],
                       source='fs')
+
             object_session(self).add(fr)
 
         return fr

@@ -9,12 +9,14 @@ __docformat__ = 'restructuredtext en'
 from time import time
 
 from sqlalchemy import Column as SAColumn, Text, String, ForeignKey, Integer, Boolean,\
-    event, UniqueConstraint
+    event, UniqueConstraint, text
 from sqlalchemy.orm import object_session, relationship
 
 from six import iterkeys
 
 from . import Base, JSONAlchemy
+from ..identity import ObjectNumber, DatasetNumber
+
 
 
 class Config(Base):
@@ -23,16 +25,15 @@ class Config(Base):
     __table_args__ = (
         UniqueConstraint('co_d_vid', 'co_type', 'co_group', 'co_key', name='_type_group_key_uc'),)
 
-    id = SAColumn(Integer, primary_key=True, autoincrement=True)
+    id = SAColumn('co_id', String(32), primary_key=True)
     d_vid = SAColumn('co_d_vid', String(16), ForeignKey('datasets.d_vid'), index=True, doc='Dataset vid')
     type = SAColumn('co_type', String(200), doc='Type of the config: metadata, process, sync, etc...')
     group = SAColumn('co_group', String(200), doc='Group of the config: identity, about, etc...')
     key = SAColumn('co_key', String(200),  doc='Key of the config')
     value = SAColumn('co_value', JSONAlchemy(Text()),  doc='Value of the config key.')
-    modified = SAColumn(
-        'co_modified', Integer(),
+    modified = SAColumn('co_modified', Integer(),
         doc='Modification date: time in seconds since the epoch as a integer.')
-    parent_id = SAColumn(Integer, ForeignKey('config.id'), nullable=True, doc='Id of the parent config.')
+    parent_id = SAColumn(String(20), ForeignKey('config.co_id'), nullable=True, doc='Id of the parent config.')
     parent = relationship('Config', remote_side=[id])
     children = relationship('Config')
 
@@ -45,6 +46,19 @@ class Config(Base):
 
     @staticmethod
     def before_insert(mapper, conn, target):
+
+        if not target.id:
+            import hashlib
+            import time
+
+            assert bool(target.d_vid)
+
+            # This is a bit of a mess, much longer than it should be. Unfortunately, there seem to be few other options
+            # since the trick used in partitions doesn't work for mass updates to many configs.
+            target.id = hashlib.md5(
+                "{}{}{}{}{}".format(target.d_vid, target.type, target.group, target.key, time.time())
+            ).hexdigest()
+
         Config.before_update(mapper, conn, target)
 
     @staticmethod

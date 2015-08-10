@@ -14,6 +14,9 @@ class Test(TestBase):
         db = self.new_database()
         ds = self.new_db_dataset(db, n=0)
 
+        print ds.config.metadata.identity.id
+        return
+
         ds.config.metadata.identity.id = 'd02'
         ds.config.metadata.identity.version = '0.0.1'
         db.commit()

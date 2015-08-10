@@ -341,6 +341,7 @@ class RunConfig(object):
         except:
             pass
 
+
         d =  dict(database=database,warehouse=warehouse,remotes= self.remotes(e.get('remotes', {})))
 
         return d

@@ -6,16 +6,12 @@ included in this distribution as LICENSE.txt
 """
 
 from ..cli import warn, fatal
-from ..identity import LocationRef
 from . import prt
 
-default_locations = [LocationRef.LOCATION.LIBRARY,  LocationRef.LOCATION.REMOTE]
 
 def root_parser(cmd):
     import argparse
-    from ..identity import LocationRef
 
-    lr = LocationRef.LOCATION
 
     sp = cmd.add_parser('list', help='List bundles and partitions')
     sp.set_defaults(command='root')

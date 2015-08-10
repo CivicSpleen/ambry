@@ -8,7 +8,7 @@ import unittest
 
 from ambry.identity import DatasetNumber, TableNumber, ObjectNumber, ColumnNumber, PartitionNumber,\
     Name, NameQuery, PartitionName, PartitionNameQuery,\
-    Identity, PartitionIdentity, NumberServer, LocationRef, Version
+    Identity, PartitionIdentity, NumberServer,  Version, OtherNumber
 
 from test_base import TestBase
 
@@ -266,16 +266,6 @@ class Test(TestBase):
         PartitionNameQuery(time='time', space='space', format='hdf')
         # pnq = PartitionNameQuery(time='time', space='space', format='hdf')
 
-        #
-        # Locations
-        #
-
-        self.assertEquals('       ', str(ident.locations))
-        ident.locations.set(LocationRef.LOCATION.LIBRARY, 1)
-        ident.locations.set(LocationRef.LOCATION.REMOTE, 2)
-        ident.locations.set(LocationRef.LOCATION.SOURCE)
-        self.assertEquals('LSR    ', str(ident.locations))
-
         # Partitions, converting to datasets
 
         ident = Identity(name, dn)
@@ -458,6 +448,15 @@ class Test(TestBase):
 
             self.assertNotEqual(p, p3)
 
+    def test_parse_other(self):
+
+        dn = DatasetNumber(100, 5, 'authoritative')
+
+        self.assertEquals('d01C005', str(dn))
+
+        self.assertEquals('G01C001Z005', str(OtherNumber('G',dn, 123)))
+
+        self.assertEquals('G01C001Z005', ObjectNumber.parse(str(OtherNumber('G',dn, 123)), True))
 
 def suite():
     suite = unittest.TestSuite()

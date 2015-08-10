@@ -76,9 +76,9 @@ class Partition(Base, DictableMixin):
     state = SAColumn('p_state', String(50))
     data = SAColumn('p_data', MutationDict.as_mutable(JSONEncodedObj))
 
-    space_coverage = SAColumn('f_scov', MutationList.as_mutable(JSONEncodedObj))
-    time_coverage = SAColumn('f_tcov', MutationList.as_mutable(JSONEncodedObj))
-    grain_coverage = SAColumn('f_gcov', MutationList.as_mutable(JSONEncodedObj))
+    space_coverage = SAColumn('p_scov', MutationList.as_mutable(JSONEncodedObj))
+    time_coverage = SAColumn('p_tcov', MutationList.as_mutable(JSONEncodedObj))
+    grain_coverage = SAColumn('p_gcov', MutationList.as_mutable(JSONEncodedObj))
 
     installed = SAColumn('p_installed', String(100))
     location = SAColumn('p_location', String(100))  # Location of the data file
@@ -339,7 +339,7 @@ class Partition(Base, DictableMixin):
 
         if not target.sequence_id:
             conn.execute('BEGIN IMMEDIATE')
-            sql = text('SELECT max(p_sequence_id)+1 FROM Partitions WHERE p_d_vid = :did')
+            sql = text('SELECT max(p_sequence_id)+1 FROM partitions WHERE p_d_vid = :did')
 
             target.sequence_id, = conn.execute(sql, did=target.d_vid).fetchone()
 

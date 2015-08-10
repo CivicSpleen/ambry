@@ -384,9 +384,6 @@ class PartialPartitionName(Name):
                 hash(self.grain) ^ hash(self.format) ^ hash(self.segment))
 
 
-
-
-
 class PartitionName(PartialPartitionName, Name):
 
     """A Partition Name."""
@@ -672,6 +669,7 @@ class ObjectNumber(object):
     TYPE.PARTITION = 'p'
     TYPE.TABLE = 't'
     TYPE.COLUMN = 'c'
+    TYPE.OTHER = 'other'
 
     VERSION_SEP = ''
 
@@ -687,6 +685,8 @@ class ObjectNumber(object):
     DLEN.TABLE = 2
     DLEN.COLUMN = 3
     DLEN.REVISION = (0, 3)
+
+    DLEN.OTHER = 4
 
     # Because the dataset number can be 3, 5, 7 or 9 characters,
     # And the revision is optional, the datasets ( and thus all
@@ -716,7 +716,8 @@ class ObjectNumber(object):
     NDS_LENGTH = {'d': 0,
                   'p': DLEN.PARTITION,
                   't': DLEN.TABLE,
-                  'c': DLEN.TABLE + DLEN.COLUMN}
+                  'c': DLEN.TABLE + DLEN.COLUMN,
+                  'other': DLEN.OTHER}
 
     TCMAXVAL = 62 ** DLEN.TABLE - 1  # maximum for table values.
     CCMAXVAL = 62 ** DLEN.COLUMN - 1  # maximum for column values.
@@ -726,8 +727,10 @@ class ObjectNumber(object):
     EPOCH = 1389210331  # About Jan 8, 2014
 
     @classmethod
-    def parse(cls, on_str):  # @ReservedAssignment
+    def parse(cls, on_str, is_other=False):  # @ReservedAssignment
         """Parse a string into one of the object number classes."""
+
+        on_str_orig = on_str
 
         if on_str is None:
             return None
@@ -741,14 +744,12 @@ class ObjectNumber(object):
         # if isinstance(on_str, unicode):
         #     dataset = on_str.encode('ascii')
 
+        if is_other:
+            type_ = 'other'
+        else:
+            type_ = on_str[0]
 
-        type_ = on_str[0]
         on_str = on_str[1:]
-
-        # There are some old values to need to be translated:
-        if type_ == 'a':
-            type_ = cls.TYPE.DATASET
-            on_str = cls.TYPE.DATASET + on_str[1:]
 
         if type_ not in cls.NDS_LENGTH.keys():
             raise NotObjectNumberError("Unknown type character '{}' for '{}'".format(type_,on_str))
@@ -791,8 +792,18 @@ class ObjectNumber(object):
 
                 return ColumnNumber(TableNumber(DatasetNumber( dataset,assignment_class=assignment_class), table),
                                     column,revision=revision)
+
+            elif type_ == cls.TYPE.OTHER:
+
+                return OtherNumber(on_str_orig[0],
+                                   DatasetNumber(dataset, assignment_class=assignment_class),
+                                   int(ObjectNumber.base62_decode(on_str[0:cls.DLEN.OTHER])),
+                                   revision=revision
+                                   )
+
             else:
-                raise NotObjectNumberError('Unknown type character: ' +on_str[0] + ' in ' + str(on_str))
+
+                raise NotObjectNumberError('Unknown type character: ' +type_ + ' in ' + str(on_str_orig))
 
         except Base62DecodeError as e:
             raise NotObjectNumberError("Unknown character:  " + str(e))
@@ -880,12 +891,7 @@ class TopNumber(ObjectNumber):
 
     """
 
-    def __init__(
-            self,
-            space,
-            dataset=None,
-            revision=None,
-            assignment_class='self'):
+    def __init__(self,space,dataset=None,revision=None,assignment_class='self'):
         """Constructor."""
 
         if len(space) > 1:
@@ -981,7 +987,6 @@ class DatasetNumber(ObjectNumber):
     def as_dataset(self):
         from copy import copy
         return copy(self)
-
 
     def as_partition(self, partition_number=0):
         """Return a new PartitionNumber based on this DatasetNumber."""
@@ -1082,7 +1087,6 @@ class ColumnNumber(ObjectNumber):
             ObjectNumber._rev_str(
                 self.revision))
 
-
 class PartitionNumber(ObjectNumber):
 
     """An identifier for a partition."""
@@ -1118,111 +1122,43 @@ class PartitionNumber(ObjectNumber):
         return (
             ObjectNumber.TYPE.PARTITION +
             self.dataset._ds_str() +
-            ObjectNumber.base62_encode(
-                self.partition).rjust(
-                self.DLEN.PARTITION,
-                '0') +
+            ObjectNumber.base62_encode(self.partition).rjust(self.DLEN.PARTITION,'0') +
             ObjectNumber._rev_str(
                 self.revision))
 
+class OtherNumber(ObjectNumber):
+    """Other types of number. Can have any type code, and 4 digits of number, directly
+     descended from the dataset"""
 
-class LocationRef(object):
+    def __init__(self, type_code, dataset, num, revision=None):
 
-    LOCATION = Constant()
+        if isinstance(dataset, basestring):
+            dataset = ObjectNumber.parse(dataset).as_dataset
 
-    LOCATION.UNKNOWN = ' '
+        try:
+            dataset = dataset.as_dataset
+        except AttributeError:
+            raise ValueError("Constructor requires a DatasetNumber or ObjectNumber that converts to a DatasetNumber")
 
-    LOCATION.SOURCE = 'S'
-    LOCATION.LIBRARY = 'L'  # For the bundle
-    LOCATION.REMOTE = 'R'
-    LOCATION.REMOTEPARTITION = 'RP'
-    LOCATION.PARTITION = 'LP'  # For the partition, b/c also used in File.type
-
-    # These are rarely or never used.
-
-    LOCATION.SREPO = 'G'  # Source repository, 'github'
-    LOCATION.UPSTREAM = 'U'
-    LOCATION.WAREHOUSE = 'W'
-
-    def __init__(self, location, revision=None, version=None, code=None):
-        self.location = location
+        self.type_code = type_code
+        self.dataset = dataset
+        self.number = num
         self.revision = revision
-        self.version = version
-        self.code = code
 
-    location = None
-    revision = None
-    version = None
-    code = None
+        if not self.revision and dataset.revision:
+            self.revision = dataset.revision
 
     @property
-    def exists(self):
-        return bool(self.revision)
+    def as_dataset(self):
+        """Unlike the .dataset property, this will include the revision."""
+        return self.dataset.rev(self.revision)
 
     def __str__(self):
-        return self.code if self.revision else self.LOCATION.UNKNOWN
-
-    def __repr__(self):
-        return '{}:{}'.format(
-            self.location,
-            self.revision if self.revision else '')
-
-
-class Locations(object):
-
-    order = [
-        LocationRef.LOCATION.LIBRARY,
-        LocationRef.LOCATION.SOURCE,
-        LocationRef.LOCATION.REMOTE,
-        LocationRef.LOCATION.REMOTEPARTITION,
-        LocationRef.LOCATION.SREPO,
-        LocationRef.LOCATION.UPSTREAM,
-        LocationRef.LOCATION.WAREHOUSE
-
-    ]
-
-    # Deprecated, Use has()
-    def is_in(self, location):
-        return location in self.codes
-
-    def has(self, location):
-        if isinstance(location, basestring) and len(location) == 1:
-            return location in self.codes
-        else:
-            return any([l in self.codes for l in location])
-
-    def __init__(self, ident=None):
-        self.ident = ident
-        self._locations = {
-            code: LocationRef(code) for name,
-            code in vars(
-                LocationRef.LOCATION).items()}
-
-    def __str__(self):
-        return ''.join([str(self._locations[code]) for code in self.order])
-
-    @property
-    def codes(self):
-        return tuple((c for c, v in self._locations.items() if v.code))
-
-    def set(self, code, revision=None, version=None):
-
-
-
-        uc_code = code.upper()
-
-        # In warehouses, there are many other file types that are not
-        # locations.
-        if uc_code not in Locations.order:
-            return
-
-        if not revision:
-            revision = self.ident.on.revision
-            version = self.ident.name.version
-
-        self._locations[uc_code].revision = revision
-        self._locations[uc_code].version = version
-        self._locations[uc_code].code = code
+        return (
+            self.type_code +
+            self.dataset._ds_str() +
+            ObjectNumber.base62_encode(self.number).rjust(self.DLEN.OTHER,'0') +
+            ObjectNumber._rev_str( self.revision))
 
 
 class Identity(object):
@@ -1284,7 +1220,6 @@ class Identity(object):
 
         self._name.version = str(nv)
 
-        self.locations = Locations(self)
         self.data = {}
 
         self.is_valid()
