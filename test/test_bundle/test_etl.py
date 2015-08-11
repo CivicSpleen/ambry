@@ -817,27 +817,20 @@ class Test(TestBase):
 
         b.sync_in()
         b = b.cast_to_subclass()
-
         b.check_subclass()
-
-        l = b._library
-
         b.meta()
-
         b.build()
-
-        self.assertEqual(['example.com-generators-demo', 'example.com-generators-demo-build2'],
-                         [str(p.identity.name) for p in b.partitions])
+        self.assertItemsEqual(['example.com-generators-demo', 'example.com-generators-demo-build2'],
+                              [str(p.identity.name) for p in b.partitions])
 
         for p in b.partitions:
-
-            count = sum = 0
+            count = sum_ = 0
             for row in p.stream(as_dict=True):
                 count += 1
-                sum += row['number2']
+                sum_ += row['number2']
 
             self.assertEquals(800, count)
-            self.assertEquals(159200, sum)
+            self.assertEquals(159200, sum_)
 
     def test_casters(self):
 
