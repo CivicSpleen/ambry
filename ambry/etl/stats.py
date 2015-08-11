@@ -10,10 +10,14 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from collections import Counter
 
 from livestats import livestats
+from six import iteritems, iterkeys
 
 from ambry.util import Constant
 
-def text_hist(nums, ascii = False):
+from .pipeline import PipelineError
+
+
+def text_hist(nums, ascii=False):
 
     if ascii:
         parts = u' _.,,-=T#'
@@ -46,7 +50,7 @@ class StatSet(object):
             self.is_time = column.type_is_time()
             self.is_date = column.type_is_date()
 
-            self.flags = " G"[self.is_gvid]+" Y"[self.is_year]+" T"[self.is_time]+" D"[self.is_date]
+            self.flags = " G"[self.is_gvid] + " Y"[self.is_year] + " T"[self.is_time] + " D"[self.is_date]
 
             if column.is_primary_key or self.is_year or self.is_time or self.is_date:
                 lom = StatSet.LOM.ORDINAL
@@ -67,12 +71,12 @@ class StatSet(object):
         self.n = 0
         self.counts = Counter()
         self.size = None
-        self.stats = livestats.LiveStats([0.25, 0.5, 0.75]) #runstats.Statistics()
+        self.stats = livestats.LiveStats([0.25, 0.5, 0.75])  # runstats.Statistics()
 
         self.bin_min = None
         self.bin_max = None
         self.bin_width = None
-        self.bin_primer_count = 5000 # how many points to collect before creating hist bins
+        self.bin_primer_count = 5000  # how many points to collect before creating hist bins
         self.num_bins = 16
         self.bins = [0] * self.num_bins
 
@@ -84,8 +88,7 @@ class StatSet(object):
         try:
             unival = unicode(v)
         except UnicodeError:
-            unival = v.decode('ascii','ignore')
-
+            unival = v.decode('ascii', 'ignore')
 
         self.size = max(self.size, len(unival))
 
@@ -115,16 +118,16 @@ class StatSet(object):
                     self.bin_max = self.stats.mean() + sqrt(self.stats.variance()) * 2
                     self.bin_width = (self.bin_max - self.bin_min) / self.num_bins
 
-                    for v, count in self.counts.items():
+                    for v, count in iteritems(self.counts):
                         if v >= self.bin_min and v <= self.bin_max:
-                            bin = int((v - self.bin_min) / self.bin_width)
-                            self.bins[bin] += count
+                            bin_ = int((v - self.bin_min) / self.bin_width)
+                            self.bins[bin_] += count
 
                 self.counts = Counter()
 
             elif self.n > self.bin_primer_count and v >= self.bin_min and v <= self.bin_max:
-                bin = int((v - self.bin_min) / self.bin_width)
-                self.bins[bin] += 1
+                bin_ = int((v - self.bin_min) / self.bin_width)
+                self.bins[bin_] += 1
 
             try:
                 self.stats.add(float(v))
@@ -139,7 +142,7 @@ class StatSet(object):
 
     @property
     def nuniques(self):
-        return len(self.counts.items())
+        return len(list(self.counts.items()))
 
     @property
     def mean(self):
@@ -164,7 +167,7 @@ class StatSet(object):
     @property
     def median(self):
         try:
-            return  self.stats.quantiles()[1][1]
+            return self.stats.quantiles()[1][1]
         except IndexError:
             return None
 
@@ -172,8 +175,7 @@ class StatSet(object):
     def p50(self):
         try:
             return self.stats.quantiles()[1][1]
-        except IndexError as e:
-
+        except IndexError:
             return None
 
     @property
@@ -213,21 +215,22 @@ class StatSet(object):
         return OrderedDict([
             ('name', self.column_name),
             ('flags', self.flags),
-            ('lom',self.lom),
-            ('count',self.n),
-            ('nuniques',self.nuniques),
-            ('mean',self.mean),
-            ('std',self.stddev),
-            ('min',self.min),
-            ('p25',self.p25),
-            ('p50',self.p50),
-            ('p75',self.p75),
-            ('max',self.max),
+            ('lom', self.lom),
+            ('count', self.n),
+            ('nuniques', self.nuniques),
+            ('mean', self.mean),
+            ('std', self.stddev),
+            ('min', self.min),
+            ('p25', self.p25),
+            ('p50', self.p50),
+            ('p75', self.p75),
+            ('max', self.max),
             ('skewness', skewness),
             ('kurtosis', kurtosis),
-            ('hist',self.bins),
-            ('uvalues',dict(self.counts.most_common(100)) ) ]
+            ('hist', self.bins),
+            ('uvalues', dict(self.counts.most_common(100)))]
         )
+
 
 class Stats(object):
     """ Stats object reads rows from the input iterator, processes the row, and yields it back out"""
@@ -241,11 +244,11 @@ class Stats(object):
         self.headers = None
 
         for c in self._table.columns:
-            self.add(c, build = False)
+            self.add(c, build=False)
 
         self._func, self._func_code = self.build()
 
-    def add(self, column, build = True):
+    def add(self, column, build=True):
         """Determine the LOM from a ORM Column"""
 
         # Try it as an orm.column, otherwise try to look up in a table,
@@ -271,31 +274,32 @@ class Stats(object):
 
         parts = []
 
-        for name in self._stats.keys():
+        for name in iterkeys(self._stats):
             if self._stats[name] is not None:
                 parts.append("stats['{name}'].add(row['{name}'])".format(name=name))
 
         if not parts:
-            from pipeline import PipelineError
-            raise PipelineError("Did not get any stats variables for table {}. Was add() or init() called first? "
-                           .format(self.table.name))
+            error_msg = 'Did not get any stats variables for table {}. Was add() or init() called first?'\
+                .format(self.table.name)
+            raise PipelineError(error_msg)
 
         code = 'def _process_row(stats, row):\n    {}'.format('\n    '.join(parts))
 
-        exec code
+        exec(code)
 
         f = locals()['_process_row']
 
         return f, code
 
     def stats(self):
-        return [ (name, self._stats[name]) for name, stat in self._stats.items() ]
+        return [(name, self._stats[name]) for name, stat in iteritems(self._stats)]
 
     def process(self, row):
         try:
             self._func(self._stats, row)
-        except KeyError as e:
-            raise KeyError('Failed to find key in row. headers = "{}", code = "{}" '.format(self.headers, self._func_code))
+        except KeyError:
+            raise KeyError(
+                'Failed to find key in row. headers = "{}", code = "{}" '.format(self.headers, self._func_code))
 
         return row
 
@@ -308,7 +312,7 @@ class Stats(object):
 
     def process_body(self, row):
 
-        self.process(dict(zip(self.headers, row)))
+        self.process(dict(list(zip(self.headers, row))))
 
         return row
 
@@ -317,15 +321,14 @@ class Stats(object):
 
         rows = []
 
-        for name, stats in  self._stats.items():
+        for name, stats in iteritems(self._stats):
             stats_dict = stats.dict
             del stats_dict["uvalues"]
             stats_dict["hist"] = text_hist(stats_dict["hist"], True)
             if not rows:
-                rows.append(stats_dict.keys())
+                rows.append(list(stats_dict.keys()))
 
-            rows.append(stats_dict.values())
-
+            rows.append(list(stats_dict.values()))
         if rows:
             return 'Statistics \n' + str(tabulate(rows[1:], rows[0], tablefmt="pipe"))
         else:

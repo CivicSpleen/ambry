@@ -85,8 +85,7 @@ class RowIntuiterTest(unittest.TestCase):
         rows.extend([[str(i), i, i + 0.1] for i in range(100)])
 
         fake_matches\
-            .expects_call().returns(False)\
-            .next_call().returns(True)
+            .expects_call().returns(True)
 
         last_line = RowIntuiter()._find_last_match_idx(rows, data_pattern)
         assert last_line >= 0, '_find_last_match_idx should not return negative indexes.'
@@ -305,7 +304,7 @@ class RowIntuiterTest(unittest.TestCase):
         rows.extend(header)
 
         # extend with data rows
-        data_rows_amount = RowIntuiter.FIRST_ROWS - len(header) + RowIntuiter.DATA_SAMPLE_SIZE + RowIntuiter.LAST_ROWS + int(RowIntuiter.DATA_SIZE / 2)
+        data_rows_amount = RowIntuiter.FIRST_ROWS - len(header) + RowIntuiter.DATA_SAMPLE_SIZE + RowIntuiter.LAST_ROWS + int(RowIntuiter.CHUNK_DATA_SIZE / 2)
         rows.extend([['data{}-1'.format(i), 'data{}-2'.format(i)] for i in range(data_rows_amount)])
 
         # extend with footer
@@ -321,7 +320,7 @@ class RowIntuiterTest(unittest.TestCase):
         # second time it raises an error because given chunk does not have data.
         fake_find_last\
             .expects_call().returns(data_rows_amount + len(header) - 1)\
-            .next_call().returns(int(RowIntuiter.DATA_SIZE / 2) - 1)
+            .next_call().returns(int(RowIntuiter.CHUNK_DATA_SIZE / 2) - 1)
         p1 = RowIntuiter()
         p1.set_source_pipe(self._get_source_pipe(rows))
 
@@ -357,13 +356,14 @@ class RowIntuiterTest(unittest.TestCase):
         rows.extend(header)
 
         # extend with data rows
-        data_rows_amount = RowIntuiter.FIRST_ROWS - len(header) + RowIntuiter.DATA_SAMPLE_SIZE + RowIntuiter.LAST_ROWS
+        data_rows_amount = \
+            RowIntuiter.FIRST_ROWS - len(header)\
+            + RowIntuiter.DATA_SAMPLE_SIZE + RowIntuiter.LAST_ROWS
         # add 3 chunks
-        data_rows_amount += (RowIntuiter.DATA_SIZE * 3)
-        # assert (data_rows_amount + len(header)) % RowIntuiter.DATA_SIZE == 0, 'You need straight rows to make the math to work.'
+        data_rows_amount += (RowIntuiter.CHUNK_DATA_SIZE * 3)
 
         # create last chunk with half fill.
-        data_rows_amount += int(RowIntuiter.DATA_SIZE / 2)
+        data_rows_amount += int(RowIntuiter.CHUNK_DATA_SIZE / 2)
         rows.extend([['data{}-1'.format(i), 'data{}-2'.format(i)] for i in range(data_rows_amount)])
 
         # extend with footer
@@ -379,7 +379,7 @@ class RowIntuiterTest(unittest.TestCase):
         # second time it raises an error because given chunk does not have data.
         fake_find_last\
             .expects_call().returns(data_rows_amount + len(header) - 1)\
-            .next_call().returns(int(RowIntuiter.DATA_SIZE / 2) - 1)
+            .next_call().returns(int(RowIntuiter.CHUNK_DATA_SIZE / 2) - 1)
         p1 = RowIntuiter()
         p1.set_source_pipe(self._get_source_pipe(rows))
 

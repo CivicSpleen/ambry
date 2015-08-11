@@ -4,16 +4,20 @@ files, and complex headers with receeding comments in Excel files.
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
-import os.path
-from ambry.etl import Pipe
-from ambry.util import get_logger
 import logging
 
+from ambry.etl import Pipe
+from ambry.util import get_logger
+
+from six.moves.urllib.parse import urlparse
+from six.moves.urllib.request import urlopen
+
 logger = get_logger(__name__, level=logging.INFO, propagate=False)
-logger.setLevel(logging.INFO)
+
 
 class SourceError(Exception):
     pass
+
 
 def source_pipe(bundle, source):
     """Create a source pipe from a source ORM record"""
@@ -22,7 +26,7 @@ def source_pipe(bundle, source):
 
         import sys
         # Ambry.build comes from ambry.bundle.files.PythonSourceFile#import_bundle
-        gen = eval(source.generator, globals(), sys.modules['ambry.build'].__dict__ )
+        gen = eval(source.generator, globals(), sys.modules['ambry.build'].__dict__)
         return gen(bundle, source)
     else:
 
@@ -44,11 +48,12 @@ def source_pipe(bundle, source):
         else:
             raise ValueError("Unknown filetype for source {}: {} ".format(source.name, gft))
 
+
 class DelayedOpen(object):
     """A Lightweight wrapper to delay opening a PyFilesystem object until is it used. It is needed because
     The open() command on a filesystem directory, to produce the file object, also opens the file
     """
-    def __init__(self, source, fs, path, mode = 'r', from_cache = False, account_accessor = None):
+    def __init__(self, source, fs, path, mode='r', from_cache=False, account_accessor=None):
         self._source = source
         self._fs = fs
         self._path = path
@@ -57,8 +62,8 @@ class DelayedOpen(object):
 
         self.from_cache = from_cache
 
-    def open(self, mode = None, encoding = None ):
-        return self._fs.open(self._path, mode if mode else self._mode, encoding = encoding )
+    def open(self, mode=None, encoding=None):
+        return self._fs.open(self._path, mode if mode else self._mode, encoding=encoding)
 
     def syspath(self):
         return self._fs.getsyspath(self._path)
@@ -93,7 +98,7 @@ def fetch(source, cache_fs, account_accessor):
         raise SourceError("Can't download; not url specified")
 
     logger.debug("Downloading: {}".format(source.url))
-    f = download(source.url, cache_fs, account_accessor = account_accessor)
+    f = download(source.url, cache_fs, account_accessor=account_accessor)
 
     logger.debug("Downloaded: {}".format(source.url))
 
@@ -116,12 +121,12 @@ def fetch(source, cache_fs, account_accessor):
                     continue
 
                 if re.search(source.file, zip_fn):
-                    fstor = DelayedOpen( source,  fs, zip_fn, 'rb', account_accessor)
+                    fstor = DelayedOpen(source,  fs, zip_fn, 'rb', account_accessor)
                     logger.debug("FSTOR for zip archive")
                     break
 
             if not fstor:
-                from ambry.dbexceptions import  ConfigurationError
+                from ambry.dbexceptions import ConfigurationError
                 raise ConfigurationError('Failed to get file {} from archive {}'.format(source.file, f))
 
     else:
@@ -129,6 +134,7 @@ def fetch(source, cache_fs, account_accessor):
         logger.debug("FSTOR for file")
 
     return fstor
+
 
 class SourcePipe(Pipe):
     """A Source RowGen is the first pipe in a pipeline, generating rows from the original source. """
@@ -143,7 +149,7 @@ class SourcePipe(Pipe):
     def __iter__(self):
         rg = self._get_row_gen()
         self.start()
-        for i,row in enumerate(rg):
+        for i, row in enumerate(rg):
             if i == 0:
                 self.headers = row
 
@@ -184,6 +190,7 @@ class CsvSource(SourcePipe):
         fstor = self.fetch()
         return petl.io.csv.fromcsv(fstor, self._source.encoding if self._source.encoding else None)
 
+
 class TsvSource(SourcePipe):
     """Generate rows from a TSV ( Tab selerated value) source"""
     def _get_row_gen(self):
@@ -192,13 +199,14 @@ class TsvSource(SourcePipe):
         fstor = self.fetch()
         return petl.io.csv.fromtsv(fstor, self._source.encoding if self._source.encoding else None)
 
+
 class FixedSource(SourcePipe):
     """Generate rows from a fixed-width source"""
 
     def fixed_width_iter(self, flo, source):
 
         parts = []
-        self.headers = [] # THe header will be the column positions.
+        self.headers = []  # THe header will be the column positions.
         for i, c in enumerate(source.source_table.columns):
 
             try:
@@ -231,11 +239,13 @@ class FixedSource(SourcePipe):
 
         self.finish()
 
+
 class ExcelSource(SourcePipe):
     """Generate rows from an excel file"""
     def _get_row_gen(self):
         fstor = self.fetch()
         return excel_iter(fstor.syspath(), self._source.segment)
+
 
 class GoogleSource(SourcePipe):
     """Generate rows from a CSV source
@@ -273,6 +283,7 @@ class GoogleSource(SourcePipe):
 
         for row in wksht.get_all_values():
             yield row
+
 
 def excel_iter(file_name, segment):
     from xlrd import open_workbook
@@ -323,15 +334,14 @@ def get_s3(url, account_accessor):
         #prefix=pd['path'],
         aws_access_key=account['access'],
         aws_secret_key=account['secret'],
-
     )
 
-    #ssl.match_hostname = _old_match_hostname
+    # ssl.match_hostname = _old_match_hostname
 
     return s3
 
+
 def download(url, cache_fs, account_accessor=None):
-    import urlparse
 
     import os.path
     import requests
@@ -339,7 +349,7 @@ def download(url, cache_fs, account_accessor=None):
     from ambry.util import parse_url_to_dict
     import filelock
 
-    parsed = urlparse.urlparse(str(url))
+    parsed = urlparse(str(url))
 
     cache_path = os.path.join(parsed.netloc, parsed.path.strip('/'))
 
@@ -352,7 +362,7 @@ def download(url, cache_fs, account_accessor=None):
 
         cache_fs.makedir(os.path.dirname(cache_path), recursive=True, allow_recreate=True)
 
-        lock_file = cache_fs.getsyspath(cache_path+".lock")
+        lock_file = cache_fs.getsyspath(cache_path + '.lock')
 
         with filelock.FileLock(lock_file):
 
@@ -366,13 +376,11 @@ def download(url, cache_fs, account_accessor=None):
 
             elif url.startswith('ftp:'):
                 import shutil
-                import urllib2
                 from contextlib import closing
 
-                with closing(urllib2.urlopen(url)) as fin:
+                with closing(urlopen(url)) as fin:
                     with cache_fs.open(cache_path, 'wb') as fout:
                         shutil.copyfileobj(fin, fout)
-
             else:
 
                 r = requests.get(url, stream=True)
@@ -410,5 +418,3 @@ def make_excel_date_caster(file_name):
                 return None
 
     return excel_date
-
-

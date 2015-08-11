@@ -4,12 +4,16 @@ Writing data to a partition
 Copyright (c) 2015 Civic Knowledge. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
+import datetime
+
+import gzip
+
+import msgpack
 
 import unicodecsv as csv
 
-from ambry.etl.pipeline import Sink, Pipe
 
-def new_partition_data_file(fs, path, stats = None):
+def new_partition_data_file(fs, path, stats=None):
     from os.path import split, splitext
 
     assert bool(fs)
@@ -30,10 +34,11 @@ def new_partition_data_file(fs, path, stats = None):
 
     return ext_map[ext](fs, path, stats=stats)
 
+
 class PartitionDataFile(object):
     """An accessor for files that hold Partition Data"""
 
-    def __init__(self, fs, path, stats = None):
+    def __init__(self, fs, path, stats=None):
         """
         Create a new acessor
         :param fs: a filesystem object
@@ -68,29 +73,21 @@ class PartitionDataFile(object):
         """
         return NotImplementedError()
 
-    def close(self):
-        """
-        Release resources
-
-        :return:
-        """
-        return NotImplementedError()
-
     @property
     def path(self):
         return self._path
 
     @property
     def syspath(self):
-        return self._fs.getsyspath(self.munged_path,allow_none=True)
+        return self._fs.getsyspath(self.munged_path, allow_none=True)
 
     def open(self, *args, **kwargs):
-        self._file =  self._fs.open(self.munged_path, *args, **kwargs)
+        self._file = self._fs.open(self.munged_path, *args, **kwargs)
         return self._file
 
     def close(self):
         if self._file:
-            self._file.close();
+            self._file.close()
             self._file = None
 
     def delete(self):
@@ -114,7 +111,6 @@ class PartitionDataFile(object):
         """Return the size of the file, in data rows"""
         return self._fs.getsize(self.munged_path)
 
-
     @property
     def munged_path(self):
         if self._path.endswith(self.EXTENSION):
@@ -122,10 +118,10 @@ class PartitionDataFile(object):
         else:
             return self._path+self.EXTENSION
 
+
 class PartitionCsvDataFileReader(object):
 
     def __init__(self, f):
-        import unicodecsv as csv
 
         self._f = f
         self.n = 0
@@ -137,8 +133,9 @@ class PartitionCsvDataFileReader(object):
 
     def next(self):
         """Generate rows from the file"""
+        # TODO: 2to3 brokes that by replacing next with __next__. Need extra check.
 
-        row = self.reader.next()
+        row = next(self.reader)
 
         if not self.header:
             self.header = row
@@ -149,6 +146,7 @@ class PartitionCsvDataFileReader(object):
 
     def close(self):
         self._f.close()
+
 
 class PartitionCsvDataFile(PartitionDataFile):
     """An accessor for files that hold Partition Data"""
@@ -278,7 +276,8 @@ class PartitionCsvDataFile(PartitionDataFile):
 
             self._nrows = 1
 
-            yield dict(zip(self._header, row))
+            yield dict(list(zip(self._header, row)))
+
 
 class PartitionMsgpackDataFileReader(object):
 
@@ -290,13 +289,9 @@ class PartitionMsgpackDataFileReader(object):
         self._compress = compress
 
         if self._compress:
-            import gzip
-
             self._f = gzip.GzipFile(fileobj=self._f)
 
     def __iter__(self):
-
-        import msgpack
 
         unpacker = msgpack.Unpacker(self._f, object_hook=self.decode_obj)
 
@@ -312,7 +307,6 @@ class PartitionMsgpackDataFileReader(object):
 
     @staticmethod
     def decode_obj(obj):
-        import datetime
 
         if b'__datetime__' in obj:
             obj = datetime.datetime.strptime(obj["as_str"], "%Y-%m-%dT%H:%M:%S.%f")
@@ -323,9 +317,9 @@ class PartitionMsgpackDataFileReader(object):
 
         return obj
 
-
     def close(self):
         self._f.close()
+
 
 class PartitionMsgpackDataFile(PartitionDataFile):
     """A reader and writer for Partition files in MessagePack format, which is about 60%  faster than unicode
@@ -333,7 +327,7 @@ class PartitionMsgpackDataFile(PartitionDataFile):
 
     EXTENSION = '.msg'
 
-    def __init__(self, fs, path, stats=None, compress = True):
+    def __init__(self, fs, path, stats=None, compress=True):
 
         assert bool(fs)
 
@@ -364,7 +358,6 @@ class PartitionMsgpackDataFile(PartitionDataFile):
             # Allow overriding the compression so we can read the file as compressed data,
             # for copying to other files.
             if self._compress and compress:
-                import gzip
                 self._file = gzip.GzipFile(fileobj=self._file)
 
         return self._file
@@ -376,14 +369,12 @@ class PartitionMsgpackDataFile(PartitionDataFile):
         :return:
         """
 
-        import msgpack
-
         if not self._nrows == 0:
             return
 
         self._header = list(row)
 
-        self.open( mode='wb')
+        self.open(mode='wb')
 
         assert isinstance(row, (list, tuple))
 
@@ -396,7 +387,6 @@ class PartitionMsgpackDataFile(PartitionDataFile):
 
     @staticmethod
     def encode_obj(obj):
-        import datetime
         if isinstance(obj, datetime.datetime):
             return {'__datetime__': True, 'as_str': obj.isoformat()}
         if isinstance(obj, datetime.date):
@@ -408,14 +398,12 @@ class PartitionMsgpackDataFile(PartitionDataFile):
 
     def insert_body(self, row):
         """
-        Add a row to the file. The first row must be a tuple or list, containing the header, to set the order of
-        the fields, while subsequent rows can be lists or dicts.
+        Add a row to the file. The first row must be a tuple or list, containing the header, to set
+        the order of the fields, while subsequent rows can be lists or dicts.
 
         :param row:
         :return:
         """
-
-        import msgpack
 
         # Assume the first item is the id, and fill it is if it empty
         if row[0] is None:
@@ -432,24 +420,20 @@ class PartitionMsgpackDataFile(PartitionDataFile):
         if stream:
             return PartitionMsgpackDataFileReader(stream, self._compress)
         else:
-            return  PartitionMsgpackDataFileReader(self._fs.open(self.munged_path, mode='rb'), self._compress)
+            return PartitionMsgpackDataFileReader(self._fs.open(self.munged_path, mode='rb'), self._compress)
 
     @property
     def dict_rows(self):
         """Generate rows from the file"""
 
-        for i,row in enumerate(self.rows):
+        for i, row in enumerate(self.rows):
             if i == 0:
                 continue
 
-            yield dict(zip(self._header, row))
+            yield dict(list(zip(self._header, row)))
 
     def clean(self):
         """Remove all of the rows in the file"""
 
         self.close()
         self._fs.remove(self._path)
-
-
-
-

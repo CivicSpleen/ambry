@@ -2,6 +2,8 @@
 
 import unittest
 
+from boto.exception import S3ResponseError
+
 from test.test_base import TestBase
 
 
@@ -319,7 +321,6 @@ class Test(TestBase):
 
         self.assertEquals('value1', check_schema_file('uuid'))
 
-
     def test_simple_build(self):
         """Build the simple bundle"""
 
@@ -489,10 +490,8 @@ class Test(TestBase):
     # tests in the class, at least when run in PyCharm.
     def test_install(self):
         """Test copying a bundle to a remote, then streaming it back"""
-        import os
-        from ambry.orm.file import File
 
-        b = self.setup_bundle('simple', source_url = 'temp://')
+        b = self.setup_bundle('simple', source_url='temp://')
         l = b._library
 
         b.sync_in()
@@ -509,7 +508,14 @@ class Test(TestBase):
 
         self.assertEqual('build', l.partition(p_vid).location)
 
-        remote_name, path = b.checkin()
+        try:
+            remote_name, path = b.checkin()
+        except S3ResponseError as exc:
+            if exc.status == 403:  # Forbidden.
+                raise unittest.SkipTest(
+                    'Skip S3 error - {}. It seems S3 credentials are not valid.'.format(exc))
+            else:
+                raise
 
         self.assertEqual('build', l.partition(p_vid).location)
 
