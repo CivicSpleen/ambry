@@ -10,8 +10,11 @@ Revised BSD License, included in this distribution as LICENSE.txt
 from collections import Counter
 
 from livestats import livestats
+from six import iteritems, iterkeys
 
 from ambry.util import Constant
+
+from .pipeline import PipelineError
 
 
 def text_hist(nums, ascii=False):
@@ -115,7 +118,7 @@ class StatSet(object):
                     self.bin_max = self.stats.mean() + sqrt(self.stats.variance()) * 2
                     self.bin_width = (self.bin_max - self.bin_min) / self.num_bins
 
-                    for v, count in self.counts.items():
+                    for v, count in iteritems(self.counts):
                         if v >= self.bin_min and v <= self.bin_max:
                             bin_ = int((v - self.bin_min) / self.bin_width)
                             self.bins[bin_] += count
@@ -139,7 +142,7 @@ class StatSet(object):
 
     @property
     def nuniques(self):
-        return len(self.counts.items())
+        return len(list(self.counts.items()))
 
     @property
     def mean(self):
@@ -271,25 +274,25 @@ class Stats(object):
 
         parts = []
 
-        for name in self._stats.keys():
+        for name in iterkeys(self._stats):
             if self._stats[name] is not None:
                 parts.append("stats['{name}'].add(row['{name}'])".format(name=name))
 
         if not parts:
-            from pipeline import PipelineError
-            raise PipelineError("Did not get any stats variables for table {}. Was add() or init() called first? "
-                           .format(self.table.name))
+            error_msg = 'Did not get any stats variables for table {}. Was add() or init() called first?'\
+                .format(self.table.name)
+            raise PipelineError(error_msg)
 
         code = 'def _process_row(stats, row):\n    {}'.format('\n    '.join(parts))
 
-        exec code
+        exec(code)
 
         f = locals()['_process_row']
 
         return f, code
 
     def stats(self):
-        return [(name, self._stats[name]) for name, stat in self._stats.items()]
+        return [(name, self._stats[name]) for name, stat in iteritems(self._stats)]
 
     def process(self, row):
         try:
@@ -309,7 +312,7 @@ class Stats(object):
 
     def process_body(self, row):
 
-        self.process(dict(zip(self.headers, row)))
+        self.process(dict(list(zip(self.headers, row))))
 
         return row
 
@@ -318,14 +321,14 @@ class Stats(object):
 
         rows = []
 
-        for name, stats in self._stats.items():
+        for name, stats in iteritems(self._stats):
             stats_dict = stats.dict
             del stats_dict["uvalues"]
             stats_dict["hist"] = text_hist(stats_dict["hist"], True)
             if not rows:
-                rows.append(stats_dict.keys())
+                rows.append(list(stats_dict.keys()))
 
-            rows.append(stats_dict.values())
+            rows.append(list(stats_dict.values()))
         if rows:
             return 'Statistics \n' + str(tabulate(rows[1:], rows[0], tablefmt="pipe"))
         else:
