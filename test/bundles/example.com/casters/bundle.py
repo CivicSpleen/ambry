@@ -1,5 +1,7 @@
+# -*- coding: utf-8 -*-
 from ambry.bundle import Bundle
 from ambry.etl import SourcePipe
+
 
 class ExampleSourcePipe(SourcePipe):
 
@@ -16,7 +18,7 @@ class ExampleSourcePipe(SourcePipe):
 
         cat_cycle = cycle(['red', 'blue', 'green', 'yellow', 'black'])
 
-        num_cycle = cycle([1,2,3,4,5,6,'*'])
+        num_cycle = cycle([1, 2, 3, 4, 5, 6, '*'])
 
         for i in range(6000):
             row = OrderedDict()
@@ -29,7 +31,7 @@ class ExampleSourcePipe(SourcePipe):
             row['categorical'] = cat_cycle.next()
             row['codes'] = num_cycle.next()
             row['keptcodes'] = num_cycle.next()
-            row['date'] = date(2000, i%12+1, i%28+1)
+            row['date'] = date(2000, i % 12 + 1, i % 28 + 1)
 
             if i == 0:
                 yield row.keys()

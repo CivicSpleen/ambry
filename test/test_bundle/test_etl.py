@@ -28,7 +28,6 @@ class Test(TestBase):
         for i in range(6):
             data.append(['abcdefghij'[j] if i == 0 else str(j) for j in range(10)])
 
-
         for i in range(3):
             cdf = new_partition_data_file(self.fs, 'foo.csv')
 
@@ -49,7 +48,7 @@ class Test(TestBase):
             if i < len(data):
                 self.assertEquals(data[i], row)
 
-        for i, row in enumerate(cdf.dict_rows,1):
+        for i, row in enumerate(cdf.dict_rows, 1):
             if i < len(data):
                 self.assertEquals(sorted(data[0]), sorted(row.keys()))
                 self.assertEquals(sorted(data[i]), sorted(row.values()))
@@ -84,7 +83,7 @@ class Test(TestBase):
 
             return eval("lambda row: [{}]".format(','.join(funcs)))
 
-        row_munger1 =  munger1(schema)
+        row_munger1 = munger1(schema)
 
         def row_munger2(row):
             out = []
@@ -110,7 +109,7 @@ class Test(TestBase):
                 return random.random()
 
         for i in range(100):
-            data.append([ str(randdata(schema[i][1])) for i in range(ncols)])
+            data.append([str(randdata(schema[i][1])) for i in range(ncols)])
 
         cdf = new_partition_data_file(fs, 'foo.msg')
 
@@ -738,7 +737,9 @@ class Test(TestBase):
         pl.run()
 
         self.assertEquals([1, 0, 1, 2, 10, 11, 12, 9, 19], pl[PrintRows].rows[0])
-        self.assertEquals(['col0', 'col1', 'col2', 'col10', 'col11', 'col12', 'col9', 'col19'], pl[PrintRows].headers)
+        self.assertEquals(
+            ['col0', 'col1', 'col2', 'col10', 'col11', 'col12', 'col9', 'col19'],
+            pl[PrintRows].headers)
 
     def test_multi_source(self):
         from ambry.etl.pipeline import Pipeline, Pipe, PrintRows
@@ -793,11 +794,9 @@ class Test(TestBase):
         for row in p.stream(skip_header=True):
             count += 1
 
-        print float(count)/ ( time.time() - t1)
-
+        print float(count) / (time.time() - t1)
 
     def test_row_gen(self):
-        from ambry.etl.rowgen import source_pipe
         b = self.setup_bundle('complete-load')
 
         b.sync_in()
@@ -814,7 +813,7 @@ class Test(TestBase):
 
     def test_generator(self):
 
-        b = self.setup_bundle('generators', source_url = 'temp://')
+        b = self.setup_bundle('generators', source_url='temp://')
 
         b.sync_in()
         b = b.cast_to_subclass()
@@ -828,7 +827,7 @@ class Test(TestBase):
         b.build()
 
         self.assertEqual(['example.com-generators-demo', 'example.com-generators-demo-build2'],
-                         [ str(p.identity.name) for p in b.partitions])
+                         [str(p.identity.name) for p in b.partitions])
 
         for p in b.partitions:
 
@@ -837,7 +836,7 @@ class Test(TestBase):
                 count += 1
                 sum += row['number2']
 
-            self.assertEquals(800,count)
+            self.assertEquals(800, count)
             self.assertEquals(159200, sum)
 
     def test_casters(self):
@@ -847,20 +846,21 @@ class Test(TestBase):
         b.sync_in()
         b = b.cast_to_subclass()
 
-        b.build()
+        try:
+            b.build()
+        except Exception as exc:
+            if exc.message == 'unsupported locale setting':
+                raise EnvironmentError('You need to install en_US locale to run that test.')
 
         mn = mx = 0
         for row in list(b.partitions)[0].stream(as_dict=True):
             self.assertEqual(row['index'], row['index2'])
-            int(row['numcom']) # Check that the comma was removed
+            int(row['numcom'])  # Check that the comma was removed
             mn, mx = min(mn, row['codes']), max(mx, row['codes'])
 
-        self.assertEqual(-1, mn) # The '*' should have been turned into a -1
+        self.assertEqual(-1, mn)  # The '*' should have been turned into a -1
         self.assertEqual(6, mx)
 
+        # FIXME: Remove print.
         for c in b.dataset.codes:
             print c.column.table.name, c.column.name, c.key, c.value, c.source
-
-
-
-
