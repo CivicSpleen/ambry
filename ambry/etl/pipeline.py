@@ -1466,7 +1466,7 @@ class Pipeline(OrderedDict):
             if len(out[i]) < ll:
                 out[i] += ['']*(ll-len(out[i]))
 
-        return tabulate.tabulate(out)
+        return tabulate(out)
 
 
 def augment_pipeline(pl, head_pipe=None, tail_pipe=None):
