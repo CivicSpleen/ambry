@@ -144,10 +144,10 @@ def config_install(args, l, rc):
     # Make the directories.
 
     from ..run import get_runconfig
-    RunConfig = get_runconfig(install_file)
+    rc = get_runconfig(install_file)
 
-    for name in RunConfig.group('filesystem').keys():
-        fs = RunConfig.filesystem(name)
+    for name in rc.group('filesystem').keys():
+        fs = rc.filesystem(name)
 
         try:
             dr = fs['dir']
