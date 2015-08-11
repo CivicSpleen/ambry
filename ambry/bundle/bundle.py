@@ -175,11 +175,11 @@ class Bundle(object):
     @property
     def session(self):
         from sqlalchemy.orm import object_session
-        return object_session(self.dataset)
+        return self.dataset._database.session
 
     def rollback(self):
         from sqlalchemy.orm import object_session
-        return object_session(self.dataset).rollback()
+        return self.dataset._database.session.rollback()
 
     @property
     def dataset(self):
@@ -247,7 +247,7 @@ class Bundle(object):
 
         p = self.partition(vid)
 
-        self.dataset._database.session.delete(p._partition)
+        self.session.delete(p._partition)
 
     def source(self, name):
         return self.dataset.source_file(name)
@@ -493,7 +493,7 @@ class Bundle(object):
         """Clean generated objects from the dataset, but only if there are File contents
          to regenerate them"""
         from ambry.orm import ColumnStat, File
-        from sqlalchemy.orm import object_session
+
 
         if self.is_finalized and not force:
             self.warn("Can't clean; bundle is finalized")
@@ -503,7 +503,7 @@ class Bundle(object):
         self.state = self.STATES.CLEANING
 
         ds = self.dataset
-        s = object_session(ds)
+        s = self.session
 
         # FIXME. There is a problem with the cascades for ColumnStats that prevents them from
         # being  deleted with the partitions. Probably, the are seen to be owed by the columns instead.
@@ -836,7 +836,6 @@ class Bundle(object):
             self.set_error_state()
             raise
 
-
         return True
 
     def final_log_pipeline(self, pl):
@@ -965,7 +964,6 @@ Pipeline Headers
                 from ambry.dbexceptions import PhaseError
                 raise PhaseError('Too many casting errors')
 
-
     def build_post_unify_partitions(self):
         """For all of the segments for a partition, create the parent partition, combine the children into the parent,
         and delete the children. """
@@ -1023,7 +1021,7 @@ Pipeline Headers
 
             for s in segments:
                 self.wrap_partition(s).datafile.delete()
-                self.dataset._database.session.delete(s)
+                self.session.delete(s)
 
     def final_finalize_segments(self, pl):
 

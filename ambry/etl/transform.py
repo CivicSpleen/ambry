@@ -341,44 +341,32 @@ class Transform(object):
             else:
                 o.append((i, name, 'partial(parse_type,{})'.format(type_.__name__)))
 
-        dict_transform = """def dict_transform(caster, row):
+        dict_transform = "lambda caster, row:{{{}}}".format(
+                        ','.join("'{name}':{func}(caster, '{name}', row.get('{name}'))".format(i=i, name=name, func=v)
+                        for i, name, v in o))
 
-        import dateutil.parser as dp
-        import datetime
-        from functools import partial
-        from ambry.etl.transform import parse_date, parse_time, parse_datetime
-
-        return {{{}}}""".format(','.join("'{name}':{func}(caster, '{name}', row.get('{name}'))".format(i=i, name=name, func=v)
-                                         for i, name, v in o))
-
-        row_transform = """def row_transform(caster, row):
-
-        import dateutil.parser as dp
-        import datetime
-        from functools import partial
-        from ambry.etl.transform import parse_date, parse_time, parse_datetime
-
-        return [{}]""".format(
-            ','.join("{func}(caster, {i}, row[{i}])".format(i=i, name=name, func=v) for i, name, v in o))
+        row_transform = "lambda caster, row: [{}]".format(
+                        ','.join("{func}(caster, {i}, row[{i}])".format(i=i, name=name, func=v)
+                        for i, name, v in o))
 
         return dict_transform,  row_transform
 
     def compile(self):
-        # import uuid
+
+        import dateutil.parser as dp
+        import datetime
+        from functools import partial
+        from ambry.etl.transform import parse_date, parse_time, parse_datetime
 
         # Get the code in string form.
-        dtc, rtc = self.make_transform()
+        self.dict_transform_code, self.row_transform_code = self.make_transform()
 
         for k, v in self.custom_types.items():
             globals()[k] = v
 
-        exec dtc
-        self.dict_transform_code = dtc
-        self.dict_transform = locals()['dict_transform']
+        self.dict_transform = eval(self.dict_transform_code)
 
-        exec rtc
-        self.row_transform_code = rtc
-        self.row_transform = locals()['row_transform']
+        self.row_transform = eval(self.row_transform_code)
 
     def cast_error(self, type_, name, v, e):
         self.error_accumulator[name] = {'type': type_, 'value': v, 'exception': str(e)}
@@ -416,6 +404,8 @@ class CasterPipe(Transform, Pipe, ):
         self.errors = []
         self.table = table
 
+        self.row_transform_code = self.dict_transform_code = ''
+
     def caster_map(self, table):
 
         casters = {}
@@ -449,7 +439,6 @@ class CasterPipe(Transform, Pipe, ):
 
         return casters
 
-
     def process_header(self, row):
 
         if self.table:
@@ -458,6 +447,7 @@ class CasterPipe(Transform, Pipe, ):
             self.table = table = self.source.dest_table
 
         ocm = self.caster_map(table)
+
 
         for h in row:
 
@@ -493,3 +483,10 @@ class CasterPipe(Transform, Pipe, ):
             self.errors.append(self.error_accumulator)
 
         return row
+
+    def __str__(self):
+        from ambry.util import qualified_class_name
+
+        return (qualified_class_name(self) + "\n" +
+                self.indent + "Row: "+self.row_transform_code + "\n" +
+                self.indent + "Dict: "+ self.dict_transform_code + "\n" )

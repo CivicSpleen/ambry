@@ -66,6 +66,15 @@ class DelayedOpen(object):
     def source_pipe(self):
         return self._source.row_gen()
 
+    def __str__(self):
+
+        from fs.errors import NoSysPathError
+
+        try:
+            return self.syspath()
+        except NoSysPathError:
+            return str(self._fs)+';'+str(self._path)
+
 def fetch(source, cache_fs, account_accessor):
     """Download the source and return a callable object that will open the file. """
 
@@ -159,10 +168,13 @@ class SourcePipe(Pipe):
 
     def __str__(self):
         from ..util import qualified_class_name
+        from fs.errors import NoSysPathError
 
         if self._fstor:
-            return qualified_class_name(self)+"\n"+self.indent+self._fstor.syspath()
+            return qualified_class_name(self)+"\n"+self.indent+str(self._fstor)
+
         else:
+
             return qualified_class_name(self)
 
 class CsvSource(SourcePipe):

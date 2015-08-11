@@ -849,11 +849,24 @@ class Test(TestBase):
             self.assertEquals(159200, sum)
 
     def test_casters(self):
+        from ambry.dbexceptions import PhaseError
+        from ambry.etl import CasterPipe
 
         b = self.setup_bundle('casters', source_url='temp://')
 
         b.sync_in()
         b = b.cast_to_subclass()
+
+        try:
+            b.build()
+        except PhaseError as e: # Gets cast errors, which are converted to codes
+            self.assertEqual(1, len(b.dataset.codes))
+
+        b.commit()
+        b.table('simple').column('keptcodes').caster = 'remove_codes'
+        b.commit()
+
+        b.dataset.codes[:] = [] # Reset the codes, of the next build will think it had errors.
 
         b.build()
 
@@ -866,8 +879,9 @@ class Test(TestBase):
         self.assertEqual(-1, mn) # The '*' should have been turned into a -1
         self.assertEqual(6, mx)
 
-        for c in b.dataset.codes:
-            print c.column.table.name, c.column.name, c.key, c.value, c.source
+        self.assertEqual(0, len(b.dataset.codes))
+
+
 
 
 

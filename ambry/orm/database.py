@@ -459,7 +459,7 @@ class Database(object):
         # FIXME: Oh, this is horrible. Sqlalchemy inserts all of the configs as a group, but they are self-referential,
         # so some with a reference to a parent get inserted before their parent. The topo sort solives this,
         # but there must be a better way to do it.
-        
+
         dag = { c.id:set([c.parent_id]) for c in ds.configs}
 
         refs = { c.id:c for c in ds.configs }
