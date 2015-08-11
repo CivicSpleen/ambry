@@ -6,9 +6,12 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 from __future__ import print_function
-import logging
+
 import argparse
+import logging
 import os.path
+
+from six import itervalues
 
 from ambry.run import get_runconfig
 import ambry._meta
@@ -49,7 +52,7 @@ def fatal(template, *args, **kwargs):
         global_logger.critical(template.replace('{', '{{').replace('}', '}}').format(*args, **kwargs))
     except:
         # No idea ...
-        global_logger.critical(';'.join(str(e) for e in [ template ] + list(args) + list(kwargs.items())))
+        global_logger.critical(';'.join(str(e) for e in [template] + list(args) + list(kwargs.items())))
 
     sys.exit(1)
 
@@ -106,7 +109,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=None):
 
     for e in all_fields:
         # Just to make the following code easier to read
-        e = dict(zip(record_entry_names, e))
+        e = dict(list(zip(record_entry_names, e)))
 
         if e['name'] not in fields:
             continue
@@ -120,7 +123,7 @@ def _print_bundle_entry(ident, show_partitions=False, prtf=prt, fields=None):
 
     if show_partitions and ident.partitions:
 
-        for pi in ident.partitions.values():
+        for pi in itervalues(ident.partitions):
             prtf(p_format, *[f(pi) for f in extractors])
 
 
@@ -226,7 +229,7 @@ def _print_info(l, ident, list_partitions=False):
 
         elif list_partitions:
             prt("D Partitions: {}", len(ident.partitions))
-            for p in sorted(ident.partitions.values(), key=lambda x: x.vname):
+            for p in sorted(list(ident.partitions.values()), key=lambda x: x.vname):
                 prt("P {:15s} {}", p.vid, p.vname)
 
 
@@ -273,9 +276,9 @@ def get_parser():
 
     from .library import library_parser
     from .warehouse import warehouse_parser
-    from config import config_parser
-    from bundle import bundle_parser
-    from root import root_parser
+    from .config import config_parser
+    from .bundle import bundle_parser
+    from .root import root_parser
 
     library_parser(cmd)
     warehouse_parser(cmd)
@@ -289,9 +292,9 @@ def get_parser():
 def main(argsv=None, ext_logger=None):
     from .library import library_command
     from .warehouse import warehouse_command
-    from config import config_command
-    from bundle import bundle_command
-    from root import root_command
+    from .config import config_command
+    from .bundle import bundle_command
+    from .root import root_command
     from ..dbexceptions import ConfigurationError
 
     parser = get_parser()
