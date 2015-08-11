@@ -41,6 +41,7 @@ def config_command(args, rc):
         l = new_library(rc)
         l.logger = global_logger
     except Exception as e:
+        l = None
         warn("Failed to setup library: {} ".format(e))
 
     globals()['config_' + args.subcommand](args, l, rc)
