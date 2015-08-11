@@ -46,7 +46,7 @@ class MigrationTest(BasePostgreSQLTest):
 
     @fudge.patch(
         'ambry.orm.database._get_all_migrations')
-    def test_apllies_new_migration_to_sqlite_database(self, fake_get):
+    def test_applies_new_migration_to_sqlite_database(self, fake_get):
         # replace real migrations with tests migrations.
 
         test_migrations = [
@@ -59,9 +59,10 @@ class MigrationTest(BasePostgreSQLTest):
         fake_get.expects_call().returns(test_migrations)
 
         # create database with initial schema
-        db = Database('sqlite:///{}'.format(self.sqlite_db_file))
-        db.create_tables()
-        db.close()
+        with fudge.patched_context(database, 'SCHEMA_VERSION', 100):
+            db = Database('sqlite:///{}'.format(self.sqlite_db_file))
+            db.create_tables()
+            db.close()
 
         # switch version and reconnect. Now both migrations should apply.
         with fudge.patched_context(database, 'SCHEMA_VERSION', 102):
@@ -98,9 +99,10 @@ class MigrationTest(BasePostgreSQLTest):
         self.pg_connection()
 
         # populate database with initial schema
-        db = Database(self.postgres_test_dsn)
-        db.create()
-        db.close()
+        with fudge.patched_context(database, 'SCHEMA_VERSION', 100):
+            db = Database(self.postgres_test_dsn)
+            db.create()
+            db.close()
 
         # switch version and reconnect. Now both migrations should apply.
         with fudge.patched_context(database, 'SCHEMA_VERSION', 102):
