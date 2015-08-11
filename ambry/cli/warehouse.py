@@ -5,7 +5,7 @@ included in this distribution as LICENSE.txt
 
 """
 
-from six import string_types
+from six import string_types, iteritems
 
 from ambry.warehouse import database_config
 
@@ -172,7 +172,7 @@ def warehouse_new(args, l, config):
         'cache': args.cache
     }
 
-    dbc.update({k: v for k, v in data.items() if v})
+    dbc.update({k: v for k, v in iteritems(data) if v})
 
     w = _warehouse_new_from_dbc(dbc, l)
 
@@ -203,7 +203,7 @@ def _warehouse_new_from_dbc(dbc, l):
 def warehouse_users(args, w, config):
 
     if args.action == 'list' or (not bool(args.delete) and not bool(args.add)):
-        for name, values in w.users().items():
+        for name, values in iteritems(w.users()):
             prt("{} id={} super={}".format(
                 name, values['id'], values['superuser']))
     elif bool(args.delete):
@@ -254,8 +254,8 @@ def warehouse_config(args, w, config):
         if val:
             setattr(w, var, val)
         else:
-            print getattr(w, var)
+            print(getattr(w, var))
 
     else:
         for e in w.library.database.get_config_group('warehouse'):
-            print e
+            print(e)
