@@ -7,13 +7,17 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 import dateutil.parser as dp
 import datetime
-from functools import partial
-from pipeline import Pipe
+import sys
 import textwrap
+
+from six import string_types, iteritems
+
+from .pipeline import Pipe, MissingHeaderError
 
 
 class CasterError(Exception):
     pass
+
 
 class CastingError(TypeError):
 
@@ -138,7 +142,7 @@ class BasicTransform(object):
                     f))
 
         # Strip test values, but not numbers
-        f = lambda v, f=f: f(v.strip()) if isinstance(v, basestring) else f(v)
+        f = lambda v, f=f: f(v.strip()) if isinstance(v, string_types) else f(v)
 
         if useIndex:
             f = lambda row, column=column, f=f: f(row[column.sequence_id - 1])
@@ -188,7 +192,7 @@ class NaturalInt(int):
 
 def is_nothing(v):
 
-    if isinstance(v, basestring):
+    if isinstance(v, string_types):
         v = v.strip()
 
     if v is None or v == '' or v == '-':
@@ -245,7 +249,7 @@ def parse_type(type_, caster,  name, v):
 def parse_date(caster, name, v):
     if is_nothing(v):
         return None
-    elif isinstance(v, basestring):
+    elif isinstance(v, string_types):
         try:
             return dp.parse(v).date()
         except (ValueError,  TypeError) as e:
@@ -263,7 +267,7 @@ def parse_date(caster, name, v):
 def parse_time(caster, name, v):
     if is_nothing(v):
         return None
-    elif isinstance(v, basestring):
+    elif isinstance(v, string_types):
         try:
             return dp.parse(v).time()
         except ValueError as e:
@@ -273,14 +277,15 @@ def parse_time(caster, name, v):
     elif isinstance(v, datetime.time):
         return v
     else:
-        caster.cast_error(datetime.date, name, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
+        caster.cast_error(
+            datetime.date, name, v, "Expected datetime.time or basestring, got '{}'".format(type(v)))
         return None
 
 
 def parse_datetime(caster, name, v):
     if is_nothing(v):
         return None
-    elif isinstance(v, basestring):
+    elif isinstance(v, string_types):
         try:
             return dp.parse(v)
         except (ValueError, TypeError) as e:
@@ -337,7 +342,6 @@ class Transform(object):
 
             if type_ in [datetime.date, datetime.time, datetime.datetime, int, float, str, unicode]:
                 o.append((i, name, 'parse_{}'.format(type_.__name__)))
-
             else:
                 o.append((i, name, 'partial(parse_type,{})'.format(type_.__name__)))
 
@@ -364,24 +368,24 @@ class Transform(object):
         return dict_transform,  row_transform
 
     def compile(self):
-        # import uuid
 
         # Get the code in string form.
         dtc, rtc = self.make_transform()
 
-        for k, v in self.custom_types.items():
+        for k, v in iteritems(self.custom_types):
             globals()[k] = v
 
-        exec dtc
+        exec(dtc)
         self.dict_transform_code = dtc
         self.dict_transform = locals()['dict_transform']
 
-        exec rtc
+        exec(rtc)
         self.row_transform_code = rtc
         self.row_transform = locals()['row_transform']
 
     def cast_error(self, type_, name, v, e):
         self.error_accumulator[name] = {'type': type_, 'value': v, 'exception': str(e)}
+
 
 class DictTransform(Transform):
 
@@ -428,17 +432,17 @@ class CasterPipe(Transform, Pipe, ):
 
                 try:
                     caster_f = getattr(self.bundle, c.caster)
-                except AttributeError as e:
+                except AttributeError:
                     pass
 
                 try:
-                    import sys
                     caster_f = getattr(sys.modules['ambry.build'], c.caster)
-                except AttributeError as e:
+                except AttributeError:
                     pass
 
                 if not caster_f:
-                    raise AttributeError("Could not find caster '{}' in bundle class or bundle module ".format(c.caster))
+                    raise AttributeError(
+                        "Could not find caster '{}' in bundle class or bundle module ".format(c.caster))
 
             else:
                 caster_f = c.python_type
@@ -448,7 +452,6 @@ class CasterPipe(Transform, Pipe, ):
             casters[c.name] = caster_f
 
         return casters
-
 
     def process_header(self, row):
 
@@ -464,9 +467,9 @@ class CasterPipe(Transform, Pipe, ):
             try:
                 self.append(h, ocm[h])
             except KeyError:
-                from pipeline import MissingHeaderError
                 # pipeline, pipe, header, table,
-                raise MissingHeaderError(self, h, table,
+                raise MissingHeaderError(
+                    self, h, table,
                     "While processing header in CasterPipe in pipe '{}' failed to find header '{}' in dest table '{}' "
                     .format(self.pipeline.name, h, table.name))
 
@@ -475,16 +478,13 @@ class CasterPipe(Transform, Pipe, ):
         return row
 
     def process_body(self, row):
-
-        self.error_accumulator = {} # Clear the accumulator
+        self.error_accumulator = {}  # Clear the accumulator
         try:
             row = self.row_transform(self, row)
-        except IndexError as e:
+        except IndexError:
             raise IndexError('Header has {} items, Row has {} items, caster has {}\nheaders= {}\ncaster = {}\nrow    = {}'
                              .format(len(self.headers), len(row), len(self.types),
-                                     self.headers, [ e[0] for e in self.types], row))
-        except Exception as e:
-            raise
+                                     self.headers, [t[0] for t in self.types], row))
 
         if self.error_handler:
             row, self.error_accumulator = self.error_handler(row, self.error_accumulator)
