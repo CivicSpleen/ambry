@@ -275,13 +275,11 @@ def get_parser():
     cmd = parser.add_subparsers(title='commands', help='command help')
 
     from .library import library_parser
-    from .warehouse import warehouse_parser
     from .config import config_parser
     from .bundle import bundle_parser
     from .root import root_parser
 
     library_parser(cmd)
-    warehouse_parser(cmd)
     config_parser(cmd)
     bundle_parser(cmd)
     root_parser(cmd)
@@ -291,7 +289,6 @@ def get_parser():
 
 def main(argsv=None, ext_logger=None):
     from .library import library_command
-    from .warehouse import warehouse_command
     from .config import config_command
     from .bundle import bundle_command
     from .root import root_command

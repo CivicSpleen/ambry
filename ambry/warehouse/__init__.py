@@ -3,11 +3,10 @@ from __future__ import absolute_import
 from ckcache import Cache
 
 from ..library import Library
-from ..library.database import LibraryDb
-from ..database import new_database
+
 from ..util import Constant, memoize
 from ambry.util import init_log_rate
-from ..library.files import Files
+
 from ..identity import TopNumber
 
 
