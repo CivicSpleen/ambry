@@ -356,10 +356,11 @@ class RowIntuiterTest(unittest.TestCase):
         rows.extend(header)
 
         # extend with data rows
-        data_rows_amount = RowIntuiter.FIRST_ROWS - len(header) + RowIntuiter.DATA_SAMPLE_SIZE + RowIntuiter.LAST_ROWS
+        data_rows_amount = \
+            RowIntuiter.FIRST_ROWS - len(header)\
+            + RowIntuiter.DATA_SAMPLE_SIZE + RowIntuiter.LAST_ROWS
         # add 3 chunks
         data_rows_amount += (RowIntuiter.CHUNK_DATA_SIZE * 3)
-        # assert (data_rows_amount + len(header)) % RowIntuiter.DATA_SIZE == 0, 'You need straight rows to make the math to work.'
 
         # create last chunk with half fill.
         data_rows_amount += int(RowIntuiter.CHUNK_DATA_SIZE / 2)
