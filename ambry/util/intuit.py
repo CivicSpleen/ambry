@@ -186,7 +186,7 @@ class Column(object):
         import datetime
 
         self.type_ratios = {test: float(
-            self.type_counts[test]) / float(self.count) for test, testf in tests + [(None, None)]}
+           (self.type_counts[test]) / float(self.count)) if self.count else 0 for test, testf in tests + [(None, None)]}
 
         if self.type_ratios[str] > .2:
             return str, False

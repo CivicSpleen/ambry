@@ -185,6 +185,8 @@ class LoaderBundle(BuildBundle):
         line_mangler = partial(self.line_mangler,  source)
         row_mangler = partial(self.row_mangler, source)
 
+        ext = ext.lower()
+
         if ext == 'csv':
             from rowgen import DelimitedRowGenerator
             return DelimitedRowGenerator(fn, line_mangler = line_mangler, row_mangler = row_mangler, **rs)
@@ -196,8 +198,10 @@ class LoaderBundle(BuildBundle):
 
             return ExcelRowGenerator(fn, **rs)
         else:
-            raise Exception("Unknown source file extension: '{}' for file '{}' from source {} "
+            from rowgen import IteratorRowGenerator
+            self.error("Unknown source file extension: '{}' for file '{}' from source {} "
                             .format(ext, file_name, source_name))
+            return IteratorRowGenerator(iter([]))
 
     def meta(self):
         from collections import defaultdict
@@ -536,7 +540,6 @@ class LoaderBundle(BuildBundle):
 
         return True
 
-
 class CsvBundle(LoaderBundle):
     """A Bundle variant for loading CSV files"""
     pass
@@ -544,7 +547,6 @@ class CsvBundle(LoaderBundle):
 
 class ExcelBuildBundle(CsvBundle):
     pass
-
 
 class TsvBuildBundle(CsvBundle):
     delimiter = '\t'

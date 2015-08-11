@@ -206,7 +206,6 @@ def root_info(args, l, rc):
         except (ConfigurationError, AttributeError):
             prt("Source :   No source directory")
 
-
         prt("Configs:   {}",rc.dict['loaded'])
 
         prt("Library:   {}", l.database.dsn)

@@ -170,8 +170,6 @@ class Bundle(object):
         with self.session as s:
             return self.database.set_config_value( self.dataset.vid, group, key, value, session=s)
 
-
-
     def get_value(self, group, key, default=None):
         """Get a config value using the current bundle's configuration
         group."""
