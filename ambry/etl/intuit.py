@@ -416,6 +416,7 @@ class TypeIntuiter(Pipe):
 
             yield d
 
+
 class RowIntuiter(Pipe):
     """ Separates rows to the comments, header and data.
 
@@ -428,11 +429,9 @@ class RowIntuiter(Pipe):
     errors = {}
     FIRST_ROWS = 20  # How many rows to keep in the top rows slice while looking for the comments and header.
     LAST_ROWS = 20  # How many rows to keep in the last rows slice while looking for the last row with data.
-    SAMPLE_SIZE = 200  # How many rows to keep in the sample while recognizing data pattern.
-    DATA_SIZE = 100  # Size of the data in the chunk.
-    HEADER_SIZE = 20  # Size of the header in the chunk.
+    CHUNK_DATA_SIZE = 100  # Size of the data in the chunk.
+    CHUNK_FOOTER_SIZE = 20  # Size of the header in the chunk.
     DATA_SAMPLE_SIZE = 1000  # How many rows with data to include to the sample to find patterns
-
 
     def _matches(self, row, pattern):
         """ Returns True if given row matches given patter.
@@ -451,7 +450,7 @@ class RowIntuiter(Pipe):
         return True
 
     def _find_first_match_idx(self, rows, pattern):
-        """ Finds first and last rows with data
+        """ Finds index of a first row with data.
 
         Note: Assuming len(rows) == len(data_pattern)
 
@@ -460,7 +459,7 @@ class RowIntuiter(Pipe):
             data_pattern (list of sets):
 
         Returns:
-            tuple of int, int: (first line index, last line index)
+            int: index of a first row with data.
 
         Raises:
             NoMatchError: if match was not found.
@@ -480,7 +479,7 @@ class RowIntuiter(Pipe):
         return first_line
 
     def _find_last_match_idx(self, rows, pattern):
-        """ Finds first and last rows with data
+        """ Finds index of a last row with data
 
         Note: Assuming len(rows) == len(data_pattern)
 
@@ -489,7 +488,7 @@ class RowIntuiter(Pipe):
             data_pattern (list of sets):
 
         Returns:
-            tuple of int, int: (first line index, last line index)
+            int: index of a last row with data.
 
         Raises:
             NoMatchError: if match was not found.
@@ -552,7 +551,7 @@ class RowIntuiter(Pipe):
             tuple of comments_pattern, header_pattern, data_pattern.
 
         """
-        assert len(rows) > self.FIRST_ROWS + self.LAST_ROWS, 'Number of rows is not enough to recognize patter.s.'
+        assert len(rows) > self.FIRST_ROWS + self.LAST_ROWS, 'Number of rows is not enough to recognize pattern.'
         data_sample = rows[self.FIRST_ROWS:-self.LAST_ROWS]
         data_pattern = [set() for x in range(len(data_sample[0]))]
 
@@ -620,8 +619,7 @@ class RowIntuiter(Pipe):
         """ Finds rows with data and generates them.
 
         Note:
-            Removes comments, header and footer rows from source pipe rows and generates rows
-            with data only.
+            All rows from the source should never be stored in the memory.
 
         Yields:
             list
@@ -654,16 +652,16 @@ class RowIntuiter(Pipe):
 
         # Now read all remaining rows from source pipe.
         # We need to collect them by chunks to properly handle footer.
-        chunk = deque(maxlen=self.DATA_SIZE + self.HEADER_SIZE)
+        chunk = deque(maxlen=self.CHUNK_DATA_SIZE + self.CHUNK_FOOTER_SIZE)
         while True:
             # collect rows to chunk.
-            for i in range(self.DATA_SIZE + self.HEADER_SIZE - len(chunk)):
+            for i in range(self.CHUNK_DATA_SIZE + self.CHUNK_FOOTER_SIZE - len(chunk)):
                 try:
                     chunk.append(rows_iter.next())
                 except StopIteration:
                     break
 
-            is_last_chunk = len(chunk) < self.DATA_SIZE + self.HEADER_SIZE
+            is_last_chunk = len(chunk) < self.CHUNK_DATA_SIZE + self.CHUNK_FOOTER_SIZE
             if is_last_chunk:
                 # find last rows with data
                 try:
@@ -683,7 +681,7 @@ class RowIntuiter(Pipe):
             else:
                 # It is not obvious has chunk header or not. Return first part of the chunk. Next
                 # iteration will care about remaining rows.
-                for i in range(self.DATA_SIZE):
+                for i in range(self.CHUNK_DATA_SIZE):
                     yield chunk.popleft()
 
             if is_last_chunk:
