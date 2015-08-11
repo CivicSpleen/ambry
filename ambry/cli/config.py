@@ -51,7 +51,7 @@ def config_install(args, l, rc):
     import yaml
     import pkgutil
     import os
-    from ambry.run import RunConfig as rc
+    from ambry.run import RunConfig
     import getpass
 
     edit_args = ' '.join(args.args)
@@ -59,13 +59,13 @@ def config_install(args, l, rc):
     user = getpass.getuser()
 
     if user == 'root':
-        install_file = rc.ROOT_CONFIG
+        install_file = RunConfig.ROOT_CONFIG
         default_root = '/ambry'
     elif os.getenv('VIRTUAL_ENV'):  # Special case for python virtual environments
         install_file = os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')
         default_root = os.path.join(os.getenv('VIRTUAL_ENV'), 'data')
     else:
-        install_file = rc.USER_CONFIG
+        install_file = RunConfig.USER_CONFIG
         warn(("Installing as non-root, to '{}'\n" +
               "Run as root to install for all users.").format(install_file))
         default_root = os.path.join(os.path.expanduser('~'), 'ambry')
@@ -133,21 +133,21 @@ def config_install(args, l, rc):
             prt('Writing config file: {}'.format(install_file))
             f.write(s)
 
-    if not os.path.exists(rc.USER_ACCOUNTS):
-        with open(rc.USER_ACCOUNTS, 'w') as f:
+    if not os.path.exists(RunConfig.USER_ACCOUNTS):
+        with open(RunConfig.USER_ACCOUNTS, 'w') as f:
 
             d = dict(accounts=dict(ambry=dict(name=None, email=None)))
 
-            prt('Writing config file: {}'.format(rc.USER_ACCOUNTS))
+            prt('Writing config file: {}'.format(RunConfig.USER_ACCOUNTS))
             f.write(yaml.dump(d, indent=4, default_flow_style=False))
 
     # Make the directories.
 
     from ..run import get_runconfig
-    rc = get_runconfig(install_file)
+    RunConfig = get_runconfig(install_file)
 
-    for name in rc.group('filesystem').keys():
-        fs = rc.filesystem(name)
+    for name in RunConfig.group('filesystem').keys():
+        fs = RunConfig.filesystem(name)
 
         try:
             dr = fs['dir']
