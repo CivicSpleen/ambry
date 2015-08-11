@@ -119,7 +119,9 @@ class File(Base, DictableMixin):
         #assert not old_size or  new_size > .5*old_size, "new={} old={}".format(new_size, old_size)
 
         self.contents = contents
+
         self.hash = hashlib.md5(contents).hexdigest()
+
         self.modified = time.time()
         self.size = new_size
 
@@ -155,7 +157,6 @@ class File(Base, DictableMixin):
         from sqlalchemy import text
 
         if not target.id:
-            conn.execute('BEGIN IMMEDIATE')
             sql = text('SELECT max(f_id)+1 FROM files WHERE f_d_vid = :did')
 
             target.id, = conn.execute(sql, did=target.d_vid).fetchone()

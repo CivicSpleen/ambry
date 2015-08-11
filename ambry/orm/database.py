@@ -21,7 +21,7 @@ from . import Column, Partition, Table, Dataset, Config, File,\
 ROOT_CONFIG_NAME = 'd000'
 ROOT_CONFIG_NAME_V = 'd000001'
 
-SCHEMA_VERSION = 104
+SCHEMA_VERSION = 105
 
 # Database connection information
 Dbci = namedtuple('Dbc', 'dsn_template sql')
@@ -88,8 +88,9 @@ class Database(object):
         if not self.exists():
             self._create_path()
             self.create_tables()
-            self._add_config_root()
             return True
+
+
 
         return False
 
@@ -132,8 +133,14 @@ class Database(object):
             if self.driver in ('postgres', 'postgis') and self._schema:
                 self.connection.execute('SET search_path TO {}'.format(self._schema))
 
-            rows = self.connection.execute("SELECT * FROM datasets WHERE d_vid = '{}' "
-                                           .format(ROOT_CONFIG_NAME_V)).fetchone()
+            from sqlalchemy.engine.reflection import Inspector
+
+            inspector = Inspector.from_engine(self.engine)
+
+            if not 'config' in inspector.get_table_names():
+                return False
+            else:
+                return True
 
         except ProgrammingError:
             # This happens when the datasets table doesn't exist
@@ -146,7 +153,6 @@ class Database(object):
         finally:
             self.close_connection()
 
-        return bool(rows)
 
     @property
     def engine(self):
@@ -163,7 +169,7 @@ class Database(object):
             # Easier than constructing the pool
             # self._engine.pool._use_threadlocal = True
 
-            self._engine = create_engine(self.dsn, echo=self._echo, **self.engine_kwargs)
+            self._engine = create_engine(self.dsn, echo=self._echo,  **self.engine_kwargs)
 
             if self.driver == 'sqlite':
                 event.listen(self._engine, 'connect', _pragma_on_connect)
@@ -334,6 +340,8 @@ class Database(object):
             for it, orig_schema in list(orig_schemas.items()):
                 it.schema = orig_schema
 
+        self._add_config_root()
+
     def _add_config_root(self):
         """ Adds the root dataset, which holds configuration values for the database. """
 
@@ -423,16 +431,20 @@ class Database(object):
 
     def remove_dataset(self, ds):
 
-        self.session.delete(ds)
-        self.session.commit()
+        if ds:
+            self.session.delete(ds)
+            self.session.commit()
 
     def copy_dataset(self, ds):
+        from ..util import toposort
+
+        ds.commit()
 
         # Make sure everything we want to copy is loaded
         ds.tables
         ds.partitions
         ds.files
-        ds.configs
+        #ds.configs
         ds.stats
         ds.codes
         ds.source_tables
@@ -443,6 +455,20 @@ class Database(object):
         ds.partitions = [ p for p in ds.partitions if not p.is_segment ] + [ p for p in ds.partitions if p.is_segment ]
 
         self.session.merge(ds)
+
+        # FIXME: Oh, this is horrible. Sqlalchemy inserts all of the configs as a group, but they are self-referential,
+        # so some with a reference to a parent get inserted before their parent. The topo sort solives this,
+        # but there must be a better way to do it.
+        
+        dag = { c.id:set([c.parent_id]) for c in ds.configs}
+
+        refs = { c.id:c for c in ds.configs }
+
+        for e in toposort(dag):
+            for ref in e:
+                if ref:
+                    self.session.merge(refs[ref])
+
         self.session.commit()
 
         return self.dataset(ds.vid)

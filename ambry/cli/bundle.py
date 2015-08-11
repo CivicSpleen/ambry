@@ -231,7 +231,7 @@ def bundle_parser(cmd):
                            help='Syncrhonize before building')
 
     command_p.add_argument('phase', nargs='?', type=str, help='Name of phase')
-    command_p.add_argument('source', nargs='?', type=str, help='Name of a single source')
+    command_p.add_argument('sources', nargs='*', type=str, help='Sources to run, instead of running all sources')
 
     #
     # Finalize Command
@@ -550,7 +550,7 @@ def bundle_phase(args, l, rc):
         b.commit()
 
     b.sync_in()
-    b.run_phase(args.phase)
+    b.run_phase(args.phase, sources = args.sources)
     b.sync_out()
 
     b.set_last_access(Bundle.STATES.META)

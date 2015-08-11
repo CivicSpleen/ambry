@@ -59,7 +59,9 @@ class Bundle(object):
         'schema': {
             'body': [
                 ambry.etl.MergeHeader,
-                ambry.etl.MangleHeader,
+                ambry.etl.MangleHeader
+            ],
+            'cast':[
                 ambry.etl.MapToSourceTable
             ],
             'intuit': [
@@ -75,9 +77,10 @@ class Bundle(object):
             'body': [
                 ambry.etl.MergeHeader,
                 ambry.etl.MangleHeader,
-                ambry.etl.MapToSourceTable,
-                ambry.etl.CasterPipe,
-
+                ambry.etl.MapToSourceTable
+            ],
+            'cast': [
+                ambry.etl.CasterPipe
             ],
             'store':[
                 ambry.etl.SelectPartition,

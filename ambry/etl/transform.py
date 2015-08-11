@@ -466,6 +466,7 @@ class CasterPipe(Transform, Pipe, ):
             except KeyError:
                 from pipeline import MissingHeaderError
                 # pipeline, pipe, header, table,
+                self.headers = row # Make sure it gets into the pilpile printout.
                 raise MissingHeaderError(self, h, table,
                     "While processing header in CasterPipe in pipe '{}' failed to find header '{}' in dest table '{}' "
                     .format(self.pipeline.name, h, table.name))

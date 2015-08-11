@@ -58,3 +58,38 @@ class Test(TestBase):
             raise AssertionError('Dupe unexpectadly saved. It seems unique constraint is broken.')
         except IntegrityError as exc:
             self.assertIn('UNIQUE constraint failed', exc.message)
+
+    def test_config_postgres_unicode(self):
+
+        from ambry.orm.database import Database
+        import time
+
+        rc = self.get_rc()
+
+        dsn = rc.database('pg-func-test', return_dsn=True)
+
+        print dsn
+
+        db = Database(dsn)
+
+        db.create()
+
+        db.clean()
+
+        ds = db.new_dataset(**self.ds_params(1, source='source'))
+
+        db.commit()
+
+        ds.config.library.build.url = u'http:/foo/bar/baz/øé'
+
+        ds.config.sync['lib']['foobar'] = time.time()
+
+        ds.commit()
+
+        print ds.config.library.build.url
+
+
+
+
+
+

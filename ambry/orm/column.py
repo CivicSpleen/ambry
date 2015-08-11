@@ -63,7 +63,7 @@ class Column(Base):
 
     # A column vid, or possibly an equation, describing how this column was
     # created from other columns.
-    derivedfrom = SAColumn('c_derivedfrom', String(20))
+    derivedfrom = SAColumn('c_derivedfrom', Text)
 
     # ids of columns used for computing ratios, rates and densities
     numerator = SAColumn('c_numerator', String(20))

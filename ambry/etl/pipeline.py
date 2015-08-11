@@ -77,6 +77,8 @@ class Pipe(object):
     pipeline = None  # Set to the name of the segment
     headers = None
 
+    indent = '    ' # For __str__ formatting
+
     @property
     def source(self):
         return self._source
@@ -679,9 +681,9 @@ class AddDeleteExpand(Pipe):
         header_extra = ["'{}'".format(e) for e in (self.add.keys()+header_expansions)]
 
         # Build the single function to edit the header or row all at once
-        self.edit_header_code = "lambda r: [{}]".format(',\n'.join(header_parts + header_extra))
+        self.edit_header_code = "lambda r: [{}]".format(','.join(header_parts + header_extra))
         self.edit_header = eval(self.edit_header_code)
-        self.edit_row_code = "lambda r,self=self: [{}]".format(',\n'.join(row_parts ))
+        self.edit_row_code = "lambda r,self=self: [{}]".format(','.join(row_parts ))
         self.edit_row = eval(self.edit_row_code)
 
         # Run it!
@@ -704,6 +706,14 @@ class AddDeleteExpand(Pipe):
             raise
 
         return r1+r2
+
+    def __str__(self):
+        from ..util import qualified_class_name
+
+        return (qualified_class_name(self) + '\n' +
+                self.indent + "H:" + str(self.edit_header_code) + '\n' +
+                self.indent + "B:" + str(self.edit_row_code)
+                )
 
 
 class Add(AddDeleteExpand):
@@ -1212,7 +1222,7 @@ class Pipeline(OrderedDict):
     phase = None
     final = None
 
-    _group_names = ['source', 'first', 'body', 'augment', 'intuit', 'last', 'store', 'final' ]
+    _group_names = ['source', 'first', 'body', 'augment', 'cast', 'intuit', 'last', 'store', 'final' ]
 
     def __init__(self, bundle=None,  *args, **kwargs):
 

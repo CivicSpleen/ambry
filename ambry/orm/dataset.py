@@ -23,7 +23,6 @@ from ambry.orm.file import File
 class Dataset(Base):
     __tablename__ = 'datasets'
 
-
     vid = SAColumn('d_vid', String(20), primary_key=True)
     id = SAColumn('d_id', String(20), )
     name = SAColumn('d_name', String(200), nullable=False, index=True)

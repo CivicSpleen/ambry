@@ -636,7 +636,7 @@ class Test(TestBase):
     def test_edit(self):
         """Test the Edit pipe, for altering the structure of data"""
         from dateutil.parser import parse
-        from ambry.etl.pipeline import PrintRows, AddDeleteExpand
+        from ambry.etl.pipeline import PrintRows, AddDeleteExpand, Delete
 
         b = self.setup_bundle('dimensions')
         b.sync_in()
@@ -663,6 +663,14 @@ class Test(TestBase):
         print pl.last[0]
 
         print pl.last[2]
+
+        pl = b.pipeline('source', 'dimensions')
+        pl.last = [Delete(['time'])]
+
+        pl.run()
+
+        print pl
+
 
     def test_sample_head(self):
         from ambry.etl.pipeline import Pipeline, Pipe, PrintRows, Sample, Head

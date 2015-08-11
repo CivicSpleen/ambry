@@ -393,10 +393,12 @@ class RunConfig(object):
 
             account = None
             fails = []
-            for account_template in ("{server}-{username}-{dbname}","{server}-{dbname}", "{server}" ):
+            for account_template in ("{server}-{username}-{dbname}","{server}-{dbname}", "{server}-{username}","{server}" ):
                 try:
-                    account_key = account_template.format(**e)
+                    account_key = account_template.format(**config)
+
                     account = self.account(account_key)
+
                     if account:
                         break
                 except KeyError:

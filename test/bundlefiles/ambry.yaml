@@ -25,6 +25,8 @@ database:
   test-database: sqlite://
   postgres-test: postgres://user:pass@host # Do not include db name here because db will be created while tests running
 
+  pg-func-test: postgres://ambry10@warehouse2/ambry10-test
+
   database1: sqlite:////foo/bar
   database2: postgres://user:pass@host/dbname
   database3:

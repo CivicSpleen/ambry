@@ -338,7 +338,7 @@ class Partition(Base, DictableMixin):
         from sqlalchemy import text
 
         if not target.sequence_id:
-            conn.execute('BEGIN IMMEDIATE')
+
             sql = text('SELECT max(p_sequence_id)+1 FROM partitions WHERE p_d_vid = :did')
 
             target.sequence_id, = conn.execute(sql, did=target.d_vid).fetchone()

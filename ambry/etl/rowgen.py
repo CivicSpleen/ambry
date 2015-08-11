@@ -107,7 +107,7 @@ def fetch(source, cache_fs, account_accessor):
                     continue
 
                 if re.search(source.file, zip_fn):
-                    fstor = DelayedOpen( source,  fs,zip_fn, 'rb', account_accessor)
+                    fstor = DelayedOpen( source,  fs, zip_fn, 'rb', account_accessor)
                     logger.debug("FSTOR for zip archive")
                     break
 
@@ -160,7 +160,10 @@ class SourcePipe(Pipe):
     def __str__(self):
         from ..util import qualified_class_name
 
-        return qualified_class_name(self)
+        if self._fstor:
+            return qualified_class_name(self)+"\n"+self.indent+self._fstor.syspath()
+        else:
+            return qualified_class_name(self)
 
 class CsvSource(SourcePipe):
     """Generate rows from a CSV source"""
@@ -277,7 +280,8 @@ def excel_iter(file_name, segment):
     s = wb.sheets()[int(segment) if segment else 0]
 
     for i in range(0, s.nrows):
-        yield srow_to_list(i, s)
+        row =  srow_to_list(i, s)
+        yield row
 
 
 def get_s3(url, account_accessor):

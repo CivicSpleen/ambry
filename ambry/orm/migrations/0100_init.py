@@ -10,4 +10,4 @@ class Migration(BaseMigration):
         pass
 
     def _migrate_postgresql(self, connection):
-        pass
+        self._migrate_sqlite(connection)

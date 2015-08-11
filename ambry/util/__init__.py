@@ -768,6 +768,10 @@ def md5_for_file(f, block_size=2 ** 20):
             if not data:
                 break
 
+            if isinstance(data, unicode):
+                # HACK! This part seems wrong, but it seems to work
+                data = data.encode('utf8')
+
             md5.update(data)
         return md5.hexdigest()
 

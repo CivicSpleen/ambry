@@ -111,8 +111,10 @@ class BuildSourceFile(object):
             return None
 
         fn_path = file_name(self._file_const)
+
         with self._fs.open(fn_path) as f:
             return md5_for_file(f)
+
 
     def sync_dir(self):
         """ Report on which direction a synchronization should be done.
@@ -201,8 +203,6 @@ class RowBuildSourceFile(BuildSourceFile):
         try:
             fr.update_contents(msgpack.packb(rows))
         except AssertionError:
-            # FIXME: Who is reader of the message?
-            print '!!!', len(rows), self._fs.getsyspath(fn_path)
             raise
 
         fr.mime_type = 'application/msgpack'
@@ -283,8 +283,10 @@ class StringSourceFile(BuildSourceFile):
         fr = self._dataset.bsfile(self._file_const)
         fr.path = fn_path
 
+        # Not dealing with encodings in in/out here, since the recod is supposed to be a striaght copy of the
+        # file.
         with self._fs.open(fn_path, 'rb') as f:
-            fr.update_contents(unicode(f.read()))
+            fr.update_contents(f.read())
 
         fr.mime_type = 'text/plain'
         fr.source_hash = self.fs_hash
@@ -298,6 +300,7 @@ class StringSourceFile(BuildSourceFile):
         if fr.contents:
             with self._fs.open(file_name(self._file_const), 'wb') as f:
                 f.write(fr.contents)
+
             fr.source_hash = self.fs_hash
             fr.modified = self.fs_modtime
 
@@ -581,6 +584,8 @@ class SchemaFile(RowBuildSourceFile):
 
 
 
+
+
         return warnings, errors
 
     def objects_to_record(self):
@@ -759,6 +764,7 @@ class BuildSourceFileAccessor(object):
         syncs = []
 
         for file_const, (file_name, clz) in file_info_map.items():
+
             f = self.file(file_const)
 
             sync_info = (None, None)
@@ -782,6 +788,7 @@ class BuildSourceFileAccessor(object):
                     self._bundle.logger.debug('   {} {}'.format(sync_info[1], file_const))
 
             syncs.append(sync_info)
+
 
         return syncs
 
