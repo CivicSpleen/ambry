@@ -47,7 +47,7 @@ def config_command(args, rc):
     globals()['config_' + args.subcommand](args, l, rc)
 
 
-def config_install(args, rc):
+def config_install(args, l, rc):
     import yaml
     import pkgutil
     import os
