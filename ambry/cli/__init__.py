@@ -311,7 +311,6 @@ def main(argsv=None, ext_logger=None):
     funcs = {
         'bundle': bundle_command,
         'library': library_command,
-        'warehouse': warehouse_command,
         'config': config_command,
         'root': root_command,
     }

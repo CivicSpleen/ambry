@@ -40,7 +40,7 @@ xlrd==0.9.3
 psycopg2==2.6
 fs==0.5.2
 msgpack-python==0.4.6
-livestats=1.0
+livestats==1.0
 tabulate==0.7.5
 watchdog==0.8.3
 petl==1.0.11
