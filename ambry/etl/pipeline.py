@@ -10,6 +10,8 @@ import time
 
 from tabulate import tabulate
 
+from six import iteritems, itervalues, string_types
+
 from ambry.identity import PartialPartitionName
 from ambry.util import qualified_class_name
 
@@ -116,7 +118,7 @@ class Pipe(object):
     def __iter__(self):
         rg = iter(self._source_pipe)
 
-        self.headers = self.process_header(rg.next())
+        self.headers = self.process_header(next(rg))
 
         yield self.headers
 
@@ -175,8 +177,8 @@ class IterSource(Pipe):
             yield self.header
         else:
             # Create a header from the datatypes
-            first = itr.next()
-            yield [ type(e).__name__ for e in first]
+            first = next(itr)
+            yield [type(e).__name__ for e in first]
             yield first
 
         for row in itr:
@@ -221,7 +223,6 @@ class Slice(Pipe):
 
         self._args = args
 
-
     @staticmethod
     def parse(v):
         """
@@ -250,9 +251,9 @@ class Slice(Pipe):
         return slices
 
     @staticmethod
-    def make_slicer( *args):
+    def make_slicer(*args):
 
-        if len(args) == 1 and isinstance(args[0], basestring):
+        if len(args) == 1 and isinstance(args[0], string_types):
             args = Slice.parse(args[0])
 
         parts = []
@@ -341,11 +342,11 @@ class Ticker(Pipe):
         self._name = name
 
     def process_body(self, row):
-        print self._name if self._name else 'B'
+        print(self._name if self._name else 'B')
         return row
 
     def process_header(self, row):
-        print '== {} {} =='.format(self.source.name, self._name if self._name else '')
+        print('== {} {} =='.format(self.source.name, self._name if self._name else ''))
         return row
 
 class AddHeader(Pipe):
@@ -370,7 +371,7 @@ class MapHeader(Pipe):
 
         rg = iter(self._source_pipe)
 
-        self.headers =  [ self._header_map.get(c,c) for c in rg.next() ]
+        self.headers =  [ self._header_map.get(c,c) for c in next(rg) ]
 
         yield self.headers
 
@@ -437,13 +438,13 @@ class MangleHeader(Pipe):
 
         itr = iter(self.source_pipe)
 
-        headers = itr.next()
+        headers = next(itr)
 
         self.headers = self.mangle_header(headers)
         yield self.headers
 
         while True:
-            yield itr.next()
+            yield next(itr)
 
 class MergeHeader(Pipe):
     """Strips out the header comments and combines multiple header lines to emit a
@@ -483,9 +484,9 @@ class MergeHeader(Pipe):
             if self.source.end_line:
                 self.data_end_line = self.source.end_line
             if self.source.header_lines:
-                self.header_lines = map(maybe_int, self.source.header_lines)
+                self.header_lines = list(map(maybe_int, self.source.header_lines))
             if self.source.comment_lines:
-                self.header_comment_lines = map(maybe_int, self.source.comment_lines)
+                self.header_comment_lines = list(map(maybe_int, self.source.comment_lines))
 
             max_header_line = max(chain(self.header_comment_lines, self.header_lines))
 
@@ -495,7 +496,7 @@ class MergeHeader(Pipe):
             if not self.header_comment_lines:
                 min_header_line = min(chain(self.header_lines))
                 if min_header_line:
-                    self.header_comment_lines = range(0, min_header_line)
+                    self.header_comment_lines = list(range(0, min_header_line))
 
             self.headers = []
             self.header_comments = []
@@ -653,7 +654,7 @@ class AddDeleteExpand(Pipe):
                 row_parts.append('r[{}]'.format(i))
                 header_parts.append('r[{}]'.format(i))
 
-        for f in self.add.values():
+        for f in itervalues(self.add):
             self.edit_functions.append(f)
             i = len(self.edit_functions)-1
             assert self.edit_functions[i] == f
@@ -664,7 +665,7 @@ class AddDeleteExpand(Pipe):
         row_expanders = []  # The outputs of the expanders are combined, outputs must have same length as header_expansions
         self.expand_row = lambda e: []  # Null output
 
-        for k, f in self.expand.items():
+        for k, f in iteritems(self.expand):
             self.edit_functions.append(f)
             i = len(self.edit_functions) - 1
             assert self.edit_functions[i] == f
@@ -678,7 +679,7 @@ class AddDeleteExpand(Pipe):
         # Maybe lookups in tuples is faster than in lists.
         self.edit_functions = tuple(self.edit_functions)
 
-        header_extra = ["'{}'".format(e) for e in (self.add.keys()+header_expansions)]
+        header_extra = ["'{}'".format(e) for e in (list(self.add.keys())+header_expansions)]
 
         # Build the single function to edit the header or row all at once
         self.edit_header_code = "lambda r: [{}]".format(', \n'.join(header_parts + header_extra))
@@ -695,14 +696,14 @@ class AddDeleteExpand(Pipe):
             r1 = self.edit_row(row)
         except:
             # Todo, put this into the exception
-            print "EDIT ROW CODE", self.edit_row_code
+            print("EDIT ROW CODE", self.edit_row_code)
             raise
 
         try:
             r2 = self.expand_row(row)
         except:
             # FIXME: put this into the exception
-            print "EXPAND ROW CODE: ", self.expand_row_code
+            print("EXPAND ROW CODE: ", self.expand_row_code)
             raise
 
         return r1+r2
@@ -745,16 +746,16 @@ class Modify(Pipe):
 
         rg = iter(self._source_pipe)
 
-        self.headers = self.process_header(rg.next())
+        self.headers = self.process_header(next(rg))
 
         yield self.headers
 
         for row in rg:
 
-            row = self.process_body(OrderedDict(zip(self.headers, row)))
+            row = self.process_body(OrderedDict(list(zip(self.headers, row))))
 
             if row:
-                yield row.values()
+                yield list(row.values())
 
 
 class RemoveBlankColumns(Pipe):
@@ -828,7 +829,7 @@ class Skip(Pipe):
         if not self._check:
             self.ignored += 1
             return row
-        elif self.pred(dict(zip(self.headers, row)) if self._use_dict else row):
+        elif self.pred(dict(list(zip(self.headers, row))) if self._use_dict else row):
             self.skipped += 1
             return None
         else:
@@ -876,7 +877,7 @@ class PrintRows(Pipe):
             self.rows.append(append_row[self.offset:self.columns])
 
         if self.i == self.print_at_row:
-            print str(self)
+            print(str(self))
 
         self.i += 1
 
@@ -885,7 +886,7 @@ class PrintRows(Pipe):
     def finish(self):
 
         if self.print_at_end:
-            print str(self)
+            print(str(self))
 
         # For multi-run pipes, the count is the number of rows per source.
         self.count += self.count_inc
@@ -913,12 +914,12 @@ class PrintEvery(Pipe):
         self.i = 0
 
     def process_header(self, row):
-        print 'Print Header: ', row
+        print('Print Header: ', row)
         return row
 
     def process_body(self, row):
         if self.i % self.N == 0:
-            print 'Print Row   :', row
+            print('Print Row   :', row)
         self.i += 1
         return row
 
@@ -1012,7 +1013,7 @@ class SelectPartition(Pipe):
     def process_body_select(self, row):
 
         if self._as_dict:
-            name = self.select_f(self.source, dict(zip(self.headers, row)))
+            name = self.select_f(self.source, dict(list(zip(self.headers, row))))
         else:
             name = self.select_f(self.source, row)
 
@@ -1124,7 +1125,7 @@ class WriteToPartition(Pipe, PartitionWriter):
 
         self._end_time = time.time()
 
-        for key, (p, header_mapper, body_mapper) in self._datafiles.items():
+        for key, (p, header_mapper, body_mapper) in iteritems(self._datafiles):
             p.datafile.close()
 
     @property
@@ -1138,7 +1139,7 @@ class WriteToPartition(Pipe, PartitionWriter):
     @property
     def partitions(self):
         """Generate the partitions, so they can be manipulated after the pipeline completes"""
-        for p in self._partitions.values():
+        for p in itervalues(self._partitions):
             yield p
 
     def __str__(self):
@@ -1167,7 +1168,7 @@ class PipelineSegment(list):
         # Index by class
         if inspect.isclass(k):
 
-            matches = filter(lambda e: isinstance(e, k), self)
+            matches = [e for e in self if isinstance(e, k)]
 
             if not matches:
                 raise IndexError("No entry for class: {}".format(k))
@@ -1223,7 +1224,7 @@ class Pipeline(OrderedDict):
         super(Pipeline, self).__setattr__('final', [])
         super(Pipeline, self).__setattr__('stopped', False)
 
-        for k, v in kwargs.items():
+        for k, v in iteritems(kwargs):
             if k not in self._group_names:
                 raise IndexError('{} is not a valid pipeline section name'.format(k))
 
@@ -1240,7 +1241,7 @@ class Pipeline(OrderedDict):
     def _subset(self, subset):
         """Return a new pipeline with a subset of the sections"""
         pl = Pipeline(bundle=self.bundle)
-        for group_name, pl_segment in self.items():
+        for group_name, pl_segment in iteritems(self):
             if group_name not in subset:
                 continue
             pl[group_name] = pl_segment
@@ -1254,12 +1255,12 @@ class Pipeline(OrderedDict):
         import ambry.etl
         import sys
         # ambry.build comes from ambry.bundle.files.PythonSourceFile#import_bundle
-        eval_locals = dict(locals().items() + ambry.etl.__dict__.items() + sys.modules['ambry.build'].__dict__.items())
+        eval_locals = dict(list(locals().items()) + list(ambry.etl.__dict__.items()) + list(sys.modules['ambry.build'].__dict__.items()))
 
         replacements = {}
 
         def eval_pipe(pipe):
-            if isinstance(pipe, basestring):
+            if isinstance(pipe, string_types):
                 try:
                     return eval(pipe, {}, eval_locals)
                 except SyntaxError as e:
@@ -1268,13 +1269,13 @@ class Pipeline(OrderedDict):
             else:
                 return pipe
 
-        for segment_name, pipes in pipe_config.items():
+        for segment_name, pipes in list(pipe_config.items()):
             if segment_name == 'final':
                 # The 'final' segment is actually a list of names of BUndle methods to call afer the pipeline
                 # completes
                 super(Pipeline, self).__setattr__('final', pipes)
             elif segment_name == 'replace':
-                for frm, to in pipes.items():
+                for frm, to in iteritems(pipes):
                     self.replace(eval_pipe(frm), eval_pipe(to))
             else:
                 self[segment_name] = [eval_pipe(pipe) for pipe in pipes]
@@ -1282,7 +1283,7 @@ class Pipeline(OrderedDict):
     def replace(self, repl_class, replacement):
         """Replace a pipe segment, specified by its class, with another segment"""
 
-        for segment_name, pipes in self.items():
+        for segment_name, pipes in iteritems(self):
             repl_pipes = []
             found = False
             for pipe in pipes:
@@ -1338,7 +1339,7 @@ class Pipeline(OrderedDict):
 
             chain, last = self._collect()
 
-            matches = filter(lambda e: isinstance(e, k), chain)
+            matches = [e for e in chain if isinstance(e, k)]
 
             if not matches:
                 raise IndexError("No entry for class: {} in {}".format(k, chain))
@@ -1433,11 +1434,11 @@ class Pipeline(OrderedDict):
         chain, last = self._collect()
 
         for pipe in chain:
-            out.append((pipe.segment.name if hasattr(pipe, 'segment') else '?')+': '+unicode(pipe))
+            out.append((pipe.segment.name if hasattr(pipe, 'segment') else '?') + ': '+unicode(pipe))
 
         out.append('final: '+str(self.final))
 
-        return 'Pipeline {}\n'.format(self.name if self.name else '')+'\n'.join(out)
+        return 'Pipeline {}\n'.format(self.name if self.name else '') + '\n'.join(out)
 
     def headers_report(self):
 
@@ -1477,7 +1478,7 @@ def augment_pipeline(pl, head_pipe=None, tail_pipe=None):
     :return:
     """
 
-    for k, v in pl.items():
+    for k, v in iteritems(pl):
         if v and len(v) > 0:
             if head_pipe and k != 'source':  # Can't put anything before the source.
                 v.insert(0, head_pipe)
