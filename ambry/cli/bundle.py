@@ -12,7 +12,7 @@ import yaml
 
 from fs.opener import fsopendir
 
-import tabulate
+from tabulate import tabulate
 
 from ambry.identity import NotObjectNumberError
 from ambry.bundle import Bundle
@@ -20,7 +20,6 @@ from ambry.orm.exc import NotFoundError
 
 from ..cli import prt, fatal, warn, err
 from ..orm import File
-
 
 def bundle_command(args, rc):
 
@@ -40,7 +39,6 @@ def bundle_command(args, rc):
         globals()['bundle_' + args.subcommand](args, l, rc)
     except ConflictError as e:
         fatal(str(e))
-
 
 def get_bundle_ref(args, l):
     """ Use a variety of methods to determine which bundle to use
@@ -756,7 +754,7 @@ def bundle_dump(args, l, rc):
         else:
             headers = []
 
-    print tabulate.tabulate(records, headers=headers)
+    print tabulate(records, headers=headers)
 
 
 def bundle_config_scrape(args, b, st, rc):

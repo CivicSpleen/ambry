@@ -526,6 +526,7 @@ class UpdateVersionTest(BasePostgreSQLTest):
         if not self.postgres_dsn:
             # FIXME: it seems failing is better choice here.
             raise unittest.SkipTest(MISSING_POSTGRES_CONFIG_MSG)
+
         pg_connection = self.pg_connection()
         create_table_query = '''
             CREATE TABLE user_version (

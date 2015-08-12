@@ -92,7 +92,6 @@ class ConfigTypeGroupAccessor(object):
 
         # find all matched configs and populate configs cache.
 
-
         configs =  (self._session.query(Config)
             .filter_by(d_vid=self._dataset.vid,
                        type=self._type_name,

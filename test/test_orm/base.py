@@ -17,6 +17,7 @@ class BasePostgreSQLTest(unittest.TestCase):
 
     def setUp(self):
         conf = get_runconfig()
+
         if 'database' in conf.dict and 'postgresql-test' in conf.dict['database']:
             dsn = conf.dict['database']['postgresql-test']
             parsed_url = urlparse(dsn)
