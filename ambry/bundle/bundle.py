@@ -11,7 +11,7 @@ import sys
 from time import time
 import traceback
 
-from six import string_types, iteritems, u, s
+from six import string_types, iteritems, u, b
 
 from geoid.civick import GVid
 from geoid import NotASummaryName
@@ -224,7 +224,7 @@ class Bundle(object):
     def partition(self, ref):
         """Return the Schema acessor"""
         for p in self.partitions:
-            if p.vid == s(ref) or p.name == s(ref):
+            if p.vid == b(ref) or p.name == b(ref):
                 return p
         return None
 
@@ -774,7 +774,7 @@ class Bundle(object):
 
             self.log('Final methods')
             for m in pl.final:
-                self.log(indent + s(m))
+                self.log(indent + b(m))
                 getattr(self, m)(pl)
 
             if pl.stopped:
@@ -982,7 +982,7 @@ Pipeline Headers
             stats = Stats(parent.table)
 
             pdf = parent.datafile
-            for seg in sorted(segments, key=lambda x: s(x.name)):
+            for seg in sorted(segments, key=lambda x: b(x.name)):
 
                 self.log(indent + 'Coalescing segment  {} '.format(seg.identity.name))
 
@@ -1132,7 +1132,7 @@ Pipeline Headers
             """Some grain are expressed as summary level names, not gvids."""
             try:
                 c = GVid.get_class(g)
-                return s(c().summarize())
+                return b(c().summarize())
             except NotASummaryName:
                 return g
 
