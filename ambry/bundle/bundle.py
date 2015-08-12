@@ -268,7 +268,6 @@ class Bundle(object):
         """Iterate over downloadable sources"""
         return list(s for s in self.dataset.sources if s.is_downloadable )
 
-
     @property
     def refs(self):
         """Iterate over downloadable sources -- referecnes and templates"""

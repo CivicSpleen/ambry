@@ -361,16 +361,23 @@ class Transform(object):
         import datetime
         from functools import partial
         from ambry.etl.transform import parse_date, parse_time, parse_datetime
+        import sys
 
         # Get the code in string form.
         self.dict_transform_code, self.row_transform_code = self.make_transform()
 
+        localvars = dict(locals().items())
+
+        localvars.update(sys.modules[__name__].__dict__.items())
+
         for k, v in iteritems(self.custom_types):
-            globals()[k] = v
+            localvars[k] = v
 
-        self.dict_transform = eval(self.dict_transform_code)
+        print
 
-        self.row_transform = eval(self.row_transform_code)
+        self.dict_transform = eval(self.dict_transform_code,  localvars)
+
+        self.row_transform = eval(self.row_transform_code,  localvars)
 
     def cast_error(self, type_, name, v, e):
         self.error_accumulator[name] = {'type': type_, 'value': v, 'exception': str(e)}
@@ -453,7 +460,6 @@ class CasterPipe(Transform, Pipe, ):
 
         ocm = self.caster_map(table)
 
-
         for h in row:
 
             try:
@@ -470,6 +476,7 @@ class CasterPipe(Transform, Pipe, ):
         return row
 
     def process_body(self, row):
+
         self.error_accumulator = {}  # Clear the accumulator
         try:
             row = self.row_transform(self, row)

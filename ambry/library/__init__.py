@@ -391,6 +391,7 @@ class Library(object):
                 self.logger.info('Synced {}'.format(ds.vname))
             except Exception as e:
                 self.logger.error('Failed to sync {}, {}: {}'.format(fn, temp.getsyspath(fn), e))
+                raise
 
         self.database.commit()
 

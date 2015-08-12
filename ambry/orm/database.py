@@ -438,8 +438,6 @@ class Database(object):
     def copy_dataset(self, ds):
         from ..util import toposort
 
-        ds.commit()
-
         # Make sure everything we want to copy is loaded
         ds.tables
         ds.partitions

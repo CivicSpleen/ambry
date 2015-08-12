@@ -846,7 +846,6 @@ class Skip(Pipe):
             self.passed += 1
             return row
 
-
 class LogRate(Pipe):
 
     def __init__(self, output_f, N, message=None):
@@ -856,7 +855,6 @@ class LogRate(Pipe):
     def process_body(self, row):
         self.lr()
         return row
-
 
 class PrintRows(Pipe):
     """A Pipe that collects rows that pass through and displays them as a table when the pipeline is printed. """
@@ -915,7 +913,6 @@ class PrintRows(Pipe):
         else:
             return qualified_class_name(self) + ' 0 rows'
 
-
 class PrintEvery(Pipe):
     """Print a row every N rows. Always prints the header. """
 
@@ -933,7 +930,6 @@ class PrintEvery(Pipe):
         self.i += 1
         return row
 
-
 class MatchPredicate(Pipe):
     """Store rows that match a predicate. THe predicate is a function that takes the row as its
     sole parameter and returns true or false"""
@@ -949,7 +945,6 @@ class MatchPredicate(Pipe):
             self.matches.append(row)
 
         return row
-
 
 class Reduce(Pipe):
     """Like works like reduce() on the body rows, using the function f(accumulator,row) """

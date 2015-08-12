@@ -49,6 +49,15 @@ class Test(TestBase):
 
         print pl
 
+    def test_simple_build(self):
+        """Just check that it doesn't throw an exception"""
+        from ambry.orm.database import Database
+
+        b = self.setup_bundle('simple')
+        l = b._library
+
+        b.run()
+
     def test_simple_process(self):
         """Build the simple bundle"""
         from ambry.orm.file import File
@@ -321,7 +330,7 @@ class Test(TestBase):
 
         self.assertEquals('value1', check_schema_file('uuid'))
 
-    def test_simple_build(self):
+    def test_edit_pipeline(self):
         """Build the simple bundle"""
 
         b = self.setup_bundle('simple')
