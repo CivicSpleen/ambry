@@ -584,11 +584,21 @@ class MigrateTest(unittest.TestCase):
 
     @fudge.patch(
         'ambry.orm.database._is_missed',
-        'ambry.orm.migrations.0100_init.Migration.migrate')
-    def test_runs_missed_migration_and_changes_version(self, fake_is_missed, fake_migrate):
+        'test.test_orm.functional.migrations.0100_init.Migration.migrate',
+        'ambry.orm.database._get_all_migrations')
+    def test_runs_missed_migration_and_changes_version(self, fake_is_missed, fake_migrate, fake_get):
+        # prepare state.
         fake_is_missed.expects_call().returns(True)
         fake_migrate.expects_call()
+        test_migrations = [
+            (100, 'test.test_orm.functional.migrations.0100_init')
+        ]
+        fake_get.expects_call().returns(test_migrations)
+
+        # run.
         migrate(self.connection)
+
+        # testing.
         stored_version = self.connection.execute('PRAGMA user_version').fetchone()[0]
         self.assertEqual(stored_version, 100)
 
