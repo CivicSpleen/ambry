@@ -66,7 +66,6 @@ class DatabaseTest(unittest.TestCase):
         self.sqlite_db.exists = fudge.Fake('exists').expects_call().returns(False)
         self.sqlite_db._create_path = fudge.Fake('_create_path').expects_call()
         self.sqlite_db.create_tables = fudge.Fake('create_tables').expects_call()
-        self.sqlite_db._add_config_root = fudge.Fake('_add_config_root').expects_call()
         ret = self.sqlite_db.create()
         self.assertTrue(ret)
         fudge.verify()
