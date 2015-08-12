@@ -89,9 +89,6 @@ class Database(object):
             self._create_path()
             self.create_tables()
             return True
-
-
-
         return False
 
     def _create_path(self):

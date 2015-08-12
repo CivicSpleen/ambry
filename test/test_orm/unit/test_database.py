@@ -362,12 +362,16 @@ class DatabaseTest(unittest.TestCase):
         # prepare state
         db = Database('sqlite://')
         db.enable_delete = True
-        db.create_tables()
+
+        # prevent _add_root_config call from create_tables
+        with fudge.patched_context(db, '_add_config_root', fudge.Fake().is_a_stub()):
+            db.create_tables()
         query = db.session.query
         datasets = query(Dataset).all()
         self.assertEqual(len(datasets), 0)
 
         # testing
+        # No call real _add_config_root and check result of the call.
         db._add_config_root()
         datasets = query(Dataset).all()
         self.assertEqual(len(datasets), 1)
