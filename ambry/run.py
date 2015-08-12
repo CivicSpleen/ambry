@@ -5,12 +5,16 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
+import copy
 import os.path
+import sys
+import traceback
 
-from six import StringIO, string_types
+from six import StringIO, string_types, print_
 
 from ambry.util import AttrDict, lru_cache
-from dbexceptions import ConfigurationError
+from .dbexceptions import ConfigurationError
+from .util import parse_url_to_dict, unparse_url_dict
 
 
 @lru_cache()
@@ -136,20 +140,18 @@ class RunConfig(object):
         if name not in self.config:
             raise ConfigurationError(
                 "No group '{}' in configuration.\n"
-                "Config has: {}\nLoaded: {}".format(name, self.config.keys(), self.loaded))
+                "Config has: {}\nLoaded: {}".format(name, list(self.config.keys()), self.loaded))
 
         return self.config.get(name, {})
 
     def group_item(self, group, name):
-        import copy
-        from dbexceptions import ConfigurationError
 
         g = self.group(group)
 
         if name not in g:
             raise ConfigurationError(
                 "Could not find name '{}' in group '{}'. \n"
-                "Config has: {}\nLoaded: {}".format(name, group, g.keys(), self.loaded))
+                "Config has: {}\nLoaded: {}".format(name, group, list(g.keys()), self.loaded))
 
         return copy.deepcopy(g[name])
 
@@ -159,7 +161,7 @@ class RunConfig(object):
         This will locate values that should be expanded by reference.
 
         """
-        from util import walk_dict
+        from .util import walk_dict
 
         for path, subdicts, values in walk_dict(e):
             for k, v in values:
@@ -235,14 +237,13 @@ class RunConfig(object):
 
     def service(self, name):
         """For configuring the client side of services."""
-        from util import parse_url_to_dict, unparse_url_dict
 
         e = self.group_item('services', name)
 
         # If the value is a string, rather than a dict, it is for a
         # FsCache. Re-write it to be the expected type.
 
-        if isinstance(e, basestring):
+        if isinstance(e, string_types):
             e = parse_url_to_dict(e)
 
         if e.get('url', False):
@@ -266,7 +267,6 @@ class RunConfig(object):
 
     def servers(self, name, default=None):
         """For configuring the server side of services."""
-        # from util import parse_url_to_dict, unparse_url_dict
 
         try:
             e = self.group_item('servers', name)
@@ -307,7 +307,7 @@ class RunConfig(object):
         r = {}
 
         try:
-            pairs = remotes.items()
+            pairs = list(remotes.items())
         except AttributeError:
             pairs = list(enumerate(remotes))
 
@@ -345,12 +345,12 @@ class RunConfig(object):
         return d
 
     def warehouse(self, name):
-        from warehouse import database_config
+        from .warehouse import database_config
 
         e = self.group_item('warehouse', name)
 
         # The warehouse can be specified as a single database string.
-        if isinstance(e, basestring):
+        if isinstance(e, string_types):
             return database_config(e)
 
         else:
@@ -360,7 +360,7 @@ class RunConfig(object):
                 'library': lambda k, v: self.database(v),
             })
 
-            if 'database' in e and isinstance(e['database'], basestring):
+            if 'database' in e and isinstance(e['database'], string_types):
                 e.update(database_config(e['database']))
 
         return e
@@ -427,9 +427,8 @@ class RunConfig(object):
 
 def mp_run(mp_run_args):
     """ Run a bundle in a multi-processor child process. """
-    import traceback
-    import sys
 
+    # FIXME: Seems unused. Remove if so.
     bundle_dir, run_args, method_name, args = mp_run_args
 
     try:
@@ -437,8 +436,10 @@ def mp_run(mp_run_args):
         # bundle_file = sys.argv[1]
 
         if not os.path.exists(os.path.join(os.getcwd(), 'bundle.yaml')):
-            print >> sys.stderr, "ERROR: Current directory '{}' does not have a bundle.yaml file, " \
-                                 "so it isn't a bundle file. Did you mean to run 'cli'?".format(os.getcwd())
+            error_msg = "ERROR: Current directory '{}' does not have a bundle.yaml file, "\
+                "so it isn't a bundle file. Did you mean to run 'cli'?"\
+                .format(os.getcwd())
+            print_(error_msg, file=sys.stderr)
             sys.exit(1)
 
         # Import the bundle file from the
@@ -470,14 +471,13 @@ def mp_run(mp_run_args):
 
     except:
         tb = traceback.format_exc()
-        print '==========vvv MP Run Exception: {} pid = {} ==========='.format(args, os.getpid())
-        print tb
-        print '==========^^^ MP Run Exception: {} pid = {} ==========='.format(args, os.getpid())
+        print('==========vvv MP Run Exception: {} pid = {} ==========='.format(args, os.getpid()))
+        print(tb)
+        print('==========^^^ MP Run Exception: {} pid = {} ==========='.format(args, os.getpid()))
         raise
 
 
 def normalize_dsn_or_dict(d):
-    from util import parse_url_to_dict
 
     if isinstance(d, dict):
 
