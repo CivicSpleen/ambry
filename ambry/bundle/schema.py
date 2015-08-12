@@ -1,14 +1,17 @@
-"""The schema sub-object provides acessors to the schema for a bundle. 
+"""The schema sub-object provides acessors to the schema for a bundle.
 
 Copyright (c) 2013 Clarinova. This file is licensed under the terms of the
 Revised BSD License, included in this distribution as LICENSE.txt
 """
+
+from six import string_types, b
 
 from ambry.dbexceptions import ConfigurationError
 from ambry.orm import Column
 from ambry.util import memoize
 
 PROTO_TERMS = 'civicknowledge.com-proto-proto_terms'
+
 
 def _clean_flag(in_flag):
     if in_flag is None or in_flag == '0':
@@ -130,28 +133,29 @@ class Schema(object):
             warnings.append(
                 (table.name, column.name, "Postgres doesn't allow a TEXT field to have a size. Use a VARCHAR instead."))
 
-        # MySql requires that text columns that have a default also have a size. 
+        # MySql requires that text columns that have a default also have a size.
         if column.type_is_text() and bool(column.default):
             if not column.size and not column.width:
                 warnings.append(
                     (table.name, column.name, "MySql requires a Text or Varchar field with a default to have a size."))
 
-            if isinstance(column.default, basestring) and column.width and len(column.default) > column.width:
+            if isinstance(column.default, string_types) and column.width and len(column.default) > column.width:
                 warnings.append((table.name, column.name, "Default value is longer than the width"))
 
-            if isinstance(column.default, basestring) and column.size and len(column.default) > column.size:
+            if isinstance(column.default, string_types) and column.size and len(column.default) > column.size:
                 warnings.append((table.name, column.name, "Default value is longer than the size"))
 
         if column.default:
             try:
                 column.python_cast(column.default)
             except TypeError as e:
-                errors.append((table.name, column.name,
-                               "Bad default value '{}' for type '{}' (T); {}".format(column.default, column.datatype,
-                                                                                     e)))
+                error_msg = "Bad default value '{}' for type '{}' (T); {}"\
+                    .format(column.default, column.datatype, e)
+                errors.append((table.name, column.name, error_msg))
             except ValueError:
-                errors.append((table.name, column.name,
-                               "Bad default value '{}' for type '{}' (V)".format(column.default, column.datatype)))
+                error_msg = "Bad default value '{}' for type '{}' (V)"\
+                    .format(column.default, column.datatype)
+                errors.append((table.name, column.name, error_msg))
 
         if column.fk_vid and ObjectNumber.parse(column.fk_vid).revision:
             errors.append((table.name, column.name, "Foreign key can't have a revision number"))
@@ -159,7 +163,7 @@ class Schema(object):
     @classmethod
     def translate_type(cls, driver, table, column):
         '''Translate types for particular driver, and perform some validity checks'''
-        # Creates a lot of unnecessary objects, but speed is not important here.  
+        # Creates a lot of unnecessary objects, but speed is not important here.
 
         if driver == 'postgis':
             driver = 'postgres'
@@ -210,7 +214,7 @@ class Schema(object):
         if alt:
             return alt + '_' + n
         else:
-            return str(table.vid) + '_' + n
+            return b(table.vid) + '_' + n
 
     def get_table_meta(self, name_or_id, use_id=False, driver=None, alt_name=None):
         """Method version of get_table_meta_from_db"""
@@ -218,8 +222,8 @@ class Schema(object):
                                            session=self.bundle.database.session, alt_name=alt_name)
 
     @classmethod
-    def get_table_meta_from_db(cls, db, name_or_id, use_id=False, driver=None, d_vid=None, session=None, alt_name=None,
-                               use_fq_col_names=False):
+    def get_table_meta_from_db(cls, db, name_or_id, use_id=False, driver=None, d_vid=None,
+                               session=None, alt_name=None, use_fq_col_names=False):
         """
             use_id: prepend the id to the class name
         """
@@ -228,7 +232,6 @@ class Schema(object):
         from sqlalchemy import Column as SAColumn
         from sqlalchemy import Table as SATable
         from ..orm.exc import NotFoundError
-
 
         if use_fq_col_names:
             def col_name(c):
@@ -240,7 +243,7 @@ class Schema(object):
         metadata = MetaData()
 
         try:
-            table = cls.get_table_from_database(db, name_or_id, d_vid = d_vid, session=session)
+            table = cls.get_table_from_database(db, name_or_id, d_vid=d_vid, session=session)
         except NotFoundError:
             raise NotFoundError("Did not find table '{}' in database {}".format(name_or_id, db.dsn))
 
@@ -259,7 +262,6 @@ class Schema(object):
         indexes = {}
         uindexes = {}
         constraints = {}
-        foreign_keys = {}
 
         assert len(table.columns) > 0, "Tables can't have 0 columns: '{}'".format(table_name)
 
@@ -273,7 +275,7 @@ class Schema(object):
 
                 try:
                     int(column.default)
-                    kwargs['server_default'] = text(str(column.default))
+                    kwargs['server_default'] = text(b(column.default))
                 except:
 
                     kwargs['server_default'] = column.default
@@ -308,16 +310,16 @@ class Schema(object):
                     constraints[cons.strip()].append(ac)
 
         # Append constraints.
-        for constraint, columns in constraints.items():
+        for constraint, columns in list(constraints.items()):
             at.append_constraint(
                 UniqueConstraint(name=cls.munge_index_name(table, constraint, alt=alt_name), *columns))
 
-        # Add indexes   
-        for index, columns in indexes.items():
+        # Add indexes
+        for index, columns in list(indexes.items()):
             Index(cls.munge_index_name(table, index, alt=alt_name), unique=False, *columns)
 
-        # Add unique indexes   
-        for index, columns in uindexes.items():
+        # Add unique indexes
+        for index, columns in list(uindexes.items()):
             Index(cls.munge_index_name(table, index, alt=alt_name), unique=True, *columns)
 
         return metadata, at
@@ -343,12 +345,12 @@ class Schema(object):
                         uindexes[cons.strip()] = set()
                     uindexes[cons.strip()].add(column)
 
-        for index_name, cols in indexes.items():
+        for index_name, cols in list(indexes.items()):
             index_name = self.munge_index_name(table, index_name)
             yield "CREATE INDEX IF NOT EXISTS {} ON {} ({});".format(index_name, table.name,
                                                                      ','.join([c.name for c in cols]))
 
-        for index_name, cols in uindexes.items():
+        for index_name, cols in list(uindexes.items()):
             index_name = self.munge_index_name(table, index_name)
             yield "CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} ({});".format(index_name, table.name,
                                                                             ','.join([c.name for c in cols]))
@@ -394,7 +396,6 @@ class Schema(object):
             bdr.append(c.name, t)
 
         return bdr
-
 
     def expand_table_prototypes(self):
         """Look for tables that have prototypes, get the original table, and expand the
@@ -485,7 +486,6 @@ class Schema(object):
         q = (self.bundle.database.session.query(Column)
              .filter(Column.proto_vid != None).filter(Column.proto_vid != ''))
 
-
         # Group expanded columns by souce table, to create sql indexes for the sets of columns
         # pointing ot the same ambry index dataset
         table_cols = defaultdict(set)
@@ -496,7 +496,7 @@ class Schema(object):
                 ObjectNumber.parse(c.proto_vid)
                 # Its all good. The proto_vid is an Object, not a name.
 
-                continue # Explicit, but not necessary.
+                continue  # Explicit, but not necessary.
 
             except NotObjectNumberError:
 
@@ -516,9 +516,9 @@ class Schema(object):
 
                 if c.datatype != pt_row['datatype']:
                     self.bundle.error(("Column datatype for {}.{} doesn't match prototype: "
-                                              "{} != {} ").format(c.table.name, c.name, c.datatype, pt_row['datatype']))
+                                       "{} != {} ").format(c.table.name, c.name, c.datatype, pt_row['datatype']))
 
-
+                #
                 # At this point, we've converted the proto_vid from a proto_term string to an Object NUmber,
                 # now we can link up an index if it is defined. If the index parition exists, then
                 # we look for the new proto-vid object number in the table of the index partition,
@@ -532,25 +532,26 @@ class Schema(object):
                         ip = self.bundle.library.get(index_partition).partition
                     except NotFoundError:
                         self.bundle.error("Failed to get index '{}' while trying to check index coverage"
-                                          .format(index_partition, c.table.name, c.name ))
+                                          .format(index_partition, c.table.name, c.name))
                         continue
 
                     for ipc in ip.table.columns:
 
                         if ipc.proto_vid == c.proto_vid:
                             c.fk_vid = ipc.id_
-                            c.data['index'] = "{}".format(str(ip.identity.vid))
-                            c.data['index_name'] = "{}:{}".format(str(ip.identity.vname), ipc.name)
+                            c.data['index'] = "{}".format(b(ip.identity.vid))
+                            c.data['index_name'] = "{}:{}".format(b(ip.identity.vname), ipc.name)
 
-                            self.bundle.log("expand_column_prototype: {}.{} -> {}.{}".format(c.table.name, c.name,
-                                str(ip.identity.vname), ipc.name))
+                            self.bundle.log(
+                                "expand_column_prototype: {}.{} -> {}.{}".format(
+                                    c.table.name, c.name, b(ip.identity.vname), ipc.name))
 
                             table_cols[ip.identity.vid].add(c.vid)
 
         # Now check that for each table, the table has columns that link to all of the  link column in the index.
         for t in self.tables:
 
-            indexes = set([ c.data['index'].split(':')[0] for c in t.columns if 'index' in c.data and c.data['index']])
+            indexes = set([c.data['index'].split(':')[0] for c in t.columns if 'index' in c.data and c.data['index']])
 
             for index in indexes:
                 try:
@@ -560,23 +561,22 @@ class Schema(object):
                                        " {}.{} ").format(index, c.table.name, c.name))
                     continue
 
-                index_columns =  set([ str(c.id_) for c in ip.table.columns if c.name != 'id'])
+                index_columns = set([b(c.id_) for c in ip.table.columns if c.name != 'id'])
 
-                link_columns =  set([ str(a.id_) for a,b  in ip.table.link_columns(t) ])
+                link_columns = set([b(a.id_) for a, b in ip.table.link_columns(t)])
 
                 diff = index_columns.difference(link_columns)
 
                 if diff:
                     missing_cols = ', '.join(ip.table.column(c).name for c in diff)
                     self.bundle.warn('Table {} does not cover all of the index values for index {}; missing {}'
-                                     .format(t.name, ip.vname, missing_cols)  )
-
+                                     .format(t.name, ip.vname, missing_cols))
 
     def extract_schema(self, db):
         '''Extract an Ambry schema from a database and create it in this bundle '''
 
         for table_name in db.inspector.get_table_names():
-            self.bundle.log("Extracting: {}".format(table_name))
+            self.bundle.log('Extracting: {}'.format(table_name))
 
             t = self.add_table(table_name)
 
@@ -586,24 +586,19 @@ class Schema(object):
 
                 try:
                     size = c['type'].length
-                    dt = str(c['type']).replace(str(size), '').replace('()', '').lower()
+                    dt = b(c['type']).replace(b(size), '').replace('()', '').lower()
                 except AttributeError:
                     size = None
-                    dt = str(c['type']).lower()
+                    dt = b(c['type']).lower()
 
-                self.bundle.log("   {} {} {} ".format(name, dt, size))
+                self.bundle.log('   {} {} {} '.format(name, dt, size))
 
                 self.add_column(t, name, datatype=dt,
                                 size=size,
                                 is_primary_key=c['primary_key'] != 0)
 
-
-
-
     def copy_table(self, in_table, out_table_name=None):
-        '''Copy a table schema into this schema
-      
-        '''
+        """ Copy a table schema into this schema."""
 
         if not out_table_name:
             out_table_name = in_table.name
@@ -625,10 +620,6 @@ class Schema(object):
 
             return table
 
-
-
-
-
     def write_codes(self):
 
         import unicodecsv as csv
@@ -644,7 +635,7 @@ class Schema(object):
             for t in self.tables:
                 for c in t.columns:
                     for cd in c.codes:
-                        row = [ t.name,c.name,cd.key,cd.value,cd.description]
+                        row = [t.name, c.name, cd.key, cd.value, cd.description]
 
                         w.writerow(row)
                         count += 1
@@ -659,7 +650,7 @@ class Schema(object):
         import csv
         from ..orm.exc import NotFoundError
 
-        with  open(self.bundle.filesystem.path('meta', self.bundle.CODE_FILE), 'r') as f:
+        with open(self.bundle.filesystem.path('meta', self.bundle.CODE_FILE), 'r') as f:
 
             r = csv.DictReader(f)
             table = None
@@ -681,8 +672,7 @@ class Schema(object):
                     column.add_code(row['key'], row['value'], row['description'])
                 except NotFoundError as e:
                     self.bundle.error("Skipping code '{}' for {}.{} : {}"
-                                      .format(row['key'],row['table'],row['column'], e))
-
+                                      .format(row['key'], row['table'], row['column'], e))
 
     @property
     def dict(self):
@@ -713,14 +703,15 @@ class Schema(object):
                 continue
 
             if not self.bundle.config.group('views'):
-                raise ConfigurationError('add_views() requires views to be specified in the configuration file')
+                raise ConfigurationError(
+                    'add_views() requires views to be specified in the configuration file')
 
             views = self.bundle.config.views.get(p.table.name, False)
 
             if not views:
                 continue
 
-            for name, view in views.items():
+            for name, view in list(views.items()):
                 self.bundle.log("Adding view: {} to {}".format(name, p.identity.name))
                 sql = "DROP VIEW IF EXISTS {}; ".format(name)
                 p.database.connection.execute(sql)
@@ -741,26 +732,25 @@ class Schema(object):
 
                 if size and size > c.size:
                     self.bundle.log(
-                        "Updating schema column length {}.{} {} -> {}".format(table.name, c.name, c.size, size))
+                        "Updating schema column length {}.{} {} -> {}".format(
+                            table.name, c.name, c.size, size))
                     c.size = size
 
                     # Integers that are too long for 32 bits should be upgraded to 64
                     if c.datatype == c.DATATYPE_INTEGER and c.size >= 10:  # 2^32 is 10 gigits
                         self.bundle.log(
-                            "Updating schema column datatype {}.{} to integer64".format(table.name, c.name, c.size,
-                                                                                        size))
+                            "Updating schema column datatype {}.{} to integer64".format(
+                                table.name, c.name, c.size, size))
                         c.datatype = c.DATATYPE_INTEGER64
 
                     s.merge(c)
 
         # Need to expire the unmanaged cache, or the regeneration of the schema in _revise_schema will
-        # use the cached schema object rather than the ones we just updated. 
+        # use the cached schema object rather than the ones we just updated.
         self.bundle.database.session.expire_all()
-
 
     #
     # Updating Schemas
-    #
     #
 
     def update_from_intuiter(self, table_name, intuiter, logger=None):
@@ -801,12 +791,8 @@ class Schema(object):
                     description = re.sub('[\r\n\s]+', ' ', col.description).strip() if col.description else ''
 
                     # add_column will update existing columns
-                    orm_col = self.add_column(
+                    self.add_column(
                         table, name, datatype=type_map[type_], description=description,
                         size=col.length if type_ == str else None, data=dict(has_codes=1) if has_codes else {})
 
-
         self.write_schema()
-
-
-
