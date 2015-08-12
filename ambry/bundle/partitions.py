@@ -9,7 +9,7 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 from sqlalchemy.orm.exc import NoResultFound
 
-from six import iteritems, b
+from six import iteritems
 
 from ..identity import PartitionIdentity, PartitionNameQuery, NameQuery  # , PartitionName
 
@@ -70,8 +70,8 @@ class Partitions(object):
         q = session\
             .query(OrmPartition)\
             .filter(OrmPartition.d_vid == self.bundle.dataset.vid)\
-            .filter(or_(OrmPartition.id == b(id_).encode('ascii'),
-                        OrmPartition.vid == b(id_).encode('ascii')))
+            .filter(or_(OrmPartition.id == str(id_).encode('ascii'),
+                        OrmPartition.vid == str(id_).encode('ascii')))
 
         try:
             orm_partition = q.one()
@@ -83,7 +83,7 @@ class Partitions(object):
             q = session\
                 .query(OrmPartition)\
                 .filter(OrmPartition.d_vid == self.bundle.dataset.vid)\
-                .filter(OrmPartition.name == b(id_).encode('ascii'))
+                .filter(OrmPartition.name == str(id_).encode('ascii'))
 
             try:
                 orm_partition = q.one()
@@ -116,7 +116,7 @@ class Partitions(object):
         elif pnq.vname is not NameQuery.ANY:
             q = q.filter(OrmPartition.vname == pnq.vname)
         elif pnq.name is not NameQuery.ANY:
-            q = q.filter(OrmPartition.name == b(pnq.name))
+            q = q.filter(OrmPartition.name == str(pnq.name))
         else:
             if pnq.time is not NameQuery.ANY:
                 q = q.filter(OrmPartition.time == pnq.time)
@@ -171,7 +171,7 @@ class Partitions(object):
 
         if name:
             name_parts = [e[0] for e in PartialPartitionName._name_parts]
-            kwargs.update((k, b(v)) for k, v in iteritems(name.dict)
+            kwargs.update((k, str(v)) for k, v in iteritems(name.dict)
                           if k in name_parts)
 
         p = self.bundle.dataset.new_partition(data=data, **kwargs)

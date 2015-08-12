@@ -136,11 +136,3 @@ instead of
 ```python
 u'some-str'
 ```
-Or
-```python
-six.b(obj)
-```
-instead of
-```python
-str(obj)
-```

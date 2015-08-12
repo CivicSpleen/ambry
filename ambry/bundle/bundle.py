@@ -844,7 +844,7 @@ Pipeline
 Pipeline Headers
 ================
 {}
-""".format(u(pl), pl.headers_report())
+""".format(unicode(pl), pl.headers_report())
 
         self.build_fs.setcontents(
             os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt'), v, encoding='utf8')
