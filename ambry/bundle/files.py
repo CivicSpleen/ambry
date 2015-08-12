@@ -438,7 +438,8 @@ class SourcesFile(RowBuildSourceFile):
         # are non-empty. Then zip again to transpose to original form.
 
         # TODO: next row is so complicated. Try to refactor.
-        non_empty_rows = list(zip(*[row for row in zip(*contents) if bool(list(filter(bool, row[1:])))]))
+        # FIXME: Needs smart 2to3 conversion. Auto conversion breaks tests.
+        non_empty_rows = zip(*[row for row in zip(*contents) if bool(filter(bool, row[1:]))])
 
         s = self._dataset._database.session
 
@@ -487,8 +488,8 @@ class SourcesFile(RowBuildSourceFile):
             rows = [list(rows[0].keys())] + [list(r.values()) for r in rows]
 
             # Transpose trick to remove empty columns
-            # TODO: So complicated, refactor.
-            rows = list(zip(*[row for row in zip(*rows) if bool(list(filter(bool, row[1:])))]))
+            # FIXME: needs smart 2to3 conversion. Auto conversion breaks tests.
+            rows = zip(*[row for row in zip(*rows) if bool(filter(bool, row[1:]))])
         else:
             # No contents, so use the default file
             import csv
