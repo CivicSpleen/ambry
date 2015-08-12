@@ -6,10 +6,19 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
+from copy import copy
+import json
+import random
 import os.path
-from semantic_version import Version
+import os
+import time
+
+import requests
+
+import semantic_version as sv
+
+from util import md5_for_file, Constant
 from util.typecheck import returns  # , accepts
-from util import Constant
 
 
 class NotObjectNumberError(ValueError):
@@ -23,7 +32,6 @@ class Base62DecodeError(ValueError):
 class Name(object):
 
     """The Name part of an identity."""
-
 
     NAME_PART_SEP = '-'
 
@@ -112,7 +120,6 @@ class Name(object):
 
     @returns(str, debug=2)
     def _parse_version(self, version):
-        import semantic_version as sv
 
         if version is not None and isinstance(version, basestring):
 
@@ -127,7 +134,6 @@ class Name(object):
                     try:
                         version = str(sv.Spec(version))
                     except ValueError:
-
                         raise ValueError("Could not parse '{}' as a semantic version".format(version))
 
         if not version:
@@ -182,11 +188,9 @@ class Name(object):
     @property
     def vname(self):
         if not self.version:
-            raise ValueError("No version set")
+            raise ValueError('No version set')
 
-        import semantic_version  # @UnresolvedImport
-
-        if isinstance(self.version, semantic_version.Spec):
+        if isinstance(self.version, sv.Spec):
             return self.name + str(self.version)
         else:
             return self.name + self.NAME_PART_SEP + str(self.version)
@@ -292,41 +296,41 @@ class Name(object):
     # convenience functions make it easier to update specific parts
     @property
     def version_minor(self):
-        return Version(self.version).minor
+        return sv.Version(self.version).minor
 
     @version_minor.setter
     def version_minor(self, value):
-        v = Version(self.version)
+        v = sv.Version(self.version)
         v.minor = int(value)
         self.version = str(v)
 
     @property
     def version_major(self):
-        return Version(self.version).minor
+        return sv.Version(self.version).minor
 
     @version_major.setter
     def version_major(self, value):
-        v = Version(self.version)
+        v = sv.Version(self.version)
         v.major = int(value)
         self.version = str(v)
 
     @property
     def version_patch(self):
-        return Version(self.version).patch
+        return sv.Version(self.version).patch
 
     @version_patch.setter
     def version_patch(self, value):
-        v = Version(self.version)
+        v = sv.Version(self.version)
         v.patch = int(value)
         self.version = str(v)
 
     @property
     def version_build(self):
-        return Version(self.version).build
+        return sv.Version(self.version).build
 
     @version_build.setter
     def version_build(self, value):
-        v = Version(self.version)
+        v = sv.Version(self.version)
         v.build = value
         self.version = str(v)
 
@@ -346,7 +350,7 @@ class PartialPartitionName(Name):
 
     """For specifying a PartitionName within the context of a bundle."""
 
-    FORMAT='default'
+    FORMAT = 'default'
 
     time = None
     space = None
@@ -370,7 +374,6 @@ class PartialPartitionName(Name):
 
     def is_valid(self):
         pass
-
 
     def __eq__(self, o):
         return (self.time == o.time and self.space == o.space and self.table == o.table and
@@ -677,10 +680,11 @@ class ObjectNumber(object):
 
     # Number of digits in each assignment class
     DLEN.DATASET = (3, 5, 7, 9)
-    DLEN.DATASET_CLASSES = dict(authoritative=DLEN.DATASET[0],  # Datasets registered by number authority .
-                                registered=DLEN.DATASET[1],  # For registered users of a numbering authority
-                                unregistered=DLEN.DATASET[2],  # For unregistered users of a numebring authority
-                                self=DLEN.DATASET[3])  # Self registered
+    DLEN.DATASET_CLASSES = dict(
+        authoritative=DLEN.DATASET[0],  # Datasets registered by number authority .
+        registered=DLEN.DATASET[1],  # For registered users of a numbering authority
+        unregistered=DLEN.DATASET[2],  # For unregistered users of a numebring authority
+        self=DLEN.DATASET[3])  # Self registered
     DLEN.PARTITION = 3
     DLEN.TABLE = 2
     DLEN.COLUMN = 3
@@ -752,12 +756,13 @@ class ObjectNumber(object):
         on_str = on_str[1:]
 
         if type_ not in cls.NDS_LENGTH.keys():
-            raise NotObjectNumberError("Unknown type character '{}' for '{}'".format(type_,on_str))
+            raise NotObjectNumberError("Unknown type character '{}' for '{}'".format(type_, on_str))
 
         ds_length = len(on_str) - cls.NDS_LENGTH[type_]
 
         if ds_length not in cls.DATASET_LENGTHS:
-            raise NotObjectNumberError("Dataset string '{}' has an unfamiliar length: {}".format(on_str,ds_length))
+            raise NotObjectNumberError(
+                "Dataset string '{}' has an unfamiliar length: {}".format(on_str, ds_length))
 
         ds_lengths = cls.DATASET_LENGTHS[ds_length]
 
@@ -776,37 +781,39 @@ class ObjectNumber(object):
             on_str = on_str[ds_lengths[0]:]
 
             if type_ == cls.TYPE.DATASET:
-                return DatasetNumber( dataset,revision=revision,assignment_class=assignment_class)
+                return DatasetNumber(dataset, revision=revision, assignment_class=assignment_class)
 
             elif type_ == cls.TYPE.TABLE:
                 table = int(ObjectNumber.base62_decode(on_str))
-                return TableNumber( DatasetNumber(dataset,assignment_class=assignment_class), table,revision=revision)
+                return TableNumber(
+                    DatasetNumber(dataset, assignment_class=assignment_class), table, revision=revision)
 
             elif type_ == cls.TYPE.PARTITION:
                 partition = int(ObjectNumber.base62_decode(on_str))
-                return PartitionNumber(DatasetNumber(dataset,assignment_class=assignment_class),partition,revision=revision)
+                return PartitionNumber(
+                    DatasetNumber(dataset, assignment_class=assignment_class), partition, revision=revision)
 
             elif type_ == cls.TYPE.COLUMN:
-                table = int(ObjectNumber.base62_decode(on_str[ 0:cls.DLEN.TABLE]))
-                column = int(ObjectNumber.base62_decode( on_str[cls.DLEN.TABLE:]))
+                table = int(ObjectNumber.base62_decode(on_str[0:cls.DLEN.TABLE]))
+                column = int(ObjectNumber.base62_decode(on_str[cls.DLEN.TABLE:]))
 
-                return ColumnNumber(TableNumber(DatasetNumber( dataset,assignment_class=assignment_class), table),
-                                    column,revision=revision)
+                return ColumnNumber(
+                    TableNumber(DatasetNumber(dataset, assignment_class=assignment_class), table),
+                    column, revision=revision)
 
             elif type_ == cls.TYPE.OTHER:
 
                 return OtherNumber(on_str_orig[0],
                                    DatasetNumber(dataset, assignment_class=assignment_class),
                                    int(ObjectNumber.base62_decode(on_str[0:cls.DLEN.OTHER])),
-                                   revision=revision
-                                   )
+                                   revision=revision)
 
             else:
 
-                raise NotObjectNumberError('Unknown type character: ' +type_ + ' in ' + str(on_str_orig))
+                raise NotObjectNumberError('Unknown type character: ' + type_ + ' in ' + str(on_str_orig))
 
         except Base62DecodeError as e:
-            raise NotObjectNumberError("Unknown character:  " + str(e))
+            raise NotObjectNumberError('Unknown character:  ' + str(e))
 
     @classmethod
     def base62_encode(cls, num):
@@ -862,7 +869,6 @@ class ObjectNumber(object):
 
     def rev(self, i):
         """Return a clone with a different revision."""
-        from copy import copy
         on = copy(self)
         on.revision = i
         return on
@@ -891,7 +897,7 @@ class TopNumber(ObjectNumber):
 
     """
 
-    def __init__(self,space,dataset=None,revision=None,assignment_class='self'):
+    def __init__(self, space, dataset=None, revision=None, assignment_class='self'):
         """Constructor."""
 
         if len(space) > 1:
@@ -902,8 +908,6 @@ class TopNumber(ObjectNumber):
         self.assignment_class = assignment_class
 
         if dataset is None:
-
-            import random
             digit_length = self.DLEN.DATASET_CLASSES[self.assignment_class]
             # On 64 bit machine, max is about 10^17, 2^53
             # That should be random enough to prevent
@@ -952,7 +956,7 @@ class TopNumber(ObjectNumber):
         return ObjectNumber.base62_encode(self.dataset).rjust(ds_len, '0')
 
     def __str__(self):
-        return (self.space +self._ds_str() + ObjectNumber._rev_str(self.revision))
+        return (self.space + self._ds_str() + ObjectNumber._rev_str(self.revision))
 
 
 class DatasetNumber(ObjectNumber):
@@ -965,8 +969,6 @@ class DatasetNumber(ObjectNumber):
         self.assignment_class = assignment_class
 
         if dataset is None:
-
-            import random
             digit_length = self.DLEN.DATASET_CLASSES[self.assignment_class]
             # On 64 bit machine, max is about 10^17, 2^53
             # That should be random enough to prevent
@@ -985,7 +987,6 @@ class DatasetNumber(ObjectNumber):
 
     @property
     def as_dataset(self):
-        from copy import copy
         return copy(self)
 
     def as_partition(self, partition_number=0):
@@ -1029,8 +1030,8 @@ class TableNumber(ObjectNumber):
         return (
             ObjectNumber.TYPE.TABLE +
             self.dataset._ds_str() +
-            ObjectNumber.base62_encode(self.table).rjust(self.DLEN.TABLE,'0') +
-            ObjectNumber._rev_str( self.revision))
+            ObjectNumber.base62_encode(self.table).rjust(self.DLEN.TABLE, '0') +
+            ObjectNumber._rev_str(self.revision))
 
 
 class ColumnNumber(ObjectNumber):
@@ -1087,6 +1088,7 @@ class ColumnNumber(ObjectNumber):
             ObjectNumber._rev_str(
                 self.revision))
 
+
 class PartitionNumber(ObjectNumber):
 
     """An identifier for a partition."""
@@ -1122,9 +1124,9 @@ class PartitionNumber(ObjectNumber):
         return (
             ObjectNumber.TYPE.PARTITION +
             self.dataset._ds_str() +
-            ObjectNumber.base62_encode(self.partition).rjust(self.DLEN.PARTITION,'0') +
-            ObjectNumber._rev_str(
-                self.revision))
+            ObjectNumber.base62_encode(self.partition).rjust(self.DLEN.PARTITION, '0') +
+            ObjectNumber._rev_str(self.revision))
+
 
 class OtherNumber(ObjectNumber):
     """Other types of number. Can have any type code, and 4 digits of number, directly
@@ -1138,7 +1140,8 @@ class OtherNumber(ObjectNumber):
         try:
             dataset = dataset.as_dataset
         except AttributeError:
-            raise ValueError("Constructor requires a DatasetNumber or ObjectNumber that converts to a DatasetNumber")
+            raise ValueError(
+                'Constructor requires a DatasetNumber or ObjectNumber that converts to a DatasetNumber')
 
         self.type_code = type_code
         self.dataset = dataset
@@ -1157,8 +1160,8 @@ class OtherNumber(ObjectNumber):
         return (
             self.type_code +
             self.dataset._ds_str() +
-            ObjectNumber.base62_encode(self.number).rjust(self.DLEN.OTHER,'0') +
-            ObjectNumber._rev_str( self.revision))
+            ObjectNumber.base62_encode(self.number).rjust(self.DLEN.OTHER, '0') +
+            ObjectNumber._rev_str(self.revision))
 
 
 class Identity(object):
@@ -1214,7 +1217,7 @@ class Identity(object):
                             .format(type(name), type(object_number)))
 
         # Update the patch number to always be the revision
-        nv = Version(self._name.version)
+        nv = sv.Version(self._name.version)
 
         nv.patch = int(self._on.revision)
 
@@ -1264,7 +1267,8 @@ class Identity(object):
 
             ident = PartitionIdentity.from_dict(d)
         else:
-            raise TypeError("Can't make identity from {}; object number is wrong type: {}".format(d, type(on)))
+            raise TypeError(
+                "Can't make identity from {}; object number is wrong type: {}".format(d, type(on)))
 
         if 'md5' in d:
             ident.md5 = d['md5']
@@ -1345,16 +1349,14 @@ class Identity(object):
             ip.isa = type(ip.on)
 
         if ip.name_parts:
-
-            import semantic_version
             last = ip.name_parts[-1]
 
             try:
-                ip.version = semantic_version.Version(last)
+                ip.version = sv.Version(last)
                 ip.vname = ip.name
             except ValueError:
                 try:
-                    ip.version = semantic_version.Spec(last)
+                    ip.version = sv.Spec(last)
                     ip.vname = None  # Specs aren't vnames you can query
                 except ValueError:
                     pass
@@ -1369,15 +1371,11 @@ class Identity(object):
 
     def to_meta(self, md5=None, file=None):
         """Return a dictionary of metadata, for use in the Remote api."""
-        import json
-        import os
         # from collections import OrderedDict
 
         if not md5:
             if not file:
-                raise ValueError("Must specify either file or md5")
-
-            from util import md5_for_file
+                raise ValueError('Must specify either file or md5')
 
             md5 = md5_for_file(file)
             size = os.stat(file).st_size
@@ -1654,8 +1652,6 @@ class PartitionIdentity(Identity):
                     d,
                     e.message))
 
-
-
     @property
     def table(self):
         return self._name.table
@@ -1715,7 +1711,6 @@ class NumberServer(object):
         self.next_time = None
 
     def next(self):
-        import requests
 
         if self.key:
             params = dict(access_key=self.key)
@@ -1731,14 +1726,11 @@ class NumberServer(object):
 
         self.last_response = d
 
-        import time
-
         self.next_time = time.time() + self.last_response['wait']
 
         return ObjectNumber.parse(d['number'])
 
     def find(self, name):
-        import requests
 
         if self.key:
             params = dict(access_key=self.key)
@@ -1754,8 +1746,6 @@ class NumberServer(object):
 
         self.last_response = d
 
-        import time
-
         try:
             self.next_time = time.time() + self.last_response['wait']
         except TypeError:
@@ -1766,8 +1756,6 @@ class NumberServer(object):
     def sleep(self):
         """Wait for the sleep time of the last response, to avoid being rate
         limited."""
-
-        import time
 
         if self.next_time and time.time() < self.next_time:
             time.sleep(self.next_time - time.time())
@@ -1833,7 +1821,7 @@ class IdentitySet(object):
 
         for row in self._yield_rows(all_fields):
             out.append('<tr>' +
-                       ''.join(["<td>{}</td>".format(format.format(value).strip()) for format, value in row]) +
+                       ''.join(["<td>{}</td>".format(f.format(value).strip()) for f, value in row]) +
                        '</tr>')
 
         return '<table>' + '\n'.join(out) + '</table>'

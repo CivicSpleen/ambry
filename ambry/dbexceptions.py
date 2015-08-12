@@ -101,6 +101,3 @@ class PhaseError(Exception):
 class BuildError(PhaseError):
 
     """General error while building a bundle."""
-
-
-
