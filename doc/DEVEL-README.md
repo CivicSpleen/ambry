@@ -69,3 +69,62 @@ $ mkvirtualenv --python=/usr/bin/python3 ambry3
  $ python -V
 Python 3.4.2
 ```
+
+### To write python2/python3 compatible code:
+Ambry uses one code base for both - python2 and python3. This requires some extra work.
+1. Tests should be run in both - python2 and python3. FIXME: Not ready yet.
+2. Run 2to3 before push for all files you changed. FIXME: Not ready yet.
+
+Usefull hints:
+1. Use print() instead of print. For complicated cases (print("", file=sys.stderr) for example) use six.print_.
+2. Use six.iteritems, six.iterkeys, six.itervalues instead of {}.iteritems, {}.iterkeys, {}.itervalues if you need iterator.
+3. If you need lists from {}.keys, {}.values wrap both with list - list({}.keys()), list({}.values())
+4. Use urlparse from six:
+```python
+from six.moves.urllib.parse import urlparse
+```
+instead of (py2 style)
+```python
+from urlparse import urlparse
+```
+5. Use StringIO from the six package:
+```python
+from six import StringIO
+```
+instead of (py2 style)
+```python
+from StringIO import StringIO
+```
+6. Use filterfalse from the six package:
+```python
+from six import filterfalse
+```
+instead of (py2 style)
+```python
+from itertools import ifilterfalse
+```
+7. Use six.string_types to check for string:
+```python
+isinstance(value, string_types)
+```
+instead of (py2 style)
+```python
+isinstance(value, basestring)
+```
+8. Use six.moves.builtins for builtins access:
+```python
+from six.moves import builtins
+```
+instead of (py2 style)
+```python
+import __builtins__
+```
+9. Use __bool__ instead of __nonzero__. For python2 compatibility use next hack:
+```python
+class Foo(objct):
+    def __bool__(self):
+        return bool(...)
+
+Foo.__nonzero__ = Foo.__bool__
+```
+If you do so, 2to3 will not replace __nonzero__.
