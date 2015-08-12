@@ -6,19 +6,21 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
+from collections import OrderedDict
 from copy import copy
 import json
-import random
-import os.path
 import os
+import random
 import time
+
+from six import iteritems, itervalues, string_types
 
 import requests
 
 import semantic_version as sv
 
-from util import md5_for_file, Constant
-from util.typecheck import returns  # , accepts
+from .util import md5_for_file, Constant
+from .util.typecheck import returns  # , accepts
 
 
 class NotObjectNumberError(ValueError):
@@ -93,7 +95,7 @@ class Name(object):
 
             v = getattr(self, k)
 
-            if not v or not isinstance(v, basestring):
+            if not v or not isinstance(v, string_types):
                 # Can only clean strings.
                 continue
 
@@ -121,7 +123,7 @@ class Name(object):
     @returns(str, debug=2)
     def _parse_version(self, version):
 
-        if version is not None and isinstance(version, basestring):
+        if version is not None and isinstance(version, string_types):
 
             if version == NameQuery.ANY:
                 pass
@@ -146,7 +148,7 @@ class Name(object):
         return self._name_parts
 
     def clear_dict(self, d):
-        return {k: v for k, v in d.items() if v}
+        return {k: v for k, v in list(d.items()) if v}
 
     @property
     def dict(self):
@@ -199,7 +201,7 @@ class Name(object):
 
         d = self._dict(with_name=False)
 
-        if isinstance(excludes, basestring):
+        if isinstance(excludes, string_types):
             excludes = {excludes}
 
         if not isinstance(excludes, set):
@@ -337,7 +339,7 @@ class Name(object):
     def as_partition(self, **kwargs):
         """Return a PartitionName based on this name."""
 
-        return PartitionName(**dict(self.dict.items() + kwargs.items()))
+        return PartitionName(**dict(list(self.dict.items()) + list(kwargs.items())))
 
     def as_namequery(self):
         return NameQuery(**self._dict(with_name=False))
@@ -370,7 +372,7 @@ class PartialPartitionName(Name):
     def promote(self, name):
         """Promote to a PartitionName by combining with a bundle Name."""
 
-        return PartitionName(**dict(name.dict.items() + self.dict.items()))
+        return PartitionName(**dict(list(name.dict.items()) + list(self.dict.items())))
 
     def is_valid(self):
         pass
@@ -442,7 +444,6 @@ class PartitionName(PartialPartitionName, Name):
 
         try:
             parts = ([super(PartitionName, self).path] + self._local_parts())
-
             return os.path.join(*parts)
         except TypeError as e:
             raise TypeError(
@@ -522,7 +523,7 @@ class PartialMixin(object):
 
     def clear_dict(self, d):
         if self.use_clear_dict:
-            return {k: v if v is not None else self.NONE for k, v in d.items()}
+            return {k: v if v is not None else self.NONE for k, v in list(d.items())}
         else:
             return d
 
@@ -742,7 +743,7 @@ class ObjectNumber(object):
         if not on_str:
             raise NotObjectNumberError("Got null input")
 
-        if not isinstance(on_str, basestring):
+        if not isinstance(on_str, string_types):
             raise NotObjectNumberError("Must be a string")
 
         # if isinstance(on_str, unicode):
@@ -755,7 +756,7 @@ class ObjectNumber(object):
 
         on_str = on_str[1:]
 
-        if type_ not in cls.NDS_LENGTH.keys():
+        if type_ not in list(cls.NDS_LENGTH.keys()):
             raise NotObjectNumberError("Unknown type character '{}' for '{}'".format(type_, on_str))
 
         ds_length = len(on_str) - cls.NDS_LENGTH[type_]
@@ -1134,7 +1135,7 @@ class OtherNumber(ObjectNumber):
 
     def __init__(self, type_code, dataset, num, revision=None):
 
-        if isinstance(dataset, basestring):
+        if isinstance(dataset, string_types):
             dataset = ObjectNumber.parse(dataset).as_dataset
 
         try:
@@ -1398,13 +1399,8 @@ class Identity(object):
         if not md5:
             if not file:
                 raise ValueError("Must specify either file or md5")
-
-            from util import md5_for_file
-
             md5 = md5_for_file(file)
-
         self.md5 = md5
-
         return self
 
     #
@@ -1507,15 +1503,10 @@ class Identity(object):
 
     @property
     def names_dict(self):
-        """A dictionary with only the generated names, name, vname and
-        fqname."""
+        """A dictionary with only the generated names, name, vname and fqname."""
+        INCLUDE_KEYS = ['name', 'vname', 'vid']
 
-        d = {
-            k: v for k,
-            v in self.dict.items() if k in [
-                'name',
-                'vname',
-                'vid']}
+        d = {k: v for k, v in iteritems(self.dict) if k in INCLUDE_KEYS}
 
         d['fqname'] = self.fqname
 
@@ -1526,14 +1517,13 @@ class Identity(object):
         """A dictionary with only the items required to specify the identy,
         excluding the generated names, name, vname and fqname."""
 
-        return {
-            k: v for k,
-            v in self.dict.items() if k not in [
-                'name',
-                'vname',
-                'fqname',
-                'vid',
-                'cache_key']}
+        SKIP_KEYS = [
+            'name',
+            'vname',
+            'fqname',
+            'vid',
+            'cache_key']
+        return {k: v for k, v in iteritems(self.dict) if k not in SKIP_KEYS}
 
     @staticmethod
     def _compose_fqname(vname, vid):
@@ -1587,15 +1577,13 @@ class Identity(object):
             raise ValueError(
                 "Can't use this method when there is more than one partition")
 
-        return self.partitions.values()[0]
+        return list(self.partitions.values())[0]
 
     def __str__(self):
         return self._compose_fqname(self._name.vname, self.vid)
 
     def _info(self):
         """Returns an OrderedDict of information, for human display."""
-        from collections import OrderedDict
-
         d = OrderedDict()
 
         d['vid'] = self.vid
@@ -1710,7 +1698,7 @@ class NumberServer(object):
         self.last_response = None
         self.next_time = None
 
-    def next(self):
+    def next(self):  # 2to3 can break it. Need extra check.
 
         if self.key:
             params = dict(access_key=self.key)
@@ -1768,7 +1756,7 @@ class IdentitySet(object):
     def __init__(self, idents, show_partitions=False, fields=None):
 
         if isinstance(idents, dict):
-            idents = idents.values()
+            idents = list(idents.values())
 
         self.idents = idents
 
@@ -1836,7 +1824,7 @@ class IdentitySet(object):
 
             for e in all_fields:
                 # Just to make the following code easier to read
-                e = dict(zip(self.record_entry_names, e))
+                e = dict(list(zip(self.record_entry_names, e)))
 
                 if e['name'] not in self.fields:
                     continue
@@ -1846,9 +1834,8 @@ class IdentitySet(object):
 
                 values.append(e['extractor'](ident))
 
-            yield zip(d_formats, values)
+            yield list(zip(d_formats, values))
 
             if self.show_partitions and ident.partitions:
-
-                for pi in ident.partitions.values():
-                    yield zip(p_formats, values)
+                for pi in itervalues(ident.partitions):
+                    yield list(zip(p_formats, values))
