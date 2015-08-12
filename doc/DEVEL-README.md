@@ -126,5 +126,21 @@ class Foo(objct):
         return bool(...)
 
 Foo.__nonzero__ = Foo.__bool__
-```
 If you do so, 2to3 will not replace __nonzero__.
+```
+10. Use six.u() if you need unicode, use six.b() if you need bytestring:
+```python
+u('some-str')
+```
+instead of
+```python
+u'some-str'
+```
+Or
+```python
+six.b(obj)
+```
+instead of
+```python
+str(obj)
+```
