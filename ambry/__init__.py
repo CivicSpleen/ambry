@@ -18,10 +18,9 @@ Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
-from _meta import *
+from ._meta import *
 
 from ambry.util import memoize
-
 
 
 @memoize
