@@ -603,8 +603,8 @@ class SchemaFile(RowBuildSourceFile):
         # Transpose trick to remove empty columns
         if rows:
             rows_before_transpose = len(rows)
-            rows = list(zip(*[r for r in zip(*rows) if bool(list(filter(bool, row[1:])))]))
-
+            # FIXME: Needs smart 2to3 conversion. Auto-conversion breaks tests.
+            rows = zip(*[r for r in zip(*rows) if bool(filter(bool, r[1:]))])
             assert rows_before_transpose == len(rows)  # The transpose trick removes all of the rows if anything goes wrong
 
         else:
