@@ -6,8 +6,10 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 """
 
 import os.path
-from ambry.util import AttrDict
-from ambry.util import lru_cache
+
+from six import StringIO, string_types
+
+from ambry.util import AttrDict, lru_cache
 from dbexceptions import ConfigurationError
 
 
@@ -41,23 +43,25 @@ class RunConfig(object):
     USER_CONFIG = (os.getenv(AMBRY_CONFIG_ENV_VAR)
                    if os.getenv(AMBRY_CONFIG_ENV_VAR) else os.path.expanduser('~/.ambry.yaml'))
 
+    pjoin = os.path.join  # Shortcut for simplification.
+
     # A special case for virtual environments -- look for a user config file there first.
     if os.getenv(AMBRY_CONFIG_ENV_VAR):
         USER_CONFIG = os.getenv(AMBRY_CONFIG_ENV_VAR)
-    elif os.getenv('VIRTUAL_ENV') and os.path.exists(os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')):
-        USER_CONFIG = os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')
+    elif os.getenv('VIRTUAL_ENV') and os.path.exists(pjoin(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')):
+        USER_CONFIG = pjoin(os.getenv('VIRTUAL_ENV'), '.ambry.yaml')
     else:
         USER_CONFIG = os.path.expanduser('~/.ambry.yaml')
 
     if os.getenv(AMBRY_ACCT_ENV_VAR):
         USER_ACCOUNTS = os.getenv(AMBRY_ACCT_ENV_VAR)
-    elif os.getenv('VIRTUAL_ENV') and os.path.exists(os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry-accounts.yaml')):
-        USER_ACCOUNTS = os.path.join(os.getenv('VIRTUAL_ENV'), '.ambry-accounts.yaml')
+    elif os.getenv('VIRTUAL_ENV') and os.path.exists(pjoin(os.getenv('VIRTUAL_ENV'), '.ambry-accounts.yaml')):
+        USER_ACCOUNTS = pjoin(os.getenv('VIRTUAL_ENV'), '.ambry-accounts.yaml')
     else:
         USER_ACCOUNTS = os.path.expanduser('~/.ambry-accounts.yaml')
 
     try:
-        DIR_CONFIG = os.path.join(os.getcwd(), 'ambry.yaml')  # In webservers, there is no cwd
+        DIR_CONFIG = pjoin(os.getcwd(), 'ambry.yaml')  # In webservers, there is no cwd
     except OSError:
         DIR_CONFIG = None
 
@@ -187,7 +191,6 @@ class RunConfig(object):
     def _sub_strings(self, e, subs):
         """Substitute keys in the dict e with functions defined in subs."""
 
-
         iters = 0
         while iters < 100:
             sub_count = 0
@@ -209,9 +212,7 @@ class RunConfig(object):
 
         to_string = False
         if stream is None:
-            import StringIO
-
-            stream = StringIO.StringIO()
+            stream = StringIO()
             to_string = True
 
         self.config.dump(stream)
@@ -230,8 +231,7 @@ class RunConfig(object):
 
         # Substititue in any of the other items in the filesystem group.
         # this is particularly useful for the 'root' value
-        return  e.format(**fs)
-
+        return e.format(**fs)
 
     def service(self, name):
         """For configuring the client side of services."""
@@ -298,10 +298,7 @@ class RunConfig(object):
 
         return e
 
-
-
     def remotes(self, remotes):
-        from ckcache import parse_cache_string
         # Re-format the string remotes from strings to dicts.
 
         fs = self.group('filesystem')
@@ -316,19 +313,18 @@ class RunConfig(object):
 
         for name, remote in pairs:
 
-            remote = remote.format(root = root_dir)
+            remote = remote.format(root=root_dir)
 
             r[str(name)] = remote
 
         return r
-
 
     def library(self):
         e = self.config['library']
 
         fs = self.group('filesystem')
 
-        database = e.get('database','').format(**fs)
+        database = e.get('database', '').format(**fs)
         warehouse = e.get('warehouse', '').format(**fs),
 
         try:
@@ -341,8 +337,10 @@ class RunConfig(object):
         except:
             pass
 
-
-        d =  dict(database=database,warehouse=warehouse,remotes= self.remotes(e.get('remotes', {})))
+        d = dict(
+            database=database,
+            warehouse=warehouse,
+            remotes=self.remotes(e.get('remotes', {})))
 
         return d
 
@@ -367,7 +365,7 @@ class RunConfig(object):
 
         return e
 
-    def database(self, name, missing_is_dsn=False, return_dsn = False):
+    def database(self, name, missing_is_dsn=False, return_dsn=False):
 
         fs = self.group('filesystem')
         root_dir = fs['root'] if 'root' in fs else '/tmp/norootdir'
@@ -393,12 +391,15 @@ class RunConfig(object):
 
             account = None
             fails = []
-            for account_template in ("{server}-{username}-{dbname}","{server}-{dbname}", "{server}-{username}","{server}" ):
+            account_templates = (
+                '{server}-{username}-{dbname}',
+                '{server}-{dbname}',
+                '{server}-{username}',
+                '{server}')
+            for tmpl in account_templates:
                 try:
-                    account_key = account_template.format(**config)
-
+                    account_key = tmpl.format(**config)
                     account = self.account(account_key)
-
                     if account:
                         break
                 except KeyError:
@@ -442,6 +443,7 @@ def mp_run(mp_run_args):
 
         # Import the bundle file from the
         rp = os.path.realpath(os.path.join(bundle_dir, 'bundle.py'))
+        # FIXME: What is import_file?
         mod = import_file(rp)
 
         dir_ = os.path.dirname(rp)
@@ -488,7 +490,7 @@ def normalize_dsn_or_dict(d):
         config = d
         dsn = None
 
-    elif isinstance(d, basestring):
+    elif isinstance(d, string_types):
         config = None
         dsn = d
 
@@ -498,7 +500,7 @@ def normalize_dsn_or_dict(d):
     if dsn:
 
         if dsn.startswith('sqlite') or dsn.startswith('spatialite'):
-            driver, path = dsn.split(':',1)
+            driver, path = dsn.split(':', 1)
 
             slashes, path = path[:2], path[2:]
 
@@ -513,12 +515,12 @@ def normalize_dsn_or_dict(d):
 
             path = path[1:]
 
-            config=dict(
+            config = dict(
                 server=None,
-                username = None,
-                password = None,
-                driver = driver,
-                dbname = path
+                username=None,
+                password=None,
+                driver=driver,
+                dbname=path
             )
         else:
 
@@ -538,7 +540,7 @@ def normalize_dsn_or_dict(d):
 
         if d.get('password'):
 
-            up += ':' + d.get('password','')
+            up += ':' + d.get('password', '')
 
         if up:
             up += "@"
@@ -546,10 +548,10 @@ def normalize_dsn_or_dict(d):
         if up and not d.get('server'):
             raise ConfigurationError("Can't construct a DSN with a username or password without a hostname")
 
-        host_part = up + d.get('server','') if d.get('server') else ''
+        host_part = up + d.get('server', '') if d.get('server') else ''
 
         if d.get('dbname', False):
-            path_part =  '/'+d.get('dbname')
+            path_part = '/' + d.get('dbname')
 
             #if d['driver'] in ('sqlite3', 'sqlite', 'spatialite'):
             #    path_part = '/' + path_part
