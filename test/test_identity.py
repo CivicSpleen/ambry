@@ -6,9 +6,11 @@ Created on Jul 6, 2013
 
 import unittest
 
+from semantic_version import Version, Spec
+
 from ambry.identity import DatasetNumber, TableNumber, ObjectNumber, ColumnNumber, PartitionNumber,\
     Name, NameQuery, PartitionName, PartitionNameQuery,\
-    Identity, PartitionIdentity, NumberServer,  Version, OtherNumber
+    Identity, PartitionIdentity, NumberServer, OtherNumber
 
 from test_base import TestBase
 
@@ -298,9 +300,7 @@ class Test(TestBase):
 
         self.assertEquals('source.com/foobar-orig-0.0.1', ident.cache_key)
 
-
     def test_split(self):
-        from semantic_version import Spec
 
         name = Name(source='source.com', dataset='foobar', version='1.2.3')
         dn = DatasetNumber(10000, 1, assignment_class='registered')
@@ -344,22 +344,22 @@ class Test(TestBase):
         ip = Identity.classify(dn.as_partition(10))
         self.assertEquals(PartitionNumber, ip.isa)
 
-        ip = Identity.classify("source.com-foobar-orig")
+        ip = Identity.classify('source.com-foobar-orig')
         self.assertIsNone(ip.version)
         self.assertEquals('source.com-foobar-orig', ip.sname)
         self.assertIsNone(ip.vname)
 
-        ip = Identity.classify("source.com-foobar-orig-1.2.3")
+        ip = Identity.classify('source.com-foobar-orig-1.2.3')
         self.assertIsInstance(ip.version, Version)
         self.assertEquals('source.com-foobar-orig', ip.sname)
         self.assertEquals('source.com-foobar-orig-1.2.3', ip.vname)
 
-        ip = Identity.classify("source.com-foobar-orig->=1.2.3")
+        ip = Identity.classify('source.com-foobar-orig->=1.2.3')
         self.assertIsInstance(ip.version, Spec)
         self.assertEquals('source.com-foobar-orig', ip.sname)
         self.assertIsNone(ip.vname)
 
-        ip = Identity.classify("source.com-foobar-orig-==1.2.3")
+        ip = Identity.classify('source.com-foobar-orig-==1.2.3')
         self.assertIsInstance(ip.version, Spec)
         self.assertEquals('source.com-foobar-orig', ip.sname)
         self.assertIsNone(ip.vname)
