@@ -6,11 +6,23 @@ the Revised BSD License, included in this distribution as LICENSE.txt
 
 """
 
+import os
+import sys
+from time import time
+import traceback
+
+from six import string_types, iteritems, u, s
+
+from geoid.civick import GVid
+from geoid import NotASummaryName
+
+from ambry.dbexceptions import PhaseError, BuildError, BundleError, FatalError
 
 import ambry.etl
 from ..util import get_logger, Constant
 
-indent = '    ' # Indent for structured log output
+indent = '    '  # Indent for structured log output
+
 
 class Bundle(object):
 
@@ -61,7 +73,7 @@ class Bundle(object):
                 ambry.etl.MergeHeader,
                 ambry.etl.MangleHeader
             ],
-            'cast':[
+            'cast': [
                 ambry.etl.MapToSourceTable
             ],
             'intuit': [
@@ -82,7 +94,7 @@ class Bundle(object):
             'cast': [
                 ambry.etl.CasterPipe
             ],
-            'store':[
+            'store': [
                 ambry.etl.SelectPartition,
                 ambry.etl.WriteToPartition
             ],
@@ -111,7 +123,7 @@ class Bundle(object):
         self._source_url = source_url
         self._build_url = build_url
 
-        self._pipeline_editor = None # A function that can be set to edit the pipeline, rather than overriding the method
+        self._pipeline_editor = None  # A function that can be set to edit the pipeline, rather than overriding the method
 
         self._source_fs = None
         self._build_fs = None
@@ -119,8 +131,8 @@ class Bundle(object):
     def set_file_system(self, source_url=None, build_url=None):
         """Set the source file filesystem and/or build  file system"""
 
-        assert isinstance(source_url, basestring) or source_url is  None
-        assert isinstance(build_url, basestring) or build_url is  None
+        assert isinstance(source_url, string_types) or source_url is None
+        assert isinstance(build_url, string_types) or build_url is None
 
         if source_url:
             self._source_url = source_url
@@ -147,10 +159,7 @@ class Bundle(object):
             return clz(self._dataset, self._library, self._source_url, self._build_url)
 
         except Exception as e:
-            from ambry.dbexceptions import BundleError
             raise BundleError("Failed to load bundle code file, skipping : {}".format(e))
-
-
 
     def import_lib(self):
         """Import the lib.py file from the bundle"""
@@ -161,9 +170,7 @@ class Bundle(object):
         """If there are python library requirements set, append the python dir
         to the path."""
 
-        import sys
-
-        for module_name, pip_name in self.metadata.requirements.items():
+        for module_name, pip_name in iteritems(self.metadata.requirements):
             self._library.install_packages(module_name, pip_name)
 
         python_dir = self._library.filesystem.python()
@@ -174,11 +181,9 @@ class Bundle(object):
 
     @property
     def session(self):
-        from sqlalchemy.orm import object_session
         return self.dataset._database.session
 
     def rollback(self):
-        from sqlalchemy.orm import object_session
         return self.dataset._database.session.rollback()
 
     @property
@@ -210,18 +215,16 @@ class Bundle(object):
 
         return self.library.partition(source.url)
 
-
     @property
     def partitions(self):
         """Return the Schema acessor"""
-        from partitions import Partitions
+        from .partitions import Partitions
         return Partitions(self)
 
     def partition(self, ref):
         """Return the Schema acessor"""
-        from partitions import Partitions
         for p in self.partitions:
-            if p.vid == str(ref) or p.name == str(ref):
+            if p.vid == s(ref) or p.name == s(ref):
                 return p
         return None
 
@@ -229,7 +232,7 @@ class Bundle(object):
         return self.dataset.table(ref)
 
     def wrap_partition(self, p):
-        from partitions import PartitionProxy
+        from .partitions import PartitionProxy
 
         if isinstance(p, PartitionProxy):
             return p
@@ -256,17 +259,17 @@ class Bundle(object):
         """Create a source pipe for a source, giving it access to download files to the local cache"""
         from ambry.etl.rowgen import source_pipe
 
-        if isinstance(source, basestring):
+        if isinstance(source, string_types):
             source = self.source(source)
 
-        sp =  source_pipe(self, source)
+        sp = source_pipe(self, source)
         sp.bundle = self
         return sp
 
     @property
     def sources(self):
         """Iterate over downloadable sources"""
-        return list(s for s in self.dataset.sources if s.is_downloadable )
+        return list(s for s in self.dataset.sources if s.is_downloadable)
 
     @property
     def refs(self):
@@ -282,7 +285,7 @@ class Bundle(object):
     def build_source_files(self):
         """Return acessors to the build files"""
 
-        from files import BuildSourceFileAccessor
+        from .files import BuildSourceFileAccessor
         return BuildSourceFileAccessor(self, self.dataset, self.source_fs)
 
     @property
@@ -298,11 +301,11 @@ class Bundle(object):
                 source_url = self.library.filesystem.source(self.identity.cache_key)
 
             try:
-                self._source_fs =  fsopendir(source_url)
+                self._source_fs = fsopendir(source_url)
             except ResourceNotFoundError:
                 self.logger.warn("Failed to locate source dir {}; using default".format(source_url))
                 source_url = self.library.filesystem.source(self.identity.cache_key)
-                self._source_fs =  fsopendir(source_url)
+                self._source_fs = fsopendir(source_url)
 
         return self._source_fs
 
@@ -315,9 +318,10 @@ class Bundle(object):
 
             if not build_url:
                 build_url = self.library.filesystem.build(self.identity.cache_key)
-                #raise ConfigurationError('Must set build URL either in the constructor or the configuration')
+                # raise ConfigurationError(
+                #    'Must set build URL either in the constructor or the configuration')
 
-            self._build_fs =  fsopendir(build_url)
+            self._build_fs = fsopendir(build_url)
 
         return self._build_fs
 
@@ -341,7 +345,6 @@ class Bundle(object):
     @property
     def logger(self):
         """The bundle logger."""
-        import sys
 
         if not self._logger:
 
@@ -387,22 +390,19 @@ class Bundle(object):
         :param message:  Log message.
 
         """
-        import sys
 
         self.logger.fatal(message)
         sys.stderr.flush()
         if self.exit_on_fatal:
             sys.exit(1)
         else:
-            from ..dbexceptions import FatalError
-
             raise FatalError(message)
 
-    ##
-    ## Source Synced
-    ##
+    #
+    # Source Synced
+    #
 
-    def sync(self, force=None, defaults = False):
+    def sync(self, force=None, defaults=False):
         """
 
         :param force: Force a sync in one direction, either ftr or rtf.
@@ -418,7 +418,7 @@ class Bundle(object):
             self.error("Can't sync; bundle is finalized")
             return False
 
-        ds = self.dataset
+        ds = self.dataset  # FIXME: Unused variable. Remove after testing.
 
         syncs = self.build_source_files.sync(force, defaults)
 
@@ -433,7 +433,7 @@ class Bundle(object):
         from ambry.bundle.files import BuildSourceFile
         self.build_source_files.sync(BuildSourceFile.SYNC_DIR.FILE_TO_RECORD)
         self.build_source_files.record_to_objects()
-        #self.state = self.STATES.SYNCED
+        # self.state = self.STATES.SYNCED
 
     def sync_objects_in(self):
         """Synchronize from records to objects"""
@@ -487,12 +487,11 @@ class Bundle(object):
     def is_clean(self):
         return self.state == self.STATES.CLEANED
 
-    def clean(self, force = False):
+    def clean(self, force=False):
 
         """Clean generated objects from the dataset, but only if there are File contents
          to regenerate them"""
         from ambry.orm import ColumnStat, File
-
 
         if self.is_finalized and not force:
             self.warn("Can't clean; bundle is finalized")
@@ -545,7 +544,6 @@ class Bundle(object):
 
         self.clean()
         self.dataset.files[:] = []
-
 
     #
     # Prepare
@@ -620,7 +618,7 @@ class Bundle(object):
         from ambry.etl.pipeline import Pipeline, PartitionWriter
 
         if source:
-            source = self.source(source) if isinstance(source, basestring) else source
+            source = self.source(source) if isinstance(source, string_types) else source
         else:
             source = None
 
@@ -704,7 +702,7 @@ class Bundle(object):
 
         return True
 
-    def phase_main(self, phase,  stage = 'main', sources=None):
+    def phase_main(self, phase,  stage='main', sources=None):
         """
         Synchronize with the files and run the meta pipeline, possibly creating new objects. Then, write the
         objects back to file records and synchronize.
@@ -712,10 +710,8 @@ class Bundle(object):
         :param force:
         :return:
         """
-        from ambry.orm.file import File
-        from ambry.etl.pipeline import StopPipe
 
-        assert isinstance(stage, basestring) or stage is None
+        assert isinstance(stage, string_types) or stage is None
 
         if self.is_finalized:
             self.error("Can't run phase {}; bundle is finalized".format(phase))
@@ -737,7 +733,6 @@ class Bundle(object):
 
             return False
 
-
         # Enumerate all of the sources first.
         if not sources:
             # Select sources that match this stage
@@ -745,20 +740,19 @@ class Bundle(object):
             for i, source in enumerate(self.sources):
 
                 if stage_match(source.stage, stage):
-                    #print 'MATCH ', source.stage, stage
+                    # print 'MATCH ', source.stage, stage
                     sources.append(source)
         else:
             # Use the named soruces, but ensure they are all source objects.
             source_objs = []
 
-            if not isinstance(sources, (list,tuple)):
+            if not isinstance(sources, (list, tuple)):
                 sources = [sources]
 
             for source in sources:
-                if isinstance(source, basestring):
+                if isinstance(source, string_types):
                     source_obj = self.source(source)
                     if not source_obj:
-                        from ambry.dbexceptions import PhaseError
                         raise PhaseError("Could not find source named '{}' ".format(source))
                     source_objs.append(source_obj)
                 else:
@@ -766,19 +760,21 @@ class Bundle(object):
 
             sources = source_objs
 
-        self.log('Processing {} sources, stage {} ; {}'.format(len(sources), stage, [s.name for s in sources[:10]]))
+        log_msg = 'Processing {} sources, stage {} ; {}'\
+            .format(len(sources), stage, [x.name for x in sources[:10]])
+        self.log(log_msg)
 
         for i, source in enumerate(sources):
 
-            self.logger.info("Running phase {} for source {} ".format(phase, source.name))
+            self.logger.info('Running phase {} for source {} '.format(phase, source.name))
 
             pl = self.pipeline(phase, source)
 
             pl.run()
 
-            self.log("Final methods")
+            self.log('Final methods')
             for m in pl.final:
-                self.log(indent+str(m))
+                self.log(indent + s(m))
                 getattr(self, m)(pl)
 
             if pl.stopped:
@@ -797,10 +793,9 @@ class Bundle(object):
 
         return True
 
-    def run_phase(self, phase, stage='main', sources = None):
-        from ambry.dbexceptions import PhaseError
+    def run_phase(self, phase, stage='main', sources=None):
 
-        assert isinstance(stage, basestring) or stage is None
+        assert isinstance(stage, string_types) or stage is None
 
         phase_pre_name = 'pre_{}'.format(phase)
         phase_post_name = 'post_{}'.format(phase)
@@ -839,7 +834,6 @@ class Bundle(object):
 
     def final_log_pipeline(self, pl):
         """Write a report of the pipeline out to a file """
-        import os
 
         self.build_fs.makedir('pipeline', allow_recreate=True)
         v = """
@@ -850,22 +844,19 @@ Pipeline
 Pipeline Headers
 ================
 {}
-""".format(unicode(pl), pl.headers_report())
+""".format(u(pl), pl.headers_report())
 
-        self.build_fs.setcontents(os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt'),v, encoding='utf8')
+        self.build_fs.setcontents(
+            os.path.join('pipeline', pl.phase + '-' + pl.file_name + '.txt'), v, encoding='utf8')
 
-    ##
-    ## Meta
-    ##
+    #
+    # Meta
+    #
 
     def meta(self, sources=None):
-
-        self.run_phase('source',sources=sources)
-
-        self.run_phase('schema',sources=sources)
-
+        self.run_phase('source', sources=sources)
+        self.run_phase('schema', sources=sources)
         return True
-
 
     def meta_schema(self, sources=None):
         return self.run_phase('schema', sources=sources)
@@ -881,16 +872,16 @@ Pipeline Headers
         source = pl.source.source
         st = source.source_table
 
-        #if not source.st_id:
+        # if not source.st_id:
         for tic in ti.columns:
             c = st.column(tic.header)
             if c:
                 c.datatype = TypeIntuiter.promote_type(c.datatype, tic.resolved_type)
-                self.log('Update column: {}.{}'.format(st.name, c.source_header ))
+                self.log('Update column: {}.{}'.format(st.name, c.source_header))
             else:
                 c = st.add_column(tic.position, source_header=tic.header, dest_header=tic.header,
-                                            datatype=tic.resolved_type_name)
-                self.log('Created soruce table column: {}.{}'.format(st.name, c.source_header ))
+                                  datatype=tic.resolved_type_name)
+                self.log('Created soruce table column: {}.{}'.format(st.name, c.source_header))
 
     def final_make_dest_tables(self, pl):
         from ambry.etl.intuit import TypeIntuiter
@@ -907,13 +898,13 @@ Pipeline Headers
             sc = st.column(tic.header)
 
             dest.add_column(name=tic.header,
-                            datatype =  col_type_map[tic.resolved_type_name],
+                            datatype=col_type_map[tic.resolved_type_name],
                             summary=sc.summary if sc else None,
                             description=sc.description if sc else None)
 
-            ##
-    ## Build
-    ##
+    #
+    # Build
+    #
 
     @property
     def is_buildable(self):
@@ -926,13 +917,13 @@ Pipeline Headers
 
     def pre_build(self, phase='build', force=False):
         assert isinstance(force, bool)
-        return self.pre_phase(phase, force = force)
+        return self.pre_phase(phase, force=force)
 
-    def build(self,  stage = 'main', sources = None):
-        assert isinstance(stage, basestring) or stage is None
-        return self.run_phase('build',sources=sources, stage = stage)
+    def build(self,  stage='main', sources=None):
+        assert isinstance(stage, string_types) or stage is None
+        return self.run_phase('build', sources=sources, stage=stage)
 
-    def post_build(self,phase='build'):
+    def post_build(self, phase='build'):
         """After the build, update the configuration with the time required for
         the build, then save the schema back to the tables, if it was revised
         during the build."""
@@ -953,14 +944,14 @@ Pipeline Headers
 
         if len(self.dataset.codes):
             cast_errors = 0
-            self.error("Casting Errors")
+            self.error('Casting Errors')
             for c in self.dataset.codes:
                 if c.source == 'cast_error':
-                    self.error(indent+"Casting Errors {}.{} {}".format(c.column.table.name, c.column.name, c.key))
+                    self.error(
+                        indent + "Casting Errors {}.{} {}".format(c.column.table.name, c.column.name, c.key))
                     cast_errors += 1
 
             if cast_errors > 0:
-                from ambry.dbexceptions import PhaseError
                 raise PhaseError('Too many casting errors')
 
     def build_post_unify_partitions(self):
@@ -970,7 +961,6 @@ Pipeline Headers
         from collections import defaultdict
         from ..orm.partition import Partition
         from ..etl.stats import Stats
-        import time
 
         # Group the segments by their parent partition name, which is the
         # same name, without the segment.
@@ -984,21 +974,21 @@ Pipeline Headers
         # For each group, copy the segment partitions to the parent partitions, then
         # delete the segment partitions.
 
-        for name, segments in partitions.items():
+        for name, segments in iteritems(partitions):
 
-            self.log("Coalescing segments for partition {} ".format(name))
+            self.log('Coalescing segments for partition {} '.format(name))
 
-            parent = self.partitions.get_or_new_partition(name, type = Partition.TYPE.UNION)
+            parent = self.partitions.get_or_new_partition(name, type=Partition.TYPE.UNION)
             stats = Stats(parent.table)
 
             pdf = parent.datafile
-            for seg in sorted(segments, key = lambda s: str(s.name)):
+            for seg in sorted(segments, key=lambda x: s(x.name)):
 
-                self.log(indent+"Coalescing segment  {} ".format(seg.identity.name))
+                self.log(indent + 'Coalescing segment  {} '.format(seg.identity.name))
 
                 reader = self.wrap_partition(seg).datafile.reader()
                 header = None
-                start_time = time.time()
+                start_time = time()
                 for i, row in enumerate(reader):
 
                     if header is None:
@@ -1011,7 +1001,7 @@ Pipeline Headers
                         stats.process_body(row)
 
                 reader.close()
-                self.log(indent+"Coalesced {} rows, {} rows/sec ".format(i, float(i)/(time.time()-start_time)))
+                self.log(indent + "Coalesced {} rows, {} rows/sec ".format(i, float(i)/(time()-start_time)))
 
             pdf.close()
             self.commit()
@@ -1024,14 +1014,13 @@ Pipeline Headers
 
     def final_finalize_segments(self, pl):
 
-        from ..etl import PartitionWriter
-
         try:
-            for p in pl[PartitionWriter].partitions:
-                self.logger.info(indent+indent+"Finalizing {}".format(p.identity.name))
-                # We're passing the datafile path into filanize b/c finalize is on the ORM object, and datafile is
-                # on the proxy.
+            for p in pl[ambry.etl.PartitionWriter].partitions:
+                self.logger.info(indent + indent + 'Finalizing {}'.format(p.identity.name))
+                # We're passing the datafile path into filanize b/c finalize is on the ORM object,
+                # and datafile is on the proxy.
                 p.finalize()
+
                 # FIXME SHouldn't need to do this commit, but without it, some stats get added multiple
                 # times, causing an error later. Probably could be avoided by adding the states to the
                 # collection in the dataset
@@ -1043,20 +1032,17 @@ Pipeline Headers
         self.commit()
 
     def final_cast_errors(self, pl):
-
-        from ..etl import CasterPipe
-
-        cp = pl[CasterPipe]
+        cp = pl[ambry.etl.CasterPipe]
 
         n = 0
         seen = set()
         for errors in cp.errors:
-            for col,error in errors.items():
+            for col, error in list(errors.items()):
 
-                n +=1
+                n += 1
 
                 key = (col, error['value'])
-                if not key in seen:
+                if key not in seen:
                     seen.add(key)
                     self.error('Cast Error on column {}; {}'.format(cp.headers[col], error))
 
@@ -1064,15 +1050,14 @@ Pipeline Headers
                     column.add_code(error['value'], error['value'], source='cast_error')
 
     def build_post_write_bundle_file(self):
-        import os
 
         path = self.library.create_bundle_file(self)
 
         with open(path) as f:
             self.build_fs.makedir(os.path.dirname(self.identity.cache_key), allow_recreate=True)
-            self.build_fs.setcontents(self.identity.cache_key+'.db', data = f)
+            self.build_fs.setcontents(self.identity.cache_key + '.db', data=f)
 
-        self.log("Wrote bundle sqlite file to {}".format(path))
+        self.log('Wrote bundle sqlite file to {}'.format(path))
 
     def post_build_test(self):
 
@@ -1082,9 +1067,6 @@ Pipeline Headers
             try:
                 f()
             except AssertionError:
-                import traceback
-                import sys
-
                 _, _, tb = sys.exc_info()
                 traceback.print_tb(tb)  # Fixed format
                 tb_info = traceback.extract_tb(tb)
@@ -1112,12 +1094,8 @@ Pipeline Headers
         for p in self.partitions:
             years |= set(p.time_coverage)
 
-
     def post_build_geo_coverage(self):
         """Collect all of the geocoverage for the bundle."""
-        from ..dbexceptions import BuildError
-        from geoid.civick import GVid
-        from geoid import NotASummaryName
 
         spaces = set()
         grains = set()
@@ -1154,7 +1132,7 @@ Pipeline Headers
             """Some grain are expressed as summary level names, not gvids."""
             try:
                 c = GVid.get_class(g)
-                return str(c().summarize())
+                return s(c().summarize())
             except NotASummaryName:
                 return g
 
@@ -1163,9 +1141,9 @@ Pipeline Headers
 
         self.metadata.write_to_dir()
 
-    ##
-    ## Finalize
-    ##
+    #
+    # Finalize
+    #
 
     @property
     def is_finalized(self):
@@ -1181,16 +1159,16 @@ Pipeline Headers
         self.commit()
         return True
 
-    ##
-    ## check in to remote
-    ##
+    #
+    # Check in to remote
+    #
 
     def checkin(self):
 
         if self.is_built:
             self.finalize()
 
-        if not ( self.is_finalized or self.is_prepared):
+        if not (self.is_finalized or self.is_prepared):
             self.error("Can't checkin; bundle state must be either finalized or prepared")
             return False
 
@@ -1207,17 +1185,9 @@ Pipeline Headers
 
         return r is not None
 
-    ##
-    ##
-    ##
-
     def remove(self):
         """Delete resources associated with the bundle."""
-        pass # Remove files in the file system other resource.
-
-
-    #######
-    #######
+        pass  # Remove files in the file system other resource.
 
     def field_row(self, fields):
         """Return a list of values to match the fielsds values"""
@@ -1243,15 +1213,12 @@ Pipeline Headers
     @property
     def error_state(self):
         """Set the error condition"""
-        from time import time
-
         self.dataset.config.build.state.lastime = time()
         return self.dataset.config.build.state.error
 
     @state.setter
     def state(self, state):
         """Set the current build state and record the tim eto maintain history"""
-        from time import time
 
         self.dataset.config.build.state.current = state
         self.dataset.config.build.state.error = False
@@ -1259,12 +1226,9 @@ Pipeline Headers
         self.dataset.config.build.state.lastime = time()
 
     def set_error_state(self):
-        from time import time
-
         self.dataset.config.build.state.error = time()
 
     def set_last_access(self, tag):
         """Mark the time that this bundle was last accessed"""
-
         self.dataset.config.build.access.last = tag
         self.dataset.commit()
