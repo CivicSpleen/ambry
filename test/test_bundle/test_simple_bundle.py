@@ -534,18 +534,18 @@ class Test(TestBase):
 
         l.sync_remote(remote_name)
 
-        b = list(l.bundles)[0]
+        b = l.bundle(b.identity.vid)
         p = list(b.partitions)[0]
 
-        self.assertEqual(1, len(list(l.bundles)))
+        self.assertEqual(7, len(list(l.bundles)))
 
         self.assertEqual('remote',l.partition(p_vid).location)
-
-        self.assertEquals(497054, int(sum(row[3] for row  in p.stream( skip_header = True))))
 
         self.assertEqual(10000, len(list(p.stream(skip_header=True))))
 
         self.assertEqual(10001, len(list(p.stream(skip_header=False))))
+
+        self.assertEquals(497054, int(sum(row[3] for row in p.stream(skip_header=True))))
 
     def test_msgpack_build(self):
         """Build the simple bundle"""
